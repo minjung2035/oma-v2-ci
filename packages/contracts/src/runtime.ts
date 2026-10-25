@@ -30,7 +30,10 @@ export interface BoundaryEvidence {
 
 export interface RunLease { actor: Actor; incarnation: number; socketHostPath: string }
 
-export interface UnitObservation { activeState: string; subState: string; result: string; execMainStatus: number; cgroup: string; invocationId: string }
+/** Transient execution status; neither current authority nor descendant death
+ * proof. The existing status wire words remain unchanged. */
+export interface ExecutionObservation { activeState: string; subState: string; result: string; execMainStatus: number; invocationId: string }
+export interface UnitObservation extends ExecutionObservation { cgroup: string }
 
 /** A live kernel scope capability, not a durable DTO or authority token. The
  * common run owner cannot interpret the OS identity or infer death from EOF. */

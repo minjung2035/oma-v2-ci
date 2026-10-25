@@ -4,7 +4,6 @@
   "apps/oma/src/application/extensions.ts",
   "apps/oma/src/application/local-packages.ts",
   "apps/oma/src/application/mail.ts",
-  "apps/oma/src/application/packages-apply.ts",
   "apps/oma/src/application/project-session-settings.ts",
   "apps/oma/src/application/project-settings.ts",
   "apps/oma/src/application/settings.ts",
@@ -59,64 +58,17 @@
   "apps/oma/src/engine/settings-files.ts",
   "apps/oma/src/engine/start-effects.ts",
   "apps/oma/src/entry/broker.ts",
-  "apps/oma/src/entry/guest-packages.ts",
-  "apps/oma/src/entry/guest-provision.ts",
-  "apps/oma/src/entry/guest-session.ts",
-  "apps/oma/src/entry/guestctl.ts",
-  "apps/oma/src/entry/guesthost.ts",
   "apps/oma/src/entry/host.ts",
   "apps/oma/src/entry/module-conformance.ts",
-  "apps/oma/src/entry/oma-mac.ts",
   "apps/oma/src/entry/oma-society.ts",
   "apps/oma/src/entry/oma.ts",
-  "apps/oma/src/entry/omahostd.ts",
   "apps/oma/src/entry/personal-host.ts",
   "apps/oma/src/entry/pi-interactive.ts",
   "apps/oma/src/entry/pi-personal.ts",
   "apps/oma/src/entry/pi-settings-preload.ts",
   "apps/oma/src/entry/prepare-society.ts",
   "apps/oma/src/entry/runner.ts",
-  "apps/oma/src/platform/guest/archive.ts",
-  "apps/oma/src/platform/guest/control.ts",
-  "apps/oma/src/platform/guest/egress.ts",
-  "apps/oma/src/platform/guest/histories.ts",
-  "apps/oma/src/platform/guest/host.ts",
-  "apps/oma/src/platform/guest/identity.ts",
-  "apps/oma/src/platform/guest/packages.ts",
-  "apps/oma/src/platform/guest/project-mutations.ts",
-  "apps/oma/src/platform/guest/project.ts",
-  "apps/oma/src/platform/guest/provision.ts",
-  "apps/oma/src/platform/guest/receipt-wait.ts",
-  "apps/oma/src/platform/guest/requests.ts",
-  "apps/oma/src/platform/guest/server.ts",
-  "apps/oma/src/platform/guest/session.ts",
-  "apps/oma/src/platform/guest/stream.ts",
-  "apps/oma/src/platform/host/api-client.ts",
-  "apps/oma/src/platform/host/attach-client.ts",
-  "apps/oma/src/platform/host/egress.ts",
-  "apps/oma/src/platform/host/guest-histories.ts",
-  "apps/oma/src/platform/host/guest-link.ts",
-  "apps/oma/src/platform/host/host-api.ts",
-  "apps/oma/src/platform/host/lifecycle.ts",
-  "apps/oma/src/platform/host/personal-histories.ts",
-  "apps/oma/src/platform/host/personal-seed.ts",
-  "apps/oma/src/platform/host/project-sync.ts",
-  "apps/oma/src/platform/host/project.ts",
-  "apps/oma/src/platform/host/resolver.ts",
-  "apps/oma/src/platform/host/service.ts",
-  "apps/oma/src/platform/host/session-gateway.ts",
-  "apps/oma/src/platform/host/snapshot-coordinator.ts",
-  "apps/oma/src/platform/host/snapshot.ts",
-  "apps/oma/src/platform/host/transfers.ts",
-  "apps/oma/src/platform/package-archive.ts",
   "apps/oma/src/platform/package-files.ts",
-  "apps/oma/src/platform/package-staging.ts",
-  "apps/oma/src/platform/rpc-server.ts",
-  "apps/oma/src/platform/rpc.ts",
-  "apps/oma/src/platform/society-client.ts",
-  "apps/oma/src/platform/stream-receive.ts",
-  "apps/oma/src/platform/stream-source.ts",
-  "apps/oma/src/platform/terminal-modes.ts",
   "apps/oma/src/ports/ledger.ts",
   "apps/oma/src/ports/package-files.ts",
   "apps/oma/src/ports/runtime.ts",
@@ -130,26 +82,22 @@
   "apps/oma/src/runtime/compile-cache.ts",
   "apps/oma/src/runtime/connect-proxy.ts",
   "apps/oma/src/runtime/deployment-manifest.ts",
-  "apps/oma/src/runtime/egress-forwarder.ts",
   "apps/oma/src/runtime/extension-integrity.ts",
   "apps/oma/src/runtime/host-arguments.ts",
   "apps/oma/src/runtime/host-tenure.ts",
   "apps/oma/src/runtime/inference-relay.ts",
   "apps/oma/src/runtime/keychain-credentials.ts",
   "apps/oma/src/runtime/locked-files.ts",
+  "apps/oma/src/runtime/native-support.ts",
   "apps/oma/src/runtime/packages/index.ts",
   "apps/oma/src/runtime/packages/store.ts",
-  "apps/oma/src/runtime/packages/tar.ts",
   "apps/oma/src/runtime/personal-models.ts",
   "apps/oma/src/runtime/personal-session.ts",
   "apps/oma/src/runtime/personal-settings.ts",
   "apps/oma/src/runtime/principal-delivery.ts",
   "apps/oma/src/runtime/project-binding.ts",
   "apps/oma/src/runtime/provision.ts",
-  "apps/oma/src/runtime/restic-verification.ts",
-  "apps/oma/src/runtime/restic.ts",
   "apps/oma/src/runtime/session-catalog.ts",
-  "apps/oma/src/runtime/session-handoff.ts",
   "apps/oma/src/runtime/session-history.ts",
   "apps/oma/src/runtime/session-mode.ts",
   "apps/oma/src/runtime/session-storage-state.ts",
@@ -200,14 +148,12 @@
   "packages/contracts/src/errors.ts",
   "packages/contracts/src/files.ts",
   "packages/contracts/src/git.ts",
-  "packages/contracts/src/guest-control.ts",
   "packages/contracts/src/host.ts",
   "packages/contracts/src/identity.ts",
   "packages/contracts/src/index.ts",
   "packages/contracts/src/integration.ts",
   "packages/contracts/src/internal-wire.ts",
   "packages/contracts/src/ledger.ts",
-  "packages/contracts/src/platform-lifecycle.ts",
   "packages/contracts/src/presentation.ts",
   "packages/contracts/src/public-wire.ts",
   "packages/contracts/src/publication.ts",
@@ -270,7 +216,6 @@
   "packages/engine/src/credential-store.ts",
   "packages/engine/src/engine-auth.ts",
   "packages/engine/src/extension-modules.ts",
-  "packages/engine/src/host-history-channel.ts",
   "packages/engine/src/interactive-channel.ts",
   "packages/engine/src/interactive-commands.ts",
   "packages/engine/src/interactive-configuration.ts",
@@ -336,11 +281,9 @@
   "packages/git/src/context-publication.ts",
   "packages/git/src/context-repository.ts",
   "packages/git/src/context.ts",
-  "packages/git/src/host-project.ts",
   "packages/git/src/index.ts",
   "packages/git/src/integration-publication.ts",
   "packages/git/src/integration.ts",
-  "packages/git/src/linux-project-preparation.ts",
   "packages/git/src/observe.ts",
   "packages/git/src/paths.ts",
   "packages/git/src/ports.ts",
@@ -385,29 +328,21 @@
   "packages/native/src/identity.ts",
   "packages/native/src/linux.ts",
   "packages/native/src/peer-uid.ts",
+  "packages/native/src/posix-files.ts",
   "packages/native/src/process-lock.ts",
+  "packages/native/src/process-observation.ts",
   "packages/native/src/pty.ts",
   "packages/native/src/snapshot-reader.ts",
-  "packages/platform-linux/src/guest-assets.ts",
-  "packages/platform-linux/src/guest-system.ts",
   "packages/platform-linux/src/resident-rootfs.ts",
   "packages/platform-linux/src/sandbox-seccomp.ts",
   "packages/platform-linux/src/sandbox.ts",
-  "packages/platform-linux/src/session-launcher.ts",
   "packages/platform-linux/src/units.ts",
   "packages/platform-linux/src/units/execute.ts",
   "packages/platform-linux/src/units/observe.ts",
   "packages/platform-linux/src/units/render.ts",
-  "packages/platform-mac/src/archive-crypto.ts",
-  "packages/platform-mac/src/bookmark.ts",
-  "packages/platform-mac/src/bundle.ts",
-  "packages/platform-mac/src/files.ts",
-  "packages/platform-mac/src/image.ts",
   "packages/platform-mac/src/keychain-client.ts",
   "packages/platform-mac/src/native-assets.ts",
   "packages/platform-mac/src/native-channel.ts",
-  "packages/platform-mac/src/record.ts",
-  "packages/platform-mac/src/vz-driver.ts",
   "packages/process/src/async.ts",
   "packages/process/src/command.ts",
   "packages/process/src/deadline.ts",
@@ -415,6 +350,9 @@
   "packages/process/src/host-loss.ts",
   "packages/process/src/policies.ts",
   "packages/process/src/preparation.ts",
+  "packages/process/src/resident-supervisor.ts",
+  "packages/process/src/restart-policy.ts",
+  "packages/process/src/restic.ts",
   "packages/process/src/run.ts",
   "packages/process/src/writer.ts",
   "packages/protocol/src/alarm.ts",
@@ -424,12 +362,7 @@
   "packages/protocol/src/client-codecs.ts",
   "packages/protocol/src/delivery-boundary.ts",
   "packages/protocol/src/frame.ts",
-  "packages/protocol/src/guest-history.ts",
-  "packages/protocol/src/host-api.ts",
   "packages/protocol/src/host-channel.ts",
-  "packages/protocol/src/host-errors.ts",
-  "packages/protocol/src/host-guest.ts",
-  "packages/protocol/src/host-history.ts",
   "packages/protocol/src/jsonl.ts",
   "packages/protocol/src/log-limits.ts",
   "packages/protocol/src/log-response.ts",
@@ -481,9 +414,14 @@
   "packages/storage/src/operation-journal.ts",
   "packages/storage/src/operation-transitions.ts",
   "packages/storage/src/output-spool.ts",
+  "packages/storage/src/package-staging.ts",
+  "packages/storage/src/package-tar.ts",
   "packages/storage/src/preaccept-artifact.ts",
   "packages/storage/src/preaccept-collection.ts",
   "packages/storage/src/published-mail.ts",
+  "packages/storage/src/restic-tar.ts",
+  "packages/storage/src/restic-tool.ts",
+  "packages/storage/src/restic-verification.ts",
   "packages/storage/src/rows.ts",
   "packages/storage/src/socket-name.ts",
   "packages/storage/src/staged-tree.ts",
@@ -613,12 +551,7 @@
      "packages/protocol/src/byte-queue.ts",
      "packages/protocol/src/client-codecs.ts",
      "packages/protocol/src/frame.ts",
-     "packages/protocol/src/guest-history.ts",
-     "packages/protocol/src/host-api.ts",
      "packages/protocol/src/host-channel.ts",
-     "packages/protocol/src/host-errors.ts",
-     "packages/protocol/src/host-guest.ts",
-     "packages/protocol/src/host-history.ts",
      "packages/protocol/src/jsonl.ts",
      "packages/protocol/src/log-response.ts",
      "packages/protocol/src/methods.ts",
@@ -654,7 +587,7 @@
      "packages/config/src/state-format.ts",
      "packages/domain/src/ask-user-question/model.ts",
      "packages/domain/src/authority.ts",
-     "packages/git/src/linux-project-preparation.ts",
+     "packages/git/src/project-preparation.ts",
      "packages/native/src/cgroup.ts",
      "packages/native/src/cleanup.ts",
      "packages/native/src/directory-layout.ts",
@@ -662,7 +595,9 @@
      "packages/native/src/identity.ts",
      "packages/native/src/linux.ts",
      "packages/native/src/peer-uid.ts",
+     "packages/native/src/posix-files.ts",
      "packages/native/src/process-lock.ts",
+     "packages/native/src/process-observation.ts",
      "packages/native/src/pty.ts",
      "packages/native/src/snapshot-reader.ts",
      "packages/process/src/async.ts",
@@ -671,6 +606,9 @@
      "packages/process/src/host-loss.ts",
      "packages/process/src/policies.ts",
      "packages/process/src/preparation.ts",
+     "packages/process/src/resident-supervisor.ts",
+     "packages/process/src/restart-policy.ts",
+     "packages/process/src/restic.ts",
      "packages/process/src/run.ts",
      "packages/process/src/writer.ts",
      "packages/protocol/src/alarm.ts",
@@ -688,9 +626,14 @@
      "packages/storage/src/mail-notices.ts",
      "packages/storage/src/mailbox.ts",
      "packages/storage/src/output-spool.ts",
+     "packages/storage/src/package-staging.ts",
+     "packages/storage/src/package-tar.ts",
      "packages/storage/src/preaccept-artifact.ts",
      "packages/storage/src/preaccept-collection.ts",
      "packages/storage/src/published-mail.ts",
+     "packages/storage/src/restic-tar.ts",
+     "packages/storage/src/restic-tool.ts",
+     "packages/storage/src/restic-verification.ts",
      "packages/storage/src/socket-name.ts",
      "packages/storage/src/staged-tree.ts",
      "packages/storage/src/submit-spool.ts",
@@ -718,11 +661,11 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 34,
-   "K1-codecs -> K0-values": 74,
-   "K1-codecs -> K1-codecs": 28,
-   "K2-mechanisms -> K0-values": 88,
+   "K1-codecs -> K0-values": 64,
+   "K1-codecs -> K1-codecs": 24,
+   "K2-mechanisms -> K0-values": 101,
    "K2-mechanisms -> K1-codecs": 10,
-   "K2-mechanisms -> K2-mechanisms": 92,
+   "K2-mechanisms -> K2-mechanisms": 115,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -731,11 +674,11 @@
   "typeOnlyEdgeMatrix": {
    "K0-values -> K0-values": 2,
    "K1-codecs -> K0-values": 2,
-   "K1-codecs -> K1-codecs": 5,
+   "K1-codecs -> K1-codecs": 1,
    "K1-codecs -> K3-ledger": 1,
-   "K2-mechanisms -> K0-values": 2,
+   "K2-mechanisms -> K0-values": 3,
    "K2-mechanisms -> K1-codecs": 2,
-   "K2-mechanisms -> K2-mechanisms": 2,
+   "K2-mechanisms -> K2-mechanisms": 4,
    "K2-mechanisms -> K3-ledger": 1,
    "K3-ledger -> K0-values": 2,
    "K3-ledger -> K1-codecs": 1,
@@ -1168,6 +1111,16 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/native/src/posix-files.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/posix-files.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/native/src/process-lock.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -1218,6 +1171,21 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/process/src/resident-supervisor.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/restic.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/restic.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
     "from": "packages/process/src/run.ts",
     "to": "packages/domain/src/utf8.ts",
     "kind": "runtime"
@@ -1265,56 +1233,6 @@
    {
     "from": "packages/protocol/src/frame.ts",
     "to": "packages/domain/src/utf8.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/guest-history.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/guest-history.ts",
-    "to": "packages/domain/src/identifiers.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-api.ts",
-    "to": "packages/domain/src/identifiers.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-errors.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-errors.ts",
-    "to": "packages/domain/src/product-text.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-guest.ts",
-    "to": "packages/domain/src/egress.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-guest.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-guest.ts",
-    "to": "packages/domain/src/identifiers.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-history.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/host-history.ts",
-    "to": "packages/domain/src/identifiers.ts",
     "kind": "runtime"
    },
    {
@@ -1693,6 +1611,26 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/storage/src/package-staging.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-staging.ts",
+    "to": "packages/domain/src/package-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-tar.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-tar.ts",
+    "to": "packages/domain/src/package-policy.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/storage/src/preaccept-artifact.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -1725,6 +1663,31 @@
    {
     "from": "packages/storage/src/published-mail.ts",
     "to": "packages/domain/src/surface-bounds.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tar.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tar.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tool.ts",
+    "to": "packages/domain/src/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tool.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-verification.ts",
+    "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
    {
@@ -1941,20 +1904,6 @@
      "coarseUpward": false
     },
     {
-     "from": "apps/oma/src/platform/package-staging.ts",
-     "to": "apps/oma/src/ports/package-files.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
-     "from": "apps/oma/src/platform/package-staging.ts",
-     "to": "apps/oma/src/ports/package-files.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
      "from": "apps/oma/src/ports/ledger.ts",
      "to": "packages/contracts/src/durable.ts",
      "classification": "internal-port-contract",
@@ -2032,13 +1981,6 @@
      "coarseUpward": false
     },
     {
-     "from": "apps/oma/src/runtime/packages/tar.ts",
-     "to": "apps/oma/src/ports/package-files.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": false
-    },
-    {
      "from": "packages/protocol/src/operation-results.ts",
      "to": "packages/protocol/src/operation-codec.ts",
      "classification": "representation-relation",
@@ -2066,7 +2008,7 @@
     "implementation/",
     "apps/oma/src/ports/"
    ],
-   "files": 24
+   "files": 22
   },
   {
    "index": 1,
@@ -2094,7 +2036,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 156
+   "files": 161
   },
   {
    "index": 2,
@@ -2126,7 +2068,7 @@
     "packages/review/src/index.ts",
     "packages/review/src/"
    ],
-   "files": 60
+   "files": 58
   },
   {
    "index": 4,
@@ -2147,7 +2089,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 185
+   "files": 130
   },
   {
    "index": 5,
@@ -2167,27 +2109,27 @@
     "packages/tool-web/src/",
     "packages/tool-hashline/src/"
    ],
-   "files": 91
+   "files": 83
   }
  ],
- "files": 535,
- "runtimeEdges": 2005,
- "typeOnlyEdges": 800,
+ "files": 473,
+ "runtimeEdges": 1660,
+ "typeOnlyEdges": 744,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 371,
-  "L2-facts -> L1-kernel": 39,
+  "L1-kernel -> L1-kernel": 393,
+  "L2-facts -> L1-kernel": 41,
   "L2-facts -> L2-facts": 11,
-  "L3-workflow -> L1-kernel": 245,
-  "L3-workflow -> L3-workflow": 71,
-  "L4-orchestration -> L1-kernel": 495,
+  "L3-workflow -> L1-kernel": 242,
+  "L3-workflow -> L3-workflow": 69,
+  "L4-orchestration -> L1-kernel": 317,
   "L4-orchestration -> L2-facts": 1,
-  "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 250,
-  "L5-entry -> L1-kernel": 178,
+  "L4-orchestration -> L3-workflow": 24,
+  "L4-orchestration -> L4-orchestration": 155,
+  "L5-entry -> L1-kernel": 148,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 6,
-  "L5-entry -> L4-orchestration": 147,
-  "L5-entry -> L5-entry": 140
+  "L5-entry -> L4-orchestration": 99,
+  "L5-entry -> L5-entry": 132
  },
  "upwardTypeOnlyEdges": [
   {
@@ -2198,67 +2140,66 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 250,
-  "packages/domain/src/identifiers.ts": 94,
-  "packages/storage/src/directory.ts": 38,
-  "packages/domain/src/paths.ts": 35,
-  "packages/native/src/files.ts": 35,
-  "packages/protocol/src/host-guest.ts": 32,
-  "packages/domain/src/canonical-json.ts": 31,
-  "packages/storage/src/durable-fs.ts": 31,
-  "packages/domain/src/deployment.ts": 24,
+  "packages/domain/src/errors.ts": 207,
+  "packages/domain/src/identifiers.ts": 82,
+  "packages/storage/src/directory.ts": 35,
+  "packages/native/src/files.ts": 34,
+  "packages/domain/src/paths.ts": 32,
+  "packages/domain/src/canonical-json.ts": 28,
+  "packages/storage/src/durable-fs.ts": 28,
   "packages/domain/src/derived.ts": 24,
-  "packages/native/src/cleanup.ts": 23,
   "packages/domain/src/request-identity.ts": 22,
   "packages/domain/src/surface-bounds.ts": 21,
+  "packages/native/src/cleanup.ts": 21,
   "packages/domain/src/utf8.ts": 20,
-  "packages/protocol/src/frame.ts": 20
+  "packages/domain/src/deployment.ts": 19,
+  "packages/domain/src/authority.ts": 14,
+  "packages/domain/src/mail-values.ts": 14
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 35,
-  "apps/oma/src/entry/oma-mac.ts": 25,
+  "apps/oma/src/entry/broker.ts": 36,
   "packages/mail/src/index.ts": 22,
+  "apps/oma/src/entry/oma-society.ts": 21,
   "packages/broker/src/index.ts": 21,
-  "apps/oma/src/entry/oma-society.ts": 20,
   "apps/oma/src/runtime/client-runtime.ts": 20,
-  "apps/oma/src/runner.ts": 18,
   "apps/oma/src/application/society-bootstrap.ts": 17,
-  "apps/oma/src/platform/host/service.ts": 17,
+  "apps/oma/src/runner.ts": 17,
   "packages/engine/src/interactive.ts": 17,
   "packages/git/src/context-repository.ts": 17,
-  "apps/oma/src/platform/guest/host.ts": 15,
   "apps/oma/src/runtime/provision.ts": 15,
   "packages/extension/src/index.ts": 15,
-  "packages/git/src/context.ts": 15
+  "packages/git/src/context.ts": 15,
+  "apps/oma/src/broker/mail-effects.ts": 14,
+  "apps/oma/src/entry/oma.ts": 14,
+  "apps/oma/src/runtime/packages/store.ts": 14
  },
  "external": {
   "@earendil-works/pi-ai": 2,
   "@earendil-works/pi-coding-agent": 47,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 6,
+  "koffi": 7,
   "node:async_hooks": 4,
   "node:buffer": 1,
-  "node:child_process": 7,
-  "node:crypto": 58,
+  "node:child_process": 5,
+  "node:crypto": 39,
   "node:dns": 1,
-  "node:fs": 142,
-  "node:fs/promises": 3,
+  "node:fs": 106,
+  "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
   "node:module": 5,
-  "node:net": 38,
-  "node:os": 18,
-  "node:path": 164,
+  "node:net": 20,
+  "node:os": 13,
+  "node:path": 127,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
-  "node:stream": 3,
-  "node:stream/promises": 3,
+  "node:stream": 2,
+  "node:stream/promises": 1,
   "node:string_decoder": 1,
   "node:timers/promises": 4,
-  "node:tty": 1,
-  "node:url": 14,
+  "node:url": 12,
   "node:util": 5,
   "node:zlib": 1,
   "nodemailer": 1,

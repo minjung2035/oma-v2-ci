@@ -2,7 +2,7 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "NOT_REVIEWED": 14361,
+  "NOT_REVIEWED": 14287,
   "REMOVED": 220
  },
  "lanes": {
@@ -47,13 +47,6 @@
   },
   {
    "path": "apps/oma/src/application/mail.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/application/packages-apply.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -435,42 +428,6 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
-  },
-  {
-   "path": "apps/oma/src/entry/guest-packages.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/entry/guest-provision.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/entry/guest-session.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/entry/guestctl.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/entry/guesthost.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
    "oracles": []
   },
   {
@@ -488,13 +445,6 @@
    "oracles": []
   },
   {
-   "path": "apps/oma/src/entry/oma-mac.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "apps/oma/src/entry/oma-society.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -503,13 +453,6 @@
   },
   {
    "path": "apps/oma/src/entry/oma.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/entry/omahostd.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -558,287 +501,7 @@
    "oracles": []
   },
   {
-   "path": "apps/oma/src/platform/guest/archive.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/control.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/egress.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/histories.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/host.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/identity.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/packages.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/project-mutations.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/project.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/provision.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/receipt-wait.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/requests.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/server.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/session.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/guest/stream.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/api-client.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/attach-client.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/egress.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/guest-histories.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/guest-link.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/host-api.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/lifecycle.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/personal-histories.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/personal-seed.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/project-sync.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/project.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/resolver.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/service.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/session-gateway.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/snapshot-coordinator.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/snapshot.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/host/transfers.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/package-archive.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "apps/oma/src/platform/package-files.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/package-staging.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/rpc-server.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/rpc.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/society-client.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/stream-receive.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/stream-source.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/platform/terminal-modes.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -936,13 +599,6 @@
    "oracles": []
   },
   {
-   "path": "apps/oma/src/runtime/egress-forwarder.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "apps/oma/src/runtime/extension-integrity.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -985,6 +641,13 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/native-support.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "apps/oma/src/runtime/packages/index.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -993,13 +656,6 @@
   },
   {
    "path": "apps/oma/src/runtime/packages/store.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/runtime/packages/tar.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -1048,30 +704,7 @@
    "oracles": []
   },
   {
-   "path": "apps/oma/src/runtime/restic-verification.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
-  },
-  {
-   "path": "apps/oma/src/runtime/restic.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
-  },
-  {
    "path": "apps/oma/src/runtime/session-catalog.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/runtime/session-handoff.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -1096,16 +729,14 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runtime/session-storage.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runtime/society-lease.ts",
@@ -1541,13 +1172,6 @@
    "oracles": []
   },
   {
-   "path": "packages/contracts/src/guest-control.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/contracts/src/host.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -1566,7 +1190,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/contracts/src/integration.ts",
@@ -1584,13 +1209,6 @@
   },
   {
    "path": "packages/contracts/src/ledger.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/contracts/src/platform-lifecycle.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -1622,7 +1240,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/contracts/src/stream.ts",
@@ -1762,8 +1381,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/domain/src/derived.ts",
@@ -2040,13 +1658,6 @@
   },
   {
    "path": "packages/engine/src/extension-modules.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/engine/src/host-history-channel.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2529,13 +2140,6 @@
    "oracles": []
   },
   {
-   "path": "packages/git/src/host-project.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/git/src/index.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -2551,13 +2155,6 @@
   },
   {
    "path": "packages/git/src/integration.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/git/src/linux-project-preparation.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2883,8 +2480,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/peer-uid.ts",
@@ -2894,7 +2490,22 @@
    "oracles": []
   },
   {
+   "path": "packages/native/src/posix-files.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
    "path": "packages/native/src/process-lock.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/native/src/process-observation.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2922,97 +2533,6 @@
    "oracles": []
   },
   {
-   "path": "packages/platform-linux/src/guest-assets.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest-system.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/bridge/oma-vsock-bridge.c",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/environment.d/60-oma-egress.conf",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/network/80-oma.network",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-control.socket",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-control@.service",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-guestctl.service",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-guesthost.service",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-provision.service",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-society.socket",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/systemd/oma-society@.service",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/guest/sysusers.d/oma.conf",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/platform-linux/src/resident-rootfs.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -3028,13 +2548,6 @@
   },
   {
    "path": "packages/platform-linux/src/sandbox.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-linux/src/session-launcher.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3073,7 +2586,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-linux/src/units/execute.ts",
@@ -3104,42 +2618,21 @@
    "oracles": []
   },
   {
-   "path": "packages/platform-mac/src/archive-crypto.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/bookmark.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/bundle.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/files.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/image.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/platform-mac/src/keychain-client.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/platform-mac/src/keychain/main.swift",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/platform-mac/src/keychain/oma-keychain.entitlements",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3160,46 +2653,12 @@
    "oracles": []
   },
   {
-   "path": "packages/platform-mac/src/record.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/vmhelper/Package.swift",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/vmhelper/Sources/oma-vmhelper/main.swift",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/vmhelper/oma-vmhelper.entitlements",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/platform-mac/src/vz-driver.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/process/package.json",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/async.ts",
@@ -3245,6 +2704,28 @@
   },
   {
    "path": "packages/process/src/preparation.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/process/src/resident-supervisor.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
+   "path": "packages/process/src/restart-policy.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/process/src/restic.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3321,42 +2802,7 @@
    "oracles": []
   },
   {
-   "path": "packages/protocol/src/guest-history.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/protocol/src/host-api.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/protocol/src/host-channel.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/protocol/src/host-errors.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/protocol/src/host-guest.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/protocol/src/host-history.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3605,8 +3051,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/storage/src/arrival-journal.ts",
@@ -3627,8 +3072,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/storage/src/context-files.ts",
@@ -3743,6 +3187,20 @@
    "oracles": []
   },
   {
+   "path": "packages/storage/src/package-staging.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/storage/src/package-tar.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/storage/src/preaccept-artifact.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -3758,6 +3216,27 @@
   },
   {
    "path": "packages/storage/src/published-mail.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/storage/src/restic-tar.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/storage/src/restic-tool.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/storage/src/restic-verification.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],

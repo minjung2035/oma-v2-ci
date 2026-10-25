@@ -150,6 +150,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/native/src/posix-files.ts",
       "packages/native/src/process-observation.ts",
       "packages/process/src/restart-policy.ts",
+      "packages/process/src/resident-supervisor.ts",
       "packages/process/src/restic.ts",
       "packages/storage/src/package-staging.ts",
       "packages/storage/src/package-tar.ts",

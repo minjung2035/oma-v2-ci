@@ -1,3 +1,5 @@
+import { ResidentSupervisor } from "@oma/process/resident-supervisor";
+import { withCleanup } from "@oma/native/cleanup";
 // MUST [UNIT-001..007]: fixed unit coordination; command outcomes are not physical proof.
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
@@ -87,13 +89,36 @@ export function assertUserManagerReachable(): void {
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
   private incarnationOf: IncarnationReader | null;
+  private readonly supervisor: ResidentSupervisor<UnitObservation>;
   private observationTask: { readonly agent: Actor; readonly task: Promise<UnitObservation> } | null = null;
   constructor(
     private readonly society: string,
     private readonly values: RenderValues,
     private readonly installDir: string = unitsInstallDir(),
     incarnationOf: IncarnationReader | null = null,
-  ) { this.incarnationOf = incarnationOf; }
+  ) {
+    this.incarnationOf = incarnationOf;
+    this.supervisor = new ResidentSupervisor({
+      assertStartOwner: agent => {
+        if (this.residentForeign(agent))
+          throw new StoreError("AGENT_CONFLICT", `the execution names of ${agent} belong to another owner`);
+      },
+      observe: agent => this.observe(agent),
+      repairStartFailure: agent => { this.run(["reset-failed", unitName(this.society, agent, "service")]); },
+      enableWake: agent => {
+        this.run(["enable", "--now", join(this.installDir, unitName(this.society, agent, "path"))]);
+        this.verifyPath(agent, true);
+      },
+      launch: agent => { this.run(["start", unitName(this.society, agent, "service")]); },
+      disableWake: agent => withCleanup(
+        () => this.stopOwnedUnit(agent, "path", "stop"),
+        () => this.stopOwnedUnit(agent, "path", "disable")),
+      revoke: agent => this.onRevokeRun?.(agent),
+      terminate: agent => this.stopOwnedUnit(agent, "service", "stop"),
+      verifyWakeDisabled: agent => { if (!this.residentForeign(agent)) this.verifyPath(agent, false); },
+      confirmDead: (agent, incarnation) => this.confirmDead(agent, incarnation),
+    });
+  }
 
   /** The lifecycle's durable Store reader deliberately replaces any constructor reader. */
   bindIncarnationReader(reader: IncarnationReader): void { this.incarnationOf = reader; }
@@ -263,61 +288,17 @@ export class UnitsModule {
       throw new StoreError("RUN_TERMINATION_UNKNOWN", `activation state not confirmed for ${agent}`);
   }
 
-  start(agent: Actor, explicitRepair: boolean): void {
-    if (this.residentForeign(agent))
-      throw new StoreError("AGENT_CONFLICT", `the unit names of ${agent} are another society's or agent's; it is not started`);
-    const before = this.observe(agent);
-    const service = unitName(this.society, agent, "service");
-    const path = unitName(this.society, agent, "path");
-    // reset-failed changes one thing, a unit's failed state (a start limit
-    // among it). A unit that is not failed has none to clear, and one systemd
-    // has unloaded while inactive answers "not loaded": that is "nothing to
-    // reset", not a failed repair (INV02). Found by the real-provider run: a
-    // Resident started a while after it was created could never start.
-    if (explicitRepair && before.activeState === "failed") this.run(["reset-failed", service]);
-    this.run(["enable", "--now", join(this.installDir, path)]);
-    this.verifyPath(agent, true);
-    try { this.run(["start", service]); }
-    catch (error) {
-      // A completed refusal may be explained by current structured evidence.
-      // A later observation cannot settle a command that never answered.
-      if (error instanceof StoreError && error.code === "INTERNAL_ERROR" && this.startLimitStatus(agent) !== null)
-        throw new StoreError("START_LIMIT", `start limit reached for ${agent}`, { cause: error });
-      throw error;
-    }
-    const after = this.observe(agent);
-    const exited = before.activeState !== "unknown" && after.activeState === "inactive" && after.result === "success" && after.execMainStatus === 0 &&
-      /^[0-9a-f]{32}$/.test(after.invocationId ?? "") && after.invocationId !== before.invocationId;
-    if (!["active", "activating"].includes(after.activeState) && !exited)
-      throw new StoreError("RUN_TERMINATION_UNKNOWN", `service activation not observed for ${agent}`);
-  }
+  start(agent: Actor, explicitRepair: boolean): void { this.supervisor.start(agent, explicitRepair); }
+  stop(agent: Actor, incarnation: number): UnitObservation { return this.supervisor.stop(agent, incarnation); }
 
-  stop(agent: Actor, incarnation: number): UnitObservation {
-    const service = unitName(this.society, agent, "service");
-    const path = unitName(this.society, agent, "path");
-    const failures: unknown[] = [];
-    // P0V-59: a name another owner holds is not stopped or disabled for this
-    // society. Refusing that effect is not proof that an earlier run died.
-    const foreign = this.residentForeign(agent);
-    const missing = (unit: string): boolean => {
-      if (foreign) return true;
-      const outcome = this.command(["show", unit, "--property=LoadState", "--value"]);
-      return outcome.kind === "succeeded" && outcome.stdout.trim() === "not-found";
-    };
-    for (const action of [
-      () => { if (!missing(path)) this.run(["stop", path]); },
-      () => { if (!missing(path)) this.run(["disable", path]); },
-      () => this.onRevokeRun?.(agent),
-      () => { if (!missing(service)) this.run(["stop", service]); },
-      () => { if (!foreign) this.verifyPath(agent, false); },
-    ]) {
-      try { action(); } catch (error) { failures.push(error); }
-    }
-    const observed = this.observe(agent);
-    const dead = this.confirmDead(agent, incarnation);
-    if (failures.length > 0 || !dead)
-      throw new StoreError("RUN_TERMINATION_UNKNOWN", `unit stop or descendant death not confirmed for ${agent}`);
-    return observed;
+  /** Linux command adapter only. Foreign names receive no effect and a missing
+   * unit is merely absent from the manager, never descendant-death evidence. */
+  private stopOwnedUnit(agent: Actor, suffix: "path" | "service", action: "stop" | "disable"): void {
+    if (this.residentForeign(agent)) return;
+    const unit = unitName(this.society, agent, suffix);
+    const observed = this.command(["show", unit, "--property=LoadState", "--value"]);
+    if (observed.kind === "succeeded" && observed.stdout.trim() === "not-found") return;
+    this.run([action, unit]);
   }
 
   unitCgroup(kind: "principal-relay"): string {
@@ -419,8 +400,5 @@ export class UnitsModule {
   /** UNIT-006/P0-5: only a current explicit result establishes a start limit.
    * NRestarts is cumulative, not the count in StartLimitIntervalSec. Managers
    * that retain exit-code leave the cause unconfirmed; null is not absence. */
-  startLimitStatus(agent: Actor): string | null {
-    const obs = this.observe(agent);
-    return obs.activeState === "failed" && obs.result === "start-limit-hit" ? "start_limit" : null;
-  }
+  startLimitStatus(agent: Actor): string | null { return this.supervisor.startLimitStatus(agent); }
 }

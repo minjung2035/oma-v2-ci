@@ -1,8 +1,37 @@
 # OMA v2 — 현재 검증 상태
 
-최신 코드 기준은 `d571645941e621eec6ccd91504cfbdc72389200d`다. 아래 코드 검증은 문서 정리 **이전 입력의 실행 기록**이다. 이번 변경은 문서만 정리하며, 이전 PASS를 정리 후 입력의 전체 runtime 실행으로 표시하지 않는다.
+현재 활성 작업은 DR49 native 구현이다. 이전 문서 정리 범위는 사용자 구현 지시로 대체됐다.
+아래 DR48·문서 정리 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
 
-## 최신 코드 검증: DR48 (2026-10-25)
+## DR49 native 전환 — 진행 중 (2026-10-25)
+
+작업 브랜치는 `work/macos-native-20261025`이며 master 병합·배포는 하지 않았다.
+현재 G-PROCESS/G-FILES/G-AUTH는 OPEN이고 Mac 제품 진입은 효과 전에 거절한다.
+이 거절 시험이나 부분 primitive 성공을 native Society 지원으로 표시하지 않는다.
+
+| 실제 입력·실행 | 결과와 범위 |
+|---|---|
+| `adf20331`: Linux 실제 Restic round trip·손상·죽음 불명·복구 | 19/19 PASS. 이전 source의 독립 결과이며 이후 모듈 이동에 대한 전체 재검증 아님 |
+| VM 제거·Restic 모듈 이동 후 Linux 회귀 | durable fault·Restic round trip 27/27, 공통 파일/metadata/소유권 73/73 PASS. artifact 로그에 각 실행 범위를 보존 |
+| `762c1604` 변경을 위한 Linux 실행 | 정식 build·typecheck PASS. config/generation/native/tar 30/30, package/세션 소유권 108/108 PASS. 전체 local은 미실행 |
+| `aea22ec0`: 실제 macOS 26/15 common-runtime | 25개 workspace build 성공. 양 OS 9/10 PASS·1 FAIL. 파일 생성 뒤 EACCES: Darwin arm64 openat 가변 인자 ABI 결함을 발견. 실패를 보존하고 수정 |
+| `762c1604`: 실제 macOS 26/15 common-runtime | build 성공, directory FFI 초기화가 없는 `readdir$INODE64` symbol을 요구해 실패. 수정 후 실제 OS 재실행 대기. Linux 성공으로 덮지 않음 |
+| 실제 macOS 26/15 Keychain | 독립 Swift primitive SDK typecheck PASS. signed Keychain·release 실행·TCC는 미실행 |
+| 현재 source의 전체 local·독립 설치·최종 architecture/trace qualification | 미완료. 일부 이전 실행 PASS를 합산하지 않음 |
+
+실제 workflow: [40195568898](https://github.com/minjung2035/oma-v2/actions/runs/40195568898),
+[40197183201](https://github.com/minjung2035/oma-v2/actions/runs/40197183201),
+[40200893255](https://github.com/minjung2035/oma-v2/actions/runs/40200893255),
+[40201140402](https://github.com/minjung2035/oma-v2/actions/runs/40201140402),
+[40201962210](https://github.com/minjung2035/oma-v2/actions/runs/40201962210).
+모든 실패 artifact를 보존한다. 원시 local 로그는
+`/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. 새/변경 source는 NOT_REVIEWED이며
+고정 architecture·authored review·과거 검토 기록은 변경하지 않는다.
+
+남은 구현은 [전환 기록](native-transition.md)을 따른다. 직접 실행 scope·auth·owned 파일
+pin/reopen·quarantine/checker·설치와 P7 최종 대조가 남아 있으며 full support 완료가 아니다.
+
+## 이전 입력의 코드 검증: DR48 (2026-10-25)
 
 | 검사 | 실제 결과와 범위 |
 |---|---|
@@ -35,7 +64,7 @@ DR48은 Git index·local refs·staged/unstaged·untracked/ignored 파일, mode·
 VM을 포함한 전체 Society 시작 시간은 측정하지 못했다. 서로 다른 측정값을 더해 전체 시간으로 표시하지 않는다. 원시 입력·로그·실패·검증 판정은
 `/home/dev/oma-audit-artifacts/society-startup-2026-10-25/verification-result.json`에 있다.
 
-## 실제 환경 검증과 알려진 한계
+## DR48 입력의 실제 환경 검증과 당시 한계
 
 | 항목 | 현재 판정 |
 |---|---|

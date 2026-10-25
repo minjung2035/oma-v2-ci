@@ -20,7 +20,9 @@ function initialize() {
     link: libc.func("int linkat(int from, const char *source, int to, const char *name, int flags)"),
     open: libc.func("int openat(int fd, const char *name, int flags, ...)"),
     fdopendir: libc.func("void *fdopendir(int fd)"),
-    readdir: libc.func(process.platform === "darwin" ? "readdir$INODE64" : "readdir", "void *", ["void *"]),
+    // arm64 Darwin has only the native 64-bit-inode ABI; the compatibility
+    // suffix belongs to Intel. The SDK layout is asserted by the CI probe.
+    readdir: libc.func(process.platform === "darwin" && process.arch === "x64" ? "readdir$INODE64" : "readdir", "void *", ["void *"]),
     closedir: libc.func("int closedir(void *directory)"),
     symlink: libc.func("int symlinkat(const char *target, int fd, const char *name)"),
     readlink: libc.func("intptr_t readlinkat(int fd, const char *name, void *buffer, size_t size)"),

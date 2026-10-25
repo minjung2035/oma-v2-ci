@@ -84,11 +84,13 @@
       "packages/lifecycle/src/create.ts#CreateCoordinator",
       "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
       "packages/platform-linux/src/units.ts#UnitsModule",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
       "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
       "test/phase4.test.ts#UNIT",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "packages/process/test/resident-supervisor.test.mjs#resident policy"
     ]
   },
   {
@@ -887,6 +889,22 @@
     "negativeTests": [
       "test/module-boundaries.test.mjs#DR41: module boundaries reject",
       "test/module-boundaries.test.mjs#DR44: conversation and native lifecycle boundaries"
+    ]
+  },
+  {
+    "source": "docs/implementation-spec.md",
+    "requirements": [
+      "UNIT-006"
+    ],
+    "owner": "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus",
+    "entrypoint": "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+    "callPath": [
+      "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-supervisor.test.mjs#start-limit observation",
+      "test/status-observation.test.ts#UNIT-006"
     ]
   }
 ]

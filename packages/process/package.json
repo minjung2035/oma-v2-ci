@@ -51,6 +51,10 @@
     "./restic": {
       "types": "./dist/restic.d.ts",
       "default": "./dist/restic.js"
+    },
+    "./resident-supervisor": {
+      "types": "./dist/resident-supervisor.d.ts",
+      "default": "./dist/resident-supervisor.js"
     }
   },
   "scripts": {
@@ -60,7 +64,8 @@
   },
   "dependencies": {
     "@oma/domain": "0.1.0",
-    "@oma/native": "0.1.0"
+    "@oma/native": "0.1.0",
+    "@oma/contracts": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

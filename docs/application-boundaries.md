@@ -53,24 +53,28 @@ Runtime의 화면 계약은 `application/society-conversation.ts`다. UI에는 d
 
 ### 세션 작업공간 보관
 
-[runtime/session-storage.ts](../apps/oma/src/runtime/session-storage.ts)가 DR48의 보관·복원을 조정한다. Restic 실행/검증과 checkpoint 상태는 같은 디렉터리의 `restic.ts`, `restic-verification.ts`, `session-storage-state.ts`에 있다. 물리 tree 검증은 [storage/cache-trees.ts](../packages/storage/src/cache-trees.ts)가 소유한다.
+[runtime/session-storage.ts](../apps/oma/src/runtime/session-storage.ts)가 DR48의 보관·복원을 조정한다. Restic child/FD 수명은 `packages/process/src/restic.ts`, tar/inventory 검증은 `packages/storage/src/restic-tar.ts`·`restic-verification.ts`, checkpoint 상태는 App의 `session-storage-state.ts`가 소유한다. 물리 tree 검증은 [storage/cache-trees.ts](../packages/storage/src/cache-trees.ts)가 소유한다.
 
 Broker는 Store open/provision **이전**에 staged restore를 수행하고, drain·native 종료·Resident quiescence·Store.close **이후**에 archive한다. DB·mail·runner·Principal history는 원래 owner에 남긴다. 보관의 성공·원본 회수·cold 선택·복원 성공을 하나의 상태로 축약하지 않는다. 도구 설치는 [install-restic.mjs](../scripts/install-restic.mjs), 운영 방법은 [operations](operations.md#세션-작업공간-보관)를 따른다.
 
-## Host/guest와 OS adapter
+## Native 실행과 OS adapter
 
-`apps/oma/src/platform/`에는 project/session/backup use case와 공통 RPC·stream 연결이 남는다. OS 구현은 플랫폼 package에 있다.
+App은 platform adapter를 선택하고 기존 25개 workspace의 public API를 조립한다. VM의
+host/guest use case·RPC·VZ lifecycle·guest 자산은 제거했다. 과거 시험 원문은
+[VM 시험 보관 기록](archive/macos-vm-tests-2026-10-25/README.md)에 있으며 native proof로 사용하지 않는다.
 
 | 위치 | 주요 역할 |
 |---|---|
-| [App host](../apps/oma/src/platform/host) | HostService·ProjectSyncCoordinator·SessionGateway·SnapshotCoordinator·HostTransfers |
-| [App guest](../apps/oma/src/platform/guest) | GuestHost·GuestControl·project/archive/package admission·mutation/maintenance fence |
-| [platform-mac](../packages/platform-mac/src) | VzDriver·NativeChannel·KeychainClient·bookmark·bundle·host 파일 처리·Swift helper |
-| [platform-linux](../packages/platform-linux/src) | UnitsModule·SystemdSessionLauncher·guest system 명령·sandbox·rootfs·guest 자산 |
+| [process](../packages/process/src) | 공통 start/stop 조정·spawn/FD/출력 수명·restart 정책·Restic 명령 |
+| [storage](../packages/storage/src) | owned tree·게시·package staging·tar/inventory 검증 |
+| [native](../packages/native/src) | 디렉터리 상대 syscall·pin/reopen·lock·peer/process 관측 primitive |
+| [platform-mac](../packages/platform-mac/src) | Darwin credential channel·독립 Keychain primitive. VM runtime 없음 |
+| [platform-linux](../packages/platform-linux/src) | Linux unit 명령/관측 reference adapter·bwrap/seccomp·rootfs |
 
-플랫폼 행위 계약은 [contracts/platform-lifecycle.ts](../packages/contracts/src/platform-lifecycle.ts), 전송 DTO는 `packages/protocol/src/`에 있다. VM running, guest ready, holder endpoint 준비, Principal 등록, 모든 Worker 종료는 각각 다른 관측이다. source나 Linux 주입 시험의 존재가 native Mac 실행 증거는 아니다.
-
-현재 Linux 의존은 플랫폼 package 밖에도 남아 있다. Broker의 peer credential/pidfd, Native의 openat2·`/proc` 경로, App의 abstract Unix Society lease, Restic 설치·실행은 현재 구현의 일부다. TypeScript와 Pi의 지원 플랫폼만으로 전체 제품의 이식성을 판단하지 않는다.
+Linux systemd·abstract Society lease 의존 제거와 Darwin sandbox·파일 pin·인증 연결은 진행 중이다.
+실제 미해결 gate와 실행 결과는 [전환 기록](implementation/native-transition.md)과
+[validation](implementation/validation.md)이 소유한다. interface나 Linux unit 시험으로
+실제 Darwin 지원을 주장하지 않는다.
 
 ## Review와 transaction 경계
 
@@ -85,3 +89,9 @@ App이 실제 ledger/effect port를 연결한다. authority reader는 Store writ
 공개 API가 없는 SDK 접점은 `packages/engine/src/pi-compat/`에 모은다. 정확한 버전·잔여 member·이유는 [contacts.json](../packages/engine/src/pi-compat/contacts.json)이 소유한다. host는 raw private handle을 받지 않는다. 버전·member shape 검사는 접점을 제거했다는 뜻이 아니며, 공개 API 사용과 남아 있는 private 의존을 구분한다.
 
 SDK autocomplete는 공개 provider API를 사용한다. optional 검색 도구 설치가 UI 시작을 막지 않도록 하는 scoped private import와 editor·session·문구 adapter는 위 inventory에 남는다. SDK 버전을 바꿀 때에는 해당 원래 semantic oracle과 실제 설치 동작을 확인한다.
+
+DR49 native 전환에서 start/stop 순서와 관측 판정은 `process/resident-supervisor`가 소유한다.
+Linux UnitsModule은 이를 실제 호출하고 unit 문법·manager 명령·cgroup 관측만 제공한다.
+이 adapter는 이행 중 reference이며 최종 manager 제거는 아직 남았다. Restic 명령/FD 수명은
+process, tar/inventory/tool 파일 검증과 package staging은 storage, 조립은 App이 소유한다.
+공통화 때문에 아래 모듈에서 App을 import하거나 workspace 의존 허용 목록을 넓히지 않는다.

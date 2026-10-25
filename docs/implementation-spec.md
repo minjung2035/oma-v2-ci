@@ -410,6 +410,12 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 11. systemd와 lifecycle
 
+DR49 전환 중에는 아래 unit 계약을 Linux reference adapter의 검증 기준으로 유지한다.
+start/stop의 hint 차단 → 권한 철회 → 종료 요청 → 독립 후손 사망 판정은 공통
+`@oma/process/resident-supervisor`가 소유하며 Linux adapter가 실제 호출한다. 완료된 명령이나
+로그는 사망 증거가 아니다. 최종 native 실행은 manager 제거와 OS별 scope/auth 검증 후
+[새 native 계약](macos-platform.md)으로 수용한다. 이행 중 adapter 존재는 P4/P6 완료가 아니다.
+
 **MUST [UNIT-001; arch §§6,15]** society별 허용 unit은 각 Resident의 service/path와 principal.path/principal-relay.service다. unit 이름은 `oma-<society>-<actor>.service/.path`, `oma-<society>-principal-relay.service`, `oma-<society>-principal.path`다. broker.service와 reconcile.service/timer는 존재하지 않는다 — broker는 제품이 foreground로 직접 실행하고 주기 reconcile은 broker process 안의 sweep이다. 이름 충돌 방지를 위해 Resident 이름 broker, principal-relay, reconcile도 금지한다.
 
 **MUST [UNIT-002]** [systemd templates](implementation-spec.md#unit-renderer-계약)를 고정 renderer로 생성한다. template의 @NODE@/@LIBDIR@/@STATE@/@SOCIETY@/@AGENT@는 host 값에서만 치환한다. unit 이름과 ExecStart argv를 caller 문자열에서 만들지 않는다. `%`/공백/따옴표/newline은 systemd 문법에 맞춰 escape하고 NUL/newline이 들어간 설정은 거절한다. 템플릿은 systemd에 그대로 설치할 파일이 아니다.

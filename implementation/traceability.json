@@ -1715,11 +1715,13 @@
       "packages/lifecycle/src/create.ts#CreateCoordinator",
       "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver",
       "packages/platform-linux/src/units.ts#UnitsModule",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor",
       "packages/platform-linux/src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
       "test/phase4.test.ts#UNIT",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "packages/process/test/resident-supervisor.test.mjs#resident policy"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1761,12 +1763,20 @@
     "normativeText": "**MUST [UNIT-006]** start-limit failure는 status에 노출하고 reconcile이 자동 reset-failed를 반복하지 않는다. 현재의 명시적 `failed/Result=start-limit-hit`만 start-limit 확정 근거다. 누적 `NRestarts`, 명령 출력에 등장하는 단어·unit 이름, 관측 timeout은 현재 StartLimitIntervalSec 안의 제한 도달 증거가 아니다. manager가 `exit-code`만 남기면 관측된 실패는 표시하되 제한 원인은 미확인이다. `startLimitStatus`의 null은 제한 없음 증명이 아니며, 뒤늦은 상태 조회가 끝나지 않은 start 명령의 unknown을 확정 실패로 바꾸지 않는다(DR27, P0-5). 명시적 `oma agent start <name>` 또는 host repair만 reset-failed를 수행할 수 있다. stopped actor의 new는 계속 저장하되 path/service를 켜지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus",
+    "entrypoint": "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+    "callPath": [
+      "packages/platform-linux/src/units.ts#UnitsModule.startLimitStatus",
+      "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
+    ],
+    "negativeTests": [
+      "packages/process/test/resident-supervisor.test.mjs#start-limit observation",
+      "test/status-observation.test.ts#UNIT-006"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "CREATE-001",
