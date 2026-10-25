@@ -18,47 +18,10 @@
  * Failing closed is refusing, not concluding that a process ended: only
  * `processEnded` says that, and only from what the substrate answered.
  */
-import { readFileSync } from "node:fs";
-
-export interface ProcessIdentity {
-  readonly pid: number;
-  /** Clock ticks since boot at which the process started (proc(5), field 22). */
-  readonly startTime: string;
-}
-
-/** What the substrate says about a pid: running (with its parent and start
- * time), exited (the kernel has no such process), or unavailable -- unreadable
- * for any other reason (too many open files, no memory, a hidden /proc),
- * malformed, or a platform with no substrate at all. Unavailable is not
- * exited (INV02). */
-export type ProcessObservation =
-  | { readonly kind: "running"; readonly ppid: number; readonly startTime: string }
-  | { readonly kind: "exited" }
-  | { readonly kind: "unavailable" };
-
-/** One observation. The seam a platform's substrate plugs into. */
+import { observeLinuxProcess, observeDarwinProcess, type ProcessObservation } from "@oma/native/process-observation";
+export type { ProcessObservation };
+export interface ProcessIdentity { readonly pid: number; readonly startTime: string }
 export type ProcessObservationReader = (pid: number) => ProcessObservation;
-
-/** Linux's substrate: /proc/<pid>/stat. */
-function procStat(pid: number): ProcessObservation {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return { kind: "unavailable" };
-  let text: string;
-  try { text = readFileSync(`/proc/${pid}/stat`, "utf8"); }
-  catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    return code === "ENOENT" || code === "ESRCH" ? { kind: "exited" } : { kind: "unavailable" };
-  }
-  // The command name is parenthesised and may itself contain ") ", so the
-  // fields are counted from the last closing parenthesis.
-  const close = text.lastIndexOf(")");
-  if (close < 0) return { kind: "unavailable" };
-  const fields = text.slice(close + 2).trim().split(" ");
-  // After the name: state(3) ppid(4) ... starttime(22).
-  const ppid = Number(fields[1]);
-  const startTime = fields[19];
-  if (!Number.isSafeInteger(ppid) || ppid < 0 || startTime === undefined || !/^[0-9]+$/.test(startTime)) return { kind: "unavailable" };
-  return { kind: "running", ppid, startTime };
-}
 
 /** A platform with no shipped substrate observes nothing. This is not an
  * absent /proc reporting every pid exited -- it is the honest "could not be
@@ -73,7 +36,7 @@ export interface ProcessProbe {
    * shipped. The macOS equivalence lane is explicitly NOT_RUN -- no native
    * darwin substrate is claimed; where a verification lane needs to say so,
    * this field is what it reads. */
-  readonly substrate: "proc" | "none";
+  readonly substrate: "proc" | "libproc" | "none";
   /** The identity of a running process, or null if it is not observed running. */
   identity(pid: number): ProcessIdentity | null;
   /** The parent of a running process, or null if it cannot be observed. */
@@ -85,7 +48,7 @@ export interface ProcessProbe {
   descendsFrom(pid: number, ancestor: ProcessIdentity): boolean;
 }
 
-function buildProbe(substrate: "proc" | "none", read: ProcessObservationReader): ProcessProbe {
+function buildProbe(substrate: "proc" | "libproc" | "none", read: ProcessObservationReader): ProcessProbe {
   return {
     substrate,
     identity(pid) {
@@ -125,16 +88,16 @@ function buildProbe(substrate: "proc" | "none", read: ProcessObservationReader):
  * equivalence lane is NOT_RUN, so no native substrate is claimed and nothing
  * is observed. `reader` is a test's own substrate. */
 export function processProbeFor(platform: NodeJS.Platform | string, reader?: ProcessObservationReader): ProcessProbe {
-  return platform === "linux" ? buildProbe("proc", reader ?? procStat) : buildProbe("none", reader ?? blindStat);
+  if (platform === "linux") return buildProbe("proc", reader ?? observeLinuxProcess);
+  if (platform === "darwin" && process.platform === "darwin") return buildProbe("libproc", reader ?? observeDarwinProcess);
+  return buildProbe("none", reader ?? blindStat);
 }
 
 /** The probe this process's platform gets, chosen once: the product's own
  * authority decisions read it, and there is no second way to observe a
  * process. */
 export const hostProcessProbe: ProcessProbe = processProbeFor(process.platform);
-// macOS and every other platform: blind. A Principal endpoint is never
-// opened over a substrate that cannot observe -- the supervision channel's
-// host identity comes back unobserved and the broker declines the channel.
+// Process identity alone does not close G-AUTH; peer pinning remains required.
 
 /** The identity of a running process, or null if it is not observed running. */
 export function processIdentity(pid: number): ProcessIdentity | null {

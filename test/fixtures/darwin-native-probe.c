@@ -62,6 +62,8 @@ static void file_probe(void) {
   int pin = openat(root, "file", O_EVTONLY | O_NOFOLLOW | O_CLOEXEC);
   int pin_error = pin < 0 ? errno : 0, repair_error = 0;
   if (pin >= 0) { if (fchmod(pin, 0600) != 0) repair_error = errno; close(pin); }
+  /* Isolate later namespace observations from the permission-pin failure. */
+  require(fchmodat(root, "file", 0600, 0) == 0, "fixture permissions");
   require(mkfifoat(root, "fifo", 0600) == 0, "fifo");
   int fifo = openat(root, "fifo", O_EVTONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
   struct stat info; int fifo_pin = fifo >= 0 && fstat(fifo, &info) == 0 && S_ISFIFO(info.st_mode);

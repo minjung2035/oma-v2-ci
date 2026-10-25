@@ -1,3 +1,4 @@
+import { unlinkAt } from "@oma/native/posix-files";
 import type { ImmutableObservation } from "@oma/contracts/files";
 /** MAIL-004..006 / FS-002: immutable bytes, never a derived overwrite API.
  * Mail permits hardlinks. Keep checked descriptors through publication; names
@@ -206,7 +207,7 @@ function publishImmutable(
     }
   }, () => withCleanup(() => {
     if (temporary !== undefined && parent !== undefined && !crashed) {
-      unlinkSync(entryAt(parent, temporary));
+      unlinkAt(parent, temporary);
       faultAt(
         faults,
         "temporary-cleanup",

@@ -1,3 +1,4 @@
+import { mkdirAt, unlinkAt, renameAt } from "@oma/native/posix-files";
 import type { StageArea } from "../ports/package-files.js";
 export type { StageArea } from "../ports/package-files.js";
 /** Filesystem staging effects; package naming and archive interpretation stay
@@ -42,7 +43,7 @@ function descendBeneath(dir: number, rel: string, create: boolean): number {
   for (const part of rel.split("/")) {
     if (part === "") continue;
     if (create) {
-      try { mkdirSync(entryAt(current, part)); }
+      try { mkdirAt(current, part); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     }
     // Every descend is inside oma's own tree -- the staging area or `local/`
@@ -76,7 +77,7 @@ export function collectStageStray(parent: number, parentPath: string, parts: rea
       })();
       if (observed === undefined) return false;
       if (!observed.isDirectory()) {
-        unlinkSync(entryAt(held, part));
+        unlinkAt(held, part);
         fsyncSync(held);
         return true;
       }
@@ -105,7 +106,7 @@ export function linuxStaging(root: string): StageArea {
   const tmp = `${STAGING_PREFIX}${randomUUID()}`;
   const path = join(root, tmp);
   try {
-    mkdirSync(entryAt(store, tmp), { mode: 0o700 });
+    mkdirAt(store, tmp, 0o700);
     dir = openBeneath(store, tmp, DIRECTORY);
   } catch (error) {
     if (dir !== undefined) closeSync(dir);
@@ -150,7 +151,7 @@ export function linuxStaging(root: string): StageArea {
       // sweep collects it, and the bounded step is retried once; anything
       // else stays the publish's own failure.
       const openLocal = (): number => {
-        try { mkdirSync(entryAt(store, PACKAGE_LOCAL_DIR), { mode: 0o700 }); }
+        try { mkdirAt(store, PACKAGE_LOCAL_DIR, 0o700); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
         return openOwnedDirectory(store, PACKAGE_LOCAL_DIR);
       };
@@ -180,7 +181,7 @@ export function linuxStaging(root: string): StageArea {
           if (observed !== undefined) {
             if (observed.isDirectory()) removeOwnedTree(destPath); else removeOwnedFile(destPath);
           }
-          renameSync(entryAt(source, leaf), entryAt(dest, destName));
+          renameAt(source, leaf, dest, destName);
           // The copy must outlive a crash the way the index naming it does.
           const arrived = lstatSync(destPath);
           if (arrived.isDirectory()) {

@@ -1,3 +1,4 @@
+import { unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
 // FS-001..003 / P7: syscall ordering, not artifact authority or S-06 evidence.
 // Immutable publication and derived replacement are deliberately separate APIs.
 // These helpers neither modify a ledger nor collect accepted recovery evidence.
@@ -126,7 +127,7 @@ export function fsyncFile(path: string, faults?: DurabilityObserver): void {
  * is flushed either way.
  */
 function cleanupOwnedTemporary(parent: number, name: string, path: string, faults?: DurabilityObserver): void {
-  try { unlinkSync(entryAt(parent, name)); }
+  try { unlinkAt(parent, name); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   faultAt(faults, "temporary-cleanup", "after-visible", path);
   fsyncHeldDir(parent, dirname(path), faults);
@@ -171,7 +172,7 @@ export function writeExclusiveFsyncedEntry(parent: number, name: string, path: s
   } catch (error) {
     if (fd === undefined || isDurabilityFault(error)) throw error;
     try {
-      unlinkSync(entryAt(parent, name));
+      unlinkAt(parent, name);
       faultAt(faults, "temporary-cleanup", "after-visible", path);
       fsyncSync(parent);
     } catch (cleanup) { throw new AggregateError([error, cleanup], "filesystem effect and owned cleanup failed"); }
@@ -236,10 +237,10 @@ export function createLockedTemporary(parent: number, temporaryName: string, fla
     // The provisional name is unique and cannot be collected or reused while
     // its descriptor is held. Never replace an existing held name.
     linkDescriptor(fd, parent, temporaryName);
-    unlinkSync(entryAt(parent, preparing));
+    unlinkAt(parent, preparing);
     return fd;
   } catch (error) {
-    try { unlinkSync(entryAt(parent, preparing)); } catch { /* retain the original failure */ }
+    try { unlinkAt(parent, preparing); } catch { /* retain the original failure */ }
     closeSync(fd);
     throw error;
   }
@@ -258,7 +259,7 @@ export function collectDeadTemporaries(parent: number): void {
     try { fd = openBeneath(parent, entry, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { continue; }
     try {
       if (lockFileDescriptor(fd).kind !== "held") continue;
-      try { unlinkSync(entryAt(parent, entry)); } catch { /* raced with another collector */ }
+      try { unlinkAt(parent, entry); } catch { /* raced with another collector */ }
     } finally { closeSync(fd); }
   }
 }
@@ -284,13 +285,13 @@ function publishOnce(parent: number, name: string, target: string, data: string 
       faultAt(faults, "file-fsync", "after-visible", temporary);
     } catch (error) {
       if (isDurabilityFault(error)) { crashed = true; throw error; }
-      try { unlinkSync(entryAt(parent, temp)); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
+      try { unlinkAt(parent, temp); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
       throw error;
     }
     let result: "created" | "existing" = "created";
     try {
       faultAt(faults, "publication-link", "before", target);
-      try { linkSync(entryAt(parent, temp), entryAt(parent, name)); }
+      try { linkAt(parent, temp, parent, name); }
       catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         // Taken by a collector before this writer's lock: start again.
@@ -305,7 +306,7 @@ function publishOnce(parent: number, name: string, target: string, data: string 
     } finally {
       if (!crashed) {
         faultAt(faults, "temporary-cleanup", "before", temporary);
-        try { unlinkSync(entryAt(parent, temp)); }
+        try { unlinkAt(parent, temp); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         fsyncHeldDir(parent, dirname(target), faults);
       }
@@ -354,7 +355,7 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
         fsyncSync(fd);
         faultAt(faults, "file-fsync", "after-visible", temporary);
         faultAt(faults, "derived-rename", "before", target);
-        try { renameSync(entryAt(parent, temporaryName), entryAt(parent, name)); }
+        try { renameAt(parent, temporaryName, parent, name); }
         catch (error) {
           // The window the no-replace publication already answers: a
           // temporary whose lock is free looks like a dead writer's to a

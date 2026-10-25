@@ -1,3 +1,4 @@
+import { mkdirAt, unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
 /** D02/WP13: managed configuration generations.
  *
  * An operations bundle edited by the product is published as one immutable
@@ -284,13 +285,13 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
     }
     const stagingName = `.staging-${randomUUID()}`;
     const staging = join(generations, stagingName);
-    mkdirSync(entryAt(parent, stagingName), { mode: 0o700 });
+    mkdirAt(parent, stagingName, 0o700);
     const tree = openBeneath(parent, stagingName, constants.O_RDONLY | constants.O_DIRECTORY);
     withCleanup(() => {
       const sub: Record<string, number> = {};
       withCleanup(() => {
         for (const directory of GENERATION_DIRECTORIES) {
-          mkdirSync(entryAt(tree, directory), { mode: 0o700 });
+          mkdirAt(tree, directory, 0o700);
           sub[directory] = openBeneath(tree, directory, constants.O_RDONLY | constants.O_DIRECTORY);
         }
         for (const [file, bytes] of published) {
@@ -305,7 +306,7 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
       fsyncHeldDir(tree, staging, faults);
     }, () => closeSync(tree));
     faultAt(faults, "derived-rename", "before", target);
-    renameSync(entryAt(parent, stagingName), entryAt(parent, name));
+    renameAt(parent, stagingName, parent, name);
     faultAt(faults, "derived-rename", "after-visible", target);
     fsyncHeldDir(parent, generations, faults);
   });
@@ -420,13 +421,13 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
       assertReproduces(temporary, edit.config, roles);
       assertCurrent(snapshot);
       faultAt(faults, "derived-rename", "before", manifest);
-      renameSync(entryAt(bundle, temporaryName), entryAt(bundle, manifestName));
+      renameAt(bundle, temporaryName, bundle, manifestName);
       renamed = true;
       faultAt(faults, "derived-rename", "after-visible", manifest);
     } catch (error) {
       // A simulated crash stops here like process loss; the quiescent collection
       // removes a manifest temporary a real crash leaves behind.
-      if (!renamed && !isDurabilityFault(error)) { try { unlinkSync(entryAt(bundle, temporaryName)); } catch { /* collected later */ } }
+      if (!renamed && !isDurabilityFault(error)) { try { unlinkAt(bundle, temporaryName); } catch { /* collected later */ } }
       throw error;
     }
     try {
@@ -486,16 +487,16 @@ function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCa
         throw new StoreError("INTERNAL_ERROR", "the written configuration does not reproduce the candidate");
       recheck();
       faultAt(faults, "derived-rename", "before", path);
-      if (mode === "replace") renameSync(entryAt(directory, temporaryName), entryAt(directory, name));
+      if (mode === "replace") renameAt(directory, temporaryName, directory, name);
       else {
-        try { linkSync(entryAt(directory, temporaryName), entryAt(directory, name)); }
+        try { linkAt(directory, temporaryName, directory, name); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; outcome = "existing"; }
-        unlinkSync(entryAt(directory, temporaryName));
+        unlinkAt(directory, temporaryName);
       }
       published = true;
       faultAt(faults, "derived-rename", "after-visible", path);
     } catch (error) {
-      if (!published && !isDurabilityFault(error)) { try { unlinkSync(entryAt(directory, temporaryName)); } catch { /* collected later */ } }
+      if (!published && !isDurabilityFault(error)) { try { unlinkAt(directory, temporaryName); } catch { /* collected later */ } }
       throw error;
     }
     try { fsyncHeldDir(directory, root, faults); }

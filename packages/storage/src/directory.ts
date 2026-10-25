@@ -1,3 +1,4 @@
+import { mkdirAt, unlinkAt } from "@oma/native/posix-files";
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
@@ -43,7 +44,7 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
   try {
     for (const component of components) {
       current = join(current, component);
-      try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
+      try { mkdirAt(parent, component, mode); created.push(current); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
       let child: number;
       try { child = openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY); }
@@ -214,7 +215,7 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
       current = join(current, component);
       const owned = index >= boundary.components.length - 1;
       const make = (): number => {
-        try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
+        try { mkdirAt(parent, component, mode); created.push(current); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
         try {
           return owned ? openOwnedDirectory(parent, component)
@@ -235,7 +236,7 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
         // the boundary: the boundary component's own parent is the user's,
         // not oma's to write, so its refusal stands.
         if (index < boundary.components.length || !(error instanceof StoreError) || error.code !== "STORE_CORRUPT") throw error;
-        try { unlinkSync(entryAt(parent, component)); }
+        try { unlinkAt(parent, component); }
         catch { throw error; }
         try { fsyncSync(parent); } catch { /* durable, or the retry reports it */ }
         child = make();

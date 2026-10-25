@@ -15,7 +15,7 @@ import { listOwnedDirectory, removeOwnedFile, removeOwnedTree, repairOwnedEntryM
 import { collectLeasedTree, leasePathOf, TreeLease } from "@oma/storage/tree-lease";
 import { observeProjectBinding } from "./project-binding.js";
 import { openResticTool, ResticProcess } from "./restic.js";
-import { verifyResticComparison, verifyResticInventory } from "./restic-verification.js";
+import { verifyResticInventory } from "./restic-verification.js";
 import { parseStorageState, readStorageText, type SessionStorageState, type StorageCheckpoint, type StorageResident } from "./session-storage-state.js";
 
 interface StorageOptions {
@@ -205,7 +205,7 @@ export class SessionStorage {
       this.options.log("Saving and verifying session workspace…");
       const snapshot = await restic.backup(this.options.society, list);
       await verifyResticInventory(await restic.inventory(snapshot), snapshot, roots.map(root => join(this.options.stateRoot, root)), before);
-      await verifyResticComparison(await restic.compare(snapshot), before);
+      await restic.compare(snapshot, before);
       if ((await digestCacheTrees(this.options.stateRoot, roots)).digest !== before.digest)
         throw new StoreError("REF_STATE_UNKNOWN", "session changed during backup; original workspace retained");
       await this.assertLedger(ledger);

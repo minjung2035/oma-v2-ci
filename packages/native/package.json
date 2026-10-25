@@ -47,6 +47,14 @@
     "./directory-layout": {
       "types": "./dist/directory-layout.d.ts",
       "default": "./dist/directory-layout.js"
+    },
+    "./posix-files": {
+      "types": "./dist/posix-files.d.ts",
+      "default": "./dist/posix-files.js"
+    },
+    "./process-observation": {
+      "types": "./dist/process-observation.d.ts",
+      "default": "./dist/process-observation.js"
     }
   },
   "scripts": {

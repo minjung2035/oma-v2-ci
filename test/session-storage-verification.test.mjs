@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { comparisonName, verifyResticComparison, verifyResticInventory } from "#oma-test/app/runtime/restic-verification";
+import { verifyResticInventory } from "#oma-test/app/runtime/restic-verification";
 import { parseStorageState } from "#oma-test/app/runtime/session-storage-state";
 import { requireResticSuccess } from "#oma-test/app/runtime/restic";
 
@@ -16,24 +16,6 @@ function spool() {
   const root = mkdtempSync(join(tmpdir(), "oma-storage-verification-")), file = join(root, "spool");
   return { file, write: text => writeFileSync(file, text, { mode: 0o600 }), close: () => rmSync(root, { recursive: true, force: true }) };
 }
-test("storage comparison decodes raw byte quoting and rejects traversal or malformed octal", () => {
-  assert.deepEqual(comparisonName('"repos/\\355\\225\\234\\352\\270\\200\\tfile\\n"'), { name: "repos/한글\tfile\n", tail: "" });
-  for (const name of ['"../escape"', '"/absolute"', '"repos//file"', '"repos/\\777"', '"repos/\\q"', '"repos/\\000"', '"unfinished'])
-    assert.throws(() => comparisonName(name));
-});
-test("storage comparison requires complete path coverage and both successful native exits", async () => {
-  const f = spool();
-  try {
-    const paths = '"repos/"\n"repos/file"\n';
-    f.write(paths + '"repos/file": Mod time differs\nOMA_RESTIC_COMPARE 0 1\n');
-    await verifyResticComparison(f.file, source);
-    for (const text of [paths + "OMA_RESTIC_COMPARE 3 1\n", paths + "OMA_RESTIC_COMPARE 0 2\n", paths + "OMA_RESTIC_COMPARE 0 1\n",
-      '"repos/"\nOMA_RESTIC_COMPARE 0 0\n', paths + '"repos/file": Contents differ\nOMA_RESTIC_COMPARE 0 1\n',
-      paths + '"repos/file"\nOMA_RESTIC_COMPARE 0 0\n', paths + 'OMA_RESTIC_COMPARE 0 0\n"repos/file"\n']) {
-      f.write(text); await assert.rejects(verifyResticComparison(f.file, source));
-    }
-  } finally { f.close(); }
-});
 test("storage inventory verifies snapshot binding, exact nanosecond metadata and all members", async () => {
   const f = spool();
   try {

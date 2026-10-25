@@ -51,6 +51,7 @@ function syscalls() {
   }
   return native;
 }
+let darwinOpen: ((directory: number, path: string, flags: number, mode: number) => number) | undefined;
 function checked(result: number): number {
   if (result >= 0) return result;
   const value = errno();
@@ -86,6 +87,18 @@ export function openBeneath(
   relativeName(path);
   if (!Number.isInteger(directory) || directory < 0)
     throw new TypeError("invalid directory descriptor");
+  if (process.platform === "darwin") {
+    // No component walk fallback: a moved intermediate directory could leave
+    // the held root between opens. Require the kernel's beneath/no-link walk.
+    darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, unsigned int mode)");
+    if ((flags & 0o10000000 /* Linux O_PATH */) !== 0)
+      throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: Darwin has no verified permission-independent entry pin and exact reopen");
+    const result = darwinOpen(directory, path, flags | 0x01000000 /* O_CLOEXEC */ |
+      0x20000000 /* O_NOFOLLOW_ANY */ | 0x1000 /* O_RESOLVE_BENEATH */, mode);
+    if (result < 0 && [20, 62, 107].includes(errno()))
+      throw new StoreError("STORE_CORRUPT", "filesystem containment rejected a link or path escape");
+    return checked(result);
+  }
   const how = Buffer.alloc(24);
   how.writeBigUInt64LE(BigInt(flags | 0o2000000 /* O_CLOEXEC */), 0);
   how.writeBigUInt64LE(BigInt(mode), 8);

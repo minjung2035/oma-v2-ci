@@ -9,6 +9,9 @@ import { fencedStdio, SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV } from "./fence.js";
 export { SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV };
 
 export interface AsyncProcessOptions {
+  /** Synchronous streaming consumer. Bytes are borrowed only for this call;
+   * consumer failure terminates the owned child and remains unobserved. */
+  readonly stdoutSink?: (bytes: Uint8Array) => void;
   /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
   readonly signal?: AbortSignal;
   /** Pinned preparation commands may own a Linux process group, never a systemd scope. */
@@ -135,6 +138,10 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const collect = (value: Buffer, output: boolean): void => {
     if (returned) return;
     if (!Buffer.isBuffer(value)) { terminate("unobserved"); return; }
+    if (output && options.stdoutSink !== undefined) {
+      try { options.stdoutSink(value); }
+      catch (error) { nativeError ??= error; terminate("unobserved"); return; }
+    }
     armSilence();
     const budget = output ? spec.stdoutBytes : spec.stderrBytes;
     const kept = output ? outBytes : errBytes;

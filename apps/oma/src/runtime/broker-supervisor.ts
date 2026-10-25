@@ -1,3 +1,4 @@
+import { RestartPolicy } from "@oma/process/restart-policy";
 /** TUI-002/LIFE-006: the product starts, owns and keeps its own society.
  *
  * `oma` is one command, so the broker cannot be something the user starts
@@ -150,7 +151,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
   };
   const maxRestarts = options.maxRestarts ?? 5;
   const windowMs = options.restartWindowMs ?? 60_000;
-  const restarts: number[] = [];
+  const restarts = new RestartPolicy(maxRestarts, windowMs);
   let stopping = false;
   let current: Generation | null = null;
   let restarting: ReturnType<typeof setTimeout> | null = null;
@@ -254,17 +255,13 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       }
       // The restart window is elapsed time: a wall clock stepped back would
       // keep old restarts inside it and give the broker up (MAC-650).
-      const now = performance.now();
-      while (restarts.length > 0 && now - restarts[0]! > windowMs) restarts.shift();
-      if (restarts.length >= maxRestarts) {
-        say(`broker ended ${restarts.length} times within ${Math.round(windowMs / 1000)}s; not restarting it`);
+      const decision = restarts.next();
+      if (decision.kind === "exhausted") {
+        say(`broker ended ${decision.count} times within ${Math.round(windowMs / 1000)}s; not restarting it`);
         disown("the broker could not stay running");
         return;
       }
-      restarts.push(now);
-      // Doubling back-off within the window, so a broker that fails at once
-      // does not spin; the first restart is quick because most ends are not.
-      const delay = Math.min(250 * 2 ** (restarts.length - 1), 8000);
+      const delay = decision.delayMs;
       const timer = setTimeout(() => {
         if (stopping || restarting !== timer) return;
         restarting = null;

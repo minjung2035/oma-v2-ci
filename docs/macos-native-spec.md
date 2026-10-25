@@ -1,6 +1,6 @@
 # macOS native 전환 명세 — TypeScript 공통 실행부와 최소 OS 경계
 
-상태: **제안, 구현 미착수**. 작성일: 2026-10-25. 조사한 코드 HEAD는 `d571645941e621eec6ccd91504cfbdc72389200d`이며, 작업 트리에 이미 있던 문서 정리 변경을 포함해 읽었다. 이 문서를 추가하는 것으로 기존 규범의 채택·폐기나 플랫폼 지원 완료를 선언하지 않는다.
+상태: **DR49로 구현 채택, 진행 중**. 작성일: 2026-10-25. 초기 조사 HEAD는 `d571645941e621eec6ccd91504cfbdc72389200d`다. 사용자 구현 지시가 이전 문서 정리 범위를 대체했다. VM 구현은 제거하며 fallback으로 남기지 않는다. 채택은 G-PROCESS·G-FILES·G-AUTH 통과나 native 지원 완료를 뜻하지 않는다. 실제 구현·시험 결과는 [전환 기록](implementation/native-transition.md)과 [validation](implementation/validation.md)을 따른다.
 
 요청의 목표는 macOS용 Linux VM을 폐기하고, Linux와 macOS가 같은 TypeScript 제품 실행부를 사용하는 것이다. 개발자는 Mac을 직접 사용할 수 없으므로 macOS 실행 증거는 GitHub Actions에서 얻는다. 구현 순서는 **Linux에서 공통화 → 같은 시험을 macOS CI에서 실행 → 필요한 OS 집행부만 연결**이다.
 

@@ -1,3 +1,4 @@
+import { renameAt } from "@oma/native/posix-files";
 import { createEnginePackageDiscovery } from "@oma/engine/package-resources";
 import { PACKAGE_LOCAL_DIR } from "@oma/domain/package-policy";
 export { PACKAGE_LOCAL_DIR } from "@oma/domain/package-policy";
@@ -79,7 +80,7 @@ export function collectPackageGenerations(data: string, current: string, afterRe
           throw new StoreError("STORE_CORRUPT", "package collection names changed");
         // Record collection before deleting any member, including its lease
         // marker. A killed collector resumes this name even after partial removal.
-        renameSync(entryAt(directory, name), entryAt(directory, tombstone));
+        renameAt(directory, name, directory, tombstone);
         fsyncHeldDir(directory, parent);
       });
       afterRename?.(join(parent, tombstone));

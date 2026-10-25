@@ -61,6 +61,7 @@ export function cacheDirectoryPresent(path: string): boolean {
 export interface CacheNodeMetadata {
   readonly type: "dir" | "file" | "symlink";
   readonly mode: number; readonly uid: string; readonly gid: string; readonly mtimeNs: string; readonly size?: number;
+  readonly contentHash?: string; readonly hardlinkGroup?: string; readonly sourceInode?: string; readonly linkTarget?: string;
 }
 export interface CacheTreeObservation {
   readonly digest: string; readonly paths: ReadonlySet<string>; readonly bytes: number;
@@ -82,7 +83,10 @@ export async function digestCacheTrees(root: string, roots: readonly string[], s
     ...(stat.isFile() ? { size: Number(stat.size) } : {}),
   });
   const record = (path: string, stat: BigIntStats, extra: readonly unknown[]): void => {
-    paths.add(path); metadata.set(path, attributes(stat));
+    paths.add(path); metadata.set(path, { ...attributes(stat),
+      ...(stat.isFile() ? { contentHash: String(extra[3]), hardlinkGroup: String(extra[2]), sourceInode: String(stat.ino) } : {}),
+      ...(stat.isSymbolicLink() ? { linkTarget: String(extra[1]) } : {}),
+    });
     hash.update(JSON.stringify([path, Number(stat.mode), String(stat.uid), String(stat.gid), String(stat.mtimeNs), ...extra]) + "\n");
   };
   const walk = async (parent: number, name: string, path: string): Promise<void> => {

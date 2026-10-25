@@ -43,6 +43,10 @@
     "./writer": {
       "types": "./dist/writer.d.ts",
       "default": "./dist/writer.js"
+    },
+    "./restart-policy": {
+      "types": "./dist/restart-policy.d.ts",
+      "default": "./dist/restart-policy.js"
     }
   },
   "scripts": {
