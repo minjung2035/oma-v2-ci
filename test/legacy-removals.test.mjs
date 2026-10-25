@@ -5,6 +5,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { legacyFindings } from "../scripts/check-legacy.mjs";
 
+test("NATIVE-010: the removed tool-runtime file implementation cannot return as a compatibility export", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-tool-files-removal-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "packages/tool-runtime/src/contained-files.ts");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, 'export * from "@oma/tool-files";');
+  assert.match(legacyFindings(root).join("\n"), /removed compatibility surface/);
+});
+
 test("completed removals reject old import facades and declarations while retaining same-build recovery", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-legacy-removals-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

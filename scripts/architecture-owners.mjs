@@ -46,6 +46,8 @@ export const fenceExemptSpawnOwners = Object.freeze({
     "independent Human session with its own inherited history lock and IPC; no Society role, state or lease",
 });
 export const DEFAULT_POLICY = Object.freeze({
+  toolFilePolicyOwner: "packages/tool-files/src/index.ts",
+  toolFilePrimitiveOwner: "packages/tool-files/src/descriptor-files.ts",
   capabilityOwner: "packages/domain/src/capabilities.ts",
   limitOwner: "packages/domain/src/limits.ts",
   identifierOwner: "packages/domain/src/identifiers.ts",

@@ -54,9 +54,9 @@ import { randomUUID } from "node:crypto";
 import { basename, delimiter, isAbsolute, join, relative, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { WorkspaceRefusal, isDescriptorOverrun, withSearchSnapshot } from "./contained-files.js";
+import { WorkspaceRefusal, isDescriptorOverrun, withSearchSnapshot } from "@oma/tool-files";
 import type { createGrepToolDefinition, createFindToolDefinition } from "@earendil-works/pi-coding-agent";
-export { WorkspaceRefusal, isDescriptorOverrun } from "./contained-files.js";
+export { WorkspaceRefusal, isDescriptorOverrun } from "@oma/tool-files";
 type SearchResult<N extends "grep" | "find"> = Awaited<ReturnType<ReturnType<N extends "grep" ? typeof createGrepToolDefinition : typeof createFindToolDefinition>["execute"]>>;
 
 /** The observation window one chunk of child output buys. A child that can

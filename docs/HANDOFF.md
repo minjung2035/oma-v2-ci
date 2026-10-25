@@ -34,6 +34,10 @@ Linux/macOS 공통 native 실행을 실제 구현·검증하는 것이다. 이�
 - 최신 `663adda3` CI는 Mac26/15 각각28/28·Ubuntu27/27, 독립 설치25/25 PASS다. 같은 입력의
   전체 local은3655개 중4개 fault/checkpoint 미도달로 실패했고 입력 변경0이다. 해당 실제
   native 경계로 옮긴 관련35/35만 별도 통과했으며 전체 PASS로 합성하지 않는다.
+- 다음 P2 변경은 SDK 없는 파일 정책을 `@oma/tool-files`로 분리해 workspace를26개로 확장한다.
+  tool-runtime·hashline·LSP는 새 공개 API로 연결하고 이전 contained-files export는 제거한다.
+  Darwin 파일 primitive는 계속 미검증이며 효과 전에 거절한다. Linux 관련189/189·별도 SIGKILL17/17과
+  독립 설치26/26을 입력 변경0으로 통과했다. 전체 local·Darwin 제품 지원 완료로 계산하지 않는다.
 - 첫 전체 local은 FAIL52·SKIP70, 입력 변경0으로 끝났고 원시 실패를 보존했다. 유지되는
   회귀의 native fault/모듈 연결과 실제 bwrap 환경을 수리했다. 부분 시험 성공을 전체 PASS로
   표시하지 않는다. `982658de`의 수리 후 전체 local은 3640/3640 PASS, skip0·입력 변경0이다.

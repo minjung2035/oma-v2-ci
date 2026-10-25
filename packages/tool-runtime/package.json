@@ -16,10 +16,6 @@
       "types": "./dist/child-env.d.ts",
       "default": "./dist/child-env.js"
     },
-    "./contained-files": {
-      "types": "./dist/contained-files.d.ts",
-      "default": "./dist/contained-files.js"
-    },
     "./contained-search": {
       "types": "./dist/contained-search.d.ts",
       "default": "./dist/contained-search.js"
@@ -59,7 +55,8 @@
     "@earendil-works/pi-coding-agent": "1.0.1",
     "typebox": "1.3.27",
     "@oma/contracts": "0.1.0",
-    "@oma/protocol": "0.1.0"
+    "@oma/protocol": "0.1.0",
+    "@oma/tool-files": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

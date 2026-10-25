@@ -12,6 +12,7 @@ const REMOVED_PATHS = Object.freeze([
   "apps/oma/src/entry/oma-mac.ts", "apps/oma/src/entry/omahostd.ts",
   "packages/platform-mac/src/vmhelper", "packages/platform-mac/src/vz-driver.ts",
   "packages/platform-linux/src/guest", "packages/platform-linux/src/guest-system.ts",
+  "packages/tool-runtime/src/contained-files.ts",
   "src",
   "apps/oma/src/engine/proper-lockfile.d.ts",
   "src/platform/host/files.ts",

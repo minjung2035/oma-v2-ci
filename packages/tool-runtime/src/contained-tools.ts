@@ -21,7 +21,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, withFileWithin, writeWithin, writeWithinUnchanged,
-} from "./contained-files.js";
+} from "@oma/tool-files";
 import { searchWorkspace } from "./contained-search.js";
 import { admittedRoot } from "./workspace-guard.js";
 

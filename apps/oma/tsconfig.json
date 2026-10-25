@@ -84,6 +84,9 @@
     },
     {
       "path": "../../packages/tui"
+    },
+    {
+      "path": "../../packages/tool-files"
     }
   ]
 }

@@ -3,33 +3,24 @@
  *
  * Every name under the workspace is reached from a descriptor held on the
  * workspace root, one component at a time, each opened with O_NOFOLLOW
- * through that descriptor (`/proc/self/fd/<fd>/<name>`: the kernel resolves
- * the held directory, then the one name in it). A link anywhere on the way
+ * through the private descriptor primitive (the kernel resolves the held
+ * directory, then the one name in it). A link anywhere on the way
  * is refused rather than followed -- a dangling one included, which a check
  * by existence missed -- and a component replaced after it was opened cannot
  * redirect what follows, because what follows is looked up in the directory
  * already held. The extension may use only Node built-ins (PI-001), so this
  * is openat2's RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS spelled with them.
  */
-import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, openSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, ftruncateSync, readSync, writeSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
 
-export class WorkspaceRefusal extends Error {
-  constructor(message: string) { super(message); this.name = "WorkspaceRefusal"; }
-}
-/** One directory entry under a held descriptor. PI-001 keeps the extension
- * from importing OMA's storage, so this mirrors `entryAt` in
- * packages/native/src/files.ts -- the same name, the same refusals; the two
- * are held equal by test/contained-tools.test.ts. */
-export function entryAt(directory: number, name: string): string {
-  if (typeof name !== "string" || name === "" || name === "." || name === ".." || name.includes("/") || name.includes("\0") ||
-      !Number.isInteger(directory) || directory < 0)
-    throw new TypeError("invalid directory entry");
-  return `/proc/self/fd/${directory}/${name}`;
-}
+import { WorkspaceRefusal } from "./errors.js";
+import { descriptorPath, directoryNames, mkdirAt, openAt, openRoot, removeSnapshotAt, reopen } from "./descriptor-files.js";
+export { WorkspaceRefusal } from "./errors.js";
+export { entryAt } from "./descriptor-files.js";
 
 /** The components of a path inside the workspace, or a refusal. */
 export function componentsWithin(root: string, path: string): string[] {
@@ -80,17 +71,17 @@ function descriptorRefusal(error: unknown): never {
 /** A descriptor on the directory `components` names, walked from the root. */
 function openDirectoryWithin(root: string, components: readonly string[], create: boolean): number {
   let fd: number;
-  try { fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+  try { fd = openRoot(root); }
   catch (error) { refusedLink(error); }
   try {
     for (const part of components) {
       let next: number;
-      try { next = openSync(entryAt(fd, part), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+      try { next = openAt(fd, part, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
       catch (error) {
         if (!create || (error as NodeJS.ErrnoException).code !== "ENOENT") refusedLink(error);
-        try { mkdirSync(entryAt(fd, part), 0o755); }
+        try { mkdirAt(fd, part, 0o755); }
         catch (made) { if ((made as NodeJS.ErrnoException).code !== "EEXIST") throw made; }
-        try { next = openSync(entryAt(fd, part), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+        try { next = openAt(fd, part, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
         catch (again) { refusedLink(again); }
       }
       closeSync(fd);
@@ -110,7 +101,7 @@ function openEntryWithin(root: string, path: string, flags: number, mode = 0o644
   }
   const parent = openDirectoryWithin(root, components.slice(0, -1), false);
   try {
-    try { return openSync(entryAt(parent, components.at(-1)!), flags | constants.O_NOFOLLOW, mode); }
+    try { return openAt(parent, components.at(-1)!, flags | constants.O_NOFOLLOW, mode); }
     catch (error) { refusedLink(error); }
   } finally { closeSync(parent); }
 }
@@ -124,10 +115,10 @@ function ownedFile(fd: number): void {
 }
 
 /** Runs `use` on the regular file itself, named by the descriptor held on it:
- * `/proc/self/fd/<fd>` reopens that inode, never the path again. */
+ * the private primitive reopens that inode, never the workspace path again. */
 export async function withFileWithin<T>(root: string, path: string, use: (held: string) => Promise<T>): Promise<T> {
   const fd = openEntryWithin(root, path, constants.O_RDONLY);
-  try { ownedFile(fd); return await use(`/proc/self/fd/${fd}`); } finally { closeSync(fd); }
+  try { ownedFile(fd); return await use(descriptorPath(fd)); } finally { closeSync(fd); }
 }
 
 export function readWithin(root: string, path: string): Buffer {
@@ -244,7 +235,7 @@ async function searchSnapshot<T>(root: string, path: string,
     for (;;) {
       baseName = `oma-search-${randomUUID()}`;
       named?.(baseName);
-      try { mkdirSync(entryAt(temp, baseName), { mode: 0o700 }); break; }
+      try { mkdirAt(temp, baseName, 0o700); break; }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     }
   } catch (error) { closeSync(temp); throw error; }
@@ -257,7 +248,7 @@ async function searchSnapshot<T>(root: string, path: string,
    * refuses in words instead of degrading to path writes. The same refusal
    * reaches every other site at the `withSearchSnapshot` boundary. */
   const openDestination = (parent: number, name: string, flags: number, mode?: number): number => {
-    try { return openSync(entryAt(parent, name), flags, mode); }
+    try { return openAt(parent, name, flags, mode); }
     catch (error) { return descriptorRefusal(error); }
   };
   // `fd` is the descriptor held on the source entry and `parent` the one
@@ -267,17 +258,17 @@ async function searchSnapshot<T>(root: string, path: string,
     check(); progress?.();
     const stat = fstatSync(fd);
     if (stat.isDirectory()) {
-      mkdirSync(entryAt(parent, name), { mode: 0o700 });
+      mkdirAt(parent, name, 0o700);
       const into = openDestination(parent, name, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       try {
-        for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
+        for (const entry of directoryNames(fd)) {
           check(); progress?.();
           // Repository internals are not a search input. An empty .git at the
           // copy's root stops parent ignore discovery without importing config.
           // A listed name is one directory entry -- anything else is not one.
           if (entry === ".git" || entry === "." || entry === ".." || entry.includes("/") || entry.includes("\0")) continue;
           let child: number;
-          try { child = openSync(entryAt(fd, entry), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+          try { child = openAt(fd, entry, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
           catch (error) {
             if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
             throw error;
@@ -312,16 +303,16 @@ async function searchSnapshot<T>(root: string, path: string,
     await setImmediate();
   };
   try {
-    destination = openSync(entryAt(temp, baseName), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    destination = openAt(temp, baseName, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     const fd = openDirectoryWithin(root, [], false);
     try {
       // Validate the explicit target beneath the same held root we copy. Do not
       // resolve the workspace pathname a second time between check and use.
-      let selected = openSync(`/proc/self/fd/${fd}`, constants.O_RDONLY | constants.O_DIRECTORY);
+      let selected = reopen(fd, constants.O_RDONLY | constants.O_DIRECTORY);
       try {
         for (const [index, part] of parts.entries()) {
           let next: number;
-          try { next = openSync(entryAt(selected, part), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK |
+          try { next = openAt(selected, part, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK |
             (index < parts.length - 1 ? constants.O_DIRECTORY : 0)); }
           catch (error) { refusedLink(error); }
           closeSync(selected); selected = next;
@@ -330,17 +321,17 @@ async function searchSnapshot<T>(root: string, path: string,
       } finally { closeSync(selected); }
       await copy(fd, destination, "workspace");
     } finally { closeSync(fd); }
-    const copied = openSync(entryAt(destination, "workspace"), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    try { mkdirSync(entryAt(copied, ".git"), { mode: 0o700 }); } finally { closeSync(copied); }
+    const copied = openAt(destination, "workspace", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try { mkdirAt(copied, ".git", 0o700); } finally { closeSync(copied); }
     check();
     return await use(snapshot, join(snapshot, ...parts));
   } finally {
     if (destination !== undefined) closeSync(destination);
-    try { rmSync(entryAt(temp, baseName), { recursive: true, force: true }); } finally { closeSync(temp); }
+    try { removeSnapshotAt(temp, baseName); } finally { closeSync(temp); }
   }
 }
 
 export function readdirWithin(root: string, path: string): string[] {
   const fd = openDirectoryWithin(root, componentsWithin(root, path), false);
-  try { return readdirSync(`/proc/self/fd/${fd}`); } finally { closeSync(fd); }
+  try { return directoryNames(fd); } finally { closeSync(fd); }
 }

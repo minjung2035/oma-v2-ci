@@ -457,6 +457,10 @@ packages/storage/src/transaction.ts
 packages/storage/src/transitions.ts
 packages/storage/src/transport-spool.ts
 packages/storage/src/tree-lease.ts
+packages/tool-files/package.json
+packages/tool-files/src/descriptor-files.ts
+packages/tool-files/src/errors.ts
+packages/tool-files/src/index.ts
 packages/tool-hashline/package.json
 packages/tool-hashline/src/index.ts
 packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE
@@ -3630,7 +3634,6 @@ packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream/utils.ts
 packages/tool-runtime/package.json
 packages/tool-runtime/src/batch-view.ts
 packages/tool-runtime/src/child-env.ts
-packages/tool-runtime/src/contained-files.ts
 packages/tool-runtime/src/contained-search.ts
 packages/tool-runtime/src/contained-tools.ts
 packages/tool-runtime/src/provenance.ts

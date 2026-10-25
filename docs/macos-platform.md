@@ -55,6 +55,13 @@ Git은 Git 검증, native/platform-*는 OS primitive를 맡는다. 아래 모듈
 manifest·owner map·경계 검사·negative control과 함께 갱신한다. 허용 목록만 넓혀 private
 접근이나 책임 침범을 숨기지 않는다. 나머지 NATIVE-001/007 계약과 원래 ID의 기록은 보존한다.
 
+**MUST [NATIVE-010]** engine-hosted 파일 도구의 containment·regular-file·hard-link·동일 inode
+판정과 search snapshot 수명은 SDK 없는 `@oma/tool-files`가 소유한다. tool-runtime·hashline·LSP는
+공개 API로 연결하고 tool-files는 Node built-in과 자신의 파일만 참조한다. OS descriptor 경로는
+작은 private primitive에 모은다. 미검증 플랫폼은 파일 효과 전에 거절하며, 이를 G-FILES 통과로
+계산하지 않는다. 기존 도구의 symlink 거절·check/effect 동일 해석·snapshot 선언 전 생성 금지와
+실제 inode 검증을 pathname 재검사나 legacy 구현으로 대체하지 않는다.
+
 **MUST [NATIVE-009]** materialization의 0→1 전이가 commit된 뒤에만 내부 wake hint를
 보낸다. hint는 accepted 작업·새 queue·실행 권한·후손 종료 증명이 아니다. process의 공통
 coalescer는 활성 callback 하나와 pending hint 하나를 유지하고 요청자의 transaction/recovery

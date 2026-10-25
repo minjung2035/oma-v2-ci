@@ -5131,7 +5131,37 @@
     "negativeTests": [
       "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
       "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
-      "test/isolated-declarations.test.mjs#foreign declaration errors"
+      "test/isolated-declarations.test.mjs#foreign declaration errors",
+      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-010",
+    "source": "docs/macos-platform.md",
+    "digest": "8bd756e105058ba1208dae73887e7f9d958fda0fa00304f23f818a77aa184a95",
+    "normativeText": "**MUST [NATIVE-010]** engine-hosted 파일 도구의 containment·regular-file·hard-link·동일 inode\n판정과 search snapshot 수명은 SDK 없는 `@oma/tool-files`가 소유한다. tool-runtime·hashline·LSP는\n공개 API로 연결하고 tool-files는 Node built-in과 자신의 파일만 참조한다. OS descriptor 경로는\n작은 private primitive에 모은다. 미검증 플랫폼은 파일 효과 전에 거절하며, 이를 G-FILES 통과로\n계산하지 않는다. 기존 도구의 symlink 거절·check/effect 동일 해석·snapshot 선언 전 생성 금지와\n실제 inode 검증을 pathname 재검사나 legacy 구현으로 대체하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/tool-files/src/index.ts#withSearchSnapshot",
+    "entrypoint": "packages/tool-runtime/src/contained-tools.ts#containWorkspaceTools",
+    "callPath": [
+      "packages/tool-runtime/src/contained-tools.ts#containWorkspaceTools",
+      "packages/tool-files/src/index.ts#readWithin",
+      "packages/tool-runtime/src/contained-search.ts#searchWorkspace",
+      "packages/tool-files/src/index.ts#withSearchSnapshot",
+      "packages/tool-files/src/descriptor-files.ts#openAt"
+    ],
+    "negativeTests": [
+      "packages/tool-files/test/files.test.mjs#real held descriptors survive",
+      "packages/tool-files/test/files.test.mjs#the actual snapshot is declared",
+      "packages/tool-files/test/files.test.mjs#unqualified descriptor access refuses",
+      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
+      "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
+      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime"
     ],
     "evidence": null,
     "status": "unverified",

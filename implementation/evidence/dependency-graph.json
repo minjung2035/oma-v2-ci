@@ -432,6 +432,9 @@
   "packages/storage/src/transitions.ts",
   "packages/storage/src/transport-spool.ts",
   "packages/storage/src/tree-lease.ts",
+  "packages/tool-files/src/descriptor-files.ts",
+  "packages/tool-files/src/errors.ts",
+  "packages/tool-files/src/index.ts",
   "packages/tool-hashline/src/index.ts",
   "packages/tool-lsp/src/index.ts",
   "packages/tool-lsp/src/lsp-call-scope.ts",
@@ -439,7 +442,6 @@
   "packages/tool-mcp/src/mcp-sdk-env.ts",
   "packages/tool-runtime/src/batch-view.ts",
   "packages/tool-runtime/src/child-env.ts",
-  "packages/tool-runtime/src/contained-files.ts",
   "packages/tool-runtime/src/contained-search.ts",
   "packages/tool-runtime/src/contained-tools.ts",
   "packages/tool-runtime/src/provenance.ts",
@@ -528,7 +530,8 @@
      "packages/process/src/command.ts",
      "packages/protocol/src/delivery-boundary.ts",
      "packages/protocol/src/log-limits.ts",
-     "packages/protocol/src/session-handoff.ts"
+     "packages/protocol/src/session-handoff.ts",
+     "packages/tool-files/src/errors.ts"
     ]
    },
    {
@@ -638,7 +641,9 @@
      "packages/storage/src/staged-tree.ts",
      "packages/storage/src/submit-spool.ts",
      "packages/storage/src/transport-spool.ts",
-     "packages/storage/src/tree-lease.ts"
+     "packages/storage/src/tree-lease.ts",
+     "packages/tool-files/src/descriptor-files.ts",
+     "packages/tool-files/src/index.ts"
     ]
    },
    {
@@ -663,9 +668,9 @@
    "K0-values -> K0-values": 34,
    "K1-codecs -> K0-values": 64,
    "K1-codecs -> K1-codecs": 24,
-   "K2-mechanisms -> K0-values": 100,
+   "K2-mechanisms -> K0-values": 103,
    "K2-mechanisms -> K1-codecs": 10,
-   "K2-mechanisms -> K2-mechanisms": 123,
+   "K2-mechanisms -> K2-mechanisms": 125,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -1789,6 +1794,21 @@
     "from": "packages/storage/src/tree-lease.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/descriptor-files.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/index.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/index.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
    }
   ],
   "internalPortContracts": [
@@ -2026,6 +2046,7 @@
     "packages/config/src/",
     "packages/process/src/",
     "packages/native/src/",
+    "packages/tool-files/src/",
     "packages/protocol/src/",
     "packages/storage/src/",
     "apps/oma/src/cli/cache-codec.ts",
@@ -2038,7 +2059,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 161
+   "files": 164
   },
   {
    "index": 2,
@@ -2050,7 +2071,7 @@
     "apps/oma/src/diagnostics/",
     "apps/oma/src/request-cache.ts"
    ],
-   "files": 19
+   "files": 18
   },
   {
    "index": 3,
@@ -2114,21 +2135,21 @@
    "files": 83
   }
  ],
- "files": 473,
- "runtimeEdges": 1677,
+ "files": 475,
+ "runtimeEdges": 1682,
  "typeOnlyEdges": 746,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 399,
-  "L2-facts -> L1-kernel": 41,
-  "L2-facts -> L2-facts": 11,
+  "L1-kernel -> L1-kernel": 404,
+  "L2-facts -> L1-kernel": 44,
+  "L2-facts -> L2-facts": 8,
   "L3-workflow -> L1-kernel": 245,
   "L3-workflow -> L3-workflow": 69,
   "L4-orchestration -> L1-kernel": 324,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 24,
   "L4-orchestration -> L4-orchestration": 155,
-  "L5-entry -> L1-kernel": 149,
-  "L5-entry -> L2-facts": 22,
+  "L5-entry -> L1-kernel": 151,
+  "L5-entry -> L2-facts": 20,
   "L5-entry -> L3-workflow": 6,
   "L5-entry -> L4-orchestration": 99,
   "L5-entry -> L5-entry": 132
@@ -2186,7 +2207,7 @@
   "node:child_process": 5,
   "node:crypto": 39,
   "node:dns": 1,
-  "node:fs": 105,
+  "node:fs": 106,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,

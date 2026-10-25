@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
-import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, writeWithinUnchanged } from "@oma/tool-runtime/contained-files";
+import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, writeWithinUnchanged } from "@oma/tool-files";
 import { registerHashlineTools, HASHLINE_EDIT_TOOL_NAMES, HASHLINE_READ_TOOL_NAME } from "@oma/tool-hashline";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "@oma/tool-runtime/vendor-bundle";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";

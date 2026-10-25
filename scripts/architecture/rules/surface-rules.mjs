@@ -83,7 +83,7 @@ const CLI_MAIL_FORBIDDEN = Object.freeze({
 
 const present = (root, files) => files.filter(file => exists(root, file));
 const productFiles = root => [...filesUnder(root, "packages/tui/src"), ...present(root, ["packages/domain/src/tool-surface.ts", "packages/config/src/defaults.ts"])];
-const TOOL_SOURCE_ROOTS = Object.freeze(["tool-runtime", "tool-lsp", "tool-hashline", "tool-web", "tool-mcp"].map(name => `packages/${name}/src`));
+const TOOL_SOURCE_ROOTS = Object.freeze(["tool-files", "tool-runtime", "tool-lsp", "tool-hashline", "tool-web", "tool-mcp"].map(name => `packages/${name}/src`));
 const extensionFiles = root => [...filesUnder(root, "packages/extension/src"), ...TOOL_SOURCE_ROOTS.flatMap(dir => filesUnder(root, dir))];
 
 /** Module edges, marking those erased at build time. */

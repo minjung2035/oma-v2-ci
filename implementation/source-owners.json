@@ -904,7 +904,8 @@
     "negativeTests": [
       "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
       "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
-      "test/isolated-declarations.test.mjs#foreign declaration errors"
+      "test/isolated-declarations.test.mjs#foreign declaration errors",
+      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent"
     ]
   },
   {
@@ -943,6 +944,29 @@
     "negativeTests": [
       "packages/process/test/resident-supervisor.test.mjs#start-limit observation",
       "test/status-observation.test.ts#UNIT-006"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-010"
+    ],
+    "owner": "packages/tool-files/src/index.ts#withSearchSnapshot",
+    "entrypoint": "packages/tool-runtime/src/contained-tools.ts#containWorkspaceTools",
+    "callPath": [
+      "packages/tool-runtime/src/contained-tools.ts#containWorkspaceTools",
+      "packages/tool-files/src/index.ts#readWithin",
+      "packages/tool-runtime/src/contained-search.ts#searchWorkspace",
+      "packages/tool-files/src/index.ts#withSearchSnapshot",
+      "packages/tool-files/src/descriptor-files.ts#openAt"
+    ],
+    "negativeTests": [
+      "packages/tool-files/test/files.test.mjs#real held descriptors survive",
+      "packages/tool-files/test/files.test.mjs#the actual snapshot is declared",
+      "packages/tool-files/test/files.test.mjs#unqualified descriptor access refuses",
+      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
+      "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
+      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime"
     ]
   }
 ]

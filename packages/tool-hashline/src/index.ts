@@ -64,7 +64,7 @@ import { open, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolResultEventResult } from "@earendil-works/pi-coding-agent";
-import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, mkdirWithin, readWithin, withFileWithin } from "@oma/tool-runtime/contained-files";
+import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, mkdirWithin, readWithin, withFileWithin } from "@oma/tool-files";
 import { admittedRoot } from "@oma/tool-runtime/workspace-guard";
 import { vendoredBundleDir, verifyVendorBundle } from "@oma/tool-runtime/vendor-bundle";
 

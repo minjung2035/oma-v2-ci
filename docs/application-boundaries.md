@@ -29,7 +29,8 @@
 | `@oma/broker`, `@oma/client` | 인증·dispatch·run 경계 / 요청·결과·receipt 클라이언트 |
 | `@oma/engine` | Pi SDK 연결·Principal/Personal session·interactive UI 연결·SDK adapter |
 | `@oma/tui` | Control Panel·메일·설정·화면 표현 |
-| `@oma/extension`, `@oma/tool-runtime` | 신뢰된 OMA 확장 / provenance·tool surface·파일/실행 경계 |
+| `@oma/extension`, `@oma/tool-runtime` | 신뢰된 OMA 확장 / provenance·tool surface·도구 실행 연결 |
+| `@oma/tool-files` | SDK 없는 workspace 파일 정책과 작은 descriptor primitive. tool-runtime·hashline·LSP가 공개 API로 사용 |
 | `@oma/tool-lsp`, `@oma/tool-hashline`, `@oma/tool-web`, `@oma/tool-mcp` | 동봉 도구의 검증된 upstream payload와 OMA 연결 |
 | `@oma/platform-linux`, `@oma/platform-mac` | bwrap·seccomp·rootfs·이행 중 unit adapter / Darwin credential channel·독립 Keychain primitive |
 | `@oma/app` | 위 기능의 제품 조립과 물리 효과 연결. 공개 API는 installer assets·admin diagnostics |

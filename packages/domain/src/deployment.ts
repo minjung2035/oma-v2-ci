@@ -15,6 +15,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     { name: "@oma/process", root: "packages/process" },
     { name: "@oma/storage", root: "packages/storage" },
     { name: "@oma/config", root: "packages/config" },
+    { name: "@oma/tool-files", root: "packages/tool-files" },
     { name: "@oma/tool-runtime", root: "packages/tool-runtime" },
     { name: "@oma/tool-lsp", root: "packages/tool-lsp" },
     { name: "@oma/tool-mcp", root: "packages/tool-mcp" },

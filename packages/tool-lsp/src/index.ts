@@ -102,7 +102,7 @@ import { statSync } from "node:fs";
 import { relative } from "node:path";
 import { Type } from "typebox";
 import { buildChildEnv } from "@oma/tool-runtime/child-env";
-import { WorkspaceRefusal } from "@oma/tool-runtime/contained-files";
+import { WorkspaceRefusal } from "@oma/tool-files";
 import { observeLspCall, withLspScratch } from "./lsp-call-scope.js";
 import { textResult } from "@oma/tool-runtime/shared";
 import { vendoredBundleDir, verifyVendorBundle, type VendorVerification } from "@oma/tool-runtime/vendor-bundle";

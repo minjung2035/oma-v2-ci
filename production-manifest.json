@@ -17,6 +17,8 @@
   "packages/storage/package.json",
   "packages/config/src",
   "packages/config/package.json",
+  "packages/tool-files/src",
+  "packages/tool-files/package.json",
   "packages/tool-runtime/src",
   "packages/tool-runtime/package.json",
   "packages/tool-lsp/src",

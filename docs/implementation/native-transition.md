@@ -111,8 +111,18 @@ directory-relative API로 치환한다. nanosecond stat·symlink raw bytes와 �
 P2나 Darwin filesystem qualification 완료를 주장하지 않는다.
 
 현재 모듈 경계의 해석은 DR50/NATIVE-008을 따른다. 25개를 고정 개수로 두지 않으며,
-새 독립 책임은 새 workspace로 분리할 수 있다. 현재 파일 handle 연결에는 기존
-native/storage/config/Git/App owner가 맞으므로 새 만능 공통 모듈을 추가하지 않았다.
+새 독립 책임은 새 workspace로 분리할 수 있다. 위 파일 handle 연결은 기존
+native/storage/config/Git/App owner에서 수행했다.
+
+다음 P2 작업은 engine-hosted 파일 정책을 SDK 연결에서 분리한다. 26번째 workspace인
+`@oma/tool-files`는 Node built-in만 사용하며 containment·inode·hard-link·snapshot 정책을
+하나의 TS owner에서 유지한다. 기존 tool-runtime·hashline·LSP 호출자를 공개 API로 연결하고
+tool-runtime의 이전 contained-files 소스·export는 제거한다. Linux descriptor 경로는 작은
+private leaf에 모으며 Darwin은 효과 전에 거절한다. 이 분리는 G-FILES 해결이나 Darwin
+파일 도구 지원이 아니다. workspace graph·독립 설치·기존 도구 회귀 결과는 validation에 기록한다.
+이 변경의 Linux 정식 build·strict typecheck·architecture는 통과했다. 관련189/189·별도 SIGKILL17/17과
+독립 설치26/26은 같은 입력을 유지했다. 새 모듈의 의존 closure는 자기 자신뿐이고 SDK 진단은0개다.
+기존 SDK 소비 모듈의 외부 declaration 진단44개는 별도로 보존하며 authored declaration 성공과 구분한다.
 
 `8c9ef61d`의 고정 입력 P2 회귀는 192/192, workspace 독립 설치는 25/25 통과했다.
 [CI 40207646347](https://github.com/minjung2035/oma-v2/actions/runs/40207646347)의 공통 runtime은

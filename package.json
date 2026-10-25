@@ -86,7 +86,8 @@
     "@oma/tool-runtime": "0.1.0",
     "@oma/tool-web": "0.1.0",
     "@oma/tui": "0.1.0",
-    "@types/proper-lockfile": "4.1.4"
+    "@types/proper-lockfile": "4.1.4",
+    "@oma/tool-files": "0.1.0"
   },
   "dependencies": {
     "@oma/app": "0.1.0"

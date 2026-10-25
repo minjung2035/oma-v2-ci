@@ -9,6 +9,7 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K0-values",
     files: [
+      "packages/tool-files/src/errors.ts",
       "packages/domain/src/recovery-policy.ts",
       "packages/domain/src/cgroup-population.ts",
       "packages/domain/src/batch-settlement.ts",
@@ -105,6 +106,8 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K2-mechanisms",
     files: [
+      "packages/tool-files/src/descriptor-files.ts",
+      "packages/tool-files/src/index.ts",
       "packages/domain/src/authority.ts",
       "packages/client/src/context.ts",
       "packages/process/src/fence.ts",

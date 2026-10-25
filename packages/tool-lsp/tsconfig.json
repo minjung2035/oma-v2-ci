@@ -17,6 +17,9 @@
   "references": [
     {
       "path": "../tool-runtime"
+    },
+    {
+      "path": "../tool-files"
     }
   ]
 }

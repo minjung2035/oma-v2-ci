@@ -133,7 +133,7 @@ test("SB-001: inside the sandbox only write and edit are replaced; reading is th
 });
 
 test("G10-02: search snapshots hold the source root through replacement and remove private copies on every outcome", async t => {
-  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
+  const { withSearchSnapshot } = await import("@oma/tool-files");
   const { workspace, outside } = world(t);
   writeFileSync(join(workspace, "a.txt"), "workspace text");
   writeFileSync(join(outside, "secret.txt"), "host secret");
@@ -158,7 +158,7 @@ test("G10-02: search snapshots hold the source root through replacement and remo
 });
 
 test("G10-02 / P0-4: a snapshot's name is declared before the directory can exist -- exists implies announced", async t => {
-  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
+  const { withSearchSnapshot } = await import("@oma/tool-files");
   const { workspace } = world(t);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const announced: string[] = [];
@@ -181,7 +181,7 @@ test("G10-02 / P0-4: a snapshot's name is declared before the directory can exis
 });
 
 test("G10-02 / P0-4: an already-taken snapshot name is announced again fresh before the retry", async t => {
-  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
+  const { withSearchSnapshot } = await import("@oma/tool-files");
   const { workspace } = world(t);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const announced: string[] = [];
@@ -623,7 +623,7 @@ else{(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;
 
 test("G10-02 / P0: depth is never refused -- a tree past every historical level bound copies whole", { timeout: 30000 }, async t => {
   const { workspace } = world(t);
-  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
+  const { withSearchSnapshot } = await import("@oma/tool-files");
   // 180 levels: past the former 128 refusal and past what recursion by path
   // could hold open, but nowhere near an operating-system limit.
   let deep = workspace;
@@ -666,7 +666,7 @@ test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE
 
 test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a write through a link", { timeout: 30000 }, async t => {
   const { base, workspace, outside } = world(t);
-  const { withSearchSnapshot } = await import("@oma/tool-runtime/contained-files");
+  const { withSearchSnapshot } = await import("@oma/tool-files");
   mkdirSync(join(workspace, "d"));
   // Enough entries that the copy is still inside `d` when the swap lands.
   for (let n = 0; n < 2000; n++) writeFileSync(join(workspace, "d", `${n}.txt`), "x".repeat(2048));
@@ -700,7 +700,7 @@ test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a wr
 });
 
 test("PI-001: the extension's entryAt mirrors the storage primitive -- it accepts and refuses the same entries and names the same path", async () => {
-  const { entryAt: mirror } = await import("@oma/tool-runtime/contained-files");
+  const { entryAt: mirror } = await import("@oma/tool-files");
   const { entryAt: original } = await import("@oma/native/files");
   const outcome = (entry: (fd: number, name: string) => string, fd: number, name: string): string => {
     try { return entry(fd, name); } catch { return "refused"; }

@@ -10,7 +10,7 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   contracts: [], domain: ["contracts"], native: ["contracts", "domain"], process: ["contracts", "domain", "native"], protocol: ["contracts", "domain"],
   config: ["contracts", "domain", "protocol", "native", "storage"],
   git: ["contracts", "domain", "protocol", "process", "native", "storage"],
-  app: ["broker","client","config","contracts","domain","engine","extension","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
+  app: ["broker","client","config","contracts","domain","engine","extension","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
   "platform-mac": ["contracts", "domain", "protocol", "native", "process"],
   "platform-linux": ["contracts", "domain", "protocol", "native", "process", "storage"],
   engine: ["contracts", "domain", "protocol", "client", "process"],
@@ -20,11 +20,12 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   review: ["contracts", "domain", "protocol", "mail"],
   mail: ["contracts", "domain", "protocol"],
   storage: ["contracts", "domain", "protocol", "native", "process"],
-  "tool-runtime": ["contracts", "domain", "protocol", "client"],
-  "tool-hashline": ["contracts", "domain", "protocol", "tool-runtime"],
+  "tool-files": [],
+  "tool-runtime": ["contracts", "domain", "protocol", "client", "tool-files"],
+  "tool-hashline": ["contracts", "domain", "protocol", "tool-runtime", "tool-files"],
   "tool-web": ["contracts", "domain", "protocol", "tool-runtime"],
   "tool-mcp": ["contracts", "domain", "protocol", "tool-runtime"],
-  "tool-lsp": ["contracts", "domain", "protocol", "tool-runtime"],
+  "tool-lsp": ["contracts", "domain", "protocol", "tool-runtime", "tool-files"],
   extension: ["contracts", "domain", "protocol", "client", "tool-runtime", "tool-lsp", "tool-hashline", "tool-web", "tool-mcp"],
   client: ["contracts", "domain", "protocol"], tui: ["contracts", "domain", "protocol"],
 });
@@ -162,6 +163,8 @@ export function moduleFindings(root = process.cwd()) {
     }
     if (manifest.version !== JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version)
       report(path, "workspace version differs from the product");
+    if (manifest.name === "@oma/tool-files" && Object.keys(manifest.dependencies ?? {}).length !== 0)
+      report(path, "tool-files has no runtime package dependencies; its primitives use Node builtins");
     for (const [name, version] of Object.entries({ ...manifest.dependencies, ...manifest.devDependencies })) if (name.startsWith("@oma/")) {
       if (!allowed.includes(name.slice(5))) report(path, `forbidden dependency ${name}`);
       if (!byName.has(name) || version !== byName.get(name).manifest.version) report(path, `unresolved workspace dependency ${name}@${version}`);
@@ -193,6 +196,8 @@ export function moduleFindings(root = process.cwd()) {
         return;
       }
       const name = packageName(specifier);
+      if (manifest.name === "@oma/tool-files" && name !== manifest.name)
+        report(slash(relative(root, file)), `tool-files may import only its own files and Node builtins: ${specifier}`);
       if (manifest.name === "@oma/platform-mac" && name === "@oma/git" && !GIT_HOST_APIS.has(specifier))
         report(slash(relative(root, file)), `Git host adapter API required in ${manifest.name}: ${specifier}`);
       if (name === "@oma/storage" && STORAGE_FILE_CONSUMERS.has(manifest.name) && !STORAGE_FILE_APIS.has(specifier))
