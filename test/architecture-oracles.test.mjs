@@ -274,7 +274,7 @@ test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinc
     "packages/domain/src/risk-tier.ts": "K0-values",
     "packages/domain/src/attestation.ts": "K1-codecs",
     "packages/domain/src/integration-policy.ts": "K1-codecs",
-    "packages/git/src/linux-project-preparation.ts": "K2-mechanisms",
+    "packages/git/src/project-preparation.ts": "K2-mechanisms",
     "packages/native/src/snapshot-reader.ts": "K2-mechanisms",
   };
   for (const [file, zone] of Object.entries(owners)) assert.equal(kernelZoneOf(file)?.name, zone, file);

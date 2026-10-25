@@ -1,5 +1,5 @@
 import { withCleanup } from "@oma/native/cleanup";
-import { unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
+import { directoryNames, statAt, unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
 // FS-001..003 / P7: syscall ordering, not artifact authority or S-06 evidence.
 // Immutable publication and derived replacement are deliberately separate APIs.
 // These helpers neither modify a ledger nor collect accepted recovery evidence.
@@ -253,7 +253,7 @@ export function createLockedTemporary(parent: number, temporaryName: string, fla
  * its leftover for ever); a live writer's is kept. */
 export function collectDeadTemporaries(parent: number): void {
   let entries: string[];
-  try { entries = readdirSync(`/proc/self/fd/${parent}`); } catch { return; }
+  try { entries = directoryNames(parent); } catch { return; }
   for (const entry of entries) {
     if (!TEMPORARY.test(entry)) continue;
     let fd: number;
@@ -395,8 +395,8 @@ export type TreeFlushPolicy = "regular-files" | "context-single-link" | "workspa
  */
 export function fsyncTree(root: string | number, policy: TreeFlushPolicy = "regular-files", faults?: DurabilityObserver): void {
   const walk = (directory: number): void => {
-    for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
-      const entry = lstatSync(entryAt(directory, name));
+    for (const name of directoryNames(directory)) {
+      const entry = statAt(directory, name);
       if (entry.isSymbolicLink() && policy === "workspace-links") continue;
       const child = entry.isDirectory()
         ? openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY)

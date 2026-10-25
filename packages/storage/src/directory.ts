@@ -1,13 +1,12 @@
-import { mkdirAt, unlinkAt, statAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt, statAt } from "@oma/native/posix-files";
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
-import { constants, chmodSync, closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, rmdirSync, unlinkSync,
-  type Dirent, type Stats } from "node:fs";
+import { constants, closeSync, fstatSync, fsyncSync, type Stats } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { withCleanup } from "@oma/native/cleanup";
-import { closeEvery, entryAt, openBeneath, openDirectory, withinDirectory } from "@oma/native/files";
+import { chmodPinned, closeEvery, openBeneath, openDirectory, pinBeneath, reopenPinned, withinDirectory } from "@oma/native/files";
 
 function componentsOf(path: string): { root: string; components: string[] } {
   if (!isAbsolute(path) || path.includes("\0"))
@@ -69,7 +68,7 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
 function repairOwnerBits(pin: number, required = 0o700): void {
   const observed = fstatSync(pin);
   if ((observed.mode & required) !== required)
-    chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | required);
+    chmodPinned(pin, (observed.mode & 0o7777) | required);
 }
 
 /** Opens the `name` directory beneath a held parent for an open, removal or
@@ -82,12 +81,12 @@ function repairOwnerBits(pin: number, required = 0o700): void {
  * proc name after the repair, so every step acts on the one pinned inode,
  * never a re-resolved path. */
 export function openOwnedDirectory(parent: number, name: string): number {
-  const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
+  const pin = pinBeneath(parent, name, true);
   let result: number | undefined;
   try {
     return withCleanup(() => {
       repairOwnerBits(pin);
-      result = openSync(`/proc/self/fd/${pin}`, constants.O_RDONLY | constants.O_DIRECTORY);
+      result = reopenPinned(pin, constants.O_RDONLY | constants.O_DIRECTORY);
       return result;
     }, () => closeSync(pin));
   } catch (error) {
@@ -109,7 +108,7 @@ export function openOwnedDirectoryPath(path: string): number {
  * device is never opened for I/O, and a replaced pathname cannot redirect it. */
 export function openOwnedAppendFile(parent: number, name: string): number {
   let pin: number;
-  try { pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_NOFOLLOW); }
+  try { pin = pinBeneath(parent, name); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     try {
@@ -118,7 +117,7 @@ export function openOwnedAppendFile(parent: number, name: string): number {
     } catch (creationError) {
       if ((creationError as NodeJS.ErrnoException).code !== "EEXIST") throw creationError;
       // Another writer supplied the name. Inspect it, never truncate it.
-      pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_NOFOLLOW);
+      pin = pinBeneath(parent, name);
     }
   }
   let result: number | undefined;
@@ -126,7 +125,7 @@ export function openOwnedAppendFile(parent: number, name: string): number {
     return withCleanup(() => {
       if (!fstatSync(pin).isFile()) throw new StoreError("STORE_CORRUPT", "owned append entry is not a regular file");
       repairOwnerBits(pin, 0o600);
-      result = openSync(`/proc/self/fd/${pin}`, constants.O_RDWR | constants.O_APPEND | constants.O_NONBLOCK);
+      result = reopenPinned(pin, constants.O_RDWR | constants.O_APPEND | constants.O_NONBLOCK);
       return result;
     }, () => closeSync(pin));
   } catch (error) {
@@ -143,7 +142,7 @@ export function* walkOwnedTree(path: string, skip: ReadonlySet<string> = new Set
   let primary: { error: unknown } | null = null;
   const enter = (parent: number, name: string, top: boolean): { stat: Stats; directory: number | null } | null => {
     let pin: number;
-    try { pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_NOFOLLOW); }
+    try { pin = pinBeneath(parent, name); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
     let directory: number | null = null;
     try { return withCleanup(() => {
@@ -153,7 +152,7 @@ export function* walkOwnedTree(path: string, skip: ReadonlySet<string> = new Set
         // Observation needs read/search, never write. Adding owner-write to
         // an immutable revision directory would invalidate its sealed mode.
         repairOwnerBits(pin, 0o500);
-        directory = openSync(`/proc/self/fd/${pin}`, constants.O_RDONLY | constants.O_DIRECTORY);
+        directory = reopenPinned(pin, constants.O_RDONLY | constants.O_DIRECTORY);
         return { stat, directory };
       }
       return { stat, directory: null };
@@ -162,7 +161,7 @@ export function* walkOwnedTree(path: string, skip: ReadonlySet<string> = new Set
   };
   const push = (entry: { stat: Stats; directory: number | null }): void => {
     if (entry.directory === null) return;
-    try { stack.push({ fd: entry.directory, names: readdirSync(`/proc/self/fd/${entry.directory}`), index: 0 }); }
+    try { stack.push({ fd: entry.directory, names: directoryNames(entry.directory), index: 0 }); }
     catch (error) { withCleanup(() => { throw error; }, () => closeSync(entry.directory!)); }
   };
   try {
@@ -259,21 +258,21 @@ export function removeOwnedTree(path: string): void {
   try { parent = openDirectory(dirname(path)); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
   try {
-    if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })) return;
+    if (!statAt(parent, basename(path), { throwIfNoEntry: false })) return;
     const walk = (directory: number): void => {
-      for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
-        const entry = entryAt(directory, name); const stat = lstatSync(entry);
+      for (const name of directoryNames(directory)) {
+        const stat = statAt(directory, name);
         if (stat.isDirectory()) {
           const child = openOwnedDirectory(directory, name);
           try { walk(child); } finally { closeSync(child); }
-          rmdirSync(entry);
-        } else unlinkSync(entry);
+          unlinkAt(directory, name, true);
+        } else unlinkAt(directory, name);
       }
       fsyncSync(directory);
     };
     const root = openOwnedDirectory(parent, basename(path));
     try { walk(root); } finally { closeSync(root); }
-    rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
+    unlinkAt(parent, basename(path), true); fsyncSync(parent);
   } finally { closeSync(parent); }
 }
 /** DR24: a session's own tree, removed when the session ended having said
@@ -284,27 +283,26 @@ export function removeUnusedTree(path: string): void {
   try { parent = openDirectory(dirname(path)); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
   try {
-    if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })?.isDirectory()) return;
+    if (!statAt(parent, basename(path), { throwIfNoEntry: false })?.isDirectory()) return;
     const walk = (directory: number): void => {
-      for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
-        const entry = entryAt(directory, name);
-        if (lstatSync(entry).isDirectory()) {
+      for (const name of directoryNames(directory)) {
+        if (statAt(directory, name).isDirectory()) {
           const child = openOwnedDirectory(directory, name);
           try { walk(child); } finally { closeSync(child); }
-          rmdirSync(entry);
-        } else unlinkSync(entry);
+          unlinkAt(directory, name, true);
+        } else unlinkAt(directory, name);
       }
     };
     const root = openOwnedDirectory(parent, basename(path));
     try { walk(root); } finally { closeSync(root); }
-    rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
+    unlinkAt(parent, basename(path), true); fsyncSync(parent);
   } finally { closeSync(parent); }
 }
 /** Remove a caller-owned leaf without traversing a replaced parent. */
 export function removeOwnedFile(path: string): void {
   const parent = openDirectory(dirname(path));
   try {
-    try { unlinkSync(entryAt(parent, basename(path))); }
+    try { unlinkAt(parent, basename(path)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     fsyncSync(parent);
   } finally { closeSync(parent); }
@@ -318,7 +316,7 @@ export function removeOwnedEntryAt(parent: number, name: string): void {
   if (!observed.isDirectory()) { unlinkAt(parent, name); fsyncSync(parent); return; }
   const root = openOwnedDirectory(parent, name);
   try {
-    for (const child of readdirSync(`/proc/self/fd/${root}`)) removeOwnedEntryAt(root, child);
+    for (const child of directoryNames(root)) removeOwnedEntryAt(root, child);
     fsyncSync(root);
   } finally { closeSync(root); }
   unlinkAt(parent, name, true); fsyncSync(parent);
@@ -332,16 +330,21 @@ export function removeOwnedEntryAt(parent: number, name: string): void {
  * owned trees: owner read/write/search bits are added back where a same-UID
  * stray or an interrupted writer dropped them, never stripped -- so a
  * directory a sweep keeps loses nothing it had, special bits included. */
-export function listOwnedDirectory(path: string, options: { readonly required: true }): Dirent[];
-export function listOwnedDirectory(path: string, options?: { readonly required?: false }): Dirent[] | null;
+export interface OwnedDirectoryEntry { readonly name: string; isDirectory(): boolean; isFile(): boolean; isSymbolicLink(): boolean }
+export function listOwnedDirectory(path: string, options: { readonly required: true }): OwnedDirectoryEntry[];
+export function listOwnedDirectory(path: string, options?: { readonly required?: false }): OwnedDirectoryEntry[] | null;
 /** A required observation propagates the actual failure; optional diagnostics retain null as unknown. */
-export function listOwnedDirectory(path: string, options: { readonly required?: boolean } = {}): Dirent[] | null {
+export function listOwnedDirectory(path: string, options: { readonly required?: boolean } = {}): OwnedDirectoryEntry[] | null {
   try {
     return withinDirectory(path, (parent, name) => {
-      const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */ | constants.O_DIRECTORY);
+      const pin = pinBeneath(parent, name, true);
       try {
         repairOwnerBits(pin);
-        return readdirSync(`/proc/self/fd/${pin}`, { withFileTypes: true });
+        return directoryNames(pin).map(name => {
+          const stat = statAt(pin, name);
+          return { name, isDirectory: () => stat.isDirectory(), isFile: () => stat.isFile(),
+            isSymbolicLink: () => stat.isSymbolicLink() };
+        });
       } finally { closeSync(pin); }
     });
   } catch (error) { if (options.required) throw error; return null; }
@@ -357,12 +360,12 @@ export function listOwnedDirectory(path: string, options: { readonly required?: 
 export function repairOwnedEntryMode(path: string): Stats | null {
   try {
     return withinDirectory(path, (parent, name) => {
-      const pin = openBeneath(parent, name, 0o10000000 /* O_PATH */);
+      const pin = pinBeneath(parent, name);
       try {
         const observed = fstatSync(pin);
         const need = observed.isDirectory() ? 0o700 : observed.isFile() ? 0o600 : 0;
         if (need !== 0 && (observed.mode & need) !== need)
-          chmodSync(`/proc/self/fd/${pin}`, (observed.mode & 0o7777) | need);
+          chmodPinned(pin, (observed.mode & 0o7777) | need);
         return observed;
       } finally { closeSync(pin); }
     });

@@ -236,4 +236,3 @@ export function ownedStaging(root: string): StageArea {
     },
   };
 }
-

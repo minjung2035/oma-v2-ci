@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { engineLoginDirectory } from "../engine/start-effects.js";
 import { assertNativeRuntime } from "../runtime/native-support.js";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 /** Product composition: command selection, admitted session, and process signal wiring. */
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,13 +44,12 @@ async function login(dataRoot: string, project: string): Promise<never> {
   if (lease === null) fail("Another oma login is running.", exitFor("BROKER_UNAVAILABLE"));
   let code: number;
   try {
-    code = await runEngineLogin(engineLoginDirectory, { stateRoot, libdir: fileURLToPath(new URL("../../../../", import.meta.url)),
-      override: process.env.OMA_PI_COMMAND, fence: lease.fence, env: process.env });
+    code = await withAsyncCleanup(() => runEngineLogin(engineLoginDirectory, {
+      stateRoot, libdir: fileURLToPath(new URL("../../../../", import.meta.url)),
+      override: process.env.OMA_PI_COMMAND, fence: lease.fence, env: process.env }), () => lease.release());
   } catch (error) {
-    lease.release();
     fail(`Could not start the engine: ${errorWords(error)}`, codeFor(error));
   }
-  lease.release();
   process.exit(code);
 }
 
@@ -72,8 +72,8 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
   try { lease = tryHoldSociety(store); }
   catch (error) { fail(`Could not take the package store: ${errorWords(error)}`, codeFor(error)); }
   if (lease === null) fail("Another oma pi command is running.", exitFor("BROKER_UNAVAILABLE"));
-  let code: number;
-  try {
+  const code = await withAsyncCleanup(async () => {
+    let code: number;
     const before = readPackageIndex(store);
     // C20: a local source is copied into the store first; the engine installs
     // the staged `local/<name>`, never the path the Human gave.
@@ -94,7 +94,8 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
       const contents = packageListLines(store);
       if (contents.length > 0) process.stdout.write(`Package contents:\n  ${contents.join("\n  ")}\n`);
     }
-  } finally { lease.release(); }
+    return code;
+  }, () => lease.release());
   process.exit(code);
 }
 

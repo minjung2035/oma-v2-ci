@@ -2,7 +2,7 @@
  * or SQLite/Git VFS boundary. An open fd pins identity, not immutable contents.
  * No lstat/open fallback when openat2 containment is unavailable.
  */
-import { constants, closeSync, fstatSync, openSync } from "node:fs";
+import { chmodSync, constants, closeSync, fstatSync, openSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { getSystemErrorName } from "node:util";
 import { load, errno } from "koffi";
@@ -51,7 +51,7 @@ function syscalls() {
   }
   return native;
 }
-let darwinOpen: ((directory: number, path: string, flags: number, mode: number) => number) | undefined;
+let darwinOpen: ((directory: number, path: string, flags: number, type: string, mode: number) => number) | undefined;
 function checked(result: number): number {
   if (result >= 0) return result;
   const value = errno();
@@ -90,11 +90,13 @@ export function openBeneath(
   if (process.platform === "darwin") {
     // No component walk fallback: a moved intermediate directory could leave
     // the held root between opens. Require the kernel's beneath/no-link walk.
-    darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, unsigned int mode)");
+    // Darwin arm64 passes variadic arguments on the stack. Declaring mode as
+    // a fixed fourth argument can create mode-000 files despite a 0600 input.
+    darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, ...)");
     if ((flags & 0o10000000 /* Linux O_PATH */) !== 0)
       throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: Darwin has no verified permission-independent entry pin and exact reopen");
     const result = darwinOpen(directory, path, flags | 0x01000000 /* O_CLOEXEC */ |
-      0x20000000 /* O_NOFOLLOW_ANY */ | 0x1000 /* O_RESOLVE_BENEATH */, mode);
+      0x20000000 /* O_NOFOLLOW_ANY */ | 0x1000 /* O_RESOLVE_BENEATH */, "unsigned int", mode);
     if (result < 0 && [20, 62, 107].includes(errno()))
       throw new StoreError("STORE_CORRUPT", "filesystem containment rejected a link or path escape");
     return checked(result);
@@ -137,6 +139,25 @@ export function openRegularBeneath(directory: number, path: string): number {
   } catch (error) {
     return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
+}
+/** Minimal entry capability operations. Type, repair bits and lifetime remain
+ * with storage. Darwin must supply an exact permission-independent pin/reopen
+ * before these are available; an I/O open or pathname retry is no substitute. */
+export function pinBeneath(directory: number, path: string, directoryOnly = false): number {
+  return openBeneath(directory, path, 0o10000000 | constants.O_NOFOLLOW |
+    (directoryOnly ? constants.O_DIRECTORY : 0));
+}
+export function reopenPinned(pin: number, flags: number): number {
+  if (!Number.isSafeInteger(pin) || pin < 0) throw new TypeError("invalid entry pin");
+  if (process.platform !== "linux")
+    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: exact entry reopen is unverified on this platform");
+  return openSync(`/proc/self/fd/${pin}`, flags);
+}
+export function chmodPinned(pin: number, mode: number): void {
+  if (!Number.isSafeInteger(pin) || pin < 0) throw new TypeError("invalid entry pin");
+  if (process.platform !== "linux")
+    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: exact entry repair is unverified on this platform");
+  chmodSync(`/proc/self/fd/${pin}`, mode);
 }
 /** Bootstrap a host-configured directory without following any pathname symlink.
  * Hold the result for the entire operation; children use openBeneath, not this path again.

@@ -1,14 +1,15 @@
+import { directoryNames, renameAt, symlinkAt, statAt, unlinkAt } from "@oma/native/posix-files";
 /** CTX-004 / FS-002: staged directories and derived links have distinct owners.
  * The caller serializes publication in a trusted root and validates artifact
  * identity. These syscalls do not establish a new kernel no-replace guarantee.
  */
-import { lstatSync, readdirSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
+import { lstatSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { fsyncDir, fsyncHeldDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
 import { assertDirectory } from "./directory.js";
-import { entryAt, withinDirectory } from "@oma/native/files";
+import { withinDirectory } from "@oma/native/files";
 
 function requireDirectory(path: string): void {
   assertDirectory(path);
@@ -43,7 +44,7 @@ export function publishStagedDirectory(
     return "existing";
   };
   let present = true;
-  try { withinDirectory(destination, (parent, name) => lstatSync(entryAt(parent, name))); }
+  try { withinDirectory(destination, (parent, name) => statAt(parent, name)); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     present = false;
@@ -61,7 +62,7 @@ export function publishStagedDirectory(
   // then reports as published.
   const moved = withinDirectory(staging, (from, fromName) =>
     withinDirectory(destination, (to, toName) => {
-      try { renameSync(entryAt(from, fromName), entryAt(to, toName)); }
+      try { renameAt(from, fromName, to, toName); }
       catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
@@ -93,20 +94,20 @@ export function replaceDerivedSymlink(path: string, target: string): void {
     // synchronous call is its only writer, and the caller serializes
     // publication in its root (above). What a killed one left is removed
     // before the next link is made; a file, or another name's, is not.
-    for (const entry of readdirSync(`/proc/self/fd/${parent}`)) {
+    for (const entry of directoryNames(parent)) {
       if (!entry.startsWith(`.${name}.`) || !/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/.test(entry)) continue;
-      try { if (lstatSync(entryAt(parent, entry)).isSymbolicLink()) unlinkSync(entryAt(parent, entry)); }
+      try { if (statAt(parent, entry).isSymbolicLink()) unlinkAt(parent, entry); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     }
     const temporaryName = `.${name}.${randomUUID()}.tmp`;
-    symlinkSync(target, entryAt(parent, temporaryName));
+    symlinkAt(target, parent, temporaryName);
     let owned = true;
     try {
-      renameSync(entryAt(parent, temporaryName), entryAt(parent, name)); owned = false;
+      renameAt(parent, temporaryName, parent, name); owned = false;
       fsyncHeldDir(parent, dirname(path));
     } finally {
       if (owned) {
-        try { unlinkSync(entryAt(parent, temporaryName)); }
+        try { unlinkAt(parent, temporaryName); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         fsyncHeldDir(parent, dirname(path));
       }

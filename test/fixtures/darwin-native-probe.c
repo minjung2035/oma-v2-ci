@@ -7,6 +7,9 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <sys/wait.h>
+#include <sys/proc_info.h>
+#include <dirent.h>
+#include <stddef.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
@@ -14,6 +17,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The production FFI readers reject a different ABI; bind their offsets to
+ * each actual runner SDK rather than assuming the layout from a header copy. */
+_Static_assert(sizeof(struct proc_bsdinfo) == 136, "proc_bsdinfo size");
+_Static_assert(offsetof(struct proc_bsdinfo, pbi_pid) == 12, "proc PID offset");
+_Static_assert(offsetof(struct proc_bsdinfo, pbi_ppid) == 16, "proc parent offset");
+_Static_assert(offsetof(struct proc_bsdinfo, pbi_start_tvsec) == 120, "proc start seconds offset");
+_Static_assert(offsetof(struct proc_bsdinfo, pbi_start_tvusec) == 128, "proc start micros offset");
+_Static_assert(offsetof(struct dirent, d_reclen) == 16, "dirent record size offset");
+_Static_assert(offsetof(struct dirent, d_namlen) == 18, "dirent name size offset");
+_Static_assert(offsetof(struct dirent, d_name) == 21, "dirent name offset");
 
 static void require(int condition, const char *label) {
   if (!condition) { perror(label); exit(2); }

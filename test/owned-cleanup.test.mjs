@@ -144,29 +144,6 @@ for (const operation of ['openDirectory', 'openRegularBeneath'])
       error => both(error, secondary, last));
     assert.deepEqual(returned, [operation === 'openDirectory' ? 11 : 13, 19]);
   });
-test('Owned cleanup archive: constructor failure retains temporary discard failure', () => {
-  let returned = 0;
-  const api = load('packages/platform-mac/src/archive-crypto.ts', { './files.js': {
-    createTemporary: () => ({ fd: 17 }), discardTemporary() { returned++; throw secondary; },
-  } });
-  assert.throws(() => api.sealedArchiveSink('/fixture', 'record', Buffer.alloc(0)), error => {
-    assert.ok(error instanceof AggregateError);
-    assert.equal(errorCodeOf(error), 'INVALID_REQUEST'); assert.equal(error.errors[1], secondary); return true;
-  });
-  assert.equal(returned, 1);
-});
-for (const stage of ['clone', 'publish', 'success']) test(`Owned cleanup stopped snapshot: ${stage} beside discard failure retains exact outcome`, async () => {
-  let returned = 0, visible = false;
-  const api = load('apps/oma/src/platform/host/snapshot.ts', {
-    'node:fs': { ...fs, readdirSync: () => [] }, '@oma/platform-mac/files': {
-      temporaryPath: () => '/fixture/partial', publishMade() { visible = true; if (stage === 'publish') throw primary; return 'created'; },
-      discardTemporary(path) { assert.equal(path, '/fixture/partial'); returned++; throw secondary; },
-    },
-  });
-  await assert.rejects(api.snapshotStopped({ dir: '/fixture', statePath: '/fixture/state',
-    clone() { if (stage === 'clone') throw primary; } }, 'record'), error => stage === 'success' ? error === secondary : both(error));
-  assert.equal(returned, 1); assert.equal(visible, stage !== 'clone');
-});
 for (const file of ['apps/oma/src/runtime/personal-settings.ts', 'apps/oma/src/engine/settings-files.ts'])
   for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
     const root = fixture(t); let returned = 0, writes = 0;

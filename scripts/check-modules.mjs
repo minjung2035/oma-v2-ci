@@ -31,7 +31,7 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
 const slash = path => path.split(sep).join("/");
 const packageName = specifier => specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
 // These consumers may use physical files, never the SQLite ledger or its erased types.
-const GIT_HOST_APIS = new Set(["@oma/git/project-preparation", "@oma/git/host-project"]);
+const GIT_HOST_APIS = new Set(["@oma/git/project-preparation"]);
 const STORAGE_FILE_CONSUMERS = new Set(["@oma/config", "@oma/git", "@oma/platform-linux"]);
 const STORAGE_FILE_APIS = new Set([
   "directory", "durable-fs", "file-digest", "immutable-file", "preaccept-artifact",

@@ -579,39 +579,18 @@ export const lanes = Object.freeze({
     proof:
       "finite real Linux socket/pidfd/cgroup-FD and direct-child pipe cleanup, measured test RSS and queue bounds; not provider throughput, kernel quota or process-tree death certification",
   },
-  // macos-platform §10.2 (DR18): the host's and the guest's Node code on
-  // Linux -- protocol, guest services, terminal session, the host's state
-  // machine, Host API, egress, image and archive -- with the guest's services
-  // on this host in place of a VM, and the bridge over vsock loopback.
+  // DR49: actual shared primitives on this host. Darwin qualification and
+  // unresolved gate probes run independently in native-runtime.yml.
   platform: {
-    files: [
-      "platform-archive.test.js", "platform-egress.test.js", "platform-guest-control.test.js", "platform-guesthost.test.js",
-      "platform-host-api.test.js", "platform-host-resolver.test.js", "platform-host-service.test.js", "platform-image.test.js",
-      "platform-lifecycle.test.js", "platform-project.test.js", "platform-provision.test.js", "platform-request-ledger.test.js", "platform-rpc.test.js", "socket-observation.test.js",
-      "platform-snapshot.test.js", "platform-terminal-session.test.js", "platform-vsock-bridge.test.js", "platform-vz-driver.test.js",
-      "dr18-product-words.test.js", "platform-stream-publication.test.js",
-    ],
-    sourceFiles: ["packages/platform-linux/test/sandbox-seccomp.test.mjs"],
-    requiredNames: [
-      "MAC-202: the production bridge closes a connection that is not from the host, unread",
-      "MAC-205/MV-20, P0V-102:",
-      "SB-001, P0V-102:",
-      "P0V-103 (F-02):",
-      "P0V-104 (F-03):",
-      "MAC-230:",
-      "MAC-021:",
-      "MAC-704:",
-      "MAC-710/711:",
-      "MAC-601:",
-      "MAC-621:",
-      "P0-7/MAC-241:",
-      "§4.6:",
-      "DR18 D-1:",
-    ],
+    files: ["socket-observation.test.js", "host-arguments.test.js"],
+    sourceFiles: ["test/native-primitives.test.mjs", "test/native-profile.test.mjs", "test/restic-tar.test.mjs",
+      "packages/platform-linux/test/sandbox-seccomp.test.mjs"],
+    requiredNames: ["directory effects remain on the held inode", "the real kernel process substrate",
+      "restart breaker counts only", "public help needs no VM", "retired VM commands refuse",
+      "dump verification consumes arbitrary chunk boundaries", "dump truncation, duplicate entries"],
     environment: "git-fs",
     timeoutSeconds: 900,
-    proof:
-      "the macOS distribution's Node code on Linux with the guest's services in place of a VM; not a VM, not Virtualization.framework, not the Swift helper or the Keychain (mac-* lanes)",
+    proof: "shared filesystem/process observations, native entry refusal and streaming archive verification on the executing OS; not G-PROCESS/G-FILES/G-AUTH closure or full native Society qualification",
   },
   all: {
     files: "all",

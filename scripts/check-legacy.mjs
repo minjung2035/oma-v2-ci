@@ -7,6 +7,11 @@ import ts from "typescript";
 import { authoredFiles } from "./architecture/rules/shared.mjs";
 
 const REMOVED_PATHS = Object.freeze([
+  // DR49: no native path may fall back to the retired VM runtime.
+  "apps/oma/src/platform/host", "apps/oma/src/platform/guest",
+  "apps/oma/src/entry/oma-mac.ts", "apps/oma/src/entry/omahostd.ts",
+  "packages/platform-mac/src/vmhelper", "packages/platform-mac/src/vz-driver.ts",
+  "packages/platform-linux/src/guest", "packages/platform-linux/src/guest-system.ts",
   "src",
   "apps/oma/src/engine/proper-lockfile.d.ts",
   "src/platform/host/files.ts",

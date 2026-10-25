@@ -31,4 +31,3 @@ export async function openResticTool(env: NodeJS.ProcessEnv = process.env): Prom
     return fd;
   } catch (error) { return withAsyncCleanup(async () => { throw error; }, () => closeSync(fd)); }
 }
-

@@ -56,12 +56,6 @@ function world({ platform = 'linux', saved = false, config = true, snapshot = {}
       try { if (!saved) seeds.push(await seed()); effects.push(['settings-commit', location]); }
       finally { effects.push(['settings-return']); }
     } },
-    '../platform/host/personal-seed.js': { async macProjectExtensionSeed(_data, cwd) {
-      effects.push(['mac-seed', cwd]); if (configError) throw configError;
-      return ['extensions/mac.js'];
-    } },
-    '@oma/protocol/guest-history': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
-    '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { effects.push(['guest-history']); } },
     '../application/settings.js': {
       projectSettingsPath: () => '/fixture/project-config.json',
       readSettingsForEditing() { effects.push(['config-read']); if (configError) throw configError; return { snapshot, config: { principalProfile: 'principal' } }; },

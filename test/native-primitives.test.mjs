@@ -4,7 +4,7 @@ import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDirectory, openBeneath } from "@oma/native/files";
-import { mkdirAt, unlinkAt, linkAt, renameAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt, linkAt, renameAt } from "@oma/native/posix-files";
 import { observeDarwinProcess, observeLinuxProcess } from "@oma/native/process-observation";
 import { hostProcessProbe } from "@oma/broker/process-ancestry";
 import { RestartPolicy } from "@oma/process/restart-policy";
@@ -16,10 +16,15 @@ test("directory effects remain on the held inode after a pathname replacement", 
     renameSync(join(scratch, "root"), join(scratch, "moved")); mkdirSync(join(scratch, "root"));
     mkdirAt(held, "안전", 0o700);
     const fd = openBeneath(held, "data", constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-    try { writeFileSync(fd, "pinned"); } finally { closeSync(fd); }
+    try {
+      assert.equal(fstatSync(fd).mode & 0o777, 0o600, "openat must pass the requested creation mode through the actual ABI");
+      writeFileSync(fd, "pinned");
+    } finally { closeSync(fd); }
     linkAt(held, "data", held, "published");
     assert.throws(() => linkAt(held, "data", held, "published"), { code: "EEXIST" });
     renameAt(held, "data", held, "renamed");
+    assert.deepEqual(directoryNames(held), ["published", "renamed", "안전"]);
+    assert.deepEqual(directoryNames(held), ["published", "renamed", "안전"], "each listing owns an independent cursor");
     assert.equal(readFileSync(join(scratch, "moved", "published"), "utf8"), "pinned");
     assert.throws(() => readFileSync(join(scratch, "root", "published")), { code: "ENOENT" });
     assert.throws(() => unlinkAt(held, "../outside"), TypeError);

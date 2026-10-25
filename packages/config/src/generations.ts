@@ -1,3 +1,4 @@
+import { directoryNames, statAt } from "@oma/native/posix-files";
 import { mkdirAt, unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
 /** D02/WP13: managed configuration generations.
  *
@@ -257,9 +258,9 @@ function sameEntries(parent: number, generation: string, files: ReadonlyMap<stri
       throw error;
     }
     try {
-      for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
+      for (const entry of directoryNames(fd)) {
         const path = relativePath === "" ? entry : `${relativePath}/${entry}`;
-        const stat = lstatSync(`/proc/self/fd/${fd}/${entry}`);
+        const stat = statAt(fd, entry);
         if (stat.isDirectory()) { if (!directories.has(path) || !walk(path)) return false; }
         else if (stat.isFile() && files.has(path)) found++;
         else return false;
@@ -279,7 +280,7 @@ function sameEntries(parent: number, generation: string, files: ReadonlyMap<stri
 function publishGeneration(generations: string, id: string, published: ReadonlyMap<string, Buffer>, faults?: DurabilityObserver): void {
   const target = join(generations, id);
   withinDirectory(target, (parent, name) => {
-    if (lstatSync(entryAt(parent, name), { throwIfNoEntry: false })) {
+    if (statAt(parent, name, { throwIfNoEntry: false })) {
       if (!sameBytes(parent, name, published)) throw new StoreError("STORE_CORRUPT", `managed generation ${id} holds other bytes`);
       return;
     }

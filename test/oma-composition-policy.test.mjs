@@ -1,3 +1,4 @@
+import * as cleanupMeaning from "@oma/native/cleanup";
 import * as nativeSupportMeaning from "#oma-test/app/runtime/native-support";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
 import * as hostLossMeaning from "@oma/process/host-loss";
@@ -145,6 +146,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     return settings;
   };
   const modules = {
+    "@oma/native/cleanup": cleanupMeaning,
     "../runtime/native-support.js": nativeSupportMeaning,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
 "@oma/process/host-loss": hostLossMeaning,
