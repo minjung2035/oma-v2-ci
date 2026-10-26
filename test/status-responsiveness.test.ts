@@ -62,7 +62,7 @@ function society(t: TestContext, options: { hang?: () => boolean; fail?: () => b
     const answer = await broker.dispatch(auth, request as never, null) as { ok: boolean; result?: any; error?: { code: string } };
     return { answer, ms: performance.now() - started };
   };
-  return { root, store, meter, broker, call };
+  return { root, store, meter, broker, call, units, views };
 }
 
 /** The longest the event loop went without running a 1 ms timer while `work` ran. */
@@ -169,4 +169,54 @@ test("V23A / WP23.05: a failed observation is published as unknown with its time
   assert.equal(view.view.agents.length, AGENTS);
   assert.ok(view.view.agents.every(row => row.activeState === null && row.execMainStatus === null));
   assert.equal(view.view.agents.find(row => row.agent === "w2")!.pending, 1, "the Store facts were not published with the unknown units");
+});
+
+
+test("NATIVE-STATUS-PUBLICATION-01: mutation hints share one active publication and one fresh follow-up", async t => {
+  const s = society(t);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  t.mock.method(s.units, "observeStatus", async (actors: readonly string[]) => {
+    await gate; return new Map(actors.map(actor => [actor, s.units.observe(actor)]));
+  });
+  const publish = s.views.publishStatus.bind(s.views); let publications = 0;
+  t.mock.method(s.views, "publishStatus", (snapshot: import("@oma/contracts/runtime").StatusSnapshot) => { publications++; publish(snapshot); });
+  try {
+    for (let i = 0; i < 4; i++) {
+      const result = await s.call({ v: 1, id: `coalesce-${i}`, method: "mail.send", request: `coalesce-${i}`,
+        params: { to: ["w2"], subject: "status coalescing", kind: "message", body: "x" } });
+      assert.equal(result.answer.ok, true);
+    }
+    assert.equal(publications, 0, "publication cannot precede its observation");
+  } finally { release(); }
+  // The observation fixture has no timer after release. Flush its promise
+  // continuations and the requested follow-up without widening a time budget.
+  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.ok(publications >= 1 && publications <= 2, `${publications} duplicate durable status publications for four hints`);
+  assert.equal(s.store.pendingDeliveries("w2").length, 4);
+});
+
+
+test("NATIVE-STATUS-PUBLICATION-02: shutdown joins a held publication before Store close", async t => {
+  const s = society(t);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  t.mock.method(s.units, "observeStatus", async (actors: readonly string[]) => {
+    await gate; return new Map(actors.map(actor => [actor, s.units.observe(actor)]));
+  });
+  let closed = false, publications = 0;
+  const close = s.store.close.bind(s.store);
+  t.mock.method(s.store, "close", () => { closed = true; close(); });
+  t.mock.method(s.views, "publishStatus", () => { publications++; });
+  try {
+    const sent = await s.call({ v: 1, id: "close-publication", method: "mail.send", request: "close-publication",
+      params: { to: ["w2"], subject: "shutdown", kind: "message", body: "x" } });
+    assert.equal(sent.answer.ok, true);
+    const draining = s.broker.drainAndClose();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(closed, false, "Store closed while its publication owner was still waiting");
+    release(); await draining;
+    assert.equal(closed, true); assert.equal(publications, 0, "draining cannot republish the removed status view");
+  } finally { release(); }
 });

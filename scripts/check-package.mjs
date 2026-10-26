@@ -176,7 +176,7 @@ export async function checkPackage(rootInput) {
     }; visit(source);
   }
   return { status: "STATIC_PACKAGE_CHECKED", root, entries: layout.entries, runtimeDependencies: versions,
-    limitations: ["entrypoints not started", "systemd/kernel/rootfs/Pi pins not attested", "deploymentDigest bytes not synthesized"] };
+    limitations: ["entrypoints not started", "native kernel/rootfs/Pi pins not attested", "deploymentDigest bytes not synthesized"] };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const flag = process.argv.indexOf("--root");

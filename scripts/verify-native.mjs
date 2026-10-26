@@ -20,7 +20,7 @@ const gates = {
     "G-AUTH": { status: "OPEN", reason: "Actual descriptor-transfer observations do not establish per-message origin, PID-reuse or whole authorization proof" },
   };
 
-const result = { provenance, gates, cases: [], observations: {}, status: "SETUP_FAILED" };
+const result = { provenance, gates, compilations: [], cases: [], observations: {}, status: "SETUP_FAILED" };
 let compilationWorkspace;
 try {
   if (source.error || source.signal || source.status !== 0 || !/^[0-9a-f]{40}$/.test(provenance.source))
@@ -28,47 +28,61 @@ try {
   if (process.platform !== "darwin") throw new Error("Darwin gate probes require a real Darwin kernel");
   const sdk = run("xcrun", ["--show-sdk-version"]); if (sdk.status !== 0 || sdk.error || sdk.signal) throw new Error("SDK could not be observed");
   provenance.sdk = sdk.stdout.trim();
-  const fixture = resolve("test/fixtures/darwin-native-probe.c");
-  provenance.probeDigest = createHash("sha256").update(readFileSync(fixture)).digest("hex");
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-probe-")));
   compilationWorkspace = scratch;
   provenance.filesystem = statfsSync(scratch);
-  const binary = join(scratch, "probe");
-  const compiled = run("xcrun", ["clang", "-Wall", "-Wextra", "-Werror", fixture, "-o", binary]);
-  writeFileSync(join(out, "compile.log"), (compiled.stdout ?? "") + (compiled.stderr ?? ""));
-  writeFileSync(join(out, "compile-result.json"), JSON.stringify({ exitCode: compiled.status, signal: compiled.signal, error: compiled.error?.message }) + "\n");
-  if (compiled.error || compiled.signal || compiled.status !== 0) throw new Error("Darwin SDK probe compilation failed");
-  // A failed case must not erase unrelated observations. Each real-kernel
-  // attempt has its own cwd, exit/signal/stdio and result, including failures.
-  const names = ["process", "files", "auth", "socket-transfer", "queued-transfer"];
-  for (let iteration = 0; iteration < 3; iteration++) for (const name of names) {
-    const directory = join(out, "cases", `${name}-${iteration}`);
-    const attempt = { name, iteration, status: "SETUP_FAILED" };
-    let workspace;
+  const programs = [
+    { name: "baseline", fixture: "darwin-native-probe.c", digest: "probeDigest", compile: "compile",
+      names: ["process", "files", "auth", "socket-transfer", "queued-transfer"], link: [] },
+    { name: "mach", fixture: "darwin-mach-probe.c", digest: "machProbeDigest", compile: "compile-mach",
+      names: ["mach-queued-live", "mach-queued-exit"], link: ["-lbsm"] },
+  ];
+  for (const program of programs) {
+    const binary = join(scratch, program.name);
+    const compilation = { name: program.name, status: "SETUP_FAILED" };
     try {
-      mkdirSync(directory, { recursive: true });
-      workspace = realpathSync(mkdtempSync(join(tmpdir(), `oma-native-${name}-`)));
-      attempt.workspace = workspace;
-      const observed = run(binary, [name], workspace);
-      Object.assign(attempt, { exitCode: observed.status, signal: observed.signal, error: observed.error?.message });
-      writeFileSync(join(directory, "stdout"), observed.stdout ?? "");
-      writeFileSync(join(directory, "stderr"), observed.stderr ?? "");
-      if (observed.error || observed.signal || observed.status !== 0)
-        throw new Error(`probe did not complete: ${observed.status}/${observed.signal}`);
-      const { case: actual, ...observations } = JSON.parse(observed.stdout);
-      if (actual !== name || Object.keys(observations).length !== 1) throw new Error("probe case/observation mismatch");
-      attempt.observations = observations; attempt.status = "OBSERVED";
-      if (iteration === 0) Object.assign(result.observations, observations);
-    } catch (error) { attempt.error = String(error); }
-    finally {
-      if (workspace !== undefined) {
-        try { rmSync(workspace, { recursive: true, force: true }); attempt.cleanup = "returned"; }
-        catch (error) { attempt.cleanupError = String(error); attempt.status = "SETUP_FAILED"; }
+      const fixture = resolve("test/fixtures", program.fixture);
+      provenance[program.digest] = createHash("sha256").update(readFileSync(fixture)).digest("hex");
+      const compiled = run("xcrun", ["clang", "-Wall", "-Wextra", "-Werror", fixture, ...program.link, "-o", binary]);
+      Object.assign(compilation, { exitCode: compiled.status, signal: compiled.signal, error: compiled.error?.message });
+      writeFileSync(join(out, `${program.compile}.log`), (compiled.stdout ?? "") + (compiled.stderr ?? ""));
+      if (compiled.error || compiled.signal || compiled.status !== 0) throw new Error("Darwin SDK probe compilation failed");
+      compilation.status = "COMPILED";
+    } catch (error) { compilation.error = String(error); }
+    result.compilations.push(compilation);
+    writeFileSync(join(out, `${program.compile}-result.json`), JSON.stringify(compilation) + "\n");
+    // A failed compilation/case must not erase unrelated observations. Every
+    // real-kernel attempt has independent exit/signal/stdio and cleanup.
+    for (let iteration = 0; iteration < 3; iteration++) for (const name of program.names) {
+      const directory = join(out, "cases", `${name}-${iteration}`);
+      const attempt = { name, iteration, status: "SETUP_FAILED" };
+      let workspace;
+      try {
+        mkdirSync(directory, { recursive: true });
+        if (compilation.status !== "COMPILED") throw new Error(`probe was not executed: ${compilation.error}`);
+        workspace = realpathSync(mkdtempSync(join(tmpdir(), `oma-native-${name}-`)));
+        attempt.workspace = workspace;
+        const observed = run(binary, [name], workspace);
+        Object.assign(attempt, { exitCode: observed.status, signal: observed.signal, error: observed.error?.message });
+        writeFileSync(join(directory, "stdout"), observed.stdout ?? "");
+        writeFileSync(join(directory, "stderr"), observed.stderr ?? "");
+        if (observed.error || observed.signal || observed.status !== 0)
+          throw new Error(`probe did not complete: ${observed.status}/${observed.signal}`);
+        const { case: actual, ...observations } = JSON.parse(observed.stdout);
+        if (actual !== name || Object.keys(observations).length !== 1) throw new Error("probe case/observation mismatch");
+        attempt.observations = observations; attempt.status = "OBSERVED";
+        if (iteration === 0) Object.assign(result.observations, observations);
+      } catch (error) { attempt.error = String(error); }
+      finally {
+        if (workspace !== undefined) {
+          try { rmSync(workspace, { recursive: true, force: true }); attempt.cleanup = "returned"; }
+          catch (error) { attempt.cleanupError = String(error); attempt.status = "SETUP_FAILED"; }
+        }
       }
+      result.cases.push(attempt);
+      try { writeFileSync(join(directory, "result.json"), JSON.stringify(attempt, null, 2) + "\n"); }
+      catch (error) { attempt.artifactError = String(error); attempt.status = "SETUP_FAILED"; }
     }
-    result.cases.push(attempt);
-    try { writeFileSync(join(directory, "result.json"), JSON.stringify(attempt, null, 2) + "\n"); }
-    catch (error) { attempt.artifactError = String(error); attempt.status = "SETUP_FAILED"; }
   }
   if (result.cases.some(attempt => attempt.status !== "OBSERVED"))
     throw new Error("at least one independent Darwin observation did not complete; other raw cases retained");

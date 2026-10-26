@@ -44,7 +44,7 @@ DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda0
 ## DR49 native 적용 범위
 
 DR49·DR56에서 폐기한 물리 구현의 문장과 ID는 과거 계약의 뜻으로 남긴다. 현재 제품은
-[현재 native 계약](macos-platform.md)의 NATIVE-001–019를 적용한다. 고정 architecture의
+[현재 native 계약](macos-platform.md)의 NATIVE-001–020을 적용한다. 고정 architecture의
 원문이나 과거 accepted 기록을 새 실행 substrate에 맞춰 재해석하지 않는다.
 
 | 이 문서의 물리 reference | 현재 적용할 계약 |

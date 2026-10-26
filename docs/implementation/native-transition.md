@@ -21,6 +21,30 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 status 게시 owner와 Darwin 인증 후보 확대
+
+네 mutation hint가 같은 status를 네 번 영속 게시하던 실제 반례를 재현했다. Broker가
+기존 process의 CoalescedWake를 재사용해 게시 작업 하나와 후속 hint 하나를 소유하고,
+활성 게시를 drain한 뒤 Store를 닫는다. DR57/NATIVE-020이 그 수명과 owner를 소유한다.
+후속 실제 Linux 선택46개 파일 **430/430 PASS**, skip/cancel/todo0·input 전후 동일이다.
+이는 전체 Linux suite나 Darwin 제품 qualification의 대체 결과가 아니다.
+
+Darwin 인증의 별도 후보로 Mach 메시지의 SDK audit trailer를 시험한다. 두 sibling sender가
+같은 상속 send right에 순서대로 요청을 미리 넣고, 두 번째 body는 첫 sender의 PID를 주장한다.
+수신자는 body가 아닌 kernel trailer를 각 메시지에서 얻는다. sender 둘이 살아 있는 경우와
+모두 실제 waitpid로 join된 뒤 읽는 경우를 각각3회 실행한다. 후자는 queued identity와 현재
+liveness가 다르다는 경계도 확인한다. [고정 XNU의 상속 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/ipc_tt.c#L2168)과
+[SDK trailer 정의](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/mach/message.h#L730)를
+조사 기준으로 사용하며 실제 runner kernel과 같다고 가정하지 않는다. 이 후보는 실제 CI
+실행 전이고 제품 transport·live pin·scope membership·PID 재사용 증명이 아니므로 G-AUTH는 OPEN이다.
+후보의 compile/실행 실패도 기존15개 관측을 지우지 않도록 독립 기록한다.
+
+Coalition도 [고정 syscall source](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/sys_coalition.c#L215)와
+[종료 요청 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c#L2179)을
+대조했다. 해당 source는 privileged coalition 소속을 요구하며 종료 요청은 active count에 따른
+종료 통지이지 member 전체 kill/후손 생성 fence가 아니다. source 검토는 현재 Darwin 실행 증명이
+아니며, private API/root daemon을 제품의 숨은 의존성으로 추가하거나 G-PROCESS를 닫지 않는다.
+
 ### 2026-10-26 전체 회귀와 credential 경계 수리
 
 전체 local3760개 중3759 PASS·1 FAIL·skip0을 확인했다. 남은 시험명 참조를 고친 뒤 실제

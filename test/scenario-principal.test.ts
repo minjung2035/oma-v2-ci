@@ -460,7 +460,8 @@ test("SCN-L02: the broker and the engine both restart mid-loop; the resumed sess
     await s.residentSends("worker-a", { to: ["principal"], subject: "Re: 배포 준비", body: "체크리스트 완료.", kind: "result" }, "w-l2");
     const seenBefore = s.provider.seen.length;
     s.script([text("체크리스트를 받았습니다.")]);
-    assert.equal((await s.deliver()).kind, "delivered");
+    const delivery = await s.deliver();
+    assert.equal(delivery.kind, "delivered", JSON.stringify({ delivery, lines: s.lines.slice(-16), events: s.events.slice(-8) }));
     const resumed = s.provider.seen[seenBefore]!.body.messages.map(textOf).join("\n");
     assert.ok(resumed.includes("배포 준비를 worker-a에게 요청해"), "the new engine did not resume the conversation (AV14)");
     assert.ok(resumed.includes("체크리스트 완료") || /path=\/mail\/archive\/cur\//.test(resumed), "the delivery did not reach the resumed session");

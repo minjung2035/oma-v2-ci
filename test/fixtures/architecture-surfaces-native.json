@@ -95,7 +95,7 @@
     "packages/contracts/src/runtime.ts": {
       "AuthContext": {
         "exported": true,
-        "sha256": "aca45745786185d994c694214077bdab77b18170bc478a8207922dda1efafdac"
+        "sha256": "7b2ac62c85e9bae0e9e041d197d2c38337e1bc8b4732775979f7c77ff1205180"
       },
       "AgentStatus": {
         "exported": true,

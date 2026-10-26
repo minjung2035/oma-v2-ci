@@ -1,5 +1,64 @@
 # OMA v2 — 현재 인계
 
+## status owner 후속 검증과 Darwin 후보 재개점
+
+최신 push HEAD는 아직 db68c111이며 아래 후속은 미push다. 최신 입력
+`66ab51c0afa08c39760f8c1e27837113c230e0625564eca6635084724b2d3896`에서 전체 정적 gate
+PASS(41.449초), 실행 정책7/7, 실제 Linux 선택46개 파일430/430 PASS·skip/cancel/todo0
+(466.084초), 각각 input 전후 동일이다. raw `native-status-owner-{architecture,policy,integration}*`.
+read lag20/mixed39/pending620 lag19ms로 기존 budget50/100/50ms를 유지했다.
+
+그 뒤 운영 안내/책임 경계의 폐기된 VM·guest sync·systemd 설명을 현재 구현으로 바로잡고,
+Darwin Mach audit trailer의 실제 메시지별 sender 후보를 추가했다. 두 sibling sender가 body의
+claimed PID를 공유해도 kernel origin은 별도로 검사하며, queued sender가 둘 다 실제 join된
+뒤에도 identity가 남는 경우와 살아 있는 경우를 분리한다. 두 case를 각각3회 실제 Mac CI에서
+실행한다. baseline15개 관측과 compile 실패를 독립 보존한다. Linux에서는 이 C를 실행하지
+않았으며 G-PROCESS/G-FILES/G-AUTH는 계속 OPEN이다. Coalition source 검토도 제품 종료 proof가 아니다.
+
+다음은 metadata 재생성/정적 gate·독립 packed install26·작업 브랜치 push/실제 Mac26/15 및
+Linux 전체 CI 결과·raw artifact 확인이다. 고정 architecture/review와 root README 원래 dirty는
+보존한다. 최신 입력의 전체 runtime PASS를 앞선430개 부분 결과로 합성하지 않는다.
+
+위 후속 중 build PASS, ledger는 authored review를 재결박하지 않고 derived stale 판정을 유지했다.
+입력 `a3b7fb252b39a2ca6a6fafb1d587c4bfb58785c9e9b7b601950ee0ce20ed8c0b`에서 전체 정적 gate
+PASS(41.075초), 독립 packed install26/26 PASS(269.430초), 실행 정책7/7·input inventory18/18 PASS,
+각 전후 동일이다(`native-status-mach-*`). 외부 SDK declaration44개와 authored 오류0은 구분한다.
+그 뒤 MAINTENANCE의 옛 물리 설명도 pinned kernel scope/실제 sender로 바로잡았다. 제품 code는
+같으며 문서 입력 재결박/검사 후 push한다. 새 Mach C는 실제 Mac CI 실행 전까지 NOT_RUN이다.
+
+## db68c111 실제 전체 실행 뒤 후속
+
+현재 HEAD/push는 `db68c111e8c203d3d8b8c821884a4b912597883a`다. 아래 앞선 기록의
+“push3f”는 그 기록 시점이며 최신 브랜치 상태가 아니다. user 목표는 전체 native 지원이며 ACTIVE다.
+최신 전체 local3775개는 **3773 PASS·2 FAIL**, skip/cancel/todo0·894.612초·input ec7ee8fc… 전후 동일
+(`native-whole-db68c111*`). 실패는 host/guest prompt 기대값과 AuthContext.cgroup 제거의 native golden
+미갱신이었다. 현재 기대값을 정확히 수정한 후 `native-final-expectations-fixed*`가 PASS다.
+과거 golden은 유지하고 새 architecture-surfaces-native.json의 AuthContext만 생성기로 갱신했다.
+
+실제 Native CI40284241937: Linux/Mac15/Mac26 공통각74/74, Linux peer3/3·native37/37·선택386/386
+PASS·skip/cancel/todo0. raw zip5개 SHA/source/input을 확인했다. 실제 양 Darwin SDK compile0·각15개
+관측 뒤 세 gate는 계속 OPEN/BLOCKED다. LOCAL_PEERTOKEN도 첫 connector byte 읽기 전후 동일한
+32-byte token이며 per-message origin proof가 아니다. 원시 `ci-db68c111/verified-summary.json`.
+독립 packed install26/26·입력 ec7ee8fc… 전후 동일도 PASS다(`native-post-regression-packed-install*`).
+
+Architecture CI40284241877은 FAIL: native-all3772/3775 FAIL3(prompt/golden/SCN-L02), fast794/795 FAIL1,
+durable871/871·property34/34·stress11/11·platform29/29 PASS. baseline local serial7/9 FAIL2(지연),
+parallel3762/3766 FAIL4(prompt/golden/Worker autonomy2). 원시 artifact2개 SHA 확인 후 같은 ci 폴더에
+추출했다. 이 실제 CI 추가 실패를 로컬2개 실패와 혼동하지 않는다.
+
+후속 실제 중복 status 게시 반례는 네 hint에 fsync 게시4회였다(`native-status-publication-before-fix*`).
+Broker가 기존 CoalescedWake로 게시를 coalesce하고 executingTasks에 등록·drain하도록 수정했다.
+기존 지연 예산은 그대로다. 새 peer 실제 실행 때문에 pending 상태를 불변으로 보던 시나리오는
+frozen message ID별 provider 대본과 실제 scope completion을 사용하고 accepted plan/메일 원본/
+완료 delivery를 비교하도록 수정했다. Principal 재시작도 실제 exited를 기다린다. 실패 시 lines/events/
+provider body+reply를 보존하며 실제 SCN-L02 CI 원인은 후속 증거로 계속 대조해야 한다.
+
+후속 관련9/9 PASS·skip/cancel/todo0,47.051초·input c88fe60f… 전후 동일
+(`native-status-and-scenario-ownership*`). read lag19/mixed43/pending12ms, budget50/100/50ms 유지.
+현재 최신 후속은 미push다. DR57/NATIVE-020/source owner를 갱신했으며 공통 메타데이터·전체 정적·
+확대46개 integration(지연 oracle 때문에 파일은 serial)·독립 설치·새 push/CI 확인이 다음이다.
+기존 README dirty와 고정 architecture/review notes를 보존한다. 실행 중 검증 입력은 수정하지 않는다.
+
 ## 최신 후속 입력과 재개점
 
 작업은 ACTIVE이며 목표를 축소하지 않는다. 최신 push는 여전히3f0f6151이다.

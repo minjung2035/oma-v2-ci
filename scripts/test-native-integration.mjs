@@ -30,4 +30,6 @@ const tests = parsed.fileNames.filter(file => file.endsWith('.test.ts')).sort().
 });
 if (tests.length === 0) throw new Error('native integration has no tests');
 console.log(`Selected native integration: ${tests.length} files; whole-root typecheck remains separate.`);
-run(['--test', '--test-concurrency=2', ...tests], 900_000);
+// This selection includes event-loop latency oracles; file isolation keeps
+// their unchanged budgets independent of sibling compiler/engine startup.
+run(['--test', '--test-concurrency=1', ...tests], 900_000);

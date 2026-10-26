@@ -53,6 +53,8 @@
     "../launch-location.test.ts",
     "../host-entry.test.ts",
     "../phase4.test.ts",
-    "../audit.test.ts"
+    "../audit.test.ts",
+    "../scenario-worker-autonomy.test.ts",
+    "../scenario-principal.test.ts"
   ]
 }

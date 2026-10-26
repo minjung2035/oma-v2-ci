@@ -11,6 +11,13 @@
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| status owner·Darwin 후보 추가 뒤 독립 설치/정적 | **26/26 packed install/public API/authored declaration/해당 installed runtime PASS**,269.430초. input `a3b7fb252b39a2ca6a6fafb1d587c4bfb58785c9e9b7b601950ee0ce20ed8c0b` 전후 동일. 전체 정적 gate41.075초·정책7/7·inventory18/18 PASS. 외부 SDK declaration44개는 별도이며 authored 오류0. `native-status-mach-*`. 이후 유지보수/결과 문서는 별도 입력이고 실제 Darwin C 실행은 아직 NOT_RUN |
+| status owner 후속 Linux 선택46개 파일 | **430/430 PASS**, fail/skip/cancel/todo0·466.084초·input `66ab51c0afa08c39760f8c1e27837113c230e0625564eca6635084724b2d3896` 전후 동일. `native-status-owner-integration*`. read20/mixed39/pending620 lag19ms, 기존 budget50/100/50ms 유지. 같은 입력 전체 정적 gate·정책7/7 PASS. 이후 운영 문서·Darwin 후보 추가는 이 실행의 입력이 아니며 전체/CI 결과로 승격하지 않음 |
+| `db68c111` 최신 전체 local | **3773/3775 PASS·2 FAIL**, skip/cancel/todo0·894.612초·input `ec7ee8fc1481ed838594ebe5d4cdf40639d421681b166c671d39b78baf4292bf` 전후 동일. `native-whole-db68c111*`. prompt의 host/guest 기대값과 cgroup 제거의 새 native golden hash가 실패했고 정확한 기대값으로 수정 후 부분 재검증 PASS. production이나 과거 golden을 되돌리지 않음 |
+| `db68c111` 실제 Native CI40284241937 | Linux/Mac15/Mac26 공통각 **74/74**, Linux peer3/3·native37/37·선택386/386 PASS·skip/cancel/todo0. input ec7ee8fc… 전후 동일. raw zip5개 SHA/source/input 검증, `ci-db68c111/verified-summary.json`. 양 Darwin SDK compile0·각15개 실제 관측·세 gate OPEN/BLOCKED. peer token도 읽기 전후 동일32bytes이며 per-message origin 미증명 |
+| `db68c111` 독립 packed install | **26/26 PASS**, authored declaration 오류0(외부 SDK 진단44는 별도), input ec7ee8fc… 전후 동일·276.137초. `native-post-regression-packed-install*`. 이후 broker 상태 게시 수명 변경은 재검증 대상 |
+| `db68c111` Architecture CI40284241877 | **FAIL**. native-all **3772/3775 FAIL3**(prompt/golden/Principal restart delivery), fast794/795 FAIL1. durable871/871·property34/34·stress11/11·platform29/29 PASS·skip0. baseline local serial7/9 FAIL2(지연 예산), parallel3762/3766 FAIL4(prompt/golden/Worker autonomy2). 원시 architecture artifact2개 SHA 검증. 부분 lane PASS를 전체 PASS로 합산하지 않음 |
+| CI 후속 상태 게시·동시 실행 수리 | 실제 네 hint가 동일 status를4회 영속 게시한 반례를 보존. 기존 coalescer 재사용·publication task drain, 실제 peer 완료/accepted bytes 대조, Principal actual close 대기로 수정. 관련 **9/9 PASS**·skip/cancel/todo0·47.051초·input `c88fe60f81dbafa4bc638db5999a75916306c5a9e7469fa1308f9e6ac049b361` 전후 동일. `native-status-and-scenario-ownership*`. read19/mixed43/pending12ms; 원래 budget50/100/50ms 유지. 후속 전체/실제 CI는 별도 필요 |
 | 전체 Linux 후속 회귀 | **3759/3760 PASS·1 FAIL**, skip/cancel/todo0, 934.673초. input `91909d2aef50ba0583eba51b63f9a1a8b99c0692c707ed9200952d0b1c3d6844` 전후 동일. 유일한 실패는 동적 Runner 제목과 durable registry의 참조2건이며 명시적 시험명으로 수정. `native-whole-current-repaired*`. 이 입력의 Personal PTY는 ambient oma를 사용했으므로 현재 설치 proof로 제외. 이후 실제 설치·통신 변경은 다음 별도 결과 |
 | 현재 checkout의 실제 설치·Keychain·Runner·경계 | **70/70 PASS**, skip/cancel/todo0·input `d3892c6bbb1a34dcf9eacb7a676584ce54dcf44127c1831633cd2408ac6c7dae` 전후 동일·64.659초. `native-keychain-install-source-fenced*`. Personal PTY16건은 runtime-only prefix의 exact bin과 checkout module/data 거절 guard를 사용. 실제 socket15건은 fatal UTF-8/BOM/중복 key/unknown correlation·field·type/oversize/EOF/timeout과 poison을 검증. Keychain ownership 정책·Runner 통신·durable registry 포함. signed Keychain/TCC/G-AUTH나 독립 packed install의 대체가 아님. 첫69/70 fixture 실패와54/70 guard setup 실패도 보존 |
 | `3f0f6151` 실제 Native CI `40259190478` | Mac15/26·Ubuntu 공통 각 **59/59**, Ubuntu peer **3/3**·native **37/37**·선택 integration **386/386 PASS**, skip/cancel/todo0. 세 OS input `3888603ca91136c2c78bbace99191ba38f7a22115604994e6809c0f3f59e177d` 전후 동일. 원시 zip5개 SHA256·source 확인, `ci-3f0f6151/verified-summary.json`. Darwin 각15개 관측/세 gate는 OPEN/BLOCKED이며 workflow 전체 PASS가 아님 |
@@ -181,7 +188,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `ec7ee8fc1481ed838594ebe5d4cdf40639d421681b166c671d39b78baf4292bf` (15598 files).
+verification input digest `2a64649825146432e67717fb36fd5a6d507a4f60a7abd13c8e3dd5a8618b730c` (15599 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

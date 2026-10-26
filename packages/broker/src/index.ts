@@ -65,6 +65,8 @@ export class Broker {
   private lastSweepFailure: string | null = null;
   private readonly sweepWake = new CoalescedWake(() => this.performSweep());
   private sweepTask: Promise<void> | null = null;
+  private readonly statusWake = new CoalescedWake(() => this.performStatusPublication());
+  private statusTask: Promise<void> | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases: RunRegistry;
@@ -252,18 +254,26 @@ export class Broker {
    * and no request's outcome depends on it. */
   private publishStatus(): void {
     if (this.draining) return;
-    // P0V-70, P0-2: publishing reads the ledger before it writes a file, so a
-    // failure here may be an integrity observation. Like every other failure
-    // this broker catches, it reaches the fence, which reads it normalized:
-    // corruption closes admission, a view file that failed to write does not.
-    const failed = (error: unknown): void => {
-      this.health.observe(error);
-      console.error("status view publish failed:", error instanceof Error ? error.message : String(error));
+    const task = this.statusWake.request();
+    if (this.statusTask === task) return;
+    this.statusTask = task;
+    this.executingTasks.add(task);
+    const release = (): void => {
+      this.executingTasks.delete(task);
+      if (this.statusTask === task) this.statusTask = null;
     };
-    void this.statusRefresh.request().then(snapshot => {
-      if (this.draining) return;
-      try { this.views.publishStatus(snapshot); } catch (error) { failed(error); }
-    }, failed);
+    void task.then(release, (error: unknown) => {
+      try {
+        // Derived publication can still reveal corruption; observe it through
+        // the same admission owner without changing an accepted outcome.
+        this.health.observe(error);
+        console.error("status view publish failed:", error instanceof Error ? error.message : String(error));
+      } finally { release(); }
+    });
+  }
+  private async performStatusPublication(): Promise<void> {
+    const snapshot = await this.statusRefresh.request();
+    if (!this.draining) this.views.publishStatus(snapshot);
   }
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
     const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);
@@ -483,7 +493,7 @@ export class Broker {
   closeAdmission(): void {
     if (this.draining) return;
     this.draining = true; this.running = false; this.health.close();
-    this.sweepWake.close();
+    this.sweepWake.close(); this.statusWake.close();
     if (this.statusTimer !== null) { clearInterval(this.statusTimer); this.statusTimer = null; }
     if (this.reconcileTimer !== null) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
     // Absence is the truthful status of a broker that is going away; an old

@@ -38,8 +38,9 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 세션을 열지 않는다. 이 기능은 Git push나 branch를 새로 만들지 않으며 과거 snapshot을 자동
 삭제하지 않는다. 오래된 고유 데이터도 계속 저장되므로 총량이 무제한으로 일정해지지는 않는다.
 
-설정은 Linux x64/arm64(guest 포함)에서 공식 Restic 0.19.1을 고정 checksum으로 설치한다.
-실행에는 GNU tar, setup 단계에는 `/usr/bin/bzip2`도 필요하다.
+Restic 0.19.1의 Linux/macOS x64·arm64 archive/binary checksum을 고정한다.
+setup 단계는 `/usr/bin/bzip2`를 사용하고, 실행 검증은 공통 TypeScript stream verifier가
+담당한다. Darwin의 설치·실제 보관/복원 지원은 아래 native gate가 해결될 때까지 미검증이다.
 기존 파일과 checksum이 다르면 덮어쓰지 않는다. 도구가 없거나 저장 검증이 실패하면 원래
 작업공간을 유지하고 이유를 로그에 남긴다. cold 세션에서 도구가 없으면 위 setup 명령을 다시
 실행한다. 현재 verifier는 extended attributes/ACL·special file·nested mount가 있거나 읽을 수
@@ -49,7 +50,10 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 
 ## macOS 코드와 배포 상태
 
-**macOS에서는 이 checkout의 `npm install -g .`만으로 사용할 수 없다.** Darwin 진입점은 OMA.app의 host service, bundle 안의 helper·Git·release key·guest image를 요구하며 Personal의 credential 경로도 bundle의 Keychain helper에 의존한다. 현재 저장소에는 설치 가능한 OMA.app/VM 이미지 배포물이 없다. macOS 코드는 개발·검증 대상이며, 위 명령을 Mac용 설치 절차로 사용하지 않는다. `--host-only` package 관리 가능 여부는 전체 제품의 설치·실행 가능 여부와 별개다.
+**macOS 제품 실행은 아직 지원하지 않는다.** 공통 native 진입점은 있으나
+G-PROCESS·G-FILES·G-AUTH가 미해결이므로 Society·Personal·login·package 명령을 효과 전에
+거절한다. OMA.app·host service·VM image를 설치하는 경로는 폐기했다. 기존 데이터와
+history는 자동 변환하거나 삭제하지 않는다. 위 Linux 설치 안내를 Mac 지원 절차로 사용하지 않는다.
 
 ## 역할별 운영 설정
 
@@ -57,9 +61,11 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 
 ## 세션 모드
 
-[DR28](design-revisions.md)의 Society는 기본 모드이며 기존 프로젝트 binding·Principal 제한·Worker 협업을 유지한다. `oma`는 모드 선택창 없이 바로 Society 세션을 연다. 아직 대화를 시작하지 않은 idle 세션에서 `/society`를 입력하면 Personal/Society 선택이 열린다. 다른 모드를 고르면 현재 세션이 완전히 종료된 뒤 같은 프로젝트에서 해당 모드로 다시 시작하며 기존 history를 변환하지 않는다. 작업을 시작한 뒤에는 `/new`로 현재 모드의 새 세션을 열고 선택한다. Personal은 Society 없이 동봉 Pi/Open TUI·기본 도구·명시적으로 선택한 확장을 사용하는 별도 Human 세션이며, `oma --mode personal`로도 바로 시작할 수 있다. `/resume`·fork는 저장된 모드를 보존한다. macOS의 Personal→Society는 OMA 앱에서 실행 중인 Society에 연결하므로 앱에서 먼저 열어야 한다. Personal Config의 확장 선택은 Principal/Worker 설정과 독립적으로 저장된다.
+[DR28](design-revisions.md)의 Society는 기본 모드이며 기존 프로젝트 binding·Principal 제한·Worker 협업을 유지한다. `oma`는 모드 선택창 없이 바로 Society 세션을 연다. 아직 대화를 시작하지 않은 idle 세션에서 `/society`를 입력하면 Personal/Society 선택이 열린다. 다른 모드를 고르면 현재 세션이 완전히 종료된 뒤 같은 프로젝트에서 해당 모드로 다시 시작하며 기존 history를 변환하지 않는다. 작업을 시작한 뒤에는 `/new`로 현재 모드의 새 세션을 열고 선택한다. Personal은 Society 없이 동봉 Pi/Open TUI·기본 도구·명시적으로 선택한 확장을 사용하는 별도 Human 세션이며, `oma --mode personal`로도 바로 시작할 수 있다. `/resume`·fork는 저장된 모드를 보존한다. Personal Config의 확장 선택은 Principal/Worker 설정과 독립적으로 저장된다.
 
-Mac의 `oma pi install npm:<package> --host-only`는 앱·Host API token·VM 없이 기존 host package store/index만 갱신한다. `remove`, `update`, `list`에도 같은 선택을 사용할 수 있다. 설치만으로 Personal 확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다. `--host-only`는 Pi에 전달되지 않으며 `--project`와 함께 쓸 수 없고 Linux에서는 거절한다. 이 flag가 없으면 기존 Society guest 동기화가 필요하며 앱이 없거나 관측이 실패해도 host-only로 대신 실행하지 않는다.
+`oma pi install npm:<package>`와 `remove`·`update`·`list`는 공통 local package store를
+사용한다. 폐기한 VM 선택자 `--host-only`·`--project`는 거절한다. 설치만으로 Personal
+확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다.
 
 Mac도 공통 native 진입점을 사용하며 VM 실행 경로는 제거했다. 현재 G-PROCESS·G-FILES·G-AUTH가
 미해결이므로 Mac 제품 실행은 효과 전에 거절한다. 기존 VM 데이터·history·accepted plan을 자동
@@ -160,16 +166,16 @@ new-operations/
   flush가 실패하면 "게시됐지만 영속 불명"으로 보고하고(화면은 "저장됨 · 디스크에 남았는지는 아직 확인되지
   않았습니다") 다음 편집 전에 다시 flush한다. 처음 만드는 설정은 이미 있는 파일을 덮어쓰지 않는다.
 
-D03(WP03): 제품이 띄운 broker는 config 경로·state root·run root를 Resident unit의 ExecStart에
-그대로 전달하고, 존재하지 않는 broker.service에 Resident를 묶지 않으며 종료할 때 Resident를
-정지한다. user manager의 런타임 디렉터리가 아닌 `XDG_RUNTIME_DIR`로는 시작하지 않는다
-(`UNSUPPORTED_PROFILE`). systemd가 fixed broker unit으로 broker를 실행하는 운영 방식은
-렌더링만 검증됐고 지원한다고 표시하지 않는다.
+DR49: foreground broker가 공통 Resident owner와 execution journal을 소유한다.
+수락된 실행 입력·config/state/run 위치를 private spawn 경로로 전달하고, 종료 시 모든
+실행 작업·독립 scope 종료·FD completion을 기다린 뒤 Store를 닫는다. user systemd와
+unit 설치·manager runtime directory는 실행 조건이 아니다. namespace/peer/file primitive가
+없거나 이전 scope가 unknown이면 시작하지 않는다.
 DR37/DR46에서 저장량·실행 자원·agent count quota는 제거했다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
 
 ## 현재 실행 제한
 
-로딩 결과는 현재 closed `HostConfig` schema 3로 검증한다(DR46). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조를 unit에서 받고 그 참조의 현재 model/provider 내용과 역할 prompt/extension snapshot을 새 RPC session에 전달한다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
+로딩 결과는 현재 closed `HostConfig` schema 3로 검증한다(DR46). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
 Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
@@ -186,7 +192,7 @@ Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록
 
 ## 봉인된 Resident의 provider 경로
 
-Society의 Resident는 항상 bwrap 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. provider credential은 sandbox에 전달하지 않는다. DR37에 따라 `--share-net`으로 host/guest 네트워크를 공유하며 일반 egress는 제한하지 않는다. credential을 사용하는 엔진 요청은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
+현재 Linux Society의 Resident는 bwrap namespace 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. provider credential은 sandbox에 전달하지 않는다. DR37에 따라 `--share-net`으로 host 네트워크를 공유하며 일반 egress는 제한하지 않는다. credential을 사용하는 엔진 요청은 trusted runner가 소유하는 relay를 통해 provider에 닿는다(`INF-005`/`INF-006`).
 
 - credential은 runner가 동봉 엔진으로 OMA 소유 agent directory에서 해석하고 한 delivery 동안만 relay에 둔다(`INF-008`). 로그인은 `oma login`으로 엔진 자체 흐름을 한 번 연다([DR18](design-revisions.md)).
 - sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받는다. relay는 나가는 길에 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 `key` query parameter에서만 진짜 key로 바꾼다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절하고, 응답에 진짜 key의 바이트가 나타나면 sandbox에 닿기 전에 끊는다(INF-007, INF-008).
@@ -208,7 +214,9 @@ broker는 `status.get`과 같은 답을 state root의 `status.json`(`0600`)으�
 
 `oma`의 최초 Society 실행은 현재 프로젝트의 작업 트리를 snapshot으로 가져와 canonical `main`을 만든다(DR27). Git 저장소에서는 커밋된 이력과 함께 **미커밋 tracked 변경·삭제 및 ignore되지 않은 untracked 파일**을 포함한다. Git 저장소가 아니거나 첫 커밋 전이어도 현재 파일을 가져오며, 포함할 파일이 없을 때만 빈 root commit으로 시작한다. Human의 HEAD·index·작업 파일은 바꾸지 않는다. 이후 시작은 기존 canonical 이력을 유지하며 원본 디렉터리의 새 변경을 자동 반영하지 않는다. 읽기 실패·손상은 빈 저장소로 대신하지 않고 시작을 멈춘다.
 
-Mac의 첫 import도 해당 작업 트리 snapshot을 bundle로 전송한다. Guest는 작업 트리가 없는 mirror의 imported HEAD를 최초 canonical seed로 사용한다. 같은 import key의 재시도는 host 재시작 후에도 처음 준비한 bundle을 재사용하며, 완료 뒤에는 작은 요청·결과 기록만 남긴다. 새 파일 상태를 가져오려면 새 요청 key를 사용한다. 변화 없는 incremental import/export도 유효한 bundle로 완료한다.
+과거 Mac VM의 bundle import/export·guest 동기화는 폐기했다. 기존 VM의 import 기록이나
+accepted bundle을 새 native 초기화로 재해석하지 않는다. native 첫 시작은 위 공통 snapshot
+owner를 사용하며 Darwin 제품 실행은 선행 gate가 해결되기 전까지 차단한다.
 
 ### 프로젝트 식별과 바인딩 (D05, WP16)
 
@@ -242,6 +250,10 @@ Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보
 
 현재 실행 환경의 검증 범위와 미실행 항목은 [validation](implementation/validation.md)을 확인한다. 플랫폼의 요구 조건은 [Core 계약](implementation-spec.md)과 [macOS 계약](macos-platform.md)을 따른다. 이전 WP31 지원 조합·lockfile 수정 기록은 [과거 qualification 기록](archive/qualification-before-consolidation.md#운영-문서의-wp31-지원-checkpoint)에 보존했다.
 
-DR46: HostConfig schema 3·DB schema 4·plan envelope v2·journal committed-v2·host/guest protocol 7만 지원한다. 이전 형식은 명시적으로 거절하며 자동 변환·덮어쓰기·삭제하지 않는다. 새 개발 상태 디렉터리를 사용한다. 새 Resident unit은 수락된 profile/modelProfile을 명시적으로 전달하며, 현재 역할의 참조를 대체값으로 사용하지 않는다. 같은 빌드에서 끊긴 write·run의 복구와 확정된 receipt 정산은 유지한다.
+HostConfig schema 3·DB schema 4·설정 journal committed-v2를 유지한다. DR52의 새 create
+plan은 v3의 `execution: "native"`를 기록한다. 과거 v2 plan/terminal receipt는 원래 bytes와
+의미로 읽으며, unit 설치가 필요한 미완료 v2 intent를 native 완료로 정산하지 않는다.
+execution journal v1은 별도의 관측 기록이며 accepted plan이나 권한의 원본이 아니다.
+host/guest protocol은 폐기했다. 기존 형식을 자동 변환·덮어쓰기·삭제하지 않는다.
 
 Mail 화면은 society 전체의 공개된 메일을 개별 행으로 보여 준다. Principal이 보낸 GOAL·작업 지시, Worker 간 메일과 응답도 포함한다. 발신자는 실제 이름을 사용하고 자동 merge 완료 공지는 `OMA / notice`, 요청자는 상세의 `Requested by`에 표시한다. `●`는 Principal 전달 대기이며 화면에서 여는 동작은 ACK를 보내지 않는다.

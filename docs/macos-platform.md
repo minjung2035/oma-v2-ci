@@ -148,6 +148,12 @@ malformed UTF-8·JSON BOM·중복 key·알 수 없는 correlation/field·잘못�
 증명이 아니며 child owner의 close 관측을 별도로 기다린다. 이 통신 시험은 signed Keychain·TCC
 검증이나 G-AUTH 통과의 대체가 아니다.
 
+**MUST [NATIVE-020]** 파생 status 게시 hint는 accepted 작업이나 실행 권한이 아니다. 공통
+coalescer가 활성 게시 하나와 pending hint 하나만 유지하며, 관측이 끝난 뒤 현재 ledger를 읽어
+게시한다. 같은 관측 Promise에 붙은 호출자마다 동일 파일을 재게시하지 않는다. 종료는 새 hint와
+pending 게시를 취소하고 활성 게시 작업을 drain한 뒤 Store를 닫는다. 종료 이후 status 파일을
+되살리지 않는다. WP23의 조회/혼합 부하 지연 예산과 unknown 표시는 그대로 유지한다.
+
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,
 전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와

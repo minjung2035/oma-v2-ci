@@ -127,7 +127,7 @@ jobs:
           # Doc↔inventory pairing: check:architecture runs it in its chain too;
           # this separate evidence line names the drifted clause directly.
           run_check spec-inventory 900 npm run check:spec-inventory
-          run_check test 1800 npm test
+          run_check test 1800 env OMA_TEST_ARTIFACT_DIR="$EVIDENCE/local-exploration" npm test
           # Full native/kernel/crash coverage also runs in native-all below.
           # These standalone wrappers retain their own scoped result records.
           run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"

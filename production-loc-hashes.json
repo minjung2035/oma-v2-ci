@@ -472,7 +472,7 @@
     },
     {
       "path": "packages/broker/src/index.ts",
-      "sha256": "b18560350376b46f839e33fadcdbce1a7207da9f30c0cdc28837baf84428e3ce"
+      "sha256": "2a5797850937f384b5c28692f622f6a2d0996b00a3c1d959b8c090a0cd77b647"
     },
     {
       "path": "packages/broker/src/internal-dispatcher.ts",

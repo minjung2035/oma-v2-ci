@@ -45,7 +45,7 @@ test("DR45/FI-3: the Resident prompt names current isolation and unrestricted ne
   const society = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## The society"), RESIDENT_SYSTEM_PROMPT.indexOf("## Starting up"));
   assert.match(society, /`git push` does not reach `main`/);
   const execution = RESIDENT_SYSTEM_PROMPT.slice(RESIDENT_SYSTEM_PROMPT.indexOf("## Task execution"), RESIDENT_SYSTEM_PROMPT.indexOf("## The Principal"));
-  for (const fact of [/shares the host\/guest network/i, /no egress allowlist or resource caps/i, /`\/tmp`/, /process\s+you\s+start/, /\/world\/START\.md/])
+  for (const fact of [/shares the host network/i, /no egress allowlist or resource caps/i, /`\/tmp`/, /process\s+you\s+start/, /\/world\/START\.md/])
     assert.match(execution, fact);
   // The facts themselves live in the map (START.md); the prompt only points there.
   assert.doesNotMatch(RESIDENT_SYSTEM_PROMPT, /OMA_CPUS|docker|submodule/i);

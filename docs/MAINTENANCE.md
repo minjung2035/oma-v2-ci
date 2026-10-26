@@ -24,8 +24,8 @@
 ## 수락·효과·복구
 
 - Acceptance 뒤에는 즉시 죽어도 frozen plan/evidence와 실제 관측으로 다음 행동을 판단할 수 있어야 한다. accepted bytes·request hash·terminal receipt를 현재 설정에 맞춰 고치지 않는다.
-- SQLite transaction은 동기 callback과 원래 Store/gate를 유지한다. 안에 await·Promise/thenable·Git/systemd/provider·network·파일 게시/fsync를 넣지 않는다. 물리 순서는 [구현 계약](implementation-spec.md#production-physical-effect-ordering)을 따른다.
-- Normal은 의도에서 시작하고 recovery는 실제 발생한 효과를 관찰한다. decision workflow를 하나로 합치지 않는다. ref/object·immutable bytes·policy·cgroup 같은 관측 primitive를 공유한다. 반복 복구가 새 효과나 상태 drift를 만들지 않아야 한다.
+- SQLite transaction은 동기 callback과 원래 Store/gate를 유지한다. 안에 await·Promise/thenable·Git/실행 adapter/provider·network·파일 게시/fsync를 넣지 않는다. 물리 순서는 [구현 계약](implementation-spec.md#production-physical-effect-ordering)을 따른다.
+- Normal은 의도에서 시작하고 recovery는 실제 발생한 효과를 관찰한다. decision workflow를 하나로 합치지 않는다. ref/object·immutable bytes·policy·execution scope 같은 관측 primitive를 공유한다. 반복 복구가 새 효과나 상태 drift를 만들지 않아야 한다.
 - Terminal receipt replay, accepted nonterminal recovery, 새 physical effect 실행을 구분한다. 과거 peer의 죽음을 receipt 조회 거절 사유로 삼거나 과거 receipt를 새 효과의 권한으로 삼지 않는다.
 - Admission과 긴 준비 뒤 효과 직전의 권한 검사는 시점이 다르다. stop·retire·policy·base·incarnation·writer가 바뀔 수 있으므로 중복이라고 제거하지 않는다.
 
@@ -37,7 +37,7 @@ Immutable publication은 같은 path/같은 bytes일 때만 idempotent하다. �
 
 FD·child·listener·timer·lock·stage는 취득 순간부터 한 owner가 실제 반환/종료까지 소유한다. 모든 cleanup을 시도하고 오류를 보존하되, 실패한 close를 재시도해 재사용된 FD를 닫지 않는다. timeout·signal 전송·직접 child close만으로 모든 후손의 죽음을 추정하지 않는다.
 
-Run은 actor 문자열이나 PID 하나가 아니다. 필요한 경계에서 incarnation·InvocationID·pinned cgroup·run lease·peer liveness를 함께 확인한다. revoke 뒤에도 death proof에 필요한 pin을 유지하며 unknown population을 dead로 처리하지 않는다.
+Run은 actor 문자열이나 PID 하나가 아니다. 필요한 경계에서 incarnation·invocation ID·pinned kernel scope·run lease·peer liveness와 각 요청의 실제 sender를 함께 확인한다. revoke 뒤에도 death proof에 필요한 pin을 유지하며 unknown population을 dead로 처리하지 않는다. DR49의 현재 scope 계약을 과거 cgroup 경로 문자열이나 saved PID로 대신하지 않는다.
 
 소유 파일도 mode·type·symlink·inode·상위 경로가 손상될 수 있다. held parent·no-follow·동일 inode 관측과 게시 순서를 유지한다. Cross-filesystem 게시는 destination temp→write→fsync→verify→publish→parent fsync를 따른다. preaccept artifact는 생성 전에 cleanup 책임을 등록하고, 수락이 불명이면 원본을 지우지 않는다.
 
@@ -61,7 +61,7 @@ Run은 actor 문자열이나 PID 하나가 아니다. 필요한 경계에서 inc
 
 중요한 버그는 현재 코드의 재현→직접 원인→사실/관계/시점→owner 확인→의미 있는 회귀→수정→같은 결함류 점검→관련 lane 실행 순서로 처리한다. 정상 fixture는 production-valid constructor를 사용하고 corruption test만 명시적으로 raw 입력을 만든다. Validator가 강화됐다고 production을 느슨하게 만들기 전에 fixture를 확인한다.
 
-Oracle은 실제 계약을 검사한다. 계산한 expected를 production planner에서 다시 얻거나 helper 이름·임시 경로만 고정하지 않는다. durable bytes·crash ordering·cgroup/ref 관계에는 실제 물리 관측을 사용한다.
+Oracle은 실제 계약을 검사한다. 계산한 expected를 production planner에서 다시 얻거나 helper 이름·임시 경로만 고정하지 않는다. durable bytes·crash ordering·scope/ref 관계에는 실제 물리 관측을 사용한다.
 
 모델→도구→CLI→broker→원장/메일→다음 전달을 바꾸면 기존 `test/scenario-*.test.ts`와 scripted-provider/scenario fixture로 정상·provider 실패·끊김·kill/restart·같은 key retry를 확인한다. 화면만 보지 않고 ledger·mailbox·receipt·session으로 판정한다. scripted provider는 실제 provider의 증거가 아니다.
 

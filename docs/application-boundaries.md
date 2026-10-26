@@ -73,9 +73,10 @@ host/guest use case·RPC·VZ lifecycle·guest 자산은 제거했다. 과거 시
 | [storage](../packages/storage/src) | owned tree·게시·package staging·tar/inventory 검증 |
 | [native](../packages/native/src) | 디렉터리 상대 syscall·pin/reopen·lock·peer/process 관측 primitive |
 | [platform-mac](../packages/platform-mac/src) | Darwin credential channel·독립 Keychain primitive. VM runtime 없음 |
-| [platform-linux](../packages/platform-linux/src) | Linux unit 명령/관측 reference adapter·bwrap/seccomp·rootfs |
+| [platform-linux](../packages/platform-linux/src) | bwrap namespace·pidfd scope·per-range kernel sender·seccomp·rootfs |
 
-Linux systemd·abstract Society lease 의존 제거와 Darwin sandbox·파일 pin·인증 연결은 진행 중이다.
+Linux systemd/path/journald 실행 경로는 제거했다. Society lease의 Linux abstract socket은
+여전히 OS 의존성이며, Darwin의 동등한 소유권·sandbox·파일 pin·인증 연결은 미해결이다.
 실제 미해결 gate와 실행 결과는 [전환 기록](implementation/native-transition.md)과
 [validation](implementation/validation.md)이 소유한다. interface나 Linux unit 시험으로
 실제 Darwin 지원을 주장하지 않는다.
@@ -94,9 +95,9 @@ App이 실제 ledger/effect port를 연결한다. authority reader는 Store writ
 
 SDK autocomplete는 공개 provider API를 사용한다. optional 검색 도구 설치가 UI 시작을 막지 않도록 하는 scoped private import와 editor·session·문구 adapter는 위 inventory에 남는다. SDK 버전을 바꿀 때에는 해당 원래 semantic oracle과 실제 설치 동작을 확인한다.
 
-DR49 native 전환에서 start/stop 순서와 관측 판정은 `process/resident-supervisor`가 소유한다.
-Linux UnitsModule은 이를 실제 호출하고 unit 문법·manager 명령·cgroup 관측만 제공한다.
-이 adapter는 이행 중 reference이며 최종 manager 제거는 아직 남았다. Restic 명령/FD 수명은
+DR49 native 전환에서 start/stop 순서와 관측 판정은 `process/resident-supervisor`와
+`resident-runtime`이 소유한다. App이 공통 execution coordinator/journal을 실제 Linux
+namespace adapter와 연결한다. UnitsModule·systemd reference adapter는 제거했다. Restic 명령/FD 수명은
 process, tar/inventory/tool 파일 검증과 package staging은 storage, 조립은 App이 소유한다.
 아래 모듈은 App을 import하지 않는다. 새 모듈이나 정당한 공개 의존성을 추가할 때는
 책임과 DAG를 먼저 명시하고 manifest·검사·독립 설치를 함께 갱신한다. 허용 목록만
@@ -105,4 +106,5 @@ process, tar/inventory/tool 파일 검증과 package staging은 storage, 조립�
 materialization commit 뒤의 hint는 App의 Mail ledger adapter가 연결하며 정책 판정은 하지
 않는다. process의 `CoalescedWake`가 중복과 활성 작업 수명을 조정하고 Broker가 drain에
 연결한다. 실행 여부는 기존 Reconcile owner가 ledger·Maildir·현재 desired/GOAL/incarnation과
-독립 scope death proof를 다시 읽어 정한다. 이 연결은 systemd backend의 최종 제거를 뜻하지 않는다.
+독립 scope death proof를 다시 읽어 정한다. status 게시도 같은 공통 coalescer를 사용하며,
+Broker가 게시 작업을 drain한 뒤 Store를 닫는다. Darwin gate 통과 여부와는 별개다.

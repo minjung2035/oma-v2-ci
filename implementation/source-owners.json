@@ -1141,5 +1141,27 @@
       "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-05",
       "packages/platform-mac/test/keychain-client-ownership.test.mjs#Keychain client:"
     ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-020"
+    ],
+    "owner": "packages/broker/src/index.ts#Broker.publishStatus",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/index.ts#Broker.publishStatus",
+      "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+      "packages/broker/src/index.ts#Broker.performStatusPublication",
+      "packages/broker/src/status-refresh.ts#StatusRefresh.request",
+      "apps/oma/src/views.ts#ViewsModule.publishStatus",
+      "packages/broker/src/index.ts#Broker.drainAndClose"
+    ],
+    "negativeTests": [
+      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
+      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
+      "test/status-responsiveness.test.ts#V23A"
+    ]
   }
 ]

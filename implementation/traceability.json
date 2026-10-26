@@ -5431,5 +5431,33 @@
     "status": "unverified",
     "verification": "NOT_RUN",
     "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-020",
+    "source": "docs/macos-platform.md",
+    "digest": "8706d06ae0006626df7d5a7c7d711d8ac94bd22c2ad73b5933e8323fa599d2ef",
+    "normativeText": "**MUST [NATIVE-020]** 파생 status 게시 hint는 accepted 작업이나 실행 권한이 아니다. 공통\ncoalescer가 활성 게시 하나와 pending hint 하나만 유지하며, 관측이 끝난 뒤 현재 ledger를 읽어\n게시한다. 같은 관측 Promise에 붙은 호출자마다 동일 파일을 재게시하지 않는다. 종료는 새 hint와\npending 게시를 취소하고 활성 게시 작업을 drain한 뒤 Store를 닫는다. 종료 이후 status 파일을\n되살리지 않는다. WP23의 조회/혼합 부하 지연 예산과 unknown 표시는 그대로 유지한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/broker/src/index.ts#Broker.publishStatus",
+    "entrypoint": "packages/broker/src/index.ts#Broker",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/index.ts#Broker.publishStatus",
+      "packages/process/src/coalesced-wake.ts#CoalescedWake.request",
+      "packages/broker/src/index.ts#Broker.performStatusPublication",
+      "packages/broker/src/status-refresh.ts#StatusRefresh.request",
+      "apps/oma/src/views.ts#ViewsModule.publishStatus",
+      "packages/broker/src/index.ts#Broker.drainAndClose"
+    ],
+    "negativeTests": [
+      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
+      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
+      "test/status-responsiveness.test.ts#V23A"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   }
 ]

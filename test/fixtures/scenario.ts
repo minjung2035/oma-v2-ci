@@ -158,6 +158,8 @@ export interface Scenario {
     stopBroker(): Promise<void>;
     /** Kills the engine outright and starts a new session over the same history. */
     restartEngine(signal?: NodeJS.Signals): Promise<void>;
+    /** Observe the already-started native scope through completion and kernel death. */
+    residentFinished(agent: string, timeoutMs?: number): Promise<ExecutionObservation>;
     /** The Maildir names in an actor's inbox. */
     inbox(actor: string, box?: "new" | "cur"): string[];
     /** The raw stored message a mail id names. */
@@ -180,7 +182,7 @@ export interface ScenarioOptions {
     };
     readonly extensions?: readonly VerifiedExtension[];
     readonly script?: Script | readonly Reply[];
-    /** Residents registered in the society (rows only; they never run here). */
+    /** Initial Resident rows; activation uses the real owned native runner. */
     readonly residents?: readonly string[];
     readonly acceptMs?: number;
     readonly retryAfterMs?: number;
@@ -446,18 +448,23 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             register();
         },
         async restartEngine(signal = "SIGKILL") {
-            const pid = session.pid;
-            if (pid !== null) {
-                const ended = new Promise<void>(resolve => { const timer = setInterval(() => { if (!session.running) {
-                    clearInterval(timer);
-                    resolve();
-                } }, 20); });
-                process.kill(pid, signal);
-                await ended;
-            }
+            const prior = session, pid = prior.pid;
+            if (pid !== null) process.kill(pid, signal);
+            // RPC completion/running=false can precede actual child close.
+            // The old history writer keeps ownership until the OS closes it.
+            await prior.exited;
             session = startSession();
             register();
             delivery = makeDelivery();
+        },
+        async residentFinished(agent, timeoutMs = 30000) {
+            const owner = executions, residents = units, end = performance.now() + timeoutMs;
+            for (;;) {
+                const observed = residents.observe(agent);
+                if (owner.confirmDead(`resident:${agent}`) && !["active", "activating"].includes(observed.activeState)) return observed;
+                assert.ok(performance.now() < end, `Resident ${agent} did not finish: ${JSON.stringify(observed)}`);
+                await new Promise(resolve => setTimeout(resolve, 20));
+            }
         },
         inbox(actor, box = "new") {
             const directory = join(root, "mail", "inboxes", actor, box);
@@ -540,10 +547,22 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
 /** Runs `body` over a fresh scenario and always tears it down. */
 export async function withScenario(options: ScenarioOptions, body: (scenario: Scenario) => Promise<void>): Promise<void> {
     const scenario = await startScenario(options);
-    try {
-        await body(scenario);
-    }
-    finally {
-        await scenario.close();
-    }
+    await withAsyncCleanup(async () => {
+        try { await body(scenario); }
+        catch (error) {
+            const root = process.env.OMA_TEST_ARTIFACT_DIR ?? process.env.OMA_NATIVE_EVIDENCE_DIR;
+            const snapshot = { error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
+                lines: scenario.lines, events: scenario.events,
+                provider: scenario.provider.seen.map(({ body, reply }) => ({ body, reply })) };
+            if (root !== undefined) {
+                try {
+                    mkdirSync(root, { recursive: true });
+                    const folder = mkdtempSync(join(root, "scenario-failure-"));
+                    writeFileSync(join(folder, "failure.json"), JSON.stringify(snapshot, null, 2) + "\n");
+                    console.error(`Scenario failure evidence: ${folder}`);
+                } catch (capture) { throw new AggregateError([error, capture], "scenario failure and evidence capture failed"); }
+            } else console.error("Scenario failure evidence:", JSON.stringify(snapshot));
+            throw error;
+        }
+    }, () => scenario.close());
 }

@@ -2439,3 +2439,17 @@ NATIVE-019는 standalone Keychain 채널을 get/put으로 닫고 공통 strict J
 VM operation/event·선택적 strict/timeout 모드는 제거한다. native 통신 실패는 credential 부재나
 평문 fallback 권한이 아니고, 채널 EOF는 helper 사망이 아니다. 실제 OS socket 시험은 별도이며
 서명·access group·TCC 및 Darwin 세 gate를 통과시켰다는 뜻이 아니다.
+
+## DR57 — status 관측 공유와 파생 게시의 소유권을 함께 결박한다
+
+실제 CI에서 상태 조회 중 event-loop 지연이 기존 예산을 넘었다. 관측은 공유됐지만 각 mutation의
+callback이 같은 status를 다시 fsync하고 있었다. 네 hint에 네 번 게시되는 반례를 보존했다.
+기존 process CoalescedWake로 게시도 활성 하나·pending 하나로 모으고, 해당 Promise를 broker의
+executingTasks에 등록해 Store close 전에 drain한다. admission 종료는 pending 게시를 취소한다.
+NATIVE-020이 이 수명을 소유하며 지연 예산을 늘리거나 status 관측을 권한으로 바꾸지 않는다.
+
+Native 시나리오의 새 peer는 실제로 기동하므로 pending 목록은 원본 불변식이 아니다. 시험은
+peer의 실제 scope 종료와 초기 메일 정산을 기다리고, same-key 재시도의 accepted plan·메일 원본·
+이미 완료된 delivery를 비교한다. provider 대본은 frozen initial message ID로 concurrent peer와
+부모를 구분한다. 엔진 재시작도 running/EOF 대신 실제 child close를 기다린다. 이는 시험 수명의
+수정이며, 임의 scope 사망·권한·기존 receipt 의미를 낮추거나 Darwin gate를 닫지 않는다.
