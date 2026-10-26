@@ -227,3 +227,31 @@ driver는 기존 C/Node case를 유지해12개를 각각3회 실행한다. 36개
 OMA의 실제 registration 거절 증거로 사용하지 않는다. 실제 제한된 caller의 등록 거절과 정상 Broker
 양성 대조, host/worker 사이 신뢰 경계가 필요하다. 이 후보와 expected-identity 광고/launch 결박을
 비교하며, 같은 profile의 `mach-priv-task-port` 등 다른 허용을 OMA에 자동 채택하지 않는다.
+
+정확한 executable 결박의 후보인 `/dev/fd`도 [XNU fdesc 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/miscfs/devfs/devfs_fdesc_support.c#L355)과
+[exec permission 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L6716)를
+대조했다. fdesc는 VNON vnode와 open syscall의 ENODEV/dup 처리를 사용하며 자체 read는 ENOTSUP다.
+exec는 regular vnode를 먼저 요구한다. 이 source로부터 일반 `/dev/fd` open/스크립트 전달을
+Mach-O FD 실행과 동일시하지 않는다. 공개 O_EXEC 정의도 정확한 실행 보장의 증명은 아니다.
+이것은 pinned source의 추론이고 실제 CI kernel 관측이 아니며 G-FILES는 OPEN이다. 정확한 원문과
+범위는 async audit root의 `fd-execution-primary.json`에 보존했다.
+
+## Pi의 실제 walker 이름과 caller limit 보존
+
+전체 Linux에서 find가1100개 중1000개만 반환한 반례를 확인했다. 설치된 Pi1.0.1과
+[공식 tool manager](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/utils/tools-manager.ts)는
+fd의 실제 system name으로 `fd`, `fdfind`를 순서대로 사용한다. 첫 pass가 fdfind를 사용한 환경에서
+OMA의 completion만 fd를 호출해 ENOENT가 났다. 현재 adapter는 실패한 spawn의 실제 close 뒤에만
+다음 이름을 시도하며 실행된 walk를 재시도하지 않는다. upstream private module은 import하지 않는다.
+실제 fdfind-only probe는 이전 source ENOENT·수정 후1100개 반환을 확인했다.
+
+같은 고정 SDK의 grep은 수치 threshold를 `Math.max(1, limit)`로 유지하고 buffered excess를 읽지
+않으며, find는0을 fd의 unlimited로 전달한다. completion이0을1로 줄이거나 fractional grep의
+buffered excess를 반환하던 실제 반례도 각각1/300·6/3으로 재현했다. caller 의미를 유지하고 성공한
+complete rendering에는 이전 renderer의 truncation metadata를 남기지 않는다. 기존 byte/시간
+budget을 늘리거나 입력 bound를 추가하지 않았으며,31개 search 회귀가 수정 뒤 통과했다.
+
+walker 추출 뒤 첫 구조 검사는 이전 `completeSearchText`의 stale exemption과 새 spawn owner 누락을
+정확히 거절했다. 실제 spawn site인 `startSearchWalker`로 기존 책임 항목을 옮겼다. 허용 파일·spawn
+역할의 수·Society writer 조건은 넓히지 않았고, 실제 close 전 alias 재시도 금지와 parent-pipe
+abort/group cleanup의 같은 책임을 명시했다. stale/missing/fence-passing negative control을 유지한다.

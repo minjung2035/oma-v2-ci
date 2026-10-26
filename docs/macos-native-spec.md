@@ -604,3 +604,22 @@ request까지 join한다. deadline은 monotonic 경과를 다시 확인해 timer
 setup 실패·construction 전 취소도 동일 owner를 사용하며 pending write의 원래 오류와 cleanup 오류를
 보존한다. 실제 Mac `mach-audit-async` case를 추가했으며 source compile/shared-flow PASS는 실제
 Darwin 실행·WP23 latency·native reference count·expected Broker identity나 세 gate 통과가 아니다.
+
+`c2745daa`를 작업 브랜치에 push한 뒤 같은 source의26/26 독립 설치·공개 API/자체 선언·지정
+runtime smoke를 확인했다. input `f353d015...`(15612개) 전후 동일이며 validation이 원본을 소유한다.
+새 Native40385385778/Architecture40385385695는7개 job 모두 스텝 실행 없이 failure다. queued였던
+마지막 Mac15 job도 같은 handle로 재조회해 terminal을 확인했고 artifact는 없다. 실제36개 Darwin
+C/Node case는 NOT_RUN이며 원인은 미확정이다. 이 실패를 source compile/runtime 실패로 바꾸지 않는다.
+
+### 14.12 전체 Linux의 실제 실패와 후속 수리 — 2026-10-27
+
+최신 전체 Linux는3772/3784 PASS·12 FAIL이었다.9건은 명시적 execution UUID의 시험 호출 누락,
+2건은 실제 pin/endpoint mechanism을 주입하지 않은 이전 Reflect fixture,1건은 find completion의
+실제 fdfind alias 누락이다. peer-pid의 실패 뒤 socket 정리가 기다리던 마지막 test process는 다른
+file들의 완료를 확인한 뒤 SIGTERM했으며 개입/원래 실패를 보존했다. 원본·입력·범위는 validation을 따른다.
+
+fixture는 실제 control FD·Linux peer pin/endpoint 효과를 주입하고, 실제 runner argv를 journal의
+execution과 정확히 대조한다. ambient identity를 복구하지 않는다. 이름 fallback은 미생성 child의
+close 뒤에만 진행하며 이미 실행된 query는 재생하지 않는다. 실제 SDK와 대조해 find0/grep threshold,
+buffered excess와 완료 후 truncation metadata도 수리했다. 선택26/26·55/55와 이후31/31을 확인했으며
+전체 후속과 실제 Mac qualification은 여전히 별도다. 기존 실패·규범·accepted plan/receipt를 보존한다.

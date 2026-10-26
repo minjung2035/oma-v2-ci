@@ -16,7 +16,9 @@ import { serializePlanIntent } from "./fixtures/plan.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, } from "node:fs";
+import { closeSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, } from "node:fs";
+import { controlSocketPair } from "@oma/native/control-socket";
+import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:net";
@@ -810,8 +812,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         writeFileSync(join(state, "config.json"), JSON.stringify({ ...cfg, society: `${society}x` }));
         for (const name of ["broker", "runner"]) {
             // A native runner is handed the broker's location explicitly.
-            const args = ["--config", join(state, "config.json"), "--state-root", state, "--run-root", join(dir, "runtime", "oma", society), ...(name === "runner" ? ["--agent", "child"] : [])];
-            const rejected = spawnSync(process.execPath, [
+            const args = ["--config", join(state, "config.json"), "--state-root", state, "--run-root", join(dir, "runtime", "oma", society), ...(name === "runner" ? ["--agent", "child", "--execution", "19f7eb77-6c27-46ce-a60b-6acd2fa9a094"] : [])];
+            const pair = name === "runner" ? controlSocketPair() : undefined;
+            const rejected = withCleanup(() => spawnSync(process.execPath, [
                 join(process.cwd(), "apps", "oma", "dist", "entry", `${name}.js`),
                 "--society",
                 society,
@@ -820,7 +823,8 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
                 env: { ...process.env, XDG_DATA_HOME: data, XDG_CONFIG_HOME: xdg },
                 encoding: "utf8",
                 timeout: 3000,
-            });
+                ...(pair === undefined ? {} : { stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", pair.child] as const }),
+            }), () => cleanupAll(pair === undefined ? [] : [() => closeSync(pair.parent), () => closeSync(pair.child)]));
             assert.equal(rejected.status, name === "broker" ? 1 : 4, rejected.stderr);
             assert.match(rejected.stderr, /config society does not match/);
             assert.equal(existsSync(join(state, "runtime.sqlite")), false);

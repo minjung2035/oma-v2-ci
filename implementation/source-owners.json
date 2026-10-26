@@ -958,6 +958,8 @@
       "packages/tool-runtime/src/contained-tools.ts#containWorkspaceTools",
       "packages/tool-files/src/index.ts#readWithin",
       "packages/tool-runtime/src/contained-search.ts#searchWorkspace",
+      "packages/tool-runtime/src/contained-search.ts#finishSearchResult",
+      "packages/tool-runtime/src/contained-search.ts#startSearchWalker",
       "packages/tool-files/src/index.ts#withSearchSnapshot",
       "packages/tool-files/src/descriptor-files.ts#openAt"
     ],
@@ -967,7 +969,10 @@
       "packages/tool-files/test/files.test.mjs#unqualified descriptor access refuses",
       "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
       "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
-      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime"
+      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime",
+      "test/contained-tools.test.ts#G10-02 / P0: a hidden walker result bound",
+      "test/contained-tools.test.ts#G10-02: explicit fd limit zero",
+      "test/contained-tools.test.ts#G10-02: grep completion keeps"
     ]
   },
   {
@@ -1232,7 +1237,9 @@
     ],
     "negativeTests": [
       "test/runner-channel.test.ts#Native runner rejects",
-      "test/runner-channel.test.ts#RUN-001"
+      "test/runner-channel.test.ts#RUN-001",
+      "test/host-entry.test.ts#runner execution identity cannot be missing",
+      "test/launch-topology.test.ts#NATIVE-TOPO-02"
     ]
   }
 ]

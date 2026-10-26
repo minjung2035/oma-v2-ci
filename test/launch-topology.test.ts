@@ -91,12 +91,12 @@ async function topology(t: TestContext) {
     await until("broker READY", () => /broker ready/.test(output) ? true : child.exitCode !== null || child.signalCode !== null ? assert.fail(output) : undefined, broker.output);
     return broker;
   }
-  function scope(): { pin: NamespaceInitPin; witness: NonNullable<ReturnType<typeof ExecutionJournal.inspect>[number]["witness"]> } | undefined {
+  function scope(): { pin: NamespaceInitPin; execution: string; witness: NonNullable<ReturnType<typeof ExecutionJournal.inspect>[number]["witness"]> } | undefined {
     let entries;
     try { entries = ExecutionJournal.inspect(stateRoot); } catch { return undefined; } // a concurrent append is not a positive observation
-    const witness = entries.find(entry => entry.slot === "resident:child")?.witness;
-    if (!witness) return undefined;
-    const pin = pinNamespaceInit(witness.pid); assert.deepEqual(pin.identity, witness); pins.push(pin); return { pin, witness };
+    const entry = entries.find(entry => entry.slot === "resident:child"), witness = entry?.witness;
+    if (!entry || !witness) return undefined;
+    const pin = pinNamespaceInit(witness.pid); assert.deepEqual(pin.identity, witness); pins.push(pin); return { pin, witness, execution: entry.execution };
   }
   async function goal(): Promise<void> {
     const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
@@ -133,6 +133,7 @@ test("NATIVE-TOPO-02: actual broker entry starts its runner and recovers a witne
   try {
     const actual = readFileSync(`/proc/${runner.pid}/cmdline`, "utf8").split("\0").slice(0, -1);
     assert.deepEqual(actual, [process.execPath, join(process.cwd(), "apps/oma/dist/entry/runner.js"), "--society", "demo", "--agent", "child",
+      "--execution", owned.execution,
       "--config", f.configPath, "--state-root", f.stateRoot, "--run-root", f.runRoot]);
     assert.equal(runner.alive(), true);
   } finally { runner.close(); }

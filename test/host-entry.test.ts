@@ -31,11 +31,28 @@ test("D03: a runner without the whole explicit location is refused, not pointed 
     for (const drop of ["--config", "--state-root", "--run-root"]) {
       const at = full.indexOf(drop);
       const args = [...full.slice(0, at), ...full.slice(at + 2)];
-      const result = spawnSync(process.execPath, [entry("runner"), "--society", "probe", "--agent", "a", ...args], {
+      const result = spawnSync(process.execPath, [entry("runner"), "--society", "probe", "--agent", "a", "--execution", "19f7eb77-6c27-46ce-a60b-6acd2fa9a094", ...args], {
         env: { ...process.env, XDG_DATA_HOME: join(dir, "data"), XDG_RUNTIME_DIR: join(dir, "run") }, encoding: "utf8", timeout: 3000,
       });
       assert.equal(result.status, 4, `${drop}: ${result.stderr}`);
       assert.match(result.stderr, new RegExp(`launch location ${drop}`));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("runner execution identity cannot be missing, repeated or supplied by ambient state", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-runner-identity-"));
+  const execution = "19f7eb77-6c27-46ce-a60b-6acd2fa9a094";
+  try {
+    for (const args of [[], ["--execution", ""], ["--execution", "not-an-execution"],
+      ["--execution", execution.replaceAll("-", "")], ["--execution", execution, "--execution", execution]]) {
+      const result = spawnSync(process.execPath, [entry("runner"), "--society", "probe", "--agent", "a", ...args], {
+        cwd: dir, env: { ...process.env, XDG_DATA_HOME: dir, XDG_RUNTIME_DIR: dir,
+          SYSTEMD_INVOCATION_ID: execution.replaceAll("-", ""), OMA_INVOCATION_ID: execution.replaceAll("-", "") },
+        encoding: "utf8", timeout: 3000,
+      });
+      assert.equal(result.status, 4, result.stderr); assert.match(result.stderr, /usage: runner.js.*--execution/);
+      assert.equal(existsSync(join(dir, "oma")), false);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

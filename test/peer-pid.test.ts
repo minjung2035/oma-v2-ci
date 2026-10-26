@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { peerCred, peerPidFd, pidfdLiveness } from "@oma/native/linux";
 import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
+import { pinLinuxPeer } from "@oma/platform-linux/peer-identity";
 
 test("AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-peer-pid-"));
@@ -66,16 +67,20 @@ test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot r
   const validWhileConnected: boolean[] = [];
   const closed: Array<Promise<unknown>> = [];
   const cleanupErrors: unknown[] = [];
+  const setupErrors: unknown[] = [];
+  const sockets = new Set<Socket>();
   const server = createServer(peer => {
-    // The exact moved native method is invoked; no cgroup, credential, PID or
-    // pidfd observation is replaced. Only its diagnostic sink is supplied.
-    const bound: ReturnType<PeerAuthenticator["bind"]> = Reflect.apply(PeerAuthenticator.prototype.bind,
-      { cleanupError: (error: unknown) => { cleanupErrors.push(error); } }, [peer]);
-    validWhileConnected.push(!!bound?.alive() && bindings.every(binding => binding && !binding.alive()));
-    bindings.push(bound);
-    closed.push(once(peer, "close"));
+    sockets.add(peer); peer.once("close", () => sockets.delete(peer));
+    closed.push(new Promise<void>(resolve => peer.once("close", resolve)));
     peer.on("error", () => {});
-    peer.end();
+    // The shared binding/reference owner uses the actual Linux pin adapter.
+    // No credential, PID or pidfd observation is replaced with a test value.
+    try {
+      const bound: ReturnType<PeerAuthenticator["bind"]> = Reflect.apply(PeerAuthenticator.prototype.bind,
+        { pinPeer: pinLinuxPeer, cleanupError: (error: unknown) => { cleanupErrors.push(error); } }, [peer]);
+      validWhileConnected.push(!!bound?.alive() && bindings.every(binding => binding && !binding.alive()));
+      bindings.push(bound); peer.end();
+    } catch (error) { setupErrors.push(error); peer.destroy(); }
   });
   try {
     await new Promise<void>(resolve => server.listen(path, resolve));
@@ -84,6 +89,7 @@ test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot r
       const client = connect(path);
       await once(client, "close");
       await closed[index];
+      assert.deepEqual(setupErrors, []);
       assert.ok(bindings[index]);
       assert.equal(validWhileConnected[index], true);
       assert.ok(bindings.every(binding => binding && !binding.alive()));
@@ -91,6 +97,7 @@ test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot r
       assert.deepEqual(cleanupErrors, []);
     }
   } finally {
+    for (const socket of sockets) socket.destroy();
     await new Promise<void>(resolve => server.close(() => resolve()));
     rmSync(root, { recursive: true, force: true });
   }

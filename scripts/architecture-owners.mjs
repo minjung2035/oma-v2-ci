@@ -20,8 +20,8 @@ export const subprocessResponsibilities = Object.freeze({
 export const fenceExemptSpawnOwners = Object.freeze({
   "packages/tool-runtime/src/contained-search.ts#searchWorkspace":
     "read-only source traversal and engine search over a private temporary copy; the oversized answer may also be written into the caller's own workspace through the serialized contained writer -- never a society write or credential; parent pipe EOF aborts its owned copy and walker group",
-  "packages/tool-runtime/src/contained-search.ts#completeSearchText":
-    "the complete-rendering walker runs inside the owned search child, over the same private copy it made; the child's own pipe-EOF abort and group kill bound it, and it writes no society state",
+  "packages/tool-runtime/src/contained-search.ts#startSearchWalker":
+    "the complete-rendering walker runs inside the owned search child over its private copy; only a failed spawn's actual close permits the next fd name, an executing walk is not retried; pipe-EOF abort and group cleanup remain with that child, which writes no society state",
 
   // Command launch owns the caller-selected descriptors and direct child.
   // It cannot prove arbitrary-descendant death. Society writers retain their

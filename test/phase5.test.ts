@@ -161,7 +161,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
             Reflect.set(env.broker, "views", views);
         }
         const socketDirectory = Reflect.get(env.broker, "actorSocketDirectory");
-        const socketOwner = { paths: { runRoot: `/run/user/1000/oma/${"s".repeat(31)}` } };
+        const socketOwner = { paths: { runRoot: `/run/user/1000/oma/${"s".repeat(31)}` }, dependencies: Reflect.get(env.broker, "dependencies") };
         assert.equal(typeof socketDirectory.call(socketOwner, "a".repeat(31), 1), "string");
         assert.throws(() => socketDirectory.call(socketOwner, "a".repeat(31), Number.MAX_SAFE_INTEGER), /sun_path/);
         const staleAuth = auth(["mail.send"]);

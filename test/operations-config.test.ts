@@ -170,7 +170,7 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
     import { RunnerModule } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runner")).href)};
     import { packageResourcePaths } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/packages/index")).href)};
     RunnerModule.prototype.run = async function () {
-      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null,
+      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, invocationId: this.invocationId, confinement: this.paths.confinement ?? null,
         packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); this.control.destroy(); return 0; };`,
   );
   // Selection policy only: run() below is intercepted before any broker or
@@ -186,6 +186,8 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
       "demo",
       "--agent",
       "worker",
+      "--execution",
+      "19f7eb77-6c27-46ce-a60b-6acd2fa9a094",
       "--config",
       f.path,
       // D03: a unit-started runner is handed the broker's roots explicitly.
@@ -219,6 +221,7 @@ test("OPS config: runner entry selects the broker-rendered role at startup witho
   try {
     const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
     assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.selected.invocationId, "19f7eb776c2746cea60b6acd2fa9a094");
     const selected = run.selected.profile;
     assert.equal(selected.name, "verifier");
     assert.equal(selected.model.model, "model-b");

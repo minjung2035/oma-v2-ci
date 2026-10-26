@@ -152,20 +152,30 @@ export async function finishSearchResult(input: ContainedSearchInput,
     result: SearchResult<"grep" | "find">, target: string, signal?: AbortSignal,
     progress?: () => void): Promise<string> {
   const resultRecord = result as { content?: { type: string; text?: string }[]; details?: Record<string, unknown> };
-  const details = (resultRecord.details ?? {}) as Record<string, unknown>;
-  const callerLimit = typeof input.params.limit === "number" && Number.isFinite(input.params.limit);
+  const details = { ...(resultRecord.details ?? {}) } as Record<string, unknown>;
+  const callerLimit = typeof input.params.limit === "number" && Number.isFinite(input.params.limit) &&
+    !(input.name === "find" && input.params.limit === 0);
   const truncation = details.truncation as { truncated?: boolean } | undefined;
   const hidden = truncation?.truncated === true || details.linesTruncated === true ||
     (!callerLimit && (details.matchLimitReached !== undefined || details.resultLimitReached !== undefined));
   if (hidden) {
     let complete: string;
+    let completed = false;
     try {
       complete = await completeSearchText(input.name, input.params, target, signal, progress);
+      completed = true;
     } catch (error) {
       // The tool's own answer stays, its truncation notices included,
       // and the marker says the completion pass failed -- never a
       // silently cut answer.
       complete = `${resultRecord.content?.[0]?.text ?? ""}\n\noma: the complete result could not be produced (${error instanceof Error ? error.message : String(error)})`;
+    }
+    if (completed) {
+      // The complete rendering replaces the upstream renderer's fixed caps.
+      // Keep only a result limit the caller actually requested.
+      delete details.truncation; delete details.linesTruncated;
+      if (!callerLimit) { delete details.matchLimitReached; delete details.resultLimitReached; }
+      resultRecord.details = details;
     }
     if (Buffer.byteLength(complete, "utf8") <= SEARCH_PREVIEW_BYTES) {
       resultRecord.content = [{ type: "text", text: complete }];
@@ -186,6 +196,34 @@ function shownPath(path: string, target: string): string {
   return trailing && !posix.endsWith("/") ? `${posix}/` : posix;
 }
 
+/** Pi accepts both system names for fd. Each failed spawn is physically
+ * closed before trying the next name; a running walk is never retried. */
+async function startSearchWalker(name: "grep" | "find", args: readonly string[], signal?: AbortSignal) {
+  const programs = name === "grep" ? ["rg"] : ["fd", "fdfind"];
+  let failure: NodeJS.ErrnoException | undefined;
+  for (const program of programs) {
+    if (signal?.aborted) throw new WorkspaceRefusal("search aborted");
+    const walker = spawn(program, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const started = await new Promise<boolean>(resolve => {
+      let launched = false;
+      const stop = (): void => { if (!walker.killed) walker.kill(); };
+      const failed = (error: Error): void => { failure = error; };
+      walker.on("error", failed);
+      walker.once("spawn", () => { launched = true; resolve(true); });
+      walker.once("close", () => {
+        signal?.removeEventListener("abort", stop); walker.off("error", failed);
+        if (!launched) resolve(false);
+      });
+      signal?.addEventListener("abort", stop, { once: true });
+      if (signal?.aborted) stop();
+    });
+    if (started) return walker;
+    if (signal?.aborted) throw new WorkspaceRefusal("search aborted");
+    if (failure?.code !== "ENOENT") throw failure ?? new Error(`${program} did not start`);
+  }
+  throw failure ?? new Error("search walker is unavailable");
+}
+
 /** The complete rendering the pinned walker produces over the frozen
  * snapshot: same arguments and same line format the engine's tool uses, with
  * the renderer's fixed 50 KiB / 500-character caps and (unless the caller
@@ -193,10 +231,10 @@ function shownPath(path: string, target: string): string {
  * applies -- it is part of the request, not a hidden bound. */
 export async function completeSearchText(name: "grep" | "find", params: Record<string, unknown>,
     target: string, signal?: AbortSignal, progress?: () => void): Promise<string> {
-  // The same `Math.max(1, limit)` reading the upstream tool gives it; absent
-  // means none, and only absent lets the hidden default be lifted.
+  // Pi clamps grep to at least one but keeps the supplied numeric threshold;
+  // fd accepts zero as unlimited. An absent limit lifts the hidden default.
   const limit = typeof params.limit === "number" && Number.isFinite(params.limit)
-    ? Math.max(1, Math.floor(params.limit)) : null;
+    ? name === "find" ? params.limit === 0 ? null : params.limit : Math.max(1, params.limit) : null;
   const args: string[] = name === "grep"
     ? ["--json", "--line-number", "--color=never", "--hidden"]
     : ["--glob", "--color=never", "--hidden"];
@@ -220,7 +258,7 @@ export async function completeSearchText(name: "grep" | "find", params: Record<s
     }
     args.push("--", pattern, target);
   }
-  const walker = spawn(name === "grep" ? "rg" : "fd", args, { stdio: ["ignore", "pipe", "pipe"] });
+  const walker = await startSearchWalker(name, args, signal);
   const lines: string[] = [];
   let seen = 0;
   let killedForLimit = false;
@@ -232,11 +270,8 @@ export async function completeSearchText(name: "grep" | "find", params: Record<s
   const matches: { filePath: string; lineNumber: number; text: string }[] = [];
   const reader = createInterface({ input: walker.stdout });
   const done = new Promise<void>((resolve, reject) => {
-    const stop = (): void => { if (!walker.killed) walker.kill(); };
-    signal?.addEventListener("abort", stop, { once: true });
     walker.on("error", reject);
     walker.on("close", code => {
-      signal?.removeEventListener("abort", stop);
       if (signal?.aborted) { reject(new WorkspaceRefusal("search aborted")); return; }
       if (!killedForLimit && code !== 0 && code !== 1 && lines.length === 0 && matches.length === 0)
         { reject(new Error(stderr.trim() || `${name === "grep" ? "ripgrep" : "fd"} exited with code ${code}`)); return; }
@@ -245,7 +280,7 @@ export async function completeSearchText(name: "grep" | "find", params: Record<s
   });
   reader.on("line", line => {
     progress?.();
-    if (!line) return;
+    if (!line || name === "grep" && limit !== null && seen >= limit) return;
     if (name === "find") {
       const text = line.replace(/\r$/, "").trim();
       if (text) lines.push(shownPath(text, target));

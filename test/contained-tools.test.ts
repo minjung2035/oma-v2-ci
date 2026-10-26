@@ -435,12 +435,16 @@ test("G10-02 / P0: a hidden walker default is not the answer -- the same snapsho
 });
 
 test("G10-02 / P0: a hidden walker result bound is not the answer -- find returns every path", { timeout: 60000 }, async t => {
-  const { workspace, run } = world(t);
+  const { workspace, tools } = world(t);
   // Past the engine's own 1000-result default.
   for (let n = 0; n < 1100; n++) writeFileSync(join(workspace, `f${String(n).padStart(4, "0")}.txt`), "");
-  const found = await run("find", { pattern: "f*.txt" });
+  const result = await tools["find"]!.execute("call", { pattern: "f*.txt" }, undefined, undefined, { cwd: workspace });
+  const found = result.content.map(part => part.text ?? "").join("");
   const rows = found.split("\n").filter(line => /^f\d+\.txt$/.test(line));
   assert.equal(rows.length, 1100, `${rows.length} of 1100 results were returned`);
+  const details = (result as { details?: Record<string, unknown> }).details;
+  assert.equal(details?.resultLimitReached, undefined, "complete results do not retain the hidden renderer limit");
+  assert.equal(details?.truncation, undefined);
 });
 
 test("G10-02 / P0: a hidden byte/line bound is not the answer -- long lines and large output arrive whole", { timeout: 60000 }, async t => {
@@ -452,6 +456,25 @@ test("G10-02 / P0: a hidden byte/line bound is not the answer -- long lines and 
   const hits = found.split("\n").filter(line => /^w\d+\.txt:1: needle/.test(line));
   assert.equal(hits.length, 150);
   assert.ok(hits.every(line => line.length === 600 + "w000.txt:1: ".length), "a line arrived cut");
+});
+
+test("G10-02: explicit fd limit zero remains unlimited during complete rendering", { timeout: 60000 }, async t => {
+  const { workspace, tools } = world(t);
+  for (let n = 0; n < 300; n++) writeFileSync(join(workspace, `z${String(n).padStart(3, "0")}${"x".repeat(190)}.txt`), "");
+  const result = await tools["find"]!.execute("call", { pattern: "z*.txt", limit: 0 }, undefined, undefined, { cwd: workspace });
+  const text = result.content.map(part => part.text ?? "").join("");
+  assert.equal(text.split("\n").filter(line => /^z\d{3}x+\.txt$/.test(line)).length, 300);
+  assert.equal((result as { details?: Record<string, unknown> }).details?.resultLimitReached, undefined);
+});
+
+test("G10-02: grep completion keeps Pi's fractional limit and discards buffered excess", { timeout: 60000 }, async t => {
+  const { workspace, tools } = world(t);
+  for (let n = 0; n < 6; n++) writeFileSync(join(workspace, `q${n}.txt`), `needle${"x".repeat(594)}\n`);
+  const result = await tools["grep"]!.execute("call", { pattern: "needle", limit: 2.5 }, undefined, undefined, { cwd: workspace });
+  const hits = result.content.map(part => part.text ?? "").join("").split("\n").filter(line => /^q\d\.txt:1: needle/.test(line));
+  assert.equal(hits.length, 3); assert.ok(hits.every(line => line.length === "q0.txt:1: ".length + 600));
+  assert.equal((result as { details?: Record<string, unknown> }).details?.linesTruncated, undefined);
+  assert.equal((result as { details?: Record<string, unknown> }).details?.matchLimitReached, 2.5);
 });
 
 test("G10-02 / P0: an answer beyond one result is spooled into the workspace, and the named path is one the model's own tools can read", { timeout: 90000 }, async t => {

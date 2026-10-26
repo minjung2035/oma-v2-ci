@@ -1,6 +1,18 @@
 # OMA v2 — 현재 인계
 
-## 현재: 7ebb7268 Mach source 연결과 실제 CI 시작 실패
+## 현재: c2745daa 비동기 audit 반환과 실제 CI 시작 실패
+
+`c2745daa`를 작업 브랜치에 push했다. 최신 비동기 audit source의 input `f353d015...`(15612개)에서
+**26/26 독립 설치·공개 API/자체 declaration·지정 runtime smoke PASS**, 전후 identity 동일이다.
+실제 Native40385385778/Architecture40385385695는7개 job 모두 스텝 실행 없이 terminal failure다.
+대기 중이던 마지막 Mac15 job도 같은 handle로 확인했고 artifact는 없다. 실제 Mac36개 case는
+NOT_RUN이며 세 gate·제품 guard를 유지한다. 실패 원인은 annotation 본문을 읽을 수 없어 미확정이다.
+원시 로그는 `/home/dev/oma-audit-artifacts/native-2026-10-27-async-audit/`를 따른다.
+
+후속 전체 Linux는3772/3784 PASS·12 FAIL이었다. 이전 UUID/DI fixture11건과 실제 find의 fdfind
+alias 누락1건을 확인했다. peer-pid의 원래 오류 뒤 cleanup hang을 SIGTERM한 개입까지 raw에 남겼다.
+수정 뒤 관련26/26·55/55, 추가 find0/grep threshold 반례의31/31을 확인했다. 새 source의 전체 재검증은
+아직 진행 전이며 이전 전체나 선택 결과를 전체 PASS로 올리지 않는다. §14.12와 validation이 현재 입력을 소유한다.
 
 작업 브랜치에 `343d4f85`와 `7ebb7268`을 push했다. Mach byte connector의 마지막 응답/EOF drain,
 kernel sender와 port 소유권, App OS 주입과 실제 Darwin Node probe3개를 연결했다. 원래 README와
