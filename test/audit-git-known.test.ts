@@ -64,7 +64,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
     role: "resident",
     channel: "actor",
     capabilities: new Set(),
-    peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null },
+    peer: { pid: process.pid, uid: 1000, gid: 1000 },
   };
   return async (candidate: string, id = "known") => {
     const params = { candidate };

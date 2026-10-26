@@ -11,16 +11,18 @@ if [ "$#" -ne 1 ] || [ -z "$1" ]; then
   exit 2
 fi
 : "${GITHUB_PATH:?Actions PATH handoff is required}"
+: "${RUNNER_TEMP:?Actions temporary directory is required}"
+oma_native_tools=$(mktemp -d "$RUNNER_TEMP/oma-native-tools.XXXXXX")
 oma_native_evidence=$1
 mkdir -p "$oma_native_evidence"
 node --input-type=module -e 'import {spawnSync} from "node:child_process"; console.log(JSON.stringify(Object.fromEntries(["rg","fd","fdfind","corepack"].map(command=>{const r=spawnSync(command,["--version"],{encoding:"utf8"});return [command,{status:r.status,error:r.error?.code,stdout:r.stdout,stderr:r.stderr}]}))))' > "$oma_native_evidence"/prerequisites-before.json
 sudo apt-get update
 sudo apt-get install -y bubblewrap meson ninja-build libcap-dev pkg-config ripgrep fd-find
 # The pinned SDK's completion pass executes the real fd binary.
-mkdir -p .scratch/native-runtime-bin
-ln -s /usr/bin/fdfind .scratch/native-runtime-bin/fd
-export PATH="$PWD/.scratch/native-runtime-bin:$PATH"
-echo "$PWD/.scratch/native-runtime-bin" >> "$GITHUB_PATH"
+mkdir -p "$oma_native_tools/bin"
+ln -s /usr/bin/fdfind "$oma_native_tools/bin/fd"
+export PATH="$oma_native_tools/bin:$PATH"
+echo "$oma_native_tools/bin" >> "$GITHUB_PATH"
 # Node 25+ does not bundle Corepack; the declared Worker toolchain
 # still requires it. https://github.com/nodejs/corepack/tree/v0.34.0
 npm install --global --ignore-scripts corepack@0.34.0 > "$oma_native_evidence"/corepack-install.log 2>&1
@@ -28,14 +30,14 @@ corepack --version > "$oma_native_evidence"/corepack-version.txt
 rg --version > "$oma_native_evidence"/ripgrep-version.txt
 fd --version > "$oma_native_evidence"/fd-version.txt
 sha256sum "$(command -v corepack)" /usr/bin/rg /usr/bin/fdfind > "$oma_native_evidence"/toolchain-sha256.txt
-git init .scratch/bubblewrap
-git -C .scratch/bubblewrap remote add origin https://github.com/containers/bubblewrap.git
-git -C .scratch/bubblewrap fetch --depth=1 origin 2a76602a8c71f36c1527cf9fc3417d9149822e0c
-git -C .scratch/bubblewrap checkout --detach FETCH_HEAD
-test "$(git -C .scratch/bubblewrap rev-parse HEAD)" = 2a76602a8c71f36c1527cf9fc3417d9149822e0c
-meson setup .scratch/bubblewrap-build .scratch/bubblewrap -Dtests=false -Dman=disabled -Dselinux=disabled -Dbash_completion=disabled -Dzsh_completion=disabled
-meson compile -C .scratch/bubblewrap-build > "$oma_native_evidence"/bubblewrap-build.log 2>&1
-sudo install -m 0755 .scratch/bubblewrap-build/bwrap /usr/bin/bwrap
+git init "$oma_native_tools/bubblewrap"
+git -C "$oma_native_tools/bubblewrap" remote add origin https://github.com/containers/bubblewrap.git
+git -C "$oma_native_tools/bubblewrap" fetch --depth=1 origin 2a76602a8c71f36c1527cf9fc3417d9149822e0c
+git -C "$oma_native_tools/bubblewrap" checkout --detach FETCH_HEAD
+test "$(git -C "$oma_native_tools/bubblewrap" rev-parse HEAD)" = 2a76602a8c71f36c1527cf9fc3417d9149822e0c
+meson setup "$oma_native_tools/bubblewrap-build" "$oma_native_tools/bubblewrap" -Dtests=false -Dman=disabled -Dselinux=disabled -Dbash_completion=disabled -Dzsh_completion=disabled
+meson compile -C "$oma_native_tools/bubblewrap-build" > "$oma_native_evidence"/bubblewrap-build.log 2>&1
+sudo install -m 0755 "$oma_native_tools/bubblewrap-build/bwrap" /usr/bin/bwrap
 /usr/bin/bwrap --version > "$oma_native_evidence"/bubblewrap-version.txt
 sha256sum /usr/bin/bwrap > "$oma_native_evidence"/bubblewrap-sha256.txt
 uname -a > "$oma_native_evidence"/kernel.txt

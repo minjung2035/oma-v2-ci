@@ -106,7 +106,7 @@ test("DR3 / AUTH-001: a capability revoked before acceptance names the capabilit
   try {
     store.transaction(tx => { tx.insertAgent(makeValidAgent("alice", { capabilities: ["mail.send"] })); });
     const auth = { actor: "alice", incarnation: store.getAgent("alice")!.incarnation, role: "resident" as const, channel: "actor" as const,
-      capabilities: new Set(["mail.send", "git.submit"] as const), peer: { pid: 1, uid: 1, gid: 1, cgroup: null } };
+      capabilities: new Set(["mail.send", "git.submit"] as const), peer: { pid: 1, uid: 1, gid: 1 } };
     const error = (() => { try { assertCurrentActor(store, auth as never, "git.submit"); return null; } catch (caught) { return caught; } })();
     assert.deepEqual(publicFailure(error).details, { capability: "git.submit" });
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }

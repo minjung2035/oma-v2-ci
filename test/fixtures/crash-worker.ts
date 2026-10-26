@@ -155,7 +155,7 @@ store.transaction = body => {
   return result;
 };
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]),
-  peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
 if (point.startsWith("error-")) {
   let outcome: unknown;

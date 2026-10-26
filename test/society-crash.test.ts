@@ -38,7 +38,7 @@ for (const state of ["open", "closed"] as const) {
         const units = { stop() {}, confirmDead() { return dead; } };
         const control = new SocietyControl(lifecycleLedger(store), units, { nextOperationId: generateOperationId });
         const auth = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
-          capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid(), gid: process.getgid(), cgroup: null } };
+          capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid(), gid: process.getgid() } };
         await control.set(auth, "closed", "initial-close");
         const point = ${JSON.stringify(point)}, state = ${JSON.stringify(state)};
         let prior;
@@ -73,7 +73,7 @@ for (const state of ["open", "closed"] as const) {
         assert.equal(store.societyOpen(), false); stopped.push(agent);
       }, confirmDead() { return true; } } as unknown as FeatureExecution, { nextOperationId: generateOperationId });
       const auth: AuthContext = { actor: "principal", role: "principal", incarnation: 0, channel: "actor",
-        capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+        capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
       const receipt = (await control.set(auth, state, "target"));
       assert.equal(receipt.operation, original.id);
       assert.equal(receipt.state, point === "superseded" ? "unknown" : "succeeded");

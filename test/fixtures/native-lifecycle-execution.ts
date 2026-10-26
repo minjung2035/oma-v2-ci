@@ -35,6 +35,10 @@ export async function nativeLifecycleExecution(store: Store, root: string) {
     bindRunRevoker(callback: (actor: string) => void) { revoke = callback; },
     scopeRoot: (actor: string) => runtime.witness(actor), runnerAlive: () => false,
     async readLogs(): Promise<never> { throw new StoreError("UNSUPPORTED_PROFILE", "lifecycle test has no product log store"); },
+    attemptConcurrentExecution: (actor: string) => executions.run(`resident:${actor}`, runnerScope({
+      executable: process.execPath, argv: ["-e", "process.exit(0)"], env: { PATH: "/usr/bin:/bin", HOME: root },
+      timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096,
+    }), undefined, () => {}),
     closeExecution: () => withAsyncCleanup(() => runtime.close(), () => executions.close()),
   });
 }

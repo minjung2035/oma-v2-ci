@@ -90,7 +90,7 @@ function actorAuth(s: Scenario, actor: Actor): AuthContext {
       const current = s.store.getAgent(actor);
       return current === null ? new Set() : capabilitiesOf(current);
     },
-    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null },
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() },
   };
 }
 /** Any actor's dispatch, as residentCall builds it. */

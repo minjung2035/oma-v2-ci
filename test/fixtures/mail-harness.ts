@@ -42,7 +42,7 @@ if (role === "send") {
   const mail = createMailModule({ stateRoot: state, society }, store, 64);
   const auth: AuthContext = {
     actor: process.env.OMA_SENDER ?? "a", incarnation: 1, role: "resident", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
+    capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1000, gid: 1000 },
   };
   const input: MailInput = {
     to: (process.env.OMA_TO ?? "b").split(",").filter(Boolean),

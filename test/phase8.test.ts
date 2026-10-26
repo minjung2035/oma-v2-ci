@@ -140,7 +140,7 @@ const auth = {
     role: "resident" as const,
     channel: "actor" as const,
     capabilities: new Set<Capability>(["mail.send"]),
-    peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
+    peer: { pid: 1, uid: 1000, gid: 1000 },
 };
 async function* iter(b: Buffer): AsyncIterable<Uint8Array> {
     yield b;

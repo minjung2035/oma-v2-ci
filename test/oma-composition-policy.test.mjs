@@ -146,6 +146,9 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     return settings;
   };
   const modules = {
+    // Composition policy only: actual journal/recovery and native gates run
+    // in their real-kernel suites. No execution or authority is minted here.
+    "../runtime/execution-runtime.js": { async recoverExecutionState() {} },
     "@oma/native/cleanup": cleanupMeaning,
     "../runtime/native-support.js": nativeSupportMeaning,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,

@@ -170,7 +170,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
   };
   let current = open();
   const auth = (actor: string): AuthContext => ({ actor, incarnation: 1, role: "resident", channel: "actor",
-    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
+    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } });
   current.store.transaction(tx => {
     for (const actor of ["alice", "bob", "worker"]) tx.insertAgent(makeValidAgent(actor, actor === "worker" ? { createdBy: "alice" } : {}));
     for (let n = 0; n < 120; n++) {

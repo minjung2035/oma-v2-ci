@@ -122,7 +122,8 @@ catch (error) { console.log(JSON.stringify({ code: error.code, message: error.me
 test("V31B: the package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
   const { checkPackage } = await import(CHECK) as { checkPackage(root: string): Promise<unknown> };
   for (const [name, damage, expected] of [
-    ["missing unit template", (prefix: string) => rmSync(join(prefix, "packages/platform-linux/dist/systemd/resident.service.in")), /resident\.service\.in|missing|asset/i],
+    ["missing credential primitive", (prefix: string) => rmSync(join(prefix, "packages/platform-mac/dist/keychain/main.swift")), /main\.swift|missing|asset/i],
+    ["missing credential entitlements", (prefix: string) => rmSync(join(prefix, "packages/platform-mac/dist/keychain/oma-keychain.entitlements")), /oma-keychain\.entitlements|missing|asset/i],
     ["stale entry", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/runner.js")), /runner\.js|missing/i],
     ["missing Personal engine", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/pi-personal.js")), /pi-personal\.js|missing/i],
     ["missing Personal host", (prefix: string) => rmSync(join(prefix, "apps/oma/dist/entry/personal-host.js")), /personal-host\.js|missing/i],

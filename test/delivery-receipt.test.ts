@@ -24,7 +24,7 @@ function auth(): AuthContext {
     role: "resident",
     channel: "actor",
     capabilities: new Set(["mail.send"]),
-    peer: { pid: 1, uid: 1, gid: 1, cgroup: null },
+    peer: { pid: 1, uid: 1, gid: 1 },
   };
 }
 test("S-03: only the pinned durable Pi boundary receipt completes a prepared batch", async (t) => {

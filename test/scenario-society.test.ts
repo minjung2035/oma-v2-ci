@@ -34,7 +34,7 @@ const receiptIn = (result: string): { operation: string; state: string; result?:
 async function principalSends(s: Scenario, to: string[], subject: string, body: string, key: string): Promise<string> {
   const principal = s.store.getAgent("principal")!;
   const sent = await s.broker.dispatch({ actor: "principal", incarnation: principal.incarnation, role: "principal", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } },
+    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } },
   { v: 1, id: key, method: "mail.send", request: key, params: { to, subject, kind: "message", body } } as never, null) as { ok: boolean; result: { result: { message: string } } };
   assert.equal(sent.ok, true, JSON.stringify(sent));
   return sent.result.result.message;

@@ -14,7 +14,7 @@ import { Store } from "@oma/storage";
 import { GitModule } from "@oma/git";
 import { MailModule } from "@oma/mail";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { gitAuth, gitCommand, seedGit } from "./fixtures/git-crash.js";
+import { gitAuth, gitCommand, seedGit, nativeQuarantine } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 function world(t: import("node:test").TestContext, tmpBytes = 256 * 1024 * 1024) {
     const root = mkdtempSync(join(tmpdir(), "oma-s05-"));
@@ -27,7 +27,7 @@ function world(t: import("node:test").TestContext, tmpBytes = 256 * 1024 * 1024)
     const paths = { stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"),
         society: "crash" };
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
-    const git = createGitModule(paths, store, mail, { policyRevision: "s05", protectedPaths: [], checks: [] });
+    const git = createGitModule(paths, store, mail, { policyRevision: "s05", protectedPaths: [], checks: [] }, null, null, nativeQuarantine(paths));
     const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as {
         base: string;
         candidate: string;

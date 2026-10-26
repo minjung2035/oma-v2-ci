@@ -4,6 +4,9 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSyn
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { controlSocketPair } from "@oma/native/control-socket";
+import { closeEvery } from "@oma/native/files";
+import { withCleanup } from "@oma/native/cleanup";
 import { loadConfig, loadConfiguration } from "@oma/config";
 
 import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
@@ -168,9 +171,12 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
     import { packageResourcePaths } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/packages/index")).href)};
     RunnerModule.prototype.run = async function () {
       writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null,
-        packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); return 0; };`,
+        packages: this.paths.packages ?? null, packageResources: packageResourcePaths(this.paths.packages) ?? null })); this.control.destroy(); return 0; };`,
   );
-  const run = spawnSync(
+  // Selection policy only: run() below is intercepted before any broker or
+  // engine effect. The entry still receives a real directly owned socket FD.
+  const pair = controlSocketPair();
+  const run = withCleanup(() => spawnSync(
     process.execPath,
     [
       "--import",
@@ -188,8 +194,9 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
       "--run-root",
       join(f.root, "run", "oma", "demo"),
     ],
-    { env: { ...process.env, ...env } as Record<string, string>, encoding: "utf8", timeout: 10000 },
-  );
+    { env: { ...process.env, ...env } as Record<string, string>, encoding: "utf8", timeout: 10000,
+      stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", "ignore", pair.child] },
+  ), () => closeEvery(pair.parent, pair.child));
   const selected = run.status === 0 ? JSON.parse(readFileSync(capture, "utf8")) : null;
   return { status: run.status, stderr: run.stderr, selected };
 }

@@ -32,7 +32,7 @@ const LIMITS: ProtocolLimits = { frameBytes: TREE_MARGIN_BYTES, mailBodyBytes: 6
 /** Existing state is made large with a sparse pad; there is no logical quota. */
 const TREE_BYTES = 1024 * 1024 * 1024;
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "1".repeat(32) };
 
 class ScriptedUnits extends PolicyExecution {

@@ -24,7 +24,8 @@ function world({ fault, noChannel = false, spawnError, timers } = {}) {
         launches.push(args); if (spawnError) throw spawnError;
         const channel = new EventEmitter(), child = new EventEmitter();
         channel.destroyed = false; channel.requests = [];
-        channel.setEncoding = value => assert.equal(value, 'utf8');
+        const emit = channel.emit.bind(channel);
+        channel.emit = (event, ...args) => emit(event, ...(event === 'data' ? [Buffer.from(args[0]), ...args.slice(1)] : args));
         channel.write = (line, callback) => { channel.requests.push(JSON.parse(line)); callback?.(); return true; };
         channel.destroy = () => { if (channel.destroyed) return; channel.destroyed = true; channel.emit('close'); };
         child.stdio = [null, null, null, noChannel ? null : channel];
@@ -120,12 +121,13 @@ for (const kind of ['synchronous', 'callback']) test(`Keychain client: ${kind} w
   const second = assert.rejects(client.get('b'), unavailable); await Promise.all([first, second]);
   const closed = client.close(); child.close(); await closed;
 });
-for (const kind of ['channel', 'encoding', 'listener', 'stderr']) test(`Keychain client: failed ${kind} acquisition retains ownership until child close`, async () => {
+for (const kind of ['channel', 'data-listener', 'error-listener', 'stderr']) test(`Keychain client: failed ${kind} acquisition retains ownership until child close`, async () => {
   const problem = new Error('injected setup');
   const w = world({ noChannel: kind === 'channel', fault(child, channel) {
-    if (kind === 'encoding') channel.setEncoding = () => { throw problem; };
     if (kind === 'stderr') child.stderr.resume = () => { throw problem; };
-    if (kind === 'listener') { const original = channel.on; channel.on = function (...args) { original.apply(this, args); throw problem; }; }
+    if (kind.endsWith('-listener')) { const original = channel.on; channel.on = function (event, ...args) {
+      original.call(this, event, ...args); if (event === kind.slice(0, -9)) throw problem; return this;
+    }; }
   } });
   let returned = false;
   const refused = assert.rejects(w.KeychainClient.launch(libdir)).then(() => { returned = true; }); await flush();

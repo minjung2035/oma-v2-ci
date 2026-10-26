@@ -27,7 +27,7 @@ import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ConnectProxy, type EgressAudit } from "#oma-test/app/runtime/connect-proxy";
 import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
-import type { FeatureExecution } from "./fixtures/execution.js";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -118,9 +118,7 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   // escape the listener exists to absorb. The run-revoke path in
   // `listenActor` reaches the identical write.
   const f = await preparedFixture();
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: "", invocationId: "a".repeat(32) }),
-    observeStatus: async () => new Map() } as unknown as FeatureExecution;
+  const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
@@ -136,7 +134,7 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   console.error = () => { throw new Error("stderr is dead"); };
   try {
     await broker.start();
-    const server = Reflect.get(broker, "hostServer") as Server;
+    const server = Reflect.get(broker, "adminServer") as Server;
     server.emit("error", acceptError());
     assert.equal(server.listening, true, "the emit absorbed the journal's own failure");
     // The shared sink the run-revoke path reaches: the same guarded write.

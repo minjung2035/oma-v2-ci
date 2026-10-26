@@ -41,7 +41,7 @@ test("SCN-B01: Principal GOAL mail preserves the exact other documents from its 
     const content = Buffer.from(files.map(([, body]) => body).join(""));
     const authority: AuthContext = { actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
       role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
-      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
     const request: Request = { v: 1, id: "seed", method: "context.publish", request: "seed", params: {
       expected: null, entries: files.map(([path, body]) => ({ path, bytes: Buffer.byteLength(body), sha256: sha256Hex(Buffer.from(body)) })),
       content: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/vnd.oma.context-v1" },
@@ -160,7 +160,7 @@ test("SCN-B07: a Resident follows a topic, gets its mail, unfollows, and gets no
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const agent = s.store.getAgent("worker-b")!;
     const auth = { actor: "worker-b", incarnation: agent.incarnation, role: "resident", channel: "actor",
-      capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+      capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
     const route = async (method: "route.follow" | "route.unfollow", request: string) => {
       const answer = await s.broker.dispatch(auth as never, { v: 1, id: request, method, request, params: { topic: "release" } } as never, null) as { ok: boolean };
       assert.equal(answer.ok, true, JSON.stringify(answer));

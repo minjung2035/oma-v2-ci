@@ -400,7 +400,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             assert.ok(agent, `no resident ${from}`);
             const auth: AuthContext = { actor: from, incarnation: agent.incarnation, role: "resident", channel: "actor",
                 capabilities: new Set(["mail.send", "route.follow", "git.submit", "agent.manage.self"]),
-                peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+                peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
             const request = { v: 1, id: key ?? method, method, ...(key === null ? {} : { request: key }), params };
             return await broker.dispatch(auth, request as unknown as Request, stream) as Record<string, unknown>;
         },

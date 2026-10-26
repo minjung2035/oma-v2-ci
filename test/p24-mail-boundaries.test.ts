@@ -37,7 +37,7 @@ function fixture() {
     role: "resident",
     channel: "actor",
     capabilities: new Set(["mail.send"]),
-    peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null },
+    peer: { pid: process.pid, uid: 1000, gid: 1000 },
   };
   const input = {
     to: ["bob"],

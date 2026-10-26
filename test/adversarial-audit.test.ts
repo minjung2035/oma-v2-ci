@@ -95,7 +95,6 @@ function auth(actor = "a"): AuthContext {
             pid: process.pid,
             uid: process.getuid!(),
             gid: process.getgid!(),
-            cgroup: null,
         },
     };
 }

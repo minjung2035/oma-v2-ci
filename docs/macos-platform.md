@@ -126,6 +126,28 @@ close-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태�
 첫 protocol·권한 오류와 불완전한 EOF는 poison되어 후속 frame이나 재호출로 성공을 만들지 못한다.
 UTF-8 decoding은 공통 domain owner를 사용하며 BOM을 지워 닫힌 JSON 문법을 통과시키지 않는다.
 
+## Native 물리 순서와 credential 경계
+
+**MUST [NATIVE-018]** DR56의 아래 native 물리 순서는 SEQ-002의 폐기된 unit/cgroup 실행
+단계를 대체한다. 아래 순서를 거꾸로 수행하거나, 실패·unknown인 단계를 성공으로 읽고
+다음 효과를 시작하지 않는다. accepted DB/plan/receipt의 logical 순서와 과거 형식의 뜻은 유지한다.
+
+| 경로 | 현재 순서와 완료 경계 |
+|---|---|
+| broker 시작 | 지원 gate → 안전한 runtime root와 broker lock → Society tenure → config/deployment 확인 → journal recovery/전체 scope 사망 확인 → restore/preparation → Store → pending reconciliation → 인증 listener → READY → 활성화. lock loser·미완료 recovery는 writer/READY/활성화를 얻지 못함 |
+| agent.create | 현재 권한·strict 입력·same-key → frozen spec/from/brief를 담은 native intent commit → immutable initial mail과 exact workspace 준비 → 실행 owner의 frozen 참조 등록 → create-ready commit → gated mail 공개 → GOAL/현재 권한 재검사 뒤 활성화 → receipt. 역사 version2 unit intent는 자동 완성 금지 |
+| agent.start/stop | accepted epoch를 바꾸지 않는 current-intent 대조 → start는 이전 scope 종료/GOAL/현재 권한, stop은 hint 차단·권한 철회·종료 시도 → 실제 사망과 진단 close 확인 → accepted operation 정산. terminal same-key receipt는 현재 설정으로 다시 만들지 않음 |
+| runner.open | 소유 private channel과 실제 child/scope pin → 현재 registry/desired/GOAL → 이전 run의 quiescence → 과거 receipt 정산 → incarnation commit → 현재 scope·endpoint 확정. 연결 소유나 로그만으로 새 grant를 만들지 않음 |
+| 종료 | admission/활성화 차단 → 소유 실행 모두 종료·completion/FD/log drain → journal owner close → broker task/Store close → singleton 반환. 종료 불명은 writer 자원 해제 성공이 아님 |
+
+**MUST [NATIVE-019]** standalone Keychain 채널은 get/put만 전송하고 VM operation/event나
+느슨한 응답 모드를 제공하지 않는다. bounded raw byte를 공통 strict JSON/UTF-8 owner로 판정한다.
+malformed UTF-8·JSON BOM·중복 key·알 수 없는 correlation/field·잘못된 값·부분 EOF·timeout은
+채널을 poison하고 모든 pending 요청을 거절한다. 후속 valid frame은 채널을 되살리지 못한다.
+값 내부의 정상 BOM은 원래 bytes의 뜻을 보존한다. EOF와 pending 거절은 helper의 실제 종료
+증명이 아니며 child owner의 close 관측을 별도로 기다린다. 이 통신 시험은 signed Keychain·TCC
+검증이나 G-AUTH 통과의 대체가 아니다.
+
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,
 전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와

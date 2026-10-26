@@ -68,7 +68,7 @@ async function replay(sequence: readonly Scenario[]): Promise<void> {
       const targetBefore = f.store.getAgent("a");
       const physicalBefore = f.units.active;
       if (scenario.entry === "normal") await f.dispatch(scenario.kind, "original");
-      else f.lifecycle.reconcileAction(accepted.id);
+      else await f.lifecycle.reconcileAction(accepted.id);
       const after = f.store.getOperationById(accepted.id)!;
       assert.equal(after.planJson, planBytes, "LIFECYCLE_REPLAY_FROZEN_PLAN");
       assert.equal(after.requestHash, accepted.requestHash);
@@ -79,7 +79,7 @@ async function replay(sequence: readonly Scenario[]): Promise<void> {
         if (scenario.kind === "agent.stop") assert.equal(f.units.effects.at(-1)?.incarnation, 1);
         const terminalBytes = after.resultJson;
         await f.dispatch(scenario.kind, "original");
-        f.lifecycle.reconcileAction(accepted.id);
+        await f.lifecycle.reconcileAction(accepted.id);
         assert.equal(f.units.effects.length, before + 1, "LIFECYCLE_REPLAY_TERMINAL_NO_EFFECT");
         assert.equal(f.store.getOperationById(accepted.id)?.resultJson, terminalBytes);
       } else {

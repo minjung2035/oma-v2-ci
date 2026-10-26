@@ -83,9 +83,16 @@ export class CandidateChecks {
       const failures: unknown[] = [];
       try { cleanupAll([closeWriter, closeReleaseRead, closeReleaseWrite, () => { if (read !== undefined) closeSync(read); }, () => { if (project !== undefined) closeSync(project); }]); }
       catch (error) { failures.push(error); }
-      if (reader !== undefined) {
-        reader.destroy();
-        if (!reader.closed) try { await once(reader, "close"); } catch (error) { failures.push(error); }
+      if (reader !== undefined && !reader.closed) {
+        const current = reader;
+        // Destroying an async iterator can emit its expected ABORT_ERR before
+        // the descriptor actually closes. Join close even after an error;
+        // retain genuine I/O failures without duplicating our own abort.
+        const closed = new Promise<void>(resolve => current.once("close", resolve));
+        const outcome = once(current, "close").then(() => null, (error: unknown) => ({ error }));
+        current.destroy();
+        const failure = await outcome; await closed;
+        if (failure !== null && !(failure.error instanceof Error && "code" in failure.error && failure.error.code === "ABORT_ERR")) failures.push(failure.error);
       }
       if (failures.length) throw new AggregateError(failures, "candidate setup descriptor cleanup failed");
     });

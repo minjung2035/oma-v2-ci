@@ -34,7 +34,7 @@ function seal(s: { store: Store; dir: string }): void {
 function auth(actor: string, capabilities: Capability[] = ["mail.send"]): AuthContext {
   return { actor, incarnation: 1, role: actor === "principal" ? "principal" : "resident",
     channel: "actor", capabilities: new Set(capabilities),
-    peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+    peer: { pid: 1, uid: 1000, gid: 1000 } };
 }
 function inTx<T>(store: Store, fn: SyncCallback<T>): T { return store.transaction<T>(fn); }
 function seedAgents(store: Store, specs: Array<[

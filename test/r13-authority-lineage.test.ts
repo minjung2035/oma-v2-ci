@@ -52,7 +52,7 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
   const store = new Store(join(root, "runtime.sqlite"));
   let granted: ReadonlySet<Capability> = new Set(["agent.create"]);
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-    get capabilities() { return granted; }, peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+    get capabilities() { return granted; }, peer: { pid: 1, uid: 1000, gid: 1000 } };
   try {
     store.transaction(tx => tx.insertAgent(makeValidAgent("alice", { capabilities: ["agent.create"] })));
     const guard = currentAuthorityGuard(store, auth);

@@ -12,7 +12,7 @@ import {mailInboxArrivalPathAt} from '@oma/domain/paths';
 import {makeValidAgent,ALL_CAPS} from '../dist/test/fixtures/spec.js';
 
 const auth={actor:'alice',incarnation:1,role:'resident',channel:'actor',capabilities:new Set(ALL_CAPS),
-  peer:{pid:process.pid,uid:process.getuid(),gid:process.getgid(),cgroup:null}};
+  peer:{pid:process.pid,uid:process.getuid(),gid:process.getgid()}};
 const input={to:['bob'],subject:'arrival durability',kind:'message',body:'accepted bytes'};
 const original=fs.writeSync;
 function injectArrivalWrite(replacement){

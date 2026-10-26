@@ -17,7 +17,7 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
 const code = expected => error => error?.code === expected;
 const auth = () => ({ actor: "alice", role: "resident", incarnation: 0, channel: "actor",
-  capabilities: new Set(["mail.send", "route.follow"]), peer: { pid: 1, uid: 1, gid: 1, cgroup: null } });
+  capabilities: new Set(["mail.send", "route.follow"]), peer: { pid: 1, uid: 1, gid: 1 } });
 function mail(store) {
   const id = generateOperationId(), message = generateMessageId(id, 0);
   const payload = { to: ["alice"], subject: "fixture", body: "x", kind: "message" };

@@ -272,7 +272,6 @@ test("P18 internal composition exposes narrow live capabilities without concrete
   assert.deepEqual(Object.keys(ports).sort(), [
     "mail",
     "peers",
-    "principalInboxNewEntries",
     "store",
   ]);
   assert.notEqual(ports.store, store);
@@ -287,10 +286,10 @@ test("P18 internal composition exposes narrow live capabilities without concrete
     "moveToCur",
     "prepare",
   ]);
-  assert.deepEqual([...ports.principalInboxNewEntries()], ["message"]);
-  assert.deepEqual(inboxReads, ["/state/mail/inboxes/principal/new"]);
+  assert.equal(ports.principalInboxNewEntries, undefined, "retired host relay has no filesystem capability");
+  assert.deepEqual(inboxReads, []);
   assert.notEqual(ports.peers, peers);
-  assert.deepEqual(Object.keys(ports.peers).sort(), ["requireHostUnit", "requireRunnerUnit", "runnerActor", "runnerAuth"]);
+  assert.deepEqual(Object.keys(ports.peers).sort(), ["requireRunnerUnit", "runnerActor", "runnerAuth"]);
 
   const identity = ports.store.getAgentIdentity("alice");
   assert.equal(identity.incarnation, 2);

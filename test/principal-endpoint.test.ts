@@ -1303,7 +1303,7 @@ class Bench {
     const peer = { pid: peerPid, uid, gid, alive: () => processIdentity(peerPid) !== null,
       retainForExecution: () => () => {}, releaseConnection: () => {} } as BoundPeer;
     const context = (): AuthContext => ({ actor: "principal", incarnation: 1, role: "principal",
-      channel: "actor", capabilities: new Set(), peer: { pid: peerPid, uid, gid, cgroup: null } });
+      channel: "actor", capabilities: new Set(), peer: { pid: peerPid, uid, gid } });
     const ports: PrincipalEndpointPorts = {
       isDraining: () => false,
       bindPeer: () => peer,
@@ -1426,7 +1426,7 @@ test("P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before
   const ports: PrincipalHostEndpointPorts = {
     isDraining: () => false, bindPeer: () => peer,
     principalContext: () => ({ actor: "principal", incarnation: 1, role: "principal", channel: "actor", capabilities: new Set(),
-      peer: { pid: process.pid, uid: peer.uid, gid: peer.gid, cgroup: null } }),
+      peer: { pid: process.pid, uid: peer.uid, gid: peer.gid } }),
     serveFrames: (_socket, _peer, handle) => { served.handle = handle; },
     fail: () => {}, observe: () => {}, cleanupError: () => {},
     registeredEngine: () => process.pid,

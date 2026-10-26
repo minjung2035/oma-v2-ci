@@ -17,9 +17,9 @@ export function runtimeAssets(root: string): RuntimeAssets {
     entries: Object.freeze(Object.fromEntries(Object.entries(DEPLOYMENT_LAYOUT.entries)
       .map(([name, path]) => [name, join(root, path)])) as RuntimeAssets["entries"]) });
 }
-/** Module-relative legacy exports are checked, never searched through fallback
+/** Module-relative exports are checked, never searched through fallback
  * directories. A wrong LIBDIR cannot silently combine two installations.
- * Call before opening Store or installing units, outside every Store transaction.
+ * Call before opening Store or preparing execution, outside every Store transaction.
  */
 export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: string }, moduleDirectories: readonly string[] = []): void {
   if (assets.schema !== observed.schema)
@@ -103,9 +103,8 @@ export function assertStateRoot(stateRoot: string, statfs: (path: string) => { t
 }
 
 /** D03: where one society lives on this host, decided once by the process that
- * starts it and handed explicitly to everything it launches. A unit-started
- * process runs in the user manager's environment, which need not be the one the
- * product was started in, so nothing below the host re-derives these. */
+ * starts it and handed explicitly to everything it launches. Child processes
+ * receive these frozen roots rather than re-derive them from their environment. */
 export interface LaunchLocation {
   readonly society: string;
   readonly stateRoot: string;

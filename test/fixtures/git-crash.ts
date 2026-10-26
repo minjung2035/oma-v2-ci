@@ -18,7 +18,7 @@ import { quarantineExecution } from "#oma-test/app/runtime/quarantine-execution"
 import { prepareResidentRootfs, hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 import type { QuarantineExecution } from "@oma/git/quarantine";
-export const gitAuth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+export const gitAuth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 export function gitCommand(root: string, args: string[]): string {
     const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024, killSignal: "SIGKILL" });
     if (out.error || out.signal || out.status !== 0)

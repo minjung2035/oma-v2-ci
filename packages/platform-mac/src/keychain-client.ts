@@ -1,4 +1,4 @@
-/** MAC-701 / MODE-006: the signed helper's Keychain channel, without a VM.
+/** NATIVE-005: the signed helper's Keychain-only channel.
  * The engine owns this child until actual close; EOF only rejects requests. */
 import type { ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
@@ -17,9 +17,9 @@ export interface KeychainDeadlines {
   readonly closeMs?: number;
 }
 
-/** The credential API shared by VM-backed and Keychain-only clients. The
+/** The credential API of the standalone Keychain helper. The
  * caller owns the channel's lifetime; this adapter owns only credential
- * response meaning and cannot send a VM operation. */
+ * response meaning. */
 export function nativeKeychainStore(
   request: (op: "keychain.get" | "keychain.put", fields: Record<string, string>) => Promise<Record<string, unknown>>,
   invalidResponse: () => void = () => {},
@@ -53,7 +53,7 @@ export class KeychainClient implements KeychainStore {
     private readonly child: ChildProcess, deadlines?: KeychainDeadlines) {
     this.deadlines = { requestMs: deadlines?.requestMs ?? REQUEST_DEADLINE_MS, closeMs: deadlines?.closeMs ?? CLOSE_DEADLINE_MS };
     this.requests = new NativeChannel(channel, {
-      helper: "Keychain", endedMessage: "the Keychain helper channel ended", strictResponses: true, timeoutEndsChannel: true,
+      endedMessage: "the Keychain helper channel ended",
       refusal: () => new StoreError("BROKER_UNAVAILABLE", "the Keychain could not be accessed"),
     });
     this.store = nativeKeychainStore((op, fields) => this.ask(op, fields), () => this.fail());
@@ -89,7 +89,7 @@ export class KeychainClient implements KeychainStore {
 
   private fail(): void { this.requests.close(); }
 
-  private ask(op: string, fields: Record<string, string>): Promise<Record<string, unknown>> {
+  private ask(op: "keychain.get" | "keychain.put", fields: Record<string, string>): Promise<Record<string, unknown>> {
     return this.requests.request(op, fields, this.deadlines.requestMs);
   }
 

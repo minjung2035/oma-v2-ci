@@ -48,7 +48,7 @@ function fixture(t: TestContext) {
     const agent = store.getAgent(name)!;
     return { actor: name, incarnation: agent.incarnation, role: agent.role, channel: "actor",
       capabilities: new Set(resolvedSpecOf(agent).capabilities),
-      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
   };
   return { root, config, path, units, from, lifecycle, auth, get store() { return store; },
     reopen() { store.close(); store = new Store(join(root, "runtime.sqlite")); } };

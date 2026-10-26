@@ -134,7 +134,7 @@ test("native wake: closing admission cancels a hint queued before dispatch", asy
 test("native wake: committed Mail reaches the live Broker and a same-key receipt does not wake again", async t => {
   const f = society(t); await f.broker.start();
   const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "host",
-    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
   const input = { to: ["bob"], subject: "committed wake", kind: "message" as const, body: "original bytes" };
   const first = await f.mail.send(auth, "committed-wake", input);
   assert.equal(first.state, "succeeded"); await settle();

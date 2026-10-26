@@ -6,7 +6,7 @@ import { join } from "node:path";
 import ts from "typescript";
 import { createArchitectureProgram } from "../scripts/dependency-graph.mjs";
 // The envelope rule is the protocol's own (P0V-32), not a copy in this fixture.
-import { internalEnvelopeProblem } from "@oma/protocol/methods";
+import { internalEnvelopeProblem, INTERNAL_METHODS, isInternalMethod } from "@oma/protocol/methods";
 
 const options = {
   strict: true,
@@ -113,11 +113,10 @@ function internalFixture() {
           },
         };
       if (name === "@oma/protocol/methods") {
-        const descriptor = { channel: "host", paramsCheck: () => null };
         return {
-          INTERNAL_METHODS: { "host.principalRelay": descriptor },
+          INTERNAL_METHODS,
           internalEnvelopeProblem,
-          isInternalMethod: (value) => value === "host.principalRelay",
+          isInternalMethod,
         };
       }
       if (name === "./replies.js")
@@ -241,7 +240,7 @@ test("P11/P12 production dispatcher sources typecheck cleanly with the pinned co
   assert.deepEqual(errors, []);
 });
 
-test("P12 internal principal relay: absent principal skips filesystem and mail effects", async () => {
+test("NATIVE-INTERNAL-RELAY-REMOVED-01: the retired host relay cannot consume mail or filesystem effects", async () => {
   const { dispatcher, calls } = internalFixture();
   const result = await dispatcher.dispatch(
     { v: 1, id: "relay", method: "host.principalRelay", params: {} },
@@ -249,10 +248,9 @@ test("P12 internal principal relay: absent principal skips filesystem and mail e
     null,
     "host",
   );
-  assert.equal(result.ok, true);
-  assert.equal(result.result.moved, 0);
-  assert.equal(result.result.pending, 0);
-  assert.equal(calls.authority, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "UNKNOWN_METHOD");
+  assert.equal(calls.authority, 0);
   assert.equal(calls.fs, 0);
   assert.equal(calls.mail, 0);
 });

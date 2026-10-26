@@ -315,7 +315,7 @@ export class Broker {
       peer = this.bindPeer(socket);
       if (!peer) throw new StoreError("AUTH_FAILED", "no peer credentials");
       const auth = this.trustedContext(actor, peer);
-      if (!auth) throw new StoreError("AUTH_FAILED", "cgroup mismatch");
+      if (!auth) throw new StoreError("AUTH_FAILED", "execution scope mismatch");
       this.serveFrames(socket, peer, (raw, stream) => this.dispatch(auth, raw as Request, stream), raw => this.preflightPublicStream(auth, raw));
       transferred = true;
     } catch (error) { this.health.observe(error); this.fail(socket, publicFailure(error)); }

@@ -2425,3 +2425,17 @@ stderr marker 위조의 CHECK_FAILED를 확인했다. G-PROCESS/G-FILES/G-AUTH �
 
 **바꾸는 규범.** INT-007의 setup 증거, NATIVE-017. accepted candidate/argv/env/receipt의 뜻을
 바꾸지 않으며 과거 receipt를 현재 권한으로 다시 실행하지 않는다.
+
+## DR56 — 폐기한 물리 reference와 현재 native 순서를 구분한다
+
+DR49 전환 뒤 구현 계약의 unit/cgroup/renderer 문장과 generic helper의 VM 옵션이 남아 있었다.
+역사 ID를 native 의미로 재사용하지 않고 NATIVE-018에 현재 물리 순서를 명시한다. 공통 logical
+owner·accepted fact·현재 권한·unknown의 구분은 유지한다. AuthContext의 사용되지 않는 cgroup
+필드는 제거하며, 인증은 native scope pin과 매 요청 재검사로만 판정한다. 기존 status wire의
+unit 필드·no-unit 표기와 과거 version2 plan reader는 의미 보존용이며 실행 fallback이 아니다.
+
+실제 socketpair에서 잘못된 UTF-8 byte가 대체 문자로 credential 응답에 수락되는 반례를 얻었다.
+NATIVE-019는 standalone Keychain 채널을 get/put으로 닫고 공통 strict JSON/UTF-8 판정을 사용한다.
+VM operation/event·선택적 strict/timeout 모드는 제거한다. native 통신 실패는 credential 부재나
+평문 fallback 권한이 아니고, 채널 EOF는 helper 사망이 아니다. 실제 OS socket 시험은 별도이며
+서명·access group·TCC 및 Darwin 세 gate를 통과시켰다는 뜻이 아니다.

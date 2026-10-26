@@ -2,7 +2,7 @@ import type { Observation } from "@oma/protocol/status-view";
 export type { Observation } from "@oma/protocol/status-view";
 /** TUI-012/021: where the Dashboard's broker-derived values come from.
  *
- * `status.get` answers only a caller inside an agent's systemd unit, and a
+ * `status.get` answers only an authenticated caller inside an agent's native scope, and a
  * terminal the Human launched is inside none, so asking it could never
  * succeed. The broker instead publishes the same answer as a host-private view
  * (TUI-021), and this reads it. The TUI adds no socket method (IPC-012).

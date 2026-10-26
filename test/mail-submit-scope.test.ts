@@ -31,7 +31,7 @@ function mailFixture() {
   store.transaction((tx) => { for (const name of ["alice", "bob", "carol"]) tx.insertAgent(makeValidAgent(name)); });
   const mail = createMailModule({ stateRoot: root, society: "fixture" }, store, 64);
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
   const input: MailInput = { to: ["topic/work"], kind: "message", subject: "frozen", body: "frozen body" };
   return {
     root, store, mail, auth, input,

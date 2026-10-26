@@ -20,7 +20,7 @@ export function lifecycleEffects(stateRoot: string): LifecycleEffects {
   return {
     nextOperationId: generateOperationId,
     newPreacceptScope: () => new PreacceptScope(),
-    bootstrapPeer: () => ({ pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null }),
+    bootstrapPeer: () => ({ pid: process.pid, uid: process.getuid!(), gid: process.getgid!() }),
     ensureAgentDirectories: actor => {
       ensureOwnedDurableDirectory(join(agentRootPathAt(stateRoot, actor), "home"), stateRoot, 0o755);
       ensureOwnedDurableDirectory(join(stateRoot, "mail", "inboxes", actor), stateRoot, 0o755);

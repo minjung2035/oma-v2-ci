@@ -6,7 +6,7 @@ export interface AuthContext {
   readonly actor: Actor; readonly incarnation: number; readonly role: 'resident' | 'principal';
   readonly channel: 'actor' | 'trusted-runner' | 'principal-extension' | 'host';
   readonly capabilities: ReadonlySet<Capability>;
-  readonly peer: { pid: number; uid: number; gid: number; cgroup: string | null };
+  readonly peer: { pid: number; uid: number; gid: number };
 }
 
 export interface AgentStatus {
@@ -133,7 +133,7 @@ export interface PreacceptCollection {
 }
 
 /** D01/BATCH-004: what a broker-owned settlement must hold. The next run of
- * `actor` has begun only after its previous invocation's cgroup was proven
+ * `actor` has begun only after its previous invocation's scope was proven
  * empty or removed (or this broker's startup quiesced every scope before
  * admitting runs), and no endpoint of that next run exists yet, so nothing at
  * `incarnation` can still act. `confirm` re-checks this immediately before the
@@ -166,8 +166,8 @@ export interface RunnerObservation {
 
 /** Observation callback is an internal boundary value, not a Views implementation. */
 export interface UnitObserve {
-  /** null: not observed. "no-unit": observed, and systemd has no such unit
-   * (LoadState=not-found) -- which is not a unit that ran and exited (INV02). */
+  /** null: not observed. "no-unit": the native slot has no recorded execution.
+   * This retained wire word never claims an execution ran and exited (INV02). */
   (agent: Actor): { activeState: string; subState: string; result: string; execMainStatus: number } | "no-unit" | null;
 }
 

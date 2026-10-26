@@ -1,7 +1,7 @@
 /** PR-001/PR-002: the Principal session's two endpoints, and the only code that
  * decides who the Principal is.
  *
- * A Resident is authorised by the systemd scope it runs in. The Principal has
+ * A Resident is authorised by its pinned native execution scope. The Principal has
  * none -- the product starts its engine itself, in the Human's terminal -- so
  * these stand in for that scope:
  *

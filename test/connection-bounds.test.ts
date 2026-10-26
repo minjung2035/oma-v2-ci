@@ -1,63 +1,68 @@
-import { testBroker } from "./helpers/broker-fixture.js";
-import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
-/** V26A / INV10 (adversarial): a Resident reaches its own actor socket, and
- * every connection there costs the broker a socket and a peer pidfd. A flood of
- * connections is held to ACTOR_CONNECTIONS by the kernel listener, costs the
- * broker bounded descriptors, and once it ends the Resident's next call is
- * answered. Real Broker.openRun on this test process's own cgroup, real Unix
- * sockets and frames.
- */
+/** V26A: actual pinned PID2/private-channel runner floods its actor endpoint.
+ * Kernel credentials, namespace lifetime and FD cleanup are production code. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { connect, type Socket } from "node:net";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ResolvedAgentSpec } from "@oma/contracts";
-import { ACTOR_CONNECTIONS, Broker } from "@oma/broker";
-import { LifecycleModule } from "@oma/lifecycle";
+import { ACTOR_CONNECTIONS, type Broker } from "@oma/broker";
+import { resolvedSpecOf } from "@oma/domain/agent-spec";
+import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { ViewsModule } from "#oma-test/app/views";
-import type { FeatureExecution } from "./fixtures/execution.js";
-import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { testBroker } from "./helpers/broker-fixture.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
+import { nativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
-const settle = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-test("V26A: a connection flood on an actor socket is bounded, and the Resident is answered once it ends", { timeout: 60_000 }, async () => {
-  const f = await preparedFixture(1);
-  const id = "c".repeat(32);
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: OWN_CGROUP, invocationId: id }),
-  } as unknown as FeatureExecution;
-  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
-    hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
-  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
-  const flood: Socket[] = [];
-  try {
-    await broker.start();
-    const lease = await (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<{ socketHostPath: string }>).call(broker, "alice", id);
-    const served = () => (Reflect.get(broker, "connections") as Map<unknown, unknown>).size;
-    for (let i = 0; i < 400; i += 1) { const socket = connect(lease.socketHostPath); socket.on("error", () => {}); flood.push(socket); }
-    await settle(1500);
-    assert.ok(served() <= ACTOR_CONNECTIONS, `the broker served ${served()} connections of one flood`);
-    for (const socket of flood) socket.destroy();
-    await settle(300);
-    // Liveness: the Resident's next call is answered.
-    const answer = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      const socket = connect(lease.socketHostPath);
-      const parser = new FrameParser(TEST_VIEW_LIMITS.frameBytes);
-      socket.on("error", reject);
-      socket.on("data", (chunk: Buffer) => { for (const frame of parser.feed(chunk)) { resolve(frame.raw); socket.destroy(); } });
-      socket.write(encodeFrame({ v: 1, id: "after-flood", method: "status.get", params: { agent: "alice" } }));
-    });
-    assert.equal(answer.id, "after-flood");
-    assert.equal(answer.ok, true, JSON.stringify(answer));
-  } finally {
-    for (const socket of flood) socket.destroy();
-    await broker.drainAndClose();
-    (f.store as unknown as { close(): void }).close = () => undefined;
+test("V26A: a connection flood on an actor socket is bounded, and the Resident is answered once it ends", { timeout: 60_000 }, async t => {
+  const f = await preparedFixture(1), units = await nativeScriptResidents(f.store, f.root);
+  let broker: Broker | undefined;
+  t.after(async () => {
+    await units.closeExecution();
+    if (broker) { await broker.drainAndClose(); f.store.close = () => {}; }
     f.close();
+  });
+  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos/project.git"),
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => { throw new Error("flood fixture cannot create agents"); }, f.mail);
+  broker = testBroker({ store: f.store, mail: f.mail, units,
+    views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle,
+    git: null, reviews: null, reconcile: null,
+    paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
+  units.attach(broker);
+  const spec = resolvedSpecOf(f.store.getAgent("alice")!); units.ensureResident("alice", spec.profile, spec.modelProfile);
+  await broker.start();
+  const ready = join(f.root, "flood-ready"), release = join(f.root, "flood-release"), script = join(f.root, "flood.mjs");
+  writeFileSync(script, `import {Socket,connect} from 'node:net';
+import {existsSync,writeFileSync} from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
+import {FrameParser,encodeFrame} from ${JSON.stringify(import.meta.resolve("@oma/protocol/frame"))};
+const control=new Socket({fd:6,readable:true,writable:true});
+async function call(socket,frame){return new Promise((resolve,reject)=>{
+ const parser=new FrameParser(${TEST_VIEW_LIMITS.frameBytes});
+ const alarm=setTimeout(()=>reject(new Error('flood RPC deadline')),10000);
+ socket.on('error',reject); socket.on('data',chunk=>{for(const f of parser.feed(chunk)){clearTimeout(alarm);resolve(f.raw);}});
+ socket.write(encodeFrame(frame));
+});}
+const answer=await call(control,{v:1,id:'open',method:'runner.open',params:{agent:'alice',invocationId:process.env.INVOCATION_ID}});
+if(!answer.ok)throw new Error(JSON.stringify(answer));
+const flood=Array.from({length:400},()=>{const s=connect(answer.result.socketHostPath);s.on('error',()=>{});return s;});
+writeFileSync(${JSON.stringify(ready)},'ready');
+const deadline=performance.now()+20000;
+while(!existsSync(${JSON.stringify(release)})){if(performance.now()>deadline)throw new Error('parent did not release flood');await delay(5);}
+for(const s of flood)s.destroy(); await delay(300);
+const socket=connect(answer.result.socketHostPath);
+const result=await call(socket,{v:1,id:'after-flood',method:'status.get',params:{agent:'alice'}});
+socket.destroy();control.destroy();process.stdout.write(JSON.stringify(result));
+`);
+  const running = units.runScript("alice", script, {}); void running.catch(() => {});
+  const served = () => [...(Reflect.get(broker!, "connections") as Map<unknown, object>).values()]
+    .filter(connection => !Reflect.get(connection, "options").inheritedControl).length;
+  const deadline = performance.now() + 15_000;
+  while (!existsSync(ready) || served() < Math.min(16, ACTOR_CONNECTIONS)) {
+    assert.ok(performance.now() < deadline, "the actual actor flood never reached the listener");
+    await new Promise(resolve => setTimeout(resolve, 5));
   }
+  assert.ok(served() <= ACTOR_CONNECTIONS, `the broker served ${served()} actor connections`);
+  writeFileSync(release, "release");
+  const result = JSON.parse((await running).stdout.toString());
+  assert.equal(result.id, "after-flood"); assert.equal(result.ok, true, JSON.stringify(result));
 });

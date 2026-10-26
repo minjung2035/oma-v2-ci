@@ -79,7 +79,7 @@ test("AV9 / INV02: Principal status never borrows a Resident's idle or exit-zero
 });
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: 1, uid: 1000, gid: 1000 } };
 
 async function ledger(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-wp23-pending-"));

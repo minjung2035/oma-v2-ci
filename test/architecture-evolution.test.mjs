@@ -18,7 +18,7 @@ import {
 const root = process.cwd();
 const baseline = createArchitectureProgram();
 const read = (file) => readFileSync(resolve(root, file), "utf8");
-const snapshots = JSON.parse(read("test/fixtures/architecture-surfaces.json"));
+const snapshots = JSON.parse(read("test/fixtures/architecture-surfaces-native.json"));
 const wire = "packages/contracts/src/public-wire.ts";
 const durable = "packages/contracts/src/durable.ts";
 const methods = "packages/protocol/src/methods.ts";

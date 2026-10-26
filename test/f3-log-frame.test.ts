@@ -36,7 +36,7 @@ const auth: AuthContext = {
   role: "resident",
   channel: "actor",
   capabilities: new Set(),
-  peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null },
+  peer: { pid: process.pid, uid: 1000, gid: 1000 },
 };
 function dispatcher(text: string, frameBytes: number) {
   const unused = (): never => {

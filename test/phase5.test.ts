@@ -121,7 +121,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
             role: "resident",
             channel: "actor",
             capabilities: new Set(capabilities),
-            peer: { pid: 0, uid: -1, gid: -1, cgroup: null },
+            peer: { pid: 0, uid: -1, gid: -1 },
         });
         const params = { to: ["b"], subject: "s", kind: "message", body: "body" };
         const denied = await env.broker.dispatch(auth(["route.follow"]), { v: 1, id: "deny", method: "mail.send", request: "deny", params } as never, null);
@@ -229,7 +229,7 @@ function auth(actor: string, caps: Capability[]): AuthContext {
         role: "resident",
         channel: "actor",
         capabilities: new Set(caps),
-        peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
+        peer: { pid: 1, uid: 1000, gid: 1000 },
     };
 }
 // ---------------------------------------------------------------------------
@@ -513,25 +513,40 @@ test("NATIVE-CANDIDATE-DR37: real checks use network, outlive legacy caps and st
 test("DR37: MCP command credentials execute through the installed adapter policy", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'oma-mcp-credential-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const prior = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = dir;
-    t.after(() => { if (prior === undefined)
-        delete process.env.PI_CODING_AGENT_DIR;
-    else
-        process.env.PI_CODING_AGENT_DIR = prior; });
-    const hooks = new Map<string, Array<() => unknown>>();
-    const pi = { registerTool() { }, registerCommand() { }, registerFlag() { }, registerShortcut() { }, appendEntry() { }, sendMessage() { },
-        exec: async () => ({ code: 0, stdout: '', stderr: '' }), events: { on() { }, off() { }, emit() { return false; } },
-        on(name: string, hook: () => unknown) { hooks.set(name, [...(hooks.get(name) ?? []), hook]); } };
-    const { registerMcpTools } = await import('@oma/tool-mcp');
-    await registerMcpTools(pi as never);
-    const specifier = new URL("../../packages/tool-mcp/dist/vendor/pi-mcp-adapter/runtime/utils.js", import.meta.url).href;
-    const utils = await import(specifier) as {
-        resolveCommandSecret: (value: string) => Promise<string>;
-    };
-    assert.equal(await utils.resolveCommandSecret('!printf helper-token'), 'helper-token');
-    for (const close of hooks.get('session_shutdown') ?? [])
-        await close();
+    const { ExecutionJournal } = await import('@oma/storage/execution-journal');
+    const { ExecutionRuntime } = await import('#oma-test/app/runtime/execution-runtime');
+    const { runnerScope } = await import('@oma/platform-linux/runner-scope');
+    const { withAsyncCleanup } = await import('@oma/native/cleanup');
+    ExecutionJournal.initialize(dir);
+    const executions = new ExecutionRuntime(dir);
+    // The installed adapter intentionally runs a credential command. Own its
+    // entire descendant lifetime in the real namespace, not in the test host.
+    // This verifies adapter policy, not a Worker grant or G-AUTH qualification.
+    const program = `
+      import assert from 'node:assert/strict';
+      const hooks = new Map();
+      const pi = { registerTool() {}, registerCommand() {}, registerFlag() {}, registerShortcut() {}, appendEntry() {}, sendMessage() {},
+        exec: async () => ({ code: 0, stdout: '', stderr: '' }), events: { on() {}, off() {}, emit() { return false; } },
+        on(name, hook) { hooks.set(name, [...(hooks.get(name) ?? []), hook]); } };
+      const { registerMcpTools } = await import(${JSON.stringify(import.meta.resolve('@oma/tool-mcp'))});
+      try {
+        await registerMcpTools(pi);
+        const utils = await import(${JSON.stringify(new URL("../../packages/tool-mcp/dist/vendor/pi-mcp-adapter/runtime/utils.js", import.meta.url).href)});
+        assert.equal(await utils.resolveCommandSecret('!printf helper-token'), 'helper-token');
+      } finally { for (const close of hooks.get('session_shutdown') ?? []) await close(); }
+    `;
+    await withAsyncCleanup(async () => {
+        await executions.recover();
+        const result = await executions.run('preparation', runnerScope({
+            executable: process.execPath, argv: ['--input-type=module', '-e', program],
+            env: { PATH: '/usr/bin:/bin', HOME: dir, PI_CODING_AGENT_DIR: dir },
+            timeoutMs: 10000, stdoutBytes: 65536, stderrBytes: 65536,
+        }), undefined, () => {});
+        assert.equal(result.kind, 'exited', result.stderr.toString());
+        assert.equal(result.exitCode, 0, result.stderr.toString());
+        assert.equal(executions.confirmDead('preparation'), true);
+        assert.deepEqual(ExecutionJournal.inspect(dir), []);
+    }, () => executions.close());
 });
 test("DR37: web configured and per-call proxies perform real requests under the restored policy", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'oma-web-proxy-'));

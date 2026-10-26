@@ -28,7 +28,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
   const model = initialModel();
   let previous: LedgerSnapshot | undefined;
   const auth = (): AuthContext => ({ actor: "alice", incarnation: store.getAgent("alice")!.incarnation, role: "resident", channel: "actor",
-    get capabilities() { return new Set(revoked ? [] : ALL_CAPS); }, peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } });
+    get capabilities() { return new Set(revoked ? [] : ALL_CAPS); }, peer: { pid: process.pid, uid: 1000, gid: 1000 } });
   // This harness exercises current writer admission plus actual ledger/file phases.
   // Direct desired/incarnation writes below model state, NOT successful systemd execution.
   async function execute(action: Action): Promise<Expected> {

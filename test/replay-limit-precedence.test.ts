@@ -31,7 +31,7 @@ const LOOSE: ProtocolLimits = {
 const TIGHT: ProtocolLimits = { ...LOOSE, mailBodyBytes: 8, subjectBytes: 8, addresses: 1, replyReferences: 1 };
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 
 type Answer = { ok: true; result: { operation?: string; state?: string } } | { ok: false; code: string | undefined };
 function fixture(t: TestContext) {

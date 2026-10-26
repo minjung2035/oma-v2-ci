@@ -61,7 +61,7 @@ export async function preparedFixture(incarnation = 1) {
     desired: "enabled", incarnation, profile: "p", createdBy: null }));
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const auth: AuthContext = { actor: "alice", incarnation, role: "resident", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1, cgroup: null } };
+    capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1 } };
   await mail.send(auth, "self", { to: ["alice"], subject: "hello", kind: "message", body: "body" });
   const batch = await mail.prepare(auth);
   assert.ok(batch);

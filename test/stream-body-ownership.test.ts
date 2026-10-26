@@ -74,12 +74,16 @@ function society(t: TestContext) {
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const paths = { stateRoot: root, runRoot: join(root, "run"), society: "crash", hasGoal: goalPublishedAt(root) };
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: null, reconcile: null, paths: paths, limits: LIMITS });
+  // This fixture supplies scripted bytes to the public framing/ownership
+  // policy. Native sender authentication has its separate real-kernel suite.
+  const dependencies = Reflect.get(broker, "dependencies");
+  Reflect.set(broker, "dependencies", { ...dependencies, effects: { ...dependencies.effects, peerStream: (socket: unknown) => socket } });
   t.after(async () => { try { await broker.drainAndClose(); } finally { removeTree(root); } });
   const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as { base: string; candidate: string; exportRef: string };
   const bundle = readFileSync(join(root, "candidate.bundle"));
   const serve = () => {
     const socket = new ScriptedSocket();
-    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null, releaseConnection: () => undefined,
+    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), releaseConnection: () => undefined,
       retainForExecution: () => () => undefined };
     (Reflect.get(broker, "serveFrames") as (...args: unknown[]) => void).call(broker, socket, peer,
       (raw: Record<string, unknown>, body: AsyncIterable<Uint8Array> | null) => broker.dispatch(gitAuth, raw as never, body),

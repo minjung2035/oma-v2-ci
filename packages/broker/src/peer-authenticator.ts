@@ -52,7 +52,7 @@ export class PeerAuthenticator {
     if (channel === "trusted-runner" && (credentials.inheritedRunner?.actor !== actor || credentials.inheritedRunner.invocationId !== run.invocationId)) return null;
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
-      peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: null } };
+      peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid } };
   }
   private matchesScope(actor: Actor, peer: BoundPeer, invocationId: string): boolean {
     const observed = this.units.observe(actor), root = this.units.scopeRoot(actor);
@@ -88,7 +88,7 @@ export class PeerAuthenticator {
     };
     return { actor: "principal", incarnation: agent.incarnation, role: agent.role, channel: "actor",
       get capabilities() { return currentCapabilities(); },
-      peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: null } };
+      peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid } };
   }
   requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void {
     const grant = peer.inheritedRunner;

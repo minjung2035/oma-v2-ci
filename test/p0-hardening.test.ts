@@ -81,7 +81,7 @@ test("P0: protected-path observation failure cannot reach main CAS", async (t) =
             role: "resident",
             channel: "actor",
             capabilities: new Set(["code.integrate"]),
-            peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null },
+            peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() },
         };
         await assert.rejects(module.integrate(auth, "p0-diff", { candidate: candidate as never, expected: base as never }), (error: unknown) => error instanceof StoreError && error.code === "REF_STATE_UNKNOWN");
         assert.equal(git(root, ["--git-dir", projectGit, "rev-parse", "refs/heads/main"]), base);
@@ -167,16 +167,18 @@ test("P0: 20,000 malformed frames close one connection without recursive drain",
             connections: new Map(),
             executingTasks: new Set(),
             health: { observe: () => undefined },
+            // Framing policy only. This scripted byte transport grants no
+            // peer identity and cannot qualify a kernel/authentication gate.
+            dependencies: { effects: { peerStream: (socket: unknown) => socket } },
         });
         const socket = new FakeSocket();
         const serveFrames = Reflect.get(broker, "serveFrames") as (sock: FakeSocket, peer: {
             pid: number;
             uid: number;
             gid: number;
-            cgroup: string | null;
             releaseConnection: () => void;
         }, handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => unknown, preflight: (raw: Record<string, unknown>) => void) => void;
-        const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null, releaseConnection: () => undefined };
+        const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), releaseConnection: () => undefined };
         serveFrames.call(broker, socket, peer, () => assert.fail("malformed input must not dispatch"), () => undefined);
         const malformed = Buffer.from([0, 0, 0, 1, 0x7b]); // one-byte "{" JSON body
         socket.emitData(Buffer.concat(Array.from({ length: 20000 }, () => malformed)));

@@ -51,7 +51,6 @@ const auth = (actor) => ({
     pid: process.pid,
     uid: process.getuid?.() ?? -1,
     gid: process.getgid?.() ?? -1,
-    cgroup: null,
   },
 });
 try {

@@ -5376,5 +5376,60 @@
     "status": "unverified",
     "verification": "NOT_RUN",
     "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-018",
+    "source": "docs/macos-platform.md",
+    "digest": "334b6ec3e2e96fbff0ae544f2f335e6a07413d06e64ba23291257eb6d81152bc",
+    "normativeText": "**MUST [NATIVE-018]** DR56의 아래 native 물리 순서는 SEQ-002의 폐기된 unit/cgroup 실행\n단계를 대체한다. 아래 순서를 거꾸로 수행하거나, 실패·unknown인 단계를 성공으로 읽고\n다음 효과를 시작하지 않는다. accepted DB/plan/receipt의 logical 순서와 과거 형식의 뜻은 유지한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "apps/oma/src/entry/broker.ts#main",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/lifecycle/src/actions.ts#LifecycleActions",
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/lifetime.ts#BrokerLifetime"
+    ],
+    "negativeTests": [
+      "test/native-profile.test.mjs#native Darwin",
+      "test/launch-location.test.ts#NATIVE-TOPO-01",
+      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL",
+      "test/rollover-settlement.test.ts#V07B",
+      "packages/broker/test/native-lifetime.test.mjs#native shutdown"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-019",
+    "source": "docs/macos-platform.md",
+    "digest": "8d369cdba1e0a39f6c583d7ecbe9325c307723f4b918edd84c29ff223281d305",
+    "normativeText": "**MUST [NATIVE-019]** standalone Keychain 채널은 get/put만 전송하고 VM operation/event나\n느슨한 응답 모드를 제공하지 않는다. bounded raw byte를 공통 strict JSON/UTF-8 owner로 판정한다.\nmalformed UTF-8·JSON BOM·중복 key·알 수 없는 correlation/field·잘못된 값·부분 EOF·timeout은\n채널을 poison하고 모든 pending 요청을 거절한다. 후속 valid frame은 채널을 되살리지 못한다.\n값 내부의 정상 BOM은 원래 bytes의 뜻을 보존한다. EOF와 pending 거절은 helper의 실제 종료\n증명이 아니며 child owner의 close 관측을 별도로 기다린다. 이 통신 시험은 signed Keychain·TCC\n검증이나 G-AUTH 통과의 대체가 아니다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/platform-mac/src/native-channel.ts#NativeChannel",
+    "entrypoint": "packages/platform-mac/src/keychain-client.ts#KeychainClient.launch",
+    "callPath": [
+      "packages/platform-mac/src/keychain-client.ts#KeychainClient.launch",
+      "packages/platform-mac/src/native-channel.ts#NativeChannel",
+      "packages/protocol/src/frame.ts#parseJsonObject"
+    ],
+    "negativeTests": [
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-02",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-03",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-04",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-05",
+      "packages/platform-mac/test/keychain-client-ownership.test.mjs#Keychain client:"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   }
 ]

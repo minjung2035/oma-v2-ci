@@ -10,7 +10,8 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
 import { residentOptions, prepareResident } from "../dist/test/fixtures/resident.js";
-import { spawnSandboxed, stopOwnedChild } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
+import { stopOwnedChild } from "@oma/process/async";
 const supported = process.platform === "linux" && spawnSync("/usr/bin/bwrap", ["--version"]).status === 0;
 
 test("DR46: the production sandbox hides host files and shares the host network; an unshared control cannot receive its marker", {
@@ -46,7 +47,7 @@ test("DR46: the production sandbox hides host files and shares the host network;
     assert.ok(plan.args.includes("--share-net"));
     for (const shared of [true, false]) {
       const args = shared ? plan.args : plan.args.filter(value => value !== "--share-net");
-      const child = spawnSandboxed([plan.command, ...args], plan.env, plan.filter);
+      const child = spawnSandboxed([plan.command, ...args], plan.env, plan.input, plan.cwd);
       let stdout = "", stderr = "", error;
       const closed = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
       child.once("error", value => { error = value; });

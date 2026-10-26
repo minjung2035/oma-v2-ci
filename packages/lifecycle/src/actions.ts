@@ -12,7 +12,7 @@ import type { LifecyclePaths } from "./contracts.js";
 import { LifecyclePolicy, lifecycleReceipt } from "./policy.js";
 
 /** Normal start/stop and recovery deliberately have separate decision paths.
- * Units owns revoke/path/service attempts and incarnation-aware death proof.
+ * The execution port owns revocation, stop attempts and incarnation-aware death proof.
  * D06: current management authority is required even for terminal action replay.
  * A later desired state or incarnation cannot grant an old intent a new effect.
  * Without historical physical proof such an intent remains unknown, not failed.

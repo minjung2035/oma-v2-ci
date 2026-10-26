@@ -230,7 +230,7 @@ test("R38: the verification closure includes every class of local gate input", (
   for (const required of [
     "packages/tui/src/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
     "packages/contracts/src/index.ts", "packages/storage/src/schema-v4.sql",
-    "packages/platform-linux/src/systemd/resident.service.in", "implementation/cloc-systemd.lang",
+    "packages/platform-mac/src/keychain/main.swift", "scripts/setup-native-linux-ci.sh",
     "implementation/source-owners.json", "implementation/traceability.json",
     "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",
     "implementation/tests/contracts.type-test.ts", "docs/architecture.md", "docs/implementation-spec.md",
@@ -257,7 +257,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     for (const file of [
       "packages/extension/tsconfig.json",
       "implementation/source-owners.json", "docs/implementation/validation.md",
-      "implementation/evidence/dependency-graph.json", "packages/platform-linux/src/systemd/resident.service.in",
+      "implementation/evidence/dependency-graph.json", "packages/platform-mac/src/keychain/main.swift",
       "docs/implementation-spec.md",
       ".github/workflows/architecture-verification.yml",
     ]) f.put(file, `${file}\n`);

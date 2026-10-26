@@ -1098,5 +1098,48 @@
       "test/candidate-checks.test.ts#INT-007/P0-5",
       "test/r36-parser-fuzz.test.ts#R36"
     ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-018"
+    ],
+    "owner": "apps/oma/src/entry/broker.ts#main",
+    "entrypoint": "apps/oma/src/entry/broker.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/broker.ts#main",
+      "apps/oma/src/runtime/execution-runtime.ts#ExecutionRuntime",
+      "packages/lifecycle/src/create.ts#CreateCoordinator",
+      "packages/lifecycle/src/actions.ts#LifecycleActions",
+      "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/lifetime.ts#BrokerLifetime"
+    ],
+    "negativeTests": [
+      "test/native-profile.test.mjs#native Darwin",
+      "test/launch-location.test.ts#NATIVE-TOPO-01",
+      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL",
+      "test/rollover-settlement.test.ts#V07B",
+      "packages/broker/test/native-lifetime.test.mjs#native shutdown"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-019"
+    ],
+    "owner": "packages/platform-mac/src/native-channel.ts#NativeChannel",
+    "entrypoint": "packages/platform-mac/src/keychain-client.ts#KeychainClient.launch",
+    "callPath": [
+      "packages/platform-mac/src/keychain-client.ts#KeychainClient.launch",
+      "packages/platform-mac/src/native-channel.ts#NativeChannel",
+      "packages/protocol/src/frame.ts#parseJsonObject"
+    ],
+    "negativeTests": [
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-02",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-03",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-04",
+      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-05",
+      "packages/platform-mac/test/keychain-client-ownership.test.mjs#Keychain client:"
+    ]
   }
 ]

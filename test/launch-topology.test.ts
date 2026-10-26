@@ -105,7 +105,7 @@ async function topology(t: TestContext) {
       const feature = createGitModule({ stateRoot, society, projectGit: join(stateRoot, "repos/project.git"), contextGit: join(stateRoot, "repos/context.git"), worldDir: join(stateRoot, "world") }, store, mail);
       const body = Buffer.from("# GOAL\nObserve native topology.\n");
       const receipt = await feature.publishContext({ actor: "principal", role: "principal", incarnation: store.getAgent("principal")!.incarnation,
-        channel: "host", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } }, "native-goal",
+        channel: "host", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } }, "native-goal",
         { expected: null, entries: [{ path: "GOAL.md", bytes: body.length, sha256: sha256Hex(body) }], content: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/vnd.oma.context-v1" } }, (async function* () { yield body; })());
       assert.equal(receipt.state, "succeeded");
     } finally { store.close(); }

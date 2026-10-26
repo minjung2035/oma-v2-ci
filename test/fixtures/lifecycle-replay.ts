@@ -67,7 +67,7 @@ export function lifecycleReplayFixture() {
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const capabilities = new Set(ALL_CAPS);
   const auth: AuthContext = { actor: "manager", incarnation: 1, role: "resident", channel: "actor", capabilities,
-    peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
+    peer: { pid: process.pid, uid: 1000, gid: 1000 } };
   const publicStore = {
     listAgents: () => store.listAgents(), getAgent: (actor: string) => store.getAgent(actor),
     getReceipt: (actor: string, key: string) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },

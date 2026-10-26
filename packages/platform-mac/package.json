@@ -39,7 +39,8 @@
   },
   "oma": {
     "assets": [
-      "keychain"
+      "keychain/main.swift",
+      "keychain/oma-keychain.entitlements"
     ],
     "isolationSmoke": "test/installed-runtime.mjs"
   }

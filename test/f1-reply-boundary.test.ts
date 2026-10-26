@@ -61,7 +61,7 @@ function fixture() {
     role: "resident",
     channel: "actor",
     capabilities: new Set(ALL_CAPS),
-    peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null },
+    peer: { pid: process.pid, uid: 1000, gid: 1000 },
   };
   const unused = (): never => {
     throw new Error("unrelated fixture effect");

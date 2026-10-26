@@ -21,6 +21,24 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 전체 회귀와 credential 경계 수리
+
+전체 local3760개 중3759 PASS·1 FAIL·skip0을 확인했다. 남은 시험명 참조를 고친 뒤 실제
+설치 prefix의 Personal PTY16개·Keychain real socket15개·소유권 정책·Runner·durable registry의
+70/70을 확인했다. input과 실패 원문은 validation을 따른다. 기존 ambient oma PTY 결과를 현재
+checkout의 설치 proof로 사용하지 않으며, 실제 prefix 밖 checkout 읽기를 거절한다.
+
+Keychain에서 raw malformed UTF-8가 대체 문자로 수락되는 결함을 실제 socketpair로 재현했다.
+공통 strict JSON/UTF-8 owner를 사용하고 VM operation/event·느슨한 옵션을 제거했다. 미사용
+AuthContext.cgroup은 현재 source와 fixture에서 삭제했다. 현재 권한은 여전히 native pin과 매 요청
+재검사로 판정하며 accepted/receipt/status wire의 뜻은 바꾸지 않는다. DR56과 NATIVE-018/019,
+source owner가 현재 물리 순서와 credential 경계를 소유한다. 새/변경 코드는 NOT_REVIEWED다.
+
+추가 G-AUTH 후보인 LOCAL_PEERTOKEN도 조사했다. [Apple XNU의 고정 source](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_usrreq.c#L900)는 이 token도 peer socket의 last_pid로 조회한다.
+이는 구현 source의 관측이며 현재 CI kernel에서의 실행 증명은 아니다. queued-transfer probe가
+첫 요청 byte를 읽기 전후의 raw SDK token과 errno/size를 기록하도록 확대했으며 실제 Mac CI로
+확인한다. 이 후보나 Linux 통과로 G-AUTH를 닫지 않는다.
+
 ### 2026-10-26 전체 시험 실행부 전환
 
 남은 audit/phase4의 실제 namespace·private channel·entry 경로를 연결하고 root strict/type DAG

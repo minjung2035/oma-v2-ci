@@ -21,7 +21,7 @@ import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
 import { gitCommand } from "./fixtures/git-crash.js";
 import { removeTree } from "./fixtures/cleanup.js";
 const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "actor", capabilities: new Set(ALL_CAPS),
-    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 function input(files: Record<string, string>, expected: string | null, subject?: string) {
     const ordered = Object.entries(files).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
     const bytes = Buffer.from(ordered.map(([, body]) => body).join(""));

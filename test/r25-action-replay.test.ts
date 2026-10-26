@@ -21,7 +21,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
             f.units.active = kind === "agent.stop" && target?.desired === "enabled";
             const physicalBefore = f.units.active;
             if (entry === "normal") await f.dispatch(kind, "old-action");
-            else f.lifecycle.reconcileAction(prior.id);
+            else await f.lifecycle.reconcileAction(prior.id);
             assert.deepEqual(f.units.effects, []);
             assert.equal(f.units.active, physicalBefore);
             assert.deepEqual(f.store.getAgent("a"), target, "replay cannot repair desired or overwrite the new epoch");
@@ -41,13 +41,13 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
       try {
         const prior = f.seedPending(kind, "same-intent");
         if (entry === "normal") await f.dispatch(kind, "same-intent");
-        else f.lifecycle.reconcileAction(prior.id);
+        else await f.lifecycle.reconcileAction(prior.id);
         assert.equal(f.store.getOperationById(prior.id)?.state, "succeeded");
         assert.equal(f.store.getOperationById(prior.id)?.planJson, prior.planJson);
         assert.deepEqual(f.units.effects, [kind === "agent.start" ? { kind: "start", agent: "a" } : { kind: "stop", agent: "a", incarnation: 1 }]);
         const terminal = f.store.getOperationById(prior.id)!;
         await f.dispatch(kind, "same-intent");
-        f.lifecycle.reconcileAction(prior.id);
+        await f.lifecycle.reconcileAction(prior.id);
         assert.equal(f.units.effects.length, 1);
         assert.equal(f.store.getOperationById(prior.id)?.resultJson, terminal.resultJson);
       } finally { f.close(); }
@@ -143,8 +143,8 @@ test("R25: no GOAL, provisioning, retired and unknown death retain their own rej
       tx.insertAgent(makeValidAgent("notready", { desired: "provisioning", incarnation: 0, createdBy: "manager" }));
       tx.insertAgent(makeValidAgent("retired", { desired: "retired", createdBy: "manager" }));
     });
-    assert.throws(() => f.lifecycle.start(f.auth, "notready", "provisioning"), { code: "AGENT_NOT_READY" });
-    assert.throws(() => f.lifecycle.stop(f.auth, "retired", "retired"), { code: "AGENT_RETIRED" });
+    await assert.rejects(f.lifecycle.start(f.auth, "notready", "provisioning"), { code: "AGENT_NOT_READY" });
+    await assert.rejects(f.lifecycle.stop(f.auth, "retired", "retired"), { code: "AGENT_RETIRED" });
     f.units.deathKnown = false;
     assert.match(JSON.stringify(await f.dispatch("agent.start", "unknown-death")), /RUN_TERMINATION_UNKNOWN/);
     assert.equal(f.store.getOperation("manager", "unknown-death"), null);

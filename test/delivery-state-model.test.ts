@@ -26,7 +26,7 @@ import type { PreparedBatch, ResolvedAgentSpec } from "@oma/contracts";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { FeatureExecution } from "./fixtures/execution.js";
+import { nativeReceiptBroker } from "./fixtures/native-receipt-broker.js";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
@@ -34,7 +34,6 @@ import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
 
 type Receipt = "absent" | "verified" | "conflicting";
 interface Model { incarnation: number; batch: { incarnation: number; state: "prepared" | "completed" }; receipt: Receipt; hidden: boolean }
@@ -67,18 +66,10 @@ async function restart(w: World): Promise<Broker & { tryOpen(): Promise<{ incarn
   else w.store.close();
   w.store = new Store(join(w.root, "runtime.sqlite"));
   w.mail = createMailModule({ stateRoot: w.root, society: "demo" }, w.store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
-  const id = (++w.invocations).toString(16).padStart(32, "0");
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: OWN_CGROUP, invocationId: id }),
-  } as unknown as FeatureExecution;
-  const lifecycle = createLifecycleModule(w.store, units, { stateRoot: w.root, projectGit: join(w.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, w.mail);
-  const broker = testBroker({ store: w.store, mail: w.mail, units: units, views: new ViewsModule(w.store, w.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: w.root, runRoot: join(w.root, "run"), society: "demo", hasGoal: () => true } });
-  await broker.start();
+  const broker = await nativeReceiptBroker(w);
   w.broker = broker;
-  const opened = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<{ incarnation: number }>).bind(broker);
-  return Object.assign(broker, { tryOpen: () => opened("alice", id) });
+  const label = String(++w.invocations);
+  return Object.assign(broker, { tryOpen: () => broker.openReceiptRun(label) });
 }
 
 function receiptFor(w: World, incarnation: number): void {

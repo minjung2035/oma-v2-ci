@@ -59,7 +59,7 @@ function fixture(options: {
     let { git: module, reviews } = services;
     const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
         incarnation: actor === "principal" ? 0 : 1, capabilities: new Set(ALL_CAPS), channel: "actor",
-        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
+        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } });
     const identity = (oid = candidate, expected = base): ExactCandidateIdentity => ({ repo: "project", targetRef: "refs/heads/main",
         expectedBase: expected, candidate: oid, policyRevision: policy.policyRevision });
     const submit = (actor = "alice", oid = candidate, key = "submit") => module.submit(auth(actor), key, {

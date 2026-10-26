@@ -16,7 +16,7 @@ import type { OperationOf } from "@oma/protocol/operation-codec";
 import type { LifecycleUnits } from "./ports.js";
 
 /** Every Resident's path is disabled, even if its service is already dead.
- * Otherwise a queued mail/path activation can outlive an observed empty cgroup. */
+ * Otherwise a queued mail wake can outlive an observed empty execution scope. */
 export async function quiesceResidents(store: Pick<LifecycleLedger, "listAgents">, units: Pick<LifecycleUnits, "stop" | "confirmDead">): Promise<void> {
   const failures: unknown[] = [];
   for (const agent of store.listAgents()) {

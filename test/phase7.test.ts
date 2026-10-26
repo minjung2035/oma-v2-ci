@@ -1,5 +1,6 @@
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { nativeQuarantine } from "./fixtures/git-crash.js";
 import type { IntegrationPolicyReader } from "@oma/domain/integration-policy";
 // Phase 7 acceptance: real Git submit/integrate/context effects and recovery.
 // Updated tests are NOT_RUN in this editing session.
@@ -52,7 +53,7 @@ function envOf(integration: IntegrationPolicy | null = null, policyRevisionReade
         worldDir: join(dir, "state/world"), society,
     };
     const policy = integration ?? { policyRevision: "p1", protectedPaths: [], checks: [] };
-    const git = createGitModule(paths, store, mail, policy, policyRevisionReader);
+    const git = createGitModule(paths, store, mail, policy, policyRevisionReader, null, nativeQuarantine(paths));
     return { dir, society, store, mail, git, paths, seal: () => { store.close(); cleanOwnedFixture(dir); } };
 }
 function sh(env: Env, args: string[], cwd?: string): string {
@@ -86,7 +87,7 @@ function makeBundle(env: Env, clone: string, candidate: Oid, base: Oid): {
 }
 function auth(actor: string, caps: Capability[]): AuthContext {
     return { actor, incarnation: 1, role: actor === "principal" ? "principal" : "resident", channel: "actor",
-        capabilities: new Set(caps), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+        capabilities: new Set(caps), peer: { pid: 1, uid: 1000, gid: 1000 } };
 }
 async function* iter(bytes: Buffer): AsyncIterable<Uint8Array> { yield bytes; }
 function publishedFastForward(env: Env): {

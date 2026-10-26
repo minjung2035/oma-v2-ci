@@ -1,14 +1,22 @@
 /** Installed command and original TUI/tools; inference and user files are local fixtures. */
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { copyInstalledProduct } from "./fixtures/installation.js";
 import { removeTree } from "./fixtures/cleanup.js";
 
 const hex = (value: string): string => Buffer.from(value).toString("hex");
 const fixtures = join(process.cwd(), "test/fixtures");
+let installRoot: string | undefined;
+before(() => {
+  installRoot = realpathSync(mkdtempSync(join(tmpdir(), "oma-personal-installed-")));
+  copyInstalledProduct(fileURLToPath(new URL("../../", import.meta.url)), installRoot);
+});
+after(() => { if (installRoot !== undefined) removeTree(installRoot); });
 for (const ending of ["tools", "config", "empty-extensions", "extensions", "new", "resume", "fork", "fork-ui", "fork-cancel", "reload-update", "reload-failure", "retry", "cancel", "project-seed", "project-seed-resume", "society-bound"]) {
   test(`Personal installed PTY: ${ending}, isolated state and restored terminal`, { timeout: 60_000 }, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-personal-pty-"));
@@ -54,7 +62,7 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
       : ending === "cancel" ? [step("Cancel this turn\r", "Cancel this turn", 0.5), step("\x1b", "Operation aborted", 0.5), prompt]
       : [prompt];
     const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify({
-      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending], ready: hex("Your ideas, in motion"),
+      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending, installRoot!], ready: hex("Your ideas, in motion"),
       steps: [...steps, { write: hex("\x04"), wait: 2 }],
     })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
     assert.equal(run.status, 0, run.stderr);

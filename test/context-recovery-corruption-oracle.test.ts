@@ -36,7 +36,7 @@ test("corrupt accepted context rows fail before Git observation or snapshot/mail
     const auth: AuthContext = {
         actor: "principal", incarnation: 0, role: "principal", channel: "actor",
         capabilities: new Set(["context.publish"]),
-        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null },
+        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() },
     };
     try {
         const specJson = resolvedSpec(["context.publish"], "p", "principal");

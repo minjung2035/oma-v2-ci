@@ -21,7 +21,7 @@ import { removeTree } from "./fixtures/cleanup.js";
 const sha = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const actor = (name: string): AuthContext => ({ actor: name, incarnation: 0,
     role: name === "principal" ? "principal" : "resident", channel: "actor", capabilities: new Set(ALL_CAPS),
-    peer: { pid: process.pid, uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0, cgroup: null } });
+    peer: { pid: process.pid, uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 } });
 function seed(store: Store, name: string): void {
     store.transaction(() => store.insertAgent({ name, ...storedSpec(ALL_CAPS, "p", name),
         role: name === "principal" ? "principal" : "resident", desired: "enabled", incarnation: 0,

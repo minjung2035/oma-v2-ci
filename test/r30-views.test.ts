@@ -22,7 +22,7 @@ async function fixture(t: TestContext, count: number) {
   context.store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
   const mail = createMailModule({ stateRoot: root, society: "demo" }, context.store, 64);
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-    capabilities: new Set(ALL_CAPS), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+    capabilities: new Set(ALL_CAPS), peer: { pid: 1, uid: 1000, gid: 1000 } };
   for (let index = 0; index < count; index++) {
     const receipt = await mail.send(auth, `r30-${index}`, { to: ["alice"], subject: `message ${index}`, kind: "message", body: `private-body-${index}` });
     assert.equal(receipt.state, "succeeded", "normal setup must reach the intended durable phase");

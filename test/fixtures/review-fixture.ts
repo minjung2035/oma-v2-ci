@@ -78,7 +78,7 @@ export function fixture(options: FixtureOptions = {}) {
     let { git: module, reviews } = services;
     const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
         incarnation: actor === "principal" ? 0 : 1, capabilities: new Set(ALL_CAPS), channel: "actor",
-        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
+        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } });
     const submits = new Map<string, string>();
     const submit = (actor: string, oid: string, key = `submit-${submits.size}`) => module.submit(auth(actor), key, { candidate: oid, exportRef: `refs/oma/export/${submits.size}`,
         prerequisites: [], to: [], paths: [], subject: "candidate", body: "submitted candidate" }, empty());

@@ -27,7 +27,7 @@ test("CTX-003/DB-009: T-context-accept already freezes candidate and matching EM
         worldDir: join(state, "world"), society: "demo",
     }, store, mail, null);
     const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
-        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
     try {
         store.transaction(() => store.insertAgent(makeValidAgent("principal")));
         assert.equal(store.getAgent("principal")?.name, "principal", "normal fixture must decode before acceptance observation");

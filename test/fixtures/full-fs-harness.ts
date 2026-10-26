@@ -20,7 +20,7 @@ const store = new Store(join(root, "runtime.sqlite"));
 store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
 const mail = createMailModule({ stateRoot: root, society: "full" }, store, 64);
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS),
-  peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 const input = (subject: string) => ({ to: ["b"], subject, kind: "message" as const, body: "x".repeat(2048) });
 
 const first = await mail.send(auth, "first", input("first"));

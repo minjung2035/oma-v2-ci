@@ -54,7 +54,14 @@ test('native candidate: SIGKILL after exact checkout preserves canonical refs an
     const entries = ExecutionJournal.inspect(f.root);
     assert.equal(entries.length, 1); assert.equal(entries[0].slot, 'candidate');
     process.kill(entries[0].witness.pid, 'SIGKILL'); throw denied;
-  }), error => error === denied);
+  }), error => {
+    if (error !== denied) {
+      const describe = error => ({ name: error?.name, message: error?.message, code: error?.code,
+        errors: error instanceof AggregateError ? error.errors.map(describe) : undefined });
+      t.diagnostic(JSON.stringify(describe(error)));
+    }
+    return error === denied;
+  });
   assert.equal(calls, 2); assert.equal(f.executions.confirmDead('candidate'), true);
   assert.equal(git(f.paths.projectGit, 'show-ref'), before);
   await f.checks.run(f.candidate, exact, undefined, () => {});

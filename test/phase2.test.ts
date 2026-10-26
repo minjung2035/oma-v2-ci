@@ -35,7 +35,7 @@ function insertAgentTx(store: Store, name: string): void {
 function mailFixture(store: Store, dir: string) {
   const mail = createMailModule({ stateRoot: dir, society: "phase2" }, store, 64);
   const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
+    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: 1000, gid: 1000 } };
   return { mail, auth };
 }
 function rawFrame(text: string): Buffer {

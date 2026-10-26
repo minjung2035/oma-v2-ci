@@ -20,7 +20,7 @@ const reader = { getAgent: name => rows.find(row => row.name === name) ?? null,
   listAgents: () => rows, societyOpen: () => open };
 const policy = new LifecyclePolicy(reader, () => null);
 const auth = { actor: "alice", role: "resident", incarnation: 1, channel: "actor", capabilities: new Set(caps),
-  peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
+  peer: { pid: process.pid, uid: 1000, gid: 1000 } };
 policy.requireManage(auth, "alice"); policy.requireManage(auth, "bob");
 assert.throws(() => policy.requireManage(auth, "principal"), { code: "CAPABILITY_DENIED" });
 open = false;

@@ -21,7 +21,7 @@ import type { ContextInput } from "@oma/git/context";
 import { makeValidAgent } from "./fixtures/spec.js";
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(["context.publish"]),
-    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 async function* once(bytes: Uint8Array): AsyncIterable<Uint8Array> { yield bytes; }
 function input(text: string, expected: string | null): {
     request: ContextInput;

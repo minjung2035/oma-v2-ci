@@ -38,7 +38,7 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
   let capabilities: ReadonlySet<Capability> = new Set(["code.integrate"]);
   const auth: AuthContext = {
     actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-    get capabilities() { return capabilities; }, peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
+    get capabilities() { return capabilities; }, peer: { pid: 1, uid: 1000, gid: 1000 },
   };
   const calls: string[] = [];
   const model: {

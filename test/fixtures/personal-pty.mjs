@@ -2,8 +2,9 @@ import { encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 // Installed oma, real bundled Pi/Open TUI and tools; only inference is scripted.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { scriptedProvider, call, tools, text, failing, lastUserText, toolResults } from '../../dist/test/fixtures/scripted-provider.js';
 import { updatePersonalSettings } from "#oma-test/app/runtime/personal-settings";
 import { defaultSocietyFor } from "@oma/config/defaults";
@@ -11,7 +12,13 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { ensureProjectSettings } from "#oma-test/app/application/project-settings";
 import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 
-const [root, ending = 'tools'] = process.argv.slice(2);
+const [root, ending = 'tools', installRoot] = process.argv.slice(2);
+assert.ok(installRoot && isAbsolute(installRoot) && realpathSync(installRoot) === installRoot, 'an exact test-owned installation is required');
+const manifest = JSON.parse(readFileSync(join(installRoot, 'package.json'), 'utf8'));
+const commands = join(root, 'bin'); mkdirSync(commands);
+const command = join(commands, 'oma');
+symlinkSync(join(installRoot, manifest.bin.oma), command);
+assert.equal(realpathSync(command), join(installRoot, manifest.bin.oma));
 const cwd = join(root, 'project'), outside = join(root, 'user', 'hyprland.conf');
 const home = join(root, 'home'), data = join(root, 'data', 'oma'), store = join(data, '.packages');
 mkdirSync(cwd, { recursive: true }); mkdirSync(join(root, 'user')); mkdirSync(home);
@@ -60,12 +67,12 @@ if (ending === 'society-bound') {
 let projectSettings;
 if (projectSeed) {
   const project = defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd)));
-  const settings = ensureProjectSettings(data, project, process.cwd());
+  const settings = ensureProjectSettings(data, project, installRoot);
   const index = [{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }];
   toggleExtension(readExtensions(settings.path, settings.config.principalProfile, settings.workerProfile, index), 'packages:fixture.mjs', 'principal', true);
   projectSettings = readFileSync(settings.path);
   writeFileSync(join(root, 'project-settings.json'), JSON.stringify({ config: settings.path }));
-} else updatePersonalSettings({ dataRoot: data, libdir: process.cwd(), packages: store }, ['packages:fixture.mjs']);
+} else updatePersonalSettings({ dataRoot: data, libdir: installRoot, packages: store }, ['packages:fixture.mjs']);
 const provider = await scriptedProvider(ending === 'tools' ? [
   tools(call('read', { path: outside })),
   tools(call('write', { path: outside, content: 'monitor=new\n' })),
@@ -83,9 +90,32 @@ const provider = await scriptedProvider(ending === 'tools' ? [
 const engine = join(data, '.engine'); provider.configure(engine);
 const settings = JSON.parse(readFileSync(join(engine, 'settings.json'), 'utf8'));
 writeFileSync(join(engine, 'settings.json'), JSON.stringify({ ...settings, defaultProvider: 'fake', defaultModel: 'scripted' }));
-const child = spawn('oma', ending === 'chooser' ? [] : ['--mode', 'personal'], {
-  cwd, stdio: 'inherit', env: { PATH: process.env.PATH, HOME: home, XDG_DATA_HOME: join(root, 'data'),
-    XDG_RUNTIME_DIR: join(root, 'run'), TERM: 'xterm-256color', PI_OFFLINE: '1' },
+// The target may read only its installed production closure. The test driver
+// and scripted provider remain outside that closure and own no product grant.
+const checkout = fileURLToPath(new URL('../../', import.meta.url));
+const guard = join(root, 'installed-source-guard.mjs');
+writeFileSync(guard, `import {register, syncBuiltinESMExports} from 'node:module';
+import fs from 'node:fs';
+import {pathToFileURL} from 'node:url';
+const checkout = ${JSON.stringify(checkout)};
+register('data:text/javascript,' + encodeURIComponent(\`export async function resolve(specifier, context, next) {
+  const result = await next(specifier, context);
+  if (result.url.startsWith(\${JSON.stringify(pathToFileURL(checkout).href)})) throw Error('installed Personal resolved checkout code');
+  return result;
+}\`));
+for (const name of ['readFileSync','openSync','statSync','lstatSync','existsSync','readdirSync','realpathSync']) {
+  const original = fs[name];
+  fs[name] = function(path, ...args) {
+    const target = typeof path === 'string' ? path : path instanceof URL ? path.pathname : '';
+    if (target.startsWith(checkout)) throw Error('installed Personal read checkout data');
+    return original.call(this, path, ...args);
+  };
+}
+syncBuiltinESMExports();
+`);
+const child = spawn(command, ending === 'chooser' ? [] : ['--mode', 'personal'], {
+  cwd, stdio: 'inherit', env: { PATH: dirname(process.execPath) + ':/usr/bin:/bin', HOME: home, XDG_DATA_HOME: join(root, 'data'),
+    XDG_RUNTIME_DIR: join(root, 'run'), NODE_OPTIONS: '--import=' + pathToFileURL(guard).href, TERM: 'xterm-256color', PI_OFFLINE: '1' },
 });
 let code;
 try {

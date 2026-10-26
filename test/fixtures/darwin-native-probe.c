@@ -8,6 +8,7 @@
 #include <sys/file.h>
 #include <sys/wait.h>
 #include <sys/proc_info.h>
+#include <mach/message.h>
 #include <dirent.h>
 #include <stddef.h>
 #include <fcntl.h>
@@ -229,15 +230,26 @@ static void queued_auth_probe(void) {
   char marker; require(read(ready[0], &marker, 1) == 1 && marker == 'r', "both writers completed"); close(ready[0]);
   pid_t before = 0, after = 0; socklen_t length = sizeof before;
   int before_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &before, &length) == 0 ? 0 : errno;
+  /* LOCAL_PEERTOKEN is another endpoint observation, not per-message origin.
+   * Keep its raw SDK audit token before/after reading the connector's byte. */
+  audit_token_t token_before = {0}, token_after = {0};
+  socklen_t token_before_length = sizeof token_before, token_after_length = sizeof token_after;
+  int token_before_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERTOKEN, &token_before, &token_before_length) == 0 ? 0 : errno;
   char first = 0, second = 0;
   require(read(accepted, &first, 1) == 1 && first == 'c', "first queued byte is connector request");
   length = sizeof after;
   int after_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERPID, &after, &length) == 0 ? 0 : errno;
+  int token_after_error = getsockopt(accepted, SOL_LOCAL, LOCAL_PEERTOKEN, &token_after, &token_after_length) == 0 ? 0 : errno;
   require(read(accepted, &second, 1) == 1 && second == 'h', "second queued byte is holder write");
-  printf(",\"queuedTransfer\":{\"firstByteFromConnector\":true,\"secondByteFromHolder\":true,\"bothWritersAlive\":%s,\"beforeReadErrno\":%d,\"beforeReadPeerIsConnector\":%s,\"beforeReadPeerIsHolder\":%s,\"afterFirstReadErrno\":%d,\"afterFirstReadPeerIsConnector\":%s,\"afterFirstReadPeerIsHolder\":%s}",
+  printf(",\"queuedTransfer\":{\"firstByteFromConnector\":true,\"secondByteFromHolder\":true,\"bothWritersAlive\":%s,\"beforeReadErrno\":%d,\"beforeReadPeerIsConnector\":%s,\"beforeReadPeerIsHolder\":%s,\"afterFirstReadErrno\":%d,\"afterFirstReadPeerIsConnector\":%s,\"afterFirstReadPeerIsHolder\":%s",
     kill(connector, 0) == 0 && kill(holder, 0) == 0 ? "true" : "false", before_error,
     before_error == 0 && before == connector ? "true" : "false", before_error == 0 && before == holder ? "true" : "false",
     after_error, after_error == 0 && after == connector ? "true" : "false", after_error == 0 && after == holder ? "true" : "false");
+  printf(",\"beforeReadPeerTokenErrno\":%d,\"beforeReadPeerTokenBytes\":%u,\"beforeReadPeerToken\":[", token_before_error, (unsigned int)token_before_length);
+  for (size_t i = 0; i < sizeof token_before.val / sizeof token_before.val[0]; i++) printf("%s%u", i == 0 ? "" : ",", token_before.val[i]);
+  printf("],\"afterFirstReadPeerTokenErrno\":%d,\"afterFirstReadPeerTokenBytes\":%u,\"afterFirstReadPeerToken\":[", token_after_error, (unsigned int)token_after_length);
+  for (size_t i = 0; i < sizeof token_after.val / sizeof token_after.val[0]; i++) printf("%s%u", i == 0 ? "" : ",", token_after.val[i]);
+  printf("]}");
   close(hold[1]); require(waitpid(connector, NULL, 0) == connector, "queued connector reap");
   shutdown(accepted, SHUT_RDWR); close(accepted); close(server);
   require(waitpid(holder, NULL, 0) == holder, "queued holder reap");

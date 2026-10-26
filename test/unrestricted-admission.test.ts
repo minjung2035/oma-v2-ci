@@ -27,7 +27,7 @@ import { gitFixture, seedGit, submitFixture } from "./fixtures/git-crash.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "1".repeat(32) };
 const running: ExecutionObservation = { activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: "fixture-scope", invocationId: "2".repeat(32) };
 

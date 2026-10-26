@@ -22,7 +22,7 @@ import { StoreError } from "@oma/domain/errors";
 import type { IntegrationPolicy } from "@oma/domain/integration-policy";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
-import { gitAuth, gitCommand, seedGit, submitFixture } from "./fixtures/git-crash.js";
+import { gitAuth, gitCommand, seedGit, submitFixture, nativeQuarantine } from "./fixtures/git-crash.js";
 const POLICY: IntegrationPolicy = { policyRevision: "crash-policy", protectedPaths: [], checks: [] };
 function repository(t: TestContext, format: "sha1" | "sha256" = "sha1") {
     const root = mkdtempSync(join(tmpdir(), "oma-git-evidence-"));
@@ -39,8 +39,9 @@ function repository(t: TestContext, format: "sha1" | "sha256" = "sha1") {
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
     // The authoritative policy is reread before main moves; a hook can act there.
     const reader = { revision: POLICY.policyRevision, onRead: null as (() => void) | null };
-    const git = createGitModule({ stateRoot: root, projectGit, contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"),
-        society: "crash" }, store, mail, POLICY, () => { reader.onRead?.(); return { ...POLICY, policyRevision: reader.revision }; });
+    const paths = { stateRoot: root, projectGit, contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash" };
+    const git = createGitModule(paths, store, mail, POLICY,
+        () => { reader.onRead?.(); return { ...POLICY, policyRevision: reader.revision }; }, null, nativeQuarantine(paths));
     const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as {
         base: string;
         candidate: string;

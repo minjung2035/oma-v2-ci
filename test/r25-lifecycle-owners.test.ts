@@ -26,7 +26,7 @@ function fixture() {
     tx.insertAgent(makeValidAgent("peer", { createdBy: "principal" }));
   });
   const auth: AuthContext = { actor: "alice", role: "resident", incarnation: 1, channel: "actor",
-    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
   return { root, store, auth, registry: new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId }), close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;

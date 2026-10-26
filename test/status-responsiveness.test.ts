@@ -39,7 +39,7 @@ function modelledUnits(_root: string, meter: Meter, options: { hang?: () => bool
 }
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 
 function society(t: TestContext, options: { hang?: () => boolean; fail?: () => boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "oma-v23a-"));

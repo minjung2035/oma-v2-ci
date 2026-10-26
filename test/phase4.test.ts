@@ -78,7 +78,7 @@ function auth(actor: string, caps: Capability[] = []): AuthContext {
     actor, incarnation: actor === "principal" ? 0 : 1,
     role: actor === "principal" ? "principal" : "resident",
     channel: actor === "principal" ? "host" : "actor",
-    capabilities: new Set(caps), peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
+    capabilities: new Set(caps), peer: { pid: 1, uid: 1000, gid: 1000 },
   };
 }
 function seedPrincipalAndA(store: Store): void {

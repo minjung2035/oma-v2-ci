@@ -101,8 +101,7 @@ export class RunnerModule {
    * than delivered as a delivery failure. */
   private queuedObservation: EngineObservation | null = null;
   private observationInFlight = false;
-  /** DR34: the Linux-side CONNECT dial (resolve + screen + pin). In the guest
-   * the dial is the host's `egress.connect` instead, bound per delivery. */
+  /** DR34: the native CONNECT dial resolves, screens and pins the address. */
   private readonly publicDial = makePublicDial();
   /** The send loop's handle: delivery completion joins it so the last thing
    * the broker hears is the engine's settled state, before batch.complete. */
@@ -191,11 +190,9 @@ export class RunnerModule {
     return { relay, connectDial: this.publicDial, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder, thinking: auth.thinking } };
   }
 
-  /** The per-delivery CONNECT proxy opens beside the relay.
-   * In the guest its dial asks the host
-   * (`egress.connect` on the run's lease); on Linux it dials directly -- both
-   * go through the same resolved-address screening. One audit line per
-   * CONNECT lands on this runner's stderr, the journal's record. */
+  /** The per-delivery CONNECT proxy opens beside the relay and uses the
+   * shared resolved-address screening. Each audit line goes to this runner's
+   * stderr, owned by the native diagnostic spool. */
   private async openConnectProxy(connectDial: ConnectDial): Promise<ConnectProxy | null> {
     if (!this.lease) return null;
     const socketHostPath = join(dirname(this.lease.socketHostPath), "egress.sock");

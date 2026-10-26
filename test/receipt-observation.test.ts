@@ -39,8 +39,9 @@ async function runnerConsume(t: TestContext, f: Fixture, wait = false): Promise<
   const channel = Reflect.get(runner, "channel") as {
     connect: (path: string) => Promise<void>; call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
   };
-  // AV21: completion dials again after a delivery; the replaced channel has nothing to dial.
-  t.mock.method(channel, "connect", async () => {});
+  // Receipt decision policy only: the real private-channel transport is
+  // exercised separately. No authentication or native gate is granted here.
+  t.mock.method(runner as unknown as Record<string, () => unknown>, "connect", async () => {});
   t.mock.method(channel, "call", async (method: string, params: Record<string, unknown>) => {
     assert.equal(method, "batch.complete");
     completions.push(params);

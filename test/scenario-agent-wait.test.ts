@@ -13,7 +13,7 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Do one step and yield." })), text("Sent.")]);
     await s.prompt("Send work.");
-    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null };
+    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() };
     for (const [actor, role, channel, code] of [["principal", "principal", "principal-extension", "CAPABILITY_DENIED"],
       ["worker-a", "resident", "actor", "STALE_RUN"]] as const) {
       const auth: AuthContext = { actor, role, channel, incarnation: s.store.getAgent(actor)!.incarnation, capabilities: new Set(), peer };

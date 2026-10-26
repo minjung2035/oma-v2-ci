@@ -60,7 +60,7 @@
     },
     {
       "path": "apps/oma/src/application/status-observation.ts",
-      "sha256": "7a5215e596a11a4c1a72547dfda49fa905c36ba9b7858a05c3c457b4a5a75ea7"
+      "sha256": "cf45848a50f4d8200de29b71f4025a08ee64537d534580db0cc6e0c7f1a44d50"
     },
     {
       "path": "apps/oma/src/broker/broker-composition.ts",
@@ -80,7 +80,7 @@
     },
     {
       "path": "apps/oma/src/broker/lifecycle-composition.ts",
-      "sha256": "b6391bcc863d65531c446971e7a51c8db0705e2e01327f03b388a78d1a85ed1d"
+      "sha256": "6d14b6eba8ba7509ba2645fdd5eebcda01bcfe8fc9fdb4511a58e90ef9a60de9"
     },
     {
       "path": "apps/oma/src/broker/lifecycle-ledger.ts",
@@ -304,11 +304,11 @@
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "248d619a97d266940da7157ee44e9a55e1fe8b9e5399e20a32f3e5b5ffae11c4"
+      "sha256": "96a830475b3cfc05feccda54986d27a33d6278a513e98f0934ef1fc47a924653"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",
-      "sha256": "a65d881733214cd1bd3cb15b622b431efb8d1602a81205687c701d8b5af8c824"
+      "sha256": "49f6f5e72d0ed4011d5c10c2c8ec6437f6ac79fcf8c23b6d7a8d08be788434b0"
     },
     {
       "path": "apps/oma/src/runtime/broker-supervisor.ts",
@@ -316,7 +316,7 @@
     },
     {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
-      "sha256": "06eec5945c2c02d3648e634d5baa1dc8f6753cd7303c11c4c7dcc8fc512c0058"
+      "sha256": "0080b7daa2434d61e84e4de8c25192952a57e2b448134fe6c9a81acd467ac931"
     },
     {
       "path": "apps/oma/src/runtime/client-preload.ts",
@@ -472,7 +472,7 @@
     },
     {
       "path": "packages/broker/src/index.ts",
-      "sha256": "2ff6e12892c6f647ad2299d93d54b81cecdc39ee4b4b7beed27b0469303bafa2"
+      "sha256": "b18560350376b46f839e33fadcdbce1a7207da9f30c0cdc28837baf84428e3ce"
     },
     {
       "path": "packages/broker/src/internal-dispatcher.ts",
@@ -492,7 +492,7 @@
     },
     {
       "path": "packages/broker/src/peer-authenticator.ts",
-      "sha256": "30a6744c644b1782a9204227c7322cf65617e29a77def7728cec8fffd14975ae"
+      "sha256": "e4f18f21897746c938a8fbf4f6c4acb1d852115e77801ce8149da023ab5546a8"
     },
     {
       "path": "packages/broker/src/peer-pin.ts",
@@ -504,7 +504,7 @@
     },
     {
       "path": "packages/broker/src/principal-endpoint.ts",
-      "sha256": "be841811b08c51a4418e3e8fede7712321675befbab79751355f153accce606f"
+      "sha256": "d3d422306d764fc68b8dcfc613fa270a3ef994869def3416d531b44a896d065a"
     },
     {
       "path": "packages/broker/src/process-ancestry.ts",
@@ -668,7 +668,7 @@
     },
     {
       "path": "packages/contracts/src/runtime.ts",
-      "sha256": "c08d362c2fbfb7fda0eb1e2dd90437fc8ffe5a241e682df49917f7ac0d855178"
+      "sha256": "d70bba6c9e76046a1bc48e056815c5aa7372e01c74f85f5f9c29be72bb974e99"
     },
     {
       "path": "packages/contracts/src/stream.ts",
@@ -848,7 +848,7 @@
     },
     {
       "path": "packages/domain/src/role-prompts.ts",
-      "sha256": "6e996d8084cfcf8f8f207306297d0812da6ffbfc343e98a8d581af4c94e632da"
+      "sha256": "6a32902ed319e5063d84a7ea2eff55dd16f1ab18b74e44038b625e7aa0efdcdb"
     },
     {
       "path": "packages/domain/src/session-mode.ts",
@@ -1256,7 +1256,7 @@
     },
     {
       "path": "packages/lifecycle/src/actions.ts",
-      "sha256": "c38a4d9572b1775404ecd14acd4e39ed28c31496ef3a3d0668d277b34113dc29"
+      "sha256": "5053d458e17af1a13c9c96eedf0663a27d4f485b7ce0aa6e61e229ec4c268e95"
     },
     {
       "path": "packages/lifecycle/src/contracts.ts",
@@ -1288,7 +1288,7 @@
     },
     {
       "path": "packages/lifecycle/src/society.ts",
-      "sha256": "84f6ca591caf4335127a7f1146bf0cd3504e4b899b00860f04a10cd867e98c6e"
+      "sha256": "27d7c7a443c5736e9e99bd442da77241afa8f2d9867932a29768a7d67b678ebc"
     },
     {
       "path": "packages/mail/package.json",
@@ -1460,11 +1460,11 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "53ba1b7a4525cccbf8e9f4a8892ea9035ad75f51f4cb966f91b44f9c4fb43ddf"
+      "sha256": "fc635f986835dfadbf9f02ddc92c4e5ccd2d3f18ba2bb6ca294bc58bddeadef8"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
-      "sha256": "152cc25833a4d7bc43d1054a37cbc3d1d5f7862ec2693f93b66d5059ff5f6796"
+      "sha256": "f79d2f3b098771a624dcea53b04c24815ff780a8a1a211155ae30ff081482f0e"
     },
     {
       "path": "packages/platform-mac/src/keychain/main.swift",
@@ -1476,11 +1476,11 @@
     },
     {
       "path": "packages/platform-mac/src/native-assets.ts",
-      "sha256": "d6c966bedc34905f05e3a2880a8ccb0b5145e89c2532e625fb9d0216dc82582f"
+      "sha256": "59121afb321ea67e20ec85c03404ff13aff441d80a57fc4b365c98c82c71e29c"
     },
     {
       "path": "packages/platform-mac/src/native-channel.ts",
-      "sha256": "1fa8f042babff661e21ecdc65af24222413c563a5351c06e4158bf14624057c7"
+      "sha256": "292288ad261f481c8bffae599f0853e693fed46a40ec11ed137d4758922e82c3"
     },
     {
       "path": "packages/process/package.json",

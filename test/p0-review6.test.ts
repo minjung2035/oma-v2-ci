@@ -472,7 +472,7 @@ test("P0V-87 / R6-10: mail accepted after the clock was set back is still delive
   store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent(makeValidAgent(name, { desired: "enabled", incarnation: 1 })); });
   const mail = createMailModule({ stateRoot: dir, society: "demo" }, store, 64);
   const auth = { actor: "a", incarnation: 1, role: "resident" as const, channel: "actor" as const, capabilities: new Set(["mail.send" as const]),
-    peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+    peer: { pid: 1, uid: 1000, gid: 1000 } };
   try {
     // Each one accepted an hour earlier, on the wall clock, than the one before it.
     for (let index = 0; index < 5; index++) {

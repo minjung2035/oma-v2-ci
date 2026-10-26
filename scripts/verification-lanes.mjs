@@ -504,7 +504,7 @@ const definitions = {
       "V23B:",
       "T38:",
       "SEQ-002: unknown old-run death",
-      "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection",
+      "NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint",
     ],
     environment: "linux-native",
     timeoutSeconds: 3600,

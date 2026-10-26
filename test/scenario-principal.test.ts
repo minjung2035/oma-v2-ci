@@ -491,7 +491,7 @@ test("SCN-L04: a topic reaches the Residents that follow it and nobody else", TI
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const agent = s.store.getAgent("worker-b")!;
     const followed = await s.broker.dispatch({ actor: "worker-b", incarnation: agent.incarnation, role: "resident", channel: "actor",
-      capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } },
+      capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } },
     { v: 1, id: "follow", method: "route.follow", request: "follow-design", params: { topic: "design" } } as never, null) as { ok: boolean };
     assert.equal(followed.ok, true, JSON.stringify(followed));
     s.script([tools(call("oma_mail_send", { to: ["topic/design"], subject: "디자인 리뷰", body: "시안을 봐 주세요." })), text("알렸습니다.")]);

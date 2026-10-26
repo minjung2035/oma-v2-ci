@@ -905,7 +905,6 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
                 pid: process.pid,
                 uid: process.getuid!(),
                 gid: process.getgid!(),
-                cgroup: null,
             },
         }, "k1", { to: ["b"], subject: "pending", kind: "message", body: "recover me" }, "accepted"));
         const recoveryId = store.getOperation("a", "k1")!.id;

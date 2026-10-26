@@ -44,7 +44,7 @@ for (const [method, params] of Object.entries({ ...vectors, ...additions })) {
 test('P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1', () => {
   assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), Object.keys({ ...vectors, ...additions }).sort());
   assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
-    'batch.complete', 'batch.prepare', 'batch.read', 'host.principalRelay',
+    'batch.complete', 'batch.prepare', 'batch.read',
     'principal.attach', 'principal.detach', 'runner.observe', 'runner.open', 'runner.pending',
   ]);
   assert.equal(canonicalJson({ method: 'mail.send', params: vectors['mail.send'] }),

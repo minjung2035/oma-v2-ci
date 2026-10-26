@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import ts from "typescript";
+import { workspaceAssetSnapshot } from "./workspace-assets.mjs";
 
 export async function checkPackage(rootInput) {
   const root = realpathSync(rootInput);
@@ -102,6 +103,8 @@ export async function checkPackage(rootInput) {
   }
   for (const workspace of layout.workspaces) {
     requiredFile(join(root, workspace.root, "package.json"));
+    const manifest = JSON.parse(readFileSync(join(root, workspace.root, "package.json"), "utf8"));
+    workspaceAssetSnapshot(join(root, workspace.root), "dist", manifest.oma?.assets ?? []);
   }
   const files = [...new Set([...compiledFiles(join(root, layout.compiledRoot)),
     ...layout.workspaces.flatMap(workspace => compiledFiles(join(root, workspace.root, "dist")))])];

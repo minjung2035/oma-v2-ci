@@ -2,6 +2,7 @@ import * as nativeSupportMeaning from "#oma-test/app/runtime/native-support";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
+import * as cleanupMeaning from "@oma/native/cleanup";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,10 +31,26 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     let gitPaths = null;
     let constructorGoal;
     const reviewOwner = {};
-    let unitValues = null;
+    let residentLocation = null;
     const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
+        "@oma/native/cleanup": cleanupMeaning,
+        "../runtime/execution-runtime.js": { ExecutionRuntime: class {
+            constructor() { calls.push("ExecutionRuntime"); }
+            async recover() { calls.push("execution-recover"); }
+            async close() { calls.push("execution-close"); }
+            run() { throw new Error("composition policy must not execute a command"); }
+            confirmDead() { throw new Error("composition policy cannot prove native death"); }
+        } },
+        "../runtime/native-residents.js": { createNativeResidents(_store, _execution, location) {
+            calls.push("NativeResidents"); residentLocation = location;
+            return { async close() { calls.push("residents-close"); } };
+        } },
+        "../runtime/quarantine-execution.js": { quarantineExecution() {
+            return { execute() { throw new Error("composition policy must not run quarantine"); },
+                confirmDead() { throw new Error("composition policy cannot prove native death"); } };
+        } },
         "../runtime/native-support.js": nativeSupportMeaning,
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
 "@oma/process/host-loss": hostLossMeaning,
@@ -53,11 +70,6 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
                 getAgent() { return null; }
             } },
         "../broker/mail-composition.js": { createMailModule() { calls.push("Mail"); return {}; } },
-        "@oma/platform-linux/units": { UNIT_TPL_DIR: "units", unitName: (society, agent, kind) => `oma-${society}-${agent}.${kind}`,
-            assertUserManagerReachable() { calls.push("manager"); },
-            UnitsModule: class {
-                constructor(_society, values) { calls.push("Units"); unitValues = values; }
-            } },
         "../views.js": { ViewsModule: class {
                 constructor() { calls.push("Views"); }
                 refreshWorld() { calls.push("refresh"); }
@@ -130,11 +142,15 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "@oma/broker/lifetime": { BrokerLifetime: class {
                 permitsActivation = true;
                 storeClose = null;
+                owned = [];
+                retainNative(close) { this.owned.push(close); }
                 retainStore(close) { this.storeClose = close; }
                 attach() { }
-                async shutdown() { calls.push("shutdown"); if (this.storeClose !== null) {
-                    paths.find(entry => "quiesceOnDrain" in entry)?.quiesceOnDrain(); this.storeClose(); this.storeClose = null;
-                } }
+                async shutdown() { calls.push("shutdown");
+                    await paths.find(entry => "quiesceOnDrain" in entry)?.quiesceOnDrain();
+                    for (const close of this.owned.splice(0).reverse()) await close();
+                    this.storeClose?.(); this.storeClose = null;
+                }
                 async start(phases) { await phases.recover(); await phases.listen(); await phases.notify(); await phases.activate(); }
             } },
         // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
@@ -178,25 +194,23 @@ if (name === "@oma/domain/deployment" && !Object.hasOwn(modules, name)) return d
     });
     if (starts) {
         assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
-        assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
+        assert.equal(process.exitCode, 0, `entrypoint must complete without the startup failure path: ${lines.join(" | ")}; calls=${calls.join(",")}`);
     }
-    return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues, gitPaths, lines };
+    return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, residentLocation, gitPaths, lines };
 }
 test("D03 composition: the product runs the broker itself, so Residents render at its location and are stopped on drain", async () => {
     const product = await compose({ OMA_HOST_CHANNEL: "3" }, { claim: "inherited",
         argv: ["--society", "fixture", "--config", "/c/x.json", "--state-root", "/s/oma/fixture", "--run-root", "/r/oma/fixture"] });
     // The product runs the broker itself: there is no broker unit a Resident
     // could be bound to, whatever cgroup this process happens to be in.
-    assert.equal(Object.hasOwn(product.unitValues, "brokerUnit"), false);
-    assert.deepEqual([product.unitValues.config, product.unitValues.state, product.unitValues.run], ["/c/x.json", "/s/oma/fixture", "/r/oma/fixture"]);
+    assert.deepEqual([product.residentLocation.configPath, product.residentLocation.stateRoot, product.residentLocation.runRoot], ["/c/x.json", "/s/oma/fixture", "/r/oma/fixture"]);
     const options = product.paths.find(entry => "principalHost" in entry);
     assert.equal(typeof options.quiesceOnDrain, "function");
     assert.equal(options.stateRoot, "/s/oma/fixture");
-    // The manager is asked before the Store is opened.
-    assert.ok(product.calls.indexOf("manager") >= 0 && product.calls.indexOf("manager") < product.calls.indexOf("Store"));
+    assert.ok(product.calls.indexOf("execution-recover") >= 0 && product.calls.indexOf("execution-recover") < product.calls.indexOf("Store"));
+    assert.equal(product.calls.includes("manager"), false);
     const manual = await compose();
-    assert.equal(Object.hasOwn(manual.unitValues, "brokerUnit"), false);
-    assert.equal(manual.unitValues.config, "/data/oma/fixture/config.json");
+    assert.equal(manual.residentLocation.configPath, "/data/oma/fixture/config.json");
 });
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
     const result = await compose();

@@ -54,7 +54,7 @@ function fixture(t: TestContext) {
   const units = new ControlledUnits(root);
   const auth = (actor = "principal"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
     incarnation: actor === "principal" ? 0 : actor === "bob" ? 4 : 1, channel: "actor", capabilities: new Set(ALL_CAPS),
-    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } });
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } });
   return { root, units, auth, get store() { return store; }, get control() { return new SocietyControl(lifecycleLedger(store), units, { nextOperationId: generateOperationId }); },
     time(value: number) { now = value; }, reopen() { store.close(); store = new Store(path, 0, { society: "demo" }, () => now); } };
 }

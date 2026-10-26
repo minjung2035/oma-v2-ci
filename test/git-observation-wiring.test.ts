@@ -68,7 +68,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
             });
             const auth: AuthContext = {
                 actor: "principal", incarnation: 0, role: "principal", channel: "actor", capabilities: new Set(["code.integrate"]),
-                peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null },
+                peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() },
             };
             const input = { candidate: CANDIDATE, expected: BASE };
             const protectedFailure = (error: unknown): boolean => error instanceof StoreError && error.code === "PROTECTED_PATH";

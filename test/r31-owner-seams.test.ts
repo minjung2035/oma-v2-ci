@@ -20,7 +20,7 @@ import { sendWithStop, StopSignal } from "./fixtures/mail-faults.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: 1000, gid: 1000 } };
 
 test("R31 public facade delegates status and mutation with the original authority and receipt semantics", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-r31-composition-"));

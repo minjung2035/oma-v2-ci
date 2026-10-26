@@ -55,7 +55,7 @@ function mailFixture() {
   const mail = createMailModule({ stateRoot: root, society: "fixture" }, store, 64, 24, { frameBytes: 262144, batchMaxMessages: 24 });
   const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
     capabilities: new Set(["mail.send"]),
-    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
   const input = { to: ["bob"], kind: "message" as const, subject: "fixture", body: "ordinary test message" };
   return { root, store, mail, auth, input, close() { store.close(); removeTree(root); } };
 }

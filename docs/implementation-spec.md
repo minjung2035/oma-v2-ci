@@ -41,6 +41,21 @@ DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda0
 
 **MUST NOT [N-005]** 이 문서의 존재, DDL 검사 통과, TypeScript 타입 검사 통과를 runtime 구현·end-to-end 검증·전원 장애 내구성 증명으로 표현하지 않는다.
 
+## DR49 native 적용 범위
+
+DR49·DR56에서 폐기한 물리 구현의 문장과 ID는 과거 계약의 뜻으로 남긴다. 현재 제품은
+[현재 native 계약](macos-platform.md)의 NATIVE-001–019를 적용한다. 고정 architecture의
+원문이나 과거 accepted 기록을 새 실행 substrate에 맞춰 재해석하지 않는다.
+
+| 이 문서의 물리 reference | 현재 적용할 계약 |
+|---|---|
+| A-001의 Linux 전용 배치, M-002의 units.ts, S-01의 systemd pin | NATIVE-001/007/008의 공통 TS 모듈·공개 DAG 및 실제 OS qualification |
+| FS-001의 unit path 렌더링, FS-006의 systemd 관측 원본 | NATIVE-003/011/016의 held 파일 capability·관측 journal·진단 spool. 관측은 accepted fact나 현재 권한의 원본이 아님 |
+| DB-005/007·CREATE·LIFE의 unit 설치 및 path 활성화 세부사항 | NATIVE-009/013/015/018. 새 version3 native intent, 공통 Resident 슬롯·wake와 실제 scope 사망. 과거 version2 intent는 원래 뜻으로 보존 |
+| IPC-011/012·AUTH의 unit/cgroup 인증 수단 | NATIVE-014의 pinned scope·private runner socketpair·per-range sender 판정. 기존 메서드의 폐기 여부는 현재 closed method registry를 따름 |
+| CTX-006·UNIT-*·UNIT-TPL-*의 path/service/relay/renderer | NATIVE-009/011–014/018. 아래 역사 unit 절은 현재 설치나 실행의 fallback이 아님 |
+| SEQ-002 표의 daemon-reload/LoadState/cgroup/path/service 단계 | NATIVE-018의 native 물리 순서. accepted transaction·receipt 정산·현재 권한 재검사·unknown 보존은 계속 적용 |
+
 ## 1. 고정된 구조와 구현 권한의 한계
 
 **MUST [A-001; arch §§1–2,8,21]** 단일 Linux host, society당 broker 프로세스 하나, 논리 Resident당 지속 private clone 하나, 활성 Resident당 trusted runner 하나와 sandbox 내부 Pi RPC session 하나를 구현한다. Principal은 기존 Human Pi session에 연결한다. broker 안의 mail/Git/inference/reconcile은 모듈이며 별도 daemon이 아니다.

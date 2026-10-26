@@ -55,7 +55,8 @@ test("P8 version boundary: a fresh database is the current schema and an unknown
 });
 
 test("P8 plan format: unknown shapes are classified unknown and never upgraded", () => {
-  assert.equal(PLAN_FORMAT_WRITTEN, "v2");
+  assert.equal(PLAN_FORMAT_WRITTEN, "v3");
+  assert.deepEqual(classifyPersistedPlan({ version: 3, intent: { kind: "mail.send" } }), { format: "v3" });
   assert.deepEqual(classifyPersistedPlan({ version: 2, intent: { kind: "mail.send" } }), { format: "v2" });
   for (const value of [{ kind: "mail.send" }, { version: 1, intent: { kind: "mail.send" } },
     { version: 2, intent: { kind: "mail.send" }, extra: true }, { version: 2, intent: null }])

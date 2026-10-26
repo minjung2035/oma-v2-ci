@@ -26,7 +26,7 @@ import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 function auth(actor: string, caps: Capability[]): AuthContext {
   return { actor, incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(caps),
-    peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+    peer: { pid: 1, uid: 1000, gid: 1000 } };
 }
 
 test("AV10 / BATCH-002: a delivery notice shows a subject as its sender wrote it, not as encoded words", async () => {

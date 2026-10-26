@@ -56,7 +56,7 @@ test("V03-S2: acceptance authority owner checks durable capability independently
       channel: "actor",
       incarnation: 1,
       capabilities: new Set(["mail.send"]),
-      peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null },
+      peer: { pid: process.pid, uid: 1000, gid: 1000 },
     };
     assert.equal(assertActorIdentity(store, auth).name, "alice");
     assert.doesNotThrow(() => assertCurrentActor(store, auth));

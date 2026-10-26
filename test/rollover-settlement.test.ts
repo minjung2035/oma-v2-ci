@@ -4,9 +4,9 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
 /** V07A/V07B (WP07, D01): a Resident's next run settles the previous
  * incarnation's receipts before rollover.
  *
- * Real Store, Mail, receipts and Broker.openRun; the unit observation is a
- * stand-in that names this test process's own (real, populated) cgroup, so the
- * run registry pins an actual cgroup directory.
+ * Real Store, Mail, receipts and Broker.openRun use an owned native namespace.
+ * Server-owner calls exercise settlement policy; authentication has its
+ * separate private-channel and actual sender suites.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -16,7 +16,7 @@ import type { AuthContext, ResolvedAgentSpec } from "@oma/contracts";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { FeatureExecution } from "./fixtures/execution.js";
+import { nativeReceiptBroker, type NativeReceiptBroker } from "./fixtures/native-receipt-broker.js";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
@@ -25,31 +25,15 @@ import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { boundaryOf, completeSession, preparedFixture, type ReceiptFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
 const FIRST = "a".repeat(32);
 const SECOND = "b".repeat(32);
 
-function unitsNaming(invocation: () => string): FeatureExecution {
-  return {
-    onRevokeRun: undefined,
-    bindIncarnationReader: () => undefined,
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0,
-      scope: OWN_CGROUP, invocationId: invocation() }),
-    unitCgroup: () => "",
-  } as unknown as FeatureExecution;
-}
-async function restartedBroker(f: ReceiptFixture, invocation: () => string): Promise<Broker> {
-  const units = unitsNaming(invocation);
-  const resolver = (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec;
-  const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true }, resolver, f.mail);
-  const views = new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS);
-  const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
-  await broker.start();
-  return broker;
+async function restartedBroker(f: ReceiptFixture, _invocation: () => string): Promise<Broker> {
+  return nativeReceiptBroker(f);
 }
 const openRun = (broker: Broker, invocation: string) =>
-  (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
+  (broker as NativeReceiptBroker).openReceiptRun(invocation);
+
 function withReceipt(f: ReceiptFixture): Buffer {
   const session = completeSession(f.root, f.batch);
   publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
@@ -61,7 +45,7 @@ async function closeAll(broker: Broker | null, f: ReceiptFixture): Promise<void>
   f.close();
 }
 const nextAuth = (incarnation: number): AuthContext => ({ actor: "alice", incarnation, role: "resident", channel: "actor",
-  capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1, cgroup: null } });
+  capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1 } });
 
 test("V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery", async () => {
   const f = await preparedFixture(1);
@@ -151,7 +135,7 @@ test("V07B: unavailable or conflicting receipt evidence opens no run, keeps the 
         chmodSync(path, 0o400);
         invocation = SECOND;
         await assert.rejects(() => openRun(broker!, SECOND), { code: "RUN_TERMINATION_UNKNOWN" },
-          "the failed opening's own invocation is still running in this cgroup, so it is not proven dead");
+          "the failed opening's own namespace is still populated and blocks a replacement");
       }
     } finally { chmodSync(runnerReceiptPathAt(f.root, "alice", f.batch.id), 0o600); await closeAll(broker, f); }
   }

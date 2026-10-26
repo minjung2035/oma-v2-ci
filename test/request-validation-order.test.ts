@@ -20,7 +20,7 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
 type Answer = { ok: true; result: unknown } | { ok: false; code: string | undefined; retry: string | undefined };
 /** A refusal may be an answer frame or a thrown error; both are the caller's outcome. */
 async function answer(call: Promise<object>): Promise<Answer> {
