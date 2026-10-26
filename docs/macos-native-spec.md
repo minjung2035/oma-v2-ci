@@ -623,3 +623,20 @@ execution과 정확히 대조한다. ambient identity를 복구하지 않는다.
 close 뒤에만 진행하며 이미 실행된 query는 재생하지 않는다. 실제 SDK와 대조해 find0/grep threshold,
 buffered excess와 완료 후 truncation metadata도 수리했다. 선택26/26·55/55와 이후31/31을 확인했으며
 전체 후속과 실제 Mac qualification은 여전히 별도다. 기존 실패·규범·accepted plan/receipt를 보존한다.
+
+수리 source `bd2049c8`를 push한 뒤 전체 Linux3787/3787·exit0·fail/cancel/skip/todo0을 확인했다.
+관측 중 수동 개입 없이 끝났고 입력/보호 파일 SHA는 전후 동일이다. 새 Native40397569660/
+Architecture40397569605는 다시7개 job 모두 스텝 실행 전 실패했으며 artifact는 없다. 실제36개
+Darwin case는 NOT_RUN이다. 이전 Linux 실패를 지우거나 이 Linux 결과로 Mac gate를 통과시키지 않는다.
+
+### 14.13 P7 검증 입력의 문서 누락 수리 — 2026-10-27
+
+문서 검사는 루트 README와 root 밖의 새 Markdown도 발견하지만 기존 verification digest는 이를
+모두 담지 않았다. 실제 finding이 바뀌어도 같은 identity였던 반례2개를 먼저 실패시킨 뒤 README를
+필수 입력으로 추가하고 기존 문서 discovery owner의 현재 Markdown을 source closure에 결박했다.
+새 문서도 symlink이면 거절하며 archive/runtime output의 기존 구분과 과거 결과는 유지한다.
+분리 작업트리의15613개 고정 입력에서 문서/목록17/17을 확인했다. validation이 정확한 입력을 소유한다.
+
+최초 사용자 변경 README는 수정하거나 commit하지 않는다. 커밋된 README를 쓰는 CI 입력과 사용자
+README를 포함한 작업트리 입력은 다른 digest를 가진다. 로컬 `bindVerificationInputs` 재생성은
+현재 실제 bytes의 구조 기록일 뿐이며, 커밋의 검증이나 이전 runtime 결과를 다시 결박하지 않는다.

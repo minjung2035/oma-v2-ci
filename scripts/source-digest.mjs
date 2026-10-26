@@ -17,6 +17,7 @@ import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { digest, sourceFiles } from "./traceability.mjs";
+import { projectDocuments } from "./document-integrity.mjs";
 
 export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "apps",
@@ -27,6 +28,7 @@ export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "docs",
   ".github/workflows",
   ".gitignore",
+  "README.md",
   "package.json",
   "package-lock.json",
   "tsconfig.json",
@@ -81,7 +83,16 @@ export function verificationInputFiles(root = ".") {
     .sort();
   if (new Set(files).size !== files.length)
     throw new Error("duplicate verification input path");
-  return files;
+  // The document gate also discovers misplaced/untracked Markdown outside
+  // these roots. Its findings are inputs too: adding a broken guide must not
+  // leave the evidence bound to the previous tree. Use that gate's discovery
+  // owner and the same symlink refusal as every other source input.
+  const listed = new Set(files);
+  for (const file of projectDocuments(root)) {
+    if (!file.startsWith("docs/archive/") && !EXCLUDED.has(file) && !listed.has(file))
+      files.push(...sourceFiles(root, file));
+  }
+  return files.sort();
 }
 
 export function verificationInputDigest(root = ".") {

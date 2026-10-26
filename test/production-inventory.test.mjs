@@ -8,6 +8,7 @@ import { collectProductionFiles, writeProductionInventory, assertProductionInven
 import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles, verificationSourceDigests } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
 import { bindVerificationInputs } from "../scripts/refresh-evidence.mjs";
+import { brokenLinks, documentLayoutFindings, projectDocuments } from "../scripts/document-integrity.mjs";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 
@@ -218,7 +219,7 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
 
 test("R38: the verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
-    "apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore",
+    "apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore", "README.md",
     "package.json", "package-lock.json",
     "tsconfig.json", "tsconfig.build.json", "tsconfig.architecture.json", "production-manifest.json", "production-files.txt",
     "production-loc-hashes.json",
@@ -228,7 +229,7 @@ test("R38: the verification closure includes every class of local gate input", (
   ]);
   const files = verificationInputFiles(REPO);
   for (const required of [
-    "packages/tui/src/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
+    "README.md", "packages/tui/src/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
     "packages/contracts/src/index.ts", "packages/storage/src/schema-v4.sql",
     "packages/platform-mac/src/keychain/main.swift", "scripts/setup-native-linux-ci.sh",
     "implementation/source-owners.json", "implementation/traceability.json",
@@ -263,7 +264,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     ]) f.put(file, `${file}\n`);
     const before = verificationInputDigest(f.root);
     f.put("apps/fixture.ts");
-    for (const file of ["package.json", "tsconfig.json", "packages/extension/tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "apps/fixture.ts", ".gitignore"]) {
+    for (const file of ["README.md", "package.json", "tsconfig.json", "packages/extension/tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml", "apps/fixture.ts", ".gitignore"]) {
       const original = readFileSync(join(f.root, file));
       f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
       assert.notDeepEqual(verificationInputDigest(f.root), before, file);
@@ -283,6 +284,49 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
     f.put("implementation/new-gate-input.json", "new input\n");
     assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
+  } finally { f.close(); }
+});
+
+test("R38: README link findings cannot change without changing their verification identity", () => {
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, `${root}\n`);
+    }
+    f.put("README.md", "# Root\n");
+    const before = verificationInputDigest(f.root);
+    assert.deepEqual(brokenLinks(f.root, projectDocuments(f.root)), []);
+    f.put("README.md", "[broken](missing-document.md)\n");
+    assert.deepEqual(brokenLinks(f.root, projectDocuments(f.root)), [
+      "README.md: missing-document.md names a file that does not exist",
+    ]);
+    assert.notDeepEqual(verificationInputDigest(f.root), before);
+    assert.equal(verificationSourceDigests(f.root)["README.md"],
+      createHash("sha256").update(readFileSync(join(f.root, "README.md"))).digest("hex"));
+  } finally { f.close(); }
+});
+
+test("R38: newly discovered project guidance is bound even when its placement is invalid", () => {
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, `${root}\n`);
+    }
+    f.put("README.md", "# Root\n");
+    const before = verificationInputDigest(f.root);
+    f.put("new-guide.md", "# Unregistered current guidance\n");
+    assert.deepEqual(documentLayoutFindings(projectDocuments(f.root)), [
+      "new-guide.md: project documentation belongs under docs/",
+    ]);
+    assert.notDeepEqual(verificationInputDigest(f.root), before);
+    rmSync(join(f.root, "new-guide.md"));
+    assert.deepEqual(verificationInputDigest(f.root), before);
+    symlinkSync("README.md", join(f.root, "linked-guide.md"));
+    assert.throws(() => verificationInputDigest(f.root), /symlink/);
   } finally { f.close(); }
 });
 
@@ -323,7 +367,7 @@ test("R38: the lane's bound source is the canonical closure -- committed digests
   // re-reads the file and must get this digest).
   const digests = verificationSourceDigests(REPO);
   const hashOf = path => createHash("sha256").update(readFileSync(join(REPO, path))).digest("hex");
-  for (const committed of ["production-manifest.json", "production-files.txt", "production-loc-hashes.json",
+  for (const committed of ["README.md", "production-manifest.json", "production-files.txt", "production-loc-hashes.json",
     "package.json", "tsconfig.json", ".github/workflows/architecture-verification.yml"])
     assert.equal(digests[committed], hashOf(committed), `${committed} must be bound by its real bytes`);
   assert.equal(digests["production-loc.json"], undefined, "a CI artifact is never a bound input");

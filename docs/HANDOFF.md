@@ -1,6 +1,10 @@
 # OMA v2 — 현재 인계
 
-## 현재: c2745daa 비동기 audit 반환과 실제 CI 시작 실패
+## 현재: bd2049c8 전체 Linux 통과와 P7 문서 입력 수리
+
+`bd2049c8` 수리 후 전체 Linux는 **3787/3787 PASS**·fail/cancel/skip/todo0·exit0이며 입력과
+보호 파일 SHA는 전후 동일이다. 실제 Mac CI는 새 push에서도7개 job 모두 스텝 시작 전 실패했다.
+Mac36개 case는 NOT_RUN이며 세 gate·제품 guard는 유지한다. 정확한 입력별 결과는 validation을 따른다.
 
 `c2745daa`를 작업 브랜치에 push했다. 최신 비동기 audit source의 input `f353d015...`(15612개)에서
 **26/26 독립 설치·공개 API/자체 declaration·지정 runtime smoke PASS**, 전후 identity 동일이다.
@@ -11,8 +15,13 @@ NOT_RUN이며 세 gate·제품 guard를 유지한다. 실패 원인은 annotatio
 
 후속 전체 Linux는3772/3784 PASS·12 FAIL이었다. 이전 UUID/DI fixture11건과 실제 find의 fdfind
 alias 누락1건을 확인했다. peer-pid의 원래 오류 뒤 cleanup hang을 SIGTERM한 개입까지 raw에 남겼다.
-수정 뒤 관련26/26·55/55, 추가 find0/grep threshold 반례의31/31을 확인했다. 새 source의 전체 재검증은
-아직 진행 전이며 이전 전체나 선택 결과를 전체 PASS로 올리지 않는다. §14.12와 validation이 현재 입력을 소유한다.
+수정 뒤 관련26/26·55/55, 추가 find0/grep threshold 반례의31/31을 확인했다. 이후 새 source 전체는
+3787/3787을 확인했으며 과거 실패도 유지한다. §14.12와 validation이 실제 입력별 범위를 소유한다.
+
+P7 입력 대조에서 README와 목록 밖 새 Markdown의 digest 누락을 반례로 확인해 수리했다.
+분리 작업트리의15613개 고정 입력에서 문서/목록17/17 PASS이며 §14.13과 validation을 따른다.
+원래 사용자 README를 바꾸거나 commit하지 않았고, 그 실제 bytes를 포함한 로컬 binding과 커밋된
+README를 쓰는 CI binding은 구분한다. 구조 재생성으로 과거 runtime PASS를 현재 결과로 바꾸지 않는다.
 
 작업 브랜치에 `343d4f85`와 `7ebb7268`을 push했다. Mach byte connector의 마지막 응답/EOF drain,
 kernel sender와 port 소유권, App OS 주입과 실제 Darwin Node probe3개를 연결했다. 원래 README와
