@@ -18,7 +18,7 @@ import type { InternalStorePort, InternalMailPort, InternalPeerPort, InternalDis
 /** The Broker projects its own live peer authenticator into dispatch capabilities. */
 export function projectInternalPeers(peers: InternalPeerPort): InternalPeerPort {
   return {
-    requireRunnerUnit: (peer, agent, invocationId) => peers.requireRunnerUnit(peer, agent, invocationId),
+    requireRunnerPeer: (peer, agent, invocationId) => peers.requireRunnerPeer(peer, agent, invocationId),
     runnerActor: peer => peers.runnerActor(peer),
     runnerAuth: (agent, incarnation, peer) => peers.runnerAuth(agent, incarnation, peer),
   };
@@ -99,7 +99,7 @@ export class InternalDispatcher {
       const { method: dispatchMethod, params: dispatchParams } = call;
       switch (dispatchMethod) {
         case "runner.open": {
-          peers.requireRunnerUnit(
+          peers.requireRunnerPeer(
             peer,
             dispatchParams.agent,
             dispatchParams.invocationId,
@@ -151,7 +151,7 @@ export class InternalDispatcher {
               "BATCH_CONFLICT",
               `unknown batch ${evidence.batchId}`,
             );
-          peers.requireRunnerUnit(peer, agent);
+          peers.requireRunnerPeer(peer, agent);
           const identity = store.getAgentIdentity(agent);
           if (!identity || identity.incarnation !== evidence.incarnation)
             throw new StoreError(

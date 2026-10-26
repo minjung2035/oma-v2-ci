@@ -7,7 +7,7 @@
  * Only a socket is removed: a file of another type at the path is not a name
  * a server left, and it is refused rather than deleted.
  *
- * Portable: the macOS host and the guest use it as the Linux core does.
+ * Shared by native host callers on each supported platform.
  */
 import { lstatSync, unlinkSync } from "node:fs";
 import { StoreError } from "@oma/domain/errors";

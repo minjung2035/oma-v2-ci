@@ -409,8 +409,8 @@ test("utf8-decoder-owner (P0V-86): UTF-8 is read through one owner, which keeps 
 });
 
 test("error-words-owner (DR18, D-1): an error's words on the product surface come from one reading", () => {
-  const words = { "packages/tui/src/words.ts": "export function errorWords(error) { return error instanceof Error ? error.message : String(error); }" };
-  withTree({ ...words, "apps/oma/src/entry/oma.ts": "try { f(); } catch (error) { fail(errorWords(error)); }",
+  const words = { "packages/domain/src/errors.ts": "export function exceptionText(error) { return error instanceof Error ? error.message : String(error); }" };
+  withTree({ ...words, "apps/oma/src/entry/oma.ts": "try { f(); } catch (error) { fail(exceptionText(error)); }",
     "packages/engine/src/principal-session.ts": "const message = event.message;" }, findings => clean(findings, "error-words-owner"));
   // Reject: each way a file reads a thrown value's words itself.
   for (const [file, text] of [

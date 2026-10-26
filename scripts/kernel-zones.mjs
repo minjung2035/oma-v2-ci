@@ -19,7 +19,6 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/domain/src/host-signals.ts",
       "packages/domain/src/config-format.ts",
       "packages/domain/src/display-address.ts",
-      "packages/domain/src/product-text.ts",
       "packages/client/src/errors.ts",
       "packages/protocol/src/log-limits.ts",
       "packages/protocol/src/delivery-boundary.ts",
@@ -153,6 +152,10 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/native/src/control-socket.ts",
       "packages/native/src/descriptor-path.ts",
       "packages/native/src/unix-message.ts",
+      "packages/native/src/mach-message.ts",
+      "packages/native/src/process-event.ts",
+      "packages/native/src/audit-origin.ts",
+      "packages/native/src/audit-token.ts",
       "packages/process/src/restart-policy.ts",
       "packages/process/src/coalesced-wake.ts",
       "packages/process/src/resident-supervisor.ts",
@@ -251,7 +254,6 @@ const PURE_NATIVE_IMPORTS = Object.freeze({
   "packages/domain/src/spec-identity.ts": ["node:crypto"],
   "packages/domain/src/paths.ts": ["node:path"],
   "packages/domain/src/durable.ts": ["node:path"],
-  "packages/domain/src/product-text.ts": ["node:os"],
   "packages/protocol/src/run-lease.ts": ["node:path"],
   "packages/protocol/src/frame.ts": ["node:util"],
 });
@@ -259,7 +261,6 @@ export function kernelExternalViolation(file, specifier, importedNames = []) {
   const zone = kernelZoneOf(file);
   if (!zone || zone.index > 1) return false;
   if (!PURE_NATIVE_IMPORTS[file]?.includes(specifier)) return true;
-  if (specifier === "node:os") return importedNames.length !== 1 || importedNames[0] !== "constants";
   // Hashing is deterministic; randomUUID/randomBytes/key generation are mechanisms.
   return (
     specifier === "node:crypto" &&

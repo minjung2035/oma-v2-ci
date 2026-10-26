@@ -34,7 +34,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     { name: "@oma/app", root: "apps/oma" },
   ] as const),
   compiledRoot: "apps/oma/dist",
-  /** App-owned package lease and in-process client composition, loaded before the engine. */
+  /** App-owned in-process client composition, loaded before the engine. */
   interactiveToolsPreload: "packages/engine/dist/pi-compat/interactive-tool-setup.js",
   settingsPreload: "apps/oma/dist/entry/pi-settings-preload.js",
   clientPreload: "apps/oma/dist/runtime/client-preload.js",
@@ -53,8 +53,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   // writes it from the sandbox's paths (src/sandbox.ts) and the manifest pins it.
   modelCommand: "apps/oma/dist/libexec/oma",
   modelCommandBuilder: "packages/domain/dist/resident-paths.js",
-  // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
-  // systemd unit, so it is absent from templateEntries by design.
+  // TUI-002: `tui` is the native host entrypoint a Human runs.
   entries: Object.freeze({ candidateCheck: "apps/oma/dist/entry/candidate-check.js", quarantine: "apps/oma/dist/entry/quarantine.js", broker: "apps/oma/dist/entry/broker.js", preparation: "apps/oma/dist/entry/prepare-society.js", runner: "apps/oma/dist/entry/runner.js", tui: "apps/oma/dist/entry/oma.js", interactive: "apps/oma/dist/entry/pi-interactive.js",
     society: "apps/oma/dist/entry/oma-society.js", personalHost: "apps/oma/dist/entry/personal-host.js", personal: "apps/oma/dist/entry/pi-personal.js",
   }),

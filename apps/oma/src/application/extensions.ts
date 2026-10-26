@@ -1,3 +1,4 @@
+import { StoreError, exceptionText } from "@oma/domain/errors";
 /** TUI-010: role-by-role extension selection over host-placed files and
  * (DR25) the packages the Human installed with `oma pi install`.
  *
@@ -14,8 +15,6 @@
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { StoreError } from "@oma/domain/errors";
-import { errorWords } from "@oma/tui/words";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { loadConfigurationSnapshot, loadEditableConfiguration, type ConfigurationSnapshot } from "@oma/config";
 import { extensionEntryProblem, extensionListProblem, observeExtensionAsset, type ExtensionRoots } from "@oma/config/operations";
@@ -112,7 +111,7 @@ export function readExtensions(source: string | ManagedSource, principalProfile:
   let mode: "full" | "repair" = "full";
   try { snapshot = typeof source === "string" ? loadConfigurationSnapshot(source) : source; }
   catch (error) {
-    const unreadable = error instanceof StoreError ? `Cannot read settings: ${errorWords(error)}` : "Cannot read settings";
+    const unreadable = error instanceof StoreError ? `Cannot read settings: ${exceptionText(error)}` : "Cannot read settings";
     // WP14.03: a configuration that fails only because a declared extension
     // file is gone can still be read as an editing input for its removal.
     if (typeof source !== "string") return unmanaged(unreadable);

@@ -1300,7 +1300,7 @@ class Bench {
     // Liveness is the peer's own, as the real authenticator answers it: a
     // descendant that outlives its engine is alive, and must be refused for
     // the reason it is actually refused for.
-    const peer = { pid: peerPid, uid, gid, alive: () => processIdentity(peerPid) !== null,
+    const peer = { pid: peerPid, uid, gid, alive: () => processIdentity(peerPid) !== null, sameSender: () => false,
       retainForExecution: () => () => {}, releaseConnection: () => {} } as BoundPeer;
     const context = (): AuthContext => ({ actor: "principal", incarnation: 1, role: "principal",
       channel: "actor", capabilities: new Set(), peer: { pid: peerPid, uid, gid } });
@@ -1419,7 +1419,7 @@ test("P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope th
 
 test("P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before any delivery method runs", async () => {
   const host = processIdentity(process.pid)!;
-  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => {}, releaseConnection: () => {} } as unknown as BoundPeer;
   const served: { handle?: (raw: Record<string, unknown>, stream: null) => Promise<object> } = {};
   const ran: string[] = [];
@@ -1699,8 +1699,9 @@ test("P0V-60 / R05, P0-2: the Principal's capabilities are read against what the
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
   store.transaction(() => store.insertAgent({ name: "principal", specHash: resolvedSpecDigest(PRINCIPAL_SPEC), role: "principal",
     desired: "enabled", incarnation: 0, profile: "p", createdBy: null, specJson: JSON.stringify(PRINCIPAL_SPEC) }));
-  const peers = new PeerAuthenticator(store, {} as PolicyExecution, new RunRegistry(() => { throw new Error("this Principal-only test has no Worker scope"); }), "demo", () => undefined);
-  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+  const peers = new PeerAuthenticator(store, {} as PolicyExecution, new RunRegistry(() => { throw new Error("this Principal-only test has no Worker scope"); }), "demo", () => undefined,
+    () => { throw new Error("Principal context checks do not acquire a connection"); });
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer;
   let standing = true;
   const auth = peers.principalContext(peer, () => standing)!;

@@ -48,7 +48,7 @@ import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "@oma/config/operations";
-import { StoreError, unobserved } from "@oma/domain/errors";
+import { StoreError, unobserved, exceptionText } from "@oma/domain/errors";
 
 import { PACKAGE_ARCHIVE_BOUNDS } from "@oma/domain/package-policy";
 import { openBeneath, withinDirectory } from "@oma/native/files";
@@ -62,7 +62,6 @@ import { PACKAGE_LOCAL_DIR, configuredPackageSources, escapes, packageStoreRoot,
 const RESOURCE_DIRECTORIES = Object.freeze(["extensions", "skills", "prompts", "themes"]);
 
 const refuse = (message: string): never => { throw new StoreError("INVALID_REQUEST", message); };
-const errorWordsOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 /** The absolute real path the given source names, with the shell conveniences
  * the engine's own resolver also knows (`~` and `file:`). What cannot be
@@ -272,7 +271,7 @@ export async function stageLocalPackage(store: string, given: string): Promise<s
 async function stageArchive(store: string, source: string): Promise<string> {
   const before = (() => {
     try { return lstatSync(source); }
-    catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${errorWordsOf(error)})`); }
+    catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${exceptionText(error)})`); }
   })();
   if (!before.isFile()) return refuse(`the package archive is not a file: ${source}`);
   const gzip = (() => {
@@ -291,7 +290,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
       try { mkdirAt(storeFd, spoolName, 0o700); }
       finally { closeSync(storeFd); }
     }
-  } catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive's staging directory could not be made (${errorWordsOf(error)})`); }
+  } catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive's staging directory could not be made (${exceptionText(error)})`); }
   const tar = gzip ? join(spool, "archive.tar") : source;
   try {
     if (gzip) {
@@ -306,7 +305,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
           });
         } finally { closeSync(out); }
       } catch (error) {
-        throw unobserved(error, "the local package") ?? refuse(`the package archive is not a gzip stream oma can read (${errorWordsOf(error)})`);
+        throw unobserved(error, "the local package") ?? refuse(`the package archive is not a gzip stream oma can read (${exceptionText(error)})`);
       }
     }
     const fd = openSync(tar, constants.O_RDONLY);

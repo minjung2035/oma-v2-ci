@@ -8,9 +8,8 @@
  * unchanged and only where the bytes go is decided here. A tool of the same
  * name registered by an extension replaces the built-in one.
  *
- * Writes are serialized within this engine, and the workspace quota is
- * decided inside that serialization, at the moment of the write -- so two
- * calls cannot each fit and together exceed it. Inside the sandbox reads are
+ * Writes are serialized within this engine through contained descriptors.
+ * File size is governed by the filesystem under DR37. Sandbox reads are
  * not narrowed (SB-001: the mount plan is the boundary), so only write and
  * edit are replaced there.
  */
@@ -88,7 +87,7 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, sandb
   // snapshot's root is the one the search's own path was admitted under.
   // A complete answer too large for one result is spilled into the
   // workspace's own `.oma/search-results/` through the same contained
-  // writer -- quota-decided and serialized like any authored file, so the
+  // writer -- contained and serialized like any authored file, so the
   // named path is one the model's read/grep/find can open. A read-only
   // surface gets no spool (it must not write where its role cannot) and
   // the answer rides inline in full instead.

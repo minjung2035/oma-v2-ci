@@ -154,6 +154,24 @@ coalescer가 활성 게시 하나와 pending hint 하나만 유지하며, 관측
 pending 게시를 취소하고 활성 게시 작업을 drain한 뒤 Store를 닫는다. 종료 이후 status 파일을
 되살리지 않는다. WP23의 조회/혼합 부하 지연 예산과 unknown 표시는 그대로 유지한다.
 
+**MUST [NATIVE-021]** 공통 public mutation dispatch는 효과와 view 갱신이 끝난 뒤 답변 전에
+event loop에 한 turn을 반환한다. 연속 완료된 요청의 Promise continuation이 timer/다른 연결을
+계속 밀어내지 않는다. 이 대기는 SQLite transaction 안이나 새로운 효과의 권한 확인을 대신하는
+위치에 두지 않는다. 그 사이 admission·현재 run 권한이 바뀌어도 이미 확정된 plan·receipt·
+accepted result를 새 실패로 재해석하지 않는다. 종료 owner는 답변 작업의 수명도 기다린다.
+
+**MUST [NATIVE-022]** native CLI/TUI의 로컬 예외 문구는 공통 error owner가 읽고, CLI 실패는
+stderr에 쓴다. 폐기한 VM 환경변수로 Linux 경로·errno·용어를 숨기거나 출력 채널을 바꾸지 않는다.
+터미널 제어문자 제거·화면 폭 처리는 현재 presentation owner에 유지한다. Society history는
+OS 분기 없이 birth·project binding·engine cwd를 검증한다. 폐기한 VM relay handoff·Society
+선택·패키지 세대 수집 API는 export나 무효 호환 wrapper로 남기지 않으며 과거 데이터는 보존한다.
+
+**MUST [NATIVE-023]** runner 실행 identity는 공통 execution owner가 발급한 UUID를 명시적인
+launch 인자로 전달한다. runner entry는 누락·중복·잘못된 identity를 거절하고, 검증한 값을
+RunnerModule에 전달한다. ambient service-manager 환경변수에서 identity를 읽거나 대체하지 않는다.
+기존 runner.open·로그의 invocationId는 같은 UUID의32자리 hex이며 broker의 현재 scope binding과
+일치해야 한다. accepted plan·receipt·incarnation·권한의 의미는 바꾸지 않는다.
+
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,
 전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와

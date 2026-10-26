@@ -1,10 +1,9 @@
+import { StoreError, exceptionText } from "@oma/domain/errors";
 /** Application interaction: translate engine events and observed settings/mail into TUI data.
 * No broker, engine or lease is acquired here. */
 import { Buffer } from "node:buffer";
-import { StoreError } from "@oma/domain/errors";
 import { TuiApp, type AppPorts } from "@oma/tui/app";
 import { PanelTerminal } from "@oma/tui/panel-terminal";
-import { errorWords, surfaceWords } from "@oma/tui/words";
 import { engineName, engineModelChoiceOf, WORKER_MODEL, workerModelText, bootstrapStateOf, type FieldValue } from "./settings.js";
 import { societyPanelPorts } from "./society-panel.js";
 import { TuiTransport, type Observation } from "./status-observation.js";
@@ -67,8 +66,6 @@ export class SocietyInteraction implements SocietyConversationView {
       this.notice(words);
     this.saidLeftOut = words;
   }
-  errorWords(error: unknown): string { return errorWords(error); }
-  surfaceWords(text: string, instead: string): string { return surfaceWords(text, instead); }
   onUi(live: ConversationUi, event: PiEvent): void {
     if (this.commands.session() !== live)
       return;
@@ -99,7 +96,7 @@ export class SocietyInteraction implements SocietyConversationView {
             current: this.commands.sessionDirectory(),
           });
       })().catch(error => { if (!this.commands.finished() && this.commands.session() === live)
-        live.sendUi({ type: "session_dirs", id, dirs: [], error: errorWords(error) }); });
+        live.sendUi({ type: "session_dirs", id, dirs: [], error: exceptionText(error) }); });
     }
     else if (event.type === "switch") {
       if (event.mode !== undefined && (event.mode !== "personal" || event.session !== undefined)) return;
@@ -125,7 +122,7 @@ export class SocietyInteraction implements SocietyConversationView {
             : `Worker model: ${workerModelText(this.configuration.settings.config, this.configuration.settings.workerProfile)}${saved.kind === "unchanged" ? " (unchanged)" : " · saved; applies from the next activation"}`);
         }
         catch (error) {
-          this.notice(`Could not save the worker model: ${errorWords(error)}`);
+          this.notice(`Could not save the worker model: ${exceptionText(error)}`);
         }
         this.app.refresh();
         this.app.draw();

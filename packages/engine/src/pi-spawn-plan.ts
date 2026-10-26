@@ -288,7 +288,7 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
     // read -- the extension's loopback forwarder of the bound proxy socket.
     // NO_PROXY keeps the engine's own loopback (the inference bridge) direct;
     // These values route cooperating clients through the injected bridge;
-    // the production recipe shares the host/guest network and imposes no
+    // the production recipe shares the host network and imposes no
     // namespace-based egress restriction.
     ...(confinement.egress === undefined ? {} : {
       OMA_EGRESS_PROXY_SOCKET: view.egress,

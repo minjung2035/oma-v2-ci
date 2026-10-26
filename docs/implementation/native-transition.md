@@ -21,6 +21,22 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 전체 CI 결과와 완료된 mutation의 응답 경계
+
+`5e369b30`의 전체 baseline/native-all 각각3777/3777·skip0을 실제 artifact에서 확인했다.
+앞선 EAGAIN1건과 strict mixed-lag 실패도 보존하며 뒤의 성공으로 원인을 해결했다고 하지 않는다.
+기존 PublicDispatcher에서 효과/view 갱신 뒤 답변 전에 event-loop turn을 반환하고,
+그 사이 admission이 닫혀도 accepted plan/result는 그대로 답한다(DR58/NATIVE-021).
+새2개는 수정 전 실패했고 수정 뒤 기존6개와 합쳐8/8 PASS다. 추가 OS branch나 queue,
+durability 생략, 지연 기준 완화는 없으며 전체 후속 입력은 별도 재검증한다.
+
+### 2026-10-26 다른 저장소의 실제 구현 대조
+
+사용자 지시에 따라 sandbox-runtime·Codex·Gemini CLI·Chromium의 고정 source를
+[대조했다](native-reference-review.md). 공통 정책/OS adapter 분리와 Chromium의 Mach
+rendezvous·kernel trailer 검증을 후보에 적용한다. 기존 실제 timeout을 지우거나 group kill을
+전체 scope 사망으로 완화하지 않는다. 새 CI가 실행 전에 종료된 경우도 NOT_RUN으로 남긴다.
+
 ### 2026-10-26 status 게시 owner와 Darwin 인증 후보 확대
 
 네 mutation hint가 같은 status를 네 번 영속 게시하던 실제 반례를 재현했다. Broker가
@@ -309,3 +325,26 @@ qualification 또는 production journal 형식 채택으로 표시하지 않는�
 `test/native-os-contracts.test.mjs`를 양 OS의 실제 파일/FD/잠금/process/socket 경계 시험으로
 추가한다. mock으로 syscall을 대체하지 않으며 새 시험과 독립 Darwin 사례별3회 관측은
 이전 전체 PASS와 분리한다. 다음 실행의 결과는 validation 및 raw artifact가 소유한다.
+
+### 2026-10-27 구현 우선 후속
+
+필수 전체 읽기와 DR59 VM 표시/history/relay/invocation 잔존 제거를 진행했다.
+`@oma/native`에 Mach inline audit facts·단일 process event·public Security audit-origin leaf,
+`@oma/platform-mac`에 audit-peer identity adapter를 추가했다. actor/capability 판단이나 전체
+후손 종료 owner가 아니며, shared broker transport 연결과 실제 Darwin 실행은 미완료다.
+최신 사용자 범위에 따라 runtime/CI 테스트는 우선 보류하고 타입·정적 검사를 진행한다.
+
+Broker의 peer identity 획득도 필수 kernel port로 분리했다. 현재 Linux composition은 실제
+SO_PEERCRED/SO_PEERPIDFD adapter를 주입하고, 공통 PeerAuthenticator는 reference 수명과
+현재 actor/scope/capability 판정만 소유한다. kernel port 누락을 ambient Linux fallback으로
+대신하지 않는다. Mac identity adapter의 transport 연결과 이 변경의 runtime 회귀는 미실행이다.
+
+후속으로 Broker의 native credential 타입·socket 생성·endpoint 길이 검사를 OS composition으로
+분리했다. Broker는 Duplex와 listener 수명 계약을 받고 actor/current grant·요청 ref 수명을
+계속 소유한다. `sameSender`는 실제 kernel receive 객체와 원래 pin의 동일성만 대조한다.
+Linux는 SO_PEERCRED 복사본을 message 증거로 쓰지 않으며, Mac 후보는 전체 audit token을
+대조한다. 공개 BSM accessor로 opaque token을 해석하며 field 위치를 auth 계약으로 쓰지 않는다.
+
+listener의 bind 성공 뒤 preparation 실패도 실제 close callback을 기다리도록 수정했다.
+close가 throw하면 불명 상태를 pending으로 남기고 기존 drain grace가 이를 제한한다.
+관련 실제 Unix listener 회귀 세 개는 작성했지만 runtime 시험은 NOT_RUN이다.

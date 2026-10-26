@@ -559,12 +559,12 @@ test("P0V-90 / R6-13: a generation already present is reused only if it holds th
 
 test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is refused by name, not assumed away", async t => {
   const { InternalDispatcher } = await import("@oma/broker/internal-dispatcher");
-  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
   const dispatcher = new InternalDispatcher({
     store: { getAgentIdentity: () => null, pendingDeliveryCount: () => 0, getBatchAgent: () => null, preparedBatchIds: () => [] },
     mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
-    peers: { requireRunnerUnit: () => {}, runnerActor: () => "alice",
+    peers: { requireRunnerPeer: () => {}, runnerActor: () => "alice",
       runnerAuth: () => { throw new Error("authenticated a runner the ledger does not know"); } },
     isDraining: () => false, assertAdmission: () => {},
     failureAnswer: (id, error) => ({ id, ok: false, code: (error as { code?: string }).code, message: (error as Error).message }),

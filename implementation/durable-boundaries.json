@@ -1358,22 +1358,6 @@
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/packages/store.ts#collectPackageGenerations",
-      "fact": "DR37: collect only marked, noncurrent generations after exclusive directory lease; live engines and unleased legacy generations retain their files; retry after collection is idempotent",
-      "tests": [
-        {
-          "file": "test/unrestricted-runtime.test.ts",
-          "title": "DR37: shared generation leases retain live readers and collect after actual SIGKILL",
-          "injection": "sigkill"
-        },
-        {
-          "file": "test/unrestricted-runtime.test.ts",
-          "title": "DR37: collector SIGKILL after tombstone rename resumes after partial removal",
-          "injection": "sigkill"
-        }
-      ]
-    },
-    {
       "owner": "apps/oma/src/views/mail-notices.ts#publishMailNoticeView",
       "fact": "host-only notice presentation rebuilt from accepted integration facts; no new mail or acknowledgement",
       "tests": [

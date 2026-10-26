@@ -120,7 +120,7 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
     /docker/i, /submodules/i, /`npm`/])
     assert.match(sandbox, fact);
   assert.doesNotMatch(sandbox, /allowlisted HTTPS|only if the Human configured|everything else.*fails/i);
-  assert.match(sandbox, /shares the host\/guest network/);
+  assert.match(sandbox, /shares the host network/);
   assert.match(sandbox, /HTTPS_PROXY.*when present/);
   const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
   assert.match(guide, /most expensive resource/);

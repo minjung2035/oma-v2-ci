@@ -1,8 +1,8 @@
 /** INF-005/006/007/008: the host end of a confined Resident's provider access.
  *
- * A confined Resident has no credential (PR-004) and no network (SB-004). This
- * relay is how the engine inside it still reaches a provider without either
- * being opened: the sandbox speaks plain HTTP to a bind-mounted unix socket,
+ * A confined Resident has no provider credential (PR-004). Its configured
+ * provider reaches this relay through the sandbox's bind-mounted Unix socket;
+ * ordinary host network access remains available under DR37. For this route,
  * and this process attaches the real credential and forwards to the one
  * endpoint the host declared.
  *
@@ -204,12 +204,6 @@ export class InferenceRelay {
     this.server.maxConnections = Math.max(1024, RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent);
   }
 
-  /** Sockets handed in through `accept` and still open. net.Server enforces
-   * `maxConnections` only inside its own accept path; a socket emitted onto
-   * the HTTP server directly passes no admission check, so a detached relay
-   * counts its own (AV-20261003-16: the same bound on both paths). */
-  private detachedConnections = 0;
-
   /** Requests whose admission passed and that are waiting for an in-flight
    * slot. An entry is its socket's claim: the socket's own close withdraws
    * it, and a grant runs the request exactly as one that never queued. */
@@ -259,32 +253,6 @@ export class InferenceRelay {
     try { chmodSync(socketPath, 0o600); }
     catch (error) { await relay.close(); throw error; }
     return relay;
-  }
-
-  /** macos-platform §4.7: the same relay, listening nowhere. The macOS host
-   * hands it each egress connection the guest opened for this run's engine;
-   * everything a connection carries is then this relay's, exactly as if it
-   * had arrived on its socket. */
-  static detached(target: RelayTarget, limits: RelayLimits): InferenceRelay {
-    return new InferenceRelay(InferenceRelay.checked(target, limits), target, limits);
-  }
-
-  /** One connection for a detached relay, with what already arrived on it.
-   * The caller read a message off it first and left it paused; the HTTP
-   * server takes it from here, so it is let flow again after the hand-over
-   * (the same order as any server that sniffs a connection's first bytes). */
-  accept(socket: Socket, head: Buffer = Buffer.alloc(0)): void {
-    if (this.closed) { socket.destroy(); return; }
-    // The same bound the listen path gets from net.Server: a connection over
-    // it is destroyed, never queued for nobody. A socket already gone is not
-    // counted: its "close" event can never arrive to decrement.
-    if (socket.destroyed || socket.closed ||
-        this.detachedConnections >= this.server.maxConnections) { socket.destroy(); return; }
-    this.detachedConnections += 1;
-    socket.once("close", () => { this.detachedConnections -= 1; });
-    if (head.length > 0) socket.unshift(head);
-    this.server.emit("connection", socket);
-    socket.resume();
   }
 
   private static checked(target: RelayTarget, limits: RelayLimits): URL {

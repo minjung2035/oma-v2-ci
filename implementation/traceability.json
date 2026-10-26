@@ -5294,9 +5294,12 @@
     "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
       "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.bind",
+      "packages/platform-linux/src/peer-identity.ts#pinLinuxPeer",
       "packages/platform-linux/src/credential-stream.ts#credentialStream",
       "packages/process/src/observed-stream.ts#ObservedStream",
-      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender"
+      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender",
+      "packages/native/src/unix-message.ts#isUnixMessageSender"
     ],
     "negativeTests": [
       "test/native-credential-stream.test.mjs#credential stream: live connector",
@@ -5454,6 +5457,80 @@
       "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
       "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
       "test/status-responsiveness.test.ts#V23A"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-021",
+    "source": "docs/macos-platform.md",
+    "digest": "745039173a4b8cbdeeefc6de2a11ef9a58be3bad47e5e048400d657187445be1",
+    "normativeText": "**MUST [NATIVE-021]** 공통 public mutation dispatch는 효과와 view 갱신이 끝난 뒤 답변 전에\nevent loop에 한 turn을 반환한다. 연속 완료된 요청의 Promise continuation이 timer/다른 연결을\n계속 밀어내지 않는다. 이 대기는 SQLite transaction 안이나 새로운 효과의 권한 확인을 대신하는\n위치에 두지 않는다. 그 사이 admission·현재 run 권한이 바뀌어도 이미 확정된 plan·receipt·\naccepted result를 새 실패로 재해석하지 않는다. 종료 owner는 답변 작업의 수명도 기다린다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatchChecked",
+    "entrypoint": "packages/broker/src/index.ts#Broker.dispatch",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker.dispatch",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatch",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatchChecked",
+      "packages/broker/src/index.ts#Broker.refreshViews",
+      "packages/broker/src/index.ts#Broker.drainAndClose"
+    ],
+    "negativeTests": [
+      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-01",
+      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-02",
+      "test/status-responsiveness.test.ts#V23A"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-022",
+    "source": "docs/macos-platform.md",
+    "digest": "650cad3fd5a767714c4a3d55eb525875932f1d8ea25f60525738fc032b88719b",
+    "normativeText": "**MUST [NATIVE-022]** native CLI/TUI의 로컬 예외 문구는 공통 error owner가 읽고, CLI 실패는\nstderr에 쓴다. 폐기한 VM 환경변수로 Linux 경로·errno·용어를 숨기거나 출력 채널을 바꾸지 않는다.\n터미널 제어문자 제거·화면 폭 처리는 현재 presentation owner에 유지한다. Society history는\nOS 분기 없이 birth·project binding·engine cwd를 검증한다. 폐기한 VM relay handoff·Society\n선택·패키지 세대 수집 API는 export나 무효 호환 wrapper로 남기지 않으며 과거 데이터는 보존한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "packages/domain/src/errors.ts#exceptionText",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "packages/domain/src/errors.ts#exceptionText",
+      "apps/oma/src/application/exit.ts#fail"
+    ],
+    "negativeTests": [
+      "test/native-error-presentation.test.ts#Native errors",
+      "test/native-error-presentation.test.ts#Native CLI failure",
+      "test/session-history.test.ts#Session history"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "NATIVE-023",
+    "source": "docs/macos-platform.md",
+    "digest": "3f6de09a297175a8c3a5d4c476853403ebc09f611d454b9bedecc4c1e8fc9b22",
+    "normativeText": "**MUST [NATIVE-023]** runner 실행 identity는 공통 execution owner가 발급한 UUID를 명시적인\nlaunch 인자로 전달한다. runner entry는 누락·중복·잘못된 identity를 거절하고, 검증한 값을\nRunnerModule에 전달한다. ambient service-manager 환경변수에서 identity를 읽거나 대체하지 않는다.\n기존 runner.open·로그의 invocationId는 같은 UUID의32자리 hex이며 broker의 현재 scope binding과\n일치해야 한다. accepted plan·receipt·incarnation·권한의 의미는 바꾸지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "entrypoint": "apps/oma/src/entry/runner.ts#runner",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "apps/oma/src/entry/runner.ts#runner",
+      "apps/oma/src/runner.ts#RunnerModule",
+      "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.requireRunnerPeer"
+    ],
+    "negativeTests": [
+      "test/runner-channel.test.ts#Native runner rejects",
+      "test/runner-channel.test.ts#RUN-001"
     ],
     "evidence": null,
     "status": "unverified",

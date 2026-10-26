@@ -108,10 +108,6 @@
       "types": "./dist/paths.d.ts",
       "default": "./dist/paths.js"
     },
-    "./product-text": {
-      "types": "./dist/product-text.d.ts",
-      "default": "./dist/product-text.js"
-    },
     "./request-identity": {
       "types": "./dist/request-identity.d.ts",
       "default": "./dist/request-identity.js"

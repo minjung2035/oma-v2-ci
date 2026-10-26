@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { FrameParser, encodeFrame } from '@oma/protocol/frame';
 import { matchesPinnedSender } from '@oma/broker/peer-authenticator';
 import { credentialStream, prepareCredentialListener } from '@oma/platform-linux/credential-stream';
+import { pinLinuxPeer } from '@oma/platform-linux/peer-identity';
 import { socketDescriptor, peerCred, peerPidFd, pidfdLiveness } from '@oma/native/linux';
 
 assert.equal(process.platform, 'linux');
@@ -23,7 +24,7 @@ async function transferFixture(t) {
     stream?.destroy(); raw?.destroy(); clientCopy?.destroy();
     const closed = children.map(child => child.exitCode !== null || child.signalCode !== null ? Promise.resolve() : once(child, 'close'));
     for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    await Promise.all(closed); if (pin !== undefined) closeSync(pin);
+    await Promise.all(closed); pin?.close();
     await new Promise(resolve => server.close(resolve)); rmSync(root, { recursive: true });
   });
   server.listen(path); await once(server, 'listening'); prepareCredentialListener(server);
@@ -34,8 +35,9 @@ async function transferFixture(t) {
   const holder = await spawn('holder'); // Exists before the original connect.
   const accepted = once(server, 'connection'), connector = await spawn('connector'); [raw] = await accepted;
   const original = peerCred(socketDescriptor(raw)); assert.equal(original.pid, connector.pid);
-  pin = peerPidFd(socketDescriptor(raw)); assert.notEqual(pin, null);
-  const peer = { ...original, alive: () => pidfdLiveness(pin).kind === 'running' };
+  pin = pinLinuxPeer(raw); assert.ok(pin);
+  const peer = pin;
+  assert.equal(peer.sameSender(original), false, 'connection credentials alone are not per-message kernel evidence');
   const ask = async (child, message, handle) => {
     const reply = once(child, 'message');
     await new Promise((resolve, reject) => child.send(message, handle, { keepOpen: true }, error => error ? reject(error) : resolve()));

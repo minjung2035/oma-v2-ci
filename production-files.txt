@@ -201,7 +201,6 @@ packages/domain/src/lineage.ts
 packages/domain/src/mail-values.ts
 packages/domain/src/package-policy.ts
 packages/domain/src/paths.ts
-packages/domain/src/product-text.ts
 packages/domain/src/protocol-limits.ts
 packages/domain/src/recovery-policy.ts
 packages/domain/src/request-identity.ts
@@ -337,6 +336,8 @@ packages/mail/src/review-documents.ts
 packages/mail/src/routing.ts
 packages/mail/src/serialize.ts
 packages/native/package.json
+packages/native/src/audit-origin.ts
+packages/native/src/audit-token.ts
 packages/native/src/cleanup.ts
 packages/native/src/control-socket.ts
 packages/native/src/descriptor-path.ts
@@ -344,9 +345,11 @@ packages/native/src/directory-layout.ts
 packages/native/src/files.ts
 packages/native/src/identity.ts
 packages/native/src/linux.ts
+packages/native/src/mach-message.ts
 packages/native/src/peer-uid.ts
 packages/native/src/pid-namespace.ts
 packages/native/src/posix-files.ts
+packages/native/src/process-event.ts
 packages/native/src/process-lock.ts
 packages/native/src/process-observation.ts
 packages/native/src/snapshot-reader.ts
@@ -357,12 +360,14 @@ packages/platform-linux/src/candidate-sandbox.ts
 packages/platform-linux/src/credential-stream.ts
 packages/platform-linux/src/git-sandbox.ts
 packages/platform-linux/src/namespace-execution.ts
+packages/platform-linux/src/peer-identity.ts
 packages/platform-linux/src/resident-rootfs.ts
 packages/platform-linux/src/runner-scope.ts
 packages/platform-linux/src/sandbox-seccomp.ts
 packages/platform-linux/src/sandbox.ts
 packages/platform-linux/src/worker-spawn.ts
 packages/platform-mac/package.json
+packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/keychain-client.ts
 packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements
@@ -14301,4 +14306,3 @@ packages/tui/src/view/notice.ts
 packages/tui/src/view/screens.ts
 packages/tui/src/view/session-mode.ts
 packages/tui/src/view/text.ts
-packages/tui/src/words.ts

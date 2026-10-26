@@ -19,7 +19,7 @@ import { ENTRY, boundaryOf, completeSession, evidenceOf, preparedFixture, type R
 /** The production runner's consume step with the engine and the broker
  * channel replaced by counters: the decision under test is the runner's own. */
 async function runnerConsume(t: TestContext, f: Fixture, wait = false): Promise<{ deliveries: number; completions: Record<string, unknown>[]; error: unknown }> {
-  const runner = new RunnerModule({ runRoot: join(f.root, "run"), stateRoot: f.root, society: "demo" }, "alice", TEST_PROTOCOL_LIMITS);
+  const runner = new RunnerModule({ runRoot: join(f.root, "run"), stateRoot: f.root, society: "demo" }, "alice", "a".repeat(32), TEST_PROTOCOL_LIMITS);
   let deliveries = 0;
   const completions: Record<string, unknown>[] = [];
   // w11/U1: a confined delivery opens the inference relay before the adapter.

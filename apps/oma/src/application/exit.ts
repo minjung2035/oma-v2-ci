@@ -6,7 +6,6 @@
 import { writeSync } from "node:fs";
 import type { ErrorCode } from "@oma/contracts/errors";
 import { errorCodeOf, errorExit } from "@oma/domain/errors";
-import { humanStream } from "@oma/tui/words";
 
 export type ExitCode = 0 | 2 | 3 | 4;
 
@@ -15,7 +14,7 @@ export function exitFor(code: ErrorCode): ExitCode { return errorExit(code); }
 export function codeFor(error: unknown): ExitCode { return exitFor(errorCodeOf(error)); }
 
 export function fail(message: string, code: ExitCode): never {
-  const stream = humanStream();
+  const stream = process.stderr;
   const text = `oma: ${message}\n`;
   // A stream write is buffered; `process.exit` on its heels can drop the
   // message when the stream is a pipe (NB-06). Writing the fd itself is what

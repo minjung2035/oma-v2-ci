@@ -16,8 +16,6 @@ export interface ConversationCommands {
   relaunch(resume: string | null, mode?: SessionMode): Promise<void>;
 }
 export interface SocietyConversationView {
-  errorWords(error: unknown): string;
-  surfaceWords(text: string, instead: string): string;
   notice(text: string): void;
   draw(): void;
   refresh(): void;

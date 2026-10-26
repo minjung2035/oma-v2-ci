@@ -1,5 +1,5 @@
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
-/** CONNECT egress: compatibility policy grammar, unrestricted destination
+/** CONNECT egress: authority grammar, unrestricted destination
  * routing, address pinning, socket protocol and owned connection lifetime. */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { connectHostProblem, parseConnectTarget } from "@oma/domain/egress";
+import { parseConnectTarget } from "@oma/domain/egress";
 import {
   ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit,
 } from "#oma-test/app/runtime/connect-proxy";
@@ -44,9 +44,7 @@ test("DR34: the CONNECT authority is host:port or [literal]:port, strictly", () 
     const { problem } = parseConnectTarget(url);
     assert.notEqual(problem, null, JSON.stringify(url));
   }
-  assert.equal(connectHostProblem("registry.npmjs.org"), null);
-  assert.equal(connectHostProblem("[::1]"), null);
-  for (const host of ["", "a b", "a/b", "@x", "a:443", 42, null]) assert.notEqual(connectHostProblem(host), null, String(host));
+
 });
 
 /* ---------------- unrestricted destination routing ---------------- */

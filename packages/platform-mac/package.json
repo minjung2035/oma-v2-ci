@@ -19,6 +19,10 @@
     "./native-assets": {
       "types": "./dist/native-assets.d.ts",
       "default": "./dist/native-assets.js"
+    },
+    "./audit-peer": {
+      "types": "./dist/audit-peer.d.ts",
+      "default": "./dist/audit-peer.js"
     }
   },
   "scripts": {

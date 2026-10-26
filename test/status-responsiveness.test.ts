@@ -220,3 +220,48 @@ test("NATIVE-STATUS-PUBLICATION-02: shutdown joins a held publication before Sto
     assert.equal(closed, true); assert.equal(publications, 0, "draining cannot republish the removed status view");
   } finally { release(); }
 });
+
+test("NATIVE-DISPATCH-YIELD-01: a completed mutation gives the event loop a turn before its reply", async t => {
+  const s = society(t);
+  const refresh = s.views.refreshWorld.bind(s.views);
+  let observed = false, turn = Promise.resolve();
+  t.mock.method(s.views, "refreshWorld", () => {
+    refresh();
+    turn = new Promise<void>(resolve => setImmediate(() => { observed = true; resolve(); }));
+  });
+  const sent = await s.call({ v: 1, id: "yield-one", method: "mail.send", request: "yield-one",
+    params: { to: ["w2"], subject: "fair turn", kind: "message", body: "accepted once" } });
+  const turnBeforeReply = observed;
+  await turn;
+  assert.equal(turnBeforeReply, true, "back-to-back completed writes monopolized the microtask queue");
+  assert.equal(sent.answer.ok, true);
+  assert.equal(s.store.getOperation("alice", "yield-one")?.state, "succeeded");
+  assert.equal(s.store.pendingDeliveries("w2").length, 1);
+});
+
+test("NATIVE-DISPATCH-YIELD-02: admission closing during the turn cannot reinterpret the accepted result", async t => {
+  const s = society(t);
+  const refresh = s.views.refreshWorld.bind(s.views);
+  let closed = false, turn = Promise.resolve(), accepted: { id: string; planJson: string; result: string } | null = null;
+  t.mock.method(s.views, "refreshWorld", () => {
+    refresh();
+    turn = new Promise<void>((resolve, reject) => setImmediate(() => {
+      try {
+        const operation = s.store.getOperation("alice", "yield-close");
+        assert.equal(operation?.state, "succeeded");
+        accepted = { id: operation!.id, planJson: operation!.planJson, result: JSON.stringify(operation!.result) };
+        s.broker.closeAdmission(); closed = true; resolve();
+      } catch (error) { reject(error); }
+    }));
+  });
+  const sent = await s.call({ v: 1, id: "yield-close", method: "mail.send", request: "yield-close",
+    params: { to: ["w2"], subject: "closed after accept", kind: "message", body: "keep this fact" } });
+  const closedBeforeReply = closed;
+  await turn;
+  assert.equal(closedBeforeReply, true, "the reply bypassed the cooperative boundary");
+  assert.equal(sent.answer.ok, true, JSON.stringify(sent.answer));
+  const operation = s.store.getOperation("alice", "yield-close")!;
+  assert.deepEqual({ id: operation.id, planJson: operation.planJson, result: JSON.stringify(operation.result) }, accepted);
+  assert.equal(operation.state, "succeeded");
+  assert.equal(s.store.pendingDeliveries("w2").length, 1);
+});

@@ -5,10 +5,9 @@ import { integerEnv } from "@oma/tool-runtime/shared";
 
 /** INF-006: the sandbox end of the provider relay.
  *
- * The confined engine has no network, so it cannot reach the host's relay
- * socket on its own. This opens a loopback listener inside the sandbox's own
- * network namespace and forwards those bytes, unread, to the bind-mounted
- * socket. Nothing here parses HTTP or holds a credential: the engine keeps its
+ * The engine's HTTP provider uses a loopback listener that forwards its
+ * bytes, unread, to the bind-mounted Unix relay socket. Host network access
+ * remains available under DR37; the relay protects the provider credential. Nothing here parses HTTP or holds a credential: the engine keeps its
  * codec and the host end attaches the real authorization.
  *
  * The engine awaits its extension factory before committing provider changes

@@ -30,7 +30,7 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
   const mode = options.mode ?? "offline";
   let physicalChecks = 0, pendingPublications = 0;
   const finish = () => Object.freeze({ ...ledger.report(facts, scanned), mode, physicalChecks, pendingPublications,
-    scope: "read-only bounded observations; not release, provider, cgroup-death or power-loss proof" });
+    scope: "read-only bounded observations; not release, provider, whole-scope death or power-loss proof" });
   if (result.report.status !== "PASS") return finish(); // Bad durable input never reaches a physical observer.
   const observe = <T>(work: () => FileObservation<T>): FileObservation<T> => {
     physicalChecks++;

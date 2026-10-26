@@ -146,7 +146,7 @@ function internalFixture() {
       requireHostUnit: () => {
         calls.authority++;
       },
-      requireRunnerUnit() {},
+      requireRunnerPeer() {},
       runnerActor() {
         return "runner";
       },

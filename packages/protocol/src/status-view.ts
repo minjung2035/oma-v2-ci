@@ -9,7 +9,7 @@
  */
 import type { AgentStatus } from "@oma/contracts";
 
-/** The reason a status row gives for a unit systemd answered it does not have:
+/** The reason a status row gives for an observed absent managed execution:
  * an observed absence, unlike a row with no reason and no state (not observed).
  * Written by the projection and read by the Dashboard (P0V-39, P0-2). */
 export const NO_UNIT_REASON = "no managed Resident execution";

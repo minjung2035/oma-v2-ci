@@ -541,7 +541,7 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
   };
   const model = { provider: "pi", model: "current", inferenceTimeoutSeconds: 600 };
   const adapterOf = (toolSurface?: string): PiAdapter => {
-    const runner = new RunnerModule(runnerPaths, "alice",
+    const runner = new RunnerModule(runnerPaths, "alice", "a".repeat(32),
       { ...LIMITS, subjectBytes: 1024, addresses: 8, replyReferences: 8, contextFiles: 8, logBytes: 1 << 20 }, {modelProfile: "md",
       name: "resident", model, ...(toolSurface === undefined ? {} : { toolSurface }) });
     Reflect.set(runner, "lease", f.confinement.lease);

@@ -1,12 +1,9 @@
 /** TUI-004 / architecture §23.5: the Principal session's connection credential.
  *
- * A Resident proves who it is by the systemd scope it runs in. The Principal
- * has no scope: the product starts its engine as its own child, in the Human's
- * terminal, so there is no unit to observe and a cgroup check could only ever
- * fail. Its authority comes instead from a secret the broker mints for the run
- * it is serving and publishes where only the owning user can read it; the host
- * hands that secret to the session it started, and a connection that presents
- * it is the Principal for as long as the broker that minted it is alive.
+ * A Resident is bound to its broker-owned execution scope and authenticated
+ * message sender. The Principal's interactive engine uses a separate private
+ * channel. Its credential is minted by the broker for the live run and passed
+ * through that channel to the registered engine, never through a public path.
  *
  * The secret is never derived from anything — not the society, not a path, not
  * the clock — so knowing the deployment tells an attacker nothing, and it dies

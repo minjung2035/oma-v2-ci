@@ -25,6 +25,11 @@ export function enableUnixCredentials(fd: number): void {
 export type UnixMessage = { readonly kind: "again" } | { readonly kind: "end" } | {
   readonly kind: "data"; readonly bytes: Buffer; readonly sender: PeerCred | null; readonly ancillary: boolean;
 };
+const observedSenders = new WeakSet<object>();
+/** A claimed PID or a copied credential object is not a receive observation. */
+export function isUnixMessageSender(value: unknown): value is PeerCred {
+  return value !== null && typeof value === "object" && observedSenders.has(value);
+}
 export function receiveUnixMessage(fd: number): UnixMessage {
   linux(); receive ??= load(null).func("long recvmsg(int fd, void *message, int flags)");
   const bytes = Buffer.alloc(65536), control = Buffer.alloc(4096), vector = Buffer.alloc(16), message = Buffer.alloc(56);
@@ -42,7 +47,7 @@ export function receiveUnixMessage(fd: number): UnixMessage {
     const data = control.subarray(offset + 16, offset + length);
     if (level === 1 && type === 2 /* SCM_CREDENTIALS */) {
       if (sender !== null || data.length !== 12) malformed = true;
-      else sender = { pid: data.readInt32LE(0), uid: data.readUInt32LE(4), gid: data.readUInt32LE(8) };
+      else sender = Object.freeze({ pid: data.readInt32LE(0), uid: data.readUInt32LE(4), gid: data.readUInt32LE(8) });
     } else {
       ancillary = true;
       if (level === 1 && (type === 1 /* SCM_RIGHTS */ || type === 4 /* SCM_PIDFD */)) {
@@ -58,6 +63,7 @@ export function receiveUnixMessage(fd: number): UnixMessage {
   if (malformed) throw new Error("Unix ancillary observation is incomplete");
   if (count === 0) return { kind: "end" };
   if (count > bytes.length) throw new Error("Unix message exceeds receive storage");
+  if (sender !== null) observedSenders.add(sender);
   return { kind: "data", bytes: bytes.subarray(0, count), sender, ancillary };
 }
 /** One asynchronous native wait can serve all observed connections. The

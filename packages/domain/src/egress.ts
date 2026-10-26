@@ -61,15 +61,3 @@ export function parseConnectTarget(url: unknown): { target: ConnectTarget; probl
     return { target: null, problem: "the CONNECT port is outside 1..65535" };
   return { target: Object.freeze({ host: normalizeEgressHost(host), port, literal }), problem: null };
 }
-
-/** The wire grammar of `host` on its own (the egress.connect params the guest
- * carries to the host): the same name-or-literal shape a CONNECT authority
- * holds, without the port. The policy question -- which names may be dialed --
- * is the dialer's, not this grammar's. */
-export function connectHostProblem(host: unknown): string | null {
-  if (typeof host !== "string" || host.length === 0 || host.length > CONNECT_HOST_BYTES)
-    return "an egress connect host must be a non-empty string within 253 bytes";
-  if (AUTHORITY_NAME_RE.test(host)) return null;
-  if (host.startsWith("[") && host.endsWith("]") && /^[0-9a-fA-F:.]+$/.test(host.slice(1, -1))) return null;
-  return "an egress connect host is a DNS name or a bracketed literal";
-}

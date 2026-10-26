@@ -8,7 +8,6 @@ import type { AgentStatus, HostConfig } from "@oma/contracts";
 import { NO_UNIT_REASON } from "@oma/protocol/status-view";
 import type { DashboardData } from "./model.js";
 import type { Observation } from "@oma/protocol/status-view";
-import { surfaceWords } from "./words.js";
 
 export interface DashboardInput {
   readonly config: HostConfig;
@@ -48,7 +47,7 @@ export function dashboardData(input: DashboardInput): DashboardData {
       pending: observation.statuses.reduce((total, row) => row.agent === "principal" ? total : total + row.pending, 0),
       principalPending: observation.statuses.find(row => row.agent === "principal")?.pending ?? null,
     }
-    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: surfaceWords(observation.reason, "Not observed") };
+    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: observation.reason };
   return Object.freeze({
     status,
     configuredWorkers: config.initialResidents.length,

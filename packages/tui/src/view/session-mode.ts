@@ -14,13 +14,3 @@ export function renderSessionMode(selected: SessionMode, width: number, height: 
   ];
   return lines.slice(0, height).map(line => pad(line, width));
 }
-
-export function renderSocietyChoice(societies: readonly string[], selected: string, width: number, height: number): readonly string[] {
-  const chrome = height >= 3;
-  const count = Math.max(1, height - (chrome ? 2 : 0));
-  const index = Math.max(0, societies.indexOf(selected));
-  const start = Math.max(0, Math.min(index, societies.length - count));
-  const choices = societies.slice(start, start + count).map(society => `${society === selected ? ">" : " "} ${society}`);
-  const lines = chrome ? ["oma — Society", ...choices, "Enter: attach  Esc: cancel"] : choices;
-  return lines.slice(0, height).map(line => pad(line, width));
-}

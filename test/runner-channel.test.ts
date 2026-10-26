@@ -105,18 +105,24 @@ test("RUN-001: a prepared handoff requires an explicitly configured Pi adapter",
     const methods: unknown[] = [];
     const transport = await privateTransport(t, raw => {
       methods.push(raw.method);
+      if (raw.method === "runner.open") assert.deepEqual(raw.params, { agent: "a", invocationId: "a".repeat(32) });
       return raw.method === "runner.open"
         ? { actor: "a", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "a", 1) }
         : prepared ? { id: "b-00000000-0000-4000-8000-000000000015", agent: "a", incarnation: 1,
           messageIds: ["m-00000000-0000-4000-8000-000000000015-0"], sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" } : null;
     });
-    const runner = new RunnerModule({ runRoot: dir }, "a", undefined, undefined, transport.control);
+    const runner = new RunnerModule({ runRoot: dir }, "a", "a".repeat(32), undefined, undefined, transport.control);
     try {
       if (prepared) await assert.rejects(runner.run(), { code: "UNSUPPORTED_PROFILE" });
       else assert.equal(await runner.run(), 0);
       assert.deepEqual(methods, ["runner.open", "batch.prepare"]);
     } finally { await runner.stop(); }
   }
+});
+
+test("Native runner rejects missing or malformed explicit execution identity", () => {
+  for (const identity of [undefined, "", "legacy-unit", "a".repeat(31), "A".repeat(32)])
+    assert.throws(() => new RunnerModule({ runRoot: "/unused" }, "alice", identity as string), /explicit execution identity/);
 });
 
 // The old AV21 pathname-reconnect case is preserved in the raw archive.
@@ -137,7 +143,7 @@ async function idleDelivery(t: import("node:test").TestContext, broken: boolean)
     return raw.method === "runner.open" ? { actor: "alice", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "alice", 1) }
       : raw.method === "batch.prepare" ? batch : { completed: true };
   }, { ...TEST_PROTOCOL_LIMITS, idleStreamSeconds: 1 });
-  const runner = new RunnerModule({ runRoot: dir, stateRoot: dir }, "alice", { ...TEST_PROTOCOL_LIMITS, idleStreamSeconds: 1 }, undefined, transport.control);
+  const runner = new RunnerModule({ runRoot: dir, stateRoot: dir }, "alice", "a".repeat(32), { ...TEST_PROTOCOL_LIMITS, idleStreamSeconds: 1 }, undefined, transport.control);
   const consume = Reflect.get(runner, "consume").bind(runner);
   t.mock.method(runner as unknown as Record<string, (...args: never[]) => unknown>, "consume", async (value: PreparedBatch) => {
     // A real quiet interval exceeds both transport idle budgets.

@@ -40,7 +40,7 @@ export class Client {
     this.transport = new Transport(grant);
   }
   private requests(): RequestService {
-    // The context's home is the request cache's root (the in-guest caller's
+    // The context's home is the request cache's root (the local caller's
     // is its agent-owned OMA_AGENT_HOME). A caller whose environment has no
     // HOME has no root; a shared /tmp guessed for it is not one.
     const home = this.context.env.HOME;

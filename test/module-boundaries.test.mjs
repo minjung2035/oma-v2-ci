@@ -22,7 +22,7 @@ test("DR41: module boundaries reject implementation imports including erased typ
 test("DR44: conversation and native lifecycle boundaries also reject erased, deferred and re-exported implementation imports", () => {
   for (const [file, target, rule] of [
     ["apps/oma/src/application/society-interaction.ts", "@oma/engine/principal-session", "society-conversation-boundary"],
-    ["apps/oma/src/application/society-runtime.ts", "@oma/tui/words", "society-conversation-boundary"],
+    ["apps/oma/src/application/society-runtime.ts", "@oma/tui/model", "society-conversation-boundary"],
     ["packages/platform-linux/src/sandbox.ts", "../../../apps/oma/src/application/society-runtime.js", "platform-adapter-boundary"],
     ["packages/platform-mac/src/keychain-client.ts", "../../../apps/oma/src/application/society-transition.js", "platform-adapter-boundary"],
   ]) for (const text of [
@@ -37,5 +37,5 @@ test("DR44: conversation and native lifecycle boundaries also reject erased, def
 test("DR41: Application composes public modules and TUI consumes contracts without loading their effects", () => {
   assert.deepEqual(findings({ "packages/tui/src/example.ts": "import type { ConfigField } from \"../../domain/src/settings.js\";",
     "apps/oma/src/application/example.ts": "import { societyPanelPorts } from \"../../../../packages/tui/src/society-panel.js\"; import { readPackageIndex } from \"../runtime/packages/index.js\";",
-    "packages/tui/src/words.ts": "import { productText } from \"../../domain/src/product-text.js\";" }), []);
+    "packages/tui/src/example.ts": "import { exceptionText } from \"../../domain/src/errors.js\";" }), []);
 });

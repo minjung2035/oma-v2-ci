@@ -16,8 +16,6 @@ export async function sessionBirthForHistory(dataRoot: string, file: string, cwd
   if (birth === null)
     throw new StoreError("INVALID_REQUEST", "This history has no OMA birth record; use a new development session directory");
   if (birth.mode === "personal") { await assertSessionHistory(file, birth); return birth; }
-  if (process.platform === "darwin")
-    throw new StoreError("INVALID_REQUEST", "That history has no local Personal birth record");
   const binding = observeProjectBinding(root);
   if (binding.kind !== "bound" || binding.binding.society !== basename(root) || binding.binding.canonicalProjectPath !== cwd)
     throw new StoreError(binding.kind === "unavailable" ? "BROKER_UNAVAILABLE" : "INVALID_REQUEST", "That Society is not bound to this project");
@@ -38,9 +36,6 @@ export function sessionHistoryDirectories(dataRoot: string, cwd: string): readon
     if (birth.mode !== "personal") throw new StoreError("STORE_CORRUPT", "Personal history has another birth mode");
     result.push({ root, dir: birth.history, mode: birth.mode });
   }
-  // Mac Society histories live in the guest. Host directory names (engine,
-  // packages, run) are not evidence of a local Society or a guest binding.
-  if (process.platform === "darwin") return Object.freeze(result);
   for (const id of names(dataRoot).filter(isValidSocietyName)) {
     const root = join(dataRoot, id), binding = observeProjectBinding(root);
     if (binding.kind === "unavailable") throw new StoreError("BROKER_UNAVAILABLE", binding.reason);

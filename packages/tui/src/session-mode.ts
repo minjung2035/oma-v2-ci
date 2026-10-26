@@ -3,16 +3,11 @@ import type { SessionMode } from "@oma/domain/session-mode";
 import { HOST_LOSS_SIGNALS } from "@oma/domain/host-signals";
 import { KeyDecoder, type Key } from "./keys.js";
 import { openTerminal, releaseTerminalResources, type TerminalStreams } from "./screen.js";
-import { renderSessionMode, renderSocietyChoice } from "./view/index.js";
+import { renderSessionMode } from "./view/index.js";
 
 export function chooseSessionMode(streams: TerminalStreams): Promise<SessionMode | null> {
   return chooseTerminalItem(streams, { items: ["society", "personal"] as const,
     render: (selected, width, height) => renderSessionMode(selected, width, height) });
-}
-
-export function chooseSociety(streams: TerminalStreams, societies: readonly string[]): Promise<string | null> {
-  return chooseTerminalItem(streams, { items: societies,
-    render: (selected, width, height) => renderSocietyChoice(societies, selected, width, height) });
 }
 
 /** One terminal/decoder lifetime for pre-engine choices; no second cleanup owner. */

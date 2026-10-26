@@ -1,39 +1,32 @@
 // AUTH-001..003: identity observation and live authority; never caches a copied capability grant.
-import type { Socket } from "node:net";
-import { closeSync } from "node:fs";
+import type { Duplex } from "node:stream";
 import type { Actor, AuthContext, Capability } from "@oma/contracts";
-import type { BrokerLedger, BrokerUnits, BoundPeer } from "./ports.js";
+import type { BrokerLedger, BrokerUnits, BoundPeer, BrokerEffects } from "./ports.js";
 import { descendsFrom } from "./process-ancestry.js";
 import type { RunRegistry } from "./run-registry.js";
 import { StoreError } from "@oma/domain/errors";
 import { capabilitiesOf } from "@oma/domain/authority";
-import { peerCred, peerPidFd, pidfdLiveness, socketDescriptor, type PeerCred } from "@oma/native/linux";
 import { SharedPeerPin, type ConnectionPeerPin } from "./peer-pin.js";
 
-function socketFd(socket: Socket): number {
-  const fd = socketDescriptor(socket);
-  if (fd === null) throw new StoreError("AUTH_FAILED", "no socket fd");
-  return fd;
-}
 /** Every received byte range must name the still-pinned original connector.
  * Descriptor possession and a caller's claimed PID are not sender evidence. */
-export function matchesPinnedSender(peer: Pick<BoundPeer, "pid" | "uid" | "gid" | "alive">, sender: PeerCred | null): boolean {
-  return sender !== null && sender.pid === peer.pid && sender.uid === peer.uid && sender.gid === peer.gid && peer.alive();
+export function matchesPinnedSender(peer: Pick<BoundPeer, "sameSender" | "alive">, sender: unknown): boolean {
+  return peer.sameSender(sender) && peer.alive();
 }
 export class PeerAuthenticator {
   constructor(private readonly store: Pick<BrokerLedger, "getAgent" | "listAgents" | "societyOpen">, private readonly units: Pick<BrokerUnits, "observe" | "scopeRoot" | "runnerAlive">, private readonly runs: RunRegistry,
-    private readonly society: string, private readonly cleanupError: (error: unknown) => void) {}
-  bind(socket: Socket): BoundPeer | null {
-    const fd = socketFd(socket); const credentials = peerCred(fd);
-    if (!credentials) return null;
-    const pinned = peerPidFd(fd);
+    private readonly society: string, private readonly cleanupError: (error: unknown) => void,
+    private readonly pinPeer: BrokerEffects["pinPeer"]) {}
+  bind(socket: Duplex): BoundPeer | null {
+    const pinned = this.pinPeer(socket);
     if (pinned === null) return null;
     // Only an answered "running" keeps the peer's authority (INV06); "exited"
     // and "failed" both refuse, and neither is used as proof of death (INV02).
-    const owner = new SharedPeerPin(() => pidfdLiveness(pinned).kind === "running", () => closeSync(pinned));
+    const owner = new SharedPeerPin(() => pinned.alive(), () => pinned.close());
     if (!owner.alive()) { owner.releaseConnection(); return null; }
     socket.once("close", () => { try { owner.releaseConnection(); } catch (error) { this.cleanupError(error); } });
-    return { ...credentials, alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };
+    return { pid: pinned.pid, uid: pinned.uid, gid: pinned.gid, sameSender: sender => pinned.sameSender(sender),
+      alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };
   }
   context(actor: Actor, credentials: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
     const agent = this.store.getAgent(actor);
@@ -90,7 +83,7 @@ export class PeerAuthenticator {
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid } };
   }
-  requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void {
+  requireRunnerPeer(peer: BoundPeer, agent: Actor, invocationId?: string): void {
     const grant = peer.inheritedRunner;
     if (!grant || grant.actor !== agent || invocationId !== undefined && grant.invocationId !== invocationId ||
         !this.matchesScope(agent, peer, grant.invocationId))
@@ -99,7 +92,7 @@ export class PeerAuthenticator {
   runnerActor(peer: BoundPeer): Actor {
     const grant = peer.inheritedRunner;
     if (!grant) throw new StoreError("AUTH_FAILED", "runner has no inherited grant");
-    this.requireRunnerUnit(peer, grant.actor, grant.invocationId); return grant.actor;
+    this.requireRunnerPeer(peer, grant.actor, grant.invocationId); return grant.actor;
   }
   runnerAuth(agent: Actor, incarnation: number, peer: BoundPeer): AuthContext {
     const auth = this.context(agent, peer, "trusted-runner");

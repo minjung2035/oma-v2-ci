@@ -221,6 +221,12 @@ export function acceptedFailurePolicy(error: unknown, phase: ErrorPhase, effectK
     observationKind: code === "STREAM_INVALID" || category === "integrity" ? "corrupt" :
       category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
 }
+/** A local exception's authored text for CLI and TUI presentation.
+ * No platform vocabulary filter, logging effect or output-channel policy. */
+export function exceptionText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** The normalized failure's own message, or null for a failure OMA does not name. */
 export function failureMessage(error: unknown): string | null {
   const normalized = normalizeStorageFailure(error);
@@ -309,7 +315,7 @@ export const ERROR_DESCRIPTIONS = Object.freeze({
   STORAGE_FULL: "Insufficient storage space", DB_BUSY: "Storage is temporarily busy",
   STORE_CORRUPT: "Mutations stopped due to a source integrity error; host recovery is required",
   BROKER_UNAVAILABLE: "The broker cannot process this request right now", DEADLINE_EXCEEDED: "The operation did not finish before its deadline",
-  RUN_TERMINATION_UNKNOWN: "Could not confirm termination of the previous run", START_LIMIT: "Systemd start limit reached; an explicit start is required",
+  RUN_TERMINATION_UNKNOWN: "Could not confirm termination of the previous run", START_LIMIT: "Automatic restart limit reached; an explicit start is required",
   PRINCIPAL_DISCONNECTED: "The Principal UI is not connected", ATTACH_CONFLICT: "Another Principal session is already attached",
   BATCH_CONFLICT: "Batch ownership or content does not match", SESSION_BOUNDARY_UNCONFIRMED: "Insufficient evidence of delivery completion",
   INVALID_OID: "Invalid commit ID format", CANDIDATE_NOT_PUBLISHED: "Candidate is not published to the society",

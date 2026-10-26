@@ -63,6 +63,18 @@
     "./descriptor-path": {
       "types": "./dist/descriptor-path.d.ts",
       "default": "./dist/descriptor-path.js"
+    },
+    "./mach-message": {
+      "types": "./dist/mach-message.d.ts",
+      "default": "./dist/mach-message.js"
+    },
+    "./process-event": {
+      "types": "./dist/process-event.d.ts",
+      "default": "./dist/process-event.js"
+    },
+    "./audit-origin": {
+      "types": "./dist/audit-origin.d.ts",
+      "default": "./dist/audit-origin.js"
     }
   },
   "scripts": {

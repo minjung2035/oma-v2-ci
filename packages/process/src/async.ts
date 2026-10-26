@@ -18,7 +18,7 @@ export interface AsyncProcessOptions {
   readonly stderrFd?: number;
   /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
   readonly signal?: AbortSignal;
-  /** Pinned preparation commands may own a Linux process group, never a systemd scope. */
+  /** Pinned preparation commands may own a process group. */
   readonly processGroup?: boolean;
   /** Owned file capabilities mapped to child descriptors 3, 4, ...; never pathname reopens. */
   readonly inheritedFds?: readonly number[];
@@ -30,7 +30,7 @@ export interface ProcessTask {
   cancel(): void;
 }
 
-/** This is not an arbitrary-descendant/cgroup death oracle. Group termination
+/** This is not an arbitrary-descendant death oracle. Group termination
  * is requested only while the original direct child is still alive; an exited
  * PID is never reused as a signal target. Escaped descendants require the native
  * profile's separate proof and cannot authorize artifact cleanup here.

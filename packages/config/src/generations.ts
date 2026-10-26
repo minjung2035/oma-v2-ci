@@ -42,7 +42,7 @@ export const MANAGED_DIRECTORY = ".oma-config";
 /** D02 editing budget, not a reading rule: a valid bundle of any shape stays
  * readable; only an edit that would exceed these is refused until a quiescent
  * start collects what no reader can still use. The loader's own closure budget
- * (256 files, 8 MiB) bounds one generation, so sixteen fit in far less. */
+ * (4096 files, 64 MiB) bounds one generation; the total edit budget remains separate. */
 export interface ManagedLimits { readonly generations: number; readonly bytes: number }
 export const MANAGED_LIMITS: ManagedLimits = Object.freeze({ generations: 16, bytes: 256 * 1024 * 1024 });
 const GENERATION_ID = /^g-[0-9a-f]{64}$/;

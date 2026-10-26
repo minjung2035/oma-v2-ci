@@ -48,13 +48,13 @@ test("runnerObservationOf: an event reports only the engine activity it names", 
 /** Deps the way p0-review6 builds them: every port stubbed, the runner
  * authenticated as the ledger's current incarnation. */
 function dispatcherWith(incarnation: number) {
-  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
   const dispatcher = new InternalDispatcher({
     store: { getAgentIdentity: () => ({ incarnation }), pendingDeliveryCount: () => 0,
       getBatchAgent: () => null, preparedBatchIds: () => [] },
     mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0 } as never,
-    peers: { requireRunnerUnit: () => {}, runnerActor: () => "alice",
+    peers: { requireRunnerPeer: () => {}, runnerActor: () => "alice",
       runnerAuth: () => ({} as never) },
     isDraining: () => false, assertAdmission: () => {},
     failureAnswer: (id: string, error: unknown) => ({ id, ok: false,
@@ -115,7 +115,7 @@ test("runner.observe: status shows the report's timestamp for its own run, and n
 /** A RunnerModule with its channel and connect() stubbed, so the send loop
  * can be watched without a broker. */
 function runnerWithChannel(call: (method: string, params: Record<string, unknown>) => Promise<unknown>) {
-  const runner = new RunnerModule({ runRoot: "/nonexistent" }, "alice");
+  const runner = new RunnerModule({ runRoot: "/nonexistent" }, "alice", "a".repeat(32));
   Reflect.set(runner, "channel", { call, close: () => {} });
   let reconnects = 0;
   Reflect.set(runner, "connect", async () => { reconnects++; });

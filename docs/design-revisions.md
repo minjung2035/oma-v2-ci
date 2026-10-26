@@ -2453,3 +2453,36 @@ peer의 실제 scope 종료와 초기 메일 정산을 기다리고, same-key �
 이미 완료된 delivery를 비교한다. provider 대본은 frozen initial message ID로 concurrent peer와
 부모를 구분한다. 엔진 재시작도 running/EOF 대신 실제 child close를 기다린다. 이는 시험 수명의
 수정이며, 임의 scope 사망·권한·기존 receipt 의미를 낮추거나 Darwin gate를 닫지 않는다.
+
+## DR58 — 완료된 mutation 사이에 event loop turn을 반환한다
+
+실제 CI stress에서 네 순차 mutation과 status 조회의 mixed lag가 기존100ms 예산을 넘었다.
+로컬 실제 Store/view 계측에서는 다수의 동기 transaction과 view 게시가 확인됐고, 완료 Promise의
+연속 continuation은 별도 I/O 대기가 없는 다음 요청을 바로 시작할 수 있다. public dispatcher는
+효과와 view 갱신이 끝난 뒤 reply 전에 공통 Node event-loop turn을 반환한다(NATIVE-021).
+업무 queue·별도 scheduler·OS별 정책을 추가하지 않으며 latency 예산을 늘리지 않는다.
+
+turn 반환은 transaction 바깥이고 추가 효과도 아니다. 대기 사이의 admission 종료로 과거
+accepted plan/result/receipt를 바꾸지 않는다. 기존 owner가 긴 준비 후/효과 직전에 하는 권한
+검사를 제거하지 않는다. 단일 host I/O 지연까지 없어졌다고 주장하지 않으며 실제 stress와
+전체 suite 결과를 별도로 확인한다.
+
+## DR59 — VM의 표시·handoff 정책을 제거하고 native 실행 identity를 명시한다
+
+DR18 D-1의 guest 표시 정책은 native 실행에 적용하지 않는다. 현재 예외 문구는
+`packages/domain/src/errors.ts#exceptionText`가 읽고 CLI 실패는 stderr로 보낸다. Linux 경로와
+errno를 숨기는 codec·환경변수·로그 중복 방지 bound와 관련 export를 삭제한다. 터미널의
+제어문자 제거·폭 처리는 그대로 사용한다. Society history는 birth·binding·engine cwd로만
+판정하며 미해결 Darwin product gate는 별도로 유지한다(NATIVE-022).
+
+미사용 InferenceRelay.detached/accept, VM Society 선택과 패키지 세대 수집·reader lease,
+옛 egress.connect 전용 grammar를 제거한다. 일반 로컬 패키지 resource 경계와 index schema,
+`OMA_PACKAGE_STORE`의 현재 tool-file 경계 용도는 유지한다. 기존 VM 데이터는 수집·변환하지 않는다.
+
+native execution owner의 UUID는 runner의 `--execution`으로 전달하고 entry가 검증한32자리
+hex를 RunnerModule에 주입한다(NATIVE-023). broker는 기존 wire invocationId와 현재 pinned
+scope를 계속 대조한다. 과거 accepted identity·plan·receipt는 새 값으로 다시 만들지 않는다.
+
+검증 상태: 전체 production source를 읽은 뒤 구현했으며 runtime 회귀는 아직 실행하지 않았다.
+최신 사용자 지시에 따라 실제 macOS 테스트/CI는 우선 제외하고 구현·source 대조·타입/정적
+검사를 진행한다. 이것으로 Darwin 세 gate나 최종 지원이 검증됐다고 표시하지 않는다.

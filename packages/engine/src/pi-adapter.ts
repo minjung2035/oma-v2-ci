@@ -395,7 +395,7 @@ export class PiAdapter {
       catch (error) { cleanupErrors.push(error); }
       // Ending the transport is not child death. Observe OS close, or report
       // an unconfirmed stop; elapsed time never creates a delivery receipt or
-      // proves that arbitrary descendants (the unit's responsibility) died.
+      // proves that arbitrary descendants (the execution owner's responsibility) died.
       if (!childClosed) {
         const stopDeadline = deadline(this.options.limits.receiptWaitSeconds,
           failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi child termination could not be confirmed"));

@@ -9,8 +9,31 @@
 현재 G-PROCESS/G-FILES/G-AUTH는 OPEN이고 Mac 제품 진입은 효과 전에 거절한다.
 이 거절 시험이나 부분 primitive 성공을 native Society 지원으로 표시하지 않는다.
 
+2026-10-27 재개: 필수 문서·machine map과 자체 작성 production523개를 전체 읽은 뒤 DR59의
+잔존 VM 정책/API를 제거했다. 수정 후 workspace26개와 root strict typecheck가 통과했다.
+Mac 인증의 새 Mach audit 수신·단일 process event·public Security audit-token 대조 leaf 및
+OS identity adapter도26개 workspace/root typecheck를 통과했다. 실제 Darwin 실행은 **NOT_RUN**이다.
+첫 정적 검사에서 제거한 package collector를 가리키던 durable map 한 건을 찾아 제거했고,
+durable map·문서·규범 fingerprint 검사는 통과했다. 마지막 source의 전체 정적 재검사는 별도다.
+과거 authored review는 보존하고 변경 bytes의 review ledger는 NOT_REVIEWED로 무효화했다.
+최신 사용자 범위에 따라 runtime 테스트·packed install·macOS CI 실행은 우선 보류한다.
+새 primitive·identity adapter는 아직 production broker transport에 연결하지 않았으며 세 gate는 OPEN이다.
+
+후속으로 Broker의 Linux native credential 타입·listener 생성·endpoint 길이 검사를 OS port로
+분리했다. common reference/authority owner를 유지하고 BSM by-value accessor로 opaque token을
+해석한다. bind 뒤 preparation 실패·불명 close 수명과 Mach body 정렬/oversized queue도 source에서
+수정했다. 26개 workspace와 root strict 검사는 통과했으며, 이 후속 입력의 전체 구조 검사는
+`/tmp/oma-native-resume-20261026/transport-static-*`의 입력 전후 identity와 단계별 원시 로그로
+구분한다. 새 listener 회귀와 변경 Linux sender/새 Mac FFI 실행은 **NOT_RUN**이다.
+
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| START/public-validation fixture 수정 후 관련 회귀 | **33/33 PASS**, skip/cancel/todo0·18.495초·input `ce9b96e02382976921f01f69b0ae67fe4c1471efd9c3dbba6d37fd4b65fdfd56` 전후 동일. `native-reference-fixtures-focused*`. 실제 Node timer를 사용하며 기존 latency budget과 accepted fact 판정 유지. 첫 전체17 FAIL을 전체 PASS로 대체하지 않음 |
+| 외부 구현 대조·reply turn 후속 첫 전체 local | **3762/3779 PASS·17 FAIL**, skip/cancel/todo0·940.027초·input `bc7e189f79ebed11044bd9697a3ed987bbb9904781b93b083585e00a78b02a18` 전후 동일. `native-reference-yield-whole*`. 실패는 START의 옛 host/guest 기대값1건과 public-validation fixture의 새 Node timer import 미연결16건. 문구를 정확히 갱신하고 실제 timer module을 fixture에 연결한 후 정책16/16 PASS·skip0. 전체 재실행 결과와 구분 |
+| `5e369b30` 전체 Architecture CI40316751983 | baseline/native-all 모두 **3777/3777 PASS**, skip/cancel/todo0. baseline fast795/795·durable871/871·property34/34·stress13/13·platform29/29 PASS. standalone kernel/crash wrapper는 NOT_RUN이며 native-all의 실제 파일/필수 이름으로 실행. ZIP `12649820624` SHA256 `2a225f1a198ad8e1eb9d389bf93abb0d517c859885f75cd0edbe27cfaa4a9113`, native-all `12648632520` SHA256 `bced406a8587ffe6f8cca335edde624d0ab216128bfdb0d425adbbe85476116c`; source/input 별도 검증. 이후 변경의 결과가 아님 |
+| 앞선 전체 CI의 실패 보존 | `e997fe37` baseline3777/3777 PASS, native-all3776/3777·mkdirAt EAGAIN1. `e37ad5e0` 전체3777/3777 및 native-all3777/3777 PASS, stress12/13·mixed lag100ms 실패. raw SHA 확인 후 각 ci 폴더에 보존. 후속 성공으로 실패를 덮지 않음. 실제 mkdirat/owned mkdirAt 각각20만 회·자식25개는 EEXIST만 관측했고 EAGAIN 원인은 미확정 |
+| mutation reply turn 회귀 | 새2개는 수정 전2 FAIL, 기존6개 PASS. 공통 PublicDispatcher에서 효과/view 갱신 뒤 turn을 반환한 뒤 **8/8 PASS**, skip/cancel/todo0·16.814초·input `4596344b5a0f10da87f296a04dd9911db91841705c9eddf82ddcb6821e41656d` 전후 동일. admission 철회 뒤 accepted plan/result 보존 포함, 기존50/100ms 지연 기준 유지. `native-dispatch-yield-{before,after}-fix*`; 전체 후속 검증과 별도 |
+| `9116bb6b` 새 CI 시작 실패 | Native40318575316/Architecture40318575321의 모든 job은 스텝·실행 로그 없이 시작 전에 failure. 새 Mac self/등록 포트 후보는 **NOT_RUN**이며 compiler/runtime 결과가 아니다. annotation 상세는 현재 조회 도구에서 미확인. 이후 외부 구현 대조와 Chromium rendezvous 후보 반영도 실제 Mac 재실행 전 |
 | `e997fe37` 실제 Mac26/15 Mach 후보 SDK 실패 | 기존15개 관측은 각각 OBSERVED. 새 후보는 deprecated mach_port_destroy에 -Werror compile 실패,6개 case 미실행/SETUP_FAILED. 원시 ZIP2개 SHA256/source 확인·`ci-e997fe37/` 보존. 경고 억제 없이 send/receive 권리별 반환으로 수정 후 실제 CI 재실행 필요. 세 gate OPEN이며 전체 workflow PASS가 아님 |
 | status owner·Darwin 후보 추가 뒤 독립 설치/정적 | **26/26 packed install/public API/authored declaration/해당 installed runtime PASS**,269.430초. input `a3b7fb252b39a2ca6a6fafb1d587c4bfb58785c9e9b7b601950ee0ce20ed8c0b` 전후 동일. 전체 정적 gate41.075초·정책7/7·inventory18/18 PASS. 외부 SDK declaration44개는 별도이며 authored 오류0. `native-status-mach-*`. 이후 유지보수/결과 문서는 별도 입력이고 실제 Darwin C 실행은 아직 NOT_RUN |
 | status owner 후속 Linux 선택46개 파일 | **430/430 PASS**, fail/skip/cancel/todo0·466.084초·input `66ab51c0afa08c39760f8c1e27837113c230e0625564eca6635084724b2d3896` 전후 동일. `native-status-owner-integration*`. read20/mixed39/pending620 lag19ms, 기존 budget50/100/50ms 유지. 같은 입력 전체 정적 gate·정책7/7 PASS. 이후 운영 문서·Darwin 후보 추가는 이 실행의 입력이 아니며 전체/CI 결과로 승격하지 않음 |
@@ -189,7 +212,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `734d2c2c091a0cfb6e18116e7882a93d088a518231cca1c4b3ad4814fe648efb` (15599 files).
+verification input digest `edebd7616f6dc27affeaf805edffcc5951fb2be97a0ac4475138e91d236f94f2` (15605 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

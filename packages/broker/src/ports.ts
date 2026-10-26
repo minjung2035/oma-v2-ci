@@ -10,11 +10,18 @@ import type { StatusSnapshot, RunnerObservation, SettlementQuiescence, RecoveryC
 import type { RawDescriptor, ConnectionSpool } from "@oma/contracts/files";
 import type { SettlementOutcome } from "@oma/domain/batch-settlement";
 import type { AdmissionGate } from "@oma/domain/admission";
-import type { PeerCred } from "@oma/native/linux";
 import type { ConnectionPeerPin } from "./peer-pin.js";
-import type { Socket, Server } from "node:net";
+import type { Duplex } from "node:stream";
 import type { RpcSocket } from "./connection.js";
-export type BoundPeer = PeerCred & ConnectionPeerPin & {
+export interface PeerIdentity { readonly pid: number; readonly uid: number; readonly gid: number }
+export interface PinnedPeerIdentity extends PeerIdentity {
+  /** OS-specific identity equality over freshly received kernel facts. */
+  sameSender(sender: unknown): boolean;
+  alive(): boolean;
+  close(): void;
+}
+export type BoundPeer = PeerIdentity & ConnectionPeerPin & {
+  sameSender(sender: unknown): boolean;
   /** Issued by the direct spawn owner, never decoded from a request. */
   readonly inheritedRunner?: { readonly actor: Actor; readonly invocationId: string };
 };
@@ -94,7 +101,7 @@ export interface InternalMailPort {
   readonly moveToCur: (agent: Actor, ids: readonly string[]) => number;
 }
 export interface InternalPeerPort {
-  readonly requireRunnerUnit: (
+  readonly requireRunnerPeer: (
     peer: BoundPeer,
     agent: Actor,
     invocationId?: string,
@@ -152,9 +159,21 @@ export interface BrokerViews {
 }
 export interface BrokerReconcile { sweep(): Promise<RecoveryCounts> }
 export interface BrokerStatusRefresh { request(): Promise<StatusSnapshot> }
+/** Endpoint mechanics supplied by an OS adapter. Readiness and close are
+ * observed separately from the Broker's authority and durable lifetime. */
+export interface BrokerListener {
+  once(event: "listening", listener: () => void): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  listen(path: string): unknown;
+  /** Callback confirms the listener is closed or never acquired. A thrown
+   * close is unanswered; it must not release the Broker's durable owners. */
+  close(callback?: () => void): unknown;
+}
 export interface BrokerEffects {
-  prepareListener(server: Server): void;
-  peerStream(socket: Socket, authorizeSender: (sender: PeerCred | null) => boolean): RpcSocket;
+  pinPeer(socket: Duplex): PinnedPeerIdentity | null;
+  assertEndpoint(path: string): void;
+  openListener(serve: (socket: Duplex) => void, maxConnections?: number): { readonly listener: BrokerListener; prepare(): void };
+  peerStream(socket: Duplex, authorizeSender: (sender: unknown) => boolean): RpcSocket;
   bindAdmission(gate: AdmissionGate): void;
   ensureRunRoot(): void;
   ensureActorDirectory(actor: Actor, incarnation: number): void;

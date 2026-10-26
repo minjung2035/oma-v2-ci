@@ -19,14 +19,14 @@ import { recoverExecutionState } from "../runtime/execution-runtime.js";
 import { ProjectSessionSettings } from "./project-session-settings.js";
 import type { SessionOwn } from "./settings.js";
 import { codeFor, exitFor } from "./exit.js";
-import { errorWords, surfaceWords } from "@oma/tui/words";
+import { exceptionText } from "@oma/domain/errors";
 type Fail = (message: string, code: ReturnType<typeof codeFor>) => never;
 
 /** Observe cwd once; login, package commands and sessions share this project identity. */
 export function identifyProject(fail: Fail) {
   let canonicalProjectPath: string;
   try { canonicalProjectPath = realpathSync(process.cwd()); }
-  catch (error) { fail(`Cannot verify the project directory: ${errorWords(error)}`, codeFor(error)); }
+  catch (error) { fail(`Cannot verify the project directory: ${exceptionText(error)}`, codeFor(error)); }
   const project = defaultSocietyFor(canonicalProjectPath, sha256Hex(canonicalProjectPath));
   if (!isValidSocietyName(project)) fail("Invalid project name", exitFor("INVALID_REQUEST"));
   const dataRoot = dirname(hostLaunchLocation(project, process.env).stateRoot);
@@ -85,18 +85,18 @@ export async function bootstrapSociety(options: {
     assertHostDirectoryLayout(runRoot, true);
   }
   catch (error) {
-    fail(`The society run directory cannot be trusted: ${errorWords(error)}`, codeFor(error));
+    fail(`The society run directory cannot be trusted: ${exceptionText(error)}`, codeFor(error));
   }
   let tenure: HostTenure | null;
   try {
     tenure = HostTenure.take(stateRoot);
   }
   catch (error) {
-    fail(`Could not verify society ownership: ${errorWords(error)}`, codeFor(error));
+    fail(`Could not verify society ownership: ${exceptionText(error)}`, codeFor(error));
   }
   acquired(() => { tenure?.abandon(); });
   // A broker that is already listening owns the writing of this society, no
-  // matter who started it -- a systemd unit, an operator by hand, or an `oma`
+  // matter who started it -- an operator by hand, or an `oma`
   // whose host is gone. This question used to be asked inside `superviseBroker`,
   // which runs after the configuration has been written and after the society
   // has been provisioned and repaired: this process would have modified files
@@ -137,12 +137,12 @@ export async function bootstrapSociety(options: {
     if (decision.kind === "refuse" || (decision.kind === "publish" && tenure === null && hasSociety)) {
       if (tenure !== null)
         await tenure.end();
-      fail(decision.kind === "refuse" ? `Cannot open this society from this project: ${surfaceWords(decision.reason, `Error code ${decision.code}`)}` :
+      fail(decision.kind === "refuse" ? `Cannot open this society from this project: ${decision.reason}` :
         "This society has no project binding and is owned by another oma process", exitFor(decision.kind === "refuse" ? decision.code : "BROKER_UNAVAILABLE"));
     }
     if (tenure !== null) {
       try { await recoverExecutionState(stateRoot, createdHere); }
-      catch (error) { await tenure.end(); fail(`Cannot recover native execution state: ${errorWords(error)}`, codeFor(error)); }
+      catch (error) { await tenure.end(); fail(`Cannot recover native execution state: ${exceptionText(error)}`, codeFor(error)); }
     }
     if (decision.kind === "publish" && tenure !== null) {
       try {
@@ -150,7 +150,7 @@ export async function bootstrapSociety(options: {
       }
       catch (error) {
         await tenure.end();
-        fail(`Could not record the society's project binding: ${errorWords(error)}`, codeFor(error));
+        fail(`Could not record the society's project binding: ${exceptionText(error)}`, codeFor(error));
       }
     }
   }
@@ -182,7 +182,7 @@ export function prepareSociety(bootstrap: SocietyBootstrap, libdir: string, effe
   catch (error) {
     if (tenure === null && !existsSync(configPath))
       fail("Another oma process owns this society and its configuration is not ready. Try again shortly.", exitFor("BROKER_UNAVAILABLE"));
-    fail(`Cannot read settings: ${errorWords(error)}`, codeFor(error));
+    fail(`Cannot read settings: ${exceptionText(error)}`, codeFor(error));
   }
   if (configuration.settings.config.society !== society)
     fail("Configured society differs from the requested society", exitFor("INVALID_REQUEST"));
@@ -198,7 +198,7 @@ export function prepareSociety(bootstrap: SocietyBootstrap, libdir: string, effe
       provisioned = provisionSociety(stateRoot, { conversationOnly: true });
     }
     catch (error) {
-      fail(`Could not prepare the society: ${errorWords(error)}`, codeFor(error));
+      fail(`Could not prepare the society: ${exceptionText(error)}`, codeFor(error));
     }
     // D02/WP13: configuration generations no reader can still use are
     // collected only here -- this process owns the society, no broker is

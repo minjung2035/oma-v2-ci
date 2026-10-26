@@ -13,6 +13,7 @@ const REMOVED_PATHS = Object.freeze([
   "packages/platform-mac/src/vmhelper", "packages/platform-mac/src/vz-driver.ts",
   "packages/platform-linux/src/guest", "packages/platform-linux/src/guest-system.ts",
   "packages/tool-runtime/src/contained-files.ts",
+  "packages/tui/src/words.ts", "packages/domain/src/product-text.ts",
   "src",
   "apps/oma/src/engine/proper-lockfile.d.ts",
   "src/platform/host/files.ts",
@@ -115,7 +116,7 @@ const REMOVED_PATHS = Object.freeze([
   "src/mail.ts", "src/mail",
   "src/config.ts", "src/config", "src/resident-paths.ts", "src/mail/review-bounds.ts", "src/ids.ts", "src/store.ts", "src/storage", "src/storage/contained-fs.ts", "src/platform/guest/pty.ts", "src/platform/host/peer.ts",
 ]);
-const REMOVED_DECLARATIONS = new Set(["PRINCIPAL_CHANNEL_ENV", "PRINCIPAL_CHANNEL_FD", "WebToolsOptions", "ResourceLimits", "RESOURCE_FIELDS", "resourceLimitsCheck", "canonicalResourceLimits", "parseCanonicalResourceLimits", "LegacyAttestationInput", "legacyReviewRequestNameFor", "TieredAuthority", "TieredAcceptance", "workspaceUsage", "EXCLUDED_USAGE_TREES", "WORKER_LIMIT", "QUARANTINE_RESOURCES", "quarantineResources", "quarantineTmpBytes", "HostConfigV1", "HostEgressConfig", "EgressPolicy", "egressPolicyFor", "societyFromDirectory", "AgentQuota", "assertCreateCapacity", "enforceQuota", "assertSeedCount", "StorageAdmission", "ResourceGate", "ResourceCategory", "resourceCategoryOf", "assertStorageQuotaAdmission", "assertStorageQuotaSupported"]);
+const REMOVED_DECLARATIONS = new Set(["chooseSociety", "renderSocietyChoice", "connectHostProblem", "collectPackageGenerations", "pinPackageGeneration", "PACKAGE_GENERATIONS", "PACKAGE_READER_MARKER", "installedPackageSource", "localPackageSource", "PRODUCT_TEXT_ENV", "productSurface", "surfaceWords", "humanStream", "productText", "detachedConnections", "requireRunnerUnit", "PRINCIPAL_CHANNEL_ENV", "PRINCIPAL_CHANNEL_FD", "WebToolsOptions", "ResourceLimits", "RESOURCE_FIELDS", "resourceLimitsCheck", "canonicalResourceLimits", "parseCanonicalResourceLimits", "LegacyAttestationInput", "legacyReviewRequestNameFor", "TieredAuthority", "TieredAcceptance", "workspaceUsage", "EXCLUDED_USAGE_TREES", "WORKER_LIMIT", "QUARANTINE_RESOURCES", "quarantineResources", "quarantineTmpBytes", "HostConfigV1", "HostEgressConfig", "EgressPolicy", "egressPolicyFor", "societyFromDirectory", "AgentQuota", "assertCreateCapacity", "enforceQuota", "assertSeedCount", "StorageAdmission", "ResourceGate", "ResourceCategory", "resourceCategoryOf", "assertStorageQuotaAdmission", "assertStorageQuotaSupported"]);
 export function legacyFindings(root = process.cwd()) {
   const findings = REMOVED_PATHS.filter(path => existsSync(resolve(root, path))).map(path => `${path}: removed compatibility surface reintroduced`);
   for (const file of authoredFiles(root)) {
@@ -128,6 +129,12 @@ export function legacyFindings(root = process.cwd()) {
       if (/^packages\/tool-(?:lsp|hashline|web|mcp)\/src\//.test(file) &&
           ts.isPropertySignature(node) && node.name?.text === "bundleDir")
         findings.push(`${file}: removed vendor location override reintroduced`);
+      if (ts.isStringLiteralLike(node) && ["OMA_PRODUCT_TEXT", "INVOCATION_ID"].includes(node.text) ||
+          ts.isPropertyAccessExpression(node) && node.name.text === "INVOCATION_ID")
+        findings.push(`${file}: retired VM/service-manager environment channel reintroduced`);
+      if (file === "apps/oma/src/runtime/inference-relay.ts" &&
+          (ts.isMethodDeclaration(node) || ts.isPropertyDeclaration(node)) && ["detached", "accept"].includes(node.name?.text))
+        findings.push(`${file}: retired relay handoff API reintroduced`);
       ts.forEachChild(node, visit);
     }; visit(source);
   }

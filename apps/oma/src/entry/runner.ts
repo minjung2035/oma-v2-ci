@@ -1,10 +1,10 @@
 // RUN-001/UNIT-003: one bound runner identity with trusted Pi RPC delivery.
-// The fixed unit supplies a broker-rendered profile; this process never reads SQLite.
+// The broker supplies explicit launch identity and profile; this process never reads SQLite.
 import { dirname, join } from "node:path";
 import { assertNativeRuntime } from "../runtime/native-support.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "@oma/config";
-import { isValidActorName, isValidSocietyName } from "@oma/domain/identifiers";
+import { isValidActorName, isValidSocietyName, UUID_V4_RE } from "@oma/domain/identifiers";
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
@@ -19,7 +19,7 @@ import { Socket } from "node:net";
 import { closeOnExec } from "@oma/native/control-socket";
 
 function usage(): never {
-  console.error("usage: runner.js --society <name> --agent <name> --config <path> --state-root <dir> --run-root <dir>");
+  console.error("usage: runner.js --society <name> --agent <name> --execution <uuid> --config <path> --state-root <dir> --run-root <dir>");
   process.exit(4);
 }
 const args = process.argv.slice(2);
@@ -30,9 +30,12 @@ if (agentIdx < 0 || args[agentIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
 const agent = args[agentIdx + 1]!;
 if (!isValidSocietyName(society) || !isValidActorName(agent)) usage();
-// D03: the unit carries the broker's resolved location. The user manager's
-// environment is not the product's, so deriving it here again would let this
-// runner read another configuration or serve another run root.
+const executionIdx = args.indexOf("--execution");
+const execution = args[executionIdx + 1];
+if (executionIdx < 0 || executionIdx !== args.lastIndexOf("--execution") || !UUID_V4_RE.test(execution ?? "")) usage();
+const invocationId = execution!.replaceAll("-", "");
+// D03: the broker carries its resolved location on this launch's argv.
+// Re-deriving it from ambient state could select another config or run root.
 let location: LaunchLocation;
 try { location = launchedLocation(args, society); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); usage(); }
@@ -63,8 +66,8 @@ const modelName = Buffer.from(modelHex, "hex").toString("utf8");
 if (Buffer.from(modelName, "utf8").toString("hex") !== modelHex || !Object.hasOwn(cfg.modelProfiles, modelName)) {
   console.error(`runner: malformed or unsupported accepted model reference for ${agent}`); process.exit(4);
 }
-// The tool-surface plan travels the same hex channel; a unit this broker
-// rendered always carries it, and a malformed one is a corrupted channel.
+// The tool-surface plan travels the same explicit hex launch channel.
+// Every broker launch carries it; malformed bytes refuse startup.
 // Like the profile above, the bytes must round-trip as UTF-8 -- hex that
 // decodes to invalid UTF-8 is corrupted channel data, not a surface plan.
 const toolSurfaceHex = process.env.OMA_TOOL_SURFACE_HEX ?? "";
@@ -74,7 +77,7 @@ if (Buffer.from(toolSurface, "utf8").toString("hex") !== toolSurfaceHex) { conso
 const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}),
   // D23/TSP-005: the deployment renders the run's surface plan into this
-  // unit's environment as hex, beside the accepted profile and model reference; this entry
+  // launch environment as hex, beside the accepted profile and model reference; this entry
   // is the boundary that reads it once and makes it declared profile data.
   // The engine's spawn plan emits it and `--clearenv` makes it the only
   // channel -- nothing inherited carries a plan into the confined engine,
@@ -90,7 +93,7 @@ const piRuntime = resolvePiRuntime({
 });
 // A confined Resident runs the shipped engine entry: piArgs[0] is the bundle
 // the mount plan translates. An OMA_PI_COMMAND override resolves to a bare
-// executable with no entry argument, so the unit refuses here at startup
+// executable with no entry argument, so the runner refuses here at startup
 // rather than throwing UNSUPPORTED_PROFILE on every delivery.
 if (piRuntime.args[0] === undefined) {
   console.error(`runner ${agent}: OMA_PI_COMMAND supplies no shipped engine entry; a Resident requires the bundled engine`);
@@ -113,7 +116,7 @@ const confinement = {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
-  // directory the loader pinned them in (on macOS the store is a link to it).
+  // directory the loader pinned them in.
   ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
@@ -126,7 +129,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   coreExtension: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.extension),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
   ...(packages === undefined ? {} : { packages }),
-  confinement }, agent, cfg.limits, profile, control);
+  confinement }, agent, invocationId, cfg.limits, profile, control);
 let stopping = false;
 const stop = (): void => {
   if (stopping) return;

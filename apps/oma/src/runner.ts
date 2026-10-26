@@ -1,3 +1,4 @@
+import { StoreError, errorCodeOf } from "@oma/domain/errors";
 import { residentEngineEffects } from "./engine/resident-effects.js";
 // RUN-001/BATCH-001: runner policy is separate from transport mechanics.
 // A prepared batch remains durable until a pinned Pi boundary receipt completes it.
@@ -16,7 +17,6 @@ import { InferenceRelay } from "./runtime/inference-relay.js";
 import { ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit } from "./runtime/connect-proxy.js";
 import { placeholderFor, resolveEngineAuth } from "@oma/engine/engine-auth";
 import { productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
-import { StoreError } from "@oma/domain/errors";
 import { packageResourcePaths } from "./runtime/packages/index.js";
 import { BrokerChannel, type ChannelLimits } from "@oma/client/channel";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
@@ -27,7 +27,6 @@ import {
   type ValidatedRunLease,
 } from "@oma/protocol/run-lease";
 import { PiAdapter, type EngineObservation } from "@oma/engine/pi-adapter";
-import { errorCodeOf } from "@oma/domain/errors";
 import { ensureOwnedDurableDirectory } from "@oma/storage/durable-fs";
 import {
   agentRootPathAt,
@@ -47,7 +46,7 @@ export interface RunnerProfile {
   readonly settings?: RoleSettings;
   /** D23/TSP-005: the deployment's encoded surface plan for this run's
    * engines. Internal OMA policy, never authored configuration: the
-   * deployment renders it into this runner's unit environment, the runner
+   * deployment renders it into this runner's explicit launch environment, the runner
    * entry reads it once at its boundary, and the adapter hands it to the
    * spawn plan -- `--clearenv` makes it the only channel, so nothing ambient
    * or inherited can carry it. */
@@ -109,10 +108,12 @@ export class RunnerModule {
   constructor(
     private readonly paths: RunnerPaths,
     private readonly agent: string,
+    private readonly invocationId: string,
     private readonly limits?: ProtocolLimits,
     readonly profile?: RunnerProfile,
     private readonly control?: Socket,
   ) {
+    if (!/^[0-9a-f]{32}$/.test(invocationId)) throw new TypeError("runner requires an explicit execution identity");
     this.channel = new BrokerChannel(limits as ChannelLimits | undefined);
   }
   stop(): Promise<void> {
@@ -123,8 +124,8 @@ export class RunnerModule {
   }
   /** A connection serves the calls made together, not the run: the broker
    * closes one nothing speaks on for idleStreamSeconds, and a delivery takes
-   * as long as the model does. What a call may do is the calling unit's
-   * (requireRunnerUnit), never the connection's, so a later call dials again. */
+   * as long as the model does. What a call may do is the calling execution scope's
+   * (requireRunnerPeer), never the connection's, so a later call dials again. */
   private async connect(): Promise<void> {
     if (this.stopped)
       throw new StoreError("BROKER_UNAVAILABLE", "runner has been stopped");
@@ -137,7 +138,7 @@ export class RunnerModule {
     await this.connect();
     const response = await this.channel.call("runner.open", {
       agent: this.agent,
-      invocationId: process.env.INVOCATION_ID ?? "",
+      invocationId: this.invocationId,
     });
     if (!response.ok)
       throw new StoreError(response.error.code, response.error.message);

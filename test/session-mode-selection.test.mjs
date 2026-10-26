@@ -10,7 +10,7 @@ import * as tui from '@earendil-works/pi-tui';
 import ts from 'typescript';
 import { workspaceSource } from './fixtures/workspace-source.mjs';
 
-function world({ tty = true, columns = 80, rows = 24, fault, societies } = {}) {
+function world({ tty = true, columns = 80, rows = 24, fault } = {}) {
   const host = new EventEmitter(), input = new EventEmitter(), output = new EventEmitter();
   const raw = [], bytes = [], timers = new Set(); let pauses = 0, now = 0;
   Object.assign(input, { isTTY: tty, setRawMode(value) { raw.push(value); }, resume() {}, pause() { pauses++; } });
@@ -40,7 +40,7 @@ function world({ tty = true, columns = 80, rows = 24, fault, societies } = {}) {
   };
   fault?.(w);
   const chooser = load('packages/tui/src/session-mode.ts');
-  w.result = societies === undefined ? chooser.chooseSessionMode({ input, output }) : chooser.chooseSociety({ input, output }, societies);
+  w.result = chooser.chooseSessionMode({ input, output });
   return w;
 }
 function returned(w) {
@@ -124,32 +124,4 @@ test('mode selector: small screens retain both choices without wrapping', async 
   assert.ok(frame.every(line => tui.visibleWidth(line) < 20), 'line wraps into another row');
   assert.ok(frame.length <= 4); assert.match(frame.join('\n'), /Society/); assert.match(frame.join('\n'), /Personal/);
   w.send('\r'); await w.result; returned(w);
-});
-function lastFrame(w) {
-  return w.bytes.at(-1).replace(/^\x1b\[H/, '').split('\r\n');
-}
-for (const rows of [1, 2, 3, 4, 8]) test(`Society selector: ${rows} rows keep the selected Society visible after scrolling and resize`, async () => {
-  const societies = Array.from({ length: 12 }, (_, index) => `society-${index}`);
-  const w = world({ columns: 20, rows, societies });
-  for (let index = 0; index < societies.length; index++) {
-    const frame = lastFrame(w);
-    assert.ok(frame.length <= rows); assert.ok(frame.every(line => tui.visibleWidth(line) < 20));
-    assert.ok(frame.some(line => line.trim() === `> ${societies[index]}`), 'the selected Society must be on screen');
-    if (index + 1 < societies.length) w.send('\x1b[B');
-  }
-  w.output.rows = 1; w.output.emit('resize');
-  assert.equal(lastFrame(w)[0].trim(), '> society-11');
-  w.send('\r'); assert.equal(await w.result, 'society-11'); returned(w);
-});
-test('Society selector: wrapping upward selects the last entry; cancel returns all resources', async () => {
-  const w = world({ societies: ['one', 'two', 'three'] });
-  w.send('\x1b[A'); assert.ok(lastFrame(w).some(line => line.trim() === '> three'));
-  w.send('\x03'); assert.equal(await w.result, null); returned(w);
-});
-test('Society selector: empty and non-TTY choices do not acquire a terminal', async () => {
-  for (const societies of [[], ['one', 'two']]) {
-    const w = world({ tty: false, societies });
-    assert.equal(await w.result, societies[0] ?? null);
-    assert.deepEqual(w.raw, []); assert.deepEqual(w.bytes, []); assert.equal(w.pauses, 0);
-  }
 });

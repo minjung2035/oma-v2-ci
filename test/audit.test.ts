@@ -448,12 +448,12 @@ function framed(sockPath, frame, streamBytes, mode, wantReplies = 1) {
 }
 
 async function main() {
-  const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor, invocationId: process.env.INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
+  const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor, invocationId: process.env.OMA_TEST_INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
   if (!lease[0] || lease[0].ok !== true) {
     writeFileSync(out, JSON.stringify({ error: lease[0]?.error ?? "no-lease" }));
     process.exit(2);
   }
-  const replay = await framed(admin, { v: 1, id: "ro2", method: "runner.open", params: { agent: actor, invocationId: process.env.INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
+  const replay = await framed(admin, { v: 1, id: "ro2", method: "runner.open", params: { agent: actor, invocationId: process.env.OMA_TEST_INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
   if (!replay[0] || replay[0].ok !== true || replay[0].result.incarnation !== lease[0].result.incarnation || replay[0].result.socketHostPath !== lease[0].result.socketHostPath) {
     writeFileSync(out, JSON.stringify({ error: "same invocation did not converge" }));
     process.exit(2);

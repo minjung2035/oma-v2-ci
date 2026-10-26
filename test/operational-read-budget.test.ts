@@ -183,7 +183,7 @@ test("G02-ledger-r2: operational reads return complete results past the former d
     assert.equal(store.getDelivery(seeded.firstMessage, "alice")?.recipient, "alice");
     // The internal dispatcher's runner.pending answers over the same store.
     const peers = {
-      requireRunnerUnit: () => undefined,
+      requireRunnerPeer: () => undefined,
       runnerActor: () => "alice" as const,
       runnerAuth: () => ({ actor: "alice" }) as unknown as AuthContext,
     };
@@ -198,7 +198,7 @@ test("G02-ledger-r2: operational reads return complete results past the former d
     } as unknown as InternalDispatchDependencies);
     const answer = await dispatcher.dispatch(
       { v: 1, id: "pending", method: "runner.pending", params: {} },
-      { pid: 1, uid: 1, gid: 1, alive: () => true, retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer,
+      { pid: 1, uid: 1, gid: 1, alive: () => true, sameSender: () => false, retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer,
       null, "runner");
     assert.deepEqual(answer, { v: 1, id: "pending", ok: true,
       result: { pending: UNBATCHED, recoverableBatchIds: [seeded.batchId] } });

@@ -3,6 +3,7 @@
 #include <mach/mach.h>
 #include <mach/message.h>
 #include <bsm/libbsm.h>
+#include <servers/bootstrap.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -56,7 +57,7 @@ static void close_owned_port(mach_port_t receive) {
 }
 static void send_request(mach_port_t destination, uint32_t sequence, pid_t claimed) {
   request_t request = {0};
-  request.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+  request.header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_COPY_SEND);
   request.header.msgh_size = sizeof request;
   request.header.msgh_remote_port = destination;
   request.header.msgh_id = 0x4f4d4101;
@@ -68,6 +69,10 @@ static void send_request(mach_port_t destination, uint32_t sequence, pid_t claim
 static void receive_request(mach_port_t receive, request_t *request, mach_msg_audit_trailer_t *trailer) {
   received_t received = {0};
   mach_msg_header_t *header = (mach_msg_header_t *)received.bytes;
+  // Chromium's MachPortRendezvousServerBase initializes both fields before
+  // receiving and validates the kernel trailer separately from the payload.
+  header->msgh_size = sizeof received;
+  header->msgh_local_port = receive;
   kernel_ok(mach_msg(header, MACH_RCV_MSG | MACH_RCV_TIMEOUT |
     MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
     MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
@@ -81,20 +86,6 @@ static void receive_request(mach_port_t receive, request_t *request, mach_msg_au
   require(trailer->msgh_trailer_type == MACH_MSG_TRAILER_FORMAT_0 &&
     trailer->msgh_trailer_size >= sizeof *trailer &&
     trailer->msgh_trailer_size <= sizeof received - offset, "actual audit trailer shape");
-}
-static void check_registration(mach_port_t receive) {
-  mach_port_array_t ports = NULL;
-  mach_msg_type_number_t count = 0;
-  kernel_ok(mach_ports_lookup(mach_task_self(), &ports, &count), "observe parent registered port");
-  require(count > 0, "parent registered array shape");
-  int exact = ports[0] == receive;
-  fprintf(stderr, "parent-registration: receive=%u returned=%u count=%u exact=%s\n",
-    receive, ports[0], count, exact ? "true" : "false");
-  for (mach_msg_type_number_t i = 0; i < count; i++)
-    if (MACH_PORT_VALID(ports[i])) kernel_ok(mach_port_deallocate(mach_task_self(), ports[i]), "release parent lookup right");
-  kernel_ok(vm_deallocate(mach_task_self(), (vm_address_t)(uintptr_t)ports,
-    count * sizeof *ports), "release parent lookup array");
-  require(exact, "registration must identify the actual held receiver");
 }
 static void self_probe(const char *name) {
   mach_port_t receive = owned_port();
@@ -112,20 +103,16 @@ static void self_probe(const char *name) {
     (unsigned int)audit_token_to_euid(trailer.msgh_audit));
 }
 
-static void send_from_child(uint32_t sequence, pid_t claimed, int ready, int finish) {
-  mach_port_array_t ports = NULL;
-  mach_msg_type_number_t count = 0;
-  kernel_ok(mach_ports_lookup(mach_task_self(), &ports, &count), "lookup inherited send right");
-  require(count > 0 && MACH_PORT_VALID(ports[0]), "inherited port shape");
+static void send_from_child(const char *service, uint32_t sequence, pid_t claimed, int ready, int finish) {
+  mach_port_t destination = MACH_PORT_NULL;
+  kernel_ok(bootstrap_look_up(bootstrap_port, (char *)service, &destination), "lookup owned rendezvous endpoint");
+  require(MACH_PORT_VALID(destination), "rendezvous right shape");
   mach_port_type_t type = 0;
-  kernel_ok(mach_port_type(mach_task_self(), ports[0], &type), "observe inherited right type");
+  kernel_ok(mach_port_type(mach_task_self(), destination, &type), "observe rendezvous right type");
   fprintf(stderr, "sender: pid=%d task=%u port=%u type=%u sequence=%u\n", getpid(),
-    mach_task_self(), ports[0], type, sequence);
-  send_request(ports[0], sequence, claimed);
-  for (mach_msg_type_number_t i = 0; i < count; i++)
-    if (MACH_PORT_VALID(ports[i])) kernel_ok(mach_port_deallocate(mach_task_self(), ports[i]), "release inherited right");
-  kernel_ok(vm_deallocate(mach_task_self(), (vm_address_t)(uintptr_t)ports,
-    count * sizeof *ports), "release inherited port array");
+    mach_task_self(), destination, type, sequence);
+  send_request(destination, sequence, claimed);
+  kernel_ok(mach_port_deallocate(mach_task_self(), destination), "release rendezvous send right");
   require(write(ready, "r", 1) == 1, "child queued");
   close(ready);
   char marker;
@@ -140,39 +127,45 @@ static void wait_success(pid_t child) {
   require(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0,
     "join actual sender");
 }
-static void queued_probe(const char *name, int exit_before_receive) {
-  mach_port_t receive = owned_port();
-  kernel_ok(mach_ports_register(mach_task_self(), &receive, 1), "register owned send right");
-  check_registration(receive);
-  int ready[2], finish[2];
-  require(pipe(ready) == 0 && pipe(finish) == 0, "private fixture pipes");
+static void rendezvous_probe(const char *name, int exit_before_receive) {
+  // The endpoint is discovered as in Chromium's macOS rendezvous. Its random
+  // name grants no authority: each queued sender still needs a kernel trailer.
+  char service[BOOTSTRAP_MAX_NAME_LEN];
+  int length = snprintf(service, sizeof service, "com.oma.native-probe.%d.%08x", getpid(), arc4random());
+  require(length > 0 && (size_t)length < sizeof service, "bounded unique service name");
+  mach_port_t receive = MACH_PORT_NULL;
+  kernel_ok(bootstrap_check_in(bootstrap_port, service, &receive), "check in owned rendezvous receiver");
+  kernel_ok(mach_port_insert_right(mach_task_self(), receive, receive, MACH_MSG_TYPE_MAKE_SEND),
+    "retain owned rendezvous send right");
+  int first_ready[2], finish[2];
+  require(pipe(first_ready) == 0 && pipe(finish) == 0, "first sender fixture pipes");
   pid_t connector = fork(); require(connector >= 0, "first sender fork");
   if (connector == 0) {
-    close(ready[0]); close(finish[1]);
-    send_from_child(1, getpid(), ready[1], finish[0]);
+    close(first_ready[0]); close(finish[1]);
+    send_from_child(service, 1, getpid(), first_ready[1], finish[0]);
   }
+  close(first_ready[1]);
   char marker = 0;
-  require(read(ready[0], &marker, 1) == 1, "first message queued");
+  require(read(first_ready[0], &marker, 1) == 1, "first message queued"); close(first_ready[0]);
   observe_queue(receive, "after-first-send");
+  int second_ready[2]; require(pipe(second_ready) == 0, "second sender fixture pipe");
   pid_t holder = fork(); require(holder >= 0, "independent second sender fork");
   if (holder == 0) {
-    close(ready[0]); close(finish[1]);
+    close(second_ready[0]); close(finish[1]);
     /* The body deliberately claims the first sender. The trailer must be
      * obtained from the kernel, independently of this untrusted field. */
-    send_from_child(2, connector, ready[1], finish[0]);
+    send_from_child(service, 2, connector, second_ready[1], finish[0]);
   }
-  close(ready[1]); close(finish[0]);
-  require(read(ready[0], &marker, 1) == 1, "second message queued"); close(ready[0]);
+  close(second_ready[1]); close(finish[0]);
+  require(read(second_ready[0], &marker, 1) == 1, "second message queued"); close(second_ready[0]);
   int both_alive = kill(connector, 0) == 0 && kill(holder, 0) == 0;
   require(both_alive, "senders remain alive until explicit completion");
-  observe_queue(receive, "before-unregister");
-  kernel_ok(mach_ports_register(mach_task_self(), NULL, 0), "remove owned registered rights");
-  observe_queue(receive, "after-unregister");
+  observe_queue(receive, "both-messages-queued");
   if (exit_before_receive) {
     close(finish[1]); wait_success(connector); wait_success(holder);
   }
   printf("{\"case\":\"%s\",\"%s\":{\"sendersAliveWhenQueued\":true,\"joinedBeforeReceive\":%s,\"connectorPid\":%d,\"holderPid\":%d,\"messages\":[",
-    name, exit_before_receive ? "machQueuedExit" : "machQueuedLive",
+    name, exit_before_receive ? "machRendezvousExit" : "machRendezvousLive",
     exit_before_receive ? "true" : "false", connector, holder);
   for (uint32_t index = 1; index <= 2; index++) {
     request_t request;
@@ -201,8 +194,8 @@ static void queued_probe(const char *name, int exit_before_receive) {
 int main(int argc, char **argv) {
   require(argc == 2, "one independent case required");
   if (strcmp(argv[1], "mach-self") == 0) { self_probe(argv[1]); return 0; }
-  int exited = strcmp(argv[1], "mach-queued-exit") == 0;
-  require(exited || strcmp(argv[1], "mach-queued-live") == 0, "unknown Mach probe case");
-  queued_probe(argv[1], exited);
+  int exited = strcmp(argv[1], "mach-rendezvous-exit") == 0;
+  require(exited || strcmp(argv[1], "mach-rendezvous-live") == 0, "unknown Mach probe case");
+  rendezvous_probe(argv[1], exited);
   return 0;
 }

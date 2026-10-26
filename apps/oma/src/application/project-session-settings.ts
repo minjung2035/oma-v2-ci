@@ -9,7 +9,7 @@ import {
 	commitField, deriveSessionSettings, projectSettingsPath, readSettings, readSettingsForEditing,
 	type FieldValue, type SessionOwn, type Settings
 } from "./settings.js";
-import { errorWords } from "@oma/tui/words";
+import { exceptionText } from "@oma/domain/errors";
 
 /** A session's view of its project's settings. Commits still belong to the
  * managed bundle primitives; this owner keeps derivation, read-back and the
@@ -83,13 +83,13 @@ export class ProjectSessionSettings {
       this.snapshot = this.makeSnapshot(current, projectSettings, this.snapshot.leftOut, this.snapshot.seen);
       this.unread = null;
       return true;
-    } catch (error) { this.unread = errorWords(error); return false; }
+    } catch (error) { this.unread = exceptionText(error); return false; }
   }
 
   rederive(): boolean {
     try { this.snapshot = this.derive(); this.cannotFollow = ""; return true; }
     catch (error) {
-      const words = `Saved for the project; this session takes it on from its next start (${errorWords(error)}).`;
+      const words = `Saved for the project; this session takes it on from its next start (${exceptionText(error)}).`;
       if (words !== this.cannotFollow) this.options.notice(words);
       this.cannotFollow = words;
       return false;

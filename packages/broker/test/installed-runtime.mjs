@@ -3,6 +3,7 @@ import { registerHooks } from 'node:module';
 import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
 const forbidden=[];
 const hook=registerHooks({resolve(specifier,context,next){
   const answer=next(specifier,context);
@@ -32,7 +33,7 @@ const dependencies={
  views:{refreshWorld(){},publishStatus(){},observeRunnerSource(){}},reconcile:null,status:{request:snapshot},public:pub,
  internal:{store:{getAgentIdentity:()=>null,pendingDeliveryCount:()=>0,getBatchAgent:()=>null,preparedBatchIds:()=>[]},
  mail:{prepare:unavailable,complete:unavailable,moveToCur:unavailable}},
- effects:{prepareListener(server){const fd=socketDescriptor(server);assert.notEqual(fd,null);enableUnixCredentials(fd);},peerStream:unavailable,
+ effects:{pinPeer:unavailable,assertEndpoint:unavailable,openListener(serve,maxConnections){const listener=createServer({allowHalfOpen:true,pauseOnConnect:true},serve);if(maxConnections!==undefined)listener.maxConnections=maxConnections;return{listener,prepare(){const fd=socketDescriptor(listener);assert.notEqual(fd,null);enableUnixCredentials(fd);}};},peerStream:unavailable,
  bindAdmission:()=>{bound=true;},ensureRunRoot(){},ensureActorDirectory:unavailable,
  clearSocketName:path=>{assert.equal(existsSync(path),false);},removeStatusView(){},makeSpool:unavailable,closeLedger:()=>{closed=true;}},
 };

@@ -56,7 +56,7 @@ export async function nativeScriptResidents(store: Store, state: string) {
         socket.pause(); socket.on("error", () => {});
         ticket = await executions.begin(`resident:${actor}`, execution => runnerScope({
           executable: process.execPath, argv: [script.path],
-          env: { ...process.env, ...script.env, INVOCATION_ID: execution.replaceAll("-", "") },
+          env: { ...process.env, ...script.env, OMA_TEST_INVOCATION_ID: execution.replaceAll("-", "") },
           timeoutMs: 120_000, stdoutBytes: 64 * 1024, stderrBytes: 64 * 1024,
         }), signal, authorize, prepared, [child]);
         const inherited = child; child = undefined; closeSync(inherited);
@@ -66,6 +66,7 @@ export async function nativeScriptResidents(store: Store, state: string) {
         }, signal, 10_000);
         const owner = new SharedPeerPin(() => pin.alive(), () => pin.close());
         const peer: BoundPeer = Object.freeze({ pid: pin.pid, uid: pin.uid, gid: pin.gid,
+          sameSender: () => false,
           inheritedRunner: Object.freeze({ actor, invocationId: ticket.execution.replaceAll("-", "") }),
           alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() });
         const connection = { socket, peer }; channels.set(actor, connection);

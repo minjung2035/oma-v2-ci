@@ -19,7 +19,7 @@ export function trustedAbsolutePath(path: unknown): path is string {
   );
 }
 /** Decode transport identity against composition facts, not against a root
- * supplied by the response. This is not a live authority or cgroup-death proof.
+ * supplied by the response. This is not a live authority or whole-scope death proof.
  */
 export function decodeRunLease(
   value: unknown,

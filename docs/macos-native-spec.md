@@ -387,3 +387,166 @@ Node 26의 libuv는 Darwin fsync에서 F_FULLFSYNC를 시도하지만 fallback�
 7. 기존 state·accepted bytes·receipt·권한을 임의 변환하거나 삭제하지 않는다. 프로덕션 전환과 데이터 migration을 혼동하지 않는다.
 
 이번 문서 작성은 위 gate나 native 실행을 수행한 결과가 아니다. **바로 진행할 수 있는 부분은 공통 TS 분리와 CI probe이며, Mac Society 완전 지원을 가르는 핵심은 임의 후손 종료·파일 capability·CLI 인증의 실제 증거다.**
+
+
+## 14. 구현 세션 인계 — 2026-10-26
+
+이 절은 구현 상태와 재개 지점이며 완료 판정이나 과거 시험의 재결박이 아니다. 사용자 최신
+지시는 **남은 레거시도 전부 제거**하는 것이다. 현재 작업량 추정은 약80%이며 지원율이 아니다.
+macOS native 제품 실행·레거시 제거·최종 검증은 아직 완료되지 않았다.
+
+### 14.1 재개 전에 반드시 확인할 입력
+
+- 작업 디렉터리 `/home/dev/oma-v2`, 브랜치 `work/macos-native-20261025`.
+- 최신 local/push HEAD `9116bb6b667edb0e3a4a31d05e4fa1bb20bb6b1e`. 아래 후속 변경은 **미commit·미push**다.
+- 기존 dirty root `README.md`는 최초 사용자 변경이다. 그대로 보존하며 stage/commit하지 않는다.
+  그 외 현재 dirty source·시험·문서와 새 `docs/implementation/native-reference-review.md`도 보존한다.
+- 필수 문서는 §1의 전체 목록과 `docs/application-boundaries.md`, 현재 owner map·verification map을
+  전부 읽는다. `production-manifest.json`·`production-files.txt`가 가리키는 **모든 프로덕션 코드**를
+  실제로 읽어 현 상태를 확인한다. 이 기록이나 이전 PASS로 그 읽기를 대체하지 않는다.
+- PRIORITY-0, accepted plan/receipt/DB·권한 의미 보존,26개 workspace의 공개 API·runtime/type DAG와
+  독립 build/test/install 경계를 유지한다. 새 책임은 좁은 독립 모듈로 둔다.
+- 고정 `docs/architecture.md`, `implementation/review-notes.json`, 과거 authored review/audit는 변경하지 않는다.
+  변경 코드의 과거 review를 자동 재결박하지 않는다. master 병합·배포는 금지다.
+- Node 실행 PATH는 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin:$PATH`.
+- 원시 증거는 `/home/dev/oma-audit-artifacts/native-2026-10-25/`에 있다. `initial.patch`,
+  `initial-status.txt`, `initial-untracked/`, `protected.json`이 최초 변경 보존 근거다.
+
+### 14.2 구현한 범위와 단계별 현재 한계
+
+| 단계 | 실제 구현/연결과 남은 조건 |
+|---|---|
+| P0 | DR49–58·NATIVE-001–021·현재 규범·source owner/traceability·인벤토리·의존 그래프 갱신. 고정 architecture와 과거 review 보존. 전체 수동 production review 완료를 주장하지 않음 |
+| P1 | 실제 Linux kernel 시험과 Mac26/15 SDK/kernel probe·raw artifact 수집. G-PROCESS/G-FILES/G-AUTH 세 gate는 모두 OPEN |
+| P2 | 공통 TS owned-files/publication/config/package/tool-file 정책과 최소 POSIX leaf 연결. `@oma/tool-files`를26번째 workspace로 분리. Linux 실제 회귀/독립 설치 검증. Darwin의 permission-independent pin·exact reopen/execution 결박 등은 미완성 |
+| P3 | 공통 ExecutionCoordinator/journal, ResidentRuntime/Supervisor, wake/backoff/log/drain, kernel scope pin 기반 RunRegistry 구현. opening→witness 영속→fresh authority→release와 unknown fence·복구 순서 연결 |
+| P4 | Linux bwrap PID namespace/pidfd 및 메시지별 kernel sender 증거로 실제 Worker/Pi·trusted runner·broker 실행 연결. systemd manager를 요구하지 않음. **Darwin production Seatbelt/process/auth backend는 미완성**이며 후보 harness를 구현 완료로 세지 않음 |
+| P5 | actual candidate checkout/status/release gate, Git quarantine RO검증→scope 사망→RW import, Restic pin/공통 stream verifier·archive/restore 연결. 기존 accepted bytes와 같은 inode의 독립 cursor·현재 권한 재검사 유지. Mac 실제 end-to-end는 미완료 |
+| P6 | 공통 oma 진입·Society/Personal 조립, standalone get/put Keychain primitive, 실제 설치 prefix Personal PTY 검증. VZ/vsock/guest/systemd의 주요 실행 구현·자산 제거. 아래 잔존 VM 정책/API는 아직 제거하지 못함. Mac 제품은 모든 효과 전에 명시적으로 거절 |
+| P7 | 현재 운영 안내·책임 경계·규범·owner·시험/CI 증거를 함께 갱신. 최종 지원 대조·레거시 잔존 제거·현재 입력의 실제 Darwin qualification은 남음 |
+
+미push 후속에는 Broker의 완료된 mutation 뒤 event-loop turn 반환(DR58/NATIVE-021),
+accepted plan/result 보존 회귀2개, START의 host network 표기와 해당 기대값 수정,
+policy fixture의 실제 Node timer 연결, Chromium 방식의 Mach rendezvous 후보가 포함된다.
+Broker status publication의 CoalescedWake/Store close 이전 drain 수정은 앞선 commit에 있다.
+
+### 14.3 실제 시험 결과 — 입력과 범위를 구분
+
+| 실행/입력 | 실제 결과 |
+|---|---|
+| `5e369b30` Architecture40316751983 | baseline 전체3777/3777 및 native-all3777/3777 PASS, skip/cancel/todo0. fast795/795·durable871/871·property34/34·stress13/13·platform29/29 PASS. source/input과 ZIP SHA 검증. raw `ci-5e369b30/architecture-baseline-summary.json` 및 각 artifact |
+| 같은 commit Native40316752088 | Mac26/15와 Ubuntu 공통각74/74, Linux peer3/3·native37/37·선택430/430 PASS. `ci-5e369b30/verified-summary.json`. Mac gate는 baseline15개 OBSERVED와 옛 Mach6개 receive timeout/SETUP_FAILED이며 지원 PASS가 아님 |
+| 앞선 전체 CI 실패 | e997 native-all의 mkdirAt EAGAIN1건, e37 stress의 mixed lag100ms 실패를 원문 보존. 이후 PASS가 이 실패를 지우지 않음. mkdirat/owned mkdirAt 각각20만 회·자식25개 관측은 EAGAIN 미재현이며 원인 미확정 |
+| 독립 설치 최신 기존 증거 | `native-status-mach-packed-install*`: Linux26/26 PASS·269.430초, input a3b7fb252b39a2ca6a6fafb1d587c4bfb58785c9e9b7b601950ee0ce20ed8c0b 전후 동일. authored declaration 오류0과 외부 SDK 진단44는 구분. 현재 미push Broker 변경 뒤의26개 재검증은 남음 |
+| 새 reply-turn 회귀 | 새2개 수정 전2 FAIL, 수정 뒤 기존6개와8/8 PASS. `native-dispatch-yield-{before,after}-fix*`. 이후 관련 START/role/status/public-validation33/33 PASS·skip/cancel/todo0,18.495초·input ce9b96e02382976921f01f69b0ae67fe4c1471efd9c3dbba6d37fd4b65fdfd56 전후 동일 |
+| 미push 후속 첫 전체 | `native-reference-yield-whole*`: 3762/3779 PASS·17 FAIL, skip/cancel/todo0·940.027초·input bc7e189f79ebed11044bd9697a3ed987bbb9904781b93b083585e00a78b02a18 전후 동일. 실패는 START의 옛 기대값1건과 fixture의 새 timer import 미연결16건. 정확한 문구와 실제 Node timer module로 수정 후 관련33/33 PASS |
+| 수정 뒤 현재 입력 | typecheck13.771초·전체 정적 gate40.796초 PASS. `native-reference-final-{typecheck,architecture}*`, input ea01a620c2ca543ec7756e675985df712b9f6918d8528e5482579d748211458a 전후 동일. **전체 재실행 결과는 아래 인계 시점 기록을 따른다** |
+
+### 14.4 인계 직전 진행 중이던 실행
+
+`native-reference-fixtures-whole` 전체 npm test를 실제 bwrap wrapper 안에서 시작했다.
+시작 시각2026-10-26 13:16 UTC, 입력 ea01a620c2ca543ec7756e675985df712b9f6918d8528e5482579d748211458a,
+기존 tool session27092다. 관측 timeout만으로 살아 있는 실행을 재시작하지 않는다.
+원시 `<label>.log`, `-before.json`, `-after.json`, `-status.json`으로 종료·입력 불변·정확한
+PASS/FAIL/skip/cancel/todo를 확인한다. 새 세션에서 tool session이 보이지 않아도 프로세스와
+원시 파일을 먼저 확인하며, 실행 중에는 그 입력을 편집하거나 metadata를 생성하지 않는다.
+
+인계 시점 확인: 위 실행은 **정상 종료·3779/3779 PASS**(serial13/13·parallel3766/3766),
+fail/skip/cancel/todo0·exit0·signal null·943.025초다. before/after 입력은 위 ea01a620…로
+동일하다. 현재 살아 있는 이 실행은 없다. 이 절을 추가하기 전 입력의 실제 전체 결과이며,
+문서 추가 뒤 입력을 같은 runtime 검증으로 재결박하지 않는다. 잔존 레거시 제거 뒤에는 다시
+검증해야 한다. 현재 미push 변경 뒤 독립 packed install26개와 실제 새 Darwin CI는 미실행이다.
+
+### 14.5 새로 확인한 잔존 레거시 — 아직 미수정
+
+사용자가 다시 “레거시 다 지우라”고 지시한 뒤 아래를 실제 source에서 찾았다.
+따라서 이전의 주요 VM runtime 제거를 **레거시 완전 제거**로 보고해서는 안 된다.
+
+1. `apps/oma/src/runtime/session-catalog.ts`: Darwin Society birth/resume 거절 및 Society 목록의
+   Darwin 조기 반환. “Mac Society histories live in the guest” 전제를 제거하고 같은 birth/binding
+   owner로 검증한다. 제품의 미해결 gate guard와 옛 VM routing을 혼동하지 않는다.
+2. `packages/tui/src/words.ts`, `packages/domain/src/product-text.ts`:
+   `OMA_PRODUCT_TEXT`·productSurface·Linux 용어 숨김·guest log/stdout 라우팅이 남아 있다.
+   사용하지 않는 환경변수 호환 경로·dead codec/export·bound·architecture 예외까지 제거하고
+   native CLI의 공통 오류 표시로 직접 연결한다. noop compatibility wrapper로 남기지 않는다.
+   `test/dr18-product-words.test.ts` 등 현재 시험과 규범도 실제 최종 구현으로 교체한다.
+3. `apps/oma/src/runtime/inference-relay.ts`: VM egress handoff용 `InferenceRelay.detached/accept`의
+   사용처와 owner를 전수 대조해 남은 미사용 API를 제거한다. 다른 책임의 동일 이름 API는
+   근거 없이 삭제하지 않는다.
+4. `packages/domain/src/errors.ts`의 START_LIMIT 설명은 아직 “Systemd start limit”이다.
+   현재 공통 breaker 의미로 바로잡고 wire code·accepted receipt 의미는 보존한다.
+5. native runner가 `INVOCATION_ID`라는 systemd 환경변수 이름을 여전히 사용한다.
+   실제 identity는 공통 실행 owner가 발급한다. runner/native-residents/관련 fixture의 전달을
+   현재 소유 계약으로 정리하고 ambient systemd 환경에 기대는 경로를 제거한다.
+6. protocol/principal-credential, status-view, lifetime, client, diagnostics 등 source comment와
+   현재 운영 문서에 guest/systemd/cgroup 설명이 남아 있다. 실제 코드와 대조해 현재 설명으로
+   고친다. 현재 Linux sandbox의 AF_VSOCK 금지, 기존 데이터·메일 표준의 의미, 고정 architecture와
+   과거 검토 기록은 단어 검색만으로 삭제·변경하지 않는다.
+
+검색 원문은 외부 `legacy-current-inventory.txt`다. 이 목록은 모든 production code의 최종
+전수 검토가 아니며, 새 세션에서 전체 코드를 읽고 코드·설정·자산·exports·시험까지 다시 확인한다.
+`check:legacy`의 기존 PASS만으로 이 잔존 정책이 없다고 판단하지 않는다.
+
+### 14.6 Darwin과 CI의 실제 차단 조건
+
+- G-PROCESS OPEN: NOTE_TRACK은 실제 ENOTSUP, setsid 후손은 group kill 뒤 생존했다.
+  public API의 임의 후손 fence·전체 사망·broker 사망/재시작 복구 증거가 필요하다.
+- G-FILES OPEN: 실제 mode-000 O_EVTONLY pin은 EACCES였고 exact reopen/metadata repair 및
+  executable 결박이 미증명이다. XNU의 별도 O_EVTONLY I/O policy는 Apple private entitlement를
+  요구한다. 이를 숨은 의존성으로 도입하지 않았다.
+- G-AUTH OPEN: Unix peer PID/token은 queued byte별 sender를 증명하지 않았다. Chromium의
+  bootstrap rendezvous·kernel audit trailer 흐름으로 새 mach-self/rendezvous-live/rendezvous-exit
+  후보를 구성했지만 실제 Mac에서는 NOT_RUN이다. live pin·PID 재사용·scope membership과
+  production transport 연결도 남았다.
+- `9116bb6b` Native40318575316/Architecture40318575321은 모든 job이 스텝/로그 없이 시작 전
+  failure였다. compiler/runtime 실패나 성공으로 세지 않는다. 연결 도구의 annotation 조회
+  한계와 local gh 미로그인으로 사유 미확정이다. 사용자에게 run 화면 Errors/Annotations 문구를
+  이미 요청했다. 사유 없이 같은 입력을 반복 실행하지 않는다.
+- Mac 실기기는 없다. 실제 Darwin 판정은 GitHub macos-26/15 job과 raw artifact로만 한다.
+  signed release Keychain·TCC·sleep/wake·power loss는 별도 미검증이다.
+- 외부 구현은 sandbox-runtime·Codex·Gemini CLI·Chromium·OpenClaw fs-safe의 고정 source를
+  대조했다. [참고 기록](implementation/native-reference-review.md)의 근거와 채택 범위를 따른다.
+  다른 제품의 group kill/pgrep snapshot·협조적 writer 계약을 OMA 보장으로 완화하지 않는다.
+
+### 14.7 다음 세션의 작업 순서
+
+1. 이 명세와 필수 문서 전체·모든 프로덕션 코드를 읽고 현재 dirty tree와 위 실행의 종료 상태를
+   확인한다. 이미 끝난 시험·살아 있는 프로세스를 중복 실행하거나 기존 변경을 되돌리지 않는다.
+2. §14.5의 잔존 레거시부터 실제 owner에서 제거한다.26개+α workspace의 공개 의존 경계를
+   지키고 source·규범·owner map·현재 시험을 함께 수정한다. 기존 accepted 사실을 새 실행 권한으로
+   바꾸거나 불명 결과를 성공/실패/부재로 단정하지 않는다.
+3. P0–P7의 남은 구현을 계속한다. Darwin 실제 primitive 후보·전체 수명·파일·인증 proof를
+   해결하고 OS backend를 연결한다. 막힌 gate의 재현 근거를 남기며 독립 구현은 계속한다.
+4. 최신 입력을 고정해 Linux 전체·관련 실제 kernel/crash/scenario·독립 packed install26개와
+   정적/타입 검사를 수행한다. metadata 생성도 순차 수행하며 authored review를 새 PASS로 만들지 않는다.
+5. concrete 변경을 작업 브랜치에 commit/push하고 필요한 workflow 실행·결과·raw artifact SHA와
+   source/input을 확인한다. master 병합·배포는 하지 않는다. Mac CI가 시작되지 않으면 외부
+   차단으로 기록하고 mock/skip/보장 완화로 통과시키지 않는다.
+6. 구현 범위·실제 시험 결과·남은 차단 조건을 구분해 보고한다. 미완성 Mac backend나 잔존
+   레거시를 숨긴 채 “구현 완료”, “완전 제거”, “100% 지원”이라고 보고하지 않는다.
+
+### 14.8 재개 후 구현 — 2026-10-27
+
+§14.7의 사전 읽기를 완료했다. 필수 문서·owner/traceability/durable map과 자체 작성 production
+523개를 모두 읽고, vendor는 §1에 따라 네 bundle의 정확한 파일/byte manifest와 OMA 접점을
+대조했다. third-party 전체 행의 수동 audit나 runtime qualification을 주장하지 않는다.
+
+§14.5의 VM 오류 표시·Darwin history routing·미사용 relay handoff·ambient runner identity를
+제거했다. 추가로 미사용 Society 선택·VM package generation 수집과 reader lease·옛
+`egress.connect` 전용 grammar를 제거했다. 현재 로컬 패키지 경계와 index reader, 과거 데이터,
+accepted plan/receipt와 historical version2 reader는 유지한다. DR59/NATIVE-022–023을 따른다.
+
+최신 사용자는 macOS의 실제 테스트를 일단 제외하고 최대한의 코드 대조·타입/정적 검사를 통한
+구현 범위의 견적을 요청했다. runtime/CI 시험을 우선 보류하고 구현을 계속한다. 제시한8–12시간은
+작업 견적이며 세 gate 해결·지원 검증을 보장하는 완료 시간이 아니다. Darwin 세 gate는 OPEN이다.
+이번 수정 후 runtime 회귀와 packed install은 NOT_RUN이며, 과거 PASS를 현재 입력에 재결박하지 않는다.
+
+후속으로 Broker의 OS peer pin·message identity·listener 생성·endpoint 길이 검사를 필수 port로
+분리했다. 공통 코드는 Duplex와 listener 수명 계약을 사용하며 현재 Linux adapter가 실제
+SO_PEERCRED/SO_PEERPIDFD/SCM_CREDENTIALS를 제공한다. Mac audit leaf는 공개 BSM accessor를
+사용한다. sender provenance는 kernel receive가 발급한 객체로 제한한다. preparation 실패 뒤
+실제 listener close를 기다리지 않던 경로도 수정했다. Mac transport의 실제 조립은 아직 남았다.
+
+현재 공개 bootstrap header와 Chromium/launchd 구현의 anonymous check-in 차이도 확인했다.
+동적 rendezvous의 성공을 가정하거나 다른 runtime의 registered-port slot을 덮어쓰지 않는다.
+source의 정확한 근거와 채택 범위는 [참고 기록](implementation/native-reference-review.md)을 따른다.

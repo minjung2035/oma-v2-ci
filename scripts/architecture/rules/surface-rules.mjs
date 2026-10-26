@@ -697,18 +697,12 @@ function utf8DecoderRules(root, findings) {
   }
 }
 
-/** DR18 (D-1, MAC-022): an error's words reach the product surface through
- * one reading, `packages/tui/src/words.ts`, which on a Mac's screen keeps only product
- * text and sends the rest to the guest's log. So no other file of the `oma`
- * process reads a thrown value's words itself: no `instanceof Error` test, no
- * `.message`, no `String()` of a caught value. The views only lay out what
- * already passed that reading. The engine's own message event is the
- * transcript's content, not OMA's words. */
-const WORDS_OWNER = "packages/tui/src/words.ts";
+/** Local exceptions use the shared domain error owner. Views render the
+ * supplied text; terminal character/width handling stays in view/text.ts. */
 const ENGINE_CONTENT = Object.freeze({ "packages/engine/src/principal-session.ts": "event" });
 function errorWordsRules(root, findings) {
-  const files = [...filesUnder(root, "packages/tui/src").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
-    ...filesUnder(root, "apps/oma/src/application").filter(file => file !== "apps/oma/src/application/local-packages.ts"),
+  const files = [...filesUnder(root, "packages/tui/src").filter(file => !file.startsWith(VIEW)),
+    ...filesUnder(root, "apps/oma/src/application"),
     ...present(root, ["apps/oma/src/entry/oma.ts", "apps/oma/src/entry/oma-society.ts"])];
   for (const file of files) {
     const caught = new Set();
@@ -720,13 +714,13 @@ function errorWordsRules(root, findings) {
     eachNode(source, node => {
       if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword
         && ts.isIdentifier(node.right) && node.right.text === "Error")
-        findings.push(finding("error-words-owner", file, "reads a thrown value's words itself (instanceof Error); use errorWords from packages/tui/src/words.ts"));
+        findings.push(finding("error-words-owner", file, "reads a thrown value's words itself (instanceof Error); use exceptionText from packages/domain/src/errors.ts"));
       if (ts.isPropertyAccessExpression(node) && node.name.text === "message"
         && !(ts.isIdentifier(node.expression) && ENGINE_CONTENT[file] === node.expression.text))
-        findings.push(finding("error-words-owner", file, `reads .message of ${node.expression.getText(source)}; an error's words come from errorWords (packages/tui/src/words.ts)`));
+        findings.push(finding("error-words-owner", file, `reads .message of ${node.expression.getText(source)}; an error's words come from exceptionText (packages/domain/src/errors.ts)`));
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "String"
         && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) && caught.has(node.arguments[0].text))
-        findings.push(finding("error-words-owner", file, "turns a caught value into text with String(); use errorWords from packages/tui/src/words.ts"));
+        findings.push(finding("error-words-owner", file, "turns a caught value into text with String(); use exceptionText from packages/domain/src/errors.ts"));
     });
   }
 }
@@ -830,8 +824,7 @@ function moduleBoundaryRules(root, findings) {
       const target = normalizeRelativeImport(file, edge.specifier);
       if (file.startsWith("packages/tui/src/")) {
         if (target !== null && ["apps/oma/src/runtime/", "apps/oma/src/application/", "packages/storage/src/", "packages/config/src/", "apps/oma/src/broker/"].some(prefix => target.startsWith(prefix)) ||
-            target === "packages/config/src/index.ts" || target !== null && target.startsWith("apps/oma/src/platform/") &&
-              !(file === "packages/tui/src/words.ts" && target === "packages/domain/src/product-text.ts") ||
+            target === "packages/config/src/index.ts" || target !== null && target.startsWith("apps/oma/src/platform/") ||
             ["packages/broker/src/index.ts", "packages/storage/src/store.ts", "apps/oma/src/runner.ts", "packages/reconcile/src/index.ts", "packages/lifecycle/src/index.ts"].includes(target) ||
             ["fs", "fs/promises", "child_process", "net", "sqlite"].includes(edge.specifier.replace(/^node:/, "")))
           findings.push(finding("tui-module-boundary", file, `imports ${edge.specifier}; file, configuration and process effects belong to Application/Runtime ports`));

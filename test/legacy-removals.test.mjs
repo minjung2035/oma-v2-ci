@@ -5,6 +5,34 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { legacyFindings } from "../scripts/check-legacy.mjs";
 
+test("DR59: retired presentation and invocation channels cannot return under another owner", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-native-channel-removal-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "apps/oma/src/runtime/example.ts");
+  mkdirSync(dirname(path), { recursive: true });
+  for (const source of ['const value = process.env.INVOCATION_ID;', 'const value = process.env["INVOCATION_ID"];',
+    'const value = process.env["OMA_PRODUCT_TEXT"];', 'export function surfaceWords(text) { return text; }']) {
+    writeFileSync(path, source);
+    assert.ok(legacyFindings(root).length > 0, source);
+  }
+  writeFileSync(path, 'const value = process.env.OMA_TOOL_SURFACE_HEX;');
+  assert.deepEqual(legacyFindings(root), []);
+});
+
+test("DR59: retired inference handoff is rejected without banning the active Principal channel", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-native-relay-removal-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const relay = join(root, "apps/oma/src/runtime/inference-relay.ts");
+  mkdirSync(dirname(relay), { recursive: true });
+  writeFileSync(relay, 'class InferenceRelay { static detached() {} accept() {} }');
+  assert.match(legacyFindings(root).join("\n"), /retired relay handoff/);
+  writeFileSync(relay, 'class InferenceRelay {}');
+  const principal = join(root, "packages/extension/src/principal-channel.ts");
+  mkdirSync(dirname(principal), { recursive: true });
+  writeFileSync(principal, 'class PrincipalChannel { static detached() {} }');
+  assert.deepEqual(legacyFindings(root), []);
+});
+
 test("NATIVE-010: the removed tool-runtime file implementation cannot return as a compatibility export", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-tool-files-removal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

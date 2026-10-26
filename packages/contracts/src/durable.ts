@@ -1,4 +1,4 @@
-/** TS-001: durable contract owner. Declarations only; current persisted plan intent (v2 envelope owned by protocol). */
+/** TS-001: durable contract owner. Declarations only; current persisted plan intent (v3 writer and historical v2 reader owned by protocol). */
 import type { RiskTier } from "./values.js";
 import type { ReviewFact } from "./attestation.js";
 import type { Failure } from "./errors.js";

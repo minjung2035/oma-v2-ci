@@ -1,3 +1,4 @@
+import { publishedUnconfirmed, exceptionText } from "@oma/domain/errors";
 /** TUI-001/007: product surface orchestration.
  *
  * The app owns no policy of its own. It routes decoded keys through the pure
@@ -7,8 +8,6 @@
  */
 import { KeyDecoder, type Key } from "./keys.js";
 import { assertNever } from "@oma/domain/exhaustive";
-import { publishedUnconfirmed } from "@oma/domain/errors";
-import { errorWords } from "./words.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
   mailIdentity, type DashboardData, type Effect, type ExtensionRow, type MailBody, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
@@ -247,8 +246,8 @@ export class TuiApp {
       // the previous value looking like it changed -- and a committed one whose
       // flush failed must not say that (P0-5): it was saved.
       this.notice = publishedUnconfirmed(error)
-        ? { kind: "saved-unconfirmed", message: errorWords(error) }
-        : { kind: "save-failed", message: errorWords(error) };
+        ? { kind: "saved-unconfirmed", message: exceptionText(error) }
+        : { kind: "save-failed", message: exceptionText(error) };
       this.refresh();
     }
   }

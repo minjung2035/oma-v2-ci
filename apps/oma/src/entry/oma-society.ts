@@ -1,15 +1,14 @@
 #!/usr/bin/env node
+import { StoreError, exceptionText } from "@oma/domain/errors";
 import { engineLoginDirectory } from "../engine/start-effects.js";
 import { assertNativeRuntime } from "../runtime/native-support.js";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 /** Product composition: command selection, admitted session, and process signal wiring. */
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { StoreError } from "@oma/domain/errors";
 import { piAgentDir } from "@oma/engine/pi-runtime";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
 import { codeFor, exitFor, fail as exitFailure } from "../application/exit.js";
-import { errorWords, humanStream } from "@oma/tui/words";
 import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, packageStoreDir,
   readPackageIndex, writePackageIndex, type PackageCommand } from "../runtime/packages/index.js";
 import { packageDirectories } from "../platform/package-files.js";
@@ -26,7 +25,7 @@ import { SocietyInteraction } from "../application/society-interaction.js";
 import { SocietyTransition } from "../application/society-transition.js";
 
 function usage(): never {
-  humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" +
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" +
     `${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n`);
   process.exit(0);
 }
@@ -40,7 +39,7 @@ async function login(dataRoot: string, project: string): Promise<never> {
   const home = piAgentDir(stateRoot);
   let lease: ReturnType<typeof tryHoldSociety>;
   try { lease = tryHoldSociety(home); }
-  catch (error) { fail(`Could not take the engine home: ${errorWords(error)}`, codeFor(error)); }
+  catch (error) { fail(`Could not take the engine home: ${exceptionText(error)}`, codeFor(error)); }
   if (lease === null) fail("Another oma login is running.", exitFor("BROKER_UNAVAILABLE"));
   let code: number;
   try {
@@ -48,7 +47,7 @@ async function login(dataRoot: string, project: string): Promise<never> {
       stateRoot, libdir: fileURLToPath(new URL("../../../../", import.meta.url)),
       override: process.env.OMA_PI_COMMAND, fence: lease.fence, env: process.env }), () => lease.release());
   } catch (error) {
-    fail(`Could not start the engine: ${errorWords(error)}`, codeFor(error));
+    fail(`Could not start the engine: ${exceptionText(error)}`, codeFor(error));
   }
   process.exit(code);
 }
@@ -70,7 +69,7 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
   ensureOwnedDirectory(store, dataRoot, 0o700);
   let lease: ReturnType<typeof tryHoldSociety>;
   try { lease = tryHoldSociety(store); }
-  catch (error) { fail(`Could not take the package store: ${errorWords(error)}`, codeFor(error)); }
+  catch (error) { fail(`Could not take the package store: ${exceptionText(error)}`, codeFor(error)); }
   if (lease === null) fail("Another oma pi command is running.", exitFor("BROKER_UNAVAILABLE"));
   const code = await withAsyncCleanup(async () => {
     let code: number;
@@ -87,7 +86,7 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
       pruneLocalStage(store, packageDirectories);
       const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
       reconcilePersonalSettings({ dataRoot, libdir, packages: store });
-      if (said.length > 0) humanStream().write(`${said.join("\n")}\n`);
+      if (said.length > 0) process.stderr.write(`${said.join("\n")}\n`);
       code = ok ? 0 : 1;
     }
     if (code === 0 && decision.command === "list") {
@@ -156,7 +155,7 @@ async function main(argv: readonly string[]): Promise<void> {
   runtime = new SocietyRuntime(bootstrap, prepared, interaction);
   transition = new SocietyTransition(bootstrap, prepared, libdir, runtime, interaction, fail);
   process.on("uncaughtException", error => {
-    abandon?.(); humanStream().write(`oma: ${errorWords(error)}\n`); process.exit(codeFor(error));
+    abandon?.(); process.stderr.write(`oma: ${exceptionText(error)}\n`); process.exit(codeFor(error));
   });
   for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => { void transition.shutdown(0); });
   await runtime.start();
@@ -168,6 +167,6 @@ main(process.argv.slice(2)).catch((error: unknown) => {
   // restored, broker stopped, engine ended -- and the reason is written after
   // the alternate screen is gone, where the Human can still read it.
   abandon?.();
-  humanStream().write(`oma: ${errorWords(error)}\n`);
+  process.stderr.write(`oma: ${exceptionText(error)}\n`);
   process.exit(codeFor(error));
 });

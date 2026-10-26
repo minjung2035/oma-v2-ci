@@ -317,7 +317,7 @@ export function principalToolSurfaceConfig(): ToolSurfaceConfig {
   };
 }
 
-/** The encoded plan a Resident's unit environment carries (as hex, beside
+/** The encoded plan a Resident's explicit launch environment carries (as hex, beside
  * the profile and resources hex) -- produced once, validated by
  * planToolSurface, identical bytes for every Resident of a deployment. */
 export function encodedResidentToolSurface(): string {

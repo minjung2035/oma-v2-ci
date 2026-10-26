@@ -29,21 +29,10 @@ export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: n
   } finally { alarm?.cancel(); }
 }
 
-/** AV31 -- D03, LIFE-006: every way this broker's host can go away ends it
- * through its drain, which revokes every run and stops the Residents. Asked to
- * stop (SIGTERM), interrupted (SIGINT), or its terminal hung up (SIGHUP: the
- * product's `oma` was the session leader and exited, or its window closed). An
- * unhandled SIGHUP killed a draining broker outright and left Residents
- * running with no broker, until systemd's start limit stopped them.
- *
- * P0V-81, R6-07: the list is the termination signals a process can catch
- * (glibc's "Termination Signals"; SIGKILL is the one it cannot), and it is the
- * list for every process of this product that has a drain -- the `oma` TUI's
- * shutdown and terminal restore, the Mac's attach client, a Resident's runner,
- * the Mac service, a guest's session holder. SIGQUIT was missing: its default
- * action ends a process with none of that, as SIGHUP's did. */
-
-
+/** AV31 / D03 / LIFE-006: host loss enters the same admission-close and
+ * drain path as an explicit stop. The common host-loss signal owner includes
+ * SIGTERM, SIGINT, SIGHUP and SIGQUIT. SIGKILL cannot run a drain; the durable
+ * execution journal and fresh kernel scope observations govern recovery. */
 export class BrokerLifetime {
   private current: LifetimePhase = "acquired";
   private stopping = false;

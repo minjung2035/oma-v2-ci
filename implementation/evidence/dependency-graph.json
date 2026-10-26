@@ -197,7 +197,6 @@
   "packages/domain/src/mail-values.ts",
   "packages/domain/src/package-policy.ts",
   "packages/domain/src/paths.ts",
-  "packages/domain/src/product-text.ts",
   "packages/domain/src/protocol-limits.ts",
   "packages/domain/src/recovery-policy.ts",
   "packages/domain/src/request-identity.ts",
@@ -326,6 +325,8 @@
   "packages/mail/src/review-documents.ts",
   "packages/mail/src/routing.ts",
   "packages/mail/src/serialize.ts",
+  "packages/native/src/audit-origin.ts",
+  "packages/native/src/audit-token.ts",
   "packages/native/src/cleanup.ts",
   "packages/native/src/control-socket.ts",
   "packages/native/src/descriptor-path.ts",
@@ -333,9 +334,11 @@
   "packages/native/src/files.ts",
   "packages/native/src/identity.ts",
   "packages/native/src/linux.ts",
+  "packages/native/src/mach-message.ts",
   "packages/native/src/peer-uid.ts",
   "packages/native/src/pid-namespace.ts",
   "packages/native/src/posix-files.ts",
+  "packages/native/src/process-event.ts",
   "packages/native/src/process-lock.ts",
   "packages/native/src/process-observation.ts",
   "packages/native/src/snapshot-reader.ts",
@@ -345,11 +348,13 @@
   "packages/platform-linux/src/credential-stream.ts",
   "packages/platform-linux/src/git-sandbox.ts",
   "packages/platform-linux/src/namespace-execution.ts",
+  "packages/platform-linux/src/peer-identity.ts",
   "packages/platform-linux/src/resident-rootfs.ts",
   "packages/platform-linux/src/runner-scope.ts",
   "packages/platform-linux/src/sandbox-seccomp.ts",
   "packages/platform-linux/src/sandbox.ts",
   "packages/platform-linux/src/worker-spawn.ts",
+  "packages/platform-mac/src/audit-peer.ts",
   "packages/platform-mac/src/keychain-client.ts",
   "packages/platform-mac/src/native-assets.ts",
   "packages/platform-mac/src/native-channel.ts",
@@ -491,8 +496,7 @@
   "packages/tui/src/view/notice.ts",
   "packages/tui/src/view/screens.ts",
   "packages/tui/src/view/session-mode.ts",
-  "packages/tui/src/view/text.ts",
-  "packages/tui/src/words.ts"
+  "packages/tui/src/view/text.ts"
  ],
  "kernel": {
   "zones": [
@@ -527,7 +531,6 @@
      "packages/domain/src/mail-values.ts",
      "packages/domain/src/package-policy.ts",
      "packages/domain/src/paths.ts",
-     "packages/domain/src/product-text.ts",
      "packages/domain/src/protocol-limits.ts",
      "packages/domain/src/recovery-policy.ts",
      "packages/domain/src/request-identity.ts",
@@ -610,6 +613,8 @@
      "packages/git/src/candidate-check.ts",
      "packages/git/src/project-preparation.ts",
      "packages/git/src/quarantine-worker.ts",
+     "packages/native/src/audit-origin.ts",
+     "packages/native/src/audit-token.ts",
      "packages/native/src/cleanup.ts",
      "packages/native/src/control-socket.ts",
      "packages/native/src/descriptor-path.ts",
@@ -617,9 +622,11 @@
      "packages/native/src/files.ts",
      "packages/native/src/identity.ts",
      "packages/native/src/linux.ts",
+     "packages/native/src/mach-message.ts",
      "packages/native/src/peer-uid.ts",
      "packages/native/src/pid-namespace.ts",
      "packages/native/src/posix-files.ts",
+     "packages/native/src/process-event.ts",
      "packages/native/src/process-lock.ts",
      "packages/native/src/process-observation.ts",
      "packages/native/src/snapshot-reader.ts",
@@ -697,9 +704,9 @@
    "K0-values -> K0-values": 34,
    "K1-codecs -> K0-values": 64,
    "K1-codecs -> K1-codecs": 24,
-   "K2-mechanisms -> K0-values": 125,
+   "K2-mechanisms -> K0-values": 129,
    "K2-mechanisms -> K1-codecs": 13,
-   "K2-mechanisms -> K2-mechanisms": 154,
+   "K2-mechanisms -> K2-mechanisms": 160,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -1155,6 +1162,16 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/native/src/audit-origin.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/audit-token.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/native/src/control-socket.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -1180,6 +1197,11 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/native/src/mach-message.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/native/src/pid-namespace.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -1192,6 +1214,11 @@
    {
     "from": "packages/native/src/posix-files.ts",
     "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/process-event.ts",
+    "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
    {
@@ -2218,7 +2245,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 173
+   "files": 176
   },
   {
    "index": 2,
@@ -2269,7 +2296,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 140
+   "files": 142
   },
   {
    "index": 5,
@@ -2289,19 +2316,19 @@
     "packages/tool-web/src/",
     "packages/tool-hashline/src/"
    ],
-   "files": 84
+   "files": 83
   }
  ],
- "files": 493,
- "runtimeEdges": 1768,
- "typeOnlyEdges": 767,
+ "files": 497,
+ "runtimeEdges": 1767,
+ "typeOnlyEdges": 768,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 441,
+  "L1-kernel -> L1-kernel": 451,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 260,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 355,
+  "L4-orchestration -> L1-kernel": 356,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
   "L4-orchestration -> L4-orchestration": 164,
@@ -2309,7 +2336,7 @@
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
   "L5-entry -> L4-orchestration": 102,
-  "L5-entry -> L5-entry": 132
+  "L5-entry -> L5-entry": 120
  },
  "upwardTypeOnlyEdges": [
   {
@@ -2320,32 +2347,32 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 226,
+  "packages/domain/src/errors.ts": 233,
   "packages/domain/src/identifiers.ts": 84,
-  "packages/storage/src/directory.ts": 40,
-  "packages/native/src/files.ts": 37,
-  "packages/native/src/cleanup.ts": 34,
+  "packages/storage/src/directory.ts": 39,
+  "packages/native/src/cleanup.ts": 38,
+  "packages/native/src/files.ts": 36,
   "packages/domain/src/paths.ts": 32,
-  "packages/storage/src/durable-fs.ts": 31,
   "packages/domain/src/canonical-json.ts": 30,
-  "packages/native/src/posix-files.ts": 25,
+  "packages/storage/src/durable-fs.ts": 30,
+  "packages/native/src/posix-files.ts": 24,
   "packages/domain/src/utf8.ts": 23,
   "packages/domain/src/request-identity.ts": 22,
-  "packages/domain/src/surface-bounds.ts": 21,
   "packages/domain/src/derived.ts": 20,
+  "packages/domain/src/surface-bounds.ts": 20,
   "packages/domain/src/deployment.ts": 19,
   "packages/process/src/async.ts": 17
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 39,
   "packages/mail/src/index.ts": 22,
-  "apps/oma/src/entry/oma-society.ts": 21,
+  "apps/oma/src/entry/oma-society.ts": 20,
   "apps/oma/src/runtime/client-runtime.ts": 20,
   "packages/broker/src/index.ts": 19,
   "apps/oma/src/application/society-bootstrap.ts": 18,
   "packages/git/src/context-repository.ts": 18,
-  "apps/oma/src/runner.ts": 17,
   "packages/engine/src/interactive.ts": 17,
+  "apps/oma/src/runner.ts": 16,
   "apps/oma/src/runtime/provision.ts": 16,
   "packages/extension/src/index.ts": 15,
   "packages/git/src/context.ts": 15,
@@ -2358,30 +2385,30 @@
   "@earendil-works/pi-coding-agent": 47,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 9,
+  "koffi": 13,
   "node:async_hooks": 5,
   "node:buffer": 1,
   "node:child_process": 5,
   "node:crypto": 39,
   "node:dns": 1,
   "node:events": 2,
-  "node:fs": 114,
+  "node:fs": 115,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
   "node:module": 5,
-  "node:net": 26,
-  "node:os": 13,
+  "node:net": 23,
+  "node:os": 12,
   "node:path": 130,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
-  "node:stream": 3,
+  "node:stream": 8,
   "node:stream/promises": 1,
   "node:string_decoder": 1,
-  "node:timers/promises": 5,
+  "node:timers/promises": 6,
   "node:url": 11,
-  "node:util": 7,
+  "node:util": 8,
   "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,

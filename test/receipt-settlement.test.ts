@@ -102,7 +102,7 @@ test("V06A: a completed batch keeps its first terminal fact under recovery", asy
 });
 
 function peerOf(): BoundPeer {
-  return { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), inheritedRunner: { actor: "alice", invocationId: OLD }, alive: () => true,
+  return { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), inheritedRunner: { actor: "alice", invocationId: OLD }, alive: () => true, sameSender: () => false,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
 }
 /** The production internal dispatcher, peer authenticator and run registry. */
@@ -112,7 +112,8 @@ function liveEndpoint(f: ReceiptFixture, registry: RunRegistry, invocation: () =
   // local process cannot promote it into the successor's authority.
   const units = { observe: () => ({ activeState: "active", invocationId: invocation(), scope: "/next" }),
     scopeRoot: () => self, runnerAlive: () => true } as unknown as FeatureExecution;
-  const peers = new PeerAuthenticator(f.store, units, registry, "demo", () => undefined);
+  const peers = new PeerAuthenticator(f.store, units, registry, "demo", () => undefined,
+    () => { throw new Error("receipt context checks do not acquire a connection"); });
   const dispatcher = new InternalDispatcher({ ...createInternalDispatchDataPorts(f.store, f.mail, f.root), peers: projectInternalPeers(peers),
     isDraining: () => false, assertAdmission: () => undefined,
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error: { code: (error as { code?: string }).code } }),

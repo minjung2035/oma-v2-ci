@@ -42,7 +42,7 @@ async function call(socket,frame){return new Promise((resolve,reject)=>{
  socket.on('error',reject); socket.on('data',chunk=>{for(const f of parser.feed(chunk)){clearTimeout(alarm);resolve(f.raw);}});
  socket.write(encodeFrame(frame));
 });}
-const answer=await call(control,{v:1,id:'open',method:'runner.open',params:{agent:'alice',invocationId:process.env.INVOCATION_ID}});
+const answer=await call(control,{v:1,id:'open',method:'runner.open',params:{agent:'alice',invocationId:process.env.OMA_TEST_INVOCATION_ID}});
 if(!answer.ok)throw new Error(JSON.stringify(answer));
 const flood=Array.from({length:400},()=>{const s=connect(answer.result.socketHostPath);s.on('error',()=>{});return s;});
 writeFileSync(${JSON.stringify(ready)},'ready');

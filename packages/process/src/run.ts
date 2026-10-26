@@ -30,7 +30,7 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
   return typeof result.status === "number" && Number.isSafeInteger(result.status) && result.status >= 0 ? "exited" : "unobserved";
 }
 /** Bounded synchronous commands remain available for the final authority/CAS
- * section. This direct-child result is not proof that an entire cgroup is dead.
+ * section. This direct-child result is not proof that an entire execution scope is dead.
  */
 export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = []): ProcessObservation {
   validateCommand(spec);

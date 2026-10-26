@@ -85,7 +85,7 @@ export function publishContextRevision(
     // AV-20261003-19 (P0-4): the temporary is lease-owned from creation, so a
     // publication interrupted between creation and the atomic rename leaves a
     // residue whose quiescence startup recovery can prove -- not an ownerless
-    // tree that counts against storage quota forever.
+    // tree with no recoverable ownership.
     const lease = TreeLease.take(temporary);
     // Everything after `take` is inside the same release-on-failure guard:
     // a failure while the tree is being made must not strand the lease fd

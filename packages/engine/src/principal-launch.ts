@@ -36,7 +36,7 @@ export interface SessionPaths {
   readonly fence?: number | undefined;
   /** D23/TSP-005: the surface plan's explicit hop into this engine, the same
    * channel the Resident arm declares on `RunnerProfile.toolSurface` (its
-   * producer is the runner unit's deployment environment, read once by the
+   * producer is the broker-owned runner launch environment, read once by the
    * runner entry). The Principal's host session carries the deployment's
    * principal plan -- oma-society.ts sets it -- so both roles run a declared
    * surface and a plan that names a missing tool refuses startup rather
@@ -212,7 +212,7 @@ export function sessionEnv(
   paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension" | "toolSurface">>,
 ): Record<string, string> {
   // D23/TSP-005: the surface plan travels only the declared hop -- the
-  // runner unit's deployment environment for Residents, this paths field for
+  // broker-owned runner launch environment for Residents, this paths field for
   // a host engine. A stray OMA_TOOL_SURFACE in the user's shell must not
   // reach the Principal's host engine -- where a malformed plan would exit(1)
   // at session_start and a crafted-valid one would narrow its tools -- so

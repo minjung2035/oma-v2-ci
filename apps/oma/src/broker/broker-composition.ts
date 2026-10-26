@@ -1,5 +1,7 @@
 /** The application binds concrete owners to Broker's exact live capabilities. */
 import { dirname, join } from "node:path";
+import { createServer, Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import type { Actor, ProtocolLimits } from "@oma/contracts";
 import type { Store } from "@oma/storage";
 import type { MailModule } from "@oma/mail";
@@ -20,6 +22,8 @@ import { Broker, type BrokerPaths, type PrincipalHostChannel } from "@oma/broker
 import type { BrokerLedger, BrokerTransaction, BrokerDependencies, BrokerMail, BrokerUnits, BrokerViews, BrokerEffects, PublicReviewPort } from "@oma/broker/ports";
 import { createPublicDispatchPorts, createInternalDispatchDataPorts } from "./composition.js";
 import { credentialStream, prepareCredentialListener } from "@oma/platform-linux/credential-stream";
+import { pinLinuxPeer } from "@oma/platform-linux/peer-identity";
+import { StoreError } from "@oma/domain/errors";
 
 export function brokerLedger(store: Store): BrokerLedger {
   return Object.freeze({
@@ -46,6 +50,10 @@ export interface BrokerExecution extends BrokerUnits {
   pin(scope: string): ExecutionScopePin;
   observeStatus(actors: readonly Actor[]): Promise<ReadonlyMap<Actor, ExecutionObservation | "no-unit">>;
 }
+function linuxSocket(stream: Duplex): Socket {
+  if (!(stream instanceof Socket)) throw new TypeError("Linux broker transport requires a native socket owner");
+  return stream;
+}
 export function createBroker(input: BrokerComposition): Broker {
   const { store, mail, units, views, lifecycle, git, reviews, reconcile, paths, limits, lock, principalHost } = input;
   const status = new StatusRefresh(() => store.agentNames(), agents => units.observeStatus(agents));
@@ -64,8 +72,17 @@ export function createBroker(input: BrokerComposition): Broker {
     public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits),
     internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot),
     effects: Object.freeze<BrokerEffects>({
-      prepareListener: prepareCredentialListener,
-      peerStream: credentialStream,
+      pinPeer: stream => pinLinuxPeer(linuxSocket(stream)),
+      assertEndpoint: path => {
+        if (Buffer.byteLength(path) > 107 || path.includes("\0"))
+          throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
+      },
+      openListener: (serve, maxConnections) => {
+        const listener = createServer({ allowHalfOpen: true, pauseOnConnect: true }, serve);
+        if (maxConnections !== undefined) listener.maxConnections = maxConnections;
+        return { listener, prepare: () => prepareCredentialListener(listener) };
+      },
+      peerStream: (stream, authorize) => credentialStream(linuxSocket(stream), authorize),
       bindAdmission: gate => bindAdmissionGate(store, gate),
       ensureRunRoot: () => ensureOwnedDirectory(paths.runRoot, dirname(paths.runRoot), 0o700),
       ensureActorDirectory: (actor, incarnation) => ensureOwnedDirectory(actorSocketDirectoryAt(paths.runRoot, actor, incarnation), dirname(paths.runRoot), 0o700),

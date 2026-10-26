@@ -91,10 +91,6 @@
     "./view/text": {
       "types": "./dist/view/text.d.ts",
       "default": "./dist/view/text.js"
-    },
-    "./words": {
-      "types": "./dist/words.d.ts",
-      "default": "./dist/words.js"
     }
   },
   "scripts": {

@@ -72,6 +72,7 @@ for (const recorded of [false, true]) test(`Session history: ${recorded ? "recor
     return;
   }
   assert.deepEqual(await sessionBirthForHistory(w.data, file, w.cwd), birth);
+  assert.equal(sessionHistoryDirectories(w.data, w.cwd).some(entry => entry.root === society && entry.mode === "society"), true);
   await assert.rejects(sessionBirthForHistory(w.data, file, "/other-project"), { code: "INVALID_REQUEST" });
   writeFileSync(file, JSON.stringify(w.header));
   await assert.rejects(sessionBirthForHistory(w.data, file, w.cwd), { code: "STORE_CORRUPT" }, "project path is not the Principal's private cwd");

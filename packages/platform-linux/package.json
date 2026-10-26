@@ -43,6 +43,10 @@
     "./candidate-sandbox": {
       "types": "./dist/candidate-sandbox.d.ts",
       "default": "./dist/candidate-sandbox.js"
+    },
+    "./peer-identity": {
+      "types": "./dist/peer-identity.d.ts",
+      "default": "./dist/peer-identity.js"
     }
   },
   "scripts": {

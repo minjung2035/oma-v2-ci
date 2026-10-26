@@ -9,7 +9,7 @@ import { sessionBirthForHistory } from "../runtime/session-catalog.js";
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { requireSessionMode } from "../runtime/session-mode.js";
 import { codeFor, fail } from "../application/exit.js";
-import { errorWords } from "@oma/tui/words";
+import { exceptionText } from "@oma/domain/errors";
 import { enableProcessCompileCache } from "../runtime/compile-cache.js";
 
 async function main(argv: readonly string[]): Promise<void> {
@@ -47,4 +47,4 @@ async function main(argv: readonly string[]): Promise<void> {
     await import("./oma-society.js");
   }
 }
-main(process.argv.slice(2)).catch(error => fail(errorWords(error), codeFor(error)));
+main(process.argv.slice(2)).catch(error => fail(exceptionText(error), codeFor(error)));

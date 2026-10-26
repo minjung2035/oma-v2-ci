@@ -102,7 +102,7 @@ export class ViewsModule {
       "## Sandbox",
       "",
       "- Toolchain: the pinned `node`, `npm`/`npx`/`corepack`, `git`, `/bin/sh`, the `oma` CLI.",
-      "- Network: the sandbox shares the host/guest network; OMA has no egress allowlist.",
+      "- Network: the sandbox shares the host network; OMA has no egress allowlist.",
       "  HTTP(S) clients can use an injected egress proxy (`HTTPS_PROXY`) when present",
       "  (`npm install`, `git clone https`, pip). Actual connectivity and host permissions apply.",
       "- `git push` is not the flow -- `origin` is read-only. `oma submit` plus `oma_merge open`",

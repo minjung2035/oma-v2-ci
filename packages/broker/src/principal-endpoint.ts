@@ -29,10 +29,11 @@
  * delivered.
  *
  * The broker owns the sockets and the connection machinery, which reach here as
- * ports; nothing in this file reads a store, a unit or a file except /proc.
+ * ports; process facts come through the shared observation owner. This file
+ * neither opens an OS channel nor interprets native credentials.
  */
 import { randomBytes } from "node:crypto";
-import type { Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import type { AuthContext, BoundaryEvidence, PreparedBatch, Request } from "@oma/contracts";
 import { StoreError, publicFailure } from "@oma/domain/errors";
 import { INTERNAL_METHODS, internalEnvelopeProblem } from "@oma/protocol/methods";
@@ -67,17 +68,17 @@ export interface PrincipalHostChannel {
 /** Ports shared by both endpoints: the broker's connection machinery. */
 interface ConnectionPorts {
   readonly isDraining: () => boolean;
-  readonly bindPeer: (socket: Socket) => BoundPeer | null;
+  readonly bindPeer: (socket: Duplex) => BoundPeer | null;
   /** The live authority of the `principal` row, re-derived on every read;
    * `live` says whether what the caller was authorised under still stands. */
   readonly principalContext: (peer: BoundPeer, live: () => boolean) => AuthContext | null;
   readonly serveFrames: (
-    socket: Socket,
+    socket: Duplex,
     peer: BoundPeer,
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
   ) => void;
-  readonly fail: (socket: Socket, failure: ReturnType<typeof publicFailure>) => void;
+  readonly fail: (socket: Duplex, failure: ReturnType<typeof publicFailure>) => void;
   readonly observe: (error: unknown) => void;
   readonly cleanupError: (error: unknown) => void;
 }
@@ -120,7 +121,7 @@ function isHost(peer: BoundPeer, host: ProcessIdentity): boolean {
 /** Serves one connection whose first frames decide what it is. Shared by both
  * endpoints so the peer binding and failure handling are written once. */
 function serveConnection(
-  ports: ConnectionPorts, socket: Socket, open: () => boolean,
+  ports: ConnectionPorts, socket: Duplex, open: () => boolean,
   admit: (peer: BoundPeer) => { handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>;
     preflight: (raw: Record<string, unknown>) => void },
 ): void {
@@ -153,7 +154,7 @@ export class PrincipalEndpoint {
   /** Connections that have attached. Held so that a session which stops being
    * the Principal's takes its connections with it instead of leaving them
    * open and authorised. */
-  private readonly attached = new Set<Socket>();
+  private readonly attached = new Set<Duplex>();
 
   constructor(private readonly channel: PrincipalHostChannel, private readonly ports: PrincipalEndpointPorts) {
     if (!Number.isSafeInteger(channel.host.pid) || channel.host.pid <= 1)
@@ -244,7 +245,7 @@ export class PrincipalEndpoint {
   /** The credential stops existing with the broker that minted it. */
   close(): void { this.open = false; this.retire(); }
 
-  serve(socket: Socket): void {
+  serve(socket: Duplex): void {
     serveConnection(this.ports, socket, () => this.open, peer => {
       // What this connection attached to, not what it was granted. An
       // AuthContext handed over at attach says what the caller could do then;
@@ -355,7 +356,7 @@ export class PrincipalHostEndpoint {
 
   close(): void { this.open = false; }
 
-  serve(socket: Socket): void {
+  serve(socket: Duplex): void {
     // The refusal of a non-host is the answer to its request, not a reply sent
     // before it asked: a caller must be able to tell "you are not the host"
     // from a broken connection.

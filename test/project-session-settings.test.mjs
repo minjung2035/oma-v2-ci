@@ -13,7 +13,7 @@ function fixture() {
     "../runtime/packages/index.js": { readPackageIndex: () => [] },
     "../runtime/user-files.js": { readUserFile: () => project.snapshot },
     "@oma/config/operations": { CONFIGURATION_DOCUMENT_BYTES: 1024 },
-    "@oma/tui/words": { errorWords: error => error.message },
+    "@oma/domain/errors": { exceptionText: error => error.message },
     "./extensions.js": { readExtensions: source => { if (failed) throw new Error("extensions unreadable"); return { source }; } },
     "./settings.js": { projectSettingsPath: () => "/project/settings", readSettings: () => current,
       readSettingsForEditing: () => project, deriveSessionSettings: () => ({ settings: current, missing: [] }) },

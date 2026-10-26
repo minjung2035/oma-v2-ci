@@ -1,4 +1,5 @@
 // IPC-004/AUTH-003: public preflight and method dispatch; no socket or lease ownership.
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods, Request, RequestKey, Actor, AgentCreateInput, Oid, MessageId, MailInput, Receipt, Json, AgentStatus } from "@oma/contracts";
 import type { StatusSnapshot } from "@oma/contracts/runtime";
 import { StoreError, publicDetails } from "@oma/domain/errors";
@@ -195,7 +196,14 @@ export class PublicDispatcher {
         default: return assertNever(method);
       }
     } catch (error) { return this.deps.failureAnswer(id, error); }
-    finally { if (descriptor.mode === "mutation") this.deps.refreshViews(); }
+    finally {
+      if (descriptor.mode === "mutation") {
+        this.deps.refreshViews();
+        // NATIVE-021: completed writes must let timers and other admitted work run.
+        // The accepted result is already fixed; this turn grants no new authority.
+        await yieldToEventLoop();
+      }
+    }
   }
 }
 function emptyStream(): AsyncIterable<Uint8Array> { return (async function* () {})(); }

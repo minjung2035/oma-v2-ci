@@ -59,8 +59,8 @@ function writeTree(root: Tree, git: Git): string {
 }
 
 /** The preparation stays owned through synchronous or asynchronous bundle/fetch.
- * A Mac caller supplies its host-transfer owner; society callers use Linux
- * held-parent storage. Neither guesses child death from a command timeout. */
+ * Callers may supply the preparation owner; the default uses held-parent
+ * storage. A command timeout never proves child or descendant death. */
 export function withProjectSnapshot<T>(options: {
   readonly source: string; readonly parent: string | null; readonly format: "sha1" | "sha256";
   readonly sourceIsGit: boolean; readonly temporaryParent: string; readonly executable: string;

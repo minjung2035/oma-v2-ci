@@ -1,5 +1,47 @@
 # OMA v2 — 현재 인계
 
+## 현재: 9116bb6b와 외부 구현 대조 후속
+
+최신 후속 전체 local은 `native-reference-yield-whole*`의 **3762/3779 PASS·17 FAIL**,
+skip/cancel/todo0·940.027초·input `bc7e189f79ebed11044bd9697a3ed987bbb9904781b93b083585e00a78b02a18`
+전후 동일이다. 실패는 START의 host/guest 기대값1건과 public-validation fixture의 새 실제
+node:timers/promises import 미연결16건이다. 정확한 host 문구와 실제 Node timer module로
+fixture를 연결했다. 이후 validation 정책16/16 PASS이며 전체 후속은 별도 재실행한다.
+수정된 START/role prompt/status/public validation의 관련33/33도 PASS·skip/cancel/todo0,
+18.495초·input `ce9b96e02382976921f01f69b0ae67fe4c1471efd9c3dbba6d37fd4b65fdfd56`
+전후 동일이다(`native-reference-fixtures-focused*`).
+mock timer·skip·latency 완화를 추가하지 않았다. 외부 대조에는 fs-safe와 XNU spawn/VFS의
+실제 조건도 추가했다. VFS의 O_EVTONLY policy는 Apple private entitlement를 요구하므로
+제품 의존성으로 채택하지 않는다. 새로운 Darwin 실행 성공으로 해석하지 않는다.
+
+후속 확인: 앞선 세 Linux CI는 모두 종료했다. `5e369b30`의 Architecture40316751983은
+baseline과 native-all 모두 성공했다. 각각 전체3777/3777·skip/cancel/todo0이며 baseline의
+fast795/795·durable871/871·property34/34·stress13/13·platform29/29도 성공했다. raw ZIP
+SHA256과 source/input을 별도로 확인했다. `e997fe37` native-all의 mkdirAt EAGAIN1건과
+`e37ad5e0` stress의 mixed lag100ms 실패도 원문을 보존한다. 뒤의 성공이 이 실패를 지우지 않는다.
+실제 mkdirat/owned mkdirAt를 각각20만 회와 자식25개로 관측했지만 EAGAIN은 재현하지 못했다.
+임의 retry나 관측 실패의 absent 변환은 추가하지 않았다.
+
+응답 지연 후속은 기존 PublicDispatcher owner에서 효과/view 갱신 뒤 reply 전에 event-loop
+turn을 반환한다. 새 회귀2개는 수정 전2/2 실패, 수정 뒤 기존6개와 합쳐8/8 PASS·skip0,
+입력 `4596344b5a0f10da87f296a04dd9911db91841705c9eddf82ddcb6821e41656d` 전후 동일이다.
+admission이 그 turn에 닫혀도 이미 accepted된 plan/result를 재해석하지 않는 시험을 포함한다.
+DR58/NATIVE-021·기존 broker owner에 연결했으며 latency budget은 그대로다. 전체 후속 검증은 진행 중이다.
+
+최신 push HEAD는 `9116bb6b667edb0e3a4a31d05e4fa1bb20bb6b1e`다. 아래 기록은 각 제목의
+commit 시점이며 최신 상태를 덮어쓰지 않는다. Native40318575316/Architecture40318575321은
+모든 job이 스텝·로그 없이 시작 전에 failure로 끝났다. 이를 시험 실패나 PASS로 세지 않는다.
+연결 GitHub 도구가 check annotation을 제공하지 않고 local gh도 미로그인이라 상세 원인은
+미확인이다. 사용자에게 해당 run의 Errors/Annotations 문구를 요청했고 자동 재실행하지 않는다.
+앞선 세 입력의 전체 Linux CI 최종 결과는 위 후속 확인을 따른다.
+
+사용자 지시대로 Anthropic sandbox-runtime·Codex·Gemini CLI·Chromium의 실제 고정 source를
+대조하고 [참고 기록](implementation/native-reference-review.md)을 추가했다. 공통 TS/OS adapter
+분리와 Chromium의 kernel audit trailer/rendezvous를 반영한다. process group signal·pgrep
+snapshot은 OMA의 전체 후손 사망 증명을 대신하지 않는다. Mach 후보를 새 rendezvous case로
+교체하되 실제 두 sender·거짓 body PID·queued sender 사망의 조건과 기존15개 Unix 관측은
+유지한다. 새 후보는 아직 실제 Mac에서 NOT_RUN이며 세 gate는 OPEN이다. 이 후속은 미push다.
+
 ## 5e369b30 후속: Mach 기본 수신과 상속 분리
 
 현재 push는 `5e369b3072608581ba3ff74bc958ac58d97acef4`다. Native40316752088의
@@ -239,3 +281,16 @@ Mac 실기기는 없으며 GitHub macOS26/15를 실제로 검증한다.
 원시 시험·CI·재현·현재 입력 관계도 같은 audit root에 있다. [validation](implementation/validation.md)과
 [전환 기록](implementation/native-transition.md)이 구현·실행 범위의 정본이다. 재개 시 실제
 working tree·실행 중 cell/session·최신 CI를 먼저 확인하고 활성 목표를 작은 부분 작업으로 줄이지 않는다.
+
+2026-10-27 후속: 필수 문서·machine map·자체 작성 production523개 전체 읽기를 완료한 뒤
+DR59 잔존 VM 정책/API를 제거했다. 실제 최신 차이는 working tree와
+[native 명세 §14.8](macos-native-spec.md#148-재개-후-구현--2026-10-27)을 따른다.
+새 Mach/audit/process-event leaf와 Mac audit-peer adapter는 source 대조·타입 검사를 진행했고,
+production transport 연결과 실제 Mac 실행은 미완료다. 최신 사용자 범위는 구현 우선이며
+runtime/CI 테스트를 우선 제외한다. 과거 PASS를 현재 입력에 붙이지 않고 세 gate를 OPEN으로 유지한다.
+
+후속 Broker transport port 정리로 공통 owner에서 Linux native 타입과 socket 생성·sun_path 검사를
+제거했다. 실제 Linux adapter를 App이 주입하며 request/authority/reference 수명은 Broker에 남는다.
+native audit token은 BSM by-value accessor로 해석한다. listener의 preparation 실패 뒤 실제
+close 대기와 불명 close 보존을 수정했고 회귀를 작성했다. 새 회귀 실행과 Mac 실제 transport는
+아직 NOT_RUN/미완료다. anonymous bootstrap check-in과 공개 header 계약 차이를 참고 기록에 남겼다.

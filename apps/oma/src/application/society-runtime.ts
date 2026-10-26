@@ -1,8 +1,8 @@
+import { exceptionText, StoreError } from "@oma/domain/errors";
 import { engineStartEffects } from "../engine/start-effects.js";
 /** Society execution coordination. HostTenure alone grants authority and holds the fence.
 * Broker/Principal callbacks report observations; UI interaction receives narrow commands. */
 import { join } from "node:path";
-import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { encodedPrincipalToolSurface } from "@oma/domain/tool-surface";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
@@ -93,11 +93,11 @@ export class SocietyRuntime {
       sessionDir: principalSessionDir(this.bootstrap.stateRoot), ...(this.bootstrap.sessionFile === undefined ? {} : { sessionFile: this.bootstrap.sessionFile }),
       workspace, home: workspace,
       // D23/TSP-005: the Principal's declared surface, same plan channel a
-      // Resident's unit environment feeds its runner -- produced by the
+      // Resident's explicit launch environment feeds its runner -- produced by the
       // deployment, never authored configuration.
       toolSurface: encodedPrincipalToolSurface(),
       fence: owner.fence }, profile, limitsOf(this.config.limits), principalEnvironment({ stateRoot: this.bootstrap.stateRoot, runRoot: this.bootstrap.runRoot, libdir: this.config.installation.libdir }, profile, this.config.limits), {
-      errorWords: error => this.view.errorWords(error),
+      errorWords: error => exceptionText(error),
       onAcquire: engine => owner.adopt(engine),
       // WP09.03: every callback is this engine's; a late one from an engine
       // that is no longer the session cannot clear or re-mark its successor.
@@ -196,13 +196,13 @@ export class SocietyRuntime {
         this.view.draw();
       }
       else if (outcome.kind === "failed") {
-        this.view.notice(`[Mail] Could not complete delivery (${outcome.phase}):${this.view.surfaceWords(outcome.reason, "See the log for details")}`);
+        this.view.notice(`[Mail] Could not complete delivery (${outcome.phase}):${outcome.reason}`);
         this.view.draw();
       }
     }, (error: unknown) => {
       if (this.delivery !== current)
         return;
-      this.view.notice(`[Mail] Delivery error: ${this.view.errorWords(error)}`);
+      this.view.notice(`[Mail] Delivery error: ${exceptionText(error)}`);
       this.view.draw();
     });
   }
@@ -224,7 +224,7 @@ export class SocietyRuntime {
         if (this.finishing || this.disowned || this.tenure !== owner || this.currentSession !== null)
           return;
         this.view.reclaim();
-        this.view.notice(`Could not start the Pi session: ${this.view.errorWords(error)}`);
+        this.view.notice(`Could not start the Pi session: ${exceptionText(error)}`);
         this.view.notice("Enter /restart to try again. Dashboard, Config, and Mail remain available through Ctrl+X.");
         this.view.draw();
       });

@@ -199,7 +199,7 @@ function framed(sockPath, frame) {
   });
 }
 
-const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.INVOCATION_ID } });
+const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.OMA_TEST_INVOCATION_ID } });
 if (!lease.ok) { writeFileSync(process.env.OMA_OUT, JSON.stringify({ leaseError: lease.error })); process.exit(2); }
 const sock = lease.result.socketHostPath;
 const results = [];

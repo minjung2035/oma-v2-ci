@@ -1,7 +1,7 @@
+import { StoreError, exceptionText } from "@oma/domain/errors";
 /** Outgoing session transition. Admission observes history; replacement awaits actual engine exit. */
 import { realpathSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import type { SessionMode } from "@oma/domain/session-mode";
 import { removeUnusedTree } from "@oma/storage/directory";
@@ -9,7 +9,6 @@ import { principalSessionDir, principalWorkspace } from "@oma/engine/principal-s
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { sessionBirthForHistory } from "../runtime/session-catalog.js";
 import { tryHoldSociety } from "../runtime/society-lease.js";
-import { errorWords } from "@oma/tui/words";
 import { exitFor } from "./exit.js";
 import type { SocietyRuntime } from "./society-runtime.js";
 import type { SocietyBootstrap, PreparedSociety } from "./society-bootstrap.js";
@@ -69,7 +68,7 @@ export class SocietyTransition {
         }
         catch (error) {
           if (!this.runtime.finished && this.runtime.session === outgoing)
-            outgoing?.sendUi({ type: "notice", text: errorWords(error) });
+            outgoing?.sendUi({ type: "notice", text: exceptionText(error) });
           return;
         }
         const target = birth.mode === "personal" ? null : birth.id;

@@ -61,14 +61,14 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
           const invocation = execution.replaceAll("-", "");
           log = logs.open(actor, invocation);
           sinks = residentLogSinks(actor, invocation, () => liveIncarnation(actor, invocation), entry => log!.append(entry));
-          const env: NodeJS.ProcessEnv = { ...environment, INVOCATION_ID: execution.replaceAll("-", ""),
+          const env: NodeJS.ProcessEnv = { ...environment,
             OMA_PROFILE_HEX: Buffer.from(references.profile).toString("hex"),
             OMA_MODEL_PROFILE_HEX: Buffer.from(references.modelProfile).toString("hex"),
             OMA_TOOL_SURFACE_HEX: Buffer.from(toolSurface).toString("hex") };
           delete env.OMA_SOCIETY_FENCE_FD; delete env.OMA_HOST_CHANNEL;
           return runnerScope({ executable: config.installation.node,
             argv: [join(config.installation.libdir, "apps/oma/dist/entry/runner.js"), "--society", location.society,
-              "--agent", actor, "--config", location.configPath, "--state-root", location.stateRoot, "--run-root", location.runRoot],
+              "--agent", actor, "--execution", execution, "--config", location.configPath, "--state-root", location.stateRoot, "--run-root", location.runRoot],
             env, timeoutMs: null, stdoutBytes: config.limits.logBytes, stderrBytes: config.limits.logBytes,
             stdoutOverflow: "discard", stderrOverflow: "discard" });
         }, signal, authorize, prepared, [child], {
@@ -85,6 +85,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
         }, signal, config.limits.receiptWaitSeconds * 1000);
         const owner = new SharedPeerPin(() => pin.alive(), () => pin.close());
         const peer: BoundPeer = Object.freeze({ pid: pin.pid, uid: pin.uid, gid: pin.gid,
+          sameSender: () => false, // This private channel never accepts an observed-message transport.
           inheritedRunner: Object.freeze({ actor, invocationId: ticket.execution.replaceAll("-", "") }),
           alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() });
         const connection = { socket, peer }; channels.set(actor, connection);

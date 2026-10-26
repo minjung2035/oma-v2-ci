@@ -35,7 +35,7 @@ try {
     { name: "baseline", fixture: "darwin-native-probe.c", digest: "probeDigest", compile: "compile",
       names: ["process", "files", "auth", "socket-transfer", "queued-transfer"], link: [] },
     { name: "mach", fixture: "darwin-mach-probe.c", digest: "machProbeDigest", compile: "compile-mach",
-      names: ["mach-self", "mach-queued-live", "mach-queued-exit"], link: ["-lbsm"] },
+      names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit"], link: ["-lbsm"] },
   ];
   for (const program of programs) {
     const binary = join(scratch, program.name);

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
+import * as timers from "node:timers/promises";
 import ts from "typescript";
 import { workspaceSource } from "./fixtures/workspace-source.mjs";
 import { publicDetails } from "@oma/domain/errors";
@@ -42,6 +43,7 @@ function fixture(transform = source => source) {
   const logResponse = load("@oma/protocol/log-response", { "@oma/domain/errors": { StoreError },
     "./log-limits.js": { MIN_LOG_FRAME_BYTES } });
   const { PublicDispatcher } = load("../packages/broker/src/public-dispatcher.ts", {
+    "node:timers/promises": timers,
     // DR3: which facts a failure may carry has one owner, used as it is.
     "@oma/domain/errors": { StoreError, publicDetails },
     "@oma/domain/exhaustive": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },

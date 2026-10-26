@@ -32,10 +32,9 @@ const blindStat: ProcessObservationReader = () => ({ kind: "unavailable" });
 /** The process-observation port: the four questions the Principal's
  * authority asks of a platform's substrate. */
 export interface ProcessProbe {
-  /** Which substrate answers: "proc" on Linux, "none" where none is
-   * shipped. The macOS equivalence lane is explicitly NOT_RUN -- no native
-   * darwin substrate is claimed; where a verification lane needs to say so,
-   * this field is what it reads. */
+  /** The actual reader: proc on Linux, libproc on Darwin, none elsewhere.
+   * Reader availability alone does not qualify per-message authentication
+   * or the complete G-AUTH execution binding. */
   readonly substrate: "proc" | "libproc" | "none";
   /** The identity of a running process, or null if it is not observed running. */
   identity(pid: number): ProcessIdentity | null;
@@ -82,11 +81,10 @@ function buildProbe(substrate: "proc" | "libproc" | "none", read: ProcessObserva
   };
 }
 
-/** The substrate this platform is shipped: Linux reads /proc. Every other
- * platform -- including darwin, where /proc does not exist and reading one
- * anyway would call every pid "exited" -- gets the blind probe: the macOS
- * equivalence lane is NOT_RUN, so no native substrate is claimed and nothing
- * is observed. `reader` is a test's own substrate. */
+/** Linux uses /proc; an actual Darwin host uses the public libproc reader.
+ * Other hosts observe nothing. Supplying a test reader does not claim that
+ * host's native substrate or qualify the broader G-AUTH execution binding.
+ */
 export function processProbeFor(platform: NodeJS.Platform | string, reader?: ProcessObservationReader): ProcessProbe {
   if (platform === "linux") return buildProbe("proc", reader ?? observeLinuxProcess);
   if (platform === "darwin" && process.platform === "darwin") return buildProbe("libproc", reader ?? observeDarwinProcess);

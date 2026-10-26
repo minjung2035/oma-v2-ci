@@ -1,6 +1,7 @@
 import type { BrokerDependencies, BrokerLedger, BrokerMail, BrokerUnits, BrokerViews, BrokerReconcile, BrokerStatusRefresh } from "./ports.js";
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
-import { createServer, type Socket, type Server } from "node:net";
+import type { Duplex } from "node:stream";
+import type { BrokerListener } from "./ports.js";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "@oma/contracts";
 import { StoreError, publicFailure, errorCodeOf } from "@oma/domain/errors";
@@ -42,9 +43,9 @@ export type { PrincipalHostChannel } from "./principal-endpoint.js";
 export const ACTOR_CONNECTIONS = 16;
 
 export class Broker {
-  private adminServer: Server | null = null;
-  private principalServer: Server | null = null;
-  private principalHostServer: Server | null = null;
+  private adminServer: BrokerListener | null = null;
+  private principalServer: BrokerListener | null = null;
+  private principalHostServer: BrokerListener | null = null;
   private principalEndpoint: PrincipalEndpoint | null = null;
   private principalHostEndpoint: PrincipalHostEndpoint | null = null;
   private readonly mail: BrokerMail;
@@ -53,7 +54,7 @@ export class Broker {
   private readonly views: BrokerViews;
   private readonly reconcile: BrokerReconcile | null;
 
-  private readonly connections = new Map<Socket, RpcConnection>();
+  private readonly connections = new Map<Duplex, RpcConnection>();
   private readonly executingTasks = new Set<Promise<void>>();
   private readonly listeners = new BrokerListeners(error => {
     this.health.observe(error); this.cleanupError(error);
@@ -92,7 +93,8 @@ export class Broker {
     this.store = store; this.units = units; this.views = views; this.reconcile = reconcile;
     this.mail = mail;
     dependencies.effects.bindAdmission(this.health);
-    this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
+    this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society,
+      error => this.cleanupError(error), socket => dependencies.effects.pinPeer(socket));
     this.statusRefresh = dependencies.status;
     const publicPorts = dependencies.public;
     this.publicDispatcher = new PublicDispatcher({ ...publicPorts, limits,
@@ -130,7 +132,7 @@ export class Broker {
     this.adminServer = this.listenOn(join(this.paths.runRoot, "admin.sock"), socket => socket.destroy());
     if (this.principalHost !== undefined) this.listenPrincipal(this.principalHost);
     const principalListeners = [this.principalServer, this.principalHostServer]
-      .filter((server): server is Server => server !== null).map(server => this.listeners.ready(server));
+      .filter((server): server is BrokerListener => server !== null).map(server => this.listeners.ready(server));
     this.starting = Promise.all([this.listeners.ready(this.adminServer),
       ...principalListeners]).then(() => {
       this.health.assertAdmission(); this.running = true;
@@ -166,12 +168,12 @@ export class Broker {
   private listenPrincipal(channel: PrincipalHostChannel): void {
     const connection = {
       isDraining: () => this.draining,
-      bindPeer: (socket: Socket) => this.bindPeer(socket),
+      bindPeer: (socket: Duplex) => this.bindPeer(socket),
       principalContext: (peer: BoundPeer, live: () => boolean) => this.peers.principalContext(peer, live),
-      serveFrames: (socket: Socket, peer: BoundPeer,
+      serveFrames: (socket: Duplex, peer: BoundPeer,
         handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
         preflight: (raw: Record<string, unknown>) => void) => this.serveFrames(socket, peer, handle, preflight),
-      fail: (socket: Socket, failure: Failure) => this.fail(socket, failure),
+      fail: (socket: Duplex, failure: Failure) => this.fail(socket, failure),
       observe: (error: unknown) => this.health.observe(error),
       cleanupError: (error: unknown) => this.cleanupError(error),
     };
@@ -197,13 +199,13 @@ export class Broker {
     this.principalServer = this.listenOn(join(this.paths.runRoot, "principal.sock"), socket => endpoint.serve(socket));
     this.principalHostServer = this.listenOn(join(this.paths.runRoot, "principal-host.sock"), socket => hostEndpoint.serve(socket));
   }
-  private listenOn(path: string, serve: (socket: Socket) => void): Server {
+  private listenOn(path: string, serve: (socket: Duplex) => void): BrokerListener {
     this.dependencies.effects.clearSocketName(path);
-    const server = createServer({ allowHalfOpen: true, pauseOnConnect: true }, socket => {
+    const { listener: server, prepare } = this.dependencies.effects.openListener(socket => {
       if (this.draining) { socket.destroy(); return; }
       serve(socket);
     });
-    this.listeners.listen(server, path, () => this.dependencies.effects.prepareListener(server));
+    this.listeners.listen(server, path, prepare);
     return server;
   }
   private refreshViews(): void {
@@ -277,32 +279,30 @@ export class Broker {
   }
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
     const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);
-    if (Buffer.byteLength(actorSocketPathAt(this.paths.runRoot, actor, incarnation)) > 107)
-      throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
+    this.dependencies.effects.assertEndpoint(actorSocketPathAt(this.paths.runRoot, actor, incarnation));
     return dir;
   }
   private listenActor(actor: Actor, incarnation = this.store.getAgent(actor)?.incarnation ?? 0): { socketHostPath: string; ready: Promise<void>; done: () => void } {
-    const dir = this.actorSocketDirectoryAfterAdmission(actor, incarnation);
+    this.actorSocketDirectoryAfterAdmission(actor, incarnation);
     const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
     // P0-8/DR32: the actor socket directory is oma's own under the run root.
     this.dependencies.effects.ensureActorDirectory(actor, incarnation);
     this.dependencies.effects.clearSocketName(path);
-    const sockets = new Set<Socket>(); let revoked = false;
-    const server = createServer({ allowHalfOpen: true, pauseOnConnect: true }, socket => {
+    const sockets = new Set<Duplex>(); let revoked = false;
+    const { listener: server, prepare } = this.dependencies.effects.openListener(socket => {
       if (revoked || this.draining) return this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
       sockets.add(socket); socket.once("close", () => sockets.delete(socket));
       this.handleActor(socket, actor, incarnation);
-    });
+    }, ACTOR_CONNECTIONS);
     // INV10: a Resident reaches only its own actor socket, and every connection
-    // costs this process a socket and a peer pidfd. Past the bound the kernel
+    // costs this process a channel and an OS peer pin. Past the bound the
     // connection is closed before it is handled, so a Resident flooding its
     // socket exhausts its own endpoint, not the broker's descriptors.
-    server.maxConnections = ACTOR_CONNECTIONS;
     server.on("error", () => {
       const run = this.runLeases.get(actor);
       if (run?.identity.incarnation === incarnation) { try { run.revoke(); } catch (error) { this.cleanupError(error); } }
     });
-    this.listeners.listen(server, path, () => this.dependencies.effects.prepareListener(server));
+    this.listeners.listen(server, path, prepare);
     return { socketHostPath: path, ready: this.listeners.ready(server), done: () => {
       if (revoked) return;
       revoked = true;
@@ -313,11 +313,11 @@ export class Broker {
   private actorSocketDirectoryAfterAdmission(actor: Actor, incarnation: number): string {
     this.health.assertAdmission(); return this.actorSocketDirectory(actor, incarnation);
   }
-  private bindPeer(socket: Socket): BoundPeer | null { return this.peers.bind(socket); }
+  private bindPeer(socket: Duplex): BoundPeer | null { return this.peers.bind(socket); }
   private trustedContext(actor: Actor, peer: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
     return this.peers.context(actor, peer, channel);
   }
-  private handleActor(socket: Socket, actor: Actor, incarnation: number): void {
+  private handleActor(socket: Duplex, actor: Actor, incarnation: number): void {
     let peer: BoundPeer | null = null; let transferred = false;
     try {
       if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
@@ -333,7 +333,7 @@ export class Broker {
   }
   /** Only App composition can supply this directly owned socket and kernel
    * pin. No request, UID or pathname can mint an inherited runner grant. */
-  attachRunner(socket: Socket, peer: BoundPeer): void {
+  attachRunner(socket: Duplex, peer: BoundPeer): void {
     if (this.draining || !this.running || peer.inheritedRunner === undefined) {
       socket.destroy(); peer.releaseConnection();
       throw new StoreError("BROKER_UNAVAILABLE", "runner control owner is not ready");
@@ -360,7 +360,7 @@ export class Broker {
     try { console.error("RPC cleanup failed:", error instanceof Error ? error.message : String(error)); }
     catch { /* nowhere left to say it */ }
   }
-  private serveFrames(socket: Socket, peer: BoundPeer,
+  private serveFrames(socket: Duplex, peer: BoundPeer,
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
     inheritedControl = false,
@@ -384,7 +384,7 @@ export class Broker {
     });
     this.connections.set(socket, connection);
   }
-  private fail(socket: Socket, error: Failure): void {
+  private fail(socket: Duplex, error: Failure): void {
     const connection = this.connections.get(socket);
     // P0V-33: restated with the facts its code may carry, as it was answered.
     const details = error.details !== null && typeof error.details === "object" && !Array.isArray(error.details)

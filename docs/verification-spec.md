@@ -389,7 +389,8 @@ A `DurabilityFaultError` can preserve leaf artifacts by bypassing cleanup, but a
 exception is not process death. In-process `mail-faults.ts` callers get a thrown
 `StopSignal` that runs through workflow cleanup; only the child `mail-harness.ts`
 passes `halt` and stops at the checkpoint itself, like `crash-worker.ts`. SIGKILL plus an observed checkpoint still is not
-VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
+VM/storage power loss. Retired systemd/VM suites remain archived; the current native
+suite includes its declared Linux execution regressions without those exclusions.
 
 ## Effect and checkpoint APIs
 

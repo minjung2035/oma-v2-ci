@@ -258,7 +258,7 @@ test("P18 internal composition exposes narrow live capabilities without concrete
   const { createInternalDispatchDataPorts, inboxReads } = loadComposition();
   const { calls, store, mail } = fixture();
   const peers = {
-    requireRunnerUnit() {},
+    requireRunnerPeer() {},
     requireHostUnit() {},
     runnerActor() {
       return "alice";
@@ -289,7 +289,7 @@ test("P18 internal composition exposes narrow live capabilities without concrete
   assert.equal(ports.principalInboxNewEntries, undefined, "retired host relay has no filesystem capability");
   assert.deepEqual(inboxReads, []);
   assert.notEqual(ports.peers, peers);
-  assert.deepEqual(Object.keys(ports.peers).sort(), ["requireRunnerUnit", "runnerActor", "runnerAuth"]);
+  assert.deepEqual(Object.keys(ports.peers).sort(), ["requireRunnerPeer", "runnerActor", "runnerAuth"]);
 
   const identity = ports.store.getAgentIdentity("alice");
   assert.equal(identity.incarnation, 2);

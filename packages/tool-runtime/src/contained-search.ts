@@ -30,10 +30,10 @@
  * complete answer that fits is returned inline; a larger one crosses the
  * pipe in the result envelope and the parent writes it whole into the
  * caller's workspace under `.oma/search-results/` through the same
- * serialized, quota-decided contained writer every workspace write takes --
+ * serialized contained writer every workspace write takes --
  * so the path the result names is one the model's own read/grep/find/ls can
  * open. A spool file is ordinary workspace content (P0-4): guard-admitted,
- * quota-charged, owned by the workspace owner like any authored file, and
+ * owned by the workspace owner like any authored file, and
  * never swept by OMA -- the result names it and it can be deleted like any
  * file. When no spool can take it the answer is still not truncated: it
  * rides inline with the notice that says why it is not at a path.
@@ -82,7 +82,7 @@ const KILL_GRACE_MS = 2_000;
  * fits. */
 const SEARCH_PREVIEW_BYTES = 1024 * 1024;
 /** Where inside the workspace a spilled answer lands: an ordinary workspace
- * path, so the guard's admission, the quota and the model's own tools all
+ * path, so the guard's admission and the model's own tools all
  * reach it unchanged. */
 const SEARCH_SPOOL_DIR = join(".oma", "search-results");
 const SELF = import.meta.url;
@@ -356,8 +356,8 @@ finally {
 }
 `;
 /** Where a spilled answer is written, when the caller's surface may write:
- * the workspace root plus the same serialized, quota-decided contained
- * writer every workspace write takes -- so a spilled result is charged,
+ * the workspace root plus the same serialized contained
+ * writer every workspace write takes -- so a spilled result is
  * admitted and owned exactly like a file the model wrote itself. */
 export interface ContainedSearchSpool {
   readonly workspace: string;
@@ -456,10 +456,10 @@ export function searchWorkspace<N extends "grep" | "find">(name: N, root: string
       })();
     });
     /** A complete answer too large for one result is written whole into the
-     * workspace spool through the contained writer -- the same quota
-     * decision and serialization as any authored write -- and the result
+     * workspace spool through the contained writer -- the same containment
+     * and serialization as any authored write -- and the result
      * names the admitted path (`details.complete`). When the spool cannot
-     * take it -- a read-only surface wires none, or the quota cannot hold
+     * take it -- a read-only surface wires none, or the filesystem cannot hold
      * it -- the answer is not truncated instead: it rides inline in full
      * with the notice that says why it is not at a path. */
     const spillComplete = async (result: SearchResult<N>, complete: string): Promise<void> => {

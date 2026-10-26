@@ -366,13 +366,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
       residentRootfsPath: () => "/state/rootfs",
     },
-    "@oma/domain/errors": { StoreError },
+    "@oma/domain/errors": { StoreError, exceptionText: error => error instanceof Error ? error.message : String(error) },
     // The real tenure over a controlled lease: what the entry may do, and when,
     // is the thing under test here.
     // `/resume` asks whether the chosen session is free; a start never does.
     "../runtime/society-lease.js": { tryHoldSociety: () => { throw new Error("a start probed another session"); } },
     "../runtime/host-tenure.js": loadSource("apps/oma/src/runtime/host-tenure.ts", {
-      "@oma/domain/errors": { StoreError },
+      "@oma/domain/errors": { StoreError, exceptionText: error => error instanceof Error ? error.message : String(error) },
       "./society-lease.js": {
         tryHoldSociety: stateRoot => {
           calls.push("tryHoldSociety");
@@ -416,9 +416,6 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "@oma/engine/login": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
     "../runtime/egress-forwarder.js": { adoptPrincipalEgress: async () => {  return null; } },
-    // DR18 (D-1): an error's words as Linux shows them.
-    "@oma/tui/words": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
-      humanStream: () => process.stderr },
     "@oma/config/generations": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   // Exercise the actual extracted settings owner with the same effect
@@ -428,7 +425,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "@oma/config/operations": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
     "../runtime/deployment-manifest.js": modules["../runtime/deployment-manifest.js"],
     "../runtime/packages/index.js": modules["../runtime/packages/index.js"],
-    "@oma/tui/words": modules["@oma/tui/words"],
+    "@oma/domain/errors": modules["@oma/domain/errors"],
     "./extensions.js": modules["../application/extensions.js"],
     "./settings.js": modules["../application/settings.js"],
     "./project-settings.js": modules["../application/project-settings.js"],

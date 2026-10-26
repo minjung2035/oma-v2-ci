@@ -62,9 +62,9 @@ function world({ command = 'update', args = [command, 'npm:fixture'], code = 0, 
     applyPackageChange() { assert.equal(held, true); calls.push('roles'); if (failure === 'roles') throw primary; return { ok: synced, said: [] }; },
     packageActivation: decision => decision.command === 'install' ? 'npm:fixture' : undefined,
     async call(method) { assert.equal(method, 'packages.sync'); await step('sync'); return { ok: synced }; },
-    randomUUID: () => 'fixture-key', humanStream: () => ({ write() {} }),
+    randomUUID: () => 'fixture-key',
     say(_line, value) { throw { exit: value }; }, fail(_line, value) { throw { exit: value }; },
-    codeFor: () => 1, exitFor: () => 1, errorWords: String,
+    codeFor: () => 1, exitFor: () => 1, exceptionText: String,
   });
   const decision = { kind: 'run', command, args, ...(hostOnly ? { hostOnly: true } : {}) };
   return { calls, output, primary, get held() { return held; }, get returns() { return returns; }, resolve() { pending(); },

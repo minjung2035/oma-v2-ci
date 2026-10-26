@@ -1,5 +1,5 @@
 // MUST [DB-001..009]: sole broker writer; synchronous transactions.
-// No Git/systemd/fsync/await inside transactions (M-004).
+// No Git/process/filesystem effects or await inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, lstatSync } from "node:fs";
 import { dirname, join } from "node:path";

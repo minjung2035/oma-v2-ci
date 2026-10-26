@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixtureStorageBytes } from "./fixtures/storage-usage.js";
 import { createEngineSettings, prepareEngineInteractiveSettings } from "@oma/engine/pi-compat/settings";
 import { runProcess } from "@oma/process/async";
-import { PACKAGE_STORE, pinPackageGeneration } from "#oma-test/app/runtime/packages/store";
+import { PACKAGE_STORE } from "#oma-test/app/runtime/packages/store";
 import { spawnSync } from "node:child_process";
 import { withOwnedSettingsLock } from "#oma-test/app/runtime/locked-files";
 import fs from "node:fs";

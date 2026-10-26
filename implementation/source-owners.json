@@ -1038,9 +1038,12 @@
     "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
       "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.bind",
+      "packages/platform-linux/src/peer-identity.ts#pinLinuxPeer",
       "packages/platform-linux/src/credential-stream.ts#credentialStream",
       "packages/process/src/observed-stream.ts#ObservedStream",
-      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender"
+      "packages/broker/src/peer-authenticator.ts#matchesPinnedSender",
+      "packages/native/src/unix-message.ts#isUnixMessageSender"
     ],
     "negativeTests": [
       "test/native-credential-stream.test.mjs#credential stream: live connector",
@@ -1162,6 +1165,62 @@
       "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
       "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
       "test/status-responsiveness.test.ts#V23A"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-021"
+    ],
+    "owner": "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatchChecked",
+    "entrypoint": "packages/broker/src/index.ts#Broker.dispatch",
+    "callPath": [
+      "packages/broker/src/index.ts#Broker.dispatch",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatch",
+      "packages/broker/src/public-dispatcher.ts#PublicDispatcher.dispatchChecked",
+      "packages/broker/src/index.ts#Broker.refreshViews",
+      "packages/broker/src/index.ts#Broker.drainAndClose"
+    ],
+    "negativeTests": [
+      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-01",
+      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-02",
+      "test/status-responsiveness.test.ts#V23A"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-022"
+    ],
+    "owner": "packages/domain/src/errors.ts#exceptionText",
+    "entrypoint": "apps/oma/src/entry/oma.ts#main",
+    "callPath": [
+      "apps/oma/src/entry/oma.ts#main",
+      "packages/domain/src/errors.ts#exceptionText",
+      "apps/oma/src/application/exit.ts#fail"
+    ],
+    "negativeTests": [
+      "test/native-error-presentation.test.ts#Native errors",
+      "test/native-error-presentation.test.ts#Native CLI failure",
+      "test/session-history.test.ts#Session history"
+    ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": [
+      "NATIVE-023"
+    ],
+    "owner": "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+    "entrypoint": "apps/oma/src/entry/runner.ts#runner",
+    "callPath": [
+      "apps/oma/src/runtime/native-residents.ts#createNativeResidents",
+      "apps/oma/src/entry/runner.ts#runner",
+      "apps/oma/src/runner.ts#RunnerModule",
+      "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.requireRunnerPeer"
+    ],
+    "negativeTests": [
+      "test/runner-channel.test.ts#Native runner rejects",
+      "test/runner-channel.test.ts#RUN-001"
     ]
   }
 ]

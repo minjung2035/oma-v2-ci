@@ -1,3 +1,4 @@
+import { unobserved, exceptionText } from "@oma/domain/errors";
 /** TUI-011: the Mail screen's read-only view of the Principal mailbox.
  *
  * The eml files are the originals (FS-006). This module reads them as the host
@@ -12,8 +13,6 @@ import { mailNamerFor, type MailRoster } from "@oma/tui/mail-names";
 import { READ_BOUNDS } from "@oma/domain/surface-bounds";
 import { displaySubject } from "@oma/mail/headers";
 import { headerEnd, readableBody } from "@oma/mail/display";
-import { unobserved } from "@oma/domain/errors";
-import { errorWords } from "@oma/tui/words";
 import { publishedMailEntries } from "@oma/storage/published-mail";
 import { readMailNotices } from "@oma/storage/mail-notices";
 
@@ -117,7 +116,7 @@ function readBounded(path: string, limit: number): BoundedRead {
       complete: stat.size <= limit && filled === stat.size };
   } catch (error) {
     const unknown = unobserved(error, path);
-    return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: errorWords(unknown) };
+    return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: exceptionText(unknown) };
   } finally { if (fd !== undefined) closeSync(fd); }
 }
 
@@ -169,7 +168,7 @@ function arrivalJournal(mailbox: string): { readonly arrivals: ReadonlyMap<strin
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return empty;
     const unknown = unobserved(error, journal);
     return unknown === null ? empty
-      : { arrivals: new Map(), unreadable: `${errorWords(unknown)}: ${journal}` };
+      : { arrivals: new Map(), unreadable: `${exceptionText(unknown)}: ${journal}` };
   } finally { if (fd !== undefined) closeSync(fd); }
   const arrivals = new Map<string, number>();
   for (const line of text.split("\n")) {
@@ -216,7 +215,7 @@ function entriesIn(directory: string, arrivals: ReadonlyMap<string, number>): { 
     try { stat = lstatSync(path); }
     catch (error) {
       const unknown = unobserved(error, path);
-      if (unknown !== null) unreadable ??= errorWords(unknown);
+      if (unknown !== null) unreadable ??= exceptionText(unknown);
       continue;
     }
     if (stat.isFile()) entries.push({ name, deliveredAtMs: arrivals.get(arrivalKeyOf(name)) ?? stat.mtimeMs });

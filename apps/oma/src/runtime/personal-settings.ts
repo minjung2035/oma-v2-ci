@@ -142,7 +142,7 @@ export function updatePersonalSettings(location: PersonalSettingsLocation, seed:
 }
 
 /** A remote first-choice observation retains this same writer while awaiting.
- * Existing choices do not depend on an app, a project or a running guest. */
+ * Existing choices do not depend on an app, a project or another running session. */
 export async function updatePersonalSettingsAsync(location: PersonalSettingsLocation,
   seed: () => Promise<readonly string[]>): Promise<PersonalSettings> {
   const directory = join(location.dataRoot, PERSONAL_SESSIONS);

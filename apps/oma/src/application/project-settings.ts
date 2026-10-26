@@ -1,16 +1,15 @@
+import { StoreError, exceptionText } from "@oma/domain/errors";
 /** DR24/DR25: a project's OMA settings, and bringing them to the installed
- * packages. One owner for both the Human's `oma pi` and the macOS engine's
- * application of the packages the Mac installed, so the two cannot differ. */
+ * packages. The common local package command and session settings use this
+ * same owner on each supported host. */
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { StoreError } from "@oma/domain/errors";
 import { defaultHostConfig } from "@oma/config/defaults";
 import { isValidSocietyName } from "@oma/domain/identifiers";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { packageStoreDir, reconciledEntries, type InstalledPackage } from "../runtime/packages/index.js";
 import { residentRootfsPath } from "../runtime/provision.js";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
-import { errorWords } from "@oma/tui/words";
 import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, readSettingsForEditing, roleSetOf, writeSettings,
   type Settings } from "./settings.js";
 
@@ -76,12 +75,12 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
   let names: string[] = [];
   try { names = readdirSync(join(dataRoot, ".projects")).filter(name => isValidSocietyName(name)).sort(); } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      return { ok: false, said: [`Could not list project settings: ${errorWords(error)}`] };
+      return { ok: false, said: [`Could not list project settings: ${exceptionText(error)}`] };
     }
   }
   if (project !== null && added.some(item => item.entries.length > 0) && !names.includes(project)) {
     try { ensureProjectSettings(dataRoot, project, libdir); names = [...names, project].sort(); }
-    catch (error) { ok = false; said.push(`Could not prepare this project's settings: ${errorWords(error)}`); }
+    catch (error) { ok = false; said.push(`Could not prepare this project's settings: ${exceptionText(error)}`); }
   }
   for (const name of names) {
     const path = projectSettingsPath(dataRoot, name);
@@ -93,7 +92,7 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
       // an absent settings file and skipped. A project that still cannot be
       // observed is reported, like a failed edit below, never left out.
       try { ensureOwnedUserDirectory(dirname(path), dataRoot); }
-      catch (error) { ok = false; said.push(`Could not update the extensions of project ${name}: ${errorWords(error)}`); continue; }
+      catch (error) { ok = false; said.push(`Could not update the extensions of project ${name}: ${exceptionText(error)}`); continue; }
       if (!existsSync(path)) continue;
     }
     try {
@@ -115,7 +114,7 @@ export function applyPackageChange(options: { readonly dataRoot: string; readonl
         applied = true;
         activatedRoles = settings.workerProfile === null ? "Principal" : "Principal and Workers";
       }
-    } catch (error) { ok = false; said.push(`Could not update the extensions of project ${name}: ${errorWords(error)}`); }
+    } catch (error) { ok = false; said.push(`Could not update the extensions of project ${name}: ${exceptionText(error)}`); }
   }
   for (const item of added) if (item.entries.length > 0)
     said.push(project === null
