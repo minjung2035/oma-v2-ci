@@ -758,7 +758,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         assert.deepEqual(replyMessage.recipients, ["a"], "direct reply uses original sender, not original recipient");
         assert.ok(env.store.getDelivery(replyMessage.id, "a"));
         const replyDecoded = spawnSync("python3", ["-c",
-            "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k:str(m[k]) for k in ['Reply-To','In-Reply-To']}))",
+            "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k:str(m[k]).strip() for k in ['Reply-To','In-Reply-To']}))",
         ], { input: readFileSync(join(env.state, replyMessage.objectPath)), encoding: "utf8" });
         assert.equal(replyDecoded.status, 0, replyDecoded.stderr);
         const replyHeaders = JSON.parse(replyDecoded.stdout);

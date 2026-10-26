@@ -9,9 +9,9 @@ import { serializePlanIntent } from "./fixtures/plan.js";
 // ordering — every claim here is executable.
 //  Part A: ConnectionDecoder byte-boundary unit cases (6)
 //  Part B: real broker socket round-trip over unix sockets (framed E2E)
-//  Part C: real systemd user-unit E2E — two concurrent git.submit uploads
-//          through the real actor channel (cgroup auth), chunking variants
-//  Part D: entry/broker.js ordered bootstrap — READY=1 only after recovery,
+//  Part C: real native namespace E2E — two concurrent git.submit uploads
+//          through the real actor channel (kernel scope auth), chunking variants
+//  Part D: entry/broker.js ordered bootstrap — foreground readiness after recovery,
 //          startup failure -> exit 1 with no READY and no serving
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +25,8 @@ import { ConnectionDecoder, FrameParser, encodeFrame } from "@oma/protocol/frame
 import { Store } from "@oma/storage";
 import { requestHash } from "@oma/domain/request-identity";
 import { MailModule } from "@oma/mail";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { GitModule } from "@oma/git";
@@ -36,11 +37,8 @@ import { loadConfig } from "@oma/config";
 import { resolveChildSpec } from "@oma/domain/child-policy";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
-import { unitName } from "@oma/platform-linux/units";
 import type { ResolvedAgentSpec } from "@oma/contracts";
-import { cleanupOwnedSystemdUnits, requireSystemdTestManager, } from "./fixtures/systemd.js";
 import { requireSubmitConvergence } from "./fixtures/verification-oracles.js";
-requireSystemdTestManager();
 const G = {
     ...process.env,
     GIT_CONFIG_NOSYSTEM: "1",
@@ -188,6 +186,26 @@ test("A6: two decoders on interleaved streams never share bytes", () => {
 // ---------------------------------------------------------------------------
 // Part B — real broker socket round-trip (framed responses)
 // ---------------------------------------------------------------------------
+const entryCloses = new WeakMap<ReturnType<typeof spawn>, Promise<void>>();
+function ownEntry(child: ReturnType<typeof spawn>): ReturnType<typeof spawn> {
+    entryCloses.set(child, new Promise(resolve => child.once("close", () => resolve())));
+    return child;
+}
+async function stopEntry(child: ReturnType<typeof spawn> | undefined): Promise<void> {
+    if (!child) return;
+    const closed = entryCloses.get(child); assert.ok(closed, "entry child must be registered at creation");
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+    const timer = setTimeout(() => child.kill("SIGKILL"), 10_000);
+    try { await closed; } finally { clearTimeout(timer); }
+}
+async function entryReady(child: ReturnType<typeof spawn>, output: () => string): Promise<void> {
+    const deadline = Date.now() + 20_000;
+    while (!/broker ready/.test(output())) {
+        if (child.exitCode !== null || child.signalCode !== null || Date.now() >= deadline) assert.fail(output());
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+}
+
 interface BrokerEnv {
     dir: string;
     state: string;
@@ -196,9 +214,10 @@ interface BrokerEnv {
     store: Store;
     broker: Broker;
     git: GitModule;
-    cleanup: () => void;
+    units: NativeScriptResidents;
+    cleanup: () => Promise<void>;
 }
-function brokerEnv(): BrokerEnv {
+async function brokerEnv(): Promise<BrokerEnv> {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-"));
     const state = join(dir, "state");
     const runRoot = join(dir, "run");
@@ -206,13 +225,7 @@ function brokerEnv(): BrokerEnv {
     mkdirSync(state, { recursive: true });
     mkdirSync(runRoot, { recursive: true });
     const store = new Store(join(state, "runtime.sqlite"));
-    const units = new UnitsModule(society, {
-        node: process.execPath,
-        libdir: "/usr/lib/oma",
-        state,
-        society,
-        agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
-    }, join(dir, "xdg"));
+    const units = await nativeScriptResidents(store, state);
     const mail = createMailModule({ stateRoot: state, society }, store, 64);
     const resolver = (_p: {
         name: string;
@@ -241,7 +254,7 @@ function brokerEnv(): BrokerEnv {
         contextGit: join(state, "repos", "context.git"),
         worldDir: join(state, "world"),
         society,
-    }, store, mail, null);
+    }, store, mail, null, null, null, units.quarantine({ stateRoot: state, projectGit: join(state, "repos/project.git"), contextGit: join(state, "repos/context.git"), worldDir: join(state, "world"), society }));
     const recon = createReconcileModule(store, mail, git, null, units, lifecycle, {
         hasGoal: () => true,
         activationAllowed: () => true,
@@ -253,7 +266,8 @@ function brokerEnv(): BrokerEnv {
         society,
         hasGoal: () => true,
     } });
-    broker.start();
+    units.attach(broker);
+    await broker.start();
     return {
         dir,
         state,
@@ -261,121 +275,37 @@ function brokerEnv(): BrokerEnv {
         society,
         store,
         broker,
-        git,
-        cleanup: () => {
-            try {
-                broker.drainAndClose();
-            }
-            catch {
-                /* store may already be closed */
-            }
-            cleanupOwnedSystemdUnits(dir, society);
+        git, units,
+        cleanup: async () => {
+            await units.closeExecution();
+            await broker.drainAndClose();
             rmSync(dir, { recursive: true, force: true });
         },
     };
 }
-/** production-client pattern: encodeFrame requests, FrameParser responses */
-function framedCall(sockPath: string, frame: unknown, stream?: Buffer, opts: {
-    chunkSize?: number | "coalesced" | "split";
-} = {}): Promise<Array<Record<string, unknown>>> {
-    return new Promise((resolve, reject) => {
-        const sock = connect(sockPath, () => {
-            const meta = encodeFrame(frame);
-            if (!stream) {
-                sock.write(meta);
-            }
-            else if (opts.chunkSize === "coalesced") {
-                sock.write(Buffer.concat([meta, stream]));
-            }
-            else if (opts.chunkSize === "split") {
-                // arbitrary byte splits across the whole payload
-                const all = Buffer.concat([meta, stream]);
-                let off = 0;
-                const timer = setInterval(() => {
-                    const step = 1 + Math.floor(Math.random() * 13);
-                    const end = Math.min(all.length, off + step);
-                    sock.write(all.subarray(off, end));
-                    off = end;
-                    if (off >= all.length)
-                        clearInterval(timer);
-                }, 5);
-            }
-            else {
-                sock.write(meta);
-                setTimeout(() => {
-                    // raw in 3 sequential chunks with a delay (separated variant)
-                    const n = Math.ceil(stream.length / 3);
-                    for (let i = 0; i < 3; i++) {
-                        const s = stream.subarray(i * n, Math.min(stream.length, (i + 1) * n));
-                        if (s.length > 0)
-                            sock.write(s);
-                    }
-                }, 30);
-            }
-        });
-        const parser = new FrameParser(256 * 1024);
-        let buf = Buffer.alloc(0);
-        const replies: Array<Record<string, unknown>> = [];
-        const timer = setTimeout(() => {
-            sock.destroy();
-            reject(new Error("framedCall timeout"));
-        }, 15000);
-        sock.on("data", (d) => {
-            buf = Buffer.concat([buf, Buffer.from(d)]);
-            try {
-                for (const f of parser.feed(buf)) {
-                    replies.push(f.raw as Record<string, unknown>);
-                }
-            }
-            catch {
-                /* incomplete */
-            }
-            buf = Buffer.alloc(0);
-            if (replies.length > 0) {
-                clearTimeout(timer);
-                sock.destroy();
-                resolve(replies);
-            }
-        });
-        sock.on("error", (e) => {
-            clearTimeout(timer);
-            reject(e);
-        });
-    });
-}
-test("B1/IPC-009: framed runner channel rejects host methods", async () => {
-    const env = brokerEnv();
+test("B1/IPC-009: framed private runner channel rejects removed host methods", async () => {
+    const env = await brokerEnv();
     try {
-        const replies = await framedCall(join(env.runRoot, "admin.sock"), {
-            v: 1,
-            id: "h1",
-            method: "host.principalRelay",
-            params: {},
-        });
-        assert.equal(replies.length, 1);
-        assert.equal(replies[0]!.ok, false);
-        assert.equal((replies[0]!.error as {
-            code: string;
-        }).code, "AUTH_FAILED");
-        // unknown method -> framed error answer, still parsable by a FrameParser client
-        const err = await framedCall(join(env.runRoot, "admin.sock"), {
-            v: 1,
-            id: "h2",
-            method: "no.such.method",
-            params: {},
-        });
-        assert.equal(err.length, 1);
-        assert.equal(err[0]!.ok, false);
-        assert.equal((err[0]!.error as {
-            code: string;
-        }).code, "UNKNOWN_METHOD");
-    }
-    finally {
-        env.cleanup();
-    }
+        env.store.transaction(tx => tx.insertAgent({ name: "a", ...storedSpec(ALL_CAPS, "p", "a"), role: "resident", desired: "enabled", incarnation: 0, profile: "p", createdBy: null }));
+        const script = join(env.dir, "closed-runner-methods.mjs"), out = join(env.dir, "closed-methods.json");
+        writeFileSync(script, `import {Socket} from 'node:net';import {writeFileSync} from 'node:fs';
+            import {FrameParser,encodeFrame} from ${JSON.stringify(new URL(import.meta.resolve("@oma/protocol/frame")).pathname)};
+            const socket=new Socket({fd:6,readable:true,writable:true});const parser=new FrameParser(262144);const replies=[];
+            socket.on('data',bytes=>{for(const frame of parser.feed(bytes))replies.push(frame.raw);
+              if(replies.length===2){writeFileSync(${JSON.stringify(out)},JSON.stringify(replies));process.exit(0);}});
+            socket.on('error',error=>{throw error});
+            socket.write(encodeFrame({v:1,id:'h1',method:'host.principalRelay',params:{}}));
+            socket.write(encodeFrame({v:1,id:'h2',method:'no.such.method',params:{}}));`);
+        await env.units.runScript("a", script, {});
+        const replies = JSON.parse(readFileSync(out, "utf8")) as { ok: boolean; error: { code: string } }[];
+        assert.equal(replies.length, 2);
+        assert.deepEqual(replies.map(reply => [reply.ok, reply.error.code]), [[false, "UNKNOWN_METHOD"], [false, "UNKNOWN_METHOD"]]);
+        assert.equal(env.store.getAgent("a")!.incarnation, 0, "a closed method cannot open a run");
+    } finally { await env.cleanup(); }
 });
+
 // ---------------------------------------------------------------------------
-// Part C — real systemd user-unit E2E: concurrent streamed submits
+// Part C — real native namespace E2E: concurrent streamed submits
 // ---------------------------------------------------------------------------
 function seedProject(env: Pick<BrokerEnv, "dir" | "state">): string {
     const seedDir = join(env.dir, "seed");
@@ -453,7 +383,8 @@ function makeCandidate(env: BrokerEnv, base: string, tag: string): {
     sh(["bundle", "create", bpath, exportRef, `^${base}`], clone);
     return { candidate, bundle: Buffer.from(readFileSync(bpath)), exportRef };
 }
-const HELPER_SRC = String.raw `import { connect } from "node:net";
+const HELPER_SRC = String.raw `import { connect, Socket } from "node:net";
+const control = new Socket({fd:6,readable:true,writable:true});
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { encodeFrame, FrameParser } from "@ABS@";
@@ -470,7 +401,8 @@ const sha = (b) => createHash("sha256").update(b).digest("hex");
 
 function framed(sockPath, frame, streamBytes, mode, wantReplies = 1) {
   return new Promise((resolve, reject) => {
-    const sock = connect(sockPath, () => {
+    const sock = sockPath === admin ? control : connect(sockPath);
+    const send = () => {
       const meta = encodeFrame(frame);
       if (mode === "coalesced") sock.write(Buffer.concat([meta, streamBytes]));
       else if (mode === "split") {
@@ -493,21 +425,24 @@ function framed(sockPath, frame, streamBytes, mode, wantReplies = 1) {
           }
         }, 40);
       }
-    });
+    };
+    if (sock === control) queueMicrotask(send); else sock.once("connect", send);
     const parser = new FrameParser(256 * 1024);
     let buf = Buffer.alloc(0);
     const replies = [];
     const done = setTimeout(() => reject(new Error("helper framed timeout")), 15000);
-    sock.on("data", (d) => {
+    const onData = (d) => {
       buf = Buffer.concat([buf, Buffer.from(d)]);
       try { for (const f of parser.feed(buf)) replies.push(f.raw); } catch {}
       buf = Buffer.alloc(0);
       if (replies.length >= wantReplies) {
         clearTimeout(done);
-        sock.destroy();
+        sock.off("data", onData);
+        if (sock !== control) sock.destroy();
         resolve(replies);
       }
-    });
+    };
+    sock.on("data", onData);
     sock.on("error", (e) => { clearTimeout(done); reject(e); });
   });
 }
@@ -544,7 +479,7 @@ main().catch((e) => {
 test("C1: two concurrent git.submit uploads over the real actor channel — connection-local streams, no cross-consumption", {
     timeout: 60000,
 }, async () => {
-    const env = brokerEnv();
+    const env = await brokerEnv();
     const society = env.society;
     try {
         const base = seedProject(env);
@@ -566,39 +501,9 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
                 }
             }
         });
-        // runner facade auth: the helper process must be INSIDE the unit's cgroup.
-        // write a oneshot unit per agent that runs the helper once.
+        // Each driver is an actual namespace PID2 with its own private grant.
         const helperPath = join(env.dir, "helper.mjs");
         writeFileSync(helperPath, HELPER_SRC.replace("@ABS@", new URL(import.meta.resolve("@oma/protocol/frame")).pathname), "utf8");
-        const u = (name: string, variant: string): string => {
-            const unit = unitName(society, name, "service");
-            const unitFile = join(env.dir, unit);
-            writeFileSync(unitFile, [
-                "[Unit]",
-                "Description=OMA audit E2E helper",
-                "[Service]",
-                "Type=oneshot",
-                `Environment=OMA_ADMIN_SOCK=${join(env.runRoot, "admin.sock")}`,
-                `Environment=OMA_BUNDLE=${join(env.dir, `${name}.bundle`)}`,
-                `Environment=OMA_ACTOR=${name}`,
-                `Environment=OMA_VARIANT=${variant}`,
-                `Environment=OMA_OUT=${join(env.dir, `${name}.out.json`)}`,
-                `Environment=OMA_CANDIDATE=${envCand(name)}`,
-                `Environment=OMA_BASE=${base}`,
-                `Environment=OMA_EXPORT_REF=${envRef(name)}`,
-                `Environment=HOME=${env.dir}`,
-                `ExecStart=${process.execPath} ${helperPath}`,
-                "[Install]",
-                "WantedBy=default.target",
-                "",
-            ].join("\n"), "utf8");
-            const link = spawnSync("systemctl", ["--user", "link", unitFile], {
-                env: G,
-            });
-            if (link.status !== 0)
-                throw new Error(`systemctl link: ${link.stderr}`);
-            return unit;
-        };
         // candidates + bundles for both agents
         const candA = makeCandidate(env, base, "a");
         const candB = makeCandidate(env, base, "b");
@@ -606,26 +511,13 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
         writeFileSync(join(env.dir, "b.bundle"), candB.bundle);
         const envCand = (name: string): string => name === "a" ? candA.candidate : candB.candidate;
         const envRef = (name: string): string => name === "a" ? candA.exportRef : candB.exportRef;
-        const unitA = u("a", "split");
-        const unitB = u("b", "coalesced");
-        spawnSync("systemctl", ["--user", "daemon-reload"], { env: G });
-        // start both concurrently (one systemctl start each, back-to-back)
-        const pA = spawn("systemctl", ["--user", "start", unitA], { env: G });
-        const pB = spawn("systemctl", ["--user", "start", unitB], { env: G });
-        const deadline = Date.now() + 30000;
-        let outA: string | null = null;
-        let outB: string | null = null;
-        while (Date.now() < deadline && (!outA || !outB)) {
-            await new Promise((r) => setTimeout(r, 250));
-            const pa = join(env.dir, "a.out.json");
-            const pb = join(env.dir, "b.out.json");
-            if (existsSync(pa))
-                outA = readFileSync(pa, "utf8");
-            if (existsSync(pb))
-                outB = readFileSync(pb, "utf8");
-        }
-        pA.kill("SIGKILL");
-        pB.kill("SIGKILL");
+        const driver = (name: string, variant: string) => env.units.runScript(name, helperPath, {
+            OMA_ADMIN_SOCK: "private-runner-control", OMA_BUNDLE: join(env.dir, `${name}.bundle`), OMA_ACTOR: name,
+            OMA_VARIANT: variant, OMA_OUT: join(env.dir, `${name}.out.json`), OMA_CANDIDATE: envCand(name),
+            OMA_BASE: base, OMA_EXPORT_REF: envRef(name), HOME: env.dir,
+        });
+        await Promise.all([driver("a", "split"), driver("b", "coalesced")]);
+        const outA = readFileSync(join(env.dir, "a.out.json"), "utf8"), outB = readFileSync(join(env.dir, "b.out.json"), "utf8");
         assert.ok(outA, "agent a helper produced no result");
         assert.ok(outB, "agent b helper produced no result");
         let resA: unknown = null;
@@ -648,6 +540,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             };
             error?: {
                 code: string;
+                phase: string;
             };
         };
         const repliesA = resA as SubmitReply[];
@@ -671,7 +564,10 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             }
             else {
                 assert.equal(reply.ok, false);
-                assert.equal(reply.error?.code, "REF_STATE_UNKNOWN", "unexpected concurrent submit rejection");
+                // A busy canonical observation or a still-live native quarantine
+                // scope is unknown, never a failed/nonaccepted submission.
+                assert.ok(["REF_STATE_UNKNOWN", "RUN_TERMINATION_UNKNOWN"].includes(reply.error?.code ?? ""), JSON.stringify(reply));
+                assert.notEqual(accepted.state, "failed");
             }
             const settled = await requireSubmitConvergence(accepted.id, () => env.store.getOperation(actor, `audit-${actor}`), (id) => env.git.reconcile(id));
             assert.ok(settled.kind === "git.submit");
@@ -708,7 +604,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
         ]), candB.candidate);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 // ---------------------------------------------------------------------------
@@ -784,10 +680,11 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
             Buffer.from(json.replace('"provider":"none"', '"provider":"none","provider":"none"')),
             Buffer.from(json.replace('"provider":"none"', '"provider":"\\ud800"')),
             Buffer.from(json.replace('"md":', '"\\ud800":')),
-            Buffer.from(json.replace('"societyAgents":8', '"societyAgents":1e999')),
+            Buffer.from(json.replace('"frameBytes":262144', '"frameBytes":1e999')),
             invalidUtf8,
         ];
         for (const body of invalid) {
+            assert.notDeepEqual(body, Buffer.from(json), "every malformed-input control must actually change the valid bytes");
             writeFileSync(path, body);
             assert.throws(() => loadConfig(path), /config unreadable/);
             const header = Buffer.alloc(4);
@@ -856,10 +753,10 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         return result.stdout.trim();
     };
     const run = async () => {
-        const child = spawn(process.execPath, [
+        const child = ownEntry(spawn(process.execPath, [
             join(process.cwd(), "apps", "oma", "dist", "entry", "broker.js"),
             "--society",
-            society,
+            society, "--config", join(state, "config.json"), "--state-root", state, "--run-root", join(dir, "runtime", "oma", society),
         ], {
             env: {
                 ...process.env,
@@ -869,7 +766,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
                 NOTIFY_SOCKET: "",
             },
             stdio: ["ignore", "ignore", "pipe"],
-        });
+        }));
         let output = "";
         child.stderr!.on("data", (bytes) => {
             output += bytes.toString();
@@ -884,7 +781,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
             assert.match(output, /broker (ready|listening)/);
         }
         finally {
-            child.kill("SIGTERM");
+            await stopEntry(child);
             await exited;
         }
     };
@@ -905,15 +802,15 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
         const rootfs = join(dir, "rootfs");
         mkdirSync(rootfs);
+        ExecutionJournal.initialize(state);
         const cfg = minimalConfig(society, rootfs);
         cfg.initialResidents = [
             { name: "child", profile: "child", brief: "initial" },
         ];
         writeFileSync(join(state, "config.json"), JSON.stringify({ ...cfg, society: `${society}x` }));
         for (const name of ["broker", "runner"]) {
-            // A unit-started runner is handed the broker's location explicitly.
-            const args = name === "runner" ? ["--agent", "child", "--config", join(state, "config.json"),
-                "--state-root", state, "--run-root", join(dir, "run", "oma", society)] : [];
+            // A native runner is handed the broker's location explicitly.
+            const args = ["--config", join(state, "config.json"), "--state-root", state, "--run-root", join(dir, "runtime", "oma", society), ...(name === "runner" ? ["--agent", "child"] : [])];
             const rejected = spawnSync(process.execPath, [
                 join(process.cwd(), "apps", "oma", "dist", "entry", `${name}.js`),
                 "--society",
@@ -958,18 +855,15 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         store.close();
     }
     finally {
-        cleanupOwnedSystemdUnits(dir, society);
         rmSync(dir, { recursive: true, force: true });
-        rmSync(join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "oma", society), { recursive: true, force: true });
     }
 });
-test("D1: READY=1 arrives after startup recovery (recovered mail op observable), never before", async (t) => {
+test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact accepted mail operation", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-d1-"));
     const society = `au${Date.now().toString(36)}`;
-    const runRoot = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
+    const runRoot = join(dir, "runtime");
     let child: ReturnType<typeof spawn> | undefined;
-    let notifyRelay: ReturnType<typeof spawn> | undefined;
-    try {
+        try {
         const xdgData = join(dir, "data");
         const stateRoot = join(xdgData, "oma", society);
         mkdirSync(stateRoot, { recursive: true });
@@ -1016,40 +910,26 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
         }, "k1", { to: ["b"], subject: "pending", kind: "message", body: "recover me" }, "accepted"));
         const recoveryId = store.getOperation("a", "k1")!.id;
         store.close();
-        // sd_notify listener: node dgram cannot create AF_UNIX datagram sockets in
-        // this runtime, so a tiny python3 relay owns the unix-dgram socket and
-        // appends every datagram to a log file the test polls.
-        const notifyPath = join(dir, "notify.sock");
-        const notifyLog = join(dir, "notify.log");
-        notifyRelay = spawn("python3", ["-u", "-c", PY_RELAY, notifyPath, notifyLog], { stdio: "ignore" });
-        const relayDeadline = Date.now() + 5000;
-        while (!existsSync(notifyPath) && Date.now() < relayDeadline) {
-            await new Promise((r) => setTimeout(r, 50));
-        }
-        assert.ok(existsSync(notifyPath), "python notify relay never bound");
-        child = spawn(process.execPath, [
+        ExecutionJournal.initialize(stateRoot);
+        child = ownEntry(spawn(process.execPath, [
             join(process.cwd(), "apps", "oma", "dist", "entry", "broker.js"),
             "--society",
-            society,
+            society, "--config", join(stateRoot, "config.json"), "--state-root", stateRoot, "--run-root", join(runRoot, "oma", society),
         ], {
             env: {
                 ...process.env,
                 XDG_DATA_HOME: xdgData,
                 XDG_RUNTIME_DIR: runRoot,
-                NOTIFY_SOCKET: notifyPath,
                 GIT_CONFIG_NOSYSTEM: "1",
                 GIT_CONFIG_GLOBAL: "/dev/null",
             },
             stdio: ["ignore", "pipe", "pipe"],
-        });
+        }));
         let stderr = "";
         child.stderr!.on("data", (d) => {
             stderr += String(d);
         });
-        const gotReady = await waitForReady(notifyLog, 20000).catch((error: unknown) => {
-            throw new Error(`${String(error)}; broker stderr: ${stderr}`);
-        });
-        assert.match(gotReady, /READY=1/);
+        await entryReady(child, () => stderr);
         // at READY time the admin socket must already exist (start before READY)
         assert.equal(existsSync(join(runRoot, "oma", society, "admin.sock")), true);
         // and the pending mail op was recovered BEFORE READY (ordered bootstrap)
@@ -1058,23 +938,19 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
         assert.equal(op?.state, "succeeded");
         assert.equal(existsSync(join(stateRoot, "mail", "archive", "cur")), true, "result mail materialized before READY");
         storeAfter.close();
-        child.kill("SIGTERM");
-        await new Promise((r) => setTimeout(r, 300));
-        child.kill("SIGKILL");
-        notifyRelay.kill("SIGKILL");
+        await stopEntry(child);
         void stderr;
     }
     finally {
-        child?.kill("SIGKILL");
-        notifyRelay?.kill("SIGKILL");
+        await stopEntry(child);
         rmSync(join(runRoot, "oma", society), { recursive: true, force: true });
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("D2: startup recovery failure -> no READY, exit 1, nothing served", async () => {
+test("NATIVE-AUDIT-READY-02: missing accepted artifact refuses native startup before readiness or serving", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-d2-"));
     const society = `au${Date.now().toString(36)}`;
-    const runRoot = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
+    const runRoot = join(dir, "runtime");
     const children: ReturnType<typeof spawn>[] = [];
     try {
         const xdgData = join(dir, "data");
@@ -1139,32 +1015,27 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
             ]);
         });
         store.close();
-        const notifyPath = join(dir, "notify.sock");
-        const notifyLog = join(dir, "notify.log");
-        const notifyRelay = spawn("python3", ["-u", "-c", PY_RELAY, notifyPath, notifyLog], { stdio: "ignore" });
-        children.push(notifyRelay);
-        await new Promise((r) => setTimeout(r, 300)); // relay binds before the broker runs
-        const child = spawn(process.execPath, [
+        ExecutionJournal.initialize(stateRoot);
+        const child = ownEntry(spawn(process.execPath, [
             join(process.cwd(), "apps", "oma", "dist", "entry", "broker.js"),
             "--society",
-            society,
+            society, "--config", join(stateRoot, "config.json"), "--state-root", stateRoot, "--run-root", join(runRoot, "oma", society),
         ], {
             env: {
                 ...process.env,
                 XDG_DATA_HOME: xdgData,
                 XDG_RUNTIME_DIR: runRoot,
-                NOTIFY_SOCKET: notifyPath,
                 GIT_CONFIG_NOSYSTEM: "1",
                 GIT_CONFIG_GLOBAL: "/dev/null",
             },
             stdio: ["ignore", "pipe", "pipe"],
-        });
+        }));
         children.push(child);
         let stderr = "";
-        child.stderr.on("data", (bytes) => {
+        child.stderr!.on("data", (bytes) => {
             stderr += String(bytes);
         });
-        child.stdout.resume();
+        child.stdout!.resume();
         const exitCode = await new Promise<number | null>((resolve) => {
             const t = setTimeout(() => {
                 child.kill("SIGKILL");
@@ -1179,41 +1050,13 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
         // The immutable object is what is absent: the corruption is reported as a
         // missing file, not as a malformed plan.
         assert.match(stderr, /STORE_CORRUPT: immutable file is missing/);
-        const events = existsSync(notifyLog) ? readFileSync(notifyLog, "utf8") : "";
-        assert.equal(events.includes("READY=1"), false, "READY must never be sent");
+        assert.equal(/broker ready/.test(stderr), false, "readiness must never be reported");
         assert.equal(existsSync(join(runRoot, "oma", society, "admin.sock")), false, "no serving socket before recovery completes");
-        notifyRelay.kill("SIGKILL");
     }
     finally {
         for (const child of children)
-            child.kill("SIGKILL");
+            await stopEntry(child);
         rmSync(join(runRoot, "oma", society), { recursive: true, force: true });
         rmSync(dir, { recursive: true, force: true });
     }
 });
-const PY_RELAY = String.raw `
-import socket, sys, os
-path, log = sys.argv[1], sys.argv[2]
-try: os.unlink(path)
-except FileNotFoundError: pass
-s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-s.bind(path)
-f = open(log, "a")
-while True:
-    data = s.recv(65536)
-    if data:
-        f.write(data.decode("utf-8", "replace"))
-        f.flush()
-`;
-async function waitForReady(logPath: string, timeoutMs: number): Promise<string> {
-    const deadline = Date.now() + timeoutMs;
-    let last = "";
-    while (Date.now() < deadline) {
-        if (existsSync(logPath))
-            last = readFileSync(logPath, "utf8");
-        if (last.includes("READY=1"))
-            return last;
-        await new Promise((r) => setTimeout(r, 100));
-    }
-    throw new Error(`no READY=1 within ${timeoutMs}ms; datagram log: ${JSON.stringify(last)}`);
-}

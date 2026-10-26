@@ -419,17 +419,14 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
             messageIds: batch.messageIds,
         };
         writeFileSync(join(viewDir, `batch-${batch.id}.json`), JSON.stringify(manifest));
-        const extCheck = `node -e "
-      const fs = require('node:fs');
-      process.chdir('/tmp/oma-t5-view');
-      const m = JSON.parse(fs.readFileSync('batch.json','utf8'));
-      if (typeof m.notice !== 'string' || !Array.isArray(m.messageIds)) process.exit(1);
-      console.log('manifest ok');
-    "`;
-        const vdir = "/tmp/oma-t5-view";
-        mkdirSync(vdir, { recursive: true });
+        const vdir = mkdtempSync(join(tmpdir(), "oma-t5-view-"));
         writeFileSync(join(vdir, "batch.json"), JSON.stringify(manifest));
-        const r = spawnSync("bash", ["-c", extCheck], { encoding: "utf8" });
+        const r = spawnSync(process.execPath, ["-e", `
+            const fs = require('node:fs');
+            const m = JSON.parse(fs.readFileSync('batch.json','utf8'));
+            if (typeof m.notice !== 'string' || !Array.isArray(m.messageIds)) process.exit(1);
+            console.log('manifest ok');
+        `], { cwd: vdir, encoding: "utf8" });
         assert.equal(r.status, 0, r.stderr);
         rmSync(vdir, { recursive: true, force: true });
     }

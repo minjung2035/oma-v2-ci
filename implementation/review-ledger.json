@@ -806,8 +806,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/views/mail-notices.ts",
@@ -1289,8 +1288,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/domain/src/actor-address.ts",
@@ -2130,8 +2128,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/git/src/canonical-command.ts",
@@ -2789,8 +2786,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/resident-supervisor.ts",
@@ -3014,8 +3010,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/reconcile/package.json",

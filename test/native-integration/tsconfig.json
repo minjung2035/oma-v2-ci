@@ -51,6 +51,8 @@
     "../sandbox-environment.test.ts",
     "../receipt-settlement.test.ts",
     "../launch-location.test.ts",
-    "../host-entry.test.ts"
+    "../host-entry.test.ts",
+    "../phase4.test.ts",
+    "../audit.test.ts"
   ]
 }

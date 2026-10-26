@@ -2,7 +2,7 @@
 
 ## 실행
 
-아래는 **Linux checkout** 설치 경로다. Node.js 26을 사용하는 환경에서 저장소 루트에서 설치·빌드한다. DR49의 foreground native Society는 bubblewrap 0.12의 FD mount/gate 기능, user·PID namespace와 pidfd, SO_PEERPIDFD를 제공하는 Linux kernel, Git 및 프로젝트 도구를 요구한다. 실행·wake·로그는 공통 TypeScript owner가 담당한다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다.
+아래는 **Linux checkout** 설치 경로다. Node.js 26을 사용하는 환경에서 저장소 루트에서 설치·빌드한다. DR49의 foreground native Society는 bubblewrap 0.12의 FD mount/gate 기능, user·PID namespace와 pidfd, SO_PEERPIDFD를 제공하는 Linux kernel, Git 및 프로젝트 도구를 요구한다. 실행·wake·로그는 공통 TypeScript owner가 담당한다. CI의 Node.js 버전은 26이며, 빌드 성공만으로 이 실행 조건이 충족되는 것은 아니다. Registry 배포와 플랫폼별 실제 지원 판정은 [validation](implementation/validation.md)을 확인한다. Node 26은 Corepack을 동봉하지 않으므로 Worker의 선언된 toolchain에는 별도 Corepack 설치가 필요하다. CI는 0.34.0을 명시적으로 설치하고 실제 버전과 SHA256을 남긴다. Host의 contained search는 실제 ripgrep과 fd/fdfind를 요구하며 CI도 이 도구를 설치한다.
 
 Ubuntu의 AppArmor user namespace 제한이 활성화된 환경에서는 고정 `/usr/bin/bwrap`에
 application별 `userns` 권한이 필요하다. CI는 distro의 해당 profile을 로드하거나 그 binary에만

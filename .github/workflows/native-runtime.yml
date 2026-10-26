@@ -37,8 +37,21 @@ jobs:
       - name: Install the actual pinned Linux sandbox backend
         if: runner.os == 'Linux'
         run: |
+          node --input-type=module -e 'import {spawnSync} from "node:child_process"; console.log(JSON.stringify(Object.fromEntries(["rg","fd","fdfind","corepack"].map(command=>{const r=spawnSync(command,["--version"],{encoding:"utf8"});return [command,{status:r.status,error:r.error?.code,stdout:r.stdout,stderr:r.stderr}]}))))' > .scratch/native-runtime/prerequisites-before.json
           sudo apt-get update
-          sudo apt-get install -y bubblewrap meson ninja-build libcap-dev pkg-config
+          sudo apt-get install -y bubblewrap meson ninja-build libcap-dev pkg-config ripgrep fd-find
+          # The pinned SDK's completion pass executes the real fd binary.
+          mkdir -p .scratch/native-runtime-bin
+          ln -s /usr/bin/fdfind .scratch/native-runtime-bin/fd
+          export PATH="$PWD/.scratch/native-runtime-bin:$PATH"
+          echo "$PWD/.scratch/native-runtime-bin" >> "$GITHUB_PATH"
+          # Node 25+ does not bundle Corepack; the declared Worker toolchain
+          # still requires it. https://github.com/nodejs/corepack/tree/v0.34.0
+          npm install --global --ignore-scripts corepack@0.34.0 > .scratch/native-runtime/corepack-install.log 2>&1
+          corepack --version > .scratch/native-runtime/corepack-version.txt
+          rg --version > .scratch/native-runtime/ripgrep-version.txt
+          fd --version > .scratch/native-runtime/fd-version.txt
+          sha256sum "$(command -v corepack)" /usr/bin/rg /usr/bin/fdfind > .scratch/native-runtime/toolchain-sha256.txt
           git init .scratch/bubblewrap
           git -C .scratch/bubblewrap remote add origin https://github.com/containers/bubblewrap.git
           git -C .scratch/bubblewrap fetch --depth=1 origin 2a76602a8c71f36c1527cf9fc3417d9149822e0c

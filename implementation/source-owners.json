@@ -1024,7 +1024,9 @@
       "test/scenario-society.test.ts#NATIVE-SCN-01",
       "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-ISOLATION-01",
       "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-STATUS-01",
-      "test/status-observation.test.ts#AV9"
+      "test/status-observation.test.ts#AV9",
+      "test/phase4.test.ts#T38",
+      "test/phase4.test.ts#V25A"
     ]
   },
   {
