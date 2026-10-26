@@ -1,8 +1,8 @@
 /** Verification tooling, not production runtime. Commands run only when invoked. */
-// Mixed files retain all their assertions, but are not local unit/integration proof.
-export const systemdTestFiles = Object.freeze([
-  "audit.test.js",
-  "phase4.test.js",
+// Required native execution regressions run in both the full local suite and
+// kernel qualification. Discovery cannot silently omit one after a rename.
+export const nativeExecutionTestFiles = Object.freeze([
+  "audit.test.js", "audit2.test.js", "cli.test.js", "phase4.test.js", "phase5.test.js", "launch-topology.test.js",
 ]);
 /** Tests a run reported but did not execute.
  *
@@ -29,10 +29,10 @@ export function unrunDirectives(summary) {
 }
 
 export function localTestFiles(compiled) {
-  for (const required of systemdTestFiles)
+  for (const required of nativeExecutionTestFiles)
     if (!compiled.includes(required))
-      throw new Error(`required systemd test file missing: ${required}`);
-  return compiled.filter((file) => !systemdTestFiles.includes(file));
+      throw new Error(`required native execution test file missing: ${required}`);
+  return [...compiled];
 }
 
 /** The discovered test files that must run alone, or a loud failure. An entry
@@ -45,7 +45,7 @@ export function serialTestFiles(files, serial) {
     throw new Error(`serial test files missing from the discovered suite: ${missing.join(", ")}`);
   return files.filter((file) => serial.has(file));
 }
-export const lanes = Object.freeze({
+const definitions = {
   fast: {
     files: [
       "config-edit-descriptors.test.js",
@@ -54,7 +54,6 @@ export const lanes = Object.freeze({
       "id-contracts.test.js",
       "model-scope.test.js",
       "r29-reconcile-accounting.test.js",
-      "systemd-cleanup.test.js",
       "verification-oracles.test.js",
       "p24-owner-guards.test.js",
       "f2-cli-request.test.js",
@@ -77,8 +76,9 @@ export const lanes = Object.freeze({
     sourceFiles: [
       "test/consistency-decisions.test.mjs",
       "test/config-bundle-owner.test.mjs",
-      "test/systemd-test-policy.test.mjs",
+      "test/native-test-policy.test.mjs",
       "test/verification-policy.test.mjs",
+      "test/verification-workflow-policy.test.mjs",
       "test/exploration-policy.test.mjs",
       "test/traceability-policy.test.mjs",
       "test/r34-owner-policy.test.mjs",
@@ -99,6 +99,7 @@ export const lanes = Object.freeze({
       "test/document-integrity.test.mjs",
     ],
     requiredNames: [
+      "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
       "P0-7: every durable boundary in the code has a registered kill/retry/restart test",
       "PRIORITY-0 / P0-7: in this tree every requirement ID has one clause, acceptance rows live in the matrix, and every link resolves",
       "PRIORITY-0 / P0-1: a requirement ID given to two clauses, or an acceptance number used outside its matrix, is a finding",
@@ -114,13 +115,11 @@ export const lanes = Object.freeze({
       "R38: the figures the validation record quotes",
       "R35 evidence policy",
       "R35 death evidence",
-      "SEQ-002: stop attempts revocation",
+      "resident policy: multiple stop failures retain every primary in their physical order",
       "V32A: the committed ledger",
       "V32A: approval is refused",
       "D03 launched location",
-      "D03 resident unit",
-      "D03: a host unit without the rendered run root",
-      "D03: a runner unit without the whole rendered location",
+      "D03: a runner without the whole explicit location",
       "V01A:",
       "V01B:",
       "V02A:",
@@ -130,8 +129,7 @@ export const lanes = Object.freeze({
       "AUTH-003: a broker handed society A's lease",
       "REC-007: a settled receipt survives",
       "OPS config:",
-      "AV9 / INV02: a unit systemd does not have is observed as no unit",
-      "AV12 / INV02, T36: an explicit start resets only a failed unit",
+      "AV9 / INV02: Principal status never borrows a Resident's idle or exit-zero observation",
       "WP23.02:",
       "V26C:",
       "T118: a view dated ahead",
@@ -265,7 +263,7 @@ export const lanes = Object.freeze({
 "audit-eml-admission.test.js",
 "audit-cli-submit.test.js"
 ],
-    sourceFiles: ["packages/engine/test/interactive-input.test.mjs",
+    sourceFiles: ["test/native-resident-runtime.test.mjs", "packages/engine/test/interactive-input.test.mjs",
 "packages/engine/test/interactive-channel.test.mjs",
 "packages/engine/test/interactive-display.test.mjs",
 "packages/engine/test/open-tui-brand.test.mjs",
@@ -353,7 +351,7 @@ export const lanes = Object.freeze({
       "DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed'",
       "DR13 / CLI-003: a failure the broker says to look up again is exit 3 whatever its code",
       "P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepted does not reinterpret it",
-      "DR13 / P0-5: a unit command that did not finish is an unknown outcome, not an unsupported profile",
+      "Resident diagnostic failure remains an unknown outcome after independently confirmed stop",
       "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused",
       "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
       "DR12: a flush that fails after the inline commit point is reported as unconfirmed",
@@ -363,7 +361,7 @@ export const lanes = Object.freeze({
       "P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a CLI credential source",
       "P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be established does not run on unsupervised",
       "P0V-49 / F3, P0-4: a descriptor given back is never closed again",
-      "P0V-59 / R04, P0-1: a unit another state tree's society of the same name installed is that owner's",
+      "NATIVE-RESIDENT-ISOLATION-01:",
       "P0V-69 / F2, P0-5: SQLite's result code is read once",
       "P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt closes admission",
       "P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption the fence sees",
@@ -478,38 +476,40 @@ export const lanes = Object.freeze({
     environment: "git-fs",
     timeoutSeconds: 1200,
     proof:
-      "real SQLite/Git/filesystem/native child boundaries and actual lifecycle dispatch; controlled units are not actual systemd or power-loss proof",
+      "real SQLite/Git/filesystem/native child boundaries and actual lifecycle dispatch; policy-only observations are not kernel or power-loss proof",
   },
   kernel: {
     files: [
-      ...systemdTestFiles,
+      ...nativeExecutionTestFiles,
       "peer-pid.test.js",
       "native-leaf.test.js",
       "runner-channel.test.js",
       "compliance.test.js",
     ],
-    sourceFiles: [],
+    sourceFiles: [
+      "test/native-process-scope.test.mjs", "test/native-resident-runtime.test.mjs",
+      "test/native-resident-logs.test.mjs", "test/native-credential-stream.test.mjs",
+      "test/native-unix-message.test.mjs", "test/native-git-execution.test.mjs",
+    ],
     requiredNames: [
       "AUTH-003 native",
-      "UNIT-004",
+      "NATIVE-TOPO-01:", "NATIVE-TOPO-02:",
+      "NATIVE-RESIDENT-ISOLATION-01:", "NATIVE-RESIDENT-STATUS-01:",
+      "credential stream: live connector", "native candidate: actual exact checkout",
       "LIFE-009 entry:",
-      "D1: READY=1",
+      "NATIVE-AUDIT-READY-01:",
       "C1: two concurrent git.submit",
       "P0-1/2/3 + P1-7/8",
-      "V03A/V03B product topology",
-      "V03B unsupported",
-      "V07B kernel",
-      "T36:",
       "V25A:",
       "V23B:",
       "T38:",
       "SEQ-002: unknown old-run death",
       "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection",
     ],
-    environment: "systemd",
+    environment: "linux-native",
     timeoutSeconds: 3600,
     proof:
-      "actual user-systemd/native/socket/cgroup oracles; unsupported environment is not a pass",
+      "actual native namespace/pidfd/credential/CLI/entry oracles; unsupported environment is not a pass",
   },
   crash: {
     files: ["crash-boundaries.test.js", "global-invariants.test.js"],
@@ -606,6 +606,7 @@ export const lanes = Object.freeze({
       "test/receipt-supersession.test.mjs",
     ],
     requiredNames: [
+      "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
       "V01A:",
       "V01B:",
       "V02A:",
@@ -662,7 +663,7 @@ export const lanes = Object.freeze({
       "P14 declaration-only",
       "P15 SCC agrees",
       "LIFE-009 entry:",
-      "D1: READY=1",
+      "NATIVE-AUDIT-READY-01:",
       "C1: two concurrent git.submit",
       "P0-1/2/3 + P1-7/8",
       "V01",
@@ -683,11 +684,17 @@ export const lanes = Object.freeze({
       "P08:",
       "A02:",
     ],
-    environment: "systemd",
+    environment: "linux-native",
     timeoutSeconds: 7200,
     proof: "full serial suite; each oracle retains its own proof scope",
   },
-});
+};
+// The all lane actually executes and requires the kernel/crash oracles; this
+// permits CI to avoid duplicate standalone wrappers without omitting a case.
+definitions.all.sourceFiles = [...new Set(Object.values(definitions).flatMap(lane => lane.sourceFiles))];
+definitions.all.requiredNames = [...new Set([...definitions.all.requiredNames, ...definitions.kernel.requiredNames, ...definitions.crash.requiredNames])];
+export const lanes = Object.freeze(definitions);
+
 export function parseTap(raw) {
   const totals = {};
   for (const line of raw.split(/\r?\n/)) {

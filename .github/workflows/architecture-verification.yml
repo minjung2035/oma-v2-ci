@@ -5,7 +5,7 @@ name: Architecture verification evidence
 # while it is still a proposal.
 on:
   push:
-    branches: [master, refactor/safety-preserving-architecture]
+    branches: [master, refactor/safety-preserving-architecture, work/macos-native-20261025]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
     # fire after every check has had the time it was given -- otherwise a check
     # still running inside its own budget would be killed by the outer one and
     # the evidence would say "timeout" about work that was proceeding.
-    timeout-minutes: 240
+    timeout-minutes: 300
     env:
       EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
       # The one commit this run is about. On a pull request `github.sha` names a
@@ -47,7 +47,7 @@ jobs:
           sha256sum "$EVIDENCE/source.tar.gz" > "$EVIDENCE/source.tar.gz.sha256"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '26'
+          node-version: '26.0.0'
           package-manager-cache: false
       - name: Record which bytes of that commit were verified
         # A commit name says which revision was meant; it does not say which
@@ -78,23 +78,9 @@ jobs:
             ${{ env.EVIDENCE }}/provenance.tsv
           retention-days: 7
           if-no-files-found: error
-      - name: Install the sandbox the containment tests need
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
-      - name: Load vsock loopback for the platform lane's bridge
-        # macos-platform §10.2: the guest bridge is tested over vsock loopback.
-        # A kernel without the module fails the lane, visibly, rather than
-        # letting the bridge tests skip (a skip is not a pass).
-        run: sudo modprobe vsock_loopback
-      - name: Install the pinned line counter
-        # CI generates LOC evidence and re-measures every count, so the
-        # exact counting tool is part of the evidence. The distribution package
-        # is a different version and counts differently; the release script is
-        # pinned by digest instead.
-        run: |
-          curl -fsSL -o /tmp/cloc-2.08.pl https://github.com/AlDanial/cloc/releases/download/v2.08/cloc-2.08.pl
-          echo "0a551a86c7785880bcaa0fdfe6107c064abfbebc7cc26b7eaeac423fe2c0d49e  /tmp/cloc-2.08.pl" | sha256sum -c -
-          sudo install -m 0755 /tmp/cloc-2.08.pl /usr/local/bin/cloc
-          test "$(cloc --version)" = "2.08"
+      - name: Install the pinned native prerequisites and line counter
+        timeout-minutes: 15
+        run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
       - name: Install locked dependencies
         id: dependencies
         continue-on-error: true
@@ -142,20 +128,16 @@ jobs:
           # this separate evidence line names the drifted clause directly.
           run_check spec-inventory 900 npm run check:spec-inventory
           run_check test 1800 npm test
-          # Only the lanes whose environment this runner actually provides. A
-          # hosted runner has no systemd user manager and no bubblewrap, so the
-          # systemd lanes cannot run here; they are recorded as NOT_RUN with the
-          # reason rather than executed to a failure that says nothing, and a
-          # lane that did not run is never counted as a pass.
+          # Full native/kernel/crash coverage also runs in native-all below.
+          # These standalone wrappers retain their own scoped result records.
           run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"
           run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
           run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
           run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
           run_check verify-platform 1000 npm run verify:platform -- --out "$EVIDENCE/platform"
-          for lane in kernel crash all; do
-            printf '%s\tNOT_RUN\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
+          for lane in kernel crash; do
+            printf '%s\tNOT_RUN standalone; covered by native-all actual files and required names\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
           done
-          printf '%s\n' 'kernel, crash and all are systemd lanes. They require a disposable user with a systemd user manager and bubblewrap, which a hosted runner does not provide, and verify-lane.mjs refuses them without OMA_TEST_SYSTEMD=1. They were NOT_RUN here and this workflow certifies nothing about them.' > "$EVIDENCE/systemd-lanes.txt"
           cp production-files.txt production-loc-hashes.json "$EVIDENCE/"
           git diff -- production-files.txt production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
           # Generating evidence must not rewrite the committed source claim.
@@ -166,7 +148,7 @@ jobs:
             printf '%s\t%s\n' generated-inventory-diff 1 >> "$EVIDENCE/exit-codes.tsv"
             touch "$EVIDENCE/failed"
           fi
-          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs the node and git-fs lanes only; it does not certify the systemd lanes, OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
+          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs baseline and full native lanes; each result certifies only its executed cases. Darwin OPEN gates and power loss remain separate.' > "$EVIDENCE/README.txt"
       - name: Upload raw evidence even when a check failed
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -187,3 +169,56 @@ jobs:
           grep -qxF "$(printf 'commit\t%s' "$VERIFIED_SHA")" "$EVIDENCE/provenance.tsv"
           test -f "$EVIDENCE/exit-codes.tsv"
           test ! -f "$EVIDENCE/failed"
+
+  native-all:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    env:
+      EVIDENCE: /tmp/oma-native-all-${{ github.run_id }}-${{ github.run_attempt }}
+      VERIFIED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Bind native all to the proposed head and its bytes
+        run: |
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-before.json"
+      - name: Install native all prerequisites
+        timeout-minutes: 15
+        run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
+      - name: Install native all locked dependencies
+        timeout-minutes: 10
+        run: npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Prepare the pinned storage dependency for native all
+        timeout-minutes: 15
+        run: |
+          npm run build:workspaces > "$EVIDENCE/storage-workspace-build.log" 2>&1
+          npm run setup:storage > "$EVIDENCE/setup-storage.log" 2>&1
+      - name: Run every native and durable oracle
+        run: |
+          run_check() {
+            local label="$1"; local seconds="$2"; shift 2
+            timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
+          }
+          run_check verify-all 9900 npm run verify:all -- --out "$EVIDENCE/all"
+      - name: Confirm native all input preservation
+        if: always()
+        run: |
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-after.json"
+          cmp "$EVIDENCE/input-before.json" "$EVIDENCE/input-after.json"
+      - name: Preserve native all raw results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-native-all-${{ env.VERIFIED_SHA }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 14

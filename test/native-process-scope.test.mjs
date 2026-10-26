@@ -108,7 +108,7 @@ test('native scope: setsid double-fork descendant with all inherited FDs closed 
   assert.equal(ticket.population(), 'empty'); assert.notEqual(observeNamespaceProcess(escaped).kind, 'running');
   assert.equal(f.owner.confirmDead('resident:escape'), true);
 });
-for (const phase of ['after-opening', 'after-witness', 'after-effect', 'before-closed', 'after-closed'])
+for (const phase of ['after-initialize', 'after-opening', 'after-witness', 'after-effect', 'before-closed', 'after-closed'])
   test(`native recovery: real owner SIGKILL at ${phase}`, { timeout: 20000 }, async t => {
     const root = mkdtempSync(join(process.env.OMA_NATIVE_EVIDENCE_DIR ?? tmpdir(), 'oma-execution-crash-'));
     const child = fork(fileURLToPath(new URL('./fixtures/execution-crash.mjs', import.meta.url)), [root, phase], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
@@ -127,10 +127,21 @@ for (const phase of ['after-opening', 'after-witness', 'after-effect', 'before-c
     }
     const checkpoint = JSON.parse(readFileSync(marker, 'utf8')); assert.equal(checkpoint.phase, phase);
     const file = join(root, 'execution/scopes.jsonl'), before = readFileSync(file);
-    assert.throws(() => ExecutionJournal.open(root), { code: 'BROKER_UNAVAILABLE' }, 'the live owner retains its exclusive journal');
+    if (phase === 'after-initialize') {
+      // Publication precedes acquisition of the journal's writer lock.
+      const published = ExecutionJournal.open(root); published.close();
+    } else assert.throws(() => ExecutionJournal.open(root), { code: 'BROKER_UNAVAILABLE' }, 'the live owner retains its exclusive journal');
     child.kill('SIGKILL'); const [code, signal] = await closed; assert.equal(code, null); assert.equal(signal, 'SIGKILL');
     journal = ExecutionJournal.open(root);
     const recovery = new ExecutionCoordinator(journal, identity => observeNamespaceProcess(identity.pid), identity => pinNamespaceInit(identity.pid));
+    if (phase === 'after-initialize') {
+      assert.deepEqual(journal.entries(), []);
+      ExecutionJournal.initialize(root);
+      await recovery.recover(); await recovery.recover();
+      assert.deepEqual(readFileSync(file), before, 'retry preserves the initialized journal bytes');
+      assert.equal(existsSync(join(root, 'effect')), false);
+      recovered = true; return;
+    }
     if (phase === 'after-opening') {
       assert.equal(checkpoint.witness, null);
       await assert.rejects(() => recovery.recover(), { code: 'RUN_TERMINATION_UNKNOWN' });

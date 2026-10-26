@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { localTestFiles, serialTestFiles, systemdTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
+import { localTestFiles, serialTestFiles, nativeExecutionTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
 import { workspaceTestFiles } from "./check-modules.mjs";
 // This runner has no selection surface: any argument is a mistake (or `npm
 // test -- foo`), and silently running the whole suite is the exact behavior
@@ -79,7 +79,6 @@ const parallelFiles = files.filter((file) => !SERIAL.has(file));
 const guard = new URL("./local-test-guard.mjs", import.meta.url).href;
 const childEnv = {
   ...process.env,
-  OMA_TEST_SYSTEMD: "0",
   NODE_OPTIONS: `--import=${guard}`,
   DBUS_SESSION_BUS_ADDRESS:
     "unix:path=/nonexistent/oma-local-tests-no-user-bus",
@@ -87,7 +86,7 @@ const childEnv = {
 
 console.error(
   `LOCAL ONLY: ${files.length} files (${parallelFiles.length} parallel at concurrency ${concurrency}, ${serialFiles.length} serial); ` +
-  `systemd-required NOT_RUN: ${systemdTestFiles.join(", ")}`,
+  `native execution regressions included: ${nativeExecutionTestFiles.length}`,
 );
 
 // The runner's own exit code says nothing about tests that did not run: a

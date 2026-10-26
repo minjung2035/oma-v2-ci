@@ -539,7 +539,7 @@
     },
     {
       "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.finishAccepted",
-      "fact": "a created agent's workspace, units and success",
+      "fact": "a created agent's workspace, execution registration and success",
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
@@ -547,7 +547,7 @@
           "injection": "sigkill",
           "points": [
             "create-workspace",
-            "create-unit",
+            "create-execution",
             "create-mail"
           ]
         }
@@ -1294,28 +1294,6 @@
       ]
     },
     {
-      "owner": "packages/platform-linux/src/units.ts#UnitsModule.prepareUnit",
-      "fact": "an installed unit file",
-      "tests": [
-        {
-          "file": "test/crash-boundaries.test.ts",
-          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
-          "injection": "sigkill",
-          "points": [
-            "boot-unit"
-          ]
-        },
-        {
-          "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
-          "injection": "sigkill",
-          "points": [
-            "create-unit"
-          ]
-        }
-      ]
-    },
-    {
       "owner": "apps/oma/src/views.ts#ViewsModule.publishInbox",
       "fact": "a derived inbox view (rebuilt from the ledger)",
       "tests": [
@@ -1618,6 +1596,39 @@
           "file": "test/session-storage.test.mjs",
           "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
           "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/execution-journal.ts#ExecutionJournal.initialize",
+      "fact": "the initialized hash-chain journal; retry never replaces existing frames",
+      "tests": [
+        {
+          "file": "test/native-process-scope.test.mjs",
+          "title": "native recovery: real owner SIGKILL at",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/candidate-check.ts#executeCandidateCheck",
+      "fact": "exact-checkout attributes in a disposable view; a killed setup never alters canonical refs or authorizes the check",
+      "tests": [
+        {
+          "file": "test/native-git-execution.test.mjs",
+          "title": "native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/quarantine-worker.ts#executeQuarantinePhase",
+      "fact": "the disposable verifier alternates; repeated verified imports preserve accepted bundle bytes and canonical refs",
+      "tests": [
+        {
+          "file": "test/native-git-execution.test.mjs",
+          "title": "native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+          "injection": "logical"
         }
       ]
     }

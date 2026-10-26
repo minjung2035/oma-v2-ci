@@ -167,7 +167,7 @@ DR46 전환 기록: 위 T117의 network 차단 절과 그 --unshare-all 전용 f
 실제 recipe의 공유 네트워크와 파일/credential 봉인은 별도 `test/network-sandbox-layout.test.mjs`가
 확인한다. T117의 실제 extension·relay credential·custom delivery·제품 코드 봉인 검사는 유지한다.
 | T124 / TUI-011 | 심볼릭 링크·디렉터리·헤더 한도를 넘는 메시지가 섞인 Maildir → Mail 화면 읽기 → 링크는 따라가지 않고 파일 전체를 버퍼링하지 않으며, unread 수와 목록의 unread 행 수가 같고, 정렬은 파일 이름이 아니라 도착 시각을 따른다 |
-| T125 / VAL-002 | CI workflow 원문과 lane 정의 → 정적 대조 → 어떤 lane도 자기 예산보다 먼저 죽지 않고, job 시계도 포함한 check들의 합보다 먼저 울리지 않으며, runner가 제공하지 않는 systemd lane은 NOT_RUN으로 기록되고, 봉인 시험이 필요로 하는 도구는 설치되며, 생성기 이전에 관측한 stale inventory가 실패로 남는다. master가 될 수 있는 모든 경로 — 통합 branch push, master push, master를 향한 pull request — 가 검증에 연결되고, 검증 대상은 CI가 만들어 낸 merge commit이 아니라 제안된 head commit이며(`github.sha` 하나만 쓰면 pull request에서 어느 tree와도 다시 대조할 수 없는 SHA에 증거가 묶여 실패), 무엇도 측정되기 전에 checkout된 tree가 그 commit임이 확인되고, 어떤 bytes가 돌았는지가 local gate와 같은 closure로 생성기 이전에 기록되며, 모든 evidence artifact는 그 commit 이름으로 보관되고, binding을 잃은 run은 성공을 보고할 수 없다 |
+| T125 / VAL-002 | CI workflow 원문과 lane 정의 → 정적 대조 → 어떤 lane도 자기 예산보다 먼저 죽지 않고, job 시계도 포함한 check들의 합보다 먼저 울리지 않으며, 기본 전체 시험은 native execution 시험을 제외하지 않으며, 별도로 실행하지 않은 wrapper는 NOT_RUN으로 기록하되 그 파일·필수 oracle이 실제 전체 native lane에서 실행되어야 하고, 봉인 시험이 필요로 하는 도구는 설치되며, 생성기 이전에 관측한 stale inventory가 실패로 남는다. master가 될 수 있는 모든 경로 — 통합 branch push, master push, master를 향한 pull request — 가 검증에 연결되고, 검증 대상은 CI가 만들어 낸 merge commit이 아니라 제안된 head commit이며(`github.sha` 하나만 쓰면 pull request에서 어느 tree와도 다시 대조할 수 없는 SHA에 증거가 묶여 실패), 무엇도 측정되기 전에 checkout된 tree가 그 commit임이 확인되고, 어떤 bytes가 돌았는지가 local gate와 같은 closure로 생성기 이전에 기록되며, 모든 evidence artifact는 그 commit 이름으로 보관되고, binding을 잃은 run은 성공을 보고할 수 없다 |
 
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.
 
@@ -215,7 +215,7 @@ receipt 보장을 mock이나 조건부 skip으로 닫지 않는다.
 | evidence | 현재 production source revision/content digest, spec digest, build command, test command, exit status, 로그 경로, adapter/환경 pin |
 | status | unverified / blocked / proven / not_applicable; blanket passed 금지 |
 
-**MUST [COMP-004]** proven은 실제 production entrypoint를 실행한 결과여야 한다. unit test의 mock adapter만 통과했거나 import 가능한 helper가 있지만 entrypoint에서 호출하지 않으면 unverified다. UI/tool wrapper가 다른 실행 파일을 호출하는 wiring도 검증한다. resource/unit/Pi 관련 요구는 필요한 실제 kernel/systemd/Pi 경계를 쓰고, 네트워크 고장 등 fault만 test adapter로 주입할 수 있다. test double의 범위와 미검증 real boundary를 증거에 표시한다.
+**MUST [COMP-004]** proven은 실제 production entrypoint를 실행한 결과여야 한다. unit test의 mock adapter만 통과했거나 import 가능한 helper가 있지만 entrypoint에서 호출하지 않으면 unverified다. UI/tool wrapper가 다른 실행 파일을 호출하는 wiring도 검증한다. resource/execution/Pi 관련 요구는 필요한 실제 kernel/namespace/Pi 경계를 쓰고, 네트워크 고장 등 fault만 test adapter로 주입할 수 있다. test double의 범위와 미검증 real boundary를 증거에 표시한다.
 
 **MUST [COMP-005]** release checker는 source inventory의 적용 runtime 요구 수와 trace 수를 대조한다. 누락/분류 없음/실제 owner 없음/현재 revision 불일치/negative test 없음/OPEN SPIKE를 proven 처리한 행이 하나라도 있으면 release gate 실패다. not_applicable은 해당 feature를 실제로 enable할 수 없다는 config/API 거절 시험이 있어야 한다. CI 로그 이름이 requirement 이름과 같다는 것만으로 coverage를 인정하지 않는다.
 
@@ -278,11 +278,11 @@ cloc --list-file=production-files.txt --by-file --skip-uniqueness \
 
 **MUST [SP-003]** 실패 시 해당 profile/경로를 차단하고 이유를 반환한다. 아키텍처 변경이 필요한 결과는 제안만 하며 이 spec의 근거 없는 확정으로 바꾸지 않는다. 아래 기재한 후보는 선택이 확정된 설계가 아니다.
 
-## S-01 — Linux / Node / systemd / sandbox substrate
+## S-01 — Linux / Node / native execution / sandbox substrate
 
-**MUST [SP-01-T]** 일반 user service로 broker+runner+bwrap를 시작해 다음을 실행한다: Pi echo/tool, 동일 UID 타 actor 연결 시도, 직접 admin socket 접근, namespace PID와 host PID 매핑, actor exit 직후 PID 재사용 stress, grandchild process 생성 후 stop, FD enumeration, host home/bus/network 접근, tmp cap 및 persistent workspace/storage cap 초과. race 때문에 identity를 확정할 수 없으면 fail closed 결과가 나와야 한다.
+**MUST [SP-01-T]** DR49의 foreground native 경로로 broker+runner+bwrap를 시작해 다음을 실행한다: Pi echo/tool, 동일 UID 타 actor 연결 시도, 직접 admin socket 접근, namespace PID와 host PID 매핑, actor exit 직후 PID 재사용 stress, grandchild process 생성 후 stop, FD enumeration, host home/bus/network 접근, tmp cap 및 persistent workspace/storage cap 초과. race 때문에 identity를 확정할 수 없으면 fail closed 결과가 나와야 한다.
 
-**MUST [SP-01-A]** 해당 incarnation의 실제 cgroup 후손만 actor listener를 사용할 수 있고 타 actor·host arbitrary process·stale run은 거절해야 한다. READY 전 요청은 접수하지 않는다. systemd/bwrap 미지원 환경은 UNSUPPORTED_PROFILE이어야 한다. 최소 native leaf를 쓰면 TS application 경계/LOC에 반영한다. userns-try·UID-only 인증·host network fallback은 금지한다.
+**MUST [SP-01-A]** 해당 incarnation의 실제로 pin된 execution scope 후손만 actor listener를 사용할 수 있고 타 actor·host arbitrary process·stale run은 거절해야 한다. READY 전 요청은 접수하지 않는다. 필요한 native containment primitive/bwrap 미지원 환경은 UNSUPPORTED_PROFILE이어야 한다. Darwin은 G-PROCESS/G-FILES/G-AUTH 미해결 상태에서 지원 완료로 판정하지 않는다. 최소 native leaf를 쓰면 TS application 경계/LOC에 반영한다. userns-try·UID-only 인증·host network fallback은 금지한다.
 
 ## S-02 — 기존 Principal Pi의 host/private 경계
 
@@ -304,7 +304,7 @@ cloc --list-file=production-files.txt --by-file --skip-uniqueness \
 
 **MUST [SP-05-A]** invalid input은 canonical ref를 바꾸지 않으며 검증된 reachable C만 게시할 수 있어야 한다. canonical objects를 읽는 quarantine은 RO이고 Resident는 canonical objects에 쓰지 못한다. publish 후 crash에도 object/ref 연결성이 유지되어야 한다. 사용한 Git versions/object formats별 정확한 argv/env·fsync 설정을 기록한다.
 
-## S-06 — durability / systemd races / storage qualification
+## S-06 — durability / native execution races / storage qualification
 
 **MUST [SP-06-T]** test matrix의 process kill 지점을 실제 subprocess kill로 실행하고, 별도 VM/지원 fault 환경에서 write ordering·abrupt power loss·ENOSPC·read-only remount를 시험한다. accepted receipt를 외부 harness에 기록한 뒤 reboot 결과와 대조한다. stop 중 mail 도착, 마지막 idle check 뒤 mail 도착, start-limit, broker crash, principal offline backlog를 실서비스로 반복한다.
 
@@ -341,9 +341,9 @@ values must not be computed by the production planner under test.
 |---|---|---|---|
 | Shape | `makeValidResolvedSpec`, `makeValidAgent` in `spec.ts`; primitive constructors in `valid.ts` | Complete resolved-spec shape is checked by `resolvedSpecCheck`; owned hashes are paired with their bytes. `r32-fixture-contracts.test.ts` round-trips selected records. | Host configuration, accepted ledger relation, current peer authority, installed runtime |
 | Complete HostConfig | `createCompleteConfigurationFixture()` in `configuration.ts` | Writes a complete inline config, runs the actual split script, calls `loadConfiguration` on BOTH inputs, compares assembled host values before returning | Deployment attestation, credentials, running broker/runner, working rootfs/provider |
-| Live Store/Mail | `mail-harness.ts` seed/send subprocess; `lifecycleReplayFixture()` in `lifecycle-replay.ts` | Real SQLite Store/decoders and actual Mail/Lifecycle paths where called; normal agents decode before fault injection. `ObservedUnits.effects` records controlled unit requests. | Socket/peer authentication and real systemd/death; lifecycle replay explicitly substitutes admission/goal/unit observations |
-| Scenario (scripted model) | `scriptedProvider()` in `scripted-provider.ts`; `startScenario()` / `withScenario()` in `scenario.ts`; suites `scenario-principal`, `scenario-society`, `scenario-confined` | The whole loop with only the model scripted: provisioning, Store, mail, the broker composed as `entry/broker.ts` composes it (Git, lifecycle with the product's child-spec resolver), the product's PrincipalSession with the bundled engine and trusted extension, the CLI it starts, PrincipalDelivery, and the product's runner process for a Resident (always confined under bubblewrap with the relay and a TLS provider served as an engine catalogue provider; missing bubblewrap is explicit NOT_RUN, never host execution). Assertions are on ledger rows, mailbox files, receipts and session history | Real provider behaviour, streaming or retries (the engine's, INF-001); systemd units and journal (`ScenarioUnits` stands in); per-Resident cgroups (a runner shares the test's cgroup, so a Resident is activatable once per broker); power loss. Not provider evidence (P0-5) |
-| Installed runtime | `P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects` in `p24-deployment-gates.test.ts` | Copies built runtime/raw assets, borrows this checkout's node_modules, invokes real broker entry and checks refusal before SQLite/socket effects | Standalone production-only install, positive society startup, clean disposable manager, engine/provider, power-loss qualification. Those require WP03/27/30/31 evidence |
+| Live Store/Mail | `mail-harness.ts` seed/send subprocess; `lifecycleReplayFixture()` in `lifecycle-replay.ts` | Real SQLite Store/decoders and actual Mail/Lifecycle paths where called; normal agents decode before fault injection. `ObservedUnits.effects` records controlled unit requests. | Socket/peer authentication and actual scope death; lifecycle replay explicitly substitutes admission/goal/execution observations |
+| Scenario (scripted model) | `scriptedProvider()` in `scripted-provider.ts`; `startScenario()` / `withScenario()` in `scenario.ts`; suites `scenario-principal`, `scenario-society`, `scenario-confined` | The whole loop with only the model scripted: provisioning, Store, mail, the broker composed as `entry/broker.ts` composes it (Git, lifecycle with the product's child-spec resolver), the product's PrincipalSession with the bundled engine and trusted extension, the CLI it starts, PrincipalDelivery, and createNativeResidents/ExecutionRuntime launching the product's runner through a real PID namespace, pinned PID2/private socketpair and durable scope journal. The Worker remains confined under bubblewrap with the relay and a TLS scripted provider; missing bubblewrap is explicit NOT_RUN, never host execution. Assertions are on ledger rows, mailbox files, receipts and session history | Real external provider behaviour, streaming or retries (the engine's, INF-001); Darwin's unresolved gates and power loss. The host's Principal registration channel and model replies remain scripted; scope/auth/death are not mocked. Not provider evidence (P0-5) |
+| Installed runtime | `P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects` in `p24-deployment-gates.test.ts` | Copies built runtime/raw assets, borrows this checkout's node_modules, invokes real broker entry and checks refusal before SQLite/socket effects | Standalone production-only install, positive society startup, positive native scope/engine/provider and power-loss qualification. Those require WP03/27/30/31 evidence |
 
 `r38-package-layout.test.ts`'s **layout-only** empty-file fixture is NOT the
 installed-runtime layer. A fake deployment digest or empty extension export in

@@ -15,6 +15,7 @@ export const EML_INVALID = ["Subject: first\r\nsubject: second\r\n", " orphan\r\
 export const SETUP_VALID = '{"kind":"prepared"}\n{"kind":"ready"}\n';
 export const SETUP_FAILED = '{"kind":"failed","code":"REF_STATE_UNKNOWN"}\n';
 export const SETUP_INVALID = ["", '{"kind":"ready"}\n', '{"kind":"prepared"}\n',
+  '\ufeff{"kind":"prepared"}\n{"kind":"ready"}\n',
   '{"kind":"prepared","extra":true}\n', '{"kind":"prepared"}\n{"kind":"prepared"}\n',
   '{"kind":"failed","code":"CHECK_FAILED"}\n', '{"kind":"failed","code":"REF_STATE_UNKNOWN"}\n{"kind":"ready"}\n',
   "x".repeat(1025)] as const;

@@ -28,7 +28,7 @@ const RAW_SPAWNS = new Set(["spawn", "spawnSync"]);
 /** This product's own spawn helpers, which take the fence as their last
  * argument. A caller that omits it is making the same decision as a raw spawn
  * without a fence, and answers here in the same way. */
-const FENCED_HELPERS = new Set(["spawnOwnedRpc", "spawnSupervisedService", "spawnSandboxed"]);
+const FENCED_HELPERS = new Set(["spawnOwnedRpc", "spawnSupervisedService", "spawnSandboxed", "spawnWithPrivateInputs"]);
 const codeOnly = ts.createPrinter({ removeComments: true });
 
 const calleeName = node => {

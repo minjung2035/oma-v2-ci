@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, openSync, closeSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readSync, renameSync, openSync, closeSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -45,6 +45,22 @@ test('native candidate: check-controlled stderr cannot forge a setup refusal', {
   await assert.rejects(f.checks.run(f.candidate, check(['/bin/sh', '-c', 'echo OMA_ERROR=UNSUPPORTED_PROFILE >&2; exit 125']), undefined, () => {}), { code: 'CHECK_FAILED' });
   assert.equal(f.executions.confirmDead('candidate'), true);
 });
+test('native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry', { timeout: 30000 }, async t => {
+  const f = fixture(t), before = git(f.paths.projectGit, 'show-ref');
+  const denied = new Error('killed after checkout and before final exec'); let calls = 0;
+  const exact = check(['/opt/oma-node/node', '-e', "require('node:assert/strict').equal(require('node:fs').readFileSync('exact.txt','utf8'),'committed\\r\\n$literal\\n')"]);
+  await assert.rejects(f.checks.run(f.candidate, exact, undefined, () => {
+    if (++calls !== 2) return;
+    const entries = ExecutionJournal.inspect(f.root);
+    assert.equal(entries.length, 1); assert.equal(entries[0].slot, 'candidate');
+    process.kill(entries[0].witness.pid, 'SIGKILL'); throw denied;
+  }), error => error === denied);
+  assert.equal(calls, 2); assert.equal(f.executions.confirmDead('candidate'), true);
+  assert.equal(git(f.paths.projectGit, 'show-ref'), before);
+  await f.checks.run(f.candidate, exact, undefined, () => {});
+  assert.equal(git(f.paths.projectGit, 'show-ref'), before);
+  assert.equal(f.executions.confirmDead('candidate'), true);
+});
 test('native candidate: option-shaped environment values remain literal through namespace controls', { timeout: 20000 }, async t => {
   const f = fixture(t);
   const literal = snapshotIntegrationPolicy({ policyRevision: 'literal-env', protectedPaths: [], checks: [{ id: 'literal',
@@ -86,10 +102,18 @@ test('native quarantine: actual verify then import preserves canonical refs and 
     if (result.exitCode !== 0) t.diagnostic(readFileSync(`/proc/self/fd/${request.stderrFd}`, 'utf8'));
     return result;
   } });
+  const acceptedBytes = readFileSync(bundle);
   const fd = openSync(bundle, 'r'); t.after(() => closeSync(fd)); let authorized = 0;
   await importer.importBundle(fd, candidate, ref, [], () => authorized++);
   assert.equal(authorized, 2); assert.equal(has(candidate), true); assert.equal(git(f.paths.projectGit, 'show-ref'), beforeRefs);
-  const mismatched = openSync(bundle, 'r');
+  const first = Buffer.alloc(1); assert.equal(readSync(fd, first, 0, 1, null), 1);
+  assert.equal(first.toString(), '#', 'the verifier must not consume the caller cursor');
+  const heldBundle = join(f.root, 'held.bundle'); renameSync(bundle, heldBundle);
+  writeFileSync(bundle, 'replaced pathname must not retarget the accepted capability');
+  await importer.importBundle(fd, candidate, ref, [], () => authorized++);
+  assert.equal(authorized, 4); assert.deepEqual(readFileSync(heldBundle), acceptedBytes);
+  assert.equal(git(f.paths.projectGit, 'show-ref'), beforeRefs);
+  const mismatched = openSync(heldBundle, 'r');
   try { await assert.rejects(importer.importBundle(mismatched, f.candidate, ref, [], () => {}), { code: 'BUNDLE_INVALID' }); }
   finally { closeSync(mismatched); }
   assert.equal(f.executions.confirmDead('quarantine'), true);

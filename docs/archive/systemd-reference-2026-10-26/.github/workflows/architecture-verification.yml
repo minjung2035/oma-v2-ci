@@ -1,0 +1,189 @@
+name: Architecture verification evidence
+
+# Every branch that can become master is verified before it does: the
+# integration branch on push, master itself after the merge, and the proposal
+# while it is still a proposal.
+on:
+  push:
+    branches: [master, refactor/safety-preserving-architecture]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    # Above the sum of the per-check ceilings below, so the job clock can only
+    # fire after every check has had the time it was given -- otherwise a check
+    # still running inside its own budget would be killed by the outer one and
+    # the evidence would say "timeout" about work that was proceeding.
+    timeout-minutes: 240
+    env:
+      EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      # The one commit this run is about. On a pull request `github.sha` names a
+      # merge commit this workflow invented, which exists in no repository
+      # afterwards -- evidence filed under it could never be checked against a
+      # tree again. The head commit is the thing under test, so it is the thing
+      # the evidence is named by, and the binding step below refuses to continue
+      # if the checkout produced anything else.
+      VERIFIED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Bind this run to the exact commit it verifies
+        run: |
+          mkdir -p "$EVIDENCE"
+          head="$(git rev-parse HEAD)"
+          # A result recorded under a SHA that did not produce it is worse than
+          # no result. Nothing is measured until the tree is that commit.
+          test "$head" = "$VERIFIED_SHA"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          git archive --format=tar.gz --output="$EVIDENCE/source.tar.gz" "$head"
+          sha256sum "$EVIDENCE/source.tar.gz" > "$EVIDENCE/source.tar.gz.sha256"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26'
+          package-manager-cache: false
+      - name: Record which bytes of that commit were verified
+        # A commit name says which revision was meant; it does not say which
+        # bytes ran. This is the same closure the local R38 gate compares
+        # against `docs/implementation/validation.md`, taken before any generator
+        # rewrites an input, so the evidence and the record answer to one
+        # number -- and that number is filed under one commit.
+        run: |
+          node --input-type=module -e '
+            const source = await import("./scripts/source-digest.mjs");
+            const measured = source.verificationInputDigest(".");
+            process.stdout.write(`files\t${measured.files}\ndigest\t${measured.digest}\n`);
+          ' > "$EVIDENCE/verification-input-digest.tsv"
+          {
+            printf 'commit\t%s\n' "$VERIFIED_SHA"
+            printf 'event\t%s\n' "$GITHUB_EVENT_NAME"
+            printf 'ref\t%s\n' "$GITHUB_REF"
+            printf 'run\t%s/%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            cat "$EVIDENCE/verification-input-digest.tsv"
+          } > "$EVIDENCE/provenance.tsv"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-source-${{ env.VERIFIED_SHA }}
+          path: |
+            ${{ env.EVIDENCE }}/source-head.txt
+            ${{ env.EVIDENCE }}/source.tar.gz
+            ${{ env.EVIDENCE }}/source.tar.gz.sha256
+            ${{ env.EVIDENCE }}/provenance.tsv
+          retention-days: 7
+          if-no-files-found: error
+      - name: Install the sandbox the containment tests need
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Load vsock loopback for the platform lane's bridge
+        # macos-platform §10.2: the guest bridge is tested over vsock loopback.
+        # A kernel without the module fails the lane, visibly, rather than
+        # letting the bridge tests skip (a skip is not a pass).
+        run: sudo modprobe vsock_loopback
+      - name: Install the pinned line counter
+        # CI generates LOC evidence and re-measures every count, so the
+        # exact counting tool is part of the evidence. The distribution package
+        # is a different version and counts differently; the release script is
+        # pinned by digest instead.
+        run: |
+          curl -fsSL -o /tmp/cloc-2.08.pl https://github.com/AlDanial/cloc/releases/download/v2.08/cloc-2.08.pl
+          echo "0a551a86c7785880bcaa0fdfe6107c064abfbebc7cc26b7eaeac423fe2c0d49e  /tmp/cloc-2.08.pl" | sha256sum -c -
+          sudo install -m 0755 /tmp/cloc-2.08.pl /usr/local/bin/cloc
+          test "$(cloc --version)" = "2.08"
+      - name: Install locked dependencies
+        id: dependencies
+        continue-on-error: true
+        run: |
+          node --version > "$EVIDENCE/node-version.txt"
+          npm --version > "$EVIDENCE/npm-version.txt"
+          uname -a > "$EVIDENCE/kernel.txt"
+          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Capture baseline and all lane outcomes without hiding failures
+        if: steps.dependencies.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          # Each check gets a wall-clock ceiling above the one the check itself
+          # enforces, so the outer kill can only ever fire on a hang -- never on
+          # a lane that is still inside its own budget and would have reported.
+          run_check() {
+            local label="$1"; local seconds="$2"; shift 2
+            timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
+            local code=$?
+            printf '%s\t%s\n' "$label" "$code" >> "$EVIDENCE/exit-codes.tsv"
+            if [ "$code" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          }
+          # A stale inventory is a failure of this commit, not a note: the
+          # generators run afterwards, so without this the regenerated files
+          # would hide the very state the check observed.
+          # Checks the committed per-file source digests without cloc before
+          # measuring LOC into CI artifacts; no source claim is regenerated.
+          npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
+          inventory_before=$?
+          printf '%s\n' "$inventory_before" > "$EVIDENCE/inventory-before.exit-code"
+          printf '%s\t%s\n' inventory-before "$inventory_before" >> "$EVIDENCE/exit-codes.tsv"
+          if [ "$inventory_before" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          # Measure into the evidence directory and bind the report to source
+          # digests without rewriting committed inputs. The inventory check
+          # remains independent of LOC; inventory writes only the file list.
+          run_check loc 900 node scripts/loc.mjs --out "$EVIDENCE"
+          run_check check-inventory 900 npm run check:inventory
+          run_check typecheck 900 npm run typecheck
+          run_check build 900 npm run build
+          run_check setup-storage 900 npm run setup:storage
+          run_check check-package 900 npm run check:package
+          run_check check-architecture 900 npm run check:architecture
+          # Doc↔inventory pairing: check:architecture runs it in its chain too;
+          # this separate evidence line names the drifted clause directly.
+          run_check spec-inventory 900 npm run check:spec-inventory
+          run_check test 1800 npm test
+          # Only the lanes whose environment this runner actually provides. A
+          # hosted runner has no systemd user manager and no bubblewrap, so the
+          # systemd lanes cannot run here; they are recorded as NOT_RUN with the
+          # reason rather than executed to a failure that says nothing, and a
+          # lane that did not run is never counted as a pass.
+          run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"
+          run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
+          run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
+          run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
+          run_check verify-platform 1000 npm run verify:platform -- --out "$EVIDENCE/platform"
+          for lane in kernel crash all; do
+            printf '%s\tNOT_RUN\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
+          done
+          printf '%s\n' 'kernel, crash and all are systemd lanes. They require a disposable user with a systemd user manager and bubblewrap, which a hosted runner does not provide, and verify-lane.mjs refuses them without OMA_TEST_SYSTEMD=1. They were NOT_RUN here and this workflow certifies nothing about them.' > "$EVIDENCE/systemd-lanes.txt"
+          cp production-files.txt production-loc-hashes.json "$EVIDENCE/"
+          git diff -- production-files.txt production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
+          # Generating evidence must not rewrite the committed source claim.
+          # Recording such a patch is not enough; the difference fails the run.
+          # LOC counts are CI artifacts, not committed inputs; only the source
+          # inventory and per-file digests are compared against the commit.
+          if ! git diff --exit-code -- production-files.txt production-loc-hashes.json; then
+            printf '%s\t%s\n' generated-inventory-diff 1 >> "$EVIDENCE/exit-codes.tsv"
+            touch "$EVIDENCE/failed"
+          fi
+          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs the node and git-fs lanes only; it does not certify the systemd lanes, OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
+      - name: Upload raw evidence even when a check failed
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-verification-${{ env.VERIFIED_SHA }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}
+          retention-days: 14
+          if-no-files-found: error
+      - name: Propagate unsuccessful verification
+        if: always()
+        env:
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+        run: |
+          test "$DEPENDENCIES_OUTCOME" = success
+          # Unbound evidence is not evidence: a run that lost the commit it was
+          # measuring cannot report a pass about one.
+          test -f "$EVIDENCE/provenance.tsv"
+          grep -qxF "$(printf 'commit\t%s' "$VERIFIED_SHA")" "$EVIDENCE/provenance.tsv"
+          test -f "$EVIDENCE/exit-codes.tsv"
+          test ! -f "$EVIDENCE/failed"

@@ -9,14 +9,15 @@ import { launchBlockedNamespace } from '@oma/platform-linux/namespace-execution'
 import { runnerScope } from '@oma/platform-linux/runner-scope';
 import { observeNamespaceProcess } from '@oma/native/pid-namespace';
 const [root, phase] = process.argv.slice(2);
-ExecutionJournal.initialize(root);
-const journal = ExecutionJournal.open(root);
 let witness = null;
 function checkpoint(at) {
   if (at !== phase) return;
   writeFileSync(join(root, 'checkpoint.json'), JSON.stringify({ phase: at, witness }));
   process.kill(process.pid, 'SIGSTOP');
 }
+ExecutionJournal.initialize(root);
+checkpoint('after-initialize');
+const journal = ExecutionJournal.open(root);
 const reserve = journal.reserve.bind(journal);
 journal.reserve = slot => {
   const reservation = reserve(slot); checkpoint('after-opening');

@@ -1,5 +1,6 @@
 /** Exact checkout policy inside the disposable check view. Git attribute
  * overrides preserve committed bytes; gitlinks use the same domain refusal. */
+import { decodeUtf8 } from "@oma/domain/utf8";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
 import { replaceDerivedFile } from "@oma/storage/durable-fs";
 import { runProcess } from "@oma/process/async";
@@ -33,7 +34,7 @@ export class CandidateSetupStatus {
       const end = this.pending.indexOf(10); if (end < 0) return;
       const line = this.pending.subarray(0, end); this.pending = this.pending.subarray(end + 1);
       let raw: unknown;
-      try { raw = JSON.parse(new TextDecoder("utf8", { fatal: true }).decode(line)); }
+      try { raw = JSON.parse(decodeUtf8(line)); }
       catch { throw new StoreError("REF_STATE_UNKNOWN", "candidate setup outcome is malformed"); }
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) this.refuse();
       const frame = raw as Record<string, unknown>, keys = Object.keys(frame).sort().join();

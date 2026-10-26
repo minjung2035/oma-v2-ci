@@ -12,13 +12,20 @@ import { readFileSync } from "node:fs";
 import { lanes } from "../scripts/verification-lanes.mjs";
 import { verificationInputDigest } from "../scripts/source-digest.mjs";
 
+const installer = readFileSync(new URL("../scripts/setup-native-linux-ci.sh", import.meta.url), "utf8");
 const workflow = readFileSync(
   new URL("../.github/workflows/architecture-verification.yml", import.meta.url), "utf8");
 
 /** `run_check <label> <seconds> ...` invocations, as the workflow spells them. */
 function checks() {
   return [...workflow.matchAll(/^\s*run_check (\S+) (\d+) (.*)$/gm)]
-    .map(([, label, seconds, command]) => ({ label, seconds: Number(seconds), command }));
+    .map(match => {
+      const [, label, seconds, command] = match;
+      const before = workflow.slice(workflow.indexOf("\njobs:\n"), match.index);
+      const job = [...before.matchAll(/^ {2}([a-z-]+):$/gm)].at(-1)?.[1];
+      assert.ok(job, "each check must belong to a job");
+      return { label, seconds: Number(seconds), command, job };
+    });
 }
 
 /** The trigger block, from `on:` to the next top-level key. */
@@ -63,50 +70,59 @@ test("T125: no lane is killed by the workflow before its own budget expires", ()
   }
 });
 
-test("T125: the workflow runs only the lanes this runner's environment provides", () => {
+test("T125: every available lane runs or its actual files and required oracles run in the full native lane", () => {
   const run = new Set(checks().map(entry => entry.label));
   const recorded = notRunLanes();
+  assert.ok(run.has("verify-all"), "full native qualification must execute");
   for (const [name, lane] of Object.entries(lanes)) {
-    const label = `verify-${name}`;
-    if (lane.environment === "systemd") {
-      // A hosted runner has no systemd user manager: running the lane here
-      // would produce a setup failure that says nothing about the code.
-      assert.equal(run.has(label), false,
-        `${label} is a systemd lane and cannot run on a hosted runner`);
-      assert.ok(recorded.includes(name),
-        `${label} must be recorded as NOT_RUN rather than left unmentioned`);
-    } else {
-      assert.ok(run.has(label), `${label} runs in this environment and is not run`);
-    }
+    for (const file of lane.sourceFiles) assert.ok(lanes.all.sourceFiles.includes(file), `${name}: full lane omitted ${file}`);
+    if (run.has(`verify-${name}`)) continue;
+    assert.ok(recorded.includes(name), `${name}: standalone nonexecution must be explicit`);
+    assert.equal(lanes.all.files, "all");
+    for (const file of lane.sourceFiles) assert.ok(lanes.all.sourceFiles.includes(file), `${name}: omitted ${file}`);
+    for (const prefix of lane.requiredNames) assert.ok(lanes.all.requiredNames.includes(prefix), `${name}: omitted ${prefix}`);
   }
+  assert.doesNotMatch(workflow, /systemd-lanes|OMA_TEST_SYSTEMD|vsock_loopback/);
 });
 
 test("T125: the job clock cannot fire before the checks it contains", () => {
   // Every check runs in sequence, so the job needs at least their sum. Without
   // this the per-check ceilings mean nothing: the outer clock kills the run
   // first and the evidence blames a check that was still inside its budget.
-  const budget = checks().reduce((total, entry) => total + entry.seconds, 0);
-  const job = Number(/timeout-minutes: (\d+)/.exec(workflow)?.[1] ?? 0);
-  assert.ok(job * 60 >= budget,
-    `the job stops at ${job} minutes but its checks may take ${Math.ceil(budget / 60)}`);
+  const observed = checks();
+  for (const job of new Set(observed.map(entry => entry.job))) {
+    const start = workflow.indexOf(`\n  ${job}:\n`);
+    const rest = workflow.slice(start + 1), next = rest.slice(1).search(/^ {2}[a-z-]+:$/m);
+    const section = next < 0 ? rest : rest.slice(0, next + 1);
+    const budget = observed.filter(entry => entry.job === job).reduce((sum, entry) => sum + entry.seconds, 0);
+    const jobMinutes = Number(/timeout-minutes: (\d+)/.exec(section)?.[1] ?? 0);
+    const setupSeconds = [...section.matchAll(/^ {8}timeout-minutes: (\d+)$/gm)].reduce((sum, entry) => sum + Number(entry[1]) * 60, 0);
+    assert.ok(jobMinutes * 60 >= budget + setupSeconds,
+      `${job} stops before its checks and explicitly bounded setup steps can finish`);
+  }
 });
 
 test("T125: the runner installs what the containment tests need rather than skipping them", () => {
   // Without bubblewrap the sandbox tests skip, the suite still exits zero, and
   // the run records a pass for work that never happened.
-  assert.match(workflow, /apt-get install -y bubblewrap/);
+  assert.match(workflow, /bash scripts\/setup-native-linux-ci\.sh/);
+  assert.match(installer, /apt-get install -y bubblewrap/);
+  assert.match(installer, /2a76602a8c71f36c1527cf9fc3417d9149822e0c/);
+  assert.match(installer, /corepack@0\.34\.0/);
+  assert.match(installer, /assert before == after/);
+  assert.doesNotMatch(installer, /sysctl -w|apparmor_restrict_unprivileged_userns=0/);
 });
 
 test("T125: the line counter is the pinned release, verified before it runs", () => {
   // The LOC gate compares every count against a fresh measurement, so the tool
   // doing the measuring is evidence too. A distribution package of another
   // version, or an unverified download, would make that comparison meaningless.
-  assert.match(workflow, /cloc\/releases\/download\/v2\.08\/cloc-2\.08\.pl/);
-  assert.match(workflow, /[0-9a-f]{64}  \/tmp\/cloc-2\.08\.pl" \| sha256sum -c -/);
-  const install = workflow.indexOf("sha256sum -c -");
-  assert.ok(install > 0 && install < workflow.indexOf("install -m 0755 /tmp/cloc-2.08.pl"),
+  assert.match(installer, /cloc\/releases\/download\/v2\.08\/cloc-2\.08\.pl/);
+  assert.match(installer, /[0-9a-f]{64}  \$oma_native_evidence\/cloc-2\.08\.pl" \| sha256sum -c -/);
+  const install = installer.indexOf("sha256sum -c -");
+  assert.ok(install > 0 && install < installer.indexOf('install -m 0755 "$oma_native_evidence/cloc-2.08.pl"'),
     "the tool is installed before its digest is checked");
-  assert.ok(workflow.indexOf("Install the pinned line counter") < workflow.indexOf("check:inventory"),
+  assert.ok(workflow.indexOf("Install the pinned native prerequisites and line counter") < workflow.indexOf("check:inventory"),
     "the inventory is checked before the tool it needs is installed");
 });
 

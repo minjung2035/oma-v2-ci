@@ -23,23 +23,22 @@ export const fenceExemptSpawnOwners = Object.freeze({
   "packages/tool-runtime/src/contained-search.ts#completeSearchText":
     "the complete-rendering walker runs inside the owned search child, over the same private copy it made; the child's own pipe-EOF abort and group kill bound it, and it writes no society state",
 
-  // The bounded command mechanism. Its descriptors are the caller's to choose
-  // (`inheritedFds`). Its callers run systemctl, systemd-run, resize2fs and
-  // git; none of them writes a society's state itself. A society session that
-  // systemd-run starts runs `oma`, which takes the society lease on its own.
+  // Command launch owns the caller-selected descriptors and direct child.
+  // It cannot prove arbitrary-descendant death. Society writers retain their
+  // own fence or execute through the separate journaled native scope owner.
   "packages/process/src/async.ts#startProcess":
-    "bounded command whose inherited descriptors are the caller's; not a society writer",
-  // SB-001: a confined Resident. The fence is deliberately not handed across
-  // the sandbox boundary: the lease is a listening socket, and a process
-  // inside the confinement holding it could answer the probe that names the
-  // society's owner. A Resident that outlives its broker is bounded by the
-  // sandbox's own lifetime and by the runner's supervision, not by this lease,
-  // and closing that gap properly needs a descendant-death boundary the kernel
-  // enforces (a cgroup), not a wider fence.
-  "packages/process/src/async.ts#spawnSandboxed":
-    "bubblewrap confinement boundary; a listening lease inside a sandbox would be answerable from inside it",
-  "packages/engine/src/pi-adapter.ts#deliver":
-    "Resident engine started through the confinement boundary above",
+    "bounded command mechanism with caller-owned capabilities; native scope callers retain witness/namespace death and journal ownership, while host preparation uses its own inherited writer fence",
+  // P0-4/NATIVE-013: a Worker must never inherit the host state-directory
+  // lease capability. The actual trusted runner and all Worker descendants
+  // are inside the journaled PID namespace; stop/recovery prove init death
+  // before Store/tenure release. These are the same confinement boundary,
+  // split into portable pipe delivery, Linux grammar and App composition.
+  "packages/process/src/async.ts#spawnWithPrivateInputs":
+    "portable private bootstrap pipe owner; production caller is the validated Worker adapter, never a host-state writer; outer native namespace ownership supplies descendant death",
+  "packages/platform-linux/src/worker-spawn.ts#spawnSandboxed":
+    "Linux Worker option grammar passes only seccomp/argv bytes to private descriptors; no Society root capability crosses containment; the trusted runner namespace owns every descendant",
+  "apps/oma/src/engine/resident-effects.ts#spawn":
+    "Resident-only composition calls the validated Worker adapter; the journaled native runner scope and its full completion fence Store/tenure release, not a leaked host state-directory FD",
   // MODE-003/005: Personal is a separate Human session, not a Society role.
   // It holds a history-writer lock but no Society authority or writable state.
   "packages/process/src/async.ts#spawnSessionInteractive":

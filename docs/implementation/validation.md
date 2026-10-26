@@ -11,6 +11,11 @@
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| native publication/cursor 수리의 실제 재검증 | **72/72 PASS**, fail/cancel/skip/todo0·input `8e4e28b76f65cee4fb01fdcc9ea181cbba9ecc84b61410e18f20e0a4936f083a` 전후 동일. 초기 journal 게시 뒤 실제 SIGKILL/재초기화·candidate checkout 뒤 SIGKILL/재시도·같은 bundle FD의 진행한 cursor와 교체 pathname·accepted 원본 bytes·canonical refs를 검증했다. UTF-8/owner rule negative controls도 포함. `native-canonical-scope-fixed{.log,-status.json}`. 전체 root runtime과 후속 CI는 별도 |
+| native publication 경계 후속 | durable 등록 불일치5건을 실제 owner/checkpoint로 갱신. 관련 최초 실행 **70/72 FAIL2**, skip/cancel/todo0·input `205d2f05143971f0426f0e991d15c4c3019acaa7534a4c6fb5d0661c1649fafc` 전후 동일. 초기 publication 시점에는 아직 journal writer lock을 획득하지 않았으며, quarantine의 bwrap data 소비가 borrowed FD cursor를 EOF로 만들어 동일 FD 재시도를 거절했다. 시험의 시점 구분·공통 Git의 exact-inode 독립 cursor 소유를 수정 중. 원시 `native-canonical-scope-regressions{.log,-status.json}` 보존. 후속 결과는 별도 기록 |
+| 후속 전체 build·정적 발견 | 전체 build PASS. 첫 전체 정적 검사는 남은 빈 legacy 디렉터리2개, private UTF-8 decoder3곳, 옮겨진 Worker spawn owner와 옛 exemption을 발견했다. 빈 디렉터리 제거·공개 domain decoder 연결·정확한 owner relocation과 private-input helper 검사 후 rule0건 PASS. candidate의 BOM이 실제로 ready/허가1을 만들던 반례(`native-candidate-bom-before-fix.log`)를 보존하고 거절/poison/허가0 회귀와 parser corpus를 추가. 전체 architecture/runtime/CI 결과는 이후 고정 입력에서 별도 확인 |
+| `dd8d7a96` 실제 CI `40254390815` | Mac26/15·Ubuntu 공통 각각 **58/58**, Ubuntu peer3/3·native35/35·확대44개 파일 **386/386 PASS**, skip/cancel/todo0. 세 OS input `4927bdabbfd9b9aba3e478158a2a473174d33c7cfb22d1f6b4a1e89601904ace`·전후 동일. 실제 prerequisites-before에는 rg/fd/fdfind가 없고 Corepack0.36.0은 ambient PATH에만 있었다. Node prefix에0.34.0 설치 후 Worker 실제 명령도 통과. 양 Darwin 각15개 관측/세 gate는 OPEN/BLOCKED이며 전체 workflow PASS가 아님. zip5개 SHA256·source 확인, `ci-dd8d7a96/verified-summary.json` 보존 |
+| 전체 검증 도구의 native 전환 작업 트리 | local에서 native execution 시험 제외를 없애고 kernel/all/durable은 pinned0.12.0 preflight를 요구한다. manager opt-in/fixture/cleanup 경로를 제거하되 direct argv/manager 거절 guard는 유지한다. 현재 selection/clock/source-binding 정책 **42/42 PASS**·skip0(`native-verification-all-policy.log`); 이 정책 단위 시험은 새 shared CI installer나 전체 Linux runtime의 PASS가 아니다. installer/전체 native-all job·root 전체 회귀의 실제 실행은 다음 검증 대상 |
 | `159c66c8` 실제 CI `40252199462` | Mac26/15·Ubuntu 공통 각각 **58/58**, Ubuntu peer3/3·native35/35 PASS. 확대 integration은 **355/359 FAIL**, skip0: Python message-id header의 선행 folding 공백, 검색 도구, Node26에 없는 Corepack 및 그 실제 실행4건. 세 OS input `b9cada156294180f8e44963308ae06f8a7bd2bbf1c93f290f98b4f8d0e4781a0`·전후 동일. Darwin 양쪽 실제15개 관측의 세 gate는 계속 OPEN/BLOCKED. zip5개 SHA256 확인·원시 `ci-159c66c8/verified-summary.json`에 보존. 전체 workflow FAIL을 PASS로 표시하지 않음 |
 | 남은 audit/phase4 native 전환 작업 트리 | 실제 scope와 원래 accepted/data 단언을 함께 검증한 **30/30 PASS**, strict/noEmitOnError 컴파일 PASS. root 전체 strict 진단0·모듈 경계0건 PASS(`native-root-final-reference-removal.log`, `native-modules-final-reference-removal.log`). 기존 C1은 실제 동시 quarantine의 RUN_TERMINATION_UNKNOWN도 unknown으로 보존하고 exact plan/ref/receipt의 수렴을 요구한다. 최초 실패 로그는 `native-audit-{first-failure,concurrent-scope-failure}.log`에 보존. 이후 작은 manifest child의 shell 제거·CI44개 목록과 prerequisite 수정은 후속 검증 필요 |
 | 검색 도구 설치 차이 재현 | isolated PATH에서 실제 rg 부재는 같은 contained-search 거절을 재현하고 실제 rg를 추가하면 같은 파일/질의가 성공했다. 원본 bytes 보존. `native-ripgrep-prerequisite-repro.log`. fd 부재를 원인으로 가정한 첫 대조는 재현되지 않았으며 `native-fd-prerequisite-repro.log`를 그대로 보존. CI는 rg/fd-find/Corepack0.34.0의 실제 설치·버전/SHA를 남기도록 수정 중이며 실패를 skip하지 않음 |
@@ -169,7 +174,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `4927bdabbfd9b9aba3e478158a2a473174d33c7cfb22d1f6b4a1e89601904ace` (15596 files).
+verification input digest `3888603ca91136c2c78bbace99191ba38f7a22115604994e6809c0f3f59e177d` (15595 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

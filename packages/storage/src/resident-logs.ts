@@ -1,5 +1,6 @@
 /** DR53 diagnostic JSONL spool. Full bytes are preserved separately from the
  * bounded public view. A partial crash tail is never an empty successful log. */
+import { decodeUtf8 } from "@oma/domain/utf8";
 import { closeSync, constants, fstatSync, fsyncSync, readSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import type { ResidentLogEntry, ResidentLogObservation } from "@oma/contracts/runtime";
@@ -78,7 +79,7 @@ export class ResidentLogStore {
             for (;;) {
               const newline = pending.indexOf(10); if (newline < 0) break;
               const line = pending.subarray(0, newline); pending = pending.subarray(newline + 1);
-              let raw: unknown; try { raw = JSON.parse(new TextDecoder("utf8", { fatal: true }).decode(line)); } catch { refuse(); }
+              let raw: unknown; try { raw = JSON.parse(decodeUtf8(line)); } catch { refuse(); }
               if (!raw || typeof raw !== "object" || Array.isArray(raw)) refuse();
               const frame = raw as Record<string, unknown>;
               if (Object.keys(frame).sort().join() !== "actor,atMs,data,incarnation,invocationId,stream,version" || frame.version !== 1 ||

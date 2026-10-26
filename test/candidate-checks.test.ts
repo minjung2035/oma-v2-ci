@@ -51,3 +51,11 @@ test("INT-007/P0-5: incomplete EOF stays poisoned and cannot later authorize exe
     assert.equal(authorizations, before);
   }
 });
+
+test("INT-007/P0-2: setup grammar preserves and refuses a BOM without authorizing exec", () => {
+  let authorizations = 0; const status = new CandidateSetupStatus(() => { authorizations++; });
+  assert.throws(() => status.write(Buffer.from('\ufeff{"kind":"prepared"}\n{"kind":"ready"}\n')), { code: "REF_STATE_UNKNOWN" });
+  assert.throws(() => status.write(Buffer.from('{"kind":"prepared"}\n{"kind":"ready"}\n')), { code: "REF_STATE_UNKNOWN" });
+  assert.throws(() => status.finish(), { code: "REF_STATE_UNKNOWN" });
+  assert.equal(authorizations, 0);
+});

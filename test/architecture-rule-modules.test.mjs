@@ -219,6 +219,18 @@ test("architecture fence rule names the enclosing function, not whatever declara
   assert.match(found[0].reason, /src\/runtime\/resident\.ts#startResident/);
 }));
 
+test("native private-input helper cannot acquire another unfenced production caller", () => {
+  withFixture({
+    "apps/oma/src/runtime/rogue.ts": `export function startWriter() {
+      return spawnWithPrivateInputs(command, args, options);
+    }`,
+  }, root => {
+    const found = fenceFindings(root, "fence-propagation");
+    assert.equal(found.length, 1, JSON.stringify(found));
+    assert.match(found[0].reason, /runtime\/rogue\.ts#startWriter/);
+  });
+});
+
 test("architecture fence rule never accepts a comment as a propagated descriptor", () => withFixture({
   "packages/process/src/run.ts": `import { spawn } from "node:child_process";
 export function runCliProcess(run: CliRun) {

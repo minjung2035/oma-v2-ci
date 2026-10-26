@@ -1,11 +1,12 @@
 /** DR51 execution observations. One append/fsync owner; closed, hash-chained
  * frames contain no commands, accepted work, credentials or replay authority.
  */
+import { decodeUtf8 } from "@oma/domain/utf8";
 import { closeSync, constants, fstatSync, fsyncSync, readSync, writeSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { sha256Hex, canonicalJson } from "@oma/domain/canonical-json";
-import { isValidActorName } from "@oma/domain/identifiers";
+import { isValidActorName, UUID_V4_RE } from "@oma/domain/identifiers";
 import { EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { uuidV4 } from "@oma/native/identity";
 import { lockFileDescriptor } from "@oma/native/linux";
@@ -24,7 +25,7 @@ type Event = { kind: "initialize"; owner: string } |
   { kind: "witness"; slot: string; execution: string; witness: NamespaceInitIdentity } |
   { kind: "closed"; slot: string; execution: string };
 interface Frame { version: 1; sequence: number; previous: string; event: Event; hash: string }
-const ZERO = "0".repeat(64), UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const ZERO = "0".repeat(64);
 const BOOT = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function keys(value: Record<string, unknown>, expected: string[]): boolean { return Object.keys(value).sort().join() === expected.sort().join(); }
@@ -40,7 +41,7 @@ function event(value: unknown): value is Event {
   if (!object(value)) return false;
   if (value.kind === "initialize") return keys(value, ["kind", "owner"]) && typeof value.owner === "string" && value.owner.startsWith("/");
   if (!["opening", "witness", "closed"].includes(String(value.kind)) || !slot(value.slot) ||
-      typeof value.execution !== "string" || !UUID.test(value.execution)) return false;
+      typeof value.execution !== "string" || !UUID_V4_RE.test(value.execution)) return false;
   return value.kind === "witness" ? keys(value, ["kind", "slot", "execution", "witness"]) && identity(value.witness)
     : keys(value, ["kind", "slot", "execution"]);
 }
@@ -142,7 +143,7 @@ export class ExecutionJournal {
       for (;;) {
         const newline = pending.indexOf(10); if (newline < 0) break;
         const bytes = pending.subarray(0, newline); pending = pending.subarray(newline + 1);
-        let value: unknown; try { value = JSON.parse(new TextDecoder("utf8", { fatal: true }).decode(bytes)); } catch { corrupt("contains an invalid frame"); }
+        let value: unknown; try { value = JSON.parse(decodeUtf8(bytes)); } catch { corrupt("contains an invalid frame"); }
         if (!object(value) || !keys(value, ["version", "sequence", "previous", "event", "hash"]) ||
             value.version !== EXECUTION_JOURNAL_VERSION || value.sequence !== this.sequence || value.previous !== this.previous ||
             !event(value.event) || value.hash !== frame(this.sequence, this.previous, value.event).hash ||

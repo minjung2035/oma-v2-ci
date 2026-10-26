@@ -26,7 +26,6 @@
     "check:architecture": "npm run check:modules && npm run check:legacy && npm run check:inventory && npm run check:architecture:rules && node scripts/architecture-check.mjs && npm run check:transactions && npm run check:boundaries && npm run check:documents && npm run check:spec-inventory",
     "test": "npm run build && node scripts/test-local.mjs",
     "test:functional-pi": "npm run build && node scripts/functional-pi-smoke.mjs",
-    "test:systemd": "node scripts/verify-lane.mjs kernel",
     "verify:lane": "node scripts/verify-lane.mjs",
     "verify:fast": "node scripts/verify-lane.mjs fast",
     "verify:durable": "node scripts/verify-lane.mjs durable",

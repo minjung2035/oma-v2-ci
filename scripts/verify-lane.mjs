@@ -81,8 +81,6 @@ function requirePreflight(executable, argv) {
   return result.stdout.trim();
 }
 try {
-  if (lane.environment === "systemd" && process.env.OMA_TEST_SYSTEMD !== "1")
-    throw new Error("systemd lane requires explicit OMA_TEST_SYSTEMD=1 and a disposable test user");
   // @types/node is not a runtime support matrix. Probe the actual required API.
   const sqlite = await import("node:sqlite");
   if (typeof sqlite.DatabaseSync !== "function") throw new Error("required runtime SQLite API is unavailable");
@@ -92,12 +90,16 @@ try {
     report.environment.git = requirePreflight("git", ["--version"]);
     if (!existsSync("/dev/shm")) throw new Error("cross-filesystem test mount missing");
   }
+  if (lane.environment === "linux-native") {
+    report.environment.bubblewrap = requirePreflight("/usr/bin/bwrap", ["--version"]);
+    if (report.environment.bubblewrap !== "bubblewrap 0.12.0") throw new Error("native qualification requires pinned bubblewrap 0.12.0");
+    report.environment.python = requirePreflight("python3", ["--version"]);
+    if (!existsSync("/proc/self/fd")) throw new Error("required native process observations unavailable");
+  }
   report.status = "SETUP_FAILED";
   // Build and qualification probes cannot access a manager, even for entry lanes.
-  environment.OMA_TEST_SYSTEMD = "0";
   environment.NODE_OPTIONS = `--import=${new URL("./local-test-guard.mjs", import.meta.url).href}`;
-  if (lane.environment !== "systemd")
-    environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
+  environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
   // AV-20261003-30: the bound source is the canonical verification-input
   // closure (source-digest.mjs) -- one definition for every consumer. The
   // committed inventory and per-file source digests the ledger and LOC checks
@@ -124,16 +126,6 @@ try {
   report.environment.sourceHeadStatus = report.environment.sourceHead ? "OBSERVED" : "NOT_AVAILABLE";
   const build = await packageScript("build", "build", 600);
   if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
-  if (lane.environment === "systemd") {
-    report.status = "BLOCKED";
-    environment.OMA_TEST_SYSTEMD = "1";
-    delete environment.NODE_OPTIONS;
-    report.environment.systemd = requirePreflight("systemctl", ["--user", "show", "--property=Version", "--value"]);
-    report.environment.bubblewrap = requirePreflight("bwrap", ["--version"]);
-    report.environment.python = requirePreflight("python3", ["--version"]);
-    if (!existsSync("/proc/self/fd") || !existsSync("/sys/fs/cgroup/cgroup.controllers")) throw new Error("required proc/cgroup v2 observations unavailable");
-    report.status = "SETUP_FAILED";
-  }
   if (name === "fast" || name === "all") {
     for (const script of ["typecheck", "check:architecture"]) {
       const check = await packageScript(script, script.replace(":", "-"), 600);

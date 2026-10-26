@@ -21,6 +21,36 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 전체 시험 실행부 전환
+
+남은 audit/phase4의 실제 namespace·private channel·entry 경로를 연결하고 root strict/type DAG
+진단을0으로 복구했다. 실제 CI44개 파일386/386과 Mac/Linux 공통58/58을 확인했다.
+정책 전용 fixture와 실제 kernel/Worker/Pi 증거의 범위는 계속 분리한다.
+
+현재 후속 작업은 전체 회귀 실행부다. local discovery가 native 실행 시험을 더 이상 제외하지
+않으며 required file 삭제는 실패다. manager opt-in·unit cleanup·vsock CI 준비를 폐기하고
+공통 Linux CI 설치 스크립트에 pinned bwrap·도구·변경 없는 global userns 제한 관측을 모았다.
+전체 native-all job이 실제 kernel/crash 파일과 필수 oracle을 포함하도록 결박한다.
+실행하지 않은 standalone wrapper를 실행한 것으로 표시하지 않는다. 이 후속 실행부 변경의
+실제 전체 build/static/runtime/CI 재검증은 진행 중이다.
+
+전체 정적 검사가 잡은 private UTF-8 decoder 세 곳은 공개 `@oma/domain/utf8` owner를
+사용하도록 연결했다. candidate setup의 기존 decoder가 BOM을 지워 exec를 허가하던
+실제 반례를 보존했고, BOM 거절·오류 poison·허가0을 회귀와 parser corpus에 추가했다.
+journal/log의 canonical bytes·형식은 그대로다. Worker spawn의 owner map은 현재 세
+경계(portable private pipe, Linux argv/seccomp, App Resident composition)를 정확히
+가리킨다. host state FD를 Worker에 넘기지 않으며 outer journaled namespace의 실제
+종료를 요구한다. 새 unfenced helper caller를 거절하는 정적 규칙과 negative control도 둔다.
+
+Durable boundary 전수 검사에서 옛 unit owner/checkpoint와 미등록 native publication을 발견했다.
+현재 registry는 create-execution checkpoint와 실제 journal 초기화 SIGKILL·candidate checkout
+SIGKILL·quarantine 재검증/import를 가리키며, 논리 재시도를 SIGKILL로 표시하지 않는다.
+초기 관련 실행72개 중2개 실패를 보존했다. 초기 journal 게시와 writer-lock 획득은 다른
+시점이므로 아직 획득하지 않은 lock을 주장하던 시험을 바로잡았다. 실제 quarantine은
+bwrap의 data FD 소비로 borrowed bundle cursor가 EOF가 되어 같은 FD 재시도가 실패했다.
+공통 Git owner가 기존 native primitive로 같은 inode의 독립 cursor를 소유/반환하도록 고쳤고,
+진행한 caller cursor와 교체된 pathname에서도 원래 accepted bytes를 사용하는 시험으로 검증한다.
+
 ### 2026-10-26 전체 회귀 전환 후속
 
 미사용 domain cgroup parser/export를 제거하고 systemd parser fuzz를 현재 CandidateSetupStatus의

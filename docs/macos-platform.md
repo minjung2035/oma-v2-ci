@@ -78,6 +78,7 @@ close·성공한 kill은 전체 사망 증명이 아니다. unknown scope의 liv
 재시작은 이전 witness 관측 없이 READY·새 실행·workspace 재사용·회수를 허용하지 않는다.
 관측 journal은 명령·accepted plan·receipt·credential·재생 queue가 아니며, 누락·손상·부분
 frame을 빈 scope 목록으로 읽지 않는다. 기록의 PID만으로 복구 중 신호를 보내지 않는다.
+초기 journal 게시 직후의 process crash와 재초기화도 기존 bytes를 교체하지 못한다.
 
 **MUST [NATIVE-012]** DR54 복구는 현재 tenure와 journal의 배타 소유 하에서만 수행한다.
 저장 PID에 신호를 보내지 않고, 새로 얻은 namespace-init capability의 전체 identity가
@@ -97,6 +98,9 @@ application은 이 owner와 execution journal owner를 모두 정리한 뒤 Stor
 사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를
 허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나
 shell script로 대체하지 않는다.
+quarantine은 빌린 accepted bundle FD의 inode를 유지하면서 독립적인 읽기 cursor를 얻고
+사용 뒤 반환한다. consumer가 caller의 cursor를 소비하거나 재시도가 pathname을 다시 따라가
+다른 bundle을 읽어서는 안 된다.
 
 **MUST [NATIVE-014]** Linux의 공개 socket은 SO_PASSCRED가 listener READY 전에 활성화되고,
 recvmsg의 각 byte range가 still-pinned original connector의 PID/UID/GID에서 왔는지 공통 broker
@@ -120,6 +124,7 @@ private 준비 상태를 보낸다. host가 현재 authority·취소 상태를 �
 release byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는
 close-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.
 첫 protocol·권한 오류와 불완전한 EOF는 poison되어 후속 frame이나 재호출로 성공을 만들지 못한다.
+UTF-8 decoding은 공통 domain owner를 사용하며 BOM을 지워 닫힌 JSON 문법을 통과시키지 않는다.
 
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,

@@ -27,7 +27,7 @@ test("R35 death evidence requires reached boundary, SIGKILL and restart independ
     { ...observed, signal: null }, { ...observed, restarted: false }]) assert.equal(validateCrashObservation(bad), false);
   assert.ok(lanes.crash.proof.includes("not an entrypoint-crash"));
   assert.ok(lanes.crash.proof.includes("VM-power-loss"));
-  assert.equal(lanes.kernel.environment, "systemd");
+  assert.equal(lanes.kernel.environment, "linux-native");
 });
 
 test("R35 every verification lane names a current test source", () => {

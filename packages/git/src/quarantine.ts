@@ -3,12 +3,12 @@ import { mkdirAt } from "@oma/native/posix-files";
  * Commit content and prerequisites are verified before objects enter the owned
  * project. Broker cancellation, namespace death and the retained tree lease
  * own shutdown; uncertain outcomes retain their staging for fresh recovery. */
-import { closeSync, fstatSync, fsyncSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, fsyncSync, readSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ensureOwnedDirectory, openOwnedDirectoryPath, openOwnedAppendFile } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
-import { withinDirectory } from "@oma/native/files";
+import { reopenPinned, withinDirectory } from "@oma/native/files";
 import type { GitPaths } from "./paths.js";
 import { StoreError } from "@oma/domain/errors";
 import { decodeProcessText, type ProcessObservation } from "@oma/process/run";
@@ -66,15 +66,20 @@ export class QuarantineImporter {
             lease.release();
             throw error;
         }
-        let rootFd: number | undefined, projectFd: number | undefined, stderrFd: number | undefined;
+        let rootFd: number | undefined, projectFd: number | undefined, stderrFd: number | undefined, inputFd: number | undefined;
         return withAsyncCleanup(async () => {
+            // Consumers such as bwrap --ro-bind-data advance an open file
+            // description's cursor. Borrow the exact inode with an independent
+            // cursor; never consume the caller's accepted bundle capability.
+            inputFd = reopenPinned(bundleFd, constants.O_RDONLY | constants.O_NONBLOCK);
+            if (!fstatSync(inputFd).isFile()) throw new StoreError("BUNDLE_INVALID", "bundle capability is not a regular file");
             rootFd = openOwnedDirectoryPath(root);
             projectFd = openOwnedDirectoryPath(this.paths.projectGit);
             for (const phase of ["verify", "import"] as const) {
             stderrFd = openOwnedAppendFile(rootFd, `stderr-${phase}`);
             const stderrStat = fstatSync(stderrFd);
             if (stderrStat.nlink !== 1 || stderrStat.size !== 0) throw new StoreError("REF_STATE_UNKNOWN", "quarantine diagnostics are not exclusively owned");
-            const result = await execution.execute({ phase, root, bundleFd, candidate, exportRef, prerequisites,
+            const result = await execution.execute({ phase, root, bundleFd: inputFd, candidate, exportRef, prerequisites,
                 rootFd, projectFd, leaseFd: lease.descriptor, stderrFd }, authorize);
             fsyncSync(stderrFd);
             if (result.kind !== "exited")
@@ -111,7 +116,7 @@ export class QuarantineImporter {
             // proof is attempted now, clearing the stale unknown when the children
             // are already reaped.
             this.staleRoot = root;
-            cleanupAll([() => { if (stderrFd !== undefined) closeSync(stderrFd); }, () => { if (rootFd !== undefined) closeSync(rootFd); }, () => { if (projectFd !== undefined) closeSync(projectFd); },
+            cleanupAll([() => { if (stderrFd !== undefined) closeSync(stderrFd); }, () => { if (inputFd !== undefined) closeSync(inputFd); }, () => { if (rootFd !== undefined) closeSync(rootFd); }, () => { if (projectFd !== undefined) closeSync(projectFd); },
                 () => lease.release(), () => {
                     if (execution.confirmDead() && collectLeasedTree(root).kind === "quiescent") this.staleRoot = null;
                 }]);

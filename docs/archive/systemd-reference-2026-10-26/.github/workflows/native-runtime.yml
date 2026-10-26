@@ -1,0 +1,151 @@
+name: Native runtime
+on:
+  push:
+    branches: [work/macos-native-20261025]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  common-runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: |
+          mkdir -p .scratch/native-runtime
+          git rev-parse HEAD > .scratch/native-runtime/source-head.txt
+          node --input-type=module -e 'console.log(JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions,image:process.env.ImageVersion}))' > .scratch/native-runtime/environment.json
+          if ! npm ci > .scratch/native-runtime/install.log 2>&1; then cat .scratch/native-runtime/install.log; exit 1; fi
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input.json
+      - name: Build the workspace graph on the actual OS
+        run: |
+          if ! npm run build:workspaces > .scratch/native-runtime/build.log 2>&1; then cat .scratch/native-runtime/build.log; exit 1; fi
+      - name: Run shared production primitives and streaming verification
+        run: |
+          mkdir -p .scratch/native-runtime
+          git rev-parse HEAD > .scratch/native-runtime/source-head.txt
+          if ! node --test test/native-primitives.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
+      - name: Install the actual pinned Linux sandbox backend
+        if: runner.os == 'Linux'
+        run: |
+          node --input-type=module -e 'import {spawnSync} from "node:child_process"; console.log(JSON.stringify(Object.fromEntries(["rg","fd","fdfind","corepack"].map(command=>{const r=spawnSync(command,["--version"],{encoding:"utf8"});return [command,{status:r.status,error:r.error?.code,stdout:r.stdout,stderr:r.stderr}]}))))' > .scratch/native-runtime/prerequisites-before.json
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap meson ninja-build libcap-dev pkg-config ripgrep fd-find
+          # The pinned SDK's completion pass executes the real fd binary.
+          mkdir -p .scratch/native-runtime-bin
+          ln -s /usr/bin/fdfind .scratch/native-runtime-bin/fd
+          export PATH="$PWD/.scratch/native-runtime-bin:$PATH"
+          echo "$PWD/.scratch/native-runtime-bin" >> "$GITHUB_PATH"
+          # Node 25+ does not bundle Corepack; the declared Worker toolchain
+          # still requires it. https://github.com/nodejs/corepack/tree/v0.34.0
+          npm install --global --ignore-scripts corepack@0.34.0 > .scratch/native-runtime/corepack-install.log 2>&1
+          corepack --version > .scratch/native-runtime/corepack-version.txt
+          rg --version > .scratch/native-runtime/ripgrep-version.txt
+          fd --version > .scratch/native-runtime/fd-version.txt
+          sha256sum "$(command -v corepack)" /usr/bin/rg /usr/bin/fdfind > .scratch/native-runtime/toolchain-sha256.txt
+          git init .scratch/bubblewrap
+          git -C .scratch/bubblewrap remote add origin https://github.com/containers/bubblewrap.git
+          git -C .scratch/bubblewrap fetch --depth=1 origin 2a76602a8c71f36c1527cf9fc3417d9149822e0c
+          git -C .scratch/bubblewrap checkout --detach FETCH_HEAD
+          test "$(git -C .scratch/bubblewrap rev-parse HEAD)" = 2a76602a8c71f36c1527cf9fc3417d9149822e0c
+          meson setup .scratch/bubblewrap-build .scratch/bubblewrap -Dtests=false -Dman=disabled -Dselinux=disabled -Dbash_completion=disabled -Dzsh_completion=disabled
+          meson compile -C .scratch/bubblewrap-build > .scratch/native-runtime/bubblewrap-build.log 2>&1
+          sudo install -m 0755 .scratch/bubblewrap-build/bwrap /usr/bin/bwrap
+          /usr/bin/bwrap --version > .scratch/native-runtime/bubblewrap-version.txt
+          sha256sum /usr/bin/bwrap > .scratch/native-runtime/bubblewrap-sha256.txt
+          uname -a > .scratch/native-runtime/kernel.txt
+      - name: Load the bubblewrap user namespace permission on the disposable Ubuntu host
+        if: runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess, json
+          evidence = Path('.scratch/native-runtime')
+          setting = Path('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')
+          before = setting.read_bytes()
+          (evidence / 'userns-restriction-before.txt').write_bytes(before)
+          with (evidence / 'apparmor-profiles-before.txt').open('wb') as out:
+              subprocess.run(['sudo', 'cat', '/sys/kernel/security/apparmor/profiles'], stdout=out, check=True)
+          attachment = re.compile(r'^\s*(?:profile\s+(?:"[^"]+"|\S+)\s+)?(?:"/usr/bin/bwrap"|/usr/bin/bwrap)(?=\s|\{)', re.M)
+          matching = [p for p in Path('/etc/apparmor.d').iterdir() if p.is_file() and attachment.search(p.read_text())]
+          if len(matching) > 1:
+              raise RuntimeError('multiple AppArmor attachments for pinned bwrap: ' + repr(matching))
+          profile = evidence / 'bwrap.apparmor'
+          if matching:
+              profile.write_bytes(matching[0].read_bytes())
+              source = str(matching[0])
+          else:
+              # Ubuntu's application-specific userns permission; no global
+              # sysctl change and no replacement of OMA's namespace/seccomp tests.
+              profile.write_text('abi <abi/4.0>,\ninclude <tunables/global>\nprofile oma-native-ci-bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n}\n')
+              source = 'explicit CI profile for /usr/bin/bwrap'
+          subprocess.run(['sudo', 'apparmor_parser', '-r', str(profile)], check=True)
+          after = setting.read_bytes()
+          (evidence / 'userns-restriction-after.txt').write_bytes(after)
+          assert before == after, 'the global user namespace restriction must remain unchanged'
+          (evidence / 'apparmor-setup.json').write_text(json.dumps({'profileSource': source, 'globalRestrictionUnchanged': True}))
+          PY
+      - name: Verify Linux pidfd and Unix credential lifetimes on the real kernel
+        if: runner.os == 'Linux'
+        run: |
+          if ! node --test test/native-leaf.test.ts test/peer-pid.test.ts > .scratch/native-runtime/linux-native-tests.log 2>&1; then cat .scratch/native-runtime/linux-native-tests.log; exit 1; fi
+      - name: Exercise real Linux scopes, crashes, byte senders and Git sandboxes
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: |
+          export OMA_NATIVE_EVIDENCE_DIR="$PWD/.scratch/native-runtime"
+          if ! node --test test/native-process-scope.test.mjs test/native-resident-runtime.test.mjs test/native-resident-logs.test.mjs test/native-credential-stream.test.mjs test/native-unix-message.test.mjs test/native-git-execution.test.mjs > .scratch/native-runtime/linux-execution-tests.log 2>&1; then cat .scratch/native-runtime/linux-execution-tests.log; exit 1; fi
+      - name: Compile and run selected Linux native product and durable regressions
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: |
+          if ! node scripts/test-native-integration.mjs > .scratch/native-runtime/linux-integration-tests.log 2>&1; then cat .scratch/native-runtime/linux-integration-tests.log; exit 1; fi
+      - name: Preserve actual Ubuntu kernel permission observations
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: sudo dmesg --notime > .scratch/native-runtime/kernel-permissions.log
+      - name: Confirm verification inputs did not change during execution
+        if: always()
+        run: |
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input-after.json
+          cmp .scratch/native-runtime/verification-input.json .scratch/native-runtime/verification-input-after.json
+      - name: Preserve shared runtime evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-runtime-${{ matrix.os }}-${{ github.sha }}
+          path: .scratch/native-runtime
+          if-no-files-found: error
+          retention-days: 14
+  darwin-gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Observe real Darwin gates
+        run: node scripts/verify-native.mjs .scratch/native-evidence
+      - name: Compile the standalone credential primitive without VM frameworks
+        if: always()
+        run: xcrun swiftc -typecheck packages/platform-mac/src/keychain/main.swift > .scratch/native-evidence/keychain-typecheck.log 2>&1
+      - name: Preserve raw observations, including blocked gates
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-gates-${{ matrix.os }}-${{ github.sha }}
+          path: .scratch/native-evidence
+          if-no-files-found: error
+          retention-days: 14
