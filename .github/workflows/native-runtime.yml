@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p .scratch/native-runtime
           git rev-parse HEAD > .scratch/native-runtime/source-head.txt
-          if ! node --test test/native-primitives.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
+          if ! node --test test/native-primitives.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs test/packet-stream.test.ts test/native-listener-lifetime.test.ts > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
       - name: Install the actual pinned Linux native prerequisites
         if: runner.os == 'Linux'
         run: bash scripts/setup-native-linux-ci.sh .scratch/native-runtime
@@ -74,14 +74,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     # SDK compilation plus every independent bounded probe must finish before
     # the job clock; a blocked candidate still preserves the other raw cases.
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '26.0.0'
           package-manager-cache: false
+      - name: Build the actual Node native adapter for independent transport observations
+        timeout-minutes: 10
+        run: |
+          mkdir -p .scratch/native-evidence
+          if ! npm ci > .scratch/native-evidence/install.log 2>&1; then cat .scratch/native-evidence/install.log; exit 1; fi
+          if ! npm run build:workspaces > .scratch/native-evidence/build.log 2>&1; then cat .scratch/native-evidence/build.log; exit 1; fi
       - name: Observe real Darwin gates
+        if: ${{ !cancelled() }}
         run: node scripts/verify-native.mjs .scratch/native-evidence
       - name: Compile the standalone credential primitive without VM frameworks
         if: always()

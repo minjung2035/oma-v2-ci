@@ -348,3 +348,16 @@ Linux는 SO_PEERCRED 복사본을 message 증거로 쓰지 않으며, Mac 후보
 listener의 bind 성공 뒤 preparation 실패도 실제 close callback을 기다리도록 수정했다.
 close가 throw하면 불명 상태를 pending으로 남기고 기존 drain grace가 이를 제한한다.
 관련 실제 Unix listener 회귀 세 개는 작성했지만 runtime 시험은 NOT_RUN이다.
+
+### Mach byte connector의 source 조립
+
+후속으로 App의 Client/Broker connector 선택에 Mac rendezvous와 byte stream을 연결했다.
+공통 PacketStream은 byte 경계·backpressure·인증한 EOF·실제 자원 반환을 소유하고, 기존
+BrokerChannel은 connector readiness Promise를 같은 generation 수명으로 소유한다. Mac 이름/nonce는
+발견과 응답 연결뿐이며 raw kernel token과 live peer pin의 대체가 아니다. COPY_SEND 실패 뒤
+pseudo-receive로 돌아온 두 header reference를 반환하고, 실패한 close를 후속 no-op으로 지우지 않는다.
+
+새 연결은 미검증 후보이며 product profile guard는 유지한다. 실제 Mach 과정·SDK/profile와
+process/file gate는 남아 있다. Security validation의 sync I/O를 async/tracked owner로 옮기고
+실제 latency도 검증해야 한다. 현재 native port golden의 의도한 변화만 갱신했으며 과거 golden,
+public/durable DTO와 과거 authored review는 바꾸지 않았다.

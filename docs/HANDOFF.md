@@ -286,11 +286,34 @@ working tree·실행 중 cell/session·최신 CI를 먼저 확인하고 활성 �
 DR59 잔존 VM 정책/API를 제거했다. 실제 최신 차이는 working tree와
 [native 명세 §14.8](macos-native-spec.md#148-재개-후-구현--2026-10-27)을 따른다.
 새 Mach/audit/process-event leaf와 Mac audit-peer adapter는 source 대조·타입 검사를 진행했고,
-production transport 연결과 실제 Mac 실행은 미완료다. 최신 사용자 범위는 구현 우선이며
-runtime/CI 테스트를 우선 제외한다. 과거 PASS를 현재 입력에 붙이지 않고 세 gate를 OPEN으로 유지한다.
+production transport 연결과 실제 Mac 실행은 당시 미완료였다. 사용자의 테스트 제외 조건은 구현
+견적의 조건이며 원래 목표의 실제 CI 요구를 대체하지 않는다. 과거 PASS를 현재 입력에 붙이지
+않고 세 gate를 OPEN으로 유지한다.
 
 후속 Broker transport port 정리로 공통 owner에서 Linux native 타입과 socket 생성·sun_path 검사를
 제거했다. 실제 Linux adapter를 App이 주입하며 request/authority/reference 수명은 Broker에 남는다.
 native audit token은 BSM by-value accessor로 해석한다. listener의 preparation 실패 뒤 실제
 close 대기와 불명 close 보존을 수정했고 회귀를 작성했다. 새 회귀 실행과 Mac 실제 transport는
 아직 NOT_RUN/미완료다. anonymous bootstrap check-in과 공개 header 계약 차이를 참고 기록에 남겼다.
+
+`343d4f85` 이후에는 Mac Mach connector를 App Client/Broker 선택까지 source로 연결했다.
+새 PacketStream과 handshake는 kernel sender/EOF·backpressure·received/pseudo-received rights의
+수명을 명시한다. 이 source 조립은 실제 Mac 지원 PASS가 아니며 세 gate와 product 차단은 유지한다.
+Security validation의 sync I/O를 async/tracked owner로 옮기는 작업과 실제 Mac 반례가 남아 있다.
+구현 견적의 테스트 제외 조건은 목표의 실제 검증 요구를 없애지 않는다. 최신 실행 결과는 입력별
+validation과 외부 원시 로그를 확인하고, 단순 build/type PASS로 OS gate를 닫지 않는다.
+
+원래 목표의 실행 검증도 재개했다. Mach source 연결 후 공통/실제 Linux 메시지·인계·listener
+선택21/21, 변경 error/history/package/runner API41/41, native consumer-port mutation7/7 PASS다.
+각 input `f86efa4e...`(15611개) 전후 동일·skip/cancel/todo0이며 전체/Mac PASS가 아니다.
+
+새 Darwin Node adapter probe는 실제 process 왕복·인증 EOF/자원 반환, queued sender exit,
+live send-right handoff를 각각3회 실행하도록 기존 C 관측 driver에 연결했다. source의 마지막
+응답/EOF를 destination port loss보다 먼저 drain하도록 수정했다. input `7736cda4...`(15612개)의
+build·types·전체 구조 검사, 공통81/81·generation9/9 PASS와 원시 로그를 새 audit root에 보존했다.
+이후 fixture deadline·job ceiling/결과 문서는 별도 입력이다. 실제 Mac 실행과 async Security
+validation, process/file backend의 미해결 보장 및 전체/설치 검증은 계속 남아 있다.
+최초 bind errno fixture 실패와 잘못된 TS 실행 명령 실패도 새 audit root
+`/home/dev/oma-audit-artifacts/native-2026-10-27-mach-connector/`에 보존했다. native 문서의 현재
+견적 제외와 실제 최종 검증 요구를 혼동하지 않는다. actual Mac adapter fixture/CI와 async image
+validation·process/file backend 및 마지막 전체 검증·독립 설치는 아직 남아 있다.

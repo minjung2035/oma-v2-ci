@@ -76,6 +76,10 @@
       "types": "./dist/observed-stream.d.ts",
       "default": "./dist/observed-stream.js"
     },
+    "./packet-stream": {
+      "types": "./dist/packet-stream.d.ts",
+      "default": "./dist/packet-stream.js"
+    },
     "./replace": {
       "types": "./dist/replace.d.ts",
       "default": "./dist/replace.js"

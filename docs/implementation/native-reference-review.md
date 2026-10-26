@@ -134,3 +134,55 @@ queue에 남은 상태를 반복해 소비하려 하지 않도록 receive owner�
 [dynamic status 검사](https://github.com/apple-oss-distributions/Security/blob/db15acbe6a7f257a859ad9a3bb86097bfe0679d9/OSX/libsecurity_codesigning/lib/Code.cpp#L181)로
 이어지는 호출도 확인했다. code reference 생성 뒤 static 검사만 하고 live audit 조회를 생략하는
 경로를 양성 관측으로 사용하지 않는다. 대상 signed/adhoc Node의 실제 호환성은 여전히 미검증이다.
+
+## Mach byte connector와 수신 권리의 후속 연결
+
+`mach-transport.ts`는 kernel audit 사실로 peer를 먼저 pin한 뒤 전용 양방향 port를 구성한다.
+주소 hash와 nonce는 발견·응답 연결에만 쓰며 actor/role/capability를 발급하지 않는다.
+App이 이 adapter를 Client/Broker에 주입하고 공통 generation·RPC decoder·현재 권한 판정을 쓴다.
+native-profile guard는 유지하며 이 source 연결을 실제 Darwin qualification으로 세지 않는다.
+
+[Chromium rendezvous의 receive/reply owner](https://github.com/chromium/chromium/blob/655c7be0fe437601b893c7d886a3cb5e80fc4d6b/base/apple/mach_port_rendezvous.cc#L97)와
+[XNU message 권리 형식](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/mach/message.h#L329)을
+대조했다. OMA는 COPY_SEND로 원래 owner를 유지하고, 수신 reply reference만 명시적으로 분리한다.
+거절한 request/stream packet의 받은 권리도 반환한다. 임의 숫자나 객체를 send owner로 받지 않는다.
+
+[XNU manual의 pseudo-receive](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/man/mach_msg.html)와
+[실제 반환 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/ipc_kmsg.c#L4305)을
+대조해 timeout/interrupt 때 돌아온 임시 send reference를 remote/local 둘 다 반환하도록 수정했다.
+SDK destructor는 local field를 반환하지 않으므로 그대로 재시도하거나 destructor만 호출하지 않는다.
+resource-shortage bit가 있으면 전달받은 권리를 모두 반환한 뒤에도 성공/재시도 가능 상태로 바꾸지 않는다.
+공개 interrupt flag로 native wrapper의 자동 재시도를 막고 TS readiness turn으로 돌려보낸다.
+
+raw Mach body 위의 byte packet은 길이·zero padding과 명시적인 EOF를 담는다. 공통 PacketStream은
+data/EOF 모두 발신자 대조 후 전달하고 읽기 buffer·하나의 blocked write·Node backpressure를 소유한다.
+[Mach port type](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/mach/port.h#L268)은
+destination receive right 손실만 관측하며 EOF/process/scope 사망으로 해석하지 않는다. native close 실패는
+반복 호출로 숨기지 않고, stream close와 자원 반환 확인도 구분하여 listener drain에 전달한다.
+
+새 shared-flow 회귀는 OS 사실을 mock으로 증명하지 않는 공통 TS 시험이다. 실제 Mach cross-process,
+queue-full reference 회수, sender 인계·PID 재사용·exec·중도 사망과 bootstrap profile은 실제 Mac에서
+별도로 실행해야 한다. Security dynamic validation은 현재 synchronous FFI이며 disk 작업을 할 수 있다.
+WP23 latency qualification 전에는 async/tracked preparation owner로 옮기고 실제 예산을 확인해야 한다.
+
+## Node adapter의 실제 Darwin 시험 경로
+
+`darwin-mach-stream.mjs`는 실제 별도 Node process와 production adapter를 사용한다. 길이393217의
+바이트를7001 단위로 분할해 왕복·인증 EOF·stream 자원 반환을 대조하고, queued sender의 실제
+close 뒤 audit binding 거절을 관측한다. live handoff는 먼저 원래 connector의 정상 바이트를
+받은 다음, 독립 holder에 send right를 넘겨 원래 connector가 살아 있는 동안 같은 body의
+foreign packet을 거절하는지 대조한다. 알려진 probe child를 join한 결과는 임의 후손 종료 proof가 아니다.
+
+`verify-native.mjs`는 기존 SDK C 관측을 유지하고 새 Node 세 경우도 각각3회 독립 실행한다.
+Node 문법 검사는 SYNTAX_CHECKED이며 C 컴파일 성공으로 표시하지 않는다. 전체 verification
+input identity의 전후 일치와 각 stdout/stderr/exit/cleanup을 보존한다. 이 추가가 queue-full
+reference count·PID reuse·exec·WP23·G-PROCESS/G-FILES/G-AUTH를 닫지는 않는다. 실제 CI 전에는 NOT_RUN이다.
+
+Node case는 전체 관측45초와 별도 cleanup30초 안에 실제 child/port/listener 반환을 시도한다.
+driver의 process ceiling120초와 job90분은 그 바깥이다. 33개 독립 case의 각 ceiling 합66분과
+build10분을 job ceiling이 먼저 자르지 않는다. timeout·반환 실패는 관측 성공으로 바꾸지 않는다.
+
+동기식 Security validation의 후속 구현은 [Koffi 공식 async 호출](https://koffi.dev/load#asynchronous-calls)과
+[output buffer 수명](https://koffi.dev/output#output-buffers)을 대조했다. callback 전에는 CF reference와
+출력 buffer를 반환할 수 없고, 취소/stream close도 그 실제 completion을 기다려야 한다. 이 조사만으로
+현재 synchronous leaf가 비동기 전환됐다고 주장하지 않는다.

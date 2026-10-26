@@ -162,6 +162,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/process/src/resident-runtime.ts",
       "packages/process/src/resident-logs.ts",
       "packages/process/src/observed-stream.ts",
+      "packages/process/src/packet-stream.ts",
       "packages/process/src/replace.ts",
       "packages/storage/src/resident-logs.ts",
       "packages/process/src/owned-execution.ts",

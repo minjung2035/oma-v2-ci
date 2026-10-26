@@ -24,6 +24,7 @@ import { createPublicDispatchPorts, createInternalDispatchDataPorts } from "./co
 import { credentialStream, prepareCredentialListener } from "@oma/platform-linux/credential-stream";
 import { pinLinuxPeer } from "@oma/platform-linux/peer-identity";
 import { StoreError } from "@oma/domain/errors";
+import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
 
 export function brokerLedger(store: Store): BrokerLedger {
   return Object.freeze({
@@ -57,6 +58,22 @@ function linuxSocket(stream: Duplex): Socket {
 export function createBroker(input: BrokerComposition): Broker {
   const { store, mail, units, views, lifecycle, git, reviews, reconcile, paths, limits, lock, principalHost } = input;
   const status = new StatusRefresh(() => store.agentNames(), agents => units.observeStatus(agents));
+  const transport: Pick<BrokerEffects, "pinPeer" | "assertEndpoint" | "openListener" | "peerStream" | "prepareEndpoint"> = process.platform === "darwin"
+    ? createMachBrokerTransport(limits.idleStreamSeconds)
+    : {
+      pinPeer: stream => pinLinuxPeer(linuxSocket(stream)),
+      assertEndpoint: path => {
+        if (Buffer.byteLength(path) > 107 || path.includes("\0"))
+          throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
+      },
+      openListener: (serve, maxConnections) => {
+        const listener = createServer({ allowHalfOpen: true, pauseOnConnect: true }, serve);
+        if (maxConnections !== undefined) listener.maxConnections = maxConnections;
+        return { listener, prepare: () => prepareCredentialListener(listener) };
+      },
+      peerStream: (stream, authorize) => credentialStream(linuxSocket(stream), authorize),
+      prepareEndpoint: clearSocketName,
+    };
   const dependencies: BrokerDependencies = {
     acquireRunScope: scope => units.pin(scope),
     ledger: brokerLedger(store),
@@ -72,21 +89,11 @@ export function createBroker(input: BrokerComposition): Broker {
     public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits),
     internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot),
     effects: Object.freeze<BrokerEffects>({
-      pinPeer: stream => pinLinuxPeer(linuxSocket(stream)),
-      assertEndpoint: path => {
-        if (Buffer.byteLength(path) > 107 || path.includes("\0"))
-          throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
-      },
-      openListener: (serve, maxConnections) => {
-        const listener = createServer({ allowHalfOpen: true, pauseOnConnect: true }, serve);
-        if (maxConnections !== undefined) listener.maxConnections = maxConnections;
-        return { listener, prepare: () => prepareCredentialListener(listener) };
-      },
-      peerStream: (stream, authorize) => credentialStream(linuxSocket(stream), authorize),
+      ...transport,
       bindAdmission: gate => bindAdmissionGate(store, gate),
       ensureRunRoot: () => ensureOwnedDirectory(paths.runRoot, dirname(paths.runRoot), 0o700),
       ensureActorDirectory: (actor, incarnation) => ensureOwnedDirectory(actorSocketDirectoryAt(paths.runRoot, actor, incarnation), dirname(paths.runRoot), 0o700),
-      clearSocketName, removeStatusView: () => removeOwnedFile(statusViewPath(paths.stateRoot)),
+      removeStatusView: () => removeOwnedFile(statusViewPath(paths.stateRoot)),
       makeSpool: descriptor => new TransportSpool(join(paths.stateRoot, "staging"), descriptor),
       closeLedger: () => store.close(),
     }),

@@ -19,6 +19,7 @@ import { placeholderFor, resolveEngineAuth } from "@oma/engine/engine-auth";
 import { productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
 import { packageResourcePaths } from "./runtime/packages/index.js";
 import { BrokerChannel, type ChannelLimits } from "@oma/client/channel";
+import { createBrokerChannel } from "./runtime/broker-channel.js";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import type { DeliveryReceipt } from "@oma/contracts/runtime";
 import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
@@ -114,7 +115,7 @@ export class RunnerModule {
     private readonly control?: Socket,
   ) {
     if (!/^[0-9a-f]{32}$/.test(invocationId)) throw new TypeError("runner requires an explicit execution identity");
-    this.channel = new BrokerChannel(limits as ChannelLimits | undefined);
+    this.channel = createBrokerChannel(limits as ChannelLimits | undefined);
   }
   stop(): Promise<void> {
     this.stopped = true;

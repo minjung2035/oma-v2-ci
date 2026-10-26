@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createServer, connect, type Socket } from "node:net";
+import { createServer, type Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
-import { BrokerChannel } from "@oma/client/channel";
+import { BrokerChannel, dialUnixChannel } from "@oma/client/channel";
 
 async function peerFixture(handle: (socket: Socket, index: number) => void) {
   const root = mkdtempSync(join(tmpdir(), "oma-r15-channel-")); const sockets = new Set<Socket>(); let index = 0;
@@ -52,14 +53,14 @@ for (const fault of ["wrong-id", "duplicate", "missing-version", "wrong-result",
 }
 
 test("R15: reconnect after a partial header rejects the old request and ignores old-socket events", async () => {
-  const clients: Socket[] = [];
+  const clients: Duplex[] = [];
   const f = await peerFixture((socket, index) => socket.once("data", bytes => {
     assert.ok(Buffer.isBuffer(bytes)); const id = requestId(bytes);
     const reply = encodeFrame({ v: 1, id, ok: true, result: null });
     if (index === 0) socket.write(reply.subarray(0, 3)); else socket.end(reply);
   }));
   const channel = new BrokerChannel({ frameBytes: 4096, idleStreamSeconds: 30, receiptWaitSeconds: 30 }, path => {
-    const socket = connect(path); clients.push(socket); return socket;
+    const endpoint = dialUnixChannel(path); clients.push(endpoint.socket); return endpoint;
   });
   try {
     await channel.connect(f.path);
@@ -102,7 +103,7 @@ test("R15: raw upload waits for drain and sends metadata before exact declared b
     });
   });
   const channel = new BrokerChannel({ frameBytes: 4096, idleStreamSeconds: 30, receiptWaitSeconds: 30 }, path => {
-    const socket = connect(path);
+    const endpoint = dialUnixChannel(path), socket = endpoint.socket;
     socket.write = new Proxy(socket.write, {
       apply(target, receiver, args) {
         writes++;
@@ -111,7 +112,7 @@ test("R15: raw upload waits for drain and sends metadata before exact declared b
         return result;
       },
     });
-    return socket;
+    return endpoint;
   });
   try {
     await channel.connect(f.path);

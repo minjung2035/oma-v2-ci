@@ -35,7 +35,7 @@ const dependencies={
  mail:{prepare:unavailable,complete:unavailable,moveToCur:unavailable}},
  effects:{pinPeer:unavailable,assertEndpoint:unavailable,openListener(serve,maxConnections){const listener=createServer({allowHalfOpen:true,pauseOnConnect:true},serve);if(maxConnections!==undefined)listener.maxConnections=maxConnections;return{listener,prepare(){const fd=socketDescriptor(listener);assert.notEqual(fd,null);enableUnixCredentials(fd);}};},peerStream:unavailable,
  bindAdmission:()=>{bound=true;},ensureRunRoot(){},ensureActorDirectory:unavailable,
- clearSocketName:path=>{assert.equal(existsSync(path),false);},removeStatusView(){},makeSpool:unavailable,closeLedger:()=>{closed=true;}},
+ prepareEndpoint:path=>{assert.equal(existsSync(path),false);},removeStatusView(){},makeSpool:unavailable,closeLedger:()=>{closed=true;}},
 };
 const broker=new Broker(dependencies,{stateRoot:root,runRoot,society:'demo',hasGoal:()=>true},limits,lock);
 try{

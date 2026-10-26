@@ -1,7 +1,8 @@
 /** IPC-001/008: role-neutral transport only. It never retries, synthesizes
  * REQUEST_NOT_FOUND, owns a Store, grants a lease, or exits the caller process.
  */
-import { connect, type Socket } from "node:net";
+import { connect } from "node:net";
+import type { Duplex } from "node:stream";
 import { randomUUID } from "node:crypto";
 import type { ProtocolLimits } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
@@ -13,8 +14,23 @@ import { decodeRpcReply, isRpcMethod, type RpcMethod, type RpcReply } from "@oma
 import { alarm, type Timer } from "@oma/protocol/alarm";
 export type { RpcMethod, RpcReply } from "@oma/protocol/response-codec";
 export type ChannelLimits = Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">;
+export const DEFAULT_CHANNEL_LIMITS: Readonly<ChannelLimits> = Object.freeze({ frameBytes: 256 * 1024, idleStreamSeconds: 30, receiptWaitSeconds: 30 });
 export interface ChannelCallOptions { readonly request?: string; readonly streamBytes?: Uint8Array }
-export type SocketDialer = (path: string) => Socket;
+export interface DialedChannel { readonly socket: Duplex; readonly ready: Promise<void> }
+export type ChannelDialer = (path: string) => DialedChannel;
+/** Node's Unix connector supplies readiness; channel generations own its
+ * cancellation, framing and deadlines just as for an injected OS connector. */
+export function dialUnixChannel(path: string): DialedChannel {
+  const socket = connect(path);
+  const ready = new Promise<void>((resolve, reject) => {
+    const clear = (): void => { socket.off("connect", connected); socket.off("error", failed); socket.off("close", closed); };
+    const connected = (): void => { clear(); resolve(); };
+    const failed = (error: Error): void => { clear(); reject(error); };
+    const closed = (): void => { clear(); reject(new StoreError("BROKER_UNAVAILABLE", "channel closed while connecting")); };
+    socket.once("connect", connected); socket.once("error", failed); socket.once("close", closed);
+  });
+  return { socket, ready };
+}
 interface Pending {
   readonly id: string; readonly method: RpcMethod; readonly params: Readonly<Record<string, unknown>>;
   readonly frame: Buffer; readonly body: Uint8Array | undefined; readonly timer: Timer;
@@ -22,7 +38,7 @@ interface Pending {
   metadataSent: boolean; offset: number; waitingDrain: boolean; writeDone: boolean; flushing: boolean;
 }
 interface Generation {
-  readonly socket: Socket; readonly parser: FrameParser;
+  readonly socket: Duplex; readonly parser: FrameParser;
   readonly inherited: boolean;
   readonly connected: () => void; readonly connectFailed: (error: unknown) => void;
   state: "connecting" | "ready" | "closed";
@@ -35,22 +51,22 @@ const unavailable = (message: string): StoreError => new StoreError("BROKER_UNAV
 export class BrokerChannel {
   private generation: Generation | null = null;
   private readonly limits: Readonly<ChannelLimits>;
-  constructor(limits: ChannelLimits = { frameBytes: 256 * 1024, idleStreamSeconds: 30, receiptWaitSeconds: 30 }, private readonly dial: SocketDialer = path => connect(path)) {
+  constructor(limits: ChannelLimits = DEFAULT_CHANNEL_LIMITS, private readonly dial: ChannelDialer = dialUnixChannel) {
     for (const value of [limits.frameBytes, limits.idleStreamSeconds, limits.receiptWaitSeconds])
       if (!Number.isSafeInteger(value) || value <= 0) throw new StoreError("UNSUPPORTED_PROFILE", "channel limits must be positive safe integers");
     this.limits = Object.freeze({ ...limits, frameBytes: Math.min(limits.frameBytes, 0xffffffff) });
   }
   connect(path: string): Promise<void> {
     this.close();
-    let socket: Socket;
-    try { socket = this.dial(path); } catch (error) { return Promise.reject(error); }
-    return this.adopt(socket, false);
+    let endpoint: DialedChannel;
+    try { endpoint = this.dial(path); } catch (error) { return Promise.reject(error); }
+    return this.adopt(endpoint.socket, false, endpoint.ready);
   }
   /** One directly inherited endpoint, with no pathname reconnect. Its process
    * owner bounds idle lifetime; frame and in-flight receipt limits still apply. */
-  attach(socket: Socket): Promise<void> { this.close(); return this.adopt(socket, true); }
+  attach(socket: Duplex): Promise<void> { this.close(); return this.adopt(socket, true); }
   get connected(): boolean { return this.generation?.state === "ready" && !this.generation.socket.destroyed; }
-  private adopt(socket: Socket, inherited: boolean): Promise<void> {
+  private adopt(socket: Duplex, inherited: boolean, ready?: Promise<void>): Promise<void> {
     return new Promise((resolve, reject) => {
       const generation: Generation = { socket, inherited, parser: new FrameParser(this.limits.frameBytes), state: "connecting", pending: null,
         connected: resolve, connectFailed: reject, idle: null, inboundBytes: 0, removeListeners: () => {} };
@@ -77,16 +93,17 @@ export class BrokerChannel {
       };
       const onClose = (): void => this.fail(generation, unavailable("broker channel closed"));
       generation.removeListeners = () => {
-        socket.off("connect", onConnect); socket.off("data", onData); socket.off("drain", onDrain);
+        socket.off("data", onData); socket.off("drain", onDrain);
         socket.off("end", onEnd); socket.off("error", onError); socket.off("close", onClose);
         // destroy/error delivery may be asynchronous; a late error cannot crash
         // the process or re-enter a newer generation's pending request.
         socket.on("error", () => {});
       };
-      socket.once("connect", onConnect); socket.on("data", onData); socket.on("drain", onDrain);
+      socket.on("data", onData); socket.on("drain", onDrain);
       socket.on("end", onEnd); socket.on("error", onError); socket.on("close", onClose);
       this.touch(generation);
       if (inherited) onConnect();
+      else void ready!.then(onConnect, error => this.fail(generation, error));
     });
   }
   private current(generation: Generation): boolean { return this.generation === generation && generation.state !== "closed"; }

@@ -34,16 +34,23 @@ test("listener preparation failure after bind waits for actual close", async () 
 
 test("a failed bind also obtains a close observation", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-listener-bind-"));
-  const server = createServer(), errors: unknown[] = [];
+  const server = createServer(), blocker = createServer(), errors: unknown[] = [];
   const owner = new BrokerListeners(error => errors.push(error));
   try {
-    owner.listen(server, join(root, "missing", "peer.sock"));
-    await assert.rejects(owner.ready(server), { code: "ENOENT" });
+    const path = join(root, "peer.sock");
+    const bound = once(blocker, "listening"); blocker.listen(path); await bound;
+    owner.listen(server, path);
+    await assert.rejects(owner.ready(server), { code: "EADDRINUSE" });
     owner.close(server); await Promise.all(owner.pendingCloses);
     assert.equal(server.listening, false);
+    assert.equal(blocker.listening, true, "failed acquisition must preserve the existing listener");
     assert.equal(owner.pendingCloses.length, 0);
     assert.equal(errors.length, 1);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally {
+    if (server.listening) await new Promise<void>(resolve => server.close(() => resolve()));
+    await new Promise<void>(resolve => blocker.close(() => resolve()));
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a thrown close keeps a real listener pending instead of returning its owner", async () => {

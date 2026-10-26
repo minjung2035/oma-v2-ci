@@ -4,11 +4,11 @@
  */
 import { decode, load } from "koffi";
 import { StoreError } from "@oma/domain/errors";
-import { withCleanup } from "./cleanup.js";
+import { cleanupAll, withCleanup } from "./cleanup.js";
 import { decodeDarwinAuditToken } from "./audit-token.js";
 
 const HEADER_BYTES = 24, AUDIT_TRAILER_BYTES = 52, INLINE_BYTES = 65536;
-const SEND_TIMEOUT = 0x10000004, RECEIVE_TIMEOUT = 0x10004003;
+const SEND_TIMEOUT = 0x10000004, SEND_INTERRUPTED = 0x10000007, RECEIVE_TIMEOUT = 0x10004003, RECEIVE_INTERRUPTED = 0x10004005;
 const RECEIVE_TOO_LARGE = 0x10004004;
 interface MachCalls {
   readonly task: number; readonly bootstrap: number;
@@ -16,6 +16,7 @@ interface MachCalls {
   insert(task: number, name: number, right: number, disposition: number): number;
   refs(task: number, name: number, right: number, delta: number): number;
   deallocate(task: number, name: number): number;
+  type(task: number, name: number, result: Buffer): number;
   checkIn(bootstrap: number, name: string, result: Buffer): number;
   lookup(bootstrap: number, name: string, result: Buffer): number;
   message(bytes: Buffer, options: number, sendBytes: number, receiveBytes: number,
@@ -35,6 +36,7 @@ function mach(): MachCalls {
     insert: library.func("int mach_port_insert_right(unsigned int task, unsigned int name, unsigned int right, unsigned int disposition)"),
     refs: library.func("int mach_port_mod_refs(unsigned int task, unsigned int name, unsigned int right, int delta)"),
     deallocate: library.func("int mach_port_deallocate(unsigned int task, unsigned int name)"),
+    type: library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)"),
     checkIn: library.func("int bootstrap_check_in(unsigned int bootstrap, const char *name, void *result)"),
     lookup: library.func("int bootstrap_look_up(unsigned int bootstrap, const char *name, void *result)"),
     message: library.func("int mach_msg(void *message, unsigned int options, unsigned int sendBytes, unsigned int receiveBytes, unsigned int receivePort, unsigned int timeoutMs, unsigned int notify)"),
@@ -66,44 +68,85 @@ export function isMachAuditSender(value: unknown): value is MachAuditSender {
 }
 export type MachMessage = { readonly kind: "again" } | {
   readonly kind: "data"; readonly id: number; readonly bytes: Buffer; readonly sender: MachAuditSender;
+  /** The caller owns this received send reference, even for a rejected request. */
+  readonly reply: MachSendRight | null;
 };
 export interface MachSendRight {
   /** Raw inline Mach body: the transport must supply four-byte alignment. */
-  send(id: number, bytes: Uint8Array): "sent" | "again";
+  send(id: number, bytes: Uint8Array, reply?: MachSendRight): "sent" | "again";
+  /** Destination receive-right state, never process/scope liveness or EOF. */
+  destination(): "present" | "dead" | "unknown";
   close(): void;
 }
 export interface MachReceiveRight {
   receive(): MachMessage;
   close(): void;
 }
+const sendNames = new WeakMap<MachSendRight, () => number>();
 function ownSend(name: number): MachSendRight {
-  const native = mach(); port(name); let closed = false;
-  return Object.freeze({
-    send(id: number, bytes: Uint8Array): "sent" | "again" {
+  const native = mach(); port(name); let closed = false, closeFailure: unknown;
+  const openName = (): number => { if (closed) throw new Error("Mach send owner is closed"); return name; };
+  const owner: MachSendRight = Object.freeze({
+    destination(): "present" | "dead" | "unknown" {
+      if (closed) return "unknown";
+      const type = Buffer.alloc(4);
+      if (native.type(native.task, name, type) !== 0) return "unknown";
+      const bits = type.readUInt32LE(0);
+      if ((bits & 0x100000 /* DEAD_NAME */) !== 0) return "dead";
+      return (bits & 0x10000 /* SEND */) !== 0 ? "present" : "unknown";
+    },
+    send(id: number, bytes: Uint8Array, reply?: MachSendRight): "sent" | "again" {
       if (closed) throw new Error("Mach send owner is closed");
       if (!Number.isInteger(id) || id < -0x80000000 || id > 0x7fffffff ||
           !(bytes instanceof Uint8Array) || bytes.length > INLINE_BYTES || bytes.length % 4 !== 0)
         throw new TypeError("inline Mach body must be bounded and four-byte aligned");
       const message = Buffer.alloc(HEADER_BYTES + bytes.length);
-      message.writeUInt32LE(19 /* COPY_SEND */, 0);
+      const replyName = reply === undefined ? 0 : sendNames.get(reply)?.();
+      if (replyName === undefined) throw new TypeError("reply must be an open native Mach send owner");
+      message.writeUInt32LE(19 /* COPY_SEND */ | (replyName === 0 ? 0 : 19 << 8), 0);
       message.writeUInt32LE(message.length, 4); message.writeUInt32LE(name, 8); message.writeInt32LE(id, 20);
+      message.writeUInt32LE(replyName, 12);
       message.set(bytes, HEADER_BYTES);
-      // No local/voucher/body rights are sent, so timeout transfers no owned
-      // resource. "sent" means enqueued only, never application acceptance.
-      const result = native.message(message, 1 /* SEND_MSG */ | 0x10 /* SEND_TIMEOUT */,
+      // COPY_SEND preserves our originals. A failed enqueue pseudo-receives
+      // the temporary copies back, including the local reply right. Return
+      // those copies before retry; the SDK destructor omits the local field.
+      const result = native.message(message, 1 /* SEND_MSG */ | 0x10 /* SEND_TIMEOUT */ | 0x40 /* SEND_INTERRUPT */,
         message.length, 0, 0, 0, 0);
-      if (result === SEND_TIMEOUT) return "again";
+      const base = result & ~0x3e00 /* MACH_MSG resource error mask */;
+      if (base === SEND_TIMEOUT || base === SEND_INTERRUPTED) {
+        const bits = message.readUInt32LE(0);
+        cleanupAll([8, 12].map((offset, at) => () => {
+          const returned = message.readUInt32LE(offset);
+          if (returned === 0 || returned === 0xffffffff) return;
+          if (((bits >> (at * 8)) & 0x1f) !== 17 /* PORT_SEND */) throw new Error("unexpected pseudo-received Mach right");
+          success(native.deallocate(native.task, returned), "release pseudo-received send copy");
+        }));
+        // Resource-shortage bits mean the pseudo-receive was incomplete.
+        // They are an error even after every delivered copy was returned.
+        if (result !== base) success(result, "Mach send pseudo-receive");
+        return "again";
+      }
       success(result, "Mach send"); return "sent";
     },
-    close() { if (closed) return; closed = true; success(native.deallocate(native.task, name), "release Mach send right"); },
+    close() {
+      if (closeFailure !== undefined) throw closeFailure;
+      if (closed) return;
+      closed = true;
+      try { success(native.deallocate(native.task, name), "release Mach send right"); }
+      catch (error) { closeFailure = error; throw error; }
+    },
   });
+  sendNames.set(owner, openName);
+  return owner;
 }
 function ownReceive(name: number): MachReceiveRight {
-  const native = mach(); port(name); let closed = false;
+  const native = mach(); port(name); let closed = false, closeFailure: unknown;
   const close = (): void => {
+    if (closeFailure !== undefined) throw closeFailure;
     if (closed) return;
     closed = true;
-    success(native.refs(native.task, name, 1 /* RECEIVE */, -1), "release Mach receive right");
+    try { success(native.refs(native.task, name, 1 /* RECEIVE */, -1), "release Mach receive right"); }
+    catch (error) { closeFailure = error; throw error; }
   };
   return Object.freeze({
     receive(): MachMessage {
@@ -111,17 +154,19 @@ function ownReceive(name: number): MachReceiveRight {
       const message = Buffer.alloc(HEADER_BYTES + INLINE_BYTES + AUDIT_TRAILER_BYTES + 4);
       message.writeUInt32LE(message.length, 4); message.writeUInt32LE(name, 12);
       const result = native.message(message,
-        2 /* RCV_MSG */ | 0x100 /* RCV_TIMEOUT */ | 4 /* RCV_LARGE */ | (3 << 24) /* AUDIT trailer */,
+        2 /* RCV_MSG */ | 0x100 /* RCV_TIMEOUT */ | 0x400 /* RCV_INTERRUPT */ | 4 /* RCV_LARGE */ | (3 << 24) /* AUDIT trailer */,
         0, message.length, name, 0, 0);
-      if (result === RECEIVE_TIMEOUT) return { kind: "again" };
+      if (result === RECEIVE_TIMEOUT || result === RECEIVE_INTERRUPTED) return { kind: "again" };
       if (result === RECEIVE_TOO_LARGE)
         return withCleanup(() => { throw new Error("Mach message exceeds the inline receive window; endpoint closed"); }, close);
       success(result, "Mach receive");
       // Even rejected messages may carry rights/OOL memory. The SDK's
       // destructor returns those; it does not destroy msgh_local_port.
-      return withCleanup(() => {
+      let reply: MachSendRight | null = null;
+      try { return withCleanup(() => {
         const bits = message.readUInt32LE(0), size = message.readUInt32LE(4);
-        if ((bits & 0x80000000) !== 0 || message.readUInt32LE(8) !== 0 || message.readUInt32LE(16) !== 0 ||
+        const remote = message.readUInt32LE(8);
+        if ((bits & 0x80000000) !== 0 || (bits & 0x1f) !== (remote === 0 ? 0 : 17 /* PORT_SEND */) || message.readUInt32LE(16) !== 0 ||
             message.readUInt32LE(12) !== name || size < HEADER_BYTES || size > HEADER_BYTES + INLINE_BYTES || size % 4 !== 0)
           throw new Error("Mach message has unsupported rights or inline shape");
         const trailer = (size + 3) & ~3;
@@ -133,8 +178,16 @@ function ownReceive(name: number): MachReceiveRight {
         if (decoded.pid < 2 || decoded.pid > 0x7fffffff) throw new Error("Mach sender is not an observed user process");
         const sender = Object.freeze({ ...decoded, token });
         observedSenders.add(sender);
-        return { kind: "data", id: message.readInt32LE(20), bytes: Buffer.from(message.subarray(HEADER_BYTES, size)), sender };
-      }, () => native.destroy(message));
+        const bytes = Buffer.from(message.subarray(HEADER_BYTES, size));
+        if (remote !== 0) {
+          reply = ownSend(remote);
+          // Exactly this send reference now belongs to reply. The SDK still
+          // destroys every other right/OOL region in the received message.
+          message.writeUInt32LE(0, 8);
+        }
+        return { kind: "data", id: message.readInt32LE(20), bytes, sender, reply };
+      }, () => native.destroy(message)); }
+      catch (error) { return withCleanup(() => { throw error; }, () => reply?.close()); }
     },
     close,
   });

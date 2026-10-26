@@ -23,6 +23,14 @@
     "./audit-peer": {
       "types": "./dist/audit-peer.d.ts",
       "default": "./dist/audit-peer.js"
+    },
+    "./mach-stream": {
+      "types": "./dist/mach-stream.d.ts",
+      "default": "./dist/mach-stream.js"
+    },
+    "./mach-transport": {
+      "types": "./dist/mach-transport.d.ts",
+      "default": "./dist/mach-transport.js"
     }
   },
   "scripts": {

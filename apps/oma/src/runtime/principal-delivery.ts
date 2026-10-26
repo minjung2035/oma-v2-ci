@@ -21,7 +21,7 @@
  * the host process, so nothing the model runs can mark its own mail read.
  */
 import type { BoundaryEvidence, PreparedBatch, ProtocolLimits } from "@oma/contracts";
-import { BrokerChannel } from "@oma/client/channel";
+import { createBrokerChannel } from "./broker-channel.js";
 import { StoreError } from "@oma/domain/errors";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import type { CheckedReceipt } from "@oma/contracts/runtime";
@@ -72,7 +72,7 @@ const FAILED_BATCHES = 64;
 export function principalHostBroker(runRoot: string, limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">): DeliveryBroker {
   const path = `${runRoot.endsWith("/") ? runRoot : `${runRoot}/`}principal-host.sock`;
   const call = async <T>(method: "batch.prepare" | "batch.complete", params: Record<string, unknown>): Promise<T> => {
-    const channel = new BrokerChannel(limits);
+    const channel = createBrokerChannel(limits);
     try {
       await channel.connect(path);
       const reply = await channel.call(method, params);

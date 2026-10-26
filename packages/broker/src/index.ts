@@ -200,7 +200,7 @@ export class Broker {
     this.principalHostServer = this.listenOn(join(this.paths.runRoot, "principal-host.sock"), socket => hostEndpoint.serve(socket));
   }
   private listenOn(path: string, serve: (socket: Duplex) => void): BrokerListener {
-    this.dependencies.effects.clearSocketName(path);
+    this.dependencies.effects.prepareEndpoint(path);
     const { listener: server, prepare } = this.dependencies.effects.openListener(socket => {
       if (this.draining) { socket.destroy(); return; }
       serve(socket);
@@ -287,7 +287,7 @@ export class Broker {
     const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
     // P0-8/DR32: the actor socket directory is oma's own under the run root.
     this.dependencies.effects.ensureActorDirectory(actor, incarnation);
-    this.dependencies.effects.clearSocketName(path);
+    this.dependencies.effects.prepareEndpoint(path);
     const sockets = new Set<Duplex>(); let revoked = false;
     const { listener: server, prepare } = this.dependencies.effects.openListener(socket => {
       if (revoked || this.draining) return this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });

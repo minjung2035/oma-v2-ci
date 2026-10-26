@@ -16,8 +16,10 @@ OS identity adapter도26개 workspace/root typecheck를 통과했다. 실제 Dar
 첫 정적 검사에서 제거한 package collector를 가리키던 durable map 한 건을 찾아 제거했고,
 durable map·문서·규범 fingerprint 검사는 통과했다. 마지막 source의 전체 정적 재검사는 별도다.
 과거 authored review는 보존하고 변경 bytes의 review ledger는 NOT_REVIEWED로 무효화했다.
-최신 사용자 범위에 따라 runtime 테스트·packed install·macOS CI 실행은 우선 보류한다.
-새 primitive·identity adapter는 아직 production broker transport에 연결하지 않았으며 세 gate는 OPEN이다.
+당시에는 테스트를 제외한 구현 견적 질문을 구현 우선 순서로 해석해 runtime·packed install·CI를
+보류했다. 이는 최종 목표의 실제 검증 요구를 없애지 않으며, 이후 실행은 입력별 증거로 구분한다.
+이 checkpoint 당시 primitive·identity adapter는 production broker transport에 미연결이었다.
+후속 source 조립 상태는 아래 기록을 따르며 세 gate는 계속 OPEN이다.
 
 후속으로 Broker의 Linux native credential 타입·listener 생성·endpoint 길이 검사를 OS port로
 분리했다. common reference/authority owner를 유지하고 BSM by-value accessor로 opaque token을
@@ -26,8 +28,18 @@ durable map·문서·규범 fingerprint 검사는 통과했다. 마지막 source
 `/tmp/oma-native-resume-20261026/transport-static-*`의 입력 전후 identity와 단계별 원시 로그로
 구분한다. 새 listener 회귀와 변경 Linux sender/새 Mac FFI 실행은 **NOT_RUN**이다.
 
+후속 Mach connector는 App Client/Broker의 OS 선택에 source로 연결했다. common PacketStream,
+인증 EOF, byte length/padding, dial readiness generation과 native port return 상태를 구현했다.
+현재 native consumer interface golden만 의도한 세 interface 추가/두 port 변경으로 갱신했으며
+public/durable DTO·과거 golden은 그대로다. 타입 검사 중 새 unit fixture의 literal 타입 오류를
+수정했고 후속 전체 workspace/root 검사는 통과했다. 새 shared-flow와 실제 Darwin 실행 결과는
+아직 이 기록에서 PASS로 주장하지 않는다. 세 gate와 product profile 차단은 유지한다.
+
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| Mach connector·실제 Darwin Node probe 연결 후 정적/공통 검사 | build·26 workspace/root strict typecheck·전체 architecture/transaction/durable/document/spec 검사 PASS. CI 공통 목록15개 파일 **81/81**, channel generation **9/9 PASS**·fail/skip/cancel/todo0. 각 input `7736cda4f8f874ac9b48ca6b0c8cc1e54c82b0feb359f895e035d758961eb441`(15612개) 전후 동일. 원시 명령/로그/종료 상태는 새 audit root의 `mach-ci-checks-20261026T183534Z/`. 이후 Node fixture의 관측/cleanup deadline과 job ceiling 및 결과 문서는 별도 입력이며 재결박으로 이 PASS를 갱신하지 않음. 실제 Mac Node 세 경우는 CI 실행 전 NOT_RUN이며 세 gate는 OPEN |
+| Mach source 연결 뒤 shared/Linux 선택 회귀 | 공통 packet/listener/generation·실제 Linux recvmsg/descriptor 인계 **21/21**, 변경 error/history/package/runner API **41/41**, native consumer-port positive/negative mutation **7/7 PASS**. 각 실행 input `f86efa4eb30d1ebd8af2bd11a59982b73833b0efa87725b25329531d721ddb8f`(15611개) 전후 동일, fail/cancel/skip/todo0. 서로 다른 세 선택 실행이며 전체 suite나 Mac qualification이 아님. 격리 시험은 pinned bwrap0.12.0을 임시 /usr/bin overlay에서 실행했고 UID1000·CapEff0·binary SHA를 보존했다. host /usr/bin은 변경하지 않았다. 원시 로그/상태/단계 명령/전후 identity와 SHA는 `/home/dev/oma-audit-artifacts/native-2026-10-27-mach-connector/`가 소유함 |
+| 위 후속의 최초 실패 보존 | 첫 선택 실행 **20/21 PASS·1 FAIL**: missing-directory bind의 ENOENT 기대에 실제 EACCES가 반환됨. 실제 점유된 주소의 EADDRINUSE 및 기존 listener 보존으로 강화 후21/21 확인. 별도 첫 확대 실행 **37/38 PASS·1 FAIL**은 원본 TS를 잘못 실행해 compiled fixture를 찾지 못한 명령 오류. 올바른 compiled JS와 실제 bwrap view에서41/41 확인. 최초 로그도 같은 새 audit root에 보존하며 지우거나 전체 PASS로 덮지 않음 |
 | START/public-validation fixture 수정 후 관련 회귀 | **33/33 PASS**, skip/cancel/todo0·18.495초·input `ce9b96e02382976921f01f69b0ae67fe4c1471efd9c3dbba6d37fd4b65fdfd56` 전후 동일. `native-reference-fixtures-focused*`. 실제 Node timer를 사용하며 기존 latency budget과 accepted fact 판정 유지. 첫 전체17 FAIL을 전체 PASS로 대체하지 않음 |
 | 외부 구현 대조·reply turn 후속 첫 전체 local | **3762/3779 PASS·17 FAIL**, skip/cancel/todo0·940.027초·input `bc7e189f79ebed11044bd9697a3ed987bbb9904781b93b083585e00a78b02a18` 전후 동일. `native-reference-yield-whole*`. 실패는 START의 옛 host/guest 기대값1건과 public-validation fixture의 새 Node timer import 미연결16건. 문구를 정확히 갱신하고 실제 timer module을 fixture에 연결한 후 정책16/16 PASS·skip0. 전체 재실행 결과와 구분 |
 | `5e369b30` 전체 Architecture CI40316751983 | baseline/native-all 모두 **3777/3777 PASS**, skip/cancel/todo0. baseline fast795/795·durable871/871·property34/34·stress13/13·platform29/29 PASS. standalone kernel/crash wrapper는 NOT_RUN이며 native-all의 실제 파일/필수 이름으로 실행. ZIP `12649820624` SHA256 `2a225f1a198ad8e1eb9d389bf93abb0d517c859885f75cd0edbe27cfaa4a9113`, native-all `12648632520` SHA256 `bced406a8587ffe6f8cca335edde624d0ab216128bfdb0d425adbbe85476116c`; source/input 별도 검증. 이후 변경의 결과가 아님 |
@@ -212,7 +224,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `edebd7616f6dc27affeaf805edffcc5951fb2be97a0ac4475138e91d236f94f2` (15605 files).
+verification input digest `2e277fbabcb6bf967ce59d99ba0a42184783ec4c337f24625e67589a1625454b` (15612 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

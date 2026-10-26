@@ -1,5 +1,5 @@
 import { RequestCache, CacheError, readCacheFile } from "../request-cache.js";
-import { BrokerChannel } from "@oma/client/channel";
+import { createBrokerChannel } from "./broker-channel.js";
 import { snapshotJson } from "@oma/domain/canonical-json";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { requestParamsEqual } from "@oma/domain/request-identity";
@@ -18,6 +18,7 @@ import { readCode } from "../cli/effects/code.js";
 import { installRuntime, type RuntimePort } from "@oma/client/runtime";
 import { inCallerView } from "@oma/client/receipts";
 import { spoolOutput } from "@oma/storage/output-spool";
+import { assertNativeRuntime } from "./native-support.js";
 
 export const CLIENT_RUNTIME: RuntimePort = {
   observationSeconds: CLI_OBSERVATION_SECONDS,
@@ -25,7 +26,7 @@ export const CLIENT_RUNTIME: RuntimePort = {
   spoolOutput,
   cache: (home, budget) => new RequestCache(home, readCacheFile, budget),
   cacheFailure: error => error instanceof CacheError ? error : null,
-  channel: limits => new BrokerChannel(limits),
+  channel: createBrokerChannel,
   snapshot: snapshotJson,
   paramsEqual: requestParamsEqual,
   intentConflict: (method, explicitParams, frozen) => requestIntentConflict({ expectedMethod: method, explicitParams }, frozen),
@@ -36,4 +37,4 @@ export const CLIENT_RUNTIME: RuntimePort = {
   receiptExit, goal: prepareGoalEffects, reply: prepareReplyEffects,
   fullOid: isValidFullOid, resolveOid, recordedBase, workspaceDirty, submit: prepareSubmitEffects, code: readCode,
 };
-export function installClientRuntime(): void { installRuntime(CLIENT_RUNTIME); }
+export function installClientRuntime(): void { assertNativeRuntime(); installRuntime(CLIENT_RUNTIME); }

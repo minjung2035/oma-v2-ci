@@ -536,8 +536,9 @@ fail/skip/cancel/todo0·exit0·signal null·943.025초다. before/after 입력�
 `egress.connect` 전용 grammar를 제거했다. 현재 로컬 패키지 경계와 index reader, 과거 데이터,
 accepted plan/receipt와 historical version2 reader는 유지한다. DR59/NATIVE-022–023을 따른다.
 
-최신 사용자는 macOS의 실제 테스트를 일단 제외하고 최대한의 코드 대조·타입/정적 검사를 통한
-구현 범위의 견적을 요청했다. runtime/CI 시험을 우선 보류하고 구현을 계속한다. 제시한8–12시간은
+사용자는 macOS의 실제 테스트를 제외하고 코드 대조·타입/정적 검사를 통한 구현 범위의 견적을
+요청했다. 앞선 세션에서 이를 실행 시험 보류로 해석했으나, 견적 조건은 원래 목표의 실제 Mac CI
+요구를 대체하지 않는다. 원래 목표에 따른 검증도 계속한다. 제시한8–12시간은
 작업 견적이며 세 gate 해결·지원 검증을 보장하는 완료 시간이 아니다. Darwin 세 gate는 OPEN이다.
 이번 수정 후 runtime 회귀와 packed install은 NOT_RUN이며, 과거 PASS를 현재 입력에 재결박하지 않는다.
 
@@ -550,3 +551,26 @@ SO_PEERCRED/SO_PEERPIDFD/SCM_CREDENTIALS를 제공한다. Mac audit leaf는 공�
 현재 공개 bootstrap header와 Chromium/launchd 구현의 anonymous check-in 차이도 확인했다.
 동적 rendezvous의 성공을 가정하거나 다른 runtime의 registered-port slot을 덮어쓰지 않는다.
 source의 정확한 근거와 채택 범위는 [참고 기록](implementation/native-reference-review.md)을 따른다.
+
+### 14.9 Mach byte connector의 source 조립 — 2026-10-27
+
+`343d4f85` checkpoint 뒤 공통 PacketStream과 Mac rendezvous/byte transport를 추가했다.
+App이 Client/Broker에 OS connector를 주입하고 shared generation·frame/stream/receipt·현재 권한
+owner를 재사용한다. raw Mach message의 수신 reply reference와 timeout pseudo-receive 반환을
+명시적으로 소유하며 data/EOF 각각 kernel sender 대조를 거친다. 이름 hash·nonce·서비스 발견은
+권한이 아니다. native close 실패와 stream close도 별개로 보존한다.
+
+이것은 source 조립이며 실제 Mac 실행이나 세 gate 통과가 아니다. ordinary dynamic bootstrap
+check-in, actual cross-process byte stream/인계/큐 포화/사망/PID 재사용은 여전히 미검증이다.
+Security image validation의 sync disk 작업은 async/tracked owner로 옮겨야 하며 WP23 실제 예산도
+확인해야 한다. Mac process/file backend의 미해결 보장은 이 connector로 대체하지 않는다.
+
+기존 public/durable DTO golden은 바꾸지 않았다. 현재 native consumer-port golden만 explicit
+peer/listener interface와 runner-peer 이름의 의도한 변화로 갱신했으며 mutation guard는 유지한다.
+shared-flow 회귀와 Unix dial generation fixture를 수정했고, 실행 여부와 결과는 validation의 실제
+입력별 기록으로 구분한다. 견적에서 테스트를 제외한 것과 최종 목표의 실제 검증 완료는 다르다.
+
+실제 Mac adapter 관측용 `darwin-mach-stream.mjs`를 추가했다. production Node adapter의
+cross-process 왕복·인증 EOF·자원 반환, queued sender exit 뒤 binding 거절, live connector의
+정상 바이트를 받은 뒤 독립 holder의 send-right 인계를 거절하는 세 경우다. 기존 C probe와 함께
+각각3회 실행하며 원시 실패를 독립 보존한다. 이 추가도 실제 Mac CI 전에는 NOT_RUN이다.

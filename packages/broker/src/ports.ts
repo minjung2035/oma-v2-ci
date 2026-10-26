@@ -177,7 +177,7 @@ export interface BrokerEffects {
   bindAdmission(gate: AdmissionGate): void;
   ensureRunRoot(): void;
   ensureActorDirectory(actor: Actor, incarnation: number): void;
-  clearSocketName(path: string): void;
+  prepareEndpoint(path: string): void;
   removeStatusView(): void;
   makeSpool(descriptor: RawDescriptor): ConnectionSpool;
   closeLedger(): void;

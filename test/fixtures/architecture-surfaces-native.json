@@ -1,8 +1,16 @@
 {
   "schema": 3,
-  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification.",
+  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
+      "PeerIdentity": {
+        "exported": true,
+        "sha256": "8f3f7b9c955031dcfe56b5fd72496aa82853c718121e15f920e700180e071e3b"
+      },
+      "PinnedPeerIdentity": {
+        "exported": true,
+        "sha256": "153b5f2b764bed5d06b9477018ad7c412e8cd77b7438f3ab71b71ddbd3947ea6"
+      },
       "PublicAgentView": {
         "exported": true,
         "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2"
@@ -49,7 +57,7 @@
       },
       "InternalPeerPort": {
         "exported": true,
-        "sha256": "9336869e1d26599b498536ba1ffae824b3ece0e3e062445674498b24f1cd7750"
+        "sha256": "6d6ef0d75b0ed91cbf2ae8574d623193bfa462109434da13f686b45733069cac"
       },
       "InternalDispatchDependencies": {
         "exported": true,
@@ -83,9 +91,13 @@
         "exported": true,
         "sha256": "4f0e2cebbe42734ddac34971a031b4d86316684229fd225d43e00b351406b821"
       },
+      "BrokerListener": {
+        "exported": true,
+        "sha256": "d58bc12c9e19161eaf5e87856bb509d527f8793487e7c6177f3257e733c6b25b"
+      },
       "BrokerEffects": {
         "exported": true,
-        "sha256": "b9fbfe752e959b73ddfdbe90cdf4a4f68953ad6d24e3d83641adb0c3d25b96d3"
+        "sha256": "7487c1cac408e469d8774d86c1d1ececfce027021468d378bc1e36ae4096a087"
       },
       "BrokerDependencies": {
         "exported": true,
