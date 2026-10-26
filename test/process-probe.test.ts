@@ -101,6 +101,52 @@ test("descent walks the whole chain -- depth alone is not a refusal, and a cycle
   assert.equal(dim.descendsFrom(900, { pid: 1, startTime: "1" }), false, "an unavailable link is not a proven chain");
 });
 
+test("descent refuses a child that detached while its former parent PID was followed", () => {
+  let detached = false;
+  const probe = processProbeFor("policy-reader-only", pid => {
+    if (pid === 300) return { kind: "running", ppid: detached ? 1 : 200, startTime: "child" };
+    if (pid === 200) { detached = true; return { kind: "running", ppid: 100, startTime: "replacement-parent" }; }
+    if (pid === 100) return { kind: "running", ppid: 1, startTime: "engine" };
+    return { kind: "unavailable" };
+  });
+  // Supplied observations exercise only common policy, never a Darwin or
+  // Linux kernel proof. Native sender/scope pinning is still required.
+  assert.equal(probe.substrate, "none");
+  assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
+});
+
+test("descent refuses an intermediate identity that changed after the first walk", () => {
+  let walked = false;
+  const probe = processProbeFor("policy-reader-only", pid => {
+    if (pid === 300) return { kind: "running", ppid: 200, startTime: "child" };
+    if (pid === 200) return { kind: "running", ppid: 100, startTime: walked ? "other-parent" : "parent" };
+    if (pid === 100) { walked = true; return { kind: "running", ppid: 1, startTime: "engine" }; }
+    return { kind: "unavailable" };
+  });
+  assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
+});
+
+test("descent refuses a replaced ancestor before publishing the chain", () => {
+  let rootReads = 0;
+  const probe = processProbeFor("policy-reader-only", pid => {
+    if (pid === 300) return { kind: "running", ppid: 100, startTime: "child" };
+    if (pid === 100) return { kind: "running", ppid: 1, startTime: ++rootReads === 1 ? "engine" : "other-engine" };
+    return { kind: "unavailable" };
+  });
+  assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
+});
+
+test("descent refuses a chain that became unobservable without reporting process death", () => {
+  let childReads = 0;
+  const probe = processProbeFor("policy-reader-only", pid => {
+    if (pid === 300) return ++childReads === 1 ? { kind: "running", ppid: 100, startTime: "child" } : { kind: "unavailable" };
+    if (pid === 100) return { kind: "running", ppid: 1, startTime: "engine" };
+    return { kind: "unavailable" };
+  });
+  assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
+  assert.equal(probe.ended({ pid: 300, startTime: "child" }), "unknown");
+});
+
 test("the exported entry points are the platform probe's, unchanged for callers", () => {
   assert.equal(processIdentity(process.pid)?.pid, process.pid);
   assert.equal(parentOf(process.pid), process.ppid);

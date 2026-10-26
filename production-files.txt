@@ -377,6 +377,8 @@ packages/platform-mac/src/mach-stream.ts
 packages/platform-mac/src/mach-transport.ts
 packages/platform-mac/src/native-assets.ts
 packages/platform-mac/src/native-channel.ts
+packages/platform-mac/src/seatbelt.ts
+packages/platform-mac/src/seatbelt/main.c
 packages/process/package.json
 packages/process/src/async.ts
 packages/process/src/coalesced-wake.ts

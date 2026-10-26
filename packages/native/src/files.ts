@@ -95,8 +95,12 @@ export function openBeneath(
     darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, ...)");
     if ((flags & 0o10000000 /* Linux O_PATH */) !== 0)
       throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: Darwin has no verified permission-independent entry pin and exact reopen");
-    const result = darwinOpen(directory, path, flags | 0x01000000 /* O_CLOEXEC */ |
-      0x20000000 /* O_NOFOLLOW_ANY */ | 0x1000 /* O_RESOLVE_BENEATH */, "unsigned int", mode);
+    // O_NOFOLLOW_ANY also rejects the final symlink. XNU rejects combining
+    // it with O_NOFOLLOW, which shared callers may already have requested.
+    const containedFlags = (flags & ~constants.O_NOFOLLOW) | 0x01000000 /* O_CLOEXEC */ |
+      0x20000000 /* O_NOFOLLOW_ANY */ | 0x1000 /* O_RESOLVE_BENEATH */;
+    const result = darwinOpen(directory, path, containedFlags,
+      "unsigned int", mode);
     if (result < 0 && [20, 62, 107].includes(errno()))
       throw new StoreError("STORE_CORRUPT", "filesystem containment rejected a link or path escape");
     return checked(result);

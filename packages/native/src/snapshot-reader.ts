@@ -20,7 +20,11 @@ function calls() {
   return native;
 }
 function opened(directory: number, name: string, flags: number): number {
-  const fd = calls().open(directory, name, flags | constants.O_NOFOLLOW |
+  // Darwin O_SYMLINK opens the final link itself. Adding O_NOFOLLOW would
+  // reject that very link with ELOOP instead of returning its descriptor.
+  const noFollow = process.platform === "darwin" && (flags & 0x200000 /* O_SYMLINK */) !== 0
+    ? 0 : constants.O_NOFOLLOW;
+  const fd = calls().open(directory, name, flags | noFollow |
     (process.platform === "darwin" ? 0x1000000 : 0o2000000)); // O_CLOEXEC
   if (fd < 0) {
     const code = getSystemErrorName(-errno());
@@ -68,18 +72,11 @@ export class SnapshotReader {
       if (previous !== this.descriptor) closeSync(previous);
     };
     try {
-      // Linux resolves the whole parent beneath the held root in one kernel
-      // walk, rejecting symlinks at every component. Each entry resolves the
-      // current path again; no cached directory can hide a replacement.
-      if (process.platform === "linux" && parts.length > 1)
+      // Resolve the whole parent beneath the held root in one kernel walk.
+      // A missing Darwin primitive refuses rather than falling back to a
+      // component walk whose intermediate directory could leave this root.
+      if (parts.length > 1)
         parent = openBeneath(this.descriptor, parts.slice(0, -1).join("/"), constants.O_RDONLY | constants.O_DIRECTORY);
-      else {
-        for (const part of parts.slice(0, -1)) {
-          const next = opened(parent, part, constants.O_RDONLY | constants.O_DIRECTORY);
-          const previous = parent; parent = next;
-          if (previous !== this.descriptor) closeSync(previous);
-        }
-      }
       const name = parts.at(-1)!;
       pin = opened(parent, name, process.platform === "linux" ? 0o10000000 /* O_PATH */ : 0x200000 | 0x8000 /* O_SYMLINK | O_EVTONLY */);
       const stat = fstatSync(pin);

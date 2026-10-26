@@ -65,7 +65,7 @@ test("startup: nested snapshot reads resolve current parents and reject a replac
   assert.equal(read(), "first");
   renameSync(join(f.project, "deep"), join(f.root, "moved"));
   symlinkSync(join(f.root, "moved"), join(f.project, "deep"));
-  assert.throws(read, process.platform === "linux" ? { code: "STORE_CORRUPT" } : /ENOTDIR|ELOOP/);
+  assert.throws(read, { code: "STORE_CORRUPT" });
   unlinkSync(join(f.project, "deep"));
   mkdirSync(join(f.project, "deep/nested"), { recursive: true });
   writeFileSync(join(f.project, relative), "second");
@@ -174,7 +174,7 @@ test("DR27: unreadable content and raced parent symlinks refuse a snapshot rathe
   try { assert.throws(() => withProjectSnapshot(f.options, () => assert.fail("published unreadable snapshot")), /EACCES/); }
   finally { chmodSync(join(f.project, "tracked"), 0o600); }
   symlinkSync(f.root, join(f.project, "escape"));
-  assert.throws(() => reader.entry("escape/hook"), process.platform === "linux" ? { code: "STORE_CORRUPT" } : /ENOTDIR|ELOOP/);
+  assert.throws(() => reader.entry("escape/hook"), { code: "STORE_CORRUPT" });
   const entry = reader.entry("tracked")!;
   try {
     writeFileSync(join(f.project, "tracked"), "changed content\n");

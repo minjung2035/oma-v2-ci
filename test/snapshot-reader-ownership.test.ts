@@ -61,7 +61,7 @@ for (const linked of [false, true]) test(`DR27/P0-4: ${linked ? "linked" : "miss
   const root = fixture(t), reader = new SnapshotReader(root); t.after(() => reader.close());
   if (linked) symlinkSync(join(root, "a", "b"), join(root, "a", "other"));
   const before = count();
-  if (linked) assert.throws(() => reader.entry("a/other/file"), process.platform === "linux" ? { code: "STORE_CORRUPT" } : /ENOTDIR|ELOOP/);
+  if (linked) assert.throws(() => reader.entry("a/other/file"), { code: "STORE_CORRUPT" });
   else assert.equal(reader.entry("a/other/file"), null);
   assert.equal(count(), before);
 });

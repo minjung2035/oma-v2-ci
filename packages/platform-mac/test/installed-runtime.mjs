@@ -13,3 +13,16 @@ await store.put("engine-managed", "fixture-only");
 assert.deepEqual(calls, [["keychain.get", "engine-managed"], ["keychain.put", "engine-managed"]]);
 for (const absent of ["@oma/engine", "@oma/client", "@oma/config", "@oma/tui", "@oma/broker", "@oma/git"])
   assert.throws(() => import.meta.resolve(absent), { code: "ERR_MODULE_NOT_FOUND" });
+
+// Installed public Seatbelt preparation is TS-only; this does not qualify the
+// kernel sandbox or the descendant scope on this installation host.
+const { prepareSeatbelt } = await import("@oma/platform-mac/seatbelt");
+const recipe = prepareSeatbelt({ executable: "/pinned/node", argv: ["a literal argument"],
+  env: { HOME: "/private/work", TMPDIR: "/private/work" }, cwd: "/private/work",
+  timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }, { readable: [],
+  writable: [{ path: "/private/work", kind: "directory" }], denied: [],
+  executable: [{ path: "/pinned/node", kind: "file" }], unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"] });
+assert.ok(recipe.command.executable.endsWith("/seatbelt/oma-seatbelt"));
+assert.deepEqual(recipe.command.argv.slice(-2), ["/pinned/node", "a literal argument"]);
+const launcher = readFileSync(new URL("./seatbelt/main.c", import.meta.resolve("@oma/platform-mac/seatbelt")), "utf8");
+assert.ok(launcher.includes("sandbox_init(profile"));

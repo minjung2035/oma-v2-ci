@@ -255,3 +255,61 @@ walker 추출 뒤 첫 구조 검사는 이전 `completeSearchText`의 stale exem
 정확히 거절했다. 실제 spawn site인 `startSearchWalker`로 기존 책임 항목을 옮겼다. 허용 파일·spawn
 역할의 수·Society writer 조건은 넓히지 않았고, 실제 close 전 alias 재시도 금지와 parent-pipe
 abort/group cleanup의 같은 책임을 명시했다. stale/missing/fence-passing negative control을 유지한다.
+
+## Mac no-follow flags와 공통 ancestry 관측의 후속 수리
+
+[고정 XNU open 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_vnops.c#L412)는
+`O_NOFOLLOW_ANY`와 `O_NOFOLLOW`가 함께 있으면 EINVAL을 반환한다. 기존 Darwin adapter는
+공통 caller의 후자를 남긴 채 전자를 추가했다. 실제 Node flag에서 후자만 제거하고
+ANY/BENEATH/CLOEXEC는 유지한다. [같은 lookup source](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_lookup.c#L466)는
+ANY일 때 첫 symlink에서 한계에 도달하도록 하므로 최종 component도 따라가지 않는다.
+component별 pathname fallback이나 permission-independent pin의 대체는 추가하지 않는다.
+공통 실제 kernel 시험은 정상 file 열기와 중간/최종 symlink 거절을 함께 확인하며 Darwin에서는
+raw flags 조합의 실제 EINVAL 대조도 실행한다. 여기의 Linux 통과는 actual Darwin 증거가 아니다.
+
+공통 ancestry의 한 번 읽기는 앞서 관측한 child가 reparent된 뒤 재사용된 부모 PID를 따라갈 수 있었다.
+입력 관측으로 구성한4개 반례는 수정 전 모두 실패했다. 경로 전체의 PID/시작 시각/부모 PID를
+다시 읽고 마지막에 고정 ancestor를 확인해 관측 불일치를 거절한다. 이는 atomic kernel tree나
+임의 후손 종료 보장이 아니며 실제 sender/scope pin과 preflight authority를 계속 요구한다.
+[psutil의 실제 parent 구현](https://github.com/giampaolo/psutil/blob/f8b0a6191085f55dc71f7a877c55dce0e4b6feb9/psutil/__init__.py#L839)도
+부모 숫자만 신뢰하지 않고 생성을 재관측한다. 그 시간 순서 판정을 복제하거나 새 의존성을 넣지
+않았고, OMA는 기존 opaque identity의 동일성과 부모 관계만 대조한다. 반례는 공통 TS 정책 시험이며
+Mac kernel 사실을 mock으로 증명하는 시험이 아니다. raw source 구간과 red/green은 nofollow audit root가 소유한다.
+
+
+## Darwin 스냅샷·메타데이터와 Seatbelt 실행 어댑터 구현
+
+고정 XNU의 [symlink open 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_subr.c#L8366)는
+O_SYMLINK에도 O_NOFOLLOW를 더하면 ELOOP로 거절한다. SnapshotReader는 최종 symlink 자체를
+열 때 후자만 제거하며, 중간 parent는 두 OS 모두 held root 아래 전체 상대 경로를 한 번에
+openBeneath로 해석한다. 개별 component walk로 containment를 약화하지 않는다.
+
+Darwin statAt은 공개 fstatat/AT_SYMLINK_NOFOLLOW로 permission-independent scalar metadata를
+조회한다. [XNU stat ABI](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/stat.h#L166)와
+[Node26 libuv 변환](https://github.com/nodejs/node/blob/v26.0.0/deps/uv/src/unix/fs.c#L1435)을
+대조해 x64의 INODE64 symbol·arm64 native symbol, 144-byte layout, signed/unsigned 값과
+nanoseconds를 처리한다. 최초 사용에서 held directory를 실제 Node fstat와 대조하고 실제 SDK
+C probe도 크기·offset·scalar width를 assert한다. Node의 공개 fstatSync object에서 metadata
+전체를 교체해 Stats/BigIntStats prototype을 보존하며 private constructor/import를 쓰지 않는다.
+이는 entry pin·수리·exact reopen·실행 대상 결박을 구현한 것이 아니며 그 거절은 유지한다.
+
+Seatbelt의 deny-default·target same-sandbox·exact IPC filter·literal escaping은 위 고정
+sandbox-runtime source를 다시 대조했다. readable/writable/denied/executable host roots와
+환경 allowlist를 TS에서 번역하며 IP network는 DR37/46대로 목적지 제한 없이 유지한다.
+Unix socket은 exact endpoint, Mach는 exact OMA rendezvous와 좁은 OS 서비스만 허용한다.
+Keychain 서비스·Mach register·전역 POSIX IPC는 열지 않는다. nested deny는 모든 allow 뒤에 둔다.
+
+큰 profile은 magic·전체 byte 길이를 갖는 private pipe로 전달하고 선언한 payload와 EOF를 모두 확인한다. producer가 중간에 죽어도 뒤의 deny가 빠진 유효 prefix를 적용하지 않는다. installed launcher의 C는 profile read/FD close, 공개
+sandbox_init, absolute execve만 수행한다. 이는 [Chromium의 공개 API wrapper](https://github.com/chromium/chromium/blob/655c7be0fe437601b893c7d886a3cb5e80fc4d6b/sandbox/mac/seatbelt.cc)의
+반환/error-buffer 처리와 대조했다. 비공개 compile/apply 함수나 entitlement를 도입하지 않고,
+일반 파일만 받는지 미확인인 sandbox-exec -f에 pipe를 가정하지 않는다. Darwin workspace build가
+실제 SDK로 launcher를 컴파일하고 결과 bytes/mode를 기존 build cache가 기록한다. 정책·process
+관리는 TS이며 native helper에 재구현하지 않는다. recipe는 기존 process의 spawnWithPrivateInputs가 소비할 framed private inputs를 반환한다.
+adapter가 직접 spawn하지 않고 stdin/RPC·취소·actual close와 execution scope의 owner는 caller에
+남는다. host-state fence FD를 Worker에 누출하거나 미완료 scope의 exemption을 추가하지 않는다. helper/target pathname의 정확한 실행 결박과 전체 descendant
+scope는 여전히 G-FILES/G-PROCESS의 별도 미완료 조건이다.
+
+실제 Darwin driver에 파일 write/read 거부·nested denial·symlink/hardlink 우회·자식의 정책 상속,
+262144-byte 초과 profile와 별도 stdin의 두 case를 각각3회 추가했다. 총42개 시도이며 새6개를
+포함한 최신 실제 Mac 실행은 NOT_RUN이다. compiler/TS 정책 시험을 실제 격리 성공이나 제품
+지원으로 승격하지 않는다. 공통 PathView와 목적별 Worker/check/quarantine 조립도 별도로 남는다.

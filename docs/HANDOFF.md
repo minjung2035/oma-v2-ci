@@ -1,6 +1,22 @@
 # OMA v2 — 현재 인계
 
-## 현재: 29938a42 설치 검증 통과와 Mac 지원 차단
+## 현재: Mac 파일·Seatbelt 실행 어댑터 구현 진행
+
+Mac adapter가 XNU에서 EINVAL인 두 no-follow flag를 함께 전달하던 결함을 수리했다. 강한
+ANY/BENEATH/CLOEXEC를 유지하고 일반 file과 중간/최종 symlink 실제 회귀를 추가했다.
+공통 ancestry의 변동 관측4개 반례도 먼저 실패시킨 뒤 전체 체인의 identity/부모 관계 재검사로
+수리했으며 관련51/51과 독립 설치 후 full build를 확인했다. Mac kernel/전체 후속 증거는 별도다.
+§14.15와 validation을 따르며 CI 차단과 가능한 source 구현 작업을 함께 중단하지 않는다.
+
+추가로 SnapshotReader의 최종 symlink flag/전체 parent containment와 Darwin fstatat scalar
+metadata를 구현했다. Seatbelt에는 TS deny-default policy·env 검사·private pipe 실행과 최소
+public sandbox_init/execve C launcher를 넣었고 Darwin build·실제 독립 probe에 연결했다.
+총42개 실제 Darwin 시도는 NOT_RUN이며 목적별 PathView/Worker/check/quarantine 조립, 임의
+후손 scope와 permission-independent pin/exact reopen/실행 대상 결박은 미완료다. 최신 결과는
+validation과 reference review를 따른다. 과거 Linux/설치 결과를 이 source에 재결박하지 않는다.
+최종 source의15617개 고정 입력 `1b53992c...`에서 full build·전체 구조 검사와 관련95/95를 확인했다.
+actual Mac은 NOT_RUN이며 세 gate/제품 guard는 유지한다. 기존 process private-input owner를
+소비할 recipe만 제공하고, 새로운 무fence spawn이나 scope exemption은 추가하지 않았다.
 
 `29938a42` 현재 source의 독립 설치26/26·공개 API/자체 선언 PASS, 지정 runtime smoke16/16을
 확인했다. input `ae96e9f6...`(15613개)과 보호 파일 SHA는 전후 동일이다. 최신 실제 CI는

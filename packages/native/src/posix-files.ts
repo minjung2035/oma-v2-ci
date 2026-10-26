@@ -103,14 +103,66 @@ export function directoryNames(fd: number): string[] {
     return names.sort();
   }, () => checked(api.closedir(directory)));
 }
-/** A no-I/O entry observation. A platform without the necessary entry pin
- * refuses before opening a FIFO/device or repairing a re-resolved pathname. */
+let darwinStat: ((fd: number, name: string, result: Buffer, flags: number) => number) | undefined;
+let darwinStatLayoutChecked = false;
+/** Decode the public 64-bit-inode stat ABI. This is one no-follow metadata
+ * observation, not an entry pin, repair capability or proof about a later open.
+ * SDK offsets are independently asserted by the real Darwin C probe. */
+function darwinStatAt(fd: number, name: string, bigint: boolean): Stats | BigIntStats {
+  if (!["arm64", "x64"].includes(process.arch))
+    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin stat requires a supported 64-bit inode ABI");
+  darwinStat ??= load(null).func(process.arch === "x64" ? "fstatat$INODE64" : "fstatat", "int",
+    ["int", "const char *", "void *", "int"]);
+  const bytes = Buffer.alloc(144);
+  if (!darwinStatLayoutChecked) {
+    // Compare the actual held directory with Node's independent native reader
+    // before decoding a target. This checks layout only, never target liveness
+    // or the stability of a later pathname operation.
+    const own = fstatSync(fd, { bigint: true });
+    checked(darwinStat(fd, ".", bytes, 0x20));
+    if (BigInt.asUintN(64, BigInt(bytes.readInt32LE(0))) !== own.dev ||
+        bytes.readBigUInt64LE(8) !== own.ino || BigInt(bytes.readUInt16LE(4)) !== own.mode ||
+        BigInt(bytes.readUInt32LE(16)) !== own.uid || BigInt(bytes.readUInt32LE(20)) !== own.gid)
+      throw new StoreError("UNSUPPORTED_PROFILE", "Darwin stat layout could not be independently observed");
+    darwinStatLayoutChecked = true;
+  }
+  checked(darwinStat(fd, name, bytes, 0x20 /* AT_SYMLINK_NOFOLLOW */));
+  // Obtain the public Node Stats shape/methods without private imports or the
+  // deprecated Stats constructor. Replace every metadata field with the target
+  // syscall's result; no parent metadata is returned as target evidence.
+  const result = bigint ? fstatSync(fd, { bigint: true }) : fstatSync(fd);
+  const value = (n: bigint): number | bigint => bigint ? n : Number(n);
+  const unsigned = (n: bigint): number | bigint => value(BigInt.asUintN(64, n));
+  const fields: Record<string, number | bigint> = {
+    dev: unsigned(BigInt(bytes.readInt32LE(0))), mode: value(BigInt(bytes.readUInt16LE(4))),
+    nlink: value(BigInt(bytes.readUInt16LE(6))), uid: value(BigInt(bytes.readUInt32LE(16))),
+    gid: value(BigInt(bytes.readUInt32LE(20))), rdev: unsigned(BigInt(bytes.readInt32LE(24))),
+    blksize: unsigned(BigInt(bytes.readInt32LE(112))), ino: value(bytes.readBigUInt64LE(8)),
+    size: unsigned(bytes.readBigInt64LE(96)), blocks: unsigned(bytes.readBigInt64LE(104)),
+  };
+  for (const [name, offset] of [["atime", 32], ["mtime", 48], ["ctime", 64], ["birthtime", 80]] as const) {
+    const seconds = bytes.readBigInt64LE(offset), nanoseconds = bytes.readBigInt64LE(offset + 8);
+    if (nanoseconds < 0n || nanoseconds >= 1_000_000_000n)
+      throw new StoreError("UNSUPPORTED_PROFILE", "Darwin stat returned an unrecognized timestamp layout");
+    const total = seconds * 1_000_000_000n + nanoseconds;
+    fields[`${name}Ms`] = bigint ? total / 1_000_000n : Number(seconds) * 1000 + Number(nanoseconds) / 1_000_000;
+    if (bigint) fields[`${name}Ns`] = total;
+  }
+  return Object.assign(result, fields);
+}
+
+/** A no-I/O entry observation. Darwin uses one directory-relative fstatat;
+ * Linux uses an O_PATH pin. Neither opens a FIFO/device for content I/O. */
 export function statAt(fd: number, name: string): Stats;
 export function statAt(fd: number, name: string, options: { readonly bigint: true; readonly throwIfNoEntry?: true }): BigIntStats;
 export function statAt(fd: number, name: string, options: { readonly bigint: true; readonly throwIfNoEntry: false }): BigIntStats | undefined;
 export function statAt(fd: number, name: string, options: { readonly throwIfNoEntry: false }): Stats | undefined;
 export function statAt(fd: number, name: string, options?: { readonly bigint?: boolean; readonly throwIfNoEntry?: boolean }): Stats | BigIntStats | undefined {
   entry(fd, name);
+  if (process.platform === "darwin") {
+    try { return darwinStatAt(fd, name, options?.bigint === true); }
+    catch (error) { if (options?.throwIfNoEntry === false && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+  }
   let pin: number;
   try { pin = openBeneath(fd, name, 0o10000000 | constants.O_NOFOLLOW); }
   catch (error) { if (options?.throwIfNoEntry === false && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }

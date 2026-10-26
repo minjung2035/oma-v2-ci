@@ -68,13 +68,26 @@ function buildProbe(substrate: "proc" | "libproc" | "none", read: ProcessObserva
       // revisits a pid -- the only other way it could not terminate -- is no
       // chain the engine started. Depth alone is not a refusal.
       let current = pid;
-      const seen = new Set<number>();
+      const chain = new Map<number, { readonly ppid: number; readonly startTime: string }>();
       for (;;) {
         const observed = read(current);
-        if (observed.kind !== "running") return false;
-        if (current === ancestor.pid) return observed.startTime === ancestor.startTime;
-        if (observed.ppid <= 1 || seen.has(current)) return false;
-        seen.add(current);
+        if (observed.kind !== "running" || chain.has(current)) return false;
+        chain.set(current, { ppid: observed.ppid, startTime: observed.startTime });
+        if (current === ancestor.pid) {
+          if (observed.startTime !== ancestor.startTime) return false;
+          // A later parent lookup may have followed a recycled numeric PID
+          // after an earlier child was reparented. Re-read every saved identity
+          // and relationship, with the pinned ancestor last, before answering.
+          // This refuses inconsistent observations; native sender/scope pins
+          // are still required and this is not an atomic kernel tree snapshot.
+          for (const [pid, previous] of chain) {
+            const fresh = read(pid);
+            if (fresh.kind !== "running" || fresh.startTime !== previous.startTime || fresh.ppid !== previous.ppid)
+              return false;
+          }
+          return true;
+        }
+        if (observed.ppid <= 1) return false;
         current = observed.ppid;
       }
     },

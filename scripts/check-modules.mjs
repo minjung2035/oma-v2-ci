@@ -226,10 +226,16 @@ export function moduleFindings(root = process.cwd()) {
           const moduleSource = asset.endsWith(".js") ? asset.slice(0, -3) + ".ts" : null;
           const compiledModule = moduleSource !== null && existsSync(moduleSource) && !moduleSource.endsWith(".d.ts");
           const ownManifest = asset === resolve(root, path, "package.json") && existsSync(asset);
+          // This one native executable is generated from the declared C asset
+          // by build-workspaces on Darwin. It has no authored binary in src;
+          // a manifest field on another owner/path cannot grant an exception.
+          const seatbeltHelper = manifest.name === "@oma/platform-mac" && name === "seatbelt/oma-seatbelt" &&
+            manifest.oma?.seatbeltHelper === name && (manifest.oma?.assets ?? []).includes("seatbelt/main.c") &&
+            existsSync(resolve(sourceRoot, "seatbelt/main.c"));
           const appRootProvider = manifest.name === "@oma/app" && value === "../../../../" &&
             ["src/entry/personal-host.ts", "src/entry/oma-society.ts", "src/entry/oma-mac.ts"]
               .some(entry => file === resolve(root, path, entry));
-          if (!ownManifest && !appRootProvider && (name.startsWith("../") || !compiledModule && (!existsSync(asset) || !(manifest.oma?.assets ?? []).includes(name))))
+          if (!ownManifest && !appRootProvider && !seatbeltHelper && (name.startsWith("../") || !compiledModule && (!existsSync(asset) || !(manifest.oma?.assets ?? []).includes(name))))
             report(slash(relative(root, file)), `unowned or missing package asset ${value}`);
         }
       }, () => report(slash(relative(root, file)), "computed module loading has no verifiable dependency"));

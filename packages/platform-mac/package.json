@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./seatbelt": {
+      "types": "./dist/seatbelt.d.ts",
+      "default": "./dist/seatbelt.js"
+    },
     "./native-channel": {
       "types": "./dist/native-channel.d.ts",
       "default": "./dist/native-channel.js"
@@ -51,9 +55,11 @@
   },
   "oma": {
     "assets": [
+      "seatbelt/main.c",
       "keychain/main.swift",
       "keychain/oma-keychain.entitlements"
     ],
-    "isolationSmoke": "test/installed-runtime.mjs"
+    "isolationSmoke": "test/installed-runtime.mjs",
+    "seatbeltHelper": "seatbelt/oma-seatbelt"
   }
 }

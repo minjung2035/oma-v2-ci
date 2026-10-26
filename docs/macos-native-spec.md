@@ -668,3 +668,33 @@ Native40400373660·Architecture40400373613의7개 job 모두 terminal failure·s
 없음이다. check-run output 본문도 null이며 annotation 원인은 미확정이다. 같은 source를 맹목적으로
 재실행하지 않는다. 공개 API 조건을 충족하는 전체 후손/파일 capability 수단과 실제 Mac CI 증거가
 없으면 목표는 미완료이며 private entitlement/root/private coalition/VM이나 기능 축소로 통과시키지 않는다.
+
+### 14.15 진행 가능한 구현 재개 — 2026-10-27
+
+Mac open adapter가 caller의 O_NOFOLLOW에 O_NOFOLLOW_ANY를 더하던 조합은 고정 XNU에서
+EINVAL이다. native leaf가 실제 Node O_NOFOLLOW만 제거하고 ANY/BENEATH/CLOEXEC를 유지한다.
+실제 common-kernel 회귀는 정상 open과 중간/최종 symlink 거절을 확인하며 Darwin에서는 raw
+조합의 EINVAL 대조도 실행한다. Linux에서 실행한 결과를 Darwin qualification으로 세지 않는다.
+
+공통 ancestry의 단일 walk가 변동·재사용·관측 소실을 놓치는4개 반례를 먼저 실패시켰다. 수집한
+PID/시작 시각/부모 PID를 다시 읽고 ancestor를 마지막에 확인해 불일치하면 거절한다. 깊이 제한이나
+관측 cache는 추가하지 않는다. atomic tree snapshot·후손 종료 proof가 아니며 kernel sender/scope
+pin과 현재 authority 재검사를 대신하지 않는다. supplied-reader 반례는 TS 정책 증거로 구분한다.
+
+같은 반례 파일로 수정 전5/9·수정 뒤 관련51/51을 확인했다. 첫 build는 외부 symlink 의존성을
+정확히 거절했고 실제 locked npm ci 뒤 full build가 통과했다. 소스/규범/owner와 보호 원문은
+계속 대조하며 전체 후속 회귀·실제 Mac 증거는 남긴다. Mac CI 차단만으로 가능한 구현까지
+모두 완료되었다고 판단하지 않는다. raw와 현재 결과의 범위는 validation이 소유한다.
+
+
+SnapshotReader의 Darwin 최종 symlink flag 조합도 수리했고, 중간 parent의 전체 beneath 해석을
+두 OS에 적용했다. statAt에는 공개 fstatat의 Darwin64 ABI를 구현했다. 실제 Node fstat와 최초
+layout 대조, SDK scalar/offset assert, numeric/BigInt metadata·ns·link identity 검증 경로를 갖는다.
+이는 pin/repair/reopen의 대체가 아니다.
+
+Seatbelt의 TS policy renderer·검사된 env·private profile-pipe 실행과 최소 C launcher를 추가했다.
+Darwin build에서 public sandbox_init launcher를 실제 SDK로 컴파일한다. 파일/IPC는 명시적
+allow이고 기본 거부이며 IP network는 DR37/46대로 유지한다. actual driver의 두 case를 각각3회
+추가해42개 시도를 준비했다. 실제 Mac 실행은 NOT_RUN이고 Worker/check/quarantine의 공통
+PathView와 전체 scope/pin/인증 증거는 미완료다. helper와 target의 정확한 exec 결박도 별도다.
+구현한 TS/최소 OS 경계와 실제 미해결 보장을 구분하며 Mac guard를 해제하지 않는다.

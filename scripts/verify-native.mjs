@@ -40,6 +40,8 @@ try {
       names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit"], link: ["-lbsm"] },
     { name: "mach-stream", fixture: "darwin-mach-stream.mjs", digest: "machStreamProbeDigest", compile: "check-mach-stream", node: true,
       names: ["mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async"] },
+    { name: "seatbelt", fixture: "darwin-seatbelt.mjs", digest: "seatbeltProbeDigest", compile: "check-seatbelt", node: true,
+      names: ["seatbelt-files", "seatbelt-profile-stream"] },
   ];
   for (const program of programs) {
     const binary = join(scratch, program.name);

@@ -25,6 +25,8 @@
     "entrypoint": "packages/broker/src/index.ts#Broker",
     "callPath": [
       "packages/broker/src/index.ts#Broker",
+      "packages/broker/src/peer-authenticator.ts#PeerAuthenticator",
+      "packages/broker/src/process-ancestry.ts#descendsFrom",
       "packages/git/src/index.ts#GitModule",
       "packages/git/src/submit.ts#SubmitCoordinator",
       "packages/git/src/context.ts#ContextCoordinator",
@@ -32,6 +34,8 @@
       "packages/domain/src/authority.ts#assertCurrentActor"
     ],
     "negativeTests": [
+      "test/process-probe.test.ts#descent refuses",
+      "test/native-os-contracts.test.mjs#real OS: ancestry distinguishes",
       "test/r37-preparation-boundaries.test.ts#R37",
       "test/r37-recovery-observation.test.ts#R37"
     ]
@@ -821,14 +825,20 @@
     "callPath": [
       "apps/oma/src/entry/oma.ts#main",
       "apps/oma/src/runtime/native-support.ts#assertNativeRuntime",
-      "apps/oma/src/entry/broker.ts#main"
+      "apps/oma/src/entry/broker.ts#main",
+      "packages/platform-mac/src/seatbelt.ts#prepareSeatbelt",
+      "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
       "test/native-profile.test.mjs#native",
       "test/native-primitives.test.mjs#the real kernel",
+      "test/process-probe.test.ts#descent refuses",
       "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
       "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID"
+      "test/native-os-contracts.test.mjs#real OS: peer UID",
+      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
+      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
     ]
   },
   {
@@ -842,10 +852,15 @@
       "apps/oma/src/runtime/user-files.ts#publishUserFile",
       "packages/storage/src/durable-fs.ts#publishNoReplace",
       "packages/native/src/posix-files.ts#linkAt",
-      "packages/native/src/files.ts#openBeneath"
+      "packages/native/src/files.ts#openBeneath",
+      "packages/native/src/posix-files.ts#statAt",
+      "packages/native/src/snapshot-reader.ts#SnapshotReader"
     ],
     "negativeTests": [
       "test/native-primitives.test.mjs#directory effects",
+      "test/native-primitives.test.mjs#contained opens accept caller no-follow",
+      "test/native-primitives.test.mjs#entry metadata preserves",
+      "test/native-primitives.test.mjs#snapshot reader returns",
       "test/user-files.test.mjs#shared metadata publication:",
       "test/durable-fs-faults.test.ts#P7",
       "test/native-os-contracts.test.mjs#real OS: no-replace publication",

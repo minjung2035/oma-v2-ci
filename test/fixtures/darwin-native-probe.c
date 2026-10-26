@@ -29,6 +29,25 @@ _Static_assert(offsetof(struct proc_bsdinfo, pbi_start_tvusec) == 128, "proc sta
 _Static_assert(offsetof(struct dirent, d_reclen) == 16, "dirent record size offset");
 _Static_assert(offsetof(struct dirent, d_namlen) == 18, "dirent name size offset");
 _Static_assert(offsetof(struct dirent, d_name) == 21, "dirent name offset");
+_Static_assert(sizeof(struct stat) == 144, "64-bit inode stat size");
+_Static_assert(sizeof(time_t) == 8 && sizeof(long) == 8, "64-bit stat timespec fields");
+_Static_assert(sizeof(dev_t) == 4 && sizeof(mode_t) == 2 && sizeof(nlink_t) == 2, "stat scalar widths");
+_Static_assert(sizeof(ino_t) == 8 && sizeof(off_t) == 8 && sizeof(blkcnt_t) == 8, "stat large scalar widths");
+_Static_assert(offsetof(struct stat, st_dev) == 0, "stat device offset");
+_Static_assert(offsetof(struct stat, st_mode) == 4, "stat mode offset");
+_Static_assert(offsetof(struct stat, st_nlink) == 6, "stat links offset");
+_Static_assert(offsetof(struct stat, st_ino) == 8, "stat inode offset");
+_Static_assert(offsetof(struct stat, st_uid) == 16, "stat UID offset");
+_Static_assert(offsetof(struct stat, st_gid) == 20, "stat GID offset");
+_Static_assert(offsetof(struct stat, st_rdev) == 24, "stat special device offset");
+_Static_assert(offsetof(struct stat, st_atimespec) == 32, "stat atime offset");
+_Static_assert(offsetof(struct stat, st_mtimespec) == 48, "stat mtime offset");
+_Static_assert(offsetof(struct stat, st_ctimespec) == 64, "stat ctime offset");
+_Static_assert(offsetof(struct stat, st_birthtimespec) == 80, "stat birthtime offset");
+_Static_assert(offsetof(struct stat, st_size) == 96, "stat size offset");
+_Static_assert(offsetof(struct stat, st_blocks) == 104, "stat blocks offset");
+_Static_assert(offsetof(struct stat, st_blksize) == 112, "stat blocksize offset");
+_Static_assert(AT_SYMLINK_NOFOLLOW == 0x20, "stat no-follow flag");
 
 static void require(int condition, const char *label) {
   if (!condition) { perror(label); exit(2); }
