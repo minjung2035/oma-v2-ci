@@ -32,11 +32,25 @@ typedef union {
   unsigned char bytes[sizeof(request_t) + MAX_TRAILER_SIZE];
 } received_t;
 
+static void observe_queue(mach_port_t receive, const char *phase) {
+  mach_port_status_t status = {0};
+  mach_msg_type_number_t count = MACH_PORT_RECEIVE_STATUS_COUNT;
+  kernel_ok(mach_port_get_attributes(mach_task_self(), receive, MACH_PORT_RECEIVE_STATUS,
+    (mach_port_info_t)&status, &count), "observe actual receive queue");
+  fprintf(stderr, "%s: pid=%d task=%u receive=%u queued=%u sendRights=%u\n", phase,
+    getpid(), mach_task_self(), receive, (unsigned int)status.mps_msgcount,
+    (unsigned int)status.mps_srights);
+}
+
 static void send_from_child(uint32_t sequence, pid_t claimed, int ready, int finish) {
   mach_port_array_t ports = NULL;
   mach_msg_type_number_t count = 0;
   kernel_ok(mach_ports_lookup(mach_task_self(), &ports, &count), "lookup inherited send right");
   require(count > 0 && MACH_PORT_VALID(ports[0]), "inherited port shape");
+  mach_port_type_t type = 0;
+  kernel_ok(mach_port_type(mach_task_self(), ports[0], &type), "observe inherited right type");
+  fprintf(stderr, "sender: pid=%d task=%u port=%u type=%u sequence=%u\n", getpid(),
+    mach_task_self(), ports[0], type, sequence);
   request_t request = {0};
   request.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
   request.header.msgh_size = sizeof request;
@@ -79,6 +93,7 @@ static void queued_probe(const char *name, int exit_before_receive) {
   }
   char marker = 0;
   require(read(ready[0], &marker, 1) == 1, "first message queued");
+  observe_queue(receive, "after-first-send");
   pid_t holder = fork(); require(holder >= 0, "independent second sender fork");
   if (holder == 0) {
     close(ready[0]); close(finish[1]);
@@ -90,7 +105,9 @@ static void queued_probe(const char *name, int exit_before_receive) {
   require(read(ready[0], &marker, 1) == 1, "second message queued"); close(ready[0]);
   int both_alive = kill(connector, 0) == 0 && kill(holder, 0) == 0;
   require(both_alive, "senders remain alive until explicit completion");
+  observe_queue(receive, "before-unregister");
   kernel_ok(mach_ports_register(mach_task_self(), NULL, 0), "remove owned registered rights");
+  observe_queue(receive, "after-unregister");
   if (exit_before_receive) {
     close(finish[1]); wait_success(connector); wait_success(holder);
   }

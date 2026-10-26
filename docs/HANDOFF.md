@@ -1,5 +1,15 @@
 # OMA v2 — 현재 인계
 
+## e37ad5e0 Mach 후보의 실제 receive 실패
+
+최신 push는 `e37ad5e09af764cd9c956de0d2a81a9fb9c1ef2b`다. Native CI40315665892에서
+두 Darwin SDK는 baseline/Mach 모두 compile0을 확인했다. Mach6개는 실제 receive timeout으로
+exit2이며 G-AUTH 통과가 아니다. Mac26 raw ZIP SHA 확인 후 `ci-e37ad5e0/12647290712/`에 보존했다.
+이는 후보 harness의 수신 실패로서 Mach audit trailer 자체의 불가능 증명으로도 사용하지 않는다.
+등록 해제 전후 실제 receive queue와 inherited right type을 기록해 원인을 구분하도록 확대한다.
+앞선 e997의 Mac26/15 공통 runtime각74/74·input2a646498… 동일 raw도 확보했다. 두 commit의
+전체 Linux CI는 계속 실행 중이며 결과를 확인해야 한다. root README만 원래 dirty다.
+
 ## e997fe37 실제 Mac SDK 후속
 
 `e997fe373be6bdeb7cb0dad75be89995c36d4fbf`를 작업 브랜치에 push했다. Native CI40315064670,
