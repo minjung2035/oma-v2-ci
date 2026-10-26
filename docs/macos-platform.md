@@ -88,7 +88,9 @@ witness 없는 opening은 새 효과나 빈 초기 상태를 허가하지 않는
 **MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,
 현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를
 유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.
-Resident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다. 중지와
+Resident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다.
+실행 이력이 없는 recovered empty slot과 Principal에는 Resident의 exit 0을 표시하지 않는다.
+빈 scope의 긍정적인 복구 관측과 unobserved는 구분한다. 중지와
 close는 실제 scope 종료와 별도로 diagnostic flush·FD 반환의 completion도 기다리며,
 application은 이 owner와 execution journal owner를 모두 정리한 뒤 Store를 닫는다.
 실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을
@@ -117,7 +119,7 @@ UTF-8 조각을 합치지 않는다. 부분 frame·UTF-8 tail·읽기 실패를 
 private 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에
 release byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는
 close-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.
-첫 protocol·권한 오류는 poison되어 후속 frame으로 성공을 만들지 못한다.
+첫 protocol·권한 오류와 불완전한 EOF는 poison되어 후속 frame이나 재호출로 성공을 만들지 못한다.
 
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,

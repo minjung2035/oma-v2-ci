@@ -103,8 +103,18 @@ export class ResidentRuntime<Witness> {
     return { ...record.observation };
   }
   observeAsync(actor: string): Promise<ExecutionObservation> { return Promise.resolve(this.observe(actor)); }
-  observeStatus(actors: readonly string[]): Promise<ReadonlyMap<string, ExecutionObservation>> {
-    return Promise.resolve(new Map(actors.map(actor => [actor, this.observe(actor)])));
+  observeStatus(actors: readonly string[]): Promise<ReadonlyMap<string, ExecutionObservation | "no-unit">> {
+    const result = new Map<string, ExecutionObservation | "no-unit">();
+    for (const actor of actors) {
+      const record = this.residents.get(actor);
+      // A recovered empty slot proves absence of an execution, not exit 0.
+      // Keep the internal idle observation for coordination, while the view
+      // distinguishes it from an execution whose outcome was observed.
+      const neverExecuted = !record || record.ticket === null && record.witness === null &&
+        record.starting === null && record.stopping === null && !record.uncertain && record.observation.invocationId === "";
+      result.set(actor, neverExecuted && this.ports.confirmDead(actor) ? "no-unit" : this.observe(actor));
+    }
+    return Promise.resolve(result);
   }
   confirmDead(actor: string, incarnation: number): boolean {
     const current = this.ports.incarnation(actor), record = this.residents.get(actor);

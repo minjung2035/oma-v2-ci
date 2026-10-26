@@ -31,6 +31,26 @@
     "../scenario-tool-surface.test.ts",
     "../crash-boundaries.test.ts",
     "../fixtures/crash-worker.ts",
-    "../fixtures/full-fs-harness.ts"
+    "../fixtures/full-fs-harness.ts",
+    "../r36-parser-fuzz.test.ts",
+    "../run-view-contracts.test.ts",
+    "../launch-topology.test.ts",
+    "../p0-review4.test.ts",
+    "../p0-review5.test.ts",
+    "../p0-review6.test.ts",
+    "../p0-review7.test.ts",
+    "../priority-0.test.ts",
+    "../adversarial-audit.test.ts",
+    "../cli.test.ts",
+    "../audit2.test.ts",
+    "../phase5.test.ts",
+    "../phase8.test.ts",
+    "../status-observation.test.ts",
+    "../status-responsiveness.test.ts",
+    "../quarantine-profile.test.ts",
+    "../sandbox-environment.test.ts",
+    "../receipt-settlement.test.ts",
+    "../launch-location.test.ts",
+    "../host-entry.test.ts"
   ]
 }

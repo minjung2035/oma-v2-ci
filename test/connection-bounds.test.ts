@@ -16,7 +16,7 @@ import type { ResolvedAgentSpec } from "@oma/contracts";
 import { ACTOR_CONNECTIONS, Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -28,8 +28,8 @@ test("V26A: a connection flood on an actor socket is bounded, and the Resident i
   const f = await preparedFixture(1);
   const id = "c".repeat(32);
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: id }),
-  } as unknown as UnitsModule;
+    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: OWN_CGROUP, invocationId: id }),
+  } as unknown as FeatureExecution;
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);

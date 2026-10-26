@@ -21,6 +21,27 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-26 전체 회귀 전환 후속
+
+미사용 domain cgroup parser/export를 제거하고 systemd parser fuzz를 현재 CandidateSetupStatus의
+fragmentation·fatal decode·오류/EOF poison oracle로 교체했다. 불완전한 EOF 후 준비 frame을
+다시 넣으면 final exec 권한이 열리던 반례를 재현·수리했다. 첫 오류와 EOF 실패는 같은 owner에
+남고 후속 write/finish로 성공을 만들지 못한다.
+
+Principal과 실제 실행 이력이 없는 recovered empty Resident slot은 종료 코드0의 실행으로
+표시하지 않는다. 공통 process owner의 status projection과 App 역할 projection이 각각 맡는다.
+서로 독립된 실제 namespace owner에서 같은 actor를 시작·중지하는 격리 시험을 추가했다.
+
+CLI·audit2의 기존 요청 키/stream/schema/receipt 단언은 실제 namespace PID2 test driver,
+private socketpair와 kernel peer/descent 경로에 연결했다. 테스트 driver는 제품 Worker/Pi의
+대체 qualification이 아니며 해당 제품 시험은 별도 실제 시나리오다. 기존 phase5 candidate의
+network·옛 cap 초과·owner/request 취소는 실제 scope/journal로 전환했고 전체 namespace 죽음과
+원래 오류를 모두 검증한다. 정책 전용 시험은 native pin/권한/죽음 증거를 만들지 않는다.
+
+선택 native integration은42개 시험 파일로 확대했다. 이 목록의 PASS와 root 전체 회귀는
+별개다. 현재 audit/phase4의 옛 물리 시험 전환·전체 정적/회귀·최종 설치 대조가 남았다.
+원문/기존 ID는 archive에 보존하며 고정 architecture와 authored review bytes는 변경하지 않는다.
+
 ### 2026-10-26 직접 실행 연결
 
 공통 `ExecutionCoordinator`가 durable opening→blocked namespace witness flush→현재 권한→

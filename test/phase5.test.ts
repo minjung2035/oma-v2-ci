@@ -17,19 +17,17 @@ import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { RunRegistry } from "@oma/broker/run-registry";
 import { actorSocketPathAt } from "@oma/domain/paths";
 import { runnerReceiptPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
-import { Broker, peerCgroup } from "@oma/broker";
+import { Broker } from "@oma/broker";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
-import { candidateCheckCommand } from "#oma-test/app/runtime/candidate-checks";
+import { candidateSandbox } from "@oma/platform-linux/candidate-sandbox";
 import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import type { AuthContext, Capability, ResolvedAgentSpec, RunLease, } from "@oma/contracts";
-import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
-requireSystemdTestManager();
 interface Env {
     dir: string;
     state: string;
@@ -38,9 +36,9 @@ interface Env {
     store: Store;
     mail: MailModule;
     broker: Broker;
-    cleanup: () => void;
+    cleanup: () => Promise<void>;
 }
-function envOf(): Env {
+async function envOf(): Promise<Env> {
     const dir = mkdtempSync(join(tmpdir(), "oma-t5-"));
     const state = join(dir, "state");
     const runRoot = join(dir, "run");
@@ -48,13 +46,7 @@ function envOf(): Env {
     mkdirSync(state, { recursive: true });
     mkdirSync(runRoot, { recursive: true });
     const store = new Store(join(state, "runtime.sqlite"));
-    const units = new UnitsModule(society, {
-        node: process.execPath,
-        libdir: "/usr/lib/oma",
-        state,
-        society,
-        agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
-    }, join(dir, "xdg"));
+    const units = new PolicyExecution();
     // Batch views require the host-configured frame and manifest limits; without
     // them preparation fails closed with UNSUPPORTED_PROFILE.
     const mail = createMailModule({ stateRoot: state, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
@@ -85,7 +77,7 @@ function envOf(): Env {
         society,
         hasGoal: goalPublishedAt(state),
     } });
-    broker.start();
+    await broker.start();
     return {
         dir,
         state,
@@ -94,9 +86,8 @@ function envOf(): Env {
         store,
         mail,
         broker,
-        cleanup: () => {
-            broker.drainAndClose();
-            cleanupOwnedSystemdUnits(dir, society);
+        cleanup: async () => {
+            await broker.drainAndClose();
             rmSync(dir, { recursive: true, force: true });
         },
     };
@@ -121,7 +112,7 @@ function seed(store: Store, specs: Array<[
     });
 }
 test("AUTH-002: durable effect requires the resolved method capability", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
         const auth = (capabilities: Capability[]): AuthContext => ({
@@ -156,7 +147,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
         const views = Reflect.get(env.broker, "views") as ViewsModule;
         const refresh = views.refreshWorld;
         try {
-            views.refreshWorld = () => { throw new Error("injected derived-view failure"); };
+            Reflect.set(env.broker, "views", { ...views, refreshWorld: () => { throw new Error("injected derived-view failure"); } });
             for (let attempt = 0; attempt < 2; attempt++) {
                 const receipt = await env.broker.dispatch(auth(["mail.send"]), { v: 1, id: "view-fault", method: "mail.send", request: "view-fault", params } as never, null);
                 assert.equal((receipt as {
@@ -167,7 +158,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
             }
         }
         finally {
-            views.refreshWorld = refresh;
+            Reflect.set(env.broker, "views", views);
         }
         const socketDirectory = Reflect.get(env.broker, "actorSocketDirectory");
         const socketOwner = { paths: { runRoot: `/run/user/1000/oma/${"s".repeat(31)}` } };
@@ -205,44 +196,32 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
         assert.equal(env.store.getOperation("a", "stopped"), null);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
-function adminCall(adminSock: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
+/** The retired pathname endpoint is an unconditional refusal. Only a directly
+ * inherited control channel can request runner.open; EOF grants no authority. */
+async function assertAdminClosed(adminSock: string, method: string, params: Record<string, unknown>): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        const chunks: Buffer[] = []; let connected = false, failure: Error | null = null;
         const sock = connect(adminSock, () => {
-            sock.write(encodeFrame({ v: 1, id: "t", method, params }));
+            connected = true; sock.write(encodeFrame({ v: 1, id: "t", method, params }));
         });
-        const parser = new FrameParser(256 * 1024);
-        let partial = Buffer.alloc(0);
-        const timer = setTimeout(() => {
-            sock.destroy();
-            reject(new Error("admin timeout"));
-        }, 10000);
-        sock.on("data", (d) => {
-            partial = Buffer.concat([partial, Buffer.from(d)]);
-            let done = false;
-            try {
-                for (const f of parser.feed(partial)) {
-                    if (!done) {
-                        done = true;
-                        clearTimeout(timer);
-                        sock.destroy();
-                        resolve(f.raw as Record<string, unknown>);
-                    }
-                }
-            }
-            catch {
-                /* incomplete frame; keep buffering */
-            }
-            partial = Buffer.alloc(0);
-        });
-        sock.on("error", (e) => {
+        const timer = setTimeout(() => { sock.destroy(); reject(new Error("admin refusal was not observed")); }, 10000);
+        sock.on("data", bytes => chunks.push(Buffer.from(bytes)));
+        sock.on("error", error => { failure = error; });
+        sock.once("close", () => {
             clearTimeout(timer);
-            reject(e);
+            try {
+                assert.equal(connected, true);
+                if (failure) assert.ok(["EPIPE", "ECONNRESET"].includes((failure as NodeJS.ErrnoException).code ?? ""), String(failure));
+                assert.equal(Buffer.concat(chunks).length, 0, "the retired endpoint must never serve a request");
+                resolve();
+            } catch (error) { reject(error); }
         });
     });
 }
+
 function auth(actor: string, caps: Capability[]): AuthContext {
     return {
         actor,
@@ -255,21 +234,18 @@ function auth(actor: string, caps: Capability[]): AuthContext {
 }
 // ---------------------------------------------------------------------------
 test("T11-neq: non-unit process cannot open a run on the runner channel", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
-        const reply = await adminCall(join(env.runRoot, "admin.sock"), "runner.open", { agent: "a", invocationId: "00000000000000000000000000000000" });
-        assert.equal(reply.ok, false);
-        assert.equal((reply.error as {
-            code: string;
-        }).code, "AUTH_FAILED");
+        await assertAdminClosed(join(env.runRoot, "admin.sock"), "runner.open", { agent: "a", invocationId: "00000000000000000000000000000000" });
+
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("T31-neg: forged batch.complete from outside the owning unit is rejected", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
         await env.mail.send(auth("a", ["mail.send"]), "self-1", {
@@ -280,162 +256,24 @@ test("T31-neg: forged batch.complete from outside the owning unit is rejected", 
         });
         const batch = await env.mail.prepare(auth("a", []));
         assert.ok(batch !== null);
-        const reply = await adminCall(join(env.runRoot, "admin.sock"), "batch.complete", {
+        await assertAdminClosed(join(env.runRoot, "admin.sock"), "batch.complete", {
             batchId: batch.id,
             incarnation: batch.incarnation,
             sessionPath: "/tmp/x",
             adapterRevision: "fake",
             receiptPath: "/tmp/fake.json",
         });
-        assert.equal(reply.ok, false);
-        assert.equal((reply.error as {
-            code: string;
-        }).code, "AUTH_FAILED");
+
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
-test("T42: principal relay moves new mail to cur, counts pending, spawns no model", async () => {
-    const env = envOf();
-    try {
-        seed(env.store, [
-            ["a", "resident", "enabled"],
-            ["principal", "principal", "enabled"],
-        ]);
-        const receipt = await env.mail.send(auth("a", ["mail.send"]), "q1", {
-            to: ["principal"],
-            subject: "question",
-            kind: "question",
-            body: "?",
-        });
-        assert.equal((receipt.result as {
-            recipientCount: number;
-        }).recipientCount, 1);
-        const newDir = join(env.state, "mail", "inboxes", "principal", "new");
-        assert.equal(readdirSync(newDir).length, 1);
-        const forged = await adminCall(join(env.runRoot, "host.sock"), "host.principalRelay", {});
-        assert.equal(forged.ok, false);
-        assert.equal((forged.error as {
-            code: string;
-        }).code, "AUTH_FAILED");
-        const helper = join(env.dir, "host-call.mjs");
-        const out = join(env.dir, "host-call.json");
-        writeFileSync(helper, `import { connect } from "node:net";
-const request = Buffer.from(JSON.stringify({v:1,id:"h",method:"host.principalRelay",params:{}}));
-const frame = Buffer.alloc(4 + request.length); frame.writeUInt32BE(request.length); request.copy(frame, 4);
-let data = Buffer.alloc(0); const socket = connect(process.env.OMA_HOST_SOCK, () => socket.write(frame));
-socket.on("data", chunk => { data = Buffer.concat([data, chunk]); if (data.length >= 4 && data.length >= 4 + data.readUInt32BE(0)) {
-  import("node:fs").then(fs => fs.writeFileSync(process.env.OMA_OUT, data.subarray(4, 4 + data.readUInt32BE(0)))); socket.destroy();
-}});`, "utf8");
-        const unit = `oma-${env.society}-principal-relay.service`;
-        const started = spawn("systemd-run", [
-            "--user",
-            "--quiet",
-            "--wait",
-            "--collect",
-            `--unit=${unit}`,
-            `--setenv=OMA_HOST_SOCK=${join(env.runRoot, "host.sock")}`,
-            `--setenv=OMA_OUT=${out}`,
-            process.execPath,
-            helper,
-        ], { env: process.env });
-        const exit = new Promise<number | null>((resolve) => started.on("exit", resolve));
-        for (let i = 0; i < 500 && !existsSync(out); i++)
-            await new Promise((resolve) => setTimeout(resolve, 20));
-        assert.equal(existsSync(out), true, "host unit produced no response");
-        assert.equal(await exit, 0);
-        const reply = JSON.parse(readFileSync(out, "utf8")) as Record<string, unknown>;
-        assert.equal(reply.ok, true);
-        const res = reply.result as {
-            moved: number;
-            pending: number;
-        };
-        assert.equal(res.moved, 1);
-        assert.equal(readdirSync(newDir).length, 0);
-        assert.equal(readdirSync(join(env.state, "mail", "inboxes", "principal", "cur"))
-            .length, 1);
-        assert.equal(env.store.preparedBatches("principal").length, 0);
-    }
-    finally {
-        env.cleanup();
-    }
-});
-test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", async () => {
-    const env = envOf();
-    const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("::")[1]!;
-    const registry = Reflect.get(env.broker, "runLeases") as RunRegistry;
-    const units = Reflect.get(env.broker, "units") as UnitsModule;
-    const observe = units.observe.bind(units);
-    try {
-        seed(env.store, [["a", "resident", "enabled"]]);
-        mkdirSync(join(env.state, "world", "context", "current"), { recursive: true });
-        const probe = openSync(join("/sys/fs/cgroup", cgroup), "r");
-        try {
-            assert.match(readFileSync(`/proc/self/fd/${probe}/cgroup.events`, "utf8"), /^populated 1$/m);
-        }
-        finally {
-            closeSync(probe);
-        }
-        // Fault seam: register a genuinely populated kernel cgroup as the previous
-        // run through the registry that owns the pin.
-        const previous = registry.begin("a", 1, "1".repeat(32), cgroup);
-        const baseline = observe("a");
-        units.observe = () => ({ ...baseline, cgroup, invocationId: "2".repeat(32) });
-        await assert.rejects(() => Reflect.get(env.broker, "openRun").call(env.broker, "a", "2".repeat(32)), /previous invocation cgroup/);
-        assert.equal(env.store.getAgent("a")!.incarnation, 1);
-        assert.equal(previous.population(), "populated", "a pinned cgroup is observed, never assumed dead");
-    }
-    finally {
-        units.observe = observe;
-        env.cleanup();
-    }
-});
-test("AUTH-003 fault seam: actor auth requires a live lease, matching invocation and pinned cgroup inode", async () => {
-    const env = envOf();
-    const units = Reflect.get(env.broker, "units") as UnitsModule;
-    const observe = units.observe.bind(units);
-    const registry = Reflect.get(env.broker, "runLeases") as RunRegistry;
-    const cg = peerCgroup(process.pid)!;
-    try {
-        seed(env.store, [["a", "resident", "enabled"]]);
-        const baseline = observe("a");
-        let invocation = "1".repeat(32);
-        units.observe = () => ({ ...baseline, cgroup: cg, invocationId: invocation });
-        let peerAlive = true; // Explicit peer-liveness seam; native pidfd has its own process-exit test.
-        const authenticate = () => Reflect.get(env.broker, "trustedContext").call(env.broker, "a", { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => peerAlive });
-        assert.equal(authenticate(), null, "an opening run has no live lease yet");
-        const record = registry.begin("a", 1, invocation, cg);
-        const lease = record.publish({ socketHostPath: actorSocketPathAt(join(env.dir, "R"), "a", 1), done: () => undefined });
-        const authenticated = authenticate() as AuthContext;
-        assert.equal(authenticated.actor, "a");
-        assert.equal(authenticated.capabilities.has("mail.send"), true);
-        invocation = "2".repeat(32);
-        assert.equal(authenticate(), null, "cgroup pathname alone is not invocation identity");
-        invocation = record.invocationId;
-        const inFlight = env.mail.send(authenticated, "lease-revoked", { to: ["a"], subject: "revoked", kind: "message", body: "body" });
-        record.revoke();
-        assert.equal(authenticate(), null);
-        assert.equal(authenticated.capabilities.size, 0, "revocation must invalidate in-flight authorization too");
-        await assert.rejects(inFlight, { code: "CAPABILITY_DENIED" });
-        assert.equal(env.store.getOperation("a", "lease-revoked"), null);
-        // The observed endpoint must match the pinned inode, not just a pathname.
-        units.observe = () => ({ ...baseline, cgroup: env.dir, invocationId: invocation });
-        assert.equal(authenticate(), null, "a different pinned inode cannot authenticate the same path");
-        units.observe = () => ({ ...baseline, cgroup: cg, invocationId: invocation });
-        assert.equal(authenticate(), null, "a revoked run cannot re-authenticate");
-        peerAlive = false;
-        assert.equal(authenticate(), null);
-        assert.equal(authenticated.capabilities.size, 0);
-        void lease;
-    }
-    finally {
-        units.observe = observe;
-        env.cleanup();
-    }
-});
+
+
+
 test("BATCH-001: failed view publication retries the same prepared snapshot", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
         await env.mail.send(auth("b", ["mail.send"]), "view-failure", {
@@ -454,11 +292,11 @@ test("BATCH-001: failed view publication retries the same prepared snapshot", as
         assert.match(readFileSync(view, "utf8"), new RegExp(frozen.id));
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid recovery", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["principal", "principal", "enabled"]]);
         const receipt = await env.mail.send(auth("a", ["mail.send"]), "relay-integrity", {
@@ -487,17 +325,17 @@ test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid reco
         assert.deepEqual(readFileSync(to), bytes);
         assert.equal(env.mail.moveToCur("principal", [id]), 0);
         writeFileSync(join(env.state, "mail", "inboxes", "principal", "new", "rogue"), bytes);
-        // A name that is not an internal message identity is refused before any move.
-        assert.throws(() => env.mail.moveToCur("principal", ["rogue"]), (error: unknown) => error instanceof TypeError || (error as {
-            code?: string;
-        }).code === "INVALID_REQUEST");
+        // A mailbox name without a durable delivery cannot acquire one by moving.
+        assert.throws(() => env.mail.moveToCur("principal", ["rogue"]), { code: "STORE_CORRUPT" });
+        assert.deepEqual(readFileSync(join(env.state, "mail/inboxes/principal/new/rogue")), bytes);
+        assert.equal(existsSync(join(env.state, "mail/inboxes/principal/cur/rogue")), false);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("T25 deterministic core: capped batches alternate direct and public mail", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [
             ["a", "resident", "enabled"],
@@ -555,11 +393,11 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
         assert.equal(env.store.getDelivery(batch.messageIds[0]!, "a")!.presented, 1);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("prepared batch manifest shape stays compatible with the trusted extension", async () => {
-    const env = envOf();
+    const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
         await env.mail.send(auth("a", ["mail.send"]), "s1", {
@@ -596,118 +434,85 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
         rmSync(vdir, { recursive: true, force: true });
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("SB-005-negative: candidate argv rejects empty commands and removes execution caps", () => {
-    const paths = { stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git", worldDir: "/state/world",
-        society: "demo", checkRootfs: "/trusted/rootfs", checkNode: process.execPath, checkAssetsDir: "/checks" };
+    const paths = { rootfs: "/trusted/rootfs", node: process.execPath, libdir: "/checks" };
     const check = { id: "bounds", argv: ["/bin/true"], env: {},
     };
-    const argv = candidateCheckCommand(paths, "a".repeat(40), check, []).argv;
+    const argv = candidateSandbox(paths, "a".repeat(40), check, []).argv;
     assert.equal(argv.includes("--size"), false);
     assert.ok(argv.includes("--share-net"));
-    assert.ok(argv.includes("--property=TasksMax=infinity"));
+    assert.equal(argv.some(arg => /TasksMax|MemoryMax|CPUQuota|RuntimeMaxSec/.test(arg)), false);
     assert.equal(argv.some(arg => /MemoryMax|CPUQuota|RuntimeMaxSec/.test(arg)), false);
-    assert.doesNotThrow(() => candidateCheckCommand(paths, "a".repeat(40), { ...check }, []));
-    assert.throws(() => candidateCheckCommand(paths, "a".repeat(40), { ...check, argv: [] }, []), (e: unknown) => e instanceof Error && (e as {
+    assert.doesNotThrow(() => candidateSandbox(paths, "a".repeat(40), { ...check }, []));
+    assert.throws(() => candidateSandbox(paths, "a".repeat(40), { ...check, argv: [] }, []), (e: unknown) => e instanceof Error && (e as {
         code?: string;
     }).code === "UNSUPPORTED_PROFILE");
 });
-test("SB-005: systemd timeout kills candidate descendants", { timeout: 10000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), "oma-t7-timeout-"));
-    const marker = join(dir, "late-marker");
-    try {
-        const child = `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(marker)}, "late"), 1000);`;
-        const parent = `const { spawn } = require("node:child_process"); spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setTimeout(() => {}, 2000);`;
-        const r = spawnSync("systemd-run", [
-            "--user",
-            "--wait",
-            "--collect",
-            "--service-type=exec",
-            "--property=RuntimeMaxSec=0.1s",
-            "--property=KillMode=control-group",
-            "--",
-            process.execPath,
-            "-e",
-            parent,
-        ], { encoding: "utf8" });
-        assert.notEqual(r.status, 0);
-        await new Promise((resolve) => setTimeout(resolve, 1300));
-        assert.equal(existsSync(marker), false);
-    }
-    finally {
-        rmSync(dir, { recursive: true, force: true });
-    }
-});
-test("DR37: real candidate checks use network, outlive legacy caps and stop their whole cgroup on owner loss or request cancellation", { timeout: 20000 }, async (t) => {
-    const { residentOptions, prepareResident } = await import('./fixtures/resident.js');
+
+test("NATIVE-CANDIDATE-DR37: real checks use network, outlive legacy caps and stop descendants on owner loss or request cancellation", { timeout: 20000 }, async t => {
+    const { residentOptions, prepareResident } = await import("./fixtures/resident.js");
     const { runGitText } = await import("@oma/process/policies");
     const { CandidateChecks } = await import("#oma-test/app/runtime/candidate-checks");
-    const { runProcess } = await import("@oma/process/run");
-    const { RESIDENT_PATHS } = await import('@oma/domain/resident-paths');
-    const { createServer } = await import('node:http');
-    const { once } = await import('node:events');
-    const dir = mkdtempSync(join(tmpdir(), 'oma-unlimited-check-'));
-    t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const opts = residentOptions(dir, process.cwd());
-    prepareResident(opts);
+    const { ExecutionJournal } = await import("@oma/storage/execution-journal");
+    const { ExecutionRuntime } = await import("#oma-test/app/runtime/execution-runtime");
+    const { pinNamespaceInit } = await import("@oma/native/pid-namespace");
+    const { RESIDENT_PATHS } = await import("@oma/domain/resident-paths");
+    const { createServer } = await import("node:http");
+    const { once } = await import("node:events");
+    const dir = mkdtempSync(join(tmpdir(), "oma-native-unlimited-check-"));
+    const opts = residentOptions(dir, process.cwd()); prepareResident(opts);
     const project = opts.paths.projectGit;
     const git = (argv: string[], input?: string) => {
         const result = runGitText(argv, { gitDir: project, ...(input === undefined ? {} : { input }), env: {
-                GIT_AUTHOR_NAME: 'fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
-                GIT_COMMITTER_NAME: 'fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid'
-            } });
-        assert.equal(result.status, 0, result.stderr);
-        return result.stdout.trim();
+            GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+        } });
+        assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
     };
-    git(['init', '--bare', project]);
-    const candidate = git(['commit-tree', git(['mktree'], ''), '-m', 'fixture']);
-    const paths = { stateRoot: dir, projectGit: project, contextGit: join(dir, 'context.git'), worldDir: join(dir, 'world'),
-        society: 'demo', checkRootfs: opts.confinement.host.rootfs,
-        checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
-    let interrupt = new AbortController();
-    let hits = 0;
-    let cgroup: string | undefined;
+    git(["init", "--bare", project]);
+    const candidate = git(["commit-tree", git(["mktree"], ""), "-m", "fixture"]);
+    const paths = { stateRoot: dir, projectGit: project, contextGit: join(dir, "context.git"), worldDir: join(dir, "world"), society: "demo",
+        checkRootfs: opts.confinement.host.rootfs, checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
+    ExecutionJournal.initialize(dir); const executions = new ExecutionRuntime(dir); await executions.recover();
+    const pins: ReturnType<typeof pinNamespaceInit>[] = [];
+    let interrupt = new AbortController(), hits = 0;
     const server = createServer((req, res) => {
-        hits++;
-        res.end('network-ok');
-        if (req.url === '/spawned')
-            void (async () => {
-                const command = candidateCheckCommand(paths, candidate, make('setInterval(()=>{},1000)'));
-                const unit = command.argv.find(arg => arg.startsWith('--unit='))!.slice(7);
-                const observed = await runProcess({ executable: '/usr/bin/systemctl', argv: ['--user', 'show', unit, '--property=ControlGroup', '--value'],
-                    env: { ...process.env }, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
-                assert.equal(observed.kind, 'exited');
-                cgroup = observed.stdout.toString().trim();
-                const tasks = await runProcess({ executable: '/usr/bin/systemctl', argv: ['--user', 'show', unit, '--property=TasksMax', '--value'],
-                    env: { ...process.env }, timeoutMs: 5000, stdoutBytes: 4096, stderrBytes: 4096 });
-                assert.equal(tasks.kind, 'exited');
-                assert.equal(tasks.stdout.toString().trim(), 'infinity');
-                interrupt.abort();
-            })();
+        hits++; res.end("network-ok");
+        if (req.url === "/spawned") interrupt.abort();
     });
-    server.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    t.after(() => { server.closeAllConnections(); server.close(); });
-    const url = `http://127.0.0.1:${(server.address() as {
-        port: number;
-    }).port}`;
-    const resources = { memoryBytes: 1, tasks: 1, cpuQuotaPercent: 1, stagingBytes: 1, checkTimeoutSeconds: 1 };
-    function make(code: string) { return { id: 'unrestricted', argv: [RESIDENT_PATHS.node, '--input-type=module', '-e', code], env: {},  }; }
-    await new CandidateChecks(paths).run(candidate, make(`await fetch('${url}/ordinary');await new Promise(r=>setTimeout(r,1500));`));
-    assert.equal(hits, 1, 'the actual checker reached the host service and passed beyond its old deadline');
-    for (const reason of ['owner', 'request'] as const) {
+    t.after(async () => {
+        await executions.close();
+        for (const pin of pins) pin.close();
+        server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        rmSync(dir, { recursive: true, force: true });
+    });
+    server.listen(0, "127.0.0.1"); await once(server, "listening");
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const execute: ConstructorParameters<typeof CandidateChecks>[1] = (command, signal, authorize, fds, prepared) =>
+        executions.run("candidate", command, signal, authorize, fds, undefined, () => {
+            const entry = ExecutionJournal.inspect(dir).find(entry => entry.slot === "candidate");
+            assert.ok(entry?.witness); const pin = pinNamespaceInit(entry.witness.pid);
+            assert.deepEqual(pin.identity, entry.witness); pins.push(pin); prepared();
+        });
+    const make = (code: string) => ({ id: "unrestricted", argv: [RESIDENT_PATHS.node, "--input-type=module", "-e", code], env: {} });
+    await new CandidateChecks(paths, execute).run(candidate, make(`await fetch('${url}/ordinary'); await new Promise(r=>setTimeout(r,1500));`), undefined, () => {});
+    assert.equal(hits, 1); assert.equal(pins.at(-1)!.population(), "empty");
+    for (const reason of ["owner", "request"] as const) {
         interrupt = new AbortController();
-        cgroup = undefined;
-        await assert.rejects(new CandidateChecks(paths, undefined, undefined, reason === 'owner' ? interrupt.signal : undefined).run(candidate, make(`
-const {spawn}=await import('node:child_process');spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
-await fetch('${url}/spawned');setInterval(()=>{},1000);`), reason === 'request' ? interrupt.signal : undefined), { code: reason === 'owner' ? 'REF_STATE_UNKNOWN' : 'CANCELLED_BEFORE_COMMIT' });
-        assert.ok((cgroup as string | undefined)?.startsWith('/'), 'the checker cgroup was actually observed before cancellation');
-        const events = `/sys/fs/cgroup${cgroup}/cgroup.events`;
-        assert.ok(!existsSync(events) || /^populated 0$/m.test(readFileSync(events, 'utf8')), `descendants survived ${reason} cancellation`);
+        const check = new CandidateChecks(paths, execute, undefined, reason === "owner" ? interrupt.signal : undefined);
+        await assert.rejects(check.run(candidate, make(`
+            const {spawn}=await import('node:child_process');
+            spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
+            await fetch('${url}/spawned'); setInterval(()=>{},1000);
+        `), reason === "request" ? interrupt.signal : undefined, () => {}), { code: reason === "owner" ? "REF_STATE_UNKNOWN" : "CANCELLED_BEFORE_COMMIT" });
+        assert.equal(pins.at(-1)!.population(), "empty", "actual namespace init death includes arbitrary descendants");
+        assert.equal(executions.confirmDead("candidate"), true); assert.deepEqual(ExecutionJournal.inspect(dir), []);
     }
+    assert.equal(hits, 3);
 });
+
 test("DR37: MCP command credentials execute through the installed adapter policy", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'oma-mcp-credential-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -764,3 +569,7 @@ test("DR37: web configured and per-call proxies perform real requests under the 
     await utils.runWithProxy(undefined, request);
     assert.deepEqual(requests, [destination, destination]);
 });
+
+// Retired relay/cgroup/runtime-limit cases keep their original IDs and bytes
+// in the raw archive. Current runner/Pi, credential sender and native scope
+// oracles qualify their actual mechanisms independently.

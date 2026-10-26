@@ -12,7 +12,7 @@ import { Store } from "@oma/storage";
 import { MailModule, expandAddresses } from "@oma/mail";
 import { expandAddresses as routingOwner } from "@oma/mail/routing";
 import { Broker } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
@@ -28,10 +28,10 @@ test("R31 public facade delegates status and mutation with the original authorit
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, join(root, "units"));
+  const units = new PolicyExecution();
   // WP23: status observes through the batched, asynchronous unit read.
   t.mock.method(units, "observeStatus", async (agents: readonly string[]) =>
-    new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }])));
+    new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" }])));
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);

@@ -196,10 +196,6 @@
       "types": "./dist/recovery-policy.d.ts",
       "default": "./dist/recovery-policy.js"
     },
-    "./cgroup-population": {
-      "types": "./dist/cgroup-population.d.ts",
-      "default": "./dist/cgroup-population.js"
-    },
     "./batch-settlement": {
       "types": "./dist/batch-settlement.d.ts",
       "default": "./dist/batch-settlement.js"

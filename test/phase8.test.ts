@@ -4,6 +4,8 @@ import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-compositio
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { serializePlanIntent } from "./fixtures/plan.js";
+// Resident policy fixture owns no actor execution. Quarantine uses the real
+// native backend; this is no process/authentication gate substitution.
 // Phase 8 acceptance: reconcile recovers pending mail/git effects, never
 // overwrites moved refs, and surfaces start-limits without reset (T68 core).
 import { test } from "node:test";
@@ -17,15 +19,14 @@ import { Store } from "@oma/storage";
 import { requestHash } from "@oma/domain/request-identity";
 import { publishedRefFor } from "@oma/domain/derived";
 import { MailModule } from "@oma/mail";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
+import { nativeQuarantine } from "./fixtures/git-crash.js";
 import { ReconcileModule } from "@oma/reconcile";
 import { LifecycleModule } from "@oma/lifecycle";
 import { GitModule, type GitPaths } from "@oma/git";
 import type { Capability } from "@oma/contracts";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
-import { requireSystemdTestManager } from "./fixtures/systemd.js";
-requireSystemdTestManager();
 const G = {
     ...process.env,
     GIT_CONFIG_NOSYSTEM: "1",
@@ -36,7 +37,7 @@ interface Env {
     dir: string;
     store: Store;
     mail: MailModule;
-    units: UnitsModule;
+    units: PolicyExecution;
     git: GitModule | null;
     recon: ReconcileModule;
     seal: () => void;
@@ -64,13 +65,7 @@ function envOf(withGit: boolean): Env {
         }
     });
     const mail = createMailModule({ stateRoot: join(dir, "state"), society }, store, 64);
-    const units = new UnitsModule(society, {
-        node: process.execPath,
-        libdir: "/l",
-        state: join(dir, "state"),
-        society,
-        agent: "", config: join(dir, "state", "config.json"), run: join(dir, "oma", society),
-    }, join(dir, "xdg"));
+    const units = new PolicyExecution();
     let git: GitModule | null = null;
     if (withGit) {
         const paths: GitPaths = {
@@ -80,7 +75,7 @@ function envOf(withGit: boolean): Env {
             worldDir: join(dir, "state", "world"),
             society,
         };
-        git = createGitModule(paths, store, mail, null);
+        git = createGitModule(paths, store, mail, null, null, null, nativeQuarantine(paths));
     }
     const lifecycle = createLifecycleModule(store, units, {
         stateRoot: join(dir, "state"),
@@ -290,7 +285,7 @@ test("T68c: canonical repo integrity is asserted; start-limit surface reported w
     try {
         seedBare(env);
         await new CanonicalHealthObserver(join(env.dir, "state", "repos", "project.git")).assertHealthy(); // clean repo passes; P0-2: the one health observation
-        assert.deepEqual(env.recon.startLimitState(), []); // no units installed => none
+        assert.deepEqual(env.recon.startLimitState(), []); // no failed native execution => none
     }
     finally {
         env.seal();

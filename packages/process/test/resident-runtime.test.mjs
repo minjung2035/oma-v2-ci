@@ -3,6 +3,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ResidentRuntime } from '../dist/resident-runtime.js';
+
+test('Resident status policy distinguishes unobserved scope from positively recovered absence', async () => {
+  let dead = false;
+  const runtime = new ResidentRuntime({ references: () => ({ profile: 'p', modelProfile: 'm' }), incarnation: () => 1,
+    confirmDead: () => dead, revoke() {}, hint() {}, failure() {},
+    async begin() { throw new Error('policy test must never launch'); } });
+  assert.equal((await runtime.observeStatus(['alice'])).get('alice').activeState, 'unknown');
+  dead = true;
+  assert.equal((await runtime.observeStatus(['alice'])).get('alice'), 'no-unit');
+  runtime.ensureResident('alice', 'p', 'm');
+  assert.equal((await runtime.observeStatus(['alice'])).get('alice'), 'no-unit');
+  await runtime.close();
+});
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const references = () => ({ profile: 'p', modelProfile: 'm' });
 

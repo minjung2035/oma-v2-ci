@@ -27,7 +27,7 @@ import { type BoundPeer } from "@oma/broker/ports";
 import { RunRegistry } from "@oma/broker/run-registry";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { resolvedSpecDigest } from "@oma/domain/spec-identity";
@@ -121,8 +121,7 @@ async function startSociety(prefix: string, supervised = true, host?: HostChanne
       specJson: JSON.stringify(PRINCIPAL_SPEC),
     }),
   );
-  const units = new UnitsModule("demo",
-    { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo") }, root);
+  const units = new PolicyExecution();
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = createLifecycleModule(store, units,
@@ -1700,7 +1699,7 @@ test("P0V-60 / R05, P0-2: the Principal's capabilities are read against what the
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
   store.transaction(() => store.insertAgent({ name: "principal", specHash: resolvedSpecDigest(PRINCIPAL_SPEC), role: "principal",
     desired: "enabled", incarnation: 0, profile: "p", createdBy: null, specJson: JSON.stringify(PRINCIPAL_SPEC) }));
-  const peers = new PeerAuthenticator(store, {} as UnitsModule, new RunRegistry(() => { throw new Error("this Principal-only test has no Worker scope"); }), "demo", () => undefined);
+  const peers = new PeerAuthenticator(store, {} as PolicyExecution, new RunRegistry(() => { throw new Error("this Principal-only test has no Worker scope"); }), "demo", () => undefined);
   const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer;
   let standing = true;

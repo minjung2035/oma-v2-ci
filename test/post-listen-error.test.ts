@@ -27,7 +27,7 @@ import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ConnectProxy, type EgressAudit } from "#oma-test/app/runtime/connect-proxy";
 import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -119,8 +119,8 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   // `listenActor` reaches the identical write.
   const f = await preparedFixture();
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: "", invocationId: "a".repeat(32) }),
-    observeStatus: async () => new Map() } as unknown as UnitsModule;
+    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: "", invocationId: "a".repeat(32) }),
+    observeStatus: async () => new Map() } as unknown as FeatureExecution;
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);

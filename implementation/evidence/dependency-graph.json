@@ -176,7 +176,6 @@
   "packages/domain/src/batch-settlement.ts",
   "packages/domain/src/canonical-json.ts",
   "packages/domain/src/capabilities.ts",
-  "packages/domain/src/cgroup-population.ts",
   "packages/domain/src/child-policy.ts",
   "packages/domain/src/config-format.ts",
   "packages/domain/src/context-policy.ts",
@@ -510,7 +509,6 @@
      "packages/domain/src/batch-settlement.ts",
      "packages/domain/src/canonical-json.ts",
      "packages/domain/src/capabilities.ts",
-     "packages/domain/src/cgroup-population.ts",
      "packages/domain/src/child-policy.ts",
      "packages/domain/src/config-format.ts",
      "packages/domain/src/context-policy.ts",
@@ -2205,7 +2203,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 174
+   "files": 173
   },
   {
    "index": 2,
@@ -2279,7 +2277,7 @@
    "files": 84
   }
  ],
- "files": 494,
+ "files": 493,
  "runtimeEdges": 1764,
  "typeOnlyEdges": 767,
  "runtimeEdgeMatrix": {

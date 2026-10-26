@@ -183,13 +183,13 @@ test("G02-ledger-r2: operational reads return complete results past the former d
     assert.equal(store.getDelivery(seeded.firstMessage, "alice")?.recipient, "alice");
     // The internal dispatcher's runner.pending answers over the same store.
     const peers = {
-      requireRunnerUnit: () => undefined, requireHostUnit: () => undefined,
+      requireRunnerUnit: () => undefined,
       runnerActor: () => "alice" as const,
       runnerAuth: () => ({ actor: "alice" }) as unknown as AuthContext,
     };
     const ports = { ...createInternalDispatchDataPorts(store, {} as unknown as MailModule, root), peers: projectInternalPeers(peers) };
     const dispatcher = new InternalDispatcher({
-      store: ports.store, mail: ports.mail, principalInboxNewEntries: ports.principalInboxNewEntries, peers: ports.peers,
+      store: ports.store, mail: ports.mail, peers: ports.peers,
       isDraining: () => false, assertAdmission: () => undefined,
 
       failureAnswer: (id: string, error: unknown) => ({ v: 1, id, ok: false, error }),

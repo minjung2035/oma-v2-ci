@@ -213,8 +213,10 @@ export class ViewsModule {
       return rows.map(row => {
         const work = pending.get(row.name);
         if (work === undefined) throw new StoreError("STORE_CORRUPT", "pending work projection lost an agent");
-        let observation: ReturnType<UnitObserve> = null;
-        try { observation = observe(row.name); } catch { /* A failed observation is not proof of running or exit zero. */ }
+        // Principal execution belongs to its host session. An idle Resident
+        // slot cannot become an observation that the Principal ran or exited.
+        let observation: ReturnType<UnitObserve> = row.role === "principal" ? "no-unit" : null;
+        if (row.role === "resident") try { observation = observe(row.name); } catch { /* Failed observation is not exit zero. */ }
         const unit = observation === "no-unit" ? null : observation;
         const known = unit !== null && unit.activeState !== "unknown" && unit.subState !== "unknown" &&
           unit.result !== "unknown" && Number.isSafeInteger(unit.execMainStatus) && unit.execMainStatus >= 0;

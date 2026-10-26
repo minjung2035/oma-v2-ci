@@ -12,7 +12,7 @@ import { unknownDashboard } from "./fixtures/dashboard.js";
 import { AcceptedFailure, StoreError, acceptedFailure, errorCodeOf, publicFailure } from "@oma/domain/errors";
 import { AdmissionGate } from "@oma/domain/admission";
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -20,7 +20,7 @@ import { Store } from "@oma/storage";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import { UnitsModule, renderUnit } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import type { ResolvedAgentSpec } from "@oma/contracts";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -126,7 +126,7 @@ test("P0V-69 / F2, P0-5: a BEGIN that fails with an I/O or unnamed error does no
 
 test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt closes admission; a view file that failed to write does not", async () => {
   const f = await preparedFixture(1);
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
+  const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
@@ -153,52 +153,16 @@ test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt clos
   }
 });
 
-test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name installed is that owner's, and no effect of this one reaches it", t => {
-  const dir = mkdtempSync(join(tmpdir(), "oma-unit-tree-"));
-  // Every systemctl call is recorded, and none reaches a real user manager.
-  const bin = join(dir, "bin"); mkdirSync(bin);
-  const log = join(dir, "systemctl.log");
-  writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\nexit 0\n`, { mode: 0o755 });
-  const savedPath = process.env.PATH; process.env.PATH = bin;
-  t.after(() => { process.env.PATH = savedPath; rmSync(dir, { recursive: true, force: true }); });
-  const values = (state: string) => ({ node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
-    config: join(state, "config.json"), run: join(dir, "run") });
-  const ours = new UnitsModule("demo", values(join(dir, "tree-b")), dir, () => 1);
-  const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
-  // The society called demo whose state tree is tree-a installed Resident alice.
-  const theirs = (template: string, agent: string, state: string) =>
-    renderUnit(`[Unit]\n${template}\nX-OMA-Owner=@STATE@\n`, { ...values(state), agent });
-  const service = theirs("Description=OMA @SOCIETY@ resident @AGENT@", "alice", join(dir, "tree-a"));
-  const path = theirs("Description=Wake OMA @SOCIETY@ resident @AGENT@ on mail", "alice", join(dir, "tree-a"));
-  writeFileSync(join(dir, "oma-demo-alice.service"), service);
-  writeFileSync(join(dir, "oma-demo-alice.path"), path);
-  assert.throws(() => ours.assertResidentNamesFree("alice"), conflict, "a create was accepted onto another tree's unit");
-  assert.throws(() => ours.ensureResident("alice", "p", "md"), conflict);
-  assert.throws(() => ours.start("alice", false), conflict);
-  // Stopping touches no foreign unit, but cannot prove an earlier run dead.
-  assert.throws(() => ours.stop("alice", 1), { code: "RUN_TERMINATION_UNKNOWN" });
-  assert.equal(ours.observe("alice").cgroup, "");
-  assert.equal(readFileSync(join(dir, "oma-demo-alice.service"), "utf8"), service, "another tree's unit was replaced");
-  const calls = (() => { try { return readFileSync(log, "utf8"); } catch { return ""; } })();
-  assert.doesNotMatch(calls, /alice/, `an effect of this society reached another tree's unit: ${calls}`);
-  // v0.1.0 owes no compatibility with units written before the owner line
-  // existed: a unit that names no owner is unknown, whoever's tree it names,
-  // and unknown is nobody's to replace (P0V-95 / R6-20).
-  writeFileSync(join(dir, "oma-demo-bob.service"), `[Unit]\nDescription=OMA demo resident bob\n[Service]\nExecStart=/n /l/runner.js --society demo --agent bob --config /c --state-root ${join(dir, "tree-a")} --run-root /r\n`);
-  assert.throws(() => ours.assertResidentNamesFree("bob"), conflict, "an ownerless unit of another tree was taken for this one's");
-  writeFileSync(join(dir, "oma-demo-carol.path"), `[Unit]\nDescription=Wake OMA demo resident carol on mail\n[Path]\nDirectoryNotEmpty=${join(dir, "tree-b")}/mail/inboxes/carol/new\n`);
-  assert.throws(() => ours.assertResidentNamesFree("carol"), conflict, "an ownerless unit naming this tree was trusted by its path alone");
-  // Its own tree's unit is its own.
-  writeFileSync(join(dir, "oma-demo-dave.service"), theirs("Description=OMA @SOCIETY@ resident @AGENT@", "dave", join(dir, "tree-b")));
-  assert.doesNotThrow(() => ours.assertResidentNamesFree("dave"));
-});
+// P0V-59/R04 and P0V-95 service-file ownership cases remain in the raw
+// archive. Real cross-owner isolation is NATIVE-RESIDENT-ISOLATION-01.
 
 test("P0V-58 / R03, P0-5: a drain that could not prove its Residents ended says so, and still gives back the Store", async () => {
-  // The lifetime passes the failure on and the entry ends the process with
-  // it (exit 1), whose death gives back the society lock (R37: a failed
-  // drain is not a reason to release the lock while this process lives).
+  // Ledger-only cleanup/error propagation; PolicyExecution owns no processes.
+  // The outer BrokerLifetime must first join its native owner; refusal retains
+  // Store and lock, as tested in packages/broker/test/native-lifetime.test.mjs.
+  // This case supplies no kernel termination or fence-release evidence.
   const f = await preparedFixture(1);
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
+  const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);

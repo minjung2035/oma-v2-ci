@@ -34,7 +34,10 @@ const context = { limits };
 test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
   assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 9);
+  assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
+    "batch.complete", "batch.prepare", "batch.read", "principal.attach", "principal.detach",
+    "runner.observe", "runner.open", "runner.pending",
+  ]);
   assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);
   for (const [method, descriptor] of Object.entries(PUBLIC_METHODS)) {
     assert.equal(isInternalMethod(method), false);
@@ -60,7 +63,7 @@ test("conditional authority and stream policy are not replaced with capability-o
   assert.equal(PUBLIC_METHODS["context.publish"].stream, "required-content");
   assert.equal(INTERNAL_METHODS["batch.complete"].evidence, "boundary");
   assert.equal(INTERNAL_METHODS["principal.attach"].channel, "extension");
-  assert.equal(INTERNAL_METHODS["host.principalRelay"].lease, "host-unit");
+  assert.equal(isInternalMethod("host.principalRelay"), false, "the retired host relay cannot authorize a request");
 });
 
 test("the shared params decoder is closed and consumes the caller's host limits", () => {

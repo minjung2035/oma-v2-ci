@@ -5254,8 +5254,8 @@
   {
     "requirement": "NATIVE-013",
     "source": "docs/macos-platform.md",
-    "digest": "04a9c7faff92c1d149cd44d6b5a2ae0ac11cfa8c2d773a41c0aa72746951d2ff",
-    "normativeText": "**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,\n현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를\n유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.\nResident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다. 중지와\nclose는 실제 scope 종료와 별도로 diagnostic flush·FD 반환의 completion도 기다리며,\napplication은 이 owner와 execution journal owner를 모두 정리한 뒤 Store를 닫는다.\n실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을\n사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를\n허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나\nshell script로 대체하지 않는다.",
+    "digest": "a30ccc6d13aff73529919c19ebc3683ddfcdaedf7bfe36a61e4e4551659c66ea",
+    "normativeText": "**MUST [NATIVE-013]** foreground broker의 공통 Resident owner가 accepted profile/model 참조,\n현재 incarnation, wake·재시작·중지·로그 수명을 조정한다. slot별 실행 하나와 메모리 backoff를\n유지하며 timer는 hint만 보낸다. Linux systemd/path/journald 및 host relay fallback을 두지 않는다.\nResident owner의 close는 새 start를 영구 차단하고 모든 slot의 정리를 시도한다.\n실행 이력이 없는 recovered empty slot과 Principal에는 Resident의 exit 0을 표시하지 않는다.\n빈 scope의 긍정적인 복구 관측과 unobserved는 구분한다. 중지와\nclose는 실제 scope 종료와 별도로 diagnostic flush·FD 반환의 completion도 기다리며,\napplication은 이 owner와 execution journal owner를 모두 정리한 뒤 Store를 닫는다.\n실제 scope owner는 Resident·candidate·quarantine 모두에서 같은 journal/gate/death 정책을\n사용한다. 검증과 import는 별도 sandbox scope이며 첫 scope의 전체 종료 뒤에만 canonical RW를\n허용한다. 읽기 전용 canonical mount·held directory FD 결박·exact checkout을 pathname 재검사나\nshell script로 대체하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/process/src/resident-runtime.ts#ResidentRuntime",
@@ -5271,7 +5271,10 @@
       "packages/process/test/resident-supervisor.test.mjs#stop",
       "test/native-git-execution.test.mjs#native quarantine",
       "test/native-resident-runtime.test.mjs#Resident close",
-      "test/scenario-society.test.ts#NATIVE-SCN-01"
+      "test/scenario-society.test.ts#NATIVE-SCN-01",
+      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-ISOLATION-01",
+      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-STATUS-01",
+      "test/status-observation.test.ts#AV9"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5349,8 +5352,8 @@
   {
     "requirement": "NATIVE-017",
     "source": "docs/macos-platform.md",
-    "digest": "5371af1ef2325bce42fd909ce15cd92c0efab174fc1f3be7080700a937032439",
-    "normativeText": "**MUST [NATIVE-017]** DR55 candidate setup은 exact checkout 뒤 check argv를 exec하기 전에\nprivate 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에\nrelease byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는\nclose-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.\n첫 protocol·권한 오류는 poison되어 후속 frame으로 성공을 만들지 못한다.",
+    "digest": "610fd904acb24cc5dcd30a8610e0ae1d5a74fdfb1e509ede0388cc0337419987",
+    "normativeText": "**MUST [NATIVE-017]** DR55 candidate setup은 exact checkout 뒤 check argv를 exec하기 전에\nprivate 준비 상태를 보낸다. host가 현재 authority·취소 상태를 다시 확인하고 별도 private gate에\nrelease byte를 써야만 exec할 수 있다. EOF·준비 상태·로그만으로 gate를 열지 않는다. 상태 FD는\nclose-on-exec이고 release FD는 exec 전에 닫으며, check가 setup 상태를 위조할 수 없게 한다.\n첫 protocol·권한 오류와 불완전한 EOF는 poison되어 후속 frame이나 재호출로 성공을 만들지 못한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/git/src/candidate-check.ts#CandidateSetupStatus",
@@ -5363,7 +5366,9 @@
     ],
     "negativeTests": [
       "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
-      "test/candidate-checks.test.ts#INT-007/P0-1"
+      "test/candidate-checks.test.ts#INT-007/P0-1",
+      "test/candidate-checks.test.ts#INT-007/P0-5",
+      "test/r36-parser-fuzz.test.ts#R36"
     ],
     "evidence": null,
     "status": "unverified",

@@ -1,11 +1,9 @@
 // D03/WP03: one launch location, decided by the host and carried verbatim.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { hostLaunchLocation, launchedLocation, launchedPath, launchLocationArgv } from "#oma-test/app/runtime/assets";
-import { renderUnit, renderedExecArgv, UNIT_TPL_DIR } from "@oma/platform-linux/units";
 
 test("D03 host location: XDG roots from the host's environment and an absolute config path", () => {
   const custom = hostLaunchLocation("demo", { XDG_DATA_HOME: "/d", XDG_RUNTIME_DIR: "/r", HOME: "/h" }, "rel/c.json");
@@ -45,36 +43,5 @@ test("D03 launched location: every part given once, normalized, absolute and nam
   assert.equal(launchedPath(["--run-root", "/r/oma/demo"], "runRoot", "demo"), "/r/oma/demo");
 });
 
-const residentValues = {
-  node: "/n", libdir: "/l", state: "/s p/oma/demo", society: "demo", agent: "a", config: "/c $%/x.json", run: "/r/oma/demo",
-  profileHex: "70", modelProfileHex: "6d64", toolSurfaceHex: "7b7d",
-};
-
-test("D03 resident unit: the product runs the broker, so nothing is bound and the location lands as exact ExecStart words", () => {
-  const template = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
-  const product = renderUnit(template, { ...residentValues });
-  assert.doesNotMatch(product, /^(BindsTo|After|Requires)=/m);
-  assert.match(product, /^ExecStart=\/n \/l\/apps\/oma\/dist\/entry\/runner\.js --society demo --agent a --config \/c\\x20\$\$%%\/x\.json --state-root \/s\\x20p\/oma\/demo --run-root \/r\/oma\/demo$/m);
-  // The path unit watches the inbox under the same root, verbatim.
-  assert.match(renderUnit(readFileSync(join(UNIT_TPL_DIR, "resident.path.in"), "utf8"), residentValues),
-    /^DirectoryNotEmpty=\/s p\/oma\/demo\/mail\/inboxes\/a\/new$/m);
-});
-
-test("D03 resident unit: a missing location is refused, never defaulted", () => {
-  const template = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
-  const { config: _config, ...noConfig } = residentValues;
-  assert.throws(() => renderUnit(template, { ...noConfig }), /unit template input is missing: CONFIG_ARG/);
-  const { run: _run, ...noRun } = residentValues;
-  assert.throws(() => renderUnit(template, { ...noRun }), /unit template input is missing: RUN_ARG/);
-  const host = renderUnit(readFileSync(join(UNIT_TPL_DIR, "principal-relay.service.in"), "utf8"), { ...residentValues });
-  assert.doesNotMatch(host, /^(BindsTo|After|Requires)=/m);
-  assert.match(host, / --run-root \/r\/oma\/demo$/m);
-});
-
-test("D03 effective ExecStart: the words systemd reports are the rendered ones, escapes undone", () => {
-  const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8"), { ...residentValues });
-  // `$$` stays until execution; C escapes and specifiers are resolved at load.
-  assert.deepEqual(renderedExecArgv(rendered), ["/n", "/l/apps/oma/dist/entry/runner.js", "--society", "demo", "--agent", "a",
-    "--config", "/c $$%/x.json", "--state-root", "/s p/oma/demo", "--run-root", "/r/oma/demo"]);
-  assert.equal(renderedExecArgv("[Path]\nDirectoryNotEmpty=/x\n"), null);
-});
+// Literal runner argv and custom roots are verified through the actual broker
+// entry in NATIVE-TOPO-01/02, rather than a removed service renderer.

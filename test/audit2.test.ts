@@ -4,7 +4,7 @@ import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-compositio
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // Second focused runtime-correctness audit (P0-1/2/3 + P1-7/8): real socket
-// E2E through the cgroup-authenticated actor channel. A systemd user unit runs
+// E2E through the native scope-authenticated actor channel. A real PID2 runner runs
 // a raw-socket driver (encodeFrame/FrameParser) so we can exercise pipelining,
 // stream-length/excess, closed-schema validation, and status filtering at the
 // actual broker boundary — never only unit-testing the decoder.
@@ -19,7 +19,7 @@ import { spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { UnitsModule, unitName } from "@oma/platform-linux/units";
+import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { GitModule } from "@oma/git";
@@ -27,9 +27,7 @@ import { ReconcileModule } from "@oma/reconcile";
 import { Broker } from "@oma/broker";
 import type { ResolvedAgentSpec } from "@oma/contracts";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
-import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
 import { requireBoundedRejection } from "./fixtures/verification-oracles.js";
-requireSystemdTestManager();
 const G = {
     ...process.env,
     GIT_CONFIG_NOSYSTEM: "1",
@@ -43,9 +41,10 @@ interface Env {
     runRoot: string;
     society: string;
     store: Store;
-    cleanup: () => void;
+    units: NativeScriptResidents;
+    cleanup: () => Promise<void>;
 }
-function envOf(): Env {
+async function envOf(): Promise<Env> {
     const dir = mkdtempSync(join(tmpdir(), "oma-a2-"));
     const state = join(dir, "state");
     const runRoot = join(dir, "run");
@@ -70,13 +69,7 @@ function envOf(): Env {
             });
         }
     });
-    const units = new UnitsModule(society, {
-        node: process.execPath,
-        libdir: "/usr/lib/oma",
-        state,
-        society,
-        agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
-    }, join(dir, "xdg"));
+    const units = await nativeScriptResidents(store, state);
     const mail = createMailModule({ stateRoot: state, society }, store, 64);
     const resolver = (_p: {
         name: string;
@@ -105,7 +98,7 @@ function envOf(): Env {
         contextGit: join(state, "repos", "context.git"),
         worldDir: join(state, "world"),
         society,
-    }, store, mail, { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] });
+    }, store, mail, { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] }, null, null, units.quarantine({ stateRoot: state, projectGit: join(state, "repos/project.git"), contextGit: join(state, "repos/context.git"), worldDir: join(state, "world"), society }));
     const recon = createReconcileModule(store, mail, git, null, units, lifecycle, {
         hasGoal: () => true,
         activationAllowed: () => true,
@@ -130,21 +123,17 @@ function envOf(): Env {
         idleStreamSeconds: 1,
         receiptWaitSeconds: 30,
     } });
-    broker.start();
+    units.attach(broker);
+    await broker.start();
     return {
         dir,
         state,
         runRoot,
         society,
-        store,
-        cleanup: () => {
-            try {
-                broker.drainAndClose();
-            }
-            catch {
-                /* already closed */
-            }
-            cleanupOwnedSystemdUnits(dir, society);
+        store, units,
+        cleanup: async () => {
+            await units.closeExecution();
+            await broker.drainAndClose();
             rmSync(dir, { recursive: true, force: true });
         },
     };
@@ -218,20 +207,22 @@ function makeCandidate(env: Env, base: string, tag: string): {
     return { candidate, bundle: Buffer.from(readFileSync(bpath)) };
 }
 /**
- * Raw socket driver, run inside the agent unit (cgroup-authenticated actor
+ * Raw socket driver, run inside the owned PID namespace (scope-authenticated actor
  * channel). Drives writes with explicit byte-level control and collects all
  * reply frames in arrival order.
  */
 const DRIVER = String.raw `import { writeFileSync, readFileSync } from "node:fs";
-import { connect } from "node:net";
+import { connect, Socket } from "node:net";
 import { FrameParser, encodeFrame } from "@ABS@";
+const control = new Socket({ fd: 6, readable: true, writable: true });
 
 async function main() {
   const admin = process.env.OMA_ADMIN_SOCK;
   const scenarios = JSON.parse(readFileSync(process.env.OMA_SCENARIOS_FILE, "utf8"));
   // obtain the actor socket via runner.open
   const actorSock = await new Promise((resolve, reject) => {
-    const s = connect(admin, () => s.write(encodeFrame({ v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.INVOCATION_ID } })));
+    const s = control;
+    s.write(encodeFrame({ v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.INVOCATION_ID } }));
     const parser = new FrameParser(256 * 1024);
     let buf = Buffer.alloc(0);
     const t = setTimeout(() => reject(new Error("no lease")), 30000);
@@ -279,14 +270,16 @@ async function main() {
   writeFileSync(process.env.OMA_OUT, JSON.stringify(results));
   process.exit(0);
 }
-main().catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
+main().then(() => process.exit(0)).catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
 `;
 const CONCURRENT_DRIVER = String.raw `import { writeFileSync, readFileSync } from "node:fs";
-import { connect } from "node:net";
+import { connect, Socket } from "node:net";
 import { FrameParser, encodeFrame } from "@ABS@";
+const control = new Socket({ fd: 6, readable: true, writable: true });
 
 const once = (path, request) => new Promise((resolve, reject) => {
-  const sock = connect(path, () => sock.write(encodeFrame(request)));
+  const sock = path === process.env.OMA_ADMIN_SOCK ? control : connect(path, () => sock.write(encodeFrame(request)));
+  if (sock === control) sock.write(encodeFrame(request));
   const parser = new FrameParser(256 * 1024);
   let buf = Buffer.alloc(0);
   const timer = setTimeout(() => { sock.destroy(); reject(new Error("request timeout")); }, 30000);
@@ -295,7 +288,7 @@ const once = (path, request) => new Promise((resolve, reject) => {
     try {
       for (const f of parser.feed(buf)) {
         clearTimeout(timer);
-        sock.destroy();
+        if (sock !== control) sock.destroy();
         resolve(f.raw);
         return;
       }
@@ -316,10 +309,10 @@ async function main() {
   writeFileSync(process.env.OMA_OUT, JSON.stringify(replies));
 }
 
-main().catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
+main().then(() => process.exit(0)).catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
 `;
 test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema, status filter", async (t) => {
-    const env = envOf();
+    const env = await envOf();
     const society = env.society;
     try {
         const base = seedProject(env);
@@ -756,42 +749,14 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
             },
         ];
         const driverPath = join(env.dir, "driver.mjs");
-        writeFileSync(driverPath, DRIVER.replace("@ABS@", join(ROOT, "apps", "oma", "dist", "frame.js")), "utf8");
+        writeFileSync(driverPath, DRIVER.replace("@ABS@", new URL(import.meta.resolve("@oma/protocol/frame")).pathname), "utf8");
         writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify(scenarios), "utf8");
         const outPath = join(env.dir, "out.json");
-        const unit = unitName(society, "a", "service");
-        writeFileSync(join(env.dir, unit), [
-            "[Unit]",
-            "Description=audit2 driver",
-            "[Service]",
-            "Type=oneshot",
-            `Environment=OMA_ADMIN_SOCK=${join(env.runRoot, "admin.sock")}`,
-            `Environment=OMA_ACTOR=a`,
-            `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
-            `Environment=OMA_OUT=${outPath}`,
-            `Environment=HOME=${env.dir}`,
-            `ExecStart=${process.execPath} ${driverPath}`,
-            "[Install]",
-            "WantedBy=default.target",
-            "",
-        ].join("\n"), "utf8");
-        const link = spawnSync("systemctl", ["--user", "link", join(env.dir, unit)], { env: G });
-        assert.equal(link.status, 0, `link: ${link.stderr}`);
-        spawnSync("systemctl", ["--user", "daemon-reload"], { env: G });
-        const started = spawn("systemctl", ["--user", "start", unit], { env: G });
-        const startExit = new Promise<number | null>((resolve) => {
-            const t2 = setTimeout(() => resolve(null), 90000);
-            started.on("exit", (c) => {
-                clearTimeout(t2);
-                resolve(c);
-            });
+        await env.units.runScript("a", driverPath, {
+            OMA_ADMIN_SOCK: "private-runner-control", OMA_ACTOR: "a", OMA_SCENARIOS_FILE: join(env.dir, "scenarios.json"),
+            OMA_OUT: outPath, HOME: env.dir,
         });
-        const deadline = Date.now() + 120000;
-        while (!existsSync(outPath) && Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 300));
-        }
-        assert.equal(await startExit, 0, "unit start failed");
-        assert.ok(existsSync(outPath), "driver produced no output");
+        assert.ok(existsSync(outPath), "native driver produced no output");
         const results = JSON.parse(readFileSync(outPath, "utf8")) as Array<{
             name: string;
             replies?: Array<{
@@ -901,11 +866,11 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         assert.equal(byName("neg-read-request")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "read method with top-level request");
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });
 test("P0-C: concurrent request-key races converge on one actor-socket effect", async (t) => {
-    const env = envOf();
+    const env = await envOf();
     try {
         const mail = (id: string, key: string, body: string) => ({
             v: 1, id, method: "mail.send", request: key,
@@ -915,30 +880,13 @@ test("P0-C: concurrent request-key races converge on one actor-socket effect", a
         const driverPath = join(env.dir, "concurrent-driver.mjs");
         const requestsPath = join(env.dir, "concurrent-requests.json");
         const outPath = join(env.dir, "concurrent-out.json");
-        writeFileSync(driverPath, CONCURRENT_DRIVER.replace("@ABS@", join(ROOT, "apps", "oma", "dist", "frame.js")), "utf8");
+        writeFileSync(driverPath, CONCURRENT_DRIVER.replace("@ABS@", new URL(import.meta.resolve("@oma/protocol/frame")).pathname), "utf8");
         writeFileSync(requestsPath, JSON.stringify(requests), "utf8");
-        const unit = unitName(env.society, "a", "service");
-        writeFileSync(join(env.dir, unit), [
-            "[Unit]",
-            "Description=concurrent audit driver",
-            "[Service]",
-            "Type=oneshot",
-            `Environment=OMA_ADMIN_SOCK=${join(env.runRoot, "admin.sock")}`,
-            `Environment=OMA_ACTOR=a`,
-            `Environment=OMA_REQUESTS_FILE=${requestsPath}`,
-            `Environment=OMA_OUT=${outPath}`,
-            `Environment=HOME=${env.dir}`,
-            `ExecStart=${process.execPath} ${driverPath}`,
-            "[Install]",
-            "WantedBy=default.target",
-            "",
-        ].join("\n"), "utf8");
-        assert.equal(spawnSync("systemctl", ["--user", "link", join(env.dir, unit)], { env: G }).status, 0);
-        spawnSync("systemctl", ["--user", "daemon-reload"], { env: G });
-        const started = spawn("systemctl", ["--user", "start", unit], { env: G });
-        const exit = await new Promise<number | null>((resolve) => started.once("exit", (code) => resolve(code)));
-        assert.equal(exit, 0);
-        assert.ok(existsSync(outPath));
+        await env.units.runScript("a", driverPath, {
+            OMA_ADMIN_SOCK: "private-runner-control", OMA_ACTOR: "a", OMA_REQUESTS_FILE: requestsPath,
+            OMA_OUT: outPath, HOME: env.dir,
+        });
+        assert.ok(existsSync(outPath), "native concurrent driver produced no output");
         const replies = JSON.parse(readFileSync(outPath, "utf8")) as Array<{
             ok?: boolean;
             result?: {
@@ -961,6 +909,6 @@ test("P0-C: concurrent request-key races converge on one actor-socket effect", a
         assert.equal(env.store.deliveriesForOperation(raceDiff.id).length, 1);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });

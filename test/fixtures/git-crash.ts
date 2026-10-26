@@ -25,11 +25,12 @@ export function gitCommand(root: string, args: string[]): string {
         throw new Error(`git ${args.join(" ")}: ${out.stderr ?? out.error?.message ?? "unknown outcome"}`);
     return out.stdout.trim();
 }
-export function gitFixture(root: string, store: Store, options: { afterImport?: () => void } = {}) {
-    const paths: GitPaths = {
-        stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
-        checkRootfs: join(root, "native-fixture-rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd(),
-    };
+/** Disposable feature fixture backend. All phase effects use production
+ * scope/journal primitives; no host import or fabricated death observation. */
+export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: () => void } = {}): QuarantineExecution {
+    const root = pathsInput.stateRoot;
+    const paths = { ...pathsInput, checkRootfs: pathsInput.checkRootfs ?? join(root, "native-fixture-rootfs"),
+      checkNode: pathsInput.checkNode ?? process.execPath, checkAssetsDir: pathsInput.checkAssetsDir ?? process.cwd() };
     // Disposable fixture state is explicitly initialized. Every effect uses
     // the production scope/journal and Linux sandbox; there is no host Git
     // import fallback. Each phase drains its owner before returning to Git.
@@ -47,6 +48,14 @@ export function gitFixture(root: string, store: Store, options: { afterImport?: 
         return result;
       },
     };
+    return quarantine;
+}
+export function gitFixture(root: string, store: Store, options: { afterImport?: () => void } = {}) {
+    const paths: GitPaths = {
+        stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
+        checkRootfs: join(root, "native-fixture-rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd(),
+    };
+    const quarantine = nativeQuarantine(paths, options);
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
     const git = createGitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] }, null, null, quarantine);
     return { git, mail, paths };

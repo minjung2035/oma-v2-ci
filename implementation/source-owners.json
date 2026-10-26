@@ -1021,7 +1021,10 @@
       "packages/process/test/resident-supervisor.test.mjs#stop",
       "test/native-git-execution.test.mjs#native quarantine",
       "test/native-resident-runtime.test.mjs#Resident close",
-      "test/scenario-society.test.ts#NATIVE-SCN-01"
+      "test/scenario-society.test.ts#NATIVE-SCN-01",
+      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-ISOLATION-01",
+      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-STATUS-01",
+      "test/status-observation.test.ts#AV9"
     ]
   },
   {
@@ -1089,7 +1092,9 @@
     ],
     "negativeTests": [
       "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
-      "test/candidate-checks.test.ts#INT-007/P0-1"
+      "test/candidate-checks.test.ts#INT-007/P0-1",
+      "test/candidate-checks.test.ts#INT-007/P0-5",
+      "test/r36-parser-fuzz.test.ts#R36"
     ]
   }
 ]

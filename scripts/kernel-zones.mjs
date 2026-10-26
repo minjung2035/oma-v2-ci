@@ -11,7 +11,6 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "packages/tool-files/src/errors.ts",
       "packages/domain/src/recovery-policy.ts",
-      "packages/domain/src/cgroup-population.ts",
       "packages/domain/src/batch-settlement.ts",
       "packages/domain/src/protocol-limits.ts",
       "packages/domain/src/extension-paths.ts",

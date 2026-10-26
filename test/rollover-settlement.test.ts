@@ -16,7 +16,7 @@ import type { AuthContext, ResolvedAgentSpec } from "@oma/contracts";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
@@ -29,14 +29,14 @@ const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[
 const FIRST = "a".repeat(32);
 const SECOND = "b".repeat(32);
 
-function unitsNaming(invocation: () => string): UnitsModule {
+function unitsNaming(invocation: () => string): FeatureExecution {
   return {
     onRevokeRun: undefined,
     bindIncarnationReader: () => undefined,
     observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0,
-      cgroup: OWN_CGROUP, invocationId: invocation() }),
+      scope: OWN_CGROUP, invocationId: invocation() }),
     unitCgroup: () => "",
-  } as unknown as UnitsModule;
+  } as unknown as FeatureExecution;
 }
 async function restartedBroker(f: ReceiptFixture, invocation: () => string): Promise<Broker> {
   const units = unitsNaming(invocation);

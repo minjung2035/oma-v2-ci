@@ -213,6 +213,7 @@ test("P9 fuzz persisted version classifier: unknown formats stay unknown and are
       assert.ok(typeof kind === "string" && isMutationMethod(kind), "v2 classification requires a method owner kind");
       continue;
     }
+    assert.ok("reason" in classification, "a historical v2 envelope cannot acquire native v3 meaning");
     unknown++;
     assert.ok(typeof classification.reason === "string" && classification.reason.length > 0);
     assert.notEqual(classification.format, "v2");

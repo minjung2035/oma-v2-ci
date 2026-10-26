@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "ba4bd9144dd4131c39b50a0374a1257bc1e9d7c014fb8f718e537c2c7c3f376c",
+  "manifest": "18ffcde0ecc193330bae53b9e1f7489c289e82ca67bc56e15b5cf4dedd969242",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -452,7 +452,7 @@
     },
     {
       "path": "apps/oma/src/views.ts",
-      "sha256": "7ffb7eccc24530be16b450014ac721c83927cb270dff10468f06b90f6c5cda57"
+      "sha256": "c37eb6705c88910eff73732b9cce5d7785c867f49ac253693d244bd1961997ed"
     },
     {
       "path": "apps/oma/src/views/mail-notices.ts",
@@ -680,7 +680,7 @@
     },
     {
       "path": "packages/domain/package.json",
-      "sha256": "c3d0f68a511fc5017776ad7963de9388812fe0adc094ae0f20524907348e1dc9"
+      "sha256": "0285b84c281f64e06af864f0632bc5b2314e06ff2ba857a3d48811cfa854cdde"
     },
     {
       "path": "packages/domain/src/actor-address.ts",
@@ -729,10 +729,6 @@
     {
       "path": "packages/domain/src/capabilities.ts",
       "sha256": "8253416417f332d999f00f05f59dd408558fd6b59ee4a4677d0bf63aa2ff0129"
-    },
-    {
-      "path": "packages/domain/src/cgroup-population.ts",
-      "sha256": "cf95998e1fcde355e4861801805250853916964923b19e440033d31e5eaa4dae"
     },
     {
       "path": "packages/domain/src/child-policy.ts",
@@ -1164,7 +1160,7 @@
     },
     {
       "path": "packages/git/src/candidate-check.ts",
-      "sha256": "99b654d2e39ffecfa67c78e307fa2d7b76adedf0c755b765e2d1590c05fb1062"
+      "sha256": "7a046279c8ee4047c8701f67d0f95cedc7087afcb1969c0605f8d769fe5b7dbd"
     },
     {
       "path": "packages/git/src/canonical-command.ts",
@@ -1540,7 +1536,7 @@
     },
     {
       "path": "packages/process/src/resident-runtime.ts",
-      "sha256": "fcb9fb992b7c72f610e47058d66b701e86241788798187acc9aeb7ae1bdf52d0"
+      "sha256": "52e5a500a27ffa77429ee69f5694278f035252ac988fd1985ad7f11ba9330b5c"
     },
     {
       "path": "packages/process/src/resident-supervisor.ts",
@@ -1668,7 +1664,7 @@
     },
     {
       "path": "packages/protocol/src/status-view.ts",
-      "sha256": "fb9fa57645e74623d9a104841f65c590d6818e3ace84a11fff9a6ac83528d864"
+      "sha256": "28dd9244d9e391665e6936c29328a917e3b2c5757c1a81fea8434fb95390246a"
     },
     {
       "path": "packages/reconcile/package.json",

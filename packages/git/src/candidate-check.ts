@@ -49,8 +49,10 @@ export class CandidateSetupStatus {
   }
   finish(): SetupOutcome {
     if (this.failure !== null) throw this.failure.error;
-    if (this.pending.length || this.outcome === null) this.refuse();
-    return this.outcome;
+    try {
+      if (this.pending.length || this.outcome === null) this.refuse();
+      return this.outcome;
+    } catch (error) { this.failure = { error }; throw error; }
   }
   private refuse(): never { throw new StoreError("REF_STATE_UNKNOWN", "candidate private setup sequence is incomplete or differs"); }
 }

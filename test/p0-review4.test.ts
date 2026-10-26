@@ -19,7 +19,7 @@ import { StatusRefresh } from "@oma/broker/status-refresh";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "@oma/domain/errors";
 import { depthOf, planToolSurface, type GroupSpec } from "@oma/domain/tool-surface";
 import { PiRpcClient, type PiEvent } from "@oma/engine/pi-rpc";
@@ -46,8 +46,6 @@ import { READ_BOUNDS } from "@oma/domain/surface-bounds";
 import { utimesSync } from "node:fs";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import { KeyDecoder } from "@oma/tui/keys";
-import { UnitsModule as Units } from "@oma/platform-linux/units";
-import { readFileSync } from "node:fs";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -168,7 +166,7 @@ test("P0V-49 / F3, P0-4: a descriptor given back is never closed again when the 
 
 test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progress", async () => {
   const f = await preparedFixture(1);
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
+  const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
@@ -536,25 +534,5 @@ test("P0V-46 / N23, P0-2: typed and pasted text are read by one rule -- a typed 
   assert.equal(typed([...Buffer.from("x"), han[0]!]), "x");
 });
 
-test("P0V-26 / N02, P0-1: a unit name that is another society's or agent's is refused, never replaced", () => {
-  const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
-  try {
-    const units = new Units("a-b", { node: process.execPath, libdir: process.cwd(), state: join(dir, "a-b"), society: "a-b", agent: "",
-      config: join(dir, "config.json"), run: join(dir, "run", "a-b") }, dir);
-    const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
-    // Society a's Resident b-c holds the name society a-b's Resident c would take.
-    const theirs = "[Unit]\nDescription=OMA a resident b-c\n";
-    writeFileSync(join(dir, "oma-a-b-c.service"), theirs);
-    assert.throws(() => units.assertResidentNamesFree("c"), conflict, "a create would be accepted onto another society's unit");
-    assert.throws(() => units.ensureResident("c", "p", "md"), conflict);
-    assert.equal(readFileSync(join(dir, "oma-a-b-c.service"), "utf8"), theirs, "another society's unit was replaced");
-    // The owner's own unit is its to replace, and a free name is free.
-    writeFileSync(join(dir, "oma-a-b-d.service"), `[Unit]\nDescription=OMA a-b resident d\nX-OMA-Owner=${join(dir, "a-b")}\n`);
-    assert.doesNotThrow(() => units.assertResidentNamesFree("d"));
-    // P0V-95 (R6-20): one that names no owner and no tree is not known to be
-    // its by the Description alone -- two trees' societies share names.
-    writeFileSync(join(dir, "oma-a-b-f.service"), "[Unit]\nDescription=OMA a-b resident f\n");
-    assert.throws(() => units.assertResidentNamesFree("f"), conflict);
-    assert.doesNotThrow(() => units.assertResidentNamesFree("e"));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
+// P0V-26/N02 and P0V-95 unit-name cases are retained in the raw archive.
+// Actual execution-owner isolation is covered by NATIVE-RESIDENT-ISOLATION-01.

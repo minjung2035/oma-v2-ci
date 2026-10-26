@@ -17,6 +17,8 @@ import { replaceDerivedSymlink } from "@oma/storage/staged-tree";
 import { lockFileDescriptor } from "@oma/native/linux";
 import { RequestCache, readCacheFile, type CacheReader } from "#oma-test/app/request-cache";
 import { StoreError } from "@oma/domain/errors";
+import { PolicyExecution } from "./fixtures/execution.js";
+import type { ExecutionObservation } from "@oma/contracts";
 
 const UUID = "0123abcd-0000-4000-8000-00000000beef";
 
@@ -109,25 +111,29 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   const { TEST_VIEW_LIMITS } = await import("./fixtures/limits.js");
   let invocation = "c".repeat(32);
   const f = await preparedFixture(1);
-  const units = {
-    onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: "/oma/alice", invocationId: invocation }),
-  } as never;
+  // Endpoint/transaction policy test with explicit scripted observations.
+  // No native pin or authenticated sender is claimed by this fixture.
+  class OpeningObservation extends PolicyExecution {
+    override observe(): ExecutionObservation {
+      return { activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: "/oma/alice", invocationId: invocation };
+    }
+  }
+  const units = new OpeningObservation();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
     hasGoal: () => true, activationAllowed: () => true }, ((_parent: unknown, input: Record<string, unknown>) => ({ ...input })) as never, f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   t.after(async () => { try { await broker.drainAndClose(); } catch { f.store.close(); } finally { rmSync(f.root, { recursive: true, force: true }); } });
-  // Each invocation's cgroup, as the kernel reports it: populated until it dies.
-  const cgroups: { population: "populated" | "empty" }[] = [];
+  // Scripted scope transitions constrain opening rollback; real death is tested separately.
+  const scopes: { population: "populated" | "empty" }[] = [];
   Reflect.set(broker, "runLeases", new RunRegistry(() => {
-    const cgroup = { population: "populated" as "populated" | "empty" }; cgroups.push(cgroup);
-    return { fd: -1, identity: { dev: 1n, ino: BigInt(cgroups.length) }, population: () => cgroup.population, matches: () => true, close() {} };
+    const scope = { population: "populated" as "populated" | "empty" }; scopes.push(scope);
+    return { fd: -1, identity: { dev: 1n, ino: BigInt(scopes.length) }, population: () => scope.population, matches: () => true, close() {} };
   }));
   await broker.start();
   const openRun = (): Promise<{ incarnation: number }> => (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
   const incarnation = (): number => f.store.getAgent("alice")!.incarnation;
   const servers = (): number => (Reflect.get(broker, "listeners") as import("@oma/broker/listeners").BrokerListeners).size;
-  const nextInvocation = (): void => { cgroups.at(-1)!.population = "empty"; invocation = String(cgroups.length).padStart(32, "d"); };
+  const nextInvocation = (): void => { scopes.at(-1)!.population = "empty"; invocation = String(scopes.length).padStart(32, "d"); };
   const before = incarnation(); const listening = servers();
   // The endpoint could not be made (a full disk, a path too long).
   const listen = Reflect.get(broker, "listenActor") as (...args: unknown[]) => unknown;
@@ -162,14 +168,14 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   await refused;
   assert.equal(incarnation(), before); assert.equal(closed, 1);
   await assert.rejects(openRun, { code: "STALE_RUN" });
-  // A revoke or new unit observation during readiness cannot commit either.
+  // A revoke or new execution observation during readiness cannot commit either.
   for (const change of ["revoke", "invocation", "population", "drain"] as const) {
     nextInvocation(); delayed();
     const opening = openRun();
     await assert.rejects(openRun, { code: "STALE_RUN" });
     if (change === "revoke") (Reflect.get(broker, "runLeases") as InstanceType<typeof RunRegistry>).get("alice")!.revoke();
     if (change === "invocation") invocation = "e".repeat(32);
-    if (change === "population") cgroups.at(-1)!.population = "empty";
+    if (change === "population") scopes.at(-1)!.population = "empty";
     if (change === "drain") Reflect.set(broker, "draining", true);
     releaseReady();
     await assert.rejects(opening, { code: "STALE_RUN" });
@@ -268,18 +274,6 @@ test("P0V-114 / G04-01: what a tenure holds ends with it, before the society is 
   assert.deepEqual(seen, ["egress closed; society held", "late closed; society free"]);
 });
 
-test("P0V-115 / G05-02: a unit carries a society's and an agent's name only when it needs no escape anywhere it lands", async () => {
-  const { renderUnit } = await import("@oma/platform-linux/units/render");
-  const values = { node: "/n", libdir: "/l", state: "/s", society: "demo", agent: "alice" };
-  const template = "Description=OMA @SOCIETY@ @AGENT@\nExecStart=@NODE@ --society @SOCIETY@ --agent @AGENT@\nUnit=oma-@SOCIETY@-@AGENT@.service";
-  assert.equal(renderUnit(template, values), "Description=OMA demo alice\nExecStart=/n --society demo --agent alice\nUnit=oma-demo-alice.service");
-  for (const society of ["de$mo", "de mo", "De", "de%i"])
-    assert.throws(() => renderUnit(template, { ...values, society }), { code: "INVALID_REQUEST" }, society);
-  for (const agent of ["a$HOME", "a\\x20", "", "a b"])
-    assert.throws(() => renderUnit(template, { ...values, agent }), { code: "INVALID_REQUEST" }, agent);
-  // A template that names no agent renders whatever the base values hold.
-  assert.equal(renderUnit("--state-root @STATE_ARG@", { ...values, agent: "" }), "--state-root /s");
-});
 
 test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches it, and is not observed as absent or as the expected value", async () => {
   const { GitObserver } = await import("@oma/git/observe");
@@ -391,17 +385,6 @@ test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no on
   assert.equal(answer, "the relay");
 });
 
-test("P0V-121 / G10-05: a journal prefix stands only when the view's own bound ended the read", async () => {
-  const { journalView } = await import("@oma/process/policies");
-  const observed = (kind: string, truncated: boolean, exitCode: number | null = null) => ({ kind, exitCode, stdout: Buffer.from("prefix"), stderr: Buffer.alloc(0),
-    stdoutTruncated: truncated, stderrTruncated: false, signal: null, errorCode: null, elapsedMs: 1 }) as never;
-  assert.deepEqual(journalView(observed("output-limited", true)), { bytes: Buffer.from("prefix"), truncated: true });
-  assert.deepEqual(journalView(observed("exited", true, 0)), { bytes: Buffer.from("prefix"), truncated: true });
-  assert.deepEqual(journalView(observed("exited", false, 0)), { bytes: Buffer.from("prefix"), truncated: false });
-  for (const kind of ["signalled", "aborted", "unobserved", "spawn-failed"])
-    assert.throws(() => journalView(observed(kind, true)), { code: "INTERNAL_ERROR" }, kind);
-  assert.throws(() => journalView(observed("timed-out", true)), { code: "DEADLINE_EXCEEDED" });
-});
 
 test("P0V-122 / G10-02: the pinned engine searches only copied single-link files, including context-zero grep", async t => {
   const { readFileSync, realpathSync } = await import("node:fs");
@@ -467,16 +450,6 @@ test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the requ
     [[false, "FRAME_TOO_LARGE", "same-key"]], "a handled request was answered as refused input");
 });
 
-test("P0V-124 / G03-broker-r2-04: one judgment of whether a peer runs inside a unit's cgroup", async () => {
-  const { insideCgroup } = await import("@oma/broker/peer-authenticator");
-  const unit = "/user.slice/app.slice/oma-demo-alice.service";
-  assert.equal(insideCgroup(unit, unit), true);
-  assert.equal(insideCgroup(`${unit}/payload`, unit), true);
-  assert.equal(insideCgroup(`${unit}/payload`, `${unit}/`), true);
-  assert.equal(insideCgroup(`${unit}x`, unit), false, "a sibling whose name begins the same is not inside");
-  assert.equal(insideCgroup("/user.slice/app.slice", unit), false);
-  for (const [peer, group] of [[null, unit], [unit, ""], [unit, null], ["", unit]] as const) assert.equal(insideCgroup(peer, group), false);
-});
 
 test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its one clock, clamped where it steps back", async t => {
   const { Store } = await import("@oma/storage");
@@ -508,25 +481,7 @@ test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its o
 });
 
 
-test("P0V-127 / G05-04: another owner's unit proves neither death nor an empty process list", async t => {
-  const { UnitsModule, renderUnit } = await import("@oma/platform-linux/units");
-  const dir = mkdtempSync(join(tmpdir(), "oma-foreign-death-"));
-  t.after(() => { rmSync(dir, { recursive: true, force: true }); });
-  const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "ours"), society: "demo", agent: "alice",
-    config: join(dir, "config.json"), run: join(dir, "run") };
-  const units = new UnitsModule("demo", values, dir, () => 1);
-  let revoked = 0;
-  units.onRevokeRun = () => { revoked++; };
-  for (const [suffix, description] of [["service", "OMA @SOCIETY@ resident @AGENT@"], ["path", "Wake OMA @SOCIETY@ resident @AGENT@ on mail"]]) {
-    const path = join(dir, `oma-demo-alice.${suffix}`);
-    writeFileSync(path, renderUnit(`[Unit]\nDescription=${description}\nX-OMA-Owner=@STATE@\n`, { ...values, state: join(dir, "theirs") }));
-    assert.equal(units.observe("alice").activeState, "unknown");
-    assert.equal((await units.observeAsync("alice")).activeState, "unknown");
-    assert.equal((await units.observeStatus(["alice"])).get("alice"), "no-unit", "the diagnostic view still identifies the name collision");
-    for (const incarnation of [0, 1]) assert.equal(units.confirmDead("alice", incarnation), false);
-    assert.throws(() => units.cgroupProcs("alice"), { code: "RUN_TERMINATION_UNKNOWN" });
-    assert.throws(() => units.stop("alice", 1), { code: "RUN_TERMINATION_UNKNOWN" });
-    rmSync(path);
-  }
-  assert.equal(revoked, 2, "our own run authority is still revoked without touching the foreign unit");
-});
+
+// Retired physical regressions P0V-115/121/124/127 remain byte-for-byte in
+// the raw archive. Current native argv, bounded diagnostic spool, credential
+// sender and cross-owner scope oracles are separate tests with separate IDs.

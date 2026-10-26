@@ -17,7 +17,7 @@ export function productionModulePaths(source: string): string[] {
 }
 
 export function copyInstalledProduct(source: string, prefix: string, options: { engine?: boolean } = {}): void {
-  const paths = [DEPLOYMENT_LAYOUT.schema, DEPLOYMENT_LAYOUT.systemd, "package.json", "package-lock.json",
+  const paths = [DEPLOYMENT_LAYOUT.schema, "package.json", "package-lock.json",
     ...DEPLOYMENT_LAYOUT.workspaces.flatMap(workspace => [`${workspace.root}/dist`, `${workspace.root}/package.json`])];
   for (const path of paths) cpSync(join(source, path), join(prefix, path), { recursive: true });
   for (const path of productionModulePaths(source)) {

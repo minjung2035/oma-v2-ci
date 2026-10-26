@@ -40,7 +40,7 @@ import { isValidWirePath } from "@oma/domain/identifiers";
 import { readBounded } from "#oma-test/app/cli/effects";
 import { makeValidAgent } from "./fixtures/spec.js";
 import type { MailModule } from "@oma/mail";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import type { LifecycleModule } from "@oma/lifecycle";
 
 test("AV-20261003-18: a failure after the staging lease is taken releases the lease", async t => {
@@ -234,7 +234,7 @@ test("AV-20261003-20: startup contains a recoverable non-mail failure like the s
       reconcileSociety: () => { throw new StoreError("REF_STATE_UNKNOWN", "fixture"); },
       reconcileCreate: async () => { throw new StoreError("REF_STATE_UNKNOWN", "fixture"); },
     } as unknown as LifecycleModule;
-    const units = { stop: () => undefined, confirmDead: () => true } as unknown as UnitsModule;
+    const units = { stop: () => undefined, confirmDead: () => true } as unknown as FeatureExecution;
     const reconcile = createReconcileModule(store, {} as MailModule, null, null, units, lifecycle, {
       projectGit: join(root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true,
     });

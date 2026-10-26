@@ -4,8 +4,8 @@ import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-compositio
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // CLI acceptance (P1): the real `oma` CLI binary against the real broker over
-// unix sockets from inside a real systemd user unit (cgroup-authenticated
-// actor channel). Covers IPC-006 freeze-cache semantics, IPC-008 --request
+// Unix sockets from a real owned PID namespace and pinned trusted runner.
+// Manual CLI children are authenticated by their actual process descent. Covers IPC-006 freeze-cache semantics, IPC-008 --request
 // recovery, CLI-003 exit codes, and the streamed submit path — through the
 // CLI, never by calling library APIs directly.
 import { test } from "node:test";
@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { spawnSync, spawn } from "node:child_process";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
-import { UnitsModule, unitName } from "@oma/platform-linux/units";
+import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { GitModule } from "@oma/git";
@@ -27,8 +27,6 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { encodeFrame } from "@oma/protocol/frame";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import type { ResolvedAgentSpec } from "@oma/contracts";
-import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
-requireSystemdTestManager();
 const G = {
     ...process.env,
     GIT_CONFIG_NOSYSTEM: "1",
@@ -42,9 +40,10 @@ interface Env {
     runRoot: string;
     society: string;
     store: Store;
-    cleanup: () => void;
+    units: NativeScriptResidents;
+    cleanup: () => Promise<void>;
 }
-function envOf(): Env {
+async function envOf(): Promise<Env> {
     const dir = mkdtempSync(join(tmpdir(), "oma-cli-"));
     const state = join(dir, "state");
     const runRoot = join(dir, "run");
@@ -69,13 +68,7 @@ function envOf(): Env {
             });
         }
     });
-    const units = new UnitsModule(society, {
-        node: process.execPath,
-        libdir: "/usr/lib/oma",
-        state,
-        society,
-        agent: "", config: join(state, "config.json"), run: join(state, "oma", society)
-    }, join(dir, "xdg"));
+    const units = await nativeScriptResidents(store, state);
     const mail = createMailModule({ stateRoot: state, society }, store, 64);
     const resolver = (_p: {
         name: string;
@@ -104,7 +97,7 @@ function envOf(): Env {
         contextGit: join(state, "repos", "context.git"),
         worldDir: join(state, "world"),
         society,
-    }, store, mail, null);
+    }, store, mail, null, null, null, units.quarantine({ stateRoot: state, projectGit: join(state, "repos/project.git"), contextGit: join(state, "repos/context.git"), worldDir: join(state, "world"), society }));
     const recon = createReconcileModule(store, mail, git, null, units, lifecycle, {
         hasGoal: () => true,
         activationAllowed: () => true,
@@ -116,21 +109,17 @@ function envOf(): Env {
         society,
         hasGoal: () => true,
     } });
-    broker.start();
+    units.attach(broker);
+    await broker.start();
     return {
         dir,
         state,
         runRoot,
         society,
-        store,
-        cleanup: () => {
-            try {
-                broker.drainAndClose();
-            }
-            catch {
-                /* already closed */
-            }
-            cleanupOwnedSystemdUnits(dir, society);
+        store, units,
+        cleanup: async () => {
+            await units.closeExecution();
+            await broker.drainAndClose();
             removeTree(dir);
         },
     };
@@ -172,15 +161,16 @@ function seedProject(env: Env): string {
     return base;
 }
 /**
- * Worker wrap: run the CLI inside the agent unit (cgroup-authenticated actor
- * channel). The unit's oneshot process first obtains a run lease via
+ * Trusted test runner: run the CLI inside an actually owned PID namespace.
+ * The inherited private control socket first obtains a run lease via
  * runner.open (the production path), then executes each scenario's CLI
  * invocation with OMA_SOCKET pointing at the lease's actor socket.
  */
 const WRAP = String.raw `import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync, spawn } from "node:child_process";
-import { connect } from "node:net";
+import { connect, Socket } from "node:net";
 import { FrameParser, encodeFrame } from "@ABS_FRAME@";
+const control = new Socket({ fd: 6, readable: true, writable: true });
 
 const admin = process.env.OMA_ADMIN_SOCK;
 const scenarios = JSON.parse(readFileSync(process.env.OMA_SCENARIOS_FILE, "utf8"));
@@ -195,13 +185,14 @@ function framed(sockPath, frame) {
       bytes.writeUInt32BE(body.length);
       body.copy(bytes, 4);
     } else bytes = encodeFrame(frame);
-    const sock = connect(sockPath, () => sock.write(bytes));
+    const sock = sockPath === admin ? control : connect(sockPath, () => sock.write(bytes));
+    if (sock === control) sock.write(bytes);
     const parser = new FrameParser(256 * 1024);
     let buf = Buffer.alloc(0);
     const timer = setTimeout(() => { sock.destroy(); reject(new Error("wrap timeout")); }, 30000);
     sock.on("data", (d) => {
       buf = Buffer.concat([buf, Buffer.from(d)]);
-      try { for (const f of parser.feed(buf)) { clearTimeout(timer); sock.destroy(); resolve(f.raw); } } catch {}
+      try { for (const f of parser.feed(buf)) { clearTimeout(timer); if (sock !== control) sock.destroy(); resolve(f.raw); } } catch {}
       buf = Buffer.alloc(0);
     });
     sock.on("error", reject);
@@ -234,8 +225,8 @@ for (const s of scenarios) {
 writeFileSync(process.env.OMA_OUT, JSON.stringify(results));
 process.exit(0);
 `;
-test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submit (real unit, real sockets)", async (t) => {
-    const env = envOf();
+test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submit (real native scope, real sockets)", async (t) => {
+    const env = await envOf();
     const society = env.society;
     try {
         const base = seedProject(env);
@@ -530,51 +521,15 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         }
         // wrap + unit
         const wrapPath = join(env.dir, "wrap.mjs");
-        writeFileSync(wrapPath, WRAP.replace("@ABS_FRAME@", join(ROOT, "apps", "oma", "dist", "frame.js")), "utf8");
+        writeFileSync(wrapPath, WRAP.replace("@ABS_FRAME@", new URL(import.meta.resolve("@oma/protocol/frame")).pathname), "utf8");
         const outPath = join(env.dir, "cli.out.json");
         writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify(scenarios), "utf8");
-        const unit = unitName(society, "a", "service");
-        const unitFile = join(env.dir, unit);
-        writeFileSync(unitFile, [
-            "[Unit]",
-            "Description=OMA CLI acceptance wrapper",
-            "[Service]",
-            "Type=oneshot",
-            `Environment=OMA_ADMIN_SOCK=${join(env.runRoot, "admin.sock")}`,
-            `Environment=OMA_ACTOR=a`,
-            `Environment=OMA_CLI=${CLI}`,
-            `Environment=OMA_HOME=${homeDir}`,
-            `Environment=OMA_OUT=${outPath}`,
-            `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
-            `Environment=HOME=${env.dir}`,
-            `WorkingDirectory=${env.dir}`,
-            `ExecStart=${process.execPath} ${wrapPath}`,
-            "[Install]",
-            "WantedBy=default.target",
-            "",
-        ].join("\n"), "utf8");
-        const link = spawnSync("systemctl", ["--user", "link", unitFile], {
-            env: G,
-        });
-        assert.equal(link.status, 0, `systemctl link: ${link.stderr}`);
-        spawnSync("systemctl", ["--user", "daemon-reload"], { env: G });
-        const started = spawn("systemctl", ["--user", "start", unit], { env: G });
-        // NOTE: spawn, never spawnSync — the broker runs in this test process, so
-        // a blocking systemctl start would freeze the broker's event loop and
-        // starve the very unit we are waiting for.
-        const startExit = new Promise<number | null>((resolve) => {
-            const t = setTimeout(() => resolve(null), 90000);
-            started.on("exit", (c) => {
-                clearTimeout(t);
-                resolve(c);
-            });
-        });
-        const deadline = Date.now() + 90000;
-        while (!existsSync(outPath) && Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 250));
-        }
-        assert.ok(existsSync(outPath), "wrapper produced no output");
-        assert.equal(await startExit, 0, "unit start failed");
+        const runEnvironment = {
+            OMA_ADMIN_SOCK: "private-runner-control", OMA_ACTOR: "a", OMA_CLI: CLI,
+            OMA_HOME: homeDir, OMA_OUT: outPath, OMA_SCENARIOS_FILE: join(env.dir, "scenarios.json"), HOME: env.dir,
+        };
+        await env.units.runScript("a", wrapPath, runEnvironment);
+        assert.ok(existsSync(outPath), "native wrapper produced no output");
         const results = JSON.parse(readFileSync(outPath, "utf8")) as Array<{
             args: string[];
             code: number;
@@ -785,11 +740,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
             }, {
                 frame: { v: 1, id: "valid-mail-control", request: "valid-mail-control", method: "mail.send", params: { to: ["b"], subject: "valid", kind: "message", body: "body" } },
             }]));
-        await new Promise<void>((resolve, reject) => {
-            const child = spawn("systemctl", ["--user", "start", unit], { env: G, timeout: 90000 });
-            child.once("error", reject);
-            child.once("exit", code => code === 0 ? resolve() : reject(new Error(`reply unit exit ${code}`)));
-        });
+        await env.units.runScript("a", wrapPath, runEnvironment);
         const replyResults = JSON.parse(readFileSync(outPath, "utf8"));
         assert.equal(replyResults[0].code, 0, JSON.stringify(replyResults));
         assert.equal(replyResults[1].code, 0, JSON.stringify(replyResults));
@@ -815,6 +766,6 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         assert.equal(replyHeaders["In-Reply-To"], `<${originalMessage.id}@${society}.oma.invalid>`);
     }
     finally {
-        env.cleanup();
+        await env.cleanup();
     }
 });

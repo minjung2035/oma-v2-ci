@@ -38,3 +38,16 @@ test("INT-007/P0-1: current authority refusal prevents private gate release", ()
   assert.throws(() => status.write(Buffer.from('{"kind":"ready"}\n')), error => error === denied);
   assert.throws(() => status.finish(), error => error === denied);
 });
+test("INT-007/P0-5: incomplete EOF stays poisoned and cannot later authorize exec", () => {
+  for (const prefix of ['', '{"kind":', '{"kind":"prepared"}\n']) {
+    let authorizations = 0;
+    const status = new CandidateSetupStatus(() => { authorizations++; });
+    status.write(Buffer.from(prefix));
+    let failure: unknown;
+    assert.throws(() => status.finish(), error => { failure = error; return (error as { code: string }).code === "REF_STATE_UNKNOWN"; });
+    const before = authorizations;
+    assert.throws(() => status.write(Buffer.from('{"kind":"prepared"}\n{"kind":"ready"}\n')), error => error === failure);
+    assert.throws(() => status.finish(), error => error === failure);
+    assert.equal(authorizations, before);
+  }
+});

@@ -11,12 +11,14 @@ import type { AuthContext } from "@oma/contracts";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import { agentRootPathAt } from "@oma/domain/paths";
 import { RunRegistry } from "@oma/broker/run-registry";
-import { type CgroupPin, type Population } from "@oma/native/cgroup";
-import { PeerAuthenticator, peerCgroup } from "@oma/broker/peer-authenticator";
+import type { ExecutionScopePin } from "@oma/contracts/runtime";
+type Population = ReturnType<ExecutionScopePin["population"]>;
+import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
+import { processIdentity } from "@oma/broker/process-ancestry";
 import { type BoundPeer } from "@oma/broker/ports";
 import { InternalDispatcher, projectInternalPeers } from "@oma/broker/internal-dispatcher";
 import { createInternalDispatchDataPorts } from "#oma-test/app/broker/composition";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { boundaryOf, completeSession, evidenceOf, preparedFixture, type ReceiptFixture } from "./fixtures/delivery-receipt.js";
@@ -27,10 +29,11 @@ function published(f: ReceiptFixture): string {
   return session;
 }
 
-/** A native cgroup pin stand-in; the registry and its fencing are production. */
+/** Scripted scope observations constrain settlement policy only. These do not
+ * qualify physical death; native-process-scope exercises the real kernel. */
 function pin(fd: number) {
   let population: Population = "populated";
-  const value: CgroupPin = { fd, identity: Object.freeze({ dev: 1n, ino: BigInt(fd) }),
+  const value: ExecutionScopePin = { identity: Object.freeze({ dev: 1n, ino: BigInt(fd) }),
     population: () => population, matches: () => true, close: () => undefined };
   return { value, empty: () => { population = "empty"; } };
 }
@@ -99,15 +102,16 @@ test("V06A: a completed batch keeps its first terminal fact under recovery", asy
 });
 
 function peerOf(): BoundPeer {
-  return { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+  return { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), inheritedRunner: { actor: "alice", invocationId: OLD }, alive: () => true,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
 }
 /** The production internal dispatcher, peer authenticator and run registry. */
 function liveEndpoint(f: ReceiptFixture, registry: RunRegistry, invocation: () => string) {
-  const cgroup = peerCgroup(process.pid);
-  assert.ok(cgroup, "the test process has no observable cgroup");
-  const units = { observe: () => ({ activeState: "active", invocationId: invocation(), cgroup }),
-    unitCgroup: () => cgroup } as unknown as UnitsModule;
+  const self = processIdentity(process.pid); assert.ok(self);
+  // This endpoint receives only the expired OLD private grant. Even an alive
+  // local process cannot promote it into the successor's authority.
+  const units = { observe: () => ({ activeState: "active", invocationId: invocation(), scope: "/next" }),
+    scopeRoot: () => self, runnerAlive: () => true } as unknown as FeatureExecution;
   const peers = new PeerAuthenticator(f.store, units, registry, "demo", () => undefined);
   const dispatcher = new InternalDispatcher({ ...createInternalDispatchDataPorts(f.store, f.mail, f.root), peers: projectInternalPeers(peers),
     isDraining: () => false, assertAdmission: () => undefined,
@@ -132,7 +136,7 @@ test("V06B local: a stale runner's live completion stays refused while the broke
     registry.begin("alice", 2, NEXT, "/next");
     const stale = await complete({ ...evidenceOf(f.root, f.batch, session) });
     assert.equal(stale.ok, false);
-    assert.equal(stale.error?.code, "STALE_RUN");
+    assert.equal(stale.error?.code, "AUTH_FAILED", "an expired private grant is refused before live lease lookup");
     const flagged = await complete({ ...evidenceOf(f.root, f.batch, session), recovery: true });
     assert.equal(flagged.ok, false, "no request field turns live completion into recovery");
     assert.equal(f.store.getBatch(f.batch.id)?.state, "prepared");

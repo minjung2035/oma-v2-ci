@@ -2,13 +2,7 @@
 // Mixed files retain all their assertions, but are not local unit/integration proof.
 export const systemdTestFiles = Object.freeze([
   "audit.test.js",
-  "audit2.test.js",
-  "cli.test.js",
   "phase4.test.js",
-  "phase5.test.js",
-  "phase8.test.js",
-  "launch-topology.test.js",
-  "cgroup-pin.test.js",
 ]);
 /** Tests a run reported but did not execute.
  *

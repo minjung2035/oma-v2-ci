@@ -1,15 +1,9 @@
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
-/** V23A (WP23, D04): unit status is diagnostic observation. Collecting it must
- * not stall the broker's event loop, pile up concurrent systemctl processes or
- * queue unbounded work, whatever the number of agents or the speed of the
- * manager. Real Store, Broker, dispatchers, Mail, Lifecycle and Views; the
- * systemctl boundary is replaced by a cost model fitted to `systemctl --user
- * show` on systemd 257 (6.9 ms + 1.61 ms per unit, measured on the disposable
- * account), blocking for the synchronous path and timed for the asynchronous
- * one. The measured figures are printed so a run records them.
- */
+/** V23A: real Store/Broker/read/mutation paths with a delayed observation
+ * port. This models coordination cost, not native OS performance or a gate.
+ * Physical scope/authentication tests use the real kernel separately. */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
@@ -19,7 +13,7 @@ import type { AuthContext } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
-import { UnitsModule, type UnitCommandOutcome } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { decodeStatusView, statusViewPath } from "@oma/protocol/status-view";
@@ -28,53 +22,20 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
 const AGENTS = 64;
-const showCostMs = (units: number): number => 6.9 + 1.61 * units;
-const blocked = new Int32Array(new SharedArrayBuffer(4));
-const blockFor = (ms: number): void => { Atomics.wait(blocked, 0, 0, ms); };
-
-/** What `systemctl show` prints for the requested units and properties. */
-function showOutput(argv: readonly string[], state: (unit: string) => string): string {
-  const units = argv.filter(word => /\.(service|path|timer)$/.test(word));
-  const properties: string[] = [];
-  argv.forEach((word, index) => {
-    if (word === "-p") properties.push(argv[index + 1]!);
-    else if (word.startsWith("--property=")) properties.push(word.slice("--property=".length));
-  });
-  const value = (unit: string, property: string): string => ({
-    Id: unit, ActiveState: state(unit), SubState: state(unit) === "active" ? "running" : "dead", Result: "success",
-    ExecMainStatus: "0", ControlGroup: "", InvocationID: "", LoadState: "loaded", NRestarts: "0", StartLimitBurst: "5",
-  } as Record<string, string>)[property] ?? "";
-  const onlyValues = argv.includes("--value");
-  return units.map(unit => properties.map(property => onlyValues ? value(unit, property) : `${property}=${value(unit, property)}`).join("\n"))
-    .join("\n\n") + "\n";
-}
-
+const observationCostMs = (actors: number): number => 6.9 + 1.61 * actors;
 interface Meter { commands: number; inFlight: number; maxInFlight: number; syncMs: number }
-function modelledUnits(root: string, meter: Meter, options: { hang?: () => boolean; fail?: () => boolean } = {}): UnitsModule {
-  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" },
-    join(root, "units"));
-  const state = (): string => "inactive";
-  // One-off measurement against the real user manager (units not found answer
-  // as inactive); the lanes run the fitted model.
-  if (process.env.V23A_REAL_SYSTEMD === "1") return units;
-  Reflect.set(units, "command", (argv: readonly string[]): UnitCommandOutcome => {
-    const count = argv.filter(word => word.endsWith(".service")).length;
-    const started = performance.now();
-    blockFor(showCostMs(Math.max(1, count)));
-    meter.commands += 1; meter.syncMs += performance.now() - started;
-    return { kind: "succeeded", stdout: showOutput(argv, state), stderr: "", status: 0, signal: null };
-  });
-  Reflect.set(units, "commandAsync", (argv: readonly string[]): Promise<UnitCommandOutcome> => {
-    const count = argv.filter(word => word.endsWith(".service")).length;
-    meter.commands += 1; meter.inFlight += 1; meter.maxInFlight = Math.max(meter.maxInFlight, meter.inFlight);
+function modelledUnits(_root: string, meter: Meter, options: { hang?: () => boolean; fail?: () => boolean } = {}): PolicyExecution {
+  const execution = new PolicyExecution();
+  execution.observeStatus = async actors => {
+    meter.commands++; meter.inFlight++; meter.maxInFlight = Math.max(meter.maxInFlight, meter.inFlight);
     const hang = options.hang?.() ?? false;
-    return new Promise(resolve => setTimeout(() => {
-      meter.inFlight -= 1;
-      resolve(options.fail?.() ? { kind: "unknown", stdout: "", stderr: "", status: null, signal: null }
-        : { kind: "succeeded", stdout: showOutput(argv, state), stderr: "", status: 0, signal: null });
-    }, hang ? 3_000 : showCostMs(Math.max(1, count))));
-  });
-  return units;
+    try {
+      await new Promise(resolve => setTimeout(resolve, hang ? 3_000 : observationCostMs(actors.length)));
+      if (options.fail?.()) throw new Error("observation unavailable");
+      return new Map(actors.map(actor => [actor, execution.observe(actor)]));
+    } finally { meter.inFlight--; }
+  };
+  return execution;
 }
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
@@ -148,16 +109,16 @@ test("V23A: concurrent status reads and mutations keep the broker responsive wit
   for (const read of [...reads.value, ...mixed.value.reads]) {
     assert.equal(read.answer.ok, true, JSON.stringify(read.answer));
     assert.equal(read.answer.result.agents.length, AGENTS);
-    assert.ok(read.answer.result.agents.every((row: { activeState: string | null }) => row.activeState === "inactive"));
+    assert.ok(read.answer.result.agents.every((row: { agent: string; activeState: string | null }) => row.activeState === (row.agent === "principal" ? null : "inactive")));
   }
   for (const write of mixed.value.writes) assert.equal(write.answer.ok, true);
-  assert.equal(s.meter.syncMs, 0, "a status path ran systemctl on the event loop");
+  assert.equal(s.meter.syncMs, 0, "a status path performed synchronous external observation");
   assert.ok(reads.maxLagMs < READ_LAG_BUDGET_MS, `status reads held the event loop ${Math.round(reads.maxLagMs)} ms`);
   assert.ok(mixed.maxLagMs < MIXED_LAG_BUDGET_MS, `status work with mutations held the event loop ${Math.round(mixed.maxLagMs)} ms`);
   assert.ok(percentile(readMs, 0.95) < ANSWER_BUDGET_MS, `status.get p95 ${Math.round(percentile(readMs, 0.95))} ms`);
   assert.ok(s.meter.maxInFlight <= 1, `${s.meter.maxInFlight} observations ran at once`);
   // 16 readers share at most one refresh and one follow-up: no per-caller observation.
-  assert.ok(readCommands <= 2 * Math.ceil(AGENTS / 32), `${readCommands} systemctl commands for 16 concurrent reads`);
+  assert.ok(readCommands <= 2, `${readCommands} observation calls for 16 concurrent reads`);
 });
 
 test("V23A / WP23.03: status of a society with hundreds of pending messages is one bounded read", { timeout: 120_000 }, async t => {
@@ -172,7 +133,7 @@ test("V23A / WP23.03: status of a society with hundreds of pending messages is o
   assert.ok(maxLagMs < READ_LAG_BUDGET_MS, `status with ${pending} pending messages held the event loop ${Math.round(maxLagMs)} ms`);
 });
 
-test("V23A: a manager that stops answering costs a bounded wait and an honest unknown, never a pile of commands", { timeout: 30_000 }, async t => {
+test("V23A: an observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands", { timeout: 30_000 }, async t => {
   let hang = true;
   const s = society(t, { hang: () => hang });
   const asked = Date.now();
@@ -190,7 +151,7 @@ test("V23A: a manager that stops answering costs a bounded wait and an honest un
   hang = false;
   await new Promise(resolve => setTimeout(resolve, 3_200));
   const after = await s.call({ v: 1, id: "h9", method: "status.get", params: { agent: "alice" } });
-  assert.equal(after.answer.result.agents[0].activeState, "inactive", "observation did not recover once the manager answered");
+  assert.equal(after.answer.result.agents[0].activeState, "inactive", "observation did not recover once the observer answered");
 });
 
 test("V23A / WP23.05: a failed observation is published as unknown with its time, not as an empty or idle society", { timeout: 30_000 }, async t => {

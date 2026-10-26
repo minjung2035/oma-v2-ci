@@ -86,10 +86,27 @@ test('Resident actual scope: concurrent starts share one launch and old stops ca
   await assert.rejects(f.runtime.stop('alice', 1), { code: 'STALE_RUN' });
   assert.equal(borrowed.population(), 'populated'); assert.equal(f.revocations(), 0);
   await f.runtime.stop('alice', 2); await f.tickets[0].completion;
-  assert.equal(borrowed.population(), 'empty'); assert.equal(f.runtime.confirmDead('alice', 2), true); borrowed.close();
+  assert.equal(borrowed.population(), 'empty'); assert.equal(f.runtime.confirmDead('alice', 2), true);
   await f.runtime.start('alice', true); assert.equal(f.begins(), 2);
-  assert.notEqual(f.runtime.observe('alice').invocationId, first.invocationId);
+  const next = f.runtime.observe('alice');
+  assert.notEqual(next.invocationId, first.invocationId);
+  assert.equal(borrowed.population(), 'empty', 'a new scope never revives the previous kernel observation');
+  assert.equal(borrowed.matches(next.scope), false);
+  assert.equal(borrowed.matches(first.scope), false, 'replacement also invalidates the old actor-slot binding');
+  borrowed.close();
   assert.deepEqual(f.journal.entries().length, 1);
+});
+test('NATIVE-RESIDENT-STATUS-01: an empty recovered slot never reports exit zero as an observed execution', { timeout: 15000 }, async t => {
+  const f = fixture(t);
+  assert.equal((await f.runtime.observeStatus(['alice'])).get('alice'), 'no-unit');
+  f.runtime.ensureResident('alice', 'p', 'm');
+  assert.equal((await f.runtime.observeStatus(['alice'])).get('alice'), 'no-unit');
+  await f.runtime.start('alice', false);
+  const running = (await f.runtime.observeStatus(['alice'])).get('alice');
+  assert.equal(running.activeState, 'active'); assert.notEqual(running.invocationId, '');
+  await f.runtime.stop('alice', 1);
+  const stopped = (await f.runtime.observeStatus(['alice'])).get('alice');
+  assert.equal(stopped.activeState, 'inactive'); assert.equal(stopped.invocationId, running.invocationId);
 });
 test('Resident actual failures respect geometric backoff and five starts per monotonic minute', { timeout: 15000 }, async t => {
   const f = fixture(t, 'process.exitCode=1');
@@ -105,6 +122,27 @@ test('Resident actual failures respect geometric backoff and five starts per mon
   assert.equal(f.begins(), 5); assert.equal(f.runtime.startLimitStatus('alice'), 'start_limit');
   await f.runtime.start('alice', true); assert.equal(f.begins(), 6);
   await f.tickets[5].completion;
+});
+test('NATIVE-RESIDENT-ISOLATION-01: equal actor names in independent owners cannot reach each other’s actual scope', { timeout: 15000 }, async t => {
+  const a = fixture(t), b = fixture(t);
+  await Promise.all([a.runtime.start('alice', false), b.runtime.start('alice', false)]);
+  const own = a.runtime.observe('alice'), foreign = b.runtime.observe('alice');
+  const aPin = a.runtime.pin(own.scope), bPin = b.runtime.pin(foreign.scope);
+  t.after(() => { aPin.close(); bPin.close(); });
+  assert.equal(aPin.population(), 'populated'); assert.equal(bPin.population(), 'populated');
+  assert.notEqual(own.scope, foreign.scope);
+  assert.notEqual(aPin.identity.namespaceInode, bPin.identity.namespaceInode);
+  assert.equal(aPin.matches(foreign.scope), false);
+  assert.equal(bPin.matches(own.scope), false);
+  assert.throws(() => a.runtime.pin(foreign.scope), { code: 'AUTH_FAILED' });
+  assert.throws(() => b.runtime.pin(own.scope), { code: 'AUTH_FAILED' });
+  await a.runtime.stop('alice', 1);
+  assert.equal(aPin.population(), 'empty'); assert.deepEqual(a.journal.entries(), []);
+  assert.equal(bPin.population(), 'populated', 'stopping one owner must not signal another owner’s namespace');
+  assert.equal(b.runtime.observe('alice').activeState, 'active');
+  assert.equal(b.journal.entries().length, 1);
+  await b.runtime.stop('alice', 1);
+  assert.equal(bPin.population(), 'empty'); assert.deepEqual(b.journal.entries(), []);
 });
 test('Resident accepted references refuse replacement and current authority refusal creates no running scope', { timeout: 15000 }, async t => {
   const f = fixture(t);

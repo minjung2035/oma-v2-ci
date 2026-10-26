@@ -1,72 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Broker, boundedLogOutput } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
-import type { ProtocolLimits, UnitObservation } from "@oma/contracts";
+import { Store } from "@oma/storage";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { ResidentLogStore } from "@oma/storage/resident-logs";
+import { residentLogView } from "@oma/process/resident-logs";
+import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
+import { createNativeResidents } from "#oma-test/app/runtime/native-residents";
+import { defaultHostConfig } from "@oma/config/defaults";
+import { withAsyncCleanup } from "@oma/native/cleanup";
+import { makeValidAgent } from "./fixtures/spec.js";
 
-const observation: UnitObservation = {
-  activeState: "inactive",
-  subState: "dead",
-  result: "success",
-  execMainStatus: 0,
-  cgroup: "",
-  invocationId: "",
-};
-
-function fakeObservation(units: UnitsModule): void {
-  (units as unknown as { observe: (agent: string) => UnitObservation }).observe = () => observation;
+/** Fresh, explicitly initialized fixture state. No process is launched here;
+ * these tests constrain incarnation binding, not arbitrary-descendant death. */
+async function nativeOwner(t: import("node:test").TestContext, incarnation: number) {
+  const root = mkdtempSync(join(tmpdir(), "oma-native-binding-"));
+  ExecutionJournal.initialize(root);
+  const executions = new ExecutionRuntime(root); await executions.recover();
+  const store = new Store(join(root, "runtime.sqlite"));
+  store.transaction(tx => tx.insertAgent(makeValidAgent("alice", { incarnation })));
+  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),
+    rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64) });
+  const units = createNativeResidents(store, executions, { stateRoot: root, runRoot: join(root, "run"), society: "demo", configPath: join(root, "config.json") },
+    config, () => { throw new Error("binding test must never attach an execution"); }, () => {}, () => null);
+  t.after(async () => { await withAsyncCleanup(() => units.close(), () => executions.close()); store.close(); rmSync(root, { recursive: true, force: true }); });
+  return { units, store };
 }
 
-test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-death-proof-"));
-  try {
-    const values = {
-      node: process.execPath,
-      libdir: "/usr/lib/oma",
-      state: root,
-      society: "demo",
-      agent: "",
-    };
-    const units = new UnitsModule("demo", values, root, () => 7);
-    fakeObservation(units);
-    assert.equal(units.confirmDead("alice", 6), true, "empty fixed cgroup proves historical incarnations are dead");
-    assert.equal(units.confirmDead("alice", 7), true, "current durable incarnation may use empty fixed-cgroup evidence");
-    assert.equal(units.confirmDead("alice", 8), false, "future incarnation must never borrow current death evidence");
-
-    const unbound = new UnitsModule("demo", values, root);
-    fakeObservation(unbound);
-    assert.equal(unbound.confirmDead("alice", 7), false, "missing durable incarnation binding must fail closed");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", async t => {
+  const { units } = await nativeOwner(t, 7);
+  assert.equal(units.confirmDead("alice", 6), true, "the recovered owner has no execution of a historical incarnation");
+  assert.equal(units.confirmDead("alice", 7), true);
+  assert.equal(units.confirmDead("alice", 8), false, "future incarnation cannot borrow an earlier observation");
+  units.bindIncarnationReader(() => null);
+  assert.equal(units.confirmDead("alice", 7), false, "unobserved incarnation fails closed despite a recovered empty journal");
 });
 
-test("RUN-001: authoritative incarnation binding replaces a stale constructor reader", () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-death-bind-"));
-  try {
-    const values = {
-      node: process.execPath,
-      libdir: "/usr/lib/oma",
-      state: root,
-      society: "demo",
-      agent: "",
-    };
-    const units = new UnitsModule("demo", values, root, () => 99);
-    fakeObservation(units);
-    assert.equal(units.confirmDead("alice", 4), true);
-    units.bindIncarnationReader(() => 3);
-    assert.equal(units.confirmDead("alice", 3), true);
-    assert.equal(
-      units.confirmDead("alice", 4),
-      false,
-      "lifecycle/store binding must override an older reader instead of borrowing future death proof",
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test("RUN-001: authoritative incarnation binding replaces a stale reader", async t => {
+  const { units, store } = await nativeOwner(t, 3);
+  units.bindIncarnationReader(() => 99);
+  assert.equal(units.confirmDead("alice", 4), true);
+  units.bindIncarnationReader(actor => store.getAgent(actor)?.incarnation ?? null);
+  assert.equal(units.confirmDead("alice", 3), true);
+  assert.equal(units.confirmDead("alice", 4), false, "the Store binding must replace an older callback");
 });
 
 test("VIEW-003: bounded UTF-8 log prefix never exceeds byte limit", () => {
@@ -81,49 +60,23 @@ test("VIEW-003: bounded UTF-8 log prefix never exceeds byte limit", () => {
   assert.equal(forced.truncated, true);
 });
 
-test("VIEW-003: journal stdout overflow returns bounded text with truncated=true", async () => {
+test("VIEW-003: real native log spool remains complete while Broker returns a bounded view", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-log-bound-"));
-  const fakeJournal = join(root, "journalctl");
-  const previousPath = process.env.PATH;
   try {
-    writeFileSync(
-      fakeJournal,
-      "#!/usr/bin/env node\nprocess.stdout.write(Buffer.alloc(4096, 0x61));\n",
-      "utf8",
-    );
-    chmodSync(fakeJournal, 0o755);
-    process.env.PATH = `${root}:${previousPath ?? ""}`;
-
-    const limits: ProtocolLimits = {
-      frameBytes: 1024,
-      mailBodyBytes: 1024,
-      subjectBytes: 128,
-      addresses: 8,
-      replyReferences: 8,
-      contextFiles: 8,
-      contextBytes: 1024,
-      bundleBytes: 1024,
-      logBytes: 64,
-      batchMaxMessages: 4,
-      idleStreamSeconds: 1,
-      receiptWaitSeconds: 1,
-    };
+    const logs = new ResidentLogStore(root), invocationId = "a".repeat(32), now = Date.now();
+    const writer = logs.open("alice", invocationId, now);
+    writer.append({ actor: "alice", invocationId, incarnation: 1, atMs: now, stream: "stderr", bytes: Buffer.alloc(4096, 0x61) });
+    writer.close();
     const broker = Object.create(Broker.prototype) as Broker;
-    Object.assign(broker, {
-      paths: { stateRoot: root, runRoot: root, society: "demo" },
-      limits,
-    });
-    const readLogs = Reflect.get(broker, "readLogs") as (
-      agent: string,
-      sinceSeconds: number,
-    ) => Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
-    const result = await readLogs.call(broker, "alice", 1);
-    assert.equal(result.truncated, true);
-    assert.ok(Buffer.byteLength(result.text, "utf8") <= limits.logBytes);
-    assert.ok(result.text.length > 0);
-    assert.ok(Number.isSafeInteger(result.observedAtMs));
-  } finally {
-    process.env.PATH = previousPath;
-    rmSync(root, { recursive: true, force: true });
-  }
+    Object.assign(broker, { limits: { logBytes: 64 }, units: {
+      readLogs: async (actor: string, since: number, limit: number) => residentLogView(logs.read(actor), since, limit),
+    } });
+    const readLogs = Reflect.get(broker, "readLogs") as (actor: string, since: number) => Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
+    const result = await readLogs.call(broker, "alice", 60);
+    assert.equal(result.truncated, true); assert.ok(Buffer.byteLength(result.text) <= 64);
+    assert.ok(result.text.length > 0); assert.ok(Number.isSafeInteger(result.observedAtMs));
+    const complete = [...logs.read("alice")]; assert.equal(complete.length, 1);
+    assert.equal(complete[0]!.kind, "entry");
+    if (complete[0]!.kind === "entry") assert.equal(complete[0]!.entry.bytes.byteLength, 4096);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

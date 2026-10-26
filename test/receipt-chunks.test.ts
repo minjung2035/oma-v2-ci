@@ -19,7 +19,7 @@ import { SharedPeerPin } from "@oma/broker/peer-pin";
 import { MailModule } from "@oma/mail";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { requestHash } from "@oma/domain/request-identity";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
@@ -158,7 +158,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
   process.env.OMA_FRAME_BYTES = String(limits.frameBytes);
   let effects = 0; let reads = 0; let drop = true;
   const units = { bindIncarnationReader() {}, stop() { effects++; }, confirmDead: () => true,
-    observeStatus: async () => new Map() } as unknown as UnitsModule;
+    observeStatus: async () => new Map() } as unknown as FeatureExecution;
   const open = () => {
     const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
     const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 24);

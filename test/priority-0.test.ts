@@ -16,7 +16,7 @@ import { generateOperationId } from "@oma/native/identity";
 import { messageIdForOperation } from "@oma/domain/derived";
 import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
 import { ReconcileModule } from "@oma/reconcile";
-import { UnitsModule as Units, assertUserManagerReachable, unitCommandError, type UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import type { LifecycleModule } from "@oma/lifecycle";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { readCurrentHostPolicy } from "@oma/config";
@@ -95,8 +95,8 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
   const f = await preparedFixture();
   try {
     const left = strandedArtifacts(f.root, f.mail);
-    const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
-      bindIncarnationReader: () => undefined } as unknown as UnitsModule;
+    const units = new PolicyExecution();
+    units.bindIncarnationReader(actor => f.store.getAgent(actor)?.incarnation ?? null);
     const reconcile = createReconcileModule(f.store, f.mail, null, null, units, {} as LifecycleModule,
       { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
     let seenByBootstrap: boolean | null = null;
@@ -131,8 +131,8 @@ test("AV-19: a stranded context .prepare-* tree is collected; an accepted or unp
 /** Runs a startup recovery pass over the fixture's state root and returns the
  * `reconcile.preaccept` events it printed. */
 async function preacceptEvents(t: import("node:test").TestContext, f: Awaited<ReturnType<typeof preparedFixture>>) {
-  const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
-    bindIncarnationReader: () => undefined } as unknown as UnitsModule;
+  const units = new PolicyExecution();
+  units.bindIncarnationReader(actor => f.store.getAgent(actor)?.incarnation ?? null);
   const reconcile = createReconcileModule(f.store, f.mail, null, null, units, {} as LifecycleModule,
     { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
   const printed: string[] = [];
@@ -245,8 +245,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
       tx.insertAgent(makeValidAgent("a", { from: info.base, createdBy: "principal" }));
     });
     const { mail, paths } = gitFixture(root, store);
-    const units = { bindIncarnationReader: () => undefined, ensureResident: () => undefined, assertResidentNamesFree: () => undefined, start: () => undefined,
-      onRevokeRun: undefined } as unknown as UnitsModule;
+    const units = new PolicyExecution();
     // The policy resolves the accepted spec twice (preparation, acceptance
     // transaction); an edit lands right after acceptance and would resolve a
     // child with fewer capabilities from then on.
@@ -260,23 +259,8 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR13 / P0-5: a unit command that did not finish is an unknown outcome, not an unsupported profile", async () => {
-  const unknown = { kind: "unknown", stdout: "", stderr: "", status: null, signal: null } as const;
-  assert.equal(unitCommandError(unknown, "start")?.code, "DEADLINE_EXCEEDED");
-  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1, stderr: "start-limit-hit" }, "start")?.code, "INTERNAL_ERROR");
-  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1 }, "start")?.code, "INTERNAL_ERROR");
-  assert.equal(unitCommandError({ ...unknown, kind: "succeeded", status: 0 }, "start"), null);
-  // The real path: a systemctl that is killed before it answers.
-  const bin = mkdtempSync(join(tmpdir(), "oma-dr13-units-"));
-  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nkill -KILL $$\n"); chmodSync(join(bin, "systemctl"), 0o755);
-  const path = process.env.PATH;
-  process.env.PATH = `${bin}:${path ?? ""}`;
-  try {
-    assert.throws(() => assertUserManagerReachable(), { code: "DEADLINE_EXCEEDED" });
-    const units = new Units("demo", { node: "/usr/bin/node", libdir: "/opt/oma", state: bin, society: "demo", agent: "", config: join(bin, "c.json"), run: bin }, bin);
-    assert.throws(() => units.start("alice", false), { code: "DEADLINE_EXCEEDED" });
-  } finally { process.env.PATH = path; rmSync(bin, { recursive: true, force: true }); }
-});
+// Retired DR13 unit-command classification case is preserved in the archive.
+// Unknown native execution is covered by the real scope/journal regressions.
 
 test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused, and the newer file is kept", () => {
   const f = createCompleteConfigurationFixture();
@@ -374,10 +358,7 @@ test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes
 
 test("P0-7: a draining broker removes its status view, so a view that is there is a live broker's", async () => {
   const f = await preparedFixture();
-  const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
-  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup, invocationId: "a".repeat(32) }),
-    observeStatus: async () => new Map() } as unknown as UnitsModule;
+  const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);

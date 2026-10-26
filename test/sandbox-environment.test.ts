@@ -10,11 +10,11 @@ import { planPiSpawn, type PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
 import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "@oma/domain/resident-paths";
 import { residentArgv } from "@oma/platform-linux/sandbox";
 import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
-import { spawnSandboxed } from "@oma/process/async";
+import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { validateConfig } from "@oma/config";
 import { defaultHostConfig } from "@oma/config/defaults";
 import { RunnerModule, type RunnerProfile } from "#oma-test/app/runner";
-import { candidateCheckCommand } from "#oma-test/app/runtime/candidate-checks";
+import { candidateSandbox } from "@oma/platform-linux/candidate-sandbox";
 import { prepareResident, residentOptions, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 /** The confined environment a plan sets, read back from its argv. */
 function planEnvironment(args: readonly string[]): Record<string, string> {
@@ -103,7 +103,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         modes: ['XDG_DATA_HOME', 'XDG_RUNTIME_DIR'].map(key => fs.statSync(process.env[key]).mode & 511),
         tmp: (() => { fs.writeFileSync(process.env.TMPDIR + '/probe', 'temp'); return fs.readFileSync('/tmp/probe', 'utf8'); })() }));
     `;
-        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "-e", body], plan.env, plan.filter, plan.cwd);
+        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "-e", body], plan.env, plan.input, plan.cwd);
         let out = "", err = "";
         child.stdout.on("data", chunk => { out += String(chunk); });
         child.stderr.on("data", chunk => { err += String(chunk); });
@@ -179,8 +179,7 @@ test("FI-2: the pinned Node's npm, npx and corepack are mounted and linked besid
         // A second start writes nothing (REC-007).
         assert.deepEqual(prepareResidentRootfs(rootfs, hostSystemLayout(), process.getuid!(), process.getgid!()), { deferred: [], corrected: [] });
         // An integration check runs the same toolchain (`npm test` as a check argv).
-        const check = candidateCheckCommand({ stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git",
-            worldDir: "/state/world", society: "demo", checkRootfs: "/rootfs", checkNode: node, checkAssetsDir: "/checks" }, "a".repeat(40), { id: "npm", argv: ["npm", "test"], env: {},  }, []).argv;
+        const check = candidateSandbox({ rootfs: "/rootfs", node, libdir: "/checks" }, "a".repeat(40), { id: "npm", argv: ["npm", "test"], env: {},  }, []).argv;
         const at = check.indexOf("/opt/oma-node/lib/node_modules/npm");
         assert.deepEqual(check.slice(at - 2, at + 1), ["--ro-bind-try", `${prefixOf(node)}/lib/node_modules/npm`, "/opt/oma-node/lib/node_modules/npm"]);
     }
@@ -226,7 +225,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
             "out corepackVersion \"$(timeout 60 corepack --version 2>/dev/null)\"",
             "out cpus \"${OMA_CPUS-unset}\"",
         ].join("\n");
-        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), "/bin/sh", "-c", script], plan.env, plan.filter, plan.cwd);
+        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), "/bin/sh", "-c", script], plan.env, plan.input, plan.cwd);
         let out = "", err = "";
         child.stdout.on("data", chunk => { out += String(chunk); });
         child.stderr.on("data", chunk => { err += String(chunk); });

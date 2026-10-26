@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { ProtocolLimits } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { Broker } from "@oma/broker";
-import { UnitsModule } from "@oma/platform-linux/units";
+import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { StoreError } from "@oma/domain/errors";
@@ -67,8 +67,8 @@ function society(t: TestContext) {
   store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
   seedGit(root);
   const { git, mail } = gitFixture(root, store);
-  const units = new UnitsModule("crash", { node: process.execPath, libdir: root, state: root, society: "crash", agent: "", config: join(root, "config.json"), run: join(root, "oma", "crash") }, join(root, "units"));
-  t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }));
+  const units = new PolicyExecution();
+  t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" }));
   const views = new ViewsModule(store, root, "crash", "p");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);

@@ -26,7 +26,7 @@ import type { PreparedBatch, ResolvedAgentSpec } from "@oma/contracts";
 import { Broker } from "@oma/broker";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
-import type { UnitsModule } from "@oma/platform-linux/units";
+import type { FeatureExecution } from "./fixtures/execution.js";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
@@ -69,8 +69,8 @@ async function restart(w: World): Promise<Broker & { tryOpen(): Promise<{ incarn
   w.mail = createMailModule({ stateRoot: w.root, society: "demo" }, w.store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const id = (++w.invocations).toString(16).padStart(32, "0");
   const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
-    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: id }),
-  } as unknown as UnitsModule;
+    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, scope: OWN_CGROUP, invocationId: id }),
+  } as unknown as FeatureExecution;
   const lifecycle = createLifecycleModule(w.store, units, { stateRoot: w.root, projectGit: join(w.root, "repos", "project.git"),
     society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, w.mail);
