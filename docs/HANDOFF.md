@@ -1,5 +1,15 @@
 # OMA v2 — 현재 인계
 
+## e997fe37 실제 Mac SDK 후속
+
+`e997fe373be6bdeb7cb0dad75be89995c36d4fbf`를 작업 브랜치에 push했다. Native CI40315064670,
+Architecture CI40315064788을 실제 실행 중이다. 아래 “최신 push db68”은 해당 기록 시점이다.
+Mac26/15 gate raw artifact는 ZIP SHA 확인 후 `ci-e997fe37/`에 보존했다. 기존15개 관측은
+각각 OBSERVED다. 새 Mach 후보 compile은 `mach_port_destroy`의 SDK deprecation이
+-Werror에 걸려 실패했고6개 case는 실제 미실행/SETUP_FAILED다. 경고 억제 없이 정확히 취득한
+send/receive 권리를 각각 deallocate/mod_refs로 반환하도록 수정했으며 실제 CI 재실행이 필요하다.
+세 gate는 계속 OPEN이다. 공통/전체 Linux CI 결과도 별도 확인해야 한다.
+
 ## status owner 후속 검증과 Darwin 후보 재개점
 
 최신 push HEAD는 아직 db68c111이며 아래 후속은 미push다. 최신 입력

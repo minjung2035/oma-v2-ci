@@ -11,6 +11,7 @@
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| `e997fe37` 실제 Mac26/15 Mach 후보 SDK 실패 | 기존15개 관측은 각각 OBSERVED. 새 후보는 deprecated mach_port_destroy에 -Werror compile 실패,6개 case 미실행/SETUP_FAILED. 원시 ZIP2개 SHA256/source 확인·`ci-e997fe37/` 보존. 경고 억제 없이 send/receive 권리별 반환으로 수정 후 실제 CI 재실행 필요. 세 gate OPEN이며 전체 workflow PASS가 아님 |
 | status owner·Darwin 후보 추가 뒤 독립 설치/정적 | **26/26 packed install/public API/authored declaration/해당 installed runtime PASS**,269.430초. input `a3b7fb252b39a2ca6a6fafb1d587c4bfb58785c9e9b7b601950ee0ce20ed8c0b` 전후 동일. 전체 정적 gate41.075초·정책7/7·inventory18/18 PASS. 외부 SDK declaration44개는 별도이며 authored 오류0. `native-status-mach-*`. 이후 유지보수/결과 문서는 별도 입력이고 실제 Darwin C 실행은 아직 NOT_RUN |
 | status owner 후속 Linux 선택46개 파일 | **430/430 PASS**, fail/skip/cancel/todo0·466.084초·input `66ab51c0afa08c39760f8c1e27837113c230e0625564eca6635084724b2d3896` 전후 동일. `native-status-owner-integration*`. read20/mixed39/pending620 lag19ms, 기존 budget50/100/50ms 유지. 같은 입력 전체 정적 gate·정책7/7 PASS. 이후 운영 문서·Darwin 후보 추가는 이 실행의 입력이 아니며 전체/CI 결과로 승격하지 않음 |
 | `db68c111` 최신 전체 local | **3773/3775 PASS·2 FAIL**, skip/cancel/todo0·894.612초·input `ec7ee8fc1481ed838594ebe5d4cdf40639d421681b166c671d39b78baf4292bf` 전후 동일. `native-whole-db68c111*`. prompt의 host/guest 기대값과 cgroup 제거의 새 native golden hash가 실패했고 정확한 기대값으로 수정 후 부분 재검증 PASS. production이나 과거 golden을 되돌리지 않음 |
@@ -188,7 +189,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `2a64649825146432e67717fb36fd5a6d507a4f60a7abd13c8e3dd5a8618b730c` (15599 files).
+verification input digest `876c4b107c60ef41490510a3d30ec5d8486c042ffc96bc5a67785ac50cafd811` (15599 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

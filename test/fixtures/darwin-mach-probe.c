@@ -131,7 +131,9 @@ static void queued_probe(const char *name, int exit_before_receive) {
     require(kill(connector, 0) == 0 && kill(holder, 0) == 0, "senders live through both receives");
     close(finish[1]); wait_success(connector); wait_success(holder);
   }
-  kernel_ok(mach_port_destroy(mach_task_self(), receive), "destroy owned receive/send right");
+  kernel_ok(mach_port_deallocate(mach_task_self(), receive), "release owned send right");
+  kernel_ok(mach_port_mod_refs(mach_task_self(), receive, MACH_PORT_RIGHT_RECEIVE, -1),
+    "release owned receive right");
   putchar('\n');
 }
 int main(int argc, char **argv) {
