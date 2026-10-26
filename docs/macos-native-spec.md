@@ -640,3 +640,31 @@ Darwin case는 NOT_RUN이다. 이전 Linux 실패를 지우거나 이 Linux 결�
 최초 사용자 변경 README는 수정하거나 commit하지 않는다. 커밋된 README를 쓰는 CI 입력과 사용자
 README를 포함한 작업트리 입력은 다른 digest를 가진다. 로컬 `bindVerificationInputs` 재생성은
 현재 실제 bytes의 구조 기록일 뿐이며, 커밋의 검증이나 이전 runtime 결과를 다시 결박하지 않는다.
+
+### 14.14 최신 설치 검증과 P0–P7 완료 대조 — 2026-10-27
+
+`29938a42` source의 독립 설치26/26·공개 import/자체 선언과 지정 runtime smoke16/16을 확인했다.
+자체 declaration 오류0이며 외부 SDK44개 진단은 구분한다. input `ae96e9f6...`(15613개)와 보호 파일
+SHA는 전후 동일이다. 이 입력은 원래 사용자 README를 포함하며 clean commit binding과 다르다.
+정확한 원본은 validation과 `/home/dev/oma-audit-artifacts/native-2026-10-27-qualification/`이 소유한다.
+
+| 단계 | 실제 확인한 범위와 미완료 조건 |
+|---|---|
+| P0 | 필수 문서/초기523개 authored source 읽기, 현재532개 source·14313개 production inventory·329개 clause와 모듈 경계 검사. 고정 원문/과거 review/golden·원래 README 보존 |
+| P1 | 기존 실제 kernel 반례를 보존. 최신36개 Darwin 관측은 CI 시작 실패로 NOT_RUN이며 세 gate는 OPEN |
+| P2 | 공통 handle/file owner와 Linux 회귀. Darwin permission-independent pin·exact reopen/repair·파일 경합/실행 대상 결박은 미완료 |
+| P3 | 공통 TS supervisor/wake/backoff/log/registry와 Linux 회귀. Darwin 임의 후손/owner-loss 종료 증거는 미완료 |
+| P4 | 실제 Linux namespace 실행과 공통 인증 정책. Darwin scope/Seatbelt/path view·실제 scope membership/권한 검증은 미완료 |
+| P5 | Linux hostile bundle/quarantine/Restic 회귀와 현재26개 독립 설치. Darwin 같은 실행 경로의 수명/격리/정확한 실행 결박은 미완료 |
+| P6 | VM runtime 폐기·과거 accepted bytes/receipt 의미 보존과 Linux 회귀. Mac native 진입은 gate guard로 거절하며 양 OS clean scenario 완료가 아님 |
+| P7 | 현재 source/문서/owner와 입력 누락 수리를 대조하고 원시 증거를 고정. 남은 Darwin 구현 뒤 최종 규범별 runtime 증명이 필요 |
+
+`execution-runtime.ts`의 non-Linux backend 거절과 native `files.ts`의 Darwin pin/reopen/repair
+거절은 실제 미구현 경계다. transport source 연결이나 지원 전 거절을 지원 완료로 세지 않는다.
+§13.2의1·4·6은 실제 양 OS 실행 증거가 없고,2·3의 정적 구조와5의 거절/unknown 방어만으로 이를
+대체하지 않는다.7의 과거 bytes/권한 보존을 위해 자동 migration·accepted plan 재작성도 하지 않는다.
+
+Native40400373660·Architecture40400373613의7개 job 모두 terminal failure·steps/logs null·artifact
+없음이다. check-run output 본문도 null이며 annotation 원인은 미확정이다. 같은 source를 맹목적으로
+재실행하지 않는다. 공개 API 조건을 충족하는 전체 후손/파일 capability 수단과 실제 Mac CI 증거가
+없으면 목표는 미완료이며 private entitlement/root/private coalition/VM이나 기능 축소로 통과시키지 않는다.

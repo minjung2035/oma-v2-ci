@@ -37,6 +37,8 @@ public/durable DTO·과거 golden은 그대로다. 타입 검사 중 새 unit fi
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| `29938a42` 최신 source 독립 설치 | **26/26 packed install·공개 API import·자체 declaration PASS**, 지정 installed-runtime smoke **16/16 PASS**·자체 declaration 오류0. 외부 SDK declaration 진단44개는 별도 분류하며 workspace별 반복을 합산한 새 오류 수로 표시하지 않음. exit0·263.254초·input `ae96e9f67c48f58c95020eaa7beb989ef467baaed258f4e43b24bb8770f84ba9`(15613개) 및 보호 README/architecture/과거 review/golden SHA 전후 동일. 현재 사용자 README가 포함된 입력이며 clean commit의 구조 binding과 구분. `/home/dev/oma-audit-artifacts/native-2026-10-27-qualification/packed-20261026T210501Z/`가 실제 명령·source HEAD·원시 출력·종료·workspace별 합계를 소유. 이후 결과 문서 입력과 실제 Darwin qualification은 별도 |
+| `29938a42` 실제 CI와 완료 대조 | Native40400373660·Architecture40400373613의7개 job 모두 terminal failure·steps/logs null·artifact 없음. check-run output의 title/summary/text도 null이고 annotation 본문은 연결 도구가 제공하지 않아 원인은 미확정. 실제 Darwin36개 case는 NOT_RUN. P0–P7와 §13.2의7개 최종 조건을 다시 대조했으며 Darwin scope·pin/exact reopen·실행 대상 결박과 실제 인증/격리/수명 qualification이 미완료다. Linux/설치 통과를 전체 완료로 승격하지 않는다. native spec §14.14와 qualification root의 `p0-p7-audit-29938a42.json`, async audit root의 `ci-29938a42.json`·`ci-29938a42-check-runs-20261027.json`이 범위를 소유 |
 | `bd2049c8` 수리 후 전체 Linux 회귀 | **3787/3787 PASS**(serial13/13, parallel3774/3774), fail/cancel/skip/todo0·exit0·973.149초. 실제 UID1000·CapEff0·Node26·pinned bwrap0.12의 private /dev와 /usr/bin overlay에서457개 file·parallel concurrency4·native execution 필수6개를 포함했다. input `9241f47e6aae491e07541aafba2995bf016a8a5b6a5256f1addfef83b2cdd8b9`(15612개)와 보호 README/architecture/과거 review/golden SHA가 전후 동일하며 관측 중 수동 개입은 없었다. 이는 이후 P7 문서-closure 변경 전의 실제 Linux 결과이며 actual Mac/CI 지원 증거가 아님. async audit root의 `full-linux-dev-20261026T203916Z/`가 명령·profile·상태·원시 로그·phase별 실제 합계를 소유 |
 | `bd2049c8` 실제 CI | Native40397569660·Architecture40397569605의7개 job 모두 terminal failure·steps/logs null·artifact 없음. 실제36개 Darwin case는 NOT_RUN이고 원인은 미확정이다. async audit root의 `ci-bd2049c8.json`·`ci-bd2049c8-artifacts.json`이 원본을 소유하며 같은 입력의 무의미한 재실행으로 덮지 않음 |
 | P7 후속 정적/문서 검사 | 분리 작업트리의 input `950cf5e29804acfc02dc7ef66f7bdd4fcf3fb425f520f2bbc01ed27597de9f06`(15613개) 전후 동일에서 전체 architecture/transaction/durable/document/spec PASS·문서/입력/workflow **32/32 PASS**·fail/cancel/skip/todo0. 첫 architecture 실행은 공유 node_modules 링크가 @oma를 원래 작업트리 밖으로 해석해51개 finding으로 실패했으며 raw를 보존했다.26개 workspace를 실제 분리 작업트리로 연결하고 같은 compiled output을 복사한 뒤 같은 입력의 architecture를 다시 통과했다. gate 규칙은 바꾸지 않았고 production source 변경도 없다. raw `document-closure-static-*`, `document-closure-architecture-*`, `closure-worktree-dependencies.json` |
@@ -235,7 +237,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `8666e5f50f2658f843e9d8e8a4c46005f260b09fdc6b4099fc13d54a749ca8e8` (15613 files).
+verification input digest `b9aa1f9df36ce2cd0fd78105d5399f05f2e17dc2d1b6d5ece6e7fe905220d741` (15613 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

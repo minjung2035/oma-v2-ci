@@ -1,6 +1,12 @@
 # OMA v2 — 현재 인계
 
-## 현재: bd2049c8 전체 Linux 통과와 P7 문서 입력 수리
+## 현재: 29938a42 설치 검증 통과와 Mac 지원 차단
+
+`29938a42` 현재 source의 독립 설치26/26·공개 API/자체 선언 PASS, 지정 runtime smoke16/16을
+확인했다. input `ae96e9f6...`(15613개)과 보호 파일 SHA는 전후 동일이다. 최신 실제 CI는
+Native40400373660·Architecture40400373613의7개 job 모두 스텝 실행 전 실패·artifact 없음이다.
+P0–P7·최종7개 조건을 다시 대조했으며 Darwin 실행 범위와 파일 pin/exact reopen/실행 대상 결박,
+실제 인증/격리/수명 검증이 남았다. §14.14와 validation의 source별 증거를 따르며 완료로 판정하지 않는다.
 
 `bd2049c8` 수리 후 전체 Linux는 **3787/3787 PASS**·fail/cancel/skip/todo0·exit0이며 입력과
 보호 파일 SHA는 전후 동일이다. 실제 Mac CI는 새 push에서도7개 job 모두 스텝 시작 전 실패했다.
