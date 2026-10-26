@@ -1,5 +1,20 @@
 # OMA v2 — 현재 인계
 
+## 5e369b30 후속: Mach 기본 수신과 상속 분리
+
+현재 push는 `5e369b3072608581ba3ff74bc958ac58d97acef4`다. Native40316752088의
+Mac26/15 공통 job은 성공했고 Ubuntu 선택 회귀는 아직 실행 중이다. Architecture40316751983,
+앞선40315064788/40315665888의 baseline/native-all도 실제 live 상태를 재확인했다. all lane은
+file concurrency1·7200초 예산이며 관측이 오래 걸린다는 이유로 재시작하지 않는다.
+
+Mac26 gate의 raw `ci-5e369b30/12646079564/`는 두 compile0·기존15개 OBSERVED·Mach6개
+SETUP_FAILED다. 실제 sender send는 성공했지만 부모 receive queue는 첫 send 뒤와 등록 해제
+전후 모두0이었다. 상속 실패와 기본 messaging/fixture 실패를 구분할 수 없어 Mach 자체의
+불가능으로 판정하지 않는다. 다음 후속은 같은 send/receive helper를 사용하는 독립 self
+message와 부모 registered port가 실제 held receiver인지 대조한다. 새 후보는 각각3회,
+기존 두-sender 조건도 그대로 실행하며 실제 Mac CI 전에는 NOT_RUN이다. 세 gate는 OPEN이다.
+기존 README dirty·architecture/review 원문을 보존하며 master 병합·배포는 하지 않는다.
+
 ## e37ad5e0 Mach 후보의 실제 receive 실패
 
 최신 push는 `e37ad5e09af764cd9c956de0d2a81a9fb9c1ef2b`다. Native CI40315665892에서

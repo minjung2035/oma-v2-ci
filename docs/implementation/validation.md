@@ -189,7 +189,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `1e6b7c28e7934e54d1f8de00bda6ce89fc566b2c1d18d2d0aad79ddc998bc438` (15599 files).
+verification input digest `734d2c2c091a0cfb6e18116e7882a93d088a518231cca1c4b3ad4814fe648efb` (15599 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

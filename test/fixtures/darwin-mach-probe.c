@@ -42,6 +42,76 @@ static void observe_queue(mach_port_t receive, const char *phase) {
     (unsigned int)status.mps_srights);
 }
 
+static mach_port_t owned_port(void) {
+  mach_port_t receive = MACH_PORT_NULL;
+  kernel_ok(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &receive), "receive port");
+  kernel_ok(mach_port_insert_right(mach_task_self(), receive, receive,
+    MACH_MSG_TYPE_MAKE_SEND), "send right");
+  return receive;
+}
+static void close_owned_port(mach_port_t receive) {
+  kernel_ok(mach_port_deallocate(mach_task_self(), receive), "release owned send right");
+  kernel_ok(mach_port_mod_refs(mach_task_self(), receive, MACH_PORT_RIGHT_RECEIVE, -1),
+    "release owned receive right");
+}
+static void send_request(mach_port_t destination, uint32_t sequence, pid_t claimed) {
+  request_t request = {0};
+  request.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+  request.header.msgh_size = sizeof request;
+  request.header.msgh_remote_port = destination;
+  request.header.msgh_id = 0x4f4d4101;
+  request.sequence = sequence;
+  request.claimed_pid = claimed;
+  kernel_ok(mach_msg(&request.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT,
+    sizeof request, 0, MACH_PORT_NULL, 5000, MACH_PORT_NULL), "queue actual message");
+}
+static void receive_request(mach_port_t receive, request_t *request, mach_msg_audit_trailer_t *trailer) {
+  received_t received = {0};
+  mach_msg_header_t *header = (mach_msg_header_t *)received.bytes;
+  kernel_ok(mach_msg(header, MACH_RCV_MSG | MACH_RCV_TIMEOUT |
+    MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
+    MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+    0, sizeof received, receive, 5000, MACH_PORT_NULL), "receive kernel audit trailer");
+  require(header->msgh_size == sizeof(request_t) && header->msgh_id == 0x4f4d4101 &&
+    !(header->msgh_bits & MACH_MSGH_BITS_COMPLEX), "received message shape");
+  memcpy(request, received.bytes, sizeof *request);
+  size_t offset = (header->msgh_size + 3u) & ~(size_t)3u;
+  require(offset + sizeof *trailer <= sizeof received, "bounded audit trailer");
+  memcpy(trailer, received.bytes + offset, sizeof *trailer);
+  require(trailer->msgh_trailer_type == MACH_MSG_TRAILER_FORMAT_0 &&
+    trailer->msgh_trailer_size >= sizeof *trailer &&
+    trailer->msgh_trailer_size <= sizeof received - offset, "actual audit trailer shape");
+}
+static void check_registration(mach_port_t receive) {
+  mach_port_array_t ports = NULL;
+  mach_msg_type_number_t count = 0;
+  kernel_ok(mach_ports_lookup(mach_task_self(), &ports, &count), "observe parent registered port");
+  require(count > 0, "parent registered array shape");
+  int exact = ports[0] == receive;
+  fprintf(stderr, "parent-registration: receive=%u returned=%u count=%u exact=%s\n",
+    receive, ports[0], count, exact ? "true" : "false");
+  for (mach_msg_type_number_t i = 0; i < count; i++)
+    if (MACH_PORT_VALID(ports[i])) kernel_ok(mach_port_deallocate(mach_task_self(), ports[i]), "release parent lookup right");
+  kernel_ok(vm_deallocate(mach_task_self(), (vm_address_t)(uintptr_t)ports,
+    count * sizeof *ports), "release parent lookup array");
+  require(exact, "registration must identify the actual held receiver");
+}
+static void self_probe(const char *name) {
+  mach_port_t receive = owned_port();
+  send_request(receive, 1, getpid());
+  observe_queue(receive, "self-after-send");
+  request_t request;
+  mach_msg_audit_trailer_t trailer;
+  receive_request(receive, &request, &trailer);
+  require(request.sequence == 1 && request.claimed_pid == getpid() &&
+    audit_token_to_pid(trailer.msgh_audit) == getpid() &&
+    audit_token_to_euid(trailer.msgh_audit) == geteuid(), "self audit identity and body");
+  close_owned_port(receive);
+  printf("{\"case\":\"%s\",\"machSelf\":{\"pid\":%d,\"auditPid\":%d,\"auditEuid\":%u}}\n",
+    name, getpid(), audit_token_to_pid(trailer.msgh_audit),
+    (unsigned int)audit_token_to_euid(trailer.msgh_audit));
+}
+
 static void send_from_child(uint32_t sequence, pid_t claimed, int ready, int finish) {
   mach_port_array_t ports = NULL;
   mach_msg_type_number_t count = 0;
@@ -51,15 +121,7 @@ static void send_from_child(uint32_t sequence, pid_t claimed, int ready, int fin
   kernel_ok(mach_port_type(mach_task_self(), ports[0], &type), "observe inherited right type");
   fprintf(stderr, "sender: pid=%d task=%u port=%u type=%u sequence=%u\n", getpid(),
     mach_task_self(), ports[0], type, sequence);
-  request_t request = {0};
-  request.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
-  request.header.msgh_size = sizeof request;
-  request.header.msgh_remote_port = ports[0];
-  request.header.msgh_id = 0x4f4d4101;
-  request.sequence = sequence;
-  request.claimed_pid = claimed;
-  kernel_ok(mach_msg(&request.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT,
-    sizeof request, 0, MACH_PORT_NULL, 5000, MACH_PORT_NULL), "queue child message");
+  send_request(ports[0], sequence, claimed);
   for (mach_msg_type_number_t i = 0; i < count; i++)
     if (MACH_PORT_VALID(ports[i])) kernel_ok(mach_port_deallocate(mach_task_self(), ports[i]), "release inherited right");
   kernel_ok(vm_deallocate(mach_task_self(), (vm_address_t)(uintptr_t)ports,
@@ -79,11 +141,9 @@ static void wait_success(pid_t child) {
     "join actual sender");
 }
 static void queued_probe(const char *name, int exit_before_receive) {
-  mach_port_t receive = MACH_PORT_NULL;
-  kernel_ok(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &receive), "receive port");
-  kernel_ok(mach_port_insert_right(mach_task_self(), receive, receive,
-    MACH_MSG_TYPE_MAKE_SEND), "send right");
+  mach_port_t receive = owned_port();
   kernel_ok(mach_ports_register(mach_task_self(), &receive, 1), "register owned send right");
+  check_registration(receive);
   int ready[2], finish[2];
   require(pipe(ready) == 0 && pipe(finish) == 0, "private fixture pipes");
   pid_t connector = fork(); require(connector >= 0, "first sender fork");
@@ -115,22 +175,9 @@ static void queued_probe(const char *name, int exit_before_receive) {
     name, exit_before_receive ? "machQueuedExit" : "machQueuedLive",
     exit_before_receive ? "true" : "false", connector, holder);
   for (uint32_t index = 1; index <= 2; index++) {
-    received_t received = {0};
-    mach_msg_header_t *header = (mach_msg_header_t *)received.bytes;
-    kernel_ok(mach_msg(header, MACH_RCV_MSG | MACH_RCV_TIMEOUT |
-      MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
-      MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
-      0, sizeof received, receive, 5000, MACH_PORT_NULL), "receive kernel audit trailer");
-    require(header->msgh_size == sizeof(request_t) && header->msgh_id == 0x4f4d4101 &&
-      !(header->msgh_bits & MACH_MSGH_BITS_COMPLEX), "received message shape");
-    request_t request; memcpy(&request, received.bytes, sizeof request);
-    size_t offset = (header->msgh_size + 3u) & ~(size_t)3u;
-    require(offset + sizeof(mach_msg_audit_trailer_t) <= sizeof received, "bounded audit trailer");
+    request_t request;
     mach_msg_audit_trailer_t trailer;
-    memcpy(&trailer, received.bytes + offset, sizeof trailer);
-    require(trailer.msgh_trailer_type == MACH_MSG_TRAILER_FORMAT_0 &&
-      trailer.msgh_trailer_size >= sizeof trailer &&
-      trailer.msgh_trailer_size <= sizeof received - offset, "actual audit trailer shape");
+    receive_request(receive, &request, &trailer);
     pid_t sender = audit_token_to_pid(trailer.msgh_audit);
     pid_t expected = index == 1 ? connector : holder;
     require(request.sequence == index && request.claimed_pid == connector && sender == expected &&
@@ -148,13 +195,12 @@ static void queued_probe(const char *name, int exit_before_receive) {
     require(kill(connector, 0) == 0 && kill(holder, 0) == 0, "senders live through both receives");
     close(finish[1]); wait_success(connector); wait_success(holder);
   }
-  kernel_ok(mach_port_deallocate(mach_task_self(), receive), "release owned send right");
-  kernel_ok(mach_port_mod_refs(mach_task_self(), receive, MACH_PORT_RIGHT_RECEIVE, -1),
-    "release owned receive right");
+  close_owned_port(receive);
   putchar('\n');
 }
 int main(int argc, char **argv) {
   require(argc == 2, "one independent case required");
+  if (strcmp(argv[1], "mach-self") == 0) { self_probe(argv[1]); return 0; }
   int exited = strcmp(argv[1], "mach-queued-exit") == 0;
   require(exited || strcmp(argv[1], "mach-queued-live") == 0, "unknown Mach probe case");
   queued_probe(argv[1], exited);
