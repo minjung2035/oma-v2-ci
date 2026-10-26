@@ -1360,7 +1360,7 @@
     },
     {
       "path": "packages/native/src/audit-origin.ts",
-      "sha256": "b589ad80a8f5bcecba86aa691a8dff1936deb4e085d008de9811f351e5b861c8"
+      "sha256": "703cd41d965487f6f9f3ae01ce0318aed4bb8cbeb693305c18606d54e24c827c"
     },
     {
       "path": "packages/native/src/audit-token.ts",
@@ -1412,7 +1412,7 @@
     },
     {
       "path": "packages/native/src/process-event.ts",
-      "sha256": "85847357972c97b5e894b8c9e77f5d4584dc12ae1970c3f60624cab2f7e2a4fe"
+      "sha256": "919862b584e371beab92439b4c5218a550db2ed09d8de80e537f50b9d06d0adb"
     },
     {
       "path": "packages/native/src/process-lock.ts",
@@ -1484,7 +1484,7 @@
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
-      "sha256": "57892ec217c0f36aaba744212440ec07fec90dfb90e082bbd696e6f5b03aa1a5"
+      "sha256": "746fb5d41a2b4eb7af80c4bcce8fe532bb0d2cd6e9a8865fa574730d6d847880"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1504,11 +1504,11 @@
     },
     {
       "path": "packages/platform-mac/src/mach-stream.ts",
-      "sha256": "3a92bec718a07ba24f2c0576c974394c000a1ece911b1a27063d9adeafc00a41"
+      "sha256": "c866b3775986691af21b65878f4d8778ef87536959d43bd4c051c81271692313"
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "5d47119944d931cb483b78bcf1991809a64508fcef76e6e224ccd2275bf472c4"
+      "sha256": "3918a5cad1e0510ee39d45bb2e75f0e9061ef69f2f1a6e24d0e77a19f4ba3222"
     },
     {
       "path": "packages/platform-mac/src/native-assets.ts",
@@ -1556,7 +1556,7 @@
     },
     {
       "path": "packages/process/src/packet-stream.ts",
-      "sha256": "d0d014624e9f57ac2beea9cfa91c5838e66a02b58a5aca16ce799fea42e75e62"
+      "sha256": "55a3348e303ba371b33ec97b4326b948001f65bd89879fd81ae4d7b9917db40e"
     },
     {
       "path": "packages/process/src/policies.ts",

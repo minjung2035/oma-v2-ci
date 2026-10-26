@@ -162,7 +162,7 @@ destination receive right 손실만 관측하며 EOF/process/scope 사망으로 
 
 새 shared-flow 회귀는 OS 사실을 mock으로 증명하지 않는 공통 TS 시험이다. 실제 Mach cross-process,
 queue-full reference 회수, sender 인계·PID 재사용·exec·중도 사망과 bootstrap profile은 실제 Mac에서
-별도로 실행해야 한다. Security dynamic validation은 현재 synchronous FFI이며 disk 작업을 할 수 있다.
+별도로 실행해야 한다. `7ebb7268`의 Security dynamic validation은 synchronous FFI이며 disk 작업을 할 수 있다.
 WP23 latency qualification 전에는 async/tracked preparation owner로 옮기고 실제 예산을 확인해야 한다.
 
 ## Node adapter의 실제 Darwin 시험 경로
@@ -185,4 +185,45 @@ build10분을 job ceiling이 먼저 자르지 않는다. timeout·반환 실패�
 동기식 Security validation의 후속 구현은 [Koffi 공식 async 호출](https://koffi.dev/load#asynchronous-calls)과
 [output buffer 수명](https://koffi.dev/output#output-buffers)을 대조했다. callback 전에는 CF reference와
 출력 buffer를 반환할 수 없고, 취소/stream close도 그 실제 completion을 기다려야 한다. 이 조사만으로
-현재 synchronous leaf가 비동기 전환됐다고 주장하지 않는다.
+이 조사만 수행한 당시에는 synchronous leaf가 비동기 전환됐다고 주장하지 않았다.
+
+## 응답자 신원과 기대한 Broker의 결박
+
+추가 source 검토에서 `dialMachChannel`의 live audit pin은 응답한 실제 process만 결박하며,
+그 process를 우리가 찾던 Broker로 독립 확인하는 경로는 아직 없음을 확인했다. public bootstrap
+name·echo nonce·유효한 Node image 검증만으로 expected Broker identity가 생기지 않는다.
+현재 product guard는 그대로이며 일반 CLI의 인증 완료로 판정하지 않는다.
+
+[Chromium의 client 검증](https://github.com/chromium/chromium/blob/655c7be0fe437601b893c7d886a3cb5e80fc4d6b/base/apple/mach_port_rendezvous_mac.cc#L270)은
+별도 `server_requirement_`에 kernel audit trailer를 대조한다. 해당 pinned source의 validate-only와
+enforce 설정도 구분했다. 이 구조는 기대 신원의 별도 근거가 필요하다는 대조이며, Chromium의
+선택적 requirement나 설정 상태가 OMA의 보안 보장을 대신하지 않는다. 신뢰한 launch/held-state
+owner에서 expected Broker identity를 결박하고 서비스 선점·교체·재사용 반례를 확인하는 작업이 남는다.
+
+## Security 호출의 비동기 완료와 반환 owner
+
+`7ebb7268` 후속 source는 [Koffi async 호출](https://koffi.dev/load#asynchronous-calls)의 worker callback으로
+두 Security 호출을 실행한다. [출력 buffer 수명](https://koffi.dev/output#output-buffers)에 따라 native
+callback 뒤 output을 읽고 CF code/dictionary/data를 반환한다. `result`의 인증 결과와 `returned`의
+실제 callback/CF 반환 증거를 분리하여, 인증 거절을 cleanup 성공이나 실패로 바꾸지 않는다.
+
+`bindMachSender`는 watch를 먼저 획득하고 `ready` 뒤 명시적인 `take` 한 번으로 pin을 인계한다.
+취소한 acquisition의 `close`는 native callback과 unclaimed watch의 실제 반환을 기다린다. 인계한
+pin은 별도 common connection/request owner가 반환한다. 이미 실패한 close는 재시도하거나
+다음 호출의 성공으로 숨기지 않는다. Client stream close와 listener의 admission/drain도 이 완료를 join한다.
+
+공통 PacketStream은 [Node26의 construct lifecycle](https://nodejs.org/download/release/v26.0.0/docs/api/stream.html#writable_constructcallback)을
+사용해 setup 실패와 construction 이전 취소를 같은 asynchronous destruction으로 돌린다. driver의
+native 반환 promise가 settle하기 전에 close/resource-return을 게시하지 않는다. 실제 기존 코드에서
+새4개 회귀가 모두 실패했고 수정 뒤 기존4개와 합쳐8/8 PASS다. 이것은 shared-flow 검증이며 Mac
+OS 사실을 mock으로 증명하지 않는다. 실제 Mac fixture에 별도 `mach-audit-async` positive/cancel/
+claimed-pin owner case를 추가했다. actual Mach token과 Security 함수로 실행하며 CI 전에는 NOT_RUN이다.
+
+driver는 기존 C/Node case를 유지해12개를 각각3회 실행한다. 36개 process ceiling 합72분과 build10분의
+바깥에 job100분을 두며 각 case의 관측45초/cleanup30초는 유지한다. 어느 ceiling도 성공 판정의 대체가 아니다.
+
+서비스 선점 방어의 추가 후보로 [같은 고정 sandbox-runtime profile](https://github.com/anthropics/sandbox-runtime/blob/98a4016d27609ed34dd1fb43d23ed6efb6eeeb77/src/sandbox/macos-sandbox-utils.ts#L1081)을
+확인했다. 기본 거절과 특정 `mach-lookup`만 만들며 이 파일에 `mach-register` 허용은 없다. 이를
+OMA의 실제 registration 거절 증거로 사용하지 않는다. 실제 제한된 caller의 등록 거절과 정상 Broker
+양성 대조, host/worker 사이 신뢰 경계가 필요하다. 이 후보와 expected-identity 광고/launch 결박을
+비교하며, 같은 profile의 `mach-priv-task-port` 등 다른 허용을 OMA에 자동 채택하지 않는다.

@@ -5304,15 +5304,18 @@
       "packages/platform-mac/src/mach-transport.ts#createMachBrokerTransport",
       "packages/platform-mac/src/mach-stream.ts#machStream",
       "packages/process/src/packet-stream.ts#PacketStream",
-      "packages/platform-mac/src/audit-peer.ts#pinMachSender"
+      "packages/platform-mac/src/audit-peer.ts#bindMachSender"
     ],
     "negativeTests": [
       "test/native-credential-stream.test.mjs#credential stream: live connector",
       "test/native-unix-message.test.mjs#recvmsg actual ABI",
       "test/packet-stream.test.ts#packet stream refuses a foreign EOF",
       "test/packet-stream.test.ts#packet write failure settles",
+      "test/packet-stream.test.ts#packet close waits for asynchronous resource return",
+      "test/packet-stream.test.ts#packet asynchronous cleanup rejection preserves",
       "test/fixtures/darwin-mach-stream.mjs#handoff",
-      "test/fixtures/darwin-mach-stream.mjs#stale"
+      "test/fixtures/darwin-mach-stream.mjs#stale",
+      "test/fixtures/darwin-mach-stream.mjs#asyncAudit"
     ],
     "evidence": null,
     "status": "unverified",

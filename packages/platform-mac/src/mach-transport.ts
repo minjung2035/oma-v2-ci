@@ -14,8 +14,8 @@ import {
   createMachEndpoint, listenMachService, lookupMachService,
   type MachMessage, type MachReceiveRight, type MachSendRight, type MachAuditSender,
 } from "@oma/native/mach-message";
-import { cleanupAll, withCleanup } from "@oma/native/cleanup";
-import { pinMachSender, type MachPeerPin } from "./audit-peer.js";
+import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
+import { bindMachSender, type MachPeerPin, type MachPeerBinding } from "./audit-peer.js";
 import { machStream } from "./mach-stream.js";
 import { machPoll } from "./mach-poll.js";
 
@@ -37,11 +37,13 @@ type Packet = Extract<MachMessage, { kind: "data" }>;
  */
 export function dialMachChannel(path: string, handshakeSeconds: number): { readonly socket: Duplex; readonly ready: Promise<void> } {
   const name = serviceFor(path), ms = duration(handshakeSeconds), nonce = randomBytes(16);
+  const expires = performance.now() + ms;
   const service = lookupMachService(name);
   let local: ReturnType<typeof createMachEndpoint>;
   try { local = createMachEndpoint(); }
   catch (error) { return withCleanup(() => { throw error; }, () => service.close()); }
   let remote: MachSendRight | null = null, pin: MachPeerPin | null = null, opened = false, sent = false;
+  let binding: MachPeerBinding | undefined;
   let poll: ReturnType<typeof machPoll> | undefined, cancel = (): void => {};
   let resolve!: () => void, reject!: (error: unknown) => void;
   const ready = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
@@ -53,15 +55,22 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
       destination: () => remote?.destination() ?? "unknown",
       close: () => remote?.close(),
     },
-  }, sender => pin !== null && pin.sameSender(sender) && pin.alive(), () => {
+  }, sender => pin !== null && pin.sameSender(sender) && pin.alive(), async () => {
     reject(unavailable("Mach connection ended before readiness"));
-    cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => pin?.close()]);
+    await withAsyncCleanup(async () => {
+      cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => pin?.close()]);
+    }, () => binding?.close());
   }, () => opened);
+  const fail = (error: unknown): void => {
+    const failure = error instanceof Error ? error : new Error("Mach connection failed", { cause: error });
+    reject(failure); socket.destroy(failure);
+  };
   // Retains terminal error ownership even if a caller destroys the pending
   // connector before installing its channel-generation listeners.
   socket.on("error", reject);
   const receive = (): void => {
-    if (socket.destroyed || opened) return;
+    if (socket.destroyed || opened || binding !== undefined) return;
+    if (performance.now() >= expires) { fail(unavailable("Mach rendezvous deadline exceeded")); return; }
     if (!sent) {
       if (service.send(OPEN, nonce, local.send) === "again") return;
       sent = true;
@@ -72,28 +81,36 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
     withCleanup(() => {
       if (message.id !== OPENED || message.reply === null || !message.bytes.equals(nonce))
         throw new StoreError("AUTH_FAILED", "invalid Mach rendezvous reply");
-      pin = pinMachSender(message.sender);
       remote = message.reply; transferred = true;
-      cleanupAll([() => service.close(), () => local.send.close(), cancel, () => poll?.close()]);
-      opened = true; resolve();
+      binding = bindMachSender(message.sender);
+      const acquisition = binding;
+      poll?.request(false);
+      void acquisition.ready.then(() => {
+        if (socket.destroyed) return;
+        if (performance.now() >= expires) throw unavailable("Mach rendezvous deadline exceeded");
+        pin = acquisition.take();
+        cleanupAll([() => service.close(), () => local.send.close(), cancel, () => poll?.close()]);
+        opened = true; resolve();
+      }).catch(fail);
     }, () => { if (!transferred) message.reply?.close(); });
   };
   try {
-    poll = machPoll(receive, error => socket.destroy(error));
-    cancel = deadline(ms, () => socket.destroy(unavailable("Mach rendezvous deadline exceeded")));
+    poll = machPoll(receive, fail);
+    cancel = deadline(Math.max(1, expires - performance.now()), () => fail(unavailable("Mach rendezvous deadline exceeded")));
     poll.request(true);
-  } catch (error) { socket.destroy(error instanceof Error ? error : unavailable("Mach rendezvous setup failed")); }
+  } catch (error) { fail(error); }
   return { socket, ready };
 }
 
 interface Pending {
   readonly client: MachSendRight; readonly endpoint: ReturnType<typeof createMachEndpoint>;
-  readonly pin: MachPeerPin; readonly nonce: Buffer; cancel(): void;
+  readonly pin: MachPeerPin; readonly nonce: Buffer; readonly expires: number; cancel(): void;
 }
 class MachListener extends EventEmitter {
   private receiver: MachReceiveRight | null = null;
   private poll: ReturnType<typeof machPoll> | null = null;
   private readonly pending = new Set<Pending>();
+  private readonly checking = new Set<Promise<void>>();
   private readonly streams = new Set<PacketStream<MachAuditSender>>();
   private readonly waiters: (() => void)[] = [];
   private started = false;
@@ -124,14 +141,34 @@ class MachListener extends EventEmitter {
     catch (error) { this.closeFailure ??= error; throw error; }
   }
   private request(message: Packet): void {
+    const task = this.prepareRequest(message);
+    this.checking.add(task);
+    void task.then(() => {
+      this.checking.delete(task); this.finishClose();
+    }, error => {
+      this.checking.delete(task); this.closeFailure ??= error;
+      this.emit("error", error); this.finishClose();
+    });
+  }
+  private async prepareRequest(message: Packet): Promise<void> {
     let clientOwned = false, pin: MachPeerPin | null = null, endpoint: ReturnType<typeof createMachEndpoint> | null = null;
+    let binding: MachPeerBinding | undefined, expired = false, ticket: Pending | undefined, cancel = (): void => {};
     try {
       if (message.id !== OPEN || message.bytes.length !== 16 || message.reply === null ||
-          this.maximum !== undefined && this.pending.size + this.streams.size >= this.maximum) return;
-      pin = pinMachSender(message.sender);
+          this.maximum !== undefined && this.pending.size + this.streams.size + this.checking.size >= this.maximum) return;
+      const expires = performance.now() + duration(this.seconds);
+      binding = bindMachSender(message.sender);
+      cancel = deadline(Math.max(1, expires - performance.now()), () => {
+        expired = true;
+        if (ticket !== undefined) {
+          try { this.discard(ticket); } catch (error) { this.emit("error", error); }
+        }
+      });
+      await binding.ready;
+      if (this.closing || expired || performance.now() >= expires) return;
+      pin = binding.take();
       endpoint = createMachEndpoint();
-      const ticket: Pending = { client: message.reply, endpoint, pin, nonce: message.bytes, cancel: () => {} };
-      ticket.cancel = deadline(duration(this.seconds), () => { try { this.discard(ticket); } catch (error) { this.emit("error", error); } });
+      ticket = { client: message.reply, endpoint, pin, nonce: message.bytes, expires, cancel };
       this.pending.add(ticket);
       clientOwned = true; pin = null; endpoint = null;
     } catch (error) {
@@ -140,16 +177,18 @@ class MachListener extends EventEmitter {
       if (error instanceof AggregateError) { this.closeFailure ??= error; this.emit("error", error); }
       else this.emit("clientError", error);
     } finally {
-      try { cleanupAll([
-        () => { if (!clientOwned) message.reply?.close(); }, () => pin?.close(),
-        () => endpoint?.receive.close(), () => endpoint?.send.close(),
-      ]); } catch (error) { this.closeFailure ??= error; this.emit("error", error); }
+      try {
+        await withAsyncCleanup(async () => { await binding?.close(); }, () => cleanupAll([
+          () => { if (!clientOwned) cancel(); }, () => { if (!clientOwned) message.reply?.close(); },
+          () => pin?.close(), () => endpoint?.receive.close(), () => endpoint?.send.close(),
+        ]));
+      } catch (error) { this.closeFailure ??= error; this.emit("error", error); }
     }
   }
   private tick(): void {
     if (this.closing || this.receiver === null) return;
     for (const ticket of [...this.pending]) {
-      if (!ticket.pin.alive()) { this.discard(ticket); continue; }
+      if (performance.now() >= ticket.expires || !ticket.pin.alive()) { this.discard(ticket); continue; }
       let enqueued = false, stream: PacketStream<MachAuditSender> | undefined;
       try {
         if (ticket.client.send(OPENED, ticket.nonce, ticket.endpoint.send) === "again") continue;
@@ -199,7 +238,7 @@ class MachListener extends EventEmitter {
     this.finishClose(); return this;
   }
   private finishClose(): void {
-    if (!this.closing || this.closed || this.closeFailure !== undefined || this.pending.size || this.streams.size) return;
+    if (!this.closing || this.closed || this.closeFailure !== undefined || this.pending.size || this.checking.size || this.streams.size) return;
     this.closed = true;
     queueMicrotask(() => { this.emit("close"); for (const callback of this.waiters.splice(0)) callback(); });
   }

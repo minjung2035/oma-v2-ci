@@ -6,11 +6,11 @@ import { once } from "node:events";
 import { setImmediate as turn } from "node:timers/promises";
 import { PacketStream, type PacketDriver, type PacketObservation, type OutboundPacket } from "@oma/process/packet-stream";
 
-function fixture() {
+function fixture(options: { returning?: Promise<void>; watchFailure?: Error } = {}) {
   const sender: Readonly<{ identity: string }> = Object.freeze({ identity: "original" });
   const alien = Object.freeze({ identity: "other" });
   const incoming: PacketObservation<typeof sender>[] = [], output: OutboundPacket[] = [];
-  let credit = 0, closes = 0, enabled = false, writing = false, queued = false, closed = false;
+  let credit = 0, closes = 0, watches = 0, enabled = false, writing = false, queued = false, closed = false;
   let ready = (): void => {}, failure: Error | null = null, cleanupFailure: Error | null = null;
   const wake = (): void => {
     if (closed || queued || !(enabled && incoming.length || writing && credit)) return;
@@ -27,10 +27,12 @@ function fixture() {
       return "sent";
     },
     watch(callback) {
+      watches++;
+      if (options.watchFailure) throw options.watchFailure;
       ready = callback;
       return { request(read, write) { enabled = read; writing = write; wake(); }, close() { closed = true; } };
     },
-    close() { closes++; if (cleanupFailure) throw cleanupFailure; },
+    close() { closes++; if (cleanupFailure) throw cleanupFailure; return options.returning; },
   };
   const stream = new PacketStream(driver, value => value === sender); stream.on("error", () => {});
   return { stream, sender, alien, output,
@@ -38,6 +40,7 @@ function fixture() {
     permit(count: number) { credit += count; wake(); },
     fail(error: Error, cleanup?: Error) { failure = error; cleanupFailure = cleanup ?? null; },
     closes: () => closes,
+    watches: () => watches,
   };
 }
 
@@ -87,4 +90,45 @@ test("packet write failure settles its callback and preserves cleanup failure", 
   assert.ok(error instanceof AggregateError); assert.deepEqual(error.errors, [primary, cleanup]);
   assert.equal(await writeError, error); assert.equal(f.closes(), 1); assert.equal(f.output.length, 0);
   assert.equal(f.stream.resourcesReturned, false);
+});
+
+test("packet close waits for asynchronous resource return before close", { timeout: 3000 }, async t => {
+  let release!: () => void;
+  const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
+  const f = fixture({ returning }); let closed = false;
+  const done = new Promise<void>(resolve => f.stream.once("close", () => { closed = true; resolve(); }));
+  await turn(); f.stream.destroy(); await turn();
+  assert.equal(f.closes(), 1); assert.equal(closed, false); assert.equal(f.stream.resourcesReturned, false);
+  release(); await done; assert.equal(f.stream.resourcesReturned, true);
+});
+
+test("packet setup failure still joins asynchronous cleanup", { timeout: 3000 }, async t => {
+  let release!: () => void;
+  const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
+  const primary = new Error("watch setup refused"), f = fixture({ returning, watchFailure: primary });
+  let closed = false; const failed = once(f.stream, "error");
+  const done = new Promise<void>(resolve => f.stream.once("close", () => { closed = true; resolve(); }));
+  await turn(); assert.equal(f.closes(), 1); assert.equal(closed, false); assert.equal(f.stream.resourcesReturned, false);
+  release(); assert.equal((await failed)[0], primary); await done; assert.equal(f.stream.resourcesReturned, true);
+});
+
+test("packet asynchronous cleanup rejection preserves the pending write error", { timeout: 3000 }, async () => {
+  let rejectReturn!: (error: Error) => void;
+  const returning = new Promise<void>((_resolve, reject) => { rejectReturn = reject; }); void returning.catch(() => {});
+  const f = fixture({ returning }), primary = new Error("connection cancelled"), cleanup = new Error("native callback return failed");
+  const failed = once(f.stream, "error"), done = new Promise<void>(resolve => f.stream.once("close", resolve));
+  const writeError = new Promise<Error | null | undefined>(resolve => f.stream.write(Buffer.from("pending"), resolve));
+  await turn(); f.stream.destroy(primary); await turn(); rejectReturn(cleanup);
+  const error = (await failed)[0]; await done;
+  assert.ok(error instanceof AggregateError); assert.deepEqual(error.errors, [primary, cleanup]);
+  assert.equal(await writeError, error); assert.equal(f.closes(), 1); assert.equal(f.stream.resourcesReturned, false);
+});
+
+test("packet cancellation before construction acquires no readiness watch", { timeout: 3000 }, async t => {
+  let release!: () => void;
+  const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
+  const f = fixture({ returning }), done = new Promise<void>(resolve => f.stream.once("close", resolve));
+  f.stream.destroy(); await turn();
+  assert.equal(f.watches(), 0); assert.equal(f.closes(), 1); assert.equal(f.stream.resourcesReturned, false);
+  release(); await done; assert.equal(f.stream.resourcesReturned, true);
 });

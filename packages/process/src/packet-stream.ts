@@ -4,7 +4,7 @@
  */
 import { Duplex } from "node:stream";
 import { StoreError } from "@oma/domain/errors";
-import { cleanupAll } from "@oma/native/cleanup";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 
 export type OutboundPacket = { readonly kind: "data"; readonly bytes: Uint8Array } | { readonly kind: "end" };
 export type PacketObservation<Sender> = { readonly kind: "again" } |
@@ -18,7 +18,8 @@ export interface PacketDriver<Sender> {
   watch(ready: () => void, failure: (error: Error) => void): {
     request(read: boolean, write: boolean): void; close(): void;
   };
-  close(): void;
+  /** Resolves only after all pending native work and resources return. */
+  close(): void | Promise<void>;
 }
 interface PendingWrite {
   readonly bytes: Buffer; readonly end: boolean; readonly callback: (error?: Error | null) => void;
@@ -27,7 +28,7 @@ interface PendingWrite {
 function errorOf(error: unknown): Error { return error instanceof Error ? error : new Error("packet transport failed", { cause: error }); }
 
 export class PacketStream<Sender> extends Duplex {
-  private readonly watch;
+  private watch: ReturnType<PacketDriver<Sender>["watch"]> | undefined;
   private reading = false;
   private flushing = false;
   private pending: PendingWrite | null = null;
@@ -36,18 +37,23 @@ export class PacketStream<Sender> extends Duplex {
   get resourcesReturned(): boolean { return this.returned; }
   constructor(private readonly driver: PacketDriver<Sender>, private readonly authorize: (sender: Sender) => boolean) {
     super({ allowHalfOpen: true, readableHighWaterMark: 65536, writableHighWaterMark: 65536 });
+  }
+  override _construct(callback: (error?: Error | null) => void): void {
+    // Node waits for construction before I/O/destruction. Setup failures use
+    // the same asynchronous return owner as cancellation and normal EOF.
+    if (this.destroyed) { callback(); return; }
+    const { driver } = this;
     if (!Number.isSafeInteger(driver.maximumPacketBytes) || driver.maximumPacketBytes < 1 || driver.maximumPacketBytes > 65536) {
-      const error = new TypeError("invalid packet transport window");
-      try { driver.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "packet setup and cleanup failed"); }
-      throw error;
+      callback(new TypeError("invalid packet transport window")); return;
     }
     try { this.watch = driver.watch(() => this.ready(), error => this.destroy(error)); }
-    catch (error) { try { driver.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "packet setup and cleanup failed"); } throw error; }
+    catch (error) { callback(errorOf(error)); return; }
+    callback();
   }
   override _read(): void { this.reading = true; this.request(); }
   private request(): void {
     if (this.destroyed) return;
-    try { this.watch.request(this.reading, this.pending !== null); }
+    try { this.watch?.request(this.reading, this.pending !== null); }
     catch (error) { this.destroy(errorOf(error)); }
   }
   private ready(): void {
@@ -98,13 +104,15 @@ export class PacketStream<Sender> extends Duplex {
   override _destroy(error: Error | null, callback: (error: Error | null) => void): void {
     this.reading = false;
     const pending = this.pending; this.pending = null;
-    let failure = error;
-    try { cleanupAll([() => this.watch.close(), () => this.driver.close()]); this.returned = true; }
-    catch (cleanup) { failure = error === null ? errorOf(cleanup) : new AggregateError([error, cleanup], "packet transport and cleanup failed"); }
-    if (pending !== null) {
-      try { pending.callback(failure ?? new StoreError("BROKER_UNAVAILABLE", "packet transport closed before write completion")); }
-      catch (cleanup) { failure = failure === null ? errorOf(cleanup) : new AggregateError([failure, cleanup], "packet callback cleanup failed"); }
-    }
-    callback(failure);
+    const complete = (failure: Error | null): void => {
+      if (pending !== null) {
+        try { pending.callback(failure ?? new StoreError("BROKER_UNAVAILABLE", "packet transport closed before write completion")); }
+        catch (cleanup) { failure = failure === null ? errorOf(cleanup) : new AggregateError([failure, cleanup], "packet callback cleanup failed"); }
+      }
+      callback(failure);
+    };
+    void withAsyncCleanup(async () => { this.watch?.close(); }, () => this.driver.close()).then(() => {
+      this.returned = true; complete(error);
+    }, cleanup => complete(error === null ? errorOf(cleanup) : new AggregateError([error, cleanup], "packet transport and cleanup failed")));
   }
 }

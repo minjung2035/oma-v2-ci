@@ -1,6 +1,29 @@
 # OMA v2 — 현재 인계
 
-## 현재: 9116bb6b와 외부 구현 대조 후속
+## 현재: 7ebb7268 Mach source 연결과 실제 CI 시작 실패
+
+작업 브랜치에 `343d4f85`와 `7ebb7268`을 push했다. Mach byte connector의 마지막 응답/EOF drain,
+kernel sender와 port 소유권, App OS 주입과 실제 Darwin Node probe3개를 연결했다. 원래 README와
+고정 architecture/과거 review bytes는 유지한다. input `7736cda4...`의 build/types/전체 정적·공통81/81·
+generation9/9, 후속 `2e277fba...`의 전체 정적 및 **26/26 독립 설치** 결과는 validation을 따른다.
+
+새 Native40380089004/Architecture40380089190은7개 job 모두 스텝 실행 없이 failure다. 실제 Mac
+Node/C 관측은 NOT_RUN이고 원인은 미확정이다. connector가 annotation 본문을 거절해 사용자에게
+표시된 오류 문구를 요청했으며 독립 구현 작업은 계속할 수 있다. 같은 입력을 무작정 rerun하지 않는다.
+
+후속 source에서 Security validation을 async 호출과 명시적 callback/CF/watch 반환 owner로 옮겼다.
+새4개 shared-flow 회귀는 수정 전 모두 실패했고 수정 뒤 기존4개와 합쳐8/8 PASS다. 실제 Darwin
+실행은 여전히 NOT_RUN이다. 다음 source 작업은 응답한 live process와 expected Broker identity의
+독립 결박이다. 후자는 Chromium의 별도 server ProcessRequirement와 대조해
+현재 빠진 경계를 명시했다. process/file backend, queue-full/reference/PID-reuse/exec 반례와
+전체 최신 Linux 회귀 및 실제 Mac CI qualification도 남았다. 세 gate는 OPEN이며 제품 guard를 유지한다.
+
+비동기 후속의 고정15612개 input `f6eaeca1...`에서 build/types/전체 구조 검사·관련52/52·generation9/9·
+surface mutation7/7이 fail/cancel/skip/todo0으로 통과했다. raw 실패4개와 수리8/8, 실제 source-bound
+검사 원본은 `/home/dev/oma-audit-artifacts/native-2026-10-27-async-audit/`에 있다. 새로운 실제 Darwin
+audit async/cancel/claimed-pin case는 CI 실행 전 NOT_RUN이며 과거26/26 설치 결과를 새 source에 붙이지 않는다.
+
+## 9116bb6b와 외부 구현 대조 후속
 
 최신 후속 전체 local은 `native-reference-yield-whole*`의 **3762/3779 PASS·17 FAIL**,
 skip/cancel/todo0·940.027초·input `bc7e189f79ebed11044bd9697a3ed987bbb9904781b93b083585e00a78b02a18`

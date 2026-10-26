@@ -2331,7 +2331,7 @@
   }
  ],
  "files": 502,
- "runtimeEdges": 1785,
+ "runtimeEdges": 1786,
  "typeOnlyEdges": 770,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 453,
@@ -2339,7 +2339,7 @@
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 260,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 362,
+  "L4-orchestration -> L1-kernel": 363,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
   "L4-orchestration -> L4-orchestration": 174,
@@ -2358,7 +2358,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 236,
+  "packages/domain/src/errors.ts": 237,
   "packages/domain/src/identifiers.ts": 84,
   "packages/native/src/cleanup.ts": 41,
   "packages/storage/src/directory.ts": 39,

@@ -37,6 +37,9 @@ public/durable DTO·과거 golden은 그대로다. 타입 검사 중 새 unit fi
 
 | 실제 입력·실행 | 결과와 범위 |
 |---|---|
+| 비동기 audit/stream 반환 source 연결 후 | 고정 input `f6eaeca119f2e2df41c40fcc91122b1b14862cb1e8bd94e7e8d7d0269851b148`(15612개) 전후 동일. build·26 workspace/root strict·전체 architecture/transaction/durable/document/spec 검사 PASS. 관련 shared-flow/lifetime **52/52**, generation **9/9**, native consumer-port mutation **7/7 PASS**·fail/cancel/skip/todo0. 새 비동기 PacketStream4개 회귀는 수정 전 모두 FAIL·기존4개 PASS, 수정 뒤8/8. 원시 실패·수리 로그/상태는 `/home/dev/oma-audit-artifacts/native-2026-10-27-async-audit/` 소유. actual Darwin Security/Mach 실행과 WP23·expected Broker identity·세 gate proof가 아님. 이후 결과 문서는 별도 입력 |
+| `7ebb7268` 현재 독립 설치 | **26/26 packed install·공개 API import·자체 declaration PASS**, 지정된 installed-runtime smoke PASS. exit0·271.606초·input `2e277fbabcb6bf967ce59d99ba0a42184783ec4c337f24625e67589a1625454b`(15612개) 전후 동일. 외부 SDK declaration 진단44개는 원시 로그에 별도 분류하며 자체 오류로 숨기지 않음. 새 audit root의 `packed-install-20261026T184226Z/`가 실제 명령·로그·종료·identity 소유자이며 실제 Darwin qualification이 아님 |
+| `7ebb7268` 새 CI 시작 실패 | 작업 브랜치 push 성공. Native40380089004·Architecture40380089190의7개 job 모두4–5초 뒤 스텝 없이 failure. job steps/실행 로그/artifact 없음. check annotation1/2건은 있으나 본문 URL이 connector allowlist400으로 거절됨. 근본 원인 미확정이며 SDK·코드 실패로 추정하지 않음. 새 Node adapter3개 case와 C probe의 이 입력 실행은 **NOT_RUN**. 새 audit root의 `ci-7ebb7268.json`이 원본 응답을 보존함 |
 | Mach connector·실제 Darwin Node probe 연결 후 정적/공통 검사 | build·26 workspace/root strict typecheck·전체 architecture/transaction/durable/document/spec 검사 PASS. CI 공통 목록15개 파일 **81/81**, channel generation **9/9 PASS**·fail/skip/cancel/todo0. 각 input `7736cda4f8f874ac9b48ca6b0c8cc1e54c82b0feb359f895e035d758961eb441`(15612개) 전후 동일. 원시 명령/로그/종료 상태는 새 audit root의 `mach-ci-checks-20261026T183534Z/`. 이후 Node fixture의 관측/cleanup deadline과 job ceiling 및 결과 문서는 별도 입력이며 재결박으로 이 PASS를 갱신하지 않음. 실제 Mac Node 세 경우는 CI 실행 전 NOT_RUN이며 세 gate는 OPEN |
 | Mach source 연결 뒤 shared/Linux 선택 회귀 | 공통 packet/listener/generation·실제 Linux recvmsg/descriptor 인계 **21/21**, 변경 error/history/package/runner API **41/41**, native consumer-port positive/negative mutation **7/7 PASS**. 각 실행 input `f86efa4eb30d1ebd8af2bd11a59982b73833b0efa87725b25329531d721ddb8f`(15611개) 전후 동일, fail/cancel/skip/todo0. 서로 다른 세 선택 실행이며 전체 suite나 Mac qualification이 아님. 격리 시험은 pinned bwrap0.12.0을 임시 /usr/bin overlay에서 실행했고 UID1000·CapEff0·binary SHA를 보존했다. host /usr/bin은 변경하지 않았다. 원시 로그/상태/단계 명령/전후 identity와 SHA는 `/home/dev/oma-audit-artifacts/native-2026-10-27-mach-connector/`가 소유함 |
 | 위 후속의 최초 실패 보존 | 첫 선택 실행 **20/21 PASS·1 FAIL**: missing-directory bind의 ENOENT 기대에 실제 EACCES가 반환됨. 실제 점유된 주소의 EADDRINUSE 및 기존 listener 보존으로 강화 후21/21 확인. 별도 첫 확대 실행 **37/38 PASS·1 FAIL**은 원본 TS를 잘못 실행해 compiled fixture를 찾지 못한 명령 오류. 올바른 compiled JS와 실제 bwrap view에서41/41 확인. 최초 로그도 같은 새 audit root에 보존하며 지우거나 전체 PASS로 덮지 않음 |
@@ -224,7 +227,7 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `2e277fbabcb6bf967ce59d99ba0a42184783ec4c337f24625e67589a1625454b` (15612 files).
+verification input digest `f353d0157c995f17ace4ff1108308989df94fc3709c76efa73dae52ccededef0` (15612 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

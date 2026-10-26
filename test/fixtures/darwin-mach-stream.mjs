@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createMachEndpoint, listenMachService, lookupMachService } from "@oma/native/mach-message";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
-import { pinMachSender } from "@oma/platform-mac/audit-peer";
+import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
+import { bindMachSender } from "@oma/platform-mac/audit-peer";
 import { createMachBrokerTransport, dialMachChannel } from "@oma/platform-mac/mach-transport";
 
 assert.equal(process.platform, "darwin", "this probe requires an actual Darwin kernel");
@@ -125,8 +126,39 @@ async function stale() {
   const client = child("child-stale", name); await joined(client);
   const message = await receive(receiver); returns.push(() => message.reply?.close());
   assert.equal(message.id, HANDOFF); assert.equal(message.sender.pid, client.process.pid);
-  await assert.rejects(async () => pinMachSender(message.sender));
+  let binding;
+  try { binding = bindMachSender(message.sender); }
+  catch (error) { if (error instanceof AggregateError) throw error; }
+  if (binding !== undefined) {
+    // A failed resource return must fail the case, rather than satisfy the
+    // negative identity assertion as though it were an ordinary refusal.
+    await withAsyncCleanup(() => assert.rejects(binding.ready), () => binding.close());
+  }
   return { machStaleOrigin: { queuedSender: message.sender.pid, childJoinedBeforeReceive: true, auditBindingRefused: true } };
+}
+async function asyncAudit() {
+  const endpoint = createMachEndpoint();
+  returns.push(() => cleanupAll([() => endpoint.send.close(), () => endpoint.receive.close()]));
+  await send(endpoint.send, HANDOFF, Buffer.alloc(4)); const message = await receive(endpoint.receive);
+  returns.push(() => message.reply?.close()); assert.equal(message.sender.pid, process.pid);
+  const observation = observeDarwinAuditOrigin(message.sender.token); returns.push(() => observation.returned);
+  let settled = false; void observation.result.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise(resolve => process.nextTick(resolve));
+  assert.equal(settled, false, "the native callback must be asynchronous");
+  assert.deepEqual(await bounded(observation.result, "actual Security validation"), { kind: "matched" });
+  await bounded(observation.returned, "actual CF return");
+  const cancelled = bindMachSender(message.sender); returns.push(() => cancelled.close());
+  const closing = cancelled.close(); let returned = false; void closing.then(() => { returned = true; }, () => {});
+  assert.equal(returned, false); assert.throws(() => cancelled.take(), { code: "AUTH_FAILED" });
+  await assert.rejects(cancelled.ready, { code: "AUTH_FAILED" }); await bounded(closing, "cancelled native binding return");
+  assert.throws(() => cancelled.take(), { code: "AUTH_FAILED" });
+  const acquired = bindMachSender(message.sender); returns.push(() => acquired.close());
+  await bounded(acquired.ready, "live native binding"); const pin = acquired.take(); returns.push(() => pin.close());
+  assert.equal(pin.sameSender(message.sender), true); assert.equal(pin.sameSender({ ...message.sender }), false);
+  assert.throws(() => acquired.take(), { code: "AUTH_FAILED" });
+  await acquired.close(); assert.equal(pin.alive(), true, "a transferred pin has its own resource owner");
+  pin.close(); assert.equal(pin.alive(), false);
+  return { machAsyncAudit: { sender: process.pid, matched: true, callbackAsynchronous: true, cancelledBindingRefused: true, claimedPinRetainedUntilExplicitClose: true, nativeCompletionJoined: true } };
 }
 async function handoff() {
   const path = address(), holder = child("child-holder", unique()), ready = await holder.message("ready");
@@ -189,6 +221,7 @@ try {
     if (mode === "mach-stream-roundtrip") return roundtrip();
     if (mode === "mach-stream-stale") return stale();
     if (mode === "mach-stream-handoff") return handoff();
+    if (mode === "mach-audit-async") return asyncAudit();
     throw new Error(`unknown Darwin transport case ${mode}`);
   }, cleanup);
   if (observation !== null) console.log(JSON.stringify({ case: mode, ...observation }));

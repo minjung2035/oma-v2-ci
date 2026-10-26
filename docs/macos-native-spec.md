@@ -574,3 +574,33 @@ shared-flow 회귀와 Unix dial generation fixture를 수정했고, 실행 여�
 cross-process 왕복·인증 EOF·자원 반환, queued sender exit 뒤 binding 거절, live connector의
 정상 바이트를 받은 뒤 독립 holder의 send-right 인계를 거절하는 세 경우다. 기존 C probe와 함께
 각각3회 실행하며 원시 실패를 독립 보존한다. 이 추가도 실제 Mac CI 전에는 NOT_RUN이다.
+
+### 14.10 실제 push·검증과 다음 경계 — 2026-10-27
+
+`343d4f85`와 `7ebb7268`을 작업 브랜치에 push했다. source byte stream은 peer의 destination
+receive right 손실을 보기 전에 이미 queue된 마지막 reply/EOF를 먼저 drain한다. 그 bytes와 EOF의
+sender 검증은 유지한다. build/types/전체 정적·공통81/81·generation9/9 및 후속26/26 독립 설치의
+정확한 입력·원시 로그는 validation을 따른다. 전체 Linux/Mac PASS로 합산하지 않는다.
+
+새 Native40380089004/Architecture40380089190의7개 job은 모두 스텝 시작 전 failure다.
+연결 도구가 annotation 본문을 거절하여 원인은 미확정이며 새 실제 Mac 관측은 NOT_RUN이다.
+원본 응답은 `/home/dev/oma-audit-artifacts/native-2026-10-27-mach-connector/ci-7ebb7268.json`에 있다.
+
+source 검토에서 현재 client의 live audit pin과 expected Broker identity는 별개임을 확인했다.
+현재 nonce/public service name과 valid code image만으로 후자를 확인하지 않는다. 신뢰한 launch/
+held-state owner의 expected identity 결박과 서비스 선점 반례가 필요하다. 이것과 async Security
+resource owner, process/file backend의 미해결 보장을 구현한 뒤 실제 Mac에서 검증한다.
+현재 product guard와 세 OPEN gate는 유지한다.
+
+### 14.11 비동기 audit binding과 실제 자원 반환 — 2026-10-27
+
+후속 source는 Security guest lookup/validation을 Koffi async worker로 옮겼다. native result와 CF
+반환 completion을 나누고, process watcher는 검증 전에 획득한다. `bindMachSender.ready` 뒤
+`take` 한 번으로 pin을 넘기며 취소된 acquisition은 실제 callback/CF/unclaimed watch 반환을 기다린다.
+Client의 readiness 실패 응답과 stream/native close도 구분한다. listener close는 검증 중인 모든
+request까지 join한다. deadline은 monotonic 경과를 다시 확인해 timer callback 지연으로 늘어나지 않는다.
+
+공통 PacketStream의 비동기 반환 regression4개는 수정 전4 FAIL·수정 뒤 기존4개와 합쳐8/8 PASS다.
+setup 실패·construction 전 취소도 동일 owner를 사용하며 pending write의 원래 오류와 cleanup 오류를
+보존한다. 실제 Mac `mach-audit-async` case를 추가했으며 source compile/shared-flow PASS는 실제
+Darwin 실행·WP23 latency·native reference count·expected Broker identity나 세 gate 통과가 아니다.

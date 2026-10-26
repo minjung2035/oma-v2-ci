@@ -39,7 +39,7 @@ try {
     { name: "mach", fixture: "darwin-mach-probe.c", digest: "machProbeDigest", compile: "compile-mach",
       names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit"], link: ["-lbsm"] },
     { name: "mach-stream", fixture: "darwin-mach-stream.mjs", digest: "machStreamProbeDigest", compile: "check-mach-stream", node: true,
-      names: ["mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff"] },
+      names: ["mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async"] },
   ];
   for (const program of programs) {
     const binary = join(scratch, program.name);

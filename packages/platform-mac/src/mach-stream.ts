@@ -3,7 +3,7 @@
  */
 import { PacketStream, type PacketDriver } from "@oma/process/packet-stream";
 import type { MachReceiveRight, MachSendRight, MachAuditSender } from "@oma/native/mach-message";
-import { cleanupAll, withCleanup } from "@oma/native/cleanup";
+import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { machPoll } from "./mach-poll.js";
 
@@ -14,8 +14,8 @@ export interface MachStreamEndpoints { readonly receive: MachReceiveRight; reado
  * an accepted RPC result. Physical receive-port loss is an error, not EOF.
  */
 export function machStream(endpoints: MachStreamEndpoints, authorize: (sender: MachAuditSender) => boolean,
-  onClosed: () => void = () => {}, ready: () => boolean = () => true): PacketStream<MachAuditSender> {
-  let closed = false;
+  onClosed: () => void | Promise<void> = () => {}, ready: () => boolean = () => true): PacketStream<MachAuditSender> {
+  let closed: Promise<void> | undefined;
   const driver: PacketDriver<MachAuditSender> = {
     maximumPacketBytes: PACKET_BYTES,
     read() {
@@ -51,9 +51,10 @@ export function machStream(endpoints: MachStreamEndpoints, authorize: (sender: M
       return { request: (read, write) => poll.request(read || write), close: () => poll.close() };
     },
     close() {
-      if (closed) return;
-      closed = true;
-      cleanupAll([() => endpoints.receive.close(), () => endpoints.send.close(), onClosed]);
+      closed ??= withAsyncCleanup(async () => {
+        cleanupAll([() => endpoints.receive.close(), () => endpoints.send.close()]);
+      }, onClosed);
+      return closed;
     },
   };
   return new PacketStream(driver, authorize);

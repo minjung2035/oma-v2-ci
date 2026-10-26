@@ -54,7 +54,7 @@ export function watchDarwinProcess(pid: number): ProcessEventWatch {
         receipt.readBigInt64LE(16) !== 0n)
       throw new Error("process event registration was not confirmed");
   } catch (error) { return withCleanup(() => { throw error; }, () => closeSync(fd)); }
-  let closed = false, status: ProcessEventState = "live";
+  let closed = false, closeFailure: unknown, status: ProcessEventState = "live";
   return Object.freeze({
     state(): ProcessEventState {
       if (closed) return "unknown";
@@ -70,6 +70,11 @@ export function watchDarwinProcess(pid: number): ProcessEventWatch {
       if ((flags & 0x20000000) !== 0) return status = "changed";
       return status = "unknown";
     },
-    close() { if (closed) return; closed = true; closeSync(fd); },
+    close() {
+      if (closeFailure !== undefined) throw closeFailure;
+      if (closed) return;
+      closed = true;
+      try { closeSync(fd); } catch (error) { closeFailure = error; throw error; }
+    },
   });
 }
