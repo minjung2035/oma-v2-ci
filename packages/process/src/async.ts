@@ -8,6 +8,8 @@ import { StoreError } from "@oma/domain/errors";
 import { fencedStdio, SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV } from "./fence.js";
 export { SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV };
 
+const PROCESS_GROUP_PLATFORMS = new Set<NodeJS.Platform>(["linux", "darwin"]);
+
 export interface AsyncProcessOptions {
   /** Synchronous streaming consumer. Bytes are borrowed only for this call;
    * consumer failure terminates the owned child and remains unobserved. */
@@ -18,7 +20,7 @@ export interface AsyncProcessOptions {
   readonly stderrFd?: number;
   /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
   readonly signal?: AbortSignal;
-  /** Pinned preparation commands may own a process group. */
+  /** A POSIX direct child may own a process group; this is no descendant fence. */
   readonly processGroup?: boolean;
   /** Owned file capabilities mapped to child descriptors 3, 4, ...; never pathname reopens. */
   readonly inheritedFds?: readonly number[];
@@ -38,7 +40,8 @@ export interface ProcessTask {
 export function startProcess(source: CommandSpec, options: AsyncProcessOptions = {}): ProcessTask {
   const spec = snapshotCommand(source);
   const ownGroup = options.processGroup === true;
-  if (ownGroup && process.platform !== "linux") throw new TypeError("owned process-group preparation requires Linux");
+  if (ownGroup && !PROCESS_GROUP_PLATFORMS.has(process.platform))
+    throw new TypeError("owned process-group execution requires a supported POSIX platform");
   const signal = options.signal;
   const inheritedFds = [...(options.inheritedFds ?? [])];
   if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");

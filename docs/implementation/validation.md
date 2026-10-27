@@ -392,11 +392,42 @@ sdk-objects-initial/·sdk-objects-repaired/·sdk-linked/·metadata-build/·check
 문서 기록은 별도 입력의 구조 검사로 결박한다. Mac33종×3회·OS별99회는 NOT_RUN이고
 G-PROCESS/G-FILES/G-AUTH와 제품 진입 guard는 그대로다. 유료 Mac CI는 실행하지 않았다.
 
+## Node POSIX 프로세스 그룹 실행 leaf — 2026-10-27
+
+`startProcess`의 processGroup 옵션이 Linux만 허용하던 부분을 Linux·Darwin 지원 표로
+연결했다. Node26의 [detached 계약](https://nodejs.org/download/release/v26.0.0/docs/api/child_process.html#optionsdetached)과
+[내장 libuv 구현](https://github.com/nodejs/node/blob/v26.0.0/deps/uv/src/unix/process.c)을 대조했다.
+Darwin의 POSIX_SPAWN_SETSID 경로를 그대로 사용하며 제품용 native helper를 추가하지 않았다.
+기존 실행 수명·결과 분류·FD 전달 owner를 사용한다.
+
+실제 POSIX C 관측 프로그램은 자손을 만들지 않고 자기 PID·group·session과 받은 FD3의
+inode를 출력한다. 공통 CI와 kernel/platform lane에 정상 실행, 취소 뒤 실제 child/stdio close,
+deadline 뒤 close, 명시 FD의 동일 inode 네 시험과 required name을 넣었다. 일반 실행의 group
+상속도 대조한다. 현재 Linux UID1000·CapEff0·Node26·pinned bwrap overlay에서 실제로 실행했고,
+Node의 detached 설정만 끈 disposable JS 변형은 같은 첫 시험에서 실패했다. canonical JS와
+시험 bytes는 바꾸지 않았다. 변형 실행의 이름 필터로 제외된 시험은 성공으로 세지 않는다.
+
+입력 `f2afe6609fb3297d68499aae8c6cfbbfdc66b47ecbdfb480ca0d00da909a5264`(15659개)에서
+CI의 공통 명령230/230·기존 async/stdio 회귀24/24·검증 정책35/35·전체 구조 검사 PASS다.
+각 정상 실행은 fail/cancel/skip/todo0이며 입력·26 workspace 산출물15400개·보호4개 SHA는
+전후 동일하다. full build와 strict typecheck도 성공했다. 새 C 관측 프로그램의 SDK15.5·26.5,
+ARM64·x64 교차 컴파일·stub 링크4/4는 별도의 정적 결과이며 실제 Darwin Node 실행이 아니다.
+
+원문은 `/home/dev/oma-audit-artifacts/native-2026-10-27-posix-process-groups/`의
+metadata-build/·sdk-fixture/·checks/·negative-control/가 소유한다. 문서 기록 뒤에는 별도 입력의
+구조 검사로 결박한다. 과거 전체 Linux3896/3896·packed26/26을 새 입력에 재결박하지 않는다.
+
+프로세스 그룹은 임의 후손 fence나 전체 사망 증명이 아니다. PreparationExecutor의 Linux
+제한과 App의 Darwin 실행 차단은 그대로이며, 이 leaf로 그 조건을 우회하지 않는다.
+G-PROCESS/G-FILES/G-AUTH는 계속 OPEN이고 Mac99회/OS 및 새 공통 시험의 실제 Darwin 실행은
+NOT_RUN이다. 유료 Mac CI는 실행하지 않았다. 저장소 전체 복잡도 점검은 사용자 지시에 따라
+native 구현을 모두 마친 뒤 진행하며 이번 변경에 포함하지 않았다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `a45d6e91294c260318dd069f519705dfcda6a283f1cab3866d706dbb158ecca7` (15657 files).
+verification input digest `241c467d239fb7fc0135593e919a625af3843933e3bd1b90850067d68244e18d` (15659 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

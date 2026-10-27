@@ -1560,7 +1560,7 @@
     },
     {
       "path": "packages/process/src/async.ts",
-      "sha256": "128c7a43bcaa42f78af072e878339f8f4076573e3f247839bd1a2374abe8df51"
+      "sha256": "5cda8edf971c6fb6d48300910fc9e792d6957d3ed11dbe4e2ce946327bc35c64"
     },
     {
       "path": "packages/process/src/coalesced-wake.ts",

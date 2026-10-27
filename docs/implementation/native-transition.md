@@ -373,3 +373,10 @@ SETEXEC·CLOEXEC_DEFAULT와 명시 inherit action으로 바꿨다. FD 번호를 
 SDK snapshot 두 버전·CPU 두 종류의 교차 컴파일과 링크는 정적 검증이다. 실제 Darwin 실행과
 G-PROCESS/G-FILES/G-AUTH 수용은 남아 있다. 제품 guard와 accepted data/receipt/auth 의미는
 유지한다. 이번 수정의 입력과 시험 결과는 [검증 기록](validation.md)이 소유한다.
+
+### Node의 POSIX group 실행 연결
+
+공통 startProcess의 group 실행 leaf는 Node26이 제공하는 Linux·Darwin 경로를 사용한다.
+자기 PID/group/session과 명시 FD를 관측하는 실제 host 시험을 공통 CI에 넣었다. 이는 직접
+child의 실행·취소·close를 다루며 전체 후손 scope를 만들지 않는다. PreparationExecutor와
+제품 Darwin guard를 이 변경으로 해제하지 않았다. 수용 범위와 미실행 항목은 검증 기록에 남긴다.
