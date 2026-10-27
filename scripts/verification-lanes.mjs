@@ -77,6 +77,8 @@ const definitions = {
       "test/consistency-decisions.test.mjs",
       "test/config-bundle-owner.test.mjs",
       "test/native-test-policy.test.mjs",
+      "test/darwin-evidence.test.mjs",
+      "test/runtime-artifact-digest.test.mjs",
       "test/verification-policy.test.mjs",
       "test/verification-workflow-policy.test.mjs",
       "test/exploration-policy.test.mjs",
@@ -100,6 +102,7 @@ const definitions = {
     ],
     requiredNames: [
       "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
+      "NATIVE-DARWIN:", "NATIVE-ARTIFACT:",
       "P0-7: every durable boundary in the code has a registered kill/retry/restart test",
       "PRIORITY-0 / P0-7: in this tree every requirement ID has one clause, acceptance rows live in the matrix, and every link resolves",
       "PRIORITY-0 / P0-1: a requirement ID given to two clauses, or an acceptance number used outside its matrix, is a finding",

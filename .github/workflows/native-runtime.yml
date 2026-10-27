@@ -3,6 +3,12 @@ on:
   push:
     branches: [work/macos-native-20261025]
   workflow_dispatch:
+    inputs:
+      run_darwin:
+        description: 'Run paid macOS qualification after the owner restores its CI budget'
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 jobs:
@@ -10,7 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-26, macos-15]
+        # macOS is an explicit paid run; ordinary source pushes use Linux.
+        os: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -33,7 +40,7 @@ jobs:
         run: |
           mkdir -p .scratch/native-runtime
           git rev-parse HEAD > .scratch/native-runtime/source-head.txt
-          if ! node --test test/native-primitives.test.mjs test/native-path-view.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs packages/platform-mac/test/seatbelt.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs test/packet-stream.test.ts test/native-listener-lifetime.test.ts > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
+          if ! node --test test/darwin-evidence.test.mjs test/runtime-artifact-digest.test.mjs test/native-primitives.test.mjs test/native-path-view.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs packages/platform-mac/test/seatbelt.test.mjs packages/tool-hashline/test/bundle.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs test/packet-stream.test.ts test/native-listener-lifetime.test.ts > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
       - name: Install the actual pinned Linux native prerequisites
         if: runner.os == 'Linux'
         run: bash scripts/setup-native-linux-ci.sh .scratch/native-runtime
@@ -67,6 +74,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   darwin-gates:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +82,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # SDK compilation plus every independent bounded probe must finish before
     # the job clock; a blocked candidate still preserves the other raw cases.
-    timeout-minutes: 100
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -92,9 +100,11 @@ jobs:
         run: node scripts/verify-native.mjs .scratch/native-evidence
       - name: Compile the standalone credential primitive without VM frameworks
         if: always()
+        timeout-minutes: 5
         run: xcrun swiftc -typecheck packages/platform-mac/src/keychain/main.swift > .scratch/native-evidence/keychain-typecheck.log 2>&1
       - name: Preserve raw observations, including blocked gates
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-gates-${{ matrix.os }}-${{ github.sha }}

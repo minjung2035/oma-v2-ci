@@ -1,6 +1,24 @@
 # OMA v2 — 현재 인계
 
-## 현재: 공통 PathView·논리 inbox 후속 구현
+## 현재: 구현 후속과 실제 Darwin CI 검증 준비
+
+`a1cc3f9c`의 PathView 구현을 작업 브랜치에 push했다. 후속 CI 준비는 macos-26/15 각각
+25개 독립 case를3회씩 총75회 실행한다. Seatbelt framing8종·argv/env/stdin·실제 canary FD
+누출의 양성/음성 대조·허용/외부 Unix socket을 추가했다. 오류·누락·중복·잘못된 observation
+귀속·미실행·정리 실패를 거절하며 실제 build output bytes/mode와 입력 identity를 실행 전후
+대조한다. 이는 세 gate를 닫는 proof가 아니며 driver의 정상 관측 완료도 BLOCKED/exit1이다.
+Linux에서 초기 기반38/38 뒤 추가 경계/관련 회귀109/109·full build를 확인했다. 입력별 전체
+구조 검사는 후속으로 구분하고 원본은 native-2026-10-27-ci-readiness/와 validation을 따른다.
+실제 Darwin 신규 case는 아직 NOT_RUN이다. 명령과 최신 결과는 validation을 따른다.
+사용자가 Mac CI 할당량 소진을 설명하고 복구를 나중으로 미뤘다. 추가 Mac 실행을 방지하기
+위해 push는 Linux만 실행하며 수동 workflow_dispatch의 run_darwin=true일 때 Mac을 포함한다.
+지금 Mac workflow를 dispatch하지 않는다. 비실행을 qualification PASS로 세지 않는다.
+
+`a1cc3f9c`의 Native40427540193·Architecture40427540022도7개 job 모두 steps/logs null,
+artifact 없음으로 실행 전 실패했다. 원인은 미확정이며 같은 source 재실행 없이 구현과
+검증 준비를 이어간다. 변경 source의 실제 Mac 통과를 주장하지 않는다.
+
+## 공통 PathView·논리 inbox 후속 구현
 
 `e4a74b54`의 파일/Seatbelt 구현을 작업 브랜치에 push했다. 후속 PathView는 두 layout의
 argv/env/relay/entry와 session 역변환을 연결하고 exact /inbox.md를 기존 hashline read로

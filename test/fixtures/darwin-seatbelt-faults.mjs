@@ -1,0 +1,175 @@
+/** Independent real-Darwin failure/positive controls. Fixture-owned files and
+ * children only; none of these observations proves arbitrary-descendant death,
+ * exact executable binding or complete actor authorization. */
+import assert from "node:assert/strict";
+import { closeSync, constants, createWriteStream, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createServer, connect } from "node:net";
+import { finished } from "node:stream/promises";
+import { once } from "node:events";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { prepareSeatbelt, bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
+import { controlPipe } from "@oma/native/control-socket";
+import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
+import { startProcess, spawnWithPrivateInputs } from "@oma/process/async";
+
+assert.equal(process.platform, "darwin", "Seatbelt fault controls require a real Darwin kernel");
+const mode = process.argv[2], root = realpathSync(process.cwd());
+const work = join(root, '한 글자 " quote\\slash'); mkdirSync(work);
+const marker = join(work, "executed"), node = realpathSync(process.execPath);
+const policy = { readable: [], writable: [{ path: work, kind: "directory" }], denied: [],
+  executable: [{ path: node, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR", "PATH", "LANG"] };
+const env = { HOME: work, TMPDIR: work, PATH: "/usr/bin:/bin", LANG: "C" };
+const target = { executable: node, argv: ["--input-type=module", "-e",
+  "import {writeFileSync} from 'node:fs'; writeFileSync(process.argv[1],'executed');", marker],
+  cwd: work, env, timeoutMs: 20000, stdoutBytes: 65536, stderrBytes: 65536 };
+const prepared = prepareSeatbelt(target, policy), original = Buffer.from(prepared.privateInputs[0].bytes);
+assert.equal(original.subarray(0, 8).toString(), "OMASBPL1");
+assert.equal(original.readBigUInt64BE(8), BigInt(original.length - 16));
+function frame(payload) {
+  const bytes = Buffer.from(payload), header = Buffer.from(original.subarray(0, 16));
+  header.writeBigUInt64BE(BigInt(bytes.length), 8); return Buffer.concat([header, bytes]);
+}
+const digest = bytes => createHash("sha256").update(bytes).digest("hex");
+async function raw(command, bytes, extraFds = []) {
+  const pipe = controlPipe(); let read = pipe.read, write = pipe.write, writer, task;
+  return withAsyncCleanup(async () => {
+    writer = createWriteStream("", { fd: write, autoClose: true }); write = undefined;
+    const returned = finished(writer, { cleanup: true }).then(() => undefined, error => error);
+    task = startProcess(command, { inheritedFds: [read, ...extraFds] });
+    const fd = read; read = undefined; closeSync(fd);
+    writer.end(bytes);
+    const result = await task.result;
+    await task.closed;
+    const failure = await returned;
+    // An expected early refusal may stop reading the pipe; unrelated write
+    // failures must remain visible instead of certifying the tested refusal.
+    if (failure !== undefined && failure.code !== "EPIPE") throw failure;
+    assert.equal(result.kind, "exited", JSON.stringify(result));
+    assert.equal(result.signal, null); assert.equal(result.stdoutTruncated, false); assert.equal(result.stderrTruncated, false);
+    return result;
+  }, async () => {
+    task?.cancel(); writer?.destroy();
+    try { cleanupAll([
+      () => { if (read !== undefined) closeSync(read); },
+      () => { if (write !== undefined) closeSync(write); },
+    ]); } finally { await Promise.all([task?.closed, writer === undefined ? undefined : finished(writer, { cleanup: true }).catch(() => {})]); }
+  });
+}
+async function good(command, selectedPolicy) {
+  const recipe = prepareSeatbelt(command, selectedPolicy);
+  const child = spawnWithPrivateInputs(recipe.command.executable, recipe.command.argv, recipe.command.cwd, recipe.command.env, recipe.privateInputs);
+  const chunks = [[], []], faults = []; let bytes = 0;
+  const closed = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
+  child.on("error", error => faults.push(error)); child.stdin.on("error", error => faults.push(error));
+  for (const [i, stream] of [child.stdout, child.stderr].entries()) stream.on("data", value => {
+    bytes += value.length;
+    if (bytes > 65536) { faults.push(new Error("probe output exceeded its bound")); child.kill("SIGKILL"); }
+    else chunks[i].push(value);
+  });
+  const timer = setTimeout(() => { faults.push(new Error("probe deadline exceeded")); child.kill("SIGKILL"); }, 30000);
+  return withAsyncCleanup(async () => {
+    child.stdin.end(command.input ?? ""); const status = await closed;
+    assert.deepEqual(faults, []); assert.equal(status.code, 0, Buffer.concat(chunks[1]).toString()); assert.equal(status.signal, null);
+    return Buffer.concat(chunks[0]).toString();
+  }, async () => { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await closed; });
+}
+async function framing() {
+  const wrongMagic = Buffer.from(original); wrongMagic[0] ^= 0xff;
+  const overflow = Buffer.from(original.subarray(0, 16)); overflow.writeBigUInt64BE(0xffffffffffffffffn, 8);
+  const options = {
+    "seatbelt-profile-header": [original.subarray(0, 15), /profile is truncated/],
+    "seatbelt-profile-magic": [wrongMagic, /profile framing is invalid/],
+    "seatbelt-profile-overflow": [overflow, /profile size/],
+    "seatbelt-profile-truncated": [original.subarray(0, original.length - 1), /profile is truncated/],
+    "seatbelt-profile-trailing": [Buffer.concat([original, Buffer.from("x")]), /profile has trailing bytes/],
+    "seatbelt-profile-nul": [frame(Buffer.from("(version 1)\n(deny default)\0(allow default)\n")), /profile contains NUL/],
+    "seatbelt-profile-empty": [frame(Buffer.alloc(0)), /profile size/],
+    "seatbelt-profile-syntax": [frame("(version 1)\n(oma-invalid-operation-for-fixture)\n"), /Seatbelt apply failed/],
+  };
+  const [bytes, error] = options[mode];
+  const result = await raw(prepared.command, bytes);
+  assert.equal(result.exitCode, 125, result.stderr.toString()); assert.match(result.stderr.toString(), error);
+  assert.equal(existsSync(marker), false, "a refused profile must never execute its target");
+  // A separate real positive execution rules out a merely broken launcher.
+  const positive = await raw(prepared.command, original);
+  assert.equal(positive.exitCode, 0, positive.stderr.toString()); assert.equal(readFileSync(marker, "utf8"), "executed");
+  return { refusedBeforeExec: true, positiveTargetExecuted: true, directChildrenClosed: true, frameSha256: digest(bytes) };
+}
+async function argvAndEnvironment() {
+  const args = ["한 글자", 'quote";$(literal)', "\\backslash", "line\nbreak", "--not-a-node-option"];
+  process.env.OMA_AMBIENT_CANARY = "fixture-only-must-not-inherit";
+  const command = { ...target, input: "stdin has its own stream\n", argv: ["--input-type=module", "-e",
+    `import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs';
+     assert.deepEqual(process.argv.slice(1),${JSON.stringify(args)});
+     assert.equal(process.env.OMA_AMBIENT_CANARY,undefined);
+     assert.equal(readFileSync(0,'utf8'),'stdin has its own stream\\n'); console.log('verified');`, "--", ...args] };
+  assert.equal((await good(command, policy)).trim(), "verified");
+  return { literalArgv: true, ambientEnvAbsent: true, independentStdin: true, directChildClosed: true };
+}
+async function fdClosure() {
+  const actorSource = fileURLToPath(new URL("./darwin-fd-observer.c", import.meta.url)), actor = join(work, "fd-observer");
+  const helperSource = readFileSync(join(dirname(bundledSeatbeltHelper()), "main.c"), "utf8");
+  assert.equal(helperSource.split("closefrom(3);").length, 2);
+  const mutantSource = join(work, "intentionally-leaky.c"), mutant = join(work, "intentionally-leaky");
+  writeFileSync(mutantSource, helperSource.replace("closefrom(3);", "/* explicit negative control: inherited FD retained */"));
+  for (const [source, output, extra] of [[actorSource, actor, []], [mutantSource, mutant, ["-lsandbox"]]]) {
+    const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, ...extra, "-o", output],
+      { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL", maxBuffer: 65536 });
+    assert.equal(compiled.error, undefined); assert.equal(compiled.signal, null); assert.equal(compiled.status, 0, compiled.stderr);
+  }
+  const canary = join(root, "descriptor-canary"); writeFileSync(canary, "fixture canary");
+  const held = openSync(canary, constants.O_RDONLY), info = fstatSync(held, { bigint: true });
+  return withAsyncCleanup(async () => {
+    const selected = { ...policy, readable: [{ path: canary, kind: "file" }], executable: [{ path: actor, kind: "file" }] };
+    const recipe = prepareSeatbelt({ ...target, executable: actor, argv: [String(info.dev), String(info.ino)] }, selected);
+    const negative = await raw({ ...recipe.command, executable: mutant }, Buffer.from(recipe.privateInputs[0].bytes), [held]);
+    assert.equal(negative.exitCode, 3, negative.stderr.toString()); assert.equal(JSON.parse(negative.stdout).leaked, true,
+      "the same real kernel must expose the deliberately leaked canary to the oracle");
+    const positive = await raw(recipe.command, Buffer.from(recipe.privateInputs[0].bytes), [held]);
+    assert.equal(positive.exitCode, 0, positive.stderr.toString()); assert.equal(JSON.parse(positive.stdout).leaked, false);
+    return { canaryLeakDetectedInControl: true, installedHelperReturnedDescriptor: true, directChildrenClosed: true,
+      actorSha256: digest(readFileSync(actor)), negativeControlSha256: digest(readFileSync(mutant)) };
+  }, () => closeSync(held));
+}
+async function ipcDenial() {
+  // Short canonical paths keep this IPC test independent of sun_path limits;
+  // the profile/files tests separately exercise long/non-ASCII host paths.
+  const directory = realpathSync(mkdtempSync("/tmp/oma-ipc-")), paths = [join(directory, "a"), join(directory, "b")];
+  const servers = [], sockets = new Set();
+  return withAsyncCleanup(async () => {
+    for (const path of paths) {
+      const server = createServer(socket => { sockets.add(socket); socket.on("error", () => {}); socket.once("close", () => sockets.delete(socket)); socket.end("echo"); });
+      servers.push(server); const ready = once(server, "listening"); server.listen(path); await ready;
+    }
+    for (const path of paths) {
+      const socket = connect(path), data = []; sockets.add(socket); socket.once("close", () => sockets.delete(socket));
+      socket.on("data", bytes => data.push(bytes)); await once(socket, "close"); assert.equal(Buffer.concat(data).toString(), "echo");
+    }
+    const command = { ...target, argv: ["--input-type=module", "-e",
+      `import assert from 'node:assert/strict'; import {connect} from 'node:net';
+       const allowed=connect(process.argv[1]); let text=''; allowed.on('data',b=>text+=b);
+       await new Promise((r,j)=>{allowed.once('error',j);allowed.once('close',r)}); assert.equal(text,'echo');
+       const refused=connect(process.argv[2]); const error=await new Promise((r,j)=>{refused.once('error',r);refused.once('connect',()=>j(new Error('foreign socket connected')))});
+       assert.ok(['EACCES','EPERM'].includes(error.code),String(error)); refused.destroy(); console.log('verified');`, ...paths] };
+    assert.equal((await good(command, { ...policy, unixSockets: [paths[0]] })).trim(), "verified");
+    return { bothHostPositiveControls: true, ownSocketEchoed: true, foreignSocketDenied: true, directChildClosed: true };
+  }, async () => {
+    for (const socket of sockets) socket.destroy();
+    const returned = await Promise.allSettled(servers.map(server => new Promise((resolve, reject) =>
+      server.close(error => error ? reject(error) : resolve()))));
+    try { rmSync(directory, { recursive: true, force: true }); }
+    catch (reason) { returned.push({ status: "rejected", reason }); }
+    const errors = returned.filter(row => row.status === "rejected").map(row => row.reason);
+    if (errors.length) throw new AggregateError(errors, "IPC fixture cleanup failed");
+  });
+}
+let observation;
+if (mode?.startsWith("seatbelt-profile-")) observation = await framing();
+else if (mode === "seatbelt-argv-env") observation = await argvAndEnvironment();
+else if (mode === "seatbelt-fd-close") observation = await fdClosure();
+else if (mode === "seatbelt-ipc-denial") observation = await ipcDenial();
+else throw new Error(`unknown Seatbelt fault case ${mode}`);
+console.log(JSON.stringify({ case: mode, seatbeltFault: observation }));

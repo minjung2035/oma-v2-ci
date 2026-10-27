@@ -1,13 +1,11 @@
 /** Actual Darwin Seatbelt observations; no process-scope or G-FILES oracle.
  * The driver owns this disposable cwd and records all raw failures separately. */
 import assert from "node:assert/strict";
-import { closeSync, createWriteStream, mkdirSync, realpathSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
-import { finished } from "node:stream/promises";
+import { mkdirSync, realpathSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { prepareSeatbelt, bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
-import { controlPipe } from "@oma/native/control-socket";
-import { startProcess, spawnWithPrivateInputs } from "@oma/process/async";
-import { withAsyncCleanup, cleanupAll } from "@oma/native/cleanup";
+import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
+import { spawnWithPrivateInputs } from "@oma/process/async";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 
 assert.equal(process.platform, "darwin", "Seatbelt observations require an actual Darwin kernel");
 const mode = process.argv[2], root = realpathSync(process.cwd());
@@ -43,29 +41,7 @@ if (mode === "seatbelt-files") {
     console.log(JSON.stringify({writable:true,readonly:true,denied:true,symlinkDenied:true,hardlinkDenied:true,inherited:true}));`;
   expected = { writable: true, readonly: true, denied: true, symlinkDenied: true, hardlinkDenied: true, inherited: true };
 } else if (mode === "seatbelt-profile-stream") {
-  // Producer EOF must never authorize a shorter profile, even when its bytes
-  // form a valid permissive SBPL program. This invokes the actual C launcher.
-  const pipe = controlPipe(); let read = pipe.read, write = pipe.write, writer, task;
-  await withAsyncCleanup(async () => {
-    writer = createWriteStream("", { fd: write, autoClose: true }); write = undefined;
-    const returned = finished(writer, { cleanup: true });
-    void returned.catch(() => {});
-    task = startProcess({ executable: bundledSeatbeltHelper(), argv: ["/usr/bin/true"], env,
-      cwd: work, timeoutMs: 10000, stdoutBytes: 1024, stderrBytes: 1024 }, { inheritedFds: [read] });
-    const held = read; read = undefined; closeSync(held);
-    const payload = Buffer.from("(version 1)\n(allow default)\n"), header = Buffer.alloc(16);
-    header.write("OMASBPL1"); header.writeBigUInt64BE(BigInt(payload.length + 1), 8);
-    writer.end(Buffer.concat([header, payload])); await returned;
-    const result = await task.result; await task.closed;
-    assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 125);
-    assert.match(result.stderr.toString(), /profile is truncated/);
-  }, async () => {
-    task?.cancel(); writer?.destroy();
-    try { cleanupAll([
-      () => { if (read !== undefined) closeSync(read); },
-      () => { if (write !== undefined) closeSync(write); },
-    ]); } finally { await Promise.all([task?.closed, writer === undefined ? undefined : finished(writer).catch(() => {})]); }
-  });
+  // Framing failures have independent cases in darwin-seatbelt-faults.mjs.
   policy.readable.push(...Array.from({ length: 5000 }, (_, n) => directory(join(readonly, `profile-entry-${n}-longer-than-the-exec-argument-budget`))));
   program = `import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs';
     assert.equal(readFileSync(0,'utf8'),${JSON.stringify(input)}); console.log(JSON.stringify({stdin:true,profilePipe:true}));`;
@@ -79,7 +55,7 @@ if (mode === "seatbelt-profile-stream") assert.ok(profileBytes > 262144);
 assert.equal(readFileSync(secretFile, "utf8"), "host canary");
 assert.equal(readFileSync(hiddenFile, "utf8"), "nested canary");
 const prepared = prepareSeatbelt(command, policy);
-const child = spawnWithPrivateInputs(prepared.command.executable, prepared.command.argv, work, env, prepared.privateInputs);
+const child = spawnWithPrivateInputs(prepared.command.executable, prepared.command.argv, prepared.command.cwd, prepared.command.env, prepared.privateInputs);
 const stdout = [], stderr = [], faults = [];
 let bytes = 0;
 const closed = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
@@ -99,5 +75,4 @@ await withAsyncCleanup(async () => {
 }, async () => { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await closed; });
 assert.equal(readFileSync(publicFile, "utf8"), "read only original");
 assert.equal(readFileSync(secretFile, "utf8"), "host canary");
-console.log(JSON.stringify({ case: mode, seatbelt: { ...expected, profileBytes, directChildClosed: true,
-  ...(mode === "seatbelt-profile-stream" ? { truncatedProfileRefused: true } : {}) } }));
+console.log(JSON.stringify({ case: mode, seatbelt: { ...expected, profileBytes, directChildClosed: true } }));

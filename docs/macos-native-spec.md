@@ -722,3 +722,31 @@ qualification이 아니며 Mac 세 gate와 제품 guard는 유지한다. 목적�
 확인했다. spawn과 session return 사이에도 같은 문자열 view를 사용하도록 adapter에 보유하며
 caller dirs 변경 반례를 거절한다. 이는 liveness/grant/scope cache가 아니다. 전체 구조 검사도
 통과했고 상세 원본/이전 실패와 이후 결과 문서는 validation이 구분한다. 실제 Mac은 별도다.
+
+### 14.17 실제 CI 재개를 위한 독립 시험 구성 — 2026-10-27
+
+사용자의 철저한 CI 시험 구축 지시에 따라 driver의 required manifest를25개 case×3회로
+확장했다. 기존 process/files/auth/Mach·대용량 profile 관측을 유지하며 Seatbelt의 짧은 header,
+잘못된 magic, 길이 overflow, payload truncation, trailing bytes, NUL, empty, invalid SBPL을
+각각 실제 launcher에서 거절하고 정상 profile의 target 실행을 별도 확인한다. argv의 Unicode/
+quote/backslash/newline, 명시 env·독립 stdin, 실제 canary FD와 closefrom을 제거한 fixture 전용
+negative helper, exact 허용/외부 Unix socket을 독립 관측한다. production helper를 변조하지 않는다.
+
+누락·중복·다른 program/observation 귀속, 비정상 종료·signal·미실행·정리/기록 실패를 성공으로
+집계하지 않는다. setup 실패도75개 required row를 NOT_RUN/SETUP_FAILED로 보존하며 실제
+Linux에서 이 거절/기록 경로를 실행한다. metadata validator 시험은 TS/JS 정책 증거이며
+Darwin kernel proof가 아니다. FD oracle 자체도 executing OS에서 실제 상속/미상속 canary를
+구별해야 한다. build record와 실제 JS/native asset/증분 상태의 bytes/mode·workspace set을
+실행 전후 비교하고 SDK/OS/Node/git/package version, compiled probe SHA와 개별 raw/종료/시간을
+남긴다. build record는 서명/권한 증거가 아니며 source input identity와 함께 사용한다.
+
+macos-26/15 job은 독립 실패를 보존하며 모든 bounded attempt/compile/setup/upload 합보다
+긴 clock을 둔다. driver는 관측이 완료되어도 세 gate OPEN·제품 qualification BLOCKED/exit1을
+유지한다. macOS 지원 PASS가 아니며 현재 신규75회는 NOT_RUN이다. actual CI와 로컬 회귀의
+source별 결과는 validation을 따른다.
+
+사용자는 macOS CI의 가중 사용량으로 할당량이 소진되었으며 나중에 복구하겠다고 명시했다.
+추가 소모를 막기 위해 push는 Linux만 실행하고 Mac 공통/독립 관측 job은 수동 dispatch의
+run_darwin=true에서만 선택한다. 테스트와 artifact 수집은 그대로 준비하며 지금 dispatch하지
+않는다. workflow 조건은 GitHub의 [boolean inputs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs)와
+[fromJSON matrix](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#fromjson) 문법을 사용한다.
