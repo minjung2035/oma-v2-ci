@@ -867,3 +867,46 @@ lease를 먼저 잡고 실제 작업 tree를 만든다. 이미 있는 외부 이
 회수 권한을 얻지 않는다. 같은 실제 Linux probe의 삭제/표시 오염 negative controls를 확인하고
 보강된 owner의 원본 보존·재시도를 검증했다. 이는 disposable nonce fixture일 뿐 kernel/PID/
 scope 사실의 mock이 아니며 Mac G-FILES qualification을 대신하지 않는다.
+
+
+### 14.21 Worker toolchain 조립과 실제 부팅 시험 준비 — 2026-10-27
+
+Broker의 startup은 actor HOME 대신 전용 leased temporary에서 실제 developer/Git/exec-path를
+관측한다. query도 기존 실행 owner의 preparation slot·중단 signal·현재 startup authority를
+사용하며 종료 때 준비 promise를 join한다. private staging 목적 runtime-tools는 durable
+journal slot 문법을 늘리지 않는다. candidate와 같은 공통 ExecutionStaging.run이 수명·충돌·
+회수를 소유하며 과거 CandidateStaging export나 compatibility wrapper는 남기지 않는다.
+실제 scope가 살아 있고 lease만 해제된 경우에는 어느 목적도 tree를 회수하거나 재사용하지 않는다.
+
+관측한 developer/Git/execPath/Contents는 protocol의 closed transient codec으로 한 번 복사해
+trusted Runner launch에 전달한다. ambient OMA_DEVELOPER_TOOLS_HEX는 명시 입력이 없으면
+제거하고 있으면 소유한 값으로 덮어쓴다. Runner는 이를 한 번 decode한 뒤 환경에서 제거한다.
+이 데이터는 scope/실행 권한·exact executable pin·설정 version을 대체하지 않는다. 필드 추가·
+root escape·잘못된 UTF-8/hex/Contents는 거절하며 Linux Runner는 Mac launch data를 받지 않는다.
+
+Runner가 공통 Pi adapter에 주입하는 실제 platform effects를 명시적으로 조립한다. Mac Worker는
+physical PathView, 필수 developer 관측, readonly selected Contents, 좁은 Git/helper/developer bin
+실행 경로와 GIT_EXEC_PATH를 사용한다. HOME/TMPDIR/PATH/preload는 trusted recipe가 고정하며
+private state 또는 writable actor root와 installation/toolchain이 겹치면 거절한다. FD3/profile과
+RPC stdin은 분리돼 있다. Linux recipe의 기본값과 native backend/product guard는 그대로다.
+Linux 전용 rootfs/layout 검사는 Mac 조립에 실행하지 않지만 HostConfig3의 필드를 optional로
+풀지 않았다. §11의 명시적 형식 version 전환은 다음 별도 구현이다.
+
+실제 Linux namespace/pidfd·상속 socket과 App NativeResidents factory를 사용하는 launch 회귀는
+ambient 제거·명시 snapshot 덮어쓰기·실제 사망 뒤 journal retirement를 확인한다. 수신 payload만
+fixture이며 실제 Runner 부팅이나 Mac identity 성공으로 해석하지 않는다. shared Worker recipe·
+Pi planner·closed codec과 runtime-tools live-scope 보존 회귀도 포함한다. 첫 slot 불일치 실패는
+raw로 보존하며, persisted grammar를 바꾸지 않고 기존 preparation slot을 사용하도록 수리했다.
+
+실제 Darwin required fixture에는 pinned Pi RPC/get_state와 physical session resume, 같은
+production client preload, oma usage, Git commit/exec-path, npm, own script/C build output 실행,
+private read/readonly write 거절을 넣었다. production preload가 현재 native guard에서 거절하는
+동안 부팅 case는 SETUP_FAILED가 되어야 하며 preload 교체·guard 우회·skip은 없다. 32종×3회,
+OS별96회는 모두 NOT_RUN이다. driver 전체 child ceiling과 setup/upload보다 큰240분 job
+ceiling을 검사하며 paid Mac 기본 trigger는 계속 꺼져 있다. Homebrew dylib·실제 부팅/도구 성공과
+G-PROCESS/G-FILES/G-AUTH는 아직 qualification되지 않았다.
+
+
+최종 검토에서 installation/package/Node module/developer root가 private state 안쪽의 readonly
+형제 경로로 들어가는 네 lexical 반례도 추가했다. 기존 한 방향 검사에서는 네 반례가 모두
+실패했고 양방향 겹침 거절로 수리했다. 이는 실제 alias/inode/executable 결박을 대신하지 않는다.

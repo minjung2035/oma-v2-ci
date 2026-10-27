@@ -2,35 +2,24 @@
  * authority/exact-executable binding. The selected bundle is read-only; no
  * grant covers /Applications, /Library, a human home or an entire prefix. */
 import { closeSync, realpathSync } from "node:fs";
-import { dirname } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { decodeProcessText } from "@oma/process/run";
 import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 import { GIT_ENV } from "@oma/process/policies";
 import { openDirectory } from "@oma/native/files";
-export interface MacDeveloperTools {
-  readonly developer: string; readonly git: string; readonly execPath: string; readonly contents: string;
-}
-const under = (value: string, root: string): boolean => value.startsWith(`${root}/`);
+import { describeMacDeveloperTools, macGitLocation, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 function refuse(): never { throw new StoreError("UNSUPPORTED_PROFILE", "Mac developer tools could not be observed unambiguously"); }
 function path(value: unknown): value is string {
   return trustedAbsolutePath(value) && !/[\r\n]/.test(value as string) && !(value as string).endsWith("/") &&
     Buffer.from(value as string).toString("utf8") === value;
 }
-/** Pure description of already observed paths; not an OS probe or a grant. */
-function gitLocation(developer: string, git: string): string {
-  if (![developer, git].every(path) || !under(git, `${developer}/usr/bin`)) refuse();
-  let contents: string;
-  if (developer === "/Library/Developer/CommandLineTools") contents = developer;
-  else if (/^\/.+\.app\/Contents\/Developer$/.test(developer)) contents = dirname(developer);
-  else refuse();
-  return contents;
-}
-export function describeMacDeveloperTools(developer: string, git: string, execPath: string): MacDeveloperTools {
-  const contents = gitLocation(developer, git);
-  if (!path(execPath) || !under(execPath, developer)) refuse();
-  return Object.freeze({ developer, git, execPath, contents });
+/** Exact executable directories in the selected tool installation. Framework
+ * mapping remains separate from process execution. */
+export function developerToolDirectories(tools: MacDeveloperTools): readonly string[] {
+  const selected = describeMacDeveloperTools(tools.developer, tools.git, tools.execPath);
+  if (selected.contents !== tools.contents) refuse();
+  return [selected.developer + "/usr/bin", selected.developer + "/Toolchains/XcodeDefault.xctoolchain/usr/bin"];
 }
 /** The caller owns this disposable HOME/TMPDIR for the entire observation.
  * Failure never substitutes /usr/bin/git or an unchecked lexical realpath.
@@ -58,6 +47,6 @@ export async function observeMacDeveloperTools(temporary: string,
   };
   const developer = await observe("/usr/bin/xcode-select", ["-p"]);
   const git = await observe("/usr/bin/xcrun", ["--find", "git"]);
-  gitLocation(developer, git); // Validate the observed location before executing it.
+  macGitLocation(developer, git); // Validate the observed location before executing it.
   return describeMacDeveloperTools(developer, git, await observe(git, ["--exec-path"]));
 }

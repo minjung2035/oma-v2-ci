@@ -240,11 +240,46 @@ DR48은 ACL/xattr·special file·nested mount·읽을 수 없는 파일·복원�
 
 정리 전 인계·검증·감사·계획 원문은 [보관 색인](../archive/documentation-cleanup-2026-10-25/README.md)에 있다. 문서를 옮겨도 요구 ID·수용 번호·과거 실패·검토 판정은 유지한다.
 
+## Worker 조립 후속 — 2026-10-27
+
+공통 ExecutionStaging·closed developer launch codec·Mac Worker effects 주입과 explicit Broker→
+Runner 전달을 구현했다. 실제 Linux App launch factory 회귀2개와 required Darwin Worker
+bootstrap/tools fixture를 추가했다. Mac32종×3회, OS별96회는 모두 NOT_RUN이다. 현재 production
+preload의 native guard를 우회하지 않으며 이 거절은 성공한 부팅으로 계산하지 않는다.
+
+첫 입력695ec0dd…(15646개)의85/86 실패는 private staging 목적을 durable slot으로 잘못 사용한
+반례다. 기존 preparation slot을 사용하는 source 수정 뒤79eae61b…의86/86·root strict가 통과했고
+각 입력 전후와 보호4개가 같다. 원시 checks-1/·checks-2/를 보존한다.
+
+후속 fixed-worker 입력 `ffad23c9cfdbcf30abfc478907474089e36b17704017821df112dfcedacc552d`
+(15648개)에서 관련189/189·contract mutation7/7, root strict·전체 구조 검사가 통과했다. 전후 입력과
+보호4개 SHA가 같으며 skip/cancel/todo/fail0이다. 이 입력은 아래 추가 겹침 수리 전의 결과다.
+
+최종 검토에서 private state 안쪽의 readonly 형제 경로를 installation/package/Node/developer로
+선택하는 네 반례를 추가했다. 기존 policy의5/9·실패4를 private-state-overlap-red.log에 보존하고
+양방향 겹침 거절로 source를 수리했다. 후속 실행과 최종 구조 결과는 같은 audit 디렉터리에 입력별로
+남긴다. raw root는 /home/dev/oma-audit-artifacts/native-2026-10-27-worker-bootstrap/이다.
+CI의 workspace-only build 뒤에 root test fixture를 참조하는 불일치도 확인했다. 실제 root dist를
+보관해 없는 상태에서 두 consumer의 module-not-found 실패를 보존했고, common CI가 전체
+installation/test graph를 빌드하도록 수리했다. root dist가 없는 상태의 실제 build와 workflow에
+적힌 그대로의 Node test 명령을 별도로 검증한다. Mac helper job은 workspace build를 유지한다.
+
+이 기록은 전체 Linux suite·현재 packed install·Darwin kernel·power-loss·제품 지원의 PASS가 아니다.
+
+
+겹침과 CI build prerequisite 수리 뒤 최종 고정 입력 `f370df2f90d8fc5662cc2eb488f0e186a6151b261edfe7357b3989627d47f7d1`
+(15648개)에서 관련194/194·contract mutation7/7·root strict·전체 구조 검사 PASS를 확인했다.
+같은 입력에서 workflow에 적힌 그대로의 Node 명령은 공통194/194·Linux native leaf3/3·실제
+Linux execution46/46 PASS다. 서로 다른 실행을 합산하지 않으며 모두 fail/skip/cancel/todo0이다.
+입력 전후와 보호4개 SHA가 같고 fixed-worker-final/summary.json·final-runtime-counts.json이 소유한다.
+root dist가 없는 상태의 실제 full build도 exit0이며 겹침 반례는 동일 test SHA로5/9→9/9다.
+마지막 문서 결과 기록 이후 입력은 구조 검사로만 별도 결박하며 runtime 결과를 재결박하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `a0c2bcc50b9ed104eec261a1b440b85da7837dcefab691dc6af4a147af5fb4be` (15643 files).
+verification input digest `d4f2e177cedd3733e4460d7651e9d52e317c9e1b332570fa9a7d917cc65c30c0` (15648 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

@@ -9,7 +9,8 @@ import { nodeToolchainMounts } from "@oma/domain/resident-paths";
 import { GIT_ENV } from "@oma/process/policies";
 import { decodeCandidateExecutionView, decodeQuarantineExecutionView, type CandidateExecutionView, type QuarantineExecutionView } from "@oma/protocol/git-execution-view";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
-import { describeMacDeveloperTools, type MacDeveloperTools } from "./developer-tools.js";
+import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
+import { developerToolDirectories } from "./developer-tools.js";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 
 export interface MacGitSandboxHost { readonly node: string; readonly libdir: string; readonly tools: MacDeveloperTools }
@@ -19,8 +20,7 @@ const under = (value: string, root: string): boolean => value === root || value.
 function refuse(): never { throw new StoreError("UNSUPPORTED_PROFILE", "Mac setup requires disjoint physical staging and trusted toolchain paths"); }
 function installation(host: MacGitSandboxHost, project: string, writable: readonly string[]) {
   if (![host.node, host.libdir, project, ...writable].every(value => trustedAbsolutePath(value) && !value.endsWith("/")) || host.libdir.includes("\\")) refuse();
-  const tools = describeMacDeveloperTools(host.tools.developer, host.tools.git, host.tools.execPath);
-  if (tools.contents !== host.tools.contents) refuse();
+  const tools = decodeMacDeveloperTools(host.tools);
   const modules = nodeToolchainMounts(host.node).map(([source]) => dir(source));
   const trusted = [host.libdir, tools.contents, ...modules.map(entry => entry.path)];
   for (const root of [...trusted, host.node]) {
@@ -44,7 +44,7 @@ export function candidateSeatbelt(host: MacGitSandboxHost, viewInput: CandidateE
     // just as the writable tmpfs view permits on Linux. Developer binaries
     // stay beneath the exact selected installation; frameworks remain map-only.
     executable: [...roots.executable, dir(view.workspace), dir(temporary),
-      dir(join(roots.tools.developer, "usr/bin")), dir(join(roots.tools.developer, "Toolchains/XcodeDefault.xctoolchain/usr/bin"))],
+      ...developerToolDirectories(roots.tools).map(dir)],
     mapped: roots.mapped, unixSockets: [], machServices: [], environmentKeys: Object.keys(env),
     profileInput: "stdin", preserveFds: [6, 8, 9],
   });

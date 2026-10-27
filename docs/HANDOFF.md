@@ -1,6 +1,32 @@
 # OMA v2 — 현재 인계
 
-## 현재: Mac check·quarantine 물리 staging과 실행 recipe 연결
+## 현재: Worker toolchain 연결과 실제 부팅 검증 준비
+
+Broker-owned leased temporary와 기존 preparation journal slot에서 developer/Git/exec-path를
+관측하고, closed transient metadata를 명시적으로 Runner에 전달한다. ambient 값은 제거/덮어쓰기,
+Runner는 decode 후 삭제한다. physical Mac PathView·필수 tools·좁은 readonly/exec roots를 조립한
+engine effects를 Runner에 주입했다. 공통 ExecutionStaging이 candidate/runtime-tools의 수명과
+실제 scope 사망 후 회수를 맡으며 과거 CandidateStaging 모듈/export는 제거했다.
+
+실제 Linux App launch factory·namespace/pidfd·상속 socket 회귀2개와 shared codec/planner/
+staging 검사를 추가했다. 첫 runtime-tools durable slot 거절은 raw로 보존하고 기존 preparation
+slot 사용으로 수리했다. 실제 Darwin은 Pi RPC/session resume·production preload·oma/Git/npm·
+own script/C 실행·권한 거절의 required fixture를 추가해 OS별96회가 준비돼 있다. 전부 NOT_RUN,
+paid CI 기본 off, native guard/backend 거절 유지다. 현재 preload의 guard 거절을 성공 부팅으로
+표시하지 않는다. 최종 입력별 결과는 validation과 native-2026-10-27-worker-bootstrap/에 기록한다.
+
+다음은 §11의 명시 config/format version 전환이다. Linux 전용 rootfs/layout 검사의 OS 조립을
+분리했지만 HostConfig3 필드를 optional로 풀거나 accepted bytes를 재작성하지 않았다.
+G-PROCESS/G-FILES/G-AUTH·Homebrew dylib·실제 Mac 부팅과 최종 양 OS qualification도 남는다.
+
+최종 고정 입력 `f370df2f90d8fc5662cc2eb488f0e186a6151b261edfe7357b3989627d47f7d1`(15648개)의 관련194/194·contract7/7,
+root strict·전체 구조 검사가 통과했다. 같은 입력의 literal CI 명령도 공통194/194·native leaf3/3·
+실제 execution46/46 PASS·skip/cancel/todo/fail0이다. 전후 입력과 보호4개가 같으며 검증 원문은
+fixed-worker-final/에 있다. private-state nested root4개 반례는 같은 test SHA로5/9→9/9를
+확인했고 common CI의 누락된 root fixture build도 실제 부재 실패 뒤 full build로 수리했다.
+현재 source의 전체 Linux/packed/lane 최종 검증과 Mac qualification을 이 결과로 닫지 않는다.
+
+## 직전: Mac check·quarantine 물리 staging과 실행 recipe 연결
 
 App의 Mac 경로에 candidate 전용 lease/workspace/tmp, quarantine의 held bundle FD→새 readonly
 input.bundle 복사와 phase별 tmp/repo를 연결했다. shared TS가 체크 환경·exact checkout·verify와

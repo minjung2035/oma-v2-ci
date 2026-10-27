@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, openSync, closeSync, writeFileSync, fstatSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, openSync, closeSync, writeFileSync, fstatSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,9 +21,9 @@ test("NATIVE-DARWIN: required independent cases keep three attempts and explicit
     "mach-rendezvous-exit", "mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async",
     "seatbelt-files", "seatbelt-profile-stream", "seatbelt-profile-header", "seatbelt-profile-magic", "seatbelt-profile-overflow",
     "seatbelt-profile-truncated", "seatbelt-profile-trailing", "seatbelt-profile-nul", "seatbelt-profile-empty",
-    "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds", "git-setup-candidate", "git-setup-quarantine"];
+    "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds", "git-setup-candidate", "git-setup-quarantine", "worker-bootstrap", "worker-tools"];
   const plan = darwinCasePlan();
-  assert.equal(plan.length, 90);
+  assert.equal(plan.length, 96);
   assert.deepEqual([...new Set(plan.map(row => row.name))].sort(), required.sort());
   assert.equal(new Set(plan.map(row => `${row.name}:${row.iteration}`)).size, plan.length);
   for (const name of required) assert.deepEqual(plan.filter(row => row.name === name).map(row => row.iteration), [0, 1, 2]);
@@ -63,7 +63,7 @@ for (const [name, change] of [
 test("NATIVE-DARWIN: failed attempts remain explicit failures, never observations", () => {
   const list = rows(); list[0] = { ...darwinCasePlan()[0], execution: "NOT_RUN", status: "SETUP_FAILED", error: "SDK unavailable" };
   assert.doesNotThrow(() => validateDarwinCaseSet(list));
-  assert.equal(list.filter(row => row.status === "OBSERVED").length, 89);
+  assert.equal(list.filter(row => row.status === "OBSERVED").length, 95);
   for (const value of [null, [], "completed", true, 0, {}])
     assert.throws(() => validateDarwinObservation("process", { process: value }));
   assert.throws(() => validateDarwinObservation("unknown", { process: { returned: true } }));
@@ -99,7 +99,7 @@ if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refus
     const result = JSON.parse(readFileSync(join(out, "result.json"), "utf8"));
     assert.equal(result.provenance.platform, "linux"); assert.equal(result.status, "SETUP_FAILED");
     assert.match(result.error, /require a real Darwin kernel/);
-    assert.deepEqual(result.summary, { required: 90, observed: 0, executed: 0, notRun: 90, productQualification: "BLOCKED" });
+    assert.deepEqual(result.summary, { required: 96, observed: 0, executed: 0, notRun: 96, productQualification: "BLOCKED" });
     assert.equal(result.compilations.length, DARWIN_PROGRAMS.length);
     assert.ok(result.compilations.every(row => row.status === "NOT_RUN"));
     validateDarwinCaseSet(result.cases);
@@ -135,4 +135,25 @@ test("NATIVE-DARWIN: real FD oracle distinguishes an inherited canary from a ret
       assert.equal(child.status, 2); assert.match(child.stderr, /invalid FD oracle identity/);
     }
   } finally { if (fd !== undefined) closeSync(fd); rmSync(out, { recursive: true, force: true }); }
+});
+
+if (process.platform === "linux") test("NATIVE-DARWIN: Worker fixture refuses the actual Linux kernel before creating state", () => {
+  const work = mkdtempSync(join(tmpdir(), "oma-worker-refusal-"));
+  try {
+    const child = spawnSync(process.execPath, [join(root, "test/fixtures/darwin-worker.mjs"), "worker-bootstrap"],
+      { cwd: work, encoding: "utf8", timeout: 10000 });
+    assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 1);
+    assert.match(child.stderr, /Worker observations require the actual Darwin kernel/);
+    assert.deepEqual(readdirSync(work), []);
+  } finally { rmSync(work, { recursive: true, force: true }); }
+});
+
+test("NATIVE-DARWIN: common CI builds the root test fixtures before their consumers", () => {
+  const workflow = readFileSync(join(root, ".github/workflows/native-runtime.yml"), "utf8");
+  const common = workflow.slice(workflow.indexOf("\n  common-runtime:\n"), workflow.indexOf("\n  darwin-gates:\n"));
+  const build = common.indexOf("if ! npm run build > .scratch/native-runtime/build.log");
+  assert.ok(build >= 0, "workspace compilation alone does not emit dist/test/fixtures");
+  assert.ok(build < common.indexOf("if ! node --test "));
+  assert.match(common, /test\/mac-worker-plan\.test\.mjs/);
+  assert.match(common, /test\/native-resident-launch-data\.test\.mjs/);
 });

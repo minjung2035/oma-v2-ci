@@ -20,17 +20,20 @@ import { ResidentLogStore } from "@oma/storage/resident-logs";
 import { residentLogSinks, residentLogView } from "@oma/process/resident-logs";
 import { acquireExecutionChild } from "@oma/process/owned-execution";
 import { withCleanup } from "@oma/native/cleanup";
+import { encodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 
 export function createNativeResidents(store: Store, executions: ExecutionRuntime,
   location: { stateRoot: string; runRoot: string; society: string; configPath: string }, config: HostConfig,
   attach: (socket: Socket, peer: BoundPeer) => void, hint: () => void,
   liveIncarnation: (actor: string, invocationId: string) => number | null,
-  launch: { readonly environment?: Readonly<NodeJS.ProcessEnv>; readonly toolSurface?: string } = {}) {
+  launch: { readonly environment?: Readonly<NodeJS.ProcessEnv>; readonly toolSurface?: string; readonly developerTools?: MacDeveloperTools } = {}) {
   // The application owns the host launch environment and internal surface.
   // Freeze them for this owner, including automatically created Residents;
   // ambient changes during another launch cannot supply different bytes.
   const environment = Object.freeze({ ...(launch.environment ?? process.env) });
   const toolSurface = launch.toolSurface ?? encodedResidentToolSurface();
+  const developerTools = launch.developerTools;
+  const developerToolsHex = developerTools === undefined ? undefined : encodeMacDeveloperTools(developerTools);
   const logs = new ResidentLogStore(location.stateRoot);
   const channels = new Map<string, { socket: Socket; peer: BoundPeer }>();
   let revoke: ((actor: string) => void) | undefined;
@@ -66,6 +69,10 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
             OMA_MODEL_PROFILE_HEX: Buffer.from(references.modelProfile).toString("hex"),
             OMA_TOOL_SURFACE_HEX: Buffer.from(toolSurface).toString("hex") };
           delete env.OMA_SOCIETY_FENCE_FD; delete env.OMA_HOST_CHANNEL;
+          // Explicit trusted launch input, never inherited ambient data. The
+          // Runner decodes it before constructing its Worker effects.
+          if (developerToolsHex === undefined) delete env.OMA_DEVELOPER_TOOLS_HEX;
+          else env.OMA_DEVELOPER_TOOLS_HEX = developerToolsHex;
           return runnerScope({ executable: config.installation.node,
             argv: [join(config.installation.libdir, "apps/oma/dist/entry/runner.js"), "--society", location.society,
               "--agent", actor, "--execution", execution, "--config", location.configPath, "--state-root", location.stateRoot, "--run-root", location.runRoot],

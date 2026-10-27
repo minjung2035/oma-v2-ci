@@ -386,3 +386,17 @@ Mac 성공 증거가 아니며 Homebrew dylib/full Worker bootstrap은 아직 �
 malformed frame/중복 옵션의 pre-exec 거절과 정확한 keep-FD를 실제 helper로 검사하도록 했다.
 candidate와 quarantine은 서로의 실패로 뒤의 case가 사라지지 않게 독립 required attempt다.
 모든 신규 Mac 관측은 NOT_RUN이며 세 gate와 제품 거절은 유지한다.
+
+
+## Worker 조립·부팅 fixture 후속 — 2026-10-27
+
+Worker developer observation은 기존 owned execution/staging과 같은 수명을 사용한다. closed
+Mac tool metadata와 Runner DI는 Pi engine/lifecycle을 OS별로 복제하지 않으며, selected Contents의
+mapping과 Git/helper/bin execution을 구분한다. common storage owner는 ExecutionStaging으로
+통합했고 과거 candidate 모듈 export는 제거했다. 이는 scope 또는 executable pin 증거가 아니다.
+
+실제 Linux App launch factory의 ambient 제거·snapshot 전달 회귀와 실제 Darwin Pi RPC/CLI/Git/
+npm/자체 script·native build fixture를 구분한다. Darwin OS별96회는 모두 NOT_RUN이고 실제
+production preload의 native guard도 유지한다. 이 guard가 거절하면 fixture도 실패해야 한다.
+새 code recipe가 full Mac bootstrap 성공 또는 G-PROCESS/G-FILES/G-AUTH를 증명하지 않는다.
+§11 config version 경계·실제 Mac 관측·Homebrew dylib와 최종 qualification은 남는다.

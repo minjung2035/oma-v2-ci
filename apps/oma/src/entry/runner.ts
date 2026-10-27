@@ -17,6 +17,8 @@ import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { stopOnHostLoss } from "@oma/process/host-loss";
 import { Socket } from "node:net";
 import { closeOnExec } from "@oma/native/control-socket";
+import { decodeMacDeveloperToolsHex } from "@oma/protocol/mac-developer-tools";
+import { createResidentEngineEffects } from "../engine/resident-effects.js";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> --execution <uuid> --config <path> --state-root <dir> --run-root <dir>");
@@ -51,7 +53,14 @@ try { assertNativeRuntime(); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); process.exit(4); }
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
-requireResidentRootfs(cfg.installation.rootfs);
+if (process.platform === "linux") requireResidentRootfs(cfg.installation.rootfs);
+// Private Broker input, decoded once. It is never role configuration or a
+// Worker environment entry; no ambient/unprepared Mac toolchain fallback.
+const developerTools = process.platform === "darwin" ? decodeMacDeveloperToolsHex(process.env.OMA_DEVELOPER_TOOLS_HEX) : undefined;
+if (process.platform !== "darwin" && process.env.OMA_DEVELOPER_TOOLS_HEX !== undefined)
+  throw new StoreError("UNSUPPORTED_PROFILE", "non-Mac Runner received a Mac toolchain launch");
+delete process.env.OMA_DEVELOPER_TOOLS_HEX;
+const engineEffects = createResidentEngineEffects(developerTools);
 if (cfg.society !== society) { console.error("runner: config society does not match the requested society"); process.exit(4); }
 const profileHex = process.env.OMA_PROFILE_HEX ?? "";
 if (!/^(?:[0-9a-f]{2})+$/.test(profileHex)) { console.error(`runner: missing broker-rendered profile for ${agent}`); process.exit(4); }
@@ -120,7 +129,7 @@ const confinement = {
   ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
-  systemBinds: hostSystemLayout().binds,
+  systemBinds: process.platform === "linux" ? hostSystemLayout().binds : [],
 };
 const runner = new RunnerModule({ runRoot, stateRoot, society,
   piCommand: piRuntime.executable,
@@ -129,7 +138,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   coreExtension: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.extension),
   cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
   ...(packages === undefined ? {} : { packages }),
-  confinement }, agent, invocationId, cfg.limits, profile, control);
+  confinement }, agent, invocationId, cfg.limits, profile, control, engineEffects);
 let stopping = false;
 const stop = (): void => {
   if (stopping) return;

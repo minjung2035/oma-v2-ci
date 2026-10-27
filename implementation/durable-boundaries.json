@@ -2,12 +2,12 @@
   "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate. Each test says how it stops the process (injection: sigkill, in-process-fault or logical, P0V-83), and the gate checks that the test's code shows it.",
   "boundaries": [
     {
-      "owner": "packages/storage/src/candidate-staging.ts#CandidateStaging.run",
-      "fact": "candidate-only disposable staging is collected only after independent whole-scope death and an uncontended lease; primary bytes survive interruption and retry. Common TS owner tested on actual Linux, not Darwin kernel qualification",
+      "owner": "packages/storage/src/execution-staging.ts#ExecutionStaging.run",
+      "fact": "candidate and runtime-tools disposable staging is collected only after independent whole-scope death and an uncontended lease; primary bytes survive interruption and retry. Common TS owner tested on actual Linux, not Darwin kernel qualification",
       "tests": [
         {
           "file": "test/candidate-staging.test.mjs",
-          "title": "candidate staging: callback fault with a live scope and free lease",
+          "title": "staging: callback fault with a live scope and free lease",
           "injection": "in-process-fault"
         },
         {

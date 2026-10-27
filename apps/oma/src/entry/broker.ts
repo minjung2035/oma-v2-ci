@@ -20,6 +20,8 @@ import { GitModule } from "@oma/git";
 import { CandidateChecks } from "../runtime/candidate-checks.js";
 import { quarantineExecution } from "../runtime/quarantine-execution.js";
 import { ExecutionRuntime } from "../runtime/execution-runtime.js";
+import { prepareResidentTools } from "../runtime/resident-tools.js";
+import type { MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { observeProjectBinding, repairSociety } from "../runtime/provision.js";
 import { prepareSociety } from "../runtime/society-preparation.js";
 import { realpathSync } from "node:fs";
@@ -122,6 +124,7 @@ async function main(): Promise<void> {
     const preparationAbort = new AbortController();
     let preparation: ReturnType<typeof prepareSociety> | null = null;
     let storagePreparation: Promise<void> | null = null;
+    let toolPreparation: Promise<MacDeveloperTools | undefined> | null = null;
     let sessionStorage: SessionStorage | null = null;
     let executions: ExecutionRuntime | null = null;
     let residents: NativeResidents | null = null;
@@ -138,6 +141,8 @@ async function main(): Promise<void> {
                 await preparation.catch(() => { });
             if (storagePreparation !== null)
                 await storagePreparation.catch(() => { });
+            if (toolPreparation !== null)
+                await toolPreparation.catch(() => { });
             await lifetime.shutdown();
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
                 try { await sessionStorage.archive(storageResidents); }
@@ -220,8 +225,17 @@ async function main(): Promise<void> {
             await stopping;
             return;
         }
-        assertHostDirectoryLayout(cfg.installation.rootfs);
+        if (process.platform === "linux") assertHostDirectoryLayout(cfg.installation.rootfs);
         assertStateRoot(stateRoot);
+        let developerTools: MacDeveloperTools | undefined;
+        if (process.platform === "darwin") {
+            toolPreparation = prepareResidentTools(stateRoot, executions, preparationAbort.signal, () => {
+                if (preparationAbort.signal.aborted || stopping !== null)
+                    throw new StoreError("REF_STATE_UNKNOWN", "Broker is stopping before runtime tool observation");
+            });
+            developerTools = await toolPreparation;
+            if (stopping !== null) { await stopping; return; }
+        }
         const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
         const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
@@ -229,7 +243,8 @@ async function main(): Promise<void> {
         const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
             cfg.limits, () => broker.hintWork());
         const units = createNativeResidents(store, executions, location, cfg,
-            (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation));
+            (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation),
+            { ...(developerTools === undefined ? {} : { developerTools }) });
         residents = units;
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);

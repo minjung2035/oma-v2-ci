@@ -1,7 +1,8 @@
 /** Pure plans only: these tests never impersonate a Darwin kernel/scope. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {describeMacDeveloperTools,observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
+import {describeMacDeveloperTools} from '@oma/protocol/mac-developer-tools';
+import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
 import {candidateSeatbelt,quarantineSeatbelt} from '@oma/platform-mac/git-sandbox';
 import {snapshotIntegrationPolicy} from '@oma/domain/integration-policy';
 import {exportRefForRequestKey} from '@oma/domain/derived';

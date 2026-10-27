@@ -8,39 +8,41 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import crypto from 'node:crypto';
 import {syncBuiltinESMExports} from 'node:module';
-import {CandidateStaging} from '@oma/storage/candidate-staging';
+import {ExecutionStaging} from '@oma/storage/execution-staging';
 import {treeQuiescence,leasePathOf} from '@oma/storage/tree-lease';
 import {ExecutionJournal} from '@oma/storage/execution-journal';
 import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
 import {runnerScope} from '@oma/platform-linux/runner-scope';
 
 assert.equal(process.platform,'linux','common staging scope tests use the actual Linux backend');
-function fixture(t){
+function fixture(t,purpose="candidate"){
   const root=mkdtempSync(join(tmpdir(),'oma-candidate-staging-'));ExecutionJournal.initialize(root);
-  const owner=new ExecutionRuntime(root),staging=new CandidateStaging(root,()=>owner.confirmDead('candidate'));
+  const slot=purpose==="runtime-tools"?"preparation":purpose;
+  const owner=new ExecutionRuntime(root),staging=new ExecutionStaging(root,purpose,()=>owner.confirmDead(slot));
   t.after(async()=>{await owner.close();rmSync(root,{recursive:true,force:true});});
-  return {root,owner,staging};
+  return {root,owner,staging,slot};
 }
-test('candidate staging: callback fault with a live scope and free lease retains the tree until actual termination and retry',{timeout:20000},async t=>{
-  const f=fixture(t),controller=new AbortController(),interrupted=new Error('fixture interruption after the child released its lease');
+for(const purpose of ['candidate','runtime-tools']) test(`${purpose} staging: callback fault with a live scope and free lease retains the tree until actual termination and retry`,{timeout:20000},async t=>{
+  const f=fixture(t,purpose),controller=new AbortController(),interrupted=new Error('fixture interruption after the child released its lease');
   let held,first;let ready;const childClosedLease=new Promise(resolve=>{ready=resolve;});let output='';
   t.after(async()=>{controller.abort();await held?.stop();});
   await assert.rejects(f.staging.run(async stage=>{
     first=stage;
-    held=await f.owner.begin('candidate',()=>runnerScope({executable:process.execPath,
+    held=await f.owner.begin(f.slot,()=>runnerScope({executable:process.execPath,
       argv:['-e',"require('node:fs').closeSync(6);process.stdout.write('lease-closed\\n');setInterval(()=>{},1000)"],
       env:{PATH:'/usr/bin:/bin'},timeoutMs:null,stdoutBytes:65536,stderrBytes:65536}),controller.signal,()=>{},()=>{},[stage.leaseFd],
       {stdoutSink:bytes=>{output+=Buffer.from(bytes).toString();if(output.includes('lease-closed\n'))ready();}});
     await childClosedLease;
     throw interrupted;
   }),error=>error===interrupted);
-  assert.equal(f.owner.confirmDead('candidate'),false);assert.equal(ExecutionJournal.inspect(f.root).length,1);
+  assert.equal(f.owner.confirmDead(f.slot),false);assert.equal(ExecutionJournal.inspect(f.root).length,1);
+  assert.equal(ExecutionJournal.inspect(f.root)[0].slot,f.slot,'the actual persisted scope uses the closed journal grammar');
   assert.equal(held.population(),'populated','the actual kernel scope still contains its live child');
   assert.equal(treeQuiescence(first.root).kind,'quiescent','the real free flock is not a whole-scope death proof');
   assert.equal(existsSync(first.root),true);assert.equal(existsSync(leasePathOf(first.root)),true);
   let entered=false;
   await assert.rejects(f.staging.run(async()=>{entered=true;}),{code:'RUN_TERMINATION_UNKNOWN'});assert.equal(entered,false);
-  await held.stop();assert.equal(f.owner.confirmDead('candidate'),true);
+  await held.stop();assert.equal(f.owner.confirmDead(f.slot),true);
   await f.staging.run(async stage=>{assert.notEqual(stage.root,first.root);assert.equal(existsSync(first.root),false);writeFileSync(join(stage.workspace,'retry'),'once');});
   assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
 });
@@ -50,11 +52,11 @@ test('candidate staging: SIGKILL after collection preserves primary bytes and a 
   const f={root:mkdtempSync(join(tmpdir(),'oma-candidate-restart-'))};ExecutionJournal.initialize(f.root);
   t.after(()=>rmSync(f.root,{recursive:true,force:true}));
   const primary=join(f.root,'accepted-evidence'),record=join(f.root,'stage-record');writeFileSync(primary,'accepted bytes stay primary');
-  const common=`import {CandidateStaging} from ${JSON.stringify(import.meta.resolve('@oma/storage/candidate-staging'))};
+  const common=`import {ExecutionStaging} from ${JSON.stringify(import.meta.resolve('@oma/storage/execution-staging'))};
     import {ExecutionRuntime} from ${JSON.stringify(import.meta.resolve('#oma-test/app/runtime/execution-runtime'))};
     import {writeFileSync,existsSync} from 'node:fs';import assert from 'node:assert/strict';
     const owner=new ExecutionRuntime(${JSON.stringify(f.root)});await owner.recover();
-    const staging=new CandidateStaging(${JSON.stringify(f.root)},()=>owner.confirmDead('candidate'));let made;
+    const staging=new ExecutionStaging(${JSON.stringify(f.root)},"candidate",()=>owner.confirmDead('candidate'));let made;
     await staging.run(async stage=>{made=stage.root;writeFileSync(${JSON.stringify(record)},made);writeFileSync(stage.workspace+'/effect','complete');});
     assert.equal(existsSync(made),false);assert.equal(existsSync(made+'.lease'),false);`;
   const killed=spawnSync(process.execPath,['--input-type=module','-e',common+`process.kill(process.pid,'SIGKILL');`],

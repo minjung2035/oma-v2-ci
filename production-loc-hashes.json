@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "90ffcaa0e8ea403041a5f845d890b255e95fc3e0a4196bca3527c242dcaef249",
+  "manifest": "bf49555a424a174afb0256e268fe9a49cb2aef3d5f4c282cd1ca5c06259acfac",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -224,7 +224,7 @@
     },
     {
       "path": "apps/oma/src/engine/resident-effects.ts",
-      "sha256": "205f8d6b1ef915180926d00bd54c2a2cf699226fa007362b2dc0710a6fcd2c35"
+      "sha256": "85925c422dc67727b5c8bf682c477856e41c776891509218dc0d23e7992f6e8d"
     },
     {
       "path": "apps/oma/src/engine/settings-files.ts",
@@ -236,7 +236,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "d6ddec4a8c1404985909e5df47b67b65cc1798905790ad970cec810d58bb60d6"
+      "sha256": "66ef07a791ddfbb2b99508bc2179a7639d2f7837c3b4a6618cd344f01c67294a"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -280,7 +280,7 @@
     },
     {
       "path": "apps/oma/src/entry/runner.ts",
-      "sha256": "02c2030c7ea684a044f2595bf8a7f849bba38a80cf144ffa38efb767cab1cc92"
+      "sha256": "9ee8a953e801ab5b0048803858408bd01b945e6c3e590800bce7b3e1d08aa5d5"
     },
     {
       "path": "apps/oma/src/platform/package-files.ts",
@@ -304,7 +304,7 @@
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "1d2d685d28d4bc9ba360a6ea63216792d0a2a4e2f931f1267cb45bc043e77f22"
+      "sha256": "98c267346b86e43737524213450403d4dc3baaf9783f94294ba5c441da301eed"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",
@@ -320,7 +320,7 @@
     },
     {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
-      "sha256": "c37ea6096f93303d279671d84ee09f7a2938099df8502f8b3e83670c5c522c20"
+      "sha256": "4cfc7924d82bc69cdffe7dc573a83853fda5eb46f67ac36ed7f7ea2327b68529"
     },
     {
       "path": "apps/oma/src/runtime/client-preload.ts",
@@ -372,7 +372,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "1a2269a6af7e6cd1780e03592aae842d1d2fee35cdc584c1e13a0dbeaf5837d3"
+      "sha256": "c211b6676b5bc03e21733fdcbfa5eb5361c019a21aec8eaf0979b25f7fa17a75"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -413,6 +413,10 @@
     {
       "path": "apps/oma/src/runtime/quarantine-execution.ts",
       "sha256": "f1b4cd5b42b5bb00da5d151008e7753acd08bf4501b2a42734409e72fe647748"
+    },
+    {
+      "path": "apps/oma/src/runtime/resident-tools.ts",
+      "sha256": "32507a17bd4de0f1ddc838d83ab682a51f6ef11fe12a6e6a519649ac8db8feea"
     },
     {
       "path": "apps/oma/src/runtime/session-catalog.ts",
@@ -832,7 +836,7 @@
     },
     {
       "path": "packages/domain/src/resident-paths.ts",
-      "sha256": "8a74e6210b31b1d6a6b863c11a3c8dc2508b7f97d4e26cb45d28dfdbea6a0b97"
+      "sha256": "c6d11d1281970d23aaf1b9d66ff897e3f1539066d7fbe40dbb30f6f627a5931f"
     },
     {
       "path": "packages/domain/src/review-bounds.ts",
@@ -1488,11 +1492,11 @@
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
-      "sha256": "f57912a3bdfd15c5f4ab4f61a77d559d6e6985573f075697346b767c44ed0580"
+      "sha256": "a8b3f8c015c0854856533335218718edd7b98816c5453df1cbc940b53dacb47c"
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
-      "sha256": "1e3bd264865ec5a88c83b240298c54f14e566f9237d034fca956b2f673f3c40c"
+      "sha256": "8f266fc6e34a37974004f2cb6eb92c4495156040063e23d46d421ff3d4f49982"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1536,7 +1540,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "4bb402e71101b99921e26b1186b43774e383ffef25382aa7a8430db01b5b2f98"
+      "sha256": "3393393c65eb87d8b969985ef66b0a9950938017a4b6e02d558cdece544cb2a8"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
@@ -1632,7 +1636,7 @@
     },
     {
       "path": "packages/protocol/package.json",
-      "sha256": "6afbd0ca05986d50568b7f35bd51fd492ab27a6c85bc377a2c9f7fa869e28e6f"
+      "sha256": "057aaec2513b863983236ede8fe7d00f60bb2c7467ed7ac1992aadcc9f285f11"
     },
     {
       "path": "packages/protocol/src/alarm.ts",
@@ -1681,6 +1685,10 @@
     {
       "path": "packages/protocol/src/log-response.ts",
       "sha256": "4e9cffb3866606fc5330fe7f2c84e35d283eec2b0d5d95a92156d30394d857d2"
+    },
+    {
+      "path": "packages/protocol/src/mac-developer-tools.ts",
+      "sha256": "99cb49e5309ad4d44ce2712fd58454b17abd2d33a221f99ce3ad5da557cec7df"
     },
     {
       "path": "packages/protocol/src/methods.ts",
@@ -1812,7 +1820,7 @@
     },
     {
       "path": "packages/storage/package.json",
-      "sha256": "ef9ac513728d1d971faf4db6de66a4ef886f525956f99ef3d95cf9354eb44992"
+      "sha256": "e1b6e701d0bd75bed5345ad9682b8b15fca2c066023bb5ccebb526d34b2115ab"
     },
     {
       "path": "packages/storage/src/arrival-journal.ts",
@@ -1825,10 +1833,6 @@
     {
       "path": "packages/storage/src/cache-trees.ts",
       "sha256": "34ea6fe555f3021f6596ebe552dc5b988837b8abca0d8281be226bf03a964e3e"
-    },
-    {
-      "path": "packages/storage/src/candidate-staging.ts",
-      "sha256": "b3ea35b4fb8c669172fe4c43ab74ea08c8147e0f1ea8dbb04a2d01235ebc6f66"
     },
     {
       "path": "packages/storage/src/context-files.ts",
@@ -1861,6 +1865,10 @@
     {
       "path": "packages/storage/src/execution-journal.ts",
       "sha256": "d8b73b48802c46cd81ab15514c88020369e5be2e8d8278ff5ff12ad14781e2b4"
+    },
+    {
+      "path": "packages/storage/src/execution-staging.ts",
+      "sha256": "8524fad8ee74b84aa43d279610cbc1901d888972e105513d68bc0a509cba05c0"
     },
     {
       "path": "packages/storage/src/facets.ts",

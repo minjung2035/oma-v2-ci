@@ -101,6 +101,7 @@ apps/oma/src/runtime/principal-delivery.ts
 apps/oma/src/runtime/project-binding.ts
 apps/oma/src/runtime/provision.ts
 apps/oma/src/runtime/quarantine-execution.ts
+apps/oma/src/runtime/resident-tools.ts
 apps/oma/src/runtime/session-catalog.ts
 apps/oma/src/runtime/session-history.ts
 apps/oma/src/runtime/session-mode.ts
@@ -418,6 +419,7 @@ packages/protocol/src/host-channel.ts
 packages/protocol/src/jsonl.ts
 packages/protocol/src/log-limits.ts
 packages/protocol/src/log-response.ts
+packages/protocol/src/mac-developer-tools.ts
 packages/protocol/src/methods.ts
 packages/protocol/src/operation-codec.ts
 packages/protocol/src/operation-results.ts
@@ -454,7 +456,6 @@ packages/storage/package.json
 packages/storage/src/arrival-journal.ts
 packages/storage/src/batch-view.ts
 packages/storage/src/cache-trees.ts
-packages/storage/src/candidate-staging.ts
 packages/storage/src/context-files.ts
 packages/storage/src/context-snapshot.ts
 packages/storage/src/context-stream.ts
@@ -463,6 +464,7 @@ packages/storage/src/diagnostic-snapshot.ts
 packages/storage/src/directory.ts
 packages/storage/src/durable-fs.ts
 packages/storage/src/execution-journal.ts
+packages/storage/src/execution-staging.ts
 packages/storage/src/facets.ts
 packages/storage/src/file-digest.ts
 packages/storage/src/immutable-file.ts

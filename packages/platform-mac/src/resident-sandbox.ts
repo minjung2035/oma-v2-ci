@@ -11,6 +11,8 @@ import { assertResidentContext, assertSandboxInstallation } from "@oma/protocol/
 import { trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-lease";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 import { machRendezvousName } from "./mach-address.js";
+import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
+import { developerToolDirectories } from "./developer-tools.js";
 
 const ENGINE_KEYS = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
   "OMA_ACTOR", "OMA_SOCIETY", "OMA_SOCKET", "OMA_BATCH_VIEW", "OMA_FRAME_BYTES", "OMA_BATCH_MAX_MESSAGES",
@@ -23,8 +25,9 @@ const ENGINE_KEYS = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME"
 const directory = (path: string): SeatbeltPath => ({ path, kind: "directory" });
 const beneath = (value: string, root: string): boolean => value === root || value.startsWith(`${root}/`);
 export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories,
-  environment: Readonly<Record<string, string>> = {}, endpoints: SandboxEndpoints = {}): ReturnType<typeof prepareSeatbelt> {
+  toolsInput: MacDeveloperTools, environment: Readonly<Record<string, string>> = {}, endpoints: SandboxEndpoints = {}): ReturnType<typeof prepareSeatbelt> {
   assertSandboxInstallation(host); assertResidentContext(host, lease, directories);
+  const tools = decodeMacDeveloperTools(toolsInput), developerBins = developerToolDirectories(tools);
   if (!beneath(host.pi, host.libdir))
     throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker Pi entry must be inside the trusted installation");
   for (const endpoint of [endpoints.inference, endpoints.egress])
@@ -34,14 +37,15 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
   const readable = roots.filter(root => !root.writable).map(root => directory(root.path));
   const writable = roots.filter(root => root.writable).map(root => directory(root.path));
   const toolchain = nodeToolchainMounts(host.node).map(([source]) => directory(source));
-  readable.push(...toolchain);
+  readable.push(...toolchain, directory(tools.contents));
   // A broad installation/package root must never expose the complete state
   // or overlap a writable actor root. These are lexical recipe checks; actual
   // aliases/renames still require G-FILES and cannot be certified by this map.
-  for (const root of [host.libdir, host.packages].filter((value): value is string => value !== undefined))
-    if (beneath(host.stateRoot!, root) || writable.some(entry => beneath(root, entry.path) || beneath(entry.path, root)))
+  for (const root of [host.libdir, host.packages, tools.contents, ...toolchain.map(entry => entry.path)].filter((value): value is string => value !== undefined))
+    if (beneath(host.stateRoot!, root) || beneath(root, host.stateRoot!) || writable.some(entry => beneath(root, entry.path) || beneath(entry.path, root)))
       throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker installation roots overlap private state");
-  const base = residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home });
+  const base = { ...residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home }, developerBins),
+    GIT_EXEC_PATH: tools.execPath };
   const allowed = new Set([...Object.keys(base), ...ENGINE_KEYS]);
   for (const [key, value] of Object.entries(environment))
     if (!allowed.has(key) || typeof value !== "string" || value.includes("\0"))
@@ -56,7 +60,9 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     readable, writable,
     denied: (host.hidden ?? []).map(entry => ({ path: join(host.libdir, entry.path), kind: entry.kind === "dir" ? "directory" : "file" })),
     executable: [{ path: host.node, kind: "file" }, directory(host.libdir),
-      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain, ...writable],
+      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain, ...writable,
+      { path: tools.git, kind: "file" }, directory(tools.execPath), ...developerBins.map(directory)],
+    mapped: [directory(tools.contents)],
     unixSockets: [endpoints.inference, endpoints.egress].filter((value): value is string => value !== undefined),
     machServices: [machRendezvousName(lease.socketHostPath)], environmentKeys: [...allowed], nodePreload: preload,
   });

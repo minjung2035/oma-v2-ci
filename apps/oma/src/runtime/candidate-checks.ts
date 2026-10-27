@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { controlPipe } from "@oma/native/control-socket";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import { openOwnedDirectoryPath } from "@oma/storage/directory";
-import { CandidateStaging, type CandidateStage } from "@oma/storage/candidate-staging";
+import { ExecutionStaging, type ExecutionStage } from "@oma/storage/execution-staging";
 import { CandidateSetupStatus } from "@oma/git/candidate-check";
 import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 import { candidateSandbox } from "@oma/platform-linux/candidate-sandbox";
@@ -22,12 +22,12 @@ import { type GitObserver } from "@oma/git/observe";
 
 
 export class CandidateChecks {
-  private readonly staging: CandidateStaging | null;
+  private readonly staging: ExecutionStaging | null;
   constructor(private readonly paths: GitPaths,
     private readonly execute: (command: CommandSpec, signal: AbortSignal, authorize: () => void, inheritedFds: readonly number[], prepared: () => void) => Promise<ProcessObservation>,
     private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver(),
     private readonly ownerSignal?: AbortSignal,
-    confirmDead?: () => boolean) { this.staging = confirmDead === undefined ? null : new CandidateStaging(paths.stateRoot, confirmDead); }
+    confirmDead?: () => boolean) { this.staging = confirmDead === undefined ? null : new ExecutionStaging(paths.stateRoot, "candidate", confirmDead); }
   async run(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void): Promise<void> {
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
     if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
@@ -38,7 +38,7 @@ export class CandidateChecks {
     return this.runPrepared(candidate, check, cancellationSignal, authorize);
   }
   private async runPrepared(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void,
-    stage?: CandidateStage): Promise<void> {
+    stage?: ExecutionStage): Promise<void> {
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
     if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
     const own = new AbortController();

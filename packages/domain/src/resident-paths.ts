@@ -108,12 +108,19 @@ export function modelCommandScript(): string {
 }
 /** One environment policy for mounted and host layouts. Callers supply only
  * trusted paths in that layout, and platform grammars apply it after extras. */
-export function residentEnvironment(paths: { readonly libdir: string; readonly node: string; readonly home: string; readonly temporary: string }) {
+export function residentEnvironment(paths: { readonly libdir: string; readonly node: string; readonly home: string; readonly temporary: string },
+  toolDirectories: readonly string[] = []) {
   if (Object.values(paths).some(path => !trustedResidentPath(path)) || paths.libdir.includes("\\"))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident environment requires normalized view paths");
+  if (!Array.isArray(toolDirectories))
+    throw new StoreError("UNSUPPORTED_PROFILE", "resident tool directories require a closed list");
+  const search = [`${paths.libdir}/${dirnameOf(DEPLOYMENT_LAYOUT.modelCommand)}`, dirnameOf(paths.node), `${paths.home}/.local/bin`,
+    ...toolDirectories, "/usr/bin", "/bin"];
+  if (search.some(value => !trustedResidentPath(value) || value.includes(":")))
+    throw new StoreError("UNSUPPORTED_PROFILE", "resident PATH requires representable absolute directories");
   return Object.freeze({
     HOME: paths.home,
-    PATH: `${paths.libdir}/${dirnameOf(DEPLOYMENT_LAYOUT.modelCommand)}:${dirnameOf(paths.node)}:${paths.home}/.local/bin:/usr/bin:/bin`,
+    PATH: search.join(":"),
     OMA_NODE: paths.node, OMA_CLI: `${paths.libdir}/${DEPLOYMENT_LAYOUT.cli}`,
     LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: paths.temporary,
     SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent",

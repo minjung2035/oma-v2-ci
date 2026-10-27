@@ -102,6 +102,7 @@
   "apps/oma/src/runtime/project-binding.ts",
   "apps/oma/src/runtime/provision.ts",
   "apps/oma/src/runtime/quarantine-execution.ts",
+  "apps/oma/src/runtime/resident-tools.ts",
   "apps/oma/src/runtime/session-catalog.ts",
   "apps/oma/src/runtime/session-history.ts",
   "apps/oma/src/runtime/session-mode.ts",
@@ -399,6 +400,7 @@
   "packages/protocol/src/jsonl.ts",
   "packages/protocol/src/log-limits.ts",
   "packages/protocol/src/log-response.ts",
+  "packages/protocol/src/mac-developer-tools.ts",
   "packages/protocol/src/methods.ts",
   "packages/protocol/src/operation-codec.ts",
   "packages/protocol/src/operation-results.ts",
@@ -432,7 +434,6 @@
   "packages/storage/src/arrival-journal.ts",
   "packages/storage/src/batch-view.ts",
   "packages/storage/src/cache-trees.ts",
-  "packages/storage/src/candidate-staging.ts",
   "packages/storage/src/context-files.ts",
   "packages/storage/src/context-snapshot.ts",
   "packages/storage/src/context-stream.ts",
@@ -441,6 +442,7 @@
   "packages/storage/src/directory.ts",
   "packages/storage/src/durable-fs.ts",
   "packages/storage/src/execution-journal.ts",
+  "packages/storage/src/execution-staging.ts",
   "packages/storage/src/facets.ts",
   "packages/storage/src/file-digest.ts",
   "packages/storage/src/immutable-file.ts",
@@ -592,6 +594,7 @@
      "packages/protocol/src/host-channel.ts",
      "packages/protocol/src/jsonl.ts",
      "packages/protocol/src/log-response.ts",
+     "packages/protocol/src/mac-developer-tools.ts",
      "packages/protocol/src/methods.ts",
      "packages/protocol/src/operation-results.ts",
      "packages/protocol/src/persisted-formats.ts",
@@ -669,7 +672,6 @@
      "packages/storage/src/arrival-journal.ts",
      "packages/storage/src/batch-view.ts",
      "packages/storage/src/cache-trees.ts",
-     "packages/storage/src/candidate-staging.ts",
      "packages/storage/src/context-files.ts",
      "packages/storage/src/context-snapshot.ts",
      "packages/storage/src/context-stream.ts",
@@ -677,6 +679,7 @@
      "packages/storage/src/directory.ts",
      "packages/storage/src/durable-fs.ts",
      "packages/storage/src/execution-journal.ts",
+     "packages/storage/src/execution-staging.ts",
      "packages/storage/src/file-digest.ts",
      "packages/storage/src/immutable-file.ts",
      "packages/storage/src/mail-notices.ts",
@@ -720,8 +723,8 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 34,
-   "K1-codecs -> K0-values": 67,
-   "K1-codecs -> K1-codecs": 27,
+   "K1-codecs -> K0-values": 68,
+   "K1-codecs -> K1-codecs": 28,
    "K2-mechanisms -> K0-values": 131,
    "K2-mechanisms -> K1-codecs": 15,
    "K2-mechanisms -> K2-mechanisms": 168,
@@ -1440,6 +1443,11 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/protocol/src/mac-developer-tools.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/protocol/src/methods.ts",
     "to": "packages/domain/src/identifiers.ts",
     "kind": "runtime"
@@ -1635,11 +1643,6 @@
     "kind": "runtime"
    },
    {
-    "from": "packages/storage/src/candidate-staging.ts",
-    "to": "packages/domain/src/errors.ts",
-    "kind": "runtime"
-   },
-   {
     "from": "packages/storage/src/context-files.ts",
     "to": "packages/domain/src/canonical-json.ts",
     "kind": "runtime"
@@ -1752,6 +1755,11 @@
    {
     "from": "packages/storage/src/execution-journal.ts",
     "to": "packages/protocol/src/persisted-formats.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-staging.ts",
+    "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
    {
@@ -2298,7 +2306,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 180
+   "files": 181
   },
   {
    "index": 2,
@@ -2349,7 +2357,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 152
+   "files": 153
   },
   {
    "index": 5,
@@ -2372,23 +2380,23 @@
    "files": 83
   }
  ],
- "files": 511,
- "runtimeEdges": 1839,
- "typeOnlyEdges": 777,
+ "files": 513,
+ "runtimeEdges": 1852,
+ "typeOnlyEdges": 781,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 467,
+  "L1-kernel -> L1-kernel": 469,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 262,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 388,
+  "L4-orchestration -> L1-kernel": 394,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
-  "L4-orchestration -> L4-orchestration": 186,
-  "L5-entry -> L1-kernel": 154,
+  "L4-orchestration -> L4-orchestration": 188,
+  "L5-entry -> L1-kernel": 155,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 102,
+  "L5-entry -> L4-orchestration": 104,
   "L5-entry -> L5-entry": 120
  },
  "upwardTypeOnlyEdges": [
@@ -2400,7 +2408,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 246,
+  "packages/domain/src/errors.ts": 247,
   "packages/domain/src/identifiers.ts": 85,
   "packages/native/src/cleanup.ts": 43,
   "packages/storage/src/directory.ts": 40,
@@ -2417,7 +2425,7 @@
   "packages/process/src/async.ts": 18
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 39,
+  "apps/oma/src/entry/broker.ts": 40,
   "packages/mail/src/index.ts": 22,
   "apps/oma/src/runtime/client-runtime.ts": 21,
   "apps/oma/src/entry/oma-society.ts": 20,
@@ -2426,12 +2434,12 @@
   "packages/git/src/context-repository.ts": 18,
   "apps/oma/src/runner.ts": 17,
   "packages/engine/src/interactive.ts": 17,
+  "apps/oma/src/entry/runner.ts": 16,
   "apps/oma/src/runtime/provision.ts": 16,
   "packages/extension/src/index.ts": 15,
   "packages/git/src/context.ts": 15,
   "apps/oma/src/broker/mail-effects.ts": 14,
-  "apps/oma/src/entry/oma.ts": 14,
-  "apps/oma/src/entry/runner.ts": 14
+  "apps/oma/src/entry/oma.ts": 14
  },
  "external": {
   "@earendil-works/pi-ai": 2,
@@ -2452,7 +2460,7 @@
   "node:module": 5,
   "node:net": 23,
   "node:os": 12,
-  "node:path": 138,
+  "node:path": 137,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,

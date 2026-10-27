@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./mac-developer-tools": {
+      "types": "./dist/mac-developer-tools.d.ts",
+      "default": "./dist/mac-developer-tools.js"
+    },
     "./alarm": {
       "types": "./dist/alarm.d.ts",
       "default": "./dist/alarm.js"

@@ -1,5 +1,6 @@
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
 import { residentEngineEffects } from "./engine/resident-effects.js";
+import type { ResidentEngineEffects } from "@oma/engine/ports";
 // RUN-001/BATCH-001: runner policy is separate from transport mechanics.
 // A prepared batch remains durable until a pinned Pi boundary receipt completes it.
 import { join } from "node:path";
@@ -113,6 +114,7 @@ export class RunnerModule {
     private readonly limits?: ProtocolLimits,
     readonly profile?: RunnerProfile,
     private readonly control?: Socket,
+    private readonly engineEffects: ResidentEngineEffects = residentEngineEffects,
   ) {
     if (!/^[0-9a-f]{32}$/.test(invocationId)) throw new TypeError("runner requires an explicit execution identity");
     this.channel = createBrokerChannel(limits as ChannelLimits | undefined);
@@ -249,7 +251,7 @@ export class RunnerModule {
       sessions: sessionDir,
     };
     const confinement = this.confinement(directories, piArgs, inference, egress);
-    return new PiAdapter(residentEngineEffects, {
+    return new PiAdapter(this.engineEffects, {
       actor: this.agent,
       society,
       limits: this.limits,
@@ -323,7 +325,7 @@ export class RunnerModule {
       runRoot: this.paths.runRoot,
       limits: this.limits,
     };
-    host.pi = residentEngineEffects.sandbox.pathView(host, this.lease, directories, {
+    host.pi = this.engineEffects.sandbox.pathView(host, this.lease, directories, {
       ...(inference === undefined ? {} : { inference: inference.socketHostPath }),
       ...(egress === undefined ? {} : { egress: egress.socketHostPath }),
     }).map(entry);
