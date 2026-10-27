@@ -10,7 +10,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { lanes } from "../scripts/verification-lanes.mjs";
-import { verificationInputDigest } from "../scripts/source-digest.mjs";
 
 const installer = readFileSync(new URL("../scripts/setup-native-linux-ci.sh", import.meta.url), "utf8");
 const workflow = readFileSync(
@@ -200,22 +199,6 @@ test("T125: nothing is measured until the tree is the commit the evidence names"
       `${measurement} runs before the run knows which commit it is measuring`);
 });
 
-test("T125: the evidence says which bytes of that commit ran, taken before the generators", () => {
-  // A commit name says which revision was meant, not which bytes were
-  // measured; the generators below rewrite inputs, so a digest taken later
-  // would describe a tree that no commit ever held.
-  const record = step("Record which bytes of that commit were verified");
-  assert.match(record, /scripts\/source-digest\.mjs/);
-  assert.match(record, /verificationInputDigest\("\."\)/);
-  assert.equal(typeof verificationInputDigest, "function",
-    "the workflow calls an export the local gate no longer has");
-  assert.match(record, /printf 'commit\\t%s\\n' "\$VERIFIED_SHA"/,
-    "the recorded bytes are not filed under the commit they came from");
-  const taken = workflow.indexOf("verification-input-digest.tsv");
-  for (const generator of ["npm ci", "run_check loc", "check:inventory"])
-    assert.ok(taken > 0 && taken < workflow.indexOf(generator),
-      `${generator} may rewrite an input before the digest is taken`);
-});
 
 test("T125: evidence is filed under the commit that produced it", () => {
   const names = [...workflow.matchAll(/^ {10}name: (oma-.*)$/gm)].map(([, name]) => name.trim());

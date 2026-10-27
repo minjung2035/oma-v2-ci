@@ -10,9 +10,9 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, HEAD `3dc66957` + 후속 WIP |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 공개 입력 `9c95aaaac95d6e17fbfb213bd0d0ec39c8f72ca6` |
-| 현재 변경 | 진단·독립 설치 수리는 commit했다. DR63 status cutover, 손실 없는 metadata 관측 후보, literal-root loader 수리와 두 temp-alias smoke 수리는 WIP다. README·WATCHDOG.yml 사용자 변경은 제외·보존했다 |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, checkpoint parent `1237aad6` + 후속 수리 |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 관측 입력 `caa779abf7ac208642826d8a5303d27d928a08d4` |
+| 현재 변경 | CI에서 DR63 storage 두 파일의 commit 누락을 발견했다. 이 두 파일·pre-install source binding·build fixture 의존성·Node page-size sysctl 수리를 통합한다. README·WATCHDOG.yml 사용자 변경은 제외·보존한다 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
 | 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
@@ -38,19 +38,21 @@
 - Seatbelt kept-FD 실제 오류는 `Seatbelt target exec: Bad file descriptor`; 다른 helper/worker/setup 실패도 별도다. generic timeout으로 합치지 않는다.
 - 파일 후보 배제 근거: `/home/dev/oma-audit-artifacts/native-2026-10-27-file-binding-feasibility/audit.json`. 새 CI 관측은 그 당시 NOT_RUN 표기보다 최신이다.
 
-직접 회수한 최신 Native run은 `40580105329`다. Architecture `40577594148`는 설치→source binding 성공을 확인했으며 전체 완료로 기록하지 않았다. 이전 실패도 보존한다. 원시는
-`/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`가 소유한다.
-nightly.link의 run/name 경로가 cached404이면 같은 URL을 반복하지 않고 공개 GitHub
-`actions/runs/<run>/artifacts`의 ID·digest를 얻어 `nightly.link/.../actions/artifacts/<id>.zip`로 받는다.
-회수한 Mac26 runtime/gates·Mac15 runtime·Ubuntu ZIP의 SHA256은 API digest와 일치했다.
+직접 회수한 최신 Native run은 `40591092710`이며 Mac 두 버전의 실제 C target FD control은
+통과했지만 Node 초기화와 root typed build는 실패했다. Architecture `40577594148`의
+전체 결과도 회수했으며 PASS로 기록하지 않는다. 원시·입력별 결과는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`와
+[진행 기록](implementation/native-transition.md)이 소유한다. 공개 API의 artifact ID·digest를
+얻어 immutable nightly.link ZIP으로 받았고, 회수한 ZIP의 SHA256은 API digest와 일치했다.
 
 ## 재개 요청을 받으면
 
 1. 위 입력과 현재 변경을 대조한다. docs-only 개정과 기존 구현 WIP를 섞어 새 PASS로 기록하지 않는다.
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
-3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치 경로는 통과했다. 후속 Mac26/15 전체 독립 설치는 각각25/27이며 git/native의 temp alias 두 건을 고쳤다. 상세 입력별 수치와 Linux/root-mapped proof 구분은 [최신 진행 기록](implementation/native-transition.md)에 있다.
-4. empty ACL의 NO_INHERIT flag는 실제 저장돼 있었지만 lstatx가 놓쳤다. 공개 getattrlist 관측으로 바꾼 후보를 실제 Mac에서 확인한다. SIGABRT는 target의 main 이전 libignition에서 발생했고 literal-root 읽기 예외를 upstream과 대조해 추가했다. 새 SDK FD control은 통과했으나 완성된 Seatbelt target 실행은 다음 CI로 증명해야 한다. DR63 status는 Linux 실제620개 게시와 latency/shutdown 회귀가 통과했다.
+3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치와 C target의 FD pruning·same-PID handoff는 확인했다. SDK libproc는 private·변경 가능하므로 지원 OS별 실제 회귀를 유지한다.
+4. root typed build 실패는 DR63 storage 두 파일을 commit에서 빠뜨린 데서 발생했다. local dist를 근거로 clean checkout 성공을 추론하지 않는다. metadata getattrlist와 temp-alias 수리의 Mac common/packed 실행은 그 build 실패로 미확인이다.
+5. literal-root 예외 뒤 C target은 main에 도달했다. Node는 다른 allocator overflow로 중단됐고 libc→XNU numeric HW_PAGESIZE가 `hw.pagesize_compat`임을 추적해 exact read-only 항목을 추가했다. 실제 Node 성공은 다음 CI로 확인한다. source binding은 compiler 분석 상수를 pure data module로 분리해 npm ci 이전으로 복구했다.
    `audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU 정의40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exact exec binding·expected-Broker는 여전히 미해결이다.
-5. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
+6. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
 상세 파일별 위치와 이전 조사 전문은 보관 인계에 있다. 이미 실패한 전제를 반복 조사하지 말고 달라진 입력 또는 새로운 반례 질문을 명시한다.

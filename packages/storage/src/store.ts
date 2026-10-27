@@ -438,7 +438,7 @@ export class Store implements StoreQueries, StoreWrites {
   getBatch(id: string): BatchRow | null { return this.reader.batch(id); }
   preparedBatches(agent: Actor): BatchRow[] { return this.reader.preparedBatches(agent); }
   /** WP23.03: display projection only; see LedgerReader.pendingWorkRows. */
-  pendingWorkRows(): PendingWorkRows { return this.reader.pendingWorkRows(); }
+  pendingWorkRows(): Promise<PendingWorkRows> { return this.reader.pendingWorkRows(); }
   linkDeliveriesToBatch(batchId: string, messages: MessageId[]): void { this.transitions.linkDeliveriesToBatch(batchId, messages); }
   /** DR9: the prepared batches a run at `incarnation` may present -- every
    * prepared batch created no later than that run, since a run inherits all of

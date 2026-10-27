@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, assertSourceDigests, measureWithCloc, writeSourceDigests } from "../scripts/production-inventory.mjs";
 import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles, verificationSourceDigests } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
@@ -284,6 +285,27 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
     assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
     f.put("implementation/new-gate-input.json", "new input\n");
     assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
+  } finally { f.close(); }
+});
+
+test("R38: a clean checkout can bind input bytes before dependency installation", () => {
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, "{}\n");
+    }
+    for (const script of ["source-digest.mjs", "traceability.mjs", "document-integrity.mjs", "vendored-source-roots.mjs"])
+      f.put(`scripts/${script}`, readFileSync(join(REPO, "scripts", script)));
+    const measure = () => JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e",
+      'import { verificationInputDigest } from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()));',
+    ], { cwd: f.root, encoding: "utf8" }));
+    const before = measure();
+    f.put("README.md", "# Changed after binding\n");
+    const after = measure();
+    assert.equal(after.files, before.files);
+    assert.notEqual(after.digest, before.digest, "post-binding source changes must invalidate the recorded bytes");
   } finally { f.close(); }
 });
 

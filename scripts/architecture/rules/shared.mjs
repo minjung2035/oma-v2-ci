@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { VENDORED_EXTENSION_DIRS } from "../../vendored-source-roots.mjs";
 
 export const slash = value => value.split(path.sep).join("/");
 export const absolute = (root, relative) => path.resolve(root, relative);
@@ -9,13 +10,6 @@ export const readJson = (root, relative) => JSON.parse(fs.readFileSync(absolute(
 export const readText = (root, relative) => fs.readFileSync(absolute(root, relative), "utf8");
 export const finding = (rule, file, reason) => ({ rule, file, reason });
 
-/** Vendored bundled-extension payloads are byte-pinned upstream snapshots
- * (packages/tool-NAME/src/vendor/PKG/: upstream sources, generated runtime and the
- * hash-manifest), not authored OMA code. Every authored-code rule -- state
- * tree ownership, fence propagation, product vocabulary, the extension's own
- * closure -- judges files it can review, and a vendored file's review is the
- * recorded digest, so the tree is data to these rules and never enumerated. */
-export const VENDORED_EXTENSION_DIRS = Object.freeze(["tool-lsp", "tool-hashline", "tool-web", "tool-mcp"].map(name => `packages/${name}/src/vendor`));
 export const isVendoredExtension = file => VENDORED_EXTENSION_DIRS.some(dir => file.startsWith(`${dir}/`));
 
 export function filesUnder(root, relative, extension = ".ts") {

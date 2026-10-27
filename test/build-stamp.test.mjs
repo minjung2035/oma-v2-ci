@@ -90,7 +90,7 @@ function fixture(t) {
     writeFileSync(join(root, name), content);
   }
   mkdirSync(join(root, "scripts"));
-  for (const script of ["build.mjs", "check-package.mjs", "build-workspaces.mjs", "check-modules.mjs", "workspace-assets.mjs", "workspace-build-cache.mjs"])
+  for (const script of ["build.mjs", "check-package.mjs", "build-workspaces.mjs", "check-modules.mjs", "workspace-assets.mjs", "workspace-executables.mjs", "workspace-build-cache.mjs"])
     writeFileSync(join(root, "scripts", script), readFileSync(join(repo, "scripts", script)));
   mkdirSync(join(root, "node_modules/@oma"), { recursive: true });
   symlinkSync(join(repo, "node_modules/typescript"), join(root, "node_modules/typescript"), "dir");

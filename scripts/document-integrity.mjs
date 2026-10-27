@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { VENDORED_EXTENSION_DIRS } from "./architecture/rules/shared.mjs";
+import { VENDORED_EXTENSION_DIRS } from "./vendored-source-roots.mjs";
 /** PRIORITY-0 "문서와 식별자에도 같은 원칙", P0-7: the durable boundaries of the
  * documents are checked by machine. A requirement ID or an acceptance number,
  * once given, has one meaning (P0-1); acceptance rows live in the matrix that
