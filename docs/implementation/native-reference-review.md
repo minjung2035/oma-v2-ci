@@ -330,3 +330,23 @@ reader의 schema·이미지/encoding 처리·offset/limit·출력을 유지한�
 등록 API와 pinned 구현을 사용하며 private extension registry를 읽거나 바꾸지 않는다.
 역변환/별칭은 TS 정책과 실제 일반 파일 read의 증거이며 Mac kernel 사실의 mock이 아니다.
 `/home/dev/oma-audit-artifacts/native-2026-10-27-path-view/`가 원시 결과를 소유한다.
+
+## Worker recipe와 고정 Node bootstrap 비교
+
+[Node26 CLI source](https://github.com/nodejs/node/blob/v26.0.0/doc/api/cli.md#node_optionsoptions)의
+NODE_OPTIONS grammar와 실제 --import 허용을 대조했다. OMA의 C launcher는 Node 환경을
+평가하지 않으므로 sandbox_init 뒤 exec한 target만 승인된 preload를 읽는다. 일반 Node option
+허용으로 풀지 않고, trusted read-only 설치 파일의 pathToFileURL 결과와 정확히 같은 한 값만
+허용한다. DYLD/LD·NODE_PATH·shell startup/SSH secret은 계속 거절한다. actual Darwin case가
+preload에서 실제 host canary read를 거절하는지 확인하도록 준비했고 현재는 NOT_RUN이다.
+
+실제 Linux Node26에서 백슬래시가 포함된 ESM entry가 실패했다. 고정 [ESM resolver source](https://github.com/nodejs/node/blob/v26.0.0/lib/internal/modules/esm/resolve.js#L225)는
+encoded separator를 module 경로로 받지 않는다. unsupported 설치/entry를 미리 거절하며
+argv의 백슬래시와 filesystem data 경로까지 같은 실패라고 일반화하지 않는다. Node loader를
+대체하거나 사용자 경로/accepted bytes를 수정하지 않았다. 초기 실패와 수정 뒤 실제 argv
+시험, 공통 Worker/root/env 정책과 Linux 실행 결과는
+`/home/dev/oma-audit-artifacts/native-2026-10-27-worker-recipe/`가 소유한다.
+
+공통 role/root/환경 정책은 TS에 있고 platform은 문법과 primitive를 제공한다. App의 기존
+Worker spawn owner를 사용하고 Mac native guard는 유지하며 새로운 fence exemption은 없다.
+실행 recipe가 있다는 사실은 전체 scope/file binding/auth qualification의 증거가 아니다.

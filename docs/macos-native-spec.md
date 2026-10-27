@@ -750,3 +750,29 @@ source별 결과는 validation을 따른다.
 run_darwin=true에서만 선택한다. 테스트와 artifact 수집은 그대로 준비하며 지금 dispatch하지
 않는다. workflow 조건은 GitHub의 [boolean inputs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs)와
 [fromJSON matrix](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#fromjson) 문법을 사용한다.
+
+### 14.18 공통 Worker 정책과 Mac recipe 조립 — 2026-10-27
+
+actor별 root와 decoded lease/설치 grammar를 공통 protocol 검증기로 분리하고, directory access
+표를 domain에서 Linux bind·Mac Seatbelt·PathView에 함께 공급한다. namespace/Seatbelt 문법만
+OS adapter가 맡으며 Mac은 rootfs를 만들거나 Linux 가상 경로를 쓰지 않는다. 기존 durable
+설정의 rootfs 필드를 optional로 풀거나 저장 bytes를 바꾸지 않았으며 §11의 형식 경계는 별도다.
+
+Mac Worker recipe는 workspace/home/session만 writable, 명시 read-only 설치·package·공유
+roots와 hidden deny, broker의 exact Mach 이름·두 stream endpoint와 좁은 env를 구성한다.
+actor/limits와 HOME/PATH/Node/CLI는 extra env 뒤에 고정한다. 모델용 oma는 현재 view의 명시
+OMA_NODE/OMA_CLI를 shell 평가 없이 argv로 전달한다. 읽기 전용 설치 안의 정확한 client
+preload만 NODE_OPTIONS로 허용하며 다른 Node option·NODE_PATH·native loader/SSH/provider
+secret은 거절한다. C launcher는 Node 옵션을 해석하지 않고 sandbox_init 뒤 target을 exec한다.
+실제 Darwin에서 preload의 host-read 거절을 관측할 case를 추가했으며 현재 NOT_RUN이다.
+
+App의 Mac residentPlan/spawn에 framed private inputs를 연결했다. spawn은 기존 native guard로
+효과 전에 거절하며, 기존 process owner·바깥 scope fence를 대체하거나 host state FD를 Worker에
+전달하지 않는다. scope identity/전체 사망·file pin/exact exec·인증 qualification은 여전히 OPEN이다.
+
+실제 Node26 ESM의 백슬래시 entry 경로 거절을 발견해 설치/entry profile을 사전에 거절한다.
+argv의 백슬래시·공백·Unicode·quote·shell 문자와 filesystem data의 literal 경로는 별도로 검사한다.
+경로를 정규화해 기존 accepted path를 고쳐 쓰지 않는다. Linux 관련111/111과 contract mutation
+7/7을 고정 입력에서 확인했고 Mac은26case×3회=78회 미실행이다. raw/정확한 입력별 범위는
+validation이 소유한다. 이 후속은 Worker source 조립이며 check/quarantine 목적별 Mac 조립,
+형식 version 경계와 최종 양 OS qualification을 완료한 것이 아니다.

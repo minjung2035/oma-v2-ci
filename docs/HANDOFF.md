@@ -1,5 +1,27 @@
 # OMA v2 — 현재 인계
 
+## 현재: 공통 Worker 정책과 Mac 실행 recipe 연결
+
+actor별 root/lease/설치 grammar를 공통 protocol 검증기로 옮겼고, 읽기/쓰기 directory 표를
+Linux bind·Mac Seatbelt·PathView가 같이 사용한다. Mac Worker는 자기 workspace/home/session만
+쓰며 설치/공유 roots는 read-only, hidden paths는 deny, broker Mach 이름과 relay/egress Unix
+endpoint만 명시한다. 표준 env와 모델용 oma의 Node/CLI 경로도 현재 view에서 만든다. Mac
+residentPlan/spawn 조립에 연결했지만 spawn은 기존 native guard로 여전히 차단된다.
+
+client preload는 읽기 전용 설치 파일의 정확한 NODE_OPTIONS 한 값만 허용한다. native loader
+주입·NODE_PATH·ambient provider/SSH secret은 계속 거절한다. 실제 Darwin preload가 sandbox
+적용 뒤 host read를 거절하는 독립 case를 추가해 OS별26×3=78회를 준비했다. 실제 Mac은
+NOT_RUN이고 수동 CI를 dispatch하지 않았다. check/quarantine의 Mac 목적별 조립과 전체
+scope/file binding/auth, 형식 경계·최종 qualification은 계속 남는다.
+
+고정15631개 input `1ee75abc...` 전후와 보호4개 SHA 동일에서 관련111/111·contract mutation7/7
+PASS·fail/cancel/skip/todo0이다. 실제 Linux Worker 환경/격리/scope·setsid 후손을 포함하며
+Mac kernel proof는 아니다. full build와 strict types도 통과했고 최종 문서 입력의 전체 구조
+검사는 별도로 기록한다. 초기 compile 타입 widening과 Node ESM 백슬래시 경로 실패, 새 codec
+semantic owner 누락 finding도 raw에 보존했다. Node가 거절하는 설치/ESM entry 경로는 미리
+거절하며 경로나 과거 accepted bytes를 고쳐 쓰지 않는다. 원본은 validation과
+`/home/dev/oma-audit-artifacts/native-2026-10-27-worker-recipe/`가 소유한다.
+
 ## 현재: 구현 후속과 실제 Darwin CI 검증 준비
 
 `a1cc3f9c`의 PathView 구현을 작업 브랜치에 push했다. 후속 CI 준비는 macos-26/15 각각

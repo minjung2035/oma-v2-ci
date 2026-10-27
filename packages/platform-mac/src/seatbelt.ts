@@ -4,7 +4,7 @@
  * SBPL syntax: Chromium's Mac sandbox and sandbox-runtime 98a401. */
 import { snapshotCommand, type CommandSpec } from "@oma/process/command";
 import { StoreError } from "@oma/domain/errors";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export interface SeatbeltPath { readonly path: string; readonly kind: "file" | "directory" }
 /** Transient trusted launch input, never a model setting or durable grant.
@@ -18,6 +18,9 @@ export interface SeatbeltPolicy {
   /** Only the particular OMA broker rendezvous may be added to OS services. */
   readonly machServices: readonly string[];
   readonly environmentKeys: readonly string[];
+  /** Exact trusted read-only preload. The C launcher interprets no Node
+   * environment; this import executes only after sandbox_init and execve. */
+  readonly nodePreload?: string;
 }
 const SYSTEM_READS = ["/System/Library", "/usr/lib", "/usr/share", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
@@ -89,10 +92,18 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
   path(command.executable); path(launcher);
   if (!Array.isArray(policy.environmentKeys) || policy.environmentKeys.some(key => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)))
     refused("Seatbelt environment allowlist is invalid");
+  let nodeOptions: string | undefined;
+  if (policy.nodePreload !== undefined) {
+    const preload = path(policy.nodePreload);
+    if (preload.includes("\\") || !policy.readable.some(entry => under(preload, entry)) || policy.writable.some(entry => under(preload, entry)) ||
+        policy.denied.some(entry => under(preload, entry))) refused("Seatbelt Node preload requires a trusted read-only root");
+    nodeOptions = `--import=${pathToFileURL(preload).href}`;
+  }
   for (const [key, value] of Object.entries(command.env)) {
     if (value === undefined) continue;
     if (!policy.environmentKeys.includes(key) || /^(?:DYLD_|LD_|__XPC_)/.test(key) ||
-        ["ENV", "BASH_ENV", "SHELLOPTS", "NODE_OPTIONS", "NODE_PATH", "SSH_AUTH_SOCK"].includes(key))
+        ["ENV", "BASH_ENV", "SHELLOPTS", "NODE_PATH", "SSH_AUTH_SOCK"].includes(key) ||
+        key === "NODE_OPTIONS" && value !== nodeOptions)
       refused("Seatbelt command environment contains an unapproved entry");
   }
   for (const key of ["HOME", "TMPDIR"] as const) {

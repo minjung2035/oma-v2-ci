@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
 import { prepareSeatbelt, seatbeltProfile } from "@oma/platform-mac/seatbelt";
 
 const dir = path => ({ path, kind: "directory" });
@@ -54,6 +55,17 @@ test("Seatbelt policy confines IPC names and keeps nested denial after its enclo
   assert.ok(!profile.includes("(allow network*)"));
   assert.ok(!profile.includes("(allow mach-register"));
   assert.ok(!profile.includes("(allow ipc-posix"));
+});
+test("Seatbelt trusted Node preload is exact, read-only and interpreted only by the sandboxed target", () => {
+  const command = source(), selected = policy(), preload = '/oma/shared/한 글자 "preload.mjs';
+  selected.environmentKeys.push('NODE_OPTIONS'); selected.nodePreload = preload;
+  command.env.NODE_OPTIONS = `--import=${pathToFileURL(preload).href}`;
+  const prepared = prepareSeatbelt(command, selected);
+  assert.equal(prepared.command.env.NODE_OPTIONS, command.env.NODE_OPTIONS);
+  for (const options of ['--require=/human/x.js', command.env.NODE_OPTIONS + ' --inspect=0.0.0.0:9229', '--import=file:///other.mjs'])
+    assert.throws(() => prepareSeatbelt({ ...command, env: { ...command.env, NODE_OPTIONS: options } }, selected), { code: 'UNSUPPORTED_PROFILE' });
+  for (const nodePreload of ['/human/x.js', '/oma/private/x.js', '/oma/private/credential/x.js'])
+    assert.throws(() => prepareSeatbelt(command, { ...selected, nodePreload }), { code: 'UNSUPPORTED_PROFILE' });
 });
 test("Seatbelt profile paths remain literals and aggregate profiles never enter argv", () => {
   const selected = policy();

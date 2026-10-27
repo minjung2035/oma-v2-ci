@@ -372,12 +372,14 @@ packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/keychain-client.ts
 packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements
+packages/platform-mac/src/mach-address.ts
 packages/platform-mac/src/mach-poll.ts
 packages/platform-mac/src/mach-stream.ts
 packages/platform-mac/src/mach-transport.ts
 packages/platform-mac/src/native-assets.ts
 packages/platform-mac/src/native-channel.ts
 packages/platform-mac/src/path-view.ts
+packages/platform-mac/src/resident-sandbox.ts
 packages/platform-mac/src/seatbelt.ts
 packages/platform-mac/src/seatbelt/main.c
 packages/process/package.json
@@ -422,6 +424,7 @@ packages/protocol/src/receipt-codec.ts
 packages/protocol/src/receipt-projector.ts
 packages/protocol/src/receipts.ts
 packages/protocol/src/request-codec.ts
+packages/protocol/src/resident-context.ts
 packages/protocol/src/response-codec.ts
 packages/protocol/src/run-lease.ts
 packages/protocol/src/session-handoff.ts

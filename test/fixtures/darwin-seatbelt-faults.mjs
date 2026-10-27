@@ -8,7 +8,7 @@ import { createServer, connect } from "node:net";
 import { finished } from "node:stream/promises";
 import { once } from "node:events";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { prepareSeatbelt, bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
 import { controlPipe } from "@oma/native/control-socket";
@@ -109,6 +109,22 @@ async function argvAndEnvironment() {
   assert.equal((await good(command, policy)).trim(), "verified");
   return { literalArgv: true, ambientEnvAbsent: true, independentStdin: true, directChildClosed: true };
 }
+async function trustedPreload() {
+  const installation = join(root, 'trusted readonly " 설치'), preload = join(installation, 'preload.mjs'), secret = join(root, 'host-secret');
+  mkdirSync(installation); writeFileSync(secret, 'fixture host canary');
+  writeFileSync(join(installation, 'package.json'), '{"type":"module"}');
+  writeFileSync(preload, `import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs';
+    assert.throws(()=>readFileSync(${JSON.stringify(secret)}),e=>['EACCES','EPERM'].includes(e.code));
+    globalThis[Symbol.for('oma.fixture.preload')]='sandbox already applied';`);
+  assert.equal(readFileSync(secret, 'utf8'), 'fixture host canary');
+  const selected = { ...policy, readable: [{ path: installation, kind: 'directory' }],
+    environmentKeys: [...policy.environmentKeys, 'NODE_OPTIONS'], nodePreload: preload };
+  const command = { ...target, env: { ...env, NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` },
+    argv: ['--input-type=module','-e',`import assert from 'node:assert/strict';
+      assert.equal(globalThis[Symbol.for('oma.fixture.preload')],'sandbox already applied'); console.log('verified');`] };
+  assert.equal((await good(command, selected)).trim(), 'verified');
+  return { readonlyPreloadExecuted: true, preloadHostReadDenied: true, ownerReadPositive: true, directChildClosed: true };
+}
 async function fdClosure() {
   const actorSource = fileURLToPath(new URL("./darwin-fd-observer.c", import.meta.url)), actor = join(work, "fd-observer");
   const helperSource = readFileSync(join(dirname(bundledSeatbeltHelper()), "main.c"), "utf8");
@@ -169,6 +185,7 @@ async function ipcDenial() {
 let observation;
 if (mode?.startsWith("seatbelt-profile-")) observation = await framing();
 else if (mode === "seatbelt-argv-env") observation = await argvAndEnvironment();
+else if (mode === "seatbelt-trusted-preload") observation = await trustedPreload();
 else if (mode === "seatbelt-fd-close") observation = await fdClosure();
 else if (mode === "seatbelt-ipc-denial") observation = await ipcDenial();
 else throw new Error(`unknown Seatbelt fault case ${mode}`);

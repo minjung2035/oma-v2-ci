@@ -9,6 +9,7 @@ export interface EngineStartEffects {
 export interface PiSpawnPlan {
   readonly command: string; readonly args: string[]; readonly cwd: string; readonly env: Record<string, string>;
   readonly input?: Uint8Array;
+  readonly privateInputs?: readonly { readonly fd: number; readonly bytes: Uint8Array }[];
 }
 export interface ResidentSandbox {
   pathView(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories, endpoints?: SandboxEndpoints): PathView;

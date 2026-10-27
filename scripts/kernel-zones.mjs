@@ -99,6 +99,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/protocol/src/request-codec.ts",
       "packages/protocol/src/response-codec.ts",
       "packages/protocol/src/run-lease.ts",
+      "packages/protocol/src/resident-context.ts",
     ],
   },
   {
@@ -256,6 +257,8 @@ const PURE_NATIVE_IMPORTS = Object.freeze({
   "packages/domain/src/paths.ts": ["node:path"],
   "packages/domain/src/durable.ts": ["node:path"],
   "packages/protocol/src/run-lease.ts": ["node:path"],
+  // Actor/root grammar only: join trusted paths; no filesystem observation.
+  "packages/protocol/src/resident-context.ts": ["node:path"],
   "packages/protocol/src/frame.ts": ["node:util"],
 });
 export function kernelExternalViolation(file, specifier, importedNames = []) {

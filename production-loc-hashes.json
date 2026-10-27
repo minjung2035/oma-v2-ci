@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "115cb55203343e42c7bdc36bdffc9ddbf72c09da80d8ea8661a1d8eb535a71e3",
+  "manifest": "a70c03d930cf722315153c236e62b25ef9a88f29ccf797b1475a61217136ced0",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -224,7 +224,7 @@
     },
     {
       "path": "apps/oma/src/engine/resident-effects.ts",
-      "sha256": "658d6279ef5a1467f337977d98bd1f73522ff80a845843b80c09e9f1961541ad"
+      "sha256": "205f8d6b1ef915180926d00bd54c2a2cf699226fa007362b2dc0710a6fcd2c35"
     },
     {
       "path": "apps/oma/src/engine/settings-files.ts",
@@ -832,7 +832,7 @@
     },
     {
       "path": "packages/domain/src/resident-paths.ts",
-      "sha256": "fb6b16fd03a5407e3c98d5e906dcf394f041609c666cbfe65913cba4ca958aaa"
+      "sha256": "8a74e6210b31b1d6a6b863c11a3c8dc2508b7f97d4e26cb45d28dfdbea6a0b97"
     },
     {
       "path": "packages/domain/src/review-bounds.ts",
@@ -1084,7 +1084,7 @@
     },
     {
       "path": "packages/engine/src/ports.ts",
-      "sha256": "b56693b6f16c497a32cacab466a23fabe4394c84056cd8078ccd3debce4d34d1"
+      "sha256": "da67235f02cb376763b6be827fa10221ce95e7e2cd9f4d99b28d67554bcc436c"
     },
     {
       "path": "packages/engine/src/presentation.ts",
@@ -1472,7 +1472,7 @@
     },
     {
       "path": "packages/platform-linux/src/sandbox.ts",
-      "sha256": "8cb6e17f4274378c9492ef59753ebfe9237c638d7d1c3eddab11eb2af8aa7cc9"
+      "sha256": "c10e7081b85f772374241ce09fee47da76832b39a8b7042fda6a0a3532e9ef7f"
     },
     {
       "path": "packages/platform-linux/src/worker-spawn.ts",
@@ -1480,7 +1480,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "1fad7d4f3370296596973411c6237f0ee21ae5f75418e697444e51357381790f"
+      "sha256": "6d56b6c7924c3c4081f59722d14169da7afc097a1018dbf5d4ef7a723ed2122c"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1499,6 +1499,10 @@
       "sha256": "442c7c8b33c09131372488df6c33a797e522886a6e4b653fcb51f0a1628b3ff4"
     },
     {
+      "path": "packages/platform-mac/src/mach-address.ts",
+      "sha256": "5f3f44cbc57ab43ff97fedeb77321f9fdf40edddf6cf6691f9244e6592129088"
+    },
+    {
       "path": "packages/platform-mac/src/mach-poll.ts",
       "sha256": "108a0a8596707b8d09c711ceea3b8f6765e8273b2ba7dae2e6705d36400c3b8f"
     },
@@ -1508,7 +1512,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "3918a5cad1e0510ee39d45bb2e75f0e9061ef69f2f1a6e24d0e77a19f4ba3222"
+      "sha256": "e658d591138045ed6431e7ec211ade3e139f64b70fd908f228fe921000048ced"
     },
     {
       "path": "packages/platform-mac/src/native-assets.ts",
@@ -1523,8 +1527,12 @@
       "sha256": "9e95f3efdbd763a641c68bef386a4abe30abfd6e06252de784a96e3b62d521a0"
     },
     {
+      "path": "packages/platform-mac/src/resident-sandbox.ts",
+      "sha256": "a29ed17a92111ad4b389afd4acb9dcb5b5b86b80a9838eab2a27f8b0b9c8ad76"
+    },
+    {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "166e1c1f716efd52c238ea48dfd70b158ba200ce836d22582ccbe40c7f1cc923"
+      "sha256": "373665d868dc06fcd44c77650da10f795efe849cd8336399f43ebacc28886f12"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/main.c",
@@ -1612,7 +1620,7 @@
     },
     {
       "path": "packages/protocol/package.json",
-      "sha256": "4e6961fa13c628b5c3bd6c8e89768a7d5e6fe712c28552b88f9a148ed7a5b927"
+      "sha256": "71ef48b7ef0871ea72c91ce8b0e37e8f3405afd5b48c91355f0eb102a3b19864"
     },
     {
       "path": "packages/protocol/src/alarm.ts",
@@ -1697,6 +1705,10 @@
     {
       "path": "packages/protocol/src/request-codec.ts",
       "sha256": "73ad3f33ff2a81e99c42bf6a98a35957f91ec5061bfb4a5d11b64f8323362986"
+    },
+    {
+      "path": "packages/protocol/src/resident-context.ts",
+      "sha256": "92e4ac3c28137ecfc519a0956c601d969237faa5c32dc182221dd20e9790fc80"
     },
     {
       "path": "packages/protocol/src/response-codec.ts",

@@ -5,8 +5,7 @@
  */
 import { EventEmitter } from "node:events";
 import type { Duplex } from "node:stream";
-import { createHash, randomBytes } from "node:crypto";
-import { isAbsolute } from "node:path";
+import { randomBytes } from "node:crypto";
 import { StoreError } from "@oma/domain/errors";
 import { deadline } from "@oma/process/deadline";
 import type { PacketStream } from "@oma/process/packet-stream";
@@ -18,14 +17,10 @@ import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 import { bindMachSender, type MachPeerPin, type MachPeerBinding } from "./audit-peer.js";
 import { machStream } from "./mach-stream.js";
 import { machPoll } from "./mach-poll.js";
+import { machRendezvousName } from "./mach-address.js";
 
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104;
 const unavailable = (message: string): StoreError => new StoreError("BROKER_UNAVAILABLE", message);
-function serviceFor(path: string): string {
-  if (!isAbsolute(path) || path.includes("\0")) throw new StoreError("UNSUPPORTED_PROFILE", "Mach endpoint requires an absolute, NUL-free address");
-  // Discovery only: neither this public hash nor the nonce grants authority.
-  return `com.oma.rpc.${createHash("sha256").update(path).digest("hex")}`;
-}
 function duration(seconds: number): number {
   if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(seconds * 1000)) throw new RangeError("invalid Mach handshake deadline");
   return seconds * 1000;
@@ -36,7 +31,7 @@ type Packet = Extract<MachMessage, { kind: "data" }>;
  * handshake is pending. No bearer/PID from a body becomes peer evidence.
  */
 export function dialMachChannel(path: string, handshakeSeconds: number): { readonly socket: Duplex; readonly ready: Promise<void> } {
-  const name = serviceFor(path), ms = duration(handshakeSeconds), nonce = randomBytes(16);
+  const name = machRendezvousName(path), ms = duration(handshakeSeconds), nonce = randomBytes(16);
   const expires = performance.now() + ms;
   const service = lookupMachService(name);
   let local: ReturnType<typeof createMachEndpoint>;
@@ -124,7 +119,7 @@ class MachListener extends EventEmitter {
     if (this.started || this.closing) throw unavailable("Mach listener cannot bind twice");
     this.started = true;
     try {
-      this.receiver = listenMachService(serviceFor(path));
+      this.receiver = listenMachService(machRendezvousName(path));
       this.poll = machPoll(() => this.tick(), error => {
         this.poll?.close();
         if (error instanceof AggregateError) this.closeFailure ??= error;
@@ -256,8 +251,8 @@ export function createMachBrokerTransport(handshakeSeconds: number) {
       if (peer === undefined || peer.taken) return null;
       peer.taken = true; return peer.pin;
     },
-    assertEndpoint(path: string): void { serviceFor(path); },
-    prepareEndpoint(path: string): void { serviceFor(path); }, // Bootstrap check-in owns name exclusivity; no pathname is unlinked.
+    assertEndpoint(path: string): void { machRendezvousName(path); },
+    prepareEndpoint(path: string): void { machRendezvousName(path); }, // Bootstrap check-in owns name exclusivity; no pathname is unlinked.
     openListener(serve: (socket: Duplex) => void, maximum?: number) {
       if (maximum !== undefined && (!Number.isSafeInteger(maximum) || maximum < 1)) throw new RangeError("invalid Mach listener connection bound");
       const listener = new MachListener(handshakeSeconds, maximum, (endpoints, pin) => {

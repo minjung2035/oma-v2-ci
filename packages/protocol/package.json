@@ -107,6 +107,10 @@
     "./session-handoff": {
       "types": "./dist/session-handoff.d.ts",
       "default": "./dist/session-handoff.js"
+    },
+    "./resident-context": {
+      "types": "./dist/resident-context.d.ts",
+      "default": "./dist/resident-context.js"
     }
   },
   "scripts": {

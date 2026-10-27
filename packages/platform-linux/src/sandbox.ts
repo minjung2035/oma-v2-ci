@@ -5,9 +5,8 @@ import { realpathSync } from "node:fs";
 import type { RunLease, SandboxPlan } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-lease";
-import { validBatchViewLimits } from "@oma/protocol/batch-view";
-import { agentRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
-import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts } from "@oma/domain/resident-paths";
+import { assertResidentContext, assertSandboxInstallation } from "@oma/protocol/resident-context";
+import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts, residentDirectoryPolicy } from "@oma/domain/resident-paths";
 
 import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 
@@ -20,23 +19,6 @@ function setenvPairs(env: Readonly<Record<string, string>>): string[] {
       throw new StoreError("UNSUPPORTED_PROFILE", "confined environment name or value is invalid");
   return Object.entries(env).sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([key, value]) => ["--setenv", key, value]);
-}
-
-function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentDirectories): void {
-  validateSandboxHost(h);
-  if (!trustedAbsolutePath(h.stateRoot) || !trustedAbsolutePath(h.runRoot) || !validBatchViewLimits(h.limits))
-    throw new StoreError("UNSUPPORTED_PROFILE", "resident sandbox requires trusted roots and explicit batch view limits");
-  assertValidatedRunLease(lease, h.runRoot);
-  const expected: ResidentDirectories = {
-    workspace: workspacePathAt(h.stateRoot, lease.actor), home: join(agentRootPathAt(h.stateRoot, lease.actor), "home"),
-    archive: join(h.stateRoot, "mail", "archive"), workerArchive: join(h.stateRoot, "mail", "workers"),
-    selfMail: join(h.stateRoot, "mail", "inboxes", lease.actor),
-    view: runnerViewPathAt(h.stateRoot, lease.actor), world: join(h.stateRoot, "world"), projectGit: projectGitPathAt(h.stateRoot),
-    projectMirror: projectMirrorPathAt(h.stateRoot), sessions: runnerSessionDirPathAt(h.stateRoot, lease.actor),
-  };
-  for (const key of Object.keys(expected) as Array<keyof ResidentDirectories>)
-    if (!trustedAbsolutePath(dirs[key]) || dirs[key] !== expected[key])
-      throw new StoreError("AUTH_FAILED", `resident ${key} mount does not match the trusted actor root`);
 }
 
 /** The same mount source, named by the real directory it reaches rather than
@@ -62,7 +44,8 @@ function resolvedBindSource(path: string): string {
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},
   inferenceSocketHost?: string, egressSocketHost?: string): string[] {
-  requireResidentContext(h, lease, dirs);
+  validateSandboxHost(h);
+  assertResidentContext(h, lease, dirs);
   if (inferenceSocketHost !== undefined && !trustedAbsolutePath(inferenceSocketHost))
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
   if (egressSocketHost !== undefined && !trustedAbsolutePath(egressSocketHost))
@@ -88,14 +71,8 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     // DR25: only the package store -- package code and its package manager's
     // list -- never the engine home, which holds the Human's login.
     ...(h.packages === undefined ? [] : ["--ro-bind", h.packages, RESIDENT_PATHS.packages]),
-    "--bind", dirs.workspace, RESIDENT_PATHS.workspace, "--bind", dirs.home, RESIDENT_PATHS.home,
-    "--bind", dirs.sessions, RESIDENT_PATHS.sessions,
-    "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.workerArchive, RESIDENT_PATHS.workerArchive,
-    "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
-    "--ro-bind", dirs.view, RESIDENT_PATHS.view, "--ro-bind", dirs.world, RESIDENT_PATHS.world,
-    "--ro-bind", dirs.projectGit, RESIDENT_PATHS.projectGit,
-    // DR18 (D-8): there only once a start has refreshed it from the project.
-    "--ro-bind-try", dirs.projectMirror, RESIDENT_PATHS.projectMirror,
+    ...residentDirectoryPolicy(h, dirs).filter(root => root.name !== "libdir" && root.name !== "packages")
+      .flatMap(root => [root.writable ? "--bind" : root.optional ? "--ro-bind-try" : "--ro-bind", root.path, root.view]),
     // P0V-95/D03: a run root may name itself through /proc/<pid>/fd (a held
     // descriptor). bwrap resolves bind sources after unsharing its user
     // namespace, where another process's fd links are denied; the kernel
@@ -116,25 +93,17 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
 }
 
 export function validateSandboxHost(h: SandboxHost): void {
-  if (!trustedAbsolutePath(h.rootfs) || !trustedAbsolutePath(h.libdir) ||
-    !trustedAbsolutePath(h.node) || !trustedAbsolutePath(h.pi) || (h.packages !== undefined && !trustedAbsolutePath(h.packages)))
+  if (!trustedAbsolutePath(h.rootfs))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
-  if (h.hidden !== undefined && (!Array.isArray(h.hidden) || h.hidden.some(entry =>
-    typeof entry?.path !== "string" || entry.path.length === 0 || entry.path.startsWith("/") ||
-    entry.path.split("/").some((part: string) => part === "" || part === "." || part === "..") ||
-    (entry.kind !== "dir" && entry.kind !== "file"))))
-    throw new StoreError("UNSUPPORTED_PROFILE", "hidden installation paths must be plain relative paths");
+  assertSandboxInstallation(h);
   if (h.systemBinds !== undefined && (!Array.isArray(h.systemBinds) ||
     h.systemBinds.some(path => !SYSTEM_BIND_CANDIDATES.includes(path))))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox system mounts must be operating-system paths only");
-  if (!Array.isArray(h.piModeArgs) ||
-    h.piModeArgs.some(value => typeof value !== "string" || value.includes("\0")))
-    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox temporary bound or Pi argv is invalid");
 }
 export class SandboxModule {
   constructor(private readonly host: SandboxHost) { validateSandboxHost(host); }
   resident(lease: RunLease, dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {}): SandboxPlan {
-    requireResidentContext(this.host, lease, dirs);
+    assertResidentContext(this.host, lease, dirs);
     assertValidatedRunLease(lease, this.host.runRoot);
     const argv = residentArgv(this.host, lease, dirs, env);
     // `env` is empty on purpose: `--clearenv` means the child's environment is

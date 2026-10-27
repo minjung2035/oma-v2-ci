@@ -39,6 +39,14 @@
     "./mach-transport": {
       "types": "./dist/mach-transport.d.ts",
       "default": "./dist/mach-transport.js"
+    },
+    "./mach-address": {
+      "types": "./dist/mach-address.d.ts",
+      "default": "./dist/mach-address.js"
+    },
+    "./resident-sandbox": {
+      "types": "./dist/resident-sandbox.d.ts",
+      "default": "./dist/resident-sandbox.js"
     }
   },
   "scripts": {

@@ -357,12 +357,14 @@
   "packages/platform-linux/src/worker-spawn.ts",
   "packages/platform-mac/src/audit-peer.ts",
   "packages/platform-mac/src/keychain-client.ts",
+  "packages/platform-mac/src/mach-address.ts",
   "packages/platform-mac/src/mach-poll.ts",
   "packages/platform-mac/src/mach-stream.ts",
   "packages/platform-mac/src/mach-transport.ts",
   "packages/platform-mac/src/native-assets.ts",
   "packages/platform-mac/src/native-channel.ts",
   "packages/platform-mac/src/path-view.ts",
+  "packages/platform-mac/src/resident-sandbox.ts",
   "packages/platform-mac/src/seatbelt.ts",
   "packages/process/src/async.ts",
   "packages/process/src/coalesced-wake.ts",
@@ -404,6 +406,7 @@
   "packages/protocol/src/receipt-projector.ts",
   "packages/protocol/src/receipts.ts",
   "packages/protocol/src/request-codec.ts",
+  "packages/protocol/src/resident-context.ts",
   "packages/protocol/src/response-codec.ts",
   "packages/protocol/src/run-lease.ts",
   "packages/protocol/src/session-handoff.ts",
@@ -592,6 +595,7 @@
      "packages/protocol/src/receipt-codec.ts",
      "packages/protocol/src/receipts.ts",
      "packages/protocol/src/request-codec.ts",
+     "packages/protocol/src/resident-context.ts",
      "packages/protocol/src/response-codec.ts",
      "packages/protocol/src/run-lease.ts",
      "packages/protocol/src/status-page.ts",
@@ -710,8 +714,8 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 34,
-   "K1-codecs -> K0-values": 64,
-   "K1-codecs -> K1-codecs": 24,
+   "K1-codecs -> K0-values": 66,
+   "K1-codecs -> K1-codecs": 26,
    "K2-mechanisms -> K0-values": 130,
    "K2-mechanisms -> K1-codecs": 13,
    "K2-mechanisms -> K2-mechanisms": 161,
@@ -1545,6 +1549,16 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/protocol/src/resident-context.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/resident-context.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/protocol/src/response-codec.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -2258,7 +2272,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 177
+   "files": 178
   },
   {
    "index": 2,
@@ -2309,7 +2323,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 148
+   "files": 150
   },
   {
    "index": 5,
@@ -2332,19 +2346,19 @@
    "files": 83
   }
  ],
- "files": 504,
- "runtimeEdges": 1791,
- "typeOnlyEdges": 772,
+ "files": 507,
+ "runtimeEdges": 1806,
+ "typeOnlyEdges": 775,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 453,
+  "L1-kernel -> L1-kernel": 457,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 260,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 367,
+  "L4-orchestration -> L1-kernel": 373,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
-  "L4-orchestration -> L4-orchestration": 175,
+  "L4-orchestration -> L4-orchestration": 180,
   "L5-entry -> L1-kernel": 154,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
@@ -2360,7 +2374,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 239,
+  "packages/domain/src/errors.ts": 242,
   "packages/domain/src/identifiers.ts": 84,
   "packages/native/src/cleanup.ts": 41,
   "packages/storage/src/directory.ts": 39,
@@ -2371,10 +2385,10 @@
   "packages/native/src/posix-files.ts": 24,
   "packages/domain/src/utf8.ts": 23,
   "packages/domain/src/request-identity.ts": 22,
+  "packages/domain/src/deployment.ts": 20,
   "packages/domain/src/derived.ts": 20,
   "packages/domain/src/surface-bounds.ts": 20,
-  "packages/domain/src/deployment.ts": 19,
-  "packages/process/src/async.ts": 17
+  "packages/process/src/async.ts": 18
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 39,
@@ -2402,7 +2416,7 @@
   "node:async_hooks": 5,
   "node:buffer": 1,
   "node:child_process": 5,
-  "node:crypto": 40,
+  "node:crypto": 41,
   "node:dns": 1,
   "node:events": 3,
   "node:fs": 115,
@@ -2412,7 +2426,7 @@
   "node:module": 5,
   "node:net": 23,
   "node:os": 12,
-  "node:path": 131,
+  "node:path": 133,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
@@ -2420,7 +2434,7 @@
   "node:stream/promises": 1,
   "node:string_decoder": 1,
   "node:timers/promises": 6,
-  "node:url": 12,
+  "node:url": 13,
   "node:util": 8,
   "node:zlib": 1,
   "nodemailer": 1,
