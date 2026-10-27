@@ -8,7 +8,7 @@ import { loadConfig, validateConfig } from '@oma/config';
 import { createInlineConfiguration } from '@oma/config/generations';
 
 const candidate = () => defaultHostConfig({ society: 'demo', node: process.execPath, libdir: '/opt/oma',
-  rootfs: '/opt/oma-rootfs', deploymentDigest: 'a'.repeat(64) });
+   deploymentDigest: 'a'.repeat(64) });
 test('published configuration is reloadable and a second create preserves its committed bytes', () => {
   const root = mkdtempSync(join(tmpdir(), 'oma-config-package-'));
   const file = join(root, 'config.json');

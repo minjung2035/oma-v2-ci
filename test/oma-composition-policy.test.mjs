@@ -125,7 +125,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   const settings = {
     config: {
       society: expected,
-      installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
+      installation: { node: "node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
       limits: { frameBytes, mailBodyBytes: 262144, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
       principalProfile: "principal",
       initialResidents: [],

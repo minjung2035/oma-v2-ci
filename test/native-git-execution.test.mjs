@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readSync, renameSync, openSync, closeSync, rmSync, readdirSync } from 'node:fs';
@@ -25,8 +26,8 @@ function fixture(t) {
   git(source, 'add', '.'); git(source, 'commit', '-qm', 'native candidate'); const candidate = git(source, 'rev-parse', 'HEAD');
   const projectGit = join(root, 'project.git'); git(root, 'clone', '-q', '--bare', source, projectGit);
   const paths = { stateRoot: root, projectGit, contextGit: join(root, 'context.git'), worldDir: join(root, 'world'), society: 'demo',
-    checkRootfs: join(root, 'rootfs'), checkNode: process.execPath, checkAssetsDir: resolve('.') };
-  prepareResidentRootfs(paths.checkRootfs, hostSystemLayout(), process.getuid(), process.getgid());
+     checkNode: process.execPath, checkAssetsDir: resolve('.') };
+  prepareResidentRootfs(residentRootfsPath(paths.stateRoot), hostSystemLayout(), process.getuid(), process.getgid());
   ExecutionJournal.initialize(root); const executions = new ExecutionRuntime(root);
   t.after(async () => { await executions.close(); rmSync(root, { recursive: true }); });
   const checks = new CandidateChecks(paths, (command, signal, authorize, fds, prepared) => executions.run('candidate', command, signal, authorize, fds, undefined, prepared));
@@ -134,12 +135,12 @@ test('native quarantine: explicit view preserves quoted Unicode and newline cano
   const candidate=git(f.source,'rev-parse','HEAD'), ref=exportRefForRequestKey('quoted-view');
   git(f.source,'update-ref',ref,candidate); const bundle=join(f.root,'quoted.bundle'); git(f.source,'bundle','create',bundle,ref,`^${f.candidate}`);
   const prefix='/native 한 글자 "quoted\nview', view={git:'/usr/bin/git',project:prefix+'/project.git',root:prefix+'/quarantine',bundle:prefix+'/frozen.bundle'};
-  for (const path of [view.project,view.root]) mkdirSync(join(f.paths.checkRootfs,path.slice(1)),{recursive:true});
-  writeFileSync(join(f.paths.checkRootfs,view.bundle.slice(1)),'');
+  for (const path of [view.project,view.root]) mkdirSync(join(residentRootfsPath(f.paths.stateRoot),path.slice(1)),{recursive:true});
+  writeFileSync(join(residentRootfsPath(f.paths.stateRoot),view.bundle.slice(1)),'');
   const has=oid=>{try{git(f.paths.projectGit,'cat-file','-e',`${oid}^{commit}`);return true}catch{return false}};
   const execution={confirmDead:()=>f.executions.confirmDead('quarantine'),async execute(request,authorize){
     const input={phase:request.phase,candidate:request.candidate,exportRef:request.exportRef,prerequisites:request.prerequisites};
-    const command=gitSandbox({rootfs:f.paths.checkRootfs,node:f.paths.checkNode,libdir:f.paths.checkAssetsDir},input);
+    const command=gitSandbox({rootfs:residentRootfsPath(f.paths.stateRoot),node:f.paths.checkNode,libdir:f.paths.checkAssetsDir},input);
     const args=command.argv.map(value=>value==='/quarantine'?view.root:value==='/git/project.git'?view.project:value==='/bundle/input.bundle'?view.bundle:value);
     const temporary=request.phase==='verify'?view.root+'/tmp':'/tmp';
     args[args.length-1]=JSON.stringify({...input,view:{...view,temporary}});

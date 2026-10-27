@@ -14,7 +14,7 @@ import {
   WORKER_MODEL, commitField, engineModelChoiceOf, readSettings, workerModelText, writeSettings,
 } from "#oma-test/app/application/settings";
 
-const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) };
+const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/",  deploymentDigest: "a".repeat(64) };
 
 test("DR46-F01: Worker edits keep the accepted reference and save model and effort contents", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-worker-model-")); t.after(() => rmSync(root, { recursive: true, force: true }));

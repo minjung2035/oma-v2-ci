@@ -3,7 +3,7 @@
 2026-10-25 사용자 구현 지시는 이전 문서 정리 범위를 대체한다. 구현 순서는
 [명세 P0–P7](../macos-native-spec.md#13-구현-순서와-완료-조건)이다.
 VM 지원은 폐기하며 새 구현의 fallback으로 남기지 않는다. architecture 원문과 과거
-검토 기록은 변경하지 않는다. accepted plan, receipt, DB 4, HostConfig 3의 뜻을 유지한다.
+검토 기록은 변경하지 않는다. accepted plan, receipt와 DB 4의 뜻을 유지한다. HostConfig 4는 Linux 전용 설정을 제거하는 명시적 형식 경계이며 HostConfig 3 원본은 변환하지 않고 보존한다.
 
 ## 선행 시험
 

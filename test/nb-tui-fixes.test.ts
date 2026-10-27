@@ -92,7 +92,7 @@ test("NB-04: the open mail's body is read once per message, not once per frame",
 });
 
 test("NB-05: Pending counts Residents only; the Principal's own count stays its own row", () => {
-  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const row = (agent: string, pending: number): AgentStatus => ({
     agent, desired: "enabled", activeState: "active", subState: "running", unitResult: "success",
     execMainStatus: 0, pending, preparedBatches: 0, reason: null, runnerObservedAtMs: null });

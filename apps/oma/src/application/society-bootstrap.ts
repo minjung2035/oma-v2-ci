@@ -6,7 +6,7 @@ import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
 import { hostLaunchLocation } from "../runtime/assets.js";
 import { defaultSocietyFor, sessionSocietyName } from "@oma/config/defaults";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety, provisionSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
+import { observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety, provisionSociety, type ProvisionReport } from "../runtime/provision.js";
 import { brokerListening } from "../runtime/broker-supervisor.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
@@ -172,7 +172,7 @@ export function prepareSociety(bootstrap: SocietyBootstrap, libdir: string, effe
   const fail: Fail = effects.fail;
   const packageStore = packageStoreDir(stateRoot);
   const own = (digest = deploymentDigest(libdir)): SessionOwn => ({ society, node: process.execPath,
-    libdir: `${libdir}/`, rootfs: residentRootfsPath(stateRoot), deploymentDigest: digest, packages: packageStore });
+    libdir: `${libdir}/`,  deploymentDigest: digest, packages: packageStore });
   let configuration: ProjectSessionSettings;
   try {
     configuration = new ProjectSessionSettings({ dataRoot, project, libdir, configPath, packageStore,

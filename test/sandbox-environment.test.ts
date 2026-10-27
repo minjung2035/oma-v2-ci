@@ -1,3 +1,4 @@
+import { SYSTEM_BIND_CANDIDATES } from "@oma/platform-linux/resident-rootfs";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -7,9 +8,9 @@ import { dirname, join } from "node:path";
 import { once } from "node:events";
 import { PiAdapter } from "@oma/engine/pi-adapter";
 import { planPiSpawn, type PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
-import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "@oma/domain/resident-paths";
+import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { residentArgv } from "@oma/platform-linux/sandbox";
-import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
+import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { validateConfig } from "@oma/config";
 import { defaultHostConfig } from "@oma/config/defaults";
@@ -60,19 +61,19 @@ test("F36: optional system binds are closed, absence-gated, and include symlink 
 test("F34/F35: explicit entries cannot override the normalized base environment", () => {
     const options = residentOptions("/state");
     const { host, lease, directories } = options.confinement;
-    const argv = residentArgv(host, lease, directories, { HOME: "/host/home", PATH: "/host/bin", LANG: "host", USER: "root" });
+    const argv = residentArgv(host, lease, directories, [], { HOME: "/host/home", PATH: "/host/bin", LANG: "host", USER: "root" });
     for (const [name, value] of Object.entries(RESIDENT_ENVIRONMENT))
         assert.equal(argv[argv.lastIndexOf(name) + 1], value);
-    assert.throws(() => residentArgv(host, lease, directories, { HOME: "bad\0value" }), { code: "UNSUPPORTED_PROFILE" });
-    assert.throws(() => residentArgv({ ...host, systemBinds: ["/etc/shadow"] }, lease, directories), { code: "UNSUPPORTED_PROFILE" });
+    assert.throws(() => residentArgv(host, lease, directories, [], { HOME: "bad\0value" }), { code: "UNSUPPORTED_PROFILE" });
+    assert.throws(() => residentArgv(host, lease, directories, ["/etc/shadow"]), { code: "UNSUPPORTED_PROFILE" });
 });
 test("U1: config validation and Resident plans reject missing confinement and host-root profiles", () => {
-    const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
+    const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),  deploymentDigest: "a".repeat(64) });
     for (const rootfs of ["/", "relative", "/state/../rootfs", "/rootfs\0"])
-        assert.throws(() => validateConfig({ ...config, installation: { ...config.installation, rootfs } }), { code: "UNSUPPORTED_PROFILE" });
+        assert.throws(() => validateConfig({ ...config, installation: { ...config.installation, rootfs } }), { code: "INVALID_REQUEST" });
     const options = residentOptions("/state");
     assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: undefined } as never), { code: "UNSUPPORTED_PROFILE" });
-    assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: { ...options.confinement, host: { ...options.confinement.host, rootfs: "/" } } }), { code: "UNSUPPORTED_PROFILE" });
+    assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: { ...options.confinement, host: { ...options.confinement.host, rootfs: "/" } as never } }), { code: "UNSUPPORTED_PROFILE" });
 });
 test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support files work without host env or network", RESIDENT_TEST_OPTIONS, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-env-live-"));
@@ -90,7 +91,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         for (const path of targets) {
             const at = plan.args.indexOf(path);
             assert.deepEqual(plan.args.slice(at - 1, at + 2), ["--ro-bind", path, path]);
-            assert.equal(lstatSync(join(options.confinement.host.rootfs, path)).isSymbolicLink(), false);
+            assert.equal(lstatSync(join(residentRootfsPath(options.confinement.host.stateRoot!), path)).isSymbolicLink(), false);
         }
         const body = `
       const fs = require('fs'), cp = require('child_process');
@@ -130,7 +131,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         ]) => !writable));
         for (const [path, bytes] of before)
             assert.equal(readFileSync(path).toString("base64"), bytes);
-        const first = prepareResidentRootfs(options.confinement.host.rootfs, layout, process.getuid!(), process.getgid!());
+        const first = prepareResidentRootfs(residentRootfsPath(options.confinement.host.stateRoot!), layout, process.getuid!(), process.getgid!());
         assert.deepEqual(first.deferred, []);
         assert.deepEqual(first.corrected, []);
     }
@@ -170,7 +171,7 @@ test("FI-2: the pinned Node's npm, npx and corepack are mounted and linked besid
         assert.ok(path.indexOf("/opt/oma-node") >= 0 && path.indexOf("/opt/oma-node") < path.indexOf("/usr/bin"), "the pinned Node's commands win over the host's");
         // The rootfs carries the links and the empty mount targets, as the
         // official distribution's `bin/` does.
-        const rootfs = options.confinement.host.rootfs;
+        const rootfs = residentRootfsPath(options.confinement.host.stateRoot!);
         prepareResidentRootfs(rootfs, hostSystemLayout(), process.getuid!(), process.getgid!());
         for (const [command, module, entry] of TOOLCHAIN) {
             assert.equal(readlinkSync(join(rootfs, "opt/oma-node", command)), `lib/node_modules/${module}/${entry}`, command);

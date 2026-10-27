@@ -45,11 +45,9 @@ import { ensureOwnedDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsy
 import { ensureOwnedDirectory, removeOwnedFile } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
 import { openRegularBeneath, withinDirectory } from "@oma/native/files";
-import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
+import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { projectGitPathAt, projectMirrorPathAt } from "@oma/domain/paths";
 
-/** The trusted rootfs OMA builds for its Residents (SB-001). */
-export function residentRootfsPath(stateRoot: string): string { return join(stateRoot, "rootfs"); }
 
 /** Directories the broker, mail and Git modules expect to already exist. */
 const OWNED_DIRECTORIES: readonly string[] = Object.freeze([
@@ -342,10 +340,14 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
     const seeded = seedSource !== null;
     const seedNote = project !== null && "note" in project && seeded ? project.note : null;
     const gitlinkNote = gitlinksOnMain(projectGit);
-    const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
-      process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
+    // Darwin uses physical Seatbelt paths and has no Linux skeleton to build.
+    if (process.platform !== "linux" && process.platform !== "darwin")
+      throw new StoreError("UNSUPPORTED_PROFILE", "Society preparation requires Linux or macOS");
+    const pendingRepairs = process.platform === "linux"
+      ? prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
+        process.getuid!(), process.getgid!(), "create").deferred : [];
     return Object.freeze({ created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote, gitlinkNote,
-      pendingRepairs: rootfs.deferred, ...(verifiedMain === undefined ? {} : { verifiedMain }) });
+      pendingRepairs, ...(verifiedMain === undefined ? {} : { verifiedMain }) });
   };
   try {
     if (!existsSync(projectGit) || !hasCanonicalMain(projectGit)) {
@@ -441,6 +443,7 @@ function observeProjectMirrorRefresh(stateRoot: string, projectDir: string, veri
  * both rules be true at once: a rootfs that lies about who the agent is gets
  * corrected, and a process that does not own the society corrects nothing. */
 export function repairSociety(stateRoot: string): readonly string[] {
+  if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "Linux rootfs repair is not a portable operation");
   return prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
     process.getuid?.() ?? 0, process.getgid?.() ?? 0, "repair").corrected;
 }

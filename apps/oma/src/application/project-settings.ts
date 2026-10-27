@@ -8,7 +8,7 @@ import { defaultHostConfig } from "@oma/config/defaults";
 import { isValidSocietyName } from "@oma/domain/identifiers";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { packageStoreDir, reconciledEntries, type InstalledPackage } from "../runtime/packages/index.js";
-import { residentRootfsPath } from "../runtime/provision.js";
+
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { commitManagedEdit, commitRoleSet, projectBundle, projectSettingsPath, readSettingsForEditing, roleSetOf, writeSettings,
   type Settings } from "./settings.js";
@@ -40,7 +40,7 @@ export function ensureProjectSettings(dataRoot: string, project: string, libdir:
         .find(file => file !== undefined && lstatSync(file, { throwIfNoEntry: false }) !== undefined);
       const seed = earlier === undefined ? null : readSettingsForEditing(earlier);
       const config = seed?.config ?? defaultHostConfig({ society: project, node: process.execPath, libdir: `${libdir}/`,
-        rootfs: residentRootfsPath(join(dataRoot, project)), deploymentDigest: verifiedDigest ?? deploymentDigest(libdir) });
+         deploymentDigest: verifiedDigest ?? deploymentDigest(libdir) });
       writeSettings(path, { ...config, society: project, installation: { ...config.installation, packages } }, dataRoot);
       // A first society that chose its roles' extensions and prompts keeps them.
       if (seed?.snapshot && seed.layout.kind === "operations") {

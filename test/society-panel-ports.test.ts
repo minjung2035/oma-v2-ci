@@ -4,7 +4,7 @@ import { defaultHostConfig } from "@oma/config/defaults";
 import { societyPanelPorts, type PanelState, type SocietySettingsView } from "@oma/tui/society-panel";
 
 function fixture() {
-  const config = defaultHostConfig({ society: "demo", node: "/node", libdir: "/lib/", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
+  const config = defaultHostConfig({ society: "demo", node: "/node", libdir: "/lib/",  deploymentDigest: "a".repeat(64) });
   let view: SocietySettingsView = { config, workerProfile: "worker", unread: null, extensions: [] };
   let reads = 0;
   let outcome: { kind: "saved" } | { kind: "saved-unread"; reason: string } = { kind: "saved" };

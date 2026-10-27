@@ -32,7 +32,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     let constructorGoal;
     const reviewOwner = {};
     let residentLocation = null;
-    const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
+    const config = { society: "fixture", installation: { node: "node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
         "@oma/native/cleanup": cleanupMeaning,
@@ -52,6 +52,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
                 confirmDead() { throw new Error("composition policy cannot prove native death"); } };
         } },
         "../runtime/native-support.js": nativeSupportMeaning,
+        "../runtime/resident-tools.js": { prepareResidentTools() {
+            throw new Error("composition policy must not observe native developer tools");
+        } },
 "@oma/protocol/session-handoff": sessionHandoffMeaning,
 "@oma/process/host-loss": hostLossMeaning,
 "@oma/domain/deployment": deploymentMeaning,
@@ -97,11 +100,6 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
             } },
         "../runtime/candidate-checks.js": { CandidateChecks: class {
                 run() { throw new Error("composition must not execute candidate checks"); }
-            } },
-        // Trusted candidate checks run inside this process on the product's own
-        // Git, never delegated (mail-v1): the fixture records the composition.
-        "../runtime/candidate-checks.js": { CandidateChecks: class {
-                run() { }
             } },
         "../runtime/provision.js": { repairSociety: stateRoot => {
                 calls.push(`repair:${stateRoot}`);
@@ -176,10 +174,13 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "../runtime/supervision-channel.js": { openSupervisionChannel: options => {
                 calls.push(`supervision:${options.fd}`);
                 supervision = options;
-                return supervisionEstablished ? { hostPid: 4242, ready() { }, grant() { }, refuse() { }, onSession() { }, close() { } } : undefined;
+                // Forward an actual process id as data; this fixture does not
+                // attest channel credentials, host identity or descendant death.
+                return supervisionEstablished ? { hostPid: globalThis.process.pid, ready() { }, grant() { }, refuse() { }, onSession() { }, close() { } } : undefined;
             } },
     };
-    const process = { argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() { },
+    const process = { platform: globalThis.process.platform,
+        argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() { },
         exit(code) { exits.push(code); throw new Exited(`exit(${code})`); } };
     const lines = [];
     await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
@@ -249,7 +250,7 @@ test("P1 composition root: only a broker the product started has a Principal end
     assert.equal(wrong.paths.at(-1).principalHost, undefined);
     const supervised = await compose({ OMA_HOST_CHANNEL: "3" });
     assert.ok(supervised.calls.includes("supervision:3"));
-    assert.equal(supervised.paths.at(-1).principalHost.hostPid, 4242);
+    assert.equal(supervised.paths.at(-1).principalHost.hostPid, process.pid);
     // The channel is opened before anything slow, so a host that dies during
     // recovery still takes this broker with it.
     assert.ok(supervised.calls.indexOf("supervision:3") < supervised.calls.indexOf("Store"));

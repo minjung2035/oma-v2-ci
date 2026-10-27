@@ -468,6 +468,7 @@ packages/storage/src/execution-staging.ts
 packages/storage/src/facets.ts
 packages/storage/src/file-digest.ts
 packages/storage/src/immutable-file.ts
+packages/storage/src/installation-surface.ts
 packages/storage/src/ledger-reader.ts
 packages/storage/src/mail-notices.ts
 packages/storage/src/mailbox.ts

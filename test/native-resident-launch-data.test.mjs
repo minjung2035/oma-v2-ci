@@ -27,7 +27,7 @@ for(const explicit of [false,true])test(`native launch data: ${explicit?'explici
     socket.write(JSON.stringify({present:Object.hasOwn(process.env,'OMA_DEVELOPER_TOOLS_HEX'),
       tools:process.env.OMA_DEVELOPER_TOOLS_HEX??null,profile:process.env.OMA_PROFILE_HEX,model:process.env.OMA_MODEL_PROFILE_HEX})+'\\n');
     setInterval(()=>{},1000);`);
-  const config=defaultHostConfig({society:'demo',node:process.execPath,libdir,rootfs:join(root,'rootfs'),deploymentDigest:'a'.repeat(64)});
+  const config=defaultHostConfig({society:'demo',node:process.execPath,libdir,deploymentDigest:'a'.repeat(64)});
   config.agentProfiles.p=config.agentProfiles.resident;config.modelProfiles.md=config.modelProfiles.worker;
   const environment={PATH:process.env.PATH,OMA_DEVELOPER_TOOLS_HEX:'ambient-forged',OMA_PROFILE_HEX:'ambient-profile'},changing={...observed};
   let answer,fail;const received=new Promise((resolve,reject)=>{answer=resolve;fail=reject;});

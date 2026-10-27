@@ -52,19 +52,18 @@ export function projectSettingsPath(dataRoot: string, project: string): string {
     return projectSettingsPathAt(dataRoot, project);
 }
 /** What a session's society has of its own: its name and the installation
- * and rootfs it runs with, and (DR25) where the Human's installed packages
+ * it runs with, and (DR25) where the Human's installed packages
  * are. The rest is the project's. */
 export interface SessionOwn {
     readonly society: string;
     readonly node: string;
     readonly libdir: string;
-    readonly rootfs: string;
     readonly deploymentDigest: string;
     readonly packages?: string | undefined;
 }
 export function sessionConfigOf(project: HostConfig, own: SessionOwn): HostConfig {
     return { ...project, society: own.society,
-        installation: { node: own.node, libdir: own.libdir, rootfs: own.rootfs, deploymentDigest: own.deploymentDigest,
+        installation: { node: own.node, libdir: own.libdir, deploymentDigest: own.deploymentDigest,
             ...(own.packages === undefined ? {} : { packages: own.packages }) } };
 }
 /** DR25: the roles a configuration runs as, whole -- a bundle's authored
@@ -123,7 +122,7 @@ export function projectBundle(path: string, ownedFrom?: string): Settings {
 }
 /** DR24/DR25: a session's configuration is its project's -- host settings,
  * models and roles, their extensions, prompts and tool surfaces -- with the
- * session's own name, rootfs and installation. An extension the project
+ * session's own name and installation. An extension the project
  * names whose file is gone is left out of the session, never loaded in its
  * place, and reported; the project keeps it until the Human turns it off. */
 export function deriveSessionSettings(project: Settings, path: string, own: SessionOwn, ownedFrom?: string): {

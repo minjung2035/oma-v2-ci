@@ -85,9 +85,9 @@ test("the shared params decoder is closed and consumes the caller's host limits"
 
 function configFixture() {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     society: "example",
-    installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
+    installation: { node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) },
     modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null } },
     principalProfile: "resident",

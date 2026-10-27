@@ -483,20 +483,20 @@ test("DR34: with an egress socket the plan binds it and exports the proxy enviro
   assert.equal(env.OMA_EGRESS_PROXY_PORT, "8318");
   // The mount builder refuses an untrusted socket path rather than bind it.
   const { host, lease, directories } = options.confinement;
-  assert.throws(() => residentArgv(host, lease, directories, {}, undefined, "relative.sock"), { code: "UNSUPPORTED_PROFILE" });
-  assert.throws(() => residentArgv(host, lease, directories, {}, undefined, "/tmp/../x"), { code: "UNSUPPORTED_PROFILE" });
+  assert.throws(() => residentArgv(host, lease, directories, [], {}, undefined, "relative.sock"), { code: "UNSUPPORTED_PROFILE" });
+  assert.throws(() => residentArgv(host, lease, directories, [], {}, undefined, "/tmp/../x"), { code: "UNSUPPORTED_PROFILE" });
 });
 
 /* ---------------- configuration ---------------- */
 
 function hostWith(egress: unknown): Parameters<typeof validateConfig>[0] {
-  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
+  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   return { ...config, egress } as Parameters<typeof validateConfig>[0];
 }
 
 test("DR46: current host configuration refuses removed policy fields and prior schema", () => {
-  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
-  assert.equal(config.schemaVersion, 3);
+  const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
+  assert.equal(config.schemaVersion, 4);
   assert.throws(() => validateConfig({ ...config, schemaVersion: 1 }), /unsupported development configuration schema/);
   assert.throws(() => validateConfig({ ...config, quota: { storageBytes: 1 } }), /unknown top-level field quota/);
   assert.throws(() => validateConfig(hostWith({ allow: ["*"] })), /unknown top-level field egress/);

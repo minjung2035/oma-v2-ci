@@ -471,7 +471,7 @@ test("NATIVE-CANDIDATE-DR37: real checks use network, outlive legacy caps and st
     git(["init", "--bare", project]);
     const candidate = git(["commit-tree", git(["mktree"], ""), "-m", "fixture"]);
     const paths = { stateRoot: dir, projectGit: project, contextGit: join(dir, "context.git"), worldDir: join(dir, "world"), society: "demo",
-        checkRootfs: opts.confinement.host.rootfs, checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
+         checkNode: opts.confinement.host.node, checkAssetsDir: process.cwd() };
     ExecutionJournal.initialize(dir); const executions = new ExecutionRuntime(dir); await executions.recover();
     const pins: ReturnType<typeof pinNamespaceInit>[] = [];
     let interrupt = new AbortController(), hits = 0;

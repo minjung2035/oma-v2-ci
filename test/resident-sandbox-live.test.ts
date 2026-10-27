@@ -1,3 +1,4 @@
+import { productSurfaceMasks } from "@oma/storage/installation-surface";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006 + INF-005..008, live: a Resident's engine under real bubblewrap.
  *
@@ -15,11 +16,11 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { provisionSociety, residentRootfsPath } from "#oma-test/app/runtime/provision";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
 import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
 import { placeholderFor } from "@oma/engine/engine-auth";
 import { PiAdapter } from "@oma/engine/pi-adapter";
-import { hostSystemLayout, productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
+import { hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { PiRpcClient } from "@oma/engine/pi-rpc";
@@ -105,8 +106,8 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       },
       confinement: {
         host: {
-          rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+           libdir: root,
+          node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
@@ -216,8 +217,8 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       },
       confinement: {
         host: {
-          rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+           libdir: root,
+          node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
@@ -325,8 +326,8 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       },
       confinement: {
         host: {
-          rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+           libdir: root,
+          node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
@@ -411,8 +412,8 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       },
       confinement: {
         host: {
-          rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: masks,
+           libdir: root,
+          node: realpathSync(process.execPath),  hidden: masks,
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
@@ -496,8 +497,8 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
       },
       confinement: {
         host: {
-          rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+           libdir: root,
+          node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },

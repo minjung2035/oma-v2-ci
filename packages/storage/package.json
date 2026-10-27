@@ -159,6 +159,10 @@
     "./resident-logs": {
       "types": "./dist/resident-logs.d.ts",
       "default": "./dist/resident-logs.js"
+    },
+    "./installation-surface": {
+      "types": "./dist/installation-surface.d.ts",
+      "default": "./dist/installation-surface.js"
     }
   },
   "scripts": {

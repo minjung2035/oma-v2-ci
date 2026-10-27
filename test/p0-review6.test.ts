@@ -264,7 +264,7 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
     assert.throws(() => cliContextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
     delete process.env.OMA_CONTEXT_BYTES;
     delete process.env.OMA_BUNDLE_BYTES;
-    const reference = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) }).limits;
+    const reference = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) }).limits;
     assert.equal(cliContextBytes(), reference.contextBytes);
     assert.equal(cliBundleBytes(), reference.bundleBytes);
   } finally {

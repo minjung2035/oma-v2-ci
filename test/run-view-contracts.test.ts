@@ -23,7 +23,7 @@ async function nativeOwner(t: import("node:test").TestContext, incarnation: numb
   const store = new Store(join(root, "runtime.sqlite"));
   store.transaction(tx => tx.insertAgent(makeValidAgent("alice", { incarnation })));
   const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),
-    rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64) });
+     deploymentDigest: "a".repeat(64) });
   const units = createNativeResidents(store, executions, { stateRoot: root, runRoot: join(root, "run"), society: "demo", configPath: join(root, "config.json") },
     config, () => { throw new Error("binding test must never attach an execution"); }, () => {}, () => null);
   t.after(async () => { await withAsyncCleanup(() => units.close(), () => executions.close()); store.close(); rmSync(root, { recursive: true, force: true }); });

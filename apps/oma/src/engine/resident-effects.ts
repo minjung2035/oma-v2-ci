@@ -1,10 +1,12 @@
 /** Resident-only platform selection; common engine policy owns argv/lifecycle. */
 import type { ResidentEngineEffects, ResidentSandbox, PiSpawnPlan } from "@oma/engine/ports";
 import { engineStartEffects } from "./start-effects.js";
+import { hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
+import { assertResidentContext } from "@oma/protocol/resident-context";
 import { residentArgv } from "@oma/platform-linux/sandbox";
-import { sandboxSeccompFilter } from "@oma/platform-linux/sandbox-seccomp";
+import { SANDBOX_EXECUTABLE, sandboxSeccompFilter } from "@oma/platform-linux/sandbox-seccomp";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
-import { SANDBOX_EXECUTABLE, residentPathView } from "@oma/domain/resident-paths";
+import { residentPathView } from "@oma/domain/resident-paths";
 import { macResidentPathView } from "@oma/platform-mac/path-view";
 import { residentSeatbelt } from "@oma/platform-mac/resident-sandbox";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
@@ -46,7 +48,8 @@ export function createResidentEngineEffects(tools?: MacDeveloperTools): Resident
   return { ...engineStartEffects, sandbox: {
     pathView: (host, lease, directories, endpoints = {}) => residentPathView(host, directories, { socket: lease.socketHostPath, ...endpoints }, "mounted"),
     residentPlan(host, lease, directories, environment, inference, egress) {
-      const argv = residentArgv(host, lease, directories, environment, inference, egress);
+      assertResidentContext(host, lease, directories);
+      const argv = residentArgv(host, lease, directories, hostSystemLayout().binds, environment, inference, egress);
       if (argv[0] !== "bwrap") throw new StoreError("UNSUPPORTED_PROFILE", "Linux Worker plan has no fixed sandbox executable");
       return { command: SANDBOX_EXECUTABLE, args: argv.slice(1), cwd: directories.workspace, env: {}, input: sandboxSeccompFilter() };
     },

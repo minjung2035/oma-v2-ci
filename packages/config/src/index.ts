@@ -13,7 +13,6 @@ import {
 import type { AgentProfile, EffortLevel, HostConfig, ModelProfile } from "@oma/contracts";
 import { HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
 import { StoreError } from "@oma/domain/errors";
-import { requireResidentRootfs } from "@oma/domain/resident-paths";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "@oma/domain/identifiers";
 import { isCapability } from "@oma/domain/capabilities";
 import { MIN_MIXED_BATCH_MESSAGES, PROTOCOL_LIMIT_FIELDS } from "@oma/domain/limits";
@@ -178,11 +177,9 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   closedKeys(cfg, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "integration", "limits"], "root");
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
-  const installation = closedRecord(cfg.installation, ["node", "libdir", "rootfs", "deploymentDigest"], "installation", ["packages"]);
+  const installation = closedRecord(cfg.installation, ["node", "libdir", "deploymentDigest"], "installation", ["packages"]);
   const node = needString(installation.node, "installation.node");
   const libdir = needString(installation.libdir, "installation.libdir");
-  const rootfs = needString(installation.rootfs, "installation.rootfs");
-  requireResidentRootfs(rootfs);
   const deploymentDigest = needString(installation.deploymentDigest, "installation.deploymentDigest");
   if (!isDeploymentDigest(deploymentDigest)) err("installation.deploymentDigest must be a lowercase SHA-256 digest");
   // DR25: where the extensions `oma pi install` installed live, when any role may name one.
@@ -262,7 +259,7 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)
     err(`limits.batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES}; a single-message batch starves an actor whose direct and public mail are both pending`);
   return validatedSnapshot({
-    schemaVersion: HOST_CONFIGURATION_VERSION, society, installation: { node, libdir, rootfs, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
+    schemaVersion: HOST_CONFIGURATION_VERSION, society, installation: { node, libdir, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfig["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfig["agentProfiles"],
     principalProfile, initialResidents: initialResidents as HostConfig["initialResidents"],

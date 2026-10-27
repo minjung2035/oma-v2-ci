@@ -201,7 +201,7 @@ test("FJ-5: the shipped configuration (highPeerFloor 2) carries a maximal approv
   const fixture = createCompleteConfigurationFixture();
   try {
     const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",
-      rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+       deploymentDigest: "a".repeat(64) });
     assert.equal(defaults.integration.tiered?.highPeerFloor, 2);
     assert.equal(mailBodyBytesFits(defaults.limits.mailBodyBytes, defaults.limits.subjectBytes, 2), true);
     assert.doesNotThrow(() => validateConfig(withLimits(withHighPeerFloor(fixture.config, 2), {

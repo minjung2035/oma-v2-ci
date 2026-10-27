@@ -70,15 +70,6 @@ export function nodeToolchainMounts(node: string): readonly (readonly [string, s
     .map(module => [`${prefix}/lib/node_modules/${module}`, `${RESIDENT_PATHS.nodeModules}/${module}`] as const);
 }
 
-/** SB-001: the only host paths a Resident may see besides its own mounts. They
- * are the operating system's programs and libraries — never `/`, `/home`, a
- * state root or a runtime directory — and each is mounted read-only. */
-export const SYSTEM_BIND_CANDIDATES: readonly string[] = Object.freeze([
-  "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/alternatives", "/etc/ld.so.cache",
-  "/etc/resolv.conf", "/etc/ssl/certs", "/etc/pki/ca-trust", "/etc/pki/tls/certs",
-  "/etc/nsswitch.conf", "/etc/hosts", "/etc/localtime",
-]);
-
 /** Preferred loopback port for the relay bridge. The shared network may
  * already have a listener here: the extension falls back to an allocated
  * port and publishes only the address its own listener actually holds. */
@@ -86,14 +77,6 @@ export const RESIDENT_INFERENCE_PORT = 8317;
 /** UX-08/DR34: the same arrangement for the CONNECT proxy -- the extension's
  * loopback forwarder standard tools reach through HTTP_PROXY et al. */
 export const RESIDENT_EGRESS_PORT = 8318;
-
-/** WP27: the one bubblewrap a confined engine is started through; the same
- * binary `spawnSandboxed` pins. A plan names it absolutely, because the
- * owned spawn that delivers a batch accepts no PATH lookup. */
-export const SANDBOX_EXECUTABLE = "/usr/bin/bwrap";
-
-/** The descriptor bubblewrap reads the sandbox's seccomp program from. */
-export const SANDBOX_FILTER_FD = 3;
 
 /** AV16, CLI-001: what `oma` is inside the sandbox -- the pinned Node running
  * the installed model-facing CLI -- and the PATH that finds it (the pinned
@@ -137,14 +120,6 @@ export function residentEnvironment(paths: { readonly libdir: string; readonly n
 export const RESIDENT_ENVIRONMENT = residentEnvironment({ libdir: RESIDENT_PATHS.libdir, node: RESIDENT_PATHS.node,
   home: RESIDENT_PATHS.home, temporary: "/tmp" });
 export const RESIDENT_PATH_ENV = RESIDENT_ENVIRONMENT.PATH;
-
-/** SB-002-E: `installation.rootfs` must name a trusted non-root path.
- * Society supports only confined Residents; a missing sandbox is rejected
- * before execution. The one reading of that setting. */
-export function requireResidentRootfs(rootfs: string): void {
-  if (!trustedResidentPath(rootfs))
-    throw new StoreError("UNSUPPORTED_PROFILE", "Society requires a trusted non-root Resident rootfs");
-}
 
 /** Where a Resident's Git reaches the canonical repository (GIT-002). */
 export function residentProjectGit(): string { return RESIDENT_PATHS.projectGit; }

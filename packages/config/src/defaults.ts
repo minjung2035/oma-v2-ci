@@ -24,7 +24,6 @@ export interface DefaultConfigInput {
   readonly society: string;
   readonly node: string;
   readonly libdir: string;
-  readonly rootfs: string;
   readonly deploymentDigest: string;
 }
 
@@ -67,7 +66,6 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfig {
     installation: {
       node: input.node,
       libdir: input.libdir,
-      rootfs: input.rootfs,
       deploymentDigest: input.deploymentDigest,
     },
     modelProfiles: {

@@ -46,7 +46,7 @@ import { resolvedSpecDigest } from "@oma/domain/spec-identity";
 import { exportRefForRequestKey } from "@oma/domain/derived";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
-import { provisionSociety, residentRootfsPath } from "#oma-test/app/runtime/provision";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
 import { processIdentity, type ProcessIdentity } from "@oma/broker/process-ancestry";
 import { encodeHostMessage } from "@oma/protocol/host-channel";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
@@ -222,7 +222,7 @@ async function composeBroker(root: string, runRoot: string, store: Store, host: 
     const views = new ViewsModule(store, root, SOCIETY, "p");
     const gitPaths = { stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
         worldDir: join(root, "world"), society: SOCIETY,
-        checkRootfs: config.installation.rootfs, checkNode: config.installation.node, checkAssetsDir: config.installation.libdir, };
+         checkNode: config.installation.node, checkAssetsDir: config.installation.libdir, };
     const checks = new CandidateChecks(gitPaths, (command, signal, authorize, fds, prepared) => executions.run("candidate", command, signal, authorize, fds, undefined, prepared));
     const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration),
         (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize),
@@ -252,7 +252,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     // The society's configuration: the product's defaults with the scripted
     // model for Residents and the generated rootfs, so every runner is confined.
     const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO,
-        rootfs: residentRootfsPath(root), deploymentDigest: "a".repeat(64) });
+         deploymentDigest: "a".repeat(64) });
     const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
     const config = validateConfig({ ...defaults,
         modelProfiles: { ...defaults.modelProfiles, scripted: { ...CONFINED_MODEL, inferenceTimeoutSeconds: 120 },
@@ -477,7 +477,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         },
         async activate(agent, timeoutMs = 90000) {
             assert.equal(RESIDENT_TEST_OPTIONS.skip, false, String(RESIDENT_TEST_OPTIONS.skip));
-            assert.notEqual(readCurrentHostPolicy(configPath, SOCIETY).installation.rootfs, "/");
+            assert.equal(readCurrentHostPolicy(configPath, SOCIETY).schemaVersion, 4);
             // What provisioning a created Resident leaves: its home and its workspace.
             const home = join(agentRootPathAt(root, agent), "home");
             for (const path of [home, runnerViewPathAt(root, agent)])

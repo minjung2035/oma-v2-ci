@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultHostConfig, DEFAULT_RESIDENT_PROFILE } from "@oma/config/defaults";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
-import { provisionSociety, residentRootfsPath } from "#oma-test/app/runtime/provision";
+import { provisionSociety } from "#oma-test/app/runtime/provision";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { Store } from "@oma/storage";
@@ -71,7 +71,7 @@ async function topology(t: TestContext) {
   provider = await scriptedProvider(() => ({ kind: "hang" }), { tls: true });
   provider.configure(resolvePiRuntime({ stateRoot, libdir: process.cwd() }).agentDir);
   const config = defaultHostConfig({ society, node: process.execPath, libdir: process.cwd(),
-    rootfs: residentRootfsPath(stateRoot), deploymentDigest: deploymentDigest(process.cwd()) });
+     deploymentDigest: deploymentDigest(process.cwd()) });
   config.modelProfiles.scripted = { ...CONFINED_MODEL, inferenceTimeoutSeconds: 120 };
   config.agentProfiles[DEFAULT_RESIDENT_PROFILE]!.modelProfile = "scripted";
   config.initialResidents = [{ name: "child", profile: DEFAULT_RESIDENT_PROFILE, brief: "Keep this exact initial brief." }];

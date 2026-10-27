@@ -177,6 +177,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/storage/src/restic-verification.ts",
       "packages/storage/src/tree-lease.ts",
       "packages/storage/src/execution-staging.ts",
+      "packages/storage/src/installation-surface.ts",
       "packages/storage/src/cache-trees.ts",
       "packages/storage/src/context-files.ts",
       "packages/storage/src/context-snapshot.ts",

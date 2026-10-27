@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 /** INT-002/007: a check reads an exact commit in a disposable sandbox.
  * An injected native execution owner owns the whole scope; there is no host execution fallback,
  * persistent checker, request file, checkout cleanup or model-facing endpoint.
@@ -68,7 +69,7 @@ export class CandidateChecks {
       })();
       let setupFailure: { error: unknown } | undefined;
       void evidence.catch(error => { setupFailure = { error }; own.abort(); });
-      if (!this.paths.checkNode || !this.paths.checkAssetsDir || process.platform !== "darwin" && !this.paths.checkRootfs)
+      if (!this.paths.checkNode || !this.paths.checkAssetsDir)
         throw new StoreError("UNSUPPORTED_PROFILE", "candidate sandbox installation is incomplete");
       let command: CommandSpec;
       if (process.platform === "darwin") {
@@ -77,7 +78,7 @@ export class CandidateChecks {
           command => this.execute(command, signal, authorize, [stage.leaseFd], () => {}));
         command = candidateSeatbelt({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools },
           { git: tools.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check).command;
-      } else command = candidateSandbox({ rootfs: this.paths.checkRootfs!, node: this.paths.checkNode, libdir: this.paths.checkAssetsDir }, candidate, check);
+      } else command = candidateSandbox({ rootfs: residentRootfsPath(this.paths.stateRoot), node: this.paths.checkNode, libdir: this.paths.checkAssetsDir }, candidate, check);
       let observation: ProcessObservation;
       let initialRefusal: { error: unknown } | undefined;
       try { observation = await this.execute(command, signal, () => {

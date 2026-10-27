@@ -43,7 +43,7 @@ const options={actor,society,limits,profile:{provider:'pi',model:'current',infer
   paths:{piCommand:runtime.executable,piArgs:runtime.args,piAgentDir:runtime.agentDir,coreExtension:join(libdir,DEPLOYMENT_LAYOUT.extension),
     cli:join(libdir,DEPLOYMENT_LAYOUT.cli),workspace:dirs.workspace,sessionDir:dirs.sessions,agentHome:dirs.home,
     mailArchive:join(dirs.archive,'cur'),workerArchive:join(dirs.workerArchive,'cur'),projectGit:dirs.projectGit,batchView:dirs.view,socket},
-  confinement:{host:{rootfs:join(root,'unused-legacy-rootfs'),libdir,node,pi:runtime.bundle,piModeArgs:[],stateRoot,runRoot,limits,
+  confinement:{host:{libdir,node,pi:runtime.bundle,piModeArgs:[],stateRoot,runRoot,limits,
     hidden:DEPLOYMENT_LAYOUT.productSurface.map(path=>({path,kind:/\.[jt]s$/.test(path)?'file':'dir'}))},lease,directories:dirs}};
 const prior=join(dirs.sessions,'2026-01-01T00-00-00-000Z_prior.jsonl'),sessionId='0190f000-0000-7000-8000-000000000001';
 writeFileSync(prior,JSON.stringify({type:'session',version:3,id:sessionId,timestamp:'2026-01-01T00:00:00.000Z',cwd:dirs.workspace})+'\n');

@@ -1215,7 +1215,7 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
       [{ source: "npm:oma-hello-ext", entries: [HELLO] , skills: [], prompts: [], themes: [] }]), HELLO, "principal", true);
 
     // Each session, now and later, is made with the project's roles and its own installation.
-    const own = { society: "demo-2", node: process.execPath, libdir: f.installation, rootfs: "/rootfs2", deploymentDigest: "b".repeat(64), packages };
+    const own = { society: "demo-2", node: process.execPath, libdir: f.installation,  deploymentDigest: "b".repeat(64), packages };
     for (const society of ["demo-2", "demo-3"]) {
       const sessionPath = join(f.root, society, "config.json");
       mkdirSync(join(f.root, society), { recursive: true });
@@ -1223,7 +1223,8 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
       assert.deepEqual(derived.missing, []);
       const session = loadConfiguration(sessionPath);
       assert.equal(session.config.society, society);
-      assert.equal(session.config.installation.rootfs, "/rootfs2");
+      assert.equal(Object.hasOwn(session.config.installation, "rootfs"), false);
+      assert.equal(session.config.installation.deploymentDigest, own.deploymentDigest);
       for (const role of ["principal", "resident"])
         assert.ok(session.roles[role]!.extensions.some(item => item.path.endsWith("hello.ts")), `${society} ${role}`);
       assert.ok(!session.roles.verifier!.extensions.some(item => item.path.endsWith("hello.ts")), "a role the Human did not choose");
@@ -1583,7 +1584,7 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     const limits = { frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
 
     const confinement = {
-      host: { rootfs: join(f.root, "rootfs"), libdir: f.installation, packages: root, node: "/usr/bin/node",
+      host: {  libdir: f.installation, packages: root, node: "/usr/bin/node",
         pi: `${RESIDENT_PATHS.libdir}/engine/cli.js`, piModeArgs: [],
         stateRoot: state, runRoot: join(f.root, "run"),
         limits: { frameBytes: 1, batchMaxMessages: 1 } },

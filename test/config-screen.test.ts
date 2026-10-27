@@ -10,7 +10,7 @@ const fields: ConfigField[] = [
 ];
 const data = { config: fields, extensions: [], mail: [], mailUnreadable: null, mailOmitted: 0,
   dashboard: { status: { kind: "unknown", observedAtMs: 0, reason: "n/a" }, configuredWorkers: 0, unread: 0,
-    principalModel: { configured: "default", session: null }, rootfs: null } } as unknown as PanelData;
+    principalModel: { configured: "default", session: null },  } } as unknown as PanelData;
 const screen = (state: typeof INITIAL): string => render({ state, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 20 }).join("\n");
 
 test("Config: a choice being edited shows every option, not only the one in view", () => {

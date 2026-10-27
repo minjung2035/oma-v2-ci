@@ -523,7 +523,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 **MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident가 provider에 닿는 길은 INF-005의 relay 하나다. credential이나 network를 조용히 열어 다른 길을 만들지 않는다. architecture §16에 비용과 선택지를 적는다.
 
-**MUST [SB-002-E]** Society는 confined-only다([DR31](design-revisions.md), 사용자 확정 U1). 설정 없이 시작한 society의 `installation.rootfs`는 `SB-007`의 생성된 rootfs이며 정규화된 비-root 절대 경로여야 한다. `/`는 `UNSUPPORTED_PROFILE` startup failure로 RunnerModule 구성 전에 거절한다. bwrap/user namespace 부재나 spawn 실패는 host 실행으로 대체하지 않는다. Dashboard는 선언된 confined rootfs를 표시하되 실행 증거로 승격하지 않는다. Resident 외 `oma login`/`oma pi` 대화형 엔진과 Principal의 contained tools는 각자 기존 계약을 유지한다.
+**MUST [SB-002-E]** Society는 confined-only다([DR31](design-revisions.md), [DR60](design-revisions.md), 사용자 확정 U1). HostConfig 4는 Linux 전용 `installation.rootfs`·system mount 목록·caller-selected OS backend를 받지 않는다. 이전 설정 형식은 원본을 변환하지 않고 거절한다. Linux 어댑터가 소유한 state root 아래 `SB-007`의 rootfs와 닫힌 OS mount 목록을 선택하며 private state를 노출하는 system mount는 거절한다. bwrap/user namespace 부재나 spawn 실패는 host 실행으로 대체하지 않는다. macOS native 보장이 미해결이면 실행을 거절한다. Dashboard는 격리가 필수임을 표시하며 관측한 실행으로 승격하지 않는다. Resident 외 `oma login`/`oma pi` 대화형 엔진과 Principal의 contained tools는 각자 기존 계약을 유지한다.
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 

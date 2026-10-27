@@ -226,7 +226,7 @@ test("FJ-3: the reconcile.preaccept event names what it kept, bounded to the fir
 });
 
 test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {
-  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   assert.equal(readCurrentHostPolicy("/config.json", "demo", () => config), config);
   for (const failure of [Object.assign(new Error("EIO: i/o error"), { code: "EIO" }), new Error("config: quota.societyAgents must be a safe integer")])
     assert.throws(() => readCurrentHostPolicy("/config.json", "demo", () => { throw failure; }), { code: "BROKER_UNAVAILABLE" });
@@ -435,7 +435,7 @@ test("DR13 / P0-5: a local observation that did not answer is 'cannot be observe
   const root = mkdtempSync(join(tmpdir(), "oma-p0-unobserved-"));
   try {
     const config = join(root, "config.json");
-    writeFileSync(config, JSON.stringify(defaultHostConfig({ society: "demo", node: process.execPath, libdir: root, rootfs: root, deploymentDigest: "0".repeat(64) })));
+    writeFileSync(config, JSON.stringify(defaultHostConfig({ society: "demo", node: process.execPath, libdir: root,  deploymentDigest: "0".repeat(64) })));
     chmodSync(config, 0o000);
     try { assert.throws(() => loadConfig(config), { code: "BROKER_UNAVAILABLE" }, "a configuration that cannot be read now"); }
     finally { chmodSync(config, 0o600); }

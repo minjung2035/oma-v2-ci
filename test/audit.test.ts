@@ -612,9 +612,9 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
 // ---------------------------------------------------------------------------
 // Part D — entry/broker.js ordered bootstrap (READY only after recovery)
 // ---------------------------------------------------------------------------
-function minimalConfig(society: string, rootfs = "/rootfs"): Record<string, unknown> {
+function minimalConfig(society: string): Record<string, unknown> {
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         society,
         installation: {
             node: process.execPath,
@@ -622,10 +622,6 @@ function minimalConfig(society: string, rootfs = "/rootfs"): Record<string, unkn
             // resolve from, or the entry refuses to start. Tests run from the package
             // root, where dist/ and implementation/ live side by side.
             libdir: process.cwd(),
-            // SB-002-E: the trusted Resident rootfs must be a real non-root path.
-            // Callers that spawn a broker pass a directory they created; the decode
-            // callers keep the shape-only default.
-            rootfs,
             deploymentDigest: deploymentDigest(process.cwd()),
         },
         modelProfiles: {
@@ -802,10 +798,8 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         ]);
         const base = git(["rev-parse", "HEAD"]);
         git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
-        const rootfs = join(dir, "rootfs");
-        mkdirSync(rootfs);
         ExecutionJournal.initialize(state);
-        const cfg = minimalConfig(society, rootfs);
+        const cfg = minimalConfig(society);
         cfg.initialResidents = [
             { name: "child", profile: "child", brief: "initial" },
         ];
@@ -874,9 +868,7 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
         mkdirSync(runRoot, { recursive: true });
         mkdirSync(join(stateRoot, "repos"), { recursive: true });
         seedProject({ dir, state: stateRoot });
-        const rootfs = join(dir, "rootfs");
-        mkdirSync(rootfs);
-        writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society, rootfs)), "utf8");
+        writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society)), "utf8");
         // seed a pending mail operation (accepted-before-materialize fixture)
         const store = new Store(join(stateRoot, "runtime.sqlite"));
         // A reader of create/context plans needs the trusted repository identity,
@@ -962,9 +954,7 @@ test("NATIVE-AUDIT-READY-02: missing accepted artifact refuses native startup be
         mkdirSync(runRoot, { recursive: true });
         mkdirSync(join(stateRoot, "repos"), { recursive: true });
         seedProject({ dir, state: stateRoot });
-        const rootfs = join(dir, "rootfs");
-        mkdirSync(rootfs);
-        writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society, rootfs)), "utf8");
+        writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society)), "utf8");
         const store = new Store(join(stateRoot, "runtime.sqlite"));
         const missingOp = "op-00000000-0000-4000-8000-0000000000d2";
         const missingMessage = "m-00000000-0000-4000-8000-0000000000d2-0";

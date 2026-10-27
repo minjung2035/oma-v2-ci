@@ -29,11 +29,25 @@ import { statAt, readlinkAt, unlinkAt, symlinkAt } from "@oma/native/posix-files
  */
 import { closeSync, constants, fstatSync, lstatSync, statSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
-import { RESIDENT_NODE_TOOLCHAIN, RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "@oma/domain/resident-paths";
+import { RESIDENT_NODE_TOOLCHAIN, RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
 import { openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
+
+/** Linux-only mount policy; never part of the common HostConfig. */
+export const SYSTEM_BIND_CANDIDATES: readonly string[] = Object.freeze([
+  "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/alternatives", "/etc/ld.so.cache",
+  "/etc/resolv.conf", "/etc/ssl/certs", "/etc/pki/ca-trust", "/etc/pki/tls/certs",
+  "/etc/nsswitch.conf", "/etc/hosts", "/etc/localtime",
+]);
+
+/** The platform selects its owned skeleton from the trusted state root. */
+export function residentRootfsPath(stateRoot: string): string {
+  if (!trustedAbsolutePath(stateRoot)) throw new StoreError("UNSUPPORTED_PROFILE", "Linux confinement needs a trusted state root");
+  return join(stateRoot, "rootfs");
+}
 
 export interface SystemLayout {
   /** Host paths bound read-only at the same path. */
@@ -196,18 +210,6 @@ export interface RootfsOutcome {
 /** TUI-003: which of the product surface's installed files exist, so the mount
  * plan can hide them. A link is refused: hiding the link would leave its
  * target, and the installation has no reason to contain one. */
-export function productSurfaceMasks(libdir: string): readonly { path: string; kind: "dir" | "file" }[] {
-  const masks: { path: string; kind: "dir" | "file" }[] = [];
-  for (const path of DEPLOYMENT_LAYOUT.productSurface) {
-    const found = kind(join(libdir, path));
-    if (found === "absent") continue;
-    if (found === "link")
-      throw new StoreError("UNSUPPORTED_PROFILE", `installed product path ${path} is a link`);
-    masks.push({ path, kind: found });
-  }
-  return Object.freeze(masks);
-}
-
 /** Brings the skeleton at `rootfs` up for the given host layout.
  *
  * A `"create"` pass makes everything that is absent and reports -- rather than

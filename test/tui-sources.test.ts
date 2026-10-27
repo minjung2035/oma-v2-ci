@@ -21,9 +21,9 @@ import { sessionArgv } from "@oma/engine/principal-session";
 function digest(text: string): string { return createHash("sha256").update(text).digest("hex"); }
 function config(root: string): HostConfig {
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         society: "demo",
-        installation: { node: process.execPath, libdir: root, rootfs: root, deploymentDigest: digest("d") },
+        installation: { node: process.execPath, libdir: root,  deploymentDigest: digest("d") },
         modelProfiles: {
             cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
             strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
@@ -405,31 +405,19 @@ test("P0V-66 / R11, P0-5: mail in a batch prepared while the session was in a tu
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () => {
+test("TUI-012/SB-002-E: the Dashboard states required confinement without claiming an observed execution", () => {
     const root = scratch("oma-tui-sandbox-");
     try {
-        const cfg = config(root);
-        const line = (installation: {
-            rootfs: string;
-        }): string => {
-            const lines = dashboardLines({
-                config: { ...cfg, installation: { ...cfg.installation, ...installation } },
-                principalModel: { configured: "strong", session: null }, unread: 0,
-                observation: { kind: "unknown", reason: "x", observedAtMs: Date.UTC(2026, 8, 18) },
-            });
-            return new Map(lines.map(entry => [entry.label, entry.value])).get("Sandbox")!;
-        };
-        // Society is confined-only; `/` is rejected before startup, not displayed
-        // as a supported unconfined execution mode. The declared rootfs is visible.
-        assert.match(line({ rootfs: "/opt/oma/rootfs" }), /^Confined/);
-        const confined = line({ rootfs: "/opt/oma/rootfs" });
-        assert.doesNotMatch(confined, /Unconfined/);
-        assert.match(confined, /\/opt\/oma\/rootfs/);
-    }
-    finally {
-        rmSync(root, { recursive: true, force: true });
-    }
+        const lines = dashboardLines({
+            config: config(root), principalModel: { configured: "strong", session: null }, unread: 0,
+            observation: { kind: "unknown", reason: "no live observation", observedAtMs: Date.UTC(2026, 8, 18) },
+        });
+        const sandbox = new Map(lines.map(entry => [entry.label, entry.value])).get("Sandbox")!;
+        assert.equal(sandbox, "Required");
+        assert.doesNotMatch(sandbox, /Confined|Running|rootfs|Unconfined/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
 test("TUI-021: the Dashboard reads the broker's status view and never invents one", async () => {
     const root = scratch("oma-tui-view-");
     try {

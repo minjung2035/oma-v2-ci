@@ -7,7 +7,6 @@ export interface GitPaths {
     society: string;
     /** Broker lifetime cancellation, never client disconnect cancellation. */
     ownerSignal?: AbortSignal;
-    checkRootfs?: string;
     checkNode?: string;
     checkAssetsDir?: string;
 }

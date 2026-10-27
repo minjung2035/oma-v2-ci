@@ -192,7 +192,7 @@ Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록
 
 ## 봉인된 Resident의 provider 경로
 
-현재 Linux Society의 Resident는 bwrap namespace 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. provider credential은 sandbox에 전달하지 않는다. DR37에 따라 `--share-net`으로 host 네트워크를 공유하며 일반 egress는 제한하지 않는다. credential을 사용하는 엔진 요청은 trusted runner가 소유하는 relay를 통해 provider에 닿는다(`INF-005`/`INF-006`).
+현재 Linux Society의 Resident는 bwrap namespace 안에서 실행된다. Linux 어댑터는 소유한 state root 아래에 rootfs를 만들며(`SB-007`, [DR60](design-revisions.md)), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. provider credential은 sandbox에 전달하지 않는다. DR37에 따라 `--share-net`으로 host 네트워크를 공유하며 일반 egress는 제한하지 않는다. credential을 사용하는 엔진 요청은 trusted runner가 소유하는 relay를 통해 provider에 닿는다(`INF-005`/`INF-006`).
 
 - credential은 runner가 동봉 엔진으로 OMA 소유 agent directory에서 해석하고 한 delivery 동안만 relay에 둔다(`INF-008`). 로그인은 `oma login`으로 엔진 자체 흐름을 한 번 연다([DR18](design-revisions.md)).
 - sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받는다. relay는 나가는 길에 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 `key` query parameter에서만 진짜 key로 바꾼다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절하고, 응답에 진짜 key의 바이트가 나타나면 sandbox에 닿기 전에 끊는다(INF-007, INF-008).
@@ -200,7 +200,7 @@ Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록
 - relay는 stream을 해석하지 않는다. 헤더에 진짜 credential을 끼우고 바이트를 그대로 넘긴다. 가격·token·재시도는 계속 엔진의 것이다.
 - 목적지는 model profile이 선언한 provider endpoint 하나다. 그 경로를 벗어나는 요청은 provider에 닿기 전에 거절된다.
 - sandbox 안의 provider 설정에 들어가는 key는 자리표시자다. 운영자가 sandbox 안에서 `/login`을 실행하면 진짜 토큰이 sandbox 안에 쓰여 이 모델이 무너진다. 하지 않는다.
-- `installation.rootfs`는 정규화된 비-root 절대 경로여야 한다. `/`는 `UNSUPPORTED_PROFILE` startup failure이며 RunnerModule 구성 전에 거절한다. bwrap/user namespace가 없거나 spawn이 실패해도 host 실행으로 대체하지 않는다([DR31](design-revisions.md)). `oma login`과 `oma pi`의 대화형 엔진은 Resident가 아니며 이 sandbox 계약을 적용하지 않는다.
+- 현재 HostConfig 4에는 `installation.rootfs`가 없다. 이전 버전과 폐기된 rootfs/mount/backend 필드는 설정 오류로 거절하며 원본 파일을 변환하지 않는다. Linux rootfs 경로와 OS mount 목록은 어댑터가 선택하고 private state를 노출하는 system mount는 거절한다. bwrap/user namespace가 없거나 spawn이 실패해도 host 실행으로 대체하지 않는다([DR31](design-revisions.md)). `oma login`과 `oma pi`의 대화형 엔진은 Resident가 아니며 이 sandbox 계약을 적용하지 않는다.
 - Resident 환경은 host 환경을 상속하지 않는다(`--clearenv`). `LANG`/`LC_ALL=C.UTF-8`, `TZ=UTC`, `TERM=xterm-256color`, `TMPDIR=/tmp`, `SHELL=/bin/sh`, `USER`/`LOGNAME=agent`를 설정한다. `XDG_DATA_HOME=/home/agent/.local/share`, `XDG_RUNTIME_DIR=/home/agent/.run`은 confined home의 private 디렉터리다. PATH는 pinned OMA/Node, confined home의 `.local/bin`, `/usr/bin`, `/bin` 순서다.
 - 존재하는 DNS/NSS/hosts/timezone 파일과 CA 디렉터리만 RO bind한다. 없는 파일(깨진 symlink 포함)은 mount 계획에서 제외하며 `/etc` 전체를 노출하지 않는다. filesystem/pid/user 격리는 유지하고 네트워크는 공유한다.
 - 과거 guest 환경은 현재 실행 계약이 아니다. Darwin은 검증된 native backend가 연결되기 전

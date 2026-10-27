@@ -82,8 +82,6 @@ export interface DashboardData {
     readonly engineManaged?: boolean };
   /** DR24: what a Worker runs, as the Worker model row says it. */
   readonly workerModel?: string;
-  /** The rootfs Residents are confined to, or null when none is declared. */
-  readonly rootfs: string | null;
 }
 
 /** What the notice line reports. The view words it. */

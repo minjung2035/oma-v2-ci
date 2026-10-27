@@ -284,7 +284,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
   try {
     const config = defaultHostConfig({
       society: defaultSocietyFor("/home/someone/My Project", sha256Hex("/home/someone/My Project")),
-      node: process.execPath, libdir: root, rootfs: join(root, "rootfs"), deploymentDigest: "a".repeat(64),
+      node: process.execPath, libdir: root,  deploymentDigest: "a".repeat(64),
     });
     // The society follows the project directory, so two checkouts stay apart.
     assert.match(config.society, /^my-project-[0-9a-f]{16}$/);
@@ -300,7 +300,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
     assert.equal(model.model, "current");
 
     // DR37: resource/count limits are disabled; integration remains explicit.
-    assert.ok(loaded.schemaVersion === 3);
+    assert.ok(loaded.schemaVersion === 4);
     assert.ok(!("quota" in loaded));
     assert.deepEqual(loaded.integration.checks, []);
     assert.deepEqual(loaded.integration.protectedPaths, []);

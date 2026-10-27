@@ -5,7 +5,7 @@ import { decodeRunLease } from "@oma/protocol/run-lease";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { confinedPath } from "@oma/domain/resident-paths";
 import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
-import { hostSystemLayout, prepareResidentRootfs } from "@oma/platform-linux/resident-rootfs";
+import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import type { PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
 
@@ -33,7 +33,7 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
       coreExtension: join(libdir, "packages/extension/dist/index.js"), cli: join(libdir, "apps/oma/dist/cli.js"),
       workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home, mailArchive: join(directories.archive, "cur"),
       workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket },
-    confinement: { host: { rootfs: join(stateRoot, "rootfs"), libdir, node: process.execPath, pi: confinedPath({ libdir }, directories, entry),
+    confinement: { host: {  libdir, node: process.execPath, pi: confinedPath({ libdir }, directories, entry),
       piModeArgs: [], stateRoot, runRoot, limits },
       directories, lease: decodeRunLease({ actor, incarnation: 1, socketHostPath: socket }, { actor, runRoot }) },
   };
@@ -45,8 +45,8 @@ export function prepareResident(options: PiAdapterOptions): void {
   for (const path of [...Object.values(directories), options.paths.mailArchive, options.paths.workerArchive,
     join(options.paths.socket, ".."), join(directories.home, ".local/share"), join(directories.home, ".run")]) mkdirSync(path, { recursive: true, mode: 0o700 });
   writeFileSync(options.paths.socket, "");
-  Object.assign(host, { systemBinds: layout.binds, node: realpathSync(process.execPath) });
-  prepareResidentRootfs(host.rootfs, layout, process.getuid!(), process.getgid!());
+  Object.assign(host, {  node: realpathSync(process.execPath) });
+  prepareResidentRootfs(residentRootfsPath(host.stateRoot!), layout, process.getuid!(), process.getgid!());
   // Callers supply test payload bytes; their declared installation directories
   // follow each current asset path rather than the former extension layout.
   for (const path of [options.paths.coreExtension, options.paths.cli])

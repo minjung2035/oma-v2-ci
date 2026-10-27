@@ -34,9 +34,9 @@ function bundle(root: string): string {
     writeFileSync(join(libdir, "extensions", "review.js"), "export {};\n");
     writeFileSync(join(root, "prompt.md"), "");
     const host: Partial<HostConfig> = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         society: "demo",
-        installation: { node: process.execPath, libdir, rootfs: libdir, deploymentDigest: digest("d") },
+        installation: { node: process.execPath, libdir,  deploymentDigest: digest("d") },
         principalProfile: "principal",
         initialResidents: [{ name: "a", profile: "resident", brief: "seed" }],
         integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },

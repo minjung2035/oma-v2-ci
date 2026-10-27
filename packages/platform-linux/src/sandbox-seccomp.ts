@@ -1,3 +1,12 @@
+/** WP27: the one bubblewrap a confined engine is started through; the same
+ * binary `spawnSandboxed` pins. A plan names it absolutely, because the
+ * owned spawn that delivers a batch accepts no PATH lookup. */
+export const SANDBOX_EXECUTABLE = "/usr/bin/bwrap";
+
+/** The descriptor bubblewrap reads the sandbox's seccomp program from. */
+export const SANDBOX_FILTER_FD = 3;
+
+
 /** SB-001, MAC-205 (DR18 D-5, P0V-102): the seccomp filter every Resident
  * sandbox loads. It refuses the kernel objects no namespace confines -- what
  * a sandboxed process could make that the host, the hypervisor or every other

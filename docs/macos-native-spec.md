@@ -290,7 +290,7 @@ CLI 개발/CI profile은 Pi의 기존 OMA 전용 credential 저장소를 **명�
 
 이 전환은 새 협업 entity·authority·업무 queue를 도입하지 않는다. mail IDs·request key·accepted plan·terminal receipt·Git ref·batch attempt 의미는 유지한다. 공통 supervisor의 handle·timer·invocation mapping은 메모리에만 둔다.
 
-현재 형식은 HostConfig 3, DB 4, plan envelope v2, managed journal committed-v2다. Linux-only `installation.rootfs`, systemd asset pin, durable host absolute path를 실제로 바꾸면 설정/형식 version을 명시적으로 올린다. 번호는 구현 시 registry에서 한 번 할당하며 무조건 기존 필드를 optional로 풀어 과거 설정을 받아들이지 않는다. OS backend는 caller가 주장하는 권한 설정이 아니라 설치·플랫폼 composition의 선택이다.
+현재 형식은 HostConfig 4, DB 4, plan envelope v3(v2 읽기 보존), managed journal committed-v2다([DR60](design-revisions.md)). Linux-only `installation.rootfs`, systemd asset pin, durable host absolute path를 실제로 바꾸면 설정/형식 version을 명시적으로 올린다. 번호는 구현 시 registry에서 한 번 할당하며 무조건 기존 필드를 optional로 풀어 과거 설정을 받아들이지 않는다. OS backend는 caller가 주장하는 권한 설정이 아니라 설치·플랫폼 composition의 선택이다.
 
 기존 VM의 guest absolute path와 UID를 가진 state, pending operation, Pi history를 Mac 경로로 문자열 치환하지 않는다. [planPortability](../packages/protocol/src/persisted-formats.ts)가 이미 구분하는 host-intent path와 역사적 결과를 보존한다. native v1은 **별도 새 state root**에서 시작한다. 기존 VM state/disk/archive는 read-only 보존하며 자동 mount·삭제·변환하지 않는다. 기존 native Personal history도 덮어쓰지 않는다. 장기적으로 필요한 데이터 이동은 quiescent export/import로 별도 설계하고 old receipt를 다시 해석하지 않는다.
 
@@ -392,7 +392,7 @@ Node 26의 libuv는 Darwin fsync에서 F_FULLFSYNC를 시도하지만 fallback�
 ## 14. 구현 세션 인계 — 2026-10-26
 
 이 절은 구현 상태와 재개 지점이며 완료 판정이나 과거 시험의 재결박이 아니다. 사용자 최신
-지시는 **남은 레거시도 전부 제거**하는 것이다. 현재 작업량 추정은 약80%이며 지원율이 아니다.
+지시는 **남은 레거시도 전부 제거**하는 것이다. 초기의 약80% 작업량 추정은 철회했으며 최신 상태는 후속 절을 따른다.
 macOS native 제품 실행·레거시 제거·최종 검증은 아직 완료되지 않았다.
 
 ### 14.1 재개 전에 반드시 확인할 입력
@@ -910,3 +910,33 @@ G-PROCESS/G-FILES/G-AUTH는 아직 qualification되지 않았다.
 최종 검토에서 installation/package/Node module/developer root가 private state 안쪽의 readonly
 형제 경로로 들어가는 네 lexical 반례도 추가했다. 기존 한 방향 검사에서는 네 반례가 모두
 실패했고 양방향 겹침 거절로 수리했다. 이는 실제 alias/inode/executable 결박을 대신하지 않는다.
+
+
+### 14.22 HostConfig 4와 Linux private 실행 배치 — 2026-10-27
+
+§11의 형식 경계를 HostConfig 4로 할당했다. 필수 rootfs를 optional로 바꾸지 않고 공통 설정에서
+삭제했으며 이전 version과 폐기된 rootfs/systemBinds/backend 입력을 거절한다. validator/현재
+default/session/managed producer를 같은 형식으로 갱신했다. DB·accepted plan/receipt·managed
+journal 형식은 바꾸거나 자동 변환하지 않는다. 실제 이전 설정 파일·sidecar·primary bytes를
+loader와 editing/project reader의 거절 전후에 비교한다.
+
+공통 SandboxHost/RunnerConfinement/GitPaths에는 rootfs/system mount가 없다. Linux adapter가
+trusted state root 아래 rootfs를 만들고 명시 OS mount 목록을 검증·복사한다. private state와
+겹치는 system mount와 common host의 폐기된 Linux 필드는 거절한다. system path 목록·sandbox
+executable/filter 상수는 Linux 모듈로 이동하고 공통 설치 surface 관측은 storage로 분리했다.
+Darwin 준비는 Linux skeleton을 만들지 않으며 native product/backend/preload guard는 유지한다.
+Dashboard는 Required라는 confinement 정책을 표시하고 관측되지 않은 실행 성공을 만들지 않는다.
+
+실제 Linux/shared 관련 초기250회는247통과·기존 version/error/dashboard 기대3개 실패였다.
+원시 입력과 실패를 보존하고 새 형식의 정확한 거절·정책 표시로 기대를 수리했다. 후속 실행은
+validation과 native-2026-10-27-config-format/에서 별도 입력으로 기록한다. 실제 Darwin96회/OS와
+G-PROCESS/G-FILES/G-AUTH는 계속 미완료이며 source/타입 성공을 제품 지원으로 승격하지 않는다.
+
+
+최종 Config4 runtime 입력 `f68dcf7688b61455d90f61b3b0f4b4cf96f3f353531c84288206776dd72fd2d1`(15651개)에서
+root strict·전체 구조·전체 Linux LOCAL 3896/3896 PASS(serial13·parallel3883,
+fail/cancel/skip/todo0)를 확인했다. 전후 입력과 보호4개가 같다. 첫 전체44bcdcbc…의실패24개와
+수리 중81/82는 보존했고 fixture/의도한 SandboxHost 기준값/required 이름을 수리했다.
+독립 packed install26/26은44bcdcbc…의별도 결과다. 이후 package source를 바꾸지 않았으며
+과거 PASS를 새 입력에 재결박하지 않는다. 상세 command·실패·수리·문서 후속 검사는 validation과
+외부 native-2026-10-27-config-format/이 소유한다. Mac96회/OS는 NOT_RUN, 세 gate는 OPEN이다.

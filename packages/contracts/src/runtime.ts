@@ -81,27 +81,18 @@ export interface SandboxDirectories {
 
 
 export interface SandboxHost {
-  /** Host path of the trusted rootfs, mounted read-only at `/`. Never `/` or
-   * `/home`: SB-001 requires a rootfs holding only pinned tools and empty
-   * mount targets. */
-  rootfs: string;
-  /** Host path of the OMA installation, mounted read-only inside. It carries
+  /** Host path of the OMA installation, read-only to the Worker. It carries
    * the vendored engine, the trusted core extension and the model-facing CLI,
-   * so the rootfs itself does not have to be rebuilt when OMA is updated. */
+   * independently of the platform confinement mechanism. */
   libdir: string;
   /** DR25: host path of the package store `oma pi install` installs into,
    * mounted read-only inside when any role may load a package's extension. */
   packages?: string | undefined;
   /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
-  /** TUI-003: installation paths hidden inside the sandbox, relative to
-   * `libdir`: a directory is covered by an empty read-only tmpfs, a file by
-   * `/dev/null`. Only paths that exist are listed; bwrap needs a target. */
+  /** TUI-003: installation-relative entries hidden from model code. The
+   * platform applies its own read-only mask or denial mechanism. */
   hidden?: readonly { readonly path: string; readonly kind: "dir" | "file" }[];
-  /** Operating-system paths mounted read-only at the same path, so a rootfs of
-   * empty mount targets can still run programs. Absent when the rootfs carries
-   * its own. Only `SYSTEM_BIND_CANDIDATES` are accepted. */
-  systemBinds?: readonly string[];
   /** Engine entry, as the confined process sees it. */
   pi: string;
   piModeArgs: string[];

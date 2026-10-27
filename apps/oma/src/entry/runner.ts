@@ -9,8 +9,6 @@ import { StoreError, errorCodeOf } from "@oma/domain/errors";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
 import { realpathSync } from "node:fs";
-import { hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
-import { requireResidentRootfs } from "@oma/domain/resident-paths";
 import { packageStoreRoot } from "../runtime/packages/index.js";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
@@ -53,7 +51,6 @@ try { assertNativeRuntime(); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); process.exit(4); }
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
-if (process.platform === "linux") requireResidentRootfs(cfg.installation.rootfs);
 // Private Broker input, decoded once. It is never role configuration or a
 // Worker environment entry; no ambient/unprepared Mac toolchain fallback.
 const developerTools = process.platform === "darwin" ? decodeMacDeveloperToolsHex(process.env.OMA_DEVELOPER_TOOLS_HEX) : undefined;
@@ -111,25 +108,20 @@ if (piRuntime.args[0] === undefined) {
 // The engine home is oma's own beside the state root: a mode-000 `.engine`
 // left by a stray is repaired within the data root, not wedged on (P0-8).
 ensureOwnedDirectory(piRuntime.agentDir, dirname(stateRoot), 0o700);
-// SB-001 wants a trusted rootfs holding pinned tools and empty mount targets.
-// `installation.rootfs` names it; binding the host root is what SB-001 forbids.
-// Society is confined-only, and an unsupported rootfs is refused before any
-// RunnerModule exists. Missing bubblewrap is a spawn failure, never permission
-// to execute a Resident on the host.
+// Every Worker requires confinement. The platform selects its private roots;
+// configuration cannot select the host root or opt out of the sandbox.
 // DR25/C18: the package store's real root, when one exists. The confinement
 // mounts it read-only inside; the runner's paths carry it too, so the spawn
 // plan can name the store's skills, prompt templates and themes on the argv.
 const packages = cfg.installation.packages === undefined ? undefined
   : packageStoreRoot(cfg.installation.packages) ?? undefined;
 const confinement = {
-  rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in.
   ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
-  systemBinds: process.platform === "linux" ? hostSystemLayout().binds : [],
 };
 const runner = new RunnerModule({ runRoot, stateRoot, society,
   piCommand: piRuntime.executable,

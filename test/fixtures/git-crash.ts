@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -29,13 +30,13 @@ export function gitCommand(root: string, args: string[]): string {
  * scope/journal primitives; no host import or fabricated death observation. */
 export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: () => void } = {}): QuarantineExecution {
     const root = pathsInput.stateRoot;
-    const paths = { ...pathsInput, checkRootfs: pathsInput.checkRootfs ?? join(root, "native-fixture-rootfs"),
+    const paths = { ...pathsInput,
       checkNode: pathsInput.checkNode ?? process.execPath, checkAssetsDir: pathsInput.checkAssetsDir ?? process.cwd() };
     // Disposable fixture state is explicitly initialized. Every effect uses
     // the production scope/journal and Linux sandbox; there is no host Git
     // import fallback. Each phase drains its owner before returning to Git.
     if (!existsSync(join(root, "execution/scopes.jsonl"))) ExecutionJournal.initialize(root);
-    prepareResidentRootfs(paths.checkRootfs!, hostSystemLayout(), process.getuid!(), process.getgid!());
+    prepareResidentRootfs(residentRootfsPath(paths.stateRoot), hostSystemLayout(), process.getuid!(), process.getgid!());
     let active: ExecutionRuntime | null = null;
     const quarantine: QuarantineExecution = {
       confirmDead: () => active === null && ExecutionJournal.inspect(root).length === 0,
@@ -53,7 +54,7 @@ export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: 
 export function gitFixture(root: string, store: Store, options: { afterImport?: () => void } = {}) {
     const paths: GitPaths = {
         stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
-        checkRootfs: join(root, "native-fixture-rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd(),
+         checkNode: process.execPath, checkAssetsDir: process.cwd(),
     };
     const quarantine = nativeQuarantine(paths, options);
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);

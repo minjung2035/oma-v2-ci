@@ -52,8 +52,8 @@ export interface AgentProfile {
 }
 
 export interface HostConfig {
-  schemaVersion: 3; society: string;
-  installation: { node: string; libdir: string; rootfs: string; deploymentDigest: string; packages?: string };
+  schemaVersion: 4; society: string;
+  installation: { node: string; libdir: string; deploymentDigest: string; packages?: string };
   modelProfiles: Record<string, ModelProfile>;
   agentProfiles: Record<string, AgentProfile>;
   principalProfile: string;

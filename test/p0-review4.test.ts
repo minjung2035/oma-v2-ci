@@ -285,7 +285,7 @@ test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line start
 });
 
 test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is refused, never applied to the Principal", () => {
-  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const principal = defaults.agentProfiles[defaults.principalProfile]!;
   // A valid configuration with a Principal only.
   const config = validateConfig({ ...defaults, agentProfiles: { [defaults.principalProfile]: { ...principal, childProfile: null } }, initialResidents: [] });
@@ -313,7 +313,7 @@ test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is ref
 });
 
 test("P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Active count unknown, never 0", () => {
-  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const row = (agent: string, activeState: string | null, reason: string | null = null): AgentStatus => ({
     agent, desired: "enabled", activeState, subState: activeState === null ? null : "running", unitResult: activeState === null ? null : "success",
     execMainStatus: activeState === null ? null : 0, pending: 2, preparedBatches: 0, reason, runnerObservedAtMs: null });

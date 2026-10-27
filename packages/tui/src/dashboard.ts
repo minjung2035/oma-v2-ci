@@ -54,8 +54,5 @@ export function dashboardData(input: DashboardInput): DashboardData {
     unread: input.unread,
     principalModel: input.principalModel,
     ...(input.workerModel === undefined ? {} : { workerModel: input.workerModel }),
-    // Society is confined-only; the configuration validator rejects `/`.
-    // This is the declared rootfs, not runtime qualification evidence.
-    rootfs: config.installation.rootfs,
   });
 }

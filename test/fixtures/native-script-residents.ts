@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 /** Real trusted test runners for protocol/CLI regressions. The program is the
  * test driver, not the production Worker. Journal, namespace, PID2 pin, private
  * control channel, byte-sender authentication and whole-scope death are real.
@@ -24,7 +25,7 @@ import type { GitPaths } from "@oma/git/paths";
 import { join } from "node:path";
 
 export async function nativeScriptResidents(store: Store, state: string) {
-  const rootfs = join(state, "native-script-rootfs");
+  const rootfs = residentRootfsPath(state);
   prepareResidentRootfs(rootfs, hostSystemLayout(), process.getuid!(), process.getgid!());
   ExecutionJournal.initialize(state);
   const executions = new ExecutionRuntime(state);
@@ -84,7 +85,7 @@ export async function nativeScriptResidents(store: Store, state: string) {
   });
   return Object.assign(runtime, {
     attach(value: Broker) { broker = value; },
-    quarantine: (paths: GitPaths) => quarantineExecution({ ...paths, checkRootfs: rootfs,
+    quarantine: (paths: GitPaths) => quarantineExecution({ ...paths,
       checkNode: process.execPath, checkAssetsDir: process.cwd() }, executions),
     bindRunRevoker(callback: (actor: string) => void) { revoke = callback; },
     bindIncarnationReader(reader: (actor: string) => number | null) { incarnationOf = reader; },

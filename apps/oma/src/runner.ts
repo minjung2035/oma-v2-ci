@@ -17,7 +17,7 @@ import type { PiConfinement, PiEgress, PiInference } from "@oma/engine/pi-spawn-
 import { InferenceRelay } from "./runtime/inference-relay.js";
 import { ConnectProxy, makePublicDial, type ConnectDial, type EgressAudit } from "./runtime/connect-proxy.js";
 import { placeholderFor, resolveEngineAuth } from "@oma/engine/engine-auth";
-import { productSurfaceMasks } from "@oma/platform-linux/resident-rootfs";
+import { productSurfaceMasks } from "@oma/storage/installation-surface";
 import { packageResourcePaths } from "./runtime/packages/index.js";
 import { BrokerChannel, type ChannelLimits } from "@oma/client/channel";
 import { createBrokerChannel } from "./runtime/broker-channel.js";
@@ -55,24 +55,16 @@ export interface RunnerProfile {
   readonly toolSurface?: string;
 
 }
-/** What the deployment declared about confining Residents.
- *
- * SB-001 requires a trusted rootfs holding pinned tools and empty mount
- * targets. Every Resident engine requires this contract, and a deployment
- * that cannot supply it is unsupported. Receipt-only recovery does not
- * construct an engine or require its mount plan.
- */
+/** Common installation supplied to the selected Worker sandbox. Platform
+ * composition owns its roots and mechanism; every engine requires confinement.
+ * Receipt-only recovery constructs no engine or execution recipe. */
 export interface RunnerConfinement {
-  /** Host path of the trusted rootfs, mounted read-only at `/`. */
-  readonly rootfs: string;
   /** Host path of the OMA installation, mounted read-only inside. */
   readonly libdir: string;
   /** DR25: host path of the installed packages, mounted read-only inside. */
   readonly packages?: string | undefined;
   /** Host path of the pinned Node, bound read-only into the sandbox. */
   readonly node: string;
-  /** Operating-system paths bound read-only over the rootfs (SB-001). */
-  readonly systemBinds: readonly string[];
 }
 export interface RunnerPaths {
   readonly runRoot: string;
@@ -312,11 +304,9 @@ export class RunnerModule {
         "a confined Resident runs the shipped engine entry, and this profile declared none",
       );
     const host = {
-      rootfs: declared.rootfs,
       libdir: declared.libdir,
       ...(declared.packages === undefined ? {} : { packages: declared.packages }),
       node: declared.node,
-      systemBinds: declared.systemBinds,
       hidden: productSurfaceMasks(declared.libdir),
       pi: entry,
       // The adapter replaces this with the engine flags it composes.

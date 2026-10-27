@@ -1,6 +1,6 @@
 {
   "schema": 3,
-  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical.",
+  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
       "PeerIdentity": {
@@ -147,7 +147,7 @@
       },
       "SandboxHost": {
         "exported": true,
-        "sha256": "9799b432870d275beb2315be1ecf49ae63d7fc8de0c8223c4c493844b706113c"
+        "sha256": "2b6b0e60d8c9aec24fd1490de2db0336d083bfda1e8fbf388b348296a8a548ea"
       },
       "DeliveryBoundary": {
         "exported": true,

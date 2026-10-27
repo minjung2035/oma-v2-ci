@@ -22,7 +22,7 @@ function context() {
     archive: join(stateRoot, 'mail/archive'), workerArchive: join(stateRoot, 'mail/workers'),
     selfMail: join(stateRoot, 'mail/inboxes', actor), view: runnerViewPathAt(stateRoot, actor), world: join(stateRoot, 'world'),
     projectGit: projectGitPathAt(stateRoot), projectMirror: projectMirrorPathAt(stateRoot), sessions: runnerSessionDirPathAt(stateRoot, actor) };
-  const host = { rootfs: '/legacy-config-field', libdir: '/opt/oma installation', node: '/opt/pinned-node/bin/node',
+  const host = {  libdir: '/opt/oma installation', node: '/opt/pinned-node/bin/node',
     pi: '/opt/oma installation/engine.js', piModeArgs: ['--mode','rpc','literal " ; $(arg)'], packages: '/opt/oma packages',
     hidden: [{ path: 'packages/tui', kind: 'dir' }, { path: 'host-entry.js', kind: 'file' }],
     stateRoot, runRoot, limits: { frameBytes: 65536, batchMaxMessages: 24 } };

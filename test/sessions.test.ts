@@ -23,12 +23,12 @@ test("DR24: every session of a project has a society name of its own, valid, and
   assert.equal(sessionSocietyName("demo", 0), "demo-0");
 });
 
-test("DR24: a session's configuration is the project's, with its own name, rootfs and installation", () => {
-  const project = defaultHostConfig({ society: "proj", node: "/old/node", libdir: "/old/", rootfs: "/data/proj/rootfs", deploymentDigest: "a".repeat(64) });
-  const own = { society: "proj-1", node: "/usr/bin/node", libdir: "/opt/oma/", rootfs: "/data/proj-1/rootfs", deploymentDigest: "b".repeat(64) };
+test("DR24: a session's configuration is the project's, with its own name and installation", () => {
+  const project = defaultHostConfig({ society: "proj", node: "/old/node", libdir: "/old/",  deploymentDigest: "a".repeat(64) });
+  const own = { society: "proj-1", node: "/usr/bin/node", libdir: "/opt/oma/",  deploymentDigest: "b".repeat(64) };
   const session = sessionConfigOf({ ...project, limits: { ...project.limits, logBytes: 6 } }, own);
   assert.equal(session.society, "proj-1");
-  assert.deepEqual(session.installation, { node: own.node, libdir: own.libdir, rootfs: own.rootfs, deploymentDigest: own.deploymentDigest });
+  assert.deepEqual(session.installation, { node: own.node, libdir: own.libdir, deploymentDigest: own.deploymentDigest });
   assert.equal(session.limits.logBytes, 6, "a project setting holds in the session");
   assert.equal(projectSettingsPath("/data/oma", "proj"), "/data/oma/.projects/proj/config.json");
 });

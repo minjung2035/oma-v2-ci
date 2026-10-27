@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 /** Real native quarantine and Git classification. No fabricated command result,
  * namespace, population, stderr or scope is substituted for these observations. */
 import test, { type TestContext } from "node:test";
@@ -27,8 +28,8 @@ function fixture(t: TestContext) {
   const candidate = git(source, ["rev-parse", "HEAD"]), exportRef = "refs/oma/export/native-test", bundle = join(root, "bundle");
   git(source, ["update-ref", exportRef, candidate]); git(source, ["bundle", "create", bundle, exportRef]);
   const paths = { stateRoot: root, projectGit, contextGit: join(root, "context.git"), worldDir: join(root, "world"), society: "demo",
-    checkRootfs: join(root, "rootfs"), checkNode: process.execPath, checkAssetsDir: process.cwd() };
-  prepareResidentRootfs(paths.checkRootfs, hostSystemLayout(), process.getuid!(), process.getgid!());
+     checkNode: process.execPath, checkAssetsDir: process.cwd() };
+  prepareResidentRootfs(residentRootfsPath(paths.stateRoot), hostSystemLayout(), process.getuid!(), process.getgid!());
   ExecutionJournal.initialize(root); const owner = new ExecutionRuntime(root), descriptors: number[] = [];
   t.after(async () => { await owner.close(); for (const fd of descriptors) closeSync(fd); rmSync(root, { recursive: true, force: true }); });
   const execution = quarantineExecution(paths, owner);
@@ -49,7 +50,7 @@ function fixture(t: TestContext) {
 test("NB-01 native: verify/import retain held capabilities and execute without resource caps", { timeout: 30_000 }, async t => {
   const f = fixture(t), before = f.git(f.projectGit, ["show-ref"]);
   for (const phase of ["verify", "import"] as const) {
-    const command = gitSandbox({ rootfs: f.paths.checkRootfs, node: process.execPath, libdir: process.cwd() },
+    const command = gitSandbox({ rootfs: residentRootfsPath(f.paths.stateRoot), node: process.execPath, libdir: process.cwd() },
       { phase, candidate: f.candidate, exportRef: "refs/oma/export/native-test", prerequisites: [] });
     assert.equal(command.executable, "/usr/bin/bwrap"); assert.equal(command.timeoutMs, null); assert.equal(command.silenceMs, undefined);
     assert.equal(command.argv.some(arg => /MemoryMax|TasksMax|CPUQuota|RuntimeMaxSec/.test(arg)), false);

@@ -225,7 +225,6 @@ async function main(): Promise<void> {
             await stopping;
             return;
         }
-        if (process.platform === "linux") assertHostDirectoryLayout(cfg.installation.rootfs);
         assertStateRoot(stateRoot);
         let developerTools: MacDeveloperTools | undefined;
         if (process.platform === "darwin") {
@@ -251,7 +250,7 @@ async function main(): Promise<void> {
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
             ownerSignal: preparationAbort.signal,
-            checkRootfs: cfg.installation.rootfs, checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
+            checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
             () => executionOwner.confirmDead("candidate"));
@@ -293,8 +292,9 @@ async function main(): Promise<void> {
                     // activation can wake one on it. A repair that fails ends startup:
                     // no broker listens or grants authority over an unverified rootfs.
                     // DR35's private host conversation uses no Resident rootfs.
-                    for (const path of repairSociety(stateRoot))
-                        console.error(`Restored rootfs entry to its expected value: ${path}`);
+                    if (process.platform === "linux")
+                        for (const path of repairSociety(stateRoot))
+                            console.error(`Restored rootfs entry to its expected value: ${path}`);
                     await lifecycle.bootstrap(cfg);
                     validateStoredProfiles();
                 });

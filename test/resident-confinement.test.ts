@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006: what a Resident's engine is actually started with.
  *
@@ -17,7 +18,7 @@ import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "@oma/eng
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { containWorkspaceTools, createContainedWriter } from "@oma/tool-runtime/contained-tools";
 import { principalEnvironment, sessionEnv } from "@oma/engine/principal-session";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentProjectGit, requireResidentRootfs } from "@oma/domain/resident-paths";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentProjectGit } from "@oma/domain/resident-paths";
 import { residentArgv } from "@oma/platform-linux/sandbox";
 import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 import { decodeRunLease } from "@oma/protocol/run-lease";
@@ -77,7 +78,7 @@ function fixture(): Fixture {
   const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: paths.socket }, { actor, runRoot });
   const confinement: PiConfinement = {
     host: {
-      rootfs: join(root, "rootfs"), libdir, node: "/usr/bin/node",
+       libdir, node: "/usr/bin/node",
       pi: confinedPath({ libdir: libdir }, dirs, paths.piEntry), piModeArgs: [],
       stateRoot, runRoot, limits: { frameBytes: LIMITS.frameBytes, batchMaxMessages: LIMITS.batchMaxMessages },
     },
@@ -333,11 +334,11 @@ test("T113 a hostile environment entry cannot become extra bwrap arguments", () 
   try {
     const { host, lease, directories } = f.confinement;
     for (const bad of [{ "OMA X": "v" }, { "--bind": "v" }, { OMA_A: `v${NUL}--bind` }])
-      assert.throws(() => residentArgv(host, lease, directories, bad),
+      assert.throws(() => residentArgv(host, lease, directories, [], bad),
         (error: unknown) => (error as { code?: string }).code === "UNSUPPORTED_PROFILE", JSON.stringify(bad));
     // A caller cannot rename the actor: the builder's own entries come last and
     // bwrap keeps the last value for a repeated name.
-    const argv = residentArgv(host, lease, directories, { OMA_ACTOR: "mallory" });
+    const argv = residentArgv(host, lease, directories, [], { OMA_ACTOR: "mallory" });
     assert.equal(argv[argv.lastIndexOf("OMA_ACTOR") + 1], "alice");
     assert.ok(argv.lastIndexOf("OMA_ACTOR") > argv.indexOf("mallory"));
   } finally { rmSync(f.root, { recursive: true, force: true }); }
@@ -487,12 +488,12 @@ test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth 
 // "host-root profiles fail"; the mount arm is unchanged.
 test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at its mount when sealed; host-root profiles fail", () => {
   for (const rootfs of ["/", "relative", "/state/../rootfs", "/state\u0000/rootfs"])
-    assert.throws(() => requireResidentRootfs(rootfs), { code: "UNSUPPORTED_PROFILE" });
-  assert.doesNotThrow(() => requireResidentRootfs("/state/rootfs"));
+    assert.throws(() => residentRootfsPath(rootfs), { code: "UNSUPPORTED_PROFILE" });
+  assert.equal(residentRootfsPath("/state"), "/state/rootfs");
   assert.equal(residentProjectGit(), RESIDENT_PATHS.projectGit);
 });
 
-test("SB-002-E: the K0 rootfs check and the run-lease predicate give one verdict", async () => {
+test("SB-002-E: the Linux state-root derivation and run-lease predicate give one verdict", async () => {
   const { trustedAbsolutePath } = await import("@oma/protocol/run-lease");
   const cases = [
     "/", "/a", "/state/rootfs", "/a/", "//a", "/a//b", "/a/./b", "/a/../b",
@@ -502,7 +503,7 @@ test("SB-002-E: the K0 rootfs check and the run-lease predicate give one verdict
   for (const path of cases) {
     const lease = trustedAbsolutePath(path);
     let kernel = true;
-    try { requireResidentRootfs(path); } catch { kernel = false; }
+    try { residentRootfsPath(path); } catch { kernel = false; }
     assert.equal(kernel, lease, `verdicts diverge on ${JSON.stringify(path)}`);
   }
 });
@@ -549,8 +550,8 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
     runRoot: join(f.root, "run"), stateRoot: f.stateRoot, society: "s",
     piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
     coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
-    confinement: { rootfs: f.confinement.host.rootfs, libdir: f.libdir, node: "/usr/bin/node",
-      systemBinds: [] },
+    confinement: {  libdir: f.libdir, node: "/usr/bin/node",
+       },
   };
   const model = { provider: "pi", model: "current", inferenceTimeoutSeconds: 600 };
   const adapterOf = (toolSurface?: string): PiAdapter => {

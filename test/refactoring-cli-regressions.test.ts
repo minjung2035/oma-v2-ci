@@ -27,8 +27,8 @@ function record(value: unknown): value is Record<string, unknown> {
 function validConfig() {
   const resources = { memoryBytes: 1024, tasks: 1, cpuQuotaPercent: 1, stagingBytes: 1024, checkTimeoutSeconds: 1 };
   return {
-    schemaVersion: 3, society: "demo",
-    installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "a".repeat(64) },
+    schemaVersion: 4, society: "demo",
+    installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma",  deploymentDigest: "a".repeat(64) },
     modelProfiles: { m: { provider: "p", model: "m", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null } },
     principalProfile: "p", initialResidents: [{ name: "alice", profile: "p", brief: "work" }],

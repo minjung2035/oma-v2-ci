@@ -1,3 +1,4 @@
+import { SANDBOX_FILTER_FD } from "./sandbox-seccomp.js";
 // SB-001..006: argv composition is NOT kernel resource-enforcement evidence.
 // Only a decoded incarnation socket and this actor's host-owned mount roots enter the plan.
 import { basename, dirname, join } from "node:path";
@@ -6,8 +7,9 @@ import type { RunLease, SandboxPlan } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-lease";
 import { assertResidentContext, assertSandboxInstallation } from "@oma/protocol/resident-context";
-import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, SANDBOX_FILTER_FD, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts, residentDirectoryPolicy } from "@oma/domain/resident-paths";
+import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS, nodeToolchainMounts, residentDirectoryPolicy } from "@oma/domain/resident-paths";
 
+import { residentRootfsPath, SYSTEM_BIND_CANDIDATES } from "./resident-rootfs.js";
 import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 
 /** Environment entries are attacker-adjacent: they come from role settings and
@@ -42,10 +44,13 @@ function resolvedBindSource(path: string): string {
  * limits the run is bound to and the actor whose lease was validated above.
  */
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
-  dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},
+  dirs: ResidentDirectories, systemBinds: readonly string[], env: Readonly<Record<string, string>> = {},
   inferenceSocketHost?: string, egressSocketHost?: string): string[] {
-  validateSandboxHost(h);
+  const binds = snapshotSystemBinds(systemBinds);
+  validateSandboxHost(h, binds);
   assertResidentContext(h, lease, dirs);
+  if (binds.some(root => h.stateRoot === root || h.stateRoot!.startsWith(`${root}/`)))
+    throw new StoreError("UNSUPPORTED_PROFILE", "Linux system mounts overlap private state");
   if (inferenceSocketHost !== undefined && !trustedAbsolutePath(inferenceSocketHost))
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
   if (egressSocketHost !== undefined && !trustedAbsolutePath(egressSocketHost))
@@ -55,8 +60,8 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     // SB-001, MAC-205: the kernel objects no namespace confines are refused by
     // system call; the program is read from this descriptor (sandboxSeccompFilter).
     "--seccomp", String(SANDBOX_FILTER_FD),
-    "--ro-bind", h.rootfs, "/",
-    ...(h.systemBinds ?? []).flatMap(path => ["--ro-bind", path, path]),
+    "--ro-bind", residentRootfsPath(h.stateRoot!), "/",
+    ...binds.flatMap(path => ["--ro-bind", path, path]),
     "--ro-bind", h.node, RESIDENT_PATHS.node,
     // FI-2: the pinned Node's npm/npx/corepack, from its own prefix when it
     // ships them there; the rootfs links them beside the Node.
@@ -92,20 +97,22 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--chdir", RESIDENT_PATHS.workspace, "--", RESIDENT_PATHS.node, h.pi, ...h.piModeArgs];
 }
 
-export function validateSandboxHost(h: SandboxHost): void {
-  if (!trustedAbsolutePath(h.rootfs))
-    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
-  assertSandboxInstallation(h);
-  if (h.systemBinds !== undefined && (!Array.isArray(h.systemBinds) ||
-    h.systemBinds.some(path => !SYSTEM_BIND_CANDIDATES.includes(path))))
+function snapshotSystemBinds(value: readonly string[]): readonly string[] {
+  if (!Array.isArray(value)) throw new StoreError("UNSUPPORTED_PROFILE", "Linux system mounts require an explicit array");
+  const copy = [...value];
+  if (copy.some(path => !SYSTEM_BIND_CANDIDATES.includes(path)))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox system mounts must be operating-system paths only");
+  return Object.freeze(copy);
+}
+export function validateSandboxHost(h: SandboxHost, systemBinds: readonly string[]): void {
+  assertSandboxInstallation(h); snapshotSystemBinds(systemBinds);
 }
 export class SandboxModule {
-  constructor(private readonly host: SandboxHost) { validateSandboxHost(host); }
+  constructor(private readonly host: SandboxHost, private readonly systemBinds: readonly string[]) { validateSandboxHost(host, systemBinds); }
   resident(lease: RunLease, dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {}): SandboxPlan {
     assertResidentContext(this.host, lease, dirs);
     assertValidatedRunLease(lease, this.host.runRoot);
-    const argv = residentArgv(this.host, lease, dirs, env);
+    const argv = residentArgv(this.host, lease, dirs, this.systemBinds, env);
     // `env` is empty on purpose: `--clearenv` means the child's environment is
     // the argv above, so nothing is inherited from whoever spawns bwrap.
     // Descriptor 3 carries the sandbox filter (sandboxSeccompFilter, DR18).

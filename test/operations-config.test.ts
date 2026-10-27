@@ -204,13 +204,14 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
 }
 const hex = (text: string): string => Buffer.from(text, "utf8").toString("hex");
 
-test("U1: rootfs '/' fails startup before RunnerModule can run", () => {
+test("U1: the retired rootfs setting fails startup before RunnerModule can run", () => {
   const f = fixture();
   try {
     f.edit("host.json", host => { host.installation.rootfs = "/"; });
     const result = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /UNSUPPORTED_PROFILE/);
+    assert.match(result.stderr, /INVALID_REQUEST/);
+    assert.match(result.stderr, /installation\.rootfs unknown/);
     assert.doesNotMatch(result.stderr, /runs unconfined/);
     assert.equal(existsSync(join(f.root, "selected.json")), false);
   } finally { f.close(); }

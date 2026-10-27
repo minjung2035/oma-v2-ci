@@ -1,8 +1,9 @@
+import { SYSTEM_BIND_CANDIDATES } from "./resident-rootfs.js";
 /** Linux candidate sandbox grammar. Shared Git owns exact checkout and setup outcomes. */
 import type { CommandSpec } from "@oma/process/command";
 import { sandboxSeccompFilter } from "./sandbox-seccomp.js";
 import { hostSystemLayout } from "./resident-rootfs.js";
-import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES, nodeToolchainMounts } from "@oma/domain/resident-paths";
+import { RESIDENT_PATHS, nodeToolchainMounts } from "@oma/domain/resident-paths";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { StoreError } from "@oma/domain/errors";

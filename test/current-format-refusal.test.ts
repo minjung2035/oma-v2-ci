@@ -33,7 +33,7 @@ for (const version of [1, 2, 3]) test(`DR46 schema4: refused schema ${version} s
 test("DR46 Host3: previous versions and inert resource fields refuse without modifying configuration bytes", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-prior-config-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const current = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), rootfs: "/rootfs", deploymentDigest: "a".repeat(64) });
+  const current = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),  deploymentDigest: "a".repeat(64) });
   assert.doesNotThrow(() => validateConfig(current));
   const path = join(root, "config.json");
   for (const value of [

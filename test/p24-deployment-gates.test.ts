@@ -31,12 +31,11 @@ import { copyInstalledProduct } from "./fixtures/installation.js";
 const project = fileURLToPath(new URL("../../", import.meta.url));
 function config(root: string): HostConfig {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     society: "fixture",
     installation: {
         node: process.execPath,
         libdir: root,
-        rootfs: root,
         deploymentDigest: deploymentDigest(root),
     },
     modelProfiles: {

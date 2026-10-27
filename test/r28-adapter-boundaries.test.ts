@@ -152,9 +152,9 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => assertValidatedRunLease({ ...lease }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease({ ...value, incarnation: 1 }, { actor: "alice", runRoot }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease(value, { actor: "bob", runRoot }), errorCode("AUTH_FAILED"));
-  const host: SandboxHost = { rootfs: "/opt/oma/rootfs", libdir: "/opt/oma/lib", node: "/usr/bin/node", pi: "/opt/oma/lib/pi/cli.js",
+  const host: SandboxHost = {  libdir: "/opt/oma/lib", node: "/usr/bin/node", pi: "/opt/oma/lib/pi/cli.js",
     piModeArgs: ["--mode", "rpc"], stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
-  const sandbox = new SandboxModule(host);
+  const sandbox = new SandboxModule(host, []);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
     archive: join(stateRoot, "mail/archive"), workerArchive: join(stateRoot, "mail/workers"), selfMail: join(stateRoot, "mail/inboxes/alice"),
     view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"), projectMirror: join(stateRoot, "repos/project-mirror.git"),

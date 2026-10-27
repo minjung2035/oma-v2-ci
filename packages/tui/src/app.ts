@@ -44,7 +44,7 @@ export type SetFieldOutcome =
 const EMPTY: PanelData = Object.freeze({
   dashboard: Object.freeze({
     status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "Not yet observed" }),
-    configuredWorkers: 0, unread: null, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null
+    configuredWorkers: 0, unread: null, principalModel: Object.freeze({ configured: "unknown", session: null })
 }),
   config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null, mailOmitted: 0,
 });

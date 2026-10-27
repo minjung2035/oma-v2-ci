@@ -18,7 +18,7 @@ const app = new TuiApp({
   configFields: () => [], extensions: () => [], body: () => null,
   mail: () => ({ rows: [], unreadable: null, omitted: 0 }),
   dashboard: () => ({ status: { kind: 'unknown', observedAtMs: 0, reason: 'Fixture observation' },
-    configuredWorkers: 1, unread: null, principalModel: { configured: 'scripted', session: 'scripted' }, rootfs: null }),
+    configuredWorkers: 1, unread: null, principalModel: { configured: 'scripted', session: 'scripted' },  }),
   setField: () => { throw new Error('unexpected write'); }, setExtension: () => { throw new Error('unexpected write'); },
   submitPrompt: value => session.submit(value), quit: () => resolveQuit(),
 }, terminal, 262144);

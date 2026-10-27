@@ -377,7 +377,7 @@ test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integ
 });
 test("T62-resource / DR18: a policy with integration checks is not supported and fails closed before candidate execution", async () => {
     const env = envOf({ policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {},  }] });
-    env.paths.checkRootfs = "/trusted/rootfs";
+
     env.paths.checkAssetsDir = "/trusted/checks";
     try {
         const { base, candidate } = publishedFastForward(env);

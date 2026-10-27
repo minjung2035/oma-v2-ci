@@ -2486,3 +2486,22 @@ scope를 계속 대조한다. 과거 accepted identity·plan·receipt는 새 값
 검증 상태: 전체 production source를 읽은 뒤 구현했으며 runtime 회귀는 아직 실행하지 않았다.
 최신 사용자 지시에 따라 실제 macOS 테스트/CI는 우선 제외하고 구현·source 대조·타입/정적
 검사를 진행한다. 이것으로 Darwin 세 gate나 최종 지원이 검증됐다고 표시하지 않는다.
+
+
+## DR60 — HostConfig 4에서 Linux 실행 배치를 공통 설정과 분리한다
+
+macOS native 명세 §11을 구현한다. 현재 설정 형식은 HostConfig 4이며 `installation`은 Node·
+설치 code·deployment digest와 선택적인 package store만 담는다. Linux rootfs·system mounts·
+OS backend를 설정하거나 이전 형식을 optional 필드로 수용하지 않는다. 이전 설정은 새 개발
+state를 요구하며 파일·managed history·accepted plan/receipt/DB bytes를 자동 변환하지 않는다.
+DB 4·plan v3와 역사적 v2 읽기·managed journal committed-v2는 이 변경에서 바꾸지 않는다.
+
+공통 SandboxHost/RunnerConfinement/GitPaths에서도 Linux rootfs와 system mount 필드를 제거한다.
+Linux 어댑터가 trusted state root 아래 rootfs를 선택하고 별도 OS mount 입력을 검증한다. public
+system mount가 private state를 노출하면 거절한다. Linux executable/filter와 mount 상수는 Linux
+모듈이 소유한다. 공통 설치 surface의 read-only 관측은 shared storage에 둔다. Darwin은 Linux
+skeleton을 생성하지 않고 native product/scope/file/auth guard는 유지한다.
+
+Dashboard는 confinement이 필수인 정책을 표시하며 설치 경로나 실제 실행 성공을 만들어내지
+않는다. 원래 confinement·credential·authority·전체 scope 종료 계약과 불명 상태의 거절은 유지한다.
+실제 Mac 시험/지원은 이 설정 전환이나 Linux 시험만으로 완료 처리하지 않는다.

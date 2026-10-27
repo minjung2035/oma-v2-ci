@@ -275,11 +275,54 @@ Linux execution46/46 PASS다. 서로 다른 실행을 합산하지 않으며 모
 root dist가 없는 상태의 실제 full build도 exit0이며 겹침 반례는 동일 test SHA로5/9→9/9다.
 마지막 문서 결과 기록 이후 입력은 구조 검사로만 별도 결박하며 runtime 결과를 재결박하지 않는다.
 
+## HostConfig 4 형식 전환 — 2026-10-27
+
+[DR60](../design-revisions.md)은 HostConfig 4에서 Linux 전용 rootfs/mount/backend 설정을
+제거하는 명시적 형식 경계다. SandboxHost·RunnerConfinement·GitPaths도 같은 공통 설치
+계약을 사용하고 Linux adapter가 trusted state root 아래 rootfs와 별도 OS mount를 선택한다.
+현재 native interface golden은 SandboxHost 한 항목만 의도적으로 바꿨다. 역사적 golden·
+architecture·authored review는 보존하고 accepted plan/receipt·DB·managed journal bytes는
+변환하지 않았다. 실제 이전 설정의 loader/editing/project reader 거절 전후 bytes·inode·
+mode·size·mtime·ctime와 sidecar/primary 보존을 검사한다.
+
+초기 관련 입력 ce163b42…(15651개)의247/250·기대 불일치3개를 보존했다. version/error/
+Dashboard 정책 기대를 수리한 입력
+`abbe06b7b1e67b6c52113e4c4109304f0aaf28004f56596d979f5dc042058c5c`에서250/250 PASS,
+skip/cancel/todo/fail0·전후 입력 동일이다. 이것은 부분 관련 실행의 결과다.
+
+첫 전체 입력 `44bcdcbca8ecdadc043b99712165184834bf6dd0402e839be5052c7fd840d42b`
+(15651개)은 root strict·전체 구조 검사 PASS였지만 local serial13/13·parallel3859/3883,
+실패24개로 전체 exit1이었다. 이전 rootfs shorthand가 남은 audit fixture5개, 새 developer-tools
+의존성이 빠진 Broker 조립 fixture17개, 의도한 SandboxHost 기준값1개, required AV27 이름1개다.
+같은 입력의 독립 tarball 설치는26/26·자체 선언/import와 지정 runtime smoke PASS다.
+외부 SDK declaration 진단은 일부 closure에서44개이며 자체 선언 오류와 구분한다.
+이 packed 결과를 이후 입력으로 재결박하지 않는다.
+
+수리 중 입력3b000ef2…의관련81/82·실패1도 보존한다. 조립 fixture의 가상 host PID를 없애는
+과정에서 전달값 단언을 누락했고 실제 process.pid의 데이터 전달로 수리했다. 이는 credential·
+host identity·scope 사망 증명이 아니다. f68dcf76…의Broker 조립18/18 PASS 뒤 전체를 재실행했다.
+실행하지 않는 physical port는 throw하고 실제 process.platform을 사용하며 성공 no-op 후보
+checker 중복 fixture를 제거했다. required 이름과 강한 원래 단언은 유지했다.
+
+최종 runtime 입력 `f68dcf7688b61455d90f61b3b0f4b4cf96f3f353531c84288206776dd72fd2d1`(15651개)에서
+root strict·전체 구조 검사와 전체 LOCAL **3896/3896 PASS**를 확인했다.
+serial13/13·parallel3883/3883, fail/cancel/skip/todo0이며 전후 입력과 보호4개 SHA가
+같다. 전체 discovery는473개 파일로 유지했다. 실제 Linux UID1000·CapEff0·pinned bwrap0.12.0/
+Node26의 /usr/bin overlay profile이며 OS/PID/kernel 사실을 대체하지 않았다.
+raw root는 `/home/dev/oma-audit-artifacts/native-2026-10-27-config-format/`다.
+`broad-initial/`, `contract-repairs/`, `contract-repairs-final/`, `broad-repaired/`와
+`whole-runtime-counts.json`이 각 실패·수리·범위와 정확한 command/종료/입력을 소유한다.
+
+결과 기록 뒤의 문서 입력은 final-documentation/에서 별도 구조 검사로 결박한다.
+이 Linux local/packed 결과는 실제 Darwin·service·paid provider·power-loss qualification의
+PASS가 아니다. Darwin32종×3회, OS별96회는 NOT_RUN이고 세 native gate와 Mac 제품 guard는
+유지한다. 유료 Mac CI 실행과 master 병합·배포는 하지 않았다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `d4f2e177cedd3733e4460d7651e9d52e317c9e1b332570fa9a7d917cc65c30c0` (15648 files).
+verification input digest `8b455786a1b97f13e910c2c48f154f4281c93a9cc7d7cb2efa2ab08338dd45da` (15651 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

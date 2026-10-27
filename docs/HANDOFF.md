@@ -1,6 +1,29 @@
 # OMA v2 — 현재 인계
 
-## 현재: Worker toolchain 연결과 실제 부팅 검증 준비
+## 현재: HostConfig 4와 Linux private 실행 배치 전환
+
+HostConfig 4는 rootfs/mount/backend 설정을 받지 않는다. SandboxHost·RunnerConfinement·GitPaths의
+Linux 필드도 제거했고 Linux adapter가 state root 아래 rootfs와 검증한 system mount를 선택한다.
+공통 설치 surface 관측은 storage로 분리했다. Darwin은 Linux skeleton을 생성하지 않는다.
+이전 형식은 파일/managed history/accepted bytes를 변환하지 않고 거절하며 native guard는 유지한다.
+
+현재 runtime 입력 `f68dcf7688b61455d90f61b3b0f4b4cf96f3f353531c84288206776dd72fd2d1`(15651개)의
+root strict·전체 구조와 전체 Linux LOCAL 3896/3896가 통과했다. serial13/13·parallel3883/3883,
+fail/cancel/skip/todo0·전후 입력과 보호4개 SHA 동일이다. 첫 전체 입력44bcdcbc…의실패24개와
+수리 중81/82는 raw로 보존했다. 같은44bcdcbc…의독립 packed install26/26·자체 선언/import/
+지정 runtime smoke PASS는 그 입력의 결과로만 기록한다. source package는 그 뒤 바꾸지 않았다.
+
+현재 native golden은 DR60의SandboxHost 한 항목만 갱신했다. 원래 README·architecture·
+authored review·역사적 contract golden은 보존한다. 정확한 원문은 validation과 외부
+native-2026-10-27-config-format/에 있다. 문서 결과 기록 뒤의 구조 입력과 실제 커밋·푸시는
+같은 root의final-documentation/·main-result.json으로 구분하며 runtime PASS를 재결박하지 않는다.
+
+다음은 P0–P7의남은 Darwin 구현/qualification이다. G-PROCESS/G-FILES/G-AUTH, 정확한 executable/
+metadata 결박과 Mac 실제 end-to-end·설치 검증은 미완료다. Darwin96회/OS는 NOT_RUN이고 paid
+CI는 기본 off다. user systemd/VM fallback·거짓 scope proof·기능 축소로 닫지 않는다.
+release Keychain·TCC·sleep/wake·power loss도 별도 미검증이다. master 병합·배포하지 않는다.
+
+## 직전: Worker toolchain 연결과 실제 부팅 검증 준비
 
 Broker-owned leased temporary와 기존 preparation journal slot에서 developer/Git/exec-path를
 관측하고, closed transient metadata를 명시적으로 Runner에 전달한다. ambient 값은 제거/덮어쓰기,
@@ -15,7 +38,7 @@ own script/C 실행·권한 거절의 required fixture를 추가해 OS별96회�
 paid CI 기본 off, native guard/backend 거절 유지다. 현재 preload의 guard 거절을 성공 부팅으로
 표시하지 않는다. 최종 입력별 결과는 validation과 native-2026-10-27-worker-bootstrap/에 기록한다.
 
-다음은 §11의 명시 config/format version 전환이다. Linux 전용 rootfs/layout 검사의 OS 조립을
+당시 다음 경계였던 §11의 명시 config/format version 전환은 위 HostConfig 4 기록을 따른다. Linux 전용 rootfs/layout 검사의 OS 조립을
 분리했지만 HostConfig3 필드를 optional로 풀거나 accepted bytes를 재작성하지 않았다.
 G-PROCESS/G-FILES/G-AUTH·Homebrew dylib·실제 Mac 부팅과 최종 양 OS qualification도 남는다.
 

@@ -10,7 +10,7 @@ import { applyLabel } from "@oma/tui/view/labels";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 const defaults = (): HostConfig => defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",
-  rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+   deploymentDigest: "a".repeat(64) });
 const input = { name: "worker", from: "a".repeat(40), brief: "b" };
 function created(cfg: HostConfig): readonly string[] {
   const parent = cfg.agentProfiles.parent!;

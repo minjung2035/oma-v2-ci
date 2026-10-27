@@ -1,3 +1,4 @@
+import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 /** App selects one physical backend; Git owns verification and authority. */
 import type { GitPaths } from "@oma/git/paths";
 import type { QuarantineExecution } from "@oma/git/quarantine";
@@ -13,7 +14,7 @@ import type { ExecutionRuntime } from "./execution-runtime.js";
 export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntime): QuarantineExecution {
   return Object.freeze<QuarantineExecution>({ confirmDead: () => executions.confirmDead("quarantine"),
     execute: async (request, authorize) => {
-      if (!paths.checkNode || !paths.checkAssetsDir || process.platform !== "darwin" && !paths.checkRootfs)
+      if (!paths.checkNode || !paths.checkAssetsDir)
         throw new StoreError("UNSUPPORTED_PROFILE", "quarantine installation is incomplete");
       const input = { phase: request.phase, candidate: request.candidate, exportRef: request.exportRef, prerequisites: request.prerequisites };
       let command: CommandSpec;
@@ -31,7 +32,7 @@ export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntim
           command => executions.run("quarantine", command, paths.ownerSignal, authorize, [request.leaseFd]));
         command = quarantineSeatbelt({ node: paths.checkNode, libdir: paths.checkAssetsDir, tools }, input,
           { git: tools.git, project: paths.projectGit, root: request.root, bundle: join(request.root, "input.bundle"), temporary }).command;
-      } else command = gitSandbox({ rootfs: paths.checkRootfs!, node: paths.checkNode, libdir: paths.checkAssetsDir }, input);
+      } else command = gitSandbox({ rootfs: residentRootfsPath(paths.stateRoot), node: paths.checkNode, libdir: paths.checkAssetsDir }, input);
       return executions.run("quarantine", command, paths.ownerSignal, authorize,
         [request.bundleFd, request.leaseFd, request.rootFd, request.projectFd], request.stderrFd);
     },

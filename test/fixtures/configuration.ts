@@ -37,13 +37,12 @@ export function createCompleteConfigurationFixture() {
       childProfile: null,
     };
     const config: HostConfig = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     society: "demo",
     installation: {
         // A node that exists here: a runner entry resolves it for confinement.
         node: process.execPath,
         libdir: installation,
-        rootfs: "/rootfs",
         deploymentDigest: "a".repeat(64),
     },
     modelProfiles: {
