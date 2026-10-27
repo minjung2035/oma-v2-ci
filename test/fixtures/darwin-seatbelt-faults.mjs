@@ -132,7 +132,7 @@ async function fdClosure() {
   const mutantSource = join(work, "intentionally-leaky.c"), mutant = join(work, "intentionally-leaky");
   writeFileSync(mutantSource, helperSource.replace("closefrom(3);", "/* explicit negative control: inherited FD retained */"));
   for (const [source, output, extra] of [[actorSource, actor, []], [mutantSource, mutant, ["-lsandbox"]]]) {
-    const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, ...extra, "-o", output],
+    const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-I", dirname(bundledSeatbeltHelper()), source, ...extra, "-o", output],
       { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL", maxBuffer: 65536 });
     assert.equal(compiled.error, undefined); assert.equal(compiled.signal, null); assert.equal(compiled.status, 0, compiled.stderr);
   }
@@ -182,11 +182,39 @@ async function ipcDenial() {
     if (errors.length) throw new AggregateError(errors, "IPC fixture cleanup failed");
   });
 }
+async function keptDescriptors() {
+  const actorSource=fileURLToPath(new URL('./darwin-fd-observer.c',import.meta.url)),actor=join(work,'kept-observer');
+  const compiled=spawnSync('/usr/bin/xcrun',['clang','-Wall','-Wextra','-Werror',actorSource,'-o',actor],
+    {encoding:'utf8',timeout:30000,killSignal:'SIGKILL',maxBuffer:65536});
+  assert.equal(compiled.error,undefined);assert.equal(compiled.signal,null);assert.equal(compiled.status,0,compiled.stderr);
+  const canary=join(root,'kept-canary');writeFileSync(canary,'fixture explicit channels');
+  const held=openSync(canary,constants.O_RDONLY),info=fstatSync(held,{bigint:true});
+  return withAsyncCleanup(async()=>{
+    const command={...target,executable:actor,argv:[String(info.dev),String(info.ino),'6','8']};
+    const selected={...policy,readable:[{path:canary,kind:'file'}],executable:[{path:actor,kind:'file'}],preserveFds:[6,8]};
+    const recipe=prepareSeatbelt(command,selected),frame=Buffer.from(recipe.privateInputs[0].bytes),inherited=Array(5).fill(held);
+    const positive=await raw(recipe.command,frame,inherited);
+    assert.equal(positive.exitCode,0,positive.stderr.toString());
+    assert.equal(JSON.parse(positive.stdout).keptCount,2);assert.equal(JSON.parse(positive.stdout).leaked,false);
+    // Intentionally retain one additional real canary; the independent actor
+    // must detect it instead of declaring every inherited channel harmless.
+    const leaky=prepareSeatbelt(command,{...selected,preserveFds:[4,6,8]});
+    const negative=await raw(leaky.command,Buffer.from(leaky.privateInputs[0].bytes),inherited);
+    assert.equal(negative.exitCode,3,negative.stderr.toString());assert.equal(JSON.parse(negative.stdout).leaked,true);
+    for(const flag of ['--keep-fds=3','--keep-fds=6,6']){
+      const refused=await raw({...recipe.command,argv:[flag,...recipe.command.argv.slice(1)]},frame,inherited);
+      assert.equal(refused.exitCode,125);assert.match(refused.stderr.toString(),/descriptor policy/);
+    }
+    return {exactChannelsRetained:true,extraCanaryDetectedInControl:true,malformedPolicyRefused:true,directChildrenClosed:true,
+      actorSha256:digest(readFileSync(actor))};
+  },()=>closeSync(held));
+}
 let observation;
 if (mode?.startsWith("seatbelt-profile-")) observation = await framing();
 else if (mode === "seatbelt-argv-env") observation = await argvAndEnvironment();
 else if (mode === "seatbelt-trusted-preload") observation = await trustedPreload();
 else if (mode === "seatbelt-fd-close") observation = await fdClosure();
 else if (mode === "seatbelt-ipc-denial") observation = await ipcDenial();
+else if (mode === "seatbelt-kept-fds") observation = await keptDescriptors();
 else throw new Error(`unknown Seatbelt fault case ${mode}`);
 console.log(JSON.stringify({ case: mode, seatbeltFault: observation }));

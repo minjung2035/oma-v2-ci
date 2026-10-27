@@ -381,6 +381,7 @@ packages/platform-mac/src/native-channel.ts
 packages/platform-mac/src/path-view.ts
 packages/platform-mac/src/resident-sandbox.ts
 packages/platform-mac/src/seatbelt.ts
+packages/platform-mac/src/seatbelt/launch-fds.h
 packages/platform-mac/src/seatbelt/main.c
 packages/process/package.json
 packages/process/src/async.ts
@@ -410,6 +411,7 @@ packages/protocol/src/byte-queue.ts
 packages/protocol/src/client-codecs.ts
 packages/protocol/src/delivery-boundary.ts
 packages/protocol/src/frame.ts
+packages/protocol/src/git-execution-view.ts
 packages/protocol/src/host-channel.ts
 packages/protocol/src/jsonl.ts
 packages/protocol/src/log-limits.ts

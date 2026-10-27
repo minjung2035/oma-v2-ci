@@ -36,7 +36,8 @@ export function candidateSandbox(host: CandidateSandboxHost, candidate: string, 
     "--proc", "/proc", "--dev", "/dev",
     "--tmpfs", "/workspace", "--tmpfs", "/tmp", "--clearenv",
     ...Object.entries(environment).flatMap(([key, value]) => ["--setenv", key, value]),
-    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv })];
+    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv,
+      view: { git: "/usr/bin/git", project: RESIDENT_PATHS.projectGit, workspace: RESIDENT_PATHS.workspace } })];
   return {
     executable: sandbox[0]!, argv: sandbox.slice(1),
     env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },

@@ -1,5 +1,27 @@
 # OMA v2 — 현재 인계
 
+## 현재: Git 실행 view와 명시 FD 전달 기반 구현
+
+candidate/check와 quarantine의 공통 TS에서 Linux 고정 경로를 제거했다. 부모의 명시된
+closed view에서 Git/project/workspace 또는 root/bundle/tmp를 받고, 두 Linux producer도 같은
+payload를 만든다. 누락·추가 필드·겹친 root·잘못된 UTF-8을 거절하고 과거 payload fallback은
+없다. canonical observer도 부모가 선택한 절대 Git을 받으며 기본 Linux 실행은 유지한다.
+
+실제 namespace에서 Unicode/quote/줄바꿈 canonical 경로의 thin bundle prerequisite 실패를
+7/8로 재현했다. Git의 C-quoted UTF-8 octal path를 사용해 같은 test SHA로8/8을 확인했다.
+accepted bundle FD/cursor·prerequisite·ref/authority·verify→전체 scope 종료→import 순서는 같다.
+
+Seatbelt의 기본 동작은 추가 FD 전체 close이며, 고정 setup protocol만 명시 slot을 보존할 수
+있다. C는 전달/close/exec만 맡고 TS가 목록을 검증한다. 실제 production C header를 Linux에서
+컴파일·실행해 FD64를 연 뒤 soft limit16으로 낮춰도6/8만 남고 CLOEXEC가 해제됨을 확인했다.
+정리를 생략한 negative control은 실제 누출을 검출했다. Mac SDK/helper 실행은 NOT_RUN이며
+같은 경계 case를 추가한 실제 Darwin27×3=81회는 준비만 했다. paid CI는 실행하지 않았다.
+
+고정15636개 input `1c17ce3c...` 전후와 보호4개 SHA 동일에서 관련158/158·contract mutation7/7
+PASS·fail/cancel/skip/todo0이다. full Linux build·strict types·module도 통과했다. 상세 raw와
+최종 문서 입력의 전체 구조 결과는 validation과 native-2026-10-27-git-views/가 소유한다.
+Mac 물리 staging/목적별 조립·private input과 실제 scope 결합, 형식 경계와 세 gate는 남는다.
+
 ## 현재: 공통 Worker 정책과 Mac 실행 recipe 연결
 
 actor별 root/lease/설치 grammar를 공통 protocol 검증기로 옮겼고, 읽기/쓰기 directory 표를

@@ -111,6 +111,10 @@
     "./resident-context": {
       "types": "./dist/resident-context.d.ts",
       "default": "./dist/resident-context.js"
+    },
+    "./git-execution-view": {
+      "types": "./dist/git-execution-view.d.ts",
+      "default": "./dist/git-execution-view.js"
     }
   },
   "scripts": {

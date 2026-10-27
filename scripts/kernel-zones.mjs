@@ -100,6 +100,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/protocol/src/response-codec.ts",
       "packages/protocol/src/run-lease.ts",
       "packages/protocol/src/resident-context.ts",
+      "packages/protocol/src/git-execution-view.ts",
     ],
   },
   {

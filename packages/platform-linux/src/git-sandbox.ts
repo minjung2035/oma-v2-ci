@@ -23,7 +23,8 @@ export function gitSandbox(host: GitSandboxHost, input: { readonly phase: "verif
     ...(input.phase === "verify" ? ["--ro-bind-data", "6", "/bundle/input.bundle"] : []),
     "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--clearenv",
     ...Object.entries(env).flatMap(([name, value]) => value === undefined ? [] : ["--setenv", name, value]),
-    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/quarantine.js`, JSON.stringify(input),
+    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/quarantine.js`, JSON.stringify({ ...input,
+      view: { git: "/usr/bin/git", project: RESIDENT_PATHS.projectGit, root: "/quarantine", bundle: "/bundle/input.bundle", temporary: env.TMPDIR } }),
   ], env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" }, timeoutMs: null,
   stdoutBytes: 256, stderrBytes: 64 * 1024, stderrOverflow: "discard" };
 }

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "launch-fds.h"
 
 extern char **environ;
 static _Noreturn void failed(const char *operation) {
@@ -27,7 +28,13 @@ static void receive(void *buffer, size_t length) {
   }
 }
 int main(int argc, char **argv) {
-  if (argc < 2 || argv[1][0] != '/') {
+  int target = 1;
+  struct oma_fd_policy kept = { NULL, 0 };
+  if (argc > 1 && strncmp(argv[1], "--keep-fds=", 11) == 0) {
+    kept = oma_parse_kept_fds(argv[1] + 11);
+    target++;
+  }
+  if (target >= argc || argv[target][0] != '/') {
     fputs("Seatbelt requires an absolute executable\n", stderr);
     return 125;
   }
@@ -78,7 +85,9 @@ int main(int argc, char **argv) {
   }
   if (error != NULL) sandbox_free_error(error);
 #pragma clang diagnostic pop
-  closefrom(3);
-  execve(argv[1], argv + 1, environ);
+  if (kept.count == 0) { closefrom(3); }
+  else oma_close_except_kept(kept);
+  free(kept.fds);
+  execve(argv[target], argv + target, environ);
   failed("Seatbelt target exec");
 }

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "a70c03d930cf722315153c236e62b25ef9a88f29ccf797b1475a61217136ced0",
+  "manifest": "854c4313bd8886183d41e517759f2d34ed95379388bf81fd2591130f9f27fd74",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1160,11 +1160,11 @@
     },
     {
       "path": "packages/git/src/candidate-check.ts",
-      "sha256": "d9c3cc06a57093fa0cf5d85453a7e3e03e0334ad4e5779e86bad2088d7e84f15"
+      "sha256": "8758aceea9815b3fd6ee5a377d982a4854af2dc1ab68bba5d9a6d318f831ef0d"
     },
     {
       "path": "packages/git/src/canonical-command.ts",
-      "sha256": "7f6cf18eaae7a32d41fff43e55895048a5ecc5ad1033b0ef61fb5578ed694792"
+      "sha256": "0c43a5c36c445cd90193df4c1232b953127babbd42ecaf9d660da59f825ac59f"
     },
     {
       "path": "packages/git/src/canonical-health.ts",
@@ -1220,7 +1220,7 @@
     },
     {
       "path": "packages/git/src/quarantine-worker.ts",
-      "sha256": "6f365089e64b488ab47a1202c1e9c705c12ca859b29c40b1d95f54db7c5d58f1"
+      "sha256": "3eb47162fb5b41643b96c088378bd985cea49ee8a0e635e4ae8c364b307da9d4"
     },
     {
       "path": "packages/git/src/quarantine.ts",
@@ -1440,7 +1440,7 @@
     },
     {
       "path": "packages/platform-linux/src/candidate-sandbox.ts",
-      "sha256": "6d1e6e80e3e48809209e1ccc7d8c8d14f55e8a93a54be99df9393bdb0fc0fa41"
+      "sha256": "4bec12394512a1c781bad20594d3fff97e65e0b4da29a57ca8c0756a590f60e2"
     },
     {
       "path": "packages/platform-linux/src/credential-stream.ts",
@@ -1448,7 +1448,7 @@
     },
     {
       "path": "packages/platform-linux/src/git-sandbox.ts",
-      "sha256": "4e92b92c6684f984c0a9293bba2fda3f4744a57b4c0b6f4eb691ef390f8b9e53"
+      "sha256": "caa1feb90efe6ace5175200055672e59fac041c666bd92f596609644d3ad9ba2"
     },
     {
       "path": "packages/platform-linux/src/namespace-execution.ts",
@@ -1480,7 +1480,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "6d56b6c7924c3c4081f59722d14169da7afc097a1018dbf5d4ef7a723ed2122c"
+      "sha256": "927e2a59e8f69ac8bcc02dc9a2ad2cafacea02f61f28a367559b5d1dc0ce7bff"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1532,11 +1532,15 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "373665d868dc06fcd44c77650da10f795efe849cd8336399f43ebacc28886f12"
+      "sha256": "71fe17e4882ac96f4987492aecc416268a7bf73f938deff0dbfc16495d0971c8"
+    },
+    {
+      "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
+      "sha256": "75a38722deef816b23838774b0e8ebcd40398178af5d3f3dccd1b507334e0011"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/main.c",
-      "sha256": "dc139e7bb2be5ad557c738b687a6f514b4cc90358a4f7393b8ad87d890c52f46"
+      "sha256": "aabb7ed28ba3054527bfa55ae5c660d35645ebf166380eedc4a2fab9eb692f64"
     },
     {
       "path": "packages/process/package.json",
@@ -1620,7 +1624,7 @@
     },
     {
       "path": "packages/protocol/package.json",
-      "sha256": "71ef48b7ef0871ea72c91ce8b0e37e8f3405afd5b48c91355f0eb102a3b19864"
+      "sha256": "6afbd0ca05986d50568b7f35bd51fd492ab27a6c85bc377a2c9f7fa869e28e6f"
     },
     {
       "path": "packages/protocol/src/alarm.ts",
@@ -1649,6 +1653,10 @@
     {
       "path": "packages/protocol/src/frame.ts",
       "sha256": "baf958917b765cf8e9d9073c8427a9faa791856c0a4f1902bb7632dd5ff762e3"
+    },
+    {
+      "path": "packages/protocol/src/git-execution-view.ts",
+      "sha256": "a0283ceb591e1ae9263d27f136440409f3b8d45da6c9618937db7d800c33dfd5"
     },
     {
       "path": "packages/protocol/src/host-channel.ts",

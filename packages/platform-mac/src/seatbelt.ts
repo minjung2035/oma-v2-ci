@@ -21,6 +21,9 @@ export interface SeatbeltPolicy {
   /** Exact trusted read-only preload. The C launcher interprets no Node
    * environment; this import executes only after sandbox_init and execve. */
   readonly nodePreload?: string;
+  /** Explicit child descriptor slots, never a parent descriptor or state
+   * directory grant. Worker defaults to none; fixed setup protocols opt in. */
+  readonly preserveFds?: readonly number[];
 }
 const SYSTEM_READS = ["/System/Library", "/usr/lib", "/usr/share", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
@@ -116,7 +119,13 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
   // The tiny installed launcher consumes/returns descriptor 3, applies the
   // profile and execs the absolute target with these exact arguments. It uses
   // no shell, profile pathname reopen or sandbox-exec pipe-file assumption.
-  return { ...command, executable: launcher, argv: [command.executable, ...command.argv] };
+  if (policy.preserveFds !== undefined && !Array.isArray(policy.preserveFds)) refused("Seatbelt descriptor policy is invalid");
+  const kept = [...(policy.preserveFds ?? [])];
+  if (kept.some(fd => !Number.isSafeInteger(fd) || fd < 4 || fd >= 0x7fffffff) || new Set(kept).size !== kept.length)
+    refused("Seatbelt descriptor policy is invalid");
+  const descriptors = kept.sort((left, right) => left - right);
+  return { ...command, executable: launcher,
+    argv: [...(descriptors.length ? [`--keep-fds=${descriptors.join(",")}`] : []), command.executable, ...command.argv] };
 }
 export function bundledSeatbeltHelper(): string {
   return fileURLToPath(new URL("./seatbelt/oma-seatbelt", import.meta.url));

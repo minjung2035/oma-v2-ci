@@ -21,15 +21,17 @@ export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 *
  * become unknown, and a truncated record can never read as "no gitlinks". */
 /** Native execution is owned by process/run.ts. Both byte budgets are the same
  * single bound, so the native combined stdout+stderr cap is unchanged. */
-function evidence(argv: readonly string[], timeoutMs: number, maxBuffer: number, input?: string, stdoutSpool?: string): GitProcessEvidence {
-  const result = runProcessSync({ executable: GIT_BIN, argv, env: GIT_ENV,
+function evidence(argv: readonly string[], timeoutMs: number, maxBuffer: number, input?: string, stdoutSpool?: string, executable = GIT_BIN): GitProcessEvidence {
+  const result = runProcessSync({ executable, argv, env: GIT_ENV,
     timeoutMs, stdoutBytes: maxBuffer, stderrBytes: maxBuffer,
     ...(input === undefined ? {} : { input }), ...(stdoutSpool === undefined ? {} : { stdoutSpool }) });
   return { status: result.kind === "exited" ? result.exitCode : null, signal: result.signal,
     stdout: result.stdout, stderr: result.stderr,
     ...(result.stdoutSpooledTo === undefined ? {} : { stdoutSpooledTo: result.stdoutSpooledTo }) };
 }
-export function createCanonicalObserver(): GitObserver {
+export function createCanonicalObserver(executable = GIT_BIN): GitObserver {
+  if (!executable.startsWith("/") || executable.includes("\0"))
+    throw new StoreError("UNSUPPORTED_PROFILE", "canonical observations require an absolute trusted Git executable");
   return new GitObserver((args, input) => {
     const format = args.includes("--show-object-format");
     const commit = args.includes("--batch-check=%(objecttype)");
@@ -46,7 +48,7 @@ export function createCanonicalObserver(): GitObserver {
       // evidence an unmade scratch does -- and the directory is given back
       // first, since nothing downstream will own it.
       try {
-        const observed = evidence([...args], CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer, input, join(dir, "stdout"));
+        const observed = evidence([...args], CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer, input, join(dir, "stdout"), executable);
         return { ...observed, dispose: () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ } } };
       } catch (error) {
         try { rmSync(dir, { recursive: true, force: true }); } catch { /* diagnostic residue */ }
@@ -55,7 +57,7 @@ export function createCanonicalObserver(): GitObserver {
       }
     }
     return evidence([...args], format ? 30000 : commit ? 10000 : CANONICAL_PROCESS_LIMITS.timeout,
-      format ? 1024 : commit ? 64 * 1024 : CANONICAL_PROCESS_LIMITS.maxBuffer, input);
+      format ? 1024 : commit ? 64 * 1024 : CANONICAL_PROCESS_LIMITS.maxBuffer, input, undefined, executable);
   });
 }
 export function compareAndSwapCanonicalRef(observations: GitObserver, repository: string, ref: string,

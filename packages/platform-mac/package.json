@@ -68,6 +68,7 @@
   "oma": {
     "assets": [
       "seatbelt/main.c",
+      "seatbelt/launch-fds.h",
       "keychain/main.swift",
       "keychain/oma-keychain.entitlements"
     ],

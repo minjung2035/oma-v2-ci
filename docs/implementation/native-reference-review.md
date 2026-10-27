@@ -350,3 +350,19 @@ argv의 백슬래시와 filesystem data 경로까지 같은 실패라고 일반�
 공통 role/root/환경 정책은 TS에 있고 platform은 문법과 primitive를 제공한다. App의 기존
 Worker spawn owner를 사용하고 Mac native guard는 유지하며 새로운 fence exemption은 없다.
 실행 recipe가 있다는 사실은 전체 scope/file binding/auth qualification의 증거가 아니다.
+
+## 명시 Git view의 alternates 형식과 setup FD 전달
+
+실행 환경의 Git2.47.3에 맞춰 [parse_alt_odb_entry](https://github.com/git/git/blob/v2.47.3/object-file.c)와
+[C-style quote 구현 비교](https://github.com/git/git/blob/v2.39.5/quote.c)를 읽었다. quoted entry는
+unquote_c_style로 byte path를 복원한다. 실제 namespace의 LF/Unicode/quote canonical alias와
+thin bundle prerequisite 반례를7/8에서 실패시킨 뒤 UTF-8 byte의 C octal encoding으로 같은
+test SHA의8/8을 확인했다. JSON의 unicode escape를 Git 형식으로 가정하지 않는다. 원본 blob
+identity·범위·raw는 native-2026-10-27-git-views/git-alternates-primary.json이 소유한다.
+
+추가 FD의 소멸을 soft limit로 판정하지 않는다. 실제 POSIX test가 FD64를 연 뒤 limit16으로
+낮추고 production header로6/8만 유지·나머지 close·CLOEXEC 해제를 확인한다. 정리를 생략한
+negative actor는 같은 canary를 검출한다. Darwin helper는 기본 closefrom(3)을 유지하고,
+explicit keep에만 closefrom(max+1)과 아래 gap close를 사용한다. SDK/helper 전체 실행은
+NOT_RUN이며 actual Mac kept-FD control을 driver에 추가한 상태다. 파일/권한/scope 업무는
+shared TS에 남으며 descriptor 전달 성공을 arbitrary-descendant death로 승격하지 않는다.

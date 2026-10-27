@@ -776,3 +776,29 @@ argv의 백슬래시·공백·Unicode·quote·shell 문자와 filesystem data의
 7/7을 고정 입력에서 확인했고 Mac은26case×3회=78회 미실행이다. raw/정확한 입력별 범위는
 validation이 소유한다. 이 후속은 Worker source 조립이며 check/quarantine 목적별 Mac 조립,
 형식 version 경계와 최종 양 OS qualification을 완료한 것이 아니다.
+
+### 14.19 Git 실행 view와 setup descriptor 기반 — 2026-10-27
+
+candidate/quarantine의 shared TS는 Linux 가상 경로를 소유하지 않고 trusted parent가 만든
+명시 view를 검증해 사용한다. candidate는 Git/project/workspace, quarantine는 Git/project/
+root/bundle/tmp를 받으며 Linux adapter도 같은 closed private invocation을 만든다. 누락/
+추가 field·잘못된 UTF-8·겹친 workspace/project·writable tmp 아래의 bundle은 거절한다.
+과거 private payload를 받는 fallback이나 durable/public schema 변경은 추가하지 않았다.
+
+물리 canonical 경로의 LF/Unicode/quote가 raw alternates line을 깨뜨리는 실제 반례를 먼저
+확인했다. Git의 C-quoted byte path로 기록해 thin bundle의 canonical prerequisites가 정확히
+읽히게 했으며 JSON unicode escaping이나 사용자 path 재작성으로 대체하지 않았다. 전체 scope
+종료와 새 authority 확인 뒤 import하는 순서, frozen FD와 caller cursor·기존 ref는 유지한다.
+
+고정 check status/release·quarantine lease 같은 채널을 위해 Seatbelt가 explicit child slot을
+보존할 수 있게 했다. Worker 기본값은 none이고 FD3/profile 및 stdio는 keep 목록으로 받을 수
+없다. C는 canonical slot 파싱·실제 descriptor flag/close·exec만 수행하며 TS가 목적과 목록을
+선택한다. 마지막 keep 이후 closefrom과 그 아래 gap close를 함께 사용하므로 soft limit보다
+높게 남아 있던 FD를 getdtablesize 결과만으로 누락하지 않는다. 실제 Linux에서 production
+header의 FD64/soft16·6/8 유지·CLOEXEC 해제와 누출 음성 대조를 확인했다. 이는 POSIX 동작
+시험이며 Darwin sandbox/전체 scope proof가 아니다. actual Darwin kept-FD case를 추가했고
+총27×3=81회는 미실행이다. Mac CI를 dispatch하지 않는다.
+
+고정 입력의 관련158/158·contract mutation7/7과 Linux build/type/module을 확인했다. 정확한
+input과 최종 구조 검사는 validation이 소유한다. Mac physical staging/목적별 recipe 조립과
+actual scope/file/auth·형식 경계는 여전히 남으며 native product guard는 해제하지 않았다.

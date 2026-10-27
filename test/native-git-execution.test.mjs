@@ -12,6 +12,7 @@ import { ExecutionRuntime } from '#oma-test/app/runtime/execution-runtime';
 import { CandidateChecks } from '#oma-test/app/runtime/candidate-checks';
 import { quarantineExecution } from '#oma-test/app/runtime/quarantine-execution';
 import { QuarantineImporter } from '@oma/git/quarantine';
+import { gitSandbox } from '@oma/platform-linux/git-sandbox';
 
 assert.equal(process.platform, 'linux');
 const gitEnv = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
@@ -125,4 +126,29 @@ test('native quarantine: actual verify then import preserves canonical refs and 
   finally { closeSync(mismatched); }
   assert.equal(f.executions.confirmDead('quarantine'), true);
   assert.deepEqual(readdirSync(join(f.root, 'staging')), []);
+});
+test('native quarantine: explicit view preserves quoted Unicode and newline canonical paths with real prerequisites', { timeout: 30000 }, async t => {
+  const f = fixture(t), beforeRefs = git(f.paths.projectGit,'show-ref');
+  writeFileSync(join(f.source,'next.txt'),'thin bundle requires canonical objects'); git(f.source,'add','.'); git(f.source,'commit','-qm','thin next');
+  const candidate=git(f.source,'rev-parse','HEAD'), ref=exportRefForRequestKey('quoted-view');
+  git(f.source,'update-ref',ref,candidate); const bundle=join(f.root,'quoted.bundle'); git(f.source,'bundle','create',bundle,ref,`^${f.candidate}`);
+  const prefix='/native 한 글자 "quoted\nview', view={git:'/usr/bin/git',project:prefix+'/project.git',root:prefix+'/quarantine',bundle:prefix+'/frozen.bundle'};
+  for (const path of [view.project,view.root]) mkdirSync(join(f.paths.checkRootfs,path.slice(1)),{recursive:true});
+  writeFileSync(join(f.paths.checkRootfs,view.bundle.slice(1)),'');
+  const has=oid=>{try{git(f.paths.projectGit,'cat-file','-e',`${oid}^{commit}`);return true}catch{return false}};
+  const execution={confirmDead:()=>f.executions.confirmDead('quarantine'),async execute(request,authorize){
+    const input={phase:request.phase,candidate:request.candidate,exportRef:request.exportRef,prerequisites:request.prerequisites};
+    const command=gitSandbox({rootfs:f.paths.checkRootfs,node:f.paths.checkNode,libdir:f.paths.checkAssetsDir},input);
+    const args=command.argv.map(value=>value==='/quarantine'?view.root:value==='/git/project.git'?view.project:value==='/bundle/input.bundle'?view.bundle:value);
+    const temporary=request.phase==='verify'?view.root+'/tmp':'/tmp';
+    args[args.length-1]=JSON.stringify({...input,view:{...view,temporary}});
+    const result=await f.executions.run('quarantine',{...command,argv:args},undefined,authorize,
+      [request.bundleFd,request.leaseFd,request.rootFd,request.projectFd],request.stderrFd);
+    if(result.exitCode!==0)t.diagnostic(readFileSync(`/proc/self/fd/${request.stderrFd}`,'utf8'));
+    return result;
+  }};
+  const importer=new QuarantineImporter(f.paths,has,execution),fd=openSync(bundle,'r');
+  try { await importer.importBundle(fd,candidate,ref,[f.candidate],()=>{}); } finally { closeSync(fd); }
+  assert.equal(has(candidate),true); assert.equal(git(f.paths.projectGit,'show-ref'),beforeRefs);
+  assert.equal(f.executions.confirmDead('quarantine'),true); assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
 });

@@ -2,9 +2,9 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "NOT_REVIEWED": 14315,
+  "NOT_REVIEWED": 14318,
   "REMOVED": 220,
-  "CHANGED_WITHOUT_ORACLE": 4
+  "CHANGED_WITHOUT_ORACLE": 3
  },
  "lanes": {
   "fast": "PASS",
@@ -408,8 +408,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/engine/settings-files.ts",
@@ -1556,8 +1555,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/domain/src/review-bounds.ts",
@@ -1998,8 +1996,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/engine/src/presentation.ts",
@@ -2130,19 +2127,18 @@
   {
    "path": "packages/git/src/candidate-check.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR49"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "d9c3cc06a57093fa0cf5d85453a7e3e03e0334ad4e5779e86bad2088d7e84f15"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/canonical-command.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/canonical-health.ts",
@@ -2240,7 +2236,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/quarantine.ts",
@@ -2628,7 +2625,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-linux/src/credential-stream.ts",
@@ -2642,7 +2640,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-linux/src/namespace-execution.ts",
@@ -2684,8 +2683,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/platform-linux/src/worker-spawn.ts",
@@ -2735,8 +2733,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/mach-poll.ts",
@@ -2757,8 +2754,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/native-assets.ts",
@@ -2786,11 +2782,18 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/platform-mac/src/seatbelt.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
    "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
-   "path": "packages/platform-mac/src/seatbelt.ts",
+   "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2802,7 +2805,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/package.json",
@@ -3002,6 +3006,14 @@
    "oracles": []
   },
   {
+   "path": "packages/protocol/src/git-execution-view.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
    "path": "packages/protocol/src/host-channel.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -3104,8 +3116,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/protocol/src/response-codec.ts",

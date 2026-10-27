@@ -76,3 +76,11 @@ test("Seatbelt profile paths remain literals and aggregate profiles never enter 
   assert.ok(prepared.command.argv.every(value => !value.includes("(version 1)")));
   assert.ok(prepared.profile.includes(JSON.stringify('/oma/private/a"\\b) (allow default)')));
 });
+test("Seatbelt retains only explicit sorted non-bootstrap descriptor slots", () => {
+  const kept=[8,6], selected={...policy(),preserveFds:kept}, prepared=prepareSeatbelt(source(),selected);
+  assert.deepEqual(kept,[8,6]); assert.equal(prepared.command.argv[0],'--keep-fds=6,8');
+  assert.equal(prepared.command.argv[1],source().executable);
+  assert.equal(prepareSeatbelt(source(),policy()).command.argv[0],source().executable);
+  for(const preserveFds of [null,'6',[3],[0],[-1],[6,6],[2147483647],[6.5],[,6]])
+    assert.throws(()=>prepareSeatbelt(source(),{...policy(),preserveFds}),{code:'UNSUPPORTED_PROFILE'});
+});

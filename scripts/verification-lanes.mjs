@@ -77,7 +77,7 @@ const definitions = {
       "test/consistency-decisions.test.mjs",
       "test/config-bundle-owner.test.mjs",
       "test/native-test-policy.test.mjs",
-      "test/darwin-evidence.test.mjs",
+      "test/darwin-evidence.test.mjs", "test/descriptor-prune.test.mjs", "test/git-execution-view.test.mjs",
       "test/runtime-artifact-digest.test.mjs",
       "test/verification-policy.test.mjs",
       "test/verification-workflow-policy.test.mjs",

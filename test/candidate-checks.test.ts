@@ -13,7 +13,8 @@ test("INT-002: exact argv and inherited canonical capability without execution q
   assert.equal(command.executable, "/usr/bin/bwrap");
   for (const flag of ["--unshare-all", "--share-net", "--new-session", "--die-with-parent", "--clearenv"]) assert.ok(command.argv.includes(flag));
   assert.deepEqual(command.argv.slice(command.argv.indexOf("--ro-bind-fd"), command.argv.indexOf("--ro-bind-fd") + 3), ["--ro-bind-fd", "7", "/git/project.git"]);
-  assert.deepEqual(JSON.parse(command.argv.at(-1)!), { candidate, argv: check.argv });
+  assert.deepEqual(JSON.parse(command.argv.at(-1)!), { candidate, argv: check.argv,
+    view: { git: "/usr/bin/git", project: "/git/project.git", workspace: "/workspace" } });
   assert.ok(Buffer.isBuffer(command.input) && command.input.length > 0); assert.equal(command.timeoutMs, null);
   assert.ok(!command.argv.some(arg => /MemoryMax|TasksMax|CPUQuota|RuntimeMaxSec|systemd-run/.test(arg)));
   assert.throws(() => candidateSandbox(host, candidate, check, ["/home"]), { code: "UNSUPPORTED_PROFILE" });
