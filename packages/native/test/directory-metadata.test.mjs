@@ -2,6 +2,7 @@ import test, { before, after } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { inspect } from "node:util";
 import { closeSync, constants, mkdirSync, mkdtempSync, openSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -95,7 +96,7 @@ if (process.platform === "darwin") {
       assertNoUnpreservedMetadataAt(outside, "outside");
       const setupObservation = setup(operation, target);
       assert.throws(() => assertNoUnpreservedMetadataAt(outside, "outside"), /has unpreserved metadata; retained/,
-        JSON.stringify({ setup: setupObservation, observed: darwinMetadata(outside, "outside") }));
+        inspect({ setup: setupObservation, observed: darwinMetadata(outside, "outside") }));
       symlinkSync(target, join(dir, "link"));
       assertNoUnpreservedMetadataAt(fd, "link");
     });

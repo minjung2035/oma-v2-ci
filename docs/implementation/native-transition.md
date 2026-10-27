@@ -60,6 +60,18 @@ Architecture CI는 설치 전 source-digest가 TypeScript를 import하여 중단
 같은 실패와 locked npm ci 뒤 같은 digest 명령의 성공을 확인하고 설치→source binding→generator
 순서로 고쳤다. source hash 기준이나 실패 판정을 완화하지 않는다.
 
+후속 공개 입력 `562548397`(Native `40577594097`)에서 SDK 빌드와 독립 C FD control은 통과했다.
+same-PID·CLOEXEC stdio·명시 채널·낮춘 hard limit 위 FD64의 제거까지 실제 관측했지만,
+Seatbelt 적용 뒤 C actor/Node의 SIGABRT는 남았다. 새 FD leaf 성공과 sandbox target 성공을 구분하며
+OS crash report를 다음 artifact에 수집한다. 세 gate는 계속 OPEN이다.
+
+Mac26 공통 시험은 진단에서 BigInt를 JSON 직렬화한 오류로245/248이다. 이 계측 오류는 inspect로
+수리했지만 ACL persistence 결과는 아직 얻지 못했다. 독립 설치는 별도 실행되어 Broker smoke의
+Linux 전용 Unix credential 준비가 Mac에서 실패했다. 검사기는 하나의 실패로 다른 workspace의
+실행을 생략하지 않고 전체 결과를 출력한 뒤 실패하도록 고쳤고, Linux27/27이 통과했다.
+Broker smoke는 요청을 받지 않는 listener/lock/drain 시험인데 Linux credential 설정까지 주입하고
+있었다. 불필요한 OS 가정을 제거했으며 실제 credential 시험과 제품의 인증 owner는 그대로다.
+
 
 ### 2026-10-28 Runner admission 회귀 수리
 

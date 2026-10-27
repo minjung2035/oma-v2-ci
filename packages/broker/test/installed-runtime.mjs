@@ -13,7 +13,6 @@ const hook=registerHooks({resolve(specifier,context,next){
 const {Broker}=await import('@oma/broker');
 const {ProcessLock}=await import('@oma/native/process-lock');
 const {socketDescriptor}=await import('@oma/native/linux');
-const {enableUnixCredentials}=await import('@oma/native/unix-message');
 hook.deregister();assert.deepEqual(forbidden,[],'Broker import must not load concrete state or feature owners');
 assert.throws(()=>Reflect.construct(Broker,[{}, {}, {}]),{code:'BROKER_UNAVAILABLE'});
 const root=mkdtempSync(join(tmpdir(),'oma-installed-broker-')),runRoot=join(root,'run');mkdirSync(runRoot);
@@ -33,7 +32,9 @@ const dependencies={
  views:{refreshWorld(){},publishStatus(){},observeRunnerSource(){}},reconcile:null,status:{request:snapshot},public:pub,
  internal:{store:{getAgentIdentity:()=>null,pendingDeliveryCount:()=>0,getBatchAgent:()=>null,preparedBatchIds:()=>[]},
  mail:{prepare:unavailable,complete:unavailable,moveToCur:unavailable}},
- effects:{pinPeer:unavailable,assertEndpoint:unavailable,openListener(serve,maxConnections){const listener=createServer({allowHalfOpen:true,pauseOnConnect:true},serve);if(maxConnections!==undefined)listener.maxConnections=maxConnections;return{listener,prepare(){const fd=socketDescriptor(listener);assert.notEqual(fd,null);enableUnixCredentials(fd);}};},peerStream:unavailable,
+ // No request is admitted here: this portable smoke owns listener/lock/drain
+ // lifetime, not an injected OS transport's per-message credential protocol.
+ effects:{pinPeer:unavailable,assertEndpoint:unavailable,openListener(serve,maxConnections){const listener=createServer({allowHalfOpen:true,pauseOnConnect:true},serve);if(maxConnections!==undefined)listener.maxConnections=maxConnections;return{listener,prepare(){assert.notEqual(socketDescriptor(listener),null);}};},peerStream:unavailable,
  bindAdmission:()=>{bound=true;},ensureRunRoot(){},ensureActorDirectory:unavailable,
  prepareEndpoint:path=>{assert.equal(existsSync(path),false);},removeStatusView(){},makeSpool:unavailable,closeLedger:()=>{closed=true;}},
 };
