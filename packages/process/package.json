@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./execution-witness": {
+      "types": "./dist/execution-witness.d.ts",
+      "default": "./dist/execution-witness.js"
+    },
     "./coalesced-wake": {
       "types": "./dist/coalesced-wake.d.ts",
       "default": "./dist/coalesced-wake.js"

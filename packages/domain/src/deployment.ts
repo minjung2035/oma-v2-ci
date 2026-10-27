@@ -12,6 +12,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     { name: "@oma/client", root: "packages/client" },
     { name: "@oma/tui", root: "packages/tui" },
     { name: "@oma/native", root: "packages/native" },
+    { name: "@oma/file-descriptors", root: "packages/file-descriptors" },
     { name: "@oma/process", root: "packages/process" },
     { name: "@oma/storage", root: "packages/storage" },
     { name: "@oma/config", root: "packages/config" },

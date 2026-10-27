@@ -10,6 +10,7 @@ import { cleanupAll, withCleanup } from "./cleanup.js";
 import { pidfdLiveness } from "./linux.js";
 
 export interface NamespaceInitIdentity {
+  readonly kind: "linux-namespace";
   readonly pid: number;
   readonly bootId: string;
   readonly startTime: string;
@@ -102,7 +103,7 @@ export function observeNamespaceProcess(pid: number): NamespaceProcessObservatio
       namespace = openSync(`/proc/self/fd/${proc}/ns/pid`, constants.O_RDONLY | 0o2000000);
       const stat = fstatSync(namespace, { bigint: true }), after = taskIdentity(proc, pid);
       if (before.startTime !== after.startTime || bootId() !== boot) return { kind: "unavailable" };
-      return { kind: "running", identity: Object.freeze({ pid, bootId: boot, startTime: before.startTime,
+      return { kind: "running", identity: Object.freeze({ kind: "linux-namespace" as const, pid, bootId: boot, startTime: before.startTime,
         namespaceDevice: String(stat.dev), namespaceInode: String(stat.ino) }) };
     }, () => cleanupAll([() => { if (namespace !== undefined) closeSync(namespace); },
       () => { if (pidfd !== undefined) closeSync(pidfd); }, () => closeSync(proc)]));
@@ -181,7 +182,7 @@ export function pinNamespaceInit(pid: number): NamespaceInitPin {
     const after = taskIdentity(proc, pid);
     if (before.startTime !== after.startTime || after.namespacePids.at(-1) !== 1 || bootId() !== boot ||
         pidfdLiveness(pidfd).kind !== "running") throw new Error("namespace init changed during acquisition");
-    return Object.freeze({ pid, bootId: boot, startTime: before.startTime,
+    return Object.freeze({ kind: "linux-namespace" as const, pid, bootId: boot, startTime: before.startTime,
       namespaceDevice: String(identity.dev), namespaceInode: String(identity.ino) });
     }, () => closeSync(proc));
     const result = makePin(pidfd!, namespace!, snapshot);

@@ -8,6 +8,7 @@
 
 | 기록 | 내용 |
 |---|---|
+| [native spec 개정 전](archive/macos-native-spec-2026-10-28-pre-redesign.md), [native 인계 개정 전](archive/native-handoff-2026-10-28-pre-redesign.md) | 2026-10-28 전면 개정 직전 원문. 원래 경로는 각각 docs/macos-native-spec.md, docs/HANDOFF.md이며 당시 링크와 중단 지시는 역사 자료 |
 | [이전 HANDOFF](archive/documentation-cleanup-2026-10-25/HANDOFF.md), [이전 validation](archive/documentation-cleanup-2026-10-25/validation.md) | DR46–DR48 전환·중간 실패·과거 실행 입력·재개 지시 전문 |
 | [WORKSTREAM](archive/documentation-cleanup-2026-10-25/WORKSTREAM.md) | 이전 브랜치·작업 프로토콜·긴 작업 일지 |
 | [merge/review 설계안](archive/documentation-cleanup-2026-10-25/merge-review-spec.md) | 당시 제안한 다음 정책. 현재 활성 계약으로 채택하지 않음 |

@@ -2,7 +2,7 @@ import test, { before, after } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
-import { closeSync, constants, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, mkdirSync, mkdtempSync, openSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errno, load } from "koffi";
@@ -21,7 +21,7 @@ function attribute(path) {
   assert.equal(setAttribute(path, "user.oma-directory-observation", Buffer.alloc(0)), 0, `setxattr errno ${errno()}`);
 }
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), "oma-directory-xattr-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-directory-xattr-")));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const dir = join(root, "held"); mkdirSync(dir);
   const fd = openDirectory(dir); t.after(() => closeSync(fd));

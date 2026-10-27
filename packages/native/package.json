@@ -72,6 +72,10 @@
       "types": "./dist/process-event.d.ts",
       "default": "./dist/process-event.js"
     },
+    "./audit-session": {
+      "types": "./dist/audit-session.d.ts",
+      "default": "./dist/audit-session.js"
+    },
     "./audit-origin": {
       "types": "./dist/audit-origin.d.ts",
       "default": "./dist/audit-origin.js"

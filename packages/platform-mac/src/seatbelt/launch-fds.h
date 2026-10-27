@@ -57,22 +57,30 @@ static inline _Noreturn void oma_exec_with_fds(const char *executable, char *con
     posix_spawn_file_actions_destroy(&actions);
     oma_fd_refused(strerror(status));
   }
+  const char *stage = "spawn attributes";
+  int selected_fd = -1;
   status = posix_spawnattr_setflags(&attributes,
     POSIX_SPAWN_SETEXEC | POSIX_SPAWN_CLOEXEC_DEFAULT);
   /* Standard streams are explicit too. A missing required stream or retained
    * channel causes kernel refusal; it must never fall back to unrestricted exec. */
-  for (int fd = 0; status == 0 && fd < 3; ++fd)
+  for (int fd = 0; status == 0 && fd < 3; ++fd) {
+    stage = "stdio inheritance"; selected_fd = fd;
     status = posix_spawn_file_actions_addinherit_np(&actions, fd);
-  for (size_t i = 0; status == 0 && i < policy.count; ++i)
+  }
+  for (size_t i = 0; status == 0 && i < policy.count; ++i) {
+    stage = "channel inheritance"; selected_fd = policy.fds[i];
     status = posix_spawn_file_actions_addinherit_np(&actions, policy.fds[i]);
-  if (status == 0)
+  }
+  if (status == 0) {
+    stage = "posix_spawn"; selected_fd = -1;
     status = posix_spawn(NULL, executable, &actions, &attributes, argv, env);
+  }
   int attribute_status = posix_spawnattr_destroy(&attributes);
   int action_status = posix_spawn_file_actions_destroy(&actions);
   /* Successful SETEXEC cannot return. Preserve the primary API error. */
   if (status == 0) status = attribute_status != 0 ? attribute_status : action_status;
   errno = status != 0 ? status : EIO;
-  perror("Seatbelt target exec");
+  fprintf(stderr, "Seatbelt target exec (%s, fd %d): %s\n", stage, selected_fd, strerror(errno));
   _exit(125);
 }
 #endif

@@ -7,6 +7,7 @@ import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
 import { ResidentRuntime } from "@oma/process/resident-runtime";
 import { runnerScope } from "@oma/platform-linux/runner-scope";
 import type { NamespaceInitIdentity } from "@oma/native/pid-namespace";
+import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { StoreError } from "@oma/domain/errors";
 import { withAsyncCleanup } from "@oma/native/cleanup";
@@ -16,7 +17,7 @@ export async function nativeLifecycleExecution(store: Store, root: string) {
   const executions = new ExecutionRuntime(root); await executions.recover();
   let incarnationOf = (actor: string): number | null => store.getAgent(actor)?.incarnation ?? null;
   let revoke: ((actor: string) => void) | undefined;
-  const runtime = new ResidentRuntime<NamespaceInitIdentity>({
+  const runtime = new ResidentRuntime<ExecutionWitness>({
     references(actor) {
       const row = store.getAgent(actor);
       if (!row || row.role !== "resident") throw new StoreError("ADDRESS_NOT_FOUND", "lifecycle test Resident is missing");
@@ -33,7 +34,12 @@ export async function nativeLifecycleExecution(store: Store, root: string) {
   return Object.assign(runtime, {
     bindIncarnationReader(reader: (actor: string) => number | null) { incarnationOf = reader; },
     bindRunRevoker(callback: (actor: string) => void) { revoke = callback; },
-    scopeRoot: (actor: string) => runtime.witness(actor), runnerAlive: () => false,
+    scopeRoot: (actor: string) => {
+      const identity = runtime.witness(actor);
+      if (identity === null) return null;
+      if (identity.kind === "darwin-audit-session") return { pid: identity.pid, startTime: String(identity.pidVersion) };
+      return { pid: identity.pid, startTime: identity.startTime };
+    }, runnerAlive: () => false,
     async readLogs(): Promise<never> { throw new StoreError("UNSUPPORTED_PROFILE", "lifecycle test has no product log store"); },
     attemptConcurrentExecution: (actor: string) => executions.run(`resident:${actor}`, runnerScope({
       executable: process.execPath, argv: ["-e", "process.exit(0)"], env: { PATH: "/usr/bin:/bin", HOME: root },

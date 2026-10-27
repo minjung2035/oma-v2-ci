@@ -1,4 +1,5 @@
 import * as posixFiles from "@oma/native/posix-files";
+import * as descriptors from "@oma/file-descriptors";
 /** Actual publication owner and real local FDs, with controlled I/O failures. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,6 +31,7 @@ for (const effectFails of [false, true]) for (const failures of [[], ['roles'], 
     const primary = new StoreError('STORE_CORRUPT', 'original publication failure');
     const deps = {
       '@oma/native/posix-files': posixFiles,
+      '@oma/file-descriptors': descriptors,
       'node:fs': { ...fs, closeSync(fd) {
         const name = held.get(fd); attempted.push(name); fs.closeSync(fd);
         if (closeErrors.has(name)) throw closeErrors.get(name);

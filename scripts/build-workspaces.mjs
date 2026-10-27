@@ -80,8 +80,8 @@ if (rebuilding.length) {
 for (const workspace of rebuilding) {
   const executables = darwinExecutables(workspace.manifest);
   if (process.platform === "darwin") for (const executable of executables) {
-    const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-O2",
-      join(root, workspace.path, "dist", executable.source), ...executable.libraries.map(name => `-l${name}`),
+    const compiled = spawnSync("/usr/bin/xcrun", [...executable.compilerArguments,
+      join(root, workspace.path, "dist", executable.source), ...executable.linkArguments,
       "-o", join(root, workspace.path, "dist", executable.output)],
     { cwd: root, stdio: "inherit", timeout: 120000, killSignal: "SIGKILL" });
     if (compiled.error || compiled.signal || compiled.status !== 0) {

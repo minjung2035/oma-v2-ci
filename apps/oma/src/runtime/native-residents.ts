@@ -10,6 +10,7 @@ import { SharedPeerPin } from "@oma/broker/peer-pin";
 import { ResidentRuntime } from "@oma/process/resident-runtime";
 import { controlSocketPair } from "@oma/native/control-socket";
 import { pinNamespaceRunner, type NamespaceInitIdentity } from "@oma/native/pid-namespace";
+import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { cleanupAll } from "@oma/native/cleanup";
 import { runnerScope } from "@oma/platform-linux/runner-scope";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
@@ -38,7 +39,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
   const channels = new Map<string, { socket: Socket; peer: BoundPeer }>();
   let revoke: ((actor: string) => void) | undefined;
   let incarnationOf = (actor: string): number | null => store.getAgent(actor)?.incarnation ?? null;
-  const runtime = new ResidentRuntime<NamespaceInitIdentity>({
+  const runtime = new ResidentRuntime<ExecutionWitness>({
     references: actor => {
       const row = store.getAgent(actor);
       if (!row || row.role !== "resident") throw new StoreError("ADDRESS_NOT_FOUND", "Resident identity is missing");
@@ -87,7 +88,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
         const inherited = child; child = undefined; closeSync(inherited);
         const witness = ticket.witness;
         const pin = await acquireExecutionChild(ticket, () => {
-          try { return { kind: "ready", pin: pinNamespaceRunner(witness) }; }
+          try { return { kind: "ready", pin: pinNamespaceRunner(witness as NamespaceInitIdentity) }; }
           catch (error) { if ((error as NodeJS.ErrnoException).code === "EAGAIN") return { kind: "waiting" }; throw error; }
         }, signal, config.limits.receiptWaitSeconds * 1000);
         const owner = new SharedPeerPin(() => pin.alive(), () => pin.close());
@@ -117,7 +118,12 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
   return Object.assign(runtime, {
     bindRunRevoker: (callback: (actor: string) => void) => { revoke = callback; },
     bindIncarnationReader: (reader: (actor: string) => number | null) => { incarnationOf = reader; },
-    scopeRoot: (actor: string) => runtime.witness(actor),
+    scopeRoot: (actor: string) => {
+      const identity = runtime.witness(actor);
+      if (identity === null) return null;
+      if (identity.kind === "darwin-audit-session") return { pid: identity.pid, startTime: String(identity.pidVersion) };
+      return { pid: identity.pid, startTime: identity.startTime };
+    },
     runnerAlive: (actor: string) => channels.get(actor)?.peer.alive() ?? false,
     readLogs: async (actor: string, sinceSeconds: number, limit: number) => residentLogView(logs.read(actor), sinceSeconds, limit),
   });

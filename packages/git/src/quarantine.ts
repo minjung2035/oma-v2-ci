@@ -1,4 +1,4 @@
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 /** Canonical bundle import runs in a disposable native sandbox scope.
  * Commit content and prerequisites are verified before objects enter the owned
  * project. Broker cancellation, whole-scope death and the retained tree lease

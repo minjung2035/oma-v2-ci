@@ -1,5 +1,6 @@
 import { withCleanup } from "@oma/native/cleanup";
-import { directoryNames, statAt, unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
+import { directoryNames, unlinkAt } from "@oma/file-descriptors";
+import { statAt, renameAt, linkAt } from "@oma/native/posix-files";
 // FS-001..003 / P7: syscall ordering, not artifact authority or S-06 evidence.
 // Immutable publication and derived replacement are deliberately separate APIs.
 // These helpers neither modify a ledger nor collect accepted recovery evidence.

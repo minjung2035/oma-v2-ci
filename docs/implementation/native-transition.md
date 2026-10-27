@@ -21,6 +21,54 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 독립 descriptor leaf와 파일 도구 전환
+
+`@oma/file-descriptors`로 기존 mkdirat/unlinkat/directory cursor를 옮기고 모든 caller를
+이관했다. 단일 leaf의 openat+no-follow와 별도 directory cursor를 제공하며 Node/Koffi 외
+업무 의존성이 없다. tool-files의 가짜 directory FD pathname과 native의 obsolete entryAt
+export를 제거했다. snapshot 정책과 link를 따라가지 않는 정리는 기존 TS owner에 남겼다.
+
+Broad native import 허용은 transitive domain/metadata까지 평가하므로 채택하지 않았다.
+실제 leaf closure의 우회 import·re-export·숨은 runtime 의존성을 검사하며 manifest·DAG·
+독립 설치·deployment layout을 함께 갱신했다(DR62/NATIVE-026).
+
+실제 Linux UID1000 smoke에서 비ASCII directory·binary write/read·root rename/replacement
+뒤 held bytes·snapshot 제거·외부 planted-link 대상 보존을 관측했다. 관련 파일/hashline/
+generation cleanup/publication/native OS 시험55/55, 전체 contained-tools30/30 PASS다.
+분리 중 추가한 filename U+FEFF 반례는 수정 전 손실로 FAIL했고, strict/BOM-preserving
+decoder 수리·재빌드 후 같은 반례1/1 PASS다. 후속 boundary/closure 시험36/36와 module·
+architecture rules·문서·규범 inventory 검사는 PASS다. 실제 Darwin과 전체 회귀 결과는 별도다.
+
+후속 tarball 독립 설치는27/27 workspace의 공개 API·자체 declaration·지정 runtime smoke가
+PASS다. tool-files의 workspace closure는 자신과 file-descriptors뿐이며 native/domain/metadata
+helper를 설치하지 않는다. 외부 SDK declaration 진단44개는 자체 오류와 별도로 기록됐다.
+
+
+### 2026-10-28 Runner admission 회귀 수리
+
+Broker composition이 `BrokerUnits.scopeRoot()`의 `{pid, startTime}`을 전체
+`ExecutionWitness`로 다시 해석해 유효한 Linux root를 `null`로 바꿨다. 실제 private
+channel의 `runner.open`이 `AUTH_FAILED`로 거절되는 것을 확인하고 중복 projection을
+제거했다. 같은 handshake에서 `ok: true`·incarnation 증가·종료 코드0을 확인했으며,
+기존 `connection-bounds`의 실제 actor socket flood·해제 후 응답 시험도1/1 PASS다.
+`npm run build`는 통과했다. 실행은 pinned bwrap을 mount한 임시 user/mount namespace
+안에서 했으며 전체 회귀·일반 사용자 파일 권한·Darwin qualification의 증거는 아니다.
+
+같은 전환에서 두 descriptor adapter가 Linux 경로를 `/proc/self/fd`가 아닌
+`/proc/fd`로 만들던 회귀도 확인했다. 실제 held inode 읽기와 tool write가 모두
+ENOENT로 실패했고, 경로 복구 후 pathname 교체에도 원래 bytes를 읽고 contained
+write/read가 성공했다. 재빌드와 선택60개 시험이 PASS·skip0이다.
+
+기존 CI run `40548845744`의 macOS15 원시 artifact를 공개
+[artifact 경로](https://nightly.link/minjung2035/oma-v2-ci/actions/runs/40548845744)에서
+확보했다. runtime218/247 PASS·29 FAIL, gate99회 실행 중39회 OBSERVED·60회
+SETUP_FAILED이며 세 gate 모두 OPEN이다. `/dev/fd` duplicate는 cursor를 공유했고
+그 경로의 executable 실행은 errno13으로 거절됐다. 이 결과는 현재 Darwin reopen을
+독립 cursor로, descriptor 경로를 exact executable로 취급할 근거가 아니다.
+metadata fixture는 canonical temp root를 사용하도록 고쳤고 production의 no-link
+검사는 유지했다. obsolete workflow 문자열 비교 시험은 삭제했으며 실패 원문은
+`/home/dev/oma-audit-artifacts/native-2026-10-28-recovered-ci`에 보존했다.
+
 ### 2026-10-26 전체 CI 결과와 완료된 mutation의 응답 경계
 
 `5e369b30`의 전체 baseline/native-all 각각3777/3777·skip0을 실제 artifact에서 확인했다.

@@ -1,5 +1,5 @@
-import { directoryNames, statAt } from "@oma/native/posix-files";
-import { mkdirAt, unlinkAt, renameAt, linkAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt } from "@oma/file-descriptors";
+import { statAt, renameAt, linkAt } from "@oma/native/posix-files";
 /** D02/WP13: managed configuration generations.
  *
  * An operations bundle edited by the product is published as one immutable

@@ -4,6 +4,16 @@
 export const nativeExecutionTestFiles = Object.freeze([
   "audit.test.js", "audit2.test.js", "cli.test.js", "phase4.test.js", "phase5.test.js", "launch-topology.test.js",
 ]);
+/** Actual compiled Swift control-channel cases. Portable recipe checks alone
+ * cannot qualify these OS observations or signed credential access. */
+export const darwinKeychainHelperOracles = Object.freeze([
+  "Darwin Keychain helper: compiled image answers fragmented control",
+  "Darwin Keychain helper: supervision EOF ends the actual child",
+  "Darwin Keychain helper: malformed JSON exits before credential access",
+  "Darwin Keychain helper: unterminated frame exits before credential access",
+  "Darwin Keychain helper: invalid UTF-8 exits before credential access",
+  "Darwin Keychain helper: unexpected credential request fields exits before credential access",
+]);
 /** Tests a run reported but did not execute.
  *
  * A Node test run exits zero when tests skip, so the exit code alone cannot
@@ -591,7 +601,7 @@ const definitions = {
   // unresolved gate probes run independently in native-runtime.yml.
   platform: {
     files: ["socket-observation.test.js", "host-arguments.test.js"],
-    sourceFiles: ["packages/native/test/metadata-observation.test.mjs", "packages/native/test/directory-metadata.test.mjs", "test/native-primitives.test.mjs", "test/native-profile.test.mjs", "test/native-path-view.test.mjs", "test/restic-tar.test.mjs",
+    sourceFiles: ["packages/native/test/metadata-observation.test.mjs", "packages/native/test/directory-metadata.test.mjs", "test/native-primitives.test.mjs", "test/native-profile.test.mjs", "test/native-path-view.test.mjs", "test/restic-tar.test.mjs", "test/keychain-helper.test.mjs",
       "packages/platform-linux/test/sandbox-seccomp.test.mjs", "packages/platform-mac/test/seatbelt.test.mjs", "packages/platform-mac/test/resident-sandbox.test.mjs", "test/model-command-path-view.test.mjs", "test/mac-worker-plan.test.mjs",
       "packages/process/test/process-group.test.mjs"],
     requiredNames: ["directory metadata helper protocol rejects", "directory metadata: actual zero-length", "directory metadata: parent rename", "directory metadata: final and dangling", "directory metadata: missing entries", "directory effects remain on the held inode", "contained opens accept caller no-follow",
@@ -601,6 +611,7 @@ const definitions = {
       "restart breaker counts only", "native entry: public help needs no VM", "native entry: retired VM commands refuse",
       "dump verification consumes arbitrary chunk boundaries", "dump truncation, duplicate entries",
       ...resticDumpOracles,
+      "Keychain helper build produces the executable",
       "POSIX group launch creates", "POSIX group cancellation", "POSIX group deadline", "POSIX group launch retains"],
     environment: "git-fs",
     timeoutSeconds: 900,
@@ -628,6 +639,7 @@ const definitions = {
     ],
     requiredNames: [
       ...resticDumpOracles,
+      "Keychain helper build produces the executable",
       "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
       "V01A:",
       "V01B:",

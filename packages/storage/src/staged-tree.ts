@@ -1,4 +1,5 @@
-import { directoryNames, renameAt, symlinkAt, statAt, unlinkAt } from "@oma/native/posix-files";
+import { directoryNames, unlinkAt } from "@oma/file-descriptors";
+import { renameAt, symlinkAt, statAt } from "@oma/native/posix-files";
 /** CTX-004 / FS-002: staged directories and derived links have distinct owners.
  * The caller serializes publication in a trusted root and validates artifact
  * identity. These syscalls do not establish a new kernel no-replace guarantee.

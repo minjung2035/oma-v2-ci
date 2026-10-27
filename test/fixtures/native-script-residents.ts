@@ -13,6 +13,7 @@ import { acquireExecutionChild, type ExecutionTicket } from "@oma/process/owned-
 import { runnerScope } from "@oma/platform-linux/runner-scope";
 import { controlSocketPair } from "@oma/native/control-socket";
 import { pinNamespaceRunner, type NamespaceInitIdentity } from "@oma/native/pid-namespace";
+import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { SharedPeerPin } from "@oma/broker/peer-pin";
 import type { BoundPeer } from "@oma/broker/ports";
 import type { Broker } from "@oma/broker";
@@ -31,12 +32,12 @@ export async function nativeScriptResidents(store: Store, state: string) {
   const executions = new ExecutionRuntime(state);
   await executions.recover();
   const scripts = new Map<string, { path: string; env: NodeJS.ProcessEnv }>();
-  const tickets = new Map<string, ExecutionTicket<NamespaceInitIdentity>>();
+  const tickets = new Map<string, ExecutionTicket<ExecutionWitness>>();
   const channels = new Map<string, { socket: Socket; peer: BoundPeer }>();
   let broker: Broker | null = null;
   let incarnationOf = (actor: string): number | null => store.getAgent(actor)?.incarnation ?? null;
   let revoke: ((actor: string) => void) | undefined;
-  const runtime = new ResidentRuntime<NamespaceInitIdentity>({
+  const runtime = new ResidentRuntime<ExecutionWitness>({
     references(actor) {
       const row = store.getAgent(actor);
       if (!row || row.role !== "resident") throw new StoreError("ADDRESS_NOT_FOUND", "test runner has no Resident");
@@ -51,7 +52,7 @@ export async function nativeScriptResidents(store: Store, state: string) {
       const script = scripts.get(actor);
       if (!script || !broker) throw new Error("native script must be assigned before launch");
       const pair = controlSocketPair(); let parent: number | undefined = pair.parent, child: number | undefined = pair.child;
-      let socket: Socket | undefined, ticket: ExecutionTicket<NamespaceInitIdentity> | undefined;
+      let socket: Socket | undefined, ticket: ExecutionTicket<ExecutionWitness> | undefined;
       try {
         socket = new Socket({ fd: parent, readable: true, writable: true }); parent = undefined;
         socket.pause(); socket.on("error", () => {});
@@ -62,7 +63,7 @@ export async function nativeScriptResidents(store: Store, state: string) {
         }), signal, authorize, prepared, [child]);
         const inherited = child; child = undefined; closeSync(inherited);
         const pin = await acquireExecutionChild(ticket, () => {
-          try { return { kind: "ready", pin: pinNamespaceRunner(ticket!.witness) }; }
+          try { return { kind: "ready", pin: pinNamespaceRunner(ticket!.witness as NamespaceInitIdentity) }; }
           catch (error) { if ((error as NodeJS.ErrnoException).code === "EAGAIN") return { kind: "waiting" }; throw error; }
         }, signal, 10_000);
         const owner = new SharedPeerPin(() => pin.alive(), () => pin.close());
@@ -89,7 +90,12 @@ export async function nativeScriptResidents(store: Store, state: string) {
       checkNode: process.execPath, checkAssetsDir: process.cwd() }, executions),
     bindRunRevoker(callback: (actor: string) => void) { revoke = callback; },
     bindIncarnationReader(reader: (actor: string) => number | null) { incarnationOf = reader; },
-    scopeRoot: (actor: string) => runtime.witness(actor),
+    scopeRoot: (actor: string) => {
+      const identity = runtime.witness(actor);
+      if (identity === null) return null;
+      if (identity.kind === "darwin-audit-session") return { pid: identity.pid, startTime: String(identity.pidVersion) };
+      return { pid: identity.pid, startTime: identity.startTime };
+    },
     runnerAlive: (actor: string) => channels.get(actor)?.peer.alive() ?? false,
     async readLogs(): Promise<never> { throw new StoreError("UNSUPPORTED_PROFILE", "test driver has no product diagnostic log store"); },
     async runScript(actor: string, path: string, env: NodeJS.ProcessEnv) {

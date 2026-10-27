@@ -16,8 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS is an explicit paid run; ordinary source pushes use Linux.
-        os: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
+        # This work branch qualifies on Darwin; other manual runs default to Linux.
+        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -33,14 +33,37 @@ jobs:
           node --input-type=module -e 'console.log(JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions,image:process.env.ImageVersion}))' > .scratch/native-runtime/environment.json
           if ! npm ci > .scratch/native-runtime/install.log 2>&1; then cat .scratch/native-runtime/install.log; exit 1; fi
           node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input.json
+      - name: Record the actual Darwin compiler and SDK
+        if: runner.os == 'macOS'
+        run: |
+          /usr/bin/xcrun --show-sdk-version > .scratch/native-runtime/sdk-version.txt
+          /usr/bin/xcrun swiftc --version > .scratch/native-runtime/swift-version.txt
       - name: Build the installation and test graph on the actual OS
         run: |
           if ! npm run build > .scratch/native-runtime/build.log 2>&1; then cat .scratch/native-runtime/build.log; exit 1; fi
+      - name: Bind the actual workspace runtime outputs
+        run: |
+          node --input-type=module -e 'import {runtimeArtifactDigest} from "./scripts/runtime-artifact-digest.mjs"; console.log(JSON.stringify(runtimeArtifactDigest()))' > .scratch/native-runtime/runtime-artifacts.json
       - name: Run shared production primitives and streaming verification
         run: |
           mkdir -p .scratch/native-runtime
           git rev-parse HEAD > .scratch/native-runtime/source-head.txt
-          if ! node --test packages/native/test/metadata-observation.test.mjs packages/native/test/directory-metadata.test.mjs test/darwin-evidence.test.mjs test/descriptor-prune.test.mjs test/descriptor-capabilities.test.mjs test/copy-descriptor.test.mjs test/git-execution-view.test.mjs test/runtime-artifact-digest.test.mjs test/native-primitives.test.mjs test/native-path-view.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs packages/platform-mac/test/seatbelt.test.mjs packages/platform-mac/test/git-sandbox.test.mjs packages/platform-mac/test/resident-sandbox.test.mjs test/model-command-path-view.test.mjs test/config-native-format.test.mjs test/linux-sandbox-layout.test.mjs test/mac-developer-tools.test.mjs test/mac-worker-plan.test.mjs packages/tool-hashline/test/bundle.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/process/test/process-group.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs test/packet-stream.test.ts test/native-listener-lifetime.test.ts > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
+          if ! node --test --test-reporter=tap packages/native/test/metadata-observation.test.mjs packages/native/test/directory-metadata.test.mjs test/darwin-evidence.test.mjs test/keychain-helper.test.mjs test/descriptor-prune.test.mjs test/descriptor-capabilities.test.mjs test/copy-descriptor.test.mjs test/git-execution-view.test.mjs test/runtime-artifact-digest.test.mjs test/native-primitives.test.mjs test/native-path-view.test.mjs test/native-os-contracts.test.mjs test/native-control.test.mjs packages/platform-mac/test/keychain-channel.test.mjs packages/platform-mac/test/seatbelt.test.mjs packages/platform-mac/test/git-sandbox.test.mjs packages/platform-mac/test/resident-sandbox.test.mjs test/model-command-path-view.test.mjs test/config-native-format.test.mjs test/linux-sandbox-layout.test.mjs test/mac-developer-tools.test.mjs test/mac-worker-plan.test.mjs packages/tool-hashline/test/bundle.test.mjs test/native-profile.test.mjs test/restic-tar.test.mjs test/candidate-checks.test.ts packages/process/test/resident-supervisor.test.mjs packages/process/test/resident-runtime.test.mjs packages/process/test/resident-logs.test.mjs packages/process/test/coalesced-wake.test.mjs packages/process/test/process-group.test.mjs packages/broker/test/native-lifetime.test.mjs packages/tool-files/test/files.test.mjs test/packet-stream.test.ts test/native-listener-lifetime.test.ts > .scratch/native-runtime/tests.log 2>&1; then cat .scratch/native-runtime/tests.log; exit 1; fi
+      - name: Require completed runtime oracles on the actual OS
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from "node:fs";
+          import { evaluateExecution, darwinKeychainHelperOracles } from "./scripts/verification-lanes.mjs";
+          const proof = evaluateExecution({ exitCode: 0, tap: readFileSync(".scratch/native-runtime/tests.log", "utf8"),
+            requiredNames: process.platform === "darwin" ? darwinKeychainHelperOracles : [] });
+          if (proof.status !== "PASS") throw new Error(JSON.stringify(proof.errors));
+          console.log(JSON.stringify({ platform: process.platform, status: proof.status, totals: proof.totals }));
+          JS
+      - name: Verify independent Darwin package installations
+        if: runner.os == 'macOS'
+        timeout-minutes: 15
+        run: |
+          if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi
       - name: Install the actual pinned Linux native prerequisites
         if: runner.os == 'Linux'
         run: bash scripts/setup-native-linux-ci.sh .scratch/native-runtime
@@ -70,6 +93,8 @@ jobs:
         run: |
           node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input-after.json
           cmp .scratch/native-runtime/verification-input.json .scratch/native-runtime/verification-input-after.json
+          node --input-type=module -e 'import {runtimeArtifactDigest} from "./scripts/runtime-artifact-digest.mjs"; console.log(JSON.stringify(runtimeArtifactDigest()))' > .scratch/native-runtime/runtime-artifacts-after.json
+          cmp .scratch/native-runtime/runtime-artifacts.json .scratch/native-runtime/runtime-artifacts-after.json
       - name: Preserve shared runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -79,7 +104,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   darwin-gates:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
     strategy:
       fail-fast: false
       matrix:

@@ -13,7 +13,7 @@ function inspect(t, files = {}, manifests = {}) {
     writeFileSync(file, typeof value === "string" ? value : JSON.stringify(value));
   };
   write("package.json", { version: "0.1.0" });
-  for (const name of ["contracts", "domain", "protocol", "client", "tui", "native", "process", "storage", "config", "mail", "git", "review", "tool-files", "tool-runtime", "tool-lsp", "platform-linux", "platform-mac"]) {
+  for (const name of ["contracts", "domain", "protocol", "client", "tui", "native", "file-descriptors", "process", "storage", "config", "mail", "git", "review", "tool-files", "tool-runtime", "tool-lsp", "platform-linux", "platform-mac"]) {
     write(`packages/${name}/package.json`, { name: `@oma/${name}`, version: "0.1.0", type: "module",
       exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }, ...manifests[name] });
     write(`packages/${name}/src/index.ts`, "export type Value = string;");
@@ -90,12 +90,26 @@ test("NATIVE-008: tool-files is independent of the SDK and application owners; c
   for (const name of ["@oma/storage", "@oma/tool-runtime", "@oma/client", "@earendil-works/pi-coding-agent"])
     for (const statement of [`import "${name}";`, `import type { Value } from "${name}";`, `type Value = import("${name}").Value;`])
       assert.match(inspect(t, { [file]: statement }, { "tool-files": { dependencies: { [name]: "0.1.0" } } }).join("\n"), /tool-files may import only/);
-  assert.match(inspect(t, {}, { "tool-files": { dependencies: { "hidden-sdk": "1.0.0" } } }).join("\n"), /no runtime package dependencies/);
+  assert.match(inspect(t, {}, { "tool-files": { dependencies: { "hidden-sdk": "1.0.0" } } }).join("\n"), /limited to the standalone descriptor leaf/);
   for (const name of ["tool-runtime", "tool-lsp"])
     assert.deepEqual(inspect(t, { [`packages/${name}/src/index.ts`]: 'import type { Value } from "@oma/tool-files";' },
       { [name]: { dependencies: { "@oma/tool-files": "0.1.0" } } }), []);
   assert.match(inspect(t, { "packages/tool-runtime/src/index.ts": 'import "@oma/tool-files/descriptor-files";' },
     { "tool-runtime": { dependencies: { "@oma/tool-files": "0.1.0" } } }).join("\n"), /private or missing export/);
+});
+
+test("NATIVE-025: only the descriptor adapter reaches the standalone leaf; the leaf cannot borrow runtime owners", t => {
+  const adapter = "packages/tool-files/src/descriptor-files.ts";
+  const manifests = { "tool-files": { dependencies: { "@oma/file-descriptors": "0.1.0" } } };
+  assert.deepEqual(inspect(t, { [adapter]: 'export { Value } from "@oma/file-descriptors";' }, manifests), []);
+  for (const file of ["packages/tool-files/src/index.ts", "packages/tool-files/src/other.ts"])
+    assert.match(inspect(t, { [file]: 'import "@oma/file-descriptors";' }, manifests).join("\n"), /tool-files may import only/);
+  for (const name of ["@oma/native/files", "@oma/native/posix-files", "@oma/file-descriptors/private"])
+    assert.match(inspect(t, { [adapter]: `import "${name}";` },
+      { "tool-files": { dependencies: { "@oma/native": "0.1.0", "@oma/file-descriptors": "0.1.0" } } }).join("\n"), /tool-files may import only/);
+  for (const name of ["@oma/domain", "@oma/storage", "hidden-runtime"])
+    assert.match(inspect(t, { "packages/file-descriptors/src/index.ts": `import "${name}";` },
+      { "file-descriptors": { dependencies: { [name]: "0.1.0" } } }).join("\n"), /file-descriptors may import only/);
 });
 
 test("DR46: a local compiled module URL resolves only to an authored executable module in that workspace", t => {
@@ -107,12 +121,12 @@ test("DR46: a local compiled module URL resolves only to an authored executable 
 });
 
 test("native generated asset ownership accepts only reviewed owner, output and declared source", t => {
-  for (const [owner, directory, output] of [["platform-mac", "seatbelt", "oma-seatbelt"], ["native", "metadata", "oma-file-metadata"]]) {
-    const manifest = { oma: { assets: [`${directory}/main.c`], darwinExecutables: [`${directory}/${output}`] } };
+  for (const [owner, directory, output, extension] of [["platform-mac", "seatbelt", "oma-seatbelt", "c"], ["native", "metadata", "oma-file-metadata", "c"], ["platform-mac", "keychain", "oma-keychain", "swift"]]) {
+    const manifest = { oma: { assets: [`${directory}/main.${extension}`], darwinExecutables: [`${directory}/${output}`] } };
     const source = `new URL("./${directory}/${output}", import.meta.url);`;
-    const files = { [`packages/${owner}/src/index.ts`]: source, [`packages/${owner}/src/${directory}/main.c`]: "int main(void) { return 0; }" };
+    const files = { [`packages/${owner}/src/index.ts`]: source, [`packages/${owner}/src/${directory}/main.${extension}`]: "// native build input" };
     assert.deepEqual(inspect(t, files, { [owner]: manifest }), []);
-    assert.match(inspect(t, { "packages/domain/src/index.ts": source, [`packages/domain/src/${directory}/main.c`]: "int main(void) { return 0; }" },
+    assert.match(inspect(t, { "packages/domain/src/index.ts": source, [`packages/domain/src/${directory}/main.${extension}`]: "// native build input" },
       { domain: manifest }).join("\n"), /unowned or missing package asset/);
     assert.match(inspect(t, { [`packages/${owner}/src/index.ts`]: source }, { [owner]: manifest }).join("\n"), /unowned or missing package asset/);
     for (const change of [{ assets: [] }, { darwinExecutables: [`${directory}/other`] }, { darwinExecutables: [`${directory}/${output}`, `${directory}/${output}`] }])

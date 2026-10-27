@@ -47,6 +47,30 @@ test("extension-closure: the extension imports only built-ins, the engine API, t
   }, findings => assert.ok(has(findings, "extension-closure")));
 });
 
+test("NATIVE-025: the descriptor leaf closure is traversed, not exempted by its public import", () => {
+  const adapter = { "packages/tool-files/src/descriptor-files.ts": 'export { openAt } from "@oma/file-descriptors";' };
+  const leaf = "packages/file-descriptors/src/index.ts", helper = "packages/file-descriptors/src/helper.ts";
+  withTree({ ...adapter, [leaf]: 'export { openAt } from "./helper.js";',
+    [helper]: 'import { load } from "koffi"; import "node:fs"; export const openAt = load;' },
+    findings => clean(findings, "extension-closure"));
+  for (const specifier of ["@oma/native/files", "@oma/domain/errors", "hidden-runtime"])
+    withTree({ ...adapter, [leaf]: 'export { openAt } from "./helper.js";', [helper]: `import "${specifier}"; export const openAt = 1;` },
+      findings => assert.ok(findings.some(value => value.rule === "extension-closure" && value.file === helper)));
+  withTree({ ...adapter, [leaf]: 'export const openAt = () => import("@oma/native/files");' },
+    findings => assert.ok(has(findings, "extension-dynamic-load")));
+  withTree({ "packages/tool-runtime/src/escape.ts": 'import "@oma/file-descriptors";' },
+    findings => assert.ok(has(findings, "extension-closure")));
+});
+
+test("the standalone directory-name decoder retains the shared strict/BOM contract", () => {
+  const leaf = "packages/file-descriptors/src/index.ts";
+  withTree({ [leaf]: 'const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });' },
+    findings => clean(findings, "utf8-decoder-owner"));
+  for (const options of ['{ fatal: true }', '{ ignoreBOM: true }', '{}'])
+    withTree({ [leaf]: `const decoder = new TextDecoder("utf-8", ${options});` },
+      findings => assert.ok(has(findings, "utf8-decoder-owner")));
+});
+
 test("extension-dynamic-load and extension-execute: no run-time loading, no invoking a tool handler", () => {
   // Near miss: defining an execute handler is not invoking one.
   withTree({

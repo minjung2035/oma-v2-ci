@@ -1,4 +1,4 @@
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 import type { PackageDirectories } from "../ports/package-files.js";
 /** DR25/C20: `oma pi install` of a path on this machine.
  *

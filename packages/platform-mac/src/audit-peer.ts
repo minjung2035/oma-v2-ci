@@ -12,6 +12,7 @@ import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 export interface MachPeerPin {
   readonly pid: number; readonly uid: number; readonly gid: number;
   readonly token: readonly number[];
+  readonly auditSession: number;
   alive(): boolean;
   sameSender(sender: unknown): boolean;
   close(): void;
@@ -46,7 +47,7 @@ export function bindMachSender(sender: MachAuditSender): MachPeerBinding {
       taken = true;
       let closed = false, closeFailure: unknown;
       return Object.freeze({
-        pid: sender.pid, uid: sender.uid, gid: sender.gid, token: sender.token,
+        pid: sender.pid, uid: sender.uid, gid: sender.gid, token: sender.token, auditSession: sender.auditSession,
         alive: () => !closed && watch.state() === "live",
         // Every packet needs new kernel provenance and the full pidVersion
         // token; claimed PID, UID and descriptor possession are insufficient.

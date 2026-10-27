@@ -25,7 +25,10 @@ export class PeerAuthenticator {
     const owner = new SharedPeerPin(() => pinned.alive(), () => pinned.close());
     if (!owner.alive()) { owner.releaseConnection(); return null; }
     socket.once("close", () => { try { owner.releaseConnection(); } catch (error) { this.cleanupError(error); } });
-    return { pid: pinned.pid, uid: pinned.uid, gid: pinned.gid, sameSender: sender => pinned.sameSender(sender),
+    return { pid: pinned.pid, uid: pinned.uid, gid: pinned.gid,
+      ...(process.platform === "darwin" && "auditSession" in pinned && typeof pinned.auditSession === "number"
+        ? { auditSession: pinned.auditSession } : {}),
+      sameSender: sender => pinned.sameSender(sender),
       alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };
   }
   context(actor: Actor, credentials: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
@@ -41,6 +44,10 @@ export class PeerAuthenticator {
       return capabilitiesOf(current);
     };
     const observed = this.units.observe(actor);
+    const scope = run.identity.scopeIdentity;
+    if (process.platform === "darwin" && (scope === null || typeof scope !== "object" ||
+        !("kind" in scope) || scope.kind !== "darwin-audit-session" || !("auditSession" in scope) ||
+        credentials.auditSession !== scope.auditSession)) return null;
     if (!this.store.societyOpen() || agent.desired !== "enabled" || !this.matchesScope(actor, credentials, run.invocationId) || !run.matches(observed.scope)) return null;
     if (channel === "trusted-runner" && (credentials.inheritedRunner?.actor !== actor || credentials.inheritedRunner.invocationId !== run.invocationId)) return null;
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,

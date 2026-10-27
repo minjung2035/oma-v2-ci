@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
 // IPC-003: .wire is an ephemeral transport copy, never an accepted plan artifact.
 // Workflow staging/object paths are not registered with this cleanup owner.
 // FS-005 / architecture section 4: the staging directory is resolved once and held for the spool's life;

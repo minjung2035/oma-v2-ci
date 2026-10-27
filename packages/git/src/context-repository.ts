@@ -1,4 +1,4 @@
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */

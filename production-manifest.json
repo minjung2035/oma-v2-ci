@@ -11,6 +11,8 @@
   "packages/tui/package.json",
   "packages/native/src",
   "packages/native/package.json",
+  "packages/file-descriptors/src",
+  "packages/file-descriptors/package.json",
   "packages/process/src",
   "packages/process/package.json",
   "packages/storage/src",

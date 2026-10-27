@@ -23,6 +23,7 @@
 | `@oma/domain` | 식별자·값·정책·권한 판정의 순수 계산 |
 | `@oma/protocol` | request/result/session DTO·wire codec·receipt/status 표현 |
 | `@oma/native`, `@oma/process` | FD·filesystem containment·lock·peer/process primitive / 실제 child 종료·상속 fence·writer 대기 |
+| `@oma/file-descriptors` | Node/Koffi만 사용하는 POSIX openat·mkdirat·unlinkat·directory cursor. 업무 정책·domain·metadata/helper 의존성 없음 |
 | `@oma/storage`, `@oma/config` | SQLite ledger·transaction·파일 게시 / 설정 해석·검증·generation 게시 |
 | `@oma/mail`, `@oma/lifecycle` | 메일·batch·정산 / 생성·bootstrap·실행·종료·복구 판정 |
 | `@oma/git`, `@oma/review`, `@oma/reconcile` | Git 관측·검사·게시·CAS / review 권한·수락·진행 / pending 효과와 실제 상태 대조 |
@@ -30,7 +31,7 @@
 | `@oma/engine` | Pi SDK 연결·Principal/Personal session·interactive UI 연결·SDK adapter |
 | `@oma/tui` | Control Panel·메일·설정·화면 표현 |
 | `@oma/extension`, `@oma/tool-runtime` | 신뢰된 OMA 확장 / provenance·tool surface·도구 실행 연결 |
-| `@oma/tool-files` | SDK 없는 workspace 파일 정책과 작은 descriptor primitive. tool-runtime·hashline·LSP가 공개 API로 사용 |
+| `@oma/tool-files` | SDK 없는 workspace 파일 정책과 snapshot 수명. private adapter로 독립 descriptor leaf 사용; tool-runtime·hashline·LSP는 공개 API 사용 |
 | `@oma/tool-lsp`, `@oma/tool-hashline`, `@oma/tool-web`, `@oma/tool-mcp` | 동봉 도구의 검증된 upstream payload와 OMA 연결 |
 | `@oma/platform-linux`, `@oma/platform-mac` | bwrap·namespace·seccomp·rootfs primitive / Darwin 관측·독립 Keychain primitive |
 | `@oma/app` | 위 기능의 제품 조립과 물리 효과 연결. 공개 API는 installer assets·admin diagnostics |

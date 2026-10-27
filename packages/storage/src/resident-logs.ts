@@ -7,7 +7,7 @@ import type { ResidentLogEntry, ResidentLogObservation } from "@oma/contracts/ru
 import { isValidActorName } from "@oma/domain/identifiers";
 import { canonicalJson } from "@oma/domain/canonical-json";
 import { StoreError } from "@oma/domain/errors";
-import { directoryNames } from "@oma/native/posix-files";
+import { directoryNames } from "@oma/file-descriptors";
 import { pinBeneath, chmodPinned, reopenPinned } from "@oma/native/files";
 import { withCleanup } from "@oma/native/cleanup";
 import { ensureOwnedDurableDirectory } from "./durable-fs.js";

@@ -2505,3 +2505,37 @@ skeleton을 생성하지 않고 native product/scope/file/auth guard는 유지�
 Dashboard는 confinement이 필수인 정책을 표시하며 설치 경로나 실제 실행 성공을 만들어내지
 않는다. 원래 confinement·credential·authority·전체 scope 종료 계약과 불명 상태의 거절은 유지한다.
 실제 Mac 시험/지원은 이 설정 전환이나 Linux 시험만으로 완료 처리하지 않는다.
+
+## DR61 — native 전환은 제품 보장과 구현 후보를 분리한다
+
+2026-10-28 사용자는 명세 전면 개정과 구현 재개를 요청했다. 긴 지시 반복 대신 다음 구현자가
+목표·결정·미결정 후보·근거·다음 검증을 찾을 수 있도록 native 명세를 다시 구성한다. 미검증
+launchd/audit-session을 확정 backend로 전제하지 않는다. 유사 제품의 실제 구현을 우선 비교하고,
+결정적인 반례를 실환경에서 확인한 뒤 caller와 durable 형식을 연결한다. 동일 실패의 반복 조사나
+Linux API의 기계적 복제가 구현의 목표가 아니다.
+
+파일 정책은 기존 TS owner에 유지하되, 각 caller에 필요한 capability를 구분한다. permission-
+independent pin이 없는 OS에서 pathname repair로 흉내 내지 않고 unknown을 보존한다. tool-files는
+Node-only라는 구현 제한 대신 좁은 native file leaf 또는 주입 port를 허용한다. NATIVE-024/025가
+관련 선행 가정·모듈 제한을 대체하며, 전체 후손 종료·현재 권한·accepted bytes·archive quiescence
+보장은 완화하지 않는다. privileged 서비스·entitlement·OS 하한 변경·기능 축소는 별도 결정이다.
+
+명세와 인계의 개정 전 bytes는 docs/archive에 보존한다. 채택 결정·소스 조사·실제 실행 proof는
+서로 다르며, 이 문서 개정은 Darwin 지원 완료나 과거 검증의 재승인이 아니다.
+
+## DR62 — 파일 도구의 native 의존성은 독립 descriptor leaf로 제한한다
+
+DR61의 후보였던 `@oma/native/files`·`posix-files`는 domain·metadata/helper까지 평가한다.
+두 import만 허용해도 실제 runtime closure가 작아지는 것은 아니다. bootstrap port 주입과
+독립 leaf 분리를 비교해, 모든 engine/search process의 조립 상태에 의존하지 않는
+`@oma/file-descriptors`를 채택한다. Node built-in과 Koffi만 사용하며 OMA 업무 모듈에는 의존하지 않는다.
+
+기존 mkdirat/unlinkat/directory cursor 구현을 옮기고 모든 caller를 이관한다. 원래 native export나
+복제 구현은 남기지 않는다. tool-files의 private adapter만 이 leaf를 참조하며, extension 검사는
+그 아래의 relative import/re-export closure까지 추적한다. 우회 import·다른 native API·숨은 의존성을
+negative control과 독립 설치로 확인한다. NATIVE-026이 NATIVE-025의 구체 leaf 선택을 대체한다.
+
+OS filename decoder도 domain을 import할 수 없으므로 같은 strict/BOM-preserving 계약을 직접
+집행한다. 선두 U+FEFF filename 손실을 실제 directory cursor 회귀로 재현했고, fatal·ignoreBOM
+두 옵션을 정적 경계와 실제 filename 관측으로 결박한다. 파일 정책·snapshot 정리는 TS owner에
+유지하며, 이 분리는 permission-independent pin·exact exec·Darwin 전체 qualification의 증거가 아니다.

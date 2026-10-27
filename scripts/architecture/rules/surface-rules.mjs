@@ -167,18 +167,23 @@ function internalMethodNames(root) {
 }
 
 function extensionRules(root, findings) {
-  const files = extensionFiles(root);
-  const members = new Set(files);
+  const descriptorRoot = "packages/file-descriptors/src/";
+  const descriptorClosure = runtimeClosure(root, `${descriptorRoot}index.ts`);
+  const files = [...new Set([...extensionFiles(root), ...descriptorClosure])];
+  const members = new Set(extensionFiles(root));
   for (const file of [...files, ...filesUnder(root, "packages/client/src")]) {
     const source = sourceOf(root, file);
-    // PI-001: the extension runs on the host and inside the sandbox from the
-    // same files, so it may import nothing of OMA's runtime.
+    const descriptorLeaf = file.startsWith(descriptorRoot);
     for (const edge of edges(source)) {
       const target = normalizeRelativeImport(file, edge.specifier);
-      if (target === null) {
+      if (descriptorLeaf) {
+        if (target === null ? !edge.specifier.startsWith("node:") && edge.specifier !== "koffi" : !target.startsWith(descriptorRoot))
+          findings.push(finding("extension-closure", file, `descriptor leaf imports ${edge.specifier}; only its own modules, Node built-ins and Koffi are allowed`));
+      } else if (target === null) {
         if (!edge.specifier.startsWith("node:") && !(members.has(file) && EXTENSION_EXTERNALS.has(edge.specifier)))
           findings.push(finding("extension-closure", file, `imports ${edge.specifier}; the extension may use only Node built-ins, the engine's extension API and typebox`));
-      } else if (!(members.has(file) && target.startsWith("packages/extension/src/")) &&
+      } else if (!(file === "packages/tool-files/src/descriptor-files.ts" && edge.specifier === "@oma/file-descriptors") &&
+        !(members.has(file) && target.startsWith("packages/extension/src/")) &&
         !["packages/client/src/", "packages/domain/src/", "packages/protocol/src/", ...TOOL_SOURCE_ROOTS.map(dir => `${dir}/`)].some(prefix => target.startsWith(prefix)) &&
         !(edge.typeOnly && (target === "packages/contracts/src/index.ts" || target.startsWith("packages/contracts/src/")))) {
         findings.push(finding("extension-closure", file, `imports ${target}; the extension imports no OMA runtime module`));
@@ -676,10 +681,9 @@ function hostLossSignalRules(root, findings) {
   }
 }
 
-/** P0V-86 (R6-09): one reading of UTF-8. A decoder is made only by the owner
- * alone; all consumers import its public API. It refuses malformed
- * bytes and keep a U+FEFF: `fatal: true, ignoreBOM: true`. */
-const UTF8_OWNERS = Object.freeze(["packages/domain/src/utf8.ts"]);
+/** P0V-86: the standalone descriptor leaf cannot depend on domain. Its OS name
+ * decoder has the same strict/BOM-preserving contract, checked below. */
+const UTF8_OWNERS = Object.freeze(["packages/domain/src/utf8.ts", "packages/file-descriptors/src/index.ts"]);
 function utf8DecoderRules(root, findings) {
   for (const file of authoredFiles(root)) {
     eachNode(sourceOf(root, file), node => {

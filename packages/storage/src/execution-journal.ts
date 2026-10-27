@@ -12,30 +12,37 @@ import { uuidV4 } from "@oma/native/identity";
 import { lockFileDescriptor } from "@oma/native/linux";
 import { chmodPinned, pinBeneath, reopenPinned, withinDirectory } from "@oma/native/files";
 import { withCleanup } from "@oma/native/cleanup";
-import type { NamespaceInitIdentity } from "@oma/native/pid-namespace";
+import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { openOwnedDirectoryPath } from "./directory.js";
 import { ensureOwnedDurableDirectory, publishNoReplace } from "./durable-fs.js";
 
 export interface ExecutionJournalEntry {
   readonly slot: string; readonly execution: string;
-  readonly witness: NamespaceInitIdentity | null;
+  readonly witness: ExecutionWitness | null;
 }
 type Event = { kind: "initialize"; owner: string } |
   { kind: "opening"; slot: string; execution: string } |
-  { kind: "witness"; slot: string; execution: string; witness: NamespaceInitIdentity } |
+  { kind: "witness"; slot: string; execution: string; witness: ExecutionWitness } |
   { kind: "closed"; slot: string; execution: string };
-interface Frame { version: 1; sequence: number; previous: string; event: Event; hash: string }
+interface Frame { version: typeof EXECUTION_JOURNAL_VERSION; sequence: number; previous: string; event: Event; hash: string }
 const ZERO = "0".repeat(64);
 const BOOT = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function keys(value: Record<string, unknown>, expected: string[]): boolean { return Object.keys(value).sort().join() === expected.sort().join(); }
 function slot(value: unknown): value is string { return typeof value === "string" &&
   (["candidate", "quarantine", "restic", "preparation"].includes(value) || value.startsWith("resident:") && isValidActorName(value.slice(9))); }
-function identity(value: unknown): value is NamespaceInitIdentity {
-  return object(value) && keys(value, ["pid", "bootId", "startTime", "namespaceDevice", "namespaceInode"]) &&
-    typeof value.pid === "number" && Number.isSafeInteger(value.pid) && value.pid > 1 && value.pid <= 0x7fffffff &&
-    typeof value.bootId === "string" && BOOT.test(value.bootId) &&
-    [value.startTime, value.namespaceDevice, value.namespaceInode].every(v => typeof v === "string" && /^[0-9]{1,24}$/.test(v));
+function identity(value: unknown): value is ExecutionWitness {
+  if (!object(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "linux-namespace")
+    return keys(value, ["kind", "pid", "bootId", "startTime", "namespaceDevice", "namespaceInode"]) &&
+      typeof value.pid === "number" && Number.isSafeInteger(value.pid) && value.pid > 1 && value.pid <= 0x7fffffff &&
+      typeof value.bootId === "string" && BOOT.test(value.bootId) &&
+      [value.startTime, value.namespaceDevice, value.namespaceInode].every(v => typeof v === "string" && /^[0-9]{1,24}$/.test(v));
+  if (value.kind === "darwin-audit-session")
+    return keys(value, ["kind", "auditSession", "coalitionId", "pid", "pidVersion"]) &&
+      typeof value.coalitionId === "string" && /^[0-9]{1,20}$/.test(value.coalitionId) &&
+      [value.auditSession, value.pid, value.pidVersion].every(v => typeof v === "number" && Number.isSafeInteger(v) && v > 0 && v <= 0xffffffff);
+  return false;
 }
 function event(value: unknown): value is Event {
   if (!object(value)) return false;
@@ -102,14 +109,14 @@ export class ExecutionJournal {
     }, () => { if (fd !== undefined) closeSync(fd); });
   }
   entries(): readonly ExecutionJournalEntry[] { this.assertOpen(); return [...this.entriesBySlot.values()]; }
-  reserve(name: string): { readonly execution: string; publish: (witness: NamespaceInitIdentity) => void; retire: () => void } {
+  reserve(name: string): { readonly execution: string; publish: (witness: ExecutionWitness) => void; retire: () => void } {
     this.assertOpen();
     if (!slot(name)) throw new TypeError("invalid execution slot");
     if (this.entriesBySlot.has(name)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not retired");
     const execution = uuidV4(); this.append({ kind: "opening", slot: name, execution });
     return Object.freeze({
       execution,
-      publish: (witness: NamespaceInitIdentity) => {
+      publish: (witness: ExecutionWitness) => {
         if (!identity(witness)) throw new TypeError("invalid kernel scope witness");
         this.append({ kind: "witness", slot: name, execution, witness });
       },

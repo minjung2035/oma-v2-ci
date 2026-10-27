@@ -16,7 +16,7 @@ export const SCHEMA_USER_VERSION_WRITTEN = 4;
 export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([SCHEMA_USER_VERSION_WRITTEN]);
 export const WIRE_PROTOCOL_VERSION = 1;
 /** DR51: process-crash recovery observations, not accepted intent or a task queue. */
-export const EXECUTION_JOURNAL_VERSION = 1 as const;
+export const EXECUTION_JOURNAL_VERSION = 2 as const;
 /** The envelope identifies the only accepted development plan format. */
 export const PLAN_ENVELOPE_VERSION = 3 as const;
 export const PLAN_FORMAT_WRITTEN = "v3" as const;

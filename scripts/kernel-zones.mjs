@@ -103,11 +103,14 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/protocol/src/resident-context.ts",
       "packages/protocol/src/mac-developer-tools.ts",
       "packages/protocol/src/git-execution-view.ts",
+      "packages/process/src/execution-witness.ts",
     ],
   },
   {
     name: "K2-mechanisms",
     files: [
+      "packages/native/src/audit-session.ts",
+      "packages/file-descriptors/src/index.ts",
       "packages/tool-files/src/descriptor-files.ts",
       "packages/tool-files/src/index.ts",
       "packages/domain/src/authority.ts",

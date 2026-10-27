@@ -1,4 +1,5 @@
-import { directoryNames, mkdirAt, unlinkAt, statAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt } from "@oma/file-descriptors";
+import { statAt } from "@oma/native/posix-files";
 /** Directory traversal uses held descriptors and kernel no-symlink resolution.
  * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */

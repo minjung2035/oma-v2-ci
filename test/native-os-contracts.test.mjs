@@ -11,7 +11,8 @@ import { setImmediate } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { ProcessLock } from '@oma/native/process-lock';
 import { closeEvery, openBeneath, openDirectory } from '@oma/native/files';
-import { directoryNames, readlinkAt, readlinkBytesAt } from '@oma/native/posix-files';
+import { directoryNames } from '@oma/file-descriptors';
+import { readlinkAt, readlinkBytesAt } from '@oma/native/posix-files';
 import { hostProcessProbe } from '@oma/broker/process-ancestry';
 import { withCleanup } from '@oma/native/cleanup';
 
@@ -96,6 +97,7 @@ test('real OS: directory cursors cover multiple buffers and leave no descriptor 
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'oma-os-cursors-'))), held = openDirectory(root);
   try {
     for (let i = 0; i < 520; i++) writeFileSync(join(root, String(i).padStart(4, '0') + '-한글-🙂'), '');
+    writeFileSync(join(root, '\ufeffleading-BOM'), 'literal filename');
     const expected = readdirSync(root).sort();
     for (let i = 0; i < 4; i++) assert.deepEqual(directoryNames(held), expected);
     const fdRoot = process.platform === 'darwin' ? '/dev/fd' : '/proc/self/fd';

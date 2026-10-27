@@ -12,5 +12,5 @@
     "src/**/*.ts"
   ],
   "exclude": [],
-  "references": []
+  "references": [{ "path": "../file-descriptors" }]
 }
