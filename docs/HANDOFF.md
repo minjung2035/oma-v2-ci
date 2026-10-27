@@ -10,11 +10,11 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, HEAD `eb63b6f245b7ac6ed7589782a20beffac6948ffa` + dirty WIP |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 공개 입력 `3272a0618d54bfd14184b0c77c32d839eca0f279` |
-| 현재 변경 | 기존 WIP와 사용자 변경 보존. 아래 Linux 수리·fixture 변경 및 이번 문서 개정은 새 commit/push하지 않음 |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, HEAD `dcaf727b42d02f96a2114b39201b61ef52905e51` + 후속 WIP |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 공개 입력 `7d81b4f2e1de6c3b2c89639328c1ea2e00265dcc` |
+| 현재 변경 | descriptor 분리와 보존 WIP를 작업 branch에 commit했다. README·WATCHDOG.yml 사용자 변경은 commit에서 제외하고 그대로 보존했다. 후속 CI/launcher 수리는 아직 미반영 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
-| 환경 | Linux 개발 장비; 실제 Mac은 GitHub CI. LSP 미설정. API/gh 인증 불가였고 SSH push는 가능 |
+| 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
 
 이 표는 작업 중 확인한 입력이지 재개 시점의 HEAD를 보증하지 않는다. 상세 변경 목록·이전 Keychain 작업은 보관 인계와 실제 worktree를 대조한다.
@@ -38,12 +38,18 @@
 - Seatbelt kept-FD 실제 오류는 `Seatbelt target exec: Bad file descriptor`; 다른 helper/worker/setup 실패도 별도다. generic timeout으로 합치지 않는다.
 - 파일 후보 배제 근거: `/home/dev/oma-audit-artifacts/native-2026-10-27-file-binding-feasibility/audit.json`. 새 CI 관측은 그 당시 NOT_RUN 표기보다 최신이다.
 
+최신 run은 Native `40573702445`, Architecture `40573702614`다. 원시는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`가 소유한다.
+nightly.link의 run/name 경로가 cached404이면 같은 URL을 반복하지 않고 공개 GitHub
+`actions/runs/<run>/artifacts`의 ID·digest를 얻어 `nightly.link/.../actions/artifacts/<id>.zip`로 받는다.
+회수한 Mac26 runtime/gates·Mac15 runtime·Ubuntu ZIP의 SHA256은 API digest와 일치했다.
+
 ## 재개 요청을 받으면
 
 1. 위 입력과 현재 변경을 대조한다. docs-only 개정과 기존 구현 WIP를 섞어 새 PASS로 기록하지 않는다.
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
-3. tool-files의 directory FD pathname은 독립 `@oma/file-descriptors`로 교체했다(DR62). 기존 primitive/caller를 이관했고 실제 Linux smoke·관련55/55·contained-tools30/30·boundary36/36·독립 설치27/27을 확인했다. U+FEFF filename 반례는 손실 재현 후 수리·재빌드하여1/1 PASS다. 실제 Darwin 전환 검증은 아직 NOT_RUN이다.
-4. `audit-session.ts` scan→empty, `execution-runtime.ts` saved witness→fresh identity, `execution-launch.ts` throw-only 경로를 production proof로 쓰지 않는다. launchd FFI의 소유권·array ABI·argv/stdio도 미검증이다.
+3. descriptor 분리는 실제 Mac26/15의 file/snapshot/cursor/hashline 경로에서도 통과했다. 두 OS 공통 suite는 각각247/248이며 빈 ACL의 상속 방지 flag 관측 한 건이 실패했다. Mac 독립 설치는 이 실패로 skip되어 다음 실행에서 build 성공을 전제로 독립 실행하도록 바꾼다. Linux 선택55/55·contained-tools30/30·boundary36/36·독립 설치27/27 및 target Node26 선택30/30은 각각의 입력 결과다.
+4. 다음 수리는 metadata persistence/observation 구분, Darwin FD exec, status pending620의74ms 지연이다. 새 launcher 후보는 공개 FD inventory+직접 exec이며 실제 Mac 검증 전이다. `audit-session.ts`의 scan→empty와32-byte coalition buffer(XNU 정의는40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exec binding·expected-Broker는 여전히 미해결이다.
 5. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
 상세 파일별 위치와 이전 조사 전문은 보관 인계에 있다. 이미 실패한 전제를 반복 조사하지 말고 달라진 입력 또는 새로운 반례 질문을 명시한다.

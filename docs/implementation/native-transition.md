@@ -43,6 +43,23 @@ architecture rules·문서·규범 inventory 검사는 PASS다. 실제 Darwin과
 PASS다. tool-files의 workspace closure는 자신과 file-descriptors뿐이며 native/domain/metadata
 helper를 설치하지 않는다. 외부 SDK declaration 진단44개는 자체 오류와 별도로 기록됐다.
 
+실제 공개 CI 입력 `7d81b4f2`의 Mac26/15는 각각247/248 PASS·1 FAIL·skip0이다.
+새 file 도구·snapshot·root replacement·cursor/BOM·hashline 경로는 두 OS에서 통과했고,
+실패는 empty ACL의 NO_INHERIT flag가 있는 directory의 metadata 거절이다. 현재 helper 관측
+누락과 fixture의 실제 persistence를 구분 중이며, 기대값을 낮추거나 directory 전체를 거절하지 않는다.
+이 실패로 Mac packed install은 아직 실행되지 않았다.
+
+Ubuntu 확대431개는430 PASS·1 FAIL이며 pending620 status의 event-loop 지연74ms가50ms
+예산을 넘었다. 별도 target Node26 선택30/30은 PASS이나 전체 실패를 대체하지 않는다.
+원시 artifact와 SHA256 확인은 native-2026-10-28-descriptor-leaf 아래에 보존했다.
+Darwin kept-FD 반례는 posix_spawn에서 EBADF, Seatbelt 파일 시나리오는 SIGABRT였다.
+새 후보는 단일-thread 확인·공개 PROC_PIDLISTFDS inventory·미허용 FD close·직접 execve이며
+실제 Mac 검증 전이다. direct child/FD 정리는 complete descendant scope의 대체가 아니다.
+
+Architecture CI는 설치 전 source-digest가 TypeScript를 import하여 중단됐다. 깨끗한 checkout의
+같은 실패와 locked npm ci 뒤 같은 digest 명령의 성공을 확인하고 설치→source binding→generator
+순서로 고쳤다. source hash 기준이나 실패 판정을 완화하지 않는다.
+
 
 ### 2026-10-28 Runner admission 회귀 수리
 

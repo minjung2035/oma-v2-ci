@@ -170,12 +170,11 @@ async function fdClosure() {
   const helperRoot = dirname(bundledSeatbeltHelper());
   const helperSource = readFileSync(join(helperRoot, "main.c"), "utf8");
   const helperHeader = readFileSync(join(helperRoot, "launch-fds.h"), "utf8");
-  assert.equal(helperHeader.split("POSIX_SPAWN_CLOEXEC_DEFAULT").length, 2);
   const mutantRoot = join(work, "leaky-helper"); mkdirSync(mutantRoot);
   const mutantSource = join(mutantRoot, "main.c"), mutant = join(mutantRoot, "intentionally-leaky");
   writeFileSync(mutantSource, helperSource);
-  writeFileSync(join(mutantRoot, "launch-fds.h"), helperHeader.replace("POSIX_SPAWN_CLOEXEC_DEFAULT", "0 /* explicit negative control: inherited FD retained */"));
-  for (const [source, output, extra] of [[actorSource, actor, []], [mutantSource, mutant, ["-lsandbox"]]]) {
+  writeFileSync(join(mutantRoot, "launch-fds.h"), helperHeader.replace("close(fd)", "0 /* explicit negative control: inherited FD retained */"));
+  for (const [source, output, extra] of [[actorSource, actor, []], [mutantSource, mutant, ["-lsandbox", "-lproc"]]]) {
     const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-I", dirname(bundledSeatbeltHelper()), source, ...extra, "-o", output],
       { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL", maxBuffer: 65536 });
     assert.equal(compiled.error, undefined); assert.equal(compiled.signal, null); assert.equal(compiled.status, 0, compiled.stderr);
@@ -235,7 +234,7 @@ async function keptDescriptors() {
   // This separate real SDK program invokes the same production exec leaf with
   // CLOEXEC stdio/kept channels and an FD above lowered soft AND hard limits.
   const pruneSource=fileURLToPath(new URL('./descriptor-prune-control.c',import.meta.url)),prune=join(work,'prune-control');
-  const pruning=spawnSync('/usr/bin/xcrun',['clang','-Wall','-Wextra','-Werror','-I',dirname(bundledSeatbeltHelper()),pruneSource,'-o',prune],
+  const pruning=spawnSync('/usr/bin/xcrun',['clang','-Wall','-Wextra','-Werror','-I',dirname(bundledSeatbeltHelper()),pruneSource,'-lproc','-o',prune],
     {encoding:'utf8',timeout:30000,killSignal:'SIGKILL',maxBuffer:65536});
   assert.equal(pruning.error,undefined);assert.equal(pruning.signal,null);assert.equal(pruning.status,0,pruning.stderr);
   function observe(list,options={}){
