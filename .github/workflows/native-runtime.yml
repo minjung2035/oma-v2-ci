@@ -44,6 +44,11 @@ jobs:
       - name: Install the actual pinned Linux native prerequisites
         if: runner.os == 'Linux'
         run: bash scripts/setup-native-linux-ci.sh .scratch/native-runtime
+      - name: Verify pinned storage setup against actual executable replacement
+        if: runner.os == 'Linux'
+        run: |
+          if ! npm run setup:storage > .scratch/native-runtime/setup-storage.log 2>&1; then cat .scratch/native-runtime/setup-storage.log; exit 1; fi
+          if ! node --test test/restic-setup.test.mjs > .scratch/native-runtime/restic-setup-tests.log 2>&1; then cat .scratch/native-runtime/restic-setup-tests.log; exit 1; fi
       - name: Verify Linux pidfd and Unix credential lifetimes on the real kernel
         if: runner.os == 'Linux'
         run: |

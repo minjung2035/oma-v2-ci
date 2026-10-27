@@ -494,6 +494,7 @@ const definitions = {
       "test/native-resident-logs.test.mjs", "test/native-credential-stream.test.mjs",
       "test/native-unix-message.test.mjs", "test/native-git-execution.test.mjs",
       "packages/process/test/process-group.test.mjs",
+      "test/restic-setup.test.mjs",
     ],
     requiredNames: [
       "AUTH-003 native",
@@ -501,6 +502,10 @@ const definitions = {
       "NATIVE-RESIDENT-ISOLATION-01:", "NATIVE-RESIDENT-STATUS-01:",
       "credential stream: live connector", "native candidate: actual exact checkout",
       "POSIX group launch creates", "POSIX group cancellation", "POSIX group deadline", "POSIX group launch retains",
+      "Restic setup: verified executable survives pathname replacement", "Restic setup: verified executable survives pathname unlink",
+      "Restic setup: newly installed executable survives pathname replacement", "Restic setup: a replacement before published-file verification",
+      "Restic setup: an existing mismatched executable", "Restic setup: mode-zero repair",
+      "Restic setup: a real execution failure", "Restic setup: an unverified archive",
       "LIFE-009 entry:",
       "NATIVE-AUDIT-READY-01:",
       "C1: two concurrent git.submit",

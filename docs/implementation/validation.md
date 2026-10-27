@@ -505,11 +505,43 @@ G-PROCESS/G-FILES/G-AUTH, mode-000 pin·exact reopen/repair·실행 결박은 �
 App·PreparationExecutor의 Darwin guard를 해제하지 않았고 유료 Mac CI도 실행하지 않았다.
 전체 코드 복잡도 검토는 native 구현·CI 준비를 모두 끝낸 뒤에 진행한다.
 
+### Restic 설치 검증과 실행의 FD 결박
+
+Spec §9.1에 따라 설치 스크립트의 checksum 검증 후 경로 재실행을 제거했다.
+기존 설치와 신규 publication을 같은 FD 검증 경로에 모으고, 검증한 파일을 child FD3로
+명시적으로 넘겨 기존 native execute leaf를 통해 실행한다. version 확인의 성공·실패 뒤
+소유 FD를 닫으며 새 publication도 실제로 연 파일의 checksum을 다시 확인한다.
+이 결박은 경로 교체·삭제의 실행 대상을 고정하며 파일 내용의 불변성을 주장하지 않는다.
+
+[Node26의 FD 상속 계약](https://github.com/nodejs/node/blob/v26.0.0/doc/api/child_process.md#optionsstdio)과
+[Linux의 검증 후 실행 경합 설명](https://man7.org/linux/man-pages/man3/fexecve.3.html)을 대조했다.
+새 OS adapter나 경로 fallback을 추가하지 않았다. Darwin exact execute는 계속 미해결이며
+이 Linux 결과를 Mac 지원·실행 검증으로 해석하지 않는다.
+
+실제 pinned Restic과 구별되는 C 실행 파일을 사용한 Linux oracle8/8이 통과했다.
+기존·신규 설치의 실행 직전 교체, link count0의 실제 unlink, publication 직후 교체의
+checksum 거절, 기존 불일치 파일 보존, mode000 복구, 실제 EACCES 뒤 FD 반환,
+불일치 archive 거절을 확인했다. 다운로드 fixture는 실제 pinned archive와 byte-for-byte
+같은 bzip2 재압축 bytes를 제공하며 kernel·프로세스 결과는 대체하지 않는다.
+동일한 최종 oracle은 격리한 수정 전 installer의 경로 실행을 실제로 거절했다(6실패·2통과).
+Linux kernel/full lane의 필수 실행 이름과 Linux native CI에 연결했다.
+
+입력 `d5f1bce12e2f39ffd182f3e9dc0afe25ab46897222c0dc6ea7f33251f4169589`(15670개)에서 위8/8,
+공통 CI235/235, 정책35/35, boundary·owner17/17, session storage15/15 및 전체 구조 검사가
+통과했다. build·strict types도 통과했다. 입력·workspace 산출물15405개·
+보호4개 SHA가 전후 같고 inventory·dependency graph·authored review 상태는 바뀌지 않았다.
+이 변경은 root installer·test·CI 범위라 workspace packed26 재시험은 하지 않았으며 이전
+packed PASS를 새 입력의 결과로 재결박하지 않는다. 문서 기록은 별도 입력으로 구조 확인한다.
+원문은 `/home/dev/oma-audit-artifacts/native-2026-10-27-restic-setup-exec/`가 소유한다.
+
+유료 Mac CI는 실행하지 않았다. G-PROCESS/G-FILES/G-AUTH와 Darwin 제품 guard는 유지한다.
+전체 코드 복잡도 정리는 native 구현·CI 준비를 모두 마친 뒤에 진행하며 아직 착수하지 않았다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `a815d7b6bf86a84d1b47f5b3a4a4bc2b7d067f65b7e6d49d7e6d6ccdc5c1f1f8` (15667 files).
+verification input digest `2fdc073b888832c0c1eb6f9564c240bee8febd6c8b38313347deb3bb5612f148` (15670 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
