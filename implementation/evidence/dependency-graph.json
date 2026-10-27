@@ -2507,7 +2507,7 @@
   "node:stream": 11,
   "node:stream/promises": 1,
   "node:string_decoder": 1,
-  "node:timers/promises": 6,
+  "node:timers/promises": 7,
   "node:url": 14,
   "node:util": 10,
   "node:zlib": 1,

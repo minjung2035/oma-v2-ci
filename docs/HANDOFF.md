@@ -10,9 +10,9 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, HEAD `62b47bf3` + 후속 WIP |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 공개 입력 `562548397db43a42bfac6be433af19e95a634a64` |
-| 현재 변경 | descriptor 분리와 첫 CI/launcher 수리를 work branch에 commit했다. README·WATCHDOG.yml 사용자 변경은 제외·보존했다. BigInt diagnostic 수리·crash report 수집·독립 설치의 실패 집계는 후속 WIP |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, HEAD `3dc66957` + 후속 WIP |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 공개 입력 `9c95aaaac95d6e17fbfb213bd0d0ec39c8f72ca6` |
+| 현재 변경 | 진단·독립 설치 수리는 commit했다. DR63 status cutover, 손실 없는 metadata 관측 후보, literal-root loader 수리와 두 temp-alias smoke 수리는 WIP다. README·WATCHDOG.yml 사용자 변경은 제외·보존했다 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
 | 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
@@ -38,7 +38,7 @@
 - Seatbelt kept-FD 실제 오류는 `Seatbelt target exec: Bad file descriptor`; 다른 helper/worker/setup 실패도 별도다. generic timeout으로 합치지 않는다.
 - 파일 후보 배제 근거: `/home/dev/oma-audit-artifacts/native-2026-10-27-file-binding-feasibility/audit.json`. 새 CI 관측은 그 당시 NOT_RUN 표기보다 최신이다.
 
-후속 run은 Native `40577594097`, Architecture `40577594148`다. 이전 Native `40573702445`의 결과를 덮지 않는다. 원시는
+직접 회수한 최신 Native run은 `40580105329`다. Architecture `40577594148`는 설치→source binding 성공을 확인했으며 전체 완료로 기록하지 않았다. 이전 실패도 보존한다. 원시는
 `/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`가 소유한다.
 nightly.link의 run/name 경로가 cached404이면 같은 URL을 반복하지 않고 공개 GitHub
 `actions/runs/<run>/artifacts`의 ID·digest를 얻어 `nightly.link/.../actions/artifacts/<id>.zip`로 받는다.
@@ -48,8 +48,9 @@ nightly.link의 run/name 경로가 cached404이면 같은 URL을 반복하지 �
 
 1. 위 입력과 현재 변경을 대조한다. docs-only 개정과 기존 구현 WIP를 섞어 새 PASS로 기록하지 않는다.
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
-3. descriptor 분리는 실제 Mac26/15의 file/snapshot/cursor/hashline 경로에서도 통과했다. 첫 공통 suite는 각각247/248이며 빈 ACL의 상속 방지 flag 관측 한 건이 실패했다. 후속 Mac26은 진단의 BigInt JSON 직렬화 오류로245/248이며, 이 진단 오류만 먼저 고쳤다. Mac packed install은 실행됐지만 Broker smoke의 Linux 전용 credential 준비에서 중단됐다. 검사기는 다른 workspace도 실행한 뒤 실패를 합산하도록 바꾼다. Linux 선택55/55·contained-tools30/30·boundary36/36·독립 설치27/27 및 target Node26 선택30/30은 각각의 입력 결과다.
-4. 다음 수리는 metadata persistence/observation 구분, Seatbelt 대상의 SIGABRT, status pending620의74ms 지연이다. 새 공개 FD inventory+직접 exec는 실제 SDK의 독립 C control에서 same-PID·stdio·FD64/낮춘 hard limit·명시 채널 검사를 통과했다. Seatbelt 적용 후 C actor와 Node는 여전히 SIGABRT이므로 end-to-end 성공이 아니다. `audit-session.ts`의 scan→empty와32-byte coalition buffer(XNU 정의는40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exec binding·expected-Broker는 여전히 미해결이다.
+3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치 경로는 통과했다. 후속 Mac26/15 전체 독립 설치는 각각25/27이며 git/native의 temp alias 두 건을 고쳤다. 상세 입력별 수치와 Linux/root-mapped proof 구분은 [최신 진행 기록](implementation/native-transition.md)에 있다.
+4. empty ACL의 NO_INHERIT flag는 실제 저장돼 있었지만 lstatx가 놓쳤다. 공개 getattrlist 관측으로 바꾼 후보를 실제 Mac에서 확인한다. SIGABRT는 target의 main 이전 libignition에서 발생했고 literal-root 읽기 예외를 upstream과 대조해 추가했다. 새 SDK FD control은 통과했으나 완성된 Seatbelt target 실행은 다음 CI로 증명해야 한다. DR63 status는 Linux 실제620개 게시와 latency/shutdown 회귀가 통과했다.
+   `audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU 정의40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exact exec binding·expected-Broker는 여전히 미해결이다.
 5. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
 상세 파일별 위치와 이전 조사 전문은 보관 인계에 있다. 이미 실패한 전제를 반복 조사하지 말고 달라진 입력 또는 새로운 반례 질문을 명시한다.

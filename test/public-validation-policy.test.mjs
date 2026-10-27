@@ -69,7 +69,7 @@ function fixture(transform = source => source) {
       getReceipt() { calls.receiptReads = (calls.receiptReads ?? 0) + 1; return null; },
     },
     mail: { send: effect }, units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
-    views: { status: () => [] }, lifecycle: {}, limits: {},
+    views: { status: async () => [] }, lifecycle: {}, limits: {},
     review: null,
 git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
     waitRun: () => true,
@@ -79,7 +79,7 @@ git: { submit: effect, publishContext: effect, isPublished() { calls.order.push(
     failureAnswer: (id, error) => replies.errorAnswer(id, { code: error.code ?? "INTERNAL_ERROR", message: error.message, retry: "never" }),
     refreshViews() { calls.refresh++; },
   };
-  return { dispatcher: new PublicDispatcher(deps), state, auth, calls, StoreError };
+  return { dispatcher: new PublicDispatcher(deps), state, auth, calls, StoreError, views: deps.views };
 }
 const request = overrides => ({ v: 1, id: "transport-1", method: "git.submit", request: "key-1", params: { bundle: { bytes: 1 } }, ...overrides });
 const body = () => (async function* () { yield new Uint8Array([1]); })();
@@ -201,4 +201,21 @@ test("P11 public mail.send approval checks the ledger before Git publication", a
   assert.equal(result.error.code, "CANDIDATE_NOT_PUBLISHED");
   assert.deepEqual(calls.order, ["operation", "published"]);
   assert.equal(calls.effects.length, 0);
+});
+
+test("P1 public validation: status cannot answer for an incarnation revoked while projection yielded", async () => {
+  const { dispatcher, state, auth, views } = fixture();
+  const request = { v: 1, id: "status-current", method: "status.get", params: {} };
+  assert.equal((await dispatcher.dispatch(auth, request, null)).ok, true);
+  const started = Promise.withResolvers(), gate = Promise.withResolvers();
+  views.status = async () => { started.resolve(); await gate.promise; return []; };
+  try {
+    const answer = dispatcher.dispatch(auth, request, null);
+    await started.promise;
+    state.actor = { ...state.actor, incarnation: 2 };
+    gate.resolve();
+    const stale = await answer;
+    assert.equal(stale.ok, false);
+    assert.equal(stale.error.code, "STALE_RUN");
+  } finally { gate.resolve(); }
 });

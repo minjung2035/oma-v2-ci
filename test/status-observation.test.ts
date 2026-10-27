@@ -70,7 +70,7 @@ test("WP23.02: a hung observation costs each caller the budget and an unknown, a
 test("AV9 / INV02: Principal status never borrows a Resident's idle or exit-zero observation", async t => {
   const f = await ledger(t), views = new ViewsModule(f.store, f.root, "demo", "principal");
   const observed: string[] = [];
-  const rows = views.status(undefined, actor => { observed.push(actor); return idle; });
+  const rows = await views.status(undefined, actor => { observed.push(actor); return idle; });
   const principal = rows.find(row => row.agent === "principal")!;
   assert.deepEqual([principal.activeState, principal.subState, principal.unitResult, principal.execMainStatus], [null, null, null, null]);
   assert.equal(principal.reason, "no managed Resident execution");
@@ -100,15 +100,15 @@ function prepare(store: Store, agent: string, messages: string[]): string {
   });
   return id;
 }
-function agree(store: Store): void {
-  const all = pendingWorkByAgent(store.pendingWorkRows());
+async function agree(store: Store): Promise<void> {
+  const all = pendingWorkByAgent(await store.pendingWorkRows());
   for (const agent of store.listAgents()) assert.deepEqual(all.get(agent.name), pendingWork(store, agent.name), agent.name);
   assert.equal(all.size, store.listAgents().length);
 }
 
 test("WP23.03: the whole-society projection counts exactly what the per-agent full-row projection counts", async t => {
   const f = await ledger(t);
-  agree(f.store);
+  await agree(f.store);
   let seed = 23;
   const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   const recipients = ["alice", "bob", "carol"];
@@ -128,9 +128,9 @@ test("WP23.03: the whole-society projection counts exactly what the per-agent fu
       const delivery = f.store.pendingDeliveries(agent)[0];
       if (delivery) f.store.transaction(tx => tx.markAcknowledged(delivery.messageId, agent));
     }
-    agree(f.store);
+    await agree(f.store);
   }
-  const total = [...pendingWorkByAgent(f.store.pendingWorkRows()).values()].reduce((sum, work) => sum + work.pendingMessages, 0);
+  const total = [...pendingWorkByAgent(await f.store.pendingWorkRows()).values()].reduce((sum, work) => sum + work.pendingMessages, 0);
   assert.ok(total > 0, "the sequence never produced pending work to compare");
 });
 
@@ -147,14 +147,36 @@ test("WP23.03: what the full-row projection refuses, the whole-society projectio
     for (let i = 0; i < 3; i++) await f.mail.send(auth, `c${i}`, { to: ["alice"], subject: "s", kind: "message", body: "x" });
     const messages = f.store.pendingDeliveries("alice").map(row => row.messageId);
     const batch = prepare(f.store, "alice", messages.slice(0, 2));
-    agree(f.store);
+    await agree(f.store);
     const path = f.store.path;
     f.store.close();
     mutateRawRowAfterClose(path, raw => corrupt(raw, batch, messages));
     f.store = new Store(path, 5, { society: "demo" });
     assert.throws(() => pendingWork(f.store, "alice"), { code: "STORE_CORRUPT" }, `${name}: the full-row projection accepted it`);
-    assert.throws(() => pendingWorkByAgent(f.store.pendingWorkRows()), { code: "STORE_CORRUPT" }, `${name}: the display projection counted it`);
+    await assert.rejects(async () => pendingWorkByAgent(await f.store.pendingWorkRows()), { code: "STORE_CORRUPT" }, `${name}: the display projection counted it`);
   }
+});
+
+test("WP23.03: a yielding display read does not mix a new batch with its pre-batch deliveries", async t => {
+  const f = await ledger(t);
+  for (let index = 0; index < 40; index++)
+    await f.mail.send(auth, `snapshot-${index}`, { to: ["bob"], subject: "s", kind: "message", body: "x" });
+  const messages = f.store.pendingDeliveries("bob").map(row => row.messageId);
+  const reading = f.store.pendingWorkRows();
+  const { promise: changed, resolve, reject } = Promise.withResolvers<void>();
+  setImmediate(() => {
+    try { prepare(f.store, "bob", messages.slice(0, 8)); resolve(); }
+    catch (error) { reject(error); }
+  });
+  try {
+    const [before] = await Promise.all([reading, changed]);
+    assert.deepEqual([before.unbatched.length, before.prepared.length, before.linked.length], [40, 0, 0]);
+    assert.equal(pendingWorkByAgent(before).get("bob")?.pendingMessages, 40);
+    const after = await f.store.pendingWorkRows();
+    assert.deepEqual([after.unbatched.length, after.prepared.length, after.linked.length], [32, 1, 8]);
+    const pending = pendingWorkByAgent(after).get("bob");
+    assert.equal(pending?.pendingMessages, 40); assert.equal(pending?.preparedBatchCount, 1);
+  } finally { await changed; }
 });
 
 test("WP23.03: the names-only read still refuses a name that is not an identity", async t => {

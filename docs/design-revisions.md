@@ -2539,3 +2539,18 @@ OS filename decoder도 domain을 import할 수 없으므로 같은 strict/BOM-pr
 집행한다. 선두 U+FEFF filename 손실을 실제 directory cursor 회귀로 재현했고, fatal·ignoreBOM
 두 옵션을 정적 경계와 실제 filename 관측으로 결박한다. 파일 정책·snapshot 정리는 TS owner에
 유지하며, 이 분리는 permission-independent pin·exact exec·Darwin 전체 qualification의 증거가 아니다.
+
+## DR63 — status는 일관된 raw snapshot을 비동기로 검증하고 게시만 동기화한다
+
+WP23.03의 전체 결과·full-row/lineage 검증과 DR57의 단일 게시 owner는 유지한다.
+동기 조회/디코딩이 한 event-loop turn에 누적되므로, display read의 모든 SELECT 결과를
+첫 await 전에 취득한 뒤32행 단위로 검증하며 turn을 반환한다. yield 사이의 mutation을
+다시 조회해 이전 delivery와 새 batch를 섞지 않는다. mutation/recovery의 동기 read·transaction은
+바꾸지 않고 행 수 제한이나 부분 count도 도입하지 않는다.
+
+`ViewsModule.status/statusOf`와 `PublicViewsPort.status`는 Promise를 반환하고 같은 unit
+snapshot의 projection은 공유한다. Broker가 projection을 await한 다음 draining을 재검사하고
+완성된 행을 동기 `publishStatus`에 전달한다. 이 owner를 drain한 뒤 Store를 닫으므로 중단 후
+상태 파일을 되살리지 않는다. public status 응답도 await 뒤 기존 검증 owner로 현재 권한을
+재검사한다. wire/DTO·durable 형식·latency budget은 그대로이며 native golden은 관련 두 port만 갱신한다.
+

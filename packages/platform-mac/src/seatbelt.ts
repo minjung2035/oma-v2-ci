@@ -77,6 +77,9 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
   // Directory metadata suffices for ancestor traversal, without reading
   // unrelated files. Device access is confined to these kernel devices.
   rules.push("(allow file-read-metadata (vnode-type DIRECTORY))");
+  // libignition opens this one directory as its openat root before main.
+  // This permits root dirent names, not reads or execution in its subtrees.
+  rules.push('(allow file-read-data (literal "/"))');
   allow("file-read* file-write-data file-ioctl", ["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"]
     .map(path => ({ path, kind: "file" as const })));
   rules.push(`(allow sysctl-read ${SYSCTLS.map(name => `(sysctl-name ${JSON.stringify(name)})`).join(" ")})`);

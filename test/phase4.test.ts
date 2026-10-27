@@ -444,13 +444,13 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
     // AV9 / INV02: a recovered empty slot is not an execution that exited.
     assert.equal(snapshot.units.get("a"), "no-unit");
     assert.equal(snapshot.units.get("b"), "no-unit");
-    const shown = env.views.statusOf(snapshot, "a")[0]!;
+    const shown = (await env.views.statusOf(snapshot, "a"))[0]!;
     assert.equal(shown.activeState, null); assert.equal(shown.execMainStatus, null);
     // After the snapshot the unit really starts.
     await env.units.start("a", false);
     assert.equal(env.units.observe("a").activeState, "active");
     // The display still says what it saw, and when -- it is not current.
-    assert.equal(env.views.statusOf(snapshot, "a")[0]!.activeState, null);
+    assert.equal((await env.views.statusOf(snapshot, "a"))[0]!.activeState, null);
     assert.ok(snapshot.observedAtMs <= Date.now());
     // Negative control: taking the cached "inactive" as death proof would
     // authorize acting on a live run.

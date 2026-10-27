@@ -80,7 +80,7 @@ test("runner.observe: the dispatcher keeps the latest report tagged with the run
   assert.equal(dispatcher.runnerObservation("bob"), null);
 });
 
-test("runner.observe: status shows the report's timestamp for its own run, and nothing for a superseded one", t => {
+test("runner.observe: status shows the report's timestamp for its own run, and nothing for a superseded one", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-observe-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(join(dir, "runtime.sqlite"));
@@ -89,24 +89,24 @@ test("runner.observe: status shows the report's timestamp for its own run, and n
   const { dispatcher, peer } = dispatcherWith(3);
   const views = new ViewsModule(store, dir, "demo", "p");
   views.observeRunnerSource(agent => dispatcher.runnerObservation(agent));
-  assert.equal(views.status("alice")[0]!.runnerObservedAtMs, null, "no observation yet");
+  assert.equal((await views.status("alice"))[0]!.runnerObservedAtMs, null, "no observation yet");
   const observedAtMs = Date.now();
   void dispatcher.dispatch(
     { v: 1, id: "o1", method: "runner.observe", params: { reason: "tool", toolName: "ls", observedAtMs } },
     peer as never, null, "runner");
   return dispatcher.dispatch(
     { v: 1, id: "o2", method: "runner.observe", params: { reason: "tool", toolName: "ls", observedAtMs } },
-    peer as never, null, "runner").then(() => {
-    assert.equal(views.status("alice")[0]!.runnerObservedAtMs, observedAtMs,
+    peer as never, null, "runner").then(async () => {
+    assert.equal((await views.status("alice"))[0]!.runnerObservedAtMs, observedAtMs,
       "the current run's report reaches the view");
     // The run moved on (the ledger says incarnation 4 now): the older run's
     // report is a fact about that run, so the view shows nothing rather than
     // stale evidence.
     store.transaction(tx => { tx.updateAgent({ name: "alice", incarnation: 4 }); });
-    assert.equal(views.status("alice")[0]!.runnerObservedAtMs, null);
+    assert.equal((await views.status("alice"))[0]!.runnerObservedAtMs, null);
     const { dispatcher: older, peer: olderPeer } = dispatcherWith(3);
     views.observeRunnerSource(agent => older.runnerObservation(agent));
-    assert.equal(views.status("alice")[0]!.runnerObservedAtMs, null,
+    assert.equal((await views.status("alice"))[0]!.runnerObservedAtMs, null,
       "a stale incarnation's report is never this run's");
     void olderPeer;
   });

@@ -82,7 +82,7 @@ export function createBroker(input: BrokerComposition): Broker {
     units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), runnerAlive: actor => units.runnerAlive(actor),
       readLogs: (actor, since, limit) => units.readLogs(actor, since, limit),
       bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
-    views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: snapshot => views.publishStatus(snapshot),
+    views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => views.publishStatus(snapshot, agents),
       observeRunnerSource: read => views.observeRunnerSource(read) }),
     reconcile: reconcile === null ? null : Object.freeze({ sweep: () => reconcile.sweep() }),
     status: Object.freeze({ request: () => status.request() }),

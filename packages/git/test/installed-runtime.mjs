@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
-import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -18,7 +18,7 @@ assert.equal(typeof GitModule, "function");
 assert.deepEqual(evaluated, [], "workflow imports evaluated command implementations");
 
 const { GitRepository } = await import("@oma/git/repository");
-const root = mkdtempSync(join(tmpdir(), "oma-installed-git-"));
+const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-installed-git-")));
 try {
   const projectGit = join(root, "project.git");
   const run = args => {

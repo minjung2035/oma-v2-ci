@@ -20,7 +20,7 @@ export interface ResidentExecutionPort {
 export interface DerivedViewsPort {
   refreshWorld(): void;
   publishInbox(batch: PreparedBatch): void;
-  status(agent?: Actor, observe?: UnitObserve): AgentStatus[];
+  status(agent?: Actor, observe?: UnitObserve): Promise<AgentStatus[]>;
 }
 export interface ReconcilePort {
   startup(allowActivation?: boolean): Promise<void>;

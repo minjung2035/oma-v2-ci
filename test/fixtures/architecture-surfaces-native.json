@@ -1,6 +1,6 @@
 {
   "schema": 3,
-  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved.",
+  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved. DR63 makes PublicViewsPort.status asynchronous and gives BrokerViews.publishStatus the completed rows so shutdown can join projection without republishing its removed view; only these two port fingerprints change.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
       "PeerIdentity": {
@@ -29,7 +29,7 @@
       },
       "PublicViewsPort": {
         "exported": true,
-        "sha256": "ff38d66b760196ec06f27810a69cbe4c844192a377183e3f28faf7b768ec84e0"
+        "sha256": "ea7fbb790520e81fec912a0240d24d48cdba7b9848b41a3451f9b2d9ae835b85"
       },
       "PublicLifecyclePort": {
         "exported": true,
@@ -81,7 +81,7 @@
       },
       "BrokerViews": {
         "exported": true,
-        "sha256": "ec9318ff0d50d11d957f77db27b600bf7c4010852b7174dcbecd01e1c7d47ca8"
+        "sha256": "25d0f0e6d8aa3b2e925af35caaaf728c81f3683f83b5e9270f3235fbaf271a13"
       },
       "BrokerReconcile": {
         "exported": true,

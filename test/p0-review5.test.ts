@@ -132,11 +132,12 @@ test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt clos
     (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   const health = Reflect.get(broker, "health") as AdmissionGate;
-  const publish = (failure: { readonly read?: unknown; readonly write?: unknown }): Promise<void> => {
-    Reflect.set(broker, "statusRefresh", { request: () => failure.read === undefined ? Promise.resolve({ agents: [] }) : Promise.reject(failure.read) });
+  const publish = async (failure: { readonly read?: unknown; readonly write?: unknown }): Promise<void> => {
+    Reflect.set(broker, "statusRefresh", { request: () => failure.read === undefined ?
+      Promise.resolve({ observedAtMs: Date.now(), units: new Map(), failure: "unavailable" }) : Promise.reject(failure.read) });
     Reflect.set(broker, "views", { publishStatus: () => { if (failure.write !== undefined) throw failure.write; } });
     (Reflect.get(broker, "publishStatus") as () => void).call(broker);
-    return new Promise(resolve => setImmediate(() => setImmediate(resolve)));
+    await Promise.allSettled([Reflect.get(broker, "statusTask") as Promise<void>]);
   };
   try {
     await publish({ write: Object.assign(new Error("EIO: view file"), { code: "EIO" }) });
