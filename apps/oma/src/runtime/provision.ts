@@ -1,4 +1,5 @@
-import { renameAt, linkAt, unlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
+import { renameAt, linkAt } from "@oma/native/posix-files";
 /** CFG-002/TUI-002: bringing a society's state tree into existence.
  *
  * The broker refuses to start against a state tree that is not already there:

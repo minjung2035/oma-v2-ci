@@ -70,7 +70,7 @@ await withAsyncCleanup(async () => {
   child.stdin.end(input);
   const result = await closed;
   assert.deepEqual(faults, []);
-  assert.equal(result.code, 0, Buffer.concat(stderr).toString()); assert.equal(result.signal, null);
+  assert.equal(result.code, 0, JSON.stringify({ ...result, stderr: Buffer.concat(stderr).toString() })); assert.equal(result.signal, null);
   assert.deepEqual(JSON.parse(Buffer.concat(stdout).toString()), expected);
 }, async () => { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await closed; });
 assert.equal(readFileSync(publicFile, "utf8"), "read only original");

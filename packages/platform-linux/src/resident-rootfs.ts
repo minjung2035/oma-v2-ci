@@ -1,4 +1,5 @@
-import { statAt, readlinkAt, unlinkAt, symlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
+import { statAt, readlinkAt, symlinkAt } from "@oma/native/posix-files";
 /** SB-001/002: the trusted rootfs a Resident runs on, made by OMA itself.
  *
  * SB-001 asks for a rootfs holding pinned tools and empty mount targets, and

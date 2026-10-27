@@ -16,8 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS is an explicit paid run; ordinary source pushes use Linux.
-        os: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_darwin) || github.event_name == 'push' && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
+        # This work branch qualifies on Darwin; other manual runs default to Linux.
+        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:

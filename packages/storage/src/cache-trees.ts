@@ -8,7 +8,8 @@ import { setImmediate } from "node:timers/promises";
 import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { assertNoUnpreservedMetadataAt, directoryNames, readlinkBytesAt, renameAt, statAt } from "@oma/native/posix-files";
+import { directoryNames } from "@oma/file-descriptors";
+import { assertNoUnpreservedMetadataAt, readlinkBytesAt, renameAt, statAt } from "@oma/native/posix-files";
 import { openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { fsyncHeldDir } from "./durable-fs.js";
 

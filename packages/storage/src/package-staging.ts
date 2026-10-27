@@ -1,4 +1,5 @@
-import { mkdirAt, unlinkAt, renameAt, statAt } from "@oma/native/posix-files";
+import { mkdirAt, unlinkAt } from "@oma/file-descriptors";
+import { renameAt, statAt } from "@oma/native/posix-files";
 export interface StageArea {
   /** The staging root's own path -- for reading it back, not writing it. */
   readonly path: string;

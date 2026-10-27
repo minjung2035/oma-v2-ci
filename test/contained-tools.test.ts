@@ -722,15 +722,6 @@ test("G10-02 / R6-01: a destination directory swapped mid-copy cannot carry a wr
   assert.equal(readdirSync(moved).length, 2000, "the held descriptor lost its real directory");
 });
 
-test("PI-001: the extension's entryAt mirrors the storage primitive -- it accepts and refuses the same entries and names the same path", async () => {
-  const { entryAt: mirror } = await import("@oma/tool-files");
-  const { entryAt: original } = await import("@oma/native/files");
-  const outcome = (entry: (fd: number, name: string) => string, fd: number, name: string): string => {
-    try { return entry(fd, name); } catch { return "refused"; }
-  };
-  for (const [fd, name] of [[3, "a"], [12, "notes.md"], [3, "한글"], [3, ""], [3, "."], [3, ".."], [3, "a/b"], [3, "a\0b"], [-1, "a"], [1.5, "a"]] as const)
-    assert.equal(outcome(mirror, fd, name), outcome(original, fd, name), `${fd} ${JSON.stringify(name)}`);
-});
 
 
 

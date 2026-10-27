@@ -1,7 +1,18 @@
 # OMA v2 — 현재 검증 상태
 
-현재 활성 작업은 DR49 native 구현이다. 이전 문서 정리 범위는 사용자 구현 지시로 대체됐다.
-아래 DR48·문서 정리 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+DR49 native 전환은 미완료이며, 최신 사용자 지시로 **개정 spec 기준 구현을 재개**했다.
+아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+
+## DR61 명세 개정 — 구현 재개 (2026-10-28)
+
+[native spec](../macos-native-spec.md)를 목표·불변식·확정 결정·미결정 후보·판정 절차·실행 순서로
+다시 구성했다. NATIVE-024/025가 후보 검증과 파일 capability/좁은 native leaf 경계를 명시한다.
+개정 전 spec·인계 원문은 archive에 보존했다. 이 단계에서는 production source를 바꾸거나
+Mac backend를 채택하지 않았다. 문서 개정은 G-PROCESS/G-FILES/G-AUTH의 통과 근거가 아니다.
+
+앞선 Linux Runner·descriptor 수리 및 회수한 Mac15 원시 artifact는
+[전환 기록](native-transition.md)과 [현재 인계](../HANDOFF.md)를 따른다.
+실제 Mac native 지원·현재 source 전체 회귀·독립 설치·최종 복잡도 검토는 여전히 미완료다.
 
 ## DR49 native 전환 — 진행 중 (2026-10-25)
 
@@ -571,7 +582,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `617363561e2f481ff463b66ee1dfc7f1798d0d205ef34ef9d02ca066d69c8781` (15670 files).
+verification input digest `6c13bbe58b03378a4f060e12b5b8050b3b17a117eab8967daf908bc3a2d163ab` (15678 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

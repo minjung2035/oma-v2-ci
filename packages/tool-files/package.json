@@ -18,6 +18,9 @@
     "typecheck": "npm run build",
     "test": "node --test test/*.test.mjs"
   },
+  "dependencies": {
+    "@oma/file-descriptors": "0.1.0"
+  },
   "devDependencies": {
     "@types/node": "^26.0.0",
     "typescript": "5.9.3"

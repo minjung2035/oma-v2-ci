@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
 import type { ImmutableObservation } from "@oma/contracts/files";
 /** MAIL-004..006 / FS-002: immutable bytes, never a derived overwrite API.
  * Mail permits hardlinks. Keep checked descriptors through publication; names

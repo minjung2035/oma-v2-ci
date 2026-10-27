@@ -175,6 +175,7 @@
     "@oma/domain": "0.1.0",
     "@oma/protocol": "0.1.0",
     "@oma/native": "0.1.0",
+    "@oma/file-descriptors": "0.1.0",
     "@oma/process": "0.1.0"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import * as cleanup from "@oma/native/cleanup";
 import * as posixFiles from "@oma/native/posix-files";
+import * as descriptors from "@oma/file-descriptors";
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -18,6 +19,7 @@ test("DR39: a collector between temporary creation and locking cannot remove the
   const parent = contained.openDirectory(root);
   let raced = false, production;
   const deps = { "@oma/native/cleanup": cleanup, "@oma/native/posix-files": posixFiles, "node:fs": fs, "node:crypto": crypto, "node:path": path,
+    "@oma/file-descriptors": descriptors,
     "./directory.js": directory, "@oma/native/files": contained, "@oma/domain/errors": errors,
     "@oma/native/linux": { lockFileDescriptor(fd) {
       if (!raced) {

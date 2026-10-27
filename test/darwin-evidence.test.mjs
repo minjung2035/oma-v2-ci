@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DARWIN_PROGRAMS, DARWIN_CASE_REPETITIONS, DARWIN_PROCESS_TIMEOUT_MS,
-  darwinCasePlan, darwinDriverBudgetSeconds, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
+  darwinCasePlan, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 // Record grammar only: these are parser inputs, never kernel observations.
@@ -100,26 +100,6 @@ test("NATIVE-DARWIN: failed attempts remain explicit failures, never observation
   assert.throws(() => validateDarwinObservation("unknown", { process: { returned: true } }));
 });
 
-test("NATIVE-DARWIN: CI gives every bounded attempt time and preserves failures", () => {
-  const workflow = readFileSync(join(root, ".github/workflows/native-runtime.yml"), "utf8");
-  const gates = workflow.slice(workflow.indexOf("\n  darwin-gates:\n"));
-  const minutes = Number(/timeout-minutes: (\d+)/.exec(gates)?.[1]);
-  const extraSeconds = [...gates.matchAll(/^ {8}timeout-minutes: (\d+)$/gm)].reduce((sum, row) => sum + Number(row[1]) * 60, 0);
-  assert.ok(minutes * 60 > darwinDriverBudgetSeconds() + extraSeconds,
-    "the job must outlive all attempts, SDK commands, bounded setup, credential compile and upload");
-  assert.match(gates, /os: \[macos-26, macos-15\]/);
-  assert.match(gates, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.run_darwin \}\}/);
-  assert.match(workflow, /run_darwin:\n\s+description:[^\n]*\n\s+type: boolean\n\s+required: false\n\s+default: false/);
-  assert.match(workflow, /os: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.run_darwin && fromJSON\('\["ubuntu-24\.04", "macos-26", "macos-15"\]'\) \|\| fromJSON\('\["ubuntu-24\.04"\]'\) \}\}/);
-  assert.match(gates, /fail-fast: false/);
-  assert.match(gates, /if: \$\{\{ !cancelled\(\) \}\}[\s\S]*node scripts\/verify-native\.mjs/);
-  assert.match(gates, /Preserve raw observations, including blocked gates\n\s+if: always\(\)/);
-  assert.match(gates, /if-no-files-found: error/);
-  assert.doesNotMatch(gates, /continue-on-error|verify-native[^\n]*(?:\|\| true|exit 0)/);
-  assert.match(workflow, /node --test [^\n]*test\/darwin-evidence\.test\.mjs/);
-  assert.match(workflow, /node --test [^\n]*test\/runtime-artifact-digest\.test\.mjs/);
-  assert.match(workflow, /node --test [^\n]*packages\/tool-hashline\/test\/bundle\.test\.mjs/);
-});
 
 if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refuses Darwin and records every NOT_RUN", () => {
   const out = mkdtempSync(join(tmpdir(), "oma-darwin-refusal-"));

@@ -1,4 +1,4 @@
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 /** P0-4/FS-005: a snapshot's owned preparation, held until its consumer ends.
  * Every Git child inherits the lease; an unobserved child keeps the tree. */
 import { constants } from "node:fs";

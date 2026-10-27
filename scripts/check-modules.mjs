@@ -9,19 +9,20 @@ import { darwinExecutables } from "./workspace-executables.mjs";
 
 export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   contracts: [], domain: ["contracts"], native: ["contracts", "domain"], process: ["contracts", "domain", "native"], protocol: ["contracts", "domain"],
-  config: ["contracts", "domain", "protocol", "native", "storage"],
-  git: ["contracts", "domain", "protocol", "process", "native", "storage"],
-  app: ["broker","client","config","contracts","domain","engine","extension","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
+  config: ["contracts", "domain", "protocol", "native", "file-descriptors", "storage"],
+  git: ["contracts", "domain", "protocol", "process", "native", "file-descriptors", "storage"],
+  app: ["broker","client","config","contracts","domain","engine","extension","file-descriptors","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
   "platform-mac": ["contracts", "domain", "protocol", "native", "process"],
-  "platform-linux": ["contracts", "domain", "protocol", "native", "process", "storage"],
+  "platform-linux": ["contracts", "domain", "protocol", "native", "file-descriptors", "process", "storage"],
   engine: ["contracts", "domain", "protocol", "client", "process"],
   broker: ["contracts", "domain", "protocol", "native", "process"],
   reconcile: ["contracts", "domain", "protocol"],
   lifecycle: ["contracts", "domain", "protocol", "mail"],
   review: ["contracts", "domain", "protocol", "mail"],
   mail: ["contracts", "domain", "protocol"],
-  storage: ["contracts", "domain", "protocol", "native", "process"],
-  "tool-files": [],
+  storage: ["contracts", "domain", "protocol", "native", "file-descriptors", "process"],
+  "file-descriptors": [],
+  "tool-files": ["file-descriptors"],
   "tool-runtime": ["contracts", "domain", "protocol", "client", "tool-files"],
   "tool-hashline": ["contracts", "domain", "protocol", "tool-runtime", "tool-files"],
   "tool-web": ["contracts", "domain", "protocol", "tool-runtime"],
@@ -164,8 +165,10 @@ export function moduleFindings(root = process.cwd()) {
     }
     if (manifest.version !== JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version)
       report(path, "workspace version differs from the product");
-    if (manifest.name === "@oma/tool-files" && Object.keys(manifest.dependencies ?? {}).length !== 0)
-      report(path, "tool-files has no runtime package dependencies; its primitives use Node builtins");
+    if (manifest.name === "@oma/tool-files" && Object.keys(manifest.dependencies ?? {}).some(name => name !== "@oma/file-descriptors"))
+      report(path, "tool-files runtime dependencies are limited to the standalone descriptor leaf");
+    if (manifest.name === "@oma/file-descriptors" && Object.keys(manifest.dependencies ?? {}).some(name => name !== "koffi"))
+      report(path, "file-descriptors runtime dependencies are limited to Koffi");
     for (const [name, version] of Object.entries({ ...manifest.dependencies, ...manifest.devDependencies })) if (name.startsWith("@oma/")) {
       if (!allowed.includes(name.slice(5))) report(path, `forbidden dependency ${name}`);
       if (!byName.has(name) || version !== byName.get(name).manifest.version) report(path, `unresolved workspace dependency ${name}@${version}`);
@@ -197,8 +200,11 @@ export function moduleFindings(root = process.cwd()) {
         return;
       }
       const name = packageName(specifier);
-      if (manifest.name === "@oma/tool-files" && name !== manifest.name)
-        report(slash(relative(root, file)), `tool-files may import only its own files and Node builtins: ${specifier}`);
+      if (manifest.name === "@oma/file-descriptors" && name !== manifest.name && name !== "koffi")
+        report(slash(relative(root, file)), `file-descriptors may import only its own files, Node builtins and Koffi: ${specifier}`);
+      if (manifest.name === "@oma/tool-files" && name !== manifest.name &&
+          !(slash(relative(root, file)) === "packages/tool-files/src/descriptor-files.ts" && specifier === "@oma/file-descriptors"))
+        report(slash(relative(root, file)), `tool-files may import only its own files, Node builtins and the private descriptor adapter: ${specifier}`);
       if (manifest.name === "@oma/platform-mac" && name === "@oma/git" && !GIT_HOST_APIS.has(specifier))
         report(slash(relative(root, file)), `Git host adapter API required in ${manifest.name}: ${specifier}`);
       if (name === "@oma/storage" && STORAGE_FILE_CONSUMERS.has(manifest.name) && !STORAGE_FILE_APIS.has(specifier))

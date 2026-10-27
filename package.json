@@ -72,6 +72,7 @@
     "@oma/lifecycle": "0.1.0",
     "@oma/mail": "0.1.0",
     "@oma/native": "0.1.0",
+    "@oma/file-descriptors": "0.1.0",
     "@oma/platform-linux": "0.1.0",
     "@oma/platform-mac": "0.1.0",
     "@oma/process": "0.1.0",

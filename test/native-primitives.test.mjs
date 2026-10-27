@@ -4,7 +4,8 @@ import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, openSync, r
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDirectory, openBeneath } from "@oma/native/files";
-import { directoryNames, mkdirAt, unlinkAt, linkAt, renameAt, readlinkAt, readlinkBytesAt, statAt, symlinkAt } from "@oma/native/posix-files";
+import { directoryNames, mkdirAt, unlinkAt } from "@oma/file-descriptors";
+import { linkAt, renameAt, readlinkAt, readlinkBytesAt, statAt, symlinkAt } from "@oma/native/posix-files";
 import { observeDarwinProcess, observeLinuxProcess } from "@oma/native/process-observation";
 import { hostProcessProbe } from "@oma/broker/process-ancestry";
 import { RestartPolicy } from "@oma/process/restart-policy";

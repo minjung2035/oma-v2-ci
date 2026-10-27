@@ -1268,5 +1268,22 @@
       "test/host-entry.test.ts#runner execution identity cannot be missing",
       "test/launch-topology.test.ts#NATIVE-TOPO-02"
     ]
+  },
+  {
+    "source": "docs/macos-platform.md",
+    "requirements": ["NATIVE-026"],
+    "owner": "packages/file-descriptors/src/index.ts#openAt",
+    "entrypoint": "packages/tool-files/src/index.ts#writeWithin",
+    "callPath": [
+      "packages/tool-files/src/index.ts#writeWithin",
+      "packages/tool-files/src/descriptor-files.ts#openAt",
+      "packages/file-descriptors/src/index.ts#openAt"
+    ],
+    "negativeTests": [
+      "test/workspace-boundaries.test.mjs#NATIVE-025",
+      "test/surface-rules.test.mjs#NATIVE-025",
+      "test/native-os-contracts.test.mjs#real OS: directory cursors",
+      "packages/tool-files/test/files.test.mjs#snapshot walking excludes links"
+    ]
   }
 ]

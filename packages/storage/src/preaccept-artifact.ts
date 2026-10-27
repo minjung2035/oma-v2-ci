@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
 /** Pre-accept artifact ownership.
  *
  * An immutable artifact published before its acceptance transaction belongs to

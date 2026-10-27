@@ -287,6 +287,8 @@ packages/extension/src/principal-channel.ts
 packages/extension/src/principal-tools.ts
 packages/extension/src/prompt-boundary.ts
 packages/extension/src/review-tools.ts
+packages/file-descriptors/package.json
+packages/file-descriptors/src/index.ts
 packages/git/package.json
 packages/git/src/candidate-check.ts
 packages/git/src/canonical-command.ts
@@ -339,6 +341,7 @@ packages/mail/src/routing.ts
 packages/mail/src/serialize.ts
 packages/native/package.json
 packages/native/src/audit-origin.ts
+packages/native/src/audit-session.ts
 packages/native/src/audit-token.ts
 packages/native/src/cleanup.ts
 packages/native/src/control-socket.ts
@@ -374,10 +377,12 @@ packages/platform-linux/src/worker-spawn.ts
 packages/platform-mac/package.json
 packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/developer-tools.ts
+packages/platform-mac/src/execution-launch.ts
 packages/platform-mac/src/git-sandbox.ts
 packages/platform-mac/src/keychain-client.ts
 packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements
+packages/platform-mac/src/launchd-job.ts
 packages/platform-mac/src/mach-address.ts
 packages/platform-mac/src/mach-poll.ts
 packages/platform-mac/src/mach-stream.ts
@@ -394,6 +399,7 @@ packages/process/src/async.ts
 packages/process/src/coalesced-wake.ts
 packages/process/src/command.ts
 packages/process/src/deadline.ts
+packages/process/src/execution-witness.ts
 packages/process/src/fence.ts
 packages/process/src/host-loss.ts
 packages/process/src/observed-stream.ts

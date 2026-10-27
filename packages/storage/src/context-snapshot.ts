@@ -18,7 +18,8 @@ import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js"
 import { openBeneath, openDirectory } from "@oma/native/files";
 import { removeOwnedFile, removeOwnedTree } from "./directory.js";
 import { withCleanup } from "@oma/native/cleanup";
-import { directoryNames, statAt } from "@oma/native/posix-files";
+import { directoryNames } from "@oma/file-descriptors";
+import { statAt } from "@oma/native/posix-files";
 import { TreeLease, leasePathOf } from "./tree-lease.js";
 
 /** Complete permitted tree verification; no writes or silent byte repair.

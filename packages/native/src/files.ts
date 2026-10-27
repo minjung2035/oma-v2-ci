@@ -202,22 +202,15 @@ export function openDirectory(path: string): number {
     return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
-/** A single directory entry under an OWNED descriptor. The only followed magic
- * link is our fd in trusted procfs; callers must not concatenate descendants.
- */
-export function entryAt(directory: number, name: string): string {
-  relativeName(name);
-  if (name.includes("/") || !Number.isInteger(directory) || directory < 0)
-    throw new TypeError("invalid directory entry");
-  return `/proc/self/fd/${directory}/${name}`;
-}
 /** linkat follows our proc-fd capability, never the previously verified source name. */
 export function linkDescriptor(
   source: number,
   directory: number,
   name: string,
 ): void {
-  entryAt(directory, name);
+  relativeName(name);
+  if (name.includes("/") || !Number.isInteger(directory) || directory < 0)
+    throw new TypeError("invalid directory entry");
   if (!Number.isInteger(source) || source < 0)
     throw new TypeError("invalid source descriptor");
   checked(
@@ -239,7 +232,7 @@ export function linkDescriptor(
  * `openDirectory` resolves the parent in the kernel with no symlink followed at
  * any component, and the returned descriptor names that directory's inode for
  * as long as it is open -- renaming, unlinking or replacing the path afterwards
- * does not move it. `entryAt` then addresses one entry through that descriptor.
+ * does not move it. Directory-relative syscalls address each entry from it.
  * So the rule this primitive exists to make cheap is: resolve the parent once,
  * and never say the pathname again.
  *

@@ -5,6 +5,9 @@
 보존하며 native 수용 번호로 재사용하지 않는다. [전환 명세](macos-native-spec.md)의 P0–P7을 따른다.
 구현 존재와 지원 완료를 구분하고, 실제 상태는 [validation](implementation/validation.md)이 소유한다.
 
+2026-10-28 DR61의 NATIVE-024/025가 아래 지정한 구현 가정과 파일 leaf 경계를 대체한다.
+기존 ID의 의미와 실행·권한·데이터 보장은 보존하며, 상세 후보/판정은 전환 명세가 소유한다.
+
 ## 실행·소유권
 
 **MUST [NATIVE-001]** 제품은 공통 `oma` 진입점과 25개 workspace의 동일한 TypeScript 실행부를
@@ -171,6 +174,32 @@ launch 인자로 전달한다. runner entry는 누락·중복·잘못된 identit
 RunnerModule에 전달한다. ambient service-manager 환경변수에서 identity를 읽거나 대체하지 않는다.
 기존 runner.open·로그의 invocationId는 같은 UUID의32자리 hex이며 broker의 현재 scope binding과
 일치해야 한다. accepted plan·receipt·incarnation·권한의 의미는 바꾸지 않는다.
+
+## 제품 보장과 구현 선택 — DR61
+
+**MUST [NATIVE-024]** native 구현은 확인된 사실·채택 결정·미검증 후보를 구분한다. 미결정
+경계는 기존 구현·복수 후보·원본 source/SDK·배포 조건·결정적 반례를 대조한 뒤 실제 실행으로
+채택한다. launchd session·PID scan·group kill을 complete-scope proof로 미리 가정하지 않는다.
+이는 NATIVE-002의 해당 효과별 gate를 유지하되 독립 작업까지 일괄 중단하는 해석을 대체한다.
+기능 제외·보안/복구 완화·privileged 서비스·restricted entitlement·지원 OS 변경은 별도 사용자
+결정이 필요하다. 같은 실패는 전제나 입력 또는 관측 질문이 바뀐 경우에만 다시 실행한다.
+
+**MUST [NATIVE-025]** NATIVE-003의 permission-independent pin 보편 제공 전제와
+NATIVE-010의 Node-only 제한을 다음으로 대체한다. 공통 TS가 파일 정책을 소유하고 caller는
+directory handle·metadata observation·entry pin·I/O FD·independent cursor·executable selection을
+구분한다. 안전하게 얻지 못한 capability는 unknown/unsupported이며 pathname repair나 다른 inode로
+대체하지 않는다. tool-files의 private descriptor adapter는 `@oma/native/files`와
+`@oma/native/posix-files`의 공개 leaf 또는 주입된 좁은 port를 사용할 수 있다. 다른 tool caller의
+native 접근이나 SDK/broker/storage 의존을 허용하지 않는다. manifest·경계 검사·negative control·
+독립 설치를 함께 갱신하며, 기존 containment·동일 inode·publication·archive 계약은 유지한다.
+
+**MUST [NATIVE-026]** DR62는 NATIVE-025의 구체 native leaf 선택을 대체한다. tool-files의
+private descriptor adapter는 업무 의존성이 없는 `@oma/file-descriptors`의 공개 API만 사용할 수
+있다. 이 leaf는 자기 파일·Node built-in·Koffi만 참조한다. 검사와 독립 설치는 직접 import뿐 아니라
+relative import/re-export와 runtime closure도 확인하며 broad native 모듈을 예외 처리하지 않는다.
+기존 descriptor primitive와 caller를 한 번에 이관하고 obsolete export·복제 구현을 남기지 않는다.
+OS filename은 malformed UTF-8을 거절하고 선두 U+FEFF를 보존한다. 기존 파일 정책·권한·복구
+계약과 NATIVE-025의 나머지 조항은 유지한다.
 
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 따라서 Mac native 제품 실행은 차단돼 있다. Linux의 실제 경로 연결과 Darwin primitive 연결,

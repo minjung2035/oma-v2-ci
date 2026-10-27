@@ -35,7 +35,7 @@
 
 ## 구현 중인 전환
 
-[macOS native 전환 명세](macos-native-spec.md)는 VM을 폐기하고 공통 TypeScript 실행부와 최소 OS 경계로 전환하는 채택된 구현 명세다. Mac 개발 장비 없이 GitHub CI로 검증하는 절차와 미해결 선행 조건을 포함한다. 설계 채택과 native 지원 완료는 구분한다.
+[macOS native 전환 명세](macos-native-spec.md)는 VM 없는 공통 TypeScript 제품의 목표·확정 결정·미결정 후보·검증 순서를 정한다. 다음 구현자의 판단 절차와 원본 근거를 포함하며, 후보의 존재·설계 채택·실제 native 지원 완료를 구분한다.
 
 ## 기준본과 결정 기록
 

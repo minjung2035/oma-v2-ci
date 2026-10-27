@@ -5,7 +5,7 @@ import { closeSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { StoreError } from "@oma/domain/errors";
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 import { withinDirectory } from "@oma/native/files";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import { ensureOwnedDirectory, openOwnedDirectoryPath, removeOwnedTree } from "./directory.js";

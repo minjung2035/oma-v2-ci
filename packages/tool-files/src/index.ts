@@ -1,15 +1,9 @@
 /** The model's file effects, contained by the way they are made (R6-01,
  * PR-004, architecture §4: the check and the effect are one resolution).
  *
- * Every name under the workspace is reached from a descriptor held on the
- * workspace root, one component at a time, each opened with O_NOFOLLOW
- * through the private descriptor primitive (the kernel resolves the held
- * directory, then the one name in it). A link anywhere on the way
- * is refused rather than followed -- a dangling one included, which a check
- * by existence missed -- and a component replaced after it was opened cannot
- * redirect what follows, because what follows is looked up in the directory
- * already held. The extension may use only Node built-ins (PI-001), so this
- * is openat2's RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS spelled with them.
+ * Workspace descendants are opened from held directories with no-follow
+ * native operations. Policy, inode checks and snapshot ownership stay here;
+ * only descriptor mechanics cross the private native adapter (NATIVE-025).
  */
 import { closeSync, constants, fstatSync, ftruncateSync, readSync, writeSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -18,9 +12,8 @@ import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
 
 import { WorkspaceRefusal } from "./errors.js";
-import { descriptorPath, directoryNames, mkdirAt, openAt, openRoot, removeSnapshotAt, reopen } from "./descriptor-files.js";
+import { descriptorPath, directoryNames, mkdirAt, openAt, openRoot, reopenDirectory, unlinkAt } from "./descriptor-files.js";
 export { WorkspaceRefusal } from "./errors.js";
-export { entryAt } from "./descriptor-files.js";
 
 /** The components of a path inside the workspace, or a refusal. */
 export function componentsWithin(root: string, path: string): string[] {
@@ -114,8 +107,8 @@ function ownedFile(fd: number): void {
   if (stat.nlink > 1) throw new WorkspaceRefusal("tool path is a file with other names; it is not written through");
 }
 
-/** Runs `use` on the regular file itself, named by the descriptor held on it:
- * the private primitive reopens that inode, never the workspace path again. */
+/** Borrows the newly opened file description for the callback. On Darwin its
+ * descriptor alias shares the cursor; this is not an independent reopen. */
 export async function withFileWithin<T>(root: string, path: string, use: (held: string) => Promise<T>): Promise<T> {
   const fd = openEntryWithin(root, path, constants.O_RDONLY);
   try { ownedFile(fd); return await use(descriptorPath(fd)); } finally { closeSync(fd); }
@@ -197,7 +190,7 @@ export function existsWithin(root: string, path: string): boolean {
  * mid-copy cannot redirect a read -- and the destination side holds one per
  * open level too. The private `oma-search-*` tree is only mode-700: a same-uid
  * racer can still rename its directories or plant names inside it, so the
- * copy's own writes are made through the same `entryAt` containment -- a
+ * copy's own writes are made through directory-relative operations -- a
  * held parent cannot be swapped for a link, and a planted leaf name only
  * ever fails the copy closed (EEXIST/ELOOP), never carries a write through.
  * Both sides cost one descriptor per open level, so an OS descriptor bound
@@ -219,6 +212,24 @@ export async function withSearchSnapshot<T>(root: string, path: string,
     // One boundary wording for the descriptor bound, wherever it fired.
     return descriptorRefusal(error);
   }
+}
+
+/** Snapshot cleanup never follows a planted link, including links to directories. */
+function removeSnapshotAt(parent: number, name: string): void {
+  let fd: number;
+  try { fd = openAt(parent, name, constants.O_RDONLY | constants.O_DIRECTORY); }
+  catch (error) {
+    const code = errnoCode(error);
+    if (code === "ENOENT") return;
+    if (code !== "ENOTDIR" && code !== "ELOOP") throw error;
+    try { unlinkAt(parent, name); }
+    catch (missing) { if (errnoCode(missing) !== "ENOENT") throw missing; }
+    return;
+  }
+  try { for (const entry of directoryNames(fd)) removeSnapshotAt(fd, entry); }
+  finally { closeSync(fd); }
+  try { unlinkAt(parent, name, true); }
+  catch (error) { if (errnoCode(error) !== "ENOENT") throw error; }
 }
 
 async function searchSnapshot<T>(root: string, path: string,
@@ -270,7 +281,7 @@ async function searchSnapshot<T>(root: string, path: string,
           let child: number;
           try { child = openAt(fd, entry, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
           catch (error) {
-            if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+            if (["ENOENT", "ELOOP"].includes(errnoCode(error) ?? "")) continue;
             throw error;
           }
           try {
@@ -308,7 +319,7 @@ async function searchSnapshot<T>(root: string, path: string,
     try {
       // Validate the explicit target beneath the same held root we copy. Do not
       // resolve the workspace pathname a second time between check and use.
-      let selected = reopen(fd, constants.O_RDONLY | constants.O_DIRECTORY);
+      let selected = reopenDirectory(fd);
       try {
         for (const [index, part] of parts.entries()) {
           let next: number;

@@ -1,0 +1,17 @@
+{
+  "name": "@oma/file-descriptors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": ["dist"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/file-descriptors",
+    "typecheck": "npm run build"
+  },
+  "dependencies": { "koffi": "^3.2.1" },
+  "devDependencies": { "@types/node": "^26.0.0", "typescript": "5.9.3" }
+}

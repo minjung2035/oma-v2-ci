@@ -7,7 +7,7 @@ import { gitSandbox } from "@oma/platform-linux/git-sandbox";
 import { quarantineSeatbelt } from "@oma/platform-mac/git-sandbox";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { copyDescriptorToEntry } from "@oma/storage/file-digest";
-import { mkdirAt } from "@oma/native/posix-files";
+import { mkdirAt } from "@oma/file-descriptors";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionRuntime } from "./execution-runtime.js";

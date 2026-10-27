@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { DEPLOYMENT_LAYOUT, isDeploymentDigest } from "@oma/domain/deployment";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
-import { directoryNames, statAt } from "@oma/native/posix-files";
+import { directoryNames } from "@oma/file-descriptors";
+import { statAt } from "@oma/native/posix-files";
 import { assertWorkspaceResolution } from "./assets.js";
 
 // The entry bound is sized for the compiled tree plus the vendored

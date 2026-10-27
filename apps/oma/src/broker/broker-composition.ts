@@ -15,7 +15,6 @@ import { ensureOwnedDirectory, removeOwnedFile } from "@oma/storage/directory";
 import { clearSocketName } from "@oma/storage/socket-name";
 import { TransportSpool } from "@oma/storage/transport-spool";
 import type { ProcessLock } from "@oma/native/process-lock";
-import type { ExecutionWitness } from "@oma/process/execution-witness";
 import type { ExecutionObservation, ExecutionScopePin } from "@oma/contracts/runtime";
 import type { ViewsModule } from "../views.js";
 import { StatusRefresh } from "@oma/broker/status-refresh";
@@ -52,13 +51,6 @@ export interface BrokerExecution extends BrokerUnits {
   pin(scope: string): ExecutionScopePin;
   observeStatus(actors: readonly Actor[]): Promise<ReadonlyMap<Actor, ExecutionObservation | "no-unit">>;
 }
-function scopeRoot(identity: unknown): { readonly pid: number; readonly startTime: string } | null {
-  if (identity === null || typeof identity !== "object") return null;
-  const value = identity as ExecutionWitness;
-  if (value.kind === "darwin-audit-session") return { pid: value.pid, startTime: String(value.pidVersion) };
-  if (value.kind === "linux-namespace") return { pid: value.pid, startTime: value.startTime };
-  return null;
-}
 function linuxSocket(stream: Duplex): Socket {
   if (!(stream instanceof Socket)) throw new TypeError("Linux broker transport requires a native socket owner");
   return stream;
@@ -87,7 +79,7 @@ export function createBroker(input: BrokerComposition): Broker {
     ledger: brokerLedger(store),
     mail: Object.freeze<BrokerMail>({ prepare: auth => mail.prepare(auth), complete: (auth, evidence) => mail.complete(auth, evidence),
       settleFromReceipt: (quiescence, batch) => mail.settleFromReceipt(quiescence, batch) }),
-    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => scopeRoot(units.scopeRoot(actor)), runnerAlive: actor => units.runnerAlive(actor),
+    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), runnerAlive: actor => units.runnerAlive(actor),
       readLogs: (actor, since, limit) => units.readLogs(actor, since, limit),
       bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
     views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: snapshot => views.publishStatus(snapshot),

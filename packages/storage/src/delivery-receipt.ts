@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/native/posix-files";
+import { unlinkAt } from "@oma/file-descriptors";
 import type { DeliveryReceipt, CheckedReceipt } from "@oma/contracts/runtime";
 import {
   closeSync,

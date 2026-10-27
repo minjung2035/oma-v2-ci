@@ -13,7 +13,8 @@ import { assertDirectory } from "./directory.js";
 import { TreeLease, collectLeasedTree } from "./tree-lease.js";
 import { openBeneath, openDirectory, closeEvery } from "@oma/native/files";
 import { ensureOwnedDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
-import { mkdirAt, statAt, unlinkAt } from "@oma/native/posix-files";
+import { mkdirAt, unlinkAt } from "@oma/file-descriptors";
+import { statAt } from "@oma/native/posix-files";
 import type { PreacceptOwner } from "@oma/contracts/files";
 
 /** The staging root one preparation created exclusively, pinned at creation.

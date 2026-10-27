@@ -2,7 +2,8 @@ import { constants, closeSync, existsSync, fstatSync, lstatSync, statSync } from
 import { resolve } from "node:path";
 import { withCleanup } from "@oma/native/cleanup";
 import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
-import { directoryNames, statAt } from "@oma/native/posix-files";
+import { directoryNames } from "@oma/file-descriptors";
+import { statAt } from "@oma/native/posix-files";
 import { contextFileCheck } from "@oma/domain/context-policy";
 import { fail } from "@oma/client/errors";
 import { readBounded, sha256Hex } from "../effects.js";

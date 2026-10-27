@@ -42,6 +42,7 @@ const LAYERS = Object.freeze([
       "packages/config/src/",
       "packages/process/src/",
       "packages/native/src/",
+      "packages/file-descriptors/src/",
       "packages/tool-files/src/",
       "packages/protocol/src/",
       "packages/storage/src/",
