@@ -133,6 +133,30 @@ jobs:
         if: always()
         timeout-minutes: 5
         run: xcrun swiftc -typecheck packages/platform-mac/src/keychain/main.swift > .scratch/native-evidence/keychain-typecheck.log 2>&1
+      - name: Preserve native crash reports for unexpected signal diagnosis
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+          import { homedir } from "node:os";
+          import { join } from "node:path";
+          const destination = ".scratch/native-evidence/crash-reports";
+          mkdirSync(destination, { recursive: true });
+          const since = statSync(".scratch/native-evidence/install.log").mtimeMs, copied = [];
+          for (const [label, directory] of [["user", join(homedir(), "Library/Logs/DiagnosticReports")], ["system", "/Library/Logs/DiagnosticReports"]]) {
+            let entries;
+            try { entries = readdirSync(directory, { withFileTypes: true }); }
+            catch (error) { if (error.code === "ENOENT") continue; throw error; }
+            for (const entry of entries) {
+              if (!entry.isFile() || !/\.(ips|crash)$/.test(entry.name)) continue;
+              const source = join(directory, entry.name);
+              if (statSync(source).mtimeMs < since) continue;
+              const name = `${label}-${entry.name}`;
+              copyFileSync(source, join(destination, name)); copied.push(name);
+            }
+          }
+          writeFileSync(join(destination, "manifest.json"), JSON.stringify({ copied }));
+          JS
       - name: Preserve raw observations, including blocked gates
         if: always()
         timeout-minutes: 5

@@ -60,7 +60,7 @@ try {
     }
     archives.set(workspace.manifest.name, { path: join(archiveRoot, result.filename), integrity: result.integrity });
   }
-  for (const workspace of workspaces) {
+  function verifyWorkspace(workspace) {
     const closure = new Set();
     const visit = name => {
       if (closure.has(name)) return;
@@ -104,6 +104,17 @@ try {
     console.log(`${workspace.manifest.name}: packed install, ${publicNames.length} public entries, authored declarations PASS; ${smoke ? "installed runtime PASS; " : ""}` +
       `external declaration diagnostics=${declared.externalDiagnostics}; closure=${[...closure].join(",")}`);
   }
+  const failures = [];
+  for (const workspace of workspaces) {
+    try { verifyWorkspace(workspace); }
+    catch (error) {
+      console.error(`${workspace.manifest.name}: isolated verification FAIL`);
+      if (error.stdout) console.error(String(error.stdout));
+      if (error.stderr) console.error(String(error.stderr));
+      failures.push(new Error(`${workspace.manifest.name}: ${error.message}`, { cause: error }));
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, `${failures.length}/${workspaces.length} isolated workspaces failed`);
 } catch (error) {
   if (error.stdout) console.error(String(error.stdout));
   if (error.stderr) console.error(String(error.stderr));
