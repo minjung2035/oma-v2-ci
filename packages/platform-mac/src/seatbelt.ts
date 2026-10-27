@@ -37,9 +37,10 @@ const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_FILES = ["/private/etc/hosts", "/private/etc/resolv.conf", "/private/etc/localtime", "/private/etc/services"];
 // getpagesize/sysconf use numeric HW_PAGESIZE, named hw.pagesize_compat in
 // XNU; hw.pagesize is a different OID. Node's allocator needs the former.
+// uname, including Node's os.release(), also reads hostname and kernel version.
 const SYSCTLS = ["hw.activecpu", "hw.logicalcpu", "hw.logicalcpu_max", "hw.physicalcpu", "hw.physicalcpu_max",
   "hw.ncpu", "hw.memsize", "hw.pagesize", "hw.pagesize_compat", "hw.cputype", "hw.cpusubtype", "hw.machine", "hw.cpufamily",
-  "kern.ostype", "kern.osrelease", "kern.osversion", "kern.osproductversion", "kern.argmax", "kern.maxfilesperproc"];
+  "kern.ostype", "kern.hostname", "kern.osrelease", "kern.version", "kern.osversion", "kern.osproductversion", "kern.argmax", "kern.maxfilesperproc"];
 const SYSTEM_MACH = ["com.apple.system.logger", "com.apple.logd", "com.apple.system.opendirectoryd.libinfo"];
 function refused(message: string): never { throw new StoreError("UNSUPPORTED_PROFILE", message); }
 function path(value: string): string {

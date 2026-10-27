@@ -2,14 +2,12 @@ import test, { before, after } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
-import { inspect } from "node:util";
 import { closeSync, constants, mkdirSync, mkdtempSync, openSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errno, load } from "koffi";
 import { openDirectory } from "@oma/native/files";
 import { assertNoUnpreservedMetadataAt } from "@oma/native/posix-files";
-import { darwinMetadata } from "../dist/darwin-metadata.js";
 
 // Test setup writes a real filesystem attribute through this host's public
 // ABI. Neither the OS nor the metadata reader is replaced by a test double.
@@ -86,7 +84,6 @@ if (process.platform === "darwin") {
   const setup = (operation, path) => {
     const result = spawnSync(helper, [operation, path], { encoding: "utf8", timeout: 10000 });
     assert.ifError(result.error); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
-    return result.stdout;
   };
   for (const [operation, label, directory] of [["flags", "BSD flags", false], ["acl", "extended ACL", false], ["empty-acl-flags", "empty ACL with flags", true]])
     test(`Darwin metadata: ${label} refuses reclamation without following an outside target`, t => {
@@ -94,9 +91,8 @@ if (process.platform === "darwin") {
       if (directory) mkdirSync(target); else writeFileSync(target, "outside");
       const outside = openDirectory(root); t.after(() => closeSync(outside));
       assertNoUnpreservedMetadataAt(outside, "outside");
-      const setupObservation = setup(operation, target);
-      assert.throws(() => assertNoUnpreservedMetadataAt(outside, "outside"), /has unpreserved metadata; retained/,
-        inspect({ setup: setupObservation, observed: darwinMetadata(outside, "outside") }));
+      setup(operation, target);
+      assert.throws(() => assertNoUnpreservedMetadataAt(outside, "outside"), /has unpreserved metadata; retained/);
       symlinkSync(target, join(dir, "link"));
       assertNoUnpreservedMetadataAt(fd, "link");
     });

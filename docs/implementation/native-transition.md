@@ -21,6 +21,30 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 metadata 완료와 후속 lifetime 실험
+
+Architecture companion `40596658850`의 native-all은 **PRECHECK_FAILED / NOT_RUN**이다.
+runtime build와 별개인 root strict checker에서 compile-only View status 계약의 동기 반환 기대가 남아 있었다.
+Promise 계약과 exported proof 이름을 이관하며, 전체 runtime 회귀를 실행한 결과로 대체하지 않는다.
+
+| 입력/환경 | 관측과 한계 |
+|---|---|
+| Native `450dd44dd` / run `40596658828`, Mac15·26 각각 | common248/248·skip0. getattrlist의 정상 empty·symlink·BSD flag·nonempty/zero-entry ACL·resource fork 경로가 실제 통과했다 |
+| 같은 Mac 입력의 독립 설치 각각 | 전체27개 중26 PASS. native temp-alias 수리는 통과했다. Git은 fixture가 아니라 shared PreparationExecutor의 Linux-only guard에서 거절됐다. 건너뛰거나 direct host exec로 대체하지 않는다 |
+| 같은 Mac 입력의 gate 각각 | 99회 실행,48 OBSERVED·51 SETUP_FAILED. Node는 allocator를 지나 JavaScript의 os binding에 도달했으나 uv_os_uname 실패 시 GetOSInformation의 assertion으로 중단됐다 |
+| 같은 입력 Ubuntu | common239/239·실제 native execution46/46·integration433/433, 모두 skip0 |
+| main `0853bfd7`의 clean checkout, Node26 UID1000 | dependency·dist 없이 pre-install hash → npm ci → workspace27/27 전체 rebuild → status22/22 통과. 전후 canonical digest는 e3a2c4b9…로 동일했고 공개 mirror의 source identity와 일치했다 |
+
+고정 Libc uname은 OSTYPE·HOSTNAME·OSRELEASE·VERSION·HW_MACHINE을 모두 질의한다.
+누락된 kern.hostname/kern.version의 exact read-only 항목을 추가했다. 실제 Node 성공은 후속 CI에서 판정한다.
+metadata의 임시 ACL dump/별도 observer 진단만 제거했고 실제 보존·symlink 회귀는 유지했다.
+
+다음 lifetime 실험은 독립 C producer의 fresh/inherited/nested signal 비교다. signal 전후 살아 있는
+직접 child임을 확인하고 join까지 PID를 reap하지 않아 outsider에 signal할 수 없게 한다.
+inherited 실제 delivery와 owned join이 positive control이다. fixture의 EOF 종료는 arbitrary descendant death 증거가 아니다.
+3회 독립 관측이 추가되어 plan은102회이며 개별120s budget은 그대로다. driver226분+설치/credential/upload20분이
+outer clock 안에 들어가도록250분으로 계산했다. 이는 timeout 실패를 숨기거나 product gate를 닫는 변경이 아니다.
+
 ### 2026-10-28 clean-checkout 반례와 Node page-size 질의
 
 | 공개 입력 | 관측과 한계 |

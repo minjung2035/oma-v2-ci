@@ -74,7 +74,7 @@ type RowNotReceipt = Assert<Equal<ReturnType<Store["getOperation"]>, OperationRo
 type EpochRequired = Assert<Equal<Parameters<NativeResidents["stop"]>, [Actor, number]>>;
 type StopIsObserved = Assert<Equal<ReturnType<NativeResidents["stop"]>, Promise<ExecutionObservation>>>;
 type ObservationIsSynchronous = Assert<Equal<ReturnType<NativeResidents["observe"]>, ExecutionObservation>>;
-type ViewIsSynchronous = Assert<Equal<ReturnType<ViewsModule["status"]>, AgentStatus[]>>;
+type ViewProjectionIsAsync = Assert<Equal<ReturnType<ViewsModule["status"]>, Promise<AgentStatus[]>>>;
 type MetricsPreserved = Assert<Equal<Awaited<ReturnType<ReconcileModule["sweep"]>>,
   { examined: number; repaired: number; remaining: number }>>;
 type RunnerIsBound = Assert<Equal<Parameters<RunnerModule["run"]>, []>>;
@@ -120,7 +120,7 @@ function rejectedChanges(store: Store, units: ResidentExecutionPort, views: Deri
 
 export type {
   RowNotReceipt, EpochRequired, StopIsObserved, ObservationIsSynchronous,
-  ViewIsSynchronous, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
+  ViewProjectionIsAsync, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
   SandboxReturnsPlan, PublicWireUnchanged, InternalNativeWire,
 };
 
