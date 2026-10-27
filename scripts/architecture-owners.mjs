@@ -2,6 +2,7 @@
  * update its imports and these negative-policy tests in the same change.
  */
 export const subprocessResponsibilities = Object.freeze({
+  "packages/native/src/darwin-xattrs.ts": "single fixed read-only directory-relative Darwin xattr observation; no target open or descendant",
   "packages/process/src/run.ts": "bounded synchronous command mechanism and final no-await observations",
   "packages/process/src/async.ts": "bounded asynchronous child and pipe lifecycle mechanism",
   "packages/process/src/coalesced-wake.ts": "one active callback and one pending memory hint, without activation or durable authority",
@@ -18,6 +19,8 @@ export const subprocessResponsibilities = Object.freeze({
  * stops being true, in either direction.
  */
 export const fenceExemptSpawnOwners = Object.freeze({
+  "packages/native/src/darwin-xattrs.ts#darwinXattrSize":
+    "fixed native helper only changes its own cwd and lists one entry metadata; no writes, credentials, subprocesses or society authority, so retaining a read-only directory reference cannot outlive a writer fence",
   "packages/tool-runtime/src/contained-search.ts#searchWorkspace":
     "read-only source traversal and engine search over a private temporary copy; the oversized answer may also be written into the caller's own workspace through the serialized contained writer -- never a society write or credential; parent pipe EOF aborts its owned copy and walker group",
   "packages/tool-runtime/src/contained-search.ts#startSearchWalker":

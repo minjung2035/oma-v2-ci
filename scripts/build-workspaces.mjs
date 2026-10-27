@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { workspaceManifests } from "./check-modules.mjs";
 import { copyWorkspaceAssets } from "./workspace-assets.mjs";
 import { workspaceBuildCache } from "./workspace-build-cache.mjs";
+import { darwinExecutables } from "./workspace-executables.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaces = workspaceManifests(root);
@@ -77,18 +78,15 @@ if (rebuilding.length) {
 
 // Executable artifacts are owned by the application workspace.
 for (const workspace of rebuilding) {
-  const seatbeltHelper = workspace.manifest.oma?.seatbeltHelper;
-  if (seatbeltHelper !== undefined) {
-    if (workspace.manifest.name !== "@oma/platform-mac" || seatbeltHelper !== "seatbelt/oma-seatbelt")
-      throw new Error("unreviewed Seatbelt helper build owner");
-    if (process.platform === "darwin") {
-      const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-O2",
-        join(root, workspace.path, "dist/seatbelt/main.c"), "-lsandbox", "-o", join(root, workspace.path, "dist", seatbeltHelper)],
-      { cwd: root, stdio: "inherit", timeout: 120000, killSignal: "SIGKILL" });
-      if (compiled.error || compiled.signal || compiled.status !== 0) {
-        if (compiled.error || compiled.signal) console.error(compiled.error?.message ?? compiled.signal);
-        process.exit(compiled.status || 1);
-      }
+  const executables = darwinExecutables(workspace.manifest);
+  if (process.platform === "darwin") for (const executable of executables) {
+    const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-O2",
+      join(root, workspace.path, "dist", executable.source), ...executable.libraries.map(name => `-l${name}`),
+      "-o", join(root, workspace.path, "dist", executable.output)],
+    { cwd: root, stdio: "inherit", timeout: 120000, killSignal: "SIGKILL" });
+    if (compiled.error || compiled.signal || compiled.status !== 0) {
+      if (compiled.error || compiled.signal) console.error(compiled.error?.message ?? compiled.signal);
+      process.exit(compiled.status || 1);
     }
   }
   const command = workspace.manifest.oma?.modelCommand;

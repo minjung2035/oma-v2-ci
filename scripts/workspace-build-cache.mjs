@@ -88,7 +88,7 @@ export function workspaceBuildCache(root, workspaces) {
   // Compiler implementation and build policy are inputs, not just version
   // strings. Manifests/lockfile cover package resolution and generated assets.
   const files = ["package.json", "package-lock.json", "scripts/build-workspaces.mjs",
-    "scripts/workspace-build-cache.mjs", "scripts/workspace-assets.mjs", "scripts/check-modules.mjs",
+    "scripts/workspace-build-cache.mjs", "scripts/workspace-assets.mjs", "scripts/workspace-executables.mjs", "scripts/check-modules.mjs",
     "node_modules/typescript/package.json", "node_modules/typescript/bin/tsc",
     "node_modules/typescript/lib/tsc.js", "node_modules/typescript/lib/_tsc.js", "node_modules/typescript/lib/typescript.js",
     ...workspaces.map(workspace => join(workspace.path, "package.json"))];

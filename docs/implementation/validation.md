@@ -423,11 +423,50 @@ G-PROCESS/G-FILES/G-AUTH는 계속 OPEN이고 Mac99회/OS 및 새 공통 시험�
 NOT_RUN이다. 유료 Mac CI는 실행하지 않았다. 저장소 전체 복잡도 점검은 사용자 지시에 따라
 native 구현을 모두 마친 뒤 진행하며 이번 변경에 포함하지 않았다.
 
+### Darwin 디렉터리 기준 확장 속성 관측
+
+Darwin의 assertNoExtendedAttributesAt을 구현했다. 보유한 directory FD를 고정된 metadata
+helper에 명시 전달하고, helper 안에서만 public fchdir 후 한 entry를 listxattr로 관측한다.
+최종 symlink를 따르지 않고 compression 속성도 조회한다. Node host의 cwd는 바뀌지 않으며
+대상 파일을 내용 I/O로 열거나 경로를 재구성하지 않는다. private pthread cwd SPI는 쓰지 않는다.
+공개 계약은 Apple의 [fchdir](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/man/man2/chdir.2)와
+[listxattr](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/man/man2/listxattr.2)를 대조했다.
+
+빈 속성 목록만 허용하는 판정은 공통 TypeScript가 소유한다. helper 오류·signal·잘못된 출력은
+빈 관측이 아니다. Linux leaf의 기존 ENOTSUP 처리는 유지하고 Darwin 오류를 같은 성공으로
+확대하지 않았다. 고정 helper와 기존 Seatbelt 실행기는 같은 reviewed recipe 표에서 소유자·
+source asset·출력·library를 선택하며 빌드 cache와 package URL 검사도 같은 표를 사용한다.
+
+실제 host 시험은 zero-length 속성이 있는 파일의 보관, 빈 entry, parent rename과 원래 경로
+교체, 속성이 있는 바깥 대상을 가리키는 symlink와 dangling symlink, 조회 실패를 검사한다.
+실제 Linux에서 private reader를 symlink를 따라가도록 바꾼 변형은 같은 symlink 시험에서
+실패했고 canonical 시험·built JS SHA는 동일했다. 이름 필터의 미선택 시험은 PASS로 세지 않는다.
+
+입력 `44ce3f3a55b6a761bb771d8609df150d8804d9c37af6c81d0417aceb30c82018`(15666개)에서 공통 CI235/235,
+정책35/35, 경계·spawn owner17/17, 전체 구조 검사와 packed26/26이 통과했다. 각 패키지의
+public import·authored declaration을 확인했고 설치 후 실행 smoke 17개도 통과했다.
+외부 SDK declaration 진단은 authored declaration 실패와 별도로 남긴다. 실제 Linux 시험은
+UID1000·CapEff0·pinned bwrap overlay에서 실행했으며 입력·26 workspace 산출물
+15405개·보호4개 SHA는 전후 동일했다. full build와 strict types도 통과했다.
+
+처음 구조 검사는 신규 TS 파일 두 개의 semantic zone 누락을 거부했다. 그 실패 입력과
+runtime 결과는 checks/에 보존하고, codec K1·OS mechanism K2 분류를 추가한 뒤 독립된
+checks-final/ 입력으로 재검증했다. 오류 기록을 새 PASS로 덮어쓰지 않았다.
+
+helper의 SDK15.5·26.5 × ARM64·x64 컴파일4/4와 stub 링크4/4는 Linux host의 정적 결과다.
+실제 Darwin helper·새 host 시험은 NOT_RUN이며 유료 Mac CI는 실행하지 않았다. 원문은
+`/home/dev/oma-audit-artifacts/native-2026-10-27-directory-xattrs/`가 소유한다. 문서 기록 뒤
+별도 구조 입력을 결박하며 과거 전체 Linux3896/3896을 이번 입력으로 재결박하지 않는다.
+
+이 구현은 한 entry의 metadata 관측이다. mode-000 pin·동일 inode 재열기·수리·실행 결박이나
+G-PROCESS/G-FILES/G-AUTH 완료가 아니며 PreparationExecutor와 App의 Darwin guard는 유지한다.
+전체 코드 복잡도 점검은 native 구현을 모두 마친 뒤에 진행한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `241c467d239fb7fc0135593e919a625af3843933e3bd1b90850067d68244e18d` (15659 files).
+verification input digest `b89ae1d2c106977c9f9e4f555eb98b041aac52be154765bc0e846ea28dcddad1` (15666 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

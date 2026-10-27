@@ -89,5 +89,14 @@
   "devDependencies": {
     "@types/node": "^26.0.0",
     "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "xattr/main.c"
+    ],
+    "darwinExecutables": [
+      "xattr/oma-list-xattr"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs"
   }
 }

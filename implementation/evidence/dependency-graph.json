@@ -331,6 +331,7 @@
   "packages/native/src/audit-token.ts",
   "packages/native/src/cleanup.ts",
   "packages/native/src/control-socket.ts",
+  "packages/native/src/darwin-xattrs.ts",
   "packages/native/src/descriptor-path.ts",
   "packages/native/src/directory-layout.ts",
   "packages/native/src/files.ts",
@@ -345,6 +346,7 @@
   "packages/native/src/process-observation.ts",
   "packages/native/src/snapshot-reader.ts",
   "packages/native/src/unix-message.ts",
+  "packages/native/src/xattr-size.ts",
   "packages/platform-linux/src/bubblewrap-arguments.ts",
   "packages/platform-linux/src/candidate-sandbox.ts",
   "packages/platform-linux/src/credential-stream.ts",
@@ -586,6 +588,7 @@
      "packages/mail/src/addresses.ts",
      "packages/mail/src/facts.ts",
      "packages/mail/src/headers.ts",
+     "packages/native/src/xattr-size.ts",
      "packages/protocol/src/ask-user-question.ts",
      "packages/protocol/src/batch-view.ts",
      "packages/protocol/src/byte-queue.ts",
@@ -637,6 +640,7 @@
      "packages/native/src/audit-token.ts",
      "packages/native/src/cleanup.ts",
      "packages/native/src/control-socket.ts",
+     "packages/native/src/darwin-xattrs.ts",
      "packages/native/src/descriptor-path.ts",
      "packages/native/src/directory-layout.ts",
      "packages/native/src/files.ts",
@@ -728,8 +732,8 @@
    "K1-codecs -> K0-values": 68,
    "K1-codecs -> K1-codecs": 28,
    "K2-mechanisms -> K0-values": 132,
-   "K2-mechanisms -> K1-codecs": 15,
-   "K2-mechanisms -> K2-mechanisms": 168,
+   "K2-mechanisms -> K1-codecs": 16,
+   "K2-mechanisms -> K2-mechanisms": 169,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -1202,6 +1206,11 @@
    {
     "from": "packages/native/src/control-socket.ts",
     "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-xattrs.ts",
+    "to": "packages/native/src/xattr-size.ts",
     "kind": "runtime"
    },
    {
@@ -2313,7 +2322,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 182
+   "files": 184
   },
   {
    "index": 2,
@@ -2387,11 +2396,11 @@
    "files": 83
   }
  ],
- "files": 514,
- "runtimeEdges": 1858,
+ "files": 516,
+ "runtimeEdges": 1860,
  "typeOnlyEdges": 781,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 470,
+  "L1-kernel -> L1-kernel": 472,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 262,
@@ -2456,7 +2465,7 @@
   "koffi": 13,
   "node:async_hooks": 5,
   "node:buffer": 1,
-  "node:child_process": 5,
+  "node:child_process": 6,
   "node:crypto": 42,
   "node:dns": 1,
   "node:events": 3,
@@ -2475,7 +2484,7 @@
   "node:stream/promises": 1,
   "node:string_decoder": 1,
   "node:timers/promises": 6,
-  "node:url": 13,
+  "node:url": 14,
   "node:util": 8,
   "node:zlib": 1,
   "nodemailer": 1,

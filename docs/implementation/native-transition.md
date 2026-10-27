@@ -380,3 +380,15 @@ G-PROCESS/G-FILES/G-AUTH 수용은 남아 있다. 제품 guard와 accepted data/
 자기 PID/group/session과 명시 FD를 관측하는 실제 host 시험을 공통 CI에 넣었다. 이는 직접
 child의 실행·취소·close를 다루며 전체 후손 scope를 만들지 않는다. PreparationExecutor와
 제품 Darwin guard를 이 변경으로 해제하지 않았다. 수용 범위와 미실행 항목은 검증 기록에 남긴다.
+
+### Darwin의 directory-relative xattr leaf
+
+보유한 directory FD를 고정 helper의 FD3으로 전달하고 그 child에서만 public fchdir와
+no-follow listxattr를 실행한다. 내용 I/O를 위한 target open 없이 최종 symlink 자체를
+관측하며 compression 속성도 포함한다. 보관 여부는 공통 TypeScript가 결정하고, 조회·실행·
+출력 해석 실패는 빈 속성 목록으로 처리하지 않는다. helper는 이 metadata 조회 외의 실행이나
+mutation을 하지 않는다. 빌드 recipe·source asset·설치 후 실행·공통 CI 시험까지 연결했다.
+
+한 entry 관측은 pin·repair·동일 image 실행 결박을 대신하지 않는다. core native gate와
+제품 Darwin guard는 유지하며 실제 Mac 실행은 NOT_RUN이다. SDK 정적 결과와 Linux 실제
+시험의 입력은 검증 기록에 따로 남긴다. 전체 코드 복잡도 검토는 native 구현 완료 뒤에 한다.

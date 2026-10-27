@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "5352454fd60dfd5710b2c70c57a7779410ce69263a7cf5d26c06ad787a9b2fe7",
+  "manifest": "71298336d049c20bdda4598748eb5149ad1654d5423c8830353e3c8ff79390c3",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1360,7 +1360,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "26cee9d98509f8aaecefb12c5bda1395d6ccff4e70f4902b2c4fe0834346d39f"
+      "sha256": "b0c8a6a8ba5056cc58b0e652bf07d517ef07a7ed42208e0b95bfaa63ab8234ee"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1377,6 +1377,10 @@
     {
       "path": "packages/native/src/control-socket.ts",
       "sha256": "45e0fd89a1cd2afce17e05d67d5dddbb4f18368c9593fd58a29915658f3d9c34"
+    },
+    {
+      "path": "packages/native/src/darwin-xattrs.ts",
+      "sha256": "da11cc78f7c3f62053ab2d021be9ceea4833ffd44b94d071c6f53d5b6986926e"
     },
     {
       "path": "packages/native/src/descriptor-path.ts",
@@ -1412,7 +1416,7 @@
     },
     {
       "path": "packages/native/src/posix-files.ts",
-      "sha256": "e0bf4afdd9a64e64326cf9896e30706e7ae36b9364b7cbc32871a265120f6b4b"
+      "sha256": "b8c7e74db745056fcd09aa5a3d3a003421f39569916222696b058725428c087e"
     },
     {
       "path": "packages/native/src/process-event.ts",
@@ -1433,6 +1437,14 @@
     {
       "path": "packages/native/src/unix-message.ts",
       "sha256": "693aa74c00eef5def22769e22e0de6061880ad5453a32cc55149eb8dd7da4eaa"
+    },
+    {
+      "path": "packages/native/src/xattr-size.ts",
+      "sha256": "c5d6ca5e5aaa7027e36fcfb62fae9e821f58f2466798701c34915c655d6e16e5"
+    },
+    {
+      "path": "packages/native/src/xattr/main.c",
+      "sha256": "1d32deebd2c770dee31935ce92de32b902d6f79d44b8287cd29274cbbd26a361"
     },
     {
       "path": "packages/platform-linux/package.json",
@@ -1484,7 +1496,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "010829ab6369c25b5329c209f9168f5ba4e599b07d21be5c6c430336b5ce0f7b"
+      "sha256": "87e24692229918ba9968a8af7b10f4228913f17e872d459ea0320332ad548f5d"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",

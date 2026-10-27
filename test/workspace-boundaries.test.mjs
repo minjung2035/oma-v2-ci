@@ -106,16 +106,18 @@ test("DR46: a local compiled module URL resolves only to an authored executable 
       "packages/domain/src/ambient.d.ts": 'export type Ambient = string;' }).join("\n"), /unowned or missing package asset/);
 });
 
-test("native generated asset ownership accepts only the declared Seatbelt launcher and its C source", t => {
-  const manifest = { oma: { assets: ["seatbelt/main.c"], seatbeltHelper: "seatbelt/oma-seatbelt" } };
-  const source = 'new URL("./seatbelt/oma-seatbelt", import.meta.url);';
-  const files = { "packages/platform-mac/src/index.ts": source, "packages/platform-mac/src/seatbelt/main.c": "int main(void) { return 0; }" };
-  assert.deepEqual(inspect(t, files, { "platform-mac": manifest }), []);
-  assert.match(inspect(t, { "packages/domain/src/index.ts": source, "packages/domain/src/seatbelt/main.c": "int main(void) { return 0; }" },
-    { domain: manifest }).join("\n"), /unowned or missing package asset/);
-  assert.match(inspect(t, { "packages/platform-mac/src/index.ts": source }, { "platform-mac": manifest }).join("\n"), /unowned or missing package asset/);
-  assert.match(inspect(t, files, { "platform-mac": { oma: { ...manifest.oma, assets: [] } } }).join("\n"), /unowned or missing package asset/);
-  assert.match(inspect(t, files, { "platform-mac": { oma: { ...manifest.oma, seatbeltHelper: "seatbelt/other" } } }).join("\n"), /unowned or missing package asset/);
+test("native generated asset ownership accepts only reviewed owner, output and declared source", t => {
+  for (const [owner, directory, output] of [["platform-mac", "seatbelt", "oma-seatbelt"], ["native", "xattr", "oma-list-xattr"]]) {
+    const manifest = { oma: { assets: [`${directory}/main.c`], darwinExecutables: [`${directory}/${output}`] } };
+    const source = `new URL("./${directory}/${output}", import.meta.url);`;
+    const files = { [`packages/${owner}/src/index.ts`]: source, [`packages/${owner}/src/${directory}/main.c`]: "int main(void) { return 0; }" };
+    assert.deepEqual(inspect(t, files, { [owner]: manifest }), []);
+    assert.match(inspect(t, { "packages/domain/src/index.ts": source, [`packages/domain/src/${directory}/main.c`]: "int main(void) { return 0; }" },
+      { domain: manifest }).join("\n"), /unowned or missing package asset/);
+    assert.match(inspect(t, { [`packages/${owner}/src/index.ts`]: source }, { [owner]: manifest }).join("\n"), /unowned or missing package asset/);
+    for (const change of [{ assets: [] }, { darwinExecutables: [`${directory}/other`] }, { darwinExecutables: [`${directory}/${output}`, `${directory}/${output}`] }])
+      assert.match(inspect(t, files, { [owner]: { oma: { ...manifest.oma, ...change } } }).join("\n"), /unowned or missing package asset/);
+  }
 });
 
 test("DR46 Linux: OS adapters use file APIs and named observations without borrowing configuration or application services", t => {

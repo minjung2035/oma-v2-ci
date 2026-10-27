@@ -342,6 +342,7 @@ packages/native/src/audit-origin.ts
 packages/native/src/audit-token.ts
 packages/native/src/cleanup.ts
 packages/native/src/control-socket.ts
+packages/native/src/darwin-xattrs.ts
 packages/native/src/descriptor-path.ts
 packages/native/src/directory-layout.ts
 packages/native/src/files.ts
@@ -356,6 +357,8 @@ packages/native/src/process-lock.ts
 packages/native/src/process-observation.ts
 packages/native/src/snapshot-reader.ts
 packages/native/src/unix-message.ts
+packages/native/src/xattr-size.ts
+packages/native/src/xattr/main.c
 packages/platform-linux/package.json
 packages/platform-linux/src/bubblewrap-arguments.ts
 packages/platform-linux/src/candidate-sandbox.ts

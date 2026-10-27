@@ -7,6 +7,7 @@ import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { openBeneath } from "./files.js";
 import { withCleanup } from "./cleanup.js";
+import { darwinXattrSize } from "./darwin-xattrs.js";
 
 let native: ReturnType<typeof initialize> | undefined;
 function initialize() {
@@ -169,20 +170,24 @@ export function statAt(fd: number, name: string, options?: { readonly bigint?: b
   return withCleanup(() => options?.bigint ? fstatSync(pin, { bigint: true }) : fstatSync(pin), () => closeSync(pin));
 }
 
-/** An attribute-bearing cache needs a richer verification protocol. Observation
- * failures never mean that attributes are absent. The Linux proc path remains
- * inside this leaf; Darwin needs an equally bound no-follow attribute primitive. */
+/** An attribute-bearing cache needs a richer verification protocol. This is
+ * one no-follow observation, not a pin or proof about a later entry. */
 let listExtended: ((path: string, list: null, size: number) => number) | undefined;
-export function assertNoExtendedAttributesAt(parent: number, name: string): void {
-  entry(parent, name);
-  if (process.platform !== "linux")
-    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: contained no-follow extended-attribute observation is unverified");
+function linuxXattrSize(parent: number, name: string): bigint {
   listExtended ??= load(null).func("long llistxattr(const char *path, void *list, unsigned long size)");
   const size = listExtended(`/proc/self/fd/${parent}/${name}`, null, 0);
   if (size < 0) {
     const code = errno();
-    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return;
+    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return 0n;
     throw new Error(`session extended attributes could not be observed (errno ${code})`);
   }
-  if (size !== 0) throw new Error("session workspace has extended attributes; retained without reclamation");
+  return BigInt(size);
+}
+const xattrReaders = { linux: linuxXattrSize, darwin: darwinXattrSize };
+export function assertNoExtendedAttributesAt(parent: number, name: string): void {
+  entry(parent, name);
+  const reader = xattrReaders[process.platform as keyof typeof xattrReaders];
+  if (!reader) throw new StoreError("UNSUPPORTED_PROFILE", "extended attribute observation requires a supported POSIX kernel");
+  if (reader(parent, name) !== 0n)
+    throw new Error("session workspace has extended attributes; retained without reclamation");
 }

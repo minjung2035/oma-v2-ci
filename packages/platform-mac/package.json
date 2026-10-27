@@ -81,6 +81,8 @@
       "keychain/oma-keychain.entitlements"
     ],
     "isolationSmoke": "test/installed-runtime.mjs",
-    "seatbeltHelper": "seatbelt/oma-seatbelt"
+    "darwinExecutables": [
+      "seatbelt/oma-seatbelt"
+    ]
   }
 }
