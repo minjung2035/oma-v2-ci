@@ -1,20 +1,20 @@
 /** Node-only directory capabilities for engine-hosted file tools (PI-001).
- * Linux resolves every component through a held directory. Darwin has no
- * qualified equivalent yet: refuse before opening or creating anything.
- * This leaf owns OS mechanics; containment and file policy live in index.ts.
+ * POSIX descriptor aliases are used only after the native entry pin and
+ * identity check. This leaf owns OS mechanics; containment and file policy
+ * live in index.ts.
  */
 import { constants, mkdirSync, openSync, readdirSync, rmSync } from "node:fs";
 import { WorkspaceRefusal } from "./errors.js";
 
 function assertProfile(): void {
-  if (process.platform !== "linux")
-    throw new WorkspaceRefusal("G-FILES: descriptor file access is not qualified on this platform");
+  if (process.platform !== "linux" && process.platform !== "darwin")
+    throw new WorkspaceRefusal("descriptor file access requires a supported POSIX platform");
 }
 
 export function descriptorPath(fd: number): string {
   if (!Number.isInteger(fd) || fd < 0) throw new TypeError("invalid file descriptor");
   assertProfile();
-  return `/proc/self/fd/${fd}`;
+  return `${process.platform === "linux" ? "/proc" : "/dev"}/fd/${fd}`;
 }
 
 /** One entry, never a pathname walk supplied by a tool. */

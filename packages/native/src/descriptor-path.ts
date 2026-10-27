@@ -3,7 +3,7 @@
 import { StoreError } from "@oma/domain/errors";
 export function inheritedDescriptorPath(fd: number, purpose: "read" | "execute"): string {
   if (!Number.isSafeInteger(fd) || fd < 0) throw new TypeError("invalid inherited descriptor");
-  if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE",
-    `G-FILES: exact descriptor ${purpose} lookup is unverified on this platform`);
-  return `/proc/self/fd/${fd}`;
+  if (process.platform !== "linux" && process.platform !== "darwin")
+    throw new StoreError("UNSUPPORTED_PROFILE", `exact descriptor ${purpose} lookup is unsupported on this platform`);
+  return `${process.platform === "linux" ? "/proc" : "/dev"}/fd/${fd}`;
 }

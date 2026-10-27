@@ -93,8 +93,12 @@ export function openBeneath(
     // Darwin arm64 passes variadic arguments on the stack. Declaring mode as
     // a fixed fourth argument can create mode-000 files despite a 0600 input.
     darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, ...)");
-    if ((flags & 0o10000000 /* Linux O_PATH */) !== 0)
-      throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: Darwin has no verified permission-independent entry pin and exact reopen");
+    if ((flags & 0o10000000 /* Linux O_PATH */) !== 0) {
+      // Darwin has no permission-independent O_PATH. O_EVTONLY is the narrow
+      // event-only capability; inaccessible entries fail closed here.
+      return checked(darwinOpen(directory, path,
+        0x00008000 | 0x01000000 | 0x20000000 | 0x1000 | (flags & constants.O_DIRECTORY), "unsigned int", 0));
+    }
     // O_NOFOLLOW_ANY also rejects the final symlink. XNU rejects combining
     // it with O_NOFOLLOW, which shared callers may already have requested.
     const containedFlags = (flags & ~constants.O_NOFOLLOW) | 0x01000000 /* O_CLOEXEC */ |
@@ -134,7 +138,7 @@ export function openRegularBeneath(directory: number, path: string): number {
           "STORE_CORRUPT",
           "contained entry is not a regular file",
         );
-      result = openSync(
+      result = process.platform === "darwin" ? reopenPinned(pin, constants.O_RDONLY | constants.O_NONBLOCK) : openSync(
         `/proc/self/fd/${pin}`,
         constants.O_RDONLY | constants.O_NONBLOCK,
       );
@@ -153,14 +157,28 @@ export function pinBeneath(directory: number, path: string, directoryOnly = fals
 }
 export function reopenPinned(pin: number, flags: number): number {
   if (!Number.isSafeInteger(pin) || pin < 0) throw new TypeError("invalid entry pin");
+  if (process.platform === "darwin") {
+    const expected = fstatSync(pin, { bigint: true });
+    const result = openSync(`/dev/fd/${pin}`, flags);
+    const actual = fstatSync(result, { bigint: true });
+    if (actual.dev !== expected.dev || actual.ino !== expected.ino)
+      return withCleanup(() => { throw new StoreError("STORE_CORRUPT", "reopened entry is not the pinned inode"); }, () => closeSync(result));
+    return result;
+  }
   if (process.platform !== "linux")
-    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: exact entry reopen is unverified on this platform");
+    throw new StoreError("UNSUPPORTED_PROFILE", "exact entry reopen is unsupported on this platform");
   return openSync(`/proc/self/fd/${pin}`, flags);
 }
 export function chmodPinned(pin: number, mode: number): void {
   if (!Number.isSafeInteger(pin) || pin < 0) throw new TypeError("invalid entry pin");
+  if (process.platform === "darwin") {
+    if (!Number.isSafeInteger(mode) || mode < 0 || mode > 0o7777) throw new TypeError("invalid entry mode");
+    const result = load(null).func("int fchmod(int, unsigned int)")(pin, mode);
+    if (result !== 0) checked(-1);
+    return;
+  }
   if (process.platform !== "linux")
-    throw new StoreError("UNSUPPORTED_PROFILE", "G-FILES: exact entry repair is unverified on this platform");
+    throw new StoreError("UNSUPPORTED_PROFILE", "exact entry repair is unsupported on this platform");
   chmodSync(`/proc/self/fd/${pin}`, mode);
 }
 /** Bootstrap a host-configured directory without following any pathname symlink.
