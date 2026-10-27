@@ -355,11 +355,48 @@ bytes 관계는 candidate-guard-failure.json에 보존한다. 최종 runtime 입
 PASS, 전후 입력/빌드 산출물/보호4개 동일이다. checks-post-format/과 post-format-runtime-counts.json이
 소유하며 최종 문서 구조 입력은 final-documentation-post-format/에서 별도로 검사한다.
 
+## Darwin 실행기의 공개 FD 상속 API 수정 — 2026-10-27
+
+Linux에서 Darwin 대상으로 컴파일하는 동안 production Seatbelt의 `closefrom` 호출이
+SDK15.5·26.5의 ARM64·x64 네 조합에서 모두 선언 부재로 실패했다. 기존 Linux 실행 시험은
+glibc의 동명 함수를 사용했으므로 이 Darwin 빌드 오류를 발견하지 못했다. 최초20개 object의
+16개 성공·4개 실패와 linker sysroot 설정 실패 원문을 별도로 보존했다.
+
+실행 leaf는 공개 `posix_spawn`의 `POSIX_SPAWN_SETEXEC | POSIX_SPAWN_CLOEXEC_DEFAULT`와
+`posix_spawn_file_actions_addinherit_np`로 바꿨다. 표준 stream과 명시한 kept FD만 전달하며
+실패 시125로 끝낸다. 일반 exec로 되돌아가는 경로는 없다. 같은 PID의 image 교체와 kernel의
+FD 상속 처리는 [Apple XNU 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c),
+CLOEXEC_DEFAULT·inherit 사용은 [libuv 구현](https://github.com/libuv/libuv/blob/v1.51.0/src/unix/process.c)과 대조했다.
+이 source 대조는 실제 Darwin 실행 결과가 아니다.
+
+Zig0.17.0/LLVM22.1.8과 pinned SDK mirror snapshot의15.5·26.5를 사용한 ARM64·x64
+교차 컴파일28/28·SDK stub library 링크28/28이 성공했다. production 실행기와 실제 Darwin용
+FD 대조 프로그램을 포함한다. compiler/SDK는 저장소 밖 보조 도구이며 제품 의존성에 추가하지
+않았다. 이는 Linux host에서 만든 Mach-O의 정적 검증으로, Apple runner의 실제 SDK·kernel
+실행·release 서명 또는 Homebrew dylib qualification을 증명하지 않는다.
+
+공통 시험은 production kept-list의 문법만 독립 검사한다. Darwin 시험에는 동일 PID 확인,
+soft/hard FD 한도를16으로 낮추기 전에 연 FD64의 제거, CLOEXEC가 설정된 표준 stream·FD6/8
+유지, 빈 keep-list, 없는 channel·target의 실패를 추가했다. 기존 실제 leak 대조군은
+CLOEXEC_DEFAULT를 제거한 private helper로 갱신했다. 필수 관측 값이 빠진 record를 거절하는
+새 회귀는 수정 전28/29·수정 후29/29였고, 별도 parser와 함께30/30이다. record 문법용
+입력은 kernel 관측으로 사용하지 않는다. 새 Darwin 실행 대조군 자체는 NOT_RUN이다.
+
+runtime 입력 `6570c49e25e84d04517d9fc7102e65f4d7db7eca6d7c8654702d024e6e2f13a6`(15657개)에서
+CI의 공통 명령226/226·검증 정책35/35·전체 구조 검사 PASS다. fail/cancel/skip/todo0이고
+입력·26 workspace의 빌드 산출물15400개·보호4개 SHA가 전후 같다. full build와 strict typecheck도
+성공했다. 과거 전체 Linux3896/3896·packed26/26을 이 입력의 결과로 다시 표시하지 않는다.
+
+원문은 `/home/dev/oma-audit-artifacts/native-2026-10-27-darwin-crosscompile/`의
+sdk-objects-initial/·sdk-objects-repaired/·sdk-linked/·metadata-build/·checks/가 소유한다.
+문서 기록은 별도 입력의 구조 검사로 결박한다. Mac33종×3회·OS별99회는 NOT_RUN이고
+G-PROCESS/G-FILES/G-AUTH와 제품 진입 guard는 그대로다. 유료 Mac CI는 실행하지 않았다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `0f817fbc7f38010eea62e60afeed8fc1f9bc6f915a57aa2d2e330a8c683fc92a` (15656 files).
+verification input digest `a45d6e91294c260318dd069f519705dfcda6a283f1cab3866d706dbb158ecca7` (15657 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

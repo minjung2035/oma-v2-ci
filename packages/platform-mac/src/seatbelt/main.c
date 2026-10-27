@@ -103,9 +103,5 @@ int main(int argc, char **argv) {
       if (close(empty) != 0) failed("Seatbelt target stdin close");
     }
   }
-  if (kept.count == 0) { closefrom(3); }
-  else oma_close_except_kept(kept);
-  free(kept.fds);
-  execve(argv[target], argv + target, environ);
-  failed("Seatbelt target exec");
+  oma_exec_with_fds(argv[target], argv + target, environ, kept);
 }

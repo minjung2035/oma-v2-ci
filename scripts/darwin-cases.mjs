@@ -51,6 +51,15 @@ export function validateDarwinObservation(name, observations) {
     validateDescriptorCapabilityObservation(value);
     if (value.platform !== "darwin") throw new Error("descriptor observation did not run on Darwin");
   }
+  if (name === "seatbelt-kept-fds") {
+    for (const key of ["exactChannelsRetained", "stdinTransportRetainedSameChannels", "extraCanaryDetectedInControl",
+      "malformedPolicyRefused", "directChildrenClosed", "samePidAfterExec", "loweredHardLimitPruned",
+      "stdioCloexecRetained", "emptyKeepListPruned", "missingChannelRefused", "missingTargetRefused"])
+      if (value[key] !== true) throw new Error(`descriptor inheritance control is missing: ${key}`);
+    for (const key of ["actorSha256", "pruneControlSha256"])
+      if (typeof value[key] !== "string" || !/^[0-9a-f]{64}$/.test(value[key]))
+        throw new Error(`descriptor control executable identity is missing: ${key}`);
+  }
 }
 export function validateDarwinCaseSet(cases) {
   const expected = new Map(darwinCasePlan().map(row => [`${row.name}:${row.iteration}`, row]));

@@ -361,3 +361,15 @@ pseudo-receive로 돌아온 두 header reference를 반환하고, 실패한 clos
 process/file gate는 남아 있다. Security validation의 sync I/O를 async/tracked owner로 옮기고
 실제 latency도 검증해야 한다. 현재 native port golden의 의도한 변화만 갱신했으며 과거 golden,
 public/durable DTO와 과거 authored review는 바꾸지 않았다.
+
+### Darwin 실행기의 FD 전달 수정
+
+Seatbelt 실행기에서 Darwin SDK에 없는 `closefrom` 사용을 발견해 공개 `posix_spawn`의
+SETEXEC·CLOEXEC_DEFAULT와 명시 inherit action으로 바꿨다. FD 번호를 한도까지 훑지 않고
+같은 PID에서 image를 교체한다. Linux의 kept-list 문법 시험과 Darwin의 실제 FD 상속 시험을
+분리했으며 후자는 낮춘 soft/hard 한도 밖 FD, CLOEXEC 표준 stream·명시 channel, 빈 목록,
+없는 channel·target, leak 대조군을 검사하도록 준비했다.
+
+SDK snapshot 두 버전·CPU 두 종류의 교차 컴파일과 링크는 정적 검증이다. 실제 Darwin 실행과
+G-PROCESS/G-FILES/G-AUTH 수용은 남아 있다. 제품 guard와 accepted data/receipt/auth 의미는
+유지한다. 이번 수정의 입력과 시험 결과는 [검증 기록](validation.md)이 소유한다.

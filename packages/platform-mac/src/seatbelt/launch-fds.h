@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(__APPLE__)
+#include <spawn.h>
+#endif
 struct oma_fd_policy { int *fds; size_t count; };
 static _Noreturn void oma_fd_refused(const char *reason) {
   fprintf(stderr, "Seatbelt descriptor policy: %s\n", reason);
@@ -38,21 +41,39 @@ static struct oma_fd_policy oma_parse_kept_fds(const char *text) {
     if (*at++ != ',') oma_fd_refused("invalid separator");
   }
 }
-static void oma_close_except_kept(struct oma_fd_policy policy) {
-  if (policy.count == 0) oma_fd_refused("missing explicit policy");
-  for (size_t i = 0; i < policy.count; ++i) {
-    int flags = fcntl(policy.fds[i], F_GETFD);
-    if (flags < 0 || fcntl(policy.fds[i], F_SETFD, flags & ~FD_CLOEXEC) != 0)
-      oma_fd_refused("retained channel is unavailable");
+#if defined(__APPLE__)
+/* Darwin has no public closefrom. SETEXEC replaces this image without a new
+ * PID; CLOEXEC_DEFAULT closes every FD except explicit file actions, including
+ * FDs above a subsequently lowered soft or hard limit. The kernel also clears
+ * CLOEXEC for addinherit_np actions. No descriptor-number scan is sufficient. */
+static inline _Noreturn void oma_exec_with_fds(const char *executable, char *const argv[],
+    char *const env[], struct oma_fd_policy policy) {
+  posix_spawn_file_actions_t actions;
+  int status = posix_spawn_file_actions_init(&actions);
+  if (status != 0) oma_fd_refused(strerror(status));
+  posix_spawnattr_t attributes;
+  status = posix_spawnattr_init(&attributes);
+  if (status != 0) {
+    posix_spawn_file_actions_destroy(&actions);
+    oma_fd_refused(strerror(status));
   }
-  int last = policy.fds[policy.count - 1];
-  /* A soft descriptor limit is not the highest open FD. closefrom covers
-   * even descriptors opened before that limit was lowered. */
-  closefrom(last + 1);
-  size_t next = 0;
-  for (int fd = 3; fd <= last; ++fd) {
-    if (next < policy.count && policy.fds[next] == fd) { ++next; continue; }
-    if (close(fd) != 0 && errno != EBADF) oma_fd_refused("descriptor close is unobserved");
-  }
+  status = posix_spawnattr_setflags(&attributes,
+    POSIX_SPAWN_SETEXEC | POSIX_SPAWN_CLOEXEC_DEFAULT);
+  /* Standard streams are explicit too. A missing required stream or retained
+   * channel causes kernel refusal; it must never fall back to unrestricted exec. */
+  for (int fd = 0; status == 0 && fd < 3; ++fd)
+    status = posix_spawn_file_actions_addinherit_np(&actions, fd);
+  for (size_t i = 0; status == 0 && i < policy.count; ++i)
+    status = posix_spawn_file_actions_addinherit_np(&actions, policy.fds[i]);
+  if (status == 0)
+    status = posix_spawn(NULL, executable, &actions, &attributes, argv, env);
+  int attribute_status = posix_spawnattr_destroy(&attributes);
+  int action_status = posix_spawn_file_actions_destroy(&actions);
+  /* Successful SETEXEC cannot return. Preserve the primary API error. */
+  if (status == 0) status = attribute_status != 0 ? attribute_status : action_status;
+  errno = status != 0 ? status : EIO;
+  perror("Seatbelt target exec");
+  _exit(125);
 }
+#endif
 #endif

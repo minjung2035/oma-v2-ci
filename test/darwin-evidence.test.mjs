@@ -23,9 +23,27 @@ const descriptorRecord = () => ({ platform: "darwin",
     namedAfterSwap: { execErrno: null, exitCode: 0, signal: null, reply: "replacement" },
     fdAfterSwap: { execErrno: 13, exitCode: 125, signal: null, reply: "exec-error" },
     fdAfterUnlink: { execErrno: 13, exitCode: 125, signal: null, reply: "exec-error" } } });
+const keptDescriptorRecord = () => ({ exactChannelsRetained: true, stdinTransportRetainedSameChannels: true,
+  extraCanaryDetectedInControl: true, malformedPolicyRefused: true, directChildrenClosed: true,
+  samePidAfterExec: true, loweredHardLimitPruned: true, stdioCloexecRetained: true,
+  emptyKeepListPruned: true, missingChannelRefused: true, missingTargetRefused: true,
+  actorSha256: "a".repeat(64), pruneControlSha256: "b".repeat(64) });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
-  observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() : { fixtureAssertionReturned: true } } }));
+  observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
+    planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() : { fixtureAssertionReturned: true } } }));
+
+test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
+  const good = keptDescriptorRecord();
+  assert.doesNotThrow(() => validateDarwinObservation("seatbelt-kept-fds", { seatbeltFault: good }));
+  for (const key of Object.keys(good)) {
+    for (const value of [undefined, null, false, "unobserved"]) {
+      const bad = { ...good, [key]: value };
+      if (value === undefined) delete bad[key];
+      assert.throws(() => validateDarwinObservation("seatbelt-kept-fds", { seatbeltFault: bad }), `${key}: ${value}`);
+    }
+  }
+});
 
 test("NATIVE-DARWIN: required independent cases keep three attempts and explicit ownership", () => {
   assert.equal(DARWIN_CASE_REPETITIONS, 3);

@@ -167,10 +167,14 @@ async function stdinProfile() {
 }
 async function fdClosure() {
   const actorSource = fileURLToPath(new URL("./darwin-fd-observer.c", import.meta.url)), actor = join(work, "fd-observer");
-  const helperSource = readFileSync(join(dirname(bundledSeatbeltHelper()), "main.c"), "utf8");
-  assert.equal(helperSource.split("closefrom(3);").length, 2);
-  const mutantSource = join(work, "intentionally-leaky.c"), mutant = join(work, "intentionally-leaky");
-  writeFileSync(mutantSource, helperSource.replace("closefrom(3);", "/* explicit negative control: inherited FD retained */"));
+  const helperRoot = dirname(bundledSeatbeltHelper());
+  const helperSource = readFileSync(join(helperRoot, "main.c"), "utf8");
+  const helperHeader = readFileSync(join(helperRoot, "launch-fds.h"), "utf8");
+  assert.equal(helperHeader.split("POSIX_SPAWN_CLOEXEC_DEFAULT").length, 2);
+  const mutantRoot = join(work, "leaky-helper"); mkdirSync(mutantRoot);
+  const mutantSource = join(mutantRoot, "main.c"), mutant = join(mutantRoot, "intentionally-leaky");
+  writeFileSync(mutantSource, helperSource);
+  writeFileSync(join(mutantRoot, "launch-fds.h"), helperHeader.replace("POSIX_SPAWN_CLOEXEC_DEFAULT", "0 /* explicit negative control: inherited FD retained */"));
   for (const [source, output, extra] of [[actorSource, actor, []], [mutantSource, mutant, ["-lsandbox"]]]) {
     const compiled = spawnSync("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", "-I", dirname(bundledSeatbeltHelper()), source, ...extra, "-o", output],
       { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL", maxBuffer: 65536 });
@@ -228,6 +232,24 @@ async function keptDescriptors() {
     {encoding:'utf8',timeout:30000,killSignal:'SIGKILL',maxBuffer:65536});
   assert.equal(compiled.error,undefined);assert.equal(compiled.signal,null);assert.equal(compiled.status,0,compiled.stderr);
   const canary=join(root,'kept-canary');writeFileSync(canary,'fixture explicit channels');
+  // This separate real SDK program invokes the same production exec leaf with
+  // CLOEXEC stdio/kept channels and an FD above lowered soft AND hard limits.
+  const pruneSource=fileURLToPath(new URL('./descriptor-prune-control.c',import.meta.url)),prune=join(work,'prune-control');
+  const pruning=spawnSync('/usr/bin/xcrun',['clang','-Wall','-Wextra','-Werror','-I',dirname(bundledSeatbeltHelper()),pruneSource,'-o',prune],
+    {encoding:'utf8',timeout:30000,killSignal:'SIGKILL',maxBuffer:65536});
+  assert.equal(pruning.error,undefined);assert.equal(pruning.signal,null);assert.equal(pruning.status,0,pruning.stderr);
+  function observe(list,options={}){
+    const child=spawnSync(prune,[canary,list],{encoding:'utf8',timeout:10000,killSignal:'SIGKILL',maxBuffer:65536,...options});
+    assert.equal(child.error,undefined);assert.equal(child.signal,null);return child;
+  }
+  const unpruned=observe('negative-control');assert.equal(unpruned.status,3,unpruned.stderr);
+  assert.deepEqual(JSON.parse(unpruned.stdout),{kept:true,outsideSoftLimitOpen:true,lowClosed:true,inheritable:true,samePid:true,stdioInherited:true,hardLimit:16});
+  for(const list of ['6,8','none']){
+    const child=observe(list);assert.equal(child.status,0,child.stderr);
+    assert.deepEqual(JSON.parse(child.stdout),{kept:list!=='none',outsideSoftLimitOpen:false,lowClosed:true,inheritable:list!=='none',samePid:true,stdioInherited:true,hardLimit:16});
+  }
+  const missing=observe('5');assert.equal(missing.status,125);assert.match(missing.stderr,/Seatbelt target exec/);
+  const absent=observe('6,8',{argv0:join(work,'absent-target')});assert.equal(absent.status,125);assert.match(absent.stderr,/Seatbelt target exec/);
   const held=openSync(canary,constants.O_RDONLY),info=fstatSync(held,{bigint:true});
   return withAsyncCleanup(async()=>{
     const command={...target,executable:actor,argv:[String(info.dev),String(info.ino),'6','8']};
@@ -255,7 +277,8 @@ async function keptDescriptors() {
       assert.equal(refused.exitCode,125);assert.match(refused.stderr.toString(),/descriptor policy/);
     }
     return {exactChannelsRetained:true,stdinTransportRetainedSameChannels:true,extraCanaryDetectedInControl:true,malformedPolicyRefused:true,directChildrenClosed:true,
-      actorSha256:digest(readFileSync(actor))};
+      samePidAfterExec:true,loweredHardLimitPruned:true,stdioCloexecRetained:true,emptyKeepListPruned:true,missingChannelRefused:true,missingTargetRefused:true,
+      actorSha256:digest(readFileSync(actor)),pruneControlSha256:digest(readFileSync(prune))};
   },()=>closeSync(held));
 }
 let observation;

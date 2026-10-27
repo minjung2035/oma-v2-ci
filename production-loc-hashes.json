@@ -1548,11 +1548,11 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
-      "sha256": "75a38722deef816b23838774b0e8ebcd40398178af5d3f3dccd1b507334e0011"
+      "sha256": "c98ae78b362e5ff5870074ed724746159a1d7604824fbc2b2e0d37d41f7480c6"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/main.c",
-      "sha256": "dc6120e667d0a58a7a95918b56e5daeecea31d272b24692a1cfee54b65523329"
+      "sha256": "f37380253f35492a5817467b8fd18919d70338bae5693c6d512766e8b65848f0"
     },
     {
       "path": "packages/process/package.json",
