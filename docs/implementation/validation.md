@@ -462,11 +462,54 @@ helper의 SDK15.5·26.5 × ARM64·x64 컴파일4/4와 stub 링크4/4는 Linux ho
 G-PROCESS/G-FILES/G-AUTH 완료가 아니며 PreparationExecutor와 App의 Darwin guard는 유지한다.
 전체 코드 복잡도 점검은 native 구현을 모두 마친 뒤에 진행한다.
 
+### Darwin ACL·BSD flags와 보관 회수 거절
+
+Spec §9.2의 ACL·BSD flags 관측을 metadata helper에 연결했다. inherited directory FD에서
+child만 cwd를 바꾸고 public lstatx_np로 symlink 자체의 stat·security를 읽는다.
+filesec_query_property(FILESEC_ACL)는 성공한 no-ACL 관측과 실패를 구분하며, entry가 없는
+명시적 ACL과 그 flags도 보관 대상으로 남긴다. ACL entry 순회 실패의 EINVAL을 빈 ACL로
+오해하지 않는다. 모든 BSD flag bit를 관측하고 xattr 조회에는 no-follow·show-compression을
+유지한다. 대상의 content I/O open이나 경로 복원은 추가하지 않았다.
+
+공개 SDK 선언과 Apple Libc `71bbe350ab79eef58113991d817ccc6165061a64`의
+[lstatx_np](https://github.com/apple-oss-distributions/Libc/blob/71bbe350ab79eef58113991d817ccc6165061a64/sys/statx_np.c)·
+[filesec](https://github.com/apple-oss-distributions/Libc/blob/71bbe350ab79eef58113991d817ccc6165061a64/gen/filesec.c)를
+대조했다. private opaque ACL layout이나 추측한 syscall ABI를 사용하지 않는다.
+
+보존하지 못하는 metadata가 있으면 공통 TS의 assertNoUnpreservedMetadataAt이 회수를 거절한다.
+Linux는 기존 no-follow xattr 관측을 유지하고 Darwin-only 사실은 null로 구분한다. session cache
+walker가 새 API를 직접 사용하며 이전 xattr-only 함수·helper 경로·decoder는 alias 없이 제거했다.
+검증된 cold metadata DTO·hash·receipt·DB 형식은 바꾸지 않았다.
+
+Darwin actual-host 시험 네 개를 공통 CI에 준비했다: BSD flag, extended ACL, flags가 있는 빈
+ACL, 실제 resource fork다. 첫 세 경우에는 바깥 metadata 대상을 향한 symlink를 따라가지
+않는지도 검사한다. C fixture는 실제 public API로 metadata를 만들고 관측자는 제품 helper다.
+이 네 경우는 Darwin에서만 등록되며 이번 Linux 성공 수에 포함되지 않는다. 실제 Mac 실행은
+NOT_RUN이다. Linux에서는 동일한 실제 symlink oracle이 private follow 변형을 거부했다.
+
+입력 `41f1ea2c7d3b99e57694e47e72abf95f3996eea9ec6effdfb27d93177fbe9fa0`(15667개)에서 공통 CI235/235,
+정책35/35, boundary·spawn owner17/17, session storage15/15, 전체 구조 검사와 packed26/26이
+통과했다. hot 원본 보존·archive/restore·snapshot metadata 회귀를 실제 Linux에서 확인했다.
+각 시험은 fail/cancel/skip/todo0이며 입력·26 workspace 산출물15405개·
+보호4개 SHA는 전후 동일했다. full build·strict types도 통과했다. installed smoke는
+17개 통과했고 기존 외부 SDK declaration44 진단은 authored 타입 성공과 구분한다.
+
+제품 helper와 metadata setup C fixture 두 source를 SDK15.5·26.5 × ARM64·x64로 각각
+컴파일·stub 링크했다(8/8·8/8). 이는 Linux host의 정적 결과이며 실제 ACL/flag 지원 PASS가
+아니다. 원문은 `/home/dev/oma-audit-artifacts/native-2026-10-27-metadata-acl-flags/`가 소유한다.
+문서 기록은 별도 구조 입력으로 확인하며 이전 단계 runtime PASS를 새 입력에 재결박하지 않는다.
+
+GUARD_CLOSE의 후손 witness 가능성도 대조했으나 XNU의 API는 PRIVATE이고 guard가
+close-on-fork를 강제하므로 채택하지 않았다. 해당 primary source는 rejected-guarded/에 남긴다.
+G-PROCESS/G-FILES/G-AUTH, mode-000 pin·exact reopen/repair·실행 결박은 계속 미완료다.
+App·PreparationExecutor의 Darwin guard를 해제하지 않았고 유료 Mac CI도 실행하지 않았다.
+전체 코드 복잡도 검토는 native 구현·CI 준비를 모두 끝낸 뒤에 진행한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `b89ae1d2c106977c9f9e4f555eb98b041aac52be154765bc0e846ea28dcddad1` (15666 files).
+verification input digest `a815d7b6bf86a84d1b47f5b3a4a4bc2b7d067f65b7e6d49d7e6d6ccdc5c1f1f8` (15667 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

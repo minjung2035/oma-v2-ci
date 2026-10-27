@@ -2,7 +2,7 @@
  * source assets, package URL checks and compilation use this same ownership. */
 const recipes = [
   { owner: "@oma/platform-mac", source: "seatbelt/main.c", output: "seatbelt/oma-seatbelt", libraries: ["sandbox"] },
-  { owner: "@oma/native", source: "xattr/main.c", output: "xattr/oma-list-xattr", libraries: [] },
+  { owner: "@oma/native", source: "metadata/main.c", output: "metadata/oma-file-metadata", libraries: [] },
 ];
 export function darwinExecutables(manifest) {
   const declared = manifest.oma?.darwinExecutables ?? [];

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "71298336d049c20bdda4598748eb5149ad1654d5423c8830353e3c8ff79390c3",
+  "manifest": "3fbea81544ab1ea9cca0dfa2a77e16bf8e7fa1847097eaa356b3dd034ef19263",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1360,7 +1360,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "b0c8a6a8ba5056cc58b0e652bf07d517ef07a7ed42208e0b95bfaa63ab8234ee"
+      "sha256": "b88d1ea3efb3b15f2632f0016c6d33bb850fdad9c3cb91f3e4364359a1440589"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1379,8 +1379,8 @@
       "sha256": "45e0fd89a1cd2afce17e05d67d5dddbb4f18368c9593fd58a29915658f3d9c34"
     },
     {
-      "path": "packages/native/src/darwin-xattrs.ts",
-      "sha256": "da11cc78f7c3f62053ab2d021be9ceea4833ffd44b94d071c6f53d5b6986926e"
+      "path": "packages/native/src/darwin-metadata.ts",
+      "sha256": "5c1844bca226513ba71b8d2f076ac4e92e6dba9cbf568661e6dfe801621d7c07"
     },
     {
       "path": "packages/native/src/descriptor-path.ts",
@@ -1407,6 +1407,14 @@
       "sha256": "0e14ecda4f07c1cf5e3a34aff9a5a3e4329c417a3443f6438e955e658653b70a"
     },
     {
+      "path": "packages/native/src/metadata-observation.ts",
+      "sha256": "0ffed6f69c80f081cccd4663d73e88bc2709bc20f6c79f63fe7f4e68cb5c7003"
+    },
+    {
+      "path": "packages/native/src/metadata/main.c",
+      "sha256": "cb8861272c99971a32c885f0661dfacbd5d86267cb1dfc58ea10440fe4857fab"
+    },
+    {
       "path": "packages/native/src/peer-uid.ts",
       "sha256": "d7054e0a24a0c2a71e8adf4f790adf8bdae6b1f99864c92b20be1d20ec85b16c"
     },
@@ -1416,7 +1424,7 @@
     },
     {
       "path": "packages/native/src/posix-files.ts",
-      "sha256": "b8c7e74db745056fcd09aa5a3d3a003421f39569916222696b058725428c087e"
+      "sha256": "d77be0170812ba7dadc8bb2324d32962d904b7c6214fc60ad37dc24be9e45e8a"
     },
     {
       "path": "packages/native/src/process-event.ts",
@@ -1437,14 +1445,6 @@
     {
       "path": "packages/native/src/unix-message.ts",
       "sha256": "693aa74c00eef5def22769e22e0de6061880ad5453a32cc55149eb8dd7da4eaa"
-    },
-    {
-      "path": "packages/native/src/xattr-size.ts",
-      "sha256": "c5d6ca5e5aaa7027e36fcfb62fae9e821f58f2466798701c34915c655d6e16e5"
-    },
-    {
-      "path": "packages/native/src/xattr/main.c",
-      "sha256": "1d32deebd2c770dee31935ce92de32b902d6f79d44b8287cd29274cbbd26a361"
     },
     {
       "path": "packages/platform-linux/package.json",
@@ -1844,7 +1844,7 @@
     },
     {
       "path": "packages/storage/src/cache-trees.ts",
-      "sha256": "34ea6fe555f3021f6596ebe552dc5b988837b8abca0d8281be226bf03a964e3e"
+      "sha256": "da941ed9aac95ca49ffacb259716544648bcc85708b3b99aa6fc8972bd846d2f"
     },
     {
       "path": "packages/storage/src/context-files.ts",

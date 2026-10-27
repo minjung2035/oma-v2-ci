@@ -92,10 +92,10 @@
   },
   "oma": {
     "assets": [
-      "xattr/main.c"
+      "metadata/main.c"
     ],
     "darwinExecutables": [
-      "xattr/oma-list-xattr"
+      "metadata/oma-file-metadata"
     ],
     "isolationSmoke": "test/installed-runtime.mjs"
   }

@@ -7,7 +7,8 @@ import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { openBeneath } from "./files.js";
 import { withCleanup } from "./cleanup.js";
-import { darwinXattrSize } from "./darwin-xattrs.js";
+import type { EntryMetadataObservation } from "./metadata-observation.js";
+import { darwinMetadata } from "./darwin-metadata.js";
 
 let native: ReturnType<typeof initialize> | undefined;
 function initialize() {
@@ -170,24 +171,26 @@ export function statAt(fd: number, name: string, options?: { readonly bigint?: b
   return withCleanup(() => options?.bigint ? fstatSync(pin, { bigint: true }) : fstatSync(pin), () => closeSync(pin));
 }
 
-/** An attribute-bearing cache needs a richer verification protocol. This is
+/** A cache with unpreserved metadata needs a richer verification protocol. This is
  * one no-follow observation, not a pin or proof about a later entry. */
 let listExtended: ((path: string, list: null, size: number) => number) | undefined;
-function linuxXattrSize(parent: number, name: string): bigint {
+function linuxMetadata(parent: number, name: string): EntryMetadataObservation {
   listExtended ??= load(null).func("long llistxattr(const char *path, void *list, unsigned long size)");
   const size = listExtended(`/proc/self/fd/${parent}/${name}`, null, 0);
   if (size < 0) {
     const code = errno();
-    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return 0n;
+    if (code === 95 /* EOPNOTSUPP: filesystem stores no attributes */) return { extendedAttributeBytes: 0n, darwin: null };
     throw new Error(`session extended attributes could not be observed (errno ${code})`);
   }
-  return BigInt(size);
+  return { extendedAttributeBytes: BigInt(size), darwin: null };
 }
-const xattrReaders = { linux: linuxXattrSize, darwin: darwinXattrSize };
-export function assertNoExtendedAttributesAt(parent: number, name: string): void {
+const metadataReaders = { linux: linuxMetadata, darwin: darwinMetadata };
+export function assertNoUnpreservedMetadataAt(parent: number, name: string): void {
   entry(parent, name);
-  const reader = xattrReaders[process.platform as keyof typeof xattrReaders];
-  if (!reader) throw new StoreError("UNSUPPORTED_PROFILE", "extended attribute observation requires a supported POSIX kernel");
-  if (reader(parent, name) !== 0n)
-    throw new Error("session workspace has extended attributes; retained without reclamation");
+  const reader = metadataReaders[process.platform as keyof typeof metadataReaders];
+  if (!reader) throw new StoreError("UNSUPPORTED_PROFILE", "metadata observation requires a supported POSIX kernel");
+  const observed = reader(parent, name);
+  if (observed.extendedAttributeBytes !== 0n || (observed.darwin !== null &&
+      (observed.darwin.bsdFlags !== 0 || observed.darwin.aclPresent)))
+    throw new Error("session workspace has unpreserved metadata; retained without reclamation");
 }

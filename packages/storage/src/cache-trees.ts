@@ -8,7 +8,7 @@ import { setImmediate } from "node:timers/promises";
 import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { assertNoExtendedAttributesAt, directoryNames, readlinkBytesAt, renameAt, statAt } from "@oma/native/posix-files";
+import { assertNoUnpreservedMetadataAt, directoryNames, readlinkBytesAt, renameAt, statAt } from "@oma/native/posix-files";
 import { openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { fsyncHeldDir } from "./durable-fs.js";
 
@@ -95,7 +95,7 @@ export async function digestCacheTrees(root: string, roots: readonly string[], s
     if (before.dev !== device) throw new StoreError("UNSUPPORTED_PROFILE", "session storage refuses nested mounts; original workspace retained");
     if (Number(before.uid) !== owner || !groups.has(Number(before.gid)))
       throw new StoreError("UNSUPPORTED_PROFILE", "session ownership cannot be restored by this user; original workspace retained");
-    assertNoExtendedAttributesAt(parent, name);
+    assertNoUnpreservedMetadataAt(parent, name);
     if (before.isSymbolicLink()) {
       const target = readlinkBytesAt(parent, name);
       if (!same(before, statAt(parent, name, { bigint: true }))) throw new StoreError("REF_STATE_UNKNOWN", "session link changed");

@@ -206,7 +206,7 @@ test("unreadable files and extended attributes retain the complete original work
     chmodSync(file, 0); await assert.rejects(a.storage.archive(a.residents));
     assert.equal(lstatSync(file).mode & 0o777, 0); chmodSync(file, 0o600);
     execFileSync("python3", ["-c", "import os,sys; os.setxattr(sys.argv[1], 'user.oma-test', b'preserve')", file]);
-    await assert.rejects(a.storage.archive(a.residents), /extended attributes/);
+    await assert.rejects(a.storage.archive(a.residents), /unpreserved metadata/);
     assert.equal(readFileSync(file, "utf8"), "ignored private bytes\n");
     assert.equal(existsSync(join(a.stateRoot, "session-storage.json")), false);
   } finally { f.close(); }

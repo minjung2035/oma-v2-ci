@@ -392,3 +392,16 @@ mutation을 하지 않는다. 빌드 recipe·source asset·설치 후 실행·�
 한 entry 관측은 pin·repair·동일 image 실행 결박을 대신하지 않는다. core native gate와
 제품 Darwin guard는 유지하며 실제 Mac 실행은 NOT_RUN이다. SDK 정적 결과와 Linux 실제
 시험의 입력은 검증 기록에 따로 남긴다. 전체 코드 복잡도 검토는 native 구현 완료 뒤에 한다.
+
+### Darwin metadata의 ACL·BSD flags 보완
+
+xattr-only helper와 API를 일반 metadata 관측으로 교체했다. 고정 child가 보유 directory
+inode에서 public lstatx_np와 filesec_query_property로 최종 symlink 자체의 stat·ACL 존재를
+읽고, 전체 BSD flags와 no-follow xattr-list 크기를 TS로 넘긴다. 공통 TS가 보존할 수 없는
+metadata의 회수를 거절하며 hot 원본을 유지한다. 명시적 빈 ACL과 ACL flags도 거절한다.
+이전 함수·binary 경로는 호환 wrapper로 남기지 않았다. durable DTO나 receipt는 바꾸지 않았다.
+
+실제 Mac ACL·flag·resource-fork 사례는 CI용으로 준비했으며 NOT_RUN이다. SDK 정적 결과와
+Linux archive/restore·원본 보존 회귀는 검증 기록에 입력별로 남긴다. exact file pin과 scope,
+Broker authority gate는 여전히 열려 있고 제품 Darwin guard도 유지한다. 전체 코드 복잡도
+정리는 native 구현·CI용 테스트 준비를 모두 마친 뒤에 진행한다.

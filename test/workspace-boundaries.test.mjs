@@ -107,7 +107,7 @@ test("DR46: a local compiled module URL resolves only to an authored executable 
 });
 
 test("native generated asset ownership accepts only reviewed owner, output and declared source", t => {
-  for (const [owner, directory, output] of [["platform-mac", "seatbelt", "oma-seatbelt"], ["native", "xattr", "oma-list-xattr"]]) {
+  for (const [owner, directory, output] of [["platform-mac", "seatbelt", "oma-seatbelt"], ["native", "metadata", "oma-file-metadata"]]) {
     const manifest = { oma: { assets: [`${directory}/main.c`], darwinExecutables: [`${directory}/${output}`] } };
     const source = `new URL("./${directory}/${output}", import.meta.url);`;
     const files = { [`packages/${owner}/src/index.ts`]: source, [`packages/${owner}/src/${directory}/main.c`]: "int main(void) { return 0; }" };

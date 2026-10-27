@@ -65,7 +65,7 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K1-codecs",
     files: [
-      "packages/native/src/xattr-size.ts",
+      "packages/native/src/metadata-observation.ts",
       "packages/protocol/src/client-codecs.ts",
       "apps/oma/src/cli/cache-codec.ts",
       "packages/domain/src/attestation.ts",
@@ -151,7 +151,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/process/src/writer.ts",
       "packages/native/src/files.ts",
       "packages/native/src/posix-files.ts",
-      "packages/native/src/darwin-xattrs.ts",
+      "packages/native/src/darwin-metadata.ts",
       "packages/native/src/process-observation.ts",
       "packages/native/src/pid-namespace.ts",
       "packages/native/src/control-socket.ts",
