@@ -17,6 +17,8 @@ export const DARWIN_PROGRAMS = Object.freeze([
     names: ["seatbelt-profile-header", "seatbelt-profile-magic", "seatbelt-profile-overflow",
       "seatbelt-profile-truncated", "seatbelt-profile-trailing", "seatbelt-profile-nul", "seatbelt-profile-empty",
       "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds"] }),
+  program({ name: "seatbelt-signals", fixture: "darwin-seatbelt-signals.c", digest: "seatbeltSignalsProbeDigest",
+    compile: "compile-seatbelt-signals", names: ["seatbelt-signals"], link: ["-lsandbox"] }),
   program({ name: "git-setup", fixture: "darwin-git-setup.mjs", digest: "gitSetupProbeDigest", compile: "check-git-setup", node: true,
     names: ["git-setup-candidate", "git-setup-quarantine"] }),
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
@@ -26,6 +28,7 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
   "mach-stream-roundtrip": "machStream", "mach-stream-stale": "machStaleOrigin", "mach-stream-handoff": "machLiveHandoff", "mach-audit-async": "machAsyncAudit",
   "seatbelt-files": "seatbelt", "seatbelt-profile-stream": "seatbelt",
+  "seatbelt-signals": "seatbeltSignals",
   "seatbelt-profile-header": "seatbeltFault", "seatbelt-profile-magic": "seatbeltFault", "seatbelt-profile-overflow": "seatbeltFault",
   "seatbelt-profile-truncated": "seatbeltFault", "seatbelt-profile-trailing": "seatbeltFault", "seatbelt-profile-nul": "seatbeltFault",
   "seatbelt-profile-empty": "seatbeltFault", "seatbelt-profile-syntax": "seatbeltFault", "seatbelt-argv-env": "seatbeltFault",
@@ -59,6 +62,22 @@ export function validateDarwinObservation(name, observations) {
     for (const key of ["actorSha256", "pruneControlSha256"])
       if (typeof value[key] !== "string" || !/^[0-9a-f]{64}$/.test(value[key]))
         throw new Error(`descriptor control executable identity is missing: ${key}`);
+  }
+  if (name === "seatbelt-signals") {
+    if (value.unreapedPidControl !== true || value.ownedChildrenJoined !== true)
+      throw new Error("signal identity observation lacks owned PID and join controls");
+    for (const key of ["inherited", "fresh", "afterNested"]) {
+      const signal = value[key];
+      if (!signal || !Number.isSafeInteger(signal.errno) ||
+          !(signal.returnCode === 0 && signal.errno === 0 && signal.delivered === true ||
+            signal.returnCode === -1 && signal.errno > 0 && signal.delivered === false))
+        throw new Error(`signal delivery observation is incomplete: ${key}`);
+    }
+    if (value.inherited.returnCode !== 0 ||
+        ![0, -1].includes(value.nestedApplyReturnCode) ||
+        !Number.isSafeInteger(value.nestedApplyErrno) || value.nestedApplyErrno < 0 ||
+        value.nestedApplyReturnCode === 0 && value.nestedApplyErrno !== 0)
+      throw new Error("signal identity observation lacks its inherited positive control or nested apply result");
   }
 }
 export function validateDarwinCaseSet(cases) {

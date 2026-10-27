@@ -78,6 +78,8 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 
 Resource coalition의 [XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/coalition.c)는 source 조사이지 목표 kernel 증명이 아니다. `tasks_started/tasks_exited`는 같은 lock 아래 읽히지만, 그것만으로 OMA job의 안정적인 닫힌 범위가 성립하지는 않는다. target source revision을 고정하고 위 전제를 확인한다. 공개 SDK에 없는 ABI를 public이라고 부르거나 private 제어 syscall로 우회하지 않는다.
 
+동일 SBPL bytes의 fresh 재적용이 inherited/nested sandbox와 같은 signal identity를 만드는지는 실제 비교한다. `seatbelt-signals`는 unreaped owned child PID만 쓰는 label 실험이며 permissive fixture profile을 production으로 옮기지 않는다. 성공해도 population·owner-loss 보장은 별개다.
+
 [ES descendant API](https://developer.apple.com/documentation/endpointsecurity/es_new_descendants_client(_:_:).md)는 macOS 27+, entitlement 필요, root/TCC 불필요라고 명시한다. 통상의 ES client 조건과 혼동하지 않는다. 이 API도 단독으로 Seatbelt 전체 정책을 대체하지 않는다.
 
 ### 4.3 수용 기준

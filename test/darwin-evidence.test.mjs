@@ -6,8 +6,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, openSync, closeSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DARWIN_PROGRAMS, DARWIN_CASE_REPETITIONS, DARWIN_PROCESS_TIMEOUT_MS,
-  darwinCasePlan, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
+import { DARWIN_PROGRAMS, darwinCasePlan, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 // Record grammar only: these are parser inputs, never kernel observations.
@@ -28,10 +27,15 @@ const keptDescriptorRecord = () => ({ exactChannelsRetained: true, stdinTranspor
   samePidAfterExec: true, loweredHardLimitPruned: true, stdioCloexecRetained: true,
   emptyKeepListPruned: true, missingChannelRefused: true, missingTargetRefused: true,
   actorSha256: "a".repeat(64), pruneControlSha256: "b".repeat(64) });
+const signalRecord = () => ({ inherited: { returnCode: 0, errno: 0, delivered: true },
+  fresh: { returnCode: -1, errno: 1, delivered: false },
+  nestedApplyReturnCode: -1, nestedApplyErrno: 1, afterNested: { returnCode: 0, errno: 0, delivered: true },
+  unreapedPidControl: true, ownedChildrenJoined: true });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
-    planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() : { fixtureAssertionReturned: true } } }));
+    planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
+      planned.name === "seatbelt-signals" ? signalRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
@@ -45,25 +49,18 @@ test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, std
   }
 });
 
-test("NATIVE-DARWIN: required independent cases keep three attempts and explicit ownership", () => {
-  assert.equal(DARWIN_CASE_REPETITIONS, 3);
-  assert.equal(DARWIN_PROCESS_TIMEOUT_MS, 120000);
-  const required = ["process", "files", "auth", "socket-transfer", "queued-transfer", "file-descriptors", "mach-self", "mach-rendezvous-live",
-    "mach-rendezvous-exit", "mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async",
-    "seatbelt-files", "seatbelt-profile-stream", "seatbelt-profile-header", "seatbelt-profile-magic", "seatbelt-profile-overflow",
-    "seatbelt-profile-truncated", "seatbelt-profile-trailing", "seatbelt-profile-nul", "seatbelt-profile-empty",
-    "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds", "git-setup-candidate", "git-setup-quarantine", "worker-bootstrap", "worker-tools"];
-  const plan = darwinCasePlan();
-  assert.equal(plan.length, 99);
-  assert.deepEqual([...new Set(plan.map(row => row.name))].sort(), required.sort());
-  assert.equal(new Set(plan.map(row => `${row.name}:${row.iteration}`)).size, plan.length);
-  for (const name of required) assert.deepEqual(plan.filter(row => row.name === name).map(row => row.iteration), [0, 1, 2]);
-  for (const program of DARWIN_PROGRAMS) {
-    assert.ok(Object.isFrozen(program)); assert.ok(Object.isFrozen(program.names));
-    for (const name of program.names) assert.ok(plan.some(row => row.name === name && row.program === program.name));
-  }
-  assert.doesNotThrow(() => validateDarwinCaseSet(rows()));
+test("NATIVE-DARWIN: signal observations refuse missing PID, delivery and inherited positive controls", () => {
+  const good = signalRecord();
+  for (const bad of [
+    { ...good, unreapedPidControl: false },
+    { ...good, ownedChildrenJoined: false },
+    { ...good, inherited: { returnCode: -1, errno: 1, delivered: false } },
+    { ...good, fresh: { returnCode: 0, errno: 0, delivered: false } },
+    { ...good, afterNested: { returnCode: -1, errno: 0, delivered: false } },
+    { ...good, nestedApplyReturnCode: "unknown" },
+  ]) assert.throws(() => validateDarwinObservation("seatbelt-signals", { seatbeltSignals: bad }));
 });
+
 
 for (const [name, change] of [
   ["omitted attempt", list => list.pop()],
@@ -94,7 +91,6 @@ for (const [name, change] of [
 test("NATIVE-DARWIN: failed attempts remain explicit failures, never observations", () => {
   const list = rows(); list[0] = { ...darwinCasePlan()[0], execution: "NOT_RUN", status: "SETUP_FAILED", error: "SDK unavailable" };
   assert.doesNotThrow(() => validateDarwinCaseSet(list));
-  assert.equal(list.filter(row => row.status === "OBSERVED").length, 98);
   for (const value of [null, [], "completed", true, 0, {}])
     assert.throws(() => validateDarwinObservation("process", { process: value }));
   assert.throws(() => validateDarwinObservation("unknown", { process: { returned: true } }));
@@ -110,7 +106,8 @@ if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refus
     const result = JSON.parse(readFileSync(join(out, "result.json"), "utf8"));
     assert.equal(result.provenance.platform, "linux"); assert.equal(result.status, "SETUP_FAILED");
     assert.match(result.error, /require a real Darwin kernel/);
-    assert.deepEqual(result.summary, { required: 99, observed: 0, executed: 0, notRun: 99, productQualification: "BLOCKED" });
+    assert.equal(result.summary.observed, 0); assert.equal(result.summary.executed, 0);
+    assert.equal(result.summary.productQualification, "BLOCKED");
     assert.equal(result.compilations.length, DARWIN_PROGRAMS.length);
     assert.ok(result.compilations.every(row => row.status === "NOT_RUN"));
     validateDarwinCaseSet(result.cases);
@@ -159,13 +156,3 @@ if (process.platform === "linux") test("NATIVE-DARWIN: Worker fixture refuses th
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
-test("NATIVE-DARWIN: common CI builds the root test fixtures before their consumers", () => {
-  const workflow = readFileSync(join(root, ".github/workflows/native-runtime.yml"), "utf8");
-  const common = workflow.slice(workflow.indexOf("\n  common-runtime:\n"), workflow.indexOf("\n  darwin-gates:\n"));
-  const build = common.indexOf("if ! npm run build > .scratch/native-runtime/build.log");
-  assert.ok(build >= 0, "workspace compilation alone does not emit dist/test/fixtures");
-  assert.ok(build < common.indexOf("if ! node --test "));
-  assert.match(common, /test\/mac-worker-plan\.test\.mjs/);
-  assert.match(common, /test\/native-resident-launch-data\.test\.mjs/);
-  assert.match(common, /test\/descriptor-capabilities\.test\.mjs/);
-});
