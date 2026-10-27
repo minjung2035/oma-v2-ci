@@ -150,7 +150,7 @@ test("G02-ledger-r2: operational reads return complete results past the former d
     assert.equal(pending[0]!.messageId, seeded.firstMessage);
     assert.equal(pending.at(-1)!.messageId, seeded.lastMessage);
     // status.get's one validated projection reads every row it counts.
-    const work = store.pendingWorkRows();
+    const work = await store.pendingWorkRows();
     assert.equal(work.unbatched.length, UNBATCHED);
     assert.equal(work.prepared.length, 1);
     assert.equal(work.linked.length, BATCHED);
@@ -162,7 +162,7 @@ test("G02-ledger-r2: operational reads return complete results past the former d
     assert.equal(summary?.pendingMessages, UNBATCHED + BATCHED);
     // The per-agent projection recovery keeps agrees on the same complete set.
     assert.equal(pendingWork(store, "alice").pendingMessages, UNBATCHED + BATCHED);
-    const status = new ViewsModule(store, root, "demo", "p").status("alice");
+    const status = await new ViewsModule(store, root, "demo", "p").status("alice");
     assert.deepEqual(status.map(row => [row.agent, row.pending, row.preparedBatches]), [["alice", UNBATCHED + BATCHED, 1]]);
     // The recovery snapshot lists every pending/unknown operation.
     assert.equal(store.recoverableOperations().length, UNBATCHED + BATCHED + SUBMITS + ATTESTS);
@@ -207,12 +207,13 @@ test("G02-ledger-r2: operational reads return complete results past the former d
   assert.throws(() => readDiagnosticSnapshot(root), { code: "LIMIT_EXCEEDED" });
 });
 
-test("G02-ledger-r2: operational reads propagate query failure, never a partial or empty answer", () => {
+test("G02-ledger-r2: operational reads propagate query failure, never a partial or empty answer", async () => {
   const db = { prepare: () => { throw new StoreError("STORE_CORRUPT", "synthetic read failure"); } } as unknown as Pick<DatabaseSync, "prepare">;
   const reader = new LedgerReader(db, "/unused", () => null);
   for (const read of [() => reader.agentNames(), () => reader.recoverableIds(), () => reader.pendingDeliveries("alice"),
-    () => reader.pendingDeliveryCount("alice"), () => reader.pendingWorkRows()])
+    () => reader.pendingDeliveryCount("alice")])
     assert.throws(read, { code: "STORE_CORRUPT" });
+  await assert.rejects(() => reader.pendingWorkRows(), { code: "STORE_CORRUPT" });
 });
 
 test("G02-ledger-r2: delivery keyset pages close before yielding and exclude later accepts", () => {

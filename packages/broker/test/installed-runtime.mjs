@@ -23,7 +23,7 @@ let closed=false,bound=false,revoker;
 const snapshot=()=>Promise.resolve({observedAtMs:Date.now(),units:new Map(),failure:null});
 const unavailable=()=>{throw Error('no mutation requested in installed transport/lifetime smoke');};
 const pub={store:{listAgents:()=>[],getAgent:()=>null,getReceipt:()=>null,hasOperation:()=>false},mail:{send:unavailable},
- units:{statusSnapshot:snapshot},views:{status:()=>[]},lifecycle:{setSociety:unavailable,create:unavailable,start:unavailable,stop:unavailable,ack:unavailable,follow:unavailable},git:null,review:null,limits};
+ units:{statusSnapshot:snapshot},views:{status:async()=>[]},lifecycle:{setSociety:unavailable,create:unavailable,start:unavailable,stop:unavailable,ack:unavailable,follow:unavailable},git:null,review:null,limits};
 const dependencies={
  acquireRunScope:unavailable,
  ledger:{agentNames:()=>[],getAgent:()=>null,listAgents:()=>[],preparedBatches:()=>[],societyOpen:()=>true,transaction:unavailable},

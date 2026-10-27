@@ -49,7 +49,7 @@ test("R30 empty, unbatched, prepared, mixed and acknowledged work all use messag
   assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 3, preparedBatchCount: 1,
     preparedMessageCount: 10, pendingMessages: 13, hasPendingWork: true });
   const views = new ViewsModule(f.store, f.root, "demo", "p");
-  const status = views.status("alice", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0 }))[0]!;
+  const status = (await views.status("alice", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0 })))[0]!;
   assert.equal(status.pending, 13); assert.equal(status.preparedBatches, 1);
   assert.equal(status.runnerObservedAtMs, null);
   assert.equal(views.unitObservations[0]!.unknownReason, null);
@@ -71,7 +71,7 @@ test("R30 unavailable and unknown units do not synthesize running or exit zero",
   const views = new ViewsModule(f.store, f.root, "demo", "p");
   for (const observe of [() => null, () => { throw new Error("private diagnostic must not escape"); },
     () => ({ activeState: "unknown", subState: "unknown", result: "unknown", execMainStatus: -1 })]) {
-    const status = views.status("alice", observe)[0]!;
+    const status = (await views.status("alice", observe))[0]!;
     assert.equal(status.activeState, null); assert.equal(status.execMainStatus, null);
     assert.equal(status.runnerObservedAtMs, null); assert.equal(status.reason, null);
     assert.ok(views.unitObservations[0]!.unknownReason);

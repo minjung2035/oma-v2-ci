@@ -48,7 +48,7 @@ export interface PublicUnitsPort {
   readonly statusSnapshot: () => Promise<StatusSnapshot>;
 }
 export interface PublicViewsPort {
-  readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => AgentStatus[];
+  readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => Promise<AgentStatus[]>;
 }
 export interface PublicLifecyclePort {
   readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt | Promise<Receipt>;
@@ -156,7 +156,7 @@ export interface BrokerUnits {
 }
 export interface BrokerViews {
   refreshWorld(): void;
-  publishStatus(snapshot: StatusSnapshot): void;
+  publishStatus(snapshot: StatusSnapshot, agents: readonly AgentStatus[]): void;
   observeRunnerSource(read: (actor: Actor) => RunnerObservation | null): void;
 }
 export interface BrokerReconcile { sweep(): Promise<RecoveryCounts> }

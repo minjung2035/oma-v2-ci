@@ -51,7 +51,7 @@ function dispatcher(text: string, frameBytes: number) {
     },
     mail: { send: async () => unused() },
     units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
-    views: { status: () => [] },
+    views: { status: async () => [] },
     review: null,
 git: null,
     lifecycle: {

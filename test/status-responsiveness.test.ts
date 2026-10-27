@@ -6,10 +6,11 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
  * Physical scope/authentication tests use the real kernel separately. */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext } from "@oma/contracts";
+import { setImmediate as yieldTurn } from "node:timers/promises";
+import type { AgentStatus, AuthContext } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { Broker } from "@oma/broker";
@@ -180,7 +181,7 @@ test("NATIVE-STATUS-PUBLICATION-01: mutation hints share one active publication 
     await gate; return new Map(actors.map(actor => [actor, s.units.observe(actor)]));
   });
   const publish = s.views.publishStatus.bind(s.views); let publications = 0;
-  t.mock.method(s.views, "publishStatus", (snapshot: import("@oma/contracts/runtime").StatusSnapshot) => { publications++; publish(snapshot); });
+  t.mock.method(s.views, "publishStatus", (snapshot: import("@oma/contracts/runtime").StatusSnapshot, agents: readonly AgentStatus[]) => { publications++; publish(snapshot, agents); });
   try {
     for (let i = 0; i < 4; i++) {
       const result = await s.call({ v: 1, id: `coalesce-${i}`, method: "mail.send", request: `coalesce-${i}`,
@@ -264,4 +265,29 @@ test("NATIVE-DISPATCH-YIELD-02: admission closing during the turn cannot reinter
   assert.deepEqual({ id: operation.id, planJson: operation.planJson, result: JSON.stringify(operation.result) }, accepted);
   assert.equal(operation.state, "succeeded");
   assert.equal(s.store.pendingDeliveries("w2").length, 1);
+});
+
+test("NATIVE-STATUS-PUBLICATION-03: shutdown joins projection and cannot republish its removed view", { timeout: 30_000 }, async t => {
+  const s = society(t);
+  const started = Promise.withResolvers<void>(), gate = Promise.withResolvers<void>();
+  const read = s.store.pendingWorkRows.bind(s.store), close = s.store.close.bind(s.store);
+  let closed = false;
+  t.mock.method(s.store, "pendingWorkRows", async () => {
+    started.resolve(); await gate.promise;
+    assert.equal(closed, false, "projection outlived its Store");
+    return read();
+  });
+  t.mock.method(s.store, "close", () => { closed = true; close(); });
+  try {
+    const sent = await s.call({ v: 1, id: "projection-drain", method: "mail.send", request: "projection-drain",
+      params: { to: ["w2"], subject: "shutdown", kind: "message", body: "x" } });
+    assert.equal(sent.answer.ok, true);
+    await started.promise;
+    const draining = s.broker.drainAndClose();
+    await yieldTurn();
+    assert.equal(closed, false, "Store closed while detached projection was still owned");
+    gate.resolve(); await draining;
+    assert.equal(closed, true);
+    assert.equal(existsSync(statusViewPath(s.root)), false, "completed projection republished a draining broker");
+  } finally { gate.resolve(); }
 });

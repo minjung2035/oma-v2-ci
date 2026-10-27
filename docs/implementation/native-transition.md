@@ -21,6 +21,34 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 metadata·loader 반례와 status projection (DR63)
+
+공개 입력 `9c95aaaac`의 Native run `40580105329` 원시 ZIP·digest를 별도로 보존했다.
+
+| 입력/환경 | 관측과 한계 |
+|---|---|
+| 실제 Mac26/15 각각 | common247/248. 빈 NO_INHERIT ACL은 getattrlist의44-byte security payload로 존재했지만 lstatx/acl_get_link_np는 없다고 답했다. fixture 소실이 아니라 관측 손실이다 |
+| 실제 Mac26/15 독립 설치 각각 | 전체27개를 실행해25 PASS·2 FAIL. Broker와 tool-files runtime은 통과했고 git/native smoke의 비정규 temp alias 두 건을 canonicalize했다 |
+| 실제 Darwin crash report | Node와 C target의 main 이전 dyld CacheFinder→ignite→boot_boot→ignition_halt, LIBIGNITION namespace35/code2에서 SIGABRT |
+| 같은 입력 Ubuntu |431/431·skip0, pending620 지연6ms. 앞선74ms 실패의 원인을 해결했다는 뜻은 아니다 |
+| DR63 Local Node26, UID1000 | 기존 latency9/9, pending620 maxLag17ms로50ms 예산 유지. 실제 durable mail620개를 status 파일로 게시·decode했고 다른 turn이 projection 완료 전에 진행했다 |
+| 같은 코드의 native lifecycle | host의 bwrap 부재로6건 실패한 뒤 private mount에 실제0.12.0을 제공해14/14 통과. root-mapped namespace이며 일반 UID의 permission proof가 아니다 |
+
+metadata helper는 공개 getattrlist의 flags와 extended-security 전체 필요 크기를 관측한다.
+ACL payload를 할당/해석하지 않고 xattr·BSD flag·ACL 보존 판정은 기존 TS owner에 남긴다.
+Darwin 확인 전인 수리이며 정상 empty·symlink·BSD flag·nonempty/empty ACL 회귀를 다음 CI에서 함께 실행한다.
+
+Loader 수리는 [고정 upstream의 literal-root 예외](https://github.com/anthropics/sandbox-runtime/blob/98a4016d27609ed34dd1fb43d23ed6efb6eeeb77/src/sandbox/macos-sandbox-utils.ts#L913)와
+[원문190](https://github.com/anthropic-experimental/sandbox-runtime/issues/190)을 대조했다.
+literal `/`의 읽기만 허용해 root dirent 이름이 보이며 subtree read/exec는 허용하지 않는다.
+실제 profile 실행은 다음 CI로 검증한다. SDK-declared libproc FD pruning은 이미 별도 control에서 통과했다.
+SDK26.5 `libproc.h:41–44`는 인터페이스를 private·향후 변경 가능으로 명시한다. stable public API라고
+분류하지 않으며, 선언된 record만 사용하고 실제 지원 OS별 회귀를 지원 조건으로 둔다.
+
+DR63은 SELECT들을 yield 전에 캡처한 뒤 full-row/lineage 검증을 나누고, 게시 owner가 projection을
+join한 뒤 draining을 확인한다. 새 batch와 이전 delivery를 섞지 않는 회귀 및 projection 중 shutdown이
+Store를 먼저 닫거나 status 파일을 재생성하지 않는 회귀가 통과했다. wire·durable 형식과 budget은 그대로다.
+
 ### 2026-10-28 독립 descriptor leaf와 파일 도구 전환
 
 `@oma/file-descriptors`로 기존 mkdirat/unlinkat/directory cursor를 옮기고 모든 caller를
@@ -45,16 +73,16 @@ helper를 설치하지 않는다. 외부 SDK declaration 진단44개는 자체 �
 
 실제 공개 CI 입력 `7d81b4f2`의 Mac26/15는 각각247/248 PASS·1 FAIL·skip0이다.
 새 file 도구·snapshot·root replacement·cursor/BOM·hashline 경로는 두 OS에서 통과했고,
-실패는 empty ACL의 NO_INHERIT flag가 있는 directory의 metadata 거절이다. 현재 helper 관측
-누락과 fixture의 실제 persistence를 구분 중이며, 기대값을 낮추거나 directory 전체를 거절하지 않는다.
-이 실패로 Mac packed install은 아직 실행되지 않았다.
+실패는 empty ACL의 NO_INHERIT flag가 있는 directory의 metadata 거절이었다. 당시에는 helper
+누락과 fixture persistence를 구분하지 못했으며, 기대값을 낮추거나 directory 전체를 거절하지 않았다.
+그 입력에서 Mac packed install은 이 실패 때문에 실행되지 않았다.
 
 Ubuntu 확대431개는430 PASS·1 FAIL이며 pending620 status의 event-loop 지연74ms가50ms
 예산을 넘었다. 별도 target Node26 선택30/30은 PASS이나 전체 실패를 대체하지 않는다.
 원시 artifact와 SHA256 확인은 native-2026-10-28-descriptor-leaf 아래에 보존했다.
 Darwin kept-FD 반례는 posix_spawn에서 EBADF, Seatbelt 파일 시나리오는 SIGABRT였다.
-새 후보는 단일-thread 확인·공개 PROC_PIDLISTFDS inventory·미허용 FD close·직접 execve이며
-실제 Mac 검증 전이다. direct child/FD 정리는 complete descendant scope의 대체가 아니다.
+당시 새 후보는 단일-thread 확인·SDK-declared PROC_PIDLISTFDS inventory·미허용 FD close·직접 execve였고
+실제 Mac 검증 전이었다. direct child/FD 정리는 complete descendant scope의 대체가 아니다.
 
 Architecture CI는 설치 전 source-digest가 TypeScript를 import하여 중단됐다. 깨끗한 checkout의
 같은 실패와 locked npm ci 뒤 같은 digest 명령의 성공을 확인하고 설치→source binding→generator

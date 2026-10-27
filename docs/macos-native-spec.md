@@ -45,6 +45,8 @@ Sandbox 기본 방향은 Linux bwrap, Mac Seatbelt다. [Anthropic](https://githu
 
 한 번에 가장 큰 불확실성 하나를 줄인다. 반례를 통과한 후보에만 caller·persisted format을 연결한다. 동일 입력·전제의 실패는 재실행하지 않는다. 새 source/OS/구현 또는 다른 관측 질문이 있어야 다시 시험한다. 자료를 찾지 못한 것과 불가능함은 다르다.
 
+SDK 선언만으로 stable public API라고 보지 않는다. header의 private/deprecated 표시와 실제 지원 OS 범위를 따로 기록한다.
+
 다음은 구현자가 정한다: 내부 API·자료구조·기존 leaf 재사용·동등한 구현 선택. 다음은 사용자에게 묻는다: 기능 제외, 보안/복구 보장 완화, privileged 서비스·restricted entitlement, OS 지원 하한 변경, 데이터 migration. 조회 가능한 repo/CI 정보를 사용자에게 되묻지 않는다.
 
 ## 4. 실행과 복구

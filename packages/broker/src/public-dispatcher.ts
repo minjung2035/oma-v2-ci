@@ -126,7 +126,11 @@ export class PublicDispatcher {
           // registry rows and pending counts are read after it, current.
           const snapshot = await units.statusSnapshot();
           if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
-          return statusPage(id, snapshot.observedAtMs, views.status(params.agent, snapshot), this.deps.limits.frameBytes, params.after);
+          const agents = await views.status(params.agent, snapshot);
+          if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
+          const current = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", false);
+          if (!current.ok) return errorAnswer(current.id, current.failure);
+          return statusPage(id, snapshot.observedAtMs, agents, this.deps.limits.frameBytes, params.after);
         }
         case "operation.read":
           return receiptChunk(id, store.getReceipt(auth.actor, params.key) ?? receiptNotFound, params, this.deps.limits.frameBytes);

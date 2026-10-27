@@ -2,9 +2,9 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "NOT_REVIEWED": 14335,
-  "REMOVED": 220,
-  "CHANGED_WITHOUT_ORACLE": 1
+  "CHANGED_WITHOUT_ORACLE": 54,
+  "NOT_REVIEWED": 14282,
+  "REMOVED": 220
  },
  "lanes": {
   "fast": "PASS",
@@ -21,10 +21,12 @@
   {
    "path": "apps/oma/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "ef1c8556a7093327e9b7af8a7c6cb9bd37cceeb7946b46a39469a250f84e745d"
   },
   {
    "path": "apps/oma/src/application/exit.ts",
@@ -43,10 +45,12 @@
   {
    "path": "apps/oma/src/application/local-packages.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "3dbc3f147c373cf936158bac25d008984ece78bd5ce37301a2465c61b5024c1f"
   },
   {
    "path": "apps/oma/src/application/mail.ts",
@@ -130,7 +134,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/broker/composition.ts",
@@ -296,10 +301,12 @@
   {
    "path": "apps/oma/src/cli/effects/context.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "53917ba1714b74496bea75ab04f61a64f57fb2cdbb45f83702813cf746b6ee95"
   },
   {
    "path": "apps/oma/src/cli/effects/goal.ts",
@@ -537,7 +544,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/request-cache.ts",
@@ -612,18 +620,22 @@
   {
    "path": "apps/oma/src/runtime/deployment-manifest.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "d28942fb2cecebb0458554a35ccbeea8a3e95c50e796da4be0e6ed1473203133"
   },
   {
    "path": "apps/oma/src/runtime/execution-runtime.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "ce85fb6c6e5dca4e32bed8cfb6a155ae0e3bece6b0c629a89472f91d7900b42f"
   },
   {
    "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -670,10 +682,12 @@
   {
    "path": "apps/oma/src/runtime/native-residents.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "6ba75d836cafd6083bcae84f1b784cef9858201689bd217b3511c5f39f571b33"
   },
   {
    "path": "apps/oma/src/runtime/native-support.ts",
@@ -734,18 +748,22 @@
   {
    "path": "apps/oma/src/runtime/provision.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "7b3f8cf26d3b074725553bb74df7baed2733f938d5f478840eed82fa2d4f351c"
   },
   {
    "path": "apps/oma/src/runtime/quarantine-execution.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "79cc90c2caba626f533e05172ff6f6e17ea6c0e9542bdf31225c4212c56e4e0a"
   },
   {
    "path": "apps/oma/src/runtime/resident-tools.ts",
@@ -829,7 +847,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/views/mail-notices.ts",
@@ -947,7 +966,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/broker/src/internal-dispatcher.ts",
@@ -980,10 +1000,12 @@
   {
    "path": "packages/broker/src/peer-authenticator.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "6adb23bbf249919a53ce9e8bb8f278007178d911b8cda84181695b3b1e580413"
   },
   {
    "path": "packages/broker/src/peer-pin.ts",
@@ -1019,7 +1041,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/broker/src/replies.ts",
@@ -1122,10 +1145,12 @@
   {
    "path": "packages/config/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "626920045d51d19b5d261268d6ad3fd6df42c35e3d70aee82caaf472ec3660fb"
   },
   {
    "path": "packages/config/src/defaults.ts",
@@ -1137,10 +1162,12 @@
   {
    "path": "packages/config/src/generations.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "517dfa7114fb4b95ebcda10d0985f3610220351b214452cab94418df37e5c78f"
   },
   {
    "path": "packages/config/src/index.ts",
@@ -1425,10 +1452,12 @@
   {
    "path": "packages/domain/src/deployment.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e6d27563f99b357aafcd8914b4df6f978243e7d2f8044d9a2ec6fac447456d99"
   },
   {
    "path": "packages/domain/src/derived.ts",
@@ -2140,26 +2169,32 @@
   {
    "path": "packages/file-descriptors/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "4ca67bcbe34c4bb5e5b9947bf391f4c891ee4d7b95bef1f3ee8e4fb8d73c481b"
   },
   {
    "path": "packages/file-descriptors/src/index.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "246dea7f62d48e61c860d90197df43fb176a6d77506697e3f06c4234f8fe1fdb"
   },
   {
    "path": "packages/git/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "bb6288558ff87e5781e469062981e365cadeebcd3c83efa16d576cd988d0436d"
   },
   {
    "path": "packages/git/src/candidate-check.ts",
@@ -2195,10 +2230,12 @@
   {
    "path": "packages/git/src/context-repository.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "4054e57ff452c605107388135e81c0cfa821032339ecbadd9b872ceab631020d"
   },
   {
    "path": "packages/git/src/context.ts",
@@ -2252,10 +2289,12 @@
   {
    "path": "packages/git/src/project-preparation.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "27efdc1c04b21c9c010d5d9ba7ae4aa6bbce0e7b922b8cf208b67434fcc1150d"
   },
   {
    "path": "packages/git/src/project-snapshot.ts",
@@ -2281,10 +2320,13 @@
   {
    "path": "packages/git/src/quarantine.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR49",
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "edc9165c0f0b6c0a9561e2bdc5a0d3745801f8274a084e584f715adc09966e4c"
   },
   {
    "path": "packages/git/src/read-port.ts",
@@ -2513,10 +2555,12 @@
   {
    "path": "packages/native/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "3a729c5de726cb8a8317338cd98dc9408e6ad6239d57cfa6b9ffbbdfc2068354"
   },
   {
    "path": "packages/native/src/audit-origin.ts",
@@ -2528,10 +2572,12 @@
   {
    "path": "packages/native/src/audit-session.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "7c9d9881ea196c7b8b6121983d7868ff98c964d14337bf96aecea51a9dc5fc39"
   },
   {
    "path": "packages/native/src/audit-token.ts",
@@ -2564,10 +2610,12 @@
   {
    "path": "packages/native/src/descriptor-path.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "ce6c96c0ebbcc5893844317d98a69647480cdf37faf45e09f99579c52dceaabf"
   },
   {
    "path": "packages/native/src/directory-layout.ts",
@@ -2579,10 +2627,12 @@
   {
    "path": "packages/native/src/files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "492c7ee9c8e7fd83e75f855c4d30be3d68b14bb97dc11baaf8b9fb4e81dc4bca"
   },
   {
    "path": "packages/native/src/identity.ts",
@@ -2617,7 +2667,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/native/src/peer-uid.ts",
@@ -2629,18 +2680,22 @@
   {
    "path": "packages/native/src/pid-namespace.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "1f08a47f97a5499b9938ad7e37d51773f6c60fcbbed381d2925085367f70e335"
   },
   {
    "path": "packages/native/src/posix-files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "2b5a30519b75498f15c9eb2bd63838cc6d75c3f35436fbc0c326faac69d7341c"
   },
   {
    "path": "packages/native/src/process-event.ts",
@@ -2680,10 +2735,12 @@
   {
    "path": "packages/platform-linux/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "1db35e0b1085775242165596ee8e47cb492e1e8f2ccc6b753f62be3041cb92f2"
   },
   {
    "path": "packages/platform-linux/src/bubblewrap-arguments.ts",
@@ -2730,10 +2787,12 @@
   {
    "path": "packages/platform-linux/src/resident-rootfs.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "c866c5927b70fe6e5f241ecfecfbab30a8bb2b2a4d509adaa66d6934eb459c8e"
   },
   {
    "path": "packages/platform-linux/src/runner-scope.ts",
@@ -2766,18 +2825,22 @@
   {
    "path": "packages/platform-mac/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "8fd832d81b9c74b0a5eb181d13d1015d229be208cb4f041d72f0b91711f0403e"
   },
   {
    "path": "packages/platform-mac/src/audit-peer.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "6cb3d00f17029b21df7846388646471f7729c390558d4faca4cde7e0ee67fd7c"
   },
   {
    "path": "packages/platform-mac/src/developer-tools.ts",
@@ -2789,10 +2852,12 @@
   {
    "path": "packages/platform-mac/src/execution-launch.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "de497fdde10e5f2343b7977843cf1c463e3b6574289f53ca86fd1307468dbe0f"
   },
   {
    "path": "packages/platform-mac/src/git-sandbox.ts",
@@ -2825,10 +2890,12 @@
   {
    "path": "packages/platform-mac/src/launchd-job.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "fadc6bfd830e3b3a1b2c45f96990b2ad8989c1d9008671393e0f059f1ccd3268"
   },
   {
    "path": "packages/platform-mac/src/mach-address.ts",
@@ -2891,14 +2958,18 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
+   "oracles": [],
+   "sha256": "220dfd584a6f1956398c5696a2437d7c575cb72fcc4e0a7bfa9f3a9ed92a56ad"
   },
   {
    "path": "packages/platform-mac/src/seatbelt/main.c",
@@ -2910,10 +2981,12 @@
   {
    "path": "packages/process/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "3b8becadd2c5aec03fb537e47f49f5da2381acc0b08b20b21d836f44d7d336d3"
   },
   {
    "path": "packages/process/src/async.ts",
@@ -2946,10 +3019,12 @@
   {
    "path": "packages/process/src/execution-witness.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "fbb45a943306cb6c8750278d9094847ea1f2c2684a235d2ceb4671faa33e1419"
   },
   {
    "path": "packages/process/src/fence.ts",
@@ -3178,10 +3253,12 @@
   {
    "path": "packages/protocol/src/persisted-formats.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "35f1e110dae2078a70db44e6a6179b8ca5478f9de8089252941b828578bbce4c"
   },
   {
    "path": "packages/protocol/src/principal-credential.ts",
@@ -3382,10 +3459,12 @@
   {
    "path": "packages/storage/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "46f361a1bc9e16188c99d678db6e1c167bdb068ed176c86b7cf36f67019b4e9f"
   },
   {
    "path": "packages/storage/src/arrival-journal.ts",
@@ -3404,10 +3483,12 @@
   {
    "path": "packages/storage/src/cache-trees.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "f835600e2df4f04b3bc41c6b3de4f35a959a18b7ed99021e4bc007ea2d8abbd4"
   },
   {
    "path": "packages/storage/src/context-files.ts",
@@ -3419,26 +3500,32 @@
   {
    "path": "packages/storage/src/context-snapshot.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "05a061c4bfe184083a94c341c3e4f9f3adef50bdcb31298bd336f637322a9eb6"
   },
   {
    "path": "packages/storage/src/context-stream.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e9770ff10aa1c57e69991710b9f45e5a928f9192000737d41906b5d19322d1f4"
   },
   {
    "path": "packages/storage/src/delivery-receipt.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "69ba95d8a404fbdc1a610834f80989bdc4a8ff45b48536454fc59c2781ec0f58"
   },
   {
    "path": "packages/storage/src/diagnostic-snapshot.ts",
@@ -3450,34 +3537,43 @@
   {
    "path": "packages/storage/src/directory.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "36dc937ff6e372eda8c2c0bd037b382ac4f7708b9a877c81729f1c3bb9d9cee9"
   },
   {
    "path": "packages/storage/src/durable-fs.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e3e198497f0c01d538eaf525f6db9b343194e90b6a3bbf1d04ff315c0d6bca47"
   },
   {
    "path": "packages/storage/src/execution-journal.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR49",
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "3d089c6566e9ba283287a8096dc0724240e10a8e11241aa240f91c1ca8680d32"
   },
   {
    "path": "packages/storage/src/execution-staging.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e84c0c852d6e1dd6b8ee108f9cc0611bae16c511ccd56e6cdc10b557df8be952"
   },
   {
    "path": "packages/storage/src/facets.ts",
@@ -3496,10 +3592,12 @@
   {
    "path": "packages/storage/src/immutable-file.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "aeab733a20dd9bbda7563e0675bde50b819dd935c17669b34047ae37f7f80423"
   },
   {
    "path": "packages/storage/src/installation-surface.ts",
@@ -3513,7 +3611,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/mail-notices.ts",
@@ -3525,10 +3624,12 @@
   {
    "path": "packages/storage/src/mailbox.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "77537a110cdefd87d50e13faa7fb266c771c50c09da221261aa8158e8f9e4f34"
   },
   {
    "path": "packages/storage/src/operation-journal.ts",
@@ -3554,10 +3655,12 @@
   {
    "path": "packages/storage/src/package-staging.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "7beb9432b5362a48329d79dbf86aac203ebe7a5e8bfe4e535896cd922b697a47"
   },
   {
    "path": "packages/storage/src/package-tar.ts",
@@ -3569,10 +3672,12 @@
   {
    "path": "packages/storage/src/preaccept-artifact.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "abee73f5b7c8aef562c22d4e76f124880ba7594c33e3c4912c8800548e157642"
   },
   {
    "path": "packages/storage/src/preaccept-collection.ts",
@@ -3591,10 +3696,13 @@
   {
    "path": "packages/storage/src/resident-logs.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR49",
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "7341ca188d272c5ce5214157ef0fee523951c99d3ea63706979418d3c0870ff9"
   },
   {
    "path": "packages/storage/src/restic-tar.ts",
@@ -3641,10 +3749,12 @@
   {
    "path": "packages/storage/src/staged-tree.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "6d134d9e8a4e347c263a63df6788fd68ffb8271744d7b54d04b62e15f95fdd75"
   },
   {
    "path": "packages/storage/src/store-access.ts",
@@ -3658,7 +3768,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/submit-spool.ts",
@@ -3684,10 +3795,12 @@
   {
    "path": "packages/storage/src/transport-spool.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "0771fcf0efcdee48bbb5d6b05b6158ba2d935950715124e790e32d4aaf393de4"
   },
   {
    "path": "packages/storage/src/tree-lease.ts",
@@ -3699,18 +3812,22 @@
   {
    "path": "packages/tool-files/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e2fbf28426f16d09f16e18707a37b3cbafdcc533085c8b8d64b4a7ba3394fa03"
   },
   {
    "path": "packages/tool-files/src/descriptor-files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "97324625e2dab65d735e3c523481ca09b35b5a10740d0d4026c8591c0953cd0a"
   },
   {
    "path": "packages/tool-files/src/errors.ts",
@@ -3722,10 +3839,12 @@
   {
    "path": "packages/tool-files/src/index.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "a92d930b636a1b451b8f7ae36bd48b2d5ada40c5f3dde6495d80b9eed67fafa2"
   },
   {
    "path": "packages/tool-hashline/package.json",

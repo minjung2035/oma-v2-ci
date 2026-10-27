@@ -275,7 +275,9 @@ export class Broker {
   }
   private async performStatusPublication(): Promise<void> {
     const snapshot = await this.statusRefresh.request();
-    if (!this.draining) this.views.publishStatus(snapshot);
+    if (this.draining) return;
+    const agents = await this.dependencies.public.views.status(undefined, snapshot);
+    if (!this.draining) this.views.publishStatus(snapshot, agents);
   }
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
     const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);

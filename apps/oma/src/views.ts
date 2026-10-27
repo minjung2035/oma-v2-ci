@@ -38,7 +38,7 @@ export function fieldEscape(value: string): string {
 }
 export class ViewsModule {
   private observations: readonly StatusExecutionObservation[] = [];
-  private projected: { readonly snapshot: StatusSnapshot; readonly agents: readonly AgentStatus[] } | null = null;
+  private projected: { readonly snapshot: StatusSnapshot; readonly agents: Promise<AgentStatus[]> } | null = null;
   /** The broker's memory-only runner-observation sink, looked up per agent.
    * `runner.observe` is the runner's own last word about what its engine was
    * doing; an observation's incarnation names the run it was authenticated
@@ -188,24 +188,23 @@ export class ViewsModule {
    * unknown rather than current. WP23: it carries when the units were
    * observed, and a unit the snapshot does not hold is unknown.
    */
-  publishStatus(snapshot: StatusSnapshot): void {
-    const agents = this.statusOf(snapshot);
+  publishStatus(snapshot: StatusSnapshot, agents: readonly AgentStatus[]): void {
     writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs: snapshot.observedAtMs, agents }), 0o600);
     publishMailNoticeView(this.store, this.stateRoot);
   }
   /** WP23: every agent's status for one observation, projected once -- when
    * the first answer for it is due, after every caller waiting on it asked --
    * and shared by those answers and the published view. Display only. */
-  statusOf(snapshot: StatusSnapshot, agent?: Actor): AgentStatus[] {
+  async statusOf(snapshot: StatusSnapshot, agent?: Actor): Promise<AgentStatus[]> {
     if (this.projected?.snapshot !== snapshot)
       this.projected = { snapshot, agents: this.status(undefined, name => snapshot.units.get(name) ?? null, snapshot.observedAtMs) };
-    const agents = this.projected.agents;
+    const agents = await this.projected.agents;
     return agent === undefined ? [...agents] : agents.filter(row => row.agent === agent);
   }
-  status(agent?: Actor, observe: UnitObserve = () => null, observedAtMs: number = Date.now()): AgentStatus[] {
+  async status(agent?: Actor, observe: UnitObserve = () => null, observedAtMs: number = Date.now()): Promise<AgentStatus[]> {
     // WP23.03: one read gives the registry and every agent's counts, not two
     // reads per agent.
-    const read = this.store.pendingWorkRows();
+    const read = await this.store.pendingWorkRows();
     const pending = pendingWorkByAgent(read);
     const rows = agent === undefined ? read.agents : read.agents.filter(row => row.name === agent);
     const observations: StatusExecutionObservation[] = [];

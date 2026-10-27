@@ -487,7 +487,7 @@ test("P0V-87 / R6-10: mail accepted after the clock was set back is still delive
     return (JSON.parse(operation.planJson).intent as { message: { id: string } }).message.id;
   });
   assert.deepEqual(store.pendingDeliveries("b").map(row => row.messageId), accepted, "the recipient reads its mail in another order than it was accepted");
-  assert.deepEqual(store.pendingWorkRows().unbatched.filter(row => row.recipient === "b").map(row => row.messageId), accepted);
+  assert.deepEqual((await store.pendingWorkRows()).unbatched.filter(row => row.recipient === "b").map(row => row.messageId), accepted);
 });
 
 test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused", async () => {

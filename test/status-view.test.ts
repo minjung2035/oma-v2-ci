@@ -14,7 +14,7 @@ import { ViewsModule } from "#oma-test/app/views";
 import { decodeStatusView, encodeStatusView, statusViewPath } from "@oma/protocol/status-view";
 import { TuiTransport } from "#oma-test/app/application/status-observation";
 
-test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", () => {
+test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-view-"));
   const store = new Store(join(root, "runtime.sqlite"), undefined, { society: "demo" });
   try {
@@ -22,7 +22,8 @@ test("T118 what the broker publishes is what the Dashboard accepts, and only its
     const before = Date.now();
     // A unit whose state cannot be read must reach the reader as unknown
     // fields, not as a guessed "inactive".
-    views.publishStatus({ observedAtMs: Date.now(), units: new Map(), failure: "unavailable" });
+    const snapshot = { observedAtMs: Date.now(), units: new Map(), failure: "unavailable" as const };
+    views.publishStatus(snapshot, await views.statusOf(snapshot));
     const decoded = decodeStatusView(readFileSync(statusViewPath(root), "utf8"), "demo");
     assert.equal(decoded.kind, "view", decoded.kind === "invalid" ? decoded.reason : "");
     if (decoded.kind !== "view") return;
