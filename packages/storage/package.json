@@ -1,0 +1,188 @@
+{
+  "name": "@oma/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./execution-staging": {
+      "types": "./dist/execution-staging.d.ts",
+      "default": "./dist/execution-staging.js"
+    },
+    "./cache-trees": {
+      "types": "./dist/cache-trees.d.ts",
+      "default": "./dist/cache-trees.js"
+    },
+    "./batch-view": {
+      "types": "./dist/batch-view.d.ts",
+      "default": "./dist/batch-view.js"
+    },
+    "./context-files": {
+      "types": "./dist/context-files.d.ts",
+      "default": "./dist/context-files.js"
+    },
+    "./context-snapshot": {
+      "types": "./dist/context-snapshot.d.ts",
+      "default": "./dist/context-snapshot.js"
+    },
+    "./context-stream": {
+      "types": "./dist/context-stream.d.ts",
+      "default": "./dist/context-stream.js"
+    },
+    "./delivery-receipt": {
+      "types": "./dist/delivery-receipt.d.ts",
+      "default": "./dist/delivery-receipt.js"
+    },
+    "./diagnostic-snapshot": {
+      "types": "./dist/diagnostic-snapshot.d.ts",
+      "default": "./dist/diagnostic-snapshot.js"
+    },
+    "./directory": {
+      "types": "./dist/directory.d.ts",
+      "default": "./dist/directory.js"
+    },
+    "./durable-fs": {
+      "types": "./dist/durable-fs.d.ts",
+      "default": "./dist/durable-fs.js"
+    },
+    "./facets": {
+      "types": "./dist/facets.d.ts",
+      "default": "./dist/facets.js"
+    },
+    "./file-digest": {
+      "types": "./dist/file-digest.d.ts",
+      "default": "./dist/file-digest.js"
+    },
+    "./immutable-file": {
+      "types": "./dist/immutable-file.d.ts",
+      "default": "./dist/immutable-file.js"
+    },
+    "./ledger-reader": {
+      "types": "./dist/ledger-reader.d.ts",
+      "default": "./dist/ledger-reader.js"
+    },
+    "./mail-notices": {
+      "types": "./dist/mail-notices.d.ts",
+      "default": "./dist/mail-notices.js"
+    },
+    "./operation-journal": {
+      "types": "./dist/operation-journal.d.ts",
+      "default": "./dist/operation-journal.js"
+    },
+    "./output-spool": {
+      "types": "./dist/output-spool.d.ts",
+      "default": "./dist/output-spool.js"
+    },
+    "./preaccept-artifact": {
+      "types": "./dist/preaccept-artifact.d.ts",
+      "default": "./dist/preaccept-artifact.js"
+    },
+    "./published-mail": {
+      "types": "./dist/published-mail.d.ts",
+      "default": "./dist/published-mail.js"
+    },
+    "./rows": {
+      "types": "./dist/rows.d.ts",
+      "default": "./dist/rows.js"
+    },
+    "./socket-name": {
+      "types": "./dist/socket-name.d.ts",
+      "default": "./dist/socket-name.js"
+    },
+    "./staged-tree": {
+      "types": "./dist/staged-tree.d.ts",
+      "default": "./dist/staged-tree.js"
+    },
+    "./store-access": {
+      "types": "./dist/store-access.d.ts",
+      "default": "./dist/store-access.js"
+    },
+    ".": {
+      "types": "./dist/store.d.ts",
+      "default": "./dist/store.js"
+    },
+    "./submit-spool": {
+      "types": "./dist/submit-spool.d.ts",
+      "default": "./dist/submit-spool.js"
+    },
+    "./transaction": {
+      "types": "./dist/transaction.d.ts",
+      "default": "./dist/transaction.js"
+    },
+    "./tree-lease": {
+      "types": "./dist/tree-lease.d.ts",
+      "default": "./dist/tree-lease.js"
+    },
+    "./arrival-journal": {
+      "types": "./dist/arrival-journal.d.ts",
+      "default": "./dist/arrival-journal.js"
+    },
+    "./mailbox": {
+      "types": "./dist/mailbox.d.ts",
+      "default": "./dist/mailbox.js"
+    },
+    "./preaccept-collection": {
+      "types": "./dist/preaccept-collection.d.ts",
+      "default": "./dist/preaccept-collection.js"
+    },
+    "./transport-spool": {
+      "types": "./dist/transport-spool.d.ts",
+      "default": "./dist/transport-spool.js"
+    },
+    "./restic-tar": {
+      "types": "./dist/restic-tar.d.ts",
+      "default": "./dist/restic-tar.js"
+    },
+    "./restic-verification": {
+      "types": "./dist/restic-verification.d.ts",
+      "default": "./dist/restic-verification.js"
+    },
+    "./package-staging": {
+      "types": "./dist/package-staging.d.ts",
+      "default": "./dist/package-staging.js"
+    },
+    "./package-tar": {
+      "types": "./dist/package-tar.d.ts",
+      "default": "./dist/package-tar.js"
+    },
+    "./restic-tool": {
+      "types": "./dist/restic-tool.d.ts",
+      "default": "./dist/restic-tool.js"
+    },
+    "./execution-journal": {
+      "types": "./dist/execution-journal.d.ts",
+      "default": "./dist/execution-journal.js"
+    },
+    "./resident-logs": {
+      "types": "./dist/resident-logs.d.ts",
+      "default": "./dist/resident-logs.js"
+    },
+    "./installation-surface": {
+      "types": "./dist/installation-surface.d.ts",
+      "default": "./dist/installation-surface.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/storage",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "schema-v4.sql"
+    ]
+  }
+}

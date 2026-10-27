@@ -1,0 +1,38 @@
+{
+  "name": "@oma/tool-lsp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/tool-lsp",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/tool-runtime": "0.1.0",
+    "@earendil-works/pi-coding-agent": "1.0.1",
+    "typebox": "1.3.27",
+    "@oma/tool-files": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3",
+    "@oma/domain": "0.1.0"
+  },
+  "oma": {
+    "assets": [
+      "vendor/pi-lsp"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

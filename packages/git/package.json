@@ -1,0 +1,120 @@
+{
+  "name": "@oma/git",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./canonical-command": {
+      "types": "./dist/canonical-command.d.ts",
+      "default": "./dist/canonical-command.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "default": "./dist/context.js"
+    },
+    "./context-publication": {
+      "types": "./dist/context-publication.d.ts",
+      "default": "./dist/context-publication.js"
+    },
+    "./context-repository": {
+      "types": "./dist/context-repository.d.ts",
+      "default": "./dist/context-repository.js"
+    },
+    "./integration": {
+      "types": "./dist/integration.d.ts",
+      "default": "./dist/integration.js"
+    },
+    "./integration-publication": {
+      "types": "./dist/integration-publication.d.ts",
+      "default": "./dist/integration-publication.js"
+    },
+    "./observe": {
+      "types": "./dist/observe.d.ts",
+      "default": "./dist/observe.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "default": "./dist/ports.js"
+    },
+    "./project-snapshot": {
+      "types": "./dist/project-snapshot.d.ts",
+      "default": "./dist/project-snapshot.js"
+    },
+    "./publication": {
+      "types": "./dist/publication.d.ts",
+      "default": "./dist/publication.js"
+    },
+    "./quarantine": {
+      "types": "./dist/quarantine.d.ts",
+      "default": "./dist/quarantine.js"
+    },
+    "./read-port": {
+      "types": "./dist/read-port.d.ts",
+      "default": "./dist/read-port.js"
+    },
+    "./repository": {
+      "types": "./dist/repository.d.ts",
+      "default": "./dist/repository.js"
+    },
+    "./repository-health": {
+      "types": "./dist/repository-health.d.ts",
+      "default": "./dist/repository-health.js"
+    },
+    "./submit": {
+      "types": "./dist/submit.d.ts",
+      "default": "./dist/submit.js"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.ts",
+      "default": "./dist/workspace.js"
+    },
+    "./canonical-health": {
+      "types": "./dist/canonical-health.d.ts",
+      "default": "./dist/canonical-health.js"
+    },
+    "./project-preparation": {
+      "types": "./dist/project-preparation.d.ts",
+      "default": "./dist/project-preparation.js"
+    },
+    "./quarantine-worker": {
+      "types": "./dist/quarantine-worker.d.ts",
+      "default": "./dist/quarantine-worker.js"
+    },
+    "./candidate-check": {
+      "types": "./dist/candidate-check.d.ts",
+      "default": "./dist/candidate-check.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/git",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/process": "0.1.0",
+    "@oma/storage": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

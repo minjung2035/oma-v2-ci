@@ -1,0 +1,202 @@
+{
+  "schema": 3,
+  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved.",
+  "dispatch": {
+    "packages/broker/src/ports.ts": {
+      "PeerIdentity": {
+        "exported": true,
+        "sha256": "8f3f7b9c955031dcfe56b5fd72496aa82853c718121e15f920e700180e071e3b"
+      },
+      "PinnedPeerIdentity": {
+        "exported": true,
+        "sha256": "153b5f2b764bed5d06b9477018ad7c412e8cd77b7438f3ab71b71ddbd3947ea6"
+      },
+      "PublicAgentView": {
+        "exported": true,
+        "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2"
+      },
+      "PublicStorePort": {
+        "exported": true,
+        "sha256": "20dd961b2dcc6eed5b428c6d85e88e6974f2486c71fa53fa4cf9eb29200ddca6"
+      },
+      "PublicMailPort": {
+        "exported": true,
+        "sha256": "720eb92c82abbf5458b0cff8bf0f7331f9efd3c11185223259d329ea4bded4fe"
+      },
+      "PublicUnitsPort": {
+        "exported": true,
+        "sha256": "fe831326695d1e368d6e55b1c7ff39ed245e07784c116d41e3ac8739db68f017"
+      },
+      "PublicViewsPort": {
+        "exported": true,
+        "sha256": "ff38d66b760196ec06f27810a69cbe4c844192a377183e3f28faf7b768ec84e0"
+      },
+      "PublicLifecyclePort": {
+        "exported": true,
+        "sha256": "74572300fcea1fd99998d77a2623f0fa118dfa9c777a29240377f625951b36b2"
+      },
+      "PublicReviewPort": {
+        "exported": true,
+        "sha256": "ad9183874c3b73cbc9b2649563734b25a9bb55ed0c704a8dcc713127a2ef38d2"
+      },
+      "PublicGitPort": {
+        "exported": true,
+        "sha256": "533e28ec95d592719afbca8f13f0f9f1ee35dc1a0d643e02fc95606b1e345b30"
+      },
+      "PublicDispatchDependencies": {
+        "exported": true,
+        "sha256": "475da2b5a6d8e982ee576257551286e3d3444ced49d51f41cefde36157cd97db"
+      },
+      "InternalStorePort": {
+        "exported": true,
+        "sha256": "1762329b0b87a7037b9226fcdc55fa85a61aa9984e7830ee330f2d991f5329cd"
+      },
+      "InternalMailPort": {
+        "exported": true,
+        "sha256": "7dacaa24f0f575ace8e95027a96cb249cca003e1463bcbd6ce67ab30a7f7e9e6"
+      },
+      "InternalPeerPort": {
+        "exported": true,
+        "sha256": "6d6ef0d75b0ed91cbf2ae8574d623193bfa462109434da13f686b45733069cac"
+      },
+      "InternalDispatchDependencies": {
+        "exported": true,
+        "sha256": "6bedae7b5d673ffbceb2e496876313dc3c37b5cf678a75cb647de3a1ca043f80"
+      },
+      "BrokerTransaction": {
+        "exported": true,
+        "sha256": "72d829a7eabecc206faedf520cb3bdbf5625bf79ec054555cfef066a0532f24c"
+      },
+      "BrokerLedger": {
+        "exported": true,
+        "sha256": "acb3c484addfc4b71c2381e2ff1f829b5efb0af006f9d703a731e018879cc072"
+      },
+      "BrokerMail": {
+        "exported": true,
+        "sha256": "d64f0c1c03b1d9993ac488e1b3f4adc10072555d289bd05e796244a77dc89a8a"
+      },
+      "BrokerUnits": {
+        "exported": true,
+        "sha256": "b457e97b3c02b6e428d703c416dd1279a9a8ae52ea8c4ad064a5fc4cdb77e6ed"
+      },
+      "BrokerViews": {
+        "exported": true,
+        "sha256": "ec9318ff0d50d11d957f77db27b600bf7c4010852b7174dcbecd01e1c7d47ca8"
+      },
+      "BrokerReconcile": {
+        "exported": true,
+        "sha256": "1a4fe90daf1e6241314915725426453e6b5a0774d15e5c67462aa7bb3106700e"
+      },
+      "BrokerStatusRefresh": {
+        "exported": true,
+        "sha256": "4f0e2cebbe42734ddac34971a031b4d86316684229fd225d43e00b351406b821"
+      },
+      "BrokerListener": {
+        "exported": true,
+        "sha256": "d58bc12c9e19161eaf5e87856bb509d527f8793487e7c6177f3257e733c6b25b"
+      },
+      "BrokerEffects": {
+        "exported": true,
+        "sha256": "7487c1cac408e469d8774d86c1d1ececfce027021468d378bc1e36ae4096a087"
+      },
+      "BrokerDependencies": {
+        "exported": true,
+        "sha256": "43210bf1f509499aa1e0043cfeb712ef4ffbf8f4632ebdd8c31126ce040c5235"
+      }
+    },
+    "packages/contracts/src/runtime.ts": {
+      "AuthContext": {
+        "exported": true,
+        "sha256": "7b2ac62c85e9bae0e9e041d197d2c38337e1bc8b4732775979f7c77ff1205180"
+      },
+      "AgentStatus": {
+        "exported": true,
+        "sha256": "dc66e39a310c4b106bb4808bbf0562c26f493cd4520fdce90a9501c6080680e3"
+      },
+      "PreparedBatch": {
+        "exported": true,
+        "sha256": "b3627dfa363ddd0d0718e056cdd613509166352a80f8ae1b1e1434dfe822c4f9"
+      },
+      "BoundaryEvidence": {
+        "exported": true,
+        "sha256": "6e573b0640105f4b5f885fdbd3ac4f9e4ce131fa04eb10122071a6d0ff65cb22"
+      },
+      "RunLease": {
+        "exported": true,
+        "sha256": "66eb75f6ddd92db298eb464a64f05f242812aec8e5f51b490df6ca805f54d73c"
+      },
+      "ExecutionObservation": {
+        "exported": true,
+        "sha256": "1bf3c98f0ae32ec242e854802eaa6e0212180bbf083689b0f9245575da7d6577"
+      },
+      "ExecutionScopePin": {
+        "exported": true,
+        "sha256": "64f4f564c948e46b2a02b9f2c2ac3addbeb3636c242a2e9e0954541f8ac1aa68"
+      },
+      "ResidentLogEntry": {
+        "exported": true,
+        "sha256": "0b47042cca06091d0278054363e494913a3c3dc1f01f772dfda24e235a65ddd4"
+      },
+      "SandboxPlan": {
+        "exported": true,
+        "sha256": "c162ce778bc3788e423f36d4b68ec6245ede25ca1737ae9c102d7cbca21ba119"
+      },
+      "SandboxDirectories": {
+        "exported": true,
+        "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
+      },
+      "SandboxHost": {
+        "exported": true,
+        "sha256": "2b6b0e60d8c9aec24fd1490de2db0336d083bfda1e8fbf388b348296a8a548ea"
+      },
+      "DeliveryBoundary": {
+        "exported": true,
+        "sha256": "d68d9cc7994e5caada1aba9774c867d595720051eddabd0271870185bd4f09de"
+      },
+      "DeliveryReceipt": {
+        "exported": true,
+        "sha256": "ebd1085e3987f4367b206424d430227caedd036782319dc6fccb3f7b79fd25b0"
+      },
+      "BatchViewDocuments": {
+        "exported": true,
+        "sha256": "4e8efb6a53a407725980a0cd216a71a91aef1b823d2395180683ffda7aed3ddb"
+      },
+      "RecoveryCounts": {
+        "exported": true,
+        "sha256": "ce49c2da570b663507e7fe1c15bc7aa44fca8d626aae9dbdd3c5e36a07427c1c"
+      },
+      "PreacceptCollection": {
+        "exported": true,
+        "sha256": "5fd7666638392680103da0a4dc8da1f9ed7351d7858856fa99e74c43ab979c1b"
+      },
+      "SettlementQuiescence": {
+        "exported": true,
+        "sha256": "a35d2cfdaaaacd352961e43f2876d20c3540b303e6c74ee367b20ce5636b4649"
+      },
+      "StatusSnapshot": {
+        "exported": true,
+        "sha256": "86e476f5900eab7a85ce82769e946b5594641e8f753a28f2ba3b5c7a33261eed"
+      },
+      "RunnerObservation": {
+        "exported": true,
+        "sha256": "b8709f45d3037cced0c4d9fcfaab80a2070b30df36d7a7bc01cc1b3000ecd7ac"
+      },
+      "UnitObserve": {
+        "exported": true,
+        "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d"
+      },
+      "FencedEngine": {
+        "exported": true,
+        "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
+      },
+      "PathView": {
+        "exported": true,
+        "sha256": "f573d48cc434296fbc17c1cab2d7ba7cba01e14b79378335c61065318c5b731e"
+      },
+      "SandboxEndpoints": {
+        "exported": true,
+        "sha256": "c1a02229e506bacdcce857afa3eba2277b88625691cb262ad810e7f9d83c2b43"
+      }
+    }
+  }
+}

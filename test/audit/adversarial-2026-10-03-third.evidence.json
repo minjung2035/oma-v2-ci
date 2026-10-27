@@ -1,0 +1,239 @@
+{
+  "date": "2026-10-03",
+  "sourceHead": "a75c29911c077a2d2b207a48773268e2e2355ca0",
+  "scope": "Third-pass selected boundary audit and conservative production-file coverage; not a full repository audit or release qualification",
+  "runtime": {
+    "node": "v24.21.0",
+    "git": "git version 2.47.3"
+  },
+  "verdict": "DEFECTS_REPRODUCED_RELEASE_BLOCKED",
+  "productionFiles": 356,
+  "productionDigest": "a8cb94866fe228e7d32ca48383e5d1a3f8c11aa86921dbb7f53804d58bdd89cf",
+  "productionSourceUnchanged": true,
+  "previousPassEvidence": [
+    {
+      "path": "test/audit/adversarial-2026-10-03.evidence.json",
+      "sha256": "3ebba913ee6dff24934f03634b94615f8abbf5404de4423c6c41f86cdb53f8b9",
+      "containsFullProductionSourceDigests": true
+    },
+    {
+      "path": "test/audit/adversarial-2026-10-03-second.evidence.json",
+      "sha256": "8127a0c153a5866d28ec5791d9bdb22259b464e7675bb0ca36f9e83012658bf3"
+    }
+  ],
+  "historicalReportBindings": "Earlier report hashes identify the report snapshot at that pass. Original source/run/oracle evidence is retained; this evidence binds the current reports.",
+  "oracle": {
+    "path": "test/audit/adversarial-2026-10-03-third.mjs",
+    "sha256": "03d7d5617224f71b15b59920b2f2ba6d0164848bc466a89bad6aabe95bf82282",
+    "asserts": "required behavior",
+    "exitCode": 1,
+    "tests": 5,
+    "suites": 0,
+    "pass": 0,
+    "fail": 5,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "regressions": {
+    "runtime": {
+      "files": [
+        "test/inference-relay.test.ts",
+        "test/platform-egress.test.ts",
+        "test/host-tenure.test.ts",
+        "test/session-history.test.ts",
+        "test/delivery-deadlines.test.ts"
+      ],
+      "exitCode": 0,
+      "tests": 81,
+      "suites": 0,
+      "pass": 81,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "ledger": {
+      "files": [
+        "test/platform-request-ledger.test.ts"
+      ],
+      "exitCode": 0,
+      "tests": 20,
+      "suites": 0,
+      "pass": 20,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "totalSelectedRegressionPass": 361,
+  "localSigkillCoverage": {
+    "executed": 2,
+    "owner": "RequestLedger",
+    "testFile": "test/platform-request-ledger.test.ts",
+    "boundaries": [
+      "during-effect",
+      "after-outcome"
+    ],
+    "target": "Self-killing child process created by the test, operating on a disposable ledger only",
+    "qualification": "Not a full crash lane, another owner, native VM proof or power-loss proof"
+  },
+  "coverage": {
+    "path": "test/audit/adversarial-2026-10-03.coverage.json",
+    "sha256": "55ad8a0ec635c286b51b627b350be6060b8ca0b17eac09674fd1cbb5b487dc87",
+    "productionFiles": 356,
+    "counts": {
+      "WHOLE_FILE_READ_SELECTED_BOUNDARIES": 19,
+      "TARGETED_BOUNDARY_READ": 36,
+      "NO_RECORDED_BOUNDARY_REVIEW": 301
+    },
+    "definitions": {
+      "WHOLE_FILE_READ_SELECTED_BOUNDARIES": "Entire file read; only listed boundary judgments supported. Not exhaustive semantic review or a clean verdict.",
+      "TARGETED_BOUNDARY_READ": "Selected functions/call sites reviewed; rest of file unqualified.",
+      "NO_RECORDED_BOUNDARY_REVIEW": "This audit has no recorded boundary judgment for this file. Prior historical audits and passing tests do not upgrade it."
+    }
+  },
+  "fixtureDigests": {
+    "test/inference-relay.test.ts": "89a07474e4ecfeb1a98d3e3da2e2c8619ddddd76557f0ffb394bab7359e4daa8",
+    "test/platform-egress.test.ts": "d2b64e6b6f78394bf164b6e20a7a7ad03b5e64fe275247b6a0c060bc2f4dc665",
+    "test/host-tenure.test.ts": "9716b3fe6a9a1a740ba88f88f2aa1ea7bb27f5c7a2db699963c031133efcf3b1",
+    "test/session-history.test.ts": "8e402aecb12886a79ddf671c6a140f4bd1a86abae1abf6505bacb1e1a62499c1",
+    "test/delivery-deadlines.test.ts": "7a4364546039f8bd9a51175fe5ed562e5bfc035f9ba7b00365390bcfd64b8f18",
+    "test/platform-request-ledger.test.ts": "18fe5564aa9f1873314ca38f4f3eab5291c5ffe7aabe25810d0c87725a6d164f",
+    "test/fixtures/tls-provider.ts": "5eac6f5bb758bde416278bf9557d9c57730fb7f5bf011d32b6877e98cdd8a81e",
+    "scripts/local-test-guard.mjs": "324f0130b33d5ea7035a4f290f6f536be2a34da15c1a8402cc9fe741f30f0fe6"
+  },
+  "compiledDigests": {
+    "dist/src/runtime/inference-relay.js": "0cc15ec97339adb8e981340e235bb9b2f3fbcfab7257b08fd964795d903bab68",
+    "dist/src/runtime/egress-forwarder.js": "4f0e9ebb112fef29fe2e90eee87312ce84ffbb77eedc929b8303a09c144e4f36",
+    "dist/src/platform/host/egress.js": "7592be7a13a5a5a8c1740fb60016389dd726a3c135b94e51f12af4a79eb29bed",
+    "dist/src/platform/guest/egress.js": "ec4c09b692c0718cc8bad23b0bafaa2b3033da08e2f8e19a93a1cbc8cc24a5c3",
+    "dist/src/frame.js": "4c8c54cccb9d6e46a5eb7353970ba69edf522fc27b05afe60275af0580136ae2",
+    "dist/src/platform/guest/requests.js": "c132b8296ce857c48f446ef6213644ceaac10f39f4d6e5f7ed0872bd7108a67b",
+    "dist/src/domain/errors.js": "8d6f58de9204cacb54d5ef5873b2ff065a0d3de6d85d4bfca893040b6a8866d0",
+    "dist/test/inference-relay.test.js": "4e225404a5b05bb7d1a6ea34d75e8b381cb373fab8f63a86e7514e2e27efa245",
+    "dist/test/platform-egress.test.js": "0bde764ca1e6f37a86e28f0057cec32876dba4713f9c3f517c4e8a762b144e4b",
+    "dist/test/host-tenure.test.js": "4e3f8a39b2d2a08c055846a39f87cfabb345129586428a49342d0e25695abb9c",
+    "dist/test/session-history.test.js": "0b1368361f2f4d78592ed800930fae32d854e6ad4cd2ff8db9e4e3645aa54bf5",
+    "dist/test/delivery-deadlines.test.js": "073bbb237d9ee5f1a797cd2ceb2c80938c3f507eb62008a72ce3c3dce366f888",
+    "dist/test/platform-request-ledger.test.js": "e742b3e896e59b98480a92b2b5e30ef18634470354ea20e1331f6ea806a1dc9e"
+  },
+  "findings": [
+    {
+      "id": "AV-20261003-13",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-14",
+      "priority": "P1",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-15",
+      "priority": "P1",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-16",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-17",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    }
+  ],
+  "observedDiagnostics": [
+    {
+      "rejected": "EIO",
+      "listening": true,
+      "socketName": true
+    },
+    [
+      {
+        "boundary": "forgetBoot",
+        "activeRunsAfterResolution": 1,
+        "issued": true,
+        "error": null,
+        "oldRelayStillAnswers": true
+      },
+      {
+        "boundary": "stop",
+        "activeRunsAfterResolution": 1,
+        "issued": true,
+        "error": null
+      }
+    ],
+    {
+      "forwarderEnded": true,
+      "retainedAfterEachEnd": [
+        1,
+        2,
+        3
+      ],
+      "stalePlaceholderStillAnswers": true,
+      "explicitReleaseControl": "closed"
+    },
+    {
+      "concurrent": 1,
+      "expectedConnections": 4,
+      "listening": 4,
+      "detached": 6
+    },
+    {
+      "original": "refused",
+      "corruptBoolean": "false",
+      "status": "done",
+      "replayResolved": true,
+      "replayValue": null,
+      "error": null,
+      "effects": 1
+    }
+  ],
+  "checks": {
+    "documents": "PASS",
+    "whitespace": "PASS",
+    "productionDiff": "UNCHANGED",
+    "coverageInventory": "PASS",
+    "evidenceBindings": "PASS"
+  },
+  "logs": {
+    "runtime": {
+      "path": "/tmp/oma-adversarial-third-regressions.log",
+      "sha256": "b59132d0bb9c072dca5c6e394429f80a92bc25dae2bda2a270909a113fee67fc",
+      "releaseEvidence": false
+    },
+    "ledger": {
+      "path": "/tmp/oma-adversarial-third-ledger-regressions.log",
+      "sha256": "9f81711631e224d690655bb380194517f28c993415b1a0db6a29e53ebfb33b8f",
+      "releaseEvidence": false
+    },
+    "oracle": {
+      "path": "/tmp/oma-adversarial-third-oracles.log",
+      "sha256": "f631869e76b1f583558908efcd599511bc652baa884fc9c5ff443bf9ed149d01",
+      "releaseEvidence": false
+    },
+    "documents": {
+      "path": "/tmp/oma-adversarial-third-documents.log",
+      "sha256": "945076a51f4ab9ab6b7232f3cb52be13e091f25bc32d89e49bea2e6c17176467",
+      "releaseEvidence": false
+    }
+  },
+  "reportDigests": {
+    "docs/HANDOFF.md": "ae975fae67223d951b471966710d87a84de4af3d8b96aec338731404e5053fbe",
+    "docs/priority-0-audit.md": "18f2a6a111ee79bf76d779d7166f2a9f42f50b04e96874cf7378e23f7e5146a5",
+    "docs/implementation/validation.md": "2724ee0d09039e9394a83b7d490ef9791373379c009683ea2f3a80ed07046add"
+  },
+  "notRun": [
+    "aggregate npm test",
+    "real systemd services",
+    "user OMA/VM",
+    "native macOS",
+    "external or paid providers",
+    "full SIGKILL/powercut qualification"
+  ],
+  "qualificationLimit": "No production fix. Actual disposable Unix sockets and product pool/service/parser with fixture-supplied completed byte channels. No native peer authentication, VM boot, actual engine or external provider. Existing TLS-provider regressions use loopback/self-signed temporary stand-ins."
+}

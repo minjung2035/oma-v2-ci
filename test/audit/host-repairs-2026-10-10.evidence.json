@@ -1,0 +1,157 @@
+{
+  "revision": "DR42",
+  "baseline": "ae15804000ce6ec9851b2c344c9d96c4268f1cc9",
+  "status": "LOCAL_AND_ACTUAL_PRIMITIVE_PASS",
+  "noSubagents": true,
+  "artifactDirectory": "/home/dev/oma-audit-artifacts/host-repairs-2026-10-10",
+  "directProductionDelta": [
+    "src/entry/guesthost.ts",
+    "src/platform/guest/archive.ts",
+    "src/platform/guest/control.ts",
+    "src/platform/guest/host.ts",
+    "src/platform/guest/packages.ts",
+    "src/platform/guest/project.ts",
+    "src/platform/guest/requests.ts",
+    "src/platform/guest/server.ts",
+    "src/platform/guest/systemd-launcher.ts",
+    "src/platform/host/egress.ts",
+    "src/platform/host/guest-link.ts",
+    "src/platform/host/host-api.ts",
+    "src/platform/host/keychain-client.ts",
+    "src/platform/host/keychain.ts",
+    "src/platform/host/project-sync.ts",
+    "src/platform/host/service.ts",
+    "src/platform/host/vz-driver.ts",
+    "src/platform/guest/project-mutations.ts",
+    "src/platform/host/native-channel.ts",
+    "src/platform/rpc-server.ts",
+    "src/runtime/process-writer.ts"
+  ],
+  "baselineNativeTests": {
+    "pass": 37,
+    "fail": 0
+  },
+  "targeted": {
+    "pass": 274,
+    "fail": 0
+  },
+  "actualSystemd": {
+    "status": "PASS",
+    "scope": "actual Linux user systemd unit; live holder/child with no socket, timed stop unknown, full stop and collected-unit proof",
+    "society": "dr42-46f958b2",
+    "first": "unknown",
+    "still": "MainPID=2638500\nControlGroup=/user.slice/user-1001.slice/user@1001.service/app.slice/oma-session-dr42-46f958b2.service\nActiveState=deactivating\n",
+    "second": "stopped",
+    "collected": "stopped",
+    "final": "MainPID=0\nControlPID=0\nControlGroup=\nLoadState=not-found\nActiveState=inactive\n",
+    "processes": {
+      "pid": 2638500,
+      "child": 2638507
+    }
+  },
+  "notRun": [
+    "native macOS VM/Keychain",
+    "VM power loss",
+    "paid provider",
+    "release"
+  ],
+  "firstFullSuite": {
+    "pass": 4008,
+    "fail": 0,
+    "proof": {
+      "lane": "local",
+      "code": 0,
+      "signal": null,
+      "seconds": 353.842,
+      "input": {
+        "files": 15439,
+        "digest": "0005daf2e0390bf6f4632a5cb6359a3cb3b8914cb5e2dfb9bb5b4d9aac72f02c"
+      },
+      "afterInput": {
+        "files": 15439,
+        "digest": "0005daf2e0390bf6f4632a5cb6359a3cb3b8914cb5e2dfb9bb5b4d9aac72f02c"
+      },
+      "changed": [],
+      "logSha256": "30ce81190fba7282dddb7d2ac9732b556ad1a06ec6e96dea2941802eb3e18b5b",
+      "node": "v24.21.0",
+      "uid": 1001,
+      "path": "/opt/oma-test-node/bin:/tmp/oma-repair-2026-10-09/bin:/home/dev/.local/bin:/usr/bin:/bin",
+      "tmpdir": "/var/tmp",
+      "started": "2026-10-10T12:01:28.955Z",
+      "finished": "2026-10-10T12:07:22.837Z"
+    },
+    "subsequentChange": "Historical ledger result/key binding before pending mutation owner; same-process writer deadlines and global package fence added, then reverified with fresh input"
+  },
+  "ledgerTargeted": {
+    "pass": 59,
+    "fail": 0
+  },
+  "lockTargeted": {
+    "pass": 87,
+    "fail": 0
+  },
+  "packageFenceTargeted": {
+    "pass": 65,
+    "fail": 0
+  },
+  "nativeLoopFinding": "NOT_REPRODUCED_AT_BASELINE: line consumption already present; duplicated parser/correlation and UTF-8 per-line validation repaired",
+  "finalFullSuite": {
+    "pass": 4010,
+    "fail": 0,
+    "proof": {
+      "lane": "local",
+      "code": 0,
+      "signal": null,
+      "seconds": 353.201,
+      "input": {
+        "files": 15439,
+        "digest": "efbad65e03c83dbc3fb64264c17b972a186403b5be58c93ebb4c8dbfc0fc913d"
+      },
+      "afterInput": {
+        "files": 15439,
+        "digest": "efbad65e03c83dbc3fb64264c17b972a186403b5be58c93ebb4c8dbfc0fc913d"
+      },
+      "changed": [],
+      "logSha256": "51334d90e048b162885e76b5e4f739232cbae6bed17f219600041936acb78b9f",
+      "node": "v24.21.0",
+      "uid": 1001,
+      "path": "/opt/oma-test-node/bin:/tmp/oma-repair-2026-10-09/bin:/home/dev/.local/bin:/usr/bin:/bin",
+      "tmpdir": "/var/tmp",
+      "started": "2026-10-10T12:26:46.218Z",
+      "finished": "2026-10-10T12:32:39.465Z"
+    }
+  },
+  "actualCrash": {
+    "pass": 63,
+    "fail": 0,
+    "scope": "actual primitive SIGSTOP, parent SIGKILL, restart and repeated recovery; no VM power-loss or entrypoint crash claim",
+    "proof": {
+      "lane": "crash",
+      "code": 0,
+      "signal": null,
+      "seconds": 50.401,
+      "input": {
+        "files": 15439,
+        "digest": "efbad65e03c83dbc3fb64264c17b972a186403b5be58c93ebb4c8dbfc0fc913d"
+      },
+      "afterInput": {
+        "files": 15439,
+        "digest": "efbad65e03c83dbc3fb64264c17b972a186403b5be58c93ebb4c8dbfc0fc913d"
+      },
+      "changed": [],
+      "logSha256": "842b81e390846b7a1bd5cf229c7c71bedd7a201f8065089529fa25c6c91a0521",
+      "node": "v24.21.0",
+      "uid": 1001,
+      "path": "/opt/oma-test-node/bin:/tmp/oma-repair-2026-10-09/bin:/home/dev/.local/bin:/usr/bin:/bin",
+      "tmpdir": "/var/tmp",
+      "started": "2026-10-10T12:34:19.634Z",
+      "finished": "2026-10-10T12:35:10.089Z"
+    }
+  },
+  "postRuntimeRecords": "Only HANDOFF, validation and this evidence changed after the frozen runtime input; fresh structure/input checks applied separately",
+  "reviewScope": {
+    "directProductionDelta": 21,
+    "inheritedNotReviewed": 50,
+    "scope": "changed source delta and affected owners only"
+  }
+}

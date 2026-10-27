@@ -1,0 +1,111 @@
+{
+  "name": "@oma/tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    },
+    "./ask-user-question/component": {
+      "types": "./dist/ask-user-question/component.d.ts",
+      "default": "./dist/ask-user-question/component.js"
+    },
+    "./ask-user-question/presenter": {
+      "types": "./dist/ask-user-question/presenter.d.ts",
+      "default": "./dist/ask-user-question/presenter.js"
+    },
+    "./cells": {
+      "types": "./dist/cells.d.ts",
+      "default": "./dist/cells.js"
+    },
+    "./compact-tools": {
+      "types": "./dist/compact-tools.d.ts",
+      "default": "./dist/compact-tools.js"
+    },
+    "./dashboard": {
+      "types": "./dist/dashboard.d.ts",
+      "default": "./dist/dashboard.js"
+    },
+    "./keys": {
+      "types": "./dist/keys.d.ts",
+      "default": "./dist/keys.js"
+    },
+    "./mail-names": {
+      "types": "./dist/mail-names.d.ts",
+      "default": "./dist/mail-names.js"
+    },
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "default": "./dist/model.js"
+    },
+    "./panel-style": {
+      "types": "./dist/panel-style.d.ts",
+      "default": "./dist/panel-style.js"
+    },
+    "./panel-terminal": {
+      "types": "./dist/panel-terminal.d.ts",
+      "default": "./dist/panel-terminal.js"
+    },
+    "./screen": {
+      "types": "./dist/screen.d.ts",
+      "default": "./dist/screen.js"
+    },
+    "./session-mode": {
+      "types": "./dist/session-mode.d.ts",
+      "default": "./dist/session-mode.js"
+    },
+    "./society-panel": {
+      "types": "./dist/society-panel.d.ts",
+      "default": "./dist/society-panel.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "default": "./dist/transcript.js"
+    },
+    "./view/dashboard": {
+      "types": "./dist/view/dashboard.d.ts",
+      "default": "./dist/view/dashboard.js"
+    },
+    "./view/index": {
+      "types": "./dist/view/index.d.ts",
+      "default": "./dist/view/index.js"
+    },
+    "./view/labels": {
+      "types": "./dist/view/labels.d.ts",
+      "default": "./dist/view/labels.js"
+    },
+    "./view/layout": {
+      "types": "./dist/view/layout.d.ts",
+      "default": "./dist/view/layout.js"
+    },
+    "./view/screens": {
+      "types": "./dist/view/screens.d.ts",
+      "default": "./dist/view/screens.js"
+    },
+    "./view/text": {
+      "types": "./dist/view/text.d.ts",
+      "default": "./dist/view/text.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/tui",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@earendil-works/pi-tui": "1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

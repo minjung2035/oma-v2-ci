@@ -1,0 +1,65 @@
+{
+  "name": "@oma/tool-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./batch-view": {
+      "types": "./dist/batch-view.d.ts",
+      "default": "./dist/batch-view.js"
+    },
+    "./child-env": {
+      "types": "./dist/child-env.d.ts",
+      "default": "./dist/child-env.js"
+    },
+    "./contained-search": {
+      "types": "./dist/contained-search.d.ts",
+      "default": "./dist/contained-search.js"
+    },
+    "./contained-tools": {
+      "types": "./dist/contained-tools.d.ts",
+      "default": "./dist/contained-tools.js"
+    },
+    "./provenance": {
+      "types": "./dist/provenance.d.ts",
+      "default": "./dist/provenance.js"
+    },
+    "./shared": {
+      "types": "./dist/shared.d.ts",
+      "default": "./dist/shared.js"
+    },
+    "./tool-surface": {
+      "types": "./dist/tool-surface.d.ts",
+      "default": "./dist/tool-surface.js"
+    },
+    "./vendor-bundle": {
+      "types": "./dist/vendor-bundle.d.ts",
+      "default": "./dist/vendor-bundle.js"
+    },
+    "./workspace-guard": {
+      "types": "./dist/workspace-guard.d.ts",
+      "default": "./dist/workspace-guard.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/tool-runtime",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/domain": "0.1.0",
+    "@earendil-works/pi-coding-agent": "1.0.1",
+    "typebox": "1.3.27",
+    "@oma/contracts": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/tool-files": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

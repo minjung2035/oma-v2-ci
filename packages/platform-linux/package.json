@@ -1,0 +1,73 @@
+{
+  "name": "@oma/platform-linux",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./resident-rootfs": {
+      "types": "./dist/resident-rootfs.d.ts",
+      "default": "./dist/resident-rootfs.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "default": "./dist/sandbox.js"
+    },
+    "./sandbox-seccomp": {
+      "types": "./dist/sandbox-seccomp.d.ts",
+      "default": "./dist/sandbox-seccomp.js"
+    },
+    "./namespace-execution": {
+      "types": "./dist/namespace-execution.d.ts",
+      "default": "./dist/namespace-execution.js"
+    },
+    "./runner-scope": {
+      "types": "./dist/runner-scope.d.ts",
+      "default": "./dist/runner-scope.js"
+    },
+    "./git-sandbox": {
+      "types": "./dist/git-sandbox.d.ts",
+      "default": "./dist/git-sandbox.js"
+    },
+    "./credential-stream": {
+      "types": "./dist/credential-stream.d.ts",
+      "default": "./dist/credential-stream.js"
+    },
+    "./worker-spawn": {
+      "types": "./dist/worker-spawn.d.ts",
+      "default": "./dist/worker-spawn.js"
+    },
+    "./candidate-sandbox": {
+      "types": "./dist/candidate-sandbox.d.ts",
+      "default": "./dist/candidate-sandbox.js"
+    },
+    "./peer-identity": {
+      "types": "./dist/peer-identity.d.ts",
+      "default": "./dist/peer-identity.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/platform-linux",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/process": "0.1.0",
+    "@oma/storage": "0.1.0",
+    "koffi": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

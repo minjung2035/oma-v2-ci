@@ -1,0 +1,10 @@
+# MUST [PR-002]: The target drains Maildir; it MUST NOT start a model.
+[Unit]
+Description=Wake OMA @SOCIETY@ Principal mail relay
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
+[Path]
+DirectoryNotEmpty=@STATE@/mail/inboxes/principal/new
+Unit=oma-@SOCIETY@-principal-relay.service
+[Install]
+WantedBy=default.target

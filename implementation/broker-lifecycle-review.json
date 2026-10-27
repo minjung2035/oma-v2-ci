@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "decision": "defer-further-split",
+  "scope": "src/broker.ts lifecycle responsibilities after dispatcher extraction",
+  "reason": "DR44: extract Server readiness and pending-close observations into BrokerListeners with one health/error callback. Admission, authenticated connection/task ownership, actor incarnation/revocation, final drain and Store/lease release stay in Broker. Do not infer reduced feature change cost from source decomposition alone.",
+  "alreadySeparatedOwners": [
+    "src/broker/connection.ts",
+    "src/broker/public-dispatcher.ts",
+    "src/broker/internal-dispatcher.ts",
+    "src/broker/peer-authenticator.ts",
+    "src/runtime/run-registry.ts",
+    "src/runtime/broker-lifetime.ts",
+    "src/runtime/process-lock.ts",
+    "src/broker/listeners.ts"
+  ],
+  "remainingClusters": {
+    "listener-connection-lifetime": {
+      "members": [
+        "Broker.listenInternal",
+        "Broker.listenActor",
+        "Broker.serveFrames",
+        "Broker.closeAdmission",
+        "Broker.drainAndClose"
+      ],
+      "coupledState": [
+        "connections",
+        "executingTasks",
+        "draining",
+        "starting",
+        "closing",
+        "health",
+        "storageReservations"
+      ],
+      "decision": "keep-connection-task-admission-and-final-drain-together"
+    },
+    "actor-run-coordination": {
+      "members": [
+        "Broker.openRun",
+        "Broker.listenActor",
+        "Broker.runnerAuth"
+      ],
+      "coupledOwners": [
+        "Store incarnation transaction",
+        "Units observation",
+        "RunRegistry",
+        "PeerAuthenticator"
+      ],
+      "decision": "keep-orchestration-in-broker"
+    }
+  },
+  "splitTriggers": [
+    "listener/drain changes repeatedly require reading dispatcher or mutation code",
+    "a listener-lifetime extraction can own Server/connection/task sets without callbacks into Broker except admission/error reporting",
+    "actor endpoint lifetime can move without duplicating Store incarnation or RunRegistry authority",
+    "the measured file/change surface decreases after the extraction"
+  ],
+  "nonTriggers": [
+    "broker.ts line count alone",
+    "symmetry with dispatcher modules",
+    "desire for another abstraction layer"
+  ]
+}

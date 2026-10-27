@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "about": "WP32: plan oracles that no test carries by their own id, and what carries them instead. `carriedBy` entries are test-name prefixes that must exist and be required by an executed lane; `notRun` says what has not run and why. Checked by scripts/review-closure.mjs (V32A).",
+  "oracles": {
+    "V00A": {
+      "carriedBy": [
+        "R38: the validation record names the verification inputs that were run",
+        "R38: the figures the validation record quotes"
+      ]
+    },
+    "V00B": {
+      "carriedBy": [
+        "R35 evidence policy detects hidden skips",
+        "R35 evidence policy accepts real complete summaries"
+      ]
+    },
+    "V05C": {
+      "carriedBy": [],
+      "notRun": "powercut lane: no approved VM; process SIGKILL results are not power-loss evidence"
+    },
+    "V10B": {
+      "carriedBy": [
+        "R37: native preparation owns the shutdown barrier",
+        "R37: failure before configuration acquisition"
+      ]
+    },
+    "V25B": {
+      "carriedBy": [],
+      "notRun": "Historical service/cgroup stop qualification is not current native execution evidence; current native scope tests do not reassign these physical oracle meanings."
+    },
+    "V26A": {
+      "carriedBy": [
+        "R14: fatal UTF-8/JSON/length/EOF never allows",
+        "R14: disconnect preserves dispatched ownership",
+        "R15: reconnect after a partial header"
+      ]
+    },
+    "V29B": {
+      "carriedBy": [
+        "V02A:",
+        "V32A: the committed ledger"
+      ]
+    },
+    "V30B": {
+      "carriedBy": [],
+      "notRun": "Historical cgroup receipt qualification and powercut/provider environments have not run on the current native input."
+    },
+    "V32B": {
+      "carriedBy": [
+        "R38: the validation record names the verification inputs that were run"
+      ],
+      "notRun": "ci: work branch 3f0f615113e5cd32116c3959ecb506df6454f5ae pushed; selected native CI passed, full qualification and Darwin G-PROCESS/G-FILES/G-AUTH remain incomplete"
+    },
+    "V03A": {
+      "carriedBy": [],
+      "notRun": "Historical systemd renderer qualification retired by DR49; preserved raw sources are not current native PASS."
+    },
+    "V03B": {
+      "carriedBy": [],
+      "notRun": "Historical user-manager parser qualification retired by DR49; native observation tests have separate names."
+    }
+  }
+}

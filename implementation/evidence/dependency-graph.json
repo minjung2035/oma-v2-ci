@@ -1,0 +1,2501 @@
+{
+ "sourceFiles": [
+  "apps/oma/src/application/exit.ts",
+  "apps/oma/src/application/extensions.ts",
+  "apps/oma/src/application/local-packages.ts",
+  "apps/oma/src/application/mail.ts",
+  "apps/oma/src/application/project-session-settings.ts",
+  "apps/oma/src/application/project-settings.ts",
+  "apps/oma/src/application/settings.ts",
+  "apps/oma/src/application/society-bootstrap.ts",
+  "apps/oma/src/application/society-conversation.ts",
+  "apps/oma/src/application/society-interaction.ts",
+  "apps/oma/src/application/society-panel.ts",
+  "apps/oma/src/application/society-runtime.ts",
+  "apps/oma/src/application/society-transition.ts",
+  "apps/oma/src/application/status-observation.ts",
+  "apps/oma/src/broker/broker-composition.ts",
+  "apps/oma/src/broker/composition.ts",
+  "apps/oma/src/broker/git-composition.ts",
+  "apps/oma/src/broker/git-ledger.ts",
+  "apps/oma/src/broker/lifecycle-composition.ts",
+  "apps/oma/src/broker/lifecycle-ledger.ts",
+  "apps/oma/src/broker/mail-composition.ts",
+  "apps/oma/src/broker/mail-effects.ts",
+  "apps/oma/src/broker/reconcile-composition.ts",
+  "apps/oma/src/broker/review-composition.ts",
+  "apps/oma/src/cli.ts",
+  "apps/oma/src/cli/arguments.ts",
+  "apps/oma/src/cli/cache-codec.ts",
+  "apps/oma/src/cli/commands/agent.ts",
+  "apps/oma/src/cli/commands/context.ts",
+  "apps/oma/src/cli/commands/logs.ts",
+  "apps/oma/src/cli/commands/merge.ts",
+  "apps/oma/src/cli/commands/routes.ts",
+  "apps/oma/src/cli/commands/send.ts",
+  "apps/oma/src/cli/commands/society.ts",
+  "apps/oma/src/cli/commands/status.ts",
+  "apps/oma/src/cli/commands/submit.ts",
+  "apps/oma/src/cli/effects.ts",
+  "apps/oma/src/cli/effects/code.ts",
+  "apps/oma/src/cli/effects/context.ts",
+  "apps/oma/src/cli/effects/goal.ts",
+  "apps/oma/src/cli/effects/mail.ts",
+  "apps/oma/src/cli/effects/submit.ts",
+  "apps/oma/src/cli/exit.ts",
+  "apps/oma/src/cli/request-intent.ts",
+  "apps/oma/src/cli/request-service.ts",
+  "apps/oma/src/cli/transport.ts",
+  "apps/oma/src/diagnostics/files.ts",
+  "apps/oma/src/diagnostics/integrity.ts",
+  "apps/oma/src/diagnostics/ledger.ts",
+  "apps/oma/src/diagnostics/mail.ts",
+  "apps/oma/src/engine/personal-composition.ts",
+  "apps/oma/src/engine/personal-entry.ts",
+  "apps/oma/src/engine/presentation.ts",
+  "apps/oma/src/engine/principal-profile.ts",
+  "apps/oma/src/engine/resident-effects.ts",
+  "apps/oma/src/engine/settings-files.ts",
+  "apps/oma/src/engine/start-effects.ts",
+  "apps/oma/src/entry/broker.ts",
+  "apps/oma/src/entry/candidate-check.ts",
+  "apps/oma/src/entry/module-conformance.ts",
+  "apps/oma/src/entry/oma-society.ts",
+  "apps/oma/src/entry/oma.ts",
+  "apps/oma/src/entry/personal-host.ts",
+  "apps/oma/src/entry/pi-interactive.ts",
+  "apps/oma/src/entry/pi-personal.ts",
+  "apps/oma/src/entry/pi-settings-preload.ts",
+  "apps/oma/src/entry/prepare-society.ts",
+  "apps/oma/src/entry/quarantine.ts",
+  "apps/oma/src/entry/runner.ts",
+  "apps/oma/src/platform/package-files.ts",
+  "apps/oma/src/ports/ledger.ts",
+  "apps/oma/src/ports/package-files.ts",
+  "apps/oma/src/ports/runtime.ts",
+  "apps/oma/src/request-cache.ts",
+  "apps/oma/src/runner.ts",
+  "apps/oma/src/runtime/assets.ts",
+  "apps/oma/src/runtime/broker-channel.ts",
+  "apps/oma/src/runtime/broker-supervisor.ts",
+  "apps/oma/src/runtime/candidate-checks.ts",
+  "apps/oma/src/runtime/client-preload.ts",
+  "apps/oma/src/runtime/client-runtime.ts",
+  "apps/oma/src/runtime/compile-cache.ts",
+  "apps/oma/src/runtime/connect-proxy.ts",
+  "apps/oma/src/runtime/deployment-manifest.ts",
+  "apps/oma/src/runtime/execution-runtime.ts",
+  "apps/oma/src/runtime/extension-integrity.ts",
+  "apps/oma/src/runtime/host-arguments.ts",
+  "apps/oma/src/runtime/host-tenure.ts",
+  "apps/oma/src/runtime/inference-relay.ts",
+  "apps/oma/src/runtime/keychain-credentials.ts",
+  "apps/oma/src/runtime/locked-files.ts",
+  "apps/oma/src/runtime/native-residents.ts",
+  "apps/oma/src/runtime/native-support.ts",
+  "apps/oma/src/runtime/packages/index.ts",
+  "apps/oma/src/runtime/packages/store.ts",
+  "apps/oma/src/runtime/personal-models.ts",
+  "apps/oma/src/runtime/personal-session.ts",
+  "apps/oma/src/runtime/personal-settings.ts",
+  "apps/oma/src/runtime/principal-delivery.ts",
+  "apps/oma/src/runtime/project-binding.ts",
+  "apps/oma/src/runtime/provision.ts",
+  "apps/oma/src/runtime/quarantine-execution.ts",
+  "apps/oma/src/runtime/resident-tools.ts",
+  "apps/oma/src/runtime/session-catalog.ts",
+  "apps/oma/src/runtime/session-history.ts",
+  "apps/oma/src/runtime/session-mode.ts",
+  "apps/oma/src/runtime/session-storage-state.ts",
+  "apps/oma/src/runtime/session-storage.ts",
+  "apps/oma/src/runtime/society-lease.ts",
+  "apps/oma/src/runtime/society-preparation.ts",
+  "apps/oma/src/runtime/society-slot.ts",
+  "apps/oma/src/runtime/supervision-channel.ts",
+  "apps/oma/src/runtime/user-files.ts",
+  "apps/oma/src/views.ts",
+  "apps/oma/src/views/mail-notices.ts",
+  "apps/oma/src/views/pending-work.ts",
+  "packages/broker/src/connection.ts",
+  "packages/broker/src/index.ts",
+  "packages/broker/src/internal-dispatcher.ts",
+  "packages/broker/src/lifetime.ts",
+  "packages/broker/src/listeners.ts",
+  "packages/broker/src/logs.ts",
+  "packages/broker/src/peer-authenticator.ts",
+  "packages/broker/src/peer-pin.ts",
+  "packages/broker/src/ports.ts",
+  "packages/broker/src/principal-endpoint.ts",
+  "packages/broker/src/process-ancestry.ts",
+  "packages/broker/src/public-dispatcher.ts",
+  "packages/broker/src/replies.ts",
+  "packages/broker/src/run-registry.ts",
+  "packages/broker/src/status-refresh.ts",
+  "packages/client/src/channel.ts",
+  "packages/client/src/connection.ts",
+  "packages/client/src/context.ts",
+  "packages/client/src/errors.ts",
+  "packages/client/src/index.ts",
+  "packages/client/src/receipts.ts",
+  "packages/client/src/request-service.ts",
+  "packages/client/src/runtime.ts",
+  "packages/client/src/settings.ts",
+  "packages/client/src/transport.ts",
+  "packages/config/src/defaults.ts",
+  "packages/config/src/generations.ts",
+  "packages/config/src/index.ts",
+  "packages/config/src/operations.ts",
+  "packages/config/src/policy.ts",
+  "packages/config/src/state-format.ts",
+  "packages/contracts/src/assets.ts",
+  "packages/contracts/src/attestation.ts",
+  "packages/contracts/src/credentials.ts",
+  "packages/contracts/src/durable.ts",
+  "packages/contracts/src/errors.ts",
+  "packages/contracts/src/files.ts",
+  "packages/contracts/src/git.ts",
+  "packages/contracts/src/host.ts",
+  "packages/contracts/src/identity.ts",
+  "packages/contracts/src/index.ts",
+  "packages/contracts/src/integration.ts",
+  "packages/contracts/src/internal-wire.ts",
+  "packages/contracts/src/ledger.ts",
+  "packages/contracts/src/presentation.ts",
+  "packages/contracts/src/public-wire.ts",
+  "packages/contracts/src/publication.ts",
+  "packages/contracts/src/runtime.ts",
+  "packages/contracts/src/stream.ts",
+  "packages/contracts/src/values.ts",
+  "packages/domain/src/actor-address.ts",
+  "packages/domain/src/admission.ts",
+  "packages/domain/src/agent-spec.ts",
+  "packages/domain/src/ask-user-question/envelope.ts",
+  "packages/domain/src/ask-user-question/model.ts",
+  "packages/domain/src/ask-user-question/questionnaire.ts",
+  "packages/domain/src/attestation-relations.ts",
+  "packages/domain/src/attestation.ts",
+  "packages/domain/src/authority.ts",
+  "packages/domain/src/batch-settlement.ts",
+  "packages/domain/src/canonical-json.ts",
+  "packages/domain/src/capabilities.ts",
+  "packages/domain/src/child-policy.ts",
+  "packages/domain/src/config-format.ts",
+  "packages/domain/src/context-policy.ts",
+  "packages/domain/src/deployment.ts",
+  "packages/domain/src/derived.ts",
+  "packages/domain/src/display-address.ts",
+  "packages/domain/src/durable.ts",
+  "packages/domain/src/egress.ts",
+  "packages/domain/src/errors.ts",
+  "packages/domain/src/exhaustive.ts",
+  "packages/domain/src/extension-paths.ts",
+  "packages/domain/src/git-facts.ts",
+  "packages/domain/src/host-signals.ts",
+  "packages/domain/src/identifiers.ts",
+  "packages/domain/src/integer-fields.ts",
+  "packages/domain/src/integration-policy.ts",
+  "packages/domain/src/limits.ts",
+  "packages/domain/src/lineage.ts",
+  "packages/domain/src/mail-values.ts",
+  "packages/domain/src/package-policy.ts",
+  "packages/domain/src/paths.ts",
+  "packages/domain/src/protocol-limits.ts",
+  "packages/domain/src/recovery-policy.ts",
+  "packages/domain/src/request-identity.ts",
+  "packages/domain/src/resident-paths.ts",
+  "packages/domain/src/review-bounds.ts",
+  "packages/domain/src/review-evaluation.ts",
+  "packages/domain/src/risk-tier.ts",
+  "packages/domain/src/role-prompts.ts",
+  "packages/domain/src/session-mode.ts",
+  "packages/domain/src/settings-policy.ts",
+  "packages/domain/src/settings.ts",
+  "packages/domain/src/spec-identity.ts",
+  "packages/domain/src/surface-bounds.ts",
+  "packages/domain/src/tool-surface.ts",
+  "packages/domain/src/turn-admission.ts",
+  "packages/domain/src/unseen-text.ts",
+  "packages/domain/src/utf8.ts",
+  "packages/domain/src/validation.ts",
+  "packages/engine/src/credential-store.ts",
+  "packages/engine/src/engine-auth.ts",
+  "packages/engine/src/extension-modules.ts",
+  "packages/engine/src/interactive-channel.ts",
+  "packages/engine/src/interactive-commands.ts",
+  "packages/engine/src/interactive-configuration.ts",
+  "packages/engine/src/interactive-display.ts",
+  "packages/engine/src/interactive-events.ts",
+  "packages/engine/src/interactive-extension.ts",
+  "packages/engine/src/interactive-input.ts",
+  "packages/engine/src/interactive-lifetime.ts",
+  "packages/engine/src/interactive-rpc.ts",
+  "packages/engine/src/interactive-runtime.ts",
+  "packages/engine/src/interactive-selections.ts",
+  "packages/engine/src/interactive-state.ts",
+  "packages/engine/src/interactive-view.ts",
+  "packages/engine/src/interactive.ts",
+  "packages/engine/src/login.ts",
+  "packages/engine/src/oma-theme.ts",
+  "packages/engine/src/open-tui-brand.ts",
+  "packages/engine/src/package-resources.ts",
+  "packages/engine/src/personal-configuration.ts",
+  "packages/engine/src/personal-history.ts",
+  "packages/engine/src/personal-ports.ts",
+  "packages/engine/src/personal-state.ts",
+  "packages/engine/src/personal.ts",
+  "packages/engine/src/pi-adapter.ts",
+  "packages/engine/src/pi-compat/commands.ts",
+  "packages/engine/src/pi-compat/contacts.json",
+  "packages/engine/src/pi-compat/env.ts",
+  "packages/engine/src/pi-compat/interactive-editor.ts",
+  "packages/engine/src/pi-compat/interactive-mode.ts",
+  "packages/engine/src/pi-compat/interactive-tool-setup.ts",
+  "packages/engine/src/pi-compat/interactive-tools.ts",
+  "packages/engine/src/pi-compat/interactive-ui.ts",
+  "packages/engine/src/pi-compat/prompt-editor.ts",
+  "packages/engine/src/pi-compat/search-tool-status.ts",
+  "packages/engine/src/pi-compat/session.ts",
+  "packages/engine/src/pi-compat/settings-files.ts",
+  "packages/engine/src/pi-compat/settings-object.ts",
+  "packages/engine/src/pi-compat/settings.ts",
+  "packages/engine/src/pi-compat/wire.ts",
+  "packages/engine/src/pi-presentation.ts",
+  "packages/engine/src/pi-rpc.ts",
+  "packages/engine/src/pi-runtime.ts",
+  "packages/engine/src/pi-spawn-plan.ts",
+  "packages/engine/src/ports.ts",
+  "packages/engine/src/presentation.ts",
+  "packages/engine/src/principal-events.ts",
+  "packages/engine/src/principal-launch.ts",
+  "packages/engine/src/principal-session.ts",
+  "packages/engine/src/session-directories.ts",
+  "packages/engine/src/session-metadata.ts",
+  "packages/extension/src/ask-user-question.ts",
+  "packages/extension/src/delivery.ts",
+  "packages/extension/src/egress-bridge.ts",
+  "packages/extension/src/index.ts",
+  "packages/extension/src/inference-bridge.ts",
+  "packages/extension/src/mail-tools.ts",
+  "packages/extension/src/principal-channel.ts",
+  "packages/extension/src/principal-tools.ts",
+  "packages/extension/src/prompt-boundary.ts",
+  "packages/extension/src/review-tools.ts",
+  "packages/git/src/candidate-check.ts",
+  "packages/git/src/canonical-command.ts",
+  "packages/git/src/canonical-health.ts",
+  "packages/git/src/context-publication.ts",
+  "packages/git/src/context-repository.ts",
+  "packages/git/src/context.ts",
+  "packages/git/src/index.ts",
+  "packages/git/src/integration-publication.ts",
+  "packages/git/src/integration.ts",
+  "packages/git/src/observe.ts",
+  "packages/git/src/paths.ts",
+  "packages/git/src/ports.ts",
+  "packages/git/src/project-preparation.ts",
+  "packages/git/src/project-snapshot.ts",
+  "packages/git/src/publication.ts",
+  "packages/git/src/quarantine-worker.ts",
+  "packages/git/src/quarantine.ts",
+  "packages/git/src/read-port.ts",
+  "packages/git/src/repository-health.ts",
+  "packages/git/src/repository-port.ts",
+  "packages/git/src/repository.ts",
+  "packages/git/src/submit.ts",
+  "packages/git/src/workspace.ts",
+  "packages/lifecycle/src/actions.ts",
+  "packages/lifecycle/src/contracts.ts",
+  "packages/lifecycle/src/create-publication.ts",
+  "packages/lifecycle/src/create.ts",
+  "packages/lifecycle/src/index.ts",
+  "packages/lifecycle/src/policy.ts",
+  "packages/lifecycle/src/ports.ts",
+  "packages/lifecycle/src/registry-operations.ts",
+  "packages/lifecycle/src/society.ts",
+  "packages/mail/src/addresses.ts",
+  "packages/mail/src/batch-policy.ts",
+  "packages/mail/src/batch-view.ts",
+  "packages/mail/src/batches.ts",
+  "packages/mail/src/display.ts",
+  "packages/mail/src/facts.ts",
+  "packages/mail/src/headers.ts",
+  "packages/mail/src/index.ts",
+  "packages/mail/src/materializer.ts",
+  "packages/mail/src/observations.ts",
+  "packages/mail/src/ports.ts",
+  "packages/mail/src/reconcile.ts",
+  "packages/mail/src/review-documents.ts",
+  "packages/mail/src/routing.ts",
+  "packages/mail/src/serialize.ts",
+  "packages/native/src/audit-origin.ts",
+  "packages/native/src/audit-token.ts",
+  "packages/native/src/cleanup.ts",
+  "packages/native/src/control-socket.ts",
+  "packages/native/src/darwin-metadata.ts",
+  "packages/native/src/descriptor-path.ts",
+  "packages/native/src/directory-layout.ts",
+  "packages/native/src/files.ts",
+  "packages/native/src/identity.ts",
+  "packages/native/src/linux.ts",
+  "packages/native/src/mach-message.ts",
+  "packages/native/src/metadata-observation.ts",
+  "packages/native/src/peer-uid.ts",
+  "packages/native/src/pid-namespace.ts",
+  "packages/native/src/posix-files.ts",
+  "packages/native/src/process-event.ts",
+  "packages/native/src/process-lock.ts",
+  "packages/native/src/process-observation.ts",
+  "packages/native/src/snapshot-reader.ts",
+  "packages/native/src/unix-message.ts",
+  "packages/platform-linux/src/bubblewrap-arguments.ts",
+  "packages/platform-linux/src/candidate-sandbox.ts",
+  "packages/platform-linux/src/credential-stream.ts",
+  "packages/platform-linux/src/git-sandbox.ts",
+  "packages/platform-linux/src/namespace-execution.ts",
+  "packages/platform-linux/src/peer-identity.ts",
+  "packages/platform-linux/src/resident-rootfs.ts",
+  "packages/platform-linux/src/runner-scope.ts",
+  "packages/platform-linux/src/sandbox-seccomp.ts",
+  "packages/platform-linux/src/sandbox.ts",
+  "packages/platform-linux/src/worker-spawn.ts",
+  "packages/platform-mac/src/audit-peer.ts",
+  "packages/platform-mac/src/developer-tools.ts",
+  "packages/platform-mac/src/git-sandbox.ts",
+  "packages/platform-mac/src/keychain-client.ts",
+  "packages/platform-mac/src/mach-address.ts",
+  "packages/platform-mac/src/mach-poll.ts",
+  "packages/platform-mac/src/mach-stream.ts",
+  "packages/platform-mac/src/mach-transport.ts",
+  "packages/platform-mac/src/native-assets.ts",
+  "packages/platform-mac/src/native-channel.ts",
+  "packages/platform-mac/src/path-view.ts",
+  "packages/platform-mac/src/resident-sandbox.ts",
+  "packages/platform-mac/src/seatbelt.ts",
+  "packages/process/src/async.ts",
+  "packages/process/src/coalesced-wake.ts",
+  "packages/process/src/command.ts",
+  "packages/process/src/deadline.ts",
+  "packages/process/src/fence.ts",
+  "packages/process/src/host-loss.ts",
+  "packages/process/src/observed-stream.ts",
+  "packages/process/src/owned-execution.ts",
+  "packages/process/src/packet-stream.ts",
+  "packages/process/src/policies.ts",
+  "packages/process/src/preparation.ts",
+  "packages/process/src/replace.ts",
+  "packages/process/src/resident-logs.ts",
+  "packages/process/src/resident-runtime.ts",
+  "packages/process/src/resident-supervisor.ts",
+  "packages/process/src/restart-policy.ts",
+  "packages/process/src/restic.ts",
+  "packages/process/src/run.ts",
+  "packages/process/src/writer.ts",
+  "packages/protocol/src/alarm.ts",
+  "packages/protocol/src/ask-user-question.ts",
+  "packages/protocol/src/batch-view.ts",
+  "packages/protocol/src/byte-queue.ts",
+  "packages/protocol/src/client-codecs.ts",
+  "packages/protocol/src/delivery-boundary.ts",
+  "packages/protocol/src/frame.ts",
+  "packages/protocol/src/git-execution-view.ts",
+  "packages/protocol/src/host-channel.ts",
+  "packages/protocol/src/jsonl.ts",
+  "packages/protocol/src/log-limits.ts",
+  "packages/protocol/src/log-response.ts",
+  "packages/protocol/src/mac-developer-tools.ts",
+  "packages/protocol/src/methods.ts",
+  "packages/protocol/src/operation-codec.ts",
+  "packages/protocol/src/operation-results.ts",
+  "packages/protocol/src/persisted-formats.ts",
+  "packages/protocol/src/principal-credential.ts",
+  "packages/protocol/src/receipt-chunks.ts",
+  "packages/protocol/src/receipt-codec.ts",
+  "packages/protocol/src/receipt-projector.ts",
+  "packages/protocol/src/receipts.ts",
+  "packages/protocol/src/request-codec.ts",
+  "packages/protocol/src/resident-context.ts",
+  "packages/protocol/src/response-codec.ts",
+  "packages/protocol/src/run-lease.ts",
+  "packages/protocol/src/session-handoff.ts",
+  "packages/protocol/src/status-page.ts",
+  "packages/protocol/src/status-view.ts",
+  "packages/reconcile/src/index.ts",
+  "packages/reconcile/src/operations.ts",
+  "packages/reconcile/src/ports.ts",
+  "packages/reconcile/src/preaccept-event.ts",
+  "packages/review/src/acceptance.ts",
+  "packages/review/src/advancement.ts",
+  "packages/review/src/authority.ts",
+  "packages/review/src/index.ts",
+  "packages/review/src/messages.ts",
+  "packages/review/src/ports.ts",
+  "packages/review/src/preparation.ts",
+  "packages/review/src/status-projection.ts",
+  "packages/review/src/status.ts",
+  "packages/review/src/types.ts",
+  "packages/storage/src/arrival-journal.ts",
+  "packages/storage/src/batch-view.ts",
+  "packages/storage/src/cache-trees.ts",
+  "packages/storage/src/context-files.ts",
+  "packages/storage/src/context-snapshot.ts",
+  "packages/storage/src/context-stream.ts",
+  "packages/storage/src/delivery-receipt.ts",
+  "packages/storage/src/diagnostic-snapshot.ts",
+  "packages/storage/src/directory.ts",
+  "packages/storage/src/durable-fs.ts",
+  "packages/storage/src/execution-journal.ts",
+  "packages/storage/src/execution-staging.ts",
+  "packages/storage/src/facets.ts",
+  "packages/storage/src/file-digest.ts",
+  "packages/storage/src/immutable-file.ts",
+  "packages/storage/src/installation-surface.ts",
+  "packages/storage/src/ledger-reader.ts",
+  "packages/storage/src/mail-notices.ts",
+  "packages/storage/src/mailbox.ts",
+  "packages/storage/src/operation-journal.ts",
+  "packages/storage/src/operation-transitions.ts",
+  "packages/storage/src/output-spool.ts",
+  "packages/storage/src/package-staging.ts",
+  "packages/storage/src/package-tar.ts",
+  "packages/storage/src/preaccept-artifact.ts",
+  "packages/storage/src/preaccept-collection.ts",
+  "packages/storage/src/published-mail.ts",
+  "packages/storage/src/resident-logs.ts",
+  "packages/storage/src/restic-tar.ts",
+  "packages/storage/src/restic-tool.ts",
+  "packages/storage/src/restic-verification.ts",
+  "packages/storage/src/rows.ts",
+  "packages/storage/src/socket-name.ts",
+  "packages/storage/src/staged-tree.ts",
+  "packages/storage/src/store-access.ts",
+  "packages/storage/src/store.ts",
+  "packages/storage/src/submit-spool.ts",
+  "packages/storage/src/transaction.ts",
+  "packages/storage/src/transitions.ts",
+  "packages/storage/src/transport-spool.ts",
+  "packages/storage/src/tree-lease.ts",
+  "packages/tool-files/src/descriptor-files.ts",
+  "packages/tool-files/src/errors.ts",
+  "packages/tool-files/src/index.ts",
+  "packages/tool-hashline/src/index.ts",
+  "packages/tool-lsp/src/index.ts",
+  "packages/tool-lsp/src/lsp-call-scope.ts",
+  "packages/tool-mcp/src/index.ts",
+  "packages/tool-mcp/src/mcp-sdk-env.ts",
+  "packages/tool-runtime/src/batch-view.ts",
+  "packages/tool-runtime/src/child-env.ts",
+  "packages/tool-runtime/src/contained-search.ts",
+  "packages/tool-runtime/src/contained-tools.ts",
+  "packages/tool-runtime/src/provenance.ts",
+  "packages/tool-runtime/src/shared.ts",
+  "packages/tool-runtime/src/tool-surface.ts",
+  "packages/tool-runtime/src/vendor-bundle.ts",
+  "packages/tool-runtime/src/workspace-guard.ts",
+  "packages/tool-web/src/index.ts",
+  "packages/tui/src/app.ts",
+  "packages/tui/src/ask-user-question/component.ts",
+  "packages/tui/src/ask-user-question/presenter.ts",
+  "packages/tui/src/cells.ts",
+  "packages/tui/src/compact-tools.ts",
+  "packages/tui/src/dashboard.ts",
+  "packages/tui/src/keys.ts",
+  "packages/tui/src/mail-names.ts",
+  "packages/tui/src/model.ts",
+  "packages/tui/src/panel-style.ts",
+  "packages/tui/src/panel-terminal.ts",
+  "packages/tui/src/prompt.ts",
+  "packages/tui/src/screen.ts",
+  "packages/tui/src/session-mode.ts",
+  "packages/tui/src/society-panel.ts",
+  "packages/tui/src/transcript.ts",
+  "packages/tui/src/view/dashboard.ts",
+  "packages/tui/src/view/index.ts",
+  "packages/tui/src/view/labels.ts",
+  "packages/tui/src/view/layout.ts",
+  "packages/tui/src/view/notice.ts",
+  "packages/tui/src/view/screens.ts",
+  "packages/tui/src/view/session-mode.ts",
+  "packages/tui/src/view/text.ts"
+ ],
+ "kernel": {
+  "zones": [
+   {
+    "name": "K0-values",
+    "files": [
+     "apps/oma/src/cli/request-intent.ts",
+     "packages/client/src/errors.ts",
+     "packages/config/src/defaults.ts",
+     "packages/domain/src/actor-address.ts",
+     "packages/domain/src/admission.ts",
+     "packages/domain/src/ask-user-question/questionnaire.ts",
+     "packages/domain/src/attestation-relations.ts",
+     "packages/domain/src/batch-settlement.ts",
+     "packages/domain/src/canonical-json.ts",
+     "packages/domain/src/capabilities.ts",
+     "packages/domain/src/child-policy.ts",
+     "packages/domain/src/config-format.ts",
+     "packages/domain/src/context-policy.ts",
+     "packages/domain/src/deployment.ts",
+     "packages/domain/src/derived.ts",
+     "packages/domain/src/display-address.ts",
+     "packages/domain/src/egress.ts",
+     "packages/domain/src/errors.ts",
+     "packages/domain/src/exhaustive.ts",
+     "packages/domain/src/extension-paths.ts",
+     "packages/domain/src/host-signals.ts",
+     "packages/domain/src/identifiers.ts",
+     "packages/domain/src/integer-fields.ts",
+     "packages/domain/src/limits.ts",
+     "packages/domain/src/lineage.ts",
+     "packages/domain/src/mail-values.ts",
+     "packages/domain/src/package-policy.ts",
+     "packages/domain/src/paths.ts",
+     "packages/domain/src/protocol-limits.ts",
+     "packages/domain/src/recovery-policy.ts",
+     "packages/domain/src/request-identity.ts",
+     "packages/domain/src/resident-paths.ts",
+     "packages/domain/src/review-evaluation.ts",
+     "packages/domain/src/risk-tier.ts",
+     "packages/domain/src/role-prompts.ts",
+     "packages/domain/src/session-mode.ts",
+     "packages/domain/src/settings-policy.ts",
+     "packages/domain/src/settings.ts",
+     "packages/domain/src/spec-identity.ts",
+     "packages/domain/src/surface-bounds.ts",
+     "packages/domain/src/tool-surface.ts",
+     "packages/domain/src/turn-admission.ts",
+     "packages/domain/src/unseen-text.ts",
+     "packages/domain/src/utf8.ts",
+     "packages/process/src/command.ts",
+     "packages/protocol/src/delivery-boundary.ts",
+     "packages/protocol/src/log-limits.ts",
+     "packages/protocol/src/session-handoff.ts",
+     "packages/tool-files/src/errors.ts"
+    ]
+   },
+   {
+    "name": "K1-codecs",
+    "files": [
+     "apps/oma/src/cli/cache-codec.ts",
+     "packages/domain/src/agent-spec.ts",
+     "packages/domain/src/ask-user-question/envelope.ts",
+     "packages/domain/src/attestation.ts",
+     "packages/domain/src/durable.ts",
+     "packages/domain/src/git-facts.ts",
+     "packages/domain/src/integration-policy.ts",
+     "packages/domain/src/review-bounds.ts",
+     "packages/domain/src/validation.ts",
+     "packages/mail/src/addresses.ts",
+     "packages/mail/src/facts.ts",
+     "packages/mail/src/headers.ts",
+     "packages/native/src/metadata-observation.ts",
+     "packages/protocol/src/ask-user-question.ts",
+     "packages/protocol/src/batch-view.ts",
+     "packages/protocol/src/byte-queue.ts",
+     "packages/protocol/src/client-codecs.ts",
+     "packages/protocol/src/frame.ts",
+     "packages/protocol/src/git-execution-view.ts",
+     "packages/protocol/src/host-channel.ts",
+     "packages/protocol/src/jsonl.ts",
+     "packages/protocol/src/log-response.ts",
+     "packages/protocol/src/mac-developer-tools.ts",
+     "packages/protocol/src/methods.ts",
+     "packages/protocol/src/operation-results.ts",
+     "packages/protocol/src/persisted-formats.ts",
+     "packages/protocol/src/principal-credential.ts",
+     "packages/protocol/src/receipt-chunks.ts",
+     "packages/protocol/src/receipt-codec.ts",
+     "packages/protocol/src/receipts.ts",
+     "packages/protocol/src/request-codec.ts",
+     "packages/protocol/src/resident-context.ts",
+     "packages/protocol/src/response-codec.ts",
+     "packages/protocol/src/run-lease.ts",
+     "packages/protocol/src/status-page.ts",
+     "packages/protocol/src/status-view.ts"
+    ]
+   },
+   {
+    "name": "K2-mechanisms",
+    "files": [
+     "packages/client/src/channel.ts",
+     "packages/client/src/connection.ts",
+     "packages/client/src/context.ts",
+     "packages/client/src/index.ts",
+     "packages/client/src/receipts.ts",
+     "packages/client/src/request-service.ts",
+     "packages/client/src/runtime.ts",
+     "packages/client/src/settings.ts",
+     "packages/client/src/transport.ts",
+     "packages/config/src/generations.ts",
+     "packages/config/src/index.ts",
+     "packages/config/src/operations.ts",
+     "packages/config/src/policy.ts",
+     "packages/config/src/state-format.ts",
+     "packages/domain/src/ask-user-question/model.ts",
+     "packages/domain/src/authority.ts",
+     "packages/git/src/candidate-check.ts",
+     "packages/git/src/project-preparation.ts",
+     "packages/git/src/quarantine-worker.ts",
+     "packages/native/src/audit-origin.ts",
+     "packages/native/src/audit-token.ts",
+     "packages/native/src/cleanup.ts",
+     "packages/native/src/control-socket.ts",
+     "packages/native/src/darwin-metadata.ts",
+     "packages/native/src/descriptor-path.ts",
+     "packages/native/src/directory-layout.ts",
+     "packages/native/src/files.ts",
+     "packages/native/src/identity.ts",
+     "packages/native/src/linux.ts",
+     "packages/native/src/mach-message.ts",
+     "packages/native/src/peer-uid.ts",
+     "packages/native/src/pid-namespace.ts",
+     "packages/native/src/posix-files.ts",
+     "packages/native/src/process-event.ts",
+     "packages/native/src/process-lock.ts",
+     "packages/native/src/process-observation.ts",
+     "packages/native/src/snapshot-reader.ts",
+     "packages/native/src/unix-message.ts",
+     "packages/process/src/async.ts",
+     "packages/process/src/coalesced-wake.ts",
+     "packages/process/src/deadline.ts",
+     "packages/process/src/fence.ts",
+     "packages/process/src/host-loss.ts",
+     "packages/process/src/observed-stream.ts",
+     "packages/process/src/owned-execution.ts",
+     "packages/process/src/packet-stream.ts",
+     "packages/process/src/policies.ts",
+     "packages/process/src/preparation.ts",
+     "packages/process/src/replace.ts",
+     "packages/process/src/resident-logs.ts",
+     "packages/process/src/resident-runtime.ts",
+     "packages/process/src/resident-supervisor.ts",
+     "packages/process/src/restart-policy.ts",
+     "packages/process/src/restic.ts",
+     "packages/process/src/run.ts",
+     "packages/process/src/writer.ts",
+     "packages/protocol/src/alarm.ts",
+     "packages/storage/src/arrival-journal.ts",
+     "packages/storage/src/batch-view.ts",
+     "packages/storage/src/cache-trees.ts",
+     "packages/storage/src/context-files.ts",
+     "packages/storage/src/context-snapshot.ts",
+     "packages/storage/src/context-stream.ts",
+     "packages/storage/src/delivery-receipt.ts",
+     "packages/storage/src/directory.ts",
+     "packages/storage/src/durable-fs.ts",
+     "packages/storage/src/execution-journal.ts",
+     "packages/storage/src/execution-staging.ts",
+     "packages/storage/src/file-digest.ts",
+     "packages/storage/src/immutable-file.ts",
+     "packages/storage/src/installation-surface.ts",
+     "packages/storage/src/mail-notices.ts",
+     "packages/storage/src/mailbox.ts",
+     "packages/storage/src/output-spool.ts",
+     "packages/storage/src/package-staging.ts",
+     "packages/storage/src/package-tar.ts",
+     "packages/storage/src/preaccept-artifact.ts",
+     "packages/storage/src/preaccept-collection.ts",
+     "packages/storage/src/published-mail.ts",
+     "packages/storage/src/resident-logs.ts",
+     "packages/storage/src/restic-tar.ts",
+     "packages/storage/src/restic-tool.ts",
+     "packages/storage/src/restic-verification.ts",
+     "packages/storage/src/socket-name.ts",
+     "packages/storage/src/staged-tree.ts",
+     "packages/storage/src/submit-spool.ts",
+     "packages/storage/src/transport-spool.ts",
+     "packages/storage/src/tree-lease.ts",
+     "packages/tool-files/src/descriptor-files.ts",
+     "packages/tool-files/src/index.ts"
+    ]
+   },
+   {
+    "name": "K3-ledger",
+    "files": [
+     "packages/protocol/src/operation-codec.ts",
+     "packages/protocol/src/receipt-projector.ts",
+     "packages/storage/src/diagnostic-snapshot.ts",
+     "packages/storage/src/facets.ts",
+     "packages/storage/src/ledger-reader.ts",
+     "packages/storage/src/operation-journal.ts",
+     "packages/storage/src/operation-transitions.ts",
+     "packages/storage/src/rows.ts",
+     "packages/storage/src/store-access.ts",
+     "packages/storage/src/store.ts",
+     "packages/storage/src/transaction.ts",
+     "packages/storage/src/transitions.ts"
+    ]
+   }
+  ],
+  "runtimeEdgeMatrix": {
+   "K0-values -> K0-values": 34,
+   "K1-codecs -> K0-values": 68,
+   "K1-codecs -> K1-codecs": 28,
+   "K2-mechanisms -> K0-values": 132,
+   "K2-mechanisms -> K1-codecs": 16,
+   "K2-mechanisms -> K2-mechanisms": 169,
+   "K3-ledger -> K0-values": 22,
+   "K3-ledger -> K1-codecs": 12,
+   "K3-ledger -> K2-mechanisms": 1,
+   "K3-ledger -> K3-ledger": 13
+  },
+  "typeOnlyEdgeMatrix": {
+   "K0-values -> K0-values": 2,
+   "K1-codecs -> K0-values": 2,
+   "K1-codecs -> K1-codecs": 1,
+   "K1-codecs -> K3-ledger": 1,
+   "K2-mechanisms -> K0-values": 4,
+   "K2-mechanisms -> K1-codecs": 3,
+   "K2-mechanisms -> K2-mechanisms": 7,
+   "K2-mechanisms -> K3-ledger": 1,
+   "K3-ledger -> K0-values": 2,
+   "K3-ledger -> K1-codecs": 1,
+   "K3-ledger -> K3-ledger": 17
+  },
+  "crossZoneEdges": [
+   {
+    "from": "apps/oma/src/cli/cache-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "apps/oma/src/cli/cache-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/protocol/src/frame.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/protocol/src/methods.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/protocol/src/response-codec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/channel.ts",
+    "to": "packages/protocol/src/response-codec.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/client/src/connection.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/request-service.ts",
+    "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/runtime.ts",
+    "to": "packages/protocol/src/client-codecs.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/client/src/settings.ts",
+    "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/settings.ts",
+    "to": "packages/protocol/src/log-limits.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/transport.ts",
+    "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/generations.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/capabilities.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/config-format.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/integration-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/limits.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/review-bounds.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/settings.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/protocol/src/log-response.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/integer-fields.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/config/src/operations.ts",
+    "to": "packages/domain/src/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/operations.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/operations.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/operations.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/operations.ts",
+    "to": "packages/protocol/src/frame.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/policy.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/policy.ts",
+    "to": "packages/domain/src/child-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/policy.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/state-format.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/agent-spec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/agent-spec.ts",
+    "to": "packages/domain/src/spec-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/ask-user-question/envelope.ts",
+    "to": "packages/domain/src/ask-user-question/questionnaire.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/domain/src/ask-user-question/model.ts",
+    "to": "packages/domain/src/ask-user-question/questionnaire.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/attestation.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/attestation.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/authority.ts",
+    "to": "packages/domain/src/agent-spec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/authority.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/capabilities.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/durable.ts",
+    "to": "packages/domain/src/spec-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/git-facts.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/git-facts.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/git-facts.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/integration-policy.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/integration-policy.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/integration-policy.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/integration-policy.ts",
+    "to": "packages/domain/src/risk-tier.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/review-bounds.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/review-bounds.ts",
+    "to": "packages/domain/src/review-evaluation.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/domain/src/git-facts.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/protocol/src/git-execution-view.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/quarantine-worker.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/quarantine-worker.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/quarantine-worker.ts",
+    "to": "packages/domain/src/validation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/quarantine-worker.ts",
+    "to": "packages/protocol/src/git-execution-view.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/addresses.ts",
+    "to": "packages/domain/src/actor-address.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/addresses.ts",
+    "to": "packages/domain/src/display-address.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/addresses.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/addresses.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/facts.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/facts.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/facts.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/facts.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/headers.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/headers.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/headers.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/mail/src/headers.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/audit-origin.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/audit-token.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/control-socket.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-metadata.ts",
+    "to": "packages/native/src/metadata-observation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/descriptor-path.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/directory-layout.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/files.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/identity.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/mach-message.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/pid-namespace.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/posix-files.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/posix-files.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/posix-files.ts",
+    "to": "packages/native/src/metadata-observation.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/native/src/process-event.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/process-lock.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/snapshot-reader.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/unix-message.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/async.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/async.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/host-loss.ts",
+    "to": "packages/domain/src/host-signals.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/host-loss.ts",
+    "to": "packages/domain/src/host-signals.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/observed-stream.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/packet-stream.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/policies.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/preparation.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/preparation.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/replace.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/replace.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/resident-logs.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/resident-runtime.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/resident-supervisor.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/restic.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/restic.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/run.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/run.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/run.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/run.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/writer.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/ask-user-question.ts",
+    "to": "packages/domain/src/ask-user-question/questionnaire.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/batch-view.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/batch-view.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/frame.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/frame.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/git-execution-view.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/jsonl.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/jsonl.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/log-response.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/log-response.ts",
+    "to": "packages/protocol/src/log-limits.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/log-response.ts",
+    "to": "packages/protocol/src/log-limits.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/mac-developer-tools.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/methods.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/attestation-relations.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/durable.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/request-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/spec-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/validation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/protocol/src/methods.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/protocol/src/persisted-formats.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/protocol/src/receipt-codec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/protocol/src/request-codec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/protocol/src/operation-results.ts",
+    "to": "packages/protocol/src/operation-codec.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/protocol/src/persisted-formats.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-chunks.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-chunks.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-codec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-codec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-projector.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipt-projector.ts",
+    "to": "packages/protocol/src/receipt-codec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/receipts.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/request-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/resident-context.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/resident-context.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/response-codec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/response-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/run-lease.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/run-lease.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/run-lease.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/status-page.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/arrival-journal.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/arrival-journal.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/batch-view.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/cache-trees.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/cache-trees.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-files.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-files.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-files.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-snapshot.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-snapshot.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-snapshot.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-snapshot.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-snapshot.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-stream.ts",
+    "to": "packages/domain/src/context-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-stream.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/context-stream.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/delivery-receipt.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/delivery-receipt.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/delivery-receipt.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/delivery-receipt.ts",
+    "to": "packages/protocol/src/delivery-boundary.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/delivery-receipt.ts",
+    "to": "packages/protocol/src/frame.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/directory.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/durable-fs.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-journal.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-journal.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-journal.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-journal.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-journal.ts",
+    "to": "packages/protocol/src/persisted-formats.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-staging.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/immutable-file.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/immutable-file.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/installation-surface.ts",
+    "to": "packages/domain/src/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/installation-surface.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/ledger-reader.ts",
+    "to": "packages/domain/src/durable.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/ledger-reader.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/ledger-reader.ts",
+    "to": "packages/domain/src/lineage.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/mail-notices.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/mail-notices.ts",
+    "to": "packages/domain/src/surface-bounds.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/mailbox.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/mailbox.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/operation-journal.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/operation-journal.ts",
+    "to": "packages/domain/src/request-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/operation-transitions.ts",
+    "to": "packages/domain/src/durable.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/operation-transitions.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/operation-transitions.ts",
+    "to": "packages/domain/src/validation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/output-spool.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-staging.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-staging.ts",
+    "to": "packages/domain/src/package-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-tar.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-tar.ts",
+    "to": "packages/domain/src/package-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-artifact.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-collection.ts",
+    "to": "packages/domain/src/durable.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-collection.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-collection.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-collection.ts",
+    "to": "packages/protocol/src/operation-codec.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/storage/src/published-mail.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/published-mail.ts",
+    "to": "packages/domain/src/surface-bounds.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/resident-logs.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/resident-logs.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/resident-logs.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/resident-logs.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tar.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tar.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tool.ts",
+    "to": "packages/domain/src/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-tool.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/restic-verification.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/rows.ts",
+    "to": "packages/domain/src/agent-spec.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/rows.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/rows.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/rows.ts",
+    "to": "packages/domain/src/spec-identity.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/rows.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/storage/src/socket-name.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/staged-tree.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/domain/src/admission.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/protocol/src/persisted-formats.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/storage/src/directory.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/domain/src/durable.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/storage/src/submit-spool.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/submit-spool.ts",
+    "to": "packages/domain/src/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/transaction.ts",
+    "to": "packages/domain/src/admission.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/transaction.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/transitions.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/transitions.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/transport-spool.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/tree-lease.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/descriptor-files.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/index.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/index.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   }
+  ],
+  "internalPortContracts": [
+   "apps/oma/src/ports/ledger.ts",
+   "apps/oma/src/ports/package-files.ts",
+   "apps/oma/src/ports/runtime.ts"
+  ],
+  "typeOnlyReview": {
+   "mode": "report-only",
+   "classificationsAreApproval": false,
+   "edges": [
+    {
+     "from": "apps/oma/src/application/local-packages.ts",
+     "to": "apps/oma/src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/diagnostics/integrity.ts",
+     "to": "packages/git/src/read-port.ts",
+     "classification": "implementation-knowledge-review",
+     "kernelUpward": false,
+     "coarseUpward": true
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/ports/ledger.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/ports/ledger.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/ports/runtime.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/runner.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/runtime/native-residents.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "apps/oma/src/views.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/contracts/src/durable.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/platform-linux/src/sandbox.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/protocol/src/operation-codec.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/protocol/src/receipt-projector.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/reconcile/src/index.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/entry/module-conformance.ts",
+     "to": "packages/storage/src/store.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/platform/package-files.ts",
+     "to": "apps/oma/src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/ledger.ts",
+     "to": "packages/contracts/src/durable.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/ledger.ts",
+     "to": "packages/contracts/src/durable.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/ledger.ts",
+     "to": "packages/contracts/src/identity.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/host.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/host.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/identity.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/ports/runtime.ts",
+     "to": "packages/contracts/src/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "apps/oma/src/runtime/packages/store.ts",
+     "to": "apps/oma/src/ports/package-files.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "packages/protocol/src/operation-results.ts",
+     "to": "packages/protocol/src/operation-codec.ts",
+     "classification": "representation-relation",
+     "kernelUpward": true,
+     "coarseUpward": false
+    },
+    {
+     "from": "packages/storage/src/preaccept-collection.ts",
+     "to": "packages/protocol/src/operation-codec.ts",
+     "classification": "representation-relation",
+     "kernelUpward": true,
+     "coarseUpward": false
+    }
+   ]
+  },
+  "runtimeCycles": [],
+  "unionCycles": []
+ },
+ "layers": [
+  {
+   "index": 0,
+   "name": "L0-contracts",
+   "prefixes": [
+    "packages/contracts/src/",
+    "implementation/",
+    "apps/oma/src/ports/"
+   ],
+   "files": 22
+  },
+  {
+   "index": 1,
+   "name": "L1-kernel",
+   "prefixes": [
+    "packages/domain/src/",
+    "packages/native/src/identity.ts",
+    "packages/native/src/linux.ts",
+    "packages/domain/src/validation.ts",
+    "packages/protocol/src/frame.ts",
+    "packages/domain/src/durable.ts",
+    "packages/config/src/index.ts",
+    "packages/config/src/",
+    "packages/process/src/",
+    "packages/native/src/",
+    "packages/tool-files/src/",
+    "packages/protocol/src/",
+    "packages/storage/src/",
+    "apps/oma/src/cli/cache-codec.ts",
+    "apps/oma/src/cli/request-intent.ts",
+    "packages/client/src/",
+    "packages/mail/src/addresses.ts",
+    "packages/mail/src/facts.ts",
+    "packages/mail/src/headers.ts",
+    "packages/domain/src/review-bounds.ts",
+    "packages/domain/src/resident-paths.ts",
+    "packages/storage/src/store.ts"
+   ],
+   "files": 184
+  },
+  {
+   "index": 2,
+   "name": "L2-facts",
+   "prefixes": [
+    "packages/tool-runtime/src/",
+    "apps/oma/src/diagnostics/",
+    "apps/oma/src/request-cache.ts"
+   ],
+   "files": 14
+  },
+  {
+   "index": 3,
+   "name": "L3-workflow",
+   "prefixes": [
+    "packages/mail/src/",
+    "packages/mail/src/index.ts",
+    "packages/git/src/",
+    "packages/git/src/index.ts",
+    "packages/lifecycle/src/",
+    "packages/lifecycle/src/index.ts",
+    "apps/oma/src/inference/",
+    "apps/oma/src/inference.ts",
+    "apps/oma/src/views/",
+    "apps/oma/src/views.ts",
+    "packages/reconcile/src/",
+    "packages/review/src/index.ts",
+    "packages/review/src/"
+   ],
+   "files": 60
+  },
+  {
+   "index": 4,
+   "name": "L4-orchestration",
+   "prefixes": [
+    "packages/reconcile/src/index.ts",
+    "packages/broker/src/",
+    "apps/oma/src/broker/",
+    "packages/broker/src/index.ts",
+    "apps/oma/src/runtime/",
+    "packages/engine/src/",
+    "packages/platform-linux/src/",
+    "packages/platform-mac/src/",
+    "apps/oma/src/engine/",
+    "apps/oma/src/cli/effects.ts",
+    "apps/oma/src/cli/effects/",
+    "apps/oma/src/runner.ts",
+    "packages/platform-linux/src/sandbox.ts",
+    "apps/oma/src/platform/"
+   ],
+   "files": 153
+  },
+  {
+   "index": 5,
+   "name": "L5-entry",
+   "prefixes": [
+    "apps/oma/src/entry/",
+    "apps/oma/src/application/",
+    "apps/oma/src/engine/presentation.ts",
+    "apps/oma/src/engine/personal-composition.ts",
+    "apps/oma/src/engine/personal-entry.ts",
+    "apps/oma/src/cli/",
+    "apps/oma/src/cli.ts",
+    "packages/tui/src/",
+    "packages/extension/src/",
+    "packages/tool-lsp/src/",
+    "packages/tool-mcp/src/",
+    "packages/tool-web/src/",
+    "packages/tool-hashline/src/"
+   ],
+   "files": 83
+  }
+ ],
+ "files": 516,
+ "runtimeEdges": 1860,
+ "typeOnlyEdges": 782,
+ "runtimeEdgeMatrix": {
+  "L1-kernel -> L1-kernel": 472,
+  "L2-facts -> L1-kernel": 33,
+  "L2-facts -> L2-facts": 5,
+  "L3-workflow -> L1-kernel": 262,
+  "L3-workflow -> L3-workflow": 69,
+  "L4-orchestration -> L1-kernel": 397,
+  "L4-orchestration -> L2-facts": 1,
+  "L4-orchestration -> L3-workflow": 25,
+  "L4-orchestration -> L4-orchestration": 193,
+  "L5-entry -> L1-kernel": 154,
+  "L5-entry -> L2-facts": 19,
+  "L5-entry -> L3-workflow": 8,
+  "L5-entry -> L4-orchestration": 102,
+  "L5-entry -> L5-entry": 120
+ },
+ "upwardTypeOnlyEdges": [
+  {
+   "from": "apps/oma/src/diagnostics/integrity.ts",
+   "to": "packages/git/src/read-port.ts"
+  }
+ ],
+ "runtimeCycles": [],
+ "unionCycles": [],
+ "fanIn": {
+  "packages/domain/src/errors.ts": 248,
+  "packages/domain/src/identifiers.ts": 85,
+  "packages/native/src/cleanup.ts": 43,
+  "packages/storage/src/directory.ts": 40,
+  "packages/native/src/files.ts": 39,
+  "packages/domain/src/paths.ts": 32,
+  "packages/domain/src/canonical-json.ts": 30,
+  "packages/storage/src/durable-fs.ts": 30,
+  "packages/native/src/posix-files.ts": 26,
+  "packages/domain/src/utf8.ts": 23,
+  "packages/domain/src/request-identity.ts": 22,
+  "packages/domain/src/deployment.ts": 21,
+  "packages/domain/src/derived.ts": 20,
+  "packages/domain/src/surface-bounds.ts": 20,
+  "packages/process/src/async.ts": 18
+ },
+ "fanOut": {
+  "apps/oma/src/entry/broker.ts": 40,
+  "packages/mail/src/index.ts": 22,
+  "apps/oma/src/runtime/client-runtime.ts": 21,
+  "apps/oma/src/entry/oma-society.ts": 20,
+  "packages/broker/src/index.ts": 19,
+  "apps/oma/src/application/society-bootstrap.ts": 18,
+  "packages/git/src/context-repository.ts": 18,
+  "apps/oma/src/runner.ts": 17,
+  "packages/engine/src/interactive.ts": 17,
+  "apps/oma/src/runtime/provision.ts": 16,
+  "packages/extension/src/index.ts": 15,
+  "packages/git/src/context.ts": 15,
+  "apps/oma/src/broker/mail-effects.ts": 14,
+  "apps/oma/src/entry/oma.ts": 14,
+  "apps/oma/src/entry/runner.ts": 14
+ },
+ "external": {
+  "@earendil-works/pi-ai": 2,
+  "@earendil-works/pi-coding-agent": 47,
+  "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
+  "@earendil-works/pi-tui": 11,
+  "koffi": 13,
+  "node:async_hooks": 5,
+  "node:buffer": 1,
+  "node:child_process": 6,
+  "node:crypto": 42,
+  "node:dns": 1,
+  "node:events": 3,
+  "node:fs": 118,
+  "node:fs/promises": 2,
+  "node:http": 2,
+  "node:https": 1,
+  "node:module": 5,
+  "node:net": 23,
+  "node:os": 12,
+  "node:path": 138,
+  "node:perf_hooks": 5,
+  "node:readline": 1,
+  "node:sqlite": 4,
+  "node:stream": 11,
+  "node:stream/promises": 1,
+  "node:string_decoder": 1,
+  "node:timers/promises": 6,
+  "node:url": 14,
+  "node:util": 8,
+  "node:zlib": 1,
+  "nodemailer": 1,
+  "nodemailer/lib/mime-funcs": 1,
+  "proper-lockfile": 1,
+  "typebox": 6
+ },
+ "unresolved": []
+}

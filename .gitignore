@@ -1,0 +1,31 @@
+node_modules/
+reference/
+dist/
+*.log
+mail/
+# Runtime mail is ignored; authored mail modules must remain visible to Git.
+!src/mail/
+runtime.sqlite
+.pi/
+staging/
+production-loc.json
+production-measurement-hashes.json
+.scratch/
+# Local AIF planning notes.
+/[Aa][Ii][Ff]_PLT_Plan.md*
+# A vendored bundle's pinned dependency closure is integrity-listed input —
+# every byte must be committed, so node_modules (and any dist/ inside it)
+# under a vendored bundle re-includes itself after the general rules above.
+# The same holds for the byte-exact upstream snapshot: pi-web-access's npm
+# tarball ships its own dist/ bundle, which is vendored for provenance.
+!packages/tool-*/src/vendor/*/node_modules/
+!packages/tool-*/src/vendor/*/node_modules/**
+!packages/tool-*/src/vendor/*/upstream/
+!packages/tool-*/src/vendor/*/upstream/**
+
+# Authored workspace mail modules remain visible.
+!packages/mail/
+*.tsbuildinfo
+
+apps/*/dist/
+apps/*/node_modules/

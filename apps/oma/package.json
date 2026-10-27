@@ -1,0 +1,73 @@
+{
+  "name": "@oma/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "oma": "dist/entry/oma.js"
+  },
+  "exports": {
+    "./runtime/assets": {
+      "types": "./dist/runtime/assets.d.ts",
+      "default": "./dist/runtime/assets.js"
+    },
+    "./diagnostics/ledger": {
+      "types": "./dist/diagnostics/ledger.d.ts",
+      "default": "./dist/diagnostics/ledger.js"
+    },
+    "./diagnostics/integrity": {
+      "types": "./dist/diagnostics/integrity.d.ts",
+      "default": "./dist/diagnostics/integrity.js"
+    },
+    "./diagnostics/files": {
+      "types": "./dist/diagnostics/files.d.ts",
+      "default": "./dist/diagnostics/files.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/app",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/broker": "0.1.0",
+    "@oma/client": "0.1.0",
+    "@oma/config": "0.1.0",
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/engine": "0.1.0",
+    "@oma/extension": "0.1.0",
+    "@oma/git": "0.1.0",
+    "@oma/lifecycle": "0.1.0",
+    "@oma/mail": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/platform-linux": "0.1.0",
+    "@oma/platform-mac": "0.1.0",
+    "@oma/process": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/reconcile": "0.1.0",
+    "@oma/review": "0.1.0",
+    "@oma/storage": "0.1.0",
+    "@oma/tool-hashline": "0.1.0",
+    "@oma/tool-lsp": "0.1.0",
+    "@oma/tool-mcp": "0.1.0",
+    "@oma/tool-runtime": "0.1.0",
+    "@oma/tool-web": "0.1.0",
+    "@oma/tui": "0.1.0",
+    "proper-lockfile": "4.1.2",
+    "@oma/tool-files": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3",
+    "@types/proper-lockfile": "4.1.4"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs",
+    "modelCommand": "libexec/oma"
+  }
+}

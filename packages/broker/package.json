@@ -1,0 +1,91 @@
+{
+  "name": "@oma/broker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./connection": {
+      "types": "./dist/connection.d.ts",
+      "default": "./dist/connection.js"
+    },
+    "./internal-dispatcher": {
+      "types": "./dist/internal-dispatcher.d.ts",
+      "default": "./dist/internal-dispatcher.js"
+    },
+    "./lifetime": {
+      "types": "./dist/lifetime.d.ts",
+      "default": "./dist/lifetime.js"
+    },
+    "./listeners": {
+      "types": "./dist/listeners.d.ts",
+      "default": "./dist/listeners.js"
+    },
+    "./logs": {
+      "types": "./dist/logs.d.ts",
+      "default": "./dist/logs.js"
+    },
+    "./peer-authenticator": {
+      "types": "./dist/peer-authenticator.d.ts",
+      "default": "./dist/peer-authenticator.js"
+    },
+    "./peer-pin": {
+      "types": "./dist/peer-pin.d.ts",
+      "default": "./dist/peer-pin.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "default": "./dist/ports.js"
+    },
+    "./principal-endpoint": {
+      "types": "./dist/principal-endpoint.d.ts",
+      "default": "./dist/principal-endpoint.js"
+    },
+    "./process-ancestry": {
+      "types": "./dist/process-ancestry.d.ts",
+      "default": "./dist/process-ancestry.js"
+    },
+    "./public-dispatcher": {
+      "types": "./dist/public-dispatcher.d.ts",
+      "default": "./dist/public-dispatcher.js"
+    },
+    "./replies": {
+      "types": "./dist/replies.d.ts",
+      "default": "./dist/replies.js"
+    },
+    "./run-registry": {
+      "types": "./dist/run-registry.d.ts",
+      "default": "./dist/run-registry.js"
+    },
+    "./status-refresh": {
+      "types": "./dist/status-refresh.d.ts",
+      "default": "./dist/status-refresh.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/broker",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/process": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

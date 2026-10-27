@@ -1,0 +1,1641 @@
+{
+  "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate. Each test says how it stops the process (injection: sigkill, in-process-fault or logical, P0V-83), and the gate checks that the test's code shows it.",
+  "boundaries": [
+    {
+      "owner": "packages/storage/src/execution-staging.ts#ExecutionStaging.run",
+      "fact": "candidate and runtime-tools disposable staging is collected only after independent whole-scope death and an uncontended lease; primary bytes survive interruption and retry. Common TS owner tested on actual Linux, not Darwin kernel qualification",
+      "tests": [
+        {
+          "file": "test/candidate-staging.test.mjs",
+          "title": "staging: callback fault with a live scope and free lease",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/candidate-staging.test.mjs",
+          "title": "candidate staging: SIGKILL after collection",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/candidate-staging.test.mjs",
+          "title": "candidate staging: a real existing tree at the selected nonce",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/broker-composition.ts#createBroker",
+      "fact": "a draining broker's status view is gone (a derived view; absence says the broker is going away)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "P0-7: a draining broker removes its status view",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/broker/src/index.ts#Broker.openRun",
+      "fact": "the agent's run lease (incarnation); DR9: prepared batches are not rewritten",
+      "tests": [
+        {
+          "file": "test/rollover-settlement.test.ts",
+          "title": "V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/rollover-settlement.test.ts",
+          "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+          "injection": "logical"
+        },
+        {
+          "file": "test/delivery-state-model.test.ts",
+          "title": "V30A: seeded delivery-evidence sequences follow D01 on the composed runtime",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/society-bootstrap.ts#bootstrapSociety",
+      "fact": "the state root's project binding (D05)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/repository.ts#GitRepository.casRef",
+      "fact": "a canonical ref moved by CAS (the adapter every coordinator's CAS goes through)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "int-cas",
+            "ctx-cas",
+            "submit-ref"
+          ]
+        },
+        {
+          "file": "test/git-effect-evidence.test.ts",
+          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "injection": "logical"
+        },
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "compareAndSwap",
+            "authorizeNoop"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/repository.ts#GitRepository.constructor",
+      "fact": "the CAS effects wired into the coordinators",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "int-cas",
+            "ctx-cas",
+            "submit-ref"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/repository.ts#GitRepository.publishRef",
+      "fact": "a published candidate ref (refs/oma/published/*)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-ref"
+          ]
+        },
+        {
+          "file": "test/phase8.test.ts",
+          "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context-repository.ts#ContextRepository.publishSnapshot",
+      "fact": "the immutable context revision and the current pointer",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "ctx-snapshot",
+            "ctx-link"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context-repository.ts#ContextRepository.writeEntry",
+      "fact": "a context file in the preparation or snapshot work tree",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "ctx-accepted",
+            "ctx-accepted-missing",
+            "ctx-snapshot"
+          ]
+        },
+        {
+          "file": "test/preaccept-ownership.test.ts",
+          "title": "V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context.ts#ContextCoordinator.materializeAndSettle",
+      "fact": "the context notification and the operation's success",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "ctx-mail"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context.ts#ContextCoordinator.publish",
+      "fact": "the accepted context intent, its staging, message object and CAS",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "ctx-accepted",
+            "ctx-cas"
+          ]
+        },
+        {
+          "file": "test/r21-context-workflow.test.ts",
+          "title": "V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context.ts#ContextCoordinator.reconcile",
+      "fact": "a recovered context CAS",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "ctx-cas",
+            "ctx-snapshot"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context.ts#ContextCoordinator.rejectAccepted",
+      "fact": "an accepted context publication's failed or unknown state",
+      "tests": [
+        {
+          "file": "test/r21-context-workflow.test.ts",
+          "title": "lost notification blocks the next writer and recovers C without recreating a commit",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context.ts#ContextCoordinator.unknown",
+      "fact": "an accepted context publication's unknown state",
+      "tests": [
+        {
+          "file": "test/r21-context-workflow.test.ts",
+          "title": "lost notification blocks the next writer and recovers C without recreating a commit",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.applyMerge",
+      "fact": "a reviewed merge's main CAS and its completion-notice publication",
+      "tests": [
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "a skipped advance and a lost application are both recovered once",
+          "injection": "logical"
+        },
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "cancelling a request with a pending integration wins the pre-CAS check",
+          "injection": "logical"
+        },
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "a requester stopped before the CAS cancels the application",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.execute",
+      "fact": "the accepted integration intent and the main CAS",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "int-before",
+            "int-cas",
+            "int-done"
+          ]
+        },
+        {
+          "file": "test/phase7.test.ts",
+          "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.reconcile",
+      "fact": "a recovered main CAS",
+      "tests": [
+        {
+          "file": "test/r19-integration-decisions.test.ts",
+          "title": "R19: base recovery rechecks conditions twice and completes the same operation",
+          "injection": "logical"
+        },
+        {
+          "file": "test/git-effect-evidence.test.ts",
+          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.rejectAccepted",
+      "fact": "an accepted integration's failed or unknown state",
+      "tests": [
+        {
+          "file": "test/phase7.test.ts",
+          "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/phase7.test.ts",
+          "title": "INT-003: accepted stop intent cancels before main CAS",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.succeed",
+      "fact": "an integration's success after its CAS",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "int-done"
+          ]
+        },
+        {
+          "file": "test/git-effect-evidence.test.ts",
+          "title": "V24B: an applied non-no-op CAS is settled as history even after stop and policy change",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration.ts#IntegrationCoordinator.unknown",
+      "fact": "an integration whose CAS outcome is not known",
+      "tests": [
+        {
+          "file": "test/git-effect-evidence.test.ts",
+          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/quarantine.ts#QuarantineImporter.importBundle",
+      "fact": "the removal of a settled quarantine namespace",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-import"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.executeAccepted",
+      "fact": "an accepted submission's import and published ref",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-import",
+            "submit-ref"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.publishMailAndSettle",
+      "fact": "the submission's result mail and success",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-mail",
+            "submit-done"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.reconcileAccepted",
+      "fact": "a recovered submission",
+      "tests": [
+        {
+          "file": "test/phase8.test.ts",
+          "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-accepted",
+            "submit-import"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.rejectAccepted",
+      "fact": "an accepted submission's failed or unknown state",
+      "tests": [
+        {
+          "file": "test/unrestricted-admission.test.ts",
+          "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/submit.ts#SubmitCoordinator.submit",
+      "fact": "the accepted submission intent, its bundle and result message",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "R20 primitive SIGKILL at submit-stage",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "submit-accepted"
+          ]
+        },
+        {
+          "file": "test/mail-submit-scope.test.ts",
+          "title": "V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.reconcile",
+      "fact": "a recovered start/stop",
+      "tests": [
+        {
+          "file": "test/r36-lifecycle-sequences.test.ts",
+          "title": "R36 lifecycle replay seed=",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/r25-action-replay.test.ts",
+          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.start",
+      "fact": "an accepted start intent and its desired state",
+      "tests": [
+        {
+          "file": "test/r36-lifecycle-sequences.test.ts",
+          "title": "R36 lifecycle replay seed=",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/r25-action-replay.test.ts",
+          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.stop",
+      "fact": "an accepted stop intent and its desired state",
+      "tests": [
+        {
+          "file": "test/r36-lifecycle-sequences.test.ts",
+          "title": "R36 lifecycle replay seed=",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/r25-action-replay.test.ts",
+          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/actions.ts#LifecycleActions.unconfirmed",
+      "fact": "a start/stop whose physical outcome is not known",
+      "tests": [
+        {
+          "file": "test/r36-lifecycle-sequences.test.ts",
+          "title": "R36 lifecycle replay seed=",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver.ready",
+      "fact": "a created agent's readiness (provisioning -> enabled)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "create-ready"
+          ]
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "boot-ready"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.bootstrap",
+      "fact": "the bootstrap seed intents and agents",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "boot-stage",
+            "boot-intent",
+            "boot-object"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.create",
+      "fact": "an accepted create intent, its agent row and initial message",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "create-stage",
+            "create-intent",
+            "create-object"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.finishAccepted",
+      "fact": "a created agent's workspace, execution registration and success",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "create-workspace",
+            "create-execution",
+            "create-mail"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.settleLinked",
+      "fact": "a linked create's terminal state",
+      "tests": [
+        {
+          "file": "test/phase4.test.ts",
+          "title": "T39/LIFE-007: same name + same resolved spec converges without a second physical create",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/registry-operations.ts#RegistryOperations.ack",
+      "fact": "an acknowledgement and its operation, in one transaction",
+      "tests": [
+        {
+          "file": "test/r10-ledger-rows.test.ts",
+          "title": "R10: normal restart and independent acknowledgement preserve exact facts",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/registry-operations.ts#RegistryOperations.follow",
+      "fact": "a subscription change and its operation, in one transaction",
+      "tests": [
+        {
+          "file": "test/r25-lifecycle-owners.test.ts",
+          "title": "R25: subscription replay keeps one durable identity and unchanged terminal bytes",
+          "injection": "logical"
+        },
+        {
+          "file": "test/coordinator-facets.test.mjs",
+          "title": "P3 facets: route acceptance/retry preserves identity and fresh authority timing",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.apply",
+      "fact": "a close/open outcome or unknown observation; only proved quiescence and current opening authority can release execution",
+      "tests": [
+        {
+          "file": "test/society-crash.test.ts",
+          "title": "preserves its fence and same-key history",
+          "injection": "sigkill",
+          "points": [
+            "settled",
+            "unknown"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.reconcile",
+      "fact": "a superseded unresolved intent stays unknown without acting on newer execution",
+      "tests": [
+        {
+          "file": "test/society-crash.test.ts",
+          "title": "preserves its fence and same-key history",
+          "injection": "sigkill",
+          "points": [
+            "superseded"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/society.ts#SocietyControl.set",
+      "fact": "an accepted open/close intent fences activation before physical work; its key and plan survive restart",
+      "tests": [
+        {
+          "file": "test/society-crash.test.ts",
+          "title": "preserves its fence and same-key history",
+          "injection": "sigkill",
+          "points": [
+            "accepted"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/workspace.ts#WorkspaceCoordinator.prepare",
+      "fact": "a created agent's published workspace; after publication the clone's lease is collected (R6-04)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "create-workspace"
+          ]
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "boot-workspace"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/workspace.ts#WorkspaceCoordinator.prepareLeased",
+      "fact": "a created agent's published workspace (the publication, inside the preparation that holds the clone's lease, R6-04)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "create-workspace"
+          ]
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "boot-workspace"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/index.ts#MailModule.freezeObject",
+      "fact": "a frozen message object (and the removal of its staging copy)",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "stage",
+            "object"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/index.ts#MailModule.sendOwned",
+      "fact": "an accepted send or attestation, its immutable plan, recipients and deliveries",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "accepted"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/mail-submit-scope.test.ts",
+          "title": "V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.complete",
+      "fact": "a batch's completion and its deliveries' presentation",
+      "tests": [
+        {
+          "file": "test/principal-settlement.test.ts",
+          "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/runner-channel.test.ts",
+          "title": "NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.finishPrepared",
+      "fact": "the batch view and the new->cur mailbox move",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "cur"
+          ]
+        },
+        {
+          "file": "test/p24-mail-boundaries.test.ts",
+          "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.prepare",
+      "fact": "a prepared batch and its delivery links",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "prepared"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/batches.ts#BatchCoordinator.settleFromReceipt",
+      "fact": "a batch completed from its receipt at a run's rollover",
+      "tests": [
+        {
+          "file": "test/rollover-settlement.test.ts",
+          "title": "V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery",
+          "injection": "logical"
+        },
+        {
+          "file": "test/rollover-settlement.test.ts",
+          "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/materializer.ts#MailMaterializer.publish",
+      "fact": "the archive copy and each delivery's materialization",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "archive"
+          ]
+        },
+        {
+          "file": "test/durable-fault-matrix.test.ts",
+          "title": "P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/materializer.ts#MailMaterializer.publishDelivery",
+      "fact": "a recipient's mailbox name and the full arrival journal record before materialization",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "inbox-a",
+            "inbox-b"
+          ]
+        },
+        {
+          "file": "test/mail-arrival-durability.test.mjs",
+          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/mail/src/reconcile.ts#reconcileMailOperation",
+      "fact": "a recovered send's success",
+      "tests": [
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/p24-mail-boundaries.test.ts",
+          "title": "P03: unavailable recovery retains reason and pending evidence, then converges",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/canonical-health.ts#CanonicalHealthObserver.assertHealthy",
+      "fact": "the canonical fsck diagnostic spool is collected when the health observation ends -- residue never blocks or survives the next observation",
+      "tests": [
+        {
+          "file": "test/phase8.test.ts",
+          "title": "T68d: a dead run's fsck diagnostic spool is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/preaccept-collection.ts#collectUnacceptedArtifacts",
+      "fact": "the removal of what no accepted plan owns (DR10)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10: startup recovery collects before anything is admitted or bootstrapped",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.freeze",
+      "fact": "a frozen request: its body, then its metadata, each published without replacing",
+      "tests": [
+        {
+          "file": "test/request-cache.test.ts",
+          "title": "body-only crashes and metadata-only corruption cannot reconstruct a freeze",
+          "injection": "logical"
+        },
+        {
+          "file": "test/request-cache.test.ts",
+          "title": "competing processes cannot publish different bodies for one frozen identity",
+          "injection": "logical"
+        },
+        {
+          "file": "test/cli-receipt-replay.test.ts",
+          "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "V26B / P0-7: a request freeze SIGKILLed at any flush",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.updateReceipt",
+      "fact": "the last receipt a request's cache recorded",
+      "tests": [
+        {
+          "file": "test/request-cache.test.ts",
+          "title": "receipt updates cannot replace immutable request fields or change operation identity",
+          "injection": "logical"
+        },
+        {
+          "file": "test/cli-receipt-replay.test.ts",
+          "title": "V26B: a terminal receipt in the cache is not replaced by a later lesser observation",
+          "injection": "logical"
+        },
+        {
+          "file": "test/cli-receipt-replay.test.ts",
+          "title": "WP26: a receipt the request cache cannot record is still shown, with the key to ask again",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/review/src/acceptance.ts#ReviewAcceptance.acceptPrepared",
+      "fact": "a review fact's acceptance (caller or broker-derived refresh) with its mail",
+      "tests": [
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "a bound reviewer's retirement withdraws and re-asks the approval",
+          "injection": "logical"
+        },
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "a skipped advance and a lost application are both recovered once",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/review/src/acceptance.ts#ReviewAcceptance.acceptIntegration",
+      "fact": "the request's single integration intent and its frozen completion notices",
+      "tests": [
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "a skipped advance and a lost application are both recovered once",
+          "injection": "logical"
+        },
+        {
+          "file": "test/merge-review.test.ts",
+          "title": "only the first ready request on a base applies; the other goes stale by refresh",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runner.ts#RunnerModule.consume",
+      "fact": "a Resident's delivery receipt (DR11: after its session entry is durable)",
+      "tests": [
+        {
+          "file": "test/delivery-receipt-publication.test.ts",
+          "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/runner-channel.test.ts",
+          "title": "NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/package-staging.ts#ownedStaging",
+      "fact": "DR25/C20: a staged local package's copy under local/<name> is whole or absent -- published by one rename after a durable fill; a dead copy or an interrupted staging area is collected, never half-seen",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/local-packages.ts#pruneLocalStage",
+      "fact": "DR25/C20: dead staged copies and interrupted staging areas under local/ are removed -- a removal nothing accepted owns, run after every oma pi change",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/local-packages.ts#stageArchive",
+      "fact": "a staged archive's inflated spool scratch is removed with the call -- residue under the staging prefix is collected, never live content",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25/C20: `oma pi install` of a local path copies it into the store as `local/<name>`",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/locked-files.ts#lockedReplace",
+      "fact": "the engine-owned files (the engine home's settings.json under Pi SettingsManager semantics, retry, presentation, keybindings, open-tui) merged and replaced atomically under the writer's lock by the one locked read-modify-replace; a refused or dead write leaves the previous bytes",
+      "tests": [
+        {
+          "file": "test/pi-compat.test.ts",
+          "title": "A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and the retry after release lands",
+          "injection": "logical"
+        },
+        {
+          "file": "test/pi-compat.test.ts",
+          "title": "A4: malformed or non-object settings are refused with the bytes untouched",
+          "injection": "logical"
+        },
+        {
+          "file": "test/pi-settings-platform.test.mjs",
+          "title": "every interactive settings file enforces its own single name",
+          "injection": "logical"
+        },
+        {
+          "file": "test/pi-runtime.test.ts",
+          "title": "INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/personal-settings.ts#commitPersonalSettings",
+      "fact": "DR28/29: the sync and async locked Personal settings wrappers publish through one shared commit; failed first observations consume no choice, saved choices skip observation, and retry preserves package edits.",
+      "tests": [
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "update preserves disabled entries and removal cannot resurrect them on restart",
+          "injection": "logical"
+        },
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "a contended writer changes nothing and releases after an exception",
+          "injection": "logical"
+        },
+        {
+          "file": "test/personal-settings.test.ts",
+          "title": "DR29/P0-5: a failed async project observation consumes no first choice and returns its writer",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/packages/store.ts#writePackageIndex",
+      "fact": "DR25: the package store's extension index, replaced atomically with the engine's answer after every oma pi change; a change whose index was not written is picked up by the next",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25: the engine names a package's extensions; the index keeps them by package, and roles follow a package through updates",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/principal-delivery.ts#PrincipalDelivery.deliverOne",
+      "fact": "the Principal's delivery receipt (DR11)",
+      "tests": [
+        {
+          "file": "test/principal-settlement.test.ts",
+          "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/delivery-receipt-publication.test.ts",
+          "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/provision.ts#collectBindingTemporaries",
+      "fact": "the removal of a binding publication's leftover temporary",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/provision.ts#collectRepositoryStaging",
+      "fact": "a repository staging a crashed start left is removed, with its lease, only when the lease proves nothing still writes it (R6-04)",
+      "tests": [
+        {
+          "file": "test/p0-review6.test.ts",
+          "title": "P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/provision.ts#createCanonicalMain",
+      "fact": "the canonical main, made once and only from nothing (P0V-85): the ref observed after the CAS, kept by every later start",
+      "tests": [
+        {
+          "file": "test/p0-review6.test.ts",
+          "title": "P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/society-bringup.test.ts",
+          "title": "T115 REC-007: two first starts racing on one state root both survive it",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/provision.ts#ensureBareRepository",
+      "fact": "a society's canonical repository, moved into place from its staging",
+      "tests": [
+        {
+          "file": "test/project-binding.test.ts",
+          "title": "V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/provision.ts#publishProjectBinding",
+      "fact": "the state root's project binding (D05)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-mode.ts#publishSessionBirth",
+      "fact": "DR28: immutable mode, identity, cwd and history published once; retries retain the first bytes, never reinterpret conflicting or corrupt records",
+      "tests": [
+        {
+          "file": "test/session-mode-record.test.ts",
+          "title": "publication is repeatable but immutable",
+          "injection": "logical"
+        },
+        {
+          "file": "test/session-mode-record.test.ts",
+          "title": "an existing conflicting fact is preserved byte-for-byte",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/output-spool.ts#spoolOutput",
+      "fact": "a caller's complete oversized answer as a digest-named file under its own state directory -- delivery only, no receipt or ledger fact",
+      "tests": [
+        {
+          "file": "test/p0-review6.test.ts",
+          "title": "a no-replace publication killed at any step leaves its name absent or whole",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/client.test.ts",
+          "title": "the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/project-preparation.ts#prepareProjectDirectory",
+      "fact": "a snapshot preparation retains its lease until its owner and descendants release it; partial cleanup is recoverable and never adopts an existing tree",
+      "tests": [
+        {
+          "file": "test/project-preparation-boundaries.test.ts",
+          "title": "keeps ownership recoverable",
+          "injection": "sigkill",
+          "points": [
+            "prepared",
+            "released",
+            "collected"
+          ]
+        },
+        {
+          "file": "test/project-preparation-boundaries.test.ts",
+          "title": "failed preparation handoff releases its lease and collects only its own tree",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/settings.ts#commitInlineEdit",
+      "fact": "an inline configuration generation (DR12)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "DR12 / P0-7: an inline commit SIGKILLed at any durability point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/settings.ts#commitManagedEdit",
+      "fact": "a managed configuration generation (D02)",
+      "tests": [
+        {
+          "file": "test/config-generations.test.ts",
+          "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "V13A / P0-7: a managed commit SIGKILLed at any durability point",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and exact candidate retry",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/settings.ts#commitRoleSet",
+      "fact": "DR25: a whole role set committed as one managed generation -- an inline configuration becoming a bundle, a session taking on its project's roles -- against the snapshot it was read as",
+      "tests": [
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25: an inline configuration crashed at any point of becoming a bundle is the whole old one or the whole new one, and the next start finishes it",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/pi-packages.test.ts",
+          "title": "DR25: a role set is committed only against the configuration it was read as, and one already there changes nothing",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/application/settings.ts#writeSettings",
+      "fact": "a first-run or replaced configuration (DR12)",
+      "tests": [
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR12: a first-run configuration is created where none exists",
+          "injection": "logical"
+        },
+        {
+          "file": "test/surface-process.test.ts",
+          "title": "T111 real SIGKILL at ${point} leaves a configuration a next start can load",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views.ts#ViewsModule.publishInbox",
+      "fact": "a derived inbox view (rebuilt from the ledger)",
+      "tests": [
+        {
+          "file": "test/durable-fault-matrix.test.ts",
+          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views.ts#ViewsModule.publishStatus",
+      "fact": "a derived status view (rebuilt from observation)",
+      "tests": [
+        {
+          "file": "test/durable-fault-matrix.test.ts",
+          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/status-view.test.ts",
+          "title": "T118: a view dated ahead of the reader's clock is unknown, not current",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views.ts#ViewsModule.refreshWorld",
+      "fact": "the derived world views (agents, topics, START)",
+      "tests": [
+        {
+          "file": "test/durable-fault-matrix.test.ts",
+          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/engine/settings-files.ts#(module)",
+      "fact": "trusted Human project settings, atomically replaced under OMA and Pi file locks; explicit choices survive restart and retry",
+      "tests": [
+        {
+          "file": "test/adversarial-repairs.test.ts",
+          "title": "AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/mail-notices.ts#publishMailNoticeView",
+      "fact": "host-only notice presentation rebuilt from accepted integration facts; no new mail or acknowledgement",
+      "tests": [
+        {
+          "file": "test/society-mail.test.ts",
+          "title": "Society mail includes sent GOAL, peer replies and board; notices use ledger provenance and real names",
+          "injection": "logical"
+        },
+        {
+          "file": "test/crash-kill-boundaries.test.ts",
+          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/repository.ts#GitRepository.authorizeNoop",
+      "fact": "the accepted direct no-op authorization witness, bound to operation and candidate",
+      "tests": [
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "compareAndSwap",
+            "authorizeNoop"
+          ]
+        },
+        {
+          "file": "test/tiered-integration.test.ts",
+          "title": "a no-op witness is not created when main differs; a matching witness survives main moving later",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/context-publication.ts#ContextPublicationObserver.authorizeNoop",
+      "fact": "the exact accepted context no-op authorization witness, before snapshot and mail publication",
+      "tests": [
+        {
+          "file": "test/integration-witness-kill.test.ts",
+          "title": "DR46 context witness kill:",
+          "injection": "sigkill",
+          "points": [
+            "authorizeNoop"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-composition.ts#mailLedger",
+      "fact": "Mail invokes the original synchronous Store root T through its captured capability projection",
+      "tests": [
+        {
+          "file": "test/mail-ledger-projection.test.mjs",
+          "title": "DR46 Mail: a projected transaction cannot escape its original root transaction",
+          "injection": "logical"
+        },
+        {
+          "file": "test/mail-arrival-durability.test.mjs",
+          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-effects.ts#freezeMailObject",
+      "fact": "the physical frozen object and exactly its preaccept inode ownership",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "stage",
+            "object"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/mail-effects.ts#mailEffects",
+      "fact": "the physical archive/batch-view adapters called through Mail-owned bounded effect ports",
+      "tests": [
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "cur"
+          ]
+        },
+        {
+          "file": "test/p24-mail-boundaries.test.ts",
+          "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+          "injection": "in-process-fault"
+        },
+        {
+          "file": "test/crash-boundaries.test.ts",
+          "title": "T18–T22/T27 primitive SIGKILL at",
+          "injection": "sigkill",
+          "points": [
+            "stage",
+            "object"
+          ]
+        },
+        {
+          "file": "test/phase3.test.ts",
+          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/priority-0.test.ts",
+          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/git-ledger.ts#gitLedger",
+      "fact": "Git invokes the original synchronous Store root T through captured write closures; accepted bytes survive process death",
+      "tests": [
+        {
+          "file": "test/git-review-ledger-projection.test.mjs",
+          "title": "captured writes cannot escape T or borrow a later T",
+          "injection": "logical"
+        },
+        {
+          "file": "test/git-review-acceptance-kill.test.ts",
+          "title": "ledger: SIGKILL after projected acceptance, retry and restart preserve intent",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/review-composition.ts#reviewLedger",
+      "fact": "Review invokes the original synchronous Store root T through captured write closures; accepted bytes survive process death",
+      "tests": [
+        {
+          "file": "test/git-review-ledger-projection.test.mjs",
+          "title": "captured writes cannot escape T or borrow a later T",
+          "injection": "logical"
+        },
+        {
+          "file": "test/git-review-acceptance-kill.test.ts",
+          "title": "ledger: SIGKILL after projected acceptance, retry and restart preserve intent",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/lifecycle-ledger.ts#lifecycleLedger",
+      "fact": "Lifecycle invokes the original synchronous Store root T through its captured capability projection; same-key history survives process death",
+      "tests": [
+        {
+          "file": "test/lifecycle-ledger-projection.test.mjs",
+          "title": "DR46 Lifecycle: every captured write refuses escape or borrowing a later root transaction",
+          "injection": "logical"
+        },
+        {
+          "file": "test/society-crash.test.ts",
+          "title": "SIGKILL after",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/broker/broker-composition.ts#brokerLedger",
+      "fact": "Broker incarnation writes use the original synchronous captured root T; before/after commit restart retains the exact earlier acceptance and receipt",
+      "tests": [
+        {
+          "file": "test/broker-ledger-projection.test.mjs",
+          "title": "DR46 Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes",
+          "injection": "logical"
+        },
+        {
+          "file": "test/broker-ledger-projection.test.mjs",
+          "title": "DR46 Broker ledger: SIGKILL ",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archive",
+      "fact": "verified immutable snapshot/checkpoint and cold selection precede cache reclamation; interrupted deletion restores the same bytes",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restore",
+      "fact": "verified staged restoration is recoverable while cold; hot selection follows complete publication",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "interrupted publication keeps cold selection and recovers without replaying partial cache",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.repository",
+      "fact": "private repository/key initialization and leased metadata stages survive failures without replacing recovery history",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/execution-journal.ts#ExecutionJournal.initialize",
+      "fact": "the initialized hash-chain journal; retry never replaces existing frames",
+      "tests": [
+        {
+          "file": "test/native-process-scope.test.mjs",
+          "title": "native recovery: real owner SIGKILL at",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/candidate-check.ts#executeCandidateCheck",
+      "fact": "exact-checkout attributes in a disposable view; a killed setup never alters canonical refs or authorizes the check",
+      "tests": [
+        {
+          "file": "test/native-git-execution.test.mjs",
+          "title": "native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry",
+          "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/quarantine-worker.ts#executeQuarantinePhase",
+      "fact": "the disposable verifier alternates; repeated verified imports preserve accepted bundle bytes and canonical refs",
+      "tests": [
+        {
+          "file": "test/native-git-execution.test.mjs",
+          "title": "native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+          "injection": "logical"
+        }
+      ]
+    }
+  ]
+}

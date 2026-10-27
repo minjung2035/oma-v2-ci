@@ -1,0 +1,746 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { activityMonitor } from "./activity.js";
+import { normalizeDomain } from "./domain-filter-normalization.js";
+import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
+import { fetchWithCredentialRedirects, getWebSearchConfigPath } from "./utils.js";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+const CONFIG_PATH = getWebSearchConfigPath();
+const SEARCH_TIMEOUT_MS = 60_000;
+// The selected model runs the server-side web_search call and writes the cited summary.
+// Prefer the newest mid-tier ("terra") model, then the newest bare mainline id, then any
+// other versioned GPT id (gateway providers such as opencode-go list only suffixed GPT
+// ids next to non-OpenAI models; unversioned ids such as gpt-oss-* are skipped); price
+// tiers ("pro"/"ultra" id segments) are excluded, and the numeric-aware sort keeps
+// e.g. gpt-5.10 ahead of gpt-5.9.
+const EXCLUDED_MODEL_SEGMENTS = new Set(["pro", "ultra"]);
+const MODEL_PREFERENCE = [
+    (id) => id.includes("terra"),
+    (id) => /^gpt-\d+(\.\d+)?$/.test(id),
+    (id) => /^gpt-\d/.test(id),
+];
+const DEFAULT_SEARCH_PROVIDERS = ["openai-codex", "openai"];
+function pickSearchModel(models) {
+    const candidates = models
+        .filter((model) => !model.id.split("-").some((segment) => EXCLUDED_MODEL_SEGMENTS.has(segment)))
+        .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+    for (const prefers of MODEL_PREFERENCE) {
+        const preferred = candidates.find((model) => prefers(model.id));
+        if (preferred)
+            return preferred;
+    }
+    return candidates[0];
+}
+class CustomOpenAIBaseUrlError extends Error {
+}
+export class OpenAIAlphaSearchUnsupportedError extends Error {
+}
+function resolveCurrentModelSearchTarget(model) {
+    const url = new URL(model.baseUrl);
+    if (url.protocol !== "https:")
+        throw new Error("Current model base URL must use HTTPS");
+    if (model.provider === "openai" && model.api === "openai-responses" && url.hostname.toLowerCase() === "api.openai.com") {
+        const pathname = url.pathname.replace(/\/+$/u, "");
+        url.pathname = `${pathname}/responses`;
+        return { responsesUrl: url.toString(), useCodexEndpoint: false };
+    }
+    if (model.provider === "openai-codex" &&
+        model.api === "openai-codex-responses" &&
+        url.hostname.toLowerCase() === "chatgpt.com" &&
+        url.pathname.replace(/\/+$/u, "") === "/backend-api") {
+        return { responsesUrl: CODEX_RESPONSES_URL, useCodexEndpoint: true };
+    }
+    throw new Error("Current model is not backed by an official OpenAI Responses endpoint");
+}
+// The active model draws on a ChatGPT subscription: openai-codex, or openai signed in
+// through Pi's "Sign in with ChatGPT" OAuth rather than an API key.
+export function isOpenAISubscriptionModelSelected(ctx) {
+    const model = ctx?.model;
+    if (model?.provider === "openai-codex")
+        return true;
+    return model?.provider === "openai" && ctx?.modelRegistry?.isUsingOAuth?.(model) === true;
+}
+export function isCurrentModelHostedSearchEligible(ctx) {
+    const model = ctx?.model;
+    if (!model || !/^gpt-/iu.test(model.id))
+        return false;
+    try {
+        resolveCurrentModelSearchTarget(model);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+let cachedConfig = null;
+function loadConfig() {
+    if (cachedConfig)
+        return cachedConfig;
+    if (!existsSync(CONFIG_PATH)) {
+        cachedConfig = {};
+        return cachedConfig;
+    }
+    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    try {
+        cachedConfig = JSON.parse(raw);
+        return cachedConfig;
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+    }
+}
+function normalizeDomainFilters(domainFilter) {
+    if (!domainFilter?.length)
+        return null;
+    const allowedDomains = [];
+    const blockedDomains = [];
+    for (const raw of domainFilter) {
+        const domain = normalizeDomain(raw);
+        if (!domain)
+            continue;
+        const target = raw.trim().startsWith("-") ? blockedDomains : allowedDomains;
+        if (!target.includes(domain))
+            target.push(domain);
+    }
+    return allowedDomains.length > 0 || blockedDomains.length > 0
+        ? {
+            ...(allowedDomains.length > 0 ? { allowedDomains: allowedDomains.slice(0, 100) } : {}),
+            ...(blockedDomains.length > 0 ? { blockedDomains: blockedDomains.slice(0, 100) } : {}),
+        }
+        : null;
+}
+function decodeJwtPayload(token) {
+    const parts = token.split(".");
+    if (parts.length !== 3 || !parts[1])
+        return null;
+    try {
+        const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(parts[1].length / 4) * 4, "=");
+        const parsed = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+        return parsed && typeof parsed === "object" ? parsed : null;
+    }
+    catch {
+        return null;
+    }
+}
+function isCodexJwt(token) {
+    const payload = decodeJwtPayload(token);
+    return !!payload?.["https://api.openai.com/auth"];
+}
+function isOfficialOpenAIBaseUrl(baseUrl) {
+    if (baseUrl === undefined)
+        return false;
+    try {
+        return new URL(baseUrl).toString().replace(/\/+$/u, "") === "https://api.openai.com/v1";
+    }
+    catch {
+        return false;
+    }
+}
+function extractAccountId(token) {
+    const payload = decodeJwtPayload(token);
+    const auth = payload?.["https://api.openai.com/auth"];
+    if (!auth || typeof auth !== "object")
+        return undefined;
+    const id = auth.chatgpt_account_id;
+    return typeof id === "string" && id.trim().length > 0 ? id.trim() : undefined;
+}
+function resolveConfiguredResponsesUrl(value) {
+    if (value === undefined)
+        return OPENAI_RESPONSES_URL;
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must be an absolute http(s) URL`);
+    }
+    let url;
+    try {
+        url = new URL(value.trim());
+    }
+    catch {
+        throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must be an absolute http(s) URL`);
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+        throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must use http or https`);
+    }
+    if (url.hostname === "opencode.ai" && url.protocol !== "https:") {
+        throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must use HTTPS for opencode.ai`);
+    }
+    return url.toString();
+}
+function resolveUseProviderBaseUrl(config) {
+    if (config.openaiResponsesUrl !== undefined)
+        return false;
+    const value = config.openaiUseProviderBaseUrl;
+    if (value === undefined)
+        return false;
+    if (typeof value !== "boolean") {
+        throw new Error(`openaiUseProviderBaseUrl in ${CONFIG_PATH} must be a boolean`);
+    }
+    return value;
+}
+function resolveProviderResponsesUrl(baseUrl, useCodexEndpoint) {
+    let url;
+    try {
+        if (typeof baseUrl !== "string" || !baseUrl.trim())
+            throw new Error();
+        url = new URL(baseUrl.trim());
+        if (url.protocol !== "https:" && url.protocol !== "http:")
+            throw new Error();
+    }
+    catch {
+        throw new CustomOpenAIBaseUrlError("OpenAI search configuration: openaiUseProviderBaseUrl requires an absolute http(s) provider baseUrl");
+    }
+    if (url.hostname === "opencode.ai" && url.protocol !== "https:") {
+        throw new CustomOpenAIBaseUrlError("OpenAI search configuration: opencode.ai provider baseUrl must use HTTPS");
+    }
+    const path = url.pathname.replace(/\/+$/u, "");
+    if (path.endsWith("/responses")) {
+        url.pathname = path;
+    }
+    else if (useCodexEndpoint && url.hostname.toLowerCase() === "chatgpt.com" && path === "/backend-api") {
+        url.pathname = "/backend-api/codex/responses";
+    }
+    else {
+        url.pathname = `${path || "/v1"}/responses`;
+    }
+    return url.toString();
+}
+function resolveConfiguredSearchProviders(value) {
+    if (value === undefined)
+        return DEFAULT_SEARCH_PROVIDERS;
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+        throw new Error(`openaiSearchProviders in ${CONFIG_PATH} must be an array of non-empty Pi provider ids`);
+    }
+    return value.map((entry) => entry.trim());
+}
+function resolveConfiguredSearchModel(value) {
+    if (value == null)
+        return undefined;
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new Error(`openaiSearchModel in ${CONFIG_PATH} must be a non-empty string`);
+    }
+    return value.trim();
+}
+function toRequestHeaders(headers) {
+    const requestHeaders = {};
+    for (const [name, value] of Object.entries(headers)) {
+        if (value !== null)
+            requestHeaders[name] = value;
+    }
+    return requestHeaders;
+}
+function applyOpenCodeDestinationHeaders(headers, requestUrl, ctx) {
+    const requestHeaders = new Headers(headers);
+    requestHeaders.delete("x-opencode-session");
+    requestHeaders.delete("x-opencode-client");
+    const url = new URL(requestUrl);
+    const sessionId = ctx?.sessionManager?.getSessionId?.();
+    if (url.protocol === "https:" && url.hostname === "opencode.ai" && sessionId) {
+        requestHeaders.set("x-opencode-session", sessionId);
+        requestHeaders.set("x-opencode-client", "pi");
+    }
+    return requestHeaders;
+}
+async function resolvePiAuth(ctx, responsesUrl, providers, modelOverride, hasExplicitResponsesUrl = false, useProviderBaseUrl = false) {
+    let models;
+    let invalidProviderUrlError;
+    try {
+        models = ctx.modelRegistry.getAll();
+    }
+    catch {
+        return undefined;
+    }
+    for (const provider of providers) {
+        const preferred = pickSearchModel(models.filter((model) => model.provider === provider));
+        if (!preferred)
+            continue;
+        let resolved;
+        try {
+            resolved = await ctx.modelRegistry.getApiKeyAndHeaders(preferred);
+        }
+        catch {
+            continue;
+        }
+        if (!resolved.ok || !resolved.apiKey)
+            continue;
+        // Auth can override the model's base URL. Do not guess Responses/web_search
+        // support from a gateway URL, or pair its credential with the official API.
+        const baseUrl = resolved.baseUrl ?? preferred.baseUrl;
+        const isOfficialBaseUrl = isOfficialOpenAIBaseUrl(baseUrl);
+        // Pi sends credentials for the official API base directly to api.openai.com, including
+        // "Sign in with ChatGPT" access tokens, which are ChatGPT JWTs but not Codex credentials.
+        const useCodexEndpoint = provider === "openai-codex" || (!isOfficialBaseUrl && isCodexJwt(resolved.apiKey));
+        if (!hasExplicitResponsesUrl && !useProviderBaseUrl && !useCodexEndpoint && baseUrl !== undefined && !isOfficialBaseUrl) {
+            throw new CustomOpenAIBaseUrlError(`OpenAI web search cannot reuse Pi credentials with a custom baseUrl by default. Set openaiResponsesUrl in ${CONFIG_PATH} to the full Responses endpoint for this credential.`);
+        }
+        let providerResponsesUrl = responsesUrl;
+        if (useProviderBaseUrl) {
+            try {
+                providerResponsesUrl = resolveProviderResponsesUrl(baseUrl, useCodexEndpoint);
+            }
+            catch (err) {
+                if (!(err instanceof CustomOpenAIBaseUrlError))
+                    throw err;
+                invalidProviderUrlError ??= err;
+                continue;
+            }
+        }
+        return {
+            provider,
+            apiKey: resolved.apiKey,
+            model: modelOverride ?? preferred.id,
+            headers: resolved.headers ?? {},
+            responsesUrl: providerResponsesUrl,
+            useCodexEndpoint,
+            ...(useProviderBaseUrl ? { useProviderBaseUrl: true } : {}),
+        };
+    }
+    if (invalidProviderUrlError)
+        throw invalidProviderUrlError;
+    return undefined;
+}
+export async function resolveOpenAIAuth(ctx, signal) {
+    const config = loadConfig();
+    const responsesUrl = resolveConfiguredResponsesUrl(config.openaiResponsesUrl);
+    const useProviderBaseUrl = resolveUseProviderBaseUrl(config);
+    const modelOverride = resolveConfiguredSearchModel(config.openaiSearchModel);
+    const providers = resolveConfiguredSearchProviders(config.openaiSearchProviders);
+    if (ctx) {
+        const auth = await resolvePiAuth(ctx, responsesUrl, providers, modelOverride, config.openaiResponsesUrl !== undefined, useProviderBaseUrl);
+        if (auth)
+            return auth;
+    }
+    if (useProviderBaseUrl) {
+        throw new CustomOpenAIBaseUrlError("OpenAI search configuration: openaiUseProviderBaseUrl requires selected Pi provider credentials and a baseUrl; set openaiResponsesUrl for standalone API keys");
+    }
+    const hasSource = hasCredentialSource({
+        provider: "OpenAI",
+        configuredValue: config.openaiApiKey,
+        environmentValue: process.env.OPENAI_API_KEY,
+    });
+    if (!hasSource)
+        return undefined;
+    const apiKey = await resolveCredential({
+        provider: "OpenAI",
+        configuredValue: config.openaiApiKey,
+        environmentValue: process.env.OPENAI_API_KEY,
+        signal,
+    });
+    return apiKey
+        ? { provider: "openai", apiKey, model: modelOverride ?? "gpt-5.6-terra", headers: {}, responsesUrl }
+        : undefined;
+}
+export async function isOpenAISearchAvailable(ctx) {
+    const config = loadConfig();
+    const responsesUrl = resolveConfiguredResponsesUrl(config.openaiResponsesUrl);
+    const useProviderBaseUrl = resolveUseProviderBaseUrl(config);
+    const providers = resolveConfiguredSearchProviders(config.openaiSearchProviders);
+    try {
+        if (ctx && await resolvePiAuth(ctx, responsesUrl, providers, undefined, config.openaiResponsesUrl !== undefined, useProviderBaseUrl))
+            return true;
+    }
+    catch (err) {
+        if (err instanceof CustomOpenAIBaseUrlError)
+            return false;
+        throw err;
+    }
+    if (useProviderBaseUrl)
+        return false;
+    return hasCredentialSource({
+        provider: "OpenAI",
+        configuredValue: config.openaiApiKey,
+        environmentValue: process.env.OPENAI_API_KEY,
+    });
+}
+async function resolveCurrentModelAuth(ctx, signal) {
+    const model = ctx.model;
+    if (!model || !isCurrentModelHostedSearchEligible(ctx)) {
+        throw new Error("Current model is not eligible for official OpenAI Hosted web search");
+    }
+    const target = resolveCurrentModelSearchTarget(model);
+    const resolved = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (signal?.aborted)
+        signal.throwIfAborted();
+    if (!resolved.ok)
+        throw new Error(`OpenAI current model authentication failed: ${resolved.error}`);
+    if (!resolved.apiKey)
+        throw new Error("OpenAI current model authentication failed: API key unavailable");
+    return {
+        provider: "openai",
+        apiKey: resolved.apiKey,
+        model: model.id,
+        headers: resolved.headers ?? {},
+        responsesUrl: target.responsesUrl,
+        useCodexEndpoint: target.useCodexEndpoint,
+    };
+}
+function buildInstructions(options) {
+    const lines = [
+        "Search the web and return a concise answer grounded only in the web results.",
+        "Include clickable source citations in the response text when possible.",
+    ];
+    if (options.recencyFilter) {
+        const labels = {
+            day: "past 24 hours",
+            week: "past week",
+            month: "past month",
+            year: "past year",
+        };
+        lines.push(`Prefer sources from the ${labels[options.recencyFilter]}.`);
+    }
+    if (typeof options.numResults === "number" && Number.isFinite(options.numResults) && options.numResults > 0) {
+        lines.push(`Prefer around ${Math.min(Math.floor(options.numResults), 20)} distinct sources.`);
+    }
+    const filters = normalizeDomainFilters(options.domainFilter);
+    if (filters?.allowedDomains?.length)
+        lines.push(`Only use sources from: ${filters.allowedDomains.join(", ")}.`);
+    if (filters?.blockedDomains?.length)
+        lines.push(`Do not use sources from: ${filters.blockedDomains.join(", ")}.`);
+    return lines.join(" ");
+}
+function buildWebSearchTool(options) {
+    const tool = { type: "web_search" };
+    const filters = normalizeDomainFilters(options.domainFilter);
+    if (filters) {
+        tool.filters = {
+            ...(filters.allowedDomains ? { allowed_domains: filters.allowedDomains } : {}),
+            ...(filters.blockedDomains ? { blocked_domains: filters.blockedDomains } : {}),
+        };
+    }
+    return tool;
+}
+function isWebSearchCall(item) {
+    return !!item && typeof item === "object" && item.type === "web_search_call";
+}
+async function parseOpenAIResponse(response) {
+    const text = await response.text();
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            const payload = Array.isArray(parsed)
+                ? { output: parsed }
+                : parsed && typeof parsed === "object" ? parsed : { output: [] };
+            const output = Array.isArray(payload.output) ? payload.output : [];
+            return { payload, webSearchCallSeen: output.some(isWebSearchCall) };
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(`OpenAI API returned invalid JSON: ${message}`);
+        }
+    }
+    const outputItems = [];
+    let completedResponse = null;
+    let webSearchCallSeen = false;
+    for (const line of text.split("\n")) {
+        if (!line.startsWith("data: "))
+            continue;
+        const data = line.slice(6).trim();
+        if (!data || data === "[DONE]")
+            continue;
+        try {
+            const parsed = JSON.parse(data);
+            if (typeof parsed.type === "string" && parsed.type.startsWith("response.web_search_call"))
+                webSearchCallSeen = true;
+            if (parsed.type === "response.output_item.done" && parsed.item) {
+                outputItems.push(parsed.item);
+                webSearchCallSeen ||= isWebSearchCall(parsed.item);
+            }
+            if ((parsed.type === "response.done" || parsed.type === "response.completed") && parsed.response && typeof parsed.response === "object") {
+                completedResponse = parsed.response;
+            }
+        }
+        catch {
+        }
+    }
+    if (completedResponse) {
+        const output = Array.isArray(completedResponse.output) ? completedResponse.output : [];
+        const payload = output.length > 0 ? completedResponse : { ...completedResponse, output: outputItems };
+        return { payload, webSearchCallSeen: webSearchCallSeen || output.some(isWebSearchCall) };
+    }
+    if (outputItems.length > 0)
+        return { payload: { output: outputItems }, webSearchCallSeen: webSearchCallSeen || outputItems.some(isWebSearchCall) };
+    throw new Error("OpenAI API returned no parseable response output");
+}
+function cleanSourceUrl(rawUrl) {
+    try {
+        const url = new URL(rawUrl);
+        if (url.searchParams.get("utm_source") === "openai")
+            url.searchParams.delete("utm_source");
+        return url.toString();
+    }
+    catch {
+        return rawUrl.replace(/[?&]utm_source=openai$/, "");
+    }
+}
+function extractSnippetAround(text, start, end) {
+    if (typeof start !== "number" || typeof end !== "number" || !text)
+        return "";
+    const before = Math.max(0, start - 100);
+    const after = Math.min(text.length, end + 100);
+    const snippet = text.slice(before, after).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").trim();
+    return snippet.length > 300 ? `${snippet.slice(0, 297)}...` : snippet;
+}
+function addResult(results, seen, url, title, snippet = "") {
+    if (typeof url !== "string" || url.trim().length === 0)
+        return;
+    const cleanUrl = cleanSourceUrl(url);
+    if (seen.has(cleanUrl))
+        return;
+    seen.add(cleanUrl);
+    results.push({
+        title: typeof title === "string" && title.trim().length > 0 ? title : cleanUrl,
+        url: cleanUrl,
+        snippet,
+    });
+}
+function extractSearchResults(output, numResults) {
+    const results = [];
+    const seenUrls = new Set();
+    for (const item of output) {
+        if (!item || typeof item !== "object" || item.type !== "message")
+            continue;
+        const content = item.content;
+        if (!Array.isArray(content))
+            continue;
+        for (const part of content) {
+            if (!part || typeof part !== "object")
+                continue;
+            const text = typeof part.text === "string" ? part.text : "";
+            const annotations = part.annotations;
+            if (!Array.isArray(annotations))
+                continue;
+            for (const annotation of annotations) {
+                if (!annotation || typeof annotation !== "object" || annotation.type !== "url_citation")
+                    continue;
+                addResult(results, seenUrls, annotation.url, annotation.title, extractSnippetAround(text, annotation.start_index, annotation.end_index));
+            }
+        }
+    }
+    for (const item of output) {
+        if (!item || typeof item !== "object" || item.type !== "web_search_call")
+            continue;
+        const value = item;
+        const actionSources = value.action && typeof value.action === "object"
+            ? value.action.sources
+            : undefined;
+        const sourceGroups = [actionSources, value.sources, value.results];
+        for (const group of sourceGroups) {
+            if (!Array.isArray(group))
+                continue;
+            for (const source of group) {
+                if (!source || typeof source !== "object")
+                    continue;
+                const record = source;
+                addResult(results, seenUrls, record.url ?? record.source_website_url, record.title ?? record.caption);
+            }
+        }
+    }
+    if (typeof numResults === "number" && Number.isFinite(numResults) && numResults > 0) {
+        return results.slice(0, Math.min(Math.floor(numResults), 20));
+    }
+    return results;
+}
+function extractAnswer(output) {
+    const parts = [];
+    for (const item of output) {
+        if (!item || typeof item !== "object" || item.type !== "message")
+            continue;
+        const content = item.content;
+        if (!Array.isArray(content))
+            continue;
+        for (const part of content) {
+            if (!part || typeof part !== "object")
+                continue;
+            const text = part.text;
+            if (typeof text === "string" && text.trim().length > 0)
+                parts.push(text);
+        }
+    }
+    return parts.join("\n").trim();
+}
+function isAlphaSearchEnabled() {
+    const value = loadConfig().openaiUseAlphaSearch;
+    if (value === undefined)
+        return false;
+    if (typeof value !== "boolean") {
+        throw new Error(`openaiUseAlphaSearch in ${CONFIG_PATH} must be a boolean`);
+    }
+    return value;
+}
+function resolveAlphaSearchUrl(responsesUrl) {
+    const url = new URL(responsesUrl);
+    const pathname = url.pathname.replace(/\/+$/u, "");
+    if (!pathname.endsWith("/responses")) {
+        throw new Error("OpenAI alpha/search configuration: endpoint path must end with /responses");
+    }
+    url.pathname = `${pathname.slice(0, -"/responses".length)}/alpha/search`;
+    return url.toString();
+}
+function buildAlphaSearchBody(query, options, model) {
+    const filters = normalizeDomainFilters(options.domainFilter);
+    if (filters?.blockedDomains?.length) {
+        throw new OpenAIAlphaSearchUnsupportedError("OpenAI alpha/search: unsupported excluded domains; use another search provider or disable openaiUseAlphaSearch");
+    }
+    const recencyDays = { day: 1, week: 7, month: 30, year: 365 };
+    return {
+        id: randomUUID(),
+        model,
+        commands: {
+            search_query: [{
+                    q: query,
+                    ...(options.recencyFilter ? { recency: recencyDays[options.recencyFilter] } : {}),
+                    ...(filters?.allowedDomains ? { domains: filters.allowedDomains } : {}),
+                }],
+        },
+    };
+}
+function buildAlphaSearchHeaders(headers, apiKey) {
+    const result = new Headers(headers);
+    for (const name of ["OpenAI-Beta", "Session_ID", "Conversation_ID", "X-Codex-Beta-Features", "X-Codex-Turn-State", "x-openai-internal-codex-responses-lite"]) {
+        result.delete(name);
+    }
+    result.set("Authorization", `Bearer ${apiKey}`);
+    result.set("Content-Type", "application/json");
+    result.set("Accept", "application/json");
+    result.set("Originator", "codex_cli_rs");
+    return result;
+}
+async function parseAlphaSearchResponse(response, numResults = 5) {
+    const text = await response.text();
+    let payload;
+    try {
+        payload = JSON.parse(text);
+    }
+    catch {
+        throw new Error("OpenAI alpha/search returned invalid JSON");
+    }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new Error("OpenAI alpha/search returned an invalid response");
+    }
+    const record = payload;
+    const answer = typeof record.output === "string" ? record.output.trim() : "";
+    const results = [];
+    const seen = new Set();
+    for (const item of Array.isArray(record.results) ? record.results : []) {
+        if (!item || typeof item !== "object" || item.type !== "text_result" || typeof item.url !== "string")
+            continue;
+        try {
+            const url = new URL(item.url);
+            if (url.protocol !== "http:" && url.protocol !== "https:")
+                continue;
+        }
+        catch {
+            continue;
+        }
+        addResult(results, seen, item.url, item.title, typeof item.snippet === "string" ? item.snippet : "");
+    }
+    if (!answer && results.length === 0) {
+        throw new Error("OpenAI alpha/search returned no parseable results or plaintext output");
+    }
+    return {
+        answer,
+        results: typeof numResults === "number" && Number.isFinite(numResults) && numResults > 0
+            ? results.slice(0, Math.min(Math.floor(numResults), 20))
+            : results,
+    };
+}
+async function runOpenAISearch(query, options, auth, ctx) {
+    const useAlphaSearch = isAlphaSearchEnabled();
+    if (useAlphaSearch)
+        options.signal?.throwIfAborted();
+    const useCodexEndpoint = auth.useCodexEndpoint ?? (auth.provider === "openai-codex" || isCodexJwt(auth.apiKey));
+    const responsesUrl = useCodexEndpoint && !auth.useProviderBaseUrl ? CODEX_RESPONSES_URL : auth.responsesUrl;
+    const requestUrl = useAlphaSearch ? resolveAlphaSearchUrl(responsesUrl) : responsesUrl;
+    const body = useAlphaSearch ? buildAlphaSearchBody(query, options, auth.model) : {
+        model: auth.model,
+        instructions: buildInstructions(options),
+        input: [{ role: "user", content: [{ type: "input_text", text: query }] }],
+        tools: [buildWebSearchTool(options)],
+        include: ["web_search_call.action.sources"],
+        store: false,
+        stream: true,
+        tool_choice: "required",
+        parallel_tool_calls: true,
+    };
+    const activityId = activityMonitor.logStart({ type: "api", query });
+    const headers = {
+        ...toRequestHeaders(auth.headers),
+        Authorization: `Bearer ${auth.apiKey}`,
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "responses=experimental",
+    };
+    if (useCodexEndpoint) {
+        const accountId = extractAccountId(auth.apiKey);
+        if (accountId)
+            headers["chatgpt-account-id"] = accountId;
+        headers.originator = "pi";
+    }
+    const requestHeaders = applyOpenCodeDestinationHeaders(useAlphaSearch ? buildAlphaSearchHeaders(headers, auth.apiKey) : headers, requestUrl, ctx);
+    try {
+        const response = await fetchWithCredentialRedirects(requestUrl, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify(body),
+            signal: options.signal
+                ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal])
+                : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        }, ["Authorization", "x-opencode-session", "x-opencode-client", "chatgpt-account-id", ...Object.keys(auth.headers)]);
+        if (!response.ok) {
+            activityMonitor.logError(activityId, `HTTP ${response.status}`);
+            const errorText = redactCredential(await response.text(), auth.apiKey);
+            const ErrorType = useAlphaSearch && [404, 405, 501].includes(response.status)
+                ? OpenAIAlphaSearchUnsupportedError
+                : Error;
+            throw new ErrorType(`OpenAI ${useAlphaSearch ? "alpha/search " : ""}API error ${response.status}: ${errorText.slice(0, 300)}`);
+        }
+        if (useAlphaSearch) {
+            const result = await parseAlphaSearchResponse(response, options.numResults);
+            activityMonitor.logComplete(activityId, response.status);
+            return result;
+        }
+        const parsed = await parseOpenAIResponse(response);
+        const output = Array.isArray(parsed.payload.output) ? parsed.payload.output : [];
+        if (!parsed.webSearchCallSeen)
+            throw new Error("OpenAI web_search returned no web_search_call");
+        const answer = extractAnswer(output);
+        const results = extractSearchResults(output, options.numResults);
+        if (!answer && results.length === 0) {
+            throw new Error("OpenAI web_search returned no answer or sources");
+        }
+        activityMonitor.logComplete(activityId, response.status);
+        return { answer, results };
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const redactedMessage = redactCredential(message, auth.apiKey);
+        if (redactedMessage.toLowerCase().includes("abort")) {
+            activityMonitor.logComplete(activityId, 0);
+        }
+        else {
+            activityMonitor.logError(activityId, redactedMessage);
+        }
+        if (redactedMessage === message)
+            throw err;
+        const redactedError = new Error(redactedMessage);
+        if (err instanceof Error)
+            redactedError.name = err.name;
+        throw redactedError;
+    }
+}
+export async function searchWithOpenAI(query, options = {}, ctx) {
+    const auth = await resolveOpenAIAuth(ctx, options.signal);
+    if (!auth) {
+        throw new Error("OpenAI web search unavailable. Either:\n" +
+            "  1. Use /login to sign in with a Codex subscription\n" +
+            `  2. Create ${CONFIG_PATH} with { "openaiApiKey": "your-key" }\n` +
+            "  3. Set OPENAI_API_KEY environment variable");
+    }
+    return runOpenAISearch(query, options, auth, ctx);
+}
+export async function searchWithCurrentModelOpenAI(query, options = {}, ctx) {
+    if (!ctx)
+        throw new Error("OpenAI current-model search requires an extension context");
+    const auth = await resolveCurrentModelAuth(ctx, options.signal);
+    return runOpenAISearch(query, options, auth, ctx);
+}

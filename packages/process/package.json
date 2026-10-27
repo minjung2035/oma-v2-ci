@@ -1,0 +1,106 @@
+{
+  "name": "@oma/process",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./execution-witness": {
+      "types": "./dist/execution-witness.d.ts",
+      "default": "./dist/execution-witness.js"
+    },
+    "./coalesced-wake": {
+      "types": "./dist/coalesced-wake.d.ts",
+      "default": "./dist/coalesced-wake.js"
+    },
+    "./async": {
+      "types": "./dist/async.d.ts",
+      "default": "./dist/async.js"
+    },
+    "./command": {
+      "types": "./dist/command.d.ts",
+      "default": "./dist/command.js"
+    },
+    "./deadline": {
+      "types": "./dist/deadline.d.ts",
+      "default": "./dist/deadline.js"
+    },
+    "./fence": {
+      "types": "./dist/fence.d.ts",
+      "default": "./dist/fence.js"
+    },
+    "./host-loss": {
+      "types": "./dist/host-loss.d.ts",
+      "default": "./dist/host-loss.js"
+    },
+    "./policies": {
+      "types": "./dist/policies.d.ts",
+      "default": "./dist/policies.js"
+    },
+    "./preparation": {
+      "types": "./dist/preparation.d.ts",
+      "default": "./dist/preparation.js"
+    },
+    "./run": {
+      "types": "./dist/run.d.ts",
+      "default": "./dist/run.js"
+    },
+    "./writer": {
+      "types": "./dist/writer.d.ts",
+      "default": "./dist/writer.js"
+    },
+    "./restart-policy": {
+      "types": "./dist/restart-policy.d.ts",
+      "default": "./dist/restart-policy.js"
+    },
+    "./restic": {
+      "types": "./dist/restic.d.ts",
+      "default": "./dist/restic.js"
+    },
+    "./resident-supervisor": {
+      "types": "./dist/resident-supervisor.d.ts",
+      "default": "./dist/resident-supervisor.js"
+    },
+    "./owned-execution": {
+      "types": "./dist/owned-execution.d.ts",
+      "default": "./dist/owned-execution.js"
+    },
+    "./resident-runtime": {
+      "types": "./dist/resident-runtime.d.ts",
+      "default": "./dist/resident-runtime.js"
+    },
+    "./resident-logs": {
+      "types": "./dist/resident-logs.d.ts",
+      "default": "./dist/resident-logs.js"
+    },
+    "./observed-stream": {
+      "types": "./dist/observed-stream.d.ts",
+      "default": "./dist/observed-stream.js"
+    },
+    "./packet-stream": {
+      "types": "./dist/packet-stream.d.ts",
+      "default": "./dist/packet-stream.js"
+    },
+    "./replace": {
+      "types": "./dist/replace.d.ts",
+      "default": "./dist/replace.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/process",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/domain": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/contracts": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

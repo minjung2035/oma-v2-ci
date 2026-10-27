@@ -1,0 +1,89 @@
+{
+  "name": "@oma/platform-mac",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./developer-tools": {
+      "types": "./dist/developer-tools.d.ts",
+      "default": "./dist/developer-tools.js"
+    },
+    "./git-sandbox": {
+      "types": "./dist/git-sandbox.d.ts",
+      "default": "./dist/git-sandbox.js"
+    },
+    "./path-view": {
+      "types": "./dist/path-view.d.ts",
+      "default": "./dist/path-view.js"
+    },
+    "./seatbelt": {
+      "types": "./dist/seatbelt.d.ts",
+      "default": "./dist/seatbelt.js"
+    },
+    "./native-channel": {
+      "types": "./dist/native-channel.d.ts",
+      "default": "./dist/native-channel.js"
+    },
+    "./keychain-client": {
+      "types": "./dist/keychain-client.d.ts",
+      "default": "./dist/keychain-client.js"
+    },
+    "./native-assets": {
+      "types": "./dist/native-assets.d.ts",
+      "default": "./dist/native-assets.js"
+    },
+    "./audit-peer": {
+      "types": "./dist/audit-peer.d.ts",
+      "default": "./dist/audit-peer.js"
+    },
+    "./mach-stream": {
+      "types": "./dist/mach-stream.d.ts",
+      "default": "./dist/mach-stream.js"
+    },
+    "./mach-transport": {
+      "types": "./dist/mach-transport.d.ts",
+      "default": "./dist/mach-transport.js"
+    },
+    "./mach-address": {
+      "types": "./dist/mach-address.d.ts",
+      "default": "./dist/mach-address.js"
+    },
+    "./resident-sandbox": {
+      "types": "./dist/resident-sandbox.d.ts",
+      "default": "./dist/resident-sandbox.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/platform-mac",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/native": "0.1.0",
+    "@oma/process": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "seatbelt/main.c",
+      "seatbelt/launch-fds.h",
+      "keychain/main.swift",
+      "keychain/oma-keychain.entitlements"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs",
+    "darwinExecutables": [
+      "seatbelt/oma-seatbelt",
+      "keychain/oma-keychain"
+    ]
+  }
+}

@@ -1,0 +1,224 @@
+name: Architecture verification evidence
+
+# Every branch that can become master is verified before it does: the
+# integration branch on push, master itself after the merge, and the proposal
+# while it is still a proposal.
+on:
+  push:
+    branches: [master, refactor/safety-preserving-architecture, work/macos-native-20261025]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    # Above the sum of the per-check ceilings below, so the job clock can only
+    # fire after every check has had the time it was given -- otherwise a check
+    # still running inside its own budget would be killed by the outer one and
+    # the evidence would say "timeout" about work that was proceeding.
+    timeout-minutes: 300
+    env:
+      EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      # The one commit this run is about. On a pull request `github.sha` names a
+      # merge commit this workflow invented, which exists in no repository
+      # afterwards -- evidence filed under it could never be checked against a
+      # tree again. The head commit is the thing under test, so it is the thing
+      # the evidence is named by, and the binding step below refuses to continue
+      # if the checkout produced anything else.
+      VERIFIED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Bind this run to the exact commit it verifies
+        run: |
+          mkdir -p "$EVIDENCE"
+          head="$(git rev-parse HEAD)"
+          # A result recorded under a SHA that did not produce it is worse than
+          # no result. Nothing is measured until the tree is that commit.
+          test "$head" = "$VERIFIED_SHA"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          git archive --format=tar.gz --output="$EVIDENCE/source.tar.gz" "$head"
+          sha256sum "$EVIDENCE/source.tar.gz" > "$EVIDENCE/source.tar.gz.sha256"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Record which bytes of that commit were verified
+        # A commit name says which revision was meant; it does not say which
+        # bytes ran. This is the same closure the local R38 gate compares
+        # against `docs/implementation/validation.md`, taken before any generator
+        # rewrites an input, so the evidence and the record answer to one
+        # number -- and that number is filed under one commit.
+        run: |
+          node --input-type=module -e '
+            const source = await import("./scripts/source-digest.mjs");
+            const measured = source.verificationInputDigest(".");
+            process.stdout.write(`files\t${measured.files}\ndigest\t${measured.digest}\n`);
+          ' > "$EVIDENCE/verification-input-digest.tsv"
+          {
+            printf 'commit\t%s\n' "$VERIFIED_SHA"
+            printf 'event\t%s\n' "$GITHUB_EVENT_NAME"
+            printf 'ref\t%s\n' "$GITHUB_REF"
+            printf 'run\t%s/%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            cat "$EVIDENCE/verification-input-digest.tsv"
+          } > "$EVIDENCE/provenance.tsv"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-source-${{ env.VERIFIED_SHA }}
+          path: |
+            ${{ env.EVIDENCE }}/source-head.txt
+            ${{ env.EVIDENCE }}/source.tar.gz
+            ${{ env.EVIDENCE }}/source.tar.gz.sha256
+            ${{ env.EVIDENCE }}/provenance.tsv
+          retention-days: 7
+          if-no-files-found: error
+      - name: Install the pinned native prerequisites and line counter
+        timeout-minutes: 15
+        run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
+      - name: Install locked dependencies
+        id: dependencies
+        continue-on-error: true
+        run: |
+          node --version > "$EVIDENCE/node-version.txt"
+          npm --version > "$EVIDENCE/npm-version.txt"
+          uname -a > "$EVIDENCE/kernel.txt"
+          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Capture baseline and all lane outcomes without hiding failures
+        if: steps.dependencies.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          # Each check gets a wall-clock ceiling above the one the check itself
+          # enforces, so the outer kill can only ever fire on a hang -- never on
+          # a lane that is still inside its own budget and would have reported.
+          run_check() {
+            local label="$1"; local seconds="$2"; shift 2
+            timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
+            local code=$?
+            printf '%s\t%s\n' "$label" "$code" >> "$EVIDENCE/exit-codes.tsv"
+            if [ "$code" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          }
+          # A stale inventory is a failure of this commit, not a note: the
+          # generators run afterwards, so without this the regenerated files
+          # would hide the very state the check observed.
+          # Checks the committed per-file source digests without cloc before
+          # measuring LOC into CI artifacts; no source claim is regenerated.
+          npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
+          inventory_before=$?
+          printf '%s\n' "$inventory_before" > "$EVIDENCE/inventory-before.exit-code"
+          printf '%s\t%s\n' inventory-before "$inventory_before" >> "$EVIDENCE/exit-codes.tsv"
+          if [ "$inventory_before" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          # Measure into the evidence directory and bind the report to source
+          # digests without rewriting committed inputs. The inventory check
+          # remains independent of LOC; inventory writes only the file list.
+          run_check loc 900 node scripts/loc.mjs --out "$EVIDENCE"
+          run_check check-inventory 900 npm run check:inventory
+          run_check typecheck 900 npm run typecheck
+          run_check build 900 npm run build
+          run_check setup-storage 900 npm run setup:storage
+          run_check check-package 900 npm run check:package
+          run_check check-architecture 900 npm run check:architecture
+          # Doc↔inventory pairing: check:architecture runs it in its chain too;
+          # this separate evidence line names the drifted clause directly.
+          run_check spec-inventory 900 npm run check:spec-inventory
+          run_check test 1800 env OMA_TEST_ARTIFACT_DIR="$EVIDENCE/local-exploration" npm test
+          # Full native/kernel/crash coverage also runs in native-all below.
+          # These standalone wrappers retain their own scoped result records.
+          run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"
+          run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
+          run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
+          run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
+          run_check verify-platform 1000 npm run verify:platform -- --out "$EVIDENCE/platform"
+          for lane in kernel crash; do
+            printf '%s\tNOT_RUN standalone; covered by native-all actual files and required names\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
+          done
+          cp production-files.txt production-loc-hashes.json "$EVIDENCE/"
+          git diff -- production-files.txt production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
+          # Generating evidence must not rewrite the committed source claim.
+          # Recording such a patch is not enough; the difference fails the run.
+          # LOC counts are CI artifacts, not committed inputs; only the source
+          # inventory and per-file digests are compared against the commit.
+          if ! git diff --exit-code -- production-files.txt production-loc-hashes.json; then
+            printf '%s\t%s\n' generated-inventory-diff 1 >> "$EVIDENCE/exit-codes.tsv"
+            touch "$EVIDENCE/failed"
+          fi
+          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs baseline and full native lanes; each result certifies only its executed cases. Darwin OPEN gates and power loss remain separate.' > "$EVIDENCE/README.txt"
+      - name: Upload raw evidence even when a check failed
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-verification-${{ env.VERIFIED_SHA }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}
+          retention-days: 14
+          if-no-files-found: error
+      - name: Propagate unsuccessful verification
+        if: always()
+        env:
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+        run: |
+          test "$DEPENDENCIES_OUTCOME" = success
+          # Unbound evidence is not evidence: a run that lost the commit it was
+          # measuring cannot report a pass about one.
+          test -f "$EVIDENCE/provenance.tsv"
+          grep -qxF "$(printf 'commit\t%s' "$VERIFIED_SHA")" "$EVIDENCE/provenance.tsv"
+          test -f "$EVIDENCE/exit-codes.tsv"
+          test ! -f "$EVIDENCE/failed"
+
+  native-all:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    env:
+      EVIDENCE: /tmp/oma-native-all-${{ github.run_id }}-${{ github.run_attempt }}
+      VERIFIED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26.0.0'
+          package-manager-cache: false
+      - name: Bind native all to the proposed head and its bytes
+        run: |
+          mkdir -p "$EVIDENCE"
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-before.json"
+      - name: Install native all prerequisites
+        timeout-minutes: 15
+        run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
+      - name: Install native all locked dependencies
+        timeout-minutes: 10
+        run: npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Prepare the pinned storage dependency for native all
+        timeout-minutes: 15
+        run: |
+          npm run build:workspaces > "$EVIDENCE/storage-workspace-build.log" 2>&1
+          npm run setup:storage > "$EVIDENCE/setup-storage.log" 2>&1
+      - name: Run every native and durable oracle
+        run: |
+          run_check() {
+            local label="$1"; local seconds="$2"; shift 2
+            timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
+          }
+          run_check verify-all 9900 npm run verify:all -- --out "$EVIDENCE/all"
+      - name: Confirm native all input preservation
+        if: always()
+        run: |
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-after.json"
+          cmp "$EVIDENCE/input-before.json" "$EVIDENCE/input-after.json"
+      - name: Preserve native all raw results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-native-all-${{ env.VERIFIED_SHA }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 14

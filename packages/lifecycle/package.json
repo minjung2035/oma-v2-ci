@@ -1,0 +1,66 @@
+{
+  "name": "@oma/lifecycle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./actions": {
+      "types": "./dist/actions.d.ts",
+      "default": "./dist/actions.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "default": "./dist/contracts.js"
+    },
+    "./create": {
+      "types": "./dist/create.d.ts",
+      "default": "./dist/create.js"
+    },
+    "./create-publication": {
+      "types": "./dist/create-publication.d.ts",
+      "default": "./dist/create-publication.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "default": "./dist/policy.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "default": "./dist/ports.js"
+    },
+    "./registry-operations": {
+      "types": "./dist/registry-operations.d.ts",
+      "default": "./dist/registry-operations.js"
+    },
+    "./society": {
+      "types": "./dist/society.d.ts",
+      "default": "./dist/society.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/lifecycle",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/mail": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

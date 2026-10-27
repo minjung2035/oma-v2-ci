@@ -1,0 +1,92 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "composite": true,
+    "tsBuildInfoFile": ".tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [],
+  "references": [
+    {
+      "path": "../../packages/broker"
+    },
+    {
+      "path": "../../packages/client"
+    },
+    {
+      "path": "../../packages/config"
+    },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/domain"
+    },
+    {
+      "path": "../../packages/engine"
+    },
+    {
+      "path": "../../packages/extension"
+    },
+    {
+      "path": "../../packages/git"
+    },
+    {
+      "path": "../../packages/lifecycle"
+    },
+    {
+      "path": "../../packages/mail"
+    },
+    {
+      "path": "../../packages/native"
+    },
+    {
+      "path": "../../packages/platform-linux"
+    },
+    {
+      "path": "../../packages/platform-mac"
+    },
+    {
+      "path": "../../packages/process"
+    },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/reconcile"
+    },
+    {
+      "path": "../../packages/review"
+    },
+    {
+      "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/tool-hashline"
+    },
+    {
+      "path": "../../packages/tool-lsp"
+    },
+    {
+      "path": "../../packages/tool-mcp"
+    },
+    {
+      "path": "../../packages/tool-runtime"
+    },
+    {
+      "path": "../../packages/tool-web"
+    },
+    {
+      "path": "../../packages/tui"
+    },
+    {
+      "path": "../../packages/tool-files"
+    }
+  ]
+}

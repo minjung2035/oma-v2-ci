@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "qualification": "NOT_REVIEWED; local probes only; native Mac/VM/provider turn NOT_RUN",
+  "versions": {
+    "@earendil-works/pi-coding-agent": "1.0.1",
+    "@earendil-works/pi-tui": "1.0.1",
+    "@earendil-works/pi-ai": "1.0.3",
+    "pi-open-tui": "0.3.11"
+  },
+  "contacts": [
+    {
+      "id": "interactive-mode-private",
+      "owner": "pi-compat/interactive-mode.ts",
+      "callers": [
+        "pi-compat/interactive-mode.ts"
+      ],
+      "members": [
+        "handleFatalRuntimeError",
+        "renderProjectTrustWarningIfNeeded",
+        "suggestBugReport",
+        "crashReportInstructions",
+        "updateTerminalTitle",
+        "handleExportCommand",
+        "getPathCommandArgument",
+        "getCrashExtensionHint",
+        "showManagedToolStatus",
+        "shutdown",
+        "showSessionSelector",
+        "getRegisteredToolDefinition",
+        "toggleThinkingBlockVisibility"
+      ],
+      "fields": [
+        "hideThinkingBlock"
+      ],
+      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal rather than the private renderer field."
+    },
+    {
+      "id": "optional-search-tool-module",
+      "owner": "pi-compat/interactive-tool-setup.ts",
+      "module": "utils/tools-manager.js",
+      "importer": "modes/interactive/interactive-mode.js",
+      "exports": [
+        "getToolPath",
+        "ensureTool"
+      ],
+      "reason": "Scope resolution to the pinned installation; UI readiness does not await downloads, actual grep/find retain original installer."
+    },
+    {
+      "id": "interactive-editor-fields",
+      "owner": "pi-compat/interactive-editor.ts",
+      "members": [
+        "actionHandlers",
+        "onSubmit",
+        "onPasteImage",
+        "addToHistory",
+        "setAutocompleteProvider"
+      ],
+      "reason": "Structural editor adaptation preserves built-in routing and keeps each plain Human prompt a separately ordered turn."
+    },
+    {
+      "id": "session-environment-and-exit-text",
+      "owner": "pi-compat/env.ts",
+      "sourceModules": [
+        "core/tools/bash.js",
+        "modes/interactive/interactive-mode.js"
+      ],
+      "reason": "Remove inherited session identity and replace upstream resume wording with the actual OMA birth owner."
+    },
+    {
+      "id": "session-header-format",
+      "owner": "pi-compat/session.ts",
+      "sourceModules": [
+        "core/session-manager.js"
+      ],
+      "reason": "Only pinned CURRENT_SESSION_VERSION header is admitted; no old or unversioned resume interpretation."
+    },
+    {
+      "id": "finished-open-tui-lines",
+      "owner": "open-tui-brand.ts",
+      "sourcePackage": "pi-open-tui",
+      "markers": [
+        "Let's build something great",
+        "Ask Pi anything",
+        "Welcome",
+        "Commands",
+        "~"
+      ],
+      "replacement": "Your ideas, in motion",
+      "reason": "SDK-specific line matching stays in Engine; actual UI primitive visibleWidth keeps every terminal width."
+    },
+    {
+      "id": "command-and-crash-literals",
+      "owner": "interactive.ts",
+      "companion": "pi-compat/commands.ts",
+      "sourceModules": [
+        "core/slash-commands.js",
+        "modes/interactive/interactive-mode.js"
+      ],
+      "reason": "Root integration probes use the actual upstream command set, export parser and extension crash advice."
+    }
+  ]
+}

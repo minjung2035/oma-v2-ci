@@ -1,0 +1,614 @@
+{
+  "version": 1,
+  "revision": "DR39",
+  "date": "2026-10-09",
+  "baseline_commit": "463b0d2c382351965ced889020d749d33a2d66f5",
+  "scope": "Concrete settings/panel and pure review owners, derived registry metadata, VM/credential API separation and additional disk-filesystem ownership repairs. Direct work; no subagents.",
+  "runtime_input": {
+    "files": 15404,
+    "digest": "fc4796d0cc73aa62d3627bf32909d9837b03801b160ac5f2dacaeec9ef20332f"
+  },
+  "runtime_byte_comparison": {
+    "input": {
+      "files": 15404,
+      "digest": "fc4796d0cc73aa62d3627bf32909d9837b03801b160ac5f2dacaeec9ef20332f"
+    },
+    "files": 15404,
+    "changed": []
+  },
+  "first_failed_input": {
+    "files": 15403,
+    "digest": "92bae4d455f2cb420b43feade3ee843821e3d7cfcbd86ba7b093b8c387a540d6"
+  },
+  "first_failed_byte_comparison": {
+    "input": {
+      "files": 15403,
+      "digest": "92bae4d455f2cb420b43feade3ee843821e3d7cfcbd86ba7b093b8c387a540d6"
+    },
+    "files": 15403,
+    "changed": []
+  },
+  "input_map_artifact": {
+    "path": "/tmp/oma-architecture-2026-10-09/bytes-final-before.json",
+    "sha256": "3a53bd12330c71615b234f1167d24ca1a3a0a0372f571f2a064f786fb13c4f37"
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "os": "Linux",
+    "uid": 1001,
+    "local_temp": "/var/tmp (disk)",
+    "local_guard": "scripts/local-test-guard.mjs",
+    "local_systemd": false,
+    "files": 407,
+    "parallel_files": 405,
+    "concurrency": 8,
+    "native_systemd": "257.13",
+    "native_bwrap": "0.12.0"
+  },
+  "reviewed_production_sources": {
+    "src/entry/oma-society.ts": "ccfc965911c0398a53af9a25adb484f3a990a008e36a50ff3905087f78346b26",
+    "src/entry/omahostd.ts": "eb822e5347df4ca83fe6d26aaac04b1dfdeb671d792f7bf1f8a01515bc84b731",
+    "src/mail.ts": "971f6cfc686dc9ca1649107b08730c2ccb61d5388db157b8929846f8633d683a",
+    "src/mail/review-documents.ts": "7ab974851d6e69acf6ff0572cc60aa004e8e5ffd771cc835c99dc6a6066c41bc",
+    "src/platform/host/keychain-client.ts": "6ef631d8a316db2d28284ff86206842d78bc6dc64fe7bbd2aaec1d6516ff46c5",
+    "src/platform/host/vz-driver.ts": "0433f715da42aa9aba6484e0ad1169a28cbdf102470962ef940dfc5e6c8a7e1c",
+    "src/review.ts": "6b92813461ae7beef5e193ca5525b56dcab5c3ac90700d6c5fed8f7a82498b0b",
+    "src/runtime/connect-proxy.ts": "0e2122b1fd6267605c53ef76ff97ea53fa69ce34b03addbcddde07f3aec67368",
+    "src/storage/durable-fs.ts": "3cbb0ba0fb1d06f3c0f1303d306f1f01d66fcb2ff8f4f551d3ec08b642245bb8",
+    "src/storage/operation-codec.ts": "f55a7e0a9f1e2a2bb0116382c827d9c7c43899b564ad359c4dddfbbfa54aa1ac",
+    "src/storage/preaccept-artifact.ts": "ce5b00dc0b24ef7181fcba3a4a0530f203b3228e68f62c81c6c98c988d066fff",
+    "src/storage/submit-spool.ts": "2835ccdb2c9f49b738dd9f0068d64913d2b3f3d106a4c28339fc8d2c4f05f04e",
+    "src/tui/project-session-settings.ts": "3384ffb9c173365c5de848300d17bf77fae0b6fae54123f4fba8613230d8ce24",
+    "src/tui/society-panel.ts": "f6af4a4b8a57254ee2e27b00e3ce7362b3e4803205a6e8a8f2d0658d69e2045e",
+    "src/views/review-status.ts": "c5dfa1dcda45d635b4242c230527410db7839ce51d4bc6d4b701b49400e53196"
+  },
+  "other_changed_source_bytes": {
+    ".gitignore": "3ca5507e0aebab64fe8ee6020c73860895bb3b2afa78d54ec899293cd8d48ea9",
+    "platform/host/vmhelper/Sources/oma-vmhelper/main.swift": "ce21e43a4ca9c2dd7919e665fd49fbb94f4f0a9f9a1ebad1f3457b53cb5637b7",
+    "scripts/architecture/rules/ownership-rules.mjs": "4908f9995282e517b72d28903e32c87484d4cb2f7738181ca15d931180d3ddef",
+    "scripts/architecture/rules/shared.mjs": "e413f7bdd73ea1c6508dd3b3d31ade5164bbd04b37909e5f922db4d020953252",
+    "scripts/mutation-locality.mjs": "2085e40ff7adcbd887ea82013926dc6a4fd567776512a60c454115831ada910e",
+    "scripts/source-digest.mjs": "1b2c804139304a60ad7d64f5ab098b916cc8ed2f29fbb3994887e72d4a6ecf52",
+    "test/action-admission.test.ts": "397c0ac7c8697c19dbf1b603d03416fa490016fad44956fda79518142d9f5bc8",
+    "test/architecture-evolution.test.mjs": "c7113a3227a24661c83a7f1e9f9bb7bbe687868215bcb3898a4f376c16d3b04c",
+    "test/architecture-rule-modules.test.mjs": "44e2ed75c9771c8d791ec55286c4edfa37f024bbd4cb57e4cc4bec1a849118d3",
+    "test/egress-connect.test.ts": "3a10493500080b9e81895a75b68bde8c8510a189d05f3da5b20d9a2dde485b91",
+    "test/oma-composition-policy.test.mjs": "e52b5bfaacb0db245fe622a88db8c076bde4a9d252789a89c39597d5532f19dd",
+    "test/platform-vz-driver.test.ts": "e7ad353170d5cbc9b2f402de1ef3a03974edfe55eb3eaf7554397fce29ea558a",
+    "test/platform-vz-ownership.test.mjs": "c404d532d0adb25c88a54d68e5f8687bef82da15721cb5406f3db7854683161c",
+    "test/preaccept-ownership.test.ts": "623c4714adf767c30091be86e7d38316047d27865f66b74f72df96a1560ca915",
+    "test/production-inventory.test.mjs": "7a7bf8e00471ef628ffdb355a4bd1240bbace994b42f3b66a418c2acf745a1f5",
+    "test/publication-lock-race.test.mjs": "a170fc4cc87e7f16aec0b1255ddb85ce89e6f56b24e72a7e93a9de0231d424ac",
+    "test/review-documents.test.mjs": "8406090029e3e5af3c518c970dfe4f1253549617d6eba994c4dfe4d49bcf8fed"
+  },
+  "logs": [
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/build-disk-repair.log",
+      "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40",
+      "bytes": 1436,
+      "observed_exit": 0,
+      "command": "npm run build",
+      "scope": "Current TypeScript production and test code.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/typecheck-disk-repair.log",
+      "sha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52",
+      "bytes": 64,
+      "observed_exit": 0,
+      "command": "npm run typecheck",
+      "scope": "Current TypeScript production and test code.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/architecture-disk-repair.log",
+      "sha256": "e4bb12d4eb8ee0b6655d9be4617675bea9b07c9be1877d43be1eaa5fa1379121",
+      "bytes": 1192,
+      "observed_exit": 0,
+      "command": "npm run check:architecture",
+      "scope": "Frozen runtime input before result recording; static gates, not native proof.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/local-full.log",
+      "sha256": "1e7c42654d61784ee1b46436ca398b5809976a2e7ab54f95b52fa4903591a23e",
+      "bytes": 430105,
+      "observed_exit": 1,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs",
+      "scope": "First frozen full suite: 9 serial PASS, 3959 parallel PASS / 3 FAIL; preserved as failure.",
+      "test_summaries": {
+        "tests": [
+          9,
+          3962
+        ],
+        "pass": [
+          9,
+          3959
+        ],
+        "fail": [
+          0,
+          3
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/local-final.log",
+      "sha256": "b391fb615f3f8e05e5aa3a34c90292addae27ad6fe20b4dab1461f613043e544",
+      "bytes": 427053,
+      "observed_exit": 0,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs",
+      "scope": "Final frozen full suite: 3973 PASS, no skips/cancels.",
+      "test_summaries": {
+        "tests": [
+          9,
+          3964
+        ],
+        "pass": [
+          9,
+          3964
+        ],
+        "fail": [
+          0,
+          0
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/disk-repair-final.log",
+      "sha256": "cccfe8c233ddb0fae8bad85844ddef55102eb03ed5d8a8e9bdad96a1d71874d0",
+      "bytes": 11909,
+      "observed_exit": 0,
+      "command": "node --test preaccept/action/CLI/spool/durability/scope/review faults and publication-lock-race",
+      "scope": "113 affected behavioral tests on disk filesystem; see executed names in log.",
+      "test_summaries": {
+        "tests": [
+          113
+        ],
+        "pass": [
+          113
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/publication-negative-control.log",
+      "sha256": "272b0a501fd58009b62e3367f3a797543498405cc34f44524391348acd0d79a6",
+      "bytes": 1609,
+      "observed_exit": 1,
+      "command": "node --test publication-negative-control.test.mjs using baseline durable-fs.ts",
+      "scope": "Expected negative control: baseline collector deletes a live pre-lock temporary.",
+      "test_summaries": {
+        "tests": [
+          1
+        ],
+        "pass": [
+          0
+        ],
+        "fail": [
+          1
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/focused-final.log",
+      "sha256": "9b5bec90f9b0d14db7f259ddd780b491af696867be226758bd60100aec2f6a51",
+      "bytes": 24353,
+      "observed_exit": 0,
+      "command": "node --test 14 affected architecture/composition/review/VM/network files",
+      "scope": "216 extraction-stage tests before disk repair delta, not proof of later bytes.",
+      "test_summaries": {
+        "tests": [
+          216
+        ],
+        "pass": [
+          216
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/focused.log",
+      "sha256": "d3fb4d8d1a7832651cb535277cdcaa0d61ea39635a6335871f6590da97e317f0",
+      "bytes": 25381,
+      "observed_exit": 1,
+      "command": "node --test affected extraction owners",
+      "scope": "Intermediate owned-state stat violation; resolved via existing pointer reader.",
+      "test_summaries": {
+        "tests": [
+          213
+        ],
+        "pass": [
+          212
+        ],
+        "fail": [
+          1
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/architecture-final.log",
+      "sha256": "c67faf663f306649da4f89246e7d73a94cddfb2e724d915c2f29a29669c4277b",
+      "bytes": 464,
+      "observed_exit": 1,
+      "command": "npm run check:architecture",
+      "scope": "Intermediate stale source digest after a later render edit; regenerated before current checks.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/startup-before.jsonl",
+      "sha256": "f972927664f7c99feb8fa0c0bcf35783a466b80a289a5db04ef0a0b59efc1548",
+      "bytes": 337,
+      "observed_exit": 1,
+      "command": "python3 scripts/benchmark-startup.py --runs 1 --wait-broker --early-tool",
+      "scope": "Pre-change performance; budget FAIL, operation succeeded once, child exit 0.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/startup-traced.jsonl",
+      "sha256": "d333a401d1ece0cb087a33ad531925d91bdd0b5ff1e40f6cf144de0c8e4d2e66",
+      "bytes": 284,
+      "observed_exit": 1,
+      "command": "strace -f -ttt -T -e process python3 scripts/benchmark-startup.py ...",
+      "scope": "Perturbed full ptrace timed out and child was terminated; excluded from performance baseline.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/startup-traced-filtered.jsonl",
+      "sha256": "91eeda1c28c0908d06b0d555f9f685b151fa8911835ca56306bc38b3dd1b14b0",
+      "bytes": 338,
+      "observed_exit": 1,
+      "command": "strace -f --seccomp-bpf -ttt -T -e execve,exit_group,wait4,waitid python3 scripts/benchmark-startup.py ...",
+      "scope": "Filtered process trace: timed successes, budget FAIL; not untraced latency.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/startup-after.jsonl",
+      "sha256": "192cf02e4d2e946aff6defde774b88142576486356384b711d21d79bfe4ec1c0",
+      "bytes": 1012,
+      "observed_exit": 1,
+      "command": "python3 scripts/benchmark-startup.py --runs 3 --wait-broker --early-tool",
+      "scope": "Final untraced timings: three succeeded-once operations, child exits 0; budget FAIL.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/crash-final/tests.stdout.log",
+      "sha256": "262353b1184d7caec66cd5e7db882ef3d8ba7b4469d0db05361503a8cb54a62a",
+      "bytes": 15601,
+      "observed_exit": 0,
+      "command": "OMA_TEST_SYSTEMD=1 node scripts/verify-lane.mjs crash --out <fresh-dir>",
+      "scope": "63 native primitive SIGKILL/restart cases, no VM power-loss or native Mac proof.",
+      "test_summaries": {
+        "tests": [
+          63
+        ],
+        "pass": [
+          63
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/input-recorded-tests.log",
+      "sha256": "ea4ae8b3fd5a85bb840f4000ceadba431a9cb7f86632512e1f6aa024e03f30c1",
+      "bytes": 2035,
+      "observed_exit": 1,
+      "command": "node --test test/production-inventory.test.mjs",
+      "scope": "First post-recording inventory check omitted cloc from PATH: 9 PASS / 1 environment FAIL; no product source change.",
+      "test_summaries": {
+        "tests": [
+          10
+        ],
+        "pass": [
+          9
+        ],
+        "fail": [
+          1
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/input-recorded-final-tests.log",
+      "sha256": "841881835fede34d4a6cf8993979036667525a8f81bf26f1c8dcc49a784285fe",
+      "bytes": 1143,
+      "observed_exit": 0,
+      "command": "node --test test/production-inventory.test.mjs",
+      "scope": "Correct PATH with pinned cloc 2.08: 10 PASS; initial post-runtime report bytes, before adding these log records.",
+      "test_summaries": {
+        "tests": [
+          10
+        ],
+        "pass": [
+          10
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-architecture-2026-10-09/architecture-recorded.log",
+      "sha256": "e4bb12d4eb8ee0b6655d9be4617675bea9b07c9be1877d43be1eaa5fa1379121",
+      "bytes": 1192,
+      "observed_exit": 0,
+      "command": "npm run check:architecture",
+      "scope": "Initial post-runtime result recording static gates: 0 findings; rerun after these log records without renewing runtime input.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    }
+  ],
+  "startup_after": [
+    {
+      "mode": "society",
+      "run": 1,
+      "artifacts": "/tmp/oma-startup-benchmark-82r3gxam",
+      "screenSeconds": 3.0748350550420582,
+      "requestSeconds": 3.318336505,
+      "responseSeconds": 15.964571648975834,
+      "brokerSeconds": 15.170052974,
+      "brokerToolSeconds": 15.946005195,
+      "brokerToolState": "succeeded-once",
+      "quitSeconds": 0.7001640300732106,
+      "exit": 0
+    },
+    {
+      "mode": "society",
+      "run": 2,
+      "artifacts": "/tmp/oma-startup-benchmark-3j05wy3u",
+      "screenSeconds": 3.0316934450529516,
+      "requestSeconds": 3.298094059,
+      "responseSeconds": 16.227462464012206,
+      "brokerSeconds": 15.365744787,
+      "brokerToolSeconds": 16.20919101,
+      "brokerToolState": "succeeded-once",
+      "quitSeconds": 0.7027216658461839,
+      "exit": 0
+    },
+    {
+      "mode": "society",
+      "run": 3,
+      "artifacts": "/tmp/oma-startup-benchmark-a2rk5ygr",
+      "screenSeconds": 2.9642600209917873,
+      "requestSeconds": 3.224132281,
+      "responseSeconds": 15.84928093594499,
+      "brokerSeconds": 15.056726881,
+      "brokerToolSeconds": 15.830252329,
+      "brokerToolState": "succeeded-once",
+      "quitSeconds": 0.7084926161915064,
+      "exit": 0
+    }
+  ],
+  "performance_verdict": {
+    "five_seconds": "FAIL",
+    "one_second": "FAIL",
+    "trace_clone_seconds": 8.568,
+    "trace_pack_seconds": 7.202,
+    "trace_fsck_seconds": 2.983,
+    "traced_timings_are_not_untraced_latency": true,
+    "production_pack_tweaks_applied": false
+  },
+  "git_transport_experiments": {
+    "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09",
+    "trace2": [
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/baseline.trace2.json",
+        "sha256": "f0a0ceddd07e43ada5ddd2c2abaaa0de2e2427fa072687de2fe7981a68865393"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/client-threads1.trace2.json",
+        "sha256": "f33b813bd1f02cbe511ff9f7b096a2332d301ec049aafb0c4cf16f6d8272969d"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/client-threads2.trace2.json",
+        "sha256": "fd32ee0931af435b6985395a745bdc78dca5eacc39398ba76b2775d7be216001"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/client-threads4.trace2.json",
+        "sha256": "76b882951313b0ca61f935f4335dead79760bd170f2c68b0ae994d821bb8fdf6"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/compression0-window0.trace2.json",
+        "sha256": "f8bb36e89bec04257b2067b57f179f623b2fde5c383a7b64068a8600d712cad9"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/compression0.trace2.json",
+        "sha256": "da6bff6ae5d0c11511cd1f9ad5675582c6579f475f30dfb981a126cce95c36b7"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/compression1.trace2.json",
+        "sha256": "3bd37a94462df79539cc915cb31ee0933d111577664af5c4368eeb2f51a913e7"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/server-depth0.trace2.json",
+        "sha256": "10a0e35468adccd2fb3a8fffe022d9e9a3a09f1d96e32f970c39c9f79921932c"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/server-window0.trace2.json",
+        "sha256": "7c8d6ec47b937cd77c907a5f339f97d31656a5c20bff96930f565d8070ff0152"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/server0.trace2.json",
+        "sha256": "b97f932e6427e23b7fcb791938c643fbcb9d0bdd6e5cb33adf274ea3f20179d4"
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture/git-transport-2026-10-09/server1.trace2.json",
+        "sha256": "13868b1e5fc0961738ad8c1b0f759fd3c658bd1ad9fa401d1d9f51565981f095"
+      }
+    ],
+    "scope": "Read-only Human source; owned experimental clones. Server experiment logs include initial failures from empty protected hook; those failures are not benchmark successes. Observed successful option timings did not resolve the startup budget."
+  },
+  "crash": {
+    "status": "PASS",
+    "execution": "EXECUTED",
+    "tests": 63,
+    "proof": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",
+    "source_digests_match_runtime_map": true,
+    "result": "/tmp/oma-architecture-2026-10-09/crash-final/result.json",
+    "result_sha256": "3854508454d4e8c0be314e87078069998ce670da2c071c81a2ea76d570a4c6e0"
+  },
+  "post_runtime_recording": "Result documents and this evidence are written after runtime verification. Current validation digest and a separate final static gate bind result recording; future bytes are not certified by the earlier runtime run.",
+  "limitations": [
+    "Startup first Society readiness/tool still exceeds 5 seconds.",
+    "Native Swift stop-error guard is source-reviewed only: Mac compiler/runtime NOT_RUN.",
+    "macOS Virtualization.framework/APFS/Keychain/AF_VSOCK, signed guest image boot, paid provider and VM power loss NOT_RUN.",
+    "Native kernel networking PASS remains historical DR37; not renewed in DR39.",
+    "Feature owner file inventories are not actual feature-change file counts.",
+    "50 inherited production files remain NOT_REVIEWED; no whole-codebase reapproval.",
+    "Preaccept artifacts retain one OS descriptor each until settlement. A failed cleanup releases its descriptor and refuses new deletion authority.",
+    "A crash before a temporary receives its flock retains an unproven plain temporary."
+  ]
+}

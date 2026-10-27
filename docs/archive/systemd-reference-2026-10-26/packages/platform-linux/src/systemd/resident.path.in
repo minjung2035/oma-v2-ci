@@ -1,0 +1,10 @@
+# MUST [UNIT-005..006]: Only enable when desired and GOAL permit activation.
+[Unit]
+Description=Wake OMA @SOCIETY@ resident @AGENT@ on mail
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
+[Path]
+DirectoryNotEmpty=@STATE@/mail/inboxes/@AGENT@/new
+Unit=oma-@SOCIETY@-@AGENT@.service
+[Install]
+WantedBy=default.target

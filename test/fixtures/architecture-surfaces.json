@@ -1,0 +1,182 @@
+{
+ "schema": 2,
+ "note": "DR46 current Broker consumer interfaces. Includes every current capability without projecting an older contract; removes the inert D04 resource gate. No historical execution or authored review is renewed. DR46 separates the actual Review port from Git and wires it explicitly; only PublicReviewPort, PublicGitPort and PublicDispatchDependencies are intentionally updated. DR46 Broker moves every consumer interface to the acyclic Broker ports owner and diagnostic DTOs to contracts/runtime. Only the existing InternalDispatchDependencies changes: a fixed principalInboxNewEntries capability replaces a filesystem stateRoot. New ledger/incarnation, effects and runtime ports are explicit; prior review is not renewed. DR46 Engine moves the exact FencedEngine child-lifetime declaration to contracts/runtime; all existing interfaces and wire contracts stay unchanged. Historical review is not renewed.",
+ "dispatch": {
+  "packages/broker/src/ports.ts": {
+   "PublicAgentView": {
+    "exported": true,
+    "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2"
+   },
+   "PublicStorePort": {
+    "exported": true,
+    "sha256": "20dd961b2dcc6eed5b428c6d85e88e6974f2486c71fa53fa4cf9eb29200ddca6"
+   },
+   "PublicMailPort": {
+    "exported": true,
+    "sha256": "720eb92c82abbf5458b0cff8bf0f7331f9efd3c11185223259d329ea4bded4fe"
+   },
+   "PublicUnitsPort": {
+    "exported": true,
+    "sha256": "fe831326695d1e368d6e55b1c7ff39ed245e07784c116d41e3ac8739db68f017"
+   },
+   "PublicViewsPort": {
+    "exported": true,
+    "sha256": "ff38d66b760196ec06f27810a69cbe4c844192a377183e3f28faf7b768ec84e0"
+   },
+   "PublicLifecyclePort": {
+    "exported": true,
+    "sha256": "c5c056f51f846484be0b0bb8bb53cafab7cba31bde78770e7b2d0f83b9bc727b"
+   },
+   "PublicReviewPort": {
+    "exported": true,
+    "sha256": "ad9183874c3b73cbc9b2649563734b25a9bb55ed0c704a8dcc713127a2ef38d2"
+   },
+   "PublicGitPort": {
+    "exported": true,
+    "sha256": "533e28ec95d592719afbca8f13f0f9f1ee35dc1a0d643e02fc95606b1e345b30"
+   },
+   "PublicDispatchDependencies": {
+    "exported": true,
+    "sha256": "475da2b5a6d8e982ee576257551286e3d3444ced49d51f41cefde36157cd97db"
+   },
+   "InternalStorePort": {
+    "exported": true,
+    "sha256": "1762329b0b87a7037b9226fcdc55fa85a61aa9984e7830ee330f2d991f5329cd"
+   },
+   "InternalMailPort": {
+    "exported": true,
+    "sha256": "7dacaa24f0f575ace8e95027a96cb249cca003e1463bcbd6ce67ab30a7f7e9e6"
+   },
+   "InternalPeerPort": {
+    "exported": true,
+    "sha256": "64aa9094345b183612f5ae36cdb5b3a59f4923caf837e754a322b1bad7b1c9ec"
+   },
+   "InternalDispatchDependencies": {
+    "exported": true,
+    "sha256": "525d1621245f72a4084a6fc9a42b75d4e332ff73a9709326ec9c230e345a9f0f"
+   },
+   "BrokerTransaction": {
+    "exported": true,
+    "sha256": "72d829a7eabecc206faedf520cb3bdbf5625bf79ec054555cfef066a0532f24c"
+   },
+   "BrokerLedger": {
+    "exported": true,
+    "sha256": "acb3c484addfc4b71c2381e2ff1f829b5efb0af006f9d703a731e018879cc072"
+   },
+   "BrokerMail": {
+    "exported": true,
+    "sha256": "d64f0c1c03b1d9993ac488e1b3f4adc10072555d289bd05e796244a77dc89a8a"
+   },
+   "BrokerUnits": {
+    "exported": true,
+    "sha256": "22f36e999de73308620338764608fb49a75359ed1eacb57c00f9d6336bffba08"
+   },
+   "BrokerViews": {
+    "exported": true,
+    "sha256": "ec9318ff0d50d11d957f77db27b600bf7c4010852b7174dcbecd01e1c7d47ca8"
+   },
+   "BrokerReconcile": {
+    "exported": true,
+    "sha256": "1a4fe90daf1e6241314915725426453e6b5a0774d15e5c67462aa7bb3106700e"
+   },
+   "BrokerStatusRefresh": {
+    "exported": true,
+    "sha256": "4f0e2cebbe42734ddac34971a031b4d86316684229fd225d43e00b351406b821"
+   },
+   "BrokerEffects": {
+    "exported": true,
+    "sha256": "5992a9999f1ad763846fc2f77dfdfa76078820a4884ea28446bb12c6c3a3bff5"
+   },
+   "BrokerDependencies": {
+    "exported": true,
+    "sha256": "43210bf1f509499aa1e0043cfeb712ef4ffbf8f4632ebdd8c31126ce040c5235"
+   }
+  },
+  "packages/contracts/src/runtime.ts": {
+   "AuthContext": {
+    "exported": true,
+    "sha256": "aca45745786185d994c694214077bdab77b18170bc478a8207922dda1efafdac"
+   },
+   "AgentStatus": {
+    "exported": true,
+    "sha256": "dc66e39a310c4b106bb4808bbf0562c26f493cd4520fdce90a9501c6080680e3"
+   },
+   "PreparedBatch": {
+    "exported": true,
+    "sha256": "b3627dfa363ddd0d0718e056cdd613509166352a80f8ae1b1e1434dfe822c4f9"
+   },
+   "BoundaryEvidence": {
+    "exported": true,
+    "sha256": "6e573b0640105f4b5f885fdbd3ac4f9e4ce131fa04eb10122071a6d0ff65cb22"
+   },
+   "RunLease": {
+    "exported": true,
+    "sha256": "66eb75f6ddd92db298eb464a64f05f242812aec8e5f51b490df6ca805f54d73c"
+   },
+   "UnitObservation": {
+    "exported": true,
+    "sha256": "cca9e766f59fe8af7ccb56ce045f62caf3ccee0d9672d0c89e8b48dacbd548df"
+   },
+   "SandboxPlan": {
+    "exported": true,
+    "sha256": "c162ce778bc3788e423f36d4b68ec6245ede25ca1737ae9c102d7cbca21ba119"
+   },
+   "SandboxDirectories": {
+    "exported": true,
+    "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
+   },
+   "SandboxHost": {
+    "exported": true,
+    "sha256": "9799b432870d275beb2315be1ecf49ae63d7fc8de0c8223c4c493844b706113c"
+   },
+   "DeliveryBoundary": {
+    "exported": true,
+    "sha256": "d68d9cc7994e5caada1aba9774c867d595720051eddabd0271870185bd4f09de"
+   },
+   "DeliveryReceipt": {
+    "exported": true,
+    "sha256": "ebd1085e3987f4367b206424d430227caedd036782319dc6fccb3f7b79fd25b0"
+   },
+   "BatchViewDocuments": {
+    "exported": true,
+    "sha256": "4e8efb6a53a407725980a0cd216a71a91aef1b823d2395180683ffda7aed3ddb"
+   },
+   "RecoveryCounts": {
+    "exported": true,
+    "sha256": "ce49c2da570b663507e7fe1c15bc7aa44fca8d626aae9dbdd3c5e36a07427c1c"
+   },
+   "PreacceptCollection": {
+    "exported": true,
+    "sha256": "5fd7666638392680103da0a4dc8da1f9ed7351d7858856fa99e74c43ab979c1b"
+   },
+   "SettlementQuiescence": {
+    "exported": true,
+    "sha256": "a35d2cfdaaaacd352961e43f2876d20c3540b303e6c74ee367b20ce5636b4649"
+   },
+   "StatusSnapshot": {
+    "exported": true,
+    "sha256": "5880d81419050b3911f5b7f099e73e9b69e699473a5d44e299baab5b4fabe472"
+   },
+   "RunnerObservation": {
+    "exported": true,
+    "sha256": "b8709f45d3037cced0c4d9fcfaab80a2070b30df36d7a7bc01cc1b3000ecd7ac"
+   },
+   "UnitObserve": {
+    "exported": true,
+    "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d"
+   },
+   "FencedEngine": {
+    "exported": true,
+    "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
+   },
+   "ExecutionObservation": {
+    "exported": true,
+    "sha256": "b3487facd87b7ba9448bdb8fc2a7436e1425ebd1105b11881832a9197b21f93b"
+   },
+   "ExecutionScopePin": {
+    "exported": true,
+    "sha256": "2d0aaeebcf76522168f267ba5ae1e8c943364f5cb1b3e2da3189bf8188e37af9"
+   }
+  }
+ }
+}

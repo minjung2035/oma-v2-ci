@@ -1,0 +1,41 @@
+import { readFileSync } from "fs";
+import { describe, expect, it } from "vitest";
+import register from "../../index";
+
+describe("extension registration", () => {
+  it("registers the read and replace tools", () => {
+    const toolNames: string[] = [];
+    const eventNames: string[] = [];
+    const commandNames: string[] = [];
+    const pi = {
+      registerTool(tool: { name: string }) {
+        toolNames.push(tool.name);
+      },
+      registerCommand(name: string) {
+        commandNames.push(name);
+      },
+      on(name: string) {
+        eventNames.push(name);
+      },
+    } as any;
+
+    register(pi);
+
+    expect(toolNames.sort()).toEqual(["anchor_grep", "copy", "insert", "move", "read", "replace", "replace_within", "undo_last_change"]);
+
+    expect(commandNames.sort()).toEqual(["clear-anchors", "hashline-config"]);
+    expect(eventNames.sort()).toEqual(["before_agent_start", "message_end", "session_shutdown", "session_start", "tool_call", "tool_result", "turn_end"]);
+  });
+});
+
+describe("tool prompt file references", () => {
+  it("replace.ts loads the consolidated replace.md prompt", () => {
+    const source = readFileSync(
+      new URL("../../src/replace.ts", import.meta.url),
+      "utf-8",
+    );
+    expect(source).toContain("../prompts/replace.md");
+    expect(source).toContain("../prompts/replace-snippet.md");
+    expect(source).toContain("../prompts/replace-guidelines.md");
+  });
+});

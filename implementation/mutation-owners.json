@@ -1,0 +1,697 @@
+{
+  "version": 1,
+  "purpose": "Predictable AI change locality for durable public mutations. Central registries stay centralized; symbol metadata narrows the read surface.",
+  "registryOwners": {
+    "wire": {
+      "path": "packages/contracts/src/public-wire.ts",
+      "symbolTemplate": "PublicMethods[\"{mutation}\"]"
+    },
+    "validation": {
+      "path": "packages/domain/src/validation.ts",
+      "symbolFromMethod": "paramsCheck"
+    },
+    "method": {
+      "path": "packages/protocol/src/methods.ts",
+      "symbolTemplate": "PUBLIC_METHODS[\"{mutation}\"]"
+    },
+    "durableContract": {
+      "path": "packages/contracts/src/durable.ts",
+      "symbolTemplate": "OperationPlan/OperationResult variant \"{mutation}\""
+    },
+    "durable": {
+      "path": "packages/domain/src/durable.ts",
+      "symbolTemplate": "checks[\"{mutation}\"] + operationPlanCheck case \"{mutation}\""
+    },
+    "resultRelation": {
+      "path": "packages/domain/src/durable.ts",
+      "symbolTemplate": "operationResultRelationCheck case \"{mutation}\""
+    },
+    "codec": {
+      "path": "packages/protocol/src/operation-codec.ts",
+      "symbolTemplate": "DecodedOperation variant \"{mutation}\""
+    },
+    "dispatch": {
+      "path": "packages/broker/src/public-dispatcher.ts",
+      "symbolTemplate": "PublicDispatcher.dispatchChecked case \"{mutation}\""
+    }
+  },
+  "requiredMutationDimensions": [
+    "workflow",
+    "persistence",
+    "recovery",
+    "cli",
+    "tests"
+  ],
+  "recoveryStrategies": {
+    "physical-replay": "accepted work may require idempotent physical replay after commit/crash",
+    "transaction-complete": "the mutation is completed inside its acceptance transaction; no physical recovery handler is expected"
+  },
+  "fanoutStages": [
+    "wire",
+    "validation",
+    "method",
+    "durableContract",
+    "durable",
+    "codec",
+    "dispatch",
+    "tests"
+  ],
+  "mutations": {
+    "society.set": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/society.ts",
+          "symbol": "SocietyControl.set"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/lifecycle/src/society.ts",
+            "symbol": "SocietyControl.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/society.ts",
+          "symbol": "runSocietyCommand"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/society-control.test.ts",
+          "symbol": "durable execution fence and quiescence"
+        },
+        {
+          "path": "test/society-schema.test.ts",
+          "symbol": "migration preservation and rollback"
+        }
+      ]
+    },
+    "attest.record": {
+      "workflow": [
+        {
+          "path": "packages/review/src/index.ts",
+          "symbol": "ReviewModule.record"
+        },
+        {
+          "path": "packages/review/src/acceptance.ts",
+          "symbol": "ReviewAcceptance.acceptPrepared"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/storage/src/operation-transitions.ts",
+          "symbol": "OperationTransitions.insert"
+        },
+        {
+          "path": "packages/mail/src/materializer.ts",
+          "symbol": "MailMaterializer"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/mail/src/reconcile.ts",
+            "symbol": "reconcileMailOperation"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/merge.ts",
+          "symbol": "runMergeCommand"
+        },
+        {
+          "path": "apps/oma/src/cli/commands/merge.ts",
+          "symbol": "runChallengeCommand"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/current-format-refusal.test.ts",
+          "symbol": "prior database/configuration/plan refusal without conversion"
+        },
+        {
+          "path": "test/merge-cli.test.ts",
+          "symbol": "review CLI freeze/replay"
+        },
+        {
+          "path": "test/tiered-integration.test.ts",
+          "symbol": "exact attestation integration"
+        }
+      ]
+    },
+    "mail.send": {
+      "workflow": [
+        {
+          "path": "packages/mail/src/index.ts",
+          "symbol": "MailModule.send"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/mail/src/materializer.ts",
+          "symbol": "MailMaterializer"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/mail/src/reconcile.ts",
+            "symbol": "reconcileMailOperation"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/send.ts",
+          "symbol": "runSendCommand"
+        },
+        {
+          "path": "apps/oma/src/cli/effects.ts",
+          "symbol": "readBody"
+        },
+        {
+          "path": "apps/oma/src/cli/effects/mail.ts",
+          "symbol": "prepareReplyEffects"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/mail-recovery-integrity.test.ts",
+          "symbol": "mail send recovery/integrity"
+        },
+        {
+          "path": "test/p24-mail-boundaries.test.ts",
+          "symbol": "mail physical boundaries"
+        },
+        {
+          "path": "test/refactoring-cli-regressions.test.ts",
+          "symbol": "CLI freeze/replay regression"
+        }
+      ]
+    },
+    "agent.continue": {
+      "workflow": [
+        {
+          "path": "packages/mail/src/index.ts",
+          "symbol": "MailModule.send(requestContext=agent.continue)"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/mail/src/materializer.ts",
+          "symbol": "MailMaterializer"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/mail/src/reconcile.ts",
+            "symbol": "reconcileMailOperation"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/agent.ts",
+          "symbol": "runAgentCommand/continue"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/mail-recovery-integrity.test.ts",
+          "symbol": "mail-backed continue recovery"
+        },
+        {
+          "path": "test/r25-action-replay.test.ts",
+          "symbol": "action replay"
+        },
+        {
+          "path": "test/refactoring-cli-regressions.test.ts",
+          "symbol": "CLI freeze/replay regression"
+        }
+      ]
+    },
+    "mail.ack": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.ack"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.ack transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "transaction-complete",
+        "owners": []
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/send.ts",
+          "symbol": "runAckCommand"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/durable-boundary.test.ts",
+          "symbol": "durable ack boundary"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "DB-only recovery classification"
+        },
+        {
+          "path": "test/cli.test.ts",
+          "symbol": "ack CLI"
+        }
+      ]
+    },
+    "route.follow": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.follow(subscribe=true)"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.follow transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "transaction-complete",
+        "owners": []
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/routes.ts",
+          "symbol": "runRouteCommand(subscribe=true)"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/durable-boundary.test.ts",
+          "symbol": "durable route boundary"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "DB-only recovery classification"
+        },
+        {
+          "path": "test/cli.test.ts",
+          "symbol": "route CLI"
+        }
+      ]
+    },
+    "route.unfollow": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.follow(subscribe=false)"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/registry-operations.ts",
+          "symbol": "RegistryOperations.follow transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "transaction-complete",
+        "owners": []
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/routes.ts",
+          "symbol": "runRouteCommand(subscribe=false)"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/durable-boundary.test.ts",
+          "symbol": "durable route boundary"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "DB-only recovery classification"
+        },
+        {
+          "path": "test/cli.test.ts",
+          "symbol": "route CLI"
+        }
+      ]
+    },
+    "agent.create": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/create.ts",
+          "symbol": "CreateCoordinator.create"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/create.ts",
+          "symbol": "CreateCoordinator.create acceptance transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/lifecycle/src/create.ts",
+            "symbol": "CreateCoordinator.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/agent.ts",
+          "symbol": "runAgentCommand/create"
+        },
+        {
+          "path": "apps/oma/src/cli/effects.ts",
+          "symbol": "resolveOid + readBody"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r25-lifecycle-owners.test.ts",
+          "symbol": "lifecycle owner boundary"
+        },
+        {
+          "path": "test/r36-lifecycle-sequences.test.ts",
+          "symbol": "create sequencing"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "create recovery routing"
+        }
+      ]
+    },
+    "agent.start": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/actions.ts",
+          "symbol": "LifecycleActions.start"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/actions.ts",
+          "symbol": "LifecycleActions.start acceptance transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/lifecycle/src/actions.ts",
+            "symbol": "LifecycleActions.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/agent.ts",
+          "symbol": "runAgentCommand/start"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r25-action-replay.test.ts",
+          "symbol": "lifecycle action replay"
+        },
+        {
+          "path": "test/r25-lifecycle-owners.test.ts",
+          "symbol": "lifecycle owner boundary"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "action recovery routing"
+        }
+      ]
+    },
+    "agent.stop": {
+      "workflow": [
+        {
+          "path": "packages/lifecycle/src/actions.ts",
+          "symbol": "LifecycleActions.stop"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/lifecycle/src/actions.ts",
+          "symbol": "LifecycleActions.stop acceptance transaction"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/lifecycle/src/actions.ts",
+            "symbol": "LifecycleActions.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/agent.ts",
+          "symbol": "runAgentCommand/stop"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r25-action-replay.test.ts",
+          "symbol": "lifecycle action replay"
+        },
+        {
+          "path": "test/r25-lifecycle-owners.test.ts",
+          "symbol": "lifecycle owner boundary"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "action recovery routing"
+        }
+      ]
+    },
+    "git.submit": {
+      "workflow": [
+        {
+          "path": "packages/git/src/submit.ts",
+          "symbol": "SubmissionCoordinator"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/storage/src/submit-spool.ts",
+          "symbol": "submit bundle staging"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/git/src/submit.ts",
+            "symbol": "SubmissionCoordinator.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/submit.ts",
+          "symbol": "runSubmitCommand"
+        },
+        {
+          "path": "apps/oma/src/cli/effects.ts",
+          "symbol": "resolveOid + readBody + sha256Hex"
+        },
+        {
+          "path": "apps/oma/src/cli/effects/submit.ts",
+          "symbol": "prepareSubmitEffects"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r20-submit-wiring.test.ts",
+          "symbol": "submit orchestration wiring"
+        },
+        {
+          "path": "test/r20-submit-spool.test.ts",
+          "symbol": "submit spool durability"
+        },
+        {
+          "path": "test/audit-cli-submit.test.ts",
+          "symbol": "CLI bundle construction"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "git recovery routing"
+        }
+      ]
+    },
+    "git.integrate": {
+      "workflow": [
+        {
+          "path": "packages/git/src/integration.ts",
+          "symbol": "IntegrationCoordinator"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/git/src/integration-publication.ts",
+          "symbol": "IntegrationPublicationObserver"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/git/src/integration.ts",
+            "symbol": "IntegrationCoordinator.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/merge.ts",
+          "symbol": "runMergeCommand (status view; the CLI no longer issues git.integrate)"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r19-integration-decisions.test.ts",
+          "symbol": "integration decisions"
+        },
+        {
+          "path": "packages/domain/test/integration-policy.test.mjs",
+          "symbol": "integration policy"
+        },
+        {
+          "path": "test/refactoring-git-regressions.test.ts",
+          "symbol": "integration regression"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "git recovery routing"
+        }
+      ]
+    },
+    "context.publish": {
+      "workflow": [
+        {
+          "path": "packages/git/src/context.ts",
+          "symbol": "ContextCoordinator.publish"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "packages/storage/src/context-stream.ts",
+          "symbol": "context stream staging"
+        },
+        {
+          "path": "packages/storage/src/context-snapshot.ts",
+          "symbol": "context snapshot persistence"
+        },
+        {
+          "path": "packages/storage/src/operation-journal.ts",
+          "symbol": "accepted operation journal"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "packages/git/src/context.ts",
+            "symbol": "ContextCoordinator.reconcile"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "apps/oma/src/cli/commands/context.ts",
+          "symbol": "runContextCommand"
+        },
+        {
+          "path": "apps/oma/src/cli/effects/context.ts",
+          "symbol": "prepareContextEffects"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/r21-context-workflow.test.ts",
+          "symbol": "context workflow"
+        },
+        {
+          "path": "test/context-publication-durability.test.ts",
+          "symbol": "context durability"
+        },
+        {
+          "path": "test/context-recovery-corruption-oracle.test.ts",
+          "symbol": "context recovery corruption"
+        },
+        {
+          "path": "test/recovery-exhaustiveness.test.mjs",
+          "symbol": "git recovery routing"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "name": "@oma/mail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./addresses": {
+      "types": "./dist/addresses.d.ts",
+      "default": "./dist/addresses.js"
+    },
+    "./batch-policy": {
+      "types": "./dist/batch-policy.d.ts",
+      "default": "./dist/batch-policy.js"
+    },
+    "./batch-view": {
+      "types": "./dist/batch-view.d.ts",
+      "default": "./dist/batch-view.js"
+    },
+    "./batches": {
+      "types": "./dist/batches.d.ts",
+      "default": "./dist/batches.js"
+    },
+    "./display": {
+      "types": "./dist/display.d.ts",
+      "default": "./dist/display.js"
+    },
+    "./facts": {
+      "types": "./dist/facts.d.ts",
+      "default": "./dist/facts.js"
+    },
+    "./headers": {
+      "types": "./dist/headers.d.ts",
+      "default": "./dist/headers.js"
+    },
+    "./materializer": {
+      "types": "./dist/materializer.d.ts",
+      "default": "./dist/materializer.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "default": "./dist/ports.js"
+    },
+    "./reconcile": {
+      "types": "./dist/reconcile.d.ts",
+      "default": "./dist/reconcile.js"
+    },
+    "./review-documents": {
+      "types": "./dist/review-documents.d.ts",
+      "default": "./dist/review-documents.js"
+    },
+    "./routing": {
+      "types": "./dist/routing.d.ts",
+      "default": "./dist/routing.js"
+    },
+    "./serialize": {
+      "types": "./dist/serialize.d.ts",
+      "default": "./dist/serialize.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/mail",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "nodemailer": "10.0.16"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "@types/nodemailer": "8.0.1",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

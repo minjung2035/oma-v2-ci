@@ -1,0 +1,1 @@
+export const RESUME_SESSION_ENV = "OMA_RESUME_SESSION";

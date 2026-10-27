@@ -1,0 +1,106 @@
+{
+  "name": "@oma/native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./cleanup": {
+      "types": "./dist/cleanup.d.ts",
+      "default": "./dist/cleanup.js"
+    },
+    "./files": {
+      "types": "./dist/files.d.ts",
+      "default": "./dist/files.js"
+    },
+    "./linux": {
+      "types": "./dist/linux.d.ts",
+      "default": "./dist/linux.js"
+    },
+    "./peer-uid": {
+      "types": "./dist/peer-uid.d.ts",
+      "default": "./dist/peer-uid.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "default": "./dist/identity.js"
+    },
+    "./snapshot-reader": {
+      "types": "./dist/snapshot-reader.d.ts",
+      "default": "./dist/snapshot-reader.js"
+    },
+    "./process-lock": {
+      "types": "./dist/process-lock.d.ts",
+      "default": "./dist/process-lock.js"
+    },
+    "./directory-layout": {
+      "types": "./dist/directory-layout.d.ts",
+      "default": "./dist/directory-layout.js"
+    },
+    "./posix-files": {
+      "types": "./dist/posix-files.d.ts",
+      "default": "./dist/posix-files.js"
+    },
+    "./process-observation": {
+      "types": "./dist/process-observation.d.ts",
+      "default": "./dist/process-observation.js"
+    },
+    "./pid-namespace": {
+      "types": "./dist/pid-namespace.d.ts",
+      "default": "./dist/pid-namespace.js"
+    },
+    "./control-socket": {
+      "types": "./dist/control-socket.d.ts",
+      "default": "./dist/control-socket.js"
+    },
+    "./unix-message": {
+      "types": "./dist/unix-message.d.ts",
+      "default": "./dist/unix-message.js"
+    },
+    "./descriptor-path": {
+      "types": "./dist/descriptor-path.d.ts",
+      "default": "./dist/descriptor-path.js"
+    },
+    "./mach-message": {
+      "types": "./dist/mach-message.d.ts",
+      "default": "./dist/mach-message.js"
+    },
+    "./process-event": {
+      "types": "./dist/process-event.d.ts",
+      "default": "./dist/process-event.js"
+    },
+    "./audit-session": {
+      "types": "./dist/audit-session.d.ts",
+      "default": "./dist/audit-session.js"
+    },
+    "./audit-origin": {
+      "types": "./dist/audit-origin.d.ts",
+      "default": "./dist/audit-origin.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/native",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/domain": "0.1.0",
+    "koffi": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "assets": [
+      "metadata/main.c"
+    ],
+    "darwinExecutables": [
+      "metadata/oma-file-metadata"
+    ],
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

@@ -1,0 +1,723 @@
+{
+  "version": 1,
+  "revision": "DR40",
+  "date": "2026-10-10",
+  "baseline_commit": "3b9bcea873725503a5afac8985deb336b452776d",
+  "scope": "A-01 through A-11 architecture audit: typed method decoding, compatibility owners, explicit facets, package responsibilities, atomic settings, shared LSP lifetime, generated SDK metadata, reusable checker helpers, AST mutation fixtures and actual changeset measurements. Direct work without subagents.",
+  "status": "VERIFIED_IN_DECLARED_SCOPE",
+  "runtime_input": {
+    "files": 15419,
+    "digest": "3b6620ac1d073e1be23979d38613a690afa8f7c3692d16a3b01a5ac6362085c3"
+  },
+  "runtime_byte_comparison": {
+    "before": {
+      "files": 15419,
+      "digest": "3b6620ac1d073e1be23979d38613a690afa8f7c3692d16a3b01a5ac6362085c3"
+    },
+    "after": {
+      "files": 15419,
+      "digest": "3b6620ac1d073e1be23979d38613a690afa8f7c3692d16a3b01a5ac6362085c3"
+    },
+    "changed": []
+  },
+  "first_failed_byte_comparison": {
+    "input": {
+      "files": 15419,
+      "digest": "bf810214ecb53fe6167099981ce3df248e6585856a8a6d797a029d6ae207e26e"
+    },
+    "after": {
+      "files": 15419,
+      "digest": "bf810214ecb53fe6167099981ce3df248e6585856a8a6d797a029d6ae207e26e"
+    },
+    "changed": []
+  },
+  "second_failed_byte_comparison": {
+    "before": {
+      "files": 15419,
+      "digest": "df9fc9f8ce4a5094a61a8efc2e095e988f92f2b3969978b3b4f53c8f112ccd58"
+    },
+    "after": {
+      "files": 15419,
+      "digest": "df9fc9f8ce4a5094a61a8efc2e095e988f92f2b3969978b3b4f53c8f112ccd58"
+    },
+    "changed": []
+  },
+  "input_map_artifact": {
+    "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/bytes-runtime-before.json",
+    "sha256": "73c46e2717f6b906362bebdf631a296483c9c053b7bdb6f79c709043917cfb6e",
+    "bytes": 2430606,
+    "observed_exit": null,
+    "command": "verificationSourceDigests()",
+    "scope": "Before frozen runtime and crash; every verification input byte.",
+    "test_summaries": {
+      "tests": [],
+      "pass": [],
+      "fail": [],
+      "cancelled": [],
+      "skipped": [],
+      "todo": []
+    }
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "os": "Linux",
+    "uid": 1001,
+    "local_temp": "/var/tmp (disk)",
+    "local_files": 411,
+    "parallel_files": 409,
+    "serial_files": 2,
+    "concurrency": 8,
+    "local_systemd": false,
+    "crash_temp": "/tmp (runner-selected; TMPDIR is not in its inherited environment)",
+    "installed_oma_path": "/tmp/oma-repair-2026-10-09/bin/oma",
+    "native_systemd": "257.13",
+    "native_bwrap": "0.12.0"
+  },
+  "reviewed_production_sources": {
+    "src/entry/pi-interactive-host.ts": "28074817bd510f2406933feb7a9114223a258a16017c8dfcd7cfd2a694c68d37",
+    "src/extension/lsp-call-scope.ts": "baca862f67355040d7e855fad1750df0c97b83deb52106755385feeddf232fe6",
+    "src/extension/lsp-tools.ts": "cc72c5636df0e146ef525d5f08aa41dfd2f9ae963b4500043df6adf05e627ada",
+    "src/extension/mcp-sdk-env.ts": "11d9f8c98355ab074bfccecc5a6d420b29f5b410c315f10c336f0b529f85c073",
+    "src/extension/mcp-tools.ts": "7d6d04d971bbb34836b1c33ddb083c5394fce2c09a037b0de09e36101950a696",
+    "src/pi-compat/interactive-editor.ts": "330692f34ce5ff517728b24a98d1d0131dc7ff8067908f07c2f9d641295f8efa",
+    "src/pi-compat/interactive-ui.ts": "6c9145d0027907b9d47e3690d40d205e5a14206d04ce603bf6cfea1173ac9b81",
+    "src/platform/host/host-api.ts": "412b374e17d346e59683306400d0a5702c20d600b1269b016bf67190f674b9a5",
+    "src/platform/host/project-sync.ts": "27649dcf128cd9394b5717fd493dfa9e77d3230fcf8c3cdecbe260621a17ca6d",
+    "src/platform/host/session-gateway.ts": "682a5978456302024cf510cdb3ea695beba0bbf0a1785b4555acf5317d38dd74",
+    "src/platform/host/snapshot-coordinator.ts": "de2124c27d487a21f5770f9ed970080a3d627d87c56d2a410702a7d08754a956",
+    "src/platform/host/transfers.ts": "0f91d78d4bd11780e24e85d4c27367a380aca8919fc0d4430c117303c9f06310",
+    "src/platform/society-client.ts": "ee3c894aec2e5ec5160953a14ab2baad34d515c2e00382860a871fe78cf0f850",
+    "src/protocol/host-api.ts": "7854c4ec0170b914c01badd467f9f91feb9e9f871d59f6c19dc656ce20a3c6f5",
+    "src/runtime/local-package-stage.ts": "6558a98d1bb4f83c2641467c61a6c56c740ed2b347b17a954e18880951b73f78",
+    "src/runtime/local-package.ts": "f4b975a9e4b50d75656f54ce9f2c98d41a3a74ebabd9941d28b6cae9e9eaf02f",
+    "src/runtime/package-tar.ts": "1d26b15b14bf11358d4f249f9623325f7ee5db340a7721393cd09603ad3dcfd3",
+    "src/storage/facets.ts": "1001651e3626bc710e9f30ebe783df6018abe11d86761cc96c6f67039eabe3f7",
+    "src/storage/transaction.ts": "3c44ca972212f7d643b0c312af1914027afed4c164652162c9e5c414f57daf01",
+    "src/tui/interactive-editor.ts": "dc5be9a45a436d53e17f8b2635012c4420c61c2089fa2eb39e77f84ac5645871",
+    "src/tui/project-session-settings.ts": "200c66f17ffac7feefece76dba9fccc0ba1660078898c080e56ca11740b44986"
+  },
+  "review_scope": {
+    "changed_production_files": 21,
+    "inherited_not_reviewed": 50,
+    "meaning": "Direct delta and affected-owner review; inherited full-file/native records are not renewed."
+  },
+  "dependency_graph": {
+    "source_files": 423,
+    "runtime_cycles": [],
+    "type_only_scc": [
+      [
+        "src/storage/facets.ts",
+        "src/storage/operation-journal.ts",
+        "src/storage/operation-transitions.ts",
+        "src/storage/transaction.ts",
+        "src/store.ts"
+      ]
+    ]
+  },
+  "changeset_measurement": {
+    "artifact": {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/change-locality.json",
+      "sha256": "343c809d4f0cf2a6d587ea4caf056e5c7f99a10189c422da4c513d7052911e07",
+      "bytes": 6142,
+      "observed_exit": 0,
+      "command": "node scripts/mutation-locality.mjs --since 3b9bcea --json",
+      "scope": "Whole eleven-topic audit changeset, not one-feature locality.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    "counts": {
+      "source": 21,
+      "tests": 15,
+      "tools": 9,
+      "metadata": 10,
+      "vendor": 0
+    },
+    "total_files": 55,
+    "related_owner_inventory": {
+      "mutations": 13,
+      "average_files": 14.461538461538462
+    },
+    "meaning": "Actual files changed in this explicit changeset; owner intersections do not attribute changes to features. Compare changesets for one declared feature to measure feature locality."
+  },
+  "logs": [
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/build-final.log",
+      "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40",
+      "bytes": 1436,
+      "observed_exit": 0,
+      "command": "npm run build",
+      "scope": "Current production and test TypeScript compile; source unchanged since this build.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/typecheck-final.log",
+      "sha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52",
+      "bytes": 64,
+      "observed_exit": 0,
+      "command": "npm run typecheck",
+      "scope": "Current production and test TypeScript.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/architecture-before-suite.log",
+      "sha256": "aa6c00702ef57f37e9746f0491a7f47a41588f7352def6afd7f3dc7ab2f762b7",
+      "bytes": 1179,
+      "observed_exit": 1,
+      "command": "npm run check:architecture",
+      "scope": "Moved staging owner boundary registration missing; preserved failed static check.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/architecture-ready.log",
+      "sha256": "e801e644f157832540bd8494c368c3186faae25870f74bee912a0af5186d8021",
+      "bytes": 1192,
+      "observed_exit": 0,
+      "command": "npm run check:architecture",
+      "scope": "Corrected owner registration and all static gates; before runtime.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/oma-architecture-focus.log",
+      "sha256": "5b14c64d6e088ffecd1b90d7ce3c29414d182467580d34cc203084181556b599",
+      "bytes": 9928,
+      "observed_exit": 0,
+      "command": "node --test (focused affected-owner selection)",
+      "scope": "83 executed affected-owner tests, including negative controls.",
+      "test_summaries": {
+        "tests": [
+          83
+        ],
+        "pass": [
+          83
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/oma-architecture-oracles.log",
+      "sha256": "5a3920b6f55290058b7a3c9e8a2194de6fb0358780aeef4f97ee49c6a2489fe7",
+      "bytes": 6084,
+      "observed_exit": 0,
+      "command": "node --test (architecture/Git/settings selection)",
+      "scope": "59 executed architecture negative controls and actual Git changesets.",
+      "test_summaries": {
+        "tests": [
+          59
+        ],
+        "pass": [
+          59
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/oma-architecture-compat.log",
+      "sha256": "7727ebcdd5739159b3d92291dafb0a4810ae878850f569a5d9e4c9e227d57bc4",
+      "bytes": 58965,
+      "observed_exit": 1,
+      "command": "node --test (Pi/LSP/MCP selection)",
+      "scope": "109 PASS / 38 FAIL; controlled fixture lacked the new UI helper import.",
+      "test_summaries": {
+        "tests": [
+          147
+        ],
+        "pass": [
+          109
+        ],
+        "fail": [
+          38
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/oma-architecture-interactive.log",
+      "sha256": "739473bb7d3305c1c1bb40bf4647038917638f3caa8e2e9ae3cd5e4657fc0613",
+      "bytes": 3723,
+      "observed_exit": 0,
+      "command": "node --test test/interactive-host-ownership.test.mjs",
+      "scope": "38 PASS after fixture imports the actual UI helper.",
+      "test_summaries": {
+        "tests": [
+          38
+        ],
+        "pass": [
+          38
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/mcp-generation-check.log",
+      "sha256": "08e9558290d4a28943b4f1bafc55e28f1c1af84af1da9ee0cfb836236de7bcd4",
+      "bytes": 702,
+      "observed_exit": 1,
+      "command": "node scripts/vendor-pi-mcp-adapter.mjs --check",
+      "scope": "Generator edit accidentally modified two existing divergence template strings; preserved failure.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/mcp-generation-baseline.log",
+      "sha256": "d22d98d76c7108d0c3cb89ffab7a7a04abff28ddcb9b251276cdd1908b12529a",
+      "bytes": 666,
+      "observed_exit": 0,
+      "command": "node (baseline generator) --check",
+      "scope": "Baseline generator positive control; no changed-generator claim.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/mcp-generation-final.log",
+      "sha256": "756d0cdd67ba85043736abfefc938a719f3bfaa7d46506d21fc5f8255ed9fd5a",
+      "bytes": 666,
+      "observed_exit": 0,
+      "command": "node scripts/vendor-pi-mcp-adapter.mjs --check",
+      "scope": "Full pinned vendor re-emit: BUNDLE_CURRENT 2727. Existing cross-spawn emit diagnostics remain; emitted runtime exactly matched.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/mcp-metadata-check.log",
+      "sha256": "c39cd0317646a07266ff932fdf0966c15f2113405f33d8296ba0f2571c50edaf",
+      "bytes": 75,
+      "observed_exit": 0,
+      "command": "node scripts/vendor-pi-mcp-adapter.mjs --check-sdk-metadata",
+      "scope": "Bundle byte identity and derived SDK names only; no full re-emit claim.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/local-suite.log",
+      "sha256": "f3f7ba9a57770299234b0a7756b6df4585b4c82ac582e28bf4a01d1067a69846",
+      "bytes": 999,
+      "observed_exit": 143,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs",
+      "scope": "Coordinator TERM; partial execution is not a full-suite result.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/local-suite-final.log",
+      "sha256": "f5ef76057caf82321bdce35a70d5c335d2f7a69ad4df24bb3dd67d11dae96aaf",
+      "bytes": 451630,
+      "observed_exit": 1,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs",
+      "scope": "First complete suite: 3966 PASS / 17 FAIL. Missing installed-oma PATH caused 16 failures; stale validation input field caused one.",
+      "test_summaries": {
+        "tests": [
+          9,
+          3974
+        ],
+        "pass": [
+          9,
+          3957
+        ],
+        "fail": [
+          0,
+          17
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/local-suite-corrected.log",
+      "sha256": "3e6151bb120ef78f8907af9271e84d9609d288a91e15a446649da76410f59c9d",
+      "bytes": 428804,
+      "observed_exit": 1,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs (installed oma on PATH)",
+      "scope": "Second complete suite: 3982 PASS / 1 FAIL. All 16 installed Personal PTY cases passed. Existing fixture assumed deleted inode cannot be reused.",
+      "test_summaries": {
+        "tests": [
+          9,
+          3974
+        ],
+        "pass": [
+          9,
+          3973
+        ],
+        "fail": [
+          0,
+          1
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/build-stamp-fixed.log",
+      "sha256": "96f0d55e1819b0804991cec4aa6861b471f80b67f1dbb3b1607fc64830b712b0",
+      "bytes": 683,
+      "observed_exit": 0,
+      "command": "TMPDIR=/var/tmp node --test test/build-stamp.test.mjs",
+      "scope": "6 PASS; old output descriptor pinned through real fixture rebuild, preserving the physical replacement assertion. Product build unchanged.",
+      "test_summaries": {
+        "tests": [
+          6
+        ],
+        "pass": [
+          6
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/local-suite-runtime.log",
+      "sha256": "855e1d51969a95785fc8956e989392536178ed73528d58a091b62209f002a8c1",
+      "bytes": 428397,
+      "observed_exit": 0,
+      "command": "TMPDIR=/var/tmp node scripts/test-local.mjs (installed oma on PATH)",
+      "scope": "Final complete suite; exact serial and parallel summaries below.",
+      "test_summaries": {
+        "tests": [
+          9,
+          3974
+        ],
+        "pass": [
+          9,
+          3974
+        ],
+        "fail": [
+          0,
+          0
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "actual_crash": {
+    "status": "PASS",
+    "execution": "EXECUTED",
+    "proof": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",
+    "totals": {
+      "tests": 63,
+      "pass": 63,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "environment": {
+      "node": "v24.21.0",
+      "platform": "linux",
+      "arch": "x64",
+      "kernel": "6.12.107+deb13-amd64",
+      "uid": 1001,
+      "inheritedKeys": [
+        "PATH",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "XDG_RUNTIME_DIR",
+        "DBUS_SESSION_BUS_ADDRESS"
+      ],
+      "paidProviderCredentialsInherited": false,
+      "sqliteApi": "DatabaseSync available; not a database-operation test",
+      "git": "git version 2.47.3",
+      "sourceHead": "3b9bcea873725503a5afac8985deb336b452776d",
+      "sourceHeadStatus": "OBSERVED",
+      "systemd": "257.13-1~deb13u1",
+      "bubblewrap": "bubblewrap 0.12.0",
+      "python": "Python 3.13.5"
+    },
+    "source_bytes_equal_runtime": true,
+    "artifact": {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/crash/result.json",
+      "sha256": "d5725993a1ef2eb5194f21a07c7ebc5bf12c0544b14932100e2c6c61be9e476d",
+      "bytes": 2909196,
+      "observed_exit": 0,
+      "command": "OMA_TEST_SYSTEMD=1 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus node scripts/verify-lane.mjs crash --out <new-directory>",
+      "scope": "Actual primitive SIGSTOP/parent SIGKILL/restart. Not VM power loss or entrypoint-crash proof.",
+      "test_summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    "commands": [
+      {
+        "executable": "/opt/oma-test-node/bin/node",
+        "argv": [
+          "scripts/build.mjs"
+        ],
+        "label": "build",
+        "startedAt": "2026-10-10T08:46:05.719Z",
+        "endedAt": "2026-10-10T08:46:11.887Z",
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "error": null,
+        "stdout": "build.stdout.log",
+        "stderr": "build.stderr.log"
+      },
+      {
+        "executable": "/opt/oma-test-node/bin/node",
+        "argv": [
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "dist/test/crash-boundaries.test.js",
+          "dist/test/global-invariants.test.js"
+        ],
+        "label": "tests",
+        "startedAt": "2026-10-10T08:46:11.914Z",
+        "endedAt": "2026-10-10T08:46:53.271Z",
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "error": null,
+        "stdout": "tests.stdout.log",
+        "stderr": "tests.stderr.log"
+      }
+    ],
+    "log_artifacts": [
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/crash/build.stdout.log",
+        "sha256": "7a7f60bb4b7fe446609e803d8ff808231c277ceb1ea0f389f7e80ed093ba3761",
+        "bytes": 1383
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/crash/build.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/crash/tests.stdout.log",
+        "sha256": "ed71eec9fcf4e46f22aba5861c0bdcc6c16f91319df14137bd489f403147217f",
+        "bytes": 15599
+      },
+      {
+        "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/crash/tests.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    ]
+  },
+  "recording_semantics": "This evidence and the result prose are written after the frozen runtime. Those future metadata bytes are not claimed as runtime-tested. A separate static gate and input-record test validate the final recorded tree. Two source files subsequently lose only one empty EOF line each; all 15150 emitted files are byte-identical (input identity stamp excluded). These final source bytes have separate build/static/input-record qualification, not a renewed full-suite execution.",
+  "limits": [
+    "Pinned Pi private hooks remain; no upstream formal-hook certification.",
+    "Store type-only SCC remains; runtime cycles zero.",
+    "Complex security AST/dataflow rules and independent permission allowlists remain.",
+    "No architecture score certification or inferred one-feature locality improvement.",
+    "No new LOC measurement; production-loc-hashes bind bytes only.",
+    "Inherited 50 NOT_REVIEWED files remain.",
+    "Native macOS, VM power loss, paid provider and release qualification NOT_RUN.",
+    "Startup target not improved by this architecture batch."
+  ],
+  "final_recording_checks": {
+    "artifact": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/recording-checks.json",
+    "commands": [
+      "npm run check:architecture",
+      "node --test --test-name-pattern=\"validation record names\" test/production-inventory.test.mjs"
+    ],
+    "meaning": "Separate validation of the result-recording bytes; not a renewed full runtime or native qualification.",
+    "initial_artifact": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/recording-checks-before-eof.json"
+  },
+  "runtime_reviewed_production_sources": {
+    "src/entry/pi-interactive-host.ts": "28074817bd510f2406933feb7a9114223a258a16017c8dfcd7cfd2a694c68d37",
+    "src/extension/lsp-call-scope.ts": "baca862f67355040d7e855fad1750df0c97b83deb52106755385feeddf232fe6",
+    "src/extension/lsp-tools.ts": "cc72c5636df0e146ef525d5f08aa41dfd2f9ae963b4500043df6adf05e627ada",
+    "src/extension/mcp-sdk-env.ts": "11d9f8c98355ab074bfccecc5a6d420b29f5b410c315f10c336f0b529f85c073",
+    "src/extension/mcp-tools.ts": "7d6d04d971bbb34836b1c33ddb083c5394fce2c09a037b0de09e36101950a696",
+    "src/pi-compat/interactive-editor.ts": "330692f34ce5ff517728b24a98d1d0131dc7ff8067908f07c2f9d641295f8efa",
+    "src/pi-compat/interactive-ui.ts": "6c9145d0027907b9d47e3690d40d205e5a14206d04ce603bf6cfea1173ac9b81",
+    "src/platform/host/host-api.ts": "412b374e17d346e59683306400d0a5702c20d600b1269b016bf67190f674b9a5",
+    "src/platform/host/project-sync.ts": "27649dcf128cd9394b5717fd493dfa9e77d3230fcf8c3cdecbe260621a17ca6d",
+    "src/platform/host/session-gateway.ts": "682a5978456302024cf510cdb3ea695beba0bbf0a1785b4555acf5317d38dd74",
+    "src/platform/host/snapshot-coordinator.ts": "de2124c27d487a21f5770f9ed970080a3d627d87c56d2a410702a7d08754a956",
+    "src/platform/host/transfers.ts": "0f91d78d4bd11780e24e85d4c27367a380aca8919fc0d4430c117303c9f06310",
+    "src/platform/society-client.ts": "ee3c894aec2e5ec5160953a14ab2baad34d515c2e00382860a871fe78cf0f850",
+    "src/protocol/host-api.ts": "7854c4ec0170b914c01badd467f9f91feb9e9f871d59f6c19dc656ce20a3c6f5",
+    "src/runtime/local-package-stage.ts": "974627f12a15cb4a4df16cdfa0315ed80f5d241d2d1d17e006a1e6796b213249",
+    "src/runtime/local-package.ts": "f4b975a9e4b50d75656f54ce9f2c98d41a3a74ebabd9941d28b6cae9e9eaf02f",
+    "src/runtime/package-tar.ts": "05ff306e76352c15ec9a0904d48378b77190c0d1e99eebb62c6efe792a13b269",
+    "src/storage/facets.ts": "1001651e3626bc710e9f30ebe783df6018abe11d86761cc96c6f67039eabe3f7",
+    "src/storage/transaction.ts": "3c44ca972212f7d643b0c312af1914027afed4c164652162c9e5c414f57daf01",
+    "src/tui/interactive-editor.ts": "dc5be9a45a436d53e17f8b2635012c4420c61c2089fa2eb39e77f84ac5645871",
+    "src/tui/project-session-settings.ts": "200c66f17ffac7feefece76dba9fccc0ba1660078898c080e56ca11740b44986"
+  },
+  "post_runtime_eof_cleanup": {
+    "source_changes": [
+      {
+        "path": "src/runtime/local-package-stage.ts",
+        "before": "974627f12a15cb4a4df16cdfa0315ed80f5d241d2d1d17e006a1e6796b213249",
+        "after": "6558a98d1bb4f83c2641467c61a6c56c740ed2b347b17a954e18880951b73f78",
+        "change": "Remove one empty EOF line only"
+      },
+      {
+        "path": "src/runtime/package-tar.ts",
+        "before": "05ff306e76352c15ec9a0904d48378b77190c0d1e99eebb62c6efe792a13b269",
+        "after": "1d26b15b14bf11358d4f249f9623325f7ee5db340a7721393cd09603ad3dcfd3",
+        "change": "Remove one empty EOF line only"
+      }
+    ],
+    "compiled_files": 15150,
+    "changed_compiled_files": [],
+    "excluded": [
+      "dist/.build-stamp.json (build input identity only)"
+    ],
+    "artifact": {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/eof-compiled-comparison.json",
+      "sha256": "3c21ce822db9dd64cd5c0734f079a9333d91fcb83ae9a5f46d8156321a631709",
+      "bytes": 720
+    },
+    "build": {
+      "path": "/home/dev/oma-audit-artifacts/architecture-2026-10-10/build-eof.log",
+      "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40",
+      "bytes": 1436,
+      "observed_exit": 0,
+      "command": "npm run build"
+    }
+  }
+}

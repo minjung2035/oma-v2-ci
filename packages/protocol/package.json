@@ -1,0 +1,137 @@
+{
+  "name": "@oma/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./mac-developer-tools": {
+      "types": "./dist/mac-developer-tools.d.ts",
+      "default": "./dist/mac-developer-tools.js"
+    },
+    "./alarm": {
+      "types": "./dist/alarm.d.ts",
+      "default": "./dist/alarm.js"
+    },
+    "./ask-user-question": {
+      "types": "./dist/ask-user-question.d.ts",
+      "default": "./dist/ask-user-question.js"
+    },
+    "./batch-view": {
+      "types": "./dist/batch-view.d.ts",
+      "default": "./dist/batch-view.js"
+    },
+    "./client-codecs": {
+      "types": "./dist/client-codecs.d.ts",
+      "default": "./dist/client-codecs.js"
+    },
+    "./frame": {
+      "types": "./dist/frame.d.ts",
+      "default": "./dist/frame.js"
+    },
+    "./host-channel": {
+      "types": "./dist/host-channel.d.ts",
+      "default": "./dist/host-channel.js"
+    },
+    "./jsonl": {
+      "types": "./dist/jsonl.d.ts",
+      "default": "./dist/jsonl.js"
+    },
+    "./log-limits": {
+      "types": "./dist/log-limits.d.ts",
+      "default": "./dist/log-limits.js"
+    },
+    "./log-response": {
+      "types": "./dist/log-response.d.ts",
+      "default": "./dist/log-response.js"
+    },
+    "./methods": {
+      "types": "./dist/methods.d.ts",
+      "default": "./dist/methods.js"
+    },
+    "./operation-codec": {
+      "types": "./dist/operation-codec.d.ts",
+      "default": "./dist/operation-codec.js"
+    },
+    "./operation-results": {
+      "types": "./dist/operation-results.d.ts",
+      "default": "./dist/operation-results.js"
+    },
+    "./persisted-formats": {
+      "types": "./dist/persisted-formats.d.ts",
+      "default": "./dist/persisted-formats.js"
+    },
+    "./principal-credential": {
+      "types": "./dist/principal-credential.d.ts",
+      "default": "./dist/principal-credential.js"
+    },
+    "./receipt-chunks": {
+      "types": "./dist/receipt-chunks.d.ts",
+      "default": "./dist/receipt-chunks.js"
+    },
+    "./receipt-codec": {
+      "types": "./dist/receipt-codec.d.ts",
+      "default": "./dist/receipt-codec.js"
+    },
+    "./receipts": {
+      "types": "./dist/receipts.d.ts",
+      "default": "./dist/receipts.js"
+    },
+    "./request-codec": {
+      "types": "./dist/request-codec.d.ts",
+      "default": "./dist/request-codec.js"
+    },
+    "./response-codec": {
+      "types": "./dist/response-codec.d.ts",
+      "default": "./dist/response-codec.js"
+    },
+    "./run-lease": {
+      "types": "./dist/run-lease.d.ts",
+      "default": "./dist/run-lease.js"
+    },
+    "./status-page": {
+      "types": "./dist/status-page.d.ts",
+      "default": "./dist/status-page.js"
+    },
+    "./status-view": {
+      "types": "./dist/status-view.d.ts",
+      "default": "./dist/status-view.js"
+    },
+    "./delivery-boundary": {
+      "types": "./dist/delivery-boundary.d.ts",
+      "default": "./dist/delivery-boundary.js"
+    },
+    "./receipt-projector": {
+      "types": "./dist/receipt-projector.d.ts",
+      "default": "./dist/receipt-projector.js"
+    },
+    "./session-handoff": {
+      "types": "./dist/session-handoff.d.ts",
+      "default": "./dist/session-handoff.js"
+    },
+    "./resident-context": {
+      "types": "./dist/resident-context.d.ts",
+      "default": "./dist/resident-context.js"
+    },
+    "./git-execution-view": {
+      "types": "./dist/git-execution-view.d.ts",
+      "default": "./dist/git-execution-view.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/protocol",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

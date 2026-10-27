@@ -1,0 +1,211 @@
+{
+  "date": "2026-10-03",
+  "sourceHead": "a75c29911c077a2d2b207a48773268e2e2355ca0",
+  "scope": "Second-pass selected boundary audit; not a full repository review or release qualification",
+  "runtime": {
+    "node": "v24.21.0",
+    "git": "git version 2.47.3"
+  },
+  "verdict": "DEFECTS_REPRODUCED_RELEASE_BLOCKED",
+  "productionFiles": 356,
+  "productionDigest": "a8cb94866fe228e7d32ca48383e5d1a3f8c11aa86921dbb7f53804d58bdd89cf",
+  "productionSourceUnchanged": true,
+  "firstPassEvidence": {
+    "path": "test/audit/adversarial-2026-10-03.evidence.json",
+    "sha256": "3ebba913ee6dff24934f03634b94615f8abbf5404de4423c6c41f86cdb53f8b9",
+    "containsFullProductionSourceDigests": true
+  },
+  "oracle": {
+    "path": "test/audit/adversarial-2026-10-03-second.mjs",
+    "sha256": "a78a2f44fbc17c4b67c2ce141e7f26bb01956a39622912a70a2cb1edc8030894",
+    "asserts": "required behavior",
+    "exitCode": 1,
+    "tests": 4,
+    "pass": 0,
+    "fail": 4,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "regression": {
+    "exitCode": 0,
+    "files": [
+      "test/config-generations.test.ts",
+      "test/config-snapshot.test.ts",
+      "test/operations-config.test.ts",
+      "test/mail-integrity.test.ts",
+      "test/mail-recovery-integrity.test.ts",
+      "test/mail-reply.test.ts",
+      "test/r14-connection-lifecycle.test.ts",
+      "test/r16-run-registry.test.ts",
+      "test/r25-lifecycle-owners.test.ts",
+      "test/tui-sources.test.ts",
+      "test/contained-tools.test.ts"
+    ],
+    "tests": 106,
+    "pass": 106,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "totalSelectedRegressionPass": 260,
+  "initialExploration": {
+    "classification": "INCONCLUSIVE_FOR_HISTORY",
+    "exitCode": 1,
+    "tests": 4,
+    "pass": 0,
+    "fail": 3,
+    "cancelled": 1,
+    "skipped": 0,
+    "todo": 0,
+    "oracleVersion": "earlier local draft, not used as final finding evidence",
+    "reason": "8192-byte/350-entry history test timed out; later reduced supported-bound fixture completed"
+  },
+  "fixtureDigests": {
+    "test/config-generations.test.ts": "2f55178c4d113ed11790b4f1c6fcfc36e38ca610a9b147f409f720a038d7c034",
+    "test/config-snapshot.test.ts": "2ff975e9c386761beedafcf4441242424e789d92ea2eb41823787607dfd5331c",
+    "test/operations-config.test.ts": "192d9d315cf925d2f98d8017961cc476698b0e3f1c06ecb0c67efcd562737fcb",
+    "test/mail-integrity.test.ts": "05f2b82ffd85f94b5b91d938afc64f1c1fe98ffdf6ea9a59096e6337891f739a",
+    "test/mail-recovery-integrity.test.ts": "1695bb4d97074ff7f2eda155878f2c9b3879758c4be68d2fd02ab8611d8c845d",
+    "test/mail-reply.test.ts": "6de2ee4e50c0ee329f9e54e16fa16d243ae640a92b4c3a480adbe02f5f50e9a5",
+    "test/r14-connection-lifecycle.test.ts": "ebdf8353a281c6c8d3c55daac1b6d0a80280a98cd89afe03d71243948e0be3d6",
+    "test/r16-run-registry.test.ts": "92e0f5a663d32ccdc3db643eceba565d4a606815c7928d32483eddc59e5446e6",
+    "test/r25-lifecycle-owners.test.ts": "ac175b0ca226520c5f94282cb41707f2d27a2d272ba38714121620b3f18de4ec",
+    "test/tui-sources.test.ts": "5bfa0a0787987172985556753dc249e6d3cfd96e96e4201be35b1b7b20db8bea",
+    "test/contained-tools.test.ts": "90a2baaa62b159e963efc2b4a2495a7b4b888333b073b7142e7d058228391941",
+    "test/fixtures/review-fixture.ts": "01e8551948bc58bb243ffdf770f6d8f0d7715711cbf51b377617a3dff1355976",
+    "test/fixtures/spec.ts": "8124bc154769f22fa525a43d21cd18e96e5d823e91089e743fd243efc9f60048",
+    "test/fixtures/configuration.ts": "ef1bad6155d1f85d90d186c917e7c1c9ed98f5252a5b715b984e1e022a9fc893",
+    "scripts/local-test-guard.mjs": "324f0130b33d5ea7035a4f290f6f536be2a34da15c1a8402cc9fe741f30f0fe6"
+  },
+  "compiledDigests": {
+    "dist/src/review.js": "1154feed7741486601cf57e880b479cbc22407f39ee16192381eb1b5095c2d3a",
+    "dist/src/mail.js": "7344c301007582c21647cc27ce188d95d8cf4fc934ee55c8bb64237d80b36b1d",
+    "dist/src/mail/materializer.js": "ed5fbaf8f0f7ce77a062223e9c59b6ded03a150c4d760b5b52993f390e06e742",
+    "dist/src/domain/admission.js": "7b442779391ad2bbcd7043825b26271f6fdac8ac3dade55c45ce164f530a58c8",
+    "dist/src/extension/mail-tools.js": "4dd55897a8a9cd10d1247677123584c78a9ef8aab31c55a384fc849eb5c8c27b",
+    "dist/src/cli.js": "865c916407b688beb10cb39edc9fd1d500eb93336c64e9863fdd9ed20dd65291",
+    "dist/src/cli/effects/mail.js": "6032555aed5e6df51470b1814a1d6ac2679b916cd480e3be2fc62ce1241f461c",
+    "dist/src/tui/sources/mail.js": "2b436a6ae7aabf552af74441760a41aafed17b850ec91257e87bbaeb83c4b4f3",
+    "dist/src/reconcile.js": "c333029d5d0595b9ac59aab15e117794c4f2a8e6f0b9c18f1cb4630c0b071a0f",
+    "dist/src/config.js": "5eff6a3ddfb88d95313b4ad7d801a6618d5938fe205b133be007ebc0b8bd34ab",
+    "dist/src/config/generations.js": "bd3e181a882a3915e94394135189ad9b608c9b51e1195b83ec16466741a9865b",
+    "dist/test/fixtures/review-fixture.js": "e5adbe33549b80386cbe7ed80ba34c0d4a964eb9eb1bd59710f744d43955324c",
+    "dist/test/config-generations.test.js": "2bb418a7ee0e044b165929a42acd8b4b05b33557ab09a7cee75c1de9ba37a526",
+    "dist/test/config-snapshot.test.js": "9c72ce5637baa110862e6557afff5bffe6f9711df34d2c4e81d3d911f5cdd32c",
+    "dist/test/operations-config.test.js": "5871a46734405b3b2bd18545d1c58c530e3f0107b4353a51fae22b25f63159df",
+    "dist/test/mail-integrity.test.js": "e21d32c72727c052160c989010bb2753e8163ac3bfe43345a636606227377eb9",
+    "dist/test/mail-recovery-integrity.test.js": "b72c2615013bef36507a7c7da23dae35aeff151177a9c837b0b5e7861d9b62f0",
+    "dist/test/mail-reply.test.js": "fa1534d076d1d18849dfe8196d6a1c2c59985637e7746dc83e874c156ad9a062",
+    "dist/test/r14-connection-lifecycle.test.js": "639107bdec957dd4d03f2fbdc4f8afd37939903ef5dd485e2267034c49b53daa",
+    "dist/test/r16-run-registry.test.js": "8e51e7b66815a4b0058feec9ad1521417f1f7cb987ce1e79d2a24703dcfa0233",
+    "dist/test/r25-lifecycle-owners.test.js": "a2549809eaa7da0408fb68c4f1b973b3155e648bf16c0f5a932767f4ab00623d",
+    "dist/test/tui-sources.test.js": "a81bdeeb50f0449409d79a02d07e5e83fca58cf73292c89cd939f9910ad13d88",
+    "dist/test/contained-tools.test.js": "55983b434f821291fe5fdd32383583817491523c697cd522405639f6ba2ab48b"
+  },
+  "findings": [
+    {
+      "id": "AV-20261003-09",
+      "priority": "P1",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-10",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-11",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    },
+    {
+      "id": "AV-20261003-12",
+      "priority": "P2",
+      "status": "CONFIRMED_UNFIXED"
+    }
+  ],
+  "observedDiagnostics": [
+    {
+      "challenge": "succeeded",
+      "conflictedRef": "refs/oma/published/bob/op-3016a7c1-a20d-4a8c-be20-87d2a9cace01",
+      "gateAtAnswer": "healthy",
+      "fresh": "succeeded",
+      "freshError": null,
+      "gateAfterSweep": "corrupt"
+    },
+    {
+      "workerRead": "succeeded",
+      "replyError": "oma: file not found: /tmp/oma-merge-review-LOtMMA/mail/archive/cur/m-8ade7d6d-29e0-44b6-b868-623748b67be6-0:2,",
+      "frames": 0,
+      "acceptedReply": null
+    },
+    {
+      "realArrivalOrder": [
+        "m-32952c0f-a3c5-4f83-8df5-b5cb83722be2-0",
+        "m-e14966dd-57e8-4212-a2e0-7c99e8b1e05b-0"
+      ],
+      "shownNewestFirst": [
+        "m-32952c0f-a3c5-4f83-8df5-b5cb83722be2-0",
+        "m-e14966dd-57e8-4212-a2e0-7c99e8b1e05b-0"
+      ],
+      "usesFreezeTime": true
+    },
+    {
+      "mailBodyBytes": 2048,
+      "acceptedReviews": 40,
+      "reviewError": "INTERNAL_ERROR",
+      "voteError": "INTERNAL_ERROR",
+      "cancelError": "INTERNAL_ERROR",
+      "cancelAfterRestart": "INTERNAL_ERROR",
+      "display": "peer-needed"
+    }
+  ],
+  "checks": {
+    "documents": "PASS",
+    "whitespace": "PASS",
+    "productionDiff": "UNCHANGED"
+  },
+  "logs": {
+    "oma-adversarial-second-baseline.log": {
+      "path": "/tmp/oma-adversarial-second-baseline.log",
+      "sha256": "e5c0f7b47bc5d0b0f1584c80516e6c375c5353a2019a1f3fc8f0ea8ebe03379c",
+      "releaseEvidence": false
+    },
+    "oma-adversarial-second-reproductions.log": {
+      "path": "/tmp/oma-adversarial-second-reproductions.log",
+      "sha256": "8d4c895de4b55d3586166448451708325332d883c751a8f74cd45cd5b59a9a7e",
+      "releaseEvidence": false
+    },
+    "oma-adversarial-thread-boundary.log": {
+      "path": "/tmp/oma-adversarial-thread-boundary.log",
+      "sha256": "193b35b0cc9b7d10a5e002c1aeb442be321ad031e042a189ef4662da841cb8d1",
+      "releaseEvidence": false
+    },
+    "oma-adversarial-second-final.log": {
+      "path": "/tmp/oma-adversarial-second-final.log",
+      "sha256": "9ee140cf77673d7af501c8dafdbf1723c19956a5eef1ba3a39f0472ad83d2b07",
+      "releaseEvidence": false
+    },
+    "oma-adversarial-second-documents.log": {
+      "path": "/tmp/oma-adversarial-second-documents.log",
+      "sha256": "b5992aa250d6957526862d7ee815bcbf70267fd0870c2bcffd98800f3f15bbd6",
+      "releaseEvidence": false
+    }
+  },
+  "reportDigests": {
+    "docs/HANDOFF.md": "d4f79da951bf3dc3aa754a6ba12de367d10959112c2ea89c32c185919a999dcb",
+    "docs/priority-0-audit.md": "b81baffe732f9c78c89c955efeed99853b72fa0478abcbaa32e30f40b6c180d4",
+    "docs/implementation/validation.md": "0cf9f246e23053b2ea7aa9232d59deb51f28aa09c60255c8980463ed2e75fbdb"
+  },
+  "notRun": [
+    "aggregate npm test",
+    "real systemd services",
+    "user OMA/VM",
+    "native macOS",
+    "paid providers",
+    "SIGKILL/powercut durability qualification"
+  ],
+  "qualificationLimit": "No production fix. In-process faults/alarms/fake units and disposable local files; no native actor authentication, real engine/provider, SIGKILL or powercut qualification."
+}

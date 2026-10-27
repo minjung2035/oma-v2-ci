@@ -1,0 +1,228 @@
+{
+  "name": "@oma/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./admission": {
+      "types": "./dist/admission.d.ts",
+      "default": "./dist/admission.js"
+    },
+    "./ask-user-question/envelope": {
+      "types": "./dist/ask-user-question/envelope.d.ts",
+      "default": "./dist/ask-user-question/envelope.js"
+    },
+    "./ask-user-question/model": {
+      "types": "./dist/ask-user-question/model.d.ts",
+      "default": "./dist/ask-user-question/model.js"
+    },
+    "./ask-user-question/questionnaire": {
+      "types": "./dist/ask-user-question/questionnaire.d.ts",
+      "default": "./dist/ask-user-question/questionnaire.js"
+    },
+    "./attestation": {
+      "types": "./dist/attestation.d.ts",
+      "default": "./dist/attestation.js"
+    },
+    "./attestation-relations": {
+      "types": "./dist/attestation-relations.d.ts",
+      "default": "./dist/attestation-relations.js"
+    },
+    "./canonical-json": {
+      "types": "./dist/canonical-json.d.ts",
+      "default": "./dist/canonical-json.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "default": "./dist/capabilities.js"
+    },
+    "./child-policy": {
+      "types": "./dist/child-policy.d.ts",
+      "default": "./dist/child-policy.js"
+    },
+    "./context-policy": {
+      "types": "./dist/context-policy.d.ts",
+      "default": "./dist/context-policy.js"
+    },
+    "./deployment": {
+      "types": "./dist/deployment.d.ts",
+      "default": "./dist/deployment.js"
+    },
+    "./derived": {
+      "types": "./dist/derived.d.ts",
+      "default": "./dist/derived.js"
+    },
+    "./durable": {
+      "types": "./dist/durable.d.ts",
+      "default": "./dist/durable.js"
+    },
+    "./egress": {
+      "types": "./dist/egress.d.ts",
+      "default": "./dist/egress.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./exhaustive": {
+      "types": "./dist/exhaustive.d.ts",
+      "default": "./dist/exhaustive.js"
+    },
+    "./host-signals": {
+      "types": "./dist/host-signals.d.ts",
+      "default": "./dist/host-signals.js"
+    },
+    "./identifiers": {
+      "types": "./dist/identifiers.d.ts",
+      "default": "./dist/identifiers.js"
+    },
+    "./integer-fields": {
+      "types": "./dist/integer-fields.d.ts",
+      "default": "./dist/integer-fields.js"
+    },
+    "./integration-policy": {
+      "types": "./dist/integration-policy.d.ts",
+      "default": "./dist/integration-policy.js"
+    },
+    "./limits": {
+      "types": "./dist/limits.d.ts",
+      "default": "./dist/limits.js"
+    },
+    "./lineage": {
+      "types": "./dist/lineage.d.ts",
+      "default": "./dist/lineage.js"
+    },
+    "./mail-values": {
+      "types": "./dist/mail-values.d.ts",
+      "default": "./dist/mail-values.js"
+    },
+    "./package-policy": {
+      "types": "./dist/package-policy.d.ts",
+      "default": "./dist/package-policy.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    },
+    "./request-identity": {
+      "types": "./dist/request-identity.d.ts",
+      "default": "./dist/request-identity.js"
+    },
+    "./review-evaluation": {
+      "types": "./dist/review-evaluation.d.ts",
+      "default": "./dist/review-evaluation.js"
+    },
+    "./session-mode": {
+      "types": "./dist/session-mode.d.ts",
+      "default": "./dist/session-mode.js"
+    },
+    "./settings": {
+      "types": "./dist/settings.d.ts",
+      "default": "./dist/settings.js"
+    },
+    "./settings-policy": {
+      "types": "./dist/settings-policy.d.ts",
+      "default": "./dist/settings-policy.js"
+    },
+    "./spec-identity": {
+      "types": "./dist/spec-identity.d.ts",
+      "default": "./dist/spec-identity.js"
+    },
+    "./surface-bounds": {
+      "types": "./dist/surface-bounds.d.ts",
+      "default": "./dist/surface-bounds.js"
+    },
+    "./tool-surface": {
+      "types": "./dist/tool-surface.d.ts",
+      "default": "./dist/tool-surface.js"
+    },
+    "./turn-admission": {
+      "types": "./dist/turn-admission.d.ts",
+      "default": "./dist/turn-admission.js"
+    },
+    "./unseen-text": {
+      "types": "./dist/unseen-text.d.ts",
+      "default": "./dist/unseen-text.js"
+    },
+    "./utf8": {
+      "types": "./dist/utf8.d.ts",
+      "default": "./dist/utf8.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "default": "./dist/validation.js"
+    },
+    "./resident-paths": {
+      "types": "./dist/resident-paths.d.ts",
+      "default": "./dist/resident-paths.js"
+    },
+    "./review-bounds": {
+      "types": "./dist/review-bounds.d.ts",
+      "default": "./dist/review-bounds.js"
+    },
+    "./config-format": {
+      "types": "./dist/config-format.d.ts",
+      "default": "./dist/config-format.js"
+    },
+    "./display-address": {
+      "types": "./dist/display-address.d.ts",
+      "default": "./dist/display-address.js"
+    },
+    "./risk-tier": {
+      "types": "./dist/risk-tier.d.ts",
+      "default": "./dist/risk-tier.js"
+    },
+    "./agent-spec": {
+      "types": "./dist/agent-spec.d.ts",
+      "default": "./dist/agent-spec.js"
+    },
+    "./authority": {
+      "types": "./dist/authority.d.ts",
+      "default": "./dist/authority.js"
+    },
+    "./git-facts": {
+      "types": "./dist/git-facts.d.ts",
+      "default": "./dist/git-facts.js"
+    },
+    "./recovery-policy": {
+      "types": "./dist/recovery-policy.d.ts",
+      "default": "./dist/recovery-policy.js"
+    },
+    "./batch-settlement": {
+      "types": "./dist/batch-settlement.d.ts",
+      "default": "./dist/batch-settlement.js"
+    },
+    "./protocol-limits": {
+      "types": "./dist/protocol-limits.d.ts",
+      "default": "./dist/protocol-limits.js"
+    },
+    "./extension-paths": {
+      "types": "./dist/extension-paths.d.ts",
+      "default": "./dist/extension-paths.js"
+    },
+    "./role-prompts": {
+      "types": "./dist/role-prompts.d.ts",
+      "default": "./dist/role-prompts.js"
+    },
+    "./actor-address": {
+      "types": "./dist/actor-address.d.ts",
+      "default": "./dist/actor-address.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/domain",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,279 @@
+{
+  "version": 1,
+  "revision": "DR38",
+  "date": "2026-10-09",
+  "baseline_commit": "00bb2cafd9fac7c05079aab1f7b9df914a0d6606",
+  "environment": {
+    "os": "Linux",
+    "node": "v24.21.0",
+    "uid": 1001,
+    "local_systemd": false,
+    "local_guard": "scripts/local-test-guard.mjs",
+    "bus": "unix:path=/nonexistent/oma-local-tests-no-user-bus",
+    "test_files": 405,
+    "parallel_files": 403,
+    "concurrency": 8
+  },
+  "scope": "Six host/guest repairs and concrete HostService coordinator extraction, directly reviewed without subagents; unrestricted network policy retained.",
+  "runtime_input": {
+    "files": 15382,
+    "digest": "0ee898bf2cbcd92d73b89c35a00719df16db9796a471d0d96149b9de92b1fe05"
+  },
+  "runtime_byte_comparison": {
+    "input": {
+      "files": 15382,
+      "digest": "0ee898bf2cbcd92d73b89c35a00719df16db9796a471d0d96149b9de92b1fe05"
+    },
+    "files": 15382,
+    "changed": []
+  },
+  "input_map_artifact": {
+    "path": "/tmp/oma-host-ownership-2026-10-09/bytes-before.json",
+    "sha256": "34e310cb8aa0a5a043912de130bb20dc8c77a2357ee7e062d65bcaf28a1a077d"
+  },
+  "reviewed_production_sources": {
+    "src/domain/egress.ts": "0dc2df28ce22f1ac391713e43dab5d3174d75c2ea610ec1335a021c94156af48",
+    "src/entry/omahostd.ts": "dbcaaa466578d6abde14cf718fe6c1039f3f7569b2d5cfb794cd9b68ed19f565",
+    "src/platform/guest/host.ts": "236b5c6ce9bce2ef144ec952d429329b4ebf043e515a131c01829c4d2601dd79",
+    "src/platform/host/egress.ts": "0c3c4325928947d54a1fc0b3886dca86dfd39c877f0e69fb595eba0721566180",
+    "src/platform/host/lifecycle.ts": "bafdca444fd92919ea2b5de1c273a53dc8ad56fa8a4650d6ced3b6a5f69ca11a",
+    "src/platform/host/project-sync.ts": "3206c4c2faf34e1b26e02a954f4ddc072eb2e2a9ad6a169afdf3b0a924c5e3d5",
+    "src/platform/host/service.ts": "1e9058c6fa6aabd8e286b023f63359784dfdd6d61d82168740155ef6a6ba4f0f",
+    "src/platform/host/session-gateway.ts": "560bec8629f856ff077216a18c82ac1ef92311869e62143ee9792212a11f10aa",
+    "src/platform/host/snapshot-coordinator.ts": "58c0b53fc648f9f099ca6cc9a33b5d436ff13ec26f228f5424e5d15f14fa5537",
+    "src/platform/host/snapshot.ts": "ba841a1370979b6bd9167a5d520d2ba11c2a2387b260064cc95c15a987c632fd",
+    "src/platform/host/transfers.ts": "89571a169273f52edcfcd389e36b2d6b41beddccaba41af5787f4b1741aab4ef",
+    "src/protocol/host-guest.ts": "eb41236df986ba5fff4ae3966286391d72b781ba66b95b5b7d01d694ce04675b"
+  },
+  "changed_test_sources": {
+    "test/platform-guesthost.test.ts": "909490ee2a71f9416772dc2ee5bd536f59a9b3d88eb8f9948263101ae3c14af4",
+    "test/platform-host-service.test.ts": "e5b05c637b03838c24734b7c15d10c4661174a12b222eb14d50ef1acd043f1dc",
+    "test/platform-lifecycle.test.ts": "afae3ee356b7c811bec2ecf59517727f6f3321601e1e8239a4ae8867a99a4c66",
+    "test/platform-egress.test.ts": "0892c4c9b2f0c81403f94a0cb76a8c8dcb85b4b53e33b4a9754021fa7380fc9f",
+    "test/omahostd-shutdown.test.mjs": "c73cf8ad3ea340a50d589b940f43346e17c7af8035988b3b7fcbce51bd592771"
+  },
+  "logs": [
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/build-final2.log",
+      "sha256": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40",
+      "bytes": 1436,
+      "observed_exit": 0,
+      "command": "npm run build",
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/typecheck-final.log",
+      "sha256": "cc5f8db3e8f9500e18fe0677c06fdbeadf01257cb4632bad7be2a52e2ca79f52",
+      "bytes": 64,
+      "observed_exit": 0,
+      "command": "npm run typecheck",
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/architecture-after.log",
+      "sha256": "886531f9c983eaabf256407a8de17dc824a4ec35496da5493c7c1400bb163b61",
+      "bytes": 1192,
+      "observed_exit": 0,
+      "command": "npm run check:architecture",
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/platform-after.log",
+      "sha256": "975d869fd6ccced45414fd90ac0395de8be650ef0b62f3261003ad5707656b09",
+      "bytes": 13104,
+      "observed_exit": 0,
+      "command": "node --test dist/test/platform-guesthost.test.js dist/test/platform-lifecycle.test.js dist/test/platform-host-service.test.js dist/test/platform-egress.test.js dist/test/platform-snapshot.test.js",
+      "summaries": {
+        "tests": [
+          80
+        ],
+        "pass": [
+          80
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/entry-after.log",
+      "sha256": "cea685452871db597fef28a8620f890955c5a1a7c371367df4a0fe0310ef7cdf",
+      "bytes": 442,
+      "observed_exit": 0,
+      "command": "node --test test/omahostd-shutdown.test.mjs",
+      "summaries": {
+        "tests": [
+          4
+        ],
+        "pass": [
+          4
+        ],
+        "fail": [
+          0
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/reproduction-before.log",
+      "sha256": "ebd83ab1bfbd94533f63fc8e6d9bd759268f2585e8765b817409cdeea31d71c3",
+      "bytes": 5676,
+      "observed_exit": 1,
+      "command": "node --test --test-name-pattern=DR38: dist/test/platform-guesthost.test.js dist/test/platform-lifecycle.test.js dist/test/platform-host-service.test.js",
+      "summaries": {
+        "tests": [
+          8
+        ],
+        "pass": [
+          0
+        ],
+        "fail": [
+          8
+        ],
+        "cancelled": [
+          0
+        ],
+        "skipped": [
+          0
+        ],
+        "todo": [
+          0
+        ]
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/architecture-before.log",
+      "sha256": "4004aaa47290413cc6548efd827bd8c273fb3bdc036b1e130c56a0d75f0efaf5",
+      "bytes": 1230,
+      "observed_exit": 1,
+      "command": "npm run check:architecture",
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/review-ledger-before-inventory.log",
+      "sha256": "7e1a9fceb3c8a7b56b5ec2ab404ecb296ef558b8e5a5b59b54057a7c470fc892",
+      "bytes": 622,
+      "observed_exit": 1,
+      "command": null,
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/review-ledger-final.log",
+      "sha256": "ba55b78866693edd53c89d03fc2d1b0f946096a0ce9c8b56a9e2adfef43a0829",
+      "bytes": 80,
+      "observed_exit": 0,
+      "command": null,
+      "summaries": {
+        "tests": [],
+        "pass": [],
+        "fail": [],
+        "cancelled": [],
+        "skipped": [],
+        "todo": []
+      }
+    },
+    {
+      "path": "/tmp/oma-host-ownership-2026-10-09/local-final.log",
+      "sha256": "40d243c69f0c74386e8bf1ceba4780185340b042ab8833a010099189cf999901",
+      "bytes": 425439,
+      "observed_exit": 0,
+      "command": "node scripts/test-local.mjs",
+      "summaries": {
+        "tests": [
+          9,
+          3953
+        ],
+        "pass": [
+          9,
+          3953
+        ],
+        "fail": [
+          0,
+          0
+        ],
+        "cancelled": [
+          0,
+          0
+        ],
+        "skipped": [
+          0,
+          0
+        ],
+        "todo": [
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "baseline_caveat": "8 failing behaviors; owned leaking worker 2162648 terminated with SIGTERM before runner completed. Baseline test bytes were not retained as a full closure.",
+  "harness_failure": "The first entry run had 3 PASS, 1 test-harness failure: assert.match supplied a string instead of RegExp; corrected run 4 PASS. The first raw log was overwritten; only its tool output remains.",
+  "not_run": [
+    "macOS Virtualization.framework/APFS/Keychain/AF_VSOCK native",
+    "VM power loss",
+    "host reboot",
+    "paid provider",
+    "new startup timing",
+    "new kernel/crash lane"
+  ],
+  "limits": [
+    "LocalDriver with actual guest services and Unix Host API is not native macOS VM proof.",
+    "Snapshot clone uses copyFileSync, not APFS.",
+    "The daemon entry runs with controlled native boundaries in node:vm.",
+    "Results and this evidence were written after the recorded runtime input; structural checks run again on the final tree.",
+    "Historical kernel/crash/startup evidence is not renewed.",
+    "Existing NOT_REVIEWED production files were not approved by metadata regeneration."
+  ]
+}

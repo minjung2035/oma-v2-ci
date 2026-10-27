@@ -1,0 +1,147 @@
+{
+  "revision": "DR43",
+  "baseline": "06df89906080558ce60f1f8453017e18e430dbe0",
+  "noSubagents": true,
+  "status": "LOCAL_AND_ACTUAL_PRIMITIVE_PASS",
+  "artifactDirectory": "/home/dev/oma-audit-artifacts/composition-2026-10-10",
+  "directProductionDelta": [
+    "src/application/society-bootstrap.ts",
+    "src/application/society-interaction.ts",
+    "src/application/society-runtime.ts",
+    "src/application/society-transition.ts",
+    "src/entry/oma-society.ts",
+    "src/platform/guest/host.ts",
+    "src/platform/host/project-sync.ts",
+    "src/platform/host/service.ts",
+    "src/platform/host/session-gateway.ts"
+  ],
+  "scope": "Application composition and coordinator/adapter role declarations; preserve Core owners and lower lifetime state machines",
+  "firstTypecheck": "FAIL: never-return flow narrowing, nullable observed session and moved transport reference; corrected",
+  "targetedBeforeFinalInput": {
+    "first": {
+      "pass": 114,
+      "fail": 0
+    },
+    "second": {
+      "pass": 116,
+      "fail": 0
+    },
+    "modulesAndComposition": {
+      "pass": 120,
+      "fail": 0
+    }
+  },
+  "notRun": [
+    "native macOS",
+    "VM power loss",
+    "paid provider",
+    "release"
+  ],
+  "knownUnchangedLimitations": [
+    "startup exceeds 5 seconds",
+    "Pi private hooks",
+    "Store type-only SCC"
+  ],
+  "structureFirstFailures": [
+    "exactOptionalPropertyTypes rejects explicitly undefined optional fields; fields made explicit string | undefined",
+    "project binding durable publication registration still names entry main; relocated with the identical kill/retry/restart tests"
+  ],
+  "reviewMetadataFirstFailure": "test path used as oracle ID; corrected to existing DR43/T119 IDs",
+  "entryDecomposition": {
+    "beforeFileLines": 881,
+    "afterFileLines": 171,
+    "beforeMainLines": 728,
+    "afterMainLines": 54,
+    "claim": "source decomposition only; no score, feature-locality or startup-performance claim"
+  },
+  "targetedFinal": {
+    "pass": 121,
+    "fail": 0,
+    "scope": "actual Application/entry composition with controlled external effects, history frames/correlation/stale replies, acquisition cleanup, independent module build/load and boundaries"
+  },
+  "finalFullSuite": {
+    "pass": 4013,
+    "fail": 0,
+    "files": 415,
+    "serial": 9,
+    "parallel": 4004,
+    "parallelFiles": 413,
+    "concurrency": 8,
+    "proof": {
+      "lane": "local",
+      "code": 0,
+      "signal": null,
+      "seconds": 354.362,
+      "input": {
+        "files": 15445,
+        "digest": "33259b0cae1da21d7653edc0b2f46fc1580dc000bfadc647b581f2e8e8137c30"
+      },
+      "afterInput": {
+        "files": 15445,
+        "digest": "33259b0cae1da21d7653edc0b2f46fc1580dc000bfadc647b581f2e8e8137c30"
+      },
+      "changed": [],
+      "logSha256": "48d2ffeacbc153949b7106d1e771b880e2f2a7b88cc270a8504c79818aa66a2a",
+      "node": "v24.21.0",
+      "uid": 1001,
+      "path": "/opt/oma-test-node/bin:/tmp/oma-repair-2026-10-09/bin:/home/dev/.local/bin:/usr/bin:/bin",
+      "tmpdir": "/var/tmp",
+      "started": "2026-10-10T13:02:52.223Z",
+      "finished": "2026-10-10T13:08:46.609Z"
+    }
+  },
+  "actualCrash": {
+    "pass": 63,
+    "fail": 0,
+    "scope": "primitive SIGSTOP/parent-SIGKILL and restart; not an entrypoint-crash or VM-power-loss attestation",
+    "proof": {
+      "lane": "crash",
+      "code": 0,
+      "signal": null,
+      "seconds": 50.158,
+      "input": {
+        "files": 15445,
+        "digest": "33259b0cae1da21d7653edc0b2f46fc1580dc000bfadc647b581f2e8e8137c30"
+      },
+      "afterInput": {
+        "files": 15445,
+        "digest": "33259b0cae1da21d7653edc0b2f46fc1580dc000bfadc647b581f2e8e8137c30"
+      },
+      "changed": [],
+      "logSha256": "215eebcc669750d8109a36b56733bb6329e39bc69f126c7fead0553fc86c7636",
+      "node": "v24.21.0",
+      "uid": 1001,
+      "path": "/opt/oma-test-node/bin:/tmp/oma-repair-2026-10-09/bin:/home/dev/.local/bin:/usr/bin:/bin",
+      "tmpdir": "/var/tmp",
+      "started": "2026-10-10T13:10:09.576Z",
+      "finished": "2026-10-10T13:10:59.789Z"
+    }
+  },
+  "graph": {
+    "files": 438,
+    "runtimeEdges": 1835,
+    "typeOnlyEdges": 483,
+    "runtimeCycles": 0,
+    "remaining": "existing Store type-only SCC"
+  },
+  "reviewScope": {
+    "directProductionDelta": 9,
+    "inheritedNotReviewed": 50,
+    "claim": "direct delta and affected owner review; not a full-file/codebase or native qualification"
+  },
+  "postRuntimeRecords": {
+    "paths": [
+      "docs/HANDOFF.md",
+      "docs/implementation/validation.md",
+      "test/audit/composition-2026-10-10.evidence.json"
+    ],
+    "claim": "records written after the frozen runtime; fresh structure/metadata/input checks applied separately, no change to executable source"
+  },
+  "logs": {
+    "targeted-cleanup.log": "8d22c03c5ad2aefdc495b56b4ec5c58a7dc451e2a057ecaf9acf633a9fa6111c",
+    "build-cleanup.log": "cccfcd5d5169e7cc8604508632ef031166923f10ded462df8caca2efb931ff40",
+    "architecture-cleanup.log": "965b3860cad8c0daa05636676e995428a70bd9f4e3a0871b7cc7e32bef53b38c",
+    "local-final.log": "48d2ffeacbc153949b7106d1e771b880e2f2a7b88cc270a8504c79818aa66a2a",
+    "crash-final.log": "215eebcc669750d8109a36b56733bb6329e39bc69f126c7fead0553fc86c7636"
+  }
+}

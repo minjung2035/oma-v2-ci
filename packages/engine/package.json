@@ -1,0 +1,162 @@
+{
+  "name": "@oma/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/pi-runtime.d.ts",
+      "default": "./dist/pi-runtime.js"
+    },
+    "./engine-auth": {
+      "types": "./dist/engine-auth.d.ts",
+      "default": "./dist/engine-auth.js"
+    },
+    "./extension-modules": {
+      "types": "./dist/extension-modules.d.ts",
+      "default": "./dist/extension-modules.js"
+    },
+    "./interactive": {
+      "types": "./dist/interactive.d.ts",
+      "default": "./dist/interactive.js"
+    },
+    "./interactive-channel": {
+      "types": "./dist/interactive-channel.d.ts",
+      "default": "./dist/interactive-channel.js"
+    },
+    "./interactive-display": {
+      "types": "./dist/interactive-display.d.ts",
+      "default": "./dist/interactive-display.js"
+    },
+    "./login": {
+      "types": "./dist/login.d.ts",
+      "default": "./dist/login.js"
+    },
+    "./personal": {
+      "types": "./dist/personal.d.ts",
+      "default": "./dist/personal.js"
+    },
+    "./personal-ports": {
+      "types": "./dist/personal-ports.d.ts",
+      "default": "./dist/personal-ports.js"
+    },
+    "./pi-adapter": {
+      "types": "./dist/pi-adapter.d.ts",
+      "default": "./dist/pi-adapter.js"
+    },
+    "./pi-compat/env": {
+      "types": "./dist/pi-compat/env.d.ts",
+      "default": "./dist/pi-compat/env.js"
+    },
+    "./pi-compat/interactive-mode": {
+      "types": "./dist/pi-compat/interactive-mode.d.ts",
+      "default": "./dist/pi-compat/interactive-mode.js"
+    },
+    "./pi-compat/interactive-tool-setup": {
+      "types": "./dist/pi-compat/interactive-tool-setup.d.ts",
+      "default": "./dist/pi-compat/interactive-tool-setup.js"
+    },
+    "./pi-compat/interactive-tools": {
+      "types": "./dist/pi-compat/interactive-tools.d.ts",
+      "default": "./dist/pi-compat/interactive-tools.js"
+    },
+    "./pi-compat/interactive-ui": {
+      "types": "./dist/pi-compat/interactive-ui.d.ts",
+      "default": "./dist/pi-compat/interactive-ui.js"
+    },
+    "./pi-compat/prompt-editor": {
+      "types": "./dist/pi-compat/prompt-editor.d.ts",
+      "default": "./dist/pi-compat/prompt-editor.js"
+    },
+    "./pi-compat/session": {
+      "types": "./dist/pi-compat/session.d.ts",
+      "default": "./dist/pi-compat/session.js"
+    },
+    "./pi-compat/settings": {
+      "types": "./dist/pi-compat/settings.d.ts",
+      "default": "./dist/pi-compat/settings.js"
+    },
+    "./pi-compat/settings-files": {
+      "types": "./dist/pi-compat/settings-files.d.ts",
+      "default": "./dist/pi-compat/settings-files.js"
+    },
+    "./pi-compat/wire": {
+      "types": "./dist/pi-compat/wire.d.ts",
+      "default": "./dist/pi-compat/wire.js"
+    },
+    "./pi-presentation": {
+      "types": "./dist/pi-presentation.d.ts",
+      "default": "./dist/pi-presentation.js"
+    },
+    "./pi-rpc": {
+      "types": "./dist/pi-rpc.d.ts",
+      "default": "./dist/pi-rpc.js"
+    },
+    "./pi-runtime": {
+      "types": "./dist/pi-runtime.d.ts",
+      "default": "./dist/pi-runtime.js"
+    },
+    "./pi-spawn-plan": {
+      "types": "./dist/pi-spawn-plan.d.ts",
+      "default": "./dist/pi-spawn-plan.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "default": "./dist/ports.js"
+    },
+    "./presentation": {
+      "types": "./dist/presentation.d.ts",
+      "default": "./dist/presentation.js"
+    },
+    "./principal-launch": {
+      "types": "./dist/principal-launch.d.ts",
+      "default": "./dist/principal-launch.js"
+    },
+    "./principal-session": {
+      "types": "./dist/principal-session.d.ts",
+      "default": "./dist/principal-session.js"
+    },
+    "./session-metadata": {
+      "types": "./dist/session-metadata.d.ts",
+      "default": "./dist/session-metadata.js"
+    },
+    "./package-resources": {
+      "types": "./dist/package-resources.d.ts",
+      "default": "./dist/package-resources.js"
+    },
+    "./open-tui-brand": {
+      "types": "./dist/open-tui-brand.d.ts",
+      "default": "./dist/open-tui-brand.js"
+    },
+    "./credential-store": {
+      "types": "./dist/credential-store.d.ts",
+      "default": "./dist/credential-store.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-workspaces.mjs @oma/engine",
+    "typecheck": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@oma/contracts": "0.1.0",
+    "@oma/domain": "0.1.0",
+    "@oma/protocol": "0.1.0",
+    "@oma/process": "0.1.0",
+    "@earendil-works/pi-ai": "1.0.3",
+    "@earendil-works/pi-coding-agent": "1.0.1",
+    "@earendil-works/pi-tui": "1.0.1",
+    "pi-open-tui": "0.3.11"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "5.9.3"
+  },
+  "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs"
+  }
+}

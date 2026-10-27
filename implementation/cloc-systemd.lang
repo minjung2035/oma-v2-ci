@@ -1,0 +1,8 @@
+OMA systemd
+    filter remove_matches ^\s*[#;]
+    extension in
+    extension service
+    extension socket
+    extension path
+    extension network
+    3rd_gen_scale 1.00
