@@ -1,6 +1,61 @@
 # OMA v2 — 현재 인계
 
-## 현재: Git 실행 view와 명시 FD 전달 기반 구현
+## 현재: Mac check·quarantine 물리 staging과 실행 recipe 연결
+
+App의 Mac 경로에 candidate 전용 lease/workspace/tmp, quarantine의 held bundle FD→새 readonly
+input.bundle 복사와 phase별 tmp/repo를 연결했다. shared TS가 체크 환경·exact checkout·verify와
+import를 소유하며 OS adapter는 physical view·Seatbelt 문법을 만든다. 원본 accepted FD의 cursor와
+bytes는 유지하고, 이전 scope가 살아 있으면 단계 전환·재사용·staging 회수를 막는다. free flock
+하나를 arbitrary-descendant 사망 증거로 해석하지 않는다.
+
+비대화형 setup은 기존 CommandSpec.input 소유자로 framed profile을 stdin에 전달한다. C는
+sandbox_init 뒤 stdin을 readonly /dev/null로 바꾸고 고정 slot만 유지한다(candidate6/8/9,
+quarantine7). Worker는 기존 FD3/profile와 별도 RPC stdin을 유지한다. selected Xcode/CLT의
+actual Git/exec-path와 정확한 bundle Contents만 관측·허용하며 framework mapping과 process-exec
+허용을 분리했다. lookup 실패 시 broad root나 /usr/bin/git fallback을 만들지 않는다.
+
+도구 경로 관측도 별도 raw spawn으로 실행하지 않는다. Mac developer-tools는 필수 async
+execute port를 받고, App은 같은 candidate/quarantine execution slot·현재 authority·retained lease를
+전달한다. xcode-select/xcrun/Git 조회의 불명 수명도 staging 회수를 막으며 unowned fallback은 없다.
+직접 process 관측을 사용하는 Darwin fixture는 실제 도구/직계 자식만 관측하며 제품 scope proof를
+주장하지 않는다.
+
+check/Worker는 자기 writable roots의 script·native addon·build output을 실행할 수 있다.
+check의 컴파일러 실행은 selected Developer usr/bin·XcodeDefault.xctoolchain/usr/bin으로 한정한다.
+실제 Darwin candidate case는 committed script/C compile/output 실행과 private channel inode
+대조까지 준비했으며 현재 NOT_RUN이다. framework 전체의 process-exec grant는 없다.
+
+실제 Linux 관련174/174·contract mutation7/7, 별도 digest 소비자133/133과 build/strict/module이
+통과했다. 후속 common staging 소유자까지 고정15643개 ff8ffcd1... 입력 전후/보호4개
+동일에서177/177·contract mutation7/7을 확인했다. 도구 조회 execute port의 후속 입력은 별도로 기록한다. 입력 전후 identity·범위·실패와 수리 관계는 validation과
+native-2026-10-27-setup-recipes/의 fixed/·digest-consumers{,-green}/가 소유한다. C18의 실패는
+mount→root 문구 단언이었으며 같은 outside path의 AUTH_FAILED를 검사하도록 수리했다.
+
+실제 Darwin candidate/quarantine은 별도 case로 서로의 실패에 가려지지 않게 했다. 총30×3=90회
+준비·NOT_RUN이며 paid CI는 실행하지 않았다. SDK/OS 증거·G-PROCESS/G-FILES/G-AUTH는 OPEN,
+제품 guard와 ExecutionRuntime의 Mac scope 거절은 유지한다. generic permission-independent
+pin/reopen/repair를 우회하지 않으므로 실제 entry는 그 primitive가 미완료이면 그대로 실패한다.
+staging 회수의 중단/재시도 registry 누락도 실제 gate가 발견했다. 공통 storage의
+CandidateStaging.run이 lifecycle을 소유하도록 옮겼고, 실제 Linux에서 lease를 먼저 닫은 live
+scope의 free flock만으로는 회수하지 않음·종료 후 retry·boundary owner 자체의 SIGKILL 뒤
+fresh owner 재시작·mode000/symlink 외부 원본 보존의3개 회귀가 통과했다. 첫 fixture는 관찰
+부모가 journal lock을 보유해 실제 exclusive-owner 거절을 받았고, 부모가 초기화만 하도록 수리했다.
+이것은 공통 TS 소유권/실제 Linux 검증이며 Mac scope 또는 파일 primitive의 성공 증거가 아니다.
+
+후속으로 기존 이름 충돌이 원래 데이터를 지우거나 잘못된 owned lease 표시를 남기는 두
+negative control을 실제 Linux에서 같은 probe SHA로 실패시켰다. 새 private container를 먼저
+exclusive mkdir로 확보한 뒤 내부 leased tree를 만드는 방식은 같은 probe에서 통과했고, 전체
+staging4회귀도 통과했다. nonce만 고정된 fixture 데이터이며 FS/EEXIST/flock/scope는 실제 OS다.
+도구 위치도 closed developer grammar로 확인한 뒤 Git --exec-path를 실행한다.
+
+
+첫 전체 구조 검사는 owned temporary의 raw realpath 조회1건을 거절했다. contained openDirectory로
+수리했고 새 fence/observation 예외는 없다. 수정 후 결과와 입력은 owned-temp-runtime/summary.json·
+qualified-final-summary.json이 구분한다.
+Worker의 full bootstrap/CLI/Git toolchain 조립·관측, §11 형식 version 경계와 양 OS qualification은
+남는다. 새로운 호스트 상태 fence 예외·durable/public schema·accepted bytes 변경은 없다.
+
+## 직전: Git 실행 view와 명시 FD 전달 기반 구현
 
 candidate/check와 quarantine의 공통 TS에서 Linux 고정 경로를 제거했다. 부모의 명시된
 closed view에서 Git/project/workspace 또는 root/bundle/tmp를 받고, 두 Linux producer도 같은
@@ -20,7 +75,8 @@ Seatbelt의 기본 동작은 추가 FD 전체 close이며, 고정 setup protocol
 고정15636개 input `1c17ce3c...` 전후와 보호4개 SHA 동일에서 관련158/158·contract mutation7/7
 PASS·fail/cancel/skip/todo0이다. full Linux build·strict types·module도 통과했다. 상세 raw와
 최종 문서 입력의 전체 구조 결과는 validation과 native-2026-10-27-git-views/가 소유한다.
-Mac 물리 staging/목적별 조립·private input과 실제 scope 결합, 형식 경계와 세 gate는 남는다.
+이 기록 당시 Mac 물리 staging/목적별 조립은 미완료였다. 후속 source 연결은 위 기록을 따른다.
+실제 scope 결합·형식 경계와 세 gate는 계속 남는다.
 
 ## 현재: 공통 Worker 정책과 Mac 실행 recipe 연결
 

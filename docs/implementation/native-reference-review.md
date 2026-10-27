@@ -366,3 +366,23 @@ negative actor는 같은 canary를 검출한다. Darwin helper는 기본 closefr
 explicit keep에만 closefrom(max+1)과 아래 gap close를 사용한다. SDK/helper 전체 실행은
 NOT_RUN이며 actual Mac kept-FD control을 driver에 추가한 상태다. 파일/권한/scope 업무는
 shared TS에 남으며 descriptor 전달 성공을 arbitrary-descendant death로 승격하지 않는다.
+
+
+## Mac Git toolchain과 setup 전달 경로 비교
+
+[warren의 실제 수정 c1a6aa32](https://github.com/jayminwest/warren/commit/c1a6aa32aa94ec2e4c34d92b345e8dd060e077b2)의
+seatbelt.ts/git-preflight.ts를 확인했다. selected Xcode의 Developer만으로는 shim의
+SharedFrameworks 읽기가 부족해 exact app Contents를 readonly로 허용한 사례다. OMA는 실제
+xcode-select·xcrun Git·Git exec-path와 canonical paths를 확인하고 selected bundle/CLT의
+read/map을 허용한다. quarantine은 exact Git/helper dir만 실행하고 check는 selected Developer의
+usr/bin·XcodeDefault.xctoolchain/usr/bin과 자기 writable workspace/tmp 실행을 추가한다. framework
+전체에 process-exec를 허용하지 않는다. 실패에 broad /Applications나
+unchecked realpath fallback을 추가하지 않는다. 원본 commit·file blob SHA·검토 patch는
+native-2026-10-27-setup-recipes/developer-tools-primary.json에 보존했다. 이 비교는 실제 OMA의
+Mac 성공 증거가 아니며 Homebrew dylib/full Worker bootstrap은 아직 관측하지 않았다.
+
+비대화형 setup은 일반 CommandSpec.input을 사용하므로 별도 private-input 실행 backend를
+만들지 않는다. Worker는 FD3/RPC를 유지한다. actual Darwin fixture는 stdin→정책 적용→/dev/null,
+malformed frame/중복 옵션의 pre-exec 거절과 정확한 keep-FD를 실제 helper로 검사하도록 했다.
+candidate와 quarantine은 서로의 실패로 뒤의 case가 사라지지 않게 독립 required attempt다.
+모든 신규 Mac 관측은 NOT_RUN이며 세 gate와 제품 거절은 유지한다.

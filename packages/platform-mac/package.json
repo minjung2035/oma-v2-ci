@@ -8,6 +8,14 @@
     "dist"
   ],
   "exports": {
+    "./developer-tools": {
+      "types": "./dist/developer-tools.d.ts",
+      "default": "./dist/developer-tools.js"
+    },
+    "./git-sandbox": {
+      "types": "./dist/git-sandbox.d.ts",
+      "default": "./dist/git-sandbox.js"
+    },
     "./path-view": {
       "types": "./dist/path-view.d.ts",
       "default": "./dist/path-view.js"

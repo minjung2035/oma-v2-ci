@@ -802,3 +802,68 @@ header의 FD64/soft16·6/8 유지·CLOEXEC 해제와 누출 음성 대조를 확
 고정 입력의 관련158/158·contract mutation7/7과 Linux build/type/module을 확인했다. 정확한
 input과 최종 구조 검사는 validation이 소유한다. Mac physical staging/목적별 recipe 조립과
 actual scope/file/auth·형식 경계는 여전히 남으며 native product guard는 해제하지 않았다.
+
+
+### 14.20 Mac setup staging·목적별 recipe와 stdin profile — 2026-10-27
+
+candidate는 전용 leased tree 아래 workspace/tmp를 만들고 physical canonical path를 readonly로
+선택한다. quarantine은 기존 importer가 소유하는 held root/lease에서 accepted readable bundle
+FD를 positional read로 새 input.bundle에 복사하며 caller cursor와 원본 bytes를 바꾸지 않는다.
+copy는 fixed memory·exclusive destination·source 전후 stat·copied digest/size·readonly/fsync를
+확인한다. 원본 pathname을 다시 열거나 accepted 이름을 정리하지 않는다. input은 verify repo/tmp
+밖에 있고 import는 canonical/tmp만 쓸 수 있다. 경로·readonly mode·held FD의 사실을 exact exec
+또는 same-UID immutable-content proof로 승격하지 않는다.
+
+공통 domain의 체크 환경과 shared Git entry를 사용한다. 검증 후 import 전에도 whole scope
+종료를 새로 확인하고, unknown이면 staging을 보존하고 다음 시도를 막는다. candidate의 회수도
+execution owner의 confirmDead와 lease를 함께 요구한다. flock 해제는 FD를 버린 후손의 사망을
+보장하지 않는다. Linux 실제 live scope 반례에서 승격 금지·회수 보류·종료 후 retry를 확인했다.
+
+비대화형 setup의 TS recipe는 기존 CommandSpec.input으로 완전한 frame과 EOF를 전달한다.
+helper는 명시 --profile-stdin/--keep-fds만 파싱하고 중복·잘못된 옵션을 거절한다. 정책 적용 뒤
+stdin을 readonly /dev/null로 복구해 대상에 profile bytes나 EBADF를 넘기지 않는다. Worker는
+기존 private FD3와 RPC stdin을 유지한다. setup의 slot은 candidate6/8/lease9, quarantine lease7만
+유지하고 다른 inherited host directory/bundle FD는 닫는다. 새로운 spawn backend/fence exemption은
+없으며 기존 ExecutionRuntime의 Mac backend 거절과 native product guard는 그대로다.
+
+Xcode/CLT는 owned temporary HOME에서 실제 xcode-select·xcrun --find git·Git --exec-path를
+관측하고 realpath 실패/모호한 출력/선택 developer 밖의 tool을 거절한다. exact selected bundle
+Contents 또는 CLT root의 read/map과 Git file/helper dir의 exec를 분리하며 /Applications·/Library·
+인간 HOME 전체를 허용하지 않는다. framework mapping이 process-exec grant를 넓히지 않는다.
+Homebrew dylib와 full Worker bootstrap/CLI/Git의 실제 동작은 별도 미완료 관측이다.
+
+실제 Darwin의 stdin frame/refusal/EOF/keep-FD와 candidate·quarantine entry를 독립 required case로
+준비했다. 총30×3=90회이며 현재 모두 NOT_RUN이다. 미완료 shared file primitive가 entry를
+거절하면 실제 실패를 보존하며 fake pin·OS override·skip으로 성공을 만들지 않는다. 로컬 실제
+Linux/공통 정책 결과와 입력·실패/수리는 validation이 구분한다. §11 형식 경계와 G-PROCESS/
+G-FILES/G-AUTH는 계속 미완료이며 실제 Mac 지원이나 전체 구현 완료를 선언하지 않는다.
+
+
+candidate의 leased tree lifecycle은 OS 조립에서 분리한 공통 storage CandidateStaging.run이
+소유한다. collection boundary에 실제 Linux의 callback fault/live-scope/free-flock 보존과 retry,
+boundary owner 자체가 collection 뒤 SIGKILL된 후 fresh-owner restart·primary bytes 보존을
+등록했고 mode000 workspace/외부 symlink 반례도 검사했다. free flock은 단독 사망 proof가
+아니며 callback의 오류와 scope 상태를 구분한다. Mac file/scope qualification을 대신하지 않는다.
+
+
+실제 xcode-select/xcrun/Git 관측 역시 caller의 필수 async execute port로 실행한다. App은
+staging을 소유하는 것과 같은 candidate/quarantine slot·현재 authority·lease를 연결한다.
+query timeout/unknown reader의 scope가 종료되지 않으면 staging을 회수하지 않는다. raw spawn
+또는 선택적 unowned fallback은 추가하지 않았다. 실제 Darwin fixture의 직접 도구 관측은 제품의
+arbitrary-descendant scope proof를 주장하지 않는다.
+
+
+check는 Linux writable tmpfs에서와 같이 자기 workspace/tmp의 script·native addon·build output을
+실행할 수 있다. selected Developer의 usr/bin과 XcodeDefault.xctoolchain/usr/bin을 실행 경로에
+추가하고 bundle/framework 전체에는 process-exec를 허용하지 않는다. Worker도 공통 access 표의
+자기 writable roots에서 실행을 허용한다. quarantine은 고정 Node/Git/helper 실행만 유지한다.
+실제 Darwin candidate case에 committed executable script와 C compile→생성 binary 실행을
+추가했으며 현재 NOT_RUN이다. private status/release의 반환은 FD 번호 재사용을 EBADF로
+가정하지 않고 실제 channel dev/inode와 비교한다.
+
+
+staging admission은 새 private container의 exclusive mkdir가 먼저 성공해야 한다. 그 안에서
+lease를 먼저 잡고 실제 작업 tree를 만든다. 이미 있는 외부 이름에는 lease 표시를 추가하거나
+회수 권한을 얻지 않는다. 같은 실제 Linux probe의 삭제/표시 오염 negative controls를 확인하고
+보강된 owner의 원본 보존·재시도를 검증했다. 이는 disposable nonce fixture일 뿐 kernel/PID/
+scope 사실의 mock이 아니며 Mac G-FILES qualification을 대신하지 않는다.

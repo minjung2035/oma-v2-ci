@@ -121,6 +121,22 @@ export function assertIntegrationCheck(check: FrozenCheck): void {
     throw new StoreError("UNSUPPORTED_PROFILE", "integration check profile is invalid");
 }
 
+/** Exact checkout and final command share this environment on either OS.
+ * Only physical PATH/HOME differ; host check values cannot override the Git
+ * hooks, attributes or replacement-object policy used for committed bytes. */
+export function integrationCheckEnvironment(check: FrozenCheck, home: string, path: string): Readonly<Record<string, string>> {
+  assertIntegrationCheck(check);
+  const environment = { ...check.env, HOME: home, PATH: path, LANG: "C", LC_ALL: "C",
+    GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
+    GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_ATTR_NOSYSTEM: "1", GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",
+    GIT_CONFIG_KEY_1: "core.attributesFile", GIT_CONFIG_VALUE_1: "/dev/null" };
+  for (const [key, value] of Object.entries(environment))
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
+      throw new StoreError("UNSUPPORTED_PROFILE", "integration check environment is invalid");
+  return Object.freeze(environment);
+}
+
 export function assertSameIntegrationPolicy(expected: IntegrationSnapshot, actual: IntegrationSnapshot): void {
   if (expected.policyIdentity !== actual.policyIdentity)
     throw new StoreError("POLICY_CHANGED", "integration policy facts changed; they apply at the next broker start");

@@ -21,9 +21,9 @@ test("NATIVE-DARWIN: required independent cases keep three attempts and explicit
     "mach-rendezvous-exit", "mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async",
     "seatbelt-files", "seatbelt-profile-stream", "seatbelt-profile-header", "seatbelt-profile-magic", "seatbelt-profile-overflow",
     "seatbelt-profile-truncated", "seatbelt-profile-trailing", "seatbelt-profile-nul", "seatbelt-profile-empty",
-    "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds"];
+    "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds", "git-setup-candidate", "git-setup-quarantine"];
   const plan = darwinCasePlan();
-  assert.equal(plan.length, 81);
+  assert.equal(plan.length, 90);
   assert.deepEqual([...new Set(plan.map(row => row.name))].sort(), required.sort());
   assert.equal(new Set(plan.map(row => `${row.name}:${row.iteration}`)).size, plan.length);
   for (const name of required) assert.deepEqual(plan.filter(row => row.name === name).map(row => row.iteration), [0, 1, 2]);
@@ -63,7 +63,7 @@ for (const [name, change] of [
 test("NATIVE-DARWIN: failed attempts remain explicit failures, never observations", () => {
   const list = rows(); list[0] = { ...darwinCasePlan()[0], execution: "NOT_RUN", status: "SETUP_FAILED", error: "SDK unavailable" };
   assert.doesNotThrow(() => validateDarwinCaseSet(list));
-  assert.equal(list.filter(row => row.status === "OBSERVED").length, 80);
+  assert.equal(list.filter(row => row.status === "OBSERVED").length, 89);
   for (const value of [null, [], "completed", true, 0, {}])
     assert.throws(() => validateDarwinObservation("process", { process: value }));
   assert.throws(() => validateDarwinObservation("unknown", { process: { returned: true } }));
@@ -99,7 +99,7 @@ if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refus
     const result = JSON.parse(readFileSync(join(out, "result.json"), "utf8"));
     assert.equal(result.provenance.platform, "linux"); assert.equal(result.status, "SETUP_FAILED");
     assert.match(result.error, /require a real Darwin kernel/);
-    assert.deepEqual(result.summary, { required: 81, observed: 0, executed: 0, notRun: 81, productQualification: "BLOCKED" });
+    assert.deepEqual(result.summary, { required: 90, observed: 0, executed: 0, notRun: 90, productQualification: "BLOCKED" });
     assert.equal(result.compilations.length, DARWIN_PROGRAMS.length);
     assert.ok(result.compilations.every(row => row.status === "NOT_RUN"));
     validateDarwinCaseSet(result.cases);

@@ -1,7 +1,7 @@
 import { mkdirAt } from "@oma/native/posix-files";
-/** Canonical bundle import runs in a disposable mount/pid/user namespace.
+/** Canonical bundle import runs in a disposable native sandbox scope.
  * Commit content and prerequisites are verified before objects enter the owned
- * project. Broker cancellation, namespace death and the retained tree lease
+ * project. Broker cancellation, whole-scope death and the retained tree lease
  * own shutdown; uncertain outcomes retain their staging for fresh recovery. */
 import { closeSync, constants, fstatSync, fsyncSync, readSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -56,8 +56,9 @@ export class QuarantineImporter {
         const staging = join(this.paths.stateRoot, "staging");
         ensureOwnedDirectory(staging, this.paths.stateRoot);
         const root = join(staging, `quarantine-ns-${randomUUID()}`);
-        // R6-04: the lease first, then the tree; every process of the namespace
-        // command holds it, so a later start can prove they are all gone.
+        // R6-04: lease before tree. It retains cooperating inherited users;
+        // the execution owner's independent scope journal must also prove
+        // death before collection or a later phase may start.
         const lease = TreeLease.take(root);
         try {
             withinDirectory(root, (parent, name) => mkdirAt(parent, name, 0o700));
@@ -76,6 +77,8 @@ export class QuarantineImporter {
             rootFd = openOwnedDirectoryPath(root);
             projectFd = openOwnedDirectoryPath(this.paths.projectGit);
             for (const phase of ["verify", "import"] as const) {
+            if (!execution.confirmDead())
+                throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous quarantine phase is not confirmed dead");
             stderrFd = openOwnedAppendFile(rootFd, `stderr-${phase}`);
             const stderrStat = fstatSync(stderrFd);
             if (stderrStat.nlink !== 1 || stderrStat.size !== 0) throw new StoreError("REF_STATE_UNKNOWN", "quarantine diagnostics are not exclusively owned");
@@ -111,8 +114,8 @@ export class QuarantineImporter {
             }
         }, () => {
             // No abort/disconnect cleanup of accepted bundle evidence. Unknown native
-            // quiescence retains the namespace staging and blocks this executor owner;
-            // its lease tells the next start when the namespace is gone -- and one
+            // quiescence retains staging and blocks this executor owner;
+            // the scope journal and lease must both permit collection -- one
             // proof is attempted now, clearing the stale unknown when the children
             // are already reaped.
             this.staleRoot = root;

@@ -369,6 +369,8 @@ packages/platform-linux/src/sandbox.ts
 packages/platform-linux/src/worker-spawn.ts
 packages/platform-mac/package.json
 packages/platform-mac/src/audit-peer.ts
+packages/platform-mac/src/developer-tools.ts
+packages/platform-mac/src/git-sandbox.ts
 packages/platform-mac/src/keychain-client.ts
 packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements
@@ -452,6 +454,7 @@ packages/storage/package.json
 packages/storage/src/arrival-journal.ts
 packages/storage/src/batch-view.ts
 packages/storage/src/cache-trees.ts
+packages/storage/src/candidate-staging.ts
 packages/storage/src/context-files.ts
 packages/storage/src/context-snapshot.ts
 packages/storage/src/context-stream.ts

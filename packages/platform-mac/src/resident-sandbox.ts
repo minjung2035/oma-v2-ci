@@ -56,7 +56,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     readable, writable,
     denied: (host.hidden ?? []).map(entry => ({ path: join(host.libdir, entry.path), kind: entry.kind === "dir" ? "directory" : "file" })),
     executable: [{ path: host.node, kind: "file" }, directory(host.libdir),
-      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain],
+      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain, ...writable],
     unixSockets: [endpoints.inference, endpoints.egress].filter((value): value is string => value !== undefined),
     machServices: [machRendezvousName(lease.socketHostPath)], environmentKeys: [...allowed], nodePreload: preload,
   });

@@ -14,6 +14,9 @@ export interface SeatbeltPolicy {
   readonly writable: readonly SeatbeltPath[];
   readonly denied: readonly SeatbeltPath[];
   readonly executable: readonly SeatbeltPath[];
+  /** Read-only dylibs/frameworks that may be mapped, without permitting a
+   * process-exec grant over their enclosing toolchain bundle. */
+  readonly mapped?: readonly SeatbeltPath[];
   readonly unixSockets: readonly string[];
   /** Only the particular OMA broker rendezvous may be added to OS services. */
   readonly machServices: readonly string[];
@@ -24,6 +27,10 @@ export interface SeatbeltPolicy {
   /** Explicit child descriptor slots, never a parent descriptor or state
    * directory grant. Worker defaults to none; fixed setup protocols opt in. */
   readonly preserveFds?: readonly number[];
+  /** Noninteractive setup may use the ordinary command-input owner. The
+   * launcher consumes the frame and gives the target /dev/null on stdin.
+   * Workers keep descriptor 3 so stdin remains their RPC channel. */
+  readonly profileInput?: "descriptor" | "stdin";
 }
 const SYSTEM_READS = ["/System/Library", "/usr/lib", "/usr/share", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
@@ -53,6 +60,8 @@ function under(value: string, entry: SeatbeltPath): boolean {
  * after all allows, including device/IPC rules, so nested denied roots retain
  * precedence. There is no allow-default or unrestricted Unix/Mach access. */
 export function seatbeltProfile(policy: SeatbeltPolicy): string {
+  const mapped = policy.mapped;
+  if (mapped !== undefined && !Array.isArray(mapped)) refused("Seatbelt mapped roots must be explicit arrays");
   const rules = ["(version 1)", "(deny default)", "(allow process-fork)",
     "(allow process-info* (target same-sandbox))", "(allow signal (target same-sandbox))"];
   const allow = (operations: string, entries: readonly SeatbeltPath[]): void => {
@@ -60,10 +69,11 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
     for (const entry of entries) rules.push(`(allow ${operations} ${filter(entry)})`);
   };
   allow("file-read*", [...SYSTEM_READS.map(path => ({ path, kind: "directory" as const })),
-    ...SYSTEM_FILES.map(path => ({ path, kind: "file" as const })), ...policy.readable, ...policy.executable, ...policy.writable]);
+    ...SYSTEM_FILES.map(path => ({ path, kind: "file" as const })), ...policy.readable, ...policy.executable,
+    ...(mapped ?? []), ...policy.writable]);
   allow("file-write*", policy.writable);
   allow("process-exec*", [...SYSTEM_EXEC.map(path => ({ path, kind: "directory" as const })), ...policy.executable]);
-  allow("file-map-executable", [...SYSTEM_READS.map(path => ({ path, kind: "directory" as const })), ...policy.executable]);
+  allow("file-map-executable", [...SYSTEM_READS.map(path => ({ path, kind: "directory" as const })), ...policy.executable, ...(mapped ?? [])]);
   // Directory metadata suffices for ancestor traversal, without reading
   // unrelated files. Device access is confined to these kernel devices.
   rules.push("(allow file-read-metadata (vnode-type DIRECTORY))");
@@ -90,8 +100,14 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
   for (const entry of policy.denied) rules.push(`(deny file* ${filter(entry)})`);
   return rules.join("\n") + "\n";
 }
-function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: string): CommandSpec {
+function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: string, frame: Uint8Array): CommandSpec {
   const command = snapshotCommand(source);
+  const profileInput = policy.profileInput;
+  if (profileInput !== undefined && profileInput !== "descriptor" && profileInput !== "stdin")
+    refused("Seatbelt profile input is invalid");
+  const stdin = profileInput === "stdin";
+  if (stdin && (command.input !== undefined || command.stdinFd !== undefined))
+    refused("Seatbelt stdin profile cannot replace command input");
   path(command.executable); path(launcher);
   if (!Array.isArray(policy.environmentKeys) || policy.environmentKeys.some(key => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)))
     refused("Seatbelt environment allowlist is invalid");
@@ -116,7 +132,7 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
   }
   if (command.cwd === undefined || !policy.writable.some(entry => under(path(command.cwd!), entry)))
     refused("Seatbelt working directory must be inside an explicit writable root");
-  // The tiny installed launcher consumes/returns descriptor 3, applies the
+  // The tiny installed launcher consumes its selected channel, applies the
   // profile and execs the absolute target with these exact arguments. It uses
   // no shell, profile pathname reopen or sandbox-exec pipe-file assumption.
   if (policy.preserveFds !== undefined && !Array.isArray(policy.preserveFds)) refused("Seatbelt descriptor policy is invalid");
@@ -125,7 +141,9 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
     refused("Seatbelt descriptor policy is invalid");
   const descriptors = kept.sort((left, right) => left - right);
   return { ...command, executable: launcher,
-    argv: [...(descriptors.length ? [`--keep-fds=${descriptors.join(",")}`] : []), command.executable, ...command.argv] };
+    ...(stdin ? { input: frame } : {}),
+    argv: [...(stdin ? ["--profile-stdin"] : []), ...(descriptors.length ? [`--keep-fds=${descriptors.join(",")}`] : []),
+      command.executable, ...command.argv] };
 }
 export function bundledSeatbeltHelper(): string {
   return fileURLToPath(new URL("./seatbelt/oma-seatbelt", import.meta.url));
@@ -141,6 +159,8 @@ export function prepareSeatbelt(source: CommandSpec, policy: SeatbeltPolicy): {
   // Producer EOF cannot authorize a syntactically valid prefix missing its
   // final denies. The launcher requires this complete frame and then EOF.
   header.write("OMASBPL1"); header.writeBigUInt64BE(BigInt(payload.length), 8);
-  return Object.freeze({ profile, command: snapshotCommand(commandFor(source, policy, bundledSeatbeltHelper())),
-    privateInputs: Object.freeze([{ fd: 3, bytes: Buffer.concat([header, payload]) }]) });
+  const frame = Buffer.concat([header, payload]);
+  const command = snapshotCommand(commandFor(source, policy, bundledSeatbeltHelper(), frame));
+  return Object.freeze({ profile, command,
+    privateInputs: Object.freeze(command.argv[0] === "--profile-stdin" ? [] : [{ fd: 3, bytes: frame }]) });
 }

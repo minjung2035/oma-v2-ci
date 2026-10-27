@@ -7,9 +7,12 @@ import { once } from "node:events";
 import { controlPipe } from "@oma/native/control-socket";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import { openOwnedDirectoryPath } from "@oma/storage/directory";
+import { CandidateStaging, type CandidateStage } from "@oma/storage/candidate-staging";
 import { CandidateSetupStatus } from "@oma/git/candidate-check";
 import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 import { candidateSandbox } from "@oma/platform-linux/candidate-sandbox";
+import { candidateSeatbelt } from "@oma/platform-mac/git-sandbox";
+import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { StoreError } from "@oma/domain/errors";
 import type { GitPaths } from "@oma/git/paths";
 import type { FrozenCheck } from "@oma/domain/integration-policy";
@@ -19,11 +22,23 @@ import { type GitObserver } from "@oma/git/observe";
 
 
 export class CandidateChecks {
+  private readonly staging: CandidateStaging | null;
   constructor(private readonly paths: GitPaths,
     private readonly execute: (command: CommandSpec, signal: AbortSignal, authorize: () => void, inheritedFds: readonly number[], prepared: () => void) => Promise<ProcessObservation>,
     private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver(),
-    private readonly ownerSignal?: AbortSignal) {}
+    private readonly ownerSignal?: AbortSignal,
+    confirmDead?: () => boolean) { this.staging = confirmDead === undefined ? null : new CandidateStaging(paths.stateRoot, confirmDead); }
   async run(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void): Promise<void> {
+    if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
+    if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
+    if (process.platform === "darwin") {
+      if (this.staging === null) throw new StoreError("UNSUPPORTED_PROFILE", "candidate staging requires its execution-scope owner");
+      return this.staging.run(stage => this.runPrepared(candidate, check, cancellationSignal, authorize, stage));
+    }
+    return this.runPrepared(candidate, check, cancellationSignal, authorize);
+  }
+  private async runPrepared(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void,
+    stage?: CandidateStage): Promise<void> {
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
     if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
     const own = new AbortController();
@@ -53,14 +68,21 @@ export class CandidateChecks {
       })();
       let setupFailure: { error: unknown } | undefined;
       void evidence.catch(error => { setupFailure = { error }; own.abort(); });
-      if (!this.paths.checkRootfs || !this.paths.checkNode || !this.paths.checkAssetsDir)
+      if (!this.paths.checkNode || !this.paths.checkAssetsDir || process.platform !== "darwin" && !this.paths.checkRootfs)
         throw new StoreError("UNSUPPORTED_PROFILE", "candidate sandbox installation is incomplete");
-      const command = candidateSandbox({ rootfs: this.paths.checkRootfs, node: this.paths.checkNode, libdir: this.paths.checkAssetsDir }, candidate, check);
+      let command: CommandSpec;
+      if (process.platform === "darwin") {
+        if (stage === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "candidate has no owned physical staging");
+        const tools = await observeMacDeveloperTools(stage.temporary,
+          command => this.execute(command, signal, authorize, [stage.leaseFd], () => {}));
+        command = candidateSeatbelt({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools },
+          { git: tools.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check).command;
+      } else command = candidateSandbox({ rootfs: this.paths.checkRootfs!, node: this.paths.checkNode, libdir: this.paths.checkAssetsDir }, candidate, check);
       let observation: ProcessObservation;
       let initialRefusal: { error: unknown } | undefined;
       try { observation = await this.execute(command, signal, () => {
         try { authorize(); } catch (error) { initialRefusal = { error }; throw error; }
-      }, [write!, project, releaseRead], () => cleanupAll([closeWriter, closeReleaseRead])); }
+      }, [write!, project, releaseRead, ...(stage === undefined ? [] : [stage.leaseFd])], () => cleanupAll([closeWriter, closeReleaseRead])); }
       catch (error) {
         if (initialRefusal?.error === error) throw error;
         if (setupFailure !== undefined) throw new AggregateError([setupFailure.error, error], "candidate setup and execution cleanup failed");

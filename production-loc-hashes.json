@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "854c4313bd8886183d41e517759f2d34ed95379388bf81fd2591130f9f27fd74",
+  "manifest": "90ffcaa0e8ea403041a5f845d890b255e95fc3e0a4196bca3527c242dcaef249",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -236,7 +236,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "3cf7353acf338cf0dd23250429adf726ca6d14b19ba71a024fb9deb332052338"
+      "sha256": "d6ddec4a8c1404985909e5df47b67b65cc1798905790ad970cec810d58bb60d6"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -320,7 +320,7 @@
     },
     {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
-      "sha256": "0080b7daa2434d61e84e4de8c25192952a57e2b448134fe6c9a81acd467ac931"
+      "sha256": "c37ea6096f93303d279671d84ee09f7a2938099df8502f8b3e83670c5c522c20"
     },
     {
       "path": "apps/oma/src/runtime/client-preload.ts",
@@ -412,7 +412,7 @@
     },
     {
       "path": "apps/oma/src/runtime/quarantine-execution.ts",
-      "sha256": "b7844c09090d8fcb24c223f95ca8ca809d542ea7fdd7c8103f806edfd9dd4dc1"
+      "sha256": "f1b4cd5b42b5bb00da5d151008e7753acd08bf4501b2a42734409e72fe647748"
     },
     {
       "path": "apps/oma/src/runtime/session-catalog.ts",
@@ -796,7 +796,7 @@
     },
     {
       "path": "packages/domain/src/integration-policy.ts",
-      "sha256": "dc2faac15afe5d64d8458362ba1793ba58977254df4c74f57bd3b50ac386dfe6"
+      "sha256": "c4e54ae2d30a6573b9396f0bd00da2c07a9ffb1e376d3bcc36d774d324aa1f1d"
     },
     {
       "path": "packages/domain/src/limits.ts",
@@ -1224,7 +1224,7 @@
     },
     {
       "path": "packages/git/src/quarantine.ts",
-      "sha256": "290dd0ada44e0e9d83af834250d71a34f5ddefde2584d7fdea604ed96deb24df"
+      "sha256": "20fe31877ee91fb677874a872528025d3a3808ee23eefcf38188c2fda5514910"
     },
     {
       "path": "packages/git/src/read-port.ts",
@@ -1440,7 +1440,7 @@
     },
     {
       "path": "packages/platform-linux/src/candidate-sandbox.ts",
-      "sha256": "4bec12394512a1c781bad20594d3fff97e65e0b4da29a57ca8c0756a590f60e2"
+      "sha256": "6d06f38281acc5c962a2e7fb777615ec508f8d82569b09e1de76f31f65153364"
     },
     {
       "path": "packages/platform-linux/src/credential-stream.ts",
@@ -1480,11 +1480,19 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "927e2a59e8f69ac8bcc02dc9a2ad2cafacea02f61f28a367559b5d1dc0ce7bff"
+      "sha256": "010829ab6369c25b5329c209f9168f5ba4e599b07d21be5c6c430336b5ce0f7b"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
       "sha256": "746fb5d41a2b4eb7af80c4bcce8fe532bb0d2cd6e9a8865fa574730d6d847880"
+    },
+    {
+      "path": "packages/platform-mac/src/developer-tools.ts",
+      "sha256": "f57912a3bdfd15c5f4ab4f61a77d559d6e6985573f075697346b767c44ed0580"
+    },
+    {
+      "path": "packages/platform-mac/src/git-sandbox.ts",
+      "sha256": "1e3bd264865ec5a88c83b240298c54f14e566f9237d034fca956b2f673f3c40c"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1528,11 +1536,11 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "a29ed17a92111ad4b389afd4acb9dcb5b5b86b80a9838eab2a27f8b0b9c8ad76"
+      "sha256": "4bb402e71101b99921e26b1186b43774e383ffef25382aa7a8430db01b5b2f98"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "71fe17e4882ac96f4987492aecc416268a7bf73f938deff0dbfc16495d0971c8"
+      "sha256": "8ae026eea4d638df0dde89754cfda6487d2378ac1e466b71a51e3ae810186a68"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
@@ -1540,7 +1548,7 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt/main.c",
-      "sha256": "aabb7ed28ba3054527bfa55ae5c660d35645ebf166380eedc4a2fab9eb692f64"
+      "sha256": "dc6120e667d0a58a7a95918b56e5daeecea31d272b24692a1cfee54b65523329"
     },
     {
       "path": "packages/process/package.json",
@@ -1804,7 +1812,7 @@
     },
     {
       "path": "packages/storage/package.json",
-      "sha256": "b081c0a47d8baf3bfc3eb833e647df9a9f738e5fc4566e5d50f5d7cd6b26b28c"
+      "sha256": "ef9ac513728d1d971faf4db6de66a4ef886f525956f99ef3d95cf9354eb44992"
     },
     {
       "path": "packages/storage/src/arrival-journal.ts",
@@ -1817,6 +1825,10 @@
     {
       "path": "packages/storage/src/cache-trees.ts",
       "sha256": "34ea6fe555f3021f6596ebe552dc5b988837b8abca0d8281be226bf03a964e3e"
+    },
+    {
+      "path": "packages/storage/src/candidate-staging.ts",
+      "sha256": "b3ea35b4fb8c669172fe4c43ab74ea08c8147e0f1ea8dbb04a2d01235ebc6f66"
     },
     {
       "path": "packages/storage/src/context-files.ts",
@@ -1856,7 +1868,7 @@
     },
     {
       "path": "packages/storage/src/file-digest.ts",
-      "sha256": "371d2e7e6939c7d0a8119efd01af2e0a29449942192e3f8623c22026c7eab48b"
+      "sha256": "f099568ca4c804dce0ea4e33e8739769d4ce6d9a2761278d0bceefc1d6b09b59"
     },
     {
       "path": "packages/storage/src/immutable-file.ts",
@@ -1964,7 +1976,7 @@
     },
     {
       "path": "packages/storage/src/tree-lease.ts",
-      "sha256": "be7c1f110344f8830128de8ab7d5c24ff2d3565b434ba79d92f75b4173f69f33"
+      "sha256": "ceed78e2079226d4df8be6229de2f29d960c1c630dbdca82c8bc36e9da5116ef"
     },
     {
       "path": "packages/tool-files/package.json",

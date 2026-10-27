@@ -238,7 +238,8 @@ async function main(): Promise<void> {
             ownerSignal: preparationAbort.signal,
             checkRootfs: cfg.installation.rootfs, checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
         const executionOwner = executions;
-        const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal);
+        const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
+            () => executionOwner.confirmDead("candidate"));
         const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
             bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();

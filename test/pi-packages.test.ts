@@ -1612,6 +1612,6 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     // A resource under no mount must not reach a confined engine at all.
     const stray = { ...resources, skills: [join(f.root, "elsewhere", "SKILL.md")] };
     assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { actor: "a", society: "s", paths,
-      profile: { ...profile, packageResources: stray }, limits, confinement } as never), /outside every mount/);
+      profile: { ...profile, packageResources: stray }, limits, confinement } as never), { code: "AUTH_FAILED" });
   } finally { f.close(); }
 });

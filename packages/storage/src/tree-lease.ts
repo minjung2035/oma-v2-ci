@@ -1,17 +1,10 @@
-/** R6-04 (P0-4, P0-5): a tree a native child works in carries a proof of
- * that child's death.
- *
- * Before a tree is made, a lease file beside it (`<tree>.lease`) is opened
- * through its held parent and flock'ed. Every child that works in the tree is
- * handed that descriptor. flock belongs to the open file description, which
- * the children share, so the lock is free only when this process and every
- * child are gone -- whatever killed them, SIGKILL and a power cut included.
- * Whoever finds the tree later (startup recovery, the next provision) tries
- * the lock: free is the proof the tree's makers are all dead, so it and its
- * lease are removed; held is a maker still alive, so both are kept. A tree
- * with no lease was made before leases existed (or crashed in the instant
- * before its lease): nothing proves anything about it, and it is kept as
- * before.
+/** R6-04 (P0-4, P0-5): a lease retains cooperating users of disposable staging.
+ * It is acquired before the tree exists and inherited as an open-file-
+ * description lock. Every retained copy keeps collection blocked, including
+ * across parent death. A descendant can close the FD while remaining alive:
+ * a free lock alone never proves arbitrary-descendant death. Owners of
+ * untrusted execution must independently confirm the complete scope is dead
+ * before collection/reuse. An absent or unobservable lease remains unknown.
  */
 import { closeSync, constants } from "node:fs";
 import { lockFileDescriptor } from "@oma/native/linux";
@@ -62,7 +55,7 @@ export type TreeQuiescence =
   | { readonly kind: "active" }
   | { readonly kind: "unknown"; readonly reason: string };
 
-/** Whether everything that worked in a leased tree is dead, as the lock says. */
+/** Lock observation only; execution scope death belongs to its own owner. */
 export function treeQuiescence(tree: string): TreeQuiescence {
   let fd: number;
   try { fd = openLease(tree, false); }
@@ -77,8 +70,8 @@ export function treeQuiescence(tree: string): TreeQuiescence {
   } finally { closeSync(fd); }
 }
 
-/** Removes a leased tree and then its lease, holding the lock throughout, if
- * and only if everything that worked in it is dead. Answers what it found. */
+/** Removes a tree while holding its uncontended lease. The caller must first
+ * establish any required independent execution-scope death. */
 export function collectLeasedTree(tree: string): TreeQuiescence {
   let fd: number;
   try { fd = openLease(tree, false); }

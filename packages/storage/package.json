@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./candidate-staging": {
+      "types": "./dist/candidate-staging.d.ts",
+      "default": "./dist/candidate-staging.js"
+    },
     "./cache-trees": {
       "types": "./dist/cache-trees.d.ts",
       "default": "./dist/cache-trees.js"

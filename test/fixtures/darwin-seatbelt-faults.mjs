@@ -33,12 +33,13 @@ function frame(payload) {
   header.writeBigUInt64BE(BigInt(bytes.length), 8); return Buffer.concat([header, bytes]);
 }
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
-async function raw(command, bytes, extraFds = []) {
+async function raw(command, bytes, extraFds = [], profileOnStdin = false) {
   const pipe = controlPipe(); let read = pipe.read, write = pipe.write, writer, task;
   return withAsyncCleanup(async () => {
     writer = createWriteStream("", { fd: write, autoClose: true }); write = undefined;
     const returned = finished(writer, { cleanup: true }).then(() => undefined, error => error);
-    task = startProcess(command, { inheritedFds: [read, ...extraFds] });
+    task = startProcess(profileOnStdin ? { ...command, input: undefined, stdinFd: read } : command,
+      { inheritedFds: profileOnStdin ? extraFds : [read, ...extraFds] });
     const fd = read; read = undefined; closeSync(fd);
     writer.end(bytes);
     const result = await task.result;
@@ -125,6 +126,45 @@ async function trustedPreload() {
   assert.equal((await good(command, selected)).trim(), 'verified');
   return { readonlyPreloadExecuted: true, preloadHostReadDenied: true, ownerReadPositive: true, directChildClosed: true };
 }
+async function stdinProfile() {
+  async function execute(command) {
+    const task = startProcess(command);
+    return withAsyncCleanup(async () => {
+      const result = await task.result; await task.closed;
+      assert.equal(result.kind, 'exited', JSON.stringify(result));
+      assert.equal(result.signal, null); assert.equal(result.stdoutTruncated, false); assert.equal(result.stderrTruncated, false);
+      return result;
+    }, async () => { task.cancel(); await task.closed; });
+  }
+  const selected = {...policy,profileInput:'stdin'};
+  const command = {...target,argv:['--input-type=module','-e',
+    `import assert from 'node:assert/strict'; import {readFileSync,fstatSync} from 'node:fs';
+     assert.equal(fstatSync(0).isCharacterDevice(),true); assert.equal(readFileSync(0,'utf8'),''); console.log('empty target stdin');`]};
+  const recipe = prepareSeatbelt(command,selected);
+  assert.deepEqual(recipe.privateInputs,[]);
+  const positive = await execute(recipe.command);
+  assert.equal(positive.exitCode,0,positive.stderr.toString()); assert.equal(positive.stdout.toString(),'empty target stdin\n');
+  const writesMarker = prepareSeatbelt(target,selected), bytes = Buffer.from(writesMarker.command.input);
+  const badMagic = Buffer.from(bytes); badMagic[0] ^= 0xff;
+  for (const [input,error] of [[badMagic,/framing is invalid/], [bytes.subarray(0,15),/profile is truncated/],
+    [bytes.subarray(0,bytes.length-1),/profile is truncated/], [Buffer.concat([bytes,Buffer.from('x')]),/trailing bytes/],
+    [frame('(version 1)\n(deny default)\0'),/contains NUL/], [frame('(version 1)\n(oma-invalid-operation-for-fixture)\n'),/apply failed/]]) {
+    // Feed negative frames through a real owned pipe so expected early EPIPE
+    // belongs to this fixture writer, not an unobserved positive command.
+    const result = await raw(writesMarker.command,input,[],true);
+    assert.equal(result.exitCode,125,result.stderr.toString()); assert.match(result.stderr.toString(),error);
+    assert.equal(existsSync(marker),false,'an invalid stdin profile must not execute its target');
+  }
+  for (const options of [['--profile-stdin','--profile-stdin'],['--profile-stdin','--keep-fds=6','--keep-fds=8'],['--unknown-launch-option']]) {
+    const result = await raw({...writesMarker.command,argv:[...options,target.executable,...target.argv]},bytes,[],true);
+    assert.equal(result.exitCode,125); assert.match(result.stderr.toString(),/option is invalid or repeated/);
+    assert.equal(existsSync(marker),false);
+  }
+  const final = await execute(writesMarker.command);
+  assert.equal(final.exitCode,0,final.stderr.toString()); assert.equal(readFileSync(marker,'utf8'),'executed');
+  return {ordinaryInputOwner:true,targetStdinIsDevNull:true,framingFaultsRefusedBeforeExec:true,
+    duplicateOptionsRefused:true,positiveTargetExecuted:true,directChildrenClosed:true};
+}
 async function fdClosure() {
   const actorSource = fileURLToPath(new URL("./darwin-fd-observer.c", import.meta.url)), actor = join(work, "fd-observer");
   const helperSource = readFileSync(join(dirname(bundledSeatbeltHelper()), "main.c"), "utf8");
@@ -196,6 +236,15 @@ async function keptDescriptors() {
     const positive=await raw(recipe.command,frame,inherited);
     assert.equal(positive.exitCode,0,positive.stderr.toString());
     assert.equal(JSON.parse(positive.stdout).keptCount,2);assert.equal(JSON.parse(positive.stdout).leaked,false);
+    // The same explicit slots must survive stdin transport. Unlike raw(),
+    // this path uses only the ordinary CommandSpec.input/process owner.
+    const stdin = prepareSeatbelt(command,{...selected,profileInput:'stdin'});
+    const task = startProcess(stdin.command,{inheritedFds:Array(6).fill(held)});
+    await withAsyncCleanup(async()=>{
+      const result=await task.result;await task.closed;
+      assert.equal(result.kind,'exited');assert.equal(result.exitCode,0,result.stderr.toString());
+      assert.equal(result.signal,null);assert.equal(JSON.parse(result.stdout).keptCount,2);assert.equal(JSON.parse(result.stdout).leaked,false);
+    },async()=>{task.cancel();await task.closed;});
     // Intentionally retain one additional real canary; the independent actor
     // must detect it instead of declaring every inherited channel harmless.
     const leaky=prepareSeatbelt(command,{...selected,preserveFds:[4,6,8]});
@@ -205,7 +254,7 @@ async function keptDescriptors() {
       const refused=await raw({...recipe.command,argv:[flag,...recipe.command.argv.slice(1)]},frame,inherited);
       assert.equal(refused.exitCode,125);assert.match(refused.stderr.toString(),/descriptor policy/);
     }
-    return {exactChannelsRetained:true,extraCanaryDetectedInControl:true,malformedPolicyRefused:true,directChildrenClosed:true,
+    return {exactChannelsRetained:true,stdinTransportRetainedSameChannels:true,extraCanaryDetectedInControl:true,malformedPolicyRefused:true,directChildrenClosed:true,
       actorSha256:digest(readFileSync(actor))};
   },()=>closeSync(held));
 }
@@ -213,6 +262,7 @@ let observation;
 if (mode?.startsWith("seatbelt-profile-")) observation = await framing();
 else if (mode === "seatbelt-argv-env") observation = await argvAndEnvironment();
 else if (mode === "seatbelt-trusted-preload") observation = await trustedPreload();
+else if (mode === "seatbelt-stdin-profile") observation = await stdinProfile();
 else if (mode === "seatbelt-fd-close") observation = await fdClosure();
 else if (mode === "seatbelt-ipc-denial") observation = await ipcDenial();
 else if (mode === "seatbelt-kept-fds") observation = await keptDescriptors();

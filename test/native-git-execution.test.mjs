@@ -13,6 +13,7 @@ import { CandidateChecks } from '#oma-test/app/runtime/candidate-checks';
 import { quarantineExecution } from '#oma-test/app/runtime/quarantine-execution';
 import { QuarantineImporter } from '@oma/git/quarantine';
 import { gitSandbox } from '@oma/platform-linux/git-sandbox';
+import { runnerScope } from '@oma/platform-linux/runner-scope';
 
 assert.equal(process.platform, 'linux');
 const gitEnv = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
@@ -151,4 +152,30 @@ test('native quarantine: explicit view preserves quoted Unicode and newline cano
   try { await importer.importBundle(fd,candidate,ref,[f.candidate],()=>{}); } finally { closeSync(fd); }
   assert.equal(has(candidate),true); assert.equal(git(f.paths.projectGit,'show-ref'),beforeRefs);
   assert.equal(f.executions.confirmDead('quarantine'),true); assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
+});
+test('native quarantine: a real live scope between phases retains staging and prevents promotion until scope death', {timeout:30000},async t=>{
+  const f=fixture(t),beforeRefs=git(f.paths.projectGit,'show-ref');
+  writeFileSync(join(f.source,'blocked.txt'),'not promoted while a scope remains');git(f.source,'add','.');git(f.source,'commit','-qm','blocked candidate');
+  const candidate=git(f.source,'rev-parse','HEAD'),ref=exportRefForRequestKey('between-phases'),bundle=join(f.root,'blocked.bundle');
+  git(f.source,'update-ref',ref,candidate);git(f.source,'bundle','create',bundle,ref);
+  const has=oid=>{try{git(f.paths.projectGit,'cat-file','-e',oid+'^{commit}');return true}catch{return false}};
+  const physical=quarantineExecution(f.paths,f.executions),phases=[],controller=new AbortController();let held,arm=true;
+  const importer=new QuarantineImporter(f.paths,has,{confirmDead:physical.confirmDead,async execute(request,authorize){
+    phases.push(request.phase);const result=await physical.execute(request,authorize);
+    if(request.phase==='verify'&&arm&&result.exitCode===0){
+      arm=false;
+      held=await f.executions.begin('quarantine',()=>runnerScope({executable:process.execPath,argv:['-e','setInterval(()=>{},1000)'],
+        env:{PATH:'/usr/bin:/bin'},timeoutMs:null,stdoutBytes:0,stderrBytes:65536}),controller.signal,()=>{},()=>{});
+      assert.equal(f.executions.confirmDead('quarantine'),false);assert.equal(ExecutionJournal.inspect(f.root).length,1);
+    }
+    return result;
+  }});
+  const fd=openSync(bundle,'r');t.after(async()=>{controller.abort();await held?.stop();closeSync(fd);});
+  await assert.rejects(importer.importBundle(fd,candidate,ref,[],()=>{}),{code:'RUN_TERMINATION_UNKNOWN'});
+  assert.deepEqual(phases,['verify']);assert.equal(has(candidate),false);assert.equal(git(f.paths.projectGit,'show-ref'),beforeRefs);
+  assert.ok(readdirSync(join(f.root,'staging')).some(name=>name.startsWith('quarantine-ns-')));
+  await held.stop();assert.equal(f.executions.confirmDead('quarantine'),true);
+  await importer.importBundle(fd,candidate,ref,[],()=>{});
+  assert.deepEqual(phases,['verify','verify','import']);assert.equal(has(candidate),true);
+  assert.equal(git(f.paths.projectGit,'show-ref'),beforeRefs);assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
 });

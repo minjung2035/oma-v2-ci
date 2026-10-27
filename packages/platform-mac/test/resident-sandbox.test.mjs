@@ -39,6 +39,7 @@ test('Mac Worker recipe uses the common access table, physical paths and exact p
   for (const root of access) {
     assert.ok(recipe.profile.includes(`(allow file-read* (subpath ${JSON.stringify(root.path)}))`));
     assert.equal(recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(root.path)}))`), root.writable, root.name);
+    if(root.writable)assert.ok(recipe.profile.includes(`(allow process-exec* (subpath ${JSON.stringify(root.path)}))`),root.name);
   }
   for (const endpoint of Object.values(endpoints)) assert.ok(recipe.profile.includes(`(remote unix-socket (literal ${JSON.stringify(endpoint)}))`));
   assert.ok(recipe.profile.includes(`(global-name ${JSON.stringify(machRendezvousName(lease.socketHostPath))})`));

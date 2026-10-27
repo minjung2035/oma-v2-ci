@@ -84,3 +84,27 @@ test("Seatbelt retains only explicit sorted non-bootstrap descriptor slots", () 
   for(const preserveFds of [null,'6',[3],[0],[-1],[6,6],[2147483647],[6.5],[,6]])
     assert.throws(()=>prepareSeatbelt(source(),{...policy(),preserveFds}),{code:'UNSUPPORTED_PROFILE'});
 });
+test("Seatbelt noninteractive setup uses ordinary input and refuses to overwrite target stdin", () => {
+  const {input, ...command} = source();
+  const prepared = prepareSeatbelt(command, {...policy(),profileInput:'stdin',preserveFds:[8,6]});
+  assert.deepEqual(prepared.privateInputs, []);
+  assert.deepEqual(prepared.command.argv.slice(0,3), ['--profile-stdin','--keep-fds=6,8',command.executable]);
+  const frame = Buffer.from(prepared.command.input);
+  assert.equal(frame.subarray(0,8).toString(),'OMASBPL1');
+  assert.equal(frame.readBigUInt64BE(8),BigInt(Buffer.byteLength(prepared.profile)));
+  assert.equal(frame.subarray(16).toString(),prepared.profile);
+  for (const input of ['',Buffer.alloc(0),'target input'])
+    assert.throws(()=>prepareSeatbelt({...command,input},{...policy(),profileInput:'stdin'}),{code:'UNSUPPORTED_PROFILE'});
+  assert.throws(()=>prepareSeatbelt({...command,stdinFd:0},{...policy(),profileInput:'stdin'}),{code:'UNSUPPORTED_PROFILE'});
+  for (const profileInput of [null,'pipe',0])
+    assert.throws(()=>prepareSeatbelt(command,{...policy(),profileInput}),{code:'UNSUPPORTED_PROFILE'});
+  assert.equal(prepareSeatbelt(source(),{...policy(),profileInput:'descriptor'}).command.input,input);
+});
+test('Seatbelt readonly mapping permits loading dylibs without widening process execution',()=>{
+  const selected={...policy(),mapped:[dir('/opt/toolchain/frameworks')]},profile=seatbeltProfile(selected);
+  assert.ok(profile.includes('(allow file-read* (subpath "/opt/toolchain/frameworks"))'));
+  assert.ok(profile.includes('(allow file-map-executable (subpath "/opt/toolchain/frameworks"))'));
+  assert.ok(!profile.includes('(allow process-exec* (subpath "/opt/toolchain/frameworks"))'));
+  assert.ok(!profile.includes('(allow file-write* (subpath "/opt/toolchain/frameworks"))'));
+  for(const mapped of [null,'/opt/toolchain',{}])assert.throws(()=>seatbeltProfile({...policy(),mapped}),{code:'UNSUPPORTED_PROFILE'});
+});
