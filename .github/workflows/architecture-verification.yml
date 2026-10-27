@@ -49,6 +49,14 @@ jobs:
         with:
           node-version: '26.0.0'
           package-manager-cache: false
+      - name: Install locked dependencies
+        id: dependencies
+        continue-on-error: true
+        run: |
+          node --version > "$EVIDENCE/node-version.txt"
+          npm --version > "$EVIDENCE/npm-version.txt"
+          uname -a > "$EVIDENCE/kernel.txt"
+          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
       - name: Record which bytes of that commit were verified
         # A commit name says which revision was meant; it does not say which
         # bytes ran. This is the same closure the local R38 gate compares
@@ -81,14 +89,6 @@ jobs:
       - name: Install the pinned native prerequisites and line counter
         timeout-minutes: 15
         run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
-      - name: Install locked dependencies
-        id: dependencies
-        continue-on-error: true
-        run: |
-          node --version > "$EVIDENCE/node-version.txt"
-          npm --version > "$EVIDENCE/npm-version.txt"
-          uname -a > "$EVIDENCE/kernel.txt"
-          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
       - name: Capture baseline and all lane outcomes without hiding failures
         if: steps.dependencies.outcome == 'success'
         shell: bash
@@ -185,18 +185,20 @@ jobs:
         with:
           node-version: '26.0.0'
           package-manager-cache: false
-      - name: Bind native all to the proposed head and its bytes
+      - name: Bind native all to the proposed head
         run: |
           mkdir -p "$EVIDENCE"
           test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
           git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+      - name: Install native all locked dependencies
+        timeout-minutes: 10
+        run: npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Record native all input before generators run
+        run: |
           node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-before.json"
       - name: Install native all prerequisites
         timeout-minutes: 15
         run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"
-      - name: Install native all locked dependencies
-        timeout-minutes: 10
-        run: npm ci > "$EVIDENCE/npm-ci.log" 2>&1
       - name: Prepare the pinned storage dependency for native all
         timeout-minutes: 15
         run: |

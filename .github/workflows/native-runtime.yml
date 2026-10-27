@@ -39,6 +39,7 @@ jobs:
           /usr/bin/xcrun --show-sdk-version > .scratch/native-runtime/sdk-version.txt
           /usr/bin/xcrun swiftc --version > .scratch/native-runtime/swift-version.txt
       - name: Build the installation and test graph on the actual OS
+        id: native_build
         run: |
           if ! npm run build > .scratch/native-runtime/build.log 2>&1; then cat .scratch/native-runtime/build.log; exit 1; fi
       - name: Bind the actual workspace runtime outputs
@@ -60,7 +61,7 @@ jobs:
           console.log(JSON.stringify({ platform: process.platform, status: proof.status, totals: proof.totals }));
           JS
       - name: Verify independent Darwin package installations
-        if: runner.os == 'macOS'
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         timeout-minutes: 15
         run: |
           if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi
