@@ -108,7 +108,6 @@ export class ResticTarVerifier {
     const path = name(extended?.path ?? (prefix ? `${prefix}/${rawName}` : rawName));
     const expected = this.source.metadata.get(path);
     if (!expected || !this.source.paths.has(path) || this.seen.has(path)) invalid(`unexpected or duplicate entry ${path}`);
-    this.seen.add(path);
     const size = extended?.size === undefined ? rawSize : decimal(extended.size);
     if (size > BigInt(Number.MAX_SAFE_INTEGER)) invalid("unaddressable PAX size");
     const mode = integer(header.subarray(100, 108)), uid = extended?.uid === undefined ? integer(header.subarray(108, 116)) : decimal(extended.uid);
@@ -136,9 +135,13 @@ export class ResticTarVerifier {
     } else if (type === "2") {
       if (expected.type !== "symlink" || size !== 0n || Buffer.from(link).toString("base64") !== expected.linkTarget) invalid(`link differs at ${path}`);
     } else if (type === "1") {
-      const target = this.source.metadata.get(name(link));
-      if (expected.type !== "file" || size !== 0n || target?.type !== "file" || !expected.hardlinkGroup || expected.hardlinkGroup !== target.hardlinkGroup || expected.contentHash !== target.contentHash) invalid(`hardlink differs at ${path}`);
+      const targetName = name(link), target = this.source.metadata.get(targetName);
+      // The next header is reached only after the earlier payload hash was
+      // verified. Induction over admitted links excludes self/forward/cycles
+      // without retaining another graph or treating source metadata as data.
+      if (!this.seen.has(targetName) || expected.type !== "file" || size !== 0n || target?.type !== "file" || !expected.hardlinkGroup || expected.hardlinkGroup !== target.hardlinkGroup || expected.contentHash !== target.contentHash) invalid(`hardlink differs at ${path}`);
     } else invalid(`unsupported entry type at ${path}`);
+    this.seen.add(path);
     this.remaining = Number(size); this.padding = (BLOCK - this.remaining % BLOCK) % BLOCK;
     if (this.remaining === 0) this.completePayload();
   }

@@ -64,3 +64,32 @@ test("hardlinks require the source group and content identity", () => {
   verify(Buffer.concat([entry("a", "0", payload), entry("b", "1", undefined, "a"), eof]), expected);
   assert.throws(() => verify(Buffer.concat([entry("a", "0", payload), entry("b", "1", undefined, "missing"), eof]), expected));
 });
+function linkedSource(names, bytes = payload) {
+  const meta = metadata("file", { size: bytes.length, contentHash: hash(bytes), hardlinkGroup: names[0] });
+  return { paths: new Set(names), metadata: new Map(names.map(name => [name, meta])) };
+}
+test("dump hardlinks reject self, forward and cyclic references without verified file data", () => {
+  for (const [names, entries] of [
+    [["a"], [entry("a", "1", undefined, "a")]],
+    [["a", "b"], [entry("a", "1", undefined, "b"), entry("b", "0", payload)]],
+    [["a", "b"], [entry("a", "1", undefined, "b"), entry("b", "1", undefined, "a")]],
+    [["a", "b", "c"], [entry("a", "0", payload), entry("b", "1", undefined, "c"), entry("c", "1", undefined, "b")]],
+  ]) {
+    const bytes = Buffer.concat([...entries, eof]);
+    for (const size of [1, 511, 512, 513, 65536])
+      assert.throws(() => verify(bytes, linkedSource(names), size), { code: "STORE_CORRUPT" });
+  }
+});
+test("dump hardlink chains resolve to verified regular data, including empty files", () => {
+  for (const bytes of [payload, Buffer.alloc(0)]) {
+    const archive = Buffer.concat([entry("a", "0", bytes), entry("b", "1", undefined, "a"), entry("c", "1", undefined, "b"), eof]);
+    for (const size of [1, 511, 512, 513, 65536]) verify(archive, linkedSource(["a", "b", "c"], bytes), size);
+  }
+});
+test("PAX hardlink targets require earlier verified data instead of trusting the raw header", () => {
+  const expected = linkedSource(["a", "b"]);
+  const link = target => Buffer.concat([entry("a", "0", payload), entry("PaxHeader", "x", paxRecord("linkpath", target)), entry("b", "1", undefined, "a"), eof]);
+  verify(link("a"), expected, 1);
+  for (const size of [1, 511, 512, 513, 65536])
+    assert.throws(() => verify(link("b"), expected, size), { code: "STORE_CORRUPT" });
+});

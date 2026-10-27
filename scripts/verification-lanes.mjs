@@ -45,6 +45,11 @@ export function serialTestFiles(files, serial) {
     throw new Error(`serial test files missing from the discovered suite: ${missing.join(", ")}`);
   return files.filter((file) => serial.has(file));
 }
+const resticDumpOracles = [
+  "dump hardlinks reject self, forward and cyclic references",
+  "dump hardlink chains resolve to verified regular data",
+  "PAX hardlink targets require earlier verified data",
+];
 const definitions = {
   fast: {
     files: [
@@ -595,6 +600,7 @@ const definitions = {
       "Mac Worker recipe uses", "model command uses the issued", "PathView mounted:", "PathView host:", "PathView policy freezes", "Mac PathView adapter requires",
       "restart breaker counts only", "native entry: public help needs no VM", "native entry: retired VM commands refuse",
       "dump verification consumes arbitrary chunk boundaries", "dump truncation, duplicate entries",
+      ...resticDumpOracles,
       "POSIX group launch creates", "POSIX group cancellation", "POSIX group deadline", "POSIX group launch retains"],
     environment: "git-fs",
     timeoutSeconds: 900,
@@ -621,6 +627,7 @@ const definitions = {
       "test/receipt-supersession.test.mjs",
     ],
     requiredNames: [
+      ...resticDumpOracles,
       "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
       "V01A:",
       "V01B:",

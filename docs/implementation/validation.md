@@ -537,11 +537,41 @@ packed PASS를 새 입력의 결과로 재결박하지 않는다. 문서 기록�
 유료 Mac CI는 실행하지 않았다. G-PROCESS/G-FILES/G-AUTH와 Darwin 제품 guard는 유지한다.
 전체 코드 복잡도 정리는 native 구현·CI 준비를 모두 마친 뒤에 진행하며 아직 착수하지 않았다.
 
+### Restic dump hardlink의 실제 데이터 근거
+
+Spec §9.1의 hardlink 검증에서 source metadata 일치만으로 수락하던 구멍을 수정했다.
+자기 자신·아직 나오지 않은 파일·데이터가 없는 순환 link는 검증된 payload를 대신할 수
+없다. 현재 header는 종류·metadata·link를 검증한 뒤 seen에 넣고, hardlink는 앞서 수락한
+파일만 참조하게 했다. 다음 header에 도달하기 전에 앞 파일의 payload hash가 확인되므로
+추가 graph나 상태 없이 정상 link chain의 데이터 근거가 이어진다. 빈 파일도 같은 규칙이다.
+
+고정 [Restic0.19.1 dump writer](https://github.com/restic/restic/blob/6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf/internal/dump/tar.go)를
+대조했다. 이 writer는 file node마다 regular payload를 출력하므로, 실제 dump가 tar hardlink
+header를 만든다고 주장하지 않는다. 기존 OMA의 hardlink grammar에는 정상 이전 참조를
+유지하면서 데이터가 없는 그래프와 PAX linkpath의 자기 참조를 거절하는 독립 반례를 추가했다.
+일곱 parser 사례는 다양한 chunk 경계, 정상·빈 payload chain과 malformed tar bytes를
+검사한다. 동일한 최종 oracle은 격리한 수정 전 compiled verifier에서 실제로 실패했다
+(2실패·5통과). 이는 parser 반례이며 Darwin kernel 관측을 흉내 낸 시험이 아니다.
+
+입력 `100f081eb9fbe7b1012572725a0370fc4eabf019adf031acbcf633ccc0d8403e`(15670개)에서 parser7/7,
+이를 포함한 공통 CI238/238, 정책35/35, boundary·owner17/17, 실제 pinned Restic의
+Linux session archive/restore15/15, 전체 구조 검사, packed 설치26/26이 통과했다.
+build·strict types도 통과했다. 각 시험의 fail/cancel/skip/todo는0이며 입력·현재 workspace
+산출물15405개·보호4개 SHA는 시험 전후 같았다. parser 구현이 바뀌었으므로
+이전 workspace output PASS를 새 결과로 재사용하지 않았다. installed runtime smoke는
+17개가 통과했고 외부 dependency declaration 진단은 authored 타입 검사와 구분했다.
+
+platform/full lane은 세 새 oracle 이름을 필수로 요구한다. G-PROCESS/G-FILES/G-AUTH는 미해결이며 제품 Darwin guard를 유지한다. 현재 실제 Darwin은
+NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
+`/home/dev/oma-audit-artifacts/native-2026-10-27-restic-hardlink-proof/`가 소유한다.
+문서 기록은 별도 입력으로 구조 확인하며 위 runtime PASS를 문서 입력에 재결박하지 않는다.
+전체 코드 복잡도 정리는 native 구현·CI 준비를 모두 끝낸 뒤에 진행하며 아직 미착수다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `2fdc073b888832c0c1eb6f9564c240bee8febd6c8b38313347deb3bb5612f148` (15670 files).
+verification input digest `47199a44b0cfe469d5b9df4b7043a3bc6b96d9db3d8e0b712f432f22f64216a3` (15670 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
