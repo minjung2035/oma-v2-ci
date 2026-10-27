@@ -49,14 +49,6 @@ jobs:
         with:
           node-version: '26.0.0'
           package-manager-cache: false
-      - name: Install locked dependencies
-        id: dependencies
-        continue-on-error: true
-        run: |
-          node --version > "$EVIDENCE/node-version.txt"
-          npm --version > "$EVIDENCE/npm-version.txt"
-          uname -a > "$EVIDENCE/kernel.txt"
-          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
       - name: Record which bytes of that commit were verified
         # A commit name says which revision was meant; it does not say which
         # bytes ran. This is the same closure the local R38 gate compares
@@ -86,6 +78,14 @@ jobs:
             ${{ env.EVIDENCE }}/provenance.tsv
           retention-days: 7
           if-no-files-found: error
+      - name: Install locked dependencies
+        id: dependencies
+        continue-on-error: true
+        run: |
+          node --version > "$EVIDENCE/node-version.txt"
+          npm --version > "$EVIDENCE/npm-version.txt"
+          uname -a > "$EVIDENCE/kernel.txt"
+          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
       - name: Install the pinned native prerequisites and line counter
         timeout-minutes: 15
         run: bash scripts/setup-native-linux-ci.sh "$EVIDENCE"

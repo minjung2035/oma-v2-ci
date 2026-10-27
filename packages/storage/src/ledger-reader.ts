@@ -8,6 +8,7 @@
  * A failed read still fails -- unknown is never answered as an empty set.
  */
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from "node:sqlite";
+import { setImmediate } from "node:timers/promises";
 import { isValidOperationId, isValidActor, type OperationId } from "@oma/domain/identifiers";
 import { ownedMessages, type RepositoryIdentity } from "@oma/domain/durable";
 import { LineageSnapshot } from "@oma/domain/lineage";
@@ -36,6 +37,16 @@ export interface PendingWorkRows {
   readonly unbatched: readonly DeliveryRow[];
   readonly prepared: readonly BatchRow[];
   readonly linked: readonly DeliveryRow[];
+}
+
+/** Display validation owns detached query results, never a live DB cursor. */
+async function decodeDisplayRows<T>(rows: readonly unknown[], decode: (row: unknown) => T): Promise<T[]> {
+  const decoded = new Array<T>(rows.length);
+  for (let index = 0; index < rows.length; index++) {
+    decoded[index] = decode(rows[index]);
+    if ((index + 1) % 32 === 0 && index + 1 < rows.length) await setImmediate();
+  }
+  return decoded;
 }
 
 /** P0V-87 (R6-10): an order that means something -- recovery, delivery, the
@@ -311,23 +322,23 @@ export class LedgerReader {
   batch(id: string): BatchRow | null {
     return this.batchScoped(id, readScope());
   }
-  /** WP23.03: every row that display counts of pending work rest on, read
-   * together with no await between the SELECTs (the broker is the only
-   * writer). Each row is decoded; relation checks are pendingWorkByAgent's.
-   * Unlike the full-row reads above it does not re-check each delivery against
-   * its operation's recipient snapshot -- a cost that grew with the square of
-   * an operation's recipients -- so no mutation or recovery path reads it.
-   * The complete result is the contract: status must still answer past any
-   * count of rows, not refuse a society for being large. */
-  pendingWorkRows(): PendingWorkRows {
-    return {
-      agents: this.agents(),
-      unbatched: this.all(`SELECT * FROM deliveries WHERE materialized=1 AND presented=0 AND batch_id IS NULL
-        ORDER BY recipient, rowid`).map(decodeDeliveryRow),
-      prepared: this.all("SELECT * FROM batches WHERE state='prepared' ORDER BY agent, rowid").map(decodeBatchRow),
-      linked: this.all(`SELECT * FROM deliveries WHERE batch_id IN (SELECT id FROM batches WHERE state='prepared')
-        ORDER BY batch_id, message_id`).map(decodeDeliveryRow),
-    };
+  /** WP23.03: capture every raw row before yielding, with no await between
+   * SELECTs (the broker is the only writer). Decode the detached snapshot in
+   * bounded turns; later writes cannot mix new batches with old deliveries.
+   * Every full-row/lineage check remains; pendingWorkByAgent owns relations.
+   * This display-only read does not authorize mutation or recovery and never
+   * truncates a society for exceeding a diagnostic result-size budget. */
+  async pendingWorkRows(): Promise<PendingWorkRows> {
+    const agents = this.all("SELECT * FROM agents ORDER BY name");
+    const unbatched = this.all(`SELECT * FROM deliveries WHERE materialized=1 AND presented=0 AND batch_id IS NULL
+      ORDER BY recipient, rowid`);
+    const prepared = this.all("SELECT * FROM batches WHERE state='prepared' ORDER BY agent, rowid");
+    const linked = this.all(`SELECT * FROM deliveries WHERE batch_id IN (SELECT id FROM batches WHERE state='prepared')
+      ORDER BY batch_id, message_id`);
+    const decodedAgents = await decodeDisplayRows(agents, decodeAgentRow);
+    new LineageSnapshot(decodedAgents);
+    return { agents: decodedAgents, unbatched: await decodeDisplayRows(unbatched, decodeDeliveryRow),
+      prepared: await decodeDisplayRows(prepared, decodeBatchRow), linked: await decodeDisplayRows(linked, decodeDeliveryRow) };
   }
   preparedBatches(agent: string): BatchRow[] {
     const scope = readScope();

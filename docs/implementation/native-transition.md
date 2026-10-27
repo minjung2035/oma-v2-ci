@@ -21,6 +21,25 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 clean-checkout 반례와 Node page-size 질의
+
+| 공개 입력 | 관측과 한계 |
+|---|---|
+| Native `caa779abf` / run `40591092710`, Mac15·26 각각 | 99회 모두 실행,45 OBSERVED·54 SETUP_FAILED. C target의 FD-close/kept-FD는 각3회 통과했다. stdio CLOEXEC·selected channel·soft/hard limit 아래 canary·same-PID exec·negative leak control을 실제 관측했다. 세 product gate는 OPEN |
+| 같은 입력 root build | DR63의 `storage/ledger-reader.ts`와 `store.ts` 두 파일이 commit에서 빠져 pendingWorkRows가 이전 동기 타입이었다. root typed build가 거절됐고 Mac common/packed는 실행되지 않았다. 미커밋 local source의 PASS를 committed source의 PASS로 읽으면 안 된다 |
+| 같은 입력 실제 Node crash | root loader 예외 뒤 C actor는 main에 도달했다. Node는 `RandomNumberGenerator::SetEntropySource`→Abseil mutex→LowLevelAlloc의 arithmetic overflow로 SIGABRT |
+| Architecture `562548397` / run `40577594148` | all3930/3944,14 FAIL. 13개는 build-stamp fixture의 workspace-executables import 누락, 하나는 workflow 순서를 문자열로 고정한 assertion. platform70/70·property34/34·stress15/15는 별도 PASS |
+
+Node26 [allocator](https://github.com/nodejs/node/blob/v26.0.0/deps/v8/third_party/abseil-cpp/absl/base/internal/low_level_alloc.cc#L356)는 sysconf(_SC_PAGESIZE)를 size_t로 변환한다.
+고정 Libc `71bbe350`의 getpagesize는 numeric HW_PAGESIZE 질의 실패 시−1을 돌려준다.
+[고정 XNU의 OID](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_mib.c#L1059)는 `hw.pagesize_compat`이며 기존 `hw.pagesize`와 별개다.
+exact read-only 항목만 추가했다. 실제 Node 시작 성공은 후속 Mac 실행 전까지 미확인이다.
+
+pre-install binding은 compiler helper에서 vendored 경로 상수만 pure module로 분리해 복구했다.
+깨끗한 dependency-free fixture에서 실제 hash CLI 실행과 후속 source 변경의 digest 무효화를 확인했다.
+build-stamp의 실제 build/cache 회귀13개는 수리 후 통과했다. incidental workflow assertion은 삭제했고
+동일한 source 문자열 기대값으로 재고정하지 않았다. 실행 중 source 편집으로 stale해진 validation binding은 최종 구조 생성 뒤 갱신한다.
+
 ### 2026-10-28 metadata·loader 반례와 status projection (DR63)
 
 공개 입력 `9c95aaaac`의 Native run `40580105329` 원시 ZIP·digest를 별도로 보존했다.
