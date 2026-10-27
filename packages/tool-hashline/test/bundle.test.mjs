@@ -11,7 +11,7 @@ import { cpSync, existsSync, linkSync, mkdtempSync, mkdirSync, readdirSync, read
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
+import { createContainedWriter, logicalReadPathView } from "@oma/tool-runtime/contained-tools";
 import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, writeWithinUnchanged } from "@oma/tool-files";
 import { registerHashlineTools, HASHLINE_EDIT_TOOL_NAMES, HASHLINE_READ_TOOL_NAME } from "@oma/tool-hashline";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "@oma/tool-runtime/vendor-bundle";
@@ -58,6 +58,7 @@ async function hashlineWorld(t, options = {}) {
         sandboxed: options.sandboxed ?? false,
         readOnly: options.readOnly ?? false,
         write,
+        readPath: options.readPath,
         stateDir: options.session === undefined ? join(tmp(t, "oma-hashline-state-"), "state") : undefined,
     });
     const ctx = ctxOf(workspace, options.session);
@@ -77,6 +78,24 @@ async function serveAnchors(world, path) {
     const read = await world.run(HASHLINE_READ_TOOL_NAME, { path });
     return anchorsOf(textOf(read));
 }
+test("native logical inbox uses the existing anchored read and preserves offset/limit without a root mount", async t => {
+    const view = tmp(t, "oma-inbox-view-한글-");
+    writeFileSync(join(view, "inbox.md"), "first delivery\nsecond delivery\nthird delivery\n");
+    const w = await hashlineWorld(t, { sandboxed: true, readPath: logicalReadPathView(true, view) });
+    const params = { path: "/inbox.md", offset: 2, limit: 1 };
+    // Pi calls this public normalizer before validation/dispatch. The
+    // original anchored execute handler remains the engine's to invoke.
+    const prepared = w.pi.tools.get("read").prepareArguments(params);
+    const answer = textOf(await w.run("read", prepared));
+    assert.match(answer, /second delivery/); assert.doesNotMatch(answer, /first delivery|third delivery/);
+    assert.equal(params.path, "/inbox.md");
+    writeFileSync(join(w.workspace, "inbox.md"), "workspace file\n");
+    assert.match(textOf(await w.run("read", { path: "inbox.md" })), /workspace file/);
+    assert.equal(logicalReadPathView(false, view)("/inbox.md"), "/inbox.md");
+    assert.equal(logicalReadPathView(true, view)("/inbox.md/../other"), "/inbox.md/../other");
+    for (const root of ["/", "relative", `${view}/../other`, `${view}\0bad`])
+        assert.throws(() => logicalReadPathView(true, root), /normalized non-root/);
+});
 // ---------------------------------------------------------------------------
 // Bundle integrity
 test("BL3: the vendored pi-hashline-edit-pro bundle verifies: source tree and the dist copy the adapter loads", () => {

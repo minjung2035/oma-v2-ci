@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./path-view": {
+      "types": "./dist/path-view.d.ts",
+      "default": "./dist/path-view.js"
+    },
     "./seatbelt": {
       "types": "./dist/seatbelt.d.ts",
       "default": "./dist/seatbelt.js"

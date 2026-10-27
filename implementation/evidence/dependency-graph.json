@@ -362,6 +362,7 @@
   "packages/platform-mac/src/mach-transport.ts",
   "packages/platform-mac/src/native-assets.ts",
   "packages/platform-mac/src/native-channel.ts",
+  "packages/platform-mac/src/path-view.ts",
   "packages/platform-mac/src/seatbelt.ts",
   "packages/process/src/async.ts",
   "packages/process/src/coalesced-wake.ts",
@@ -2308,7 +2309,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 147
+   "files": 148
   },
   {
    "index": 5,
@@ -2331,19 +2332,19 @@
    "files": 83
   }
  ],
- "files": 503,
- "runtimeEdges": 1788,
- "typeOnlyEdges": 770,
+ "files": 504,
+ "runtimeEdges": 1791,
+ "typeOnlyEdges": 772,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 453,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 260,
   "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 365,
+  "L4-orchestration -> L1-kernel": 367,
   "L4-orchestration -> L2-facts": 1,
   "L4-orchestration -> L3-workflow": 25,
-  "L4-orchestration -> L4-orchestration": 174,
+  "L4-orchestration -> L4-orchestration": 175,
   "L5-entry -> L1-kernel": 154,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
@@ -2359,7 +2360,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 238,
+  "packages/domain/src/errors.ts": 239,
   "packages/domain/src/identifiers.ts": 84,
   "packages/native/src/cleanup.ts": 41,
   "packages/storage/src/directory.ts": 39,

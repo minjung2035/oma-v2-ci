@@ -4,13 +4,13 @@ import { engineStartEffects } from "./start-effects.js";
 import { residentArgv } from "@oma/platform-linux/sandbox";
 import { sandboxSeccompFilter } from "@oma/platform-linux/sandbox-seccomp";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
-import { SANDBOX_EXECUTABLE, RESIDENT_PATHS, confinedPath } from "@oma/domain/resident-paths";
+import { SANDBOX_EXECUTABLE, residentPathView } from "@oma/domain/resident-paths";
+import { macResidentPathView } from "@oma/platform-mac/path-view";
 import { StoreError } from "@oma/domain/errors";
 export const residentEngineEffects: ResidentEngineEffects = { ...engineStartEffects, sandbox: {
-  pathView: (host, lease, directories) => ({
-    map: path => path === lease.socketHostPath ? RESIDENT_PATHS.socket : confinedPath(host, directories, path),
-    inference: RESIDENT_PATHS.inference, egress: RESIDENT_PATHS.egress,
-  }),
+  pathView: (host, lease, directories, endpoints = {}) => process.platform === "darwin"
+    ? macResidentPathView(host, lease, directories, endpoints)
+    : residentPathView(host, directories, { socket: lease.socketHostPath, ...endpoints }, "mounted"),
   residentPlan(host, lease, directories, environment, inferenceSocket, egressSocket) {
     const argv = residentArgv(host, lease, directories, environment, inferenceSocket, egressSocket);
     if (argv[0] !== "bwrap") throw new StoreError("UNSUPPORTED_PROFILE", "Linux Worker plan has no fixed sandbox executable");

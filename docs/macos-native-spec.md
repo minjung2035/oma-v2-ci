@@ -698,3 +698,27 @@ allow이고 기본 거부이며 IP network는 DR37/46대로 유지한다. actual
 추가해42개 시도를 준비했다. 실제 Mac 실행은 NOT_RUN이고 Worker/check/quarantine의 공통
 PathView와 전체 scope/pin/인증 증거는 미완료다. helper와 target의 정확한 exec 결박도 별도다.
 구현한 TS/최소 OS 경계와 실제 미해결 보장을 구분하며 Mac guard를 해제하지 않는다.
+
+
+### 14.16 공통 PathView와 논리 inbox 구현 — 2026-10-27
+
+공통 PathView 계약이 host→model argv/env와 model→host session 검증을 함께 소유한다.
+mounted/host layout은 같은 root·exact endpoint 표를 사용하며, Mac adapter는 decoded run-root
+lease를 요구하고 물리 경로를 유지한다. Pi spawn의 relay/egress와 runner의 entry 선택, 실제
+세션 boundary의 역변환을 이 표에 연결했다. session root를 Linux 상수로 가정하지 않고,
+생성 이후 caller의 dirs 변경이 역변환을 다른 root로 바꾸지 못하도록 snapshot을 보유한다.
+
+/inbox.md는 sandboxed read의 exact 논리 별칭으로 현재 OMA_BATCH_VIEW/inbox.md를 읽는다.
+검증된 기존 hashline 도구의 public prepareArguments에만 경로 변환을 적용해 schema·anchors·offset/limit·rendering을
+그대로 사용한다. mutation이나 host/Principal의 containment는 변환하지 않으며 / 아래 파일이나
+링크를 만들지 않는다. vendored bytes·public/durable DTO·기존 receipt bytes는 변경하지 않았다.
+현재 native consumer golden에는 두 transient interface만 추가했고 기존 fingerprint는 모두 같다.
+
+공통/실제 file-read 정책29/29와 strict types를 확인했다. 이는 실제 Darwin sandbox/process
+qualification이 아니며 Mac 세 gate와 제품 guard는 유지한다. 목적별 Worker/check/quarantine
+조립과 Linux 후속 실제 실행·최종 구조 검증은 별도다. source별 결과는 validation을 따른다.
+
+후속 실제 Linux scope/Worker 환경을 포함한70/70와 contract mutation7/7을 고정15619개 입력에서
+확인했다. spawn과 session return 사이에도 같은 문자열 view를 사용하도록 adapter에 보유하며
+caller dirs 변경 반례를 거절한다. 이는 liveness/grant/scope cache가 아니다. 전체 구조 검사도
+통과했고 상세 원본/이전 실패와 이후 결과 문서는 validation이 구분한다. 실제 Mac은 별도다.

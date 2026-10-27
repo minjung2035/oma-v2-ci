@@ -4,7 +4,7 @@
  * cannot drift. Kernel layer: pure path policy, no store or broker imports. */
 import { DEPLOYMENT_LAYOUT } from "./deployment.js";
 import { StoreError } from "./errors.js";
-import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
+import type { PathView, SandboxEndpoints, SandboxHost, SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 
 /** The dirname a K0 module may compute: a pure suffix cut, so the kernel zone
  * stays free of platform path capabilities (kernel-external-effect). */
@@ -128,8 +128,9 @@ export function requireResidentRootfs(rootfs: string): void {
 /** Where a Resident's Git reaches the canonical repository (GIT-002). */
 export function residentProjectGit(): string { return RESIDENT_PATHS.projectGit; }
 
-export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): string | null {
-  const prefix = `${RESIDENT_PATHS.sessions}/`;
+export function hostSessionPath(dirs: ResidentDirectories, insidePath: string, sessionRoot: string): string | null {
+  if (!trustedResidentPath(sessionRoot)) return null;
+  const prefix = `${sessionRoot.replace(/\/$/, "")}/`;
   if (!insidePath.startsWith(prefix) || insidePath.includes("\0")) return null;
   const name = insidePath.slice(prefix.length);
   if (name.length === 0 || name.includes("/") || name === "." || name === "..") return null;
@@ -171,5 +172,37 @@ export function confinedPath(host: MountedInstallation, dirs: ResidentDirectorie
     if (hostPath.startsWith(`${host}/`)) return `${inside}${hostPath.slice(host.length)}`;
   }
   throw new StoreError("AUTH_FAILED", "path is outside every mount the confined engine has");
+}
+
+/** The OS adapter selects its display layout. Directory membership and
+ * session validation stay here; there is no kernel or authority observation.
+ * A host layout preserves each admitted physical path, without inventing
+ * mounts at /workspace, /mail or /opt on that operating system. */
+export function residentPathView(host: MountedInstallation, dirs: ResidentDirectories,
+  endpoints: SandboxEndpoints & { readonly socket: string }, layout: "mounted" | "host"): PathView {
+  const directories = { ...dirs };
+  const entries = residentMounts(host, directories).map(([root, mounted]) => {
+    if (!trustedResidentPath(root)) throw new StoreError("AUTH_FAILED", "model view root is invalid");
+    const source = root.replace(/\/$/, "");
+    return [source, layout === "host" ? source : mounted] as const;
+  }).sort(([left], [right]) => right.length - left.length);
+  const files = [[endpoints.socket, RESIDENT_PATHS.socket],
+    ...(endpoints.inference === undefined ? [] : [[endpoints.inference, RESIDENT_PATHS.inference] as const]),
+    ...(endpoints.egress === undefined ? [] : [[endpoints.egress, RESIDENT_PATHS.egress] as const])]
+    .map(([root, mounted]) => {
+      if (!trustedResidentPath(root)) throw new StoreError("AUTH_FAILED", "model endpoint path is invalid");
+      return [root, layout === "host" ? root : mounted] as const;
+    });
+  const map = (hostPath: string): string => {
+    if (!trustedResidentPath(hostPath)) throw new StoreError("AUTH_FAILED", "model path is invalid");
+    for (const [root, inside] of files) if (hostPath === root) return inside;
+    for (const [root, inside] of entries) {
+      if (hostPath === root) return inside;
+      if (hostPath.startsWith(`${root}/`)) return `${inside}${hostPath.slice(root.length)}`;
+    }
+    throw new StoreError("AUTH_FAILED", "path is outside every root the confined engine has");
+  };
+  const sessions = map(directories.sessions.replace(/\/$/, ""));
+  return Object.freeze({ map, sessionPathToHost: (path: string) => hostSessionPath(directories, path, sessions) });
 }
 

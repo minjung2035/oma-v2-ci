@@ -10,7 +10,7 @@ import type {
   ProtocolLimits,
 } from "@oma/contracts";
 import { dirname } from "node:path";
-import { confinedPath, RESIDENT_ENVIRONMENT } from "@oma/domain/resident-paths";
+import { RESIDENT_ENVIRONMENT } from "@oma/domain/resident-paths";
 import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 import type { PiConfinement, PiEgress, PiInference } from "@oma/engine/pi-spawn-plan";
 import { InferenceRelay } from "./runtime/inference-relay.js";
@@ -309,21 +309,26 @@ export class RunnerModule {
         "UNSUPPORTED_PROFILE",
         "a confined Resident runs the shipped engine entry, and this profile declared none",
       );
+    const host = {
+      rootfs: declared.rootfs,
+      libdir: declared.libdir,
+      ...(declared.packages === undefined ? {} : { packages: declared.packages }),
+      node: declared.node,
+      systemBinds: declared.systemBinds,
+      hidden: productSurfaceMasks(declared.libdir),
+      pi: entry,
+      // The adapter replaces this with the engine flags it composes.
+      piModeArgs: [],
+      stateRoot: this.paths.stateRoot!,
+      runRoot: this.paths.runRoot,
+      limits: this.limits,
+    };
+    host.pi = residentEngineEffects.sandbox.pathView(host, this.lease, directories, {
+      ...(inference === undefined ? {} : { inference: inference.socketHostPath }),
+      ...(egress === undefined ? {} : { egress: egress.socketHostPath }),
+    }).map(entry);
     return {
-      host: {
-        rootfs: declared.rootfs,
-        libdir: declared.libdir,
-        ...(declared.packages === undefined ? {} : { packages: declared.packages }),
-        node: declared.node,
-        systemBinds: declared.systemBinds,
-        hidden: productSurfaceMasks(declared.libdir),
-        pi: confinedPath(declared, directories, entry),
-        // The adapter replaces this with the engine flags it composes.
-        piModeArgs: [],
-        stateRoot: this.paths.stateRoot!,
-        runRoot: this.paths.runRoot,
-        limits: this.limits,
-      },
+      host,
       lease: this.lease,
       directories,
       ...(inference === undefined ? {} : { inference }),

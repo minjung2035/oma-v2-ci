@@ -900,11 +900,23 @@
       "apps/oma/src/broker/broker-composition.ts#createBroker",
       "packages/broker/src/run-registry.ts#RunRegistry",
       "packages/storage/src/restic-tar.ts#verifyResticDump",
-      "packages/process/src/restic.ts#ResticProcess.dump"
+      "packages/process/src/restic.ts#ResticProcess.dump",
+      "packages/domain/src/resident-paths.ts#residentPathView",
+      "packages/platform-mac/src/path-view.ts#macResidentPathView",
+      "packages/engine/src/pi-spawn-plan.ts#planPiSpawn",
+      "packages/engine/src/pi-adapter.ts#PiAdapter",
+      "packages/tool-runtime/src/contained-tools.ts#logicalReadPathView",
+      "packages/tool-hashline/src/index.ts#registerHashlineTools"
     ],
     "negativeTests": [
       "test/module-boundaries.test.mjs#DR41: module boundaries reject",
-      "test/module-boundaries.test.mjs#DR44: conversation and native lifecycle boundaries"
+      "test/module-boundaries.test.mjs#DR44: conversation and native lifecycle boundaries",
+      "test/native-path-view.test.mjs#PathView mounted:",
+      "test/native-path-view.test.mjs#PathView host:",
+      "test/native-path-view.test.mjs#PathView policy freezes",
+      "test/native-path-view.test.mjs#Mac PathView adapter requires",
+      "packages/tool-hashline/test/bundle.test.mjs#native logical inbox",
+      "test/resident-confinement.test.ts#PathView policy adapter keeps"
     ]
   },
   {

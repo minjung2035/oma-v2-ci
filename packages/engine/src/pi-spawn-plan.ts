@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RESIDENT_EGRESS_PORT, RESIDENT_INFERENCE_PORT } from "@oma/domain/resident-paths";
 import type { ResidentSandbox, PiSpawnPlan } from "./ports.js";
-import { type SandboxDirectories as ResidentDirectories, type SandboxHost } from "@oma/contracts/runtime";
+import { type SandboxDirectories as ResidentDirectories, type SandboxHost, type PathView as ResidentPathView } from "@oma/contracts/runtime";
 import type { ValidatedRunLease } from "@oma/protocol/run-lease";
 import { StoreError } from "@oma/domain/errors";
 import { storedMailBytes } from "@oma/domain/mail-values";
@@ -252,7 +252,7 @@ function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
 
 /** Every Resident command is wrapped in the sandbox mount plan,
  * with one builder for the argv the engine receives. */
-export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions): PiSpawnPlan {
+export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions, preparedView?: ResidentPathView): PiSpawnPlan {
   if (options.confinement === undefined)
     throw new StoreError("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
   // PR-004/SB-006, the same rule as the Principal's: the model's workspace
@@ -261,7 +261,10 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
   assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView,
     ...(options.paths.piAgentDir === undefined ? [] : [options.paths.piAgentDir])]);
   const confinement = options.confinement;
-  const view = sandbox.pathView(confinement.host, confinement.lease, confinement.directories);
+  const view = preparedView ?? sandbox.pathView(confinement.host, confinement.lease, confinement.directories, {
+    ...(confinement.inference === undefined ? {} : { inference: confinement.inference.socketHostPath }),
+    ...(confinement.egress === undefined ? {} : { egress: confinement.egress.socketHostPath }),
+  });
   const inside: PathView = path => view.map(path);
   // `residentArgv` appends `node pi <piModeArgs>` itself, so the engine flags
   // travel as the host's Pi arguments and the entry is `host.pi`.
@@ -279,7 +282,7 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
     // sandbox, the mount plan is the boundary of its tools (TSP-009).
     [TOOL_SCOPE_ENV]: TOOL_SCOPE_SANDBOX,
     ...(relay === undefined ? {} : {
-      OMA_INFERENCE_SOCKET: view.inference,
+      OMA_INFERENCE_SOCKET: inside(relay.socketHostPath),
       OMA_INFERENCE_PROVIDER: relay.provider,
       OMA_INFERENCE_PORT: String(RESIDENT_INFERENCE_PORT),
       OMA_INFERENCE_KEY: relay.placeholder,
@@ -291,7 +294,7 @@ export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions)
     // the production recipe shares the host network and imposes no
     // namespace-based egress restriction.
     ...(confinement.egress === undefined ? {} : {
-      OMA_EGRESS_PROXY_SOCKET: view.egress,
+      OMA_EGRESS_PROXY_SOCKET: inside(confinement.egress.socketHostPath),
       OMA_EGRESS_PROXY_PORT: String(RESIDENT_EGRESS_PORT),
       HTTP_PROXY: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,
       http_proxy: `http://127.0.0.1:${RESIDENT_EGRESS_PORT}`,

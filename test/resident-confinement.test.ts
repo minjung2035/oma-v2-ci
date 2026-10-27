@@ -301,7 +301,7 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
     assert.ok(!plan.args.some(value => value.includes(f.paths.piAgentDir!)), "the engine home was mounted");
     // With no package store declared, a package's file is under no mount: refused, not handed over.
     assert.throws(() => new PiAdapter(residentEngineEffects, { actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
-      confinement: f.confinement }).spawnPlan(), /outside every mount/);
+      confinement: f.confinement }).spawnPlan(), { code: "AUTH_FAILED", message: "path is outside every root the confined engine has" });
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -431,11 +431,24 @@ test("AV17 / D01, SB-006: a session path the confined engine reports translates 
   const f = fixture();
   try {
     const name = "2026-09-25T10-46-44-816Z_x.jsonl";
-    assert.equal(hostSessionPath(f.dirs, `${RESIDENT_PATHS.sessions}/${name}`), join(f.dirs.sessions, name));
+    assert.equal(hostSessionPath(f.dirs, `${RESIDENT_PATHS.sessions}/${name}`, RESIDENT_PATHS.sessions), join(f.dirs.sessions, name));
     assert.equal(confinedPath({ libdir: f.libdir }, f.dirs, join(f.dirs.sessions, name)), `${RESIDENT_PATHS.sessions}/${name}`, "the two directions disagree");
     for (const other of [`${RESIDENT_PATHS.workspace}/${name}`, `${RESIDENT_PATHS.sessions}/../x.jsonl`, `${RESIDENT_PATHS.sessions}/a/${name}`,
       `${RESIDENT_PATHS.sessions}/`, `${RESIDENT_PATHS.sessions}`, join(f.dirs.sessions, name), "/run/oma-sessionsX/x.jsonl"])
-      assert.equal(hostSessionPath(f.dirs, other), null, other);
+      assert.equal(hostSessionPath(f.dirs, other, RESIDENT_PATHS.sessions), null, other);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("PathView policy adapter keeps the issued spawn view for the returned session boundary", () => {
+  const f = fixture();
+  try {
+    const original = f.dirs.sessions;
+    f.adapter.spawnPlan();
+    f.dirs.sessions = join(f.root, "different-session-root");
+    const boundary = { batchId: "batch", incarnation: 1, sessionPath: `${RESIDENT_PATHS.sessions}/session.jsonl`,
+      entryId: "entry", adapterRevision: "revision" };
+    const adapter = f.adapter as unknown as { hostBoundary(value: typeof boundary): typeof boundary | null };
+    assert.equal(adapter.hostBoundary(boundary)?.sessionPath, join(original, "session.jsonl"));
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 

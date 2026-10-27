@@ -50,6 +50,15 @@ export type ResidentLogObservation = { readonly kind: "entry"; readonly entry: R
 
 export interface SandboxPlan { argv: readonly string[]; env: Readonly<Record<string,string>>; inheritedFds: readonly number[] }
 
+/** Transient model view, never a durable identity or execution capability.
+ * Host paths enter argv/env through one mapping; reported sessions leave
+ * through its matching reverse mapping. */
+export interface PathView {
+  map(hostPath: string): string;
+  sessionPathToHost(enginePath: string): string | null;
+}
+export interface SandboxEndpoints { readonly inference?: string; readonly egress?: string }
+
 
 
 /** Absolute host paths supplied by validated composition, never by IPC DTOs. */

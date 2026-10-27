@@ -10,10 +10,10 @@ import { CLI_OBSERVATION_SECONDS } from "@oma/domain/limits";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX } from "@oma/protocol/delivery-boundary";
 import { type DeliveryBoundary } from "@oma/contracts";
+import type { PathView } from "@oma/contracts/runtime";
 import type { ResidentEngineEffects } from "./ports.js";
 import { PiRpcClient, alarm, assertPiRpcLimits, type PiEvent, type Timer } from "./pi-rpc.js";
 import { planPiSpawn, type PiAdapterOptions, type PiSpawnPlan } from "./pi-spawn-plan.js";
-import { hostSessionPath } from "@oma/domain/resident-paths";
 import { preparePiRetry } from "./pi-runtime.js";
 
 function failure(
@@ -156,6 +156,7 @@ export interface DeliveryHooks {
 }
 
 export class PiAdapter {
+  private issuedView: PathView | undefined;
   constructor(private readonly effects: ResidentEngineEffects, private readonly options: PiAdapterOptions) {
     if (options.confinement === undefined)
       throw failure("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
@@ -189,16 +190,24 @@ export class PiAdapter {
    * plan that can only be observed by running it cannot be checked.
    */
   spawnPlan(): PiSpawnPlan {
-    return planPiSpawn(this.effects.sandbox, this.options);
+    return planPiSpawn(this.effects.sandbox, this.options, this.pathView());
+  }
+  /** One immutable path recipe for this adapter's argv and session return.
+   * This holds no liveness/grant observation; those owners still recheck. */
+  private pathView(): PathView {
+    const confinement = this.options.confinement;
+    return this.issuedView ??= this.effects.sandbox.pathView(confinement.host, confinement.lease, confinement.directories, {
+      ...(confinement.inference === undefined ? {} : { inference: confinement.inference.socketHostPath }),
+      ...(confinement.egress === undefined ? {} : { egress: confinement.egress.socketHostPath }),
+    });
   }
   /** AV17: a confined engine reports its session file by the sandbox's view of
    * it; the receipt the trusted runner publishes names it by its host path
    * (D01, SB-006). A boundary whose session path is not a file of this
    * Resident's session mount is no boundary. */
   private hostBoundary(boundary: DeliveryBoundary | null): DeliveryBoundary | null {
-    const confinement = this.options.confinement;
     if (boundary === null) return null;
-    const sessionPath = hostSessionPath(confinement.directories, boundary.sessionPath);
+    const sessionPath = this.pathView().sessionPathToHost(boundary.sessionPath);
     return sessionPath === null ? null : { ...boundary, sessionPath };
   }
   /** null is a deliberate wait after persisted tools, never delivery success. */

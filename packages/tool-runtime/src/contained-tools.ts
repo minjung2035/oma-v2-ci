@@ -13,7 +13,7 @@
  * not narrowed (SB-001: the mount plan is the boundary), so only write and
  * edit are replaced there.
  */
-import { dirname } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
   createEditToolDefinition, createFindToolDefinition, createGrepToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
   detectSupportedImageMimeTypeFromFile, type ExtensionAPI,
@@ -23,6 +23,17 @@ import {
 } from "@oma/tool-files";
 import { searchWorkspace } from "./contained-search.js";
 import { admittedRoot } from "./workspace-guard.js";
+
+/** /inbox.md is a logical product input. Native host layouts have no mount
+ * there. Translate only that exact read alias; writes and host/Principal
+ * admission keep their existing boundaries. Capture the trusted view now. */
+export function logicalReadPathView(sandboxed: boolean, batchView?: string): (path: string) => string {
+  if (!sandboxed || batchView === undefined) return path => path;
+  if (!isAbsolute(batchView) || batchView === "/" || batchView.includes("\0") || resolve(batchView) !== batchView)
+    throw new WorkspaceRefusal("batch read view must be a normalized non-root absolute path");
+  const inbox = join(batchView, "inbox.md");
+  return path => path === "/inbox.md" ? inbox : path;
+}
 
 /** The serialized, contained workspace writer the contained `write`
  * and `edit` tools share -- exposed so a registered tool whose mutation

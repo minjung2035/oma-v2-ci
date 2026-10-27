@@ -1,6 +1,15 @@
 # OMA v2 — 현재 인계
 
-## 현재: Mac 파일·Seatbelt 실행 어댑터 구현 진행
+## 현재: 공통 PathView·논리 inbox 후속 구현
+
+`e4a74b54`의 파일/Seatbelt 구현을 작업 브랜치에 push했다. 후속 PathView는 두 layout의
+argv/env/relay/entry와 session 역변환을 연결하고 exact /inbox.md를 기존 hashline read로
+전달한다. 현재 정책/일반 read29/29 뒤 관련 실제 Linux70/70·contract mutation7/7, full build와 전체 구조 검사를 확인했다. 입력/보호 SHA 전후 동일이며 원본과 source별 범위는 validation을 따른다.
+Mac purpose별 조립·scope/pin/exact exec 보장과 실제42개 Darwin 시도는 미완료/NOT_RUN이다.
+Native40420671166·Architecture40420671129의7개 job도 steps/logs null·artifact 없음으로
+실행 전 실패했다. 원인은 미확정이고 이 외부 조건 때문에 가능한 source 구현을 중단하지 않는다.
+
+## 앞선 Mac 파일·Seatbelt 실행 어댑터 구현
 
 Mac adapter가 XNU에서 EINVAL인 두 no-follow flag를 함께 전달하던 결함을 수리했다. 강한
 ANY/BENEATH/CLOEXEC를 유지하고 일반 file과 중간/최종 symlink 실제 회귀를 추가했다.

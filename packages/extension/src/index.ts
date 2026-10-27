@@ -18,7 +18,7 @@ import { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV }
 import { registerPromptBoundary } from "./prompt-boundary.js";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
-import { containWorkspaceTools, createContainedWriter } from "@oma/tool-runtime/contained-tools";
+import { containWorkspaceTools, createContainedWriter, logicalReadPathView } from "@oma/tool-runtime/contained-tools";
 import { registerLspTools } from "@oma/tool-lsp";
 import { registerHashlineTools } from "@oma/tool-hashline";
 import { registerWebTools } from "@oma/tool-web";
@@ -91,6 +91,7 @@ export default async function extension(pi: ExtensionAPI) {
     sandboxed,
     readOnly: channel.attached,
     write: workspaceWriter,
+    readPath: logicalReadPathView(sandboxed, process.env.OMA_BATCH_VIEW),
   });
   // BL4: the bundled pi-web-access extension -- same fail-closed bundle
   // verification before any vendored module evaluates. The adapter

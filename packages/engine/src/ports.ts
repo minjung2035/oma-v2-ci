@@ -1,5 +1,5 @@
 import type { VerifiedExtension } from "@oma/contracts/assets";
-import type { SandboxDirectories, SandboxHost } from "@oma/contracts/runtime";
+import type { PathView, SandboxDirectories, SandboxEndpoints, SandboxHost } from "@oma/contracts/runtime";
 import type { ValidatedRunLease } from "@oma/protocol/run-lease";
 import type { EngineSettingsFiles } from "./pi-compat/settings-files.js";
 export interface EngineStartEffects {
@@ -11,9 +11,7 @@ export interface PiSpawnPlan {
   readonly input?: Uint8Array;
 }
 export interface ResidentSandbox {
-  pathView(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories): {
-    map(path: string): string; readonly inference: string; readonly egress: string;
-  };
+  pathView(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories, endpoints?: SandboxEndpoints): PathView;
   residentPlan(host: SandboxHost, lease: ValidatedRunLease, directories: SandboxDirectories,
     environment: Readonly<Record<string, string>>, inferenceSocket?: string, egressSocket?: string): PiSpawnPlan;
   spawn(plan: PiSpawnPlan): import("@oma/process/async").ChildProcessWithoutNullStreams;

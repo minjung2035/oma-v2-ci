@@ -100,6 +100,9 @@ export interface HashlineToolOptions {
   /** Where upstream's state files land — defaults to
    * `<sessionDir>/hashline` under the engine's own session directory. */
   readonly stateDir?: string | undefined;
+  /** Trusted model-view alias translation, applied only to sandboxed reads.
+   * Mutation paths and the host contained opener never use this port. */
+  readonly readPath?: ((path: string) => string) | undefined;
 }
 
 /** The subset of the verified vendored runtime this module calls, loaded
@@ -299,7 +302,21 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
   // Upstream's tool registrations — OMA's subset only. `read` replaces the
   // contained read under the same name (last registration wins); the three
   // file_edit members exist only where the role may write.
-  vendored.regRead(pi);
+  if (options.sandboxed && options.readPath !== undefined) {
+    const readPath = options.readPath;
+    const registration = Object.create(pi) as ExtensionAPI;
+    registration.registerTool = tool => {
+      if (tool.name !== HASHLINE_READ_TOOL_NAME) { pi.registerTool(tool); return; }
+      const prepare = tool.prepareArguments;
+      pi.registerTool({ ...tool, prepareArguments: args => {
+        const params = prepare === undefined ? args : prepare(args);
+        const named = params as { path?: unknown } | null | undefined;
+        const translated = typeof named?.path === "string" ? { ...named, path: readPath(named.path) } : params;
+        return translated as ReturnType<NonNullable<typeof tool.prepareArguments>>;
+      } });
+    };
+    vendored.regRead(registration);
+  } else vendored.regRead(pi);
   if (!options.readOnly) {
     vendored.regReplace(pi);
     vendored.regReplaceWithin(pi);

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "e59d60e4abf0cd492bc700edde240741902d85d3ba6a6238adbd7bb4cee096c7",
+  "manifest": "115cb55203343e42c7bdc36bdffc9ddbf72c09da80d8ea8661a1d8eb535a71e3",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -224,7 +224,7 @@
     },
     {
       "path": "apps/oma/src/engine/resident-effects.ts",
-      "sha256": "61dff7ca65d43fc5c18cdeb932ad6223069305b88123f9595227c6f5fb64615c"
+      "sha256": "658d6279ef5a1467f337977d98bd1f73522ff80a845843b80c09e9f1961541ad"
     },
     {
       "path": "apps/oma/src/engine/settings-files.ts",
@@ -304,7 +304,7 @@
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "362dd34f67fe599ed6a0a7a5ea271252bf56d7ad8aafad6e603aa2202635230a"
+      "sha256": "1d2d685d28d4bc9ba360a6ea63216792d0a2a4e2f931f1267cb45bc043e77f22"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",
@@ -672,7 +672,7 @@
     },
     {
       "path": "packages/contracts/src/runtime.ts",
-      "sha256": "d70bba6c9e76046a1bc48e056815c5aa7372e01c74f85f5f9c29be72bb974e99"
+      "sha256": "6a1a67befd1627cc40ce30b02ed3cfb3e830273dda7ce47b0cb5c824bece760c"
     },
     {
       "path": "packages/contracts/src/stream.ts",
@@ -832,7 +832,7 @@
     },
     {
       "path": "packages/domain/src/resident-paths.ts",
-      "sha256": "3e5a1a45d4d08673d9cc7e5697772b3fed44c661f14108bcefec68f5c4e90976"
+      "sha256": "fb6b16fd03a5407e3c98d5e906dcf394f041609c666cbfe65913cba4ca958aaa"
     },
     {
       "path": "packages/domain/src/review-bounds.ts",
@@ -1000,7 +1000,7 @@
     },
     {
       "path": "packages/engine/src/pi-adapter.ts",
-      "sha256": "3030a952704d855c80de574cd000d917e6323b40eb923626cb207e9259db358a"
+      "sha256": "9f2cd70c10a1794094c539e9bd7e6e5b5ea979290ba4e5dbaeaf186e5fbd801f"
     },
     {
       "path": "packages/engine/src/pi-compat/commands.ts",
@@ -1080,11 +1080,11 @@
     },
     {
       "path": "packages/engine/src/pi-spawn-plan.ts",
-      "sha256": "4ed56fe159fa44d8829afed5b16a2b1c113d2a333d516a47761fa09b00183516"
+      "sha256": "70a0b231ecb5c8f55c8b0e623e3a8227110bcd61fd74c569aeacd068832f6e8d"
     },
     {
       "path": "packages/engine/src/ports.ts",
-      "sha256": "14aee405a8d20c3174f731c57b6fa5168a03c6d961ebda3141c8a1b0a6c1372f"
+      "sha256": "b56693b6f16c497a32cacab466a23fabe4394c84056cd8078ccd3debce4d34d1"
     },
     {
       "path": "packages/engine/src/presentation.ts",
@@ -1128,7 +1128,7 @@
     },
     {
       "path": "packages/extension/src/index.ts",
-      "sha256": "189e4dcfaed76bf7fe08b68e184ba6f4fd700b05fc8ef7ad36a90a821f6404e8"
+      "sha256": "1211e2a47c1222b9d0f98cb2b4d09f9cc9a435eaec4470a147a0c97877405a80"
     },
     {
       "path": "packages/extension/src/inference-bridge.ts",
@@ -1480,7 +1480,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "4cc1680ac3cac346681ee12c84543ba3fcc49ef1326a721c4196b89290884508"
+      "sha256": "1fad7d4f3370296596973411c6237f0ee21ae5f75418e697444e51357381790f"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1517,6 +1517,10 @@
     {
       "path": "packages/platform-mac/src/native-channel.ts",
       "sha256": "292288ad261f481c8bffae599f0853e693fed46a40ec11ed137d4758922e82c3"
+    },
+    {
+      "path": "packages/platform-mac/src/path-view.ts",
+      "sha256": "9e95f3efdbd763a641c68bef386a4abe30abfd6e06252de784a96e3b62d521a0"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
@@ -1964,7 +1968,7 @@
     },
     {
       "path": "packages/tool-hashline/src/index.ts",
-      "sha256": "fa980774edd1748afdf39a784ab5edabb6e12b8d4fffaebd76ddeafed3ecf693"
+      "sha256": "607dd231d59ca5eaff7f8f028ed03d9bcf053f03e6efb77026d7f8c940544ab9"
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE",
@@ -14656,7 +14660,7 @@
     },
     {
       "path": "packages/tool-runtime/src/contained-tools.ts",
-      "sha256": "635450d22a7cfdbf1a6b7f33b0ea14613529f071409ec788398ac5323fa9b070"
+      "sha256": "1a48d59eaad26fd7806dde40df45fdf8a21d8d0615ba3201d390ba824251d588"
     },
     {
       "path": "packages/tool-runtime/src/provenance.ts",

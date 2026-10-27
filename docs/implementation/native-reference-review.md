@@ -313,3 +313,20 @@ scope는 여전히 G-FILES/G-PROCESS의 별도 미완료 조건이다.
 262144-byte 초과 profile와 별도 stdin의 두 case를 각각3회 추가했다. 총42개 시도이며 새6개를
 포함한 최신 실제 Mac 실행은 NOT_RUN이다. compiler/TS 정책 시험을 실제 격리 성공이나 제품
 지원으로 승격하지 않는다. 공통 PathView와 목적별 Worker/check/quarantine 조립도 별도로 남는다.
+
+
+## 공통 PathView와 Pi read 별칭의 적용
+
+PathView는 두 OS의 업무 구현을 만들지 않고 같은 TypeScript root/endpoint 표의 layout만
+선택한다. Pi argv/env·relay socket·entry와 session 역변환이 이 표를 쓰며, 역변환 root의 caller
+변경 반례는3/4에서 실패시킨 뒤 immutable snapshot으로 수리했다. 최초 시험 문법 오류도
+raw에 보존했고 그 실패를 의미 반례로 세지 않는다.
+
+설치된 고정 Pi1.0.1의 examples/extensions/tool-override.ts와 실제 vendored regRead의
+registerTool/execute 형태를 대조했다. 새 파일 reader나 vendor patch를 만들지 않고 trusted
+registration facade의 public prepareArguments에서 exact /inbox.md 입력만 실제 batch-view file로 전달한다.
+원래 normalizer를 먼저 실행하며 execute handler는 직접 호출하지 않고 Pi의 검증/dispatch에 남긴다. 기존 anchored
+reader의 schema·이미지/encoding 처리·offset/limit·출력을 유지한다. 이 선택은 공개 SDK의
+등록 API와 pinned 구현을 사용하며 private extension registry를 읽거나 바꾸지 않는다.
+역변환/별칭은 TS 정책과 실제 일반 파일 read의 증거이며 Mac kernel 사실의 mock이 아니다.
+`/home/dev/oma-audit-artifacts/native-2026-10-27-path-view/`가 원시 결과를 소유한다.
