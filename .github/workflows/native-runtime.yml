@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         # macOS is an explicit paid run; ordinary source pushes use Linux.
-        os: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
+        os: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_darwin) || github.event_name == 'push' && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -104,7 +104,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   darwin-gates:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
     strategy:
       fail-fast: false
       matrix:
