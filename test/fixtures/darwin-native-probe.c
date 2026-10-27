@@ -52,6 +52,7 @@ _Static_assert(AT_SYMLINK_NOFOLLOW == 0x20, "stat no-follow flag");
 static void require(int condition, const char *label) {
   if (!condition) { perror(label); exit(2); }
 }
+#include "descriptor-capabilities.h"
 static void process_probe(void) {
   int queue = kqueue(); require(queue >= 0, "kqueue");
   struct kevent change, answer;
@@ -274,11 +275,12 @@ static void queued_auth_probe(void) {
   require(waitpid(holder, NULL, 0) == holder, "queued holder reap");
 }
 int main(int argc, char **argv) {
-  const char *names[] = { "process", "files", "auth", "socket-transfer", "queued-transfer" };
+  if (descriptor_exec_target(argc, argv)) return 0;
+  const char *names[] = { "process", "files", "auth", "socket-transfer", "queued-transfer", "file-descriptors" };
   void (*probes[])(void) = { process_probe, file_probe, auth_probe, transferred_auth_probe, queued_auth_probe };
   require(argc == 2, "one independent probe case required");
   int selected = -1;
-  for (int i = 0; i < 5; ++i) if (strcmp(argv[1], names[i]) == 0) selected = i;
+  for (int i = 0; i < 6; ++i) if (strcmp(argv[1], names[i]) == 0) selected = i;
   require(selected >= 0, "unknown probe case");
   setbuf(stdout, NULL);
   if (selected == 1) {
@@ -287,5 +289,6 @@ int main(int argc, char **argv) {
   }
   printf("{\"case\":\"%s\"", names[selected]);
   if (selected == 0) putchar(',');
-  probes[selected](); puts("}"); return 0;
+  if (selected == 5) descriptor_capabilities_probe(argv[0]); else probes[selected]();
+  puts("}"); return 0;
 }

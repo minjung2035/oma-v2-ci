@@ -10,20 +10,33 @@ import { DARWIN_PROGRAMS, DARWIN_CASE_REPETITIONS, DARWIN_PROCESS_TIMEOUT_MS,
   darwinCasePlan, darwinDriverBudgetSeconds, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+// Record grammar only: these are parser inputs, never kernel observations.
+const descriptorRecord = () => ({ platform: "darwin",
+  devFd: { attempted: true, openReturn: -1, openErrno: 13, sameInode: null, closeOnExec: null,
+    accessMode: null, sourceBefore: null, sourceAfter: null, duplicateBefore: null, duplicateAfter: null },
+  fileport: { available: false, makeportReturn: null, makeportErrno: null,
+    duplicate: { attempted: false, openReturn: null, openErrno: null, sameInode: null, closeOnExec: null,
+      accessMode: null, sourceBefore: null, sourceAfter: null, duplicateBefore: null, duplicateAfter: null } },
+  namespace: { heldAfterSwap: true, namedIsReplacement: true, heldAfterUnlink: true },
+  exec: { direct: { execErrno: null, exitCode: 0, signal: null, reply: "original" },
+    fdBeforeSwap: { execErrno: 13, exitCode: 125, signal: null, reply: "exec-error" },
+    namedAfterSwap: { execErrno: null, exitCode: 0, signal: null, reply: "replacement" },
+    fdAfterSwap: { execErrno: 13, exitCode: 125, signal: null, reply: "exec-error" },
+    fdAfterUnlink: { execErrno: 13, exitCode: 125, signal: null, reply: "exec-error" } } });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
-  observations: { [observation]: { fixtureAssertionReturned: true } } }));
+  observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: required independent cases keep three attempts and explicit ownership", () => {
   assert.equal(DARWIN_CASE_REPETITIONS, 3);
   assert.equal(DARWIN_PROCESS_TIMEOUT_MS, 120000);
-  const required = ["process", "files", "auth", "socket-transfer", "queued-transfer", "mach-self", "mach-rendezvous-live",
+  const required = ["process", "files", "auth", "socket-transfer", "queued-transfer", "file-descriptors", "mach-self", "mach-rendezvous-live",
     "mach-rendezvous-exit", "mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async",
     "seatbelt-files", "seatbelt-profile-stream", "seatbelt-profile-header", "seatbelt-profile-magic", "seatbelt-profile-overflow",
     "seatbelt-profile-truncated", "seatbelt-profile-trailing", "seatbelt-profile-nul", "seatbelt-profile-empty",
     "seatbelt-profile-syntax", "seatbelt-argv-env", "seatbelt-trusted-preload", "seatbelt-stdin-profile", "seatbelt-fd-close", "seatbelt-ipc-denial", "seatbelt-kept-fds", "git-setup-candidate", "git-setup-quarantine", "worker-bootstrap", "worker-tools"];
   const plan = darwinCasePlan();
-  assert.equal(plan.length, 96);
+  assert.equal(plan.length, 99);
   assert.deepEqual([...new Set(plan.map(row => row.name))].sort(), required.sort());
   assert.equal(new Set(plan.map(row => `${row.name}:${row.iteration}`)).size, plan.length);
   for (const name of required) assert.deepEqual(plan.filter(row => row.name === name).map(row => row.iteration), [0, 1, 2]);
@@ -63,7 +76,7 @@ for (const [name, change] of [
 test("NATIVE-DARWIN: failed attempts remain explicit failures, never observations", () => {
   const list = rows(); list[0] = { ...darwinCasePlan()[0], execution: "NOT_RUN", status: "SETUP_FAILED", error: "SDK unavailable" };
   assert.doesNotThrow(() => validateDarwinCaseSet(list));
-  assert.equal(list.filter(row => row.status === "OBSERVED").length, 95);
+  assert.equal(list.filter(row => row.status === "OBSERVED").length, 98);
   for (const value of [null, [], "completed", true, 0, {}])
     assert.throws(() => validateDarwinObservation("process", { process: value }));
   assert.throws(() => validateDarwinObservation("unknown", { process: { returned: true } }));
@@ -99,7 +112,7 @@ if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refus
     const result = JSON.parse(readFileSync(join(out, "result.json"), "utf8"));
     assert.equal(result.provenance.platform, "linux"); assert.equal(result.status, "SETUP_FAILED");
     assert.match(result.error, /require a real Darwin kernel/);
-    assert.deepEqual(result.summary, { required: 96, observed: 0, executed: 0, notRun: 96, productQualification: "BLOCKED" });
+    assert.deepEqual(result.summary, { required: 99, observed: 0, executed: 0, notRun: 99, productQualification: "BLOCKED" });
     assert.equal(result.compilations.length, DARWIN_PROGRAMS.length);
     assert.ok(result.compilations.every(row => row.status === "NOT_RUN"));
     validateDarwinCaseSet(result.cases);
@@ -156,4 +169,5 @@ test("NATIVE-DARWIN: common CI builds the root test fixtures before their consum
   assert.ok(build < common.indexOf("if ! node --test "));
   assert.match(common, /test\/mac-worker-plan\.test\.mjs/);
   assert.match(common, /test\/native-resident-launch-data\.test\.mjs/);
+  assert.match(common, /test\/descriptor-capabilities\.test\.mjs/);
 });

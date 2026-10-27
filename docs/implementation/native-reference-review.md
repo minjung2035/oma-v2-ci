@@ -400,3 +400,24 @@ npm/자체 script·native build fixture를 구분한다. Darwin OS별96회는 �
 production preload의 native guard도 유지한다. 이 guard가 거절하면 fixture도 실패해야 한다.
 새 code recipe가 full Mac bootstrap 성공 또는 G-PROCESS/G-FILES/G-AUTH를 증명하지 않는다.
 §11 config version 경계·실제 Mac 관측·Homebrew dylib와 최종 qualification은 남는다.
+
+
+### 2026-10-27: fileport와 FD 재열기·실행을 구분하는 관측
+
+[고정 Apple fileport 계약](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/man/man2/fileport_makeport.2)과
+[공개 SDK 선언](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/fileport.h)을 대조했다.
+이 API는 기존 open file description을 공유한다. `dup`와 같은 공유와 독립 cursor 재열기,
+정확한 executable 선택은 서로 다른 성질이다. [Chromium의 고정 Mach channel 구현](https://chromium.googlesource.com/chromium/src/+/dd480bc4ba0e1b21392f4b5365f77e0182dd3eef/mojo/core/channel_mac.cc)도
+FD의 fileport 전달을 사용하지만 OMA의 mode-000 pin·독립 재열기·정확한 exec 보장을 대신하지 않는다.
+
+새 `file-descriptors` case는 실제 `/dev/fd` open과 fileport의 errno·inode·flags·원본/복제 cursor를
+각각 기록한다. 별도 private executable copy의 보유 FD·이름 교체·unlink 뒤 실제 exec를 관측하며,
+원래 image와 교체 image가 서로 다른 표식을 private reply pipe로 보내고 각 자식을 waitpid로
+회수한다. exit0 하나를 정확한 image의 증거로 쓰지 않는다. SDK에 fileport 선언이 없거나 생성이
+실패한 경우 다음 연산은 attempted=false/null로 남기고 성공 사실을 만들어내지 않는다.
+
+실제 Linux의 portable oracle은 같은 C helper로 inode/cursor와 원본/교체 image 대조군을
+검사한다. 이 Linux 결과를 Darwin record로 넣으면 거절한다. 새 Darwin record는 닫힌 필드와
+실제 종료·exec errno·표식·미시도 상태의 일관성을 검사한다. program/budget은 기존 baseline에
+case 하나를 더해 총33종×3회, OS별99회이며 기존240분 ceiling 안에 모든 child 상한과
+setup/upload 상한이 들어간다. 실제 Darwin 실행은 전부 NOT_RUN이고 세 gate는 OPEN이다.

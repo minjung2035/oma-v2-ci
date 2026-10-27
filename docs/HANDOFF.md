@@ -1,6 +1,22 @@
 # OMA v2 — 현재 인계
 
-## 현재: HostConfig 4와 Linux private 실행 배치 전환
+## 현재: FD 재열기·정확한 실행의 실제 Darwin 관측 준비
+
+기존 file probe의 held root 관측만으로 독립 cursor와 exact exec를 가정하지 않는다.
+새 file-descriptors case와 같은 C helper의 실제 POSIX oracle을 구현했다. 원래/교체 image의
+다른 표식, 이름 swap/unlink 뒤 held FD alias 실행, inode/flags/offset/errno와 미시도 상태를
+구분한다. Linux 결과의 Darwin 재분류와 불완전·모순된 record는 거절한다.
+
+required matrix는33종×3회·OS별99회이며240분 job budget은 유지했다. Mac 전체 NOT_RUN,
+G-PROCESS/G-FILES/G-AUTH와 제품 guard는 유지한다. 유료 Mac CI는 실행하지 않는다.
+고정 runtime 입력 `ead1b9960c28b0a8ef0bd2eaf8bead7f883763099aa28d6c57dcd71fea3c099e`(15656개)의
+literal common CI225/225·정책35/35·전체 구조 검사가 통과했다. fail/cancel/skip/todo0,
+입력/빌드 산출물/보호4개 전후 동일이다. 실제 C mutant3개는 같은 oracle consumer가 거절했다.
+결과 기록 뒤 문서 입력과 실제 커밋/푸시는 validation과 native-2026-10-27-file-descriptors/의
+final-documentation-post-format/·main-result.json을 따른다. runtime 결과를 새 문서 입력에 재결박하지 않는다.
+이전 Config4 입력의 전체 Linux3896/3896·packed26/26은 아래 당시 입력의 결과다.
+
+## 직전: HostConfig 4와 Linux private 실행 배치 전환
 
 HostConfig 4는 rootfs/mount/backend 설정을 받지 않는다. SandboxHost·RunnerConfinement·GitPaths의
 Linux 필드도 제거했고 Linux adapter가 state root 아래 rootfs와 검증한 system mount를 선택한다.

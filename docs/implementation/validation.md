@@ -318,11 +318,48 @@ raw root는 `/home/dev/oma-audit-artifacts/native-2026-10-27-config-format/`다.
 PASS가 아니다. Darwin32종×3회, OS별96회는 NOT_RUN이고 세 native gate와 Mac 제품 guard는
 유지한다. 유료 Mac CI 실행과 master 병합·배포는 하지 않았다.
 
+## FD capability의 실제 관측 준비 — 2026-10-27
+
+Darwin baseline에 file-descriptors case를 추가했다. `/dev/fd` open과 public fileport를 독립
+cursor 재열기·정확한 exec로 가정하지 않고 inode·flags·원본/복제 cursor·errno·미시도 값을
+관측한다. 실제 private image와 교체 image는 서로 다른 표식을 reply pipe로 보내고 자식은
+waitpid로 회수한다. linked/rename/unlink 상태의 FD alias 실행과 이름 교체 대조군을 구분한다.
+SDK header/API 부재를 성공으로 채우지 않으며 exit0 하나를 원래 image의 실행으로 해석하지 않는다.
+
+소비자 조립 후 runtime 입력 `76483eecaa1990b0562c2cd21b86567b4aaeaa694d0a218eb7b084d0ccb3f05b`(15656개)에서
+CI에 적힌 그대로의 공통 Node 명령225/225·검증 정책35/35·전체 구조 검사 PASS다.
+각 실행은 fail/cancel/skip/todo0이며 입력·26 workspace의빌드 산출물15400개와 보호4개 SHA가
+전후 같다. 실제 Linux UID1000·CapEff0·Node26·pinned bwrap overlay다. C helper의Linux 관측은
+Darwin 실행으로 집계하지 않는다. 실제 common log에 inode/flags/offset/exec 표식 원문을 남겼다.
+처음3b2d281b…의225/225·35/35 결과도 별도로 보존하며 합산하지 않는다.
+
+실제 disposable C source 변형3개를 컴파일·실행했다. FD alias를 교체된 이름으로 바꾸는 변형과
+독립 open을 dup으로 바꾸는 변형은 producer가0으로 끝나도 실제 CI와 같은 oracle consumer가
+거절했다. 표식 없이0으로 끝나는 image는 native positive control에서 거절했고 partial record도
+consumer가 거절했다. 동일 canonical header SHA의positive 실행과 mutant SHA/원시 exit/stdio를
+negative-controls/에 보존한다. OS/PID/scope 사실은 대체하지 않았다.
+
+원시 root는 `/home/dev/oma-audit-artifacts/native-2026-10-27-file-descriptors/`다.
+checks-final/summary.json·final-runtime-counts.json과 negative-controls/consumer-results.json이
+각 입력·실행·반례의 범위를 소유한다. 결과 기록 뒤 문서 입력은 final-documentation/의별도
+구조 검사로 결박한다. authored production은 이 변경에서 바꾸지 않았으며 이전 전체 Linux
+3896/3896·packed26/26을 새 검증 입력에 재결박하지 않는다.
+
+required Darwin은33종×3회·OS별99회, 전부 NOT_RUN이다. 기존240분 budget은 유지했고
+유료 Mac CI 실행·master 병합·배포는 하지 않았다. G-PROCESS/G-FILES/G-AUTH는 계속 OPEN,
+product guard는 그대로다. 이는 Mac implementation/qualification 완료가 아니다.
+
+게시 전 공백 검사에서 새 테스트 EOF의추가 LF 한 개를 제거했다. 본문은 동일하며 거절 원문과
+bytes 관계는 candidate-guard-failure.json에 보존한다. 최종 runtime 입력
+`ead1b9960c28b0a8ef0bd2eaf8bead7f883763099aa28d6c57dcd71fea3c099e`(15656개)의공통225/225·정책35/35·전체 구조 검사도
+PASS, 전후 입력/빌드 산출물/보호4개 동일이다. checks-post-format/과 post-format-runtime-counts.json이
+소유하며 최종 문서 구조 입력은 final-documentation-post-format/에서 별도로 검사한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `8b455786a1b97f13e910c2c48f154f4281c93a9cc7d7cb2efa2ab08338dd45da` (15651 files).
+verification input digest `0f817fbc7f38010eea62e60afeed8fc1f9bc6f915a57aa2d2e330a8c683fc92a` (15656 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

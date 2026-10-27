@@ -1,11 +1,12 @@
 /** Required real-Darwin observations. This manifest grants no kernel support;
  * missing, failed or unexecuted rows can never become completed observations. */
+import { validateDescriptorCapabilityObservation } from "./descriptor-capability-observation.mjs";
 export const DARWIN_CASE_REPETITIONS = 3;
 export const DARWIN_PROCESS_TIMEOUT_MS = 120000;
 const program = row => Object.freeze({ ...row, names: Object.freeze(row.names), link: Object.freeze(row.link ?? []) });
 export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "baseline", fixture: "darwin-native-probe.c", digest: "probeDigest", compile: "compile",
-    names: ["process", "files", "auth", "socket-transfer", "queued-transfer"] }),
+    names: ["process", "files", "auth", "socket-transfer", "queued-transfer", "file-descriptors"] }),
   program({ name: "mach", fixture: "darwin-mach-probe.c", digest: "machProbeDigest", compile: "compile-mach",
     names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit"], link: ["-lbsm"] }),
   program({ name: "mach-stream", fixture: "darwin-mach-stream.mjs", digest: "machStreamProbeDigest", compile: "check-mach-stream", node: true,
@@ -21,7 +22,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
     names: ["worker-bootstrap", "worker-tools"] }),
 ]);
-const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer",
+const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer", "file-descriptors": "fileDescriptors",
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
   "mach-stream-roundtrip": "machStream", "mach-stream-stale": "machStaleOrigin", "mach-stream-handoff": "machLiveHandoff", "mach-audit-async": "machAsyncAudit",
   "seatbelt-files": "seatbelt", "seatbelt-profile-stream": "seatbelt",
@@ -46,6 +47,10 @@ export function validateDarwinObservation(name, observations) {
   const value = observations[expected.observation];
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0)
     throw new Error("probe observation is empty or malformed");
+  if (name === "file-descriptors") {
+    validateDescriptorCapabilityObservation(value);
+    if (value.platform !== "darwin") throw new Error("descriptor observation did not run on Darwin");
+  }
 }
 export function validateDarwinCaseSet(cases) {
   const expected = new Map(darwinCasePlan().map(row => [`${row.name}:${row.iteration}`, row]));

@@ -940,3 +940,25 @@ fail/cancel/skip/todo0)를 확인했다. 전후 입력과 보호4개가 같다. 
 독립 packed install26/26은44bcdcbc…의별도 결과다. 이후 package source를 바꾸지 않았으며
 과거 PASS를 새 입력에 재결박하지 않는다. 상세 command·실패·수리·문서 후속 검사는 validation과
 외부 native-2026-10-27-config-format/이 소유한다. Mac96회/OS는 NOT_RUN, 세 gate는 OPEN이다.
+
+
+### 14.23 FD capability와 executable 관측 준비 — 2026-10-27
+
+공개 fileport API를 독립 cursor 재열기나 fd-exec로 가정하지 않는다. 새 actual Darwin case는
+보유 inode·`/dev/fd`와 fileport의 offset/flags/errno를 따로 관측한다. private executable의
+원래 image와 이름 교체 image는 다른 표식을 private pipe로 보내며, FD alias의 rename/unlink
+전후 실행을 별도로 기록한다. exit0·이름 문자열·unattempted API의 기본값으로 정확한 실행을
+만들지 않는다. public header가 없으면 그 API는 미시도/null로 남긴다.
+
+같은 C helper를 사용하는 portable oracle은 실제 실행 OS와 실제 inode/cursor/exec 표식을
+검사하며 Linux record의 Darwin 재분류는 거절한다. 새 record의 field/errno/termination/control
+검사와 실제 Linux 대조군을 common CI에 연결했다. required Darwin case는33종×3회,
+OS별99회가 됐으며 Mac 실행은 모두 NOT_RUN이다. 기존240분 job budget은 유지한다.
+세 gate와 제품 guard는 유지하며 native implementation/qualification 완료로 표시하지 않는다.
+
+
+FD 관측 구현의고정 runtime 입력 `ead1b9960c28b0a8ef0bd2eaf8bead7f883763099aa28d6c57dcd71fea3c099e`(15656개)에서
+literal common CI225/225·검증 정책35/35·전체 구조 검사 PASS를 확인했다. 입력·빌드 산출물·
+보호4개가 전후 같으며 fail/cancel/skip/todo0이다. 같은 실제 C oracle의source mutant3개도
+consumer가 검출했다. 이 Linux/관측 grammar 결과는 실제 Darwin 실행·세 gate의완료가 아니다.
+실제 Mac99회/OS는 NOT_RUN이며 정확한 raw/input 범위는 validation과 해당 audit root를 따른다.
