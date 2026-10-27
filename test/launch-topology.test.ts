@@ -13,7 +13,7 @@ import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { Store } from "@oma/storage";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
-import { pinNamespaceInit, pinNamespaceRunner, type NamespaceInitPin } from "@oma/native/pid-namespace";
+import { pinNamespaceInit, pinNamespaceRunner, type NamespaceInitPin, type NamespaceInitIdentity } from "@oma/native/pid-namespace";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { ALL_CAPS } from "./fixtures/spec.js";
 import { CONFINED_MODEL, scriptedProvider, type ScriptedProvider } from "./fixtures/scripted-provider.js";
@@ -129,7 +129,7 @@ test("NATIVE-TOPO-02: actual broker entry starts its runner and recovers a witne
   await f.goal(); broker = await f.start();
   const owned = await until("witnessed Resident", f.scope, broker.output);
   await until("authenticated runner and provider request", () => f.provider.seen.length > 0 ? true : undefined, broker.output);
-  const runner = pinNamespaceRunner(owned.witness);
+  const runner = pinNamespaceRunner(owned.witness as NamespaceInitIdentity);
   try {
     const actual = readFileSync(`/proc/${runner.pid}/cmdline`, "utf8").split("\0").slice(0, -1);
     assert.deepEqual(actual, [process.execPath, join(process.cwd(), "apps/oma/dist/entry/runner.js"), "--society", "demo", "--agent", "child",

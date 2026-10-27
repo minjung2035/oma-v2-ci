@@ -21,6 +21,8 @@ export interface PinnedPeerIdentity extends PeerIdentity {
   close(): void;
 }
 export type BoundPeer = PeerIdentity & ConnectionPeerPin & {
+  /** Present only on Darwin; compared with the current run's kernel witness. */
+  readonly auditSession?: number;
   sameSender(sender: unknown): boolean;
   /** Issued by the direct spawn owner, never decoded from a request. */
   readonly inheritedRunner?: { readonly actor: Actor; readonly invocationId: string };

@@ -39,7 +39,8 @@ function identity(value: unknown): value is ExecutionWitness {
       typeof value.bootId === "string" && BOOT.test(value.bootId) &&
       [value.startTime, value.namespaceDevice, value.namespaceInode].every(v => typeof v === "string" && /^[0-9]{1,24}$/.test(v));
   if (value.kind === "darwin-audit-session")
-    return keys(value, ["kind", "auditSession", "pid", "pidVersion"]) &&
+    return keys(value, ["kind", "auditSession", "coalitionId", "pid", "pidVersion"]) &&
+      typeof value.coalitionId === "string" && /^[0-9]{1,20}$/.test(value.coalitionId) &&
       [value.auditSession, value.pid, value.pidVersion].every(v => typeof v === "number" && Number.isSafeInteger(v) && v > 0 && v <= 0xffffffff);
   return false;
 }
@@ -115,7 +116,7 @@ export class ExecutionJournal {
     const execution = uuidV4(); this.append({ kind: "opening", slot: name, execution });
     return Object.freeze({
       execution,
-      publish: (witness: NamespaceInitIdentity) => {
+      publish: (witness: ExecutionWitness) => {
         if (!identity(witness)) throw new TypeError("invalid kernel scope witness");
         this.append({ kind: "witness", slot: name, execution, witness });
       },

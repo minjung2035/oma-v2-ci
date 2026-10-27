@@ -52,6 +52,14 @@
       "types": "./dist/mach-address.d.ts",
       "default": "./dist/mach-address.js"
     },
+    "./execution-launch": {
+      "types": "./dist/execution-launch.d.ts",
+      "default": "./dist/execution-launch.js"
+    },
+    "./launchd-job": {
+      "types": "./dist/launchd-job.d.ts",
+      "default": "./dist/launchd-job.js"
+    },
     "./resident-sandbox": {
       "types": "./dist/resident-sandbox.d.ts",
       "default": "./dist/resident-sandbox.js"
@@ -67,7 +75,8 @@
     "@oma/domain": "0.1.0",
     "@oma/protocol": "0.1.0",
     "@oma/native": "0.1.0",
-    "@oma/process": "0.1.0"
+    "@oma/process": "0.1.0",
+    "koffi": "^3.2.1"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
