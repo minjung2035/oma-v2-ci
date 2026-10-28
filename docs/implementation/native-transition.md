@@ -21,6 +21,33 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 실제 Personal wait 관측과 suspended-image 다음 판정
+
+Native `40625206025` / `4bea9f8442`의 Mac15·26 common은 각각251/251·skip0이다.
+Society의 provisioning 전 거절·기존 bytes 보존 계약도 두 OS에서 실제 통과했다.
+gate 실행은 각각111회·96 OBSERVED·15 SETUP_FAILED이며 세 product gate는 그대로 OPEN이다.
+각 OS의 첫 Personal 시도는 실제 waitpid상 미종료·ready=false·빈 출력, termios ECHO/ICANON=true였다.
+native sample은 exit0으로 root Node의 `uv__io_poll → kevent` 대기를 보였다. 어느 JS await/child에서
+멈췄는지는 이것만으로 알 수 없다. 원시는 digest 확인한 `truthful-macos{15,26}-{gates,runtime}/`에 있다.
+
+Mac26의 큰 stderr JSON 중간에는 uncaught assertion stack이 끼어들었다. fixture는 record의 write
+callback 완료 뒤 throw하도록 수정했다. 후속 Personal 시험만 조사용 preload로 Node child 생성
+call site와18초 시점의 active child/resource 종류를 기록한다. experimental diagnostics channel은
+진단용이며 PID/서명/role authority나 정상 제품 경로의 대체가 아니다. 원인 확인 뒤 제거한다.
+Linux 실제 parent/child 대기 관측과262144-byte failure record의 완전한 decode를 확인했다
+(`personal-startup-trace-linux.json`). 이 관측은 Mac UI 성공을 뜻하지 않는다.
+
+`suspended-image` fixture와 evidence validator를 추가했다. START_SUSPENDED의 A/B 양성 대조,
+B를 map한 뒤 pathname을 A로 복원하고 **첫 dynamic guest lookup**부터 A/B requirement를 검사하는
+반례, Node/Git/compiler 및 shebang interpreter 대조를 같은 actual-child 경로로 실행한다.
+동기 Security 호출은 owned-group Python supervisor가 제한하고 unreaped direct-child PID만 제어한다.
+plain spawn·명시 file actions를 쓰며 실패한 SETEXEC/addinherit recipe를 반복하지 않는다.
+arch별 cdhash 집합을 requirement로 검증하고 실제 release/constructor/main 결과를 남긴다.
+main image만의 관측이지 script/module/library bytes·전체 후손·expected-Broker proof가 아니다.
+Linux C target 두 variant의 실제 실행·같은 PID constructor/main, Linux kernel refusal와 parser/policy50/50은
+확인했다. Darwin controller의 Security-framework compile/실행은 아직 NOT_RUN이며 채택하지 않았다.
+driver는114회·11개 program을 예약하고 workflow의 최악 시간 한도를 함께 늘렸다.
+
 ### 2026-10-28 두 Mac의 파일 수리 확인과 launchd 후보 반례
 
 Native `40618265543` / `a62af1bae3`의 Mac15·26은 각각111회 실행·96 OBSERVED·15 SETUP_FAILED다.

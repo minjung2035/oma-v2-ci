@@ -19,11 +19,14 @@ const run = spawnSync("python3", [harness, JSON.stringify({
   sample: join(root, "personal-startup.sample.txt"),
 })], { cwd: project, encoding: "utf8", timeout: 45000, maxBuffer: 4 * 1024 * 1024,
   env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: home, XDG_DATA_HOME: join(root, "data"),
-    XDG_RUNTIME_DIR: join(root, "run"), PI_OFFLINE: "1", TERM: "xterm-256color" } });
+    XDG_RUNTIME_DIR: join(root, "run"), PI_OFFLINE: "1", TERM: "xterm-256color",
+    NODE_OPTIONS: `--import=${new URL("./darwin-personal-startup-trace.mjs", import.meta.url).href}` } });
 assert.equal(run.error, undefined); assert.equal(run.signal, null); assert.equal(run.status, 0, run.stderr);
 const terminal = JSON.parse(run.stdout), output = Buffer.from(terminal.output, "hex").toString();
 // Preserve the real screen even if Keychain, startup, or terminal checks fail.
-console.error(JSON.stringify({ personalTerminal: terminal, stderr: run.stderr }));
+await new Promise((resolve, reject) => process.stderr.write(
+  JSON.stringify({ personalTerminal: terminal, stderr: run.stderr }) + "\n",
+  error => error ? reject(error) : resolve()));
 assert.equal(terminal.ready, true, output);
 assert.equal(terminal.exited, true, output); assert.equal(terminal.code, 0, output);
 assert.equal(terminal.echo, true); assert.equal(terminal.icanon, true);

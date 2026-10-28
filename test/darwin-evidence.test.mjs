@@ -39,13 +39,32 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
+const suspendedRecord = () => {
+  const attempt = variant => ({ stopped: true, stopSignal: 17, beforeRelease: {
+    constructor: false, main: false, stdoutBytes: 0, stderrBytes: 0 },
+    copyStatus: 0, primary: { parseStatus: 0, validationStatus: 0 }, alternate: null,
+    released: true, childReaped: true, supervisorJoined: true, exitCode: 0, signal: null,
+    constructor: variant ? { variant, pid: 100 + variant } : null,
+    main: variant ? { variant, pid: 100 + variant } : null, targetStdout: "" });
+  const refused = () => ({ ...attempt(), primary: { parseStatus: 0, validationStatus: -1 },
+    alternate: { parseStatus: 0, validationStatus: 0 }, released: false, exitCode: null, signal: 9 });
+  const signature = hash => ({ sha256: "d".repeat(64), cdhashes: [hash.repeat(40)] });
+  return { fixtureOnly: true, scope: "main-image-only", unreapedPidControl: true, ownedChildrenJoined: true,
+    scriptRequirementNamesInterpreter: true, sourceSha256: { controller: "c".repeat(64), target: "d".repeat(64) },
+    images: { a: signature("a"), b: signature("b") },
+    tools: Object.fromEntries(["node", "git", "compiler", "shell"].map(key => [key, signature("c")])),
+    positive: { a: attempt(1), b: attempt(2), node: { ...attempt(), main: { kind: "node" } },
+      git: { ...attempt(), targetStdout: "git version fixture" }, compiler: { ...attempt(), targetStdout: "clang version fixture" },
+      script: { ...attempt(), main: { kind: "script" } } }, mismatch: refused(), restoredPath: refused() };
+};
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
       planned.name === "seatbelt-signals" ? signalRecord() :
         ["launchd-scope", "launchd-image"].includes(planned.name) ? launchdRecord(planned.name) :
-          planned.name === "personal-entry" ? personalRecord() : { fixtureAssertionReturned: true } } }));
+          planned.name === "personal-entry" ? personalRecord() :
+            planned.name === "suspended-image" ? suspendedRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
@@ -92,6 +111,30 @@ test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a cha
     { ...good, societyRefusedBeforeState: false }, { ...good, noSocietyProvisioned: false },
     { ...good, terminalRestored: false }, { ...good, birthMode: "society" }, { ...good, credentialFixture: true },
   ]) assert.throws(() => validateDarwinObservation("personal-entry", { personal: bad }));
+});
+
+test("NATIVE-DARWIN: suspended image observations require real positive contexts and coherent pre-release validation", () => {
+  const good = suspendedRecord();
+  assert.doesNotThrow(() => validateDarwinObservation("suspended-image", { suspendedImage: good }));
+  for (const change of [
+    value => { value.ownedChildrenJoined = false; },
+    value => { delete value.sourceSha256.controller; },
+    value => { value.images.b = value.images.a; },
+    value => { value.positive.a.beforeRelease.constructor = true; },
+    value => { value.positive.node.primary.validationStatus = -1; },
+    value => { value.positive.compiler.targetStdout = ""; },
+    value => { value.mismatch.released = true; },
+    value => { value.restoredPath.alternate = null; },
+    value => { value.restoredPath.constructor = { variant: 2, pid: 102 }; },
+  ]) {
+    const bad = structuredClone(good); change(bad);
+    assert.throws(() => validateDarwinObservation("suspended-image", { suspendedImage: bad }));
+  }
+  // A real counterexample is an observation, not a product PASS. Preserve
+  // evidence that a wrong image actually ran when validation let it through.
+  const counterexample = structuredClone(good);
+  counterexample.restoredPath = { ...structuredClone(good.positive.b), alternate: { parseStatus: 0, validationStatus: -1 } };
+  assert.doesNotThrow(() => validateDarwinObservation("suspended-image", { suspendedImage: counterexample }));
 });
 
 

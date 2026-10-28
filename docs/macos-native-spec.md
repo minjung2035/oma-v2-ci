@@ -121,6 +121,8 @@ path 문법·소유 경계·종류·hardlink·repair 정책·동일 bytes·publi
 
 현재 확인된 반례: Darwin `/dev/fd` duplicate는 cursor를 공유했고 descriptor 경로 exec는 errno13이었다. `/dev/fd/<directory>/<name>`은 directory API가 아니다. O_EVTONLY mode-000은 EACCES였다. `openbyid_np`는 syscall 번호가 보여도 platform/private entitlement 조건이 있으며 현재 일반 CLI 해법이 아니다. [기존 조사](implementation/native-reference-review.md)와 원시 artifact를 먼저 읽고 같은 가정을 반복하지 않는다.
 
+`suspended-image` 선행 시험은 정상 A/B·Node/Git/compiler·interpreter 대조와 **B를 map한 뒤 pathname을 A로 복원하고 첫 dynamic guest lookup**을 시작하는 반례를 함께 기록한다. lookup 성공이나 on-disk signing metadata를 검증 성공으로 바꾸지 않는다. 실제 requirement status와 release 전/후 실행 marker로 판정하며, main-image 검증은 script/module/library bytes·후손 수명·sender role을 보증하지 않는다.
+
 mode-000 등 안전하게 취득·수리할 수 없는 entry는 unknown으로 남긴다. metadata 조회 뒤 pathname chmod로 다른 inode를 건드리지 않는다. 한 손상 entry 때문에 무관한 cleanup까지 생략하지 않는다. 기존 metadata/history bytes는 보존한다.
 
 ### 6.2 소유권과 publication

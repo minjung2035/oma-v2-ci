@@ -10,9 +10,9 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, 이번 checkpoint parent `6c4d8983` |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch; 마지막 원시 회수 입력 `a62af1bae3` |
-| 현재 변경 | readable directory·immutable publication은 두 Mac의 실제 회귀를 통과했다. Personal은 화면 ready 관측에 실패하며 timeout 고정값으로 child 상태를 단정하지 않는다. GUI launchd의 bootout 탈출 후손과 constraint A에서 B 실행을 확인해 단독 해법으로 배제했다. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, 이번 checkpoint parent `30e13de6` |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch; 마지막 원시 회수 입력 `4bea9f8442` |
+| 현재 변경 | 두 Mac common251/251·skip0. Personal 첫 시도의 실제 미종료·ECHO/ICANON on·빈 화면과 root Node의 kevent 대기를 확인했으나 원인은 미해결. 후속 child-wait 진단과 suspended-image 반례 fixture를 준비했다. launchd bootout/constraint 단독 해법은 배제했다. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
 | 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
@@ -38,7 +38,7 @@
 - Seatbelt kept-FD 실제 오류는 `Seatbelt target exec: Bad file descriptor`; 다른 helper/worker/setup 실패도 별도다. generic timeout으로 합치지 않는다.
 - 파일 후보 배제 근거: `/home/dev/oma-audit-artifacts/native-2026-10-27-file-binding-feasibility/audit.json`. 새 CI 관측은 그 당시 NOT_RUN 표기보다 최신이다.
 
-직접 회수한 최신 Native run은 `40618265543`(a62af1bae3), full regression이 확인된 Architecture는 `40601095851`(87cc9c92e)이다.
+직접 회수한 최신 Native run은 `40625206025`(4bea9f8442), full regression이 확인된 Architecture는 `40601095851`(87cc9c92e)이다.
 후자는 full native-all과 baseline/lane을 실제 실행해 통과했지만 Mac 세 product gate는 OPEN이다.
 file/Git/Worker의 남은 실패와 source별 수치는 [진행 기록](implementation/native-transition.md)이 소유한다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`에 보존했다.
@@ -51,7 +51,7 @@ validation binding은 clean committed bytes를 가리키므로 dirty README 입�
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
 3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치와 C target의 FD pruning·same-PID handoff는 확인했다. SDK libproc는 private·변경 가능하므로 지원 OS별 실제 회귀를 유지한다.
 4. DR63 storage cutover는 미커밋 dist가 없는 checkout에서 실제 재빌드·status 회귀로 확인했다. metadata getattrlist도 실제 Mac에서 통과했다. Git packed smoke의 UNSUPPORTED_PROFILE은 실제 shared Linux-only preparation guard이며 기대값을 낮추지 않는다.
-5. Node startup·file fence·일반 owned-directory·immutable bytes 공개는 두 Mac에서 확인했다. fresh 동일 SBPL reaper는 EPERM이다. GUI launchd는 실제 생성됐지만 bootout 후 detached가 생존했고 SIP-disabled 두 OS에서 constraint A의 B도 실행됐다. 관측 성공을 backend PASS로 바꾸지 않는다. Git의 REF_STATE_UNKNOWN과 Personal의 화면 ready 실패는 미해결이다. timeout 고정값을 생존/raw-mode 관측으로 읽지 말고 실제 child 상태·native sample을 확인한다. obsolete global-entry guard 시험은 Society에 한정했고 수정 뒤 Darwin-only assertion은 NOT_RUN이다.
+5. Node startup·file fence·일반 owned-directory·immutable bytes 공개는 두 Mac에서 확인했다. fresh 동일 SBPL reaper는 EPERM이다. GUI launchd의 bootout 뒤 detached 생존과 SIP-disabled 두 OS의 constraint A에서 B 실행은 단독 backend 채택을 막는다. Git REF_STATE_UNKNOWN과 Personal 화면 ready 실패는 미해결이다. 새 실제 waitpid/termios/sample은 root Node 대기까지 확인했다. 후속 조사용 child-wait preload는 원인 확인 뒤 제거한다. Society-only guard 계약은 이제 두 Mac 실제 PASS다. `suspended-image`의 B-map→A-path 복원·첫 dynamic lookup 반례와 정상 도구 대조는 Darwin 실행 전까지 NOT_RUN이며 main-image proof를 다른 gate로 확대하지 않는다.
    `audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU 정의40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exact exec binding·expected-Broker는 여전히 미해결이다.
 6. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
