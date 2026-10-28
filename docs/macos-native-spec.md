@@ -81,10 +81,12 @@ Resource coalition의 [고정 XNU 관측 코드](https://github.com/apple-oss-di
 Mac15·26 각3회에서 job bootout 후 detached 생존, controlled release 뒤 기존 CID의 ESRCH와 별도 live CID의 성공 조회를 확인했다([기록](implementation/native-transition.md)). [고정 reap 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c#L2240)은 terminated·active_count0 뒤 ID를 hash에서 제거한다. started==exited에는 pending activation이 없으므로 ID 소멸과 혼동하지 않는다.
 inherited spawn은 같은 CID였고 explicit own/다른 CID spawn은 EPERM이었다. private attribute는 시험 전용 adversary이며 제품 launch API가 아니다. [privilege/entitlement 조건](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L4020)을 서비스 경유 실행·headless·다른 보안 환경의 admission proof로 확대하지 않는다.
 
-다음 판정은 fresh `task_name_for_pid → TASK_AUDIT_TOKEN`의 실제 취득·거절이다.
-kernel PID lookup으로 받은 port만 쓰고, peer가 준 port를 kernel task라고 믿지 않는다.
-unique/version before→CID→kernel token→unique/version after를 결박하고 SDK effect와 **release 전** CID query를 남긴다.
-source 가능성·controlled cleanup을 durable authority producer·전체 후손 탐색·all-owner-death recovery로 대신하지 않는다.
+`885c07fedf`의 두 Mac 각3회에서 fresh kernel task-name token과 before/after generation·CID를
+결박한 SDK 제어, wrong-member 미호출, release 전 CID 소멸을 확인했다([기록](implementation/native-transition.md)).
+peer가 준 port를 kernel task라고 믿지 않는다. unprofiled controlled target의 결과를 role authority나 새 Seatbelt label 복구로 확대하지 않는다.
+다음은 **CID만으로** owner 뒤/첫 snapshot 뒤 생긴 후손을 재탐색·제어하는 판정이다.
+PID count를 bytes로 읽지 않고 scan은 hint로만 쓴다. empty/truncated scan·deadline 대신 kernel ID 소멸을 확인한다.
+이 선행 시험을 실제 product owner crash·service admission·durable authority producer의 증명으로 대신하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.

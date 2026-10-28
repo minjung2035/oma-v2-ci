@@ -826,8 +826,8 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         assert.ok(recipientOp);
         assert.equal(env.store.deliveriesForOperation(recipientOp.id).length, 1);
         const gitSame = byName("git-idempotent")?.replies ?? [];
-        assert.equal(gitSame[0]?.ok, true);
-        assert.equal(gitSame[1]?.ok, true);
+        assert.equal(gitSame[0]?.ok, true, `first git-idempotent response: ${JSON.stringify(gitSame[0])}`);
+        assert.equal(gitSame[1]?.ok, true, `second git-idempotent response: ${JSON.stringify(gitSame[1])}`);
         assert.equal((gitSame[0]?.result as {
             operation: string;
         }).operation, (gitSame[1]?.result as {

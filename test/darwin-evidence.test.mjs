@@ -37,12 +37,17 @@ const admissionAttempt = (name, requestedResource, spawned) => ({ name, requeste
   spawnStatus: spawned ? 0 : 1, pid: spawned ? 103 : 0, stopped: spawned, joined: spawned,
   coalitionBytes: spawned ? 40 : 0, coalitionErrno: 0, actualResource: spawned ? "41" : "0", waitStatus: spawned ? 9 : 0 });
 const memberControl = (pid, matched) => ({ controllerPid: 200 + pid, controllerUid: 501, targetPid: pid,
-  expectedResource: "41", before: { bytes: 56, errno: 0, unique: "99", version: 7 },
+  expectedResource: "41", before: { bytes: 56, errno: 0, unique: String(1000 + pid), version: 7 },
   membership: { bytes: 40, errno: 0, resource: matched ? "41" : "42" },
   taskNameStatus: matched ? 0 : -1, taskInfoStatus: matched ? 0 : -1, namePortReleaseStatus: matched ? 0 : -1,
   auditCount: 8, auditPid: matched ? pid : 0, auditUid: matched ? 501 : 0, auditPidVersion: matched ? 7 : 0,
-  after: matched ? { bytes: 56, errno: 0, unique: "99", version: 7 } : { bytes: 0, errno: 0, unique: "0", version: 0 },
+  after: matched ? { bytes: 56, errno: 0, unique: String(1000 + pid), version: 7 } : { bytes: 0, errno: 0, unique: "0", version: 0 },
   correlated: matched, signalStatus: matched ? 0 : -1 });
+const discoveryRound = (pid, closed) => ({ discovery: { hintOnly: true, resource: "41", capacity: 10,
+  listed: 1, errno: 0, saturated: false, candidatePids: [pid], unreadable: 0 },
+  controls: [memberControl(pid, true)], elapsedMs: 100,
+  aggregate: closed ? { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 } : coalitionQuery("2", "1"),
+  otherAggregate: coalitionQuery() });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
   ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
@@ -57,6 +62,9 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
         remainingMember: memberControl(101, true), afterAttempt: {
           samples: [{ elapsedMs: 90, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
             otherAggregate: coalitionQuery() }] } },
+      late: { pid: 105, resource: "41" },
+      discoveryRecovery: { input: "resource-coalition-only", beforeFixtureRelease: true,
+        afterSnapshot: { pid: 106, resource: "41" }, rounds: [discoveryRound(105, false), discoveryRound(106, true)] },
       afterControlledExit: { controlledGenerationsExited: true,
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
@@ -188,6 +196,16 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
     scope => { scope.recovery.remainingMember.auditPidVersion = 8; },
     scope => { scope.recovery.remainingMember.namePortReleaseStatus = -1; },
     scope => { scope.recovery.afterAttempt.samples[0].aggregate.errno = 0; },
+    scope => { delete scope.discoveryRecovery; },
+    scope => { scope.discoveryRecovery.input = "saved-pids"; },
+    scope => { scope.discoveryRecovery.beforeFixtureRelease = false; },
+    scope => { delete scope.discoveryRecovery.afterSnapshot; },
+    scope => { scope.discoveryRecovery.rounds = []; },
+    scope => { scope.discoveryRecovery.rounds[0].discovery.hintOnly = false; },
+    scope => { scope.discoveryRecovery.rounds[0].discovery.listed = 0; },
+    scope => { scope.discoveryRecovery.rounds[0].controls = []; },
+    scope => { scope.discoveryRecovery.rounds[0].controls[0].targetPid = 106; },
+    scope => { delete scope.discoveryRecovery.rounds[1].aggregate; },
   ]) {
     const bad = structuredClone(good); corrupt(bad.scope);
     assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
