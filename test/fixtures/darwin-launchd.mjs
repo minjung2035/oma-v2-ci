@@ -3,7 +3,7 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
@@ -174,12 +174,16 @@ try {
   } else {
     // No SpawnConstraint: independently qualify ordinary job provisioning.
     const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
-    const serviceTarget = loadJob("service-target", actor, "once");
-    run("/bin/launchctl", ["kickstart", serviceTarget.target]);
-    await waitFor(() => existsSync(join(serviceTarget.directory, "once.json")));
-    const servicePositive = remember(marker(serviceTarget.directory, "once"));
+    // Keep the host positive on a separate, otherwise equivalent job. Reusing
+    // it would mix launchd restart scheduling into the first-admission question.
+    const servicePositiveJob = loadJob("service-positive", actor, "once");
+    const positiveServiceKickstart = run("/bin/launchctl", ["kickstart", servicePositiveJob.target]);
+    await waitFor(() => existsSync(join(servicePositiveJob.directory, "once.json")));
+    const servicePositive = remember(marker(servicePositiveJob.directory, "once"));
     await waitFor(() => originalExited(servicePositive.identity));
-    unlinkSync(join(serviceTarget.directory, "once.json"));
+    const positiveServiceAfter = run("/bin/launchctl", ["print", servicePositiveJob.target], false);
+    const serviceTarget = loadJob("service-target", actor, "once");
+    const serviceBefore = run("/bin/launchctl", ["print", serviceTarget.target], false);
     const profile = seatbeltProfile({ readable: [{ path: actor, kind: "file" }],
       writable: [{ path: scope.directory, kind: "directory" }], denied: [],
       executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
@@ -194,7 +198,8 @@ try {
     observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
     observation.scope.seatbelt = { renderer: "production-seatbeltProfile",
       sha256: createHash("sha256").update(profile).digest("hex"), serviceTarget: serviceTarget.target,
-      positiveServiceControl: servicePositive, attempt: marker(scope.directory, "service-admission"),
+      positiveServiceTarget: servicePositiveJob.target, positiveServiceKickstart, positiveServiceAfter,
+      positiveServiceControl: servicePositive, serviceBefore, attempt: marker(scope.directory, "service-admission"),
       serviceAfter: run("/bin/launchctl", ["print", serviceTarget.target], false),
       guestEffect: existsSync(join(serviceTarget.directory, "once.json")) ?
         remember(marker(serviceTarget.directory, "once")) : null };
@@ -256,7 +261,7 @@ finally {
     try {
       const output = name => existsSync(join(job.directory, name)) ?
         readFileSync(join(job.directory, name)).subarray(0, 65536).toString("utf8") : null;
-      observation.jobOutputs.push({ label: job.label, stdout: output("stdout"), stderr: output("stderr") });
+      observation.jobOutputs.push({ label: job.label, target: job.target, stdout: output("stdout"), stderr: output("stderr") });
     } catch (error) { faults.push(String(error)); }
   }
   observation.cleanupFaults = faults;

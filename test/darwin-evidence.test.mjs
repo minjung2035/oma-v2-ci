@@ -48,6 +48,8 @@ const discoveryRound = (pid, closed) => ({ discovery: { hintOnly: true, resource
   controls: [memberControl(pid, true)], elapsedMs: 100,
   aggregate: closed ? { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 } : coalitionQuery("2", "1"),
   otherAggregate: coalitionQuery() });
+const launchctlRecord = (command, target) => ({ executable: "/bin/launchctl", argv: [command, target],
+  exitCode: 0, signal: null, stdout: "", stderr: "" });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
   domain: "gui/501",
@@ -59,10 +61,14 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
         attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
           admissionAttempt("explicit-other", "42", false)] },
       seatbelt: { renderer: "production-seatbeltProfile", sha256: "d".repeat(64),
-        serviceTarget: "gui/501/org.oma.probe.test.service-target", positiveServiceControl: { pid: 107 },
+        serviceTarget: "gui/501/org.oma.probe.test.service-target",
+        positiveServiceTarget: "gui/501/org.oma.probe.test.service-positive", positiveServiceControl: { pid: 107 },
+        positiveServiceKickstart: launchctlRecord("kickstart", "gui/501/org.oma.probe.test.service-positive"),
+        positiveServiceAfter: launchctlRecord("print", "gui/501/org.oma.probe.test.service-positive"),
+        serviceBefore: launchctlRecord("print", "gui/501/org.oma.probe.test.service-target"),
         attempt: { sandboxApplied: true, target: "gui/501/org.oma.probe.test.service-target",
           spawnStatus: 0, childPid: 108, waitStatus: 256, joined: true, numericCleanupUsed: false },
-        serviceAfter: { exitCode: 0, signal: null }, guestEffect: null },
+        serviceAfter: launchctlRecord("print", "gui/501/org.oma.probe.test.service-target"), guestEffect: null },
       recovery: { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
         fixtureReleaseUsedBeforeObservation: false, wrongMember: memberControl(102, false),
         remainingMember: memberControl(101, true), afterAttempt: {
@@ -219,6 +225,16 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
     scope => { scope.seatbelt.attempt.target = "gui/501/foreign"; },
     scope => { scope.seatbelt.attempt.joined = false; },
     scope => { scope.seatbelt.positiveServiceControl.pid = 0; },
+    scope => { delete scope.seatbelt.positiveServiceTarget; },
+    scope => { scope.seatbelt.positiveServiceTarget = scope.seatbelt.serviceTarget; },
+    scope => { scope.seatbelt.positiveServiceTarget = "gui/502/foreign"; },
+    scope => { delete scope.seatbelt.positiveServiceKickstart; },
+    scope => { scope.seatbelt.positiveServiceKickstart.argv[1] = scope.seatbelt.serviceTarget; },
+    scope => { scope.seatbelt.positiveServiceKickstart.exitCode = 1; },
+    scope => { scope.seatbelt.positiveServiceAfter.argv[1] = scope.seatbelt.serviceTarget; },
+    scope => { delete scope.seatbelt.serviceBefore; },
+    scope => { scope.seatbelt.serviceBefore.argv[1] = scope.seatbelt.positiveServiceTarget; },
+    scope => { scope.seatbelt.serviceAfter.argv[1] = scope.seatbelt.positiveServiceTarget; },
     scope => { delete scope.seatbelt.guestEffect; },
   ]) {
     const bad = structuredClone(good); corrupt(bad.scope);

@@ -21,6 +21,109 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 Linux 인수검증 마감·독립 설치본 live/recovery·CI 이력 정정
+
+고정 입력 `88d1cf0b1a435a0c7494e67ccd306ca328a28c73ed8b8535c5168c9904a1c76b` /15686 files의
+serial all3952/3952·fail/cancel/skip/todo0·errors[]·baseline COMPARED, build/typecheck/architecture
+모든 command exit0·입력 전후 동일을 확인했다. 첫 all의 PATH 누락/cloc4 FAIL과 정상 PATH의
+영향 파일23/23·후속 전체 PASS를 모두 보존한다. 제품 코드·성공 조건·timeout은 바꾸지 않았다.
+
+검증된 packed27개 payload로 독립 설치하고 두 checkout을 mount로 가렸다.
+실제 GPT-6 Luna/medium Principal·Worker의 코드 수정·검증·submit·수신과 Personal 도구/추론,
+두 모드의 history 재개를 확인했다. 실제 broker native drain·Store.close 뒤 자동 Restic 보관,
+분실 credential의 원본 보존 거절, 원래 credential의 실제 cold 복원과 같은 key의 원래 receipt도 확인했다.
+pre-cold accepted fact11건이 그대로이고 최종 operation14 succeeded·batch8 completed·submit1·
+integrate0·추가 Worker0·active journal0·정상 종료0이다. SDK auth 원문·사용자 README/WATCHDOG는 보존했다.
+모델 인자 오류·명시 key 생략·prose 마침표와 두 smoke selector/oracle 오류도 원시에 구분했다.
+
+사용자 정정으로 과거 `2af0de04a0`의 첫 `ok:false`는 **원인 미상 단일 CI 실패·비차단 이력**이다.
+Git 결함/무해한 flake/수리 완료로 단정하지 않고 진단을 유지하며, 재발·실사용 제출 실패·중복 효과·
+ref/receipt 불일치 시 승격한다. 아래 이전 checkpoint의 강한 blocker 표현은 이 정정으로 대체한다.
+Linux 인수검증·문서 마감 후 지정 work branch push와 Mac 재개를 사용자에게 지시받았다.
+기존 native 문서3개의 변경도 보존해 commit에 포함하도록 승인받았고 README/WATCHDOG는 제외한다.
+원시 root는 `/home/dev/oma-audit-artifacts/native-2026-10-28-linux-resume/`,
+범위·증거는 [validation](validation.md#linux-인수검증-마감--독립-설치실제-추론재개cold-복구-2026-10-28)을 따른다.
+실제 push/새 Mac 실행·세 product gate 통과는 아직 이 기록의 관측이 아니다.
+
+### 2026-10-28 후속 실제 Codex GPT-6 Luna / medium 검증
+
+후속 사용자 지시로 기존 Codex 인증을 원문 노출 없이 검증용 SDK 저장소에 가져왔다.
+Principal·Worker 모두 `openai-codex/gpt-6-luna`·`medium`으로 설정하고 실제 checkout CLI·PTY·
+native Worker·외부 provider로 GOAL→파일/검증/commit/submit→Principal 수신을 확인했다.
+published blob·변경 경로, operation9 succeeded·batch5 completed·journal active0·정상 종료0을 대조했다.
+추가 Worker·integrate는 없고 원래 Codex auth bytes/mode·사용자 설정·Human checkout을 보존했다.
+도구 오류 각3건 후 완료했으며 두 wait abort는 직전 실제 `oma agent wait`와 대조했다.
+실행 중 placeholder 값은 채집하지 않았고 종료 후 Worker credential 부재를 확인했다.
+제품 code·기본 모델·security/recovery policy·timeout은 변경하지 않았다.
+원시·범위는 [validation](validation.md#후속-실제-codex-principalworker--제한된-실환경-pass)을 따른다.
+이 checkout live 결과를 앞선 packed 설치본의 live 추론이나 과거 Git 거절의 원인 수리로 확대하지 않는다.
+Linux 완료 조건은 아직 열려 있으며 macOS는 계속 보류한다.
+
+### 2026-10-28 Linux 우선 전환·전체 회귀와 독립 설치 수명 수리
+
+최신 사용자 지시로 Mac 구현·CI·push를 보류했다. P0 durable fact·현재 권한·unknown·ownership을
+유지한 Linux 오류·전체 기능·독립 설치·실사용·전체 회귀를 먼저 검증한다.
+일반 UID1000/CapEff0·Node26·bwrap0.12에서 첫 고정 입력 `650294ba…`/15686 files의
+build27/27·architecture findings0·전체3952/3952·skip0·전후 동일을 확인했다.
+이 입력의 첫 Git socket 선택1/1과 전체 동시 실행도 통과했지만 과거 거절 원인은 여전히 미확정이다.
+verifier 수리 뒤 고정 입력 `c62c180dea0bd613c9ce625567be0005745422c037fd862d5d1864e785a6abe9`
+/15686 files의 serial all도3952/3952·fail/cancel/skip/todo0·errors[]로 통과했다.
+build·전체 typecheck·전체 architecture command 모두 exit0이며 per-file/canonical 입력도 전후 동일했다.
+
+독립 workspace 검증은 완료된 설치 트리를 끝까지 누적해23/27 뒤 ENOSPC4건으로 실패했다.
+각 verifier child가 끝나면 해당 임시 directory만 정리하고 cleanup 실패도 보존하도록 수리했다.
+이후27/27 packed/public API/authored declaration/지정 runtime이 통과했다. production code는 미변경이다.
+별도로 packed27개 payload·root manifest/lock에서 source/node_modules 복사 없이 제품을 설치했다.
+그 설치본의 실제 Society/Personal PTY·Ctrl-D·exit0·terminal 복원과 local package install/list/remove,
+실제 Restic 보관·복원·unreadable source 보존·분실 credential 재생성 거절을 확인했다.
+첫 저장 smoke의 cycle 혼합 oracle 실패와 `.git` directory mtime 관측도 원시로 보존했다.
+
+구체적 명령·source별 결과·기능/P0 근거와 한계는 [validation](validation.md)을 따른다.
+이 단계 당시 OMA 소유 auth/default provider/model과 확인한9종 API-key 환경이 없어 실제 provider 추론은 NOT_RUN이었다.
+후속 실제 Codex 실행은 위 별도 기록을 따르며 원래 첫 Git 거절의 요청별 reply/원인은 여전히 미확정이다.
+사용자 README·WATCHDOG와 Mac WIP를 보존한다. Linux 완료 근거를 닫기 전 Mac으로 넘어가지 않는다.
+
+### 2026-10-28 service 양성 대조와 fresh target 분리 — 구현 재개
+
+명시적 재개 요청으로 인계·spec·실제 code와 보존된 `836e2f5963`의 양 Mac3회씩을 대조했다.
+기존 fixture의 동일 service job 재사용은 확인했으며, 재시작 대기 원인설은 여전히 추정이다.
+host가 실행·종료를 확인하는 `service-positive` 뒤 별도 `service-target`을 같은 actor/once 설정으로 등록한다.
+5초 한도·production Seatbelt·C actor·숫자 PID cleanup 범위는 바꾸지 않았다.
+두 target·host 양성 명령·positive 종료 뒤/target 전후 print·실제 attempt·target별 job 출력을 남기고,
+parser는 두 target의 분리와 명령 귀속을 검사한다. print 텍스트를 admission proof로 쓰지 않는다.
+
+새 귀속 회귀는 수정 전1 FAIL, 같은 test bytes로 수정 후 parser·Seatbelt40/40 PASS·skip0이었다.
+변경 MJS3개 syntax exit0. 직접 smoke에서 기존 Mac 결과6건을 새 fresh-target 근거로 거절하고,
+합성 거절·spawn 실패·deadline 불명·다른 CID effect를 결과 재분류 없이 수용했다.
+실제 Linux의 launchd fixture는 state 생성 전에 exit1로 Darwin-only guard를 유지했다.
+합성 grammar는 실제 OS proof가 아니다. **새 fixture의 Mac15·26 실행·새 CI·전체 회귀는 NOT_RUN**이며
+G-PROCESS/G-FILES/G-AUTH는 OPEN이다. 원시는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-service-fresh-target/`에 보존한다.
+재개 전 README·문서 WIP·WATCHDOG.yml을 보존했으며 commit·push·merge·deploy하지 않았다.
+
+### 2026-10-28 production Seatbelt 후손 제어 확인과 사용자 중단
+
+Native [40659493379](https://github.com/minjung2035/oma-v2-ci/actions/runs/40659493379) /
+`836e2f5963`의 Mac15·26 gate artifact를 회수·SHA256 대조 후 판독했다.
+각117 executed/105 OBSERVED/12 SETUP_FAILED이며 세 product gate는 OPEN이다.
+두 Mac 각3회에서 실제 production `seatbeltProfile`을 적용한 detached target과 상속 후손을
+fresh controller로 제어했다. 첫 snapshot 뒤 태어난 후손은 다음 scan에서 제어했고,
+fixture release 전 old CID ESRCH·다른 live CID query 성공을 확인했다.
+GUI UID501·SIP-disabled controlled fixture이며 실제 제품 owner crash·durable producer proof는 아니다.
+같은 source의 다운로드한 Mac15 runtime은253/253·skip0이다. Mac26 runtime과
+Architecture40659493531 결과는 아직 회수·판독하지 않았다.
+
+service 시도는 두 Mac 각3회 모두 spawnStatus0 뒤 5초 deadline에서 fixture cleanup,
+waitStatus9·joined=true·numericCleanupUsed=true였다. 명시적 거절/허용은 판정하지 못했다.
+Mac15 진단에는 spawn scheduled·minimum runtime10·runs1이 있었다. 동일 job을 host 양성 후
+재사용한 데 따른 재시작 대기 가능성은 추정이지 확정 원인이 아니다.
+당시 별도 positive job과 최초 실행 target 분리는 제안만 했고 아직 적용하지 않았다. 이후 적용 범위는 위 재개 기록을 따른다.
+이 결과를 service 차단 성공으로 쓰거나 marker 부재를 death/admission proof로 쓰지 않는다.
+
+당시 최신 사용자 지시는 **작업 중단과 인수인계 작성**이었다. 중단 뒤 구현·시험·commit·push 없이
+[인계](../HANDOFF.md)를 작성했고, 이후 명시적 재개 요청에 따른 변경은 위 기록으로 구분한다.
+아래 이전 checkpoint의 NOT_RUN은 그 source/시점의 기록이며 위 관측보다 최신이 아니다.
+
 ### 2026-10-28 CID-only late-fork 재탐색 실제 통과와 Seatbelt 다음 판정
 
 Native [40654073529](https://github.com/minjung2035/oma-v2-ci/actions/runs/40654073529) /
