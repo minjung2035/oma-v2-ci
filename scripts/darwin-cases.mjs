@@ -27,6 +27,8 @@ export const DARWIN_PROGRAMS = Object.freeze([
     names: ["launchd-scope", "launchd-image"] }),
   program({ name: "personal", fixture: "darwin-personal.mjs", digest: "personalProbeDigest", compile: "check-personal", node: true,
     names: ["personal-entry"] }),
+  program({ name: "suspended-image", fixture: "darwin-suspended-image.mjs", digest: "suspendedImageProbeDigest", compile: "check-suspended-image", node: true,
+    names: ["suspended-image"] }),
 ]);
 const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer", "file-descriptors": "fileDescriptors",
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
@@ -39,7 +41,7 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
   "worker-bootstrap": "worker", "worker-tools": "worker",
-  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "personal-entry": "personal" });
+  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "personal-entry": "personal", "suspended-image": "suspendedImage" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -97,6 +99,61 @@ export function validateDarwinObservation(name, observations) {
       throw new Error("launchd image observation lacks distinct executed positive controls or image outcome");
     if (name === "launchd-scope" && value.scope?.afterBootout?.otherAcknowledged !== true)
       throw new Error("launchd scope observation lacks its independent live job control");
+  }
+  if (name === "suspended-image") {
+    if (value.fixtureOnly !== true || value.scope !== "main-image-only" ||
+        value.unreapedPidControl !== true || value.ownedChildrenJoined !== true ||
+        value.scriptRequirementNamesInterpreter !== true)
+      throw new Error("suspended image observation lacks owned-child or interpreter scope controls");
+    for (const source of ["controller", "target"])
+      if (typeof value.sourceSha256?.[source] !== "string" || !/^[0-9a-f]{64}$/.test(value.sourceSha256[source]))
+        throw new Error("suspended image source identity is missing");
+    const signatures = [value.images?.a, value.images?.b, ...["node", "git", "compiler", "shell"].map(key => value.tools?.[key])];
+    for (const signature of signatures)
+      if (!signature || typeof signature.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(signature.sha256) ||
+          !Array.isArray(signature.cdhashes) || signature.cdhashes.length === 0 ||
+          signature.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)))
+        throw new Error("suspended image expected executable hashes are missing");
+    if (value.images.a.cdhashes.some(hash => value.images.b.cdhashes.includes(hash)))
+      throw new Error("suspended image positive controls do not identify distinct images");
+    const attempts = ["a", "b", "node", "git", "compiler", "script"].map(key => value.positive?.[key]);
+    attempts.push(value.mismatch, value.restoredPath);
+    for (const attempt of attempts) {
+      if (!attempt || attempt.stopped !== true || !Number.isSafeInteger(attempt.stopSignal) || attempt.stopSignal < 1 ||
+          attempt.childReaped !== true || attempt.supervisorJoined !== true ||
+          attempt.beforeRelease?.constructor !== false || attempt.beforeRelease?.main !== false ||
+          attempt.beforeRelease?.stdoutBytes !== 0 || attempt.beforeRelease?.stderrBytes !== 0 ||
+          !Number.isSafeInteger(attempt.copyStatus))
+        throw new Error("suspended image observation lacks stopped, silent and joined child controls");
+      const checks = attempt.copyStatus === 0 ? [attempt.primary] : [];
+      if (attempt === value.mismatch || attempt === value.restoredPath) {
+        if (attempt.copyStatus === 0) checks.push(attempt.alternate);
+      }
+      if (attempt.copyStatus !== 0 && (attempt.primary !== null || attempt.alternate !== null))
+        throw new Error("suspended image validation was reported without a code reference");
+      for (const check of checks)
+        if (!check || !Number.isSafeInteger(check.parseStatus) ||
+            (check.parseStatus === 0 ? !Number.isSafeInteger(check.validationStatus) : check.validationStatus !== null))
+          throw new Error("suspended image requirement validation is missing");
+      const matched = attempt.copyStatus === 0 && attempt.primary.parseStatus === 0 && attempt.primary.validationStatus === 0;
+      if (attempt.released !== matched || (matched ? attempt.exitCode !== 0 || attempt.signal !== null : attempt.exitCode !== null || attempt.signal !== 9))
+        throw new Error("suspended image release or refusal contradicts actual validation");
+    }
+    for (const attempt of attempts.slice(0, 6))
+      if (!attempt.released) throw new Error("suspended image executable positive control did not run");
+    for (const [key, variant] of [["a", 1], ["b", 2]]) {
+      const attempt = value.positive[key];
+      if (attempt.constructor?.variant !== variant || attempt.main?.variant !== variant ||
+          !Number.isSafeInteger(attempt.main.pid) || attempt.main.pid < 2 || attempt.constructor.pid !== attempt.main.pid)
+        throw new Error("suspended image constructor/main positive controls are missing");
+    }
+    if (value.positive.node.main?.kind !== "node" || value.positive.script.main?.kind !== "script" ||
+        typeof value.positive.git.targetStdout !== "string" || !/^git version /.test(value.positive.git.targetStdout) ||
+        typeof value.positive.compiler.targetStdout !== "string" || !/clang version/.test(value.positive.compiler.targetStdout))
+      throw new Error("suspended image normal tool contexts are missing");
+    for (const attempt of [value.mismatch, value.restoredPath])
+      if (attempt.released ? attempt.constructor?.variant !== 2 || attempt.main?.variant !== 2 : attempt.constructor !== null || attempt.main !== null)
+        throw new Error("suspended image substitution outcome is unobserved");
   }
   if (name === "personal-entry") {
     for (const key of ["actualTerminal", "cleanExit", "terminalRestored", "noSocietyProvisioned", "societyRefusedBeforeState"])

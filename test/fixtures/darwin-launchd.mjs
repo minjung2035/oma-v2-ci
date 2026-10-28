@@ -180,7 +180,9 @@ finally {
   if (faults.length) failure = new AggregateError([...(failure ? [failure] : []), ...faults], "launchd fixture cleanup failed");
 }
 if (failure) {
-  console.error(JSON.stringify({ case: mode, error: String(failure), observation }));
+  await new Promise((resolve, reject) => process.stderr.write(
+    JSON.stringify({ case: mode, error: String(failure), observation }) + "\n",
+    error => error ? reject(error) : resolve()));
   throw failure;
 }
 console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" : "launchdScope"]: observation }));

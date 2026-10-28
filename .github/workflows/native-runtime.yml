@@ -111,9 +111,9 @@ jobs:
       matrix:
         os: [macos-26, macos-15]
     runs-on: ${{ matrix.os }}
-    # (111 attempts + 10 compilations + 3 driver calls) * 120s = 248m.
-    # Build 10m + credential compile 5m + upload 5m require 268m, below 270m.
-    timeout-minutes: 270
+    # (114 attempts + 11 compilations + 3 driver calls) * 120s = 256m.
+    # Build 10m + credential compile 5m + upload 5m require 276m, below 280m.
+    timeout-minutes: 280
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
