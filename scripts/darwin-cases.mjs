@@ -189,6 +189,23 @@ export function validateDarwinObservation(name, observations) {
       }
       validateMemberControl(recovery.wrongMember, scope.control.pid);
       validateMemberControl(recovery.remainingMember, scope.members?.detached?.pid);
+      const seatbelt = scope.seatbelt, service = seatbelt?.attempt;
+      if (seatbelt?.renderer !== "production-seatbeltProfile" ||
+          typeof seatbelt.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(seatbelt.sha256) ||
+          scope.members?.detached?.sandboxed !== true || scope.late?.sandboxed !== true ||
+          scope.discoveryRecovery?.afterSnapshot?.sandboxed !== true ||
+          typeof seatbelt.serviceTarget !== "string" || !seatbelt.serviceTarget.startsWith(`${value.domain}/`) ||
+          !Number.isSafeInteger(seatbelt.positiveServiceControl?.pid) || seatbelt.positiveServiceControl.pid <= 1 ||
+          service?.sandboxApplied !== true || service.target !== seatbelt.serviceTarget ||
+          !Number.isSafeInteger(service.spawnStatus) || service.spawnStatus < 0 ||
+          !Number.isSafeInteger(service.childPid) || !Number.isSafeInteger(service.waitStatus) || service.waitStatus < 0 ||
+          typeof service.joined !== "boolean" || typeof service.numericCleanupUsed !== "boolean" ||
+          (service.spawnStatus === 0 ? service.childPid <= 1 || !service.joined :
+            service.childPid !== 0 || service.joined || service.waitStatus !== 0 || service.numericCleanupUsed) ||
+          !Number.isSafeInteger(seatbelt.serviceAfter?.exitCode) || seatbelt.serviceAfter.signal !== null ||
+          !(seatbelt.guestEffect === null ||
+            Number.isSafeInteger(seatbelt.guestEffect?.pid) && seatbelt.guestEffect.pid > 1))
+        throw new Error("launchd scope lacks the actual production sandbox and controlled service-admission outcome");
       const discovery = scope.discoveryRecovery;
       if (discovery?.input !== "resource-coalition-only" || discovery.beforeFixtureRelease !== true ||
           !Number.isSafeInteger(scope.late?.pid) || scope.late.pid <= 1 ||

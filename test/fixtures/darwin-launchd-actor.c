@@ -5,8 +5,8 @@
  * osfmk/mach/coalition.h (resource-usage task counter prefix),
  * bsd/kern/sys_coalition.c (bounded MIN(bufsize, sizeof(cru)) copy-out),
  * libsyscall/wrappers/spawn/spawn_private.h (explicit coalition attribute).
- * No coalition control syscall or private entitlement. Numeric signals below
- * only clean up fresh, stopped, unreaped direct children of this fixture. */
+ * No coalition control syscall or private entitlement. Numeric signals only
+ * clean up fresh unreaped direct children; scope control uses kernel tokens. */
 #define _DARWIN_C_SOURCE 1
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -16,6 +16,7 @@
 #include <signal.h>
 #include <mach/mach.h>
 #include <bsm/libbsm.h>
+#include <sandbox.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -51,13 +52,14 @@ static void identity(FILE *output, pid_t pid) {
     "\"version\":%d,\"bsdBytes\":%d,\"status\":%u}", pid, bytes, saved, unique.unique,
     unique.version, bsd_bytes, bsd.pbi_status);
 }
+static int sandboxed;
 static void describe(FILE *output) {
   struct coalition_ids ids = {0};
   errno = 0;
   int size = proc_pidinfo(getpid(), 20, 0, &ids, sizeof ids), saved = size == (int)sizeof ids ? 0 : errno;
-  fprintf(output, "{\"variant\":%d,\"pid\":%d,\"parent\":%d,\"group\":%d,\"session\":%d,"
+  fprintf(output, "{\"variant\":%d,\"sandboxed\":%s,\"pid\":%d,\"parent\":%d,\"group\":%d,\"session\":%d,"
     "\"coalitionBytes\":%d,\"coalitionErrno\":%d,\"resource\":\"%" PRIu64 "\",\"jetsam\":\"%" PRIu64 "\",\"identity\":",
-    PROBE_VARIANT, getpid(), getppid(), getpgrp(), getsid(0), size, saved, ids.ids[0], ids.ids[1]);
+    PROBE_VARIANT, sandboxed ? "true" : "false", getpid(), getppid(), getpgrp(), getsid(0), size, saved, ids.ids[0], ids.ids[1]);
   identity(output, getpid()); fputc('}', output);
 }
 static void publish(const char *name, int observation) {
@@ -133,7 +135,61 @@ static void admission(void) {
   admission_attempt(output, "explicit-other", other, setter); fputs("]}", output);
   require(fclose(output) == 0 && rename("admission.tmp", "admission.json") == 0, "admission publish");
 }
+static void apply_profile(void) {
+  FILE *file = fopen("profile.sb", "rb"); require(file != NULL, "profile open");
+  require(fseek(file, 0, SEEK_END) == 0, "profile length");
+  long length = ftell(file); require(length > 0 && length <= 1024 * 1024, "bounded profile length");
+  rewind(file);
+  char *text = malloc((size_t)length + 1); require(text != NULL, "profile allocation");
+  require(fread(text, 1, (size_t)length, file) == (size_t)length && fgetc(file) == EOF, "complete profile read");
+  require(fclose(file) == 0 && memchr(text, 0, (size_t)length) == NULL, "profile framing");
+  text[length] = 0;
+  char *error = NULL;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  int code = sandbox_init(text, 0, &error);
+  if (error != NULL) { fprintf(stderr, "lifetime profile: %s\n", error); sandbox_free_error(error); }
+#pragma clang diagnostic pop
+  free(text);
+  require(code == 0, "apply production Seatbelt profile");
+  sandboxed = 1;
+}
+static void service_probe(void) {
+  FILE *input = fopen("service-target", "r"); require(input != NULL, "service target open");
+  char target[256];
+  require(fscanf(input, "%255s", target) == 1 && fgetc(input) == '\n' && fgetc(input) == EOF, "service target content");
+  require(fclose(input) == 0, "service target close");
+  char *arguments[] = { "launchctl", "kickstart", target, NULL };
+  pid_t child = 0;
+  int code = posix_spawn(&child, "/bin/launchctl", NULL, NULL, arguments, environ);
+  int status = 0, joined = 0, numeric_cleanup = 0;
+  if (code == 0) {
+    struct timespec start, now;
+    require(clock_gettime(CLOCK_MONOTONIC, &start) == 0, "service start clock");
+    for (;;) {
+      pid_t waited = waitpid(child, &status, WNOHANG);
+      if (waited == child) { joined = 1; break; }
+      require(waited == 0 || (waited < 0 && errno == EINTR), "service child observation");
+      require(clock_gettime(CLOCK_MONOTONIC, &now) == 0, "service deadline clock");
+      if (now.tv_sec - start.tv_sec >= 5) {
+        numeric_cleanup = 1;
+        require(kill(child, SIGKILL) == 0 || errno == ESRCH, "service owned child deadline cleanup");
+        do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
+        require(waited == child, "service deadline child join");
+        joined = 1; break;
+      }
+      usleep(1000);
+    }
+    require(WIFEXITED(status) || WIFSIGNALED(status), "service terminal child status");
+  } else child = 0;
+  FILE *output = fopen("service-admission.tmp", "wx"); require(output != NULL, "service observation open");
+  fprintf(output, "{\"sandboxApplied\":%s,\"target\":\"%s\",\"spawnStatus\":%d,\"childPid\":%d,"
+    "\"waitStatus\":%d,\"joined\":%s,\"numericCleanupUsed\":%s}",
+    sandboxed ? "true" : "false", target, code, child, status, joined ? "true" : "false", numeric_cleanup ? "true" : "false");
+  require(fclose(output) == 0 && rename("service-admission.tmp", "service-admission.json") == 0, "service observation publish");
+}
 static void hold(const char *role, int prune) {
+  if (strcmp(role, "detached") == 0) { apply_profile(); service_probe(); }
   if (prune) close_descriptors();
   publish(role, 1);
   struct timespec start, now, pause = { .tv_nsec = 25000000 };

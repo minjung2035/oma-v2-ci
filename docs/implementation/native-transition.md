@@ -21,6 +21,35 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 CID-only late-fork 재탐색 실제 통과와 Seatbelt 다음 판정
+
+Native [40654073529](https://github.com/minjung2035/oma-v2-ci/actions/runs/40654073529) /
+`4d140a51d5`의 두 Mac common은253/253·skip0, gate117회는105 OBSERVED·12 SETUP_FAILED다.
+각 OS의3회 모두 첫 scan이 late child만 찾았고, 그 snapshot 뒤 태어난 grandchild는 포함하지 않았다.
+첫 제어 뒤 kernel 집계는8 started/7 exited로 여전히 live였고, 다음 scan이 새 PID를 찾아 SDK 제어했다.
+두 번째 제어 뒤 **release 전 CID ESRCH**와 별도 live CID의 성공 조회를 확인했다.
+effect 입력은 kernel CID hint였으며 marker에 저장한 PID·old owner token/FD는 쓰지 않았다.
+이는 unprofiled controlled target·GUI UID501·SIP-disabled 범위다. 원시는 SHA256 확인한
+`late-fork-macos{15,26}-{gates,runtime}/`다.
+
+다음 fixture는 동일한 `seatbeltProfile` production renderer를 detached target에 실제 적용하고,
+후속 fork는 그 label을 상속한다. trusted fresh controller는 재적용 없이 외부에서 제어한다.
+추가로 host가 실제 실행·종료를 확인한 dormant owned job을 sandboxed `/bin/launchctl kickstart`로
+다시 시작하려 한다. 실제 spawn/wait·deadline cleanup·job 출력과 marker 양성만 기록한다.
+거절을 기대값으로 고정하거나 marker 부재를 거절/죽음으로 해석하지 않는다.
+Linux parser/policy52/52·skip0은 통과했고 새 sandboxed target·service 시도의 Mac 실행은 NOT_RUN이다.
+bootstrap/다른 service 경로·실제 product owner crash·durable producer는 여전히 별도다.
+
+같은 `4d140a51d5`의 Architecture `40654073512`는 full serial3952/3952·skip0·errors[]이고,
+baseline 모든 command exit0·5개 lane PASS·skip0이다. input 전후15686 files·
+`7461a8886f3ad044027eb7eb96de5ff785e4eefaf1fb929bcad4b04d8f5d2eb4`가 같다.
+원시는 digest 확인한 `native-all-4d140a51d5/`, `architecture-4d140a51d5/`다.
+이 성공은 이전 exploratory 첫 Git 거절의 원인 설명이나 수리가 아니다.
+로컬 진단도 private bwrap0.12 overlay의 mapped-root namespace에서1/1 PASS였고, 실제 두 Git reply는
+같은 succeeded operation이었다(`socket-first-submit-mapped-smoke.json`). 일반 UID proof로 세지 않는다.
+최초 local smoke는 고정 `/usr/bin/bwrap` 부재로 spawn-failed(-2)·JSON EOF였으며 별개 setup 실패다.
+overlay·script·temporary dump는 제거했고 이전 CI 거절의 원인 추적은 유지한다.
+
 ### 2026-10-28 fresh kernel token 제어와 release 전 CID 소멸 확인
 
 Native [40650124720](https://github.com/minjung2035/oma-v2-ci/actions/runs/40650124720) /
