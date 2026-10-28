@@ -10,6 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
+assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
 const mode = process.argv[2];
 assert.ok(["launchd-scope", "launchd-image"].includes(mode));
 const root = realpathSync(process.cwd()), started = performance.now();
@@ -81,6 +82,18 @@ function usage(id) {
   if (!/^[1-9][0-9]*$/.test(id)) return { status: "NOT_QUERIED", reason: "no valid observed resource coalition" };
   return JSON.parse(run(actor, ["usage", id]).stdout);
 }
+async function observeReaping(id, other) {
+  const samples = [], end = performance.now() + 2000;
+  for (;;) {
+    const aggregate = usage(id), otherAggregate = usage(other);
+    samples.push({ elapsedMs: performance.now() - started, aggregate, otherAggregate });
+    // ESRCH is a lookup observation, not a count==0 or marker-based inference.
+    if (aggregate.available === true && aggregate.returnCode === -1 && aggregate.errno === 3 ||
+        performance.now() >= end) break;
+    await delay(100);
+  }
+  return { controlledGenerationsExited: true, samples };
+}
 function originalExited(target) {
   const current = inspect(target.pid);
   // Read-only exact-generation observation; never a signal or empty-scope oracle.
@@ -144,6 +157,14 @@ try {
     const members = Object.fromEntries(["leader", "ordinary", "detached"].map(name => [name, remember(marker(scope.directory, name))]));
     const control = remember(marker(other.directory, "other"));
     observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
+    assert.match(control.resource, /^[1-9][0-9]*$/);
+    const request = join(scope.directory, "admission-request");
+    writeFileSync(`${request}.tmp`, `${control.resource}\n`, { flag: "wx" });
+    renameSync(`${request}.tmp`, request);
+    await waitFor(() => existsSync(join(scope.directory, "admission.json")));
+    observation.scope.admission = marker(scope.directory, "admission");
+    assert.equal(observation.scope.admission.uid, process.getuid());
+    assert.equal(observation.scope.admission.callerResource, members.leader.resource);
     for (const member of [...Object.values(members), control]) {
       const current = inspect(member.pid);
       assert.equal(current.uniqueBytes, 56); assert.equal(current.unique, member.identity.unique);
@@ -157,6 +178,9 @@ try {
       ordinaryAcknowledged: existsSync(join(scope.directory, "ordinary.ack.json")),
       detachedAcknowledged: existsSync(join(scope.directory, "detached.ack.json")), otherAcknowledged: true,
       removedService: run("/bin/launchctl", ["print", scope.target], false) };
+    writeFileSync(join(scope.directory, "release"), "controlled actors only; not a production stop mechanism");
+    await waitFor(() => Object.values(members).every(member => originalExited(member.identity)), 12000);
+    observation.scope.afterControlledExit = await observeReaping(members.leader.resource, control.resource);
   }
 } catch (error) { failure = error; }
 finally {

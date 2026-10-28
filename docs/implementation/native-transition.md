@@ -21,28 +21,39 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
-### 2026-10-28 실제 Mac Personal 복원과 다음 generation-control 관측
+### 2026-10-28 clean Personal과 generation-checked SDK 제어 실제 통과
 
-Native `40637664033` / `4a579cff04`의 두 Mac common은251/251·skip0이다.
-EOF 전 fragmented frame 응답 회귀가 두 OS에서 실제 통과했다. Personal도 각3회 실제 화면 ready,
-Ctrl-D 뒤 exit0, ECHO/ICANON 복원과 Personal birth까지 확인했다. 다만 fixture의
-`dataRoot` 엔트리가 전부 숨김 이름이어야 한다는 가정에서 SETUP_FAILED였다.
-파일명은 session mode가 아니므로 이 가정은 삭제했다. 기존 `readSessionBirth`로 Society birth가
-없음을 확인하고, 별도의 Society exit4·무 provisioning 대조는 유지한다.
-실제 Linux birth API smoke는 비숨김 Human metadata를 허용하고 Society birth는 검출했다
-(`personal-birth-isolation-linux.json`). 원인이 확인된 조사용 preload와 NODE_OPTIONS는 제거했다.
-관측을 통과한 Mac UI와 수정한 clean fixture의 최종 판정은 구분한다.
-원시는 digest 확인한 `stream-fix-macos{15,26}-{gates,runtime}/`다.
+Native [40642688171](https://github.com/minjung2035/oma-v2-ci/actions/runs/40642688171) /
+`0aebf98b64`의 Mac15·26 common은 각각252/252·skip0이다.
+각 OS의 gate117회는105 OBSERVED·12 SETUP_FAILED이며 세 product gate는 OPEN이다.
+조사용 preload 없이 Personal 각3회 화면 ready·Ctrl-D·exit0·terminal 복원·Unicode cwd의 Personal birth와
+무 Society birth를 확인했다. 별도 Society 실행은 state 생성 전 exit4였다.
+파일명을 session mode로 오인한 oracle은 기존 `readSessionBirth` 의미로 교체했고 진단용 preload는 제거했다.
+실제 signed Swift helper의 EOF 전 fragmented frame 회귀도 두 OS에서 통과했다.
+원시는 API SHA256 확인한 `generation-macos{15,26}-{gates,runtime}/`다.
 
-다음 `mach-token-control`은 SDK 선언된 `proc_signal_with_audittoken`의 별도 primitive 실험이다.
-SDK header는 private/unstable이며 [고정 wrapper](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/libproc/libproc.c#L479)는
-0 또는 errno 값을 반환한다. raw syscall이나 private entitlement는 추가하지 않았다.
-parent가 unreaped child를 고정하고 kernel Mach trailer를 받은 뒤, 별도 sibling controller가
-signal0·잘못된 generation의 SIGSTOP·실제 SIGKILL을 호출한다. controller에는 새 profile을 적용하지
-않으므로 fresh sandboxed reaper·현재 role·PID 재사용·전체 scope 복구의 proof가 아니다.
-종료 전/후·fixture-only numeric cleanup·두 child join을 구분하고 거절/반례도 그대로 기록한다.
-driver117회·11 program과285분 최악 한도를 맞췄다. parser/policy51/51·skip0은 통과했으나
-새 SDK control C의 실제 compile/실행은 아직 NOT_RUN이다. 제품 guard와 journal은 바꾸지 않았다.
+`mach-token-control`도 두 Mac 각3회 OBSERVED다. UID501의 nonparent sibling controller가
+kernel Mach trailer의 genuine token으로 실제 대상을 SIGKILL했고, target은 signal9로 join됐다.
+잘못된 generation은 ESRCH(3), signal0은 EINVAL(22), 실제 SIGKILL은0을 반환했다.
+fixture-only numeric cleanup은 사용하지 않았고 두 owned child를 모두 join했다.
+SDK header는 private/unstable이며 [고정 wrapper](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/libproc/libproc.c#L479)의
+반환 계약은0 또는 errno다. raw syscall이나 private entitlement는 추가하지 않았다.
+controller에는 새 profile을 적용하지 않았다. 이 결과는 role·실제 PID 재사용·fresh sandboxed reaper·
+임의 후손의 token 취득·전체 scope 복구를 증명하지 않는다. 제품 guard와 journal은 그대로다.
+
+다음 판정은 resource coalition의 **재활성화 불가능한 종료 관측과 외부 admission**이다.
+task count의 일시적0은 pending activation을 배제하지 않는다. job 제거와 controlled exit 뒤
+동일 boot의 기존 CID가 kernel query에서 사라지는지, 별도 live job을 대조하며 관측한다.
+admission 및 all-owner-death 복구가 남으므로 이를 complete-scope backend 채택으로 읽지 않는다.
+
+다음 fixture는 controller가 제거한 job의 controlled actors를 release한 뒤, 기존 CID와 별도 live CID를
+짝지어2초까지 query한다. **이 release는 시험 cleanup이며 실제 recovery proof가 아니다.**
+실제 job 안에서는 inherited spawn을 대조군으로, own/다른 controlled CID를 명시한 suspended spawn을 시도한다.
+`posix_spawnattr_setcoalition_np`는 SDK에 없는 [고정 private 선언](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/spawn/spawn_private.h#L86)을
+따르는 시험 전용 adversary다. raw coalition control syscall·private entitlement·제품 경로는 추가하지 않는다.
+symbol 부재·거절·실제 성공을 구분하고 새 direct unreaped child만 종료·join한다.
+Linux parser/policy52/52·skip0과 실제 fixture의 Linux 거절·무 state 생성은 확인했다.
+새 C의 Mac compile·admission·CID 소멸은 아직 NOT_RUN이다.
 
 ### 2026-10-28 main-image 검증 통과와 실제 Keychain frame deadlock 수리
 

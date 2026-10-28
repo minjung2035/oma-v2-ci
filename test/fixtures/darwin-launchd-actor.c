@@ -1,15 +1,19 @@
 /* Disposable launchd experiment, never a production death or authority oracle.
- * Private read-only ABI: apple-oss-distributions/xnu at
+ * Private observation/adversarial ABI: apple-oss-distributions/xnu at
  * f6217f891ac0bb64f3d375211650a4c1ff8ca1ea:
  * bsd/sys/proc_info_private.h (PID flavor 20, 40-byte coalition IDs),
- * osfmk/mach/coalition.h (resource-usage task counter prefix), and
- * bsd/kern/sys_coalition.c (bounded MIN(bufsize, sizeof(cru)) copy-out).
- * No coalition control syscall and no signal to a numeric PID is used. */
+ * osfmk/mach/coalition.h (resource-usage task counter prefix),
+ * bsd/kern/sys_coalition.c (bounded MIN(bufsize, sizeof(cru)) copy-out),
+ * libsyscall/wrappers/spawn/spawn_private.h (explicit coalition attribute).
+ * No coalition control syscall or private entitlement. Numeric signals below
+ * only clean up fresh, stopped, unreaped direct children of this fixture. */
 #define _DARWIN_C_SOURCE 1
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <libproc.h>
 #include <dlfcn.h>
+#include <spawn.h>
+#include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -30,6 +34,8 @@ struct process_identity {
 _Static_assert(sizeof(struct process_identity) == 56, "pinned unique process result size");
 _Static_assert(sizeof(struct coalition_ids) == 40, "pinned coalition result size");
 _Static_assert(sizeof(struct task_counts) == 16, "pinned task counter prefix size");
+static const char *self_image;
+extern char **environ;
 static void require(int condition, const char *message) {
   if (!condition) { perror(message); exit(2); }
 }
@@ -68,16 +74,76 @@ static void close_descriptors(void) {
     require(close(entries[at].proc_fd) == 0, "close inherited descriptor");
 }
 static int exists(const char *name) { return access(name, F_OK) == 0; }
+typedef int (*set_coalition)(const posix_spawnattr_t *, uint64_t, int, int);
+static void admission_attempt(FILE *output, const char *name, uint64_t id, set_coalition setter) {
+  posix_spawnattr_t attributes;
+  require(posix_spawnattr_init(&attributes) == 0, "admission attributes");
+  require(posix_spawnattr_setflags(&attributes, POSIX_SPAWN_START_SUSPENDED | POSIX_SPAWN_CLOEXEC_DEFAULT) == 0,
+    "admission suspended flags");
+  /* Pinned private ABI: resource type 0, undefined task role 0.
+   * This is an adversarial test of admission, not a production launch API. */
+  int attribute_status = id == 0 ? 0 : setter == NULL ? ENOSYS : setter(&attributes, id, 0, 0);
+  char *arguments[] = { (char *)self_image, "describe", NULL };
+  pid_t child = 0;
+  int spawn_status = attribute_status == 0 ? posix_spawn(&child, self_image, NULL, &attributes, arguments, environ) : -1;
+  require(posix_spawnattr_destroy(&attributes) == 0, "admission destroy attributes");
+  struct coalition_ids ids = {0};
+  int stopped = 0, bytes = 0, saved = 0, status = 0, joined = 0;
+  if (spawn_status == 0) {
+    pid_t waited;
+    do { waited = waitpid(child, &status, WUNTRACED); } while (waited < 0 && errno == EINTR);
+    require(waited == child, "admission initial child wait");
+    stopped = WIFSTOPPED(status);
+    if (stopped) {
+      errno = 0;
+      bytes = proc_pidinfo(child, 20, 0, &ids, sizeof ids);
+      saved = bytes == (int)sizeof ids ? 0 : errno;
+      /* The successful spawn's child has not been reaped or released. */
+      require(kill(child, SIGKILL) == 0 || errno == ESRCH, "admission owned child cleanup");
+      do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
+      require(waited == child, "admission child join");
+    }
+    require(WIFEXITED(status) || WIFSIGNALED(status), "admission terminal child status");
+    joined = 1;
+  } else child = 0;
+  fprintf(output, "{\"name\":\"%s\",\"requestedResource\":\"%" PRIu64 "\",\"attributeStatus\":%d,"
+    "\"spawnStatus\":%d,\"pid\":%d,\"stopped\":%s,\"coalitionBytes\":%d,\"coalitionErrno\":%d,"
+    "\"actualResource\":\"%" PRIu64 "\",\"joined\":%s,\"waitStatus\":%d}",
+    name, id, attribute_status, spawn_status, child, stopped ? "true" : "false", bytes, saved,
+    ids.ids[0], joined ? "true" : "false", status);
+}
+static void admission(void) {
+  FILE *request = fopen("admission-request", "r"); require(request != NULL, "admission request");
+  char text[32], *end;
+  require(fscanf(request, "%31s", text) == 1 && fgetc(request) == '\n' && fgetc(request) == EOF, "admission request content");
+  require(fclose(request) == 0, "admission request close");
+  errno = 0; uint64_t other = strtoull(text, &end, 10);
+  require(errno == 0 && text[0] >= '1' && text[0] <= '9' && *end == 0 && other > 0, "admission other resource");
+  struct coalition_ids ids = {0};
+  require(getuid() != 0 && proc_pidinfo(getpid(), 20, 0, &ids, sizeof ids) == (int)sizeof ids &&
+    ids.ids[0] > 0 && ids.ids[0] != other, "admission distinct ordinary-user coalitions");
+  set_coalition setter = (set_coalition)dlsym(RTLD_DEFAULT, "posix_spawnattr_setcoalition_np");
+  FILE *output = fopen("admission.tmp", "wx"); require(output != NULL, "admission observation");
+  fprintf(output, "{\"privateInterface\":true,\"available\":%s,\"uid\":%u,\"callerResource\":\"%" PRIu64 "\",\"attempts\":[",
+    setter == NULL ? "false" : "true", (unsigned)getuid(), ids.ids[0]);
+  admission_attempt(output, "inherited", 0, setter); fputc(',', output);
+  admission_attempt(output, "explicit-own", ids.ids[0], setter); fputc(',', output);
+  admission_attempt(output, "explicit-other", other, setter); fputs("]}", output);
+  require(fclose(output) == 0 && rename("admission.tmp", "admission.json") == 0, "admission publish");
+}
 static void hold(const char *role, int prune) {
   if (prune) close_descriptors();
   publish(role, 1);
   struct timespec start, now, pause = { .tv_nsec = 25000000 };
   require(clock_gettime(CLOCK_MONOTONIC, &start) == 0, "actor start clock");
-  int acknowledged = 0;
+  int acknowledged = 0, admission_done = 0;
   for (;;) {
     if (!acknowledged && exists("ping")) {
       char ack[128]; require(snprintf(ack, sizeof ack, "%s.ack", role) > 0, "ack name");
       publish(ack, 0); acknowledged = 1;
+    }
+    if (!admission_done && strcmp(role, "leader") == 0 && exists("admission-request")) {
+      admission(); admission_done = 1;
     }
     if (exists("release")) break;
     require(clock_gettime(CLOCK_MONOTONIC, &now) == 0, "actor deadline clock");
@@ -102,6 +168,7 @@ static void usage(const char *text) {
 }
 int main(int argc, char **argv) {
   require(argc >= 2, "actor mode");
+  self_image = argv[0];
   if (strcmp(argv[1], "describe") == 0) { describe(stdout); putchar('\n'); return 0; }
   if (strcmp(argv[1], "inspect") == 0) {
     require(argc == 3, "inspect arguments");

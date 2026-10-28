@@ -78,6 +78,17 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 
 Resource coalition의 [고정 XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c)에서 `tasks_started/tasks_exited`는 같은 lock 아래 읽힌다. `termrequested`는 empty 알림 요청이며 즉시 fork 차단이 아니다. [같은 revision의 설명](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/doc/observability/coalitions.md)은 ID 비재사용과 loaded service 재시작의 coalition 재사용을 명시한다. 일시적 empty·terminate 요청을 닫힌 실행 범위로 승격하지 않는다. 목표 kernel의 위 전제를 실제 확인하며, SDK에 없는 ABI를 public이라 부르거나 private 제어 syscall로 우회하지 않는다.
 
+다음 최소 판정: job bootout 후 **controlled descendants 종료와 별도 live job**을 함께 관측하며,
+기존 CID의 조회가 ESRCH로 바뀌는지 기록한다. [고정 reap 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c#L2240)은 terminated·active_count0 뒤 hash에서 ID를 제거한다.
+started==exited는 pending activation을 포함하지 않는다. 외부 admission은 [spawn의 privilege/entitlement 조건](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L4020)을 실제 job에서 별도로 판정한다. source 조건을 목표 OS의 관측이나 owner-loss recovery로 대신하지 않는다.
+admission fixture의 private spawn attribute는 **시험 전용 adversary**다. inherited spawn을 대조군으로
+own/다른 controlled CID의 실제 API 결과·kernel membership·owned-child join을 남긴다.
+SDK symbol 부재를 admission 거절로 바꾸거나 이 private attribute를 제품 launch 경로로 채택하지 않는다.
+
+`proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
+nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.
+이 primitive는 role authority·실제 PID 재사용·fresh-profile recovery·임의 후손 token 취득·scope death의 증명이 아니다.
+
 Mac15·26 각3회에서 inherited signal은 전달됐지만 동일 SBPL을 fresh 적용한 쪽은 EPERM이었고 nested 재적용도 EPERM이었다. 따라서 SBPL 재적용을 recovery reaper로 사용하지 않는다. `seatbelt-signals`는 unreaped owned child만 쓰는 label 실험이며 permissive fixture profile·EOF 종료를 production policy나 complete-death proof로 옮기지 않는다.
 
 Native `40618265543`의 SIP-disabled Mac15·26에서는 GUI job 생성에 성공했지만, `SpawnConstraint.cdhash=A`에 경로를 B로 교체한 실행이 각3회 실제 B를 실행했다. 이 환경에서 launchd constraint 단독 exact-image 결박은 배제한다. SIP-enabled 환경이나 headless 지원으로 일반화하지 않는다.
