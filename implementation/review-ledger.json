@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 61,
-  "NOT_REVIEWED": 14275,
+  "CHANGED_WITHOUT_ORACLE": 62,
+  "NOT_REVIEWED": 14274,
   "REMOVED": 220
  },
  "lanes": {
@@ -469,7 +469,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/personal-host.ts",
@@ -2971,10 +2972,12 @@
   {
    "path": "packages/platform-mac/src/seatbelt.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR63"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "e9fe3c7aac46872aaad7baa610df195d8143f8809017d8d7b932133e2c3bdef5"
   },
   {
    "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
@@ -3081,8 +3084,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/preparation.ts",

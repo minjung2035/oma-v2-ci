@@ -19,10 +19,6 @@ async function main(argv: readonly string[]): Promise<void> {
     process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
     return;
   }
-  if (process.platform === "darwin") {
-    const { assertNativeRuntime } = await import("../runtime/native-support.js");
-    assertNativeRuntime();
-  }
   if (command.kind !== "session") { await import("./oma-society.js"); return; }
   const cwd = realpathSync(process.cwd());
   const dataRoot = dirname(hostLaunchLocation("personal", process.env).stateRoot);

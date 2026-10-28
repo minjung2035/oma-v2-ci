@@ -35,12 +35,16 @@ const launchdRecord = () => ({ fixtureOnly: true, controlledGenerationsExited: t
   jobRegistrationsRemoved: true, cleanupFaults: [], matchingA: { variant: 1 }, matchingB: { variant: 2 },
   cdhashes: ["a".repeat(40), "b".repeat(40)], actorSourceSha256: "c".repeat(64),
   replacedImage: { markerAfterTwoSeconds: false }, scope: { afterBootout: { otherAcknowledged: true } } });
+const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
+  noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
+  input: "ctrl-d", credentialFixture: false });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
       planned.name === "seatbelt-signals" ? signalRecord() :
-        planned.name === "launchd-job" ? launchdRecord() : { fixtureAssertionReturned: true } } }));
+        planned.name === "launchd-job" ? launchdRecord() :
+          planned.name === "personal-entry" ? personalRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
@@ -78,6 +82,14 @@ test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup
     { ...good, replacedImage: {} },
     { ...good, scope: { afterBootout: { otherAcknowledged: false } } },
   ]) assert.throws(() => validateDarwinObservation("launchd-job", { launchdJob: bad }));
+});
+
+test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {
+  const good = personalRecord();
+  for (const bad of [
+    { ...good, societyRefusedBeforeState: false }, { ...good, noSocietyProvisioned: false },
+    { ...good, terminalRestored: false }, { ...good, birthMode: "society" }, { ...good, credentialFixture: true },
+  ]) assert.throws(() => validateDarwinObservation("personal-entry", { personal: bad }));
 });
 
 

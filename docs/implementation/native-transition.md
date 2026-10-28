@@ -21,6 +21,22 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 Personal의 독립 진입 복구
+
+`entry/oma.ts`의 모드 선택 전 Darwin 전체 차단을 제거했다. Personal은 기존 Human OS 권한·history owner를 쓰며
+Society broker/role/scope를 로드하지 않는다. Society entry·broker·runner·client의 capability guard는 그대로다.
+지원되지 않는 Society는 자기 entry에서 provisioning 전에 거절한다. resume의 birth/history 조회는 읽기 관측이다.
+
+수정 전 compiled entry는 Linux에서 platform selector만 제어한 component smoke로 Personal도 exit4/무상태로 거절했다.
+처음 시도는 Koffi가 잘못된 OS binary를 찾은 setup 실패였으며 실제 Linux Koffi를 먼저 로드해 관측을 분리했다.
+이는 Darwin kernel 실행이 아니다. 수정 뒤 실제 Linux PTY·bundled Pi·새 HOME/data에서 Personal 화면 표시 →
+Ctrl-D → exit0·echo/icanon 복원·Personal birth1개·Society 미생성을 확인했다. build·전체 strict와 관련87개도 통과했다.
+
+실제 Mac의 `personal-entry`는 credential/inference 대체 없이 같은 새 terminal 경로와 Society의 무상태 거절을 확인한다.
+Mac 결과는 아직 미확인이고 signed Keychain·도구·resume 전체 검증을 이 startup smoke로 대신하지 않는다.
+plan108회·program10개의 driver242분+설치/credential/upload20분을 outer270분 안에 둔다.
+
+
 ### 2026-10-28 file fence의 실제 수정 확인과 public launchd 후보
 
 Native `40607179845`, 입력 `4173f5941`의 Mac15·26에서 nested credential read·credential/parent rename 거절과
