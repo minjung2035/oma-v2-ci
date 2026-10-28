@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { runProcessSync } from "@oma/process/run";
+import { GIT_ENV } from "@oma/process/policies";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
 assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
@@ -23,18 +24,18 @@ const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()
 const commands = [], jobs = [], targets = [];
 const observation = { domain, commands, fixtureOnly: true };
 let cleaning = false, failure;
-function observe(executable, argv, maximum = 10000) {
+function observe(executable, argv, maximum = 10000, environment = process.env) {
   const remaining = (cleaning ? 110000 : 80000) - (performance.now() - started);
   assert.ok(remaining > 0, "launchd fixture deadline");
-  const result = spawnSync(executable, argv, { cwd: root, encoding: "utf8",
+  const result = spawnSync(executable, argv, { cwd: root, env: environment, encoding: "utf8",
     timeout: Math.max(1, Math.min(maximum, Math.floor(remaining))), killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
   const record = { executable, argv, pid: result.pid, exitCode: result.status, signal: result.signal,
     error: result.error?.message, errorCode: result.error?.code, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   commands.push(record);
   return record;
 }
-function run(executable, argv, required = true) {
-  const record = observe(executable, argv);
+function run(executable, argv, required = true, environment = process.env) {
+  const record = observe(executable, argv, 10000, environment);
   assert.equal(record.error, undefined, JSON.stringify(record));
   assert.equal(record.signal, null, JSON.stringify(record));
   if (required) assert.equal(record.exitCode, 0, JSON.stringify(record));
@@ -155,7 +156,7 @@ try {
   if (mode === "launchd-bootstrap") {
     const bootstrapSource = fileURLToPath(new URL("./darwin-bootstrap-exec.c", import.meta.url));
     const launcher = join(root, "bootstrap-exec");
-    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-o", launcher]);
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-ldns_sd", "-o", launcher]);
     const compiler = realpathSync(run("/usr/bin/xcrun", ["--find", "clang"]).stdout.trim());
     const sdk = realpathSync(run("/usr/bin/xcrun", ["--show-sdk-path"]).stdout.trim());
     const selectorHome = join(root, "developer-observation"); mkdirSync(selectorHome, { mode: 0o700 });
@@ -175,19 +176,27 @@ try {
     const gitControlPath = join(root, "git-control.txt");
     const gitControlBytes = "BOOTSTRAP_NATIVE_OK\n"; writeFileSync(gitControlPath, gitControlBytes, { flag: "wx" });
     const gitExpected = createHash("sha1").update(`blob ${Buffer.byteLength(gitControlBytes)}\0${gitControlBytes}`).digest("hex");
-    const positiveGit = run(developerTools.git, ["--no-replace-objects", "hash-object", "--no-filters", "--", gitControlPath]);
+    const gitEnvironment = JSON.stringify(GIT_ENV);
+    const positiveGit = run(developerTools.git, ["--no-replace-objects", "hash-object", "--no-filters", "--", gitControlPath],
+      true, { ...GIT_ENV, HOME: selectorHome, TMPDIR: selectorHome });
     assert.equal(positiveGit.stdout, `${gitExpected}\n`);
+    const nativeDnsHostPath = join(root, "host-native-dns.json");
+    const nativeDnsHostCommand = run(launcher, ["observe-dns", nativeDnsHostPath]);
+    const nativeDnsHost = JSON.parse(readFileSync(nativeDnsHostPath, "utf8"));
+    assert.equal(nativeDnsHost.socket.connectResult, 0, JSON.stringify(nativeDnsHost));
+    assert.equal(nativeDnsHost.dnssd.createResult, 0, JSON.stringify(nativeDnsHost));
+    assert.equal(nativeDnsHost.getaddrinfo.result, 0, JSON.stringify(nativeDnsHost));
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
-const [target, canary, compiler, git, report] = process.argv.slice(2);
+const [target, canary, compiler, git, gitEnvironment, launcher, report] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 const save = () => writeFileSync(report, JSON.stringify(value));
-const command = (executable, argv, timeout = 5000) => {
-  const child = spawnSync(executable, argv, { encoding: "utf8", timeout, killSignal: "SIGKILL" });
+const command = (executable, argv, environment = process.env) => {
+  const child = spawnSync(executable, argv, { env: environment, encoding: "utf8", timeout: 5000, killSignal: "SIGKILL" });
   return { executable, argv, pid: child.pid, exitCode: child.status, signal: child.signal,
     error: child.error?.message, errorCode: child.error?.code, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
 };
@@ -198,11 +207,15 @@ catch (error) { value.writeError = { code: error.code, message: error.message };
 try { writeFileSync(canary, "UNEXPECTED_WRITE\\n"); value.deniedWrite = "unexpected-success"; }
 catch (error) { value.deniedWrite = error.code; }
 save();
-value.git = command(git, ["--no-replace-objects", "hash-object", "--no-filters", "--", "node-output.txt"]); save();
+value.git = command(git, ["--no-replace-objects", "hash-object", "--no-filters", "--", "node-output.txt"],
+  { ...JSON.parse(gitEnvironment), HOME: process.cwd(), TMPDIR: process.cwd() }); save();
 writeFileSync("compile.c", "int main(void) { return 0; }\\n");
 value.compiler = command(compiler, ["-fsyntax-only", "compile.c"]); save();
 try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
 catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
+const nativeDnsPath = report + ".dns.json";
+value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath]);
+value.nativeDns = existsSync(nativeDnsPath) ? JSON.parse(readFileSync(nativeDnsPath, "utf8")) : null;
 value.complete = true; save();
 `, { flag: "wx" });
     const positive = loadJob("bootstrap-positive", actor, "once");
@@ -212,7 +225,8 @@ value.complete = true; save();
       sourceSha256: createHash("sha256").update(readFileSync(bootstrapSource)).digest("hex"),
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
-      compiler, sdk, developerTools, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected, variants: [] };
+      compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
+      nativeDnsHostCommand, nativeDnsHost, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
@@ -231,7 +245,7 @@ value.complete = true; save();
       const toolsReport = join(directory, "tools.json");
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
-        nodeTarget.target, canary, compiler, developerTools.git, toolsReport]);
+        nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher, toolsReport]);
       const tools = optionalJson(toolsReport);
       const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
       const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,

@@ -7,6 +7,10 @@
 #include <mach/task_special_ports.h>
 #include <libproc.h>
 #include <sandbox.h>
+#include <dns_sd.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -70,6 +74,47 @@ static void apply_profile(const char *path) {
   free(profile);
   require(status == 0, "apply production Seatbelt profile");
 }
+/* Diagnostic calls under the inherited label, never a resolver fallback.
+ * Keep raw connect, DNS-SD IPC and libc lookup failures separate. */
+static int observe_dns(const char *report_path) {
+  struct snapshot ports = snapshot();
+  struct sockaddr_un address = {0};
+  address.sun_len = sizeof address; address.sun_family = AF_UNIX;
+  const char endpoint[] = "/var/run/mDNSResponder";
+  _Static_assert(sizeof endpoint <= sizeof address.sun_path, "exact DNS endpoint fits sockaddr_un");
+  memcpy(address.sun_path, endpoint, sizeof endpoint);
+  errno = 0;
+  int descriptor = socket(AF_UNIX, SOCK_STREAM, 0);
+  int socket_errno = descriptor < 0 ? errno : 0;
+  errno = 0;
+  int connected = descriptor >= 0 ? connect(descriptor, (const struct sockaddr *)&address, sizeof address) : -1;
+  int connect_errno = descriptor >= 0 && connected < 0 ? errno : 0;
+  if (descriptor >= 0) require(close(descriptor) == 0, "close diagnostic Unix socket");
+  DNSServiceRef service = NULL;
+  DNSServiceErrorType dns_status = DNSServiceCreateConnection(&service);
+  if (service != NULL) DNSServiceRefDeallocate(service);
+  struct addrinfo hints = {0}, *addresses = NULL;
+  hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM;
+  errno = 0;
+  int gai_status = getaddrinfo("example.com", "443", &hints, &addresses), gai_errno = errno;
+  unsigned ipv4 = 0, ipv6 = 0;
+  for (const struct addrinfo *item = gai_status == 0 ? addresses : NULL; item != NULL; item = item->ai_next) {
+    if (item->ai_family == AF_INET) ++ipv4;
+    if (item->ai_family == AF_INET6) ++ipv6;
+  }
+  if (gai_status == 0 && addresses != NULL) freeaddrinfo(addresses);
+  FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive DNS report");
+  fprintf(output, "{\"phase\":\"native-dns\",\"pid\":%d,\"uid\":%u,"
+    "\"hostname\":\"example.com\",\"endpoint\":\"/var/run/mDNSResponder\",\"ports\":", getpid(), (unsigned)getuid());
+  print_snapshot(output, &ports);
+  fprintf(output, ",\"socket\":{\"created\":%s,\"errno\":%d,\"connectAttempted\":%s,\"connectResult\":%d,\"connectErrno\":%d},"
+    "\"dnssd\":{\"createResult\":%d},\"getaddrinfo\":{\"result\":%d,\"errno\":%d,\"ipv4\":%u,\"ipv6\":%u}}\n",
+    descriptor >= 0 ? "true" : "false", socket_errno, descriptor >= 0 ? "true" : "false",
+    connected, connect_errno, dns_status, gai_status, gai_errno, ipv4, ipv6);
+  require(fclose(output) == 0, "complete DNS report");
+  release_snapshot(&ports, NULL, 0);
+  return 0;
+}
 /* Executed after the sandboxed pruning helper execs this same controlled
  * image. An ordinary program can try these SDK calls; no new grant is used. */
 static int restore_registered(char **argv) {
@@ -93,7 +138,9 @@ static int restore_registered(char **argv) {
   return 126;
 }
 int main(int argc, char **argv) {
-  require(argc >= 6 && getuid() != 0, "mode profile report cwd executable [args] as ordinary user");
+  require(getuid() != 0, "ordinary user required");
+  if (argc == 3 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2]);
+  require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];
   int clear_bootstrap = strcmp(mode, "inherited") != 0;

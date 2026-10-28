@@ -90,7 +90,12 @@ peer가 준 port를 kernel task라고 믿지 않는다. unprofiled controlled ta
 다음 최소 질문은 bootstrap/XPC 제어 권한을 exec 전에 분리할 수 있는지와 정상 도구·DNS의 양립 여부다. public API와 libxpc의 내부 port 전달 관례를 구분하고, 오래된 bootstrap proxy를 바로 제품에 이식하지 않는다. 다른 service 경로·실제 product owner crash·durable producer의 증명도 별도다. 실행 guard·Linux backend·기존 writer/receipt/recovery 계약은 유지한다.
 `launchd-bootstrap`의 첫 `41392d6624`는 unsafe/deprecated API로 compile 실패했다. SEND 참조만 반납하도록 교체한 `a4c398f89a`의 Native [40726395555](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395555)에서는 양 Mac 각3회 실제 compile·실행을 확인했다. inherited service12회는 성공, bootstrap만/모두 제거한24회는 CLI141·effect 미관측이고 Node·clang·자기 쓰기·금지 canary는18 variant 모두 기대대로다. 단, Git shim/ DNS는 상속 기준선부터 실패했으므로 권한 제거의 호환성 실패로 분류할 수 없다. selected Git·host DNS 양성과 registered seed 재취득 반례를 다음에 확인한다. backend·role authority·전체 service admission/death proof는 아직 채택하지 않는다. [Chromium V2 원본](https://chromium.googlesource.com/chromium/src/+/dc38dfd79ac22ae4d60fb49a78f63ab0920f958e/sandbox/mac/seatbelt_sandbox_design.md)의 proxy 제약과 public Mach API/libxpc 내부 관례 구분도 유지한다.
 
-후속 fixture는 기존 selected developer-tools owner로 Git 양성을 맞추고, 같은 hostname의 host DNS 양성 및 실제 mDNSResponder socket의 exact 두 경로만 선언한다. registered seed 재조회→task bootstrap 복구→별도 target exec의 adversary도 추가했다. local grammar/tool producer 검증은 통과했지만 이 입력의 실제 Mac 실행은 NOT_RUN이다. fixture 입력을 production 정책 확대나 안전한 backend 채택으로 해석하지 않는다.
+후속 `4baca756363`의 Native [40735745482](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745482)에서 host selected Git·DNS 양성은 확인했다.
+그러나 sandboxed Git은 inherited부터 `/etc/gitconfig` EPERM·128, DNS도 exact socket 입력 뒤 ENOTFOUND였다. 정상 도구 양립은 아직 미충족이다.
+bootstrap-only는 registered seed 재조회·setter0·task bootstrap 복구6회를 관측했으나 launchctl141·effect 미관측이었다.
+task handle 복구를 service 실행 권한 복구/탈출로 확대하지 않는다. 모든 seed 제거 뒤에는 이 재취득 방법에서 seed0·setter 미호출이었다.
+기존 Git 환경 owner와 native DNS 진단으로 다음 원인을 분리하며 fixture용 광범위 권한·production 실행 허용으로 우회하지 않는다.
+현재 probe는 host/Node Git에 기존 `GIT_ENV`를 적용했고 native DNS 단계별 진단을 추가했다. local41/41과 Linux producer smoke는 통과했지만 이 변경의 Mac compile·Git 정상화·DNS 원인 분류는 NOT_RUN이다. Node resolver·production 정책과 실행 guard를 바꾸지 않았다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.

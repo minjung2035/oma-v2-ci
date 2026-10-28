@@ -113,7 +113,7 @@ baselineComparison은 각 NOT_AVAILABLE이고 비교 완료라고 쓰지 않는�
 Mac packed install의 `@oma/git` canonical-health→preparation `UNSUPPORTED_PROFILE`은 여전히 실패다. skip/fallback으로 바꾸지 않았다.
 원시는 `bootstrap-rights/send-rights-fix/clean-source-linux-regression/`·`actual-native-runtime-summary.json`이다.
 
-### 다음 입력의 stronger baseline·재취득 반례 — 실제 Mac NOT_RUN
+### 발행 전 checkpoint의 stronger baseline·재취득 반례 — 당시 실제 Mac NOT_RUN
 
 기존 developer-tools owner가 관측한 actual Git으로 host 양성·sandboxed hash를 맞추고 같은 hostname의 host DNS 양성을 추가했다.
 실제 확인한 mDNSResponder socket의 원래 경로와 physical alias만 기존 fixture의 exact Unix-socket 입력으로 선언했다.
@@ -121,8 +121,55 @@ Mac packed install의 `@oma/git` canonical-health→preparation `UNSUPPORTED_PRO
 validator는 baseline 실패·잘못된 binary/target/PID·거짓 setter 결과 귀속을 거절하되 실제 service 성공/거절과 음성 tool 결과는 보존한다.
 local parser/policy41/41·skip0, syntax3개·생성 script syntax, 실제 Linux state 전 거절을 확인했다.
 생성한 Node producer를 Linux에서 실제 실행해 자기 쓰기·Git hash·cc syntax 성공, 없는 launchctl의 ENOENT 원시 기록도 확인했다.
-이 unsandboxed producer smoke는 Darwin sandbox proof가 아니다. 새 source의 Mac compile·DNS 양립·권한 재취득은 **NOT_RUN**이다.
+이 unsandboxed producer smoke는 Darwin sandbox proof가 아니다. 이 checkpoint 당시 Mac compile·DNS 양립·권한 재취득은 **NOT_RUN**이었다.
 production renderer·actor·실행 guard·Linux backend·원래 timeout은 그대로다. local 원시는 `bootstrap-rights/send-rights-fix/baseline-restoration-local/`다.
+
+### stronger baseline·재취득 실제 Mac 판독
+
+주 `f73c315acbc15b48a79b9fc7d3c3a5da0a12b8aa` / mirror `4baca756363b053a18704c828c7e5d013dae5230`,
+Native [40735745482](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745482)의 원시 ZIP5개를 SHA256 대조했다.
+gates Mac15 ZIP12838540627 `e4d0e9283f6c0b1085421d8ee751d051006ac735bfc5184b231d05e73f465b3c`,
+Mac26 ZIP12836149748 `7a67863518ed0045ecc8885ceb867e984a2f78e99ad496501595bc6e9a62077b`다.
+clean `2dcd9200abb3a2b8deb91975541ffe0c9a325a0ce56af3d0a3923bfdc143c136` /15687 files와 runtime artifacts 전후 동일이다.
+GUI UID501·arm64·SDK15.5/26.5 각각3회이며 새 case는 OBSERVED, 전체는 각108 OBSERVED·12 SETUP_FAILED다.
+
+| 조건 | 실제 task bootstrap 재취득 | 직접 / Node / 재취득 뒤 CLI | 실제 owned service effect |
+|---|---|---|---|
+| inherited |기존 nonzero·setter0 |각6회 exit0 |18회 |
+| bootstrap-only |seed 조회·setter0·0→nonzero 총6회 |각6회141 |미관측 |
+| bootstrap-and-xpc |seed0·setter 미호출6회 |직접/Node 각6회141·재취득 helper6회125 |미관측 |
+
+task handle의 실제 복구와 service 실행 권한의 복구는 다르다. bootstrap-only의 실행 탈출이 확인된 것은 아니다.
+host selected Git·같은 hostname DNS 양성은 모두 성공했다. 그러나 sandboxed Git은 전18 variant에서
+`fatal: unable to access '/etc/gitconfig': Operation not permitted`·exit128이고 DNS도 inherited부터 ENOTFOUND다.
+Git probe는 기존 `GIT_ENV`와 달리 ambient 환경을 사용했다. 기존 owner 적용·native DNS 진단은 다음 입력에서 검증한다.
+광범위한 파일/Mach grant·timeout 확대·기대 오류 묵인으로 정상 기능을 선언하지 않는다.
+clang·자기 쓰기·금지 canary는18 variant 모두 기대대로지만 backend 미채택·실행 차단·세 gate OPEN은 그대로다.
+원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/`의 원시 ZIP·OS별 row·
+`actual-baseline-restoration-{outcomes,summary}.json`이다. Architecture40735745551 artifact는 아직 미판독이며 과거 all3953 결과를 이 입력으로 승격하지 않는다.
+
+### 후속 회수한 같은 source의 전체 Linux 회귀·native common
+
+Architecture [40735745551](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745551), source `4baca756363b053a18704c828c7e5d013dae5230`의
+all ZIP12839366662 `1941b4c222dab951eef72964c593bca434e797b46c15b149d8d4bff71a28c4a2`,
+verification ZIP12839985845 `be75b536a6823dd1a701fb3546118274f18acd717780886d29efefa76ffefb07`를 SHA256 대조했다.
+같은 clean `2dcd9200…`에서 all3953/3953·fail/cancel/skip/todo0·errors[]이며 all의13 command는 code0·signal/error/timeout 없음이다.
+다른5 lane도 PASS·skip0·errors[]·각 command code0이다. baselineComparison은 모두 NOT_AVAILABLE이다.
+원시 all 입력 전후가 같고 Native runtime의 source HEAD·입력·runtime artifacts도 전후 동일하다.
+Mac15/26 common 각254/254·Ubuntu246/246·skip0이다. Mac packed 선언/설치 통과26개와 authored installed-runtime PASS16개를 구분한다.
+나머지10개에 runtime smoke가 있다고 합성하지 않으며 `@oma/git` preparation `UNSUPPORTED_PROFILE`1건은 여전히 실패다.
+원시는 같은 root의 `clean-source-linux-regression/`·`actual-native-runtime-summary.json`이다.
+
+### 다음 Git 환경·native DNS 진단 입력 — Mac NOT_RUN
+
+기존 `GIT_ENV`를 재사용해 system/global config·hooks 정책을 복제하지 않고 host/Node Git을 소유 HOME/TMPDIR에 맞췄다.
+normal Node DNS는 그대로 두고 C child에서 raw Unix socket/connect·DNSService IPC·libc getaddrinfo의 실제 status/errno를 분리한다.
+host의 같은 native API 양성을 먼저 요구하며, child의 API 거절·timeout·report 부재는 음성/미관측으로 보존한다.
+local parser/policy41/41·skip0·생성 script syntax·실제 Linux fixture의 state 전 거절을 확인했다.
+실제 Linux producer의 기존 Git 환경 hash·cc syntax 성공과 없는 native helper의 ENOENT·null report 경로를 확인했다.
+이것은 Mac DNS 실행 증거가 아니다. 새 C compile·Mac Git 정상화·DNS 거절 원인은 **NOT_RUN**이다.
+production renderer·actor·Linux backend·실행 guard·원래 timeout은 바꾸지 않았다.
+local 원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/git-env-native-dns-local/`다.
 
 
 
@@ -870,7 +917,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `2dcd9200abb3a2b8deb91975541ffe0c9a325a0ce56af3d0a3923bfdc143c136` (15687 files).
+verification input digest `b89d272184e568470267ec35ecafc6c3ede867e6564b46ef52c0b5d4d55560b1` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

@@ -21,6 +21,42 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 기존 Git 환경 적용·native DNS 단계별 진단 — Mac 실행 전
+
+실제 `/etc/gitconfig` 거절 뒤 host/Node Git의 환경을 기존 `@oma/process/policies:GIT_ENV`와 소유 HOME/TMPDIR로 맞췄다.
+system/global config 읽기 grant를 넓히거나 새 config 정책을 복제하지 않았다.
+C helper의 진단은 exact AF_UNIX socket/create/connect errno, `DNSServiceCreateConnection` 결과,
+libc getaddrinfo 결과/errno·주소 family 수를 각각 남긴다. 같은 host에서 세 API의 실제 양성을 먼저 요구한다.
+Node resolver는 그대로 실행하고 별도 C child의 원시 실패를 보존한다. resolver fallback·Mach grant·timeout 확대는 없다.
+local parser/policy41/41·실제 Linux 생성 producer의 Git/cc·없는 native helper의 실제 ENOENT 기록·fixture의 state 전 거절을 확인했다.
+이 새 C source의 Mac compile·Git 정상화·native DNS 진단은 **NOT_RUN**이다.
+원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/git-env-native-dns-local/`다.
+
+별도로 이전 source `4baca756363`의 Architecture40735745551 ZIP2개를 SHA256 대조·판독했다.
+clean `2dcd9200…`의 all3953/3953·skip0·errors[]·13 command code0와 입력 전후 동일을 확인했다.
+다른5 lane도 PASS, baselineComparison은 모두 NOT_AVAILABLE이다. 새 진단 source의 runtime 결과로 합성하지 않는다.
+같은 source의 Mac common각254/254·Ubuntu246/246·skip0, Mac packed declaration26/27·authored installed-runtime16 PASS를 구분했다.
+`@oma/git` preparation `UNSUPPORTED_PROFILE`1건은 그대로 남아 있다.
+
+
+### 2026-10-28 stronger baseline·registered seed 재취득의 실제 결과
+
+주 `f73c315acbc15b48a79b9fc7d3c3a5da0a12b8aa` / mirror `4baca756363b053a18704c828c7e5d013dae5230`,
+Native [40735745482](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745482)의 원시 ZIP5개 SHA256을 대조했다.
+clean `2dcd9200abb3a2b8deb91975541ffe0c9a325a0ce56af3d0a3923bfdc143c136` /15687 files·runtime artifacts 전후 동일이다.
+양 Mac 각각120회 중108 OBSERVED·12 SETUP_FAILED이며 새 bootstrap3회는 모두 실제 compile·실행 후 OBSERVED다.
+
+host selected Git·같은 hostname DNS 양성은 모두 성공했다. sandboxed Git은 inherited부터 전18 variant가
+`/etc/gitconfig` EPERM·128이다. probe의 ambient 환경과 기존 `GIT_ENV` owner 차이가 확인돼 그 owner를 재사용한다.
+DNS는 exact socket 두 경로를 선언한 뒤에도 inherited부터 ENOTFOUND다. native Unix connect·DNSService·getaddrinfo 진단으로 분리하며 원인은 아직 미분류다.
+
+bootstrap-only는 총6회 setter0과 task bootstrap0→nonzero를 실제 관측했지만 launchctl은141·effect 미관측이었다.
+이를 service 실행 탈출 성공으로 쓰지 않는다. 모든 seed 제거는 seed0·setter 미호출·helper125이고,
+inherited의 직접/Node/restored 총18회 effect만 성공했다. clang·자기 쓰기·금지 canary는18 variant 모두 기대대로다.
+실행 guard 차단·세 product gate OPEN·backend 미채택은 그대로다. Architecture40735745551은 아직 artifact 미판독이다.
+원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/`의 원시 ZIP·OS별 row·`actual-baseline-restoration-{outcomes,summary}.json`이다.
+
+
 ### 2026-10-28 selected Git·DNS 양성 대조와 registered seed 재취득 — Mac 실행 전
 
 기존 `observeMacDeveloperTools`의 actual selector 결과를 재사용하고 host·sandboxed Git을 같은 binary로 맞췄다.

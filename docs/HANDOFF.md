@@ -24,11 +24,12 @@
 | 재개 기준 주 HEAD | `74eadb6fd34c258393a231930fcdf0c85e601af6` — `Bind sandbox recovery evidence to clean committed inputs` |
 | CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, `origin`은 `git@github.com:minjung2035/oma-v2-ci.git` |
 | 재개 기준 mirror HEAD / origin ref | `836e2f596314857e2f03a5d91154a40413ecf71a` — `Bind sandboxed recovery probe to clean committed inputs` |
-| 마지막 committed 코드 변경 | 주 저장소 `2dd8bf5d`: production Seatbelt target + service 호출 관측. 이후 binding commit은 코드 구현이 아님 |
+| 인수 시 마지막 committed 코드 변경 | 주 저장소 `2dd8bf5d`: production Seatbelt target + service 호출 관측. 이후 binding commit은 코드 구현이 아님 |
 | 이번 작업 | verifier 임시 트리 수명 수리·fresh service target·Linux 인수검증 마감. 관련 native 문서의 기존 변경까지 포함한 commit/push를 사용자에게 명시 승인받음 |
 | Linux 발행 source | 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9` / mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`, tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c` 동일 |
 | 첫 bootstrap 실험 source | 주 `3581b838463cd55d1294a362014bcfba2e2ce918` / mirror `41392d6624cc5d6301ea97bf0b2127a053956ea0`, tree `ae563d0f9501943c4281e6660c05bd9c64206f1b` 동일. Native40721951956에서 새 helper compile6건 실패, 권한 분리는 미실행 |
 | SEND right 교체 뒤 실제 source | 주 `3ca06ef0485e5114a3d3f62e55aabd26dca1c9d3` / mirror `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`, tree `006be93f2bc1c40c2baf98ebe6697b5a0d0817e0` 동일. Native40726395555의 양 Mac 새3건씩 OBSERVED |
+| selected baseline·재취득 실제 source | 주 `f73c315acbc15b48a79b9fc7d3c3a5da0a12b8aa` / mirror `4baca756363b053a18704c828c7e5d013dae5230`, tree `29d2cc1f2698c424ae4d24627191c5e30e3df50c` 동일. Native40735745482의 양 Mac 새3건씩 OBSERVED |
 | 마지막 로컬 실행 | 정상 PATH serial all3952/3952·skip0·errors[], 독립 설치본 실제 Principal/Worker/Personal·재개·자동 보관/cold 복원·같은 key receipt 확인. 유한 작업은 종료했으며 원시와 소유 임시 자원을 구분 |
 | 환경 | Linux x64. Mac 실행은 실제 GitHub runner. LSP 미설정 |
 | Node26 | `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
@@ -117,6 +118,16 @@ SEND right 교체 뒤 원시는 `bootstrap-rights/send-rights-fix/`다. clean �
 후속 Architecture [40726395696](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395696), source `a4c398f89a`의 ZIP2개도 SHA256 대조·판독했다. 같은 clean `92b706…`에서 all3953/3953·skip0·errors[], 전체13 command exit0과 입력 전후 동일을 확인했다. baselineComparison은 NOT_AVAILABLE이다. 같은 source의 Mac common 각254/254·Ubuntu246/246·skip0도 확인했다. Mac 독립 설치의 `@oma/git` preparation `UNSUPPORTED_PROFILE`은 그대로 남아 있다. 원시는 `bootstrap-rights/send-rights-fix/clean-source-linux-regression/`·`actual-native-runtime-summary.json`이다.
 
 **다음 입력 구현·local 검증 완료 / 실제 Mac 미실행:** 기존 `observeMacDeveloperTools`의 selected Git으로 host 양성·sandboxed 명령을 일치시켰다. 같은 hostname의 host DNS 양성과 관측한 `/var/run/mDNSResponder` 및 그 실제 socket의 physical alias만 fixture 입력으로 선언한다. registered seed를 다시 조회하고 task bootstrap을 복구한 뒤 별도 fresh target의 launchctl로 exec하는 adversary를 추가했다. production Seatbelt renderer·actor·실행 guard·Linux backend는 바꾸지 않았다. local parser/policy41/41·실제 생성 Node script의 Git/cc 실행·Linux fixture의 state 전 거절을 확인했다. 이 변경 source의 Mac compile·권한 재취득·DNS 양립은 아직 NOT_RUN이며 과거 결과를 승격하지 않는다.
+
+위 NOT_RUN은 발행 전 checkpoint다. 후속 Native [40735745482](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745482), `4baca756363b053a18704c828c7e5d013dae5230`의 ZIP5개를 SHA256 대조했다. clean `2dcd9200abb3a2b8deb91975541ffe0c9a325a0ce56af3d0a3923bfdc143c136` /15687 files와 runtime artifacts는 양 Mac 전후 동일하다. 새 case각3건은 OBSERVED·전체108 OBSERVED/12 SETUP_FAILED다.
+
+**확정:** host selected Git과 같은 hostname DNS는 모두 양성이다. 그러나 sandboxed Git은 inherited부터 모든18 variant에서 `/etc/gitconfig` EPERM·exit128이며, DNS도 exact socket 입력 뒤 여전히 ENOTFOUND다. Git probe가 production의 `GIT_ENV`를 쓰지 않은 차이가 확인됐다. 기존 환경 owner를 재사용하고 DNS는 raw Unix connect·DNSService·getaddrinfo의 native 결과를 분리해 확인한다. 광범위한 파일/Mach 권한으로 덮지 않는다.
+
+**재취득의 실제 한계:** bootstrap-only는 양 Mac 총6회 registered seed 조회와 setter0, task bootstrap0→nonzero를 확인했다. 하지만 이후 launchctl은 여전히141이고 service effect는 없었다. 이는 task handle 복구 관측이지 실행 탈출 확인이 아니다. 모든 seed 제거 조건은 seed0·setter 미호출·helper125였다. inherited의 직접/Node/restored 총18회 service effect만 실제 성공했다. 세 product gate OPEN·실행 차단·backend 미채택을 유지한다. 원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/actual-baseline-restoration-{outcomes,summary}.json`·OS별 row와 ZIP이다. 같은 source의 Architecture40735745551 artifact는 아직 미판독이다.
+
+이후 Architecture [40735745551](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745551)의 SHA256 대조한 ZIP2개를 판독했다. 같은 clean `2dcd9200…`의 all3953/3953·skip0·errors[]·13 command code0·전후 동일이다. 다른5 lane도 PASS·skip0·errors[]·각 command code0이며 baselineComparison은 모두 NOT_AVAILABLE다. Native common은 Mac각254/254·Ubuntu246/246·skip0다. Mac packed26/27 중 authored installed-runtime PASS는16개이고 `@oma/git` preparation 실패1개는 유지한다. declaration 통과를 runtime 검증으로 합산하지 않는다.
+
+**다음 입력 적용·local41/41 / Mac 미실행:** host/Node Git 모두 기존 `GIT_ENV`와 소유 HOME/TMPDIR로 실행하도록 probe를 맞췄다. C helper에는 exact Unix connect·`DNSServiceCreateConnection`·libc getaddrinfo의 개별 결과를 남기는 진단만 추가했다. Node DNS는 그대로 실행하며 resolver 대체나 정책 확대는 없다. 실제 Linux 생성 producer의 Git/cc와 진단 helper 부재의 ENOENT 기록을 확인했다. 새 C compile·Mac Git 정상화·DNS 거절 분류는 아직 NOT_RUN이다.
 
 
 ### 현재 관련 파일
