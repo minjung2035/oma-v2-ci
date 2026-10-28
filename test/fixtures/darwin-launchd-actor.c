@@ -138,14 +138,23 @@ static void hold(const char *role, int prune) {
   publish(role, 1);
   struct timespec start, now, pause = { .tv_nsec = 25000000 };
   require(clock_gettime(CLOCK_MONOTONIC, &start) == 0, "actor start clock");
-  int acknowledged = 0, admission_done = 0;
+  int acknowledged = 0, admission_done = 0, late_forked = 0;
   for (;;) {
     if (!acknowledged && exists("ping")) {
+      if (strcmp(role, "detached") == 0) {
+        pid_t late = fork(); require(late >= 0, "ownerless late fork");
+        if (late == 0) { hold("late", 0); _exit(0); }
+      }
       char ack[128]; require(snprintf(ack, sizeof ack, "%s.ack", role) > 0, "ack name");
       publish(ack, 0); acknowledged = 1;
     }
     if (!admission_done && strcmp(role, "leader") == 0 && exists("admission-request")) {
       admission(); admission_done = 1;
+    }
+    if (!late_forked && strcmp(role, "late") == 0 && exists("fork-after-snapshot")) {
+      pid_t late = fork(); require(late >= 0, "post-snapshot fork");
+      if (late == 0) { hold("after-snapshot", 0); _exit(0); }
+      late_forked = 1;
     }
     if (exists("release")) break;
     require(clock_gettime(CLOCK_MONOTONIC, &now) == 0, "actor deadline clock");
@@ -221,6 +230,39 @@ static void signal_member(pid_t pid, const char *text) {
     audit_token_to_pid(token), (unsigned)audit_token_to_euid(token), token.val[7],
     after_bytes, after_errno, after.unique, after.version, correlated ? "true" : "false", signal_status);
 }
+static void candidates(const char *text) {
+  errno = 0; char *end;
+  uint64_t expected = strtoull(text, &end, 10);
+  require(errno == 0 && text[0] >= '1' && text[0] <= '9' && *end == 0 && expected > 0, "candidate coalition ID");
+  errno = 0;
+  int estimate = proc_listallpids(NULL, 0), saved = errno;
+  int capacity = estimate > 0 ? (estimate < 65472 ? estimate + 64 : 65536) : 0;
+  pid_t *pids = capacity > 0 ? malloc((size_t)capacity * sizeof *pids) : NULL;
+  require(capacity == 0 || pids != NULL, "bounded candidate allocation");
+  int listed = 0, unreadable = 0;
+  if (pids != NULL) {
+    errno = 0;
+    /* The wrapper returns a PID count, not bytes. Enumeration is only hints;
+     * a full buffer or an empty scan can never establish a closed scope. */
+    listed = proc_listallpids(pids, (int)((size_t)capacity * sizeof *pids));
+    saved = errno;
+  }
+  printf("{\"hintOnly\":true,\"resource\":\"%" PRIu64 "\",\"capacity\":%d,\"listed\":%d,\"errno\":%d,"
+    "\"saturated\":%s,\"candidatePids\":[", expected, capacity, listed, saved,
+    capacity > 0 && listed >= capacity ? "true" : "false");
+  int emitted = 0;
+  for (int index = 0; index < listed && index < capacity; index++) {
+    if (pids[index] <= 1) continue;
+    struct coalition_ids ids = {0};
+    int bytes = proc_pidinfo(pids[index], 20, 0, &ids, sizeof ids);
+    if (bytes != (int)sizeof ids) { unreadable++; continue; }
+    if (ids.ids[0] == expected) {
+      printf("%s%d", emitted ? "," : "", pids[index]); emitted++;
+    }
+  }
+  printf("],\"unreadable\":%d}\n", unreadable);
+  free(pids);
+}
 int main(int argc, char **argv) {
   require(argc >= 2, "actor mode");
   self_image = argv[0];
@@ -238,6 +280,7 @@ int main(int argc, char **argv) {
     signal_member((pid_t)pid, argv[3]); return 0;
   }
   if (strcmp(argv[1], "usage") == 0) { require(argc == 3, "usage arguments"); usage(argv[2]); return 0; }
+  if (strcmp(argv[1], "candidates") == 0) { require(argc == 3, "candidate arguments"); candidates(argv[2]); return 0; }
   require(argc == 3 && chdir(argv[2]) == 0, "private observation directory");
   if (strcmp(argv[1], "once") == 0) { publish("once", 1); return 0; }
   if (strcmp(argv[1], "hold") == 0) { hold("other", 1); return 0; }

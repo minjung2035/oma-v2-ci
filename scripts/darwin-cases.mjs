@@ -163,8 +163,7 @@ export function validateDarwinObservation(name, observations) {
       const snapshot = result => result && Number.isSafeInteger(result.bytes) && result.bytes >= 0 &&
         Number.isSafeInteger(result.errno) && result.errno >= 0 && decimal(result.unique) &&
         Number.isSafeInteger(result.version) && result.version >= -2147483648 && result.version <= 2147483647;
-      for (const [key, pid] of [["wrongMember", scope.control.pid], ["remainingMember", scope.members?.detached?.pid]]) {
-        const result = recovery[key];
+      function validateMemberControl(result, pid) {
         if (!result || !Number.isSafeInteger(pid) || pid <= 1 || result.targetPid !== pid ||
             result.expectedResource !== admission.callerResource || typeof result.correlated !== "boolean" ||
             !Number.isSafeInteger(result.controllerPid) || result.controllerPid <= 1 || result.controllerPid === pid ||
@@ -187,6 +186,30 @@ export function validateDarwinObservation(name, observations) {
             result.auditCount !== 8 || result.auditPid !== pid || result.auditUid !== result.controllerUid ||
             result.auditPidVersion !== (result.before.version >>> 0)))
           throw new Error("launchd member effect is not correlated with one kernel generation and coalition");
+      }
+      validateMemberControl(recovery.wrongMember, scope.control.pid);
+      validateMemberControl(recovery.remainingMember, scope.members?.detached?.pid);
+      const discovery = scope.discoveryRecovery;
+      if (discovery?.input !== "resource-coalition-only" || discovery.beforeFixtureRelease !== true ||
+          !Number.isSafeInteger(scope.late?.pid) || scope.late.pid <= 1 ||
+          !Number.isSafeInteger(discovery.afterSnapshot?.pid) || discovery.afterSnapshot.pid <= 1 ||
+          !decimal(discovery.afterSnapshot.resource) || !Array.isArray(discovery.rounds) ||
+          !pairs({ samples: discovery.rounds }))
+        throw new Error("launchd recovery lacks post-owner and post-snapshot births with paired kernel queries");
+      for (const round of discovery.rounds) {
+        const hint = round.discovery;
+        if (hint?.hintOnly !== true || hint.resource !== admission.callerResource ||
+            !Number.isSafeInteger(hint.capacity) || hint.capacity < 0 ||
+            !Number.isSafeInteger(hint.listed) || hint.listed < -1 ||
+            !Number.isSafeInteger(hint.errno) || hint.errno < 0 ||
+            !Number.isSafeInteger(hint.unreadable) || hint.unreadable < 0 ||
+            hint.saturated !== (hint.capacity > 0 && hint.listed >= hint.capacity) ||
+            !Array.isArray(hint.candidatePids) || hint.candidatePids.length > Math.max(0, Math.min(hint.listed, hint.capacity)) ||
+            hint.candidatePids.some(pid => !Number.isSafeInteger(pid) || pid <= 1) ||
+            !Array.isArray(round.controls) || round.controls.length !== hint.candidatePids.length)
+          throw new Error("launchd discovery turns an incomplete PID hint scan into scope evidence");
+        for (const [index, result] of round.controls.entries())
+          validateMemberControl(result, hint.candidatePids[index]);
       }
     }
   }

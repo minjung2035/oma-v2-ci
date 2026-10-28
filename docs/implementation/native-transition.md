@@ -21,6 +21,40 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 fresh kernel token 제어와 release 전 CID 소멸 확인
+
+Native [40650124720](https://github.com/minjung2035/oma-v2-ci/actions/runs/40650124720) /
+`885c07fedf`의 Mac15·26 common은 각각253/253·skip0이고 gate117회는105 OBSERVED·12 SETUP_FAILED다.
+각 OS의3회 모두 fresh exec controller가 kernel task-name port에서 audit token을 얻었다.
+before/after unique·version과 CID가 일치한 detached target의 SDK SIGKILL은0이었으며,
+**fixture release 전에** 기존 CID는 ESRCH·별도 CID는 live query 성공이었다.
+다른 CID의 target은 correlated=false·signalStatus=-1(미호출)이었다.
+old owner의 token/FD나 target의 Mach 응답은 사용하지 않았고 private entitlement·숫자 PID fallback도 없다.
+이것은 GUI UID501·SIP-disabled·unprofiled controlled target의 primitive proof이며 role authority가 아니다.
+원시는 API SHA256 확인한 `fresh-token-macos{15,26}-{gates,runtime}/`다.
+[고정 kernel signal](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/proc_info.c#L3544)은
+token lookup→MAC→동일 proc_ident ref 재취득→UID 권한 검사 뒤 실제 signal을 보낸다.
+
+다음 fixture는 owner/job 제거 뒤 태어난 child와 **첫 PID snapshot 뒤** 태어난 grandchild를 추가한다.
+`proc_listallpids`의 [반환 단위는 PID count](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/libproc/libproc.c#L62)다.
+bounded scan은 candidate hint만 내며 각 effect에서 membership/token을 다시 결박한다.
+재탐색과 paired CID query를 반복하되, empty/truncated scan·deadline을 scope death로 바꾸지 않는다.
+관측용 marker PID는 제어 입력으로 쓰지 않는다. Linux parser/policy52/52·skip0은 통과했고
+새 late-fork/discovery C의 실제 Mac compile·실행은 아직 NOT_RUN이다.
+product owner crash·Seatbelt/service admission·durable producer와 세 product gate는 여전히 미해결이다.
+
+### 2026-10-28 Linux full serial PASS와 별도 exploratory Git 거절
+
+Architecture [40647938235](https://github.com/minjung2035/oma-v2-ci/actions/runs/40647938235) /
+`2af0de04a0`의 native-all은3952/3952·skip0·errors[] PASS다. input before/after는15686 files·
+`bef0de38e4b254be781e24e5dcefe09ec5c0c9913be2d5a4186edf7d75db584a`로 같았다.
+fast880·durable872·property34·stress16·platform72도 전부 PASS·skip0이다.
+다만 exploratory baseline의 `test`는 exit1이었다. P0 real-socket 시험에서 첫 `git-idempotent`
+reply의 ok=false가 관측됐으며, 원시에는 error body가 없다(`dist/test/audit2.test.js:788`).
+같은 입력의 serial full PASS가 이 실패를 지우지 않는다. 계약·timeout·기대값은 유지하고 기존
+assertion에 실제 reply를 남기도록 했다. 원인/수리는 아직 미확정이며 재실행 PASS만으로 해결 처리하지 않는다.
+원시는 digest 확인한 `native-all-2af0de04a0/`, `architecture-2af0de04a0/`다.
+
 ### 2026-10-28 coalition 소멸과 explicit admission 거절 실제 확인
 
 Native [40647938085](https://github.com/minjung2035/oma-v2-ci/actions/runs/40647938085) /

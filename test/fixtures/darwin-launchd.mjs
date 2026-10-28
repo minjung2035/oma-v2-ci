@@ -94,6 +94,29 @@ async function observeReaping(id, other) {
   }
   return { samples };
 }
+async function recoverFromHints(id, other, directory) {
+  const rounds = [], end = performance.now() + 8000;
+  let afterSnapshot;
+  for (;;) {
+    const discovery = JSON.parse(run(actor, ["candidates", id]).stdout);
+    assert.ok(Array.isArray(discovery.candidatePids) &&
+      discovery.candidatePids.every(pid => Number.isSafeInteger(pid) && pid > 1));
+    if (rounds.length === 0) {
+      writeFileSync(join(directory, "fork-after-snapshot"), "controlled birth after the first kernel snapshot");
+      await waitFor(() => existsSync(join(directory, "after-snapshot.json")));
+      // Observation/fixture cleanup only; never an input to member control.
+      afterSnapshot = remember(marker(directory, "after-snapshot"));
+    }
+    const controls = discovery.candidatePids.map(pid =>
+      JSON.parse(run(actor, ["signal-member", String(pid), id]).stdout));
+    const aggregate = usage(id), otherAggregate = usage(other);
+    rounds.push({ discovery, controls, elapsedMs: performance.now() - started, aggregate, otherAggregate });
+    if (aggregate.available === true && aggregate.returnCode === -1 && aggregate.errno === 3 ||
+        performance.now() >= end) break;
+    await delay(25);
+  }
+  return { input: "resource-coalition-only", beforeFixtureRelease: true, afterSnapshot, rounds };
+}
 function originalExited(target) {
   const current = inspect(target.pid);
   // Read-only exact-generation observation; never a signal or empty-scope oracle.
@@ -178,6 +201,8 @@ try {
       ordinaryAcknowledged: existsSync(join(scope.directory, "ordinary.ack.json")),
       detachedAcknowledged: existsSync(join(scope.directory, "detached.ack.json")), otherAcknowledged: true,
       removedService: run("/bin/launchctl", ["print", scope.target], false) };
+    await waitFor(() => existsSync(join(scope.directory, "late.json")));
+    observation.scope.late = remember(marker(scope.directory, "late"));
     // A fresh executable gets its own kernel task-name port and token.
     // Neither target cooperation nor the old owner's handles are required.
     const wrongMember = JSON.parse(run(actor, ["signal-member", String(control.pid), members.leader.resource]).stdout);
@@ -185,6 +210,7 @@ try {
     observation.scope.recovery = { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
       fixtureReleaseUsedBeforeObservation: false, wrongMember, remainingMember,
       afterAttempt: await observeReaping(members.leader.resource, control.resource) };
+    observation.scope.discoveryRecovery = await recoverFromHints(members.leader.resource, control.resource, scope.directory);
     writeFileSync(join(scope.directory, "release"), "controlled actors only; not a production stop mechanism");
     await waitFor(() => Object.values(members).every(member => originalExited(member.identity)), 12000);
     observation.scope.afterControlledExit = { controlledGenerationsExited: true,
