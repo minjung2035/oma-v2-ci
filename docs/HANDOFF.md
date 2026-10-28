@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux EAGAIN 수리 뒤 로컬 재인수를 완료했다.** 동일 입력의 병렬 baseline·serial all, 독립 설치·실제 추론/도구·재개/보관/복구를 확인했다. 현재 작업은 아래 실패 이력까지 문서에 남기고 지정 work branch로 발행하는 것이다. clean publication/새 CI 결과는 이 dirty 입력의 실행 근거와 분리한다. Mac production 정책은 아직 바꾸지 않았으며 Linux 발행 뒤 exact Unix socket 양성·음성 경계부터 진행한다.
+**Linux EAGAIN 수리 뒤 로컬 재인수·지정 branch 발행을 완료했다.** 주 `1a4829819d5876427e3df85863ab022c7f82e575` / mirror `ae819c1c8adb02286cc24ea7b60b21e788be93c7`의 tree는 같다. 사용자 파일은 제외·보존했다. 새 Ubuntu native 검증도 통과했고 전체 Architecture CI는 마지막 조회에서 진행 중이다. 현재 Mac exact Unix socket 번역과 실제 listed/unlisted listener 반례를 연결했으며 build·local 검증은 통과했다. 이 새 변경의 실제 Mac compile/kernel 실행은 아직 NOT_RUN이다. [현재 판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 

@@ -76,20 +76,36 @@ static void apply_profile(const char *path) {
 }
 /* Diagnostic calls under the inherited label, never a resolver fallback.
  * Keep raw connect, DNS-SD IPC and libc lookup failures separate. */
-static int observe_dns(const char *report_path) {
-  struct snapshot ports = snapshot();
+struct unix_observation { int created, socket_errno, connected, connect_errno; };
+static void observe_unix(const char *endpoint, struct unix_observation *result) {
   struct sockaddr_un address = {0};
+  size_t length = strlen(endpoint);
+  require(length < sizeof address.sun_path, "diagnostic Unix endpoint length");
   address.sun_len = sizeof address; address.sun_family = AF_UNIX;
-  const char endpoint[] = "/var/run/mDNSResponder";
-  _Static_assert(sizeof endpoint <= sizeof address.sun_path, "exact DNS endpoint fits sockaddr_un");
-  memcpy(address.sun_path, endpoint, sizeof endpoint);
+  memcpy(address.sun_path, endpoint, length + 1);
   errno = 0;
   int descriptor = socket(AF_UNIX, SOCK_STREAM, 0);
-  int socket_errno = descriptor < 0 ? errno : 0;
-  errno = 0;
-  int connected = descriptor >= 0 ? connect(descriptor, (const struct sockaddr *)&address, sizeof address) : -1;
-  int connect_errno = descriptor >= 0 && connected < 0 ? errno : 0;
-  if (descriptor >= 0) require(close(descriptor) == 0, "close diagnostic Unix socket");
+  result->created = descriptor >= 0;
+  result->socket_errno = descriptor < 0 ? errno : 0;
+  result->connected = -1;
+  if (descriptor >= 0) {
+    errno = 0;
+    result->connected = connect(descriptor, (const struct sockaddr *)&address, sizeof address);
+    result->connect_errno = result->connected < 0 ? errno : 0;
+    require(close(descriptor) == 0, "close diagnostic Unix socket");
+  }
+}
+static void print_unix(FILE *output, const struct unix_observation *value) {
+  fprintf(output, "{\"created\":%s,\"errno\":%d,\"connectAttempted\":%s,\"connectResult\":%d,\"connectErrno\":%d}",
+    value->created ? "true" : "false", value->socket_errno, value->created ? "true" : "false",
+    value->connected, value->connect_errno);
+}
+static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {
+  struct snapshot ports = snapshot();
+  struct unix_observation dns_socket = {0}, listed_socket = {0}, unlisted_socket = {0};
+  observe_unix("/var/run/mDNSResponder", &dns_socket);
+  observe_unix(listed, &listed_socket);
+  observe_unix(unlisted, &unlisted_socket);
   DNSServiceRef service = NULL;
   DNSServiceErrorType dns_status = DNSServiceCreateConnection(&service);
   if (service != NULL) DNSServiceRefDeallocate(service);
@@ -107,10 +123,11 @@ static int observe_dns(const char *report_path) {
   fprintf(output, "{\"phase\":\"native-dns\",\"pid\":%d,\"uid\":%u,"
     "\"hostname\":\"example.com\",\"endpoint\":\"/var/run/mDNSResponder\",\"ports\":", getpid(), (unsigned)getuid());
   print_snapshot(output, &ports);
-  fprintf(output, ",\"socket\":{\"created\":%s,\"errno\":%d,\"connectAttempted\":%s,\"connectResult\":%d,\"connectErrno\":%d},"
-    "\"dnssd\":{\"createResult\":%d},\"getaddrinfo\":{\"result\":%d,\"errno\":%d,\"ipv4\":%u,\"ipv6\":%u}}\n",
-    descriptor >= 0 ? "true" : "false", socket_errno, descriptor >= 0 ? "true" : "false",
-    connected, connect_errno, dns_status, gai_status, gai_errno, ipv4, ipv6);
+  fputs(",\"socket\":", output); print_unix(output, &dns_socket);
+  fputs(",\"unixAllowlist\":{\"listed\":", output); print_unix(output, &listed_socket);
+  fputs(",\"unlisted\":", output); print_unix(output, &unlisted_socket);
+  fprintf(output, "},\"dnssd\":{\"createResult\":%d},\"getaddrinfo\":{\"result\":%d,\"errno\":%d,\"ipv4\":%u,\"ipv6\":%u}}\n",
+    dns_status, gai_status, gai_errno, ipv4, ipv6);
   require(fclose(output) == 0, "complete DNS report");
   release_snapshot(&ports, NULL, 0);
   return 0;
@@ -139,7 +156,7 @@ static int restore_registered(char **argv) {
 }
 int main(int argc, char **argv) {
   require(getuid() != 0, "ordinary user required");
-  if (argc == 3 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2]);
+  if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];
