@@ -171,6 +171,20 @@ local parser/policy41/41·skip0·생성 script syntax·실제 Linux fixture의 s
 production renderer·actor·Linux backend·실행 guard·원래 timeout은 바꾸지 않았다.
 local 원시는 `bootstrap-rights/send-rights-fix/selected-baseline-and-restoration/git-env-native-dns-local/`다.
 
+### 첫 native DNS 진단 source의 link 실패·Mac15 실행 근거 없음
+
+주 `ae6d72826557e65ad485229f24d1527ca6b8e0e3` / mirror `a399fb7fe5807f2a7a953db28326380de857bee6`,
+Native [40743666948](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666948)의 실제 artifact3개를 SHA256 대조했다.
+clean `b89d272184e568470267ec35ecafc6c3ede867e6564b46ef52c0b5d4d55560b1` /15687 files·Mac26 gate runtime artifacts 전후 동일이다.
+Mac26 bootstrap3회는 clang/link command exit1, `ld: library 'dns_sd' not found`이며 gate 전체105 OBSERVED·15 SETUP_FAILED다.
+Git 환경·native DNS API는 아직 실행되지 않았다. 경고 억제나 성공 조건 변경 없이 잘못 추가한 독립 `-ldns_sd`만 제거했다.
+[Apple Libsystem requiredlibs](https://github.com/apple-oss-distributions/Libsystem/blob/main/requiredlibs)에 `system_dnssd`가 속한다.
+수정 source의 actual link·Mac Git 정상화·DNS 분류는 **NOT_RUN**이다.
+
+Mac26 common254/254·Ubuntu246/246·skip0은 원시 tests.log에서 별도 확인했다.
+Mac15 두 job은 cancelled·runner_name 비어 있음·artifact 없음이다. 취소 원인은 미확인이며 이 source의 Mac15 실행/PASS로 기록하지 않는다.
+원시는 같은 root의 `git-env-native-dns/observed-link-failure-summary.json`·`native-job-observed-summary.json`·ZIP3개다.
+
 
 
 
@@ -917,7 +931,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `b89d272184e568470267ec35ecafc6c3ede867e6564b46ef52c0b5d4d55560b1` (15687 files).
+verification input digest `7670738e80e58d9c0ebe4dabff70b5ec655e67408f95c7ff53983fe7f39817fa` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

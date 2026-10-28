@@ -21,6 +21,20 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 native DNS probe의 잘못된 link flag 제거 — 수정 실행 전
+
+주 `ae6d72826557e65ad485229f24d1527ca6b8e0e3` / mirror `a399fb7fe5807f2a7a953db28326380de857bee6`,
+Native [40743666948](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666948)의 SHA256 대조 artifact는3개다.
+Mac26 새3회는 `ld: library 'dns_sd' not found`로 link 실패했다. 따라서 새 Git 환경 효과·DNS API 호출은 NOT_RUN이다.
+잘못된 독립 library flag는 probe에 내가 추가한 오류다.
+[Apple Libsystem requiredlibs](https://github.com/apple-oss-distributions/Libsystem/blob/main/requiredlibs)의 `system_dnssd` 소유를 대조하고
+`-ldns_sd`만 제거했다. 동적 symbol fallback·새 broad grant·경고/성공 조건 완화는 없다. 수정 source의 실제 link/실행은 NOT_RUN이다.
+
+Mac26 common254/254·Ubuntu246/246·skip0, Mac26 gate105 OBSERVED·15 SETUP_FAILED다.
+Mac15 common/gate 두 job은 cancelled·runner_name 비어 있음·artifact 없음이다. 취소 원인 미확인·실행 근거 없음으로 남긴다.
+원시는 `git-env-native-dns/observed-link-failure-summary.json`·`native-job-observed-summary.json`과 ZIP3개다.
+
+
 ### 2026-10-28 기존 Git 환경 적용·native DNS 단계별 진단 — Mac 실행 전
 
 실제 `/etc/gitconfig` 거절 뒤 host/Node Git의 환경을 기존 `@oma/process/policies:GIT_ENV`와 소유 HOME/TMPDIR로 맞췄다.

@@ -129,6 +129,10 @@ SEND right 교체 뒤 원시는 `bootstrap-rights/send-rights-fix/`다. clean �
 
 **다음 입력 적용·local41/41 / Mac 미실행:** host/Node Git 모두 기존 `GIT_ENV`와 소유 HOME/TMPDIR로 실행하도록 probe를 맞췄다. C helper에는 exact Unix connect·`DNSServiceCreateConnection`·libc getaddrinfo의 개별 결과를 남기는 진단만 추가했다. Node DNS는 그대로 실행하며 resolver 대체나 정책 확대는 없다. 실제 Linux 생성 producer의 Git/cc와 진단 helper 부재의 ENOENT 기록을 확인했다. 새 C compile·Mac Git 정상화·DNS 거절 분류는 아직 NOT_RUN이다.
 
+`ae6d72826557e65ad485229f24d1527ca6b8e0e3` / mirror `a399fb7fe5807f2a7a953db28326380de857bee6`의 Native [40743666948](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666948)는 실제로 Mac26 helper link3회가 `ld: library 'dns_sd' not found`로 실패했다. 내 probe의 잘못된 독립 library flag이며 Git 환경 효과·native DNS API는 미실행이다. Apple Libsystem `requiredlibs`의 `system_dnssd` 소유를 대조하고 불필요한 `-ldns_sd`만 제거했다. 경고·성공 조건은 유지하며 교체 뒤 실제 link/실행은 아직 NOT_RUN이다.
+
+이 source의 SHA256 대조 artifact는3개뿐이다. Mac26 common254/254·Ubuntu246/246·skip0이며 gate105 OBSERVED/15 SETUP_FAILED다. Mac15 두 job은 cancelled·runner_name 비어 있음·artifact 없음으로 실행 근거가 없다. 취소 원인은 확인하지 못했고 Mac15 PASS로 합성하지 않는다. 원시는 위 root의 `git-env-native-dns/observed-link-failure-summary.json`·`native-job-observed-summary.json`과 ZIP이다.
+
 
 ### 현재 관련 파일
 
