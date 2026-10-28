@@ -8,7 +8,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "baseline", fixture: "darwin-native-probe.c", digest: "probeDigest", compile: "compile",
     names: ["process", "files", "auth", "socket-transfer", "queued-transfer", "file-descriptors"] }),
   program({ name: "mach", fixture: "darwin-mach-probe.c", digest: "machProbeDigest", compile: "compile-mach",
-    names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit"], link: ["-lbsm"] }),
+    names: ["mach-self", "mach-rendezvous-live", "mach-rendezvous-exit", "mach-token-control"], link: ["-lbsm", "-lproc"] }),
   program({ name: "mach-stream", fixture: "darwin-mach-stream.mjs", digest: "machStreamProbeDigest", compile: "check-mach-stream", node: true,
     names: ["mach-stream-roundtrip", "mach-stream-stale", "mach-stream-handoff", "mach-audit-async"] }),
   program({ name: "seatbelt", fixture: "darwin-seatbelt.mjs", digest: "seatbeltProbeDigest", compile: "check-seatbelt", node: true,
@@ -32,6 +32,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
 ]);
 const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer", "file-descriptors": "fileDescriptors",
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
+  "mach-token-control": "machTokenControl",
   "mach-stream-roundtrip": "machStream", "mach-stream-stale": "machStaleOrigin", "mach-stream-handoff": "machLiveHandoff", "mach-audit-async": "machAsyncAudit",
   "seatbelt-files": "seatbelt", "seatbelt-profile-stream": "seatbelt",
   "seatbelt-signals": "seatbeltSignals",
@@ -60,6 +61,25 @@ export function validateDarwinObservation(name, observations) {
   if (name === "file-descriptors") {
     validateDescriptorCapabilityObservation(value);
     if (value.platform !== "darwin") throw new Error("descriptor observation did not run on Darwin");
+  }
+  if (name === "mach-token-control") {
+    if (value.scope !== "owned-child-generation-only" || value.controllerContext !== "sibling-fork-no-profile-applied" || value.sdkInterfacePrivate !== true ||
+        value.kernelTokenReceived !== true || value.unreapedPidControl !== true || value.ownedChildrenJoined !== true)
+      throw new Error("generation control lacks its private SDK, kernel identity or owned-child scope");
+    const pids = [value.ownerPid, value.controllerPid, value.targetPid];
+    if (pids.some(pid => !Number.isSafeInteger(pid) || pid < 2) || new Set(pids).size !== pids.length ||
+        !Number.isSafeInteger(value.ownerUid) || value.ownerUid < 1 ||
+        value.controllerUid !== value.ownerUid || value.targetUid !== value.ownerUid ||
+        !Number.isSafeInteger(value.targetPidVersion) || value.targetPidVersion < 1 || value.targetPidVersion > 0xffffffff)
+      throw new Error("generation control lacks ordinary-UID nonparent and target identity controls");
+    for (const key of ["zeroSignalStatus", "wrongVersionStatus", "killStatus"])
+      if (!Number.isSafeInteger(value[key]) || value[key] < 0)
+        throw new Error(`SDK control status must be zero or an error number: ${key}`);
+    if (typeof value.exitedBeforeCleanup !== "boolean" || typeof value.numericCleanupUsed !== "boolean" ||
+        value.numericCleanupUsed === value.exitedBeforeCleanup ||
+        !(value.targetExitCode === null && Number.isSafeInteger(value.targetSignal) && value.targetSignal > 0 ||
+          Number.isSafeInteger(value.targetExitCode) && value.targetExitCode >= 0 && value.targetSignal === null))
+      throw new Error("generation control hides the actual exit or fixture-only cleanup");
   }
   if (name === "seatbelt-kept-fds") {
     for (const key of ["exactChannelsRetained", "stdinTransportRetainedSameChannels", "extraCanaryDetectedInControl",
