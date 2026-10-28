@@ -64,9 +64,66 @@ SDK15.5·26.5가 `mach_port_destroy`의 macOS12부터 unsafe/deprecated 표시�
 경고·compiler 성공 조건은 유지하고 SEND right의 참조만 `mach_port_get_refs`/`mach_port_mod_refs`로
 명시 반납하도록 교체했다. RECEIVE right는 제거하지 않으며 record/parser의 이름도 `droppedSendRights`로 맞췄다.
 수정 뒤 local parser/policy41/41·skip0·실제 Linux fixture의 state 전 거절을 확인했다.
-수정 source의 실제 Mac compile/실행은 **NOT_RUN**이다. production guard·Seatbelt·actor·Linux backend는 그대로다.
+이 checkpoint 당시 수정 source의 Mac 실행은 NOT_RUN이었다. 후속 실제 결과는 아래에서 별도로 기록한다.
 원시는 같은 root의 `bootstrap-rights/observed-first-attempt-summary.json`·원시 ZIP5개와
 `bootstrap-rights/send-rights-fix-local/`이며 최초 실패를 삭제·재분류하지 않는다.
+
+### SEND right 교체 뒤 실제 Mac 실행 (2026-10-28)
+
+주 `3ca06ef0485e5114a3d3f62e55aabd26dca1c9d3` / mirror `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`,
+Native [40726395555](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395555)의 ZIP5개 SHA256을 확인했다.
+clean 입력 `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` /15687 files는 양 Mac 전후 동일하다.
+실제 SDK compile과 새 case3건씩이 OBSERVED이며 각 gate 전체는108 OBSERVED·12 SETUP_FAILED다.
+각 조건은 Mac15·26 각각3회이며 GUI UID501·SIP-disabled 범위다.
+
+| 권한 조건 | 직접 CLI / Node 후손 CLI | 실제 owned service effect | Node·clang·자기 쓰기 / 금지 canary |
+|---|---|---|---|
+| inherited |각6회 exit0 |12회 PID1 아래 별도 CID 실행 |모든 variant 정상 / EPERM·원본 보존 |
+| bootstrap-only |각6회 exit141, `Reentrancy avoided` |미관측 |모든 variant 정상 / EPERM·원본 보존 |
+| bootstrap-and-xpc |각6회 exit141, `Reentrancy avoided` |미관측 |모든 variant 정상 / EPERM·원본 보존 |
+
+위 명시적 client 실패와 effect 미관측을 전체 service admission/death proof로 쓰지 않는다.
+bootstrap-only의 registered send right는 여전히 남아 있으며, 이를 다시 취득하는 adversary는 미실행이다.
+모든18 variant에서 Git은 shim의 `/var/select/developer_dir` EPERM, DNS는 ENOTFOUND였다.
+inherited 기준선부터 같으므로 이를 포트 제거 때문에 생긴 Git/DNS 실패로 분류하지 않는다.
+다음 입력은 기존 selected developer-tools owner의 실제 Git 양성·같은 hostname host DNS 대조와 정확한 DNS endpoint,
+registered seed 재취득 반례다. production 실행 guard는 차단을 유지하며, 세 product gate는 OPEN이고 backend는 미채택이다.
+원시는 `bootstrap-rights/send-rights-fix/`의 원시 ZIP5개·OS별 bootstrap row·
+`actual-rights-isolation-outcomes.json`·`actual-rights-isolation-summary.json`에 보존한다.
+
+### 같은 published source의 Linux 전체 회귀와 native common 판독
+
+Architecture [40726395696](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395696), source `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`의
+all ZIP12835895324(SHA256 `3cf5e3b4c1b8488715853a348a95db63a21b9f90c0c0ecdd4080cd39f08edef9`)와
+verification ZIP12835700946(`b565a5b7790134bfe1163d6f47471f8e4844793297c8930dc829b1646fd6accb`)를 대조했다.
+clean `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` /15687 files 전후 동일이다.
+
+| lane | 실제 tests / pass | fail / cancel / skip / todo |
+|---|---|---|
+| all |3953 / 3953 |0 / 0 / 0 / 0 |
+| fast |881 / 881 |0 / 0 / 0 / 0 |
+| durable |872 / 872 |0 / 0 / 0 / 0 |
+| property |34 / 34 |0 / 0 / 0 / 0 |
+| stress |16 / 16 |0 / 0 / 0 / 0 |
+| platform |72 / 72 |0 / 0 / 0 / 0 |
+
+모든 lane errors[]이며 각 command는 code0·signal/error/timeout 없음이다. all의13개 command에 build/typecheck/architecture가 포함된다.
+baselineComparison은 각 NOT_AVAILABLE이고 비교 완료라고 쓰지 않는다. 독립 kernel/crash lane의 실행으로 확대하지 않는다.
+같은 Native source의 원시 tests.log도 판독해 Mac15/26 각254/254·Ubuntu246/246·skip0과 입력 전후 동일을 확인했다.
+Mac packed install의 `@oma/git` canonical-health→preparation `UNSUPPORTED_PROFILE`은 여전히 실패다. skip/fallback으로 바꾸지 않았다.
+원시는 `bootstrap-rights/send-rights-fix/clean-source-linux-regression/`·`actual-native-runtime-summary.json`이다.
+
+### 다음 입력의 stronger baseline·재취득 반례 — 실제 Mac NOT_RUN
+
+기존 developer-tools owner가 관측한 actual Git으로 host 양성·sandboxed hash를 맞추고 같은 hostname의 host DNS 양성을 추가했다.
+실제 확인한 mDNSResponder socket의 원래 경로와 physical alias만 기존 fixture의 exact Unix-socket 입력으로 선언했다.
+각 조건의 별도 fresh target에 대해 registered seed 재조회·task bootstrap 복구·launchctl exec와 실제 effect를 기록한다.
+validator는 baseline 실패·잘못된 binary/target/PID·거짓 setter 결과 귀속을 거절하되 실제 service 성공/거절과 음성 tool 결과는 보존한다.
+local parser/policy41/41·skip0, syntax3개·생성 script syntax, 실제 Linux state 전 거절을 확인했다.
+생성한 Node producer를 Linux에서 실제 실행해 자기 쓰기·Git hash·cc syntax 성공, 없는 launchctl의 ENOENT 원시 기록도 확인했다.
+이 unsandboxed producer smoke는 Darwin sandbox proof가 아니다. 새 source의 Mac compile·DNS 양립·권한 재취득은 **NOT_RUN**이다.
+production renderer·actor·실행 guard·Linux backend·원래 timeout은 그대로다. local 원시는 `bootstrap-rights/send-rights-fix/baseline-restoration-local/`다.
+
 
 
 
@@ -813,7 +870,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` (15687 files).
+verification input digest `2dcd9200abb3a2b8deb91975541ffe0c9a325a0ce56af3d0a3923bfdc143c136` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

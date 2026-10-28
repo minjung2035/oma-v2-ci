@@ -28,6 +28,7 @@
 | 이번 작업 | verifier 임시 트리 수명 수리·fresh service target·Linux 인수검증 마감. 관련 native 문서의 기존 변경까지 포함한 commit/push를 사용자에게 명시 승인받음 |
 | Linux 발행 source | 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9` / mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`, tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c` 동일 |
 | 첫 bootstrap 실험 source | 주 `3581b838463cd55d1294a362014bcfba2e2ce918` / mirror `41392d6624cc5d6301ea97bf0b2127a053956ea0`, tree `ae563d0f9501943c4281e6660c05bd9c64206f1b` 동일. Native40721951956에서 새 helper compile6건 실패, 권한 분리는 미실행 |
+| SEND right 교체 뒤 실제 source | 주 `3ca06ef0485e5114a3d3f62e55aabd26dca1c9d3` / mirror `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`, tree `006be93f2bc1c40c2baf98ebe6697b5a0d0817e0` 동일. Native40726395555의 양 Mac 새3건씩 OBSERVED |
 | 마지막 로컬 실행 | 정상 PATH serial all3952/3952·skip0·errors[], 독립 설치본 실제 Principal/Worker/Personal·재개·자동 보관/cold 복원·같은 key receipt 확인. 유한 작업은 종료했으며 원시와 소유 임시 자원을 구분 |
 | 환경 | Linux x64. Mac 실행은 실제 GitHub runner. LSP 미설정 |
 | Node26 | `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
@@ -103,14 +104,19 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 3. **적용:** 두 target·host kickstart·positive 종료 뒤 print·target 전후 print·실제 spawn/wait·cleanup·target별 job 출력·guest effect를 남긴다. validator는 서로 다른 동일 domain target, host 양성 명령의 귀속, 실제 attempt의 target을 대조한다. print 텍스트는 proof로 파싱하지 않는다.
 4. **실제 Mac 확인:** Mac26 CID1393→1397·1435→1439·1497→1509, Mac15 CID1217→1221·1249→1251·1267→1271. 동일 actor·production policy·5초 한도를 유지한 fresh-target6건 모두 범위 밖 실행이었다.
 5. **판정 / 다음 행동:** 현재 policy+coalition만으로 complete backend를 채택하지 않는다. 실행 차단을 유지한다. launchd control과 service lookup의 권한 경로를 OS 원본·SDK와 대조하고, bootstrap/XPC 권한 제거가 실제 제어와 정상 Node/Git/compiler/DNS에 미치는 한 질문만 최소 실행으로 확인한다. CLI 이름 차단·timeout 확대·marker 부재로 해결하지 않는다.
-6. **다음 질문 구현 / 첫 Mac compile 실패:** `launchd-bootstrap`은 상속 그대로·bootstrap만 제거·bootstrap+registered XPC seed 제거를 direct exec 전에 비교한다. 직접 CLI와 Node 후손 CLI·파일/금지 canary·Git/compiler/DNS를 기록한다. Native [40721951956](https://github.com/minjung2035/oma-v2-ci/actions/runs/40721951956)의 양 Mac 각3회는 unsafe/deprecated `mach_port_destroy`를 유지한 `-Werror`가 거절했다. 권한 제거 실행 결과는 아직 없다. 경고를 끄지 않고 SEND right의 참조를 `mach_port_get_refs`/`mach_port_mod_refs`로 반납하도록 교체했다. 수정 뒤 local41/41·state 전 Linux 거절은 확인했으며 수정 source의 Mac compile/실행은 NOT_RUN이다.
+6. **실제 권한 제거 관측 완료 / backend 미채택:** 첫 `41392d6624`의 unsafe/deprecated `mach_port_destroy` compile 실패를 보존했고, 경고 억제 없이 typed SEND 참조 반납으로 교체했다. Native [40726395555](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395555), `a4c398f89a`의 양 Mac 각3회에서 helper compile·권한 제거·Node 후손 실행을 실제 관측했다. inherited는 직접/Node service 총12회 성공했고, bootstrap만/모두 제거한24회는 CLI141(`Reentrancy avoided`)·effect 미관측이었다. Node·clang·자기 파일 쓰기·금지 canary는 모든18 variant에서 기대대로였으나 이것을 전체 service 차단으로 확대하지 않는다.
 
-관측 입력은 clean `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files이며 양 Mac 전후 동일하다. common 각253/253이지만 독립 설치는 각26/27이고 Git preparation은 실제 `UNSUPPORTED_PROFILE`로 실패했다. gate 각105 OBSERVED·12 SETUP_FAILED와 G-PROCESS/G-FILES/G-AUTH OPEN을 그대로 유지한다.
+첫 fresh-service 관측 입력은 clean `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files이며 양 Mac 전후 동일하다. common 각253/253이지만 독립 설치는 각26/27이고 Git preparation은 실제 `UNSUPPORTED_PROFILE`로 실패했다. gate 각105 OBSERVED·12 SETUP_FAILED와 G-PROCESS/G-FILES/G-AUTH OPEN을 그대로 유지한다.
 
 이번 local 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-service-fresh-target/`다. `red.log`·`green.log`와 각 status, `checked-source.json`, `regression-input.json`, `direct-smoke.log`가 명령·exit·변경 source SHA와 grammar/kernel 경계를 소유한다.
 새 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/`다. Native ZIP5개와 Architecture ZIP2개의 SHA256을 대조했다. `fresh-service-admission-observed.json`·`native-runtime-observed-summaries.json`과 OS별 원시 launchd row를 보존한다. Architecture [40711228820](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228820)의 같은 clean 입력에서 all3952/3952·skip0·errors[], fast880·durable872·property34·stress16·platform72와 모든 command exit0을 확인했다. baseline comparison은 NOT_AVAILABLE이며 비교 완료로 쓰지 않는다.
 조사에서 deprecated `bootstrap_unprivileged`는 native launchd job이 이미 그 port로 시작한다고 명시했고, Chromium V2는 macOS10.10 이후 오래된 bootstrap proxy의 투명 중계가 성립하지 않았다고 설명한다. API 이름만으로 해법을 채택하지 않는다. 새 probe3회가 늘어 CI worst-case 계산은288분이며 job 상한만300분으로 맞췄다. 기존 probe120초·fixture80초·service5초 한도와 제품 timeout은 유지한다.
 첫 bootstrap 실험의 원시는 `bootstrap-rights/`다. clean 입력 `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` /15687 files 전후 동일, common Mac 각254/254·Ubuntu246/246·skip0, Mac 독립 설치26/27이다. gate 각120 /105 OBSERVED /15 SETUP_FAILED 중 추가3건은 위 compile 실패다. 이 실패를 후보의 권한 분리 성공/실패나 기존 Linux 제품 결함으로 해석하지 않는다.
+SEND right 교체 뒤 원시는 `bootstrap-rights/send-rights-fix/`다. clean 입력 `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` /15687 files 전후 동일, gate 각108 OBSERVED·12 SETUP_FAILED다. Git은 **상속 양성에서도** `/usr/bin/git` shim의 `/var/select/developer_dir` EPERM, DNS도 모든 variant에서 ENOTFOUND였다. 포트 제거 때문에 Git/DNS가 깨졌다고 단정할 수 없다. 다음은 기존 selected developer-tools owner로 실제 Git 양성을 만들고 같은 hostname의 host DNS 대조·정확한 DNS endpoint를 확인하는 일이다. 남겨진 registered send right에서 bootstrap을 다시 취득하는 adversary도 아직 NOT_RUN이다.
+
+후속 Architecture [40726395696](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395696), source `a4c398f89a`의 ZIP2개도 SHA256 대조·판독했다. 같은 clean `92b706…`에서 all3953/3953·skip0·errors[], 전체13 command exit0과 입력 전후 동일을 확인했다. baselineComparison은 NOT_AVAILABLE이다. 같은 source의 Mac common 각254/254·Ubuntu246/246·skip0도 확인했다. Mac 독립 설치의 `@oma/git` preparation `UNSUPPORTED_PROFILE`은 그대로 남아 있다. 원시는 `bootstrap-rights/send-rights-fix/clean-source-linux-regression/`·`actual-native-runtime-summary.json`이다.
+
+**다음 입력 구현·local 검증 완료 / 실제 Mac 미실행:** 기존 `observeMacDeveloperTools`의 selected Git으로 host 양성·sandboxed 명령을 일치시켰다. 같은 hostname의 host DNS 양성과 관측한 `/var/run/mDNSResponder` 및 그 실제 socket의 physical alias만 fixture 입력으로 선언한다. registered seed를 다시 조회하고 task bootstrap을 복구한 뒤 별도 fresh target의 launchctl로 exec하는 adversary를 추가했다. production Seatbelt renderer·actor·실행 guard·Linux backend는 바꾸지 않았다. local parser/policy41/41·실제 생성 Node script의 Git/cc 실행·Linux fixture의 state 전 거절을 확인했다. 이 변경 source의 Mac compile·권한 재취득·DNS 양립은 아직 NOT_RUN이며 과거 결과를 승격하지 않는다.
 
 
 ### 현재 관련 파일
@@ -119,7 +125,7 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 |---|---|
 | `test/fixtures/darwin-launchd.mjs` | public launchctl 실험, production `seatbeltProfile` 호출, GUI domain, 별도 positive/fresh target·전후 raw·target별 job 출력·cleanup |
 | `test/fixtures/darwin-launchd-actor.c` | controlled C actor·실제 sandbox_init·후손 생성·CID hint·fresh identity control. production 업무 owner가 아님 |
-| `scripts/darwin-cases.mjs` | 117 attempts와 관측 parser. service 결과는 성공/거절을 강제하지 않음 |
+| `scripts/darwin-cases.mjs` | 120 attempts와 관측 parser. service 결과는 성공/거절을 강제하지 않음 |
 | `test/darwin-evidence.test.mjs` | synthetic evidence grammar 검증. kernel 실행 증거가 아님 |
 | `packages/platform-mac/src/seatbelt.ts` | 실제 deny-default renderer. broad system executable 목록과 좁은 Mach allowlist가 존재. fixture용 permissive profile로 대체 금지 |
 

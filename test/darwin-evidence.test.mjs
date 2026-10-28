@@ -81,30 +81,44 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
 const bootstrapRecord = () => {
+  const git = "/selected/usr/bin/git", digest = "a".repeat(40);
+  const command = (executable, argv, pid, stdout = "") => ({ executable, argv, pid, exitCode: 0, signal: null, stdout, stderr: "" });
+  const dns = { hostname: "example.com", addresses: [{ address: "192.0.2.1", family: 4 }] };
   const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
     const attempt = kind => {
-      const pid = 120 + index * 2 + (kind === "node" ? 1 : 0);
+      const pid = 120 + index * 3 + (kind === "direct" ? 0 : kind === "node" ? 1 : 2);
       const target = `gui/501/org.oma.probe.test.${name}-${kind}`;
-      return { target, command: { executable: "/owned/bootstrap-exec",
-        argv: [name, "/owned/profile", "/owned/ports", "/owned/work",
-          ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] :
-            ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", "/owned/report"])],
-        pid, exitCode: 0, signal: null, stdout: "", stderr: "" },
+      const seed = name === "bootstrap-and-xpc" ? 0 : 201;
+      return { target, command: command("/owned/bootstrap-exec",
+        [name, "/owned/profile", "/owned/ports", "/owned/work",
+          ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] : kind === "node" ?
+            ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", git, "/owned/report"] :
+            ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
           before: { bootstrap: 200, registered: [201] },
-          after: { bootstrap: name === "inherited" ? 200 : 0, registered: name === "bootstrap-and-xpc" ? [0] : [201] },
+          after: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
           droppedSendRights: name === "inherited" ? [] : [200] }, guestEffect: null,
         ...(kind === "node" ? { tools: { pid, complete: true,
-          service: { ...launchctlRecord("kickstart", target), pid: 150 + index } } } : {}) };
+          service: command("/bin/launchctl", ["kickstart", target], 150 + index),
+          git: command(git, ["hash-object"], 160 + index, `${digest}\n`),
+          compiler: command("/owned/clang", ["-fsyntax-only", "compile.c"], 170 + index), dns } } : {}),
+        ...(kind === "restored" ? { restoration: { pid, uid: 501, phase: "restore-registered-seed", seed,
+          attempted: seed !== 0, setStatus: seed ? 0 : null,
+          before: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
+          after: { bootstrap: seed, registered: [seed] } } } : {}) };
     };
-    return { name, profileSha256: "e".repeat(64), canaryPreserved: true, direct: attempt("direct"), node: attempt("node") };
+    return { name, profileSha256: "e".repeat(64), canaryPreserved: true,
+      direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
   });
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
       positiveTarget: "gui/501/org.oma.probe.test.positive",
       positiveKickstart: { ...launchctlRecord("kickstart", "gui/501/org.oma.probe.test.positive"), pid: 119 },
-      positiveControl: { pid: 118 }, variants } };
+      positiveControl: { pid: 118 }, developerTools: { git }, gitExpected: digest,
+      positiveGit: command(git, ["hash-object", "git-control.txt"], 116, `${digest}\n`),
+      hostDns: command("/owned/node", ["--input-type=module"], 117, JSON.stringify(dns)),
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
@@ -286,6 +300,18 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.variants[2].node.tools = null; },
     value => { value.bootstrap.variants[2].node.command.argv[6] = "gui/501/foreign"; },
     value => { value.bootstrap.variants[2].node.tools.service.argv[1] = "gui/501/foreign"; },
+    value => { value.bootstrap.positiveGit.executable = "/usr/bin/git"; },
+    value => { value.bootstrap.positiveGit.exitCode = 1; },
+    value => { value.bootstrap.hostDns.stdout = JSON.stringify({ hostname: "example.com", error: { code: "ENOTFOUND" } }); },
+    value => { value.bootstrap.dnsEndpoint = "*"; },
+    value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
+    value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.seed += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.setStatus = 0x80000000; },
+    value => { value.bootstrap.variants[2].restored.restoration.setStatus = 0; },
+    value => { value.bootstrap.variants[1].restored.command.argv[9] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.git.executable = "/usr/bin/git"; },
     value => { delete value.bootstrap.variants[2].canaryPreserved; },
   ]) {
     const bad = structuredClone(good); corrupt(bad);
@@ -297,6 +323,9 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   unknown.bootstrap.variants[2].node.command = { ...unknown.bootstrap.variants[2].node.command, exitCode: 126 };
   unknown.bootstrap.variants[2].node.tools = null;
   unknown.bootstrap.variants[2].canaryPreserved = false;
+  unknown.bootstrap.variants[1].restored.command.exitCode = 126;
+  unknown.bootstrap.variants[1].restored.restoration.setStatus = -303;
+  unknown.bootstrap.variants[1].restored.restoration.after = unknown.bootstrap.variants[1].restored.restoration.before;
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
 });
 

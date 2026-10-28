@@ -21,6 +21,44 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 selected Git·DNS 양성 대조와 registered seed 재취득 — Mac 실행 전
+
+기존 `observeMacDeveloperTools`의 actual selector 결과를 재사용하고 host·sandboxed Git을 같은 binary로 맞췄다.
+host의 같은 `example.com` DNS 양성을 먼저 요구하며 `DNSSD_UDS_PATH` override가 있으면 setup을 거절한다.
+[Apple client 기본 endpoint](https://github.com/apple-oss-distributions/mDNSResponder/blob/main/mDNSShared/dnssd_ipc.h#L73-L99)와
+[client connect 경로](https://github.com/apple-oss-distributions/mDNSResponder/blob/main/mDNSShared/dnssd_clientstub.c#L790-L850)를 대조했다.
+실제 socket임을 확인한 `/var/run/mDNSResponder`와 physical alias만 fixture의 기존 exact Unix-socket 입력에 추가했다.
+production renderer·Mach allowlist·controlled actor·각 timeout·실행 guard·Linux backend는 변경하지 않았다.
+
+typed SEND helper에 `restore-registered-seed` 관측을 추가했다. 제거 조건마다 별도 fresh target에서
+registered seed 조회·실제 task bootstrap setter 결과·before/after·동일 PID를 보존하고 launchctl로 직접 exec한다.
+다시 취득한 권한으로 effect가 생겨도 OBSERVED 반례로 남기며 성공/거절을 validator로 강제하지 않는다.
+local parser/policy41/41·생성된 실제 Node producer의 Linux Git/cc 실행·실제 fixture의 Linux state 전 거절을 확인했다.
+이 source의 Mac compile·재취득·정상 DNS 양립은 **NOT_RUN**이다. local 원시는 `bootstrap-rights/send-rights-fix/baseline-restoration-local/`다.
+
+별도로 이전 published source `a4c398f89a`의 Architecture40726395696 원시 ZIP2개를 SHA256 대조했다.
+clean `92b706…` /15687 files에서 all3953/3953·skip0·errors[]·13 command exit0·입력 전후 동일을 확인했다.
+baselineComparison은 NOT_AVAILABLE이며, 상세 lane·Mac common 결과와 미해결 설치 오류는 validation에 기록했다.
+
+
+### 2026-10-28 typed SEND 반납 뒤 실제 권한 제거·Node/compiler 관측
+
+주 `3ca06ef0485e5114a3d3f62e55aabd26dca1c9d3` / mirror `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`의
+Native [40726395555](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395555) ZIP5개를 SHA256 대조했다.
+clean `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` /15687 files 전후 동일이다.
+양 Mac 새 case3회씩은 실제 compile·실행 후 OBSERVED, 전체는108 OBSERVED·12 SETUP_FAILED다.
+inherited 직접/Node service12회는 실제 성공, bootstrap만/모두 제거한24회는 CLI141·effect 미관측이었다.
+deadline이나 marker 부재만이 아니라 실제 client 반환을 보존하며 전체 service 차단으로 확대하지 않는다.
+모든18 variant의 Node·clang·자기 파일 쓰기·금지 canary EPERM/원본 보존은 기대대로였다.
+
+Git은 **inherited에서도** `/usr/bin/git` shim의 `/var/select/developer_dir` 읽기가 EPERM이고,
+DNS도 모든 variant에서 ENOTFOUND였다. host의 같은 hostname 양성은 없어 포트 제거의 호환성 실패로 분류할 수 없다.
+다음은 기존 `observeMacDeveloperTools`로 selected Git 양성, host DNS 대조·정확한 DNS endpoint,
+남겨진 registered send right로 bootstrap을 재취득하는 실제 adversary다. 이들은 아직 NOT_RUN이다.
+production guard·Linux·role/grant·durable producer·headless와 세 product gate는 그대로 유지한다.
+원시는 `bootstrap-rights/send-rights-fix/actual-rights-isolation-{outcomes,summary}.json`과 원시 ZIP이다.
+
+
 ### 2026-10-28 첫 bootstrap 실기 compile 실패와 SEND right 전용 반납으로 교체
 
 주 `3581b838` / mirror `41392d6624`의 같은 tree를 발행하고 Native
