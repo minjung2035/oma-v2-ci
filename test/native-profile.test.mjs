@@ -34,3 +34,15 @@ if (process.platform === "darwin") test("native Darwin: Society refuses before p
   assert.equal(readFileSync(old, "utf8"), "accepted bytes must remain\n");
   assert.deepEqual(readdirSync(f.root).sort(), ["old-vm-state", "project"]);
 });
+
+test("PTY readiness failure preserves the actual child exit instead of reporting a live placeholder", () => {
+  const result = spawnSync("python3", [resolve("test/fixtures/pty-harness.py"), JSON.stringify({
+    argv: [process.execPath, "-e", "process.exit(7)"],
+    ready: Buffer.from("never emitted").toString("hex"), steps: [],
+  })], { encoding: "utf8", timeout: 30000 });
+  assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
+  const terminal = JSON.parse(result.stdout);
+  assert.equal(terminal.ready, false);
+  assert.equal(terminal.exited, true);
+  assert.equal(terminal.code, 7);
+});

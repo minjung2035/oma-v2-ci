@@ -1,6 +1,6 @@
 """V28B harness: run a command in a real pty, feed it bytes, resize it, and
 report how it left the terminal. Prints one JSON object."""
-import fcntl, json, os, pty, select, signal, struct, sys, termios, time
+import fcntl, json, os, pty, select, signal, struct, subprocess, sys, termios, time
 
 def main():
     spec = json.loads(sys.argv[1])
@@ -9,6 +9,19 @@ def main():
         os.execvpe(spec["argv"][0], spec["argv"], {**os.environ, "TERM": "xterm-256color"})
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     out = bytearray()
+    status = None
+    def terminal():
+        try:
+            lflag = termios.tcgetattr(master)[3]
+        except (OSError, termios.error):
+            lflag = None
+        return {
+            "exited": status is not None,
+            "code": os.waitstatus_to_exitcode(status) if status is not None else None,
+            "echo": bool(lflag & termios.ECHO) if lflag is not None else None,
+            "icanon": bool(lflag & termios.ICANON) if lflag is not None else None,
+            "output": out.hex(),
+        }
     def pump(seconds):
         end = time.time() + seconds
         while time.time() < end:
@@ -31,9 +44,42 @@ def main():
         deadline = time.time() + 20
         while ready not in out and time.time() < deadline:
             pump(0.05)
+            done, raw = os.waitpid(pid, os.WNOHANG)
+            if done:
+                status = raw
+                pump(0.2)
+                break
         if ready not in out:
-            print(json.dumps({"exited": False, "code": None, "echo": False, "icanon": False, "output": out.hex(), "ready": False}))
-            os.kill(pid, signal.SIGKILL)
+            diagnostic = None
+            if status is None and "sample" in spec:
+                # The direct child is still unreaped, so this PID cannot name
+                # an outsider. Sampling is diagnostic, not a scope-death proof.
+                try:
+                    sampled = subprocess.run(["/usr/bin/sample", str(pid), "1", "1", "-file", spec["sample"]],
+                        capture_output=True, text=True, timeout=10)
+                    diagnostic = {"exitCode": sampled.returncode, "stdout": sampled.stdout, "stderr": sampled.stderr}
+                    if os.path.exists(spec["sample"]):
+                        with open(spec["sample"], encoding="utf8", errors="replace") as report:
+                            diagnostic["report"] = report.read()
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    diagnostic = {"error": str(error)}
+                pump(0.05)
+                done, raw = os.waitpid(pid, os.WNOHANG)
+                if done:
+                    status = raw
+            result = terminal()
+            result["ready"] = False
+            if diagnostic is not None:
+                result["sample"] = diagnostic
+            print(json.dumps(result))
+            if status is None:
+                # forkpty's unreaped session leader pins this fixture group.
+                # This cleanup is not arbitrary-descendant containment.
+                try:
+                    os.killpg(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                os.waitpid(pid, 0)
             return
     # Steps may carry "expect": after the step's fixed wait, keep reading until
     # that marker shows up in output emitted since the last write (bounded by
@@ -62,9 +108,8 @@ def main():
                 missed += 1
     # Waited by the clock, not by rounds: once the program has closed its side,
     # a read answers EIO at once and a round takes no time at all.
-    status = None
     deadline = time.time() + 10
-    while time.time() < deadline:
+    while status is None and time.time() < deadline:
         done, raw = os.waitpid(pid, os.WNOHANG)
         if done:
             status = raw
@@ -72,17 +117,16 @@ def main():
         pump(0.05)
         time.sleep(0.01)
     pump(0.2)
-    attrs = termios.tcgetattr(master)
-    lflag = attrs[3]
-    print(json.dumps({
-        "exited": status is not None,
-        "code": os.waitstatus_to_exitcode(status) if status is not None else None,
-        "echo": bool(lflag & termios.ECHO),
-        "icanon": bool(lflag & termios.ICANON),
-        "output": out.hex(),
-        "expectMissed": missed,
-    }))
+    result = terminal()
+    if ready is not None:
+        result["ready"] = True
+    result["expectMissed"] = missed
+    print(json.dumps(result))
     if status is None:
-        os.kill(pid, signal.SIGKILL)
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        os.waitpid(pid, 0)
 
 main()
