@@ -13,7 +13,9 @@ assert.equal(process.platform, "darwin", "launchd observations require the actua
 const mode = process.argv[2];
 assert.ok(["launchd-scope", "launchd-image"].includes(mode));
 const root = realpathSync(process.cwd()), started = performance.now();
-const domain = `user/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()}`;
+// Plain user/UID bootstrap failed before spawning on both runners. Test a
+// distinct GUI session context; this does not qualify headless operation.
+const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()}`;
 const commands = [], jobs = [], targets = [];
 const observation = { domain, commands, fixtureOnly: true };
 let cleaning = false, failure;
@@ -88,6 +90,8 @@ function originalExited(target) {
     current.bsdBytes === 136 && current.status === 5; // SDK SZOMB: no live task/writer.
 }
 try {
+  observation.manager = Object.fromEntries(["manageruid", "managername", "managerpid"]
+    .map(command => [command, run("/bin/launchctl", [command], false)]));
   observation.sip = run("/usr/bin/csrutil", ["status"], false);
   observation.boot = run("/usr/sbin/sysctl", ["-n", "kern.bootsessionuuid"]);
   const source = fileURLToPath(new URL("./darwin-launchd-actor.c", import.meta.url));

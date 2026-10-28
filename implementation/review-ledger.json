@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 62,
-  "NOT_REVIEWED": 14274,
+  "CHANGED_WITHOUT_ORACLE": 57,
+  "NOT_REVIEWED": 14279,
   "REMOVED": 220
  },
  "lanes": {
@@ -469,8 +469,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/entry/personal-host.ts",
@@ -2641,12 +2640,10 @@
   {
    "path": "packages/native/src/files.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "492c7ee9c8e7fd83e75f855c4d30be3d68b14bb97dc11baaf8b9fb4e81dc4bca"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/native/src/identity.ts",
@@ -3538,12 +3535,10 @@
   {
    "path": "packages/storage/src/delivery-receipt.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "69ba95d8a404fbdc1a610834f80989bdc4a8ff45b48536454fc59c2781ec0f58"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/diagnostic-snapshot.ts",
@@ -3555,22 +3550,18 @@
   {
    "path": "packages/storage/src/directory.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "36dc937ff6e372eda8c2c0bd037b382ac4f7708b9a877c81729f1c3bb9d9cee9"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/durable-fs.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "e3e198497f0c01d538eaf525f6db9b343194e90b6a3bbf1d04ff315c0d6bca47"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/execution-journal.ts",
@@ -3610,12 +3601,10 @@
   {
    "path": "packages/storage/src/immutable-file.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "aeab733a20dd9bbda7563e0675bde50b819dd935c17669b34047ae37f7f80423"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/installation-surface.ts",

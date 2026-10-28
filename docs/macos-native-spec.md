@@ -125,6 +125,9 @@ mode-000 등 안전하게 취득·수리할 수 없는 entry는 unknown으로 �
 
 Society·broker·tree-reader lock은 서로 다른 수명이다. held directory/inode의 실제 flock 계약을 검증하며 TTL·heartbeat·PID 파일로 ownership을 대체하지 않는다. `temp → write-all → file flush → verify → no-replace publish/derived replace → parent flush`를 유지한다. 같은 이름/다른 bytes는 충돌이다. SQLite/Git 등 외부 writer도 같은 root capability에 연결해야 한다.
 
+외부 source와 이번 호출이 `O_EXCL`로 만든 비공개 temporary를 구분한다. 후자는 held parent의 `linkat`로 같은 leased inode를 no-replace 공개한다. 이 이름은 해당 writer 소유이며 collector는 live flock을 존중해야 한다.
+외부 source의 FD hardlink가 없거나 cross-device면, 이미 확인한 held-source bytes를 목적지의 비공개 leased temporary에 복사·hash 검증한 뒤 공개한다. 기존 destination은 덮어쓰지 않고 bytes를 검증하며 cleanup identity는 실제 공개한 inode다. source와의 inode 공유 자체는 영속 계약이 아니다.
+
 ## 7. Sandbox와 path view
 
 Deny-default Seatbelt와 기존 Linux confinement을 같은 목적별 policy에서 만든다. Worker·candidate·quarantine은 다른 최소 권한 입력을 받는다. read·write·exec·library mapping·IPC를 구분하고 credential/다른 actor/설치 code/receipt/DB를 노출하지 않는다. 상속 FD는 명시된 채널만 남긴다.

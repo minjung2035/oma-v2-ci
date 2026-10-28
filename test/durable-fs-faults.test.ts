@@ -36,7 +36,6 @@ test("immutable and derived callers use different shared owners", () => {
   fixture((root, source, target, bytes) => {
     publishImmutableFile(source, target, sha256Hex(bytes));
     assert.deepEqual(fs.readFileSync(target), bytes);
-    assert.equal(fs.lstatSync(target).ino, fs.lstatSync(source).ino, "same-filesystem immutable names may hardlink");
     assert.equal(fs.lstatSync(target).mode & 0o777, 0o444);
     publishImmutableFile(source, target, sha256Hex(bytes));
     const other = join(root, "other.eml"); fs.writeFileSync(other, "different");

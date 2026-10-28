@@ -21,19 +21,28 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
-### 2026-10-28 launchd setup과 Git forwarding의 관측 분리
+### 2026-10-28 readable directory와 portable immutable publication
 
-Native `40609391051` / `3d9ed7493`의 두 Mac은105회 실행·90 OBSERVED·15 SETUP_FAILED다.
-각3회의 `launchd-job`은 matching A의 user/501 bootstrap이5로 실패해 scope/집계에 도달하지 못했다.
-두 runner의 SIP는 disabled다. 컴파일·서명·직접 child의 PID/coalition 조회는 성공했지만 constraint 지원이나 job 분리는 미확인이다.
-후속은 constraint 없는 `launchd-scope`와 별도 `launchd-image`로 분리해 기본 job 생성과 image 조건을 비교한다.
-기존 failure를 backend 채택 근거로 사용하지 않는다.
+Native `40612861610` / `c01e308a15`의 두 Mac은 각각111회 실행·90 OBSERVED·21 SETUP_FAILED다.
+constraint 없는 `launchd-scope`도 user/501 bootstrap5에서 멈췄으므로 image constraint만의 실패로 해석하지 않는다.
+후속은 manageruid/name/pid를 기록하고 **별도 gui/UID context**를 시험한다. headless 지원이나 backend 채택을 뜻하지 않는다.
+두 Mac의 동일 sandbox·production stderrFd2 Git query는 exit0/sha1이었다. 전달 문제라는 가설은 배제하고 임시 진단을 제거했다.
+이전 `3d9ed7493`의 Mac26 common247/247·skip0과 Linux installed Personal tools1/1·skip0은 해당 입력의 근거로 유지한다.
 
-Mac26 common은247/247·skip0이다. 같은 profile의 일반 async/sync Git query는 실제 exit0/sha1이었다.
-quarantine 진단은 자체256-byte 출력 한도에서 output-limited가 됐으므로 **진단만**65536으로 고친다.
-production 출력 제한은 유지하고 다음 관측은 production과 같은 stderrFd2 전달에 한정한다.
-기존 installed Personal tools PTY도 Linux에서 실제 read/write/edit/bash와 terminal 복원을 통과했다(선택1개·skip0).
-후속 plan111회·program10개의 driver248분+설치/credential/upload20분은 기존270분 안에 든다.
+실제 Mac Personal은 화면 전에 `directory type mismatch: …/data/oma`로 실패했다.
+readable owned directory는 처음 연 directory FD를 그대로 유지하도록 고쳤다. EACCES일 때만 기존 pin/repair/reopen을 시도하며
+Darwin mode-000 반례를 pathname chmod로 우회하지 않는다. 이 수정의 Mac 결과는 아직 NOT_RUN이다.
+
+private temporary 생성·receipt 공개는 기존 held-parent `linkAt` 관례를 재사용한다.
+외부 source의 `tryLinkDescriptor`는 Linux FD hardlink를 유지하고, Darwin 또는 EXDEV에서는 checked bytes의 검증된 목적지-side copy를 공개한다.
+writer flock·no-replace·충돌 검증·실제 published inode의 cleanup identity·flush 순서는 유지한다. inode 공유 assertion과 source-text mutator gate는 삭제했다.
+Linux UID1000의 파일/receipt 회귀60/60·skip0, build·전체 strict가 통과했다.
+처음 넓은 선택은 `/usr/bin/bwrap` 부재로 native Git1건이 실패했다. 실제0.12 binary를 넣은 disposable mount namespace에서 preaccept28/28·skip0을 확인했다.
+이는 root-mapped 관측이며 일반 UID permission proof는 아니다. overlay scaffold도 제거했다.
+실제 다른 device(42→26)의 copy에서 source-name 교체·destination-parent 교체·충돌 보존·published identity·flock contention과 해제를 확인했다.
+현재 compiled Personal+bundled Pi의 실제 Linux PTY도 birth 공개→화면→Ctrl-D→exit0·terminal 복원·Society 미생성을 통과했다.
+원시는 `native-2026-10-28-descriptor-leaf/portable-publication-*.json`와 `publication-preaccept-namespace.json`이 소유한다.
+Darwin publication/Personal after-proof와 세 product gate는 아직 미완료다. plan111·program10·outer270분은 유지한다.
 
 
 ### 2026-10-28 Personal의 독립 진입 복구

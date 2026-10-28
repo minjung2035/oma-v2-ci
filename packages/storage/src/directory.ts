@@ -60,28 +60,26 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
   } finally { closeSync(parent); }
 }
 
-/** Gives a directory pinned beneath a held parent back its owner
- * required owner bits where a same-UID stray or an interrupted writer
- * dropped them. The repair runs through the O_PATH pin's own proc name --
- * the one inode the pin names, never a replaced path -- and bits are only
- * added, never stripped: the mode's other permission bits and its setuid,
- * setgid and sticky bits are kept. */
+/** Restore required owner bits through the held directory descriptor, never
+ * a replaced pathname. Other permission, setid and sticky bits are retained. */
 function repairOwnerBits(pin: number, required = 0o700): void {
   const observed = fstatSync(pin);
   if ((observed.mode & required) !== required)
     chmodPinned(pin, (observed.mode & 0o7777) | required);
 }
 
-/** Opens the `name` directory beneath a held parent for an open, removal or
- * listing walk even when its mode lost owner bits -- the `O_RDONLY |
- * O_DIRECTORY` open this replaces throws EACCES on a mode-000 directory
- * before any repair inside the walk could run. The O_PATH pin needs no
- * permission bits of its own and keeps the RESOLVE_BENEATH |
- * RESOLVE_NO_SYMLINKS guarantee -- a name swapped for a link or an escape is
- * refused in-kernel -- and the real descriptor is opened through the pin's
- * proc name after the repair, so every step acts on the one pinned inode,
- * never a re-resolved path. */
+/** A readable directory already supplies the held capability this walk needs.
+ * Only EACCES needs a permission-independent pin/repair/reopen, on kernels
+ * that support it. A failed pin is not permission to retry by pathname. */
 export function openOwnedDirectory(parent: number, name: string): number {
+  let direct: number | undefined;
+  try { direct = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "EACCES") throw error; }
+  if (direct !== undefined) {
+    const held = direct;
+    try { repairOwnerBits(held); return held; }
+    catch (error) { return withCleanup(() => { throw error; }, () => closeSync(held)); }
+  }
   const pin = pinBeneath(parent, name, true);
   let result: number | undefined;
   try {

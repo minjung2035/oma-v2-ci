@@ -1,6 +1,6 @@
-/** Linux filesystem capabilities for staging/file handoff, not a full hostile-host
- * or SQLite/Git VFS boundary. An open fd pins identity, not immutable contents.
- * No lstat/open fallback when openat2 containment is unavailable.
+/** Contained filesystem capabilities for staging/file handoff, not a full
+ * hostile-host or SQLite/Git VFS boundary. An fd pins identity, not contents.
+ * No lstat/open fallback when native containment is unavailable.
  */
 import { chmodSync, constants, closeSync, fstatSync, openSync } from "node:fs";
 import { basename, dirname } from "node:path";
@@ -202,20 +202,24 @@ export function openDirectory(path: string): number {
     return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
-/** linkat follows our proc-fd capability, never the previously verified source name. */
-export function linkDescriptor(
+/** Link the held inode where supported. False means no link was created
+ * (unsupported capability or cross-device). Darwin's descriptor filesystem is
+ * not a vnode-link capability. No source pathname is reconstructed or retried. */
+export function tryLinkDescriptor(
   source: number,
   directory: number,
   name: string,
-): void {
+): boolean {
   relativeName(name);
   if (name.includes("/") || !Number.isInteger(directory) || directory < 0)
     throw new TypeError("invalid directory entry");
   if (!Number.isInteger(source) || source < 0)
     throw new TypeError("invalid source descriptor");
-  checked(
-    syscalls().link(-100, `/proc/self/fd/${source}`, directory, name, 0x400),
-  ); // AT_SYMLINK_FOLLOW
+  if (process.platform === "darwin") return false;
+  const result = syscalls().link(-100, `/proc/self/fd/${source}`, directory, name, 0x400 /* AT_SYMLINK_FOLLOW */);
+  if (result < 0 && errno() === 18 /* EXDEV */) return false;
+  checked(result);
+  return true;
 }
 
 /** Do something to a name, inside the directory that holds it, having resolved

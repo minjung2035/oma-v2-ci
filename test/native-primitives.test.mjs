@@ -11,6 +11,9 @@ import { hostProcessProbe } from "@oma/broker/process-ancestry";
 import { RestartPolicy } from "@oma/process/restart-policy";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import { SnapshotReader } from "@oma/native/snapshot-reader";
+import { ensureOwnedDirectory, openOwnedDirectory } from "@oma/storage/directory";
+import { createHash } from "node:crypto";
+import { publishImmutableFile } from "@oma/storage/immutable-file";
 
 test("snapshot reader returns final symlink bytes while refusing linked parents", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-snapshot-link-")));
@@ -68,6 +71,53 @@ test("contained opens accept caller no-follow and reject intermediate and final 
     () => { if (held !== undefined) closeSync(held); },
     () => rmSync(scratch, { recursive: true, force: true }),
   ]));
+});
+
+test("owned directory creation retains readable inode authority and repairs owner bits without following replacements", () => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-owned-readable-")));
+  let parent, held;
+  withCleanup(() => {
+    const owned = join(scratch, "owned"), outside = join(scratch, "outside");
+    mkdirSync(owned); mkdirSync(outside);
+    const original = openDirectory(owned);
+    withCleanup(() => fchmodSync(original, 0o550), () => closeSync(original));
+    writeFileSync(join(outside, "canary"), "outside unchanged");
+    ensureOwnedDirectory(join(owned, "nested"), owned, 0o700);
+    parent = openDirectory(scratch); held = openOwnedDirectory(parent, "owned");
+    assert.equal(fstatSync(held).mode & 0o777, 0o750);
+    renameSync(owned, join(scratch, "moved")); symlinkAt("outside", parent, "owned");
+    mkdirAt(held, "held-effect", 0o700);
+    assert.deepEqual(directoryNames(held), ["held-effect", "nested"]);
+    assert.throws(() => openOwnedDirectory(parent, "owned"), { code: "STORE_CORRUPT" });
+    assert.equal(readFileSync(join(outside, "canary"), "utf8"), "outside unchanged");
+  }, () => cleanupAll([
+    () => { if (held !== undefined) closeSync(held); },
+    () => { if (parent !== undefined) closeSync(parent); },
+    () => rmSync(scratch, { recursive: true, force: true }),
+  ]));
+});
+
+test("immutable publication keeps checked source bytes across source-name substitution and refuses a conflicting destination", () => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-immutable-held-")));
+  withCleanup(() => {
+    const source = join(scratch, "source"), moved = join(scratch, "moved"), target = join(scratch, "published");
+    const original = Buffer.from([0, 0x7f, 0x80, 0xff, 10]);
+    const replacement = Buffer.from("replacement must not be published");
+    writeFileSync(source, original);
+    const hash = createHash("sha256").update(original).digest("hex");
+    publishImmutableFile(source, target, hash, fault => {
+      if (fault.point === "publication-link" && fault.phase === "before") {
+        renameSync(source, moved);
+        writeFileSync(source, replacement);
+      }
+    });
+    assert.deepEqual(readFileSync(target), original);
+    assert.deepEqual(readFileSync(source), replacement);
+    assert.deepEqual(readFileSync(moved), original);
+    assert.throws(() => publishImmutableFile(source, target), { code: "STORE_CORRUPT" });
+    assert.deepEqual(readFileSync(target), original);
+    assert.deepEqual(readFileSync(source), replacement);
+  }, () => rmSync(scratch, { recursive: true, force: true }));
 });
 
 test("directory effects remain on the held inode after a pathname replacement", () => {
