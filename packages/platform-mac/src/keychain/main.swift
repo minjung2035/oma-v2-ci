@@ -47,26 +47,34 @@ func put(_ id: Int, _ account: String, _ value: String) {
   else { refuse(id, "The Keychain could not be written (status \(status))") }
 }
 guard CommandLine.arguments.count == 1 else { exit(2) }
-var received = Data()
-while true {
-  let chunk = channel.readData(ofLength: 65536)
-  if chunk.isEmpty { exit(received.isEmpty ? 0 : 2) }
-  received.append(chunk)
-  if received.count > 1024 * 1024 { exit(2) }
-  while let newline = received.firstIndex(of: 10) {
-    let bytes = received.subdata(in: received.startIndex..<newline)
-    received.removeSubrange(received.startIndex...newline)
-    guard let request = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-      let id = request["id"] as? Int, let operation = request["op"] as? String,
-      let account = request["account"] as? String else { exit(2) }
-    switch operation {
-    case "keychain.get":
-      guard Set(request.keys) == Set(["id", "op", "account"]) else { exit(2) }
-      get(id, account)
-    case "keychain.put":
-      guard Set(request.keys) == Set(["id", "op", "account", "value"]), let value = request["value"] as? String else { exit(2) }
-      put(id, account, value)
-    default: refuse(id, "Unknown credential operation")
+withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 65536) { input in
+  let buffer = input.baseAddress!, descriptor = channel.fileDescriptor
+  var received = Data()
+  while true {
+    // A stream request must be answered before its supervision channel ends.
+    let count = Darwin.read(descriptor, buffer, input.count)
+    if count < 0 {
+      if errno == EINTR { continue }
+      exit(2)
+    }
+    if count == 0 { exit(received.isEmpty ? 0 : 2) }
+    received.append(buffer, count: count)
+    if received.count > 1024 * 1024 { exit(2) }
+    while let newline = received.firstIndex(of: 10) {
+      let bytes = received.subdata(in: received.startIndex..<newline)
+      received.removeSubrange(received.startIndex...newline)
+      guard let request = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+        let id = request["id"] as? Int, let operation = request["op"] as? String,
+        let account = request["account"] as? String else { exit(2) }
+      switch operation {
+      case "keychain.get":
+        guard Set(request.keys) == Set(["id", "op", "account"]) else { exit(2) }
+        get(id, account)
+      case "keychain.put":
+        guard Set(request.keys) == Set(["id", "op", "account", "value"]), let value = request["value"] as? String else { exit(2) }
+        put(id, account, value)
+      default: refuse(id, "Unknown credential operation")
+      }
     }
   }
 }
