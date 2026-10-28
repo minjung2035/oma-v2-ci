@@ -76,7 +76,7 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
 
-Resource coalition의 [XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/coalition.c)는 source 조사이지 목표 kernel 증명이 아니다. `tasks_started/tasks_exited`는 같은 lock 아래 읽히지만, 그것만으로 OMA job의 안정적인 닫힌 범위가 성립하지는 않는다. target source revision을 고정하고 위 전제를 확인한다. 공개 SDK에 없는 ABI를 public이라고 부르거나 private 제어 syscall로 우회하지 않는다.
+Resource coalition의 [고정 XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c)에서 `tasks_started/tasks_exited`는 같은 lock 아래 읽힌다. [같은 revision의 설명](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/doc/observability/coalitions.md)은 ID 비재사용과 loaded service 재시작의 coalition 재사용을 명시한다. 따라서 일시적 empty를 닫힌 실행 범위로 승격하지 않는다. 이는 목표 kernel 증명이 아니며 위 전제를 실제 확인한다. SDK에 없는 ABI를 public이라 부르거나 private 제어 syscall로 우회하지 않는다.
 
 Mac15·26 각3회에서 inherited signal은 전달됐지만 동일 SBPL을 fresh 적용한 쪽은 EPERM이었고 nested 재적용도 EPERM이었다. 따라서 SBPL 재적용을 recovery reaper로 사용하지 않는다. `seatbelt-signals`는 unreaped owned child만 쓰는 label 실험이며 permissive fixture profile·EOF 종료를 production policy나 complete-death proof로 옮기지 않는다.
 

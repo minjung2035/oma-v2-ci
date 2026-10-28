@@ -36,6 +36,21 @@ function git(cwd,args,success=true){
   if(success)assert.equal(result.exitCode,0,result.stderr.toString());
   return success?decodeProcessText(result.stdout).trim():result.exitCode;
 }
+// Temporary real-command diagnosis: distinguish async spawn from Git refusal
+// under the identical profile. No mock or changed production status grammar.
+async function diagnoseGit(recipe,inheritedFds){
+  const position=recipe.command.argv.indexOf(host.node);assert.ok(position>=0);
+  const script=`import {runProcess} from ${JSON.stringify(import.meta.resolve('@oma/process/async'))};
+    import {runProcessSync} from ${JSON.stringify(import.meta.resolve('@oma/process/run'))};
+    import {GIT_ENV} from ${JSON.stringify(import.meta.resolve('@oma/process/policies'))};
+    const command={executable:process.argv[1],argv:['--git-dir',process.argv[2],'rev-parse','--show-object-format'],
+      env:GIT_ENV,timeoutMs:10000,stdoutBytes:65536,stderrBytes:65536};
+    const describe=result=>({...result,stdout:result.stdout.toString(),stderr:result.stderr.toString()});
+    console.log(JSON.stringify({async:describe(await runProcess(command)),sync:describe(runProcessSync(command))}));`;
+  const command={...recipe.command,argv:[...recipe.command.argv.slice(0,position+1),'--input-type=module','-e',script,tools.git,project],timeoutMs:15000};
+  const result=await execute(command,inheritedFds);
+  console.error(JSON.stringify({gitSpawnDiagnostic:JSON.parse(result.stdout.toString())}));
+}
 async function execute(command,inheritedFds){
   const task=startProcess({...command,timeoutMs:30000},{inheritedFds});
   return withAsyncCleanup(async()=>{const result=await task.result;await task.closed;
@@ -72,6 +87,7 @@ await withAsyncCleanup(async()=>{
      assert.equal(run('./executable-check.sh',[]),'script-check\\n');writeFileSync('native-check.c','int main(void){return 0;}');
      run('/usr/bin/cc',['native-check.c','-o','native-check']);run('./native-check',[]);console.log('exact-check');`,project],env:{}}]}).checks[0];
   const recipe=candidateSeatbelt(host,{git:tools.git,project,workspace},checkTmp,base,check);
+  await diagnoseGit(recipe,[spare,spare,spare,statusWrite,spare,releaseRead,checkLease.descriptor]);
   const sequence=new CandidateSetupStatus(()=>{gateReleases++;assert.equal(writeSync(releaseWrite,Buffer.from([1])),1);closeSync(releaseWrite);releaseWrite=undefined;});
   reader=createReadStream('',{fd:status.read,autoClose:true});
   const evidence=(async()=>{for await(const bytes of reader)sequence.write(bytes);return sequence.finish();})();
@@ -113,6 +129,7 @@ await withAsyncCleanup(async()=>{
     const temporary=join(quarantine,phase+'-tmp');mkdirSync(temporary);
     const recipe=quarantineSeatbelt(host,{phase,candidate,exportRef,prerequisites:[base]},
       {git:tools.git,project,root:quarantine,bundle:join(quarantine,'input.bundle'),temporary});
+    if(phase==='verify')await diagnoseGit(recipe,[empty,empty,empty,input,lease.descriptor,rootFd,projectFd]);
     assert.deepEqual(recipe.privateInputs,[]);const result=await execute(recipe.command,[empty,empty,empty,input,lease.descriptor,rootFd,projectFd]);
     assert.equal(result.stdout.toString(),candidate+'\n');
     assert.equal(git(root,['--git-dir',project,'show-ref']),refs);
