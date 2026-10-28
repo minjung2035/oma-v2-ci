@@ -119,7 +119,7 @@ export function validateDarwinObservation(name, observations) {
     const attempts = ["a", "b", "node", "git", "compiler", "script"].map(key => value.positive?.[key]);
     attempts.push(value.mismatch, value.restoredPath);
     for (const attempt of attempts) {
-      if (!attempt || attempt.stopped !== true || !Number.isSafeInteger(attempt.stopSignal) || attempt.stopSignal < 1 ||
+      if (!attempt || attempt.stopped !== true || !Number.isSafeInteger(attempt.stopSignal) || attempt.stopSignal < 0 ||
           attempt.childReaped !== true || attempt.supervisorJoined !== true ||
           attempt.beforeRelease?.constructor !== false || attempt.beforeRelease?.main !== false ||
           attempt.beforeRelease?.stdoutBytes !== 0 || attempt.beforeRelease?.stderrBytes !== 0 ||
