@@ -14,6 +14,8 @@
 #include <dlfcn.h>
 #include <spawn.h>
 #include <signal.h>
+#include <mach/mach.h>
+#include <bsm/libbsm.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -166,6 +168,59 @@ static void usage(const char *text) {
   printf("{\"available\":%s,\"returnCode\":%d,\"errno\":%d,\"started\":\"%" PRIu64 "\",\"exited\":\"%" PRIu64 "\"}\n",
     read_counts == NULL ? "false" : "true", code, saved, counts.started, counts.exited);
 }
+static void signal_member(pid_t pid, const char *text) {
+  errno = 0; char *end;
+  uint64_t expected = strtoull(text, &end, 10);
+  require(getuid() != 0 && errno == 0 && text[0] >= '1' && text[0] <= '9' && *end == 0 && expected > 0,
+    "ordinary-user member control arguments");
+  struct process_identity before = {0}, after = {0};
+  struct coalition_ids ids = {0};
+  audit_token_t token = {{0}};
+  mach_port_name_t name = MACH_PORT_NULL;
+  mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
+  int membership_bytes = 0, membership_errno = 0, after_bytes = 0, after_errno = 0;
+  int name_status = -1, info_status = -1, release_status = -1, signal_status = -1;
+  errno = 0;
+  int before_bytes = proc_pidinfo(pid, 17, 0, &before, sizeof before);
+  int before_errno = before_bytes == (int)sizeof before ? 0 : errno;
+  if (before_bytes == (int)sizeof before && before.unique != 0 && before.version != 0) {
+    errno = 0;
+    membership_bytes = proc_pidinfo(pid, 20, 0, &ids, sizeof ids);
+    membership_errno = membership_bytes == (int)sizeof ids ? 0 : errno;
+    if (membership_bytes == (int)sizeof ids && ids.ids[0] == expected) {
+      /* The port comes from the kernel PID lookup, not from an untrusted peer. */
+      name_status = task_name_for_pid(mach_task_self(), pid, &name);
+      if (name_status == KERN_SUCCESS && MACH_PORT_VALID(name)) {
+        info_status = task_info(name, TASK_AUDIT_TOKEN, (task_info_t)&token, &count);
+        release_status = mach_port_deallocate(mach_task_self(), name);
+      }
+      errno = 0;
+      after_bytes = proc_pidinfo(pid, 17, 0, &after, sizeof after);
+      after_errno = after_bytes == (int)sizeof after ? 0 : errno;
+    }
+  }
+  /* The generation sandwich correlates membership with the kernel token.
+   * The SDK then checks that generation at the signal effect. No saved PID
+   * control, invented sender identity, or target cooperation is involved. */
+  int correlated = before_bytes == (int)sizeof before && after_bytes == (int)sizeof after &&
+    before.unique != 0 && before.unique == after.unique && before.version != 0 && before.version == after.version &&
+    membership_bytes == (int)sizeof ids && ids.ids[0] == expected &&
+    name_status == KERN_SUCCESS && info_status == KERN_SUCCESS && release_status == KERN_SUCCESS &&
+    count == TASK_AUDIT_TOKEN_COUNT && audit_token_to_pid(token) == pid &&
+    audit_token_to_euid(token) == geteuid() && token.val[7] == (uint32_t)before.version;
+  if (correlated) signal_status = proc_signal_with_audittoken(&token, SIGKILL);
+  printf("{\"controllerPid\":%d,\"controllerUid\":%u,\"targetPid\":%d,\"expectedResource\":\"%" PRIu64 "\","
+    "\"before\":{\"bytes\":%d,\"errno\":%d,\"unique\":\"%" PRIu64 "\",\"version\":%d},"
+    "\"membership\":{\"bytes\":%d,\"errno\":%d,\"resource\":\"%" PRIu64 "\"},"
+    "\"taskNameStatus\":%d,\"taskInfoStatus\":%d,\"namePortReleaseStatus\":%d,\"auditCount\":%u,"
+    "\"auditPid\":%d,\"auditUid\":%u,\"auditPidVersion\":%u,"
+    "\"after\":{\"bytes\":%d,\"errno\":%d,\"unique\":\"%" PRIu64 "\",\"version\":%d},"
+    "\"correlated\":%s,\"signalStatus\":%d}\n",
+    getpid(), (unsigned)geteuid(), pid, expected, before_bytes, before_errno, before.unique, before.version,
+    membership_bytes, membership_errno, ids.ids[0], name_status, info_status, release_status, count,
+    audit_token_to_pid(token), (unsigned)audit_token_to_euid(token), token.val[7],
+    after_bytes, after_errno, after.unique, after.version, correlated ? "true" : "false", signal_status);
+}
 int main(int argc, char **argv) {
   require(argc >= 2, "actor mode");
   self_image = argv[0];
@@ -175,6 +230,12 @@ int main(int argc, char **argv) {
     errno = 0; char *end; long pid = strtol(argv[2], &end, 10);
     require(errno == 0 && *end == 0 && pid > 1 && pid <= INT32_MAX, "inspection PID");
     identity(stdout, (pid_t)pid); putchar('\n'); return 0;
+  }
+  if (strcmp(argv[1], "signal-member") == 0) {
+    require(argc == 4, "member control arguments");
+    errno = 0; char *end; long pid = strtol(argv[2], &end, 10);
+    require(errno == 0 && *end == 0 && pid > 1 && pid <= INT32_MAX, "member candidate PID");
+    signal_member((pid_t)pid, argv[3]); return 0;
   }
   if (strcmp(argv[1], "usage") == 0) { require(argc == 3, "usage arguments"); usage(argv[2]); return 0; }
   require(argc == 3 && chdir(argv[2]) == 0, "private observation directory");

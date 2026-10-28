@@ -21,6 +21,28 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 coalition 소멸과 explicit admission 거절 실제 확인
+
+Native [40647938085](https://github.com/minjung2035/oma-v2-ci/actions/runs/40647938085) /
+`2af0de04a0`의 Mac15·26 common은 각각253/253·skip0이다. gate117회는105 OBSERVED·12 SETUP_FAILED다.
+새 actor는 두 SDK에서 `-Wall -Wextra -Werror`로 compile됐다. 각 OS의3회 모두 inherited child가
+같은 resource CID에 있었고, private setter는0을 반환했으나 explicit own/다른 CID의 spawn은 EPERM(1)이었다.
+bootout 뒤 detached actor 생존·6 started/5 exited를 다시 관측했다. **시험용 release 뒤** 기존 CID 조회는
+ESRCH(-1/3)로 바뀌었고, 별도 live CID의 query는 성공·2 started/1 exited였다.
+이는 count0과 다른 kernel ID 소멸 관측이며 all-owner-death 제어의 증명은 아니다.
+SIP-disabled·GUI UID501에서의 범위이며 headless/SIP-enabled·service-mediated spawn은 미검증이다.
+원시는 API SHA256 확인한 `coalition-macos{15,26}-{gates,runtime}/`다.
+
+다음 최소 시험은 fresh exec controller의 `task_name_for_pid → task_info(TASK_AUDIT_TOKEN)`다.
+[고정 PID lookup](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_proc.c#L5843)은
+same-user·MAC 검사 뒤 kernel task-name port를 반환하고,
+[task_info](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task.c#L6444)는 이 port에서 audit token을 읽는다.
+fixture는 unique/version before→membership→kernel token→unique/version after를 대조한 뒤 SDK signal을 호출한다.
+다른 live job을 wrong-member 대조로 쓰고, release 전에 CID query를 남긴다. 거절/미호출(-1)/실제 효과를
+구분하며 새 sandbox profile·private entitlement·숫자 PID fallback은 추가하지 않는다.
+Linux parser/policy52/52·skip0은 통과했고 새 C getter·control의 Mac 실행은 아직 NOT_RUN이다.
+이 선행 시험은 durable authority producer·전체 후손 탐색·fork race·all-owner-death 복구가 아니다.
+
 ### 2026-10-28 clean Personal과 generation-checked SDK 제어 실제 통과
 
 Native [40642688171](https://github.com/minjung2035/oma-v2-ci/actions/runs/40642688171) /

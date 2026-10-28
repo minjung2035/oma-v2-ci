@@ -126,9 +126,10 @@ export function validateDarwinObservation(name, observations) {
         [0, -1].includes(result.returnCode) && Number.isSafeInteger(result.errno) &&
         (result.returnCode === 0 ? result.available && result.errno === 0 : result.errno > 0) &&
         decimal(result.started) && decimal(result.exited);
-      if (exit?.controlledGenerationsExited !== true || !Array.isArray(exit.samples) || exit.samples.length === 0 ||
-          exit.samples.some(sample => !Number.isFinite(sample.elapsedMs) || sample.elapsedMs < 0 ||
-            !query(sample.aggregate) || !query(sample.otherAggregate)))
+      const pairs = record => Array.isArray(record?.samples) && record.samples.length > 0 &&
+        record.samples.every(sample => Number.isFinite(sample.elapsedMs) && sample.elapsedMs >= 0 &&
+          query(sample.aggregate) && query(sample.otherAggregate));
+      if (exit?.controlledGenerationsExited !== true || !pairs(exit))
         throw new Error("launchd scope lacks paired post-exit kernel queries");
       if (admission?.privateInterface !== true || typeof admission.available !== "boolean" ||
           !Number.isSafeInteger(admission.uid) || admission.uid <= 0 ||
@@ -154,6 +155,38 @@ export function validateDarwinObservation(name, observations) {
             !Number.isSafeInteger(attempt.coalitionErrno) || attempt.coalitionErrno < 0 ||
             !decimal(attempt.actualResource) || !Number.isSafeInteger(attempt.waitStatus) || attempt.waitStatus < 0)
           throw new Error("launchd admission loses its actual API result, cohort or owned-child cleanup");
+      }
+      const recovery = scope.recovery;
+      if (recovery?.context !== "fresh-exec-no-profile-applied" || recovery.tokenSource !== "kernel-task-name-port" ||
+          recovery.fixtureReleaseUsedBeforeObservation !== false || !pairs(recovery.afterAttempt))
+        throw new Error("launchd scope loses fresh kernel-token recovery before fixture cleanup");
+      const snapshot = result => result && Number.isSafeInteger(result.bytes) && result.bytes >= 0 &&
+        Number.isSafeInteger(result.errno) && result.errno >= 0 && decimal(result.unique) &&
+        Number.isSafeInteger(result.version) && result.version >= -2147483648 && result.version <= 2147483647;
+      for (const [key, pid] of [["wrongMember", scope.control.pid], ["remainingMember", scope.members?.detached?.pid]]) {
+        const result = recovery[key];
+        if (!result || !Number.isSafeInteger(pid) || pid <= 1 || result.targetPid !== pid ||
+            result.expectedResource !== admission.callerResource || typeof result.correlated !== "boolean" ||
+            !Number.isSafeInteger(result.controllerPid) || result.controllerPid <= 1 || result.controllerPid === pid ||
+            result.controllerUid !== admission.uid || !snapshot(result.before) || !snapshot(result.after) ||
+            !Number.isSafeInteger(result.membership?.bytes) || result.membership.bytes < 0 ||
+            !Number.isSafeInteger(result.membership.errno) || result.membership.errno < 0 ||
+            !decimal(result.membership.resource) ||
+            ["taskNameStatus", "taskInfoStatus", "namePortReleaseStatus", "signalStatus"].some(field =>
+              !Number.isSafeInteger(result[field]) || result[field] < -1) ||
+            ["auditCount", "auditPid", "auditUid", "auditPidVersion"].some(field =>
+              !Number.isSafeInteger(result[field]) || result[field] < 0) ||
+            (result.correlated ? result.signalStatus < 0 : result.signalStatus !== -1))
+          throw new Error("launchd member control lacks actual acquisition or effect state");
+        if (result.correlated && (result.before.bytes !== 56 || result.before.errno !== 0 ||
+            result.after.bytes !== 56 || result.after.errno !== 0 || result.before.unique === "0" ||
+            result.before.unique !== result.after.unique || result.before.version === 0 ||
+            result.before.version !== result.after.version || result.membership.bytes !== 40 ||
+            result.membership.errno !== 0 || result.membership.resource !== result.expectedResource ||
+            result.taskNameStatus !== 0 || result.taskInfoStatus !== 0 || result.namePortReleaseStatus !== 0 ||
+            result.auditCount !== 8 || result.auditPid !== pid || result.auditUid !== result.controllerUid ||
+            result.auditPidVersion !== (result.before.version >>> 0)))
+          throw new Error("launchd member effect is not correlated with one kernel generation and coalition");
       }
     }
   }
