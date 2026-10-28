@@ -37,7 +37,7 @@ all 입력은 전후 동일하다. baselineComparison은 NOT_AVAILABLE이며 비
 standalone kernel/crash lane은 NOT_RUN이고 native-all의 실제 필수 파일/이름과 별개로 표시한다.
 원시 ZIP2개와 `published-clean-linux-verification-summary.json`을 보존한다.
 
-### 다음 최소 질문 — bootstrap/XPC 권한 제거 (실제 Mac 미실행)
+### 다음 최소 질문 — bootstrap/XPC 권한 제거 (첫 Mac compile 실패·실행 미실행)
 
 `launchd-bootstrap`의 새 helper는 production profile을 적용하고 상속 그대로 / bootstrap만 제거 /
 bootstrap+registered seed 제거를 direct exec 전에 비교한다. 원래 controlled actor와 policy는 바꾸지 않았다.
@@ -48,10 +48,26 @@ public Mach port API와 libxpc seed 전달의 내부 관례를 구분하며 prod
 현재 local parser·production policy41/41·skip0, 변경 JS3개 syntax exit0,
 AST로 추출한 생성 Node script syntax exit0, 기존 실제 service6건의 parser 대조,
 새 mode의 실제 Linux 실행이 state 전 exit1인 것을 확인했다.
-이는 **새 C helper의 실제 Mac compile/실행은 NOT_RUN**이라는 상태를 바꾸지 않는다.
+이후 실제 Mac compile을 시도한 첫 결과와 수정 source의 미실행은 아래에 구분한다.
 추가 case3회에 맞춰 CI job 전체 상한만300분으로 조정했다(worst-case288분).
 기존 probe120초·fixture80초·service5초·제품 timeout과 세 product gate는 유지한다.
 원시는 같은 Mac resume root의 `bootstrap-local/`·`upstream-bootstrap-authority-research.json`이다.
+
+첫 발행 주 `3581b838` / mirror `41392d6624`의 Native
+[40721951956](https://github.com/minjung2035/oma-v2-ci/actions/runs/40721951956)를 실제 판독했다.
+clean 입력 `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` /15687 files 전후 동일,
+common Mac15/26 각254/254·Ubuntu246/246·skip0, 양 Mac 독립 설치26/27이다.
+gate 각120 /105 OBSERVED /15 SETUP_FAILED이며 새 bootstrap3건씩은 모두 C compile 단계 실패다.
+SDK15.5·26.5가 `mach_port_destroy`의 macOS12부터 unsafe/deprecated 표시를 `-Werror`로 거절했다.
+권한 분리 자체가 실행된 것이 아니므로 이를 허용/거절·호환성·제품 결함으로 판정하지 않는다.
+
+경고·compiler 성공 조건은 유지하고 SEND right의 참조만 `mach_port_get_refs`/`mach_port_mod_refs`로
+명시 반납하도록 교체했다. RECEIVE right는 제거하지 않으며 record/parser의 이름도 `droppedSendRights`로 맞췄다.
+수정 뒤 local parser/policy41/41·skip0·실제 Linux fixture의 state 전 거절을 확인했다.
+수정 source의 실제 Mac compile/실행은 **NOT_RUN**이다. production guard·Seatbelt·actor·Linux backend는 그대로다.
+원시는 같은 root의 `bootstrap-rights/observed-first-attempt-summary.json`·원시 ZIP5개와
+`bootstrap-rights/send-rights-fix-local/`이며 최초 실패를 삭제·재분류하지 않는다.
+
 
 
 
@@ -797,7 +813,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` (15687 files).
+verification input digest `92b706badeddfd746705389ea330524770745ae544f2c049456066fc3aef88ba` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

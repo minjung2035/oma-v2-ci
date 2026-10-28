@@ -146,8 +146,8 @@ export function validateDarwinObservation(name, observations) {
               !(ports === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                 ports?.mode === variant.name && ports.sandboxApplied === true && ports.preExecObservation === true &&
                 ports.pid === attempt.command.pid && Number.isSafeInteger(ports.uid) && ports.uid > 0 &&
-                snapshot(ports.before) && snapshot(ports.after) && Array.isArray(ports.destroyed) &&
-                ports.destroyed.every(portNumber)))
+                snapshot(ports.before) && snapshot(ports.after) && Array.isArray(ports.droppedSendRights) &&
+                ports.droppedSendRights.every(portNumber)))
             throw new Error("bootstrap attempt loses its actual sandbox, rights, command, target or exit outcome");
           targets.add(attempt.target);
           if (key === "direct" &&

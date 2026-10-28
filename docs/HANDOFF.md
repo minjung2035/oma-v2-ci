@@ -26,7 +26,8 @@
 | 재개 기준 mirror HEAD / origin ref | `836e2f596314857e2f03a5d91154a40413ecf71a` — `Bind sandboxed recovery probe to clean committed inputs` |
 | 마지막 committed 코드 변경 | 주 저장소 `2dd8bf5d`: production Seatbelt target + service 호출 관측. 이후 binding commit은 코드 구현이 아님 |
 | 이번 작업 | verifier 임시 트리 수명 수리·fresh service target·Linux 인수검증 마감. 관련 native 문서의 기존 변경까지 포함한 commit/push를 사용자에게 명시 승인받음 |
-| 발행한 source | 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9` / mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`, tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c` 동일 |
+| Linux 발행 source | 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9` / mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`, tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c` 동일 |
+| 첫 bootstrap 실험 source | 주 `3581b838463cd55d1294a362014bcfba2e2ce918` / mirror `41392d6624cc5d6301ea97bf0b2127a053956ea0`, tree `ae563d0f9501943c4281e6660c05bd9c64206f1b` 동일. Native40721951956에서 새 helper compile6건 실패, 권한 분리는 미실행 |
 | 마지막 로컬 실행 | 정상 PATH serial all3952/3952·skip0·errors[], 독립 설치본 실제 Principal/Worker/Personal·재개·자동 보관/cold 복원·같은 key receipt 확인. 유한 작업은 종료했으며 원시와 소유 임시 자원을 구분 |
 | 환경 | Linux x64. Mac 실행은 실제 GitHub runner. LSP 미설정 |
 | Node26 | `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
@@ -102,13 +103,14 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 3. **적용:** 두 target·host kickstart·positive 종료 뒤 print·target 전후 print·실제 spawn/wait·cleanup·target별 job 출력·guest effect를 남긴다. validator는 서로 다른 동일 domain target, host 양성 명령의 귀속, 실제 attempt의 target을 대조한다. print 텍스트는 proof로 파싱하지 않는다.
 4. **실제 Mac 확인:** Mac26 CID1393→1397·1435→1439·1497→1509, Mac15 CID1217→1221·1249→1251·1267→1271. 동일 actor·production policy·5초 한도를 유지한 fresh-target6건 모두 범위 밖 실행이었다.
 5. **판정 / 다음 행동:** 현재 policy+coalition만으로 complete backend를 채택하지 않는다. 실행 차단을 유지한다. launchd control과 service lookup의 권한 경로를 OS 원본·SDK와 대조하고, bootstrap/XPC 권한 제거가 실제 제어와 정상 Node/Git/compiler/DNS에 미치는 한 질문만 최소 실행으로 확인한다. CLI 이름 차단·timeout 확대·marker 부재로 해결하지 않는다.
-6. **다음 질문 구현 / 실제 Mac 미실행:** `launchd-bootstrap`은 상속 그대로·bootstrap만 제거·bootstrap+registered XPC seed 제거를 direct exec 전에 비교한다. 별도 fresh target의 직접 CLI와 Node가 만든 CLI, 정상 파일 쓰기·금지 canary·Git hash·compiler·실제 DNS를 기록한다. public Mach API와 libxpc 내부 관례를 구분하며 production에는 연결하지 않았다. local parser/policy41/41·원시6건 parser 대조·생성 Node script syntax·실제 Linux의 state 전 거절을 확인했다. 새 C helper의 Mac compile/실행은 아직 NOT_RUN이다.
+6. **다음 질문 구현 / 첫 Mac compile 실패:** `launchd-bootstrap`은 상속 그대로·bootstrap만 제거·bootstrap+registered XPC seed 제거를 direct exec 전에 비교한다. 직접 CLI와 Node 후손 CLI·파일/금지 canary·Git/compiler/DNS를 기록한다. Native [40721951956](https://github.com/minjung2035/oma-v2-ci/actions/runs/40721951956)의 양 Mac 각3회는 unsafe/deprecated `mach_port_destroy`를 유지한 `-Werror`가 거절했다. 권한 제거 실행 결과는 아직 없다. 경고를 끄지 않고 SEND right의 참조를 `mach_port_get_refs`/`mach_port_mod_refs`로 반납하도록 교체했다. 수정 뒤 local41/41·state 전 Linux 거절은 확인했으며 수정 source의 Mac compile/실행은 NOT_RUN이다.
 
 관측 입력은 clean `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files이며 양 Mac 전후 동일하다. common 각253/253이지만 독립 설치는 각26/27이고 Git preparation은 실제 `UNSUPPORTED_PROFILE`로 실패했다. gate 각105 OBSERVED·12 SETUP_FAILED와 G-PROCESS/G-FILES/G-AUTH OPEN을 그대로 유지한다.
 
 이번 local 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-service-fresh-target/`다. `red.log`·`green.log`와 각 status, `checked-source.json`, `regression-input.json`, `direct-smoke.log`가 명령·exit·변경 source SHA와 grammar/kernel 경계를 소유한다.
 새 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/`다. Native ZIP5개와 Architecture ZIP2개의 SHA256을 대조했다. `fresh-service-admission-observed.json`·`native-runtime-observed-summaries.json`과 OS별 원시 launchd row를 보존한다. Architecture [40711228820](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228820)의 같은 clean 입력에서 all3952/3952·skip0·errors[], fast880·durable872·property34·stress16·platform72와 모든 command exit0을 확인했다. baseline comparison은 NOT_AVAILABLE이며 비교 완료로 쓰지 않는다.
 조사에서 deprecated `bootstrap_unprivileged`는 native launchd job이 이미 그 port로 시작한다고 명시했고, Chromium V2는 macOS10.10 이후 오래된 bootstrap proxy의 투명 중계가 성립하지 않았다고 설명한다. API 이름만으로 해법을 채택하지 않는다. 새 probe3회가 늘어 CI worst-case 계산은288분이며 job 상한만300분으로 맞췄다. 기존 probe120초·fixture80초·service5초 한도와 제품 timeout은 유지한다.
+첫 bootstrap 실험의 원시는 `bootstrap-rights/`다. clean 입력 `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` /15687 files 전후 동일, common Mac 각254/254·Ubuntu246/246·skip0, Mac 독립 설치26/27이다. gate 각120 /105 OBSERVED /15 SETUP_FAILED 중 추가3건은 위 compile 실패다. 이 실패를 후보의 권한 분리 성공/실패나 기존 Linux 제품 결함으로 해석하지 않는다.
 
 
 ### 현재 관련 파일
