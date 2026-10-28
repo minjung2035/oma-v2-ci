@@ -21,6 +21,24 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 첫 bootstrap 실기 compile 실패와 SEND right 전용 반납으로 교체
+
+주 `3581b838` / mirror `41392d6624`의 같은 tree를 발행하고 Native
+[40721951956](https://github.com/minjung2035/oma-v2-ci/actions/runs/40721951956) ZIP5개를 SHA256 대조했다.
+clean `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` /15687 files는 전후 동일하다.
+common Mac15/26 각254/254·Ubuntu246/246·skip0, Mac 독립 설치26/27이다.
+gate 각120회는105 OBSERVED·15 SETUP_FAILED이며 새 bootstrap3회가 각 OS에서 compile 실패했다.
+SDK15.5·26.5가 `mach_port_destroy`를 macOS12부터 inherently unsafe/deprecated라 선언해
+기존 `-Wall -Wextra -Werror`가 거절했다. 따라서 실제 권한 제거·정상 도구 양립 결과는 없다.
+
+경고를 끄거나 unsafe API를 허용하지 않았다. 현재 helper는 조회한 SEND right의 양수 참조를
+`mach_port_get_refs`/`mach_port_mod_refs`로 명시 반납하며 RECEIVE right는 제거하지 않는다.
+관측 필드도 `droppedSendRights`로 clean cutover했다. production policy·guard·actor·Linux backend는 유지했다.
+수정 local parser/policy41/41·실제 Linux state 전 거절은 확인했고 수정 source의 Mac compile/실행은 NOT_RUN이다.
+첫 실패 원시는 `bootstrap-rights/observed-first-attempt-summary.json`과 원시 ZIP,
+수정 local 원시는 `bootstrap-rights/send-rights-fix-local/`에 보존한다. 후보 채택·제품 PASS는 아니다.
+
+
 ### 2026-10-28 service-control 권한 분리의 최소 질문 구현 — Mac 실행 전
 
 실제 fresh-service 반례 뒤 기존 production guard와 Seatbelt·Linux backend·controlled actor를 유지했다.

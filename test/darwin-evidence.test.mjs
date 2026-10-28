@@ -93,7 +93,7 @@ const bootstrapRecord = () => {
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
           before: { bootstrap: 200, registered: [201] },
           after: { bootstrap: name === "inherited" ? 200 : 0, registered: name === "bootstrap-and-xpc" ? [0] : [201] },
-          destroyed: name === "inherited" ? [] : [200] }, guestEffect: null,
+          droppedSendRights: name === "inherited" ? [] : [200] }, guestEffect: null,
         ...(kind === "node" ? { tools: { pid, complete: true,
           service: { ...launchctlRecord("kickstart", target), pid: 150 + index } } } : {}) };
     };

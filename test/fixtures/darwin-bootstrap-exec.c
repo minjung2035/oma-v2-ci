@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,10 +46,10 @@ static int contains(const mach_port_t *ports, size_t count, mach_port_t port) {
   for (size_t i = 0; i < count; ++i) if (ports[i] == port) return 1;
   return 0;
 }
-static void release_snapshot(const struct snapshot *value, const mach_port_t *destroyed, size_t count) {
+static void release_snapshot(const struct snapshot *value, const mach_port_t *dropped, size_t count) {
   const mach_port_t ports[] = { value->bootstrap, value->registered[0], value->registered[1], value->registered[2] };
   for (size_t i = 0; i < sizeof ports / sizeof ports[0]; ++i)
-    if (MACH_PORT_VALID(ports[i]) && !contains(destroyed, count, ports[i]))
+    if (MACH_PORT_VALID(ports[i]) && !contains(dropped, count, ports[i]))
       mach_success(mach_port_deallocate(mach_task_self(), ports[i]), "release snapshot send right");
 }
 static void apply_profile(const char *path) {
@@ -82,14 +83,18 @@ int main(int argc, char **argv) {
     mach_success(task_set_bootstrap_port(mach_task_self(), MACH_PORT_NULL), "clear task bootstrap port");
   if (clear_registered)
     mach_success(mach_ports_register(mach_task_self(), NULL, 0), "clear registered seed ports");
-  mach_port_t destroyed[4]; size_t destroyed_count = 0;
+  mach_port_t dropped[4]; size_t dropped_count = 0;
   const mach_port_t old_ports[] = { before.bootstrap, before.registered[0], before.registered[1], before.registered[2] };
   for (size_t i = 0; clear_bootstrap && i < (clear_registered ? 4U : 1U); ++i) {
     mach_port_t port = old_ports[i];
-    if (!MACH_PORT_VALID(port) || contains(destroyed, destroyed_count, port)) continue;
+    if (!MACH_PORT_VALID(port) || contains(dropped, dropped_count, port)) continue;
     require(port != mach_task_self(), "bootstrap rights cannot name the task itself");
-    mach_success(mach_port_destroy(mach_task_self(), port), "destroy old bootstrap send rights");
-    destroyed[destroyed_count++] = port;
+    mach_port_urefs_t references = 0;
+    mach_success(mach_port_get_refs(mach_task_self(), port, MACH_PORT_RIGHT_SEND, &references), "read owned send references");
+    require(references > 0 && references <= INT_MAX, "bounded owned send references");
+    mach_success(mach_port_mod_refs(mach_task_self(), port, MACH_PORT_RIGHT_SEND, -(mach_port_delta_t)references),
+      "drop owned bootstrap send references");
+    dropped[dropped_count++] = port;
   }
   struct snapshot after = snapshot();
   struct coalition_ids coalition = {0};
@@ -101,11 +106,11 @@ int main(int argc, char **argv) {
     "\"coalitionBytes\":%d,\"coalitionErrno\":%d,\"resource\":\"%" PRIu64 "\",\"before\":",
     mode, getpid(), (unsigned)getuid(), bytes, saved, coalition.ids[0]);
   print_snapshot(output, &before); fputs(",\"after\":", output); print_snapshot(output, &after);
-  fputs(",\"destroyed\":[", output);
-  for (size_t i = 0; i < destroyed_count; ++i) fprintf(output, "%s%u", i ? "," : "", destroyed[i]);
+  fputs(",\"droppedSendRights\":[", output);
+  for (size_t i = 0; i < dropped_count; ++i) fprintf(output, "%s%u", i ? "," : "", dropped[i]);
   fputs("],\"preExecObservation\":true}\n", output);
   require(fclose(output) == 0, "complete observation report");
-  release_snapshot(&before, destroyed, destroyed_count);
+  release_snapshot(&before, dropped, dropped_count);
   release_snapshot(&after, NULL, 0);
   execve(argv[5], &argv[5], environ);
   fprintf(stderr, "direct exec refused: errno %d\n", errno);
