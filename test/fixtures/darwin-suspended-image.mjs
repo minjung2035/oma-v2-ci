@@ -7,7 +7,6 @@ import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, re
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { constants as osConstants } from "node:os";
 
 assert.equal(process.platform, "darwin", "suspended-image observations require the actual Darwin kernel");
 assert.equal(process.argv[2], "suspended-image");
@@ -83,7 +82,6 @@ function attempt(name, executable, argv, expected, alternate, restore) {
 }
 function positive(result) {
   assert.equal(result.stopped, true, JSON.stringify(result));
-  assert.equal(result.stopSignal, osConstants.signals.SIGSTOP);
   assert.deepEqual(result.beforeRelease, { constructor: false, main: false, stdoutBytes: 0, stderrBytes: 0 });
   assert.equal(result.copyStatus, 0, JSON.stringify(result));
   assert.deepEqual(result.primary, { parseStatus: 0, validationStatus: 0 });
@@ -107,13 +105,14 @@ try {
   const [a, b] = binaries;
   assert.ok(a.cdhashes.every(hash => !b.cdhashes.includes(hash)), "controlled images require distinct hashes");
   observation.images = { a, b };
-  const first = attempt("positive-a", a.path, [], a), second = attempt("positive-b", b.path, [], b);
+  const positives = observation.positive = {};
+  const first = positives.a = attempt("positive-a", a.path, [], a);
+  const second = positives.b = attempt("positive-b", b.path, [], b);
   positive(first); positive(second);
   for (const [result, variant] of [[first, 1], [second, 2]]) {
     assert.equal(result.constructor.variant, variant); assert.equal(result.main.variant, variant);
     assert.equal(result.constructor.pid, result.main.pid);
   }
-  observation.positive = { a: first, b: second };
   observation.mismatch = attempt("mismatch-b", b.path, [], a, b);
   const selected = join(root, "selected"), restored = join(root, "restored-a");
   copyFileSync(b.path, selected); copyFileSync(a.path, restored);

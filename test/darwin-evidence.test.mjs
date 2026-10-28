@@ -116,11 +116,15 @@ test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a cha
 test("NATIVE-DARWIN: suspended image observations require real positive contexts and coherent pre-release validation", () => {
   const good = suspendedRecord();
   assert.doesNotThrow(() => validateDarwinObservation("suspended-image", { suspendedImage: good }));
+  // START_SUSPENDED is a kernel task stop, not delivery of a particular signal.
+  const initialStop = structuredClone(good); initialStop.positive.a.stopSignal = 0;
+  validateDarwinObservation("suspended-image", { suspendedImage: initialStop });
   for (const change of [
     value => { value.ownedChildrenJoined = false; },
     value => { delete value.sourceSha256.controller; },
     value => { value.images.b = value.images.a; },
     value => { value.positive.a.beforeRelease.constructor = true; },
+    value => { value.positive.a.stopSignal = -1; },
     value => { value.positive.node.primary.validationStatus = -1; },
     value => { value.positive.compiler.targetStdout = ""; },
     value => { value.mismatch.released = true; },

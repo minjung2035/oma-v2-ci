@@ -582,7 +582,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `489ab823aa5c95f0c43da6a471ecfdd0bcd6fd94fe88b13b515f0314e8dd9996` (15687 files).
+verification input digest `d7c3d950776a10623df4a4ca4d5811ff8a05a0c98c9b53f297152d547f07ecd4` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

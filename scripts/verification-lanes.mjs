@@ -611,7 +611,6 @@ const definitions = {
       "restart breaker counts only", "native entry: public help needs no VM", "native entry: retired VM commands refuse",
       "dump verification consumes arbitrary chunk boundaries", "dump truncation, duplicate entries",
       ...resticDumpOracles,
-      "Keychain helper build produces the executable",
       "POSIX group launch creates", "POSIX group cancellation", "POSIX group deadline", "POSIX group launch retains"],
     environment: "git-fs",
     timeoutSeconds: 900,
@@ -639,7 +638,6 @@ const definitions = {
     ],
     requiredNames: [
       ...resticDumpOracles,
-      "Keychain helper build produces the executable",
       "NATIVE-VERIFY-01:", "NATIVE-VERIFY-02:", "NATIVE-VERIFY-03:",
       "V01A:",
       "V01B:",

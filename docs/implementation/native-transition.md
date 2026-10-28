@@ -21,6 +21,24 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 Keychain 대기 분리와 초기 Mach stop의 실제 의미
+
+Native `40631668104` / `9e2cbceb9b`의 Mac15·26 common은 각각252/252·skip0이며,
+gate는 각각114회·96 OBSERVED·18 SETUP_FAILED다. digest 확인 원시는 `suspended-macos{15,26}-{gates,runtime}/`에 있다.
+두 OS의 첫 Personal trace는 host → pi-personal → 실제 `oma-keychain` child를 보였다.
+engine은 `personalModels → KeychainClient.launch` 뒤 channel 응답을 기다린다. Keychain 접근 자체의
+대기인지 frame reader의 대기인지는 아직 분리하지 못했다. 기존 helper 시험은 입력 직후 EOF를
+보내므로 이 차이를 잡지 못했다. credential을 읽지 않는 fragmented unknown-op 시험을 **EOF 전에
+완전한 거절 응답을 받아야 하는 계약**으로 강화했다. 이 입력의 Swift reader는 아직 바꾸지 않았으며,
+다음 실제 Mac 실행이 before 회귀를 판정한다. recipe path·오류 문구만 고정하던 oracle과 required-name은 제거했다.
+
+suspended controller는 두 SDK에서 실제 compile/실행됐지만, 첫 positive가 WIFSTOPPED=true·WSTOPSIG=0에서
+시험의 SIGSTOP=17 가정에 막혔다. [고정 XNU의 초기 정지](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L2208)는
+signal 전달 대신 SSTOP·task_suspend_internal을 설정한다. 특정 signal 값 검사는 삭제하고 C의
+WIFSTOPPED·실행 전 무출력·실제 requirement·release/실행 marker 검사는 유지했다.
+positive 결과는 assertion 전에 보존하도록 고쳤다. 이후 pathname 치환 반례와 정상 도구의
+full qualification은 아직 NOT_RUN이며 gate는 OPEN이다. Linux parser/policy50/50·skip0은 통과했다.
+
 ### 2026-10-28 실제 Personal wait 관측과 suspended-image 다음 판정
 
 Native `40625206025` / `4bea9f8442`의 Mac15·26 common은 각각251/251·skip0이다.
