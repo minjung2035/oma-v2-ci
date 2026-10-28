@@ -1,6 +1,7 @@
 /** Required real-Darwin observations. This manifest grants no kernel support;
  * missing, failed or unexecuted rows can never become completed observations. */
 import { validateDescriptorCapabilityObservation } from "./descriptor-capability-observation.mjs";
+import { isIP } from "node:net";
 export const DARWIN_CASE_REPETITIONS = 3;
 export const DARWIN_PROCESS_TIMEOUT_MS = 120000;
 const program = row => Object.freeze({ ...row, names: Object.freeze(row.names), link: Object.freeze(row.link ?? []) });
@@ -116,13 +117,20 @@ export function validateDarwinObservation(name, observations) {
     if (name === "launchd-bootstrap") {
       const bootstrap = value.bootstrap, modes = ["inherited", "bootstrap-only", "bootstrap-and-xpc"];
       const target = name => typeof name === "string" && name.startsWith(`${value.domain}/org.oma.probe.`);
-      const outcome = result => result && Number.isSafeInteger(result.pid) && result.pid > 0 &&
-        (Number.isSafeInteger(result.exitCode) && result.exitCode >= 0 && result.signal === null ||
-          result.exitCode === null && typeof result.signal === "string") &&
+      const outcome = result => result && Number.isSafeInteger(result.pid) && result.pid >= 0 &&
+        (result.pid > 0 && Number.isSafeInteger(result.exitCode) && result.exitCode >= 0 && result.signal === null ||
+          result.pid > 0 && result.exitCode === null && typeof result.signal === "string" ||
+          result.exitCode === null && result.signal === null && typeof result.error === "string") &&
         typeof result.stdout === "string" && typeof result.stderr === "string";
       const portNumber = port => Number.isSafeInteger(port) && port >= 0 && port <= 0xffffffff;
       const snapshot = record => record && portNumber(record.bootstrap) &&
         Array.isArray(record.registered) && record.registered.length <= 3 && record.registered.every(portNumber);
+      const dns = record => record?.hostname === "example.com" &&
+        (Array.isArray(record.addresses) && record.addresses.length > 0 &&
+          record.addresses.every(row => [4, 6].includes(row.family) && isIP(row.address) === row.family) ||
+          typeof record.error?.code === "string");
+      let hostDns;
+      try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
       if (bootstrap?.renderer !== "production-seatbeltProfile" ||
           ![bootstrap.sourceSha256, bootstrap.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
           !target(bootstrap.positiveTarget) || !outcome(bootstrap.positiveKickstart) ||
@@ -131,14 +139,23 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.positiveKickstart.exitCode !== 0 || !Number.isSafeInteger(bootstrap.positiveControl?.pid) ||
           bootstrap.positiveControl.pid <= 1 || !Array.isArray(bootstrap.variants) || bootstrap.variants.length !== modes.length ||
           bootstrap.variants[0]?.direct?.ports?.preExecObservation !== true ||
-          bootstrap.variants[0]?.node?.ports?.preExecObservation !== true)
+          bootstrap.variants[0]?.node?.ports?.preExecObservation !== true ||
+          typeof bootstrap.developerTools?.git !== "string" || !bootstrap.developerTools.git.startsWith("/") ||
+          !outcome(bootstrap.positiveGit) || bootstrap.positiveGit.exitCode !== 0 ||
+          bootstrap.positiveGit.executable !== bootstrap.developerTools.git ||
+          typeof bootstrap.gitExpected !== "string" || !/^[0-9a-f]{40}$/.test(bootstrap.gitExpected) ||
+          bootstrap.positiveGit.stdout !== `${bootstrap.gitExpected}\n` ||
+          bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
+          typeof bootstrap.dnsResolvedEndpoint !== "string" || !bootstrap.dnsResolvedEndpoint.startsWith("/") ||
+          !outcome(bootstrap.hostDns) || bootstrap.hostDns.exitCode !== 0 ||
+          !dns(hostDns) || hostDns.error !== undefined)
         throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
       const targets = new Set([bootstrap.positiveTarget]);
       for (const [index, variant] of bootstrap.variants.entries()) {
         if (variant.name !== modes[index] || typeof variant.canaryPreserved !== "boolean" ||
             typeof variant.profileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(variant.profileSha256))
           throw new Error("bootstrap variants omit or relabel a rights/compatibility outcome");
-        for (const key of ["direct", "node"]) {
+        for (const key of ["direct", "node", "restored"]) {
           const attempt = variant[key], ports = attempt?.ports;
           if (!target(attempt?.target) || targets.has(attempt.target) || !outcome(attempt.command) ||
               !Array.isArray(attempt.command.argv) || attempt.command.argv[0] !== variant.name ||
@@ -154,13 +171,31 @@ export function validateDarwinObservation(name, observations) {
               JSON.stringify(attempt.command.argv.slice(4)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]))
             throw new Error("direct bootstrap service outcome belongs to a different target");
           if (key === "node" &&
-              (attempt.command.argv[6] !== attempt.target ||
+              (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
                   (attempt.tools.service === undefined && attempt.tools.complete === false ||
                     attempt.tools.service?.executable === "/bin/launchctl" &&
                     JSON.stringify(attempt.tools.service.argv) === JSON.stringify(["kickstart", attempt.target])))))
             throw new Error("bootstrap Node compatibility outcome is absent or belongs to a different process/target");
+          if (key === "node" && attempt.tools?.complete &&
+              (!outcome(attempt.tools.git) || attempt.tools.git.executable !== bootstrap.developerTools.git ||
+                !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns)))
+            throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
+          if (key === "restored") {
+            const restoration = attempt.restoration;
+            if (JSON.stringify(attempt.command.argv.slice(5, 6)) !== JSON.stringify(["restore-registered-seed"]) ||
+                JSON.stringify(attempt.command.argv.slice(7)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]) ||
+                !(restoration === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                  restoration?.phase === "restore-registered-seed" && Number.isSafeInteger(restoration.pid) &&
+                  restoration.pid > 0 && restoration.pid === ports?.pid && restoration.uid === ports?.uid &&
+                  portNumber(restoration.seed) && snapshot(restoration.before) && snapshot(restoration.after) &&
+                  restoration.seed === (restoration.before.registered[0] ?? 0) &&
+                  (restoration.attempted === true && restoration.seed > 0 && restoration.seed !== 0xffffffff &&
+                    Number.isSafeInteger(restoration.setStatus) && restoration.setStatus >= -0x80000000 && restoration.setStatus <= 0x7fffffff ||
+                    restoration.attempted === false && [0, 0xffffffff].includes(restoration.seed) && restoration.setStatus === null)))
+              throw new Error("registered-seed restoration loses its actual call, process, target or capability outcome");
+          }
         }
       }
     }

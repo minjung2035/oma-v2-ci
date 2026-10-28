@@ -70,8 +70,31 @@ static void apply_profile(const char *path) {
   free(profile);
   require(status == 0, "apply production Seatbelt profile");
 }
+/* Executed after the sandboxed pruning helper execs this same controlled
+ * image. An ordinary program can try these SDK calls; no new grant is used. */
+static int restore_registered(char **argv) {
+  struct snapshot before = snapshot();
+  mach_port_t seed = before.count ? before.registered[0] : MACH_PORT_NULL;
+  int attempted = MACH_PORT_VALID(seed);
+  kern_return_t status = attempted ? task_set_bootstrap_port(mach_task_self(), seed) : KERN_INVALID_RIGHT;
+  struct snapshot after = snapshot();
+  FILE *output = fopen(argv[2], "wx"); require(output != NULL, "exclusive restoration report");
+  fprintf(output, "{\"pid\":%d,\"uid\":%u,\"phase\":\"restore-registered-seed\",\"seed\":%u,"
+    "\"attempted\":%s,\"setStatus\":", getpid(), (unsigned)getuid(), seed, attempted ? "true" : "false");
+  if (attempted) fprintf(output, "%d", status); else fputs("null", output);
+  fputs(",\"before\":", output); print_snapshot(output, &before);
+  fputs(",\"after\":", output); print_snapshot(output, &after); fputs("}\n", output);
+  require(fclose(output) == 0, "complete restoration report");
+  release_snapshot(&before, NULL, 0); release_snapshot(&after, NULL, 0);
+  if (!attempted) return 125;
+  if (status != KERN_SUCCESS) return 126;
+  execve(argv[3], &argv[3], environ);
+  fprintf(stderr, "restored direct exec refused: errno %d\n", errno);
+  return 126;
+}
 int main(int argc, char **argv) {
   require(argc >= 6 && getuid() != 0, "mode profile report cwd executable [args] as ordinary user");
+  if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];
   int clear_bootstrap = strcmp(mode, "inherited") != 0;
   int clear_registered = strcmp(mode, "bootstrap-and-xpc") == 0;
