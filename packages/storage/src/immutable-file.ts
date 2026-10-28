@@ -1,9 +1,8 @@
 import { unlinkAt } from "@oma/file-descriptors";
 import type { ImmutableObservation } from "@oma/contracts/files";
 /** MAIL-004..006 / FS-002: immutable bytes, never a derived overwrite API.
- * Mail permits hardlinks. Keep checked descriptors through publication; names
- * are directory-relative and source linkat consumes the checked inode itself.
- */
+ * Keep the checked source descriptor. A kernel FD hardlink is optional;
+ * otherwise publish a verified copy in the held destination directory. */
 import {
   constants,
   closeSync,
@@ -27,7 +26,8 @@ import {
   temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { linkDescriptor, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { tryLinkDescriptor, openDirectory, openRegularBeneath } from "@oma/native/files";
+import { linkAt } from "@oma/native/posix-files";
 import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
@@ -159,35 +159,38 @@ function publishImmutable(
         const stat = fstatSync(fd);
         linked?.({ dev: stat.dev, ino: stat.ino });
       };
+      let needsCopy = true;
       try {
         faultAt(faults, "publication-link", "before", destination);
-        linkDescriptor(sourceFd, parent, destinationName);
-        report(sourceFd);
+        needsCopy = !tryLinkDescriptor(sourceFd, parent, destinationName);
+        if (!needsCopy) report(sourceFd);
       } catch (error) {
         if (isDurabilityFault(error)) throw error;
         const code = (error as NodeJS.ErrnoException).code;
-        if (code === "EXDEV") {
-          const name = temporaryNameFor(basename(destination));
-          const label = join(dirname(destination), name);
-          faultAt(faults, "file-create", "before", label);
-          temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
-          temporary = name;
-          faultAt(faults, "file-create", "after-visible", label);
-          faultAt(faults, "file-write", "before", label);
-          writeFileSync(temporaryFd, original.bytes);
-          faultAt(faults, "file-write", "ambiguous", label);
-          faultAt(faults, "file-fsync", "ambiguous", label);
-          fsyncSync(temporaryFd);
-          faultAt(faults, "file-fsync", "after-visible", label);
-          checkedBytes(temporaryFd, original.hash);
-          try {
-            linkDescriptor(temporaryFd, parent, destinationName);
-            report(temporaryFd);
-          } catch (publicationError) {
-            if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
-              throw publicationError;
-          }
-        } else if (code !== "EEXIST") throw error;
+        if (code === "EEXIST") needsCopy = false;
+        else if (code !== "EXDEV") throw error;
+      }
+      if (needsCopy) {
+        const name = temporaryNameFor(basename(destination));
+        const label = join(dirname(destination), name);
+        faultAt(faults, "file-create", "before", label);
+        temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
+        temporary = name;
+        faultAt(faults, "file-create", "after-visible", label);
+        faultAt(faults, "file-write", "before", label);
+        writeFileSync(temporaryFd, original.bytes);
+        faultAt(faults, "file-write", "ambiguous", label);
+        faultAt(faults, "file-fsync", "ambiguous", label);
+        fsyncSync(temporaryFd);
+        faultAt(faults, "file-fsync", "after-visible", label);
+        checkedBytes(temporaryFd, original.hash);
+        try {
+          linkAt(parent, name, parent, destinationName);
+          report(temporaryFd);
+        } catch (publicationError) {
+          if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
+            throw publicationError;
+        }
       }
       faultAt(faults, "publication-link", "after-visible", destination);
       faultAt(faults, "destination-validate", "before", destination);

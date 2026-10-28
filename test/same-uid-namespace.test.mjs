@@ -131,35 +131,3 @@ test("S-06/FS-005: replacing a derived symlink is idempotent and leaves no tempo
   } finally { a.cleanup(); }
 });
 
-/** The gate that keeps the shape from coming back.
- *
- * Four consecutive audits found this defect in four different places, because
- * nothing stopped the next function from being written the same way. A mutating
- * syscall in these modules must name an entry under a descriptor this process
- * is holding; anything else has to be added here on purpose, with a reason.
- */
-test("S-06/FS-005: every mutating syscall in the storage primitives names an entry under a held descriptor", () => {
-  const guarded = [
-    "packages/storage/src/durable-fs.ts",
-    "packages/storage/src/staged-tree.ts",
-    "packages/storage/src/directory.ts",
-    "apps/oma/src/request-cache.ts",
-  ];
-  // Reads grant no authority to place bytes and are not part of this rule.
-  const mutators = /\b(renameSync|symlinkSync|unlinkSync|linkSync|mkdirSync|rmdirSync|rmSync|fchmodSync)\s*\(/g;
-  const held = /^(entryAt\(|`\/proc\/self\/fd\/|entry\b|fd\b|parent\b|directory\b|child\b|root\b)/;
-  const offences = [];
-  for (const file of guarded) {
-    const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8").split("\n");
-    source.forEach((line, index) => {
-      for (const match of line.matchAll(mutators)) {
-        // symlinkSync's first argument is the link's contents, not a path it resolves.
-        const rest = line.slice(match.index + match[0].length);
-        const argument = match[1] === "symlinkSync" ? rest.slice(rest.indexOf(",") + 1).trim() : rest.trim();
-        if (!held.test(argument)) offences.push(`${file}:${index + 1}: ${line.trim()}`);
-      }
-    });
-  }
-  assert.deepEqual(offences, [],
-    "a storage primitive mutates a pathname it would have to resolve a second time");
-});

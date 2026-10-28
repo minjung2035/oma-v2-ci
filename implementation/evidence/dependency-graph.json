@@ -741,7 +741,7 @@
    "K1-codecs -> K1-codecs": 28,
    "K2-mechanisms -> K0-values": 133,
    "K2-mechanisms -> K1-codecs": 16,
-   "K2-mechanisms -> K2-mechanisms": 177,
+   "K2-mechanisms -> K2-mechanisms": 179,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -2421,10 +2421,10 @@
   }
  ],
  "files": 521,
- "runtimeEdges": 1878,
+ "runtimeEdges": 1880,
  "typeOnlyEdges": 788,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 481,
+  "L1-kernel -> L1-kernel": 483,
   "L2-facts -> L1-kernel": 33,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 262,

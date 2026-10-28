@@ -1404,7 +1404,7 @@
     },
     {
       "path": "packages/native/src/files.ts",
-      "sha256": "492c7ee9c8e7fd83e75f855c4d30be3d68b14bb97dc11baaf8b9fb4e81dc4bca"
+      "sha256": "c019813ee433d4a399a2b548c5ed1b3e133dfb06013be0f44863cf9c7ab024de"
     },
     {
       "path": "packages/native/src/identity.ts",
@@ -1884,7 +1884,7 @@
     },
     {
       "path": "packages/storage/src/delivery-receipt.ts",
-      "sha256": "69ba95d8a404fbdc1a610834f80989bdc4a8ff45b48536454fc59c2781ec0f58"
+      "sha256": "41c0ae61aaa1b01717161cceadbcc9fc0d884b2ea31cc2b453ef318779d69ab2"
     },
     {
       "path": "packages/storage/src/diagnostic-snapshot.ts",
@@ -1892,11 +1892,11 @@
     },
     {
       "path": "packages/storage/src/directory.ts",
-      "sha256": "36dc937ff6e372eda8c2c0bd037b382ac4f7708b9a877c81729f1c3bb9d9cee9"
+      "sha256": "5893bf7119c26e5cba2585443e89dd1efc48901f14690975af2b5950494c062e"
     },
     {
       "path": "packages/storage/src/durable-fs.ts",
-      "sha256": "e3e198497f0c01d538eaf525f6db9b343194e90b6a3bbf1d04ff315c0d6bca47"
+      "sha256": "b7af5dcde6f83326e8a63cf2dd4f7fb8f639aa3ffb0651a58c73a746fa77b29a"
     },
     {
       "path": "packages/storage/src/execution-journal.ts",
@@ -1916,7 +1916,7 @@
     },
     {
       "path": "packages/storage/src/immutable-file.ts",
-      "sha256": "aeab733a20dd9bbda7563e0675bde50b819dd935c17669b34047ae37f7f80423"
+      "sha256": "2ae8c02c63327e54b2c29fef4d30b6043bef4f04b970f8405ea93706b04f87da"
     },
     {
       "path": "packages/storage/src/installation-surface.ts",

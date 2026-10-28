@@ -23,7 +23,8 @@ import {
   temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
+import { openBeneath, openDirectory, openRegularBeneath, closeEvery } from "@oma/native/files";
+import { linkAt } from "@oma/native/posix-files";
 import { runnerReceiptPathAt, sessionDirPathAt } from "@oma/domain/paths";
 
 import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
@@ -402,7 +403,7 @@ export function publishDeliveryReceipt(
     faultAt(faults, "file-fsync", "after-visible", temporaryPath);
     decodeDeliveryReceipt(parseJsonObject(requireBytes(readBoundedFd(fd, maximum))).raw, batch, stateRoot);
     faultAt(faults, "publication-link", "before", path);
-    try { linkDescriptor(fd, parent, finalName); }
+    try { linkAt(parent, temporaryName, parent, finalName); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     faultAt(faults, "publication-link", "after-visible", path);
     faultAt(faults, "destination-validate", "before", path);

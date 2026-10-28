@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { assertDirectory, ensureDirectory, ensureOwnedDirectory } from "./directory.js";
-import { linkDescriptor, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 
 /** P7 durability fault seam. It is confined to these leaf primitives and their
@@ -236,9 +236,9 @@ export function createLockedTemporary(parent: number, temporaryName: string, fla
     const lock = lockFileDescriptor(fd);
     if (lock.kind !== "held")
       throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
-    // The provisional name is unique and cannot be collected or reused while
-    // its descriptor is held. Never replace an existing held name.
-    linkDescriptor(fd, parent, temporaryName);
+    // This invocation owns the unique, uncollectible provisional entry.
+    // Publish its leased inode under the same held parent without replacement.
+    linkAt(parent, preparing, parent, temporaryName);
     unlinkAt(parent, preparing);
     return fd;
   } catch (error) {
