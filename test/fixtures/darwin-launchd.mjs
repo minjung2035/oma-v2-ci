@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -13,7 +13,7 @@ import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
 assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
 const mode = process.argv[2];
-assert.ok(["launchd-scope", "launchd-image"].includes(mode));
+assert.ok(["launchd-scope", "launchd-image", "launchd-bootstrap"].includes(mode));
 const root = realpathSync(process.cwd()), started = performance.now();
 // Plain user/UID bootstrap failed before spawning on both runners. Test a
 // distinct GUI session context; this does not qualify headless operation.
@@ -21,17 +21,21 @@ const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()
 const commands = [], jobs = [], targets = [];
 const observation = { domain, commands, fixtureOnly: true };
 let cleaning = false, failure;
-function run(executable, argv, required = true) {
+function observe(executable, argv, maximum = 10000) {
   const remaining = (cleaning ? 110000 : 80000) - (performance.now() - started);
   assert.ok(remaining > 0, "launchd fixture deadline");
   const result = spawnSync(executable, argv, { cwd: root, encoding: "utf8",
-    timeout: Math.max(1, Math.min(10000, Math.floor(remaining))), killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
-  const record = { executable, argv, exitCode: result.status, signal: result.signal,
-    error: result.error?.message, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+    timeout: Math.max(1, Math.min(maximum, Math.floor(remaining))), killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
+  const record = { executable, argv, pid: result.pid, exitCode: result.status, signal: result.signal,
+    error: result.error?.message, errorCode: result.error?.code, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   commands.push(record);
-  assert.equal(result.error, undefined, JSON.stringify(record));
-  assert.equal(result.signal, null, JSON.stringify(record));
-  if (required) assert.equal(result.status, 0, JSON.stringify(record));
+  return record;
+}
+function run(executable, argv, required = true) {
+  const record = observe(executable, argv);
+  assert.equal(record.error, undefined, JSON.stringify(record));
+  assert.equal(record.signal, null, JSON.stringify(record));
+  if (required) assert.equal(record.exitCode, 0, JSON.stringify(record));
   return record;
 }
 const text = value => String(value).replace(/[&<>"']/g, character =>
@@ -146,7 +150,75 @@ try {
   observation.controllerChild = JSON.parse(run(actor, ["describe"]).stdout);
   observation.cdhashes = hashes;
   observation.executables = binaries.map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
-  if (mode === "launchd-image") {
+  if (mode === "launchd-bootstrap") {
+    const bootstrapSource = fileURLToPath(new URL("./darwin-bootstrap-exec.c", import.meta.url));
+    const launcher = join(root, "bootstrap-exec");
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-o", launcher]);
+    const compiler = realpathSync(run("/usr/bin/xcrun", ["--find", "clang"]).stdout.trim());
+    const sdk = realpathSync(run("/usr/bin/xcrun", ["--show-sdk-path"]).stdout.trim());
+    const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
+    writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
+    writeFileSync(script, `
+import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { lookup } from "node:dns/promises";
+const [target, canary, compiler, report] = process.argv.slice(2);
+const value = { pid: process.pid, complete: false };
+const save = () => writeFileSync(report, JSON.stringify(value));
+const command = (executable, argv, timeout = 5000) => {
+  const child = spawnSync(executable, argv, { encoding: "utf8", timeout, killSignal: "SIGKILL" });
+  return { executable, argv, pid: child.pid, exitCode: child.status, signal: child.signal,
+    error: child.error?.message, errorCode: child.error?.code, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
+};
+save();
+value.service = command("/bin/launchctl", ["kickstart", target]); save();
+try { writeFileSync("node-output.txt", "BOOTSTRAP_NATIVE_OK\\n"); value.write = "BOOTSTRAP_NATIVE_OK\\n"; }
+catch (error) { value.writeError = { code: error.code, message: error.message }; }
+try { writeFileSync(canary, "UNEXPECTED_WRITE\\n"); value.deniedWrite = "unexpected-success"; }
+catch (error) { value.deniedWrite = error.code; }
+save();
+value.git = command("/usr/bin/git", ["--no-replace-objects", "hash-object", "--no-filters", "--", "node-output.txt"]); save();
+writeFileSync("compile.c", "int main(void) { return 0; }\\n");
+value.compiler = command(compiler, ["-fsyntax-only", "compile.c"]); save();
+try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
+catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
+value.complete = true; save();
+`, { flag: "wx" });
+    const positive = loadJob("bootstrap-positive", actor, "once");
+    const positiveKickstart = run("/bin/launchctl", ["kickstart", positive.target]);
+    await waitFor(() => existsSync(join(positive.directory, "once.json")));
+    observation.bootstrap = { renderer: "production-seatbeltProfile",
+      sourceSha256: createHash("sha256").update(readFileSync(bootstrapSource)).digest("hex"),
+      executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
+      positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
+      compiler, sdk, variants: [] };
+    const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+    for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
+      const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
+      const directTarget = loadJob(`${name}-direct`, actor, "once"), nodeTarget = loadJob(`${name}-node`, actor, "once");
+      const profile = seatbeltProfile({ readable: [
+        ...[actor, launcher, script, process.execPath, compiler].map(path => ({ path, kind: "file" })),
+        { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
+        writable: [{ path: directory, kind: "directory" }], denied: [],
+        executable: [actor, launcher, process.execPath, compiler].map(path => ({ path, kind: "file" })),
+        unixSockets: [], machServices: [], environmentKeys: [] });
+      const profilePath = join(directory, "profile.sb"); writeFileSync(profilePath, profile, { mode: 0o600 });
+      const directPorts = join(directory, "direct-ports.json"), nodePorts = join(directory, "node-ports.json");
+      const toolsReport = join(directory, "tools.json");
+      const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
+      const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
+        nodeTarget.target, canary, compiler, toolsReport]);
+      const tools = optionalJson(toolsReport);
+      for (const [job, result] of [[directTarget, direct], [nodeTarget, tools?.service]])
+        if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+          await waitFor(() => existsSync(join(job.directory, "once.json")));
+      const effect = job => existsSync(join(job.directory, "once.json")) ? remember(marker(job.directory, "once")) : null;
+      observation.bootstrap.variants.push({ name, profileSha256: createHash("sha256").update(profile).digest("hex"),
+        direct: { target: directTarget.target, command: direct, ports: optionalJson(directPorts), guestEffect: effect(directTarget) },
+        node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget) },
+        canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+    }
+  } else if (mode === "launchd-image") {
     assert.notEqual(hashes[0], hashes[1], "different controlled programs require different code hashes");
     const selected = join(root, "selected");
     copyFileSync(actor, selected);
@@ -274,4 +346,5 @@ if (failure) {
     error => error ? reject(error) : resolve()));
   throw failure;
 }
-console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" : "launchdScope"]: observation }));
+console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" :
+  mode === "launchd-bootstrap" ? "launchdBootstrap" : "launchdScope"]: observation }));

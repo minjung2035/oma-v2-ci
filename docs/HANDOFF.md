@@ -12,7 +12,7 @@
 - 에이전트 위임 없이 진행한다. work branch만 사용하며 merge/deploy하지 않는다.
 - 사용자 `README.md` 변경과 untracked `WATCHDOG.yml`은 보존하고 stage하지 않는다. reset/clean·무차별 stage 금지.
 - spec은 핵심 판단·근거·후보·다음 행동을 간결하게 적는다. 검색 가능한 정보를 사용자에게 되묻거나 미확정 후보를 확정 해법으로 적지 않는다.
-- Linux 완료 근거·문서 정합성 확인 뒤 같은 work branch의 commit/push를 진행한다. push가 Mac job도 시작함을 확인했으며 사용자가 이를 명시적으로 지시했다. 실제 push/CI 결과 전에는 발행·Mac 실행 완료로 쓰지 않는다.
+- Linux 마감 뒤 주 저장소 `257baab324d0cac93fb49fcf1c69ba0231b24db9`와 같은 tree의 CI mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`를 지정 work branch에 push했다. primary는 `[skip ci]`, 기존 mirror에서 실제 Mac job을 실행했다. merge/deploy는 하지 않았다.
 
 기준: [개정 spec](macos-native-spec.md), [규범](macos-platform.md), [진행 기록](implementation/native-transition.md), [검증 기록](implementation/validation.md). 개정 전 전문은 [이전 spec](archive/macos-native-spec-2026-10-28-pre-redesign.md)·[이전 인계](archive/native-handoff-2026-10-28-pre-redesign.md)에 있다.
 
@@ -26,6 +26,7 @@
 | 재개 기준 mirror HEAD / origin ref | `836e2f596314857e2f03a5d91154a40413ecf71a` — `Bind sandboxed recovery probe to clean committed inputs` |
 | 마지막 committed 코드 변경 | 주 저장소 `2dd8bf5d`: production Seatbelt target + service 호출 관측. 이후 binding commit은 코드 구현이 아님 |
 | 이번 작업 | verifier 임시 트리 수명 수리·fresh service target·Linux 인수검증 마감. 관련 native 문서의 기존 변경까지 포함한 commit/push를 사용자에게 명시 승인받음 |
+| 발행한 source | 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9` / mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`, tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c` 동일 |
 | 마지막 로컬 실행 | 정상 PATH serial all3952/3952·skip0·errors[], 독립 설치본 실제 Principal/Worker/Personal·재개·자동 보관/cold 복원·같은 key receipt 확인. 유한 작업은 종료했으며 원시와 소유 임시 자원을 구분 |
 | 환경 | Linux x64. Mac 실행은 실제 GitHub runner. LSP 미설정 |
 | Node26 | `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
@@ -59,6 +60,8 @@
 
 | 입력·범위 | 관측 결과 | 확대 해석 금지 |
 |---|---|---|
+| Mac15·26 `2ef7fb517b`, Native `40711228810` | common 각253/253·skip0, 독립 packed 설치 각26/27·Git preparation `UNSUPPORTED_PROFILE`1 FAIL. gate 각117 /105 OBSERVED /12 SETUP_FAILED | 세 product gate OPEN. 새 source의 실제 실패를 skip·성공으로 바꾸지 않음 |
+| 같은 source의 fresh service 최초 요청 | 양 Mac 각3회 모두 production Seatbelt 안의 launchctl exit0·cleanup 불필요, PID1이 다른 CID에서 unsandboxed controlled actor 실행 | **현 policy+coalition만으로 닫힌 범위라는 후보의 실제 반례.** GUI UID501·SIP-disabled 관측이며 SIP-enabled/headless 지원 증명은 아님 |
 | 최종 Linux 입력 `88d1cf0b…` /15686 files | 정상 PATH serial all3952/3952·fail/cancel/skip/todo0·errors[]·baseline COMPARED. build/typecheck/architecture 모두 exit0, per-file/canonical 입력 전후 동일 | 첫 PATH 누락 all3948/3952·cloc4 FAIL도 보존. 제품 조건을 바꾼 재시험이 아님 |
 | 후속 독립 설치본 live·재개·복구 | 두 checkout을 가리고 Principal·Worker·Personal 실제 GPT-6 Luna/medium, 코드 수정·도구·수신·history 재개·실제 broker archive/restore·같은 receipt 확인 | operation14 succeeded·batch8 completed·submit1·integrate0·active journal0. 외부 재인증/power loss의 모든 조건을 증명하지 않음 |
 | verifier 수리 뒤 Linux `c62c180d…` | serial all3952/3952·fail/cancel/skip/todo0·errors[], build·typecheck·전체 architecture 모든 command exit0.15686개 per-file/canonical 입력 전후 동일 | 이 all의 추론은 scripted. 후속 실제 Codex 실행은 별도 근거이며 원래 첫 Git 거절 원인은 미확정 |
@@ -82,7 +85,7 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 
 ## 4. 가장 가까운 재개점: service 관측의 혼입 제거
 
-**Linux 인수검증 마감 후의 재개점:** 아래 fresh-target 변경과 Linux 결과·문서를 지정 branch에 commit/push한 뒤 실제 Mac15·26 관측을 이어간다. §5의 단일 CI 실패는 비차단 이력이며 이를 무한 재현하는 일을 Mac 재개의 선행조건으로 삼지 않는다.
+**Linux 완료·push 뒤 실제 Mac 관측까지 진행했다.** Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810), source `2ef7fb517b24e4a48c3ac48646f87f6a81316638`의 SHA256 확인한 Mac15·26 artifact를 판독했다. 다음 질문은 재시작 대기가 아니라 **상속된 launchd 제어 권한을 정상 도구·DNS·manual CLI와 양립하게 분리할 수 있는가**다.
 
 ### 확인한 사실
 
@@ -90,19 +93,23 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 
 `836e2f5963`의 두 Mac 각3회에서 sandboxed CLI는 5초 내 종료하지 않아 fixture가 자신의 unreaped direct child만 정리했다. Mac15의 `launchctl print`에는 `state = spawn scheduled`, `minimum runtime = 10`, `runs = 1`이 기록됐다. `print`는 진단 텍스트이며 production API나 admission/death proof가 아니다.
 
-**현재 판단:** 같은 job 재사용에 따른 재시작 대기가 결과에 섞였을 가능성이 있다. 이는 `[INFERENCE]`이며 확정 원인이 아니다. 서비스 요청이 거절됐는지·허용됐는지 아직 모른다. PID가 안 보이거나 marker가 없다는 것으로 차단을 선언할 수 없다.
+**현재 확정:** 새 target의 최초 요청은 양 Mac 각3회 모두 spawnStatus0·waitStatus0·joined=true·numericCleanupUsed=false였다. target actor는 PID1 아래 별도 resource CID에서 `sandboxed=false`로 실행됐다. marker 부재나 print 추정이 아니라 실제 성공 응답과 실행된 controlled program의 kernel 관측이다. 이전 동일 job 재사용/재시작 대기 원인설은 여전히 `[INFERENCE]`이며 이 결과로 당시 timeout 원인을 확정하지 않는다.
 
 ### 재개 후 적용한 최소 변경과 다음 검증
 
 1. **적용:** host는 `service-positive`만 실행·종료 확인한다. 그 뒤 동일 actor/program 설정의 `service-target`을 새로 등록하고 sandboxed actor의 최초 요청 대상으로만 사용한다. 양성 marker는 지우지 않는다.
 2. **유지:** 기존 5초 한도와 production policy를 바꾸지 않았다. 새 입력의 질문은 “재시작 대기와 무관한 첫 service 실행이 실제 허용되는가”다.
 3. **적용:** 두 target·host kickstart·positive 종료 뒤 print·target 전후 print·실제 spawn/wait·cleanup·target별 job 출력·guest effect를 남긴다. validator는 서로 다른 동일 domain target, host 양성 명령의 귀속, 실제 attempt의 target을 대조한다. print 텍스트는 proof로 파싱하지 않는다.
-4. **local 확인 / 실제 Mac 미실행:** parser·Seatbelt40/40·skip0, MJS3개 syntax exit0, 직접 grammar/refusal smoke exit0. fresh-target fixture의 Mac15·26 실제 실행은 **NOT_RUN**이다. 로컬은 Linux이고 등록된 원격 Mac은 없다. 새 paid CI는 발행하지 않았다.
-5. **Linux 완료 뒤의 다음 행동:** 실제 Mac15·26에서 같은 변경 입력을 실행하고 거절·성공·불명을 원시 결과대로 기록한다. 다른 CID 실행이 생기면 닫힌 범위 후보의 반례다. 첫 실행도 불명이면 원시 SDK/CLI와 OS 문서에서 다음 불확실성 하나만 줄인다.
+4. **실제 Mac 확인:** Mac26 CID1393→1397·1435→1439·1497→1509, Mac15 CID1217→1221·1249→1251·1267→1271. 동일 actor·production policy·5초 한도를 유지한 fresh-target6건 모두 범위 밖 실행이었다.
+5. **판정 / 다음 행동:** 현재 policy+coalition만으로 complete backend를 채택하지 않는다. 실행 차단을 유지한다. launchd control과 service lookup의 권한 경로를 OS 원본·SDK와 대조하고, bootstrap/XPC 권한 제거가 실제 제어와 정상 Node/Git/compiler/DNS에 미치는 한 질문만 최소 실행으로 확인한다. CLI 이름 차단·timeout 확대·marker 부재로 해결하지 않는다.
+6. **다음 질문 구현 / 실제 Mac 미실행:** `launchd-bootstrap`은 상속 그대로·bootstrap만 제거·bootstrap+registered XPC seed 제거를 direct exec 전에 비교한다. 별도 fresh target의 직접 CLI와 Node가 만든 CLI, 정상 파일 쓰기·금지 canary·Git hash·compiler·실제 DNS를 기록한다. public Mach API와 libxpc 내부 관례를 구분하며 production에는 연결하지 않았다. local parser/policy41/41·원시6건 parser 대조·생성 Node script syntax·실제 Linux의 state 전 거절을 확인했다. 새 C helper의 Mac compile/실행은 아직 NOT_RUN이다.
 
-대안인 cooldown이나 throttle 변경 대신 별도 fresh target을 적용했다. 재시작 대기가 원인이었는지는 여전히 `[INFERENCE]`이며, local 검증으로 service admission을 판정하지 않는다.
+관측 입력은 clean `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files이며 양 Mac 전후 동일하다. common 각253/253이지만 독립 설치는 각26/27이고 Git preparation은 실제 `UNSUPPORTED_PROFILE`로 실패했다. gate 각105 OBSERVED·12 SETUP_FAILED와 G-PROCESS/G-FILES/G-AUTH OPEN을 그대로 유지한다.
 
 이번 local 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-service-fresh-target/`다. `red.log`·`green.log`와 각 status, `checked-source.json`, `regression-input.json`, `direct-smoke.log`가 명령·exit·변경 source SHA와 grammar/kernel 경계를 소유한다.
+새 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/`다. Native ZIP5개와 Architecture ZIP2개의 SHA256을 대조했다. `fresh-service-admission-observed.json`·`native-runtime-observed-summaries.json`과 OS별 원시 launchd row를 보존한다. Architecture [40711228820](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228820)의 같은 clean 입력에서 all3952/3952·skip0·errors[], fast880·durable872·property34·stress16·platform72와 모든 command exit0을 확인했다. baseline comparison은 NOT_AVAILABLE이며 비교 완료로 쓰지 않는다.
+조사에서 deprecated `bootstrap_unprivileged`는 native launchd job이 이미 그 port로 시작한다고 명시했고, Chromium V2는 macOS10.10 이후 오래된 bootstrap proxy의 투명 중계가 성립하지 않았다고 설명한다. API 이름만으로 해법을 채택하지 않는다. 새 probe3회가 늘어 CI worst-case 계산은288분이며 job 상한만300분으로 맞췄다. 기존 probe120초·fixture80초·service5초 한도와 제품 timeout은 유지한다.
+
 
 ### 현재 관련 파일
 
@@ -120,10 +127,10 @@ fixture marker는 관측·cleanup 조율 전용이다. marker PID·UUID·저장�
 
 ### 실행 범위와 recovery
 
-현재 가장 근거 있는 후보는 launchd가 만든 resource coalition + generation-checked 제어 + kernel CID 소멸 관측이다. **complete backend로 채택한 것은 아니다.** ordinary process group은 setsid/double-fork 반례가 있고, bootout 단독도 detached 후손을 남긴다.
+launchd resource coalition의 상속·fresh generation 제어·CID 소멸 관측은 개별 primitive 근거다. **현재 production Seatbelt와 조합한 닫힌 범위 후보는 service 실행 반례가 나왔으며 complete backend로 채택할 수 없다.** ordinary process group은 setsid/double-fork 반례가 있고, bootout 단독도 detached 후손을 남긴다.
 
 - primitive에서 확인한 것: job별 CID 분리·상속, explicit coalition 이동의 EPERM, fresh kernel identity로 실제 제어, 첫 snapshot 이후 생긴 후손의 재탐색, release 전 ID 소멸.
-- 남은 것: service 경유 새 실행/예약 작업으로 범위가 열리는지, 실제 runner/broker/host owner crash, opening만 남은 crash와 witness 이후 crash, boot identity·ID 재사용·PID/exec generation 경계, durable producer·reacquisition.
+- 새 미해결: 기존 service를 통한 CID 밖·unsandboxed 실행의 권한 분리. 이후에도 실제 runner/broker/host owner crash, opening만 남은 crash와 witness 이후 crash, boot identity·ID 재사용·PID/exec generation 경계, durable producer·reacquisition을 별도로 증명해야 한다.
 - `started==exited`, empty/truncated scan, direct-child exit, deadline은 complete death가 아니다. old CID ESRCH도 같은 boot·지원 query와 다른 live CID 대조가 있어야 해석한다.
 - 정상 Node/Git/compiler와 sandboxed target 제어가 함께 성립해야 한다. 새 SBPL을 reaper에 재적용하는 방식은 실제 EPERM 반례가 있어 채택하지 않는다.
 

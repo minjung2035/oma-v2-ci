@@ -2,6 +2,58 @@
 
 DR49 native 전환은 미완료다. 최신 지시는 **Priority 0를 유지해 Linux 검증을 마감한 뒤 지정 work branch를 push하고 macOS 작업을 재개하는 것**이다. 아래 Linux 인수검증을 마쳤으며, 문서 정합성·commit/push와 실제 Mac 관측은 각각 별도 단계다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+## Linux 발행 뒤 실제 Mac service 반례 (2026-10-28)
+
+주 `257baab324d0cac93fb49fcf1c69ba0231b24db9`와 mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`를
+지정 work branch에 push했다. tree `32f8cf22e4af7b0728edd52e6cbd6c05b9f11d1c`는 같고
+사용자 README/WATCHDOG는 제외·보존했다. 위임·merge·deploy는 없다.
+Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810)의
+ZIP5개를 공개 artifact SHA256과 대조해 회수했다. clean canonical input은
+`232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files이며
+모든 OS의 전후 입력이 같았다. 앞선 dirty Linux 전체 입력과 소급 합성하지 않는다.
+
+| 실제 실행 | 결과 | 판정 경계 |
+|---|---|---|
+| Ubuntu24 common |245/245·skip0 | 이 lane은 전체 Linux3952개나 독립 설치 live 시험이 아님 |
+| Mac26 arm64 / SDK26.5 common |253/253·skip0 | 전체 제품 qualification 아님 |
+| Mac15 arm64 / SDK15.5 common |253/253·skip0 | 첫 목표 Mac26과 별도 호환성 관측 |
+| 각 Mac 독립 packed 설치 |26/27, `@oma/git` canonical-health→PreparationExecutor의 `UNSUPPORTED_PROFILE`1 FAIL | 현재 Darwin preparation 미구현을 그대로 드러냄. skip·host spawn fallback·성공 재분류 없음 |
+| 각 Mac Darwin gate |117 executed /105 OBSERVED /12 SETUP_FAILED | candidate/quarantine·Worker 각3회 실패. G-PROCESS/G-FILES/G-AUTH 모두 OPEN |
+| fresh service 최초 요청 |양 Mac 각3회 모두 production Seatbelt 적용 caller의 launchctl exit0·joined=true·numericCleanupUsed=false | PID1이 다른 CID에서 unsandboxed controlled actor를 실제 실행. 현 policy+coalition만으로 닫힌 범위라는 후보의 반례 |
+
+Mac26 CID는1393→1397·1435→1439·1497→1509, Mac15는1217→1221·1249→1251·1267→1271이다.
+동일 actor의 별도 host 양성과 새 target, production profile·5초 한도, 실제 spawn/wait·실행 marker의
+kernel CID/identity를 대조했다. `launchctl print`는 진단이고 marker 부재를 차단 증거로 쓰지 않았다.
+GUI UID501·SIP-disabled 범위다. SIP-enabled·headless 지원, 실제 제품 owner crash·durable producer는 미증명이다.
+과거 동일 job 재사용에 따른 restart 대기 원인설은 여전히 추정이며 이번 성공으로 과거 실패 원인을 확정하지 않는다.
+
+`/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/`의 verified ZIP5개·download metadata,
+OS별 `launchd-scope-results.json`·`fresh-service-admission-observed.json`·`native-runtime-observed-summaries.json`을 보존한다.
+현 Darwin guard와 Linux 보장을 유지하고 서비스 제어 권한 분리의 최소 반례로 진행한다.
+Architecture [40711228820](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228820)의 같은 clean 입력도 판독했다.
+all3952/3952·fast880/880·durable872/872·property34/34·stress16/16·platform72/72,
+모두 skip/cancel/todo0·errors[]이며 모든 lane command가 code0·signal/error/timeout 없음이다.
+all 입력은 전후 동일하다. baselineComparison은 NOT_AVAILABLE이며 비교 완료로 소급 승격하지 않는다.
+standalone kernel/crash lane은 NOT_RUN이고 native-all의 실제 필수 파일/이름과 별개로 표시한다.
+원시 ZIP2개와 `published-clean-linux-verification-summary.json`을 보존한다.
+
+### 다음 최소 질문 — bootstrap/XPC 권한 제거 (실제 Mac 미실행)
+
+`launchd-bootstrap`의 새 helper는 production profile을 적용하고 상속 그대로 / bootstrap만 제거 /
+bootstrap+registered seed 제거를 direct exec 전에 비교한다. 원래 controlled actor와 policy는 바꾸지 않았다.
+각 variant의 별도 fresh job을 직접 CLI와 Node 후손 CLI로 요청하고, Node 파일 쓰기·금지 canary·Git hash·
+compiler·실제 DNS의 반환/오류·부분 보고를 보존한다. pre-exec report와 marker 부재를 실제 exec/death/denial proof로 쓰지 않는다.
+public Mach port API와 libxpc seed 전달의 내부 관례를 구분하며 production backend로 채택하지 않았다.
+
+현재 local parser·production policy41/41·skip0, 변경 JS3개 syntax exit0,
+AST로 추출한 생성 Node script syntax exit0, 기존 실제 service6건의 parser 대조,
+새 mode의 실제 Linux 실행이 state 전 exit1인 것을 확인했다.
+이는 **새 C helper의 실제 Mac compile/실행은 NOT_RUN**이라는 상태를 바꾸지 않는다.
+추가 case3회에 맞춰 CI job 전체 상한만300분으로 조정했다(worst-case288분).
+기존 probe120초·fixture80초·service5초·제품 timeout과 세 product gate는 유지한다.
+원시는 같은 Mac resume root의 `bootstrap-local/`·`upstream-bootstrap-authority-research.json`이다.
+
+
 
 ## Linux 인수검증 마감 — 독립 설치·실제 추론·재개·cold 복구 (2026-10-28)
 
@@ -745,7 +797,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` (15686 files).
+verification input digest `e6ca64260acf796d80c6cfa756567b60f9754011357ed97fa034b263178fdf72` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
