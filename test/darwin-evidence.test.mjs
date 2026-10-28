@@ -36,15 +36,27 @@ const coalitionQuery = (started = "1", exited = "0") =>
 const admissionAttempt = (name, requestedResource, spawned) => ({ name, requestedResource, attributeStatus: 0,
   spawnStatus: spawned ? 0 : 1, pid: spawned ? 103 : 0, stopped: spawned, joined: spawned,
   coalitionBytes: spawned ? 40 : 0, coalitionErrno: 0, actualResource: spawned ? "41" : "0", waitStatus: spawned ? 9 : 0 });
+const memberControl = (pid, matched) => ({ controllerPid: 200 + pid, controllerUid: 501, targetPid: pid,
+  expectedResource: "41", before: { bytes: 56, errno: 0, unique: "99", version: 7 },
+  membership: { bytes: 40, errno: 0, resource: matched ? "41" : "42" },
+  taskNameStatus: matched ? 0 : -1, taskInfoStatus: matched ? 0 : -1, namePortReleaseStatus: matched ? 0 : -1,
+  auditCount: 8, auditPid: matched ? pid : 0, auditUid: matched ? 501 : 0, auditPidVersion: matched ? 7 : 0,
+  after: matched ? { bytes: 56, errno: 0, unique: "99", version: 7 } : { bytes: 0, errno: 0, unique: "0", version: 0 },
+  correlated: matched, signalStatus: matched ? 0 : -1 });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
   ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
     cdhashes: ["a".repeat(40), "b".repeat(40)], replacedImage: { markerAfterTwoSeconds: false } }
-    : { scope: { members: { leader: { resource: "41" } }, control: { resource: "42" },
+    : { scope: { members: { leader: { resource: "41" }, detached: { pid: 101 } }, control: { resource: "42", pid: 102 },
       afterBootout: { otherAcknowledged: true },
       admission: { privateInterface: true, available: true, uid: 501, callerResource: "41",
         attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
           admissionAttempt("explicit-other", "42", false)] },
+      recovery: { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
+        fixtureReleaseUsedBeforeObservation: false, wrongMember: memberControl(102, false),
+        remainingMember: memberControl(101, true), afterAttempt: {
+          samples: [{ elapsedMs: 90, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
+            otherAggregate: coalitionQuery() }] } },
       afterControlledExit: { controlledGenerationsExited: true,
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
@@ -166,6 +178,16 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
     scope => { scope.afterControlledExit.samples[0].aggregate.available = "unknown"; },
     scope => { scope.afterControlledExit.samples[0].aggregate.errno = 0; },
     scope => { delete scope.afterControlledExit.samples[0].otherAggregate; },
+    scope => { delete scope.recovery; },
+    scope => { scope.recovery.context = "inherited"; },
+    scope => { scope.recovery.tokenSource = "peer-supplied-port"; },
+    scope => { scope.recovery.fixtureReleaseUsedBeforeObservation = true; },
+    scope => { scope.recovery.wrongMember.expectedResource = "42"; },
+    scope => { scope.recovery.wrongMember.signalStatus = 0; },
+    scope => { scope.recovery.remainingMember.after.unique = "100"; },
+    scope => { scope.recovery.remainingMember.auditPidVersion = 8; },
+    scope => { scope.recovery.remainingMember.namePortReleaseStatus = -1; },
+    scope => { scope.recovery.afterAttempt.samples[0].aggregate.errno = 0; },
   ]) {
     const bad = structuredClone(good); corrupt(bad.scope);
     assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));

@@ -78,12 +78,13 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 
 Resource coalition의 [고정 XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c)에서 `tasks_started/tasks_exited`는 같은 lock 아래 읽힌다. `termrequested`는 empty 알림 요청이며 즉시 fork 차단이 아니다. [같은 revision의 설명](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/doc/observability/coalitions.md)은 ID 비재사용과 loaded service 재시작의 coalition 재사용을 명시한다. 일시적 empty·terminate 요청을 닫힌 실행 범위로 승격하지 않는다. 목표 kernel의 위 전제를 실제 확인하며, SDK에 없는 ABI를 public이라 부르거나 private 제어 syscall로 우회하지 않는다.
 
-다음 최소 판정: job bootout 후 **controlled descendants 종료와 별도 live job**을 함께 관측하며,
-기존 CID의 조회가 ESRCH로 바뀌는지 기록한다. [고정 reap 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c#L2240)은 terminated·active_count0 뒤 hash에서 ID를 제거한다.
-started==exited는 pending activation을 포함하지 않는다. 외부 admission은 [spawn의 privilege/entitlement 조건](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L4020)을 실제 job에서 별도로 판정한다. source 조건을 목표 OS의 관측이나 owner-loss recovery로 대신하지 않는다.
-admission fixture의 private spawn attribute는 **시험 전용 adversary**다. inherited spawn을 대조군으로
-own/다른 controlled CID의 실제 API 결과·kernel membership·owned-child join을 남긴다.
-SDK symbol 부재를 admission 거절로 바꾸거나 이 private attribute를 제품 launch 경로로 채택하지 않는다.
+Mac15·26 각3회에서 job bootout 후 detached 생존, controlled release 뒤 기존 CID의 ESRCH와 별도 live CID의 성공 조회를 확인했다([기록](implementation/native-transition.md)). [고정 reap 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c#L2240)은 terminated·active_count0 뒤 ID를 hash에서 제거한다. started==exited에는 pending activation이 없으므로 ID 소멸과 혼동하지 않는다.
+inherited spawn은 같은 CID였고 explicit own/다른 CID spawn은 EPERM이었다. private attribute는 시험 전용 adversary이며 제품 launch API가 아니다. [privilege/entitlement 조건](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L4020)을 서비스 경유 실행·headless·다른 보안 환경의 admission proof로 확대하지 않는다.
+
+다음 판정은 fresh `task_name_for_pid → TASK_AUDIT_TOKEN`의 실제 취득·거절이다.
+kernel PID lookup으로 받은 port만 쓰고, peer가 준 port를 kernel task라고 믿지 않는다.
+unique/version before→CID→kernel token→unique/version after를 결박하고 SDK effect와 **release 전** CID query를 남긴다.
+source 가능성·controlled cleanup을 durable authority producer·전체 후손 탐색·all-owner-death recovery로 대신하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.

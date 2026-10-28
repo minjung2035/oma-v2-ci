@@ -92,7 +92,7 @@ async function observeReaping(id, other) {
         performance.now() >= end) break;
     await delay(100);
   }
-  return { controlledGenerationsExited: true, samples };
+  return { samples };
 }
 function originalExited(target) {
   const current = inspect(target.pid);
@@ -112,7 +112,7 @@ try {
   const binaries = [], hashes = [];
   for (const variant of mode === "launchd-image" ? [1, 2] : [1]) {
     const binary = join(root, `actor-${variant}`);
-    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", `-DPROBE_VARIANT=${variant}`, source, "-o", binary]);
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", `-DPROBE_VARIANT=${variant}`, source, "-lproc", "-lbsm", "-o", binary]);
     run("/usr/bin/codesign", ["--force", "--sign", "-", binary]);
     const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", binary]);
     const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
@@ -178,9 +178,17 @@ try {
       ordinaryAcknowledged: existsSync(join(scope.directory, "ordinary.ack.json")),
       detachedAcknowledged: existsSync(join(scope.directory, "detached.ack.json")), otherAcknowledged: true,
       removedService: run("/bin/launchctl", ["print", scope.target], false) };
+    // A fresh executable gets its own kernel task-name port and token.
+    // Neither target cooperation nor the old owner's handles are required.
+    const wrongMember = JSON.parse(run(actor, ["signal-member", String(control.pid), members.leader.resource]).stdout);
+    const remainingMember = JSON.parse(run(actor, ["signal-member", String(members.detached.pid), members.leader.resource]).stdout);
+    observation.scope.recovery = { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
+      fixtureReleaseUsedBeforeObservation: false, wrongMember, remainingMember,
+      afterAttempt: await observeReaping(members.leader.resource, control.resource) };
     writeFileSync(join(scope.directory, "release"), "controlled actors only; not a production stop mechanism");
     await waitFor(() => Object.values(members).every(member => originalExited(member.identity)), 12000);
-    observation.scope.afterControlledExit = await observeReaping(members.leader.resource, control.resource);
+    observation.scope.afterControlledExit = { controlledGenerationsExited: true,
+      ...await observeReaping(members.leader.resource, control.resource) };
   }
 } catch (error) { failure = error; }
 finally {
