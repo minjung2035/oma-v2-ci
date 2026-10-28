@@ -3,6 +3,53 @@
 DR49 native 전환은 미완료다. 최신 지시는 **Priority 0를 유지해 Linux 검증을 마감한 뒤 지정 work branch를 push하고 macOS 작업을 재개하는 것**이다. 아래 Linux 인수검증을 마쳤으며, 문서 정합성·commit/push와 실제 Mac 관측은 각각 별도 단계다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
 추가 CI에서 Linux rootfs 준비의 native EAGAIN1건을 확인해 재인수를 우선했고, 아래 [새 수정 입력의 전체 재인수](#linux-eagain-수리-뒤-실제-재인수)를 마쳤다. 과거 마감/PASS와 원시 실패는 그대로 보존한다. 문서 반영 뒤 clean 발행/CI 입력을 dirty 실행 입력과 합성하지 않는다.
+
+## Mac exact Unix socket 번역 — 실제 kernel 검증 전
+
+Linux 재인수를 마치고 주 `1a4829819d5876427e3df85863ab022c7f82e575` /
+mirror `ae819c1c8adb02286cc24ea7b60b21e788be93c7`를 지정 work branch에 발행했다.
+tree `c5d45c9649b49051070c92fc2c74f11f3e957733`는 같고 clean input은
+`f334d462f65b19c76fbd658f8171a14f081a5a47a01a22689b5cf04b01dde8d2` /15687 files다.
+이는 앞선 실제 runtime의 dirty `02fd1a08…` 입력과 별개다. clean mirror architecture는 exit0다.
+README/WATCHDOG 제외·보존, 위임·merge·deploy 없음, 검증 후 소유 설치본/auth/state와 private tool mount를 제거했다.
+제거 전 retained evidence282개를 opaque credential과 대조해 실제 값 일치0을 확인했다.
+
+Native [40784728767](https://github.com/minjung2035/oma-v2-ci/actions/runs/40784728767)의 SHA256 대조 ZIP을 회수했다.
+Ubuntu job은 success이고 common246/246·Linux integration433/433·execution46/46·Restic-setup8/8,
+모두 fail/cancel/skip/todo0이며 source/input 전후 동일이다.
+두 Mac common은 각254/254·skip0다. Mac26 packed는26/27·기존 Git preparation guard의 `UNSUPPORTED_PROFILE`1 FAIL이다.
+**Mac15는 같은 package 판정이 아니다.** `@oma/tool-web`의 `npm pack --json --ignore-scripts`가120초 budget에서
+`spawnSync npm` ETIMEDOUT였다. 원인은 미분류이며 installed workspace qualification에 도달하지 못했다.
+이미 stdout은 소유 파일로 streaming하고 있어 buffer overflow로 단정하지 않는다. timeout·성공 조건을 늘리거나 전용 재현 loop를 만들지 않았다.
+양 Mac gate는120 executed /108 OBSERVED·product BLOCKED, G-PROCESS/G-FILES/G-AUTH 모두 OPEN이다.
+Architecture [40784728753](https://github.com/minjung2035/oma-v2-ci/actions/runs/40784728753)은 마지막 조회에서 in_progress였으며
+새 clean source의 전체 CI PASS로 기록하지 않는다. 원시는 Linux 재인수 root의 `published-ci/`다.
+
+그 뒤 Mac production `seatbeltProfile`의 Unix 규칙을
+`network-outbound (remote unix-socket (literal …))`에서 `network-outbound (literal …)`로 좁게 바꿨다.
+[고정 upstream 원본](https://raw.githubusercontent.com/eugene1g/agent-safehouse/v0.12.0/profiles/20-network.sb)의 exact DNS socket 표현을 대조했다.
+다른 network/file/Mach grant·기본 endpoint·resolver·exec guard는 바꾸지 않았다.
+기존 실제 e9a939d619의 raw connect EPERM18건은 변경 전 반례이며, 새 spelling이 원인이었음은 실제 교체 실행 뒤 판정한다.
+
+`darwin-launchd.mjs`는 짧은 소유 Unix socket directory에 실제 listener 둘을 만든다.
+같은 부모의 read/metadata 접근은 같고 listed path만 network allowlist에 넣는다. host native probe는 둘 다 실제 connect0을 요구한다.
+같은 inherited/port-pruned Node 아래 helper가 DNS·listed·unlisted connect를 각각 기록한다.
+argv/report·실제 child PID/UID·endpoint 대조를 validator/factory와 함께 cutover했다.
+unlisted의 예상 밖 성공이나 listed/DNS 실패를 없애거나 SETUP_FAILED로 숨기지 않고 actual observation으로 보존한다.
+원래 forbidden-file canary·Git/compiler·fresh service target·registered-seed 재취득 관측과 deadline도 유지했다.
+
+| 이 새 변경의 local 실행 | 결과 | 확대 해석 금지 |
+|---|---|---|
+| production inventory·review stale·DAG·build | 모두 exit0 | 과거 authored review 재승인 없음 |
+| 기존 parser·Seatbelt regression |41/41·fail/cancel/skip/todo0 | 합성 evidence grammar·policy contract이지 실제 Mac kernel proof 아님 |
+| 실제 영향 caller·Linux layout/profile regression |18/18·fail/cancel/skip/todo0 | 이 선택 실행을 전체 Linux suite라고 부르지 않음 |
+| 변경 MJS와 실제 생성 Node module | syntax exit0 | Darwin C compile/link 대체 아님 |
+| 실제 fixture의 Linux 실행 | exit1, state 생성 전 실제 OS guard 거절 | Mac 성공이나 sandbox 적용 proof 아님 |
+
+새 source의 실제 SDK15.5/26.5 compile·normal DNS·listed0/unlisted거절은 아직 **NOT_RUN**이다.
+이것을 확인하기 전 정상 기능 수리·Mac 설치 완료·complete-scope/backend 채택·세 gate 완료를 주장하지 않는다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
+
 ## Linux 발행 뒤 실제 Mac service 반례 (2026-10-28)
 
 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9`와 mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`를
@@ -267,7 +314,7 @@ Personal0개를 보존한다. 첫 GOAL schema는 한 차례 사람이 안내했�
 `prerequisites-corrected/full-regression-result.json`·`all-serial/result.json`이 최종 전체 실행을 소유한다.
 `installed-live-complete-result.json`, `installed-real-npm-and-same-key-replay.json`, redacted 실제 SDK session,
 host/namespace identity와 원래/최종 cold checkpoint를 함께 보존했다.
-clean publication·새 CI는 이 checkpoint에서 아직 미실행이며 별도 source 결과로 기록한다.
+이 runtime checkpoint에서는 clean publication·새 CI가 미실행이었다. 이후 발행 source와 실제 관측 결과는 위 [새 Mac 재개 기록](#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 별도로 결박했다.
 
 
 
@@ -1016,7 +1063,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `f334d462f65b19c76fbd658f8171a14f081a5a47a01a22689b5cf04b01dde8d2` (15687 files).
+verification input digest `45a155109641ad8929d962dc5253b6cb59608cbf1ab73908fc197532e5b7373d` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

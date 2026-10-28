@@ -2640,10 +2640,12 @@
   {
    "path": "packages/native/src/files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "bf6e35cb0a058ff72bc0ce8fdfd98620874fb2373c6541a1c59aea40506460a9"
   },
   {
    "path": "packages/native/src/identity.ts",
@@ -2969,12 +2971,10 @@
   {
    "path": "packages/platform-mac/src/seatbelt.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "e9fe3c7aac46872aaad7baa610df195d8143f8809017d8d7b932133e2c3bdef5"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/seatbelt/launch-fds.h",

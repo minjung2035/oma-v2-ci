@@ -130,17 +130,22 @@ export function validateDarwinObservation(name, observations) {
         (Array.isArray(record.addresses) && record.addresses.length > 0 &&
           record.addresses.every(row => [4, 6].includes(row.family) && isIP(row.address) === row.family) ||
           typeof record.error?.code === "string");
+      const unix = bootstrap?.unixSocketCanary;
+      const unixSocket = record => record && typeof record.created === "boolean" &&
+        record.connectAttempted === record.created && [-1, 0].includes(record.connectResult) &&
+        (record.created || record.connectResult === -1) &&
+        [record.errno, record.connectErrno].every(number => Number.isSafeInteger(number) && number >= 0);
       const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
       const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
-        command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 2 &&
+        command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
         command.argv[0] === "observe-dns" && typeof command.argv[1] === "string" && command.argv[1].startsWith("/") &&
+        command.argv[2] === unix?.listed && command.argv[3] === unix?.unlisted &&
         (record === null && (command.exitCode !== 0 || command.signal !== null) ||
           record?.phase === "native-dns" && Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === command.pid &&
           Number.isSafeInteger(record.uid) && record.uid > 0 && record.hostname === "example.com" &&
           record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) &&
-          typeof record.socket?.created === "boolean" && record.socket.connectAttempted === record.socket.created &&
-          [-1, 0].includes(record.socket.connectResult) && (record.socket.created || record.socket.connectResult === -1) &&
-          [record.socket.errno, record.socket.connectErrno, record.getaddrinfo?.errno, record.getaddrinfo?.ipv4, record.getaddrinfo?.ipv6]
+          [record.socket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
+          [record.getaddrinfo?.errno, record.getaddrinfo?.ipv4, record.getaddrinfo?.ipv6]
             .every(number => Number.isSafeInteger(number) && number >= 0) &&
           [record.dnssd?.createResult, record.getaddrinfo?.result].every(signed32));
       let hostDns;
@@ -159,12 +164,16 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.positiveGit.executable !== bootstrap.developerTools.git ||
           typeof bootstrap.gitExpected !== "string" || !/^[0-9a-f]{40}$/.test(bootstrap.gitExpected) ||
           bootstrap.positiveGit.stdout !== `${bootstrap.gitExpected}\n` ||
+          typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
+          unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
           bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
           typeof bootstrap.dnsResolvedEndpoint !== "string" || !bootstrap.dnsResolvedEndpoint.startsWith("/") ||
           !outcome(bootstrap.hostDns) || bootstrap.hostDns.exitCode !== 0 ||
           !dns(hostDns) || hostDns.error !== undefined ||
           !nativeDns(bootstrap.nativeDnsHostCommand, bootstrap.nativeDnsHost) || bootstrap.nativeDnsHostCommand.exitCode !== 0 ||
           bootstrap.nativeDnsHost?.socket.created !== true || bootstrap.nativeDnsHost.socket.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.unixAllowlist.listed.created !== true || bootstrap.nativeDnsHost.unixAllowlist.listed.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.unixAllowlist.unlisted.created !== true || bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult !== 0 ||
           bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||
           bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0)
         throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
@@ -191,6 +200,7 @@ export function validateDarwinObservation(name, observations) {
           if (key === "node" &&
               (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
                 attempt.command.argv[11] !== launcher ||
+                attempt.command.argv[12] !== unix.listed || attempt.command.argv[13] !== unix.unlisted ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
                   (attempt.tools.service === undefined && attempt.tools.complete === false ||

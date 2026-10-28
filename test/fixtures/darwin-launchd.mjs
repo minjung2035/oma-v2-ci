@@ -3,11 +3,12 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { createServer } from "node:net";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { runProcessSync } from "@oma/process/run";
@@ -22,8 +23,9 @@ const root = realpathSync(process.cwd()), started = performance.now();
 // distinct GUI session context; this does not qualify headless operation.
 const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()}`;
 const commands = [], jobs = [], targets = [];
+const socketServers = [];
 const observation = { domain, commands, fixtureOnly: true };
-let cleaning = false, failure;
+let cleaning = false, failure, socketDirectory;
 function observe(executable, argv, maximum = 10000, environment = process.env) {
   const remaining = (cleaning ? 110000 : 80000) - (performance.now() - started);
   assert.ok(remaining > 0, "launchd fixture deadline");
@@ -171,6 +173,19 @@ try {
     assert.equal(process.env.DNSSD_UDS_PATH, undefined, "DNS endpoint override would change the observation");
     const dnsEndpoint = "/var/run/mDNSResponder", dnsResolvedEndpoint = realpathSync(dnsEndpoint);
     assert.ok(statSync(dnsResolvedEndpoint).isSocket(), "the declared DNS endpoint must be an actual socket");
+    socketDirectory = realpathSync(mkdtempSync("/tmp/oma-unix-"));
+    const unixSocketCanary = { directory: socketDirectory,
+      listed: join(socketDirectory, "allowed"), unlisted: join(socketDirectory, "denied") };
+    for (const path of [unixSocketCanary.listed, unixSocketCanary.unlisted]) {
+      assert.ok(Buffer.byteLength(path) < 104, "actual Unix endpoint fits sockaddr_un");
+      const server = createServer(socket => socket.destroy()); socketServers.push(server);
+      server.on("error", error => { failure ??= error; });
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(path, () => { server.off("error", reject); resolve(); });
+      });
+      assert.ok(statSync(path).isSocket(), "Unix allowlist control must be listening");
+    }
     const hostDns = run(process.execPath, ["--input-type=module", "-e",
       'import { lookup } from "node:dns/promises"; console.log(JSON.stringify({hostname:"example.com",addresses:await lookup("example.com",{all:true})}));']);
     const gitControlPath = join(root, "git-control.txt");
@@ -181,18 +196,20 @@ try {
       true, { ...GIT_ENV, HOME: selectorHome, TMPDIR: selectorHome });
     assert.equal(positiveGit.stdout, `${gitExpected}\n`);
     const nativeDnsHostPath = join(root, "host-native-dns.json");
-    const nativeDnsHostCommand = run(launcher, ["observe-dns", nativeDnsHostPath]);
+    const nativeDnsHostCommand = run(launcher, ["observe-dns", nativeDnsHostPath, unixSocketCanary.listed, unixSocketCanary.unlisted]);
     const nativeDnsHost = JSON.parse(readFileSync(nativeDnsHostPath, "utf8"));
     assert.equal(nativeDnsHost.socket.connectResult, 0, JSON.stringify(nativeDnsHost));
     assert.equal(nativeDnsHost.dnssd.createResult, 0, JSON.stringify(nativeDnsHost));
     assert.equal(nativeDnsHost.getaddrinfo.result, 0, JSON.stringify(nativeDnsHost));
+    for (const socket of Object.values(nativeDnsHost.unixAllowlist))
+      assert.equal(socket.connectResult, 0, JSON.stringify(nativeDnsHost));
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
-const [target, canary, compiler, git, gitEnvironment, launcher, report] = process.argv.slice(2);
+const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -214,7 +231,7 @@ value.compiler = command(compiler, ["-fsyntax-only", "compile.c"]); save();
 try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
 catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
 const nativeDnsPath = report + ".dns.json";
-value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath]);
+value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath, listedSocket, unlistedSocket]);
 value.nativeDns = existsSync(nativeDnsPath) ? JSON.parse(readFileSync(nativeDnsPath, "utf8")) : null;
 value.complete = true; save();
 `, { flag: "wx" });
@@ -226,7 +243,7 @@ value.complete = true; save();
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
-      nativeDnsHostCommand, nativeDnsHost, variants: [] };
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
@@ -235,17 +252,19 @@ value.complete = true; save();
       const profile = seatbeltProfile({ readable: [
         ...[actor, launcher, script, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         { path: developerTools.contents, kind: "directory" },
+        { path: unixSocketCanary.directory, kind: "directory" },
         { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
         writable: [{ path: directory, kind: "directory" }], denied: [],
         executable: [actor, launcher, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
-        unixSockets: dnsResolvedEndpoint === dnsEndpoint ? [dnsEndpoint] : [dnsEndpoint, dnsResolvedEndpoint],
+        unixSockets: [dnsEndpoint, ...(dnsResolvedEndpoint === dnsEndpoint ? [] : [dnsResolvedEndpoint]), unixSocketCanary.listed],
         machServices: [], environmentKeys: [] });
       const profilePath = join(directory, "profile.sb"); writeFileSync(profilePath, profile, { mode: 0o600 });
       const directPorts = join(directory, "direct-ports.json"), nodePorts = join(directory, "node-ports.json");
       const toolsReport = join(directory, "tools.json");
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
-        nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher, toolsReport]);
+        nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport]);
       const tools = optionalJson(toolsReport);
       const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
       const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,
@@ -370,6 +389,14 @@ finally {
       await waitFor(() => targets.every(originalExited), 12000);
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
+  }
+  for (const server of socketServers) {
+    try { if (server.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+    catch (error) { faults.push(String(error)); }
+  }
+  if (socketDirectory !== undefined) {
+    try { rmSync(socketDirectory, { recursive: true, force: true }); }
+    catch (error) { faults.push(String(error)); }
   }
   observation.jobOutputs = [];
   for (const job of jobs) {

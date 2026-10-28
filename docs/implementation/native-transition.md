@@ -21,6 +21,19 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 exact Unix socket 번역·실제 allowlist 반례 — Mac 실행 전
+
+Linux 재인수와 주 `1a4829819d` / mirror `ae819c1c8a` 발행 뒤 Mac 작업을 재개했다.
+production Seatbelt의 명시된 Unix endpoint를 top-level literal로 번역하도록 한 줄을 바꿨다.
+기존 IP·Mach·file 정책과 실행 guard는 유지했다. 진단 fixture는 같은 read-only 부모 아래 두 실제 listener를 만들고
+host 둘 다 양성, sandbox에서는 listed 양성/unlisted 거절 여부를 각각 raw connect로 기록한다.
+native helper argv·PID/UID·validator·fixture factory를 함께 바꾸고 반례의 예상 밖 성공도 OBSERVED로 남긴다.
+build·focused41/41·caller impact18/18·syntax/잘못된 OS 조기 거절은 통과했다.
+실제 Mac compile·DNS·listed/unlisted 효과는 NOT_RUN이며 세 gate를 닫지 않는다.
+출처·새 Linux CI에서 관측한 Mac15 별도 pack timeout은 [검증 owner](validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 구분했다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
+
+
 ### 2026-10-28 새 Linux contained-open EAGAIN 우선 수리 — 전체 재인수 전
 
 Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926), `a399fb7fe58`의
