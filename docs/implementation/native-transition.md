@@ -21,6 +21,27 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 두 Mac의 파일 수리 확인과 launchd 후보 반례
+
+Native `40618265543` / `a62af1bae3`의 Mac15·26은 각각111회 실행·96 OBSERVED·15 SETUP_FAILED다.
+새 readable-directory·immutable checked-source/collision 회귀는 두 OS에서 실제 통과했다. common 전체는 각각249/250·skip0이며,
+남은1건은 Personal/login/install까지 전부 exit4라고 고정하던 이전 global-guard 계약이다. 그 가정을 제거하고 Society의
+무상태 거절·기존 bytes 보존만 검사하도록 이관했다. Linux 관련39/39와 selector component exit4/무상태는 확인했지만
+수정된 Darwin-only assertion의 재실행은 NOT_RUN이다. component는 실제 Linux ESM Koffi를 먼저 로드한 selector 시험이지 Darwin kernel proof가 아니다.
+
+GUI/501(Aqua)에서는 두 job의 생성·서로 다른 resource coalition·fork/setsid 상속·집계를 각3회 관측했다.
+bootout 뒤 ordinary ack는 없지만 detached·독립 other job은 계속 실제 ack했고 집계는 started5/exited4였다.
+등록 제거와 전체 후손 죽음은 다르므로 단순 bootout backend는 채택하지 않는다.
+image의 A/B 양성 대조도 실행됐지만 constraint A의 교체된 B가 실제 variant2 marker를 남겼다.
+SIP-disabled 두 환경에서 launchd constraint를 exact-image proof로 사용할 수 없다. 실제 종료/복구·expected-Broker gate는 OPEN이다.
+
+Personal은 directory 오류를 지나 raw terminal까지 진입했지만 ready=false·빈 출력·아직 살아 있는 child로 실패했다.
+원인을 Keychain이나 TUI로 단정하거나 timeout을 늘리지 말고 owned child의 native/JS 대기 지점을 다음에 관측한다.
+Git candidate는 gate release0/REF_STATE_UNKNOWN, quarantine도 REF_STATE_UNKNOWN이다. directory 수리로 해결됐다고 기록하지 않는다.
+네 immutable ZIP의 SHA256은 API digest와 일치하며 원시는 `portable-macos{15,26}-{gates,runtime}/`에 보존했다.
+clean mirror의 첫 검사는 누락된 workspace 설치/선언 때문에 실패했다. `npm ci` 뒤27/27 rebuild와 전체 architecture가 통과했다.
+
+
 ### 2026-10-28 readable directory와 portable immutable publication
 
 Native `40612861610` / `c01e308a15`의 두 Mac은 각각111회 실행·90 OBSERVED·21 SETUP_FAILED다.
