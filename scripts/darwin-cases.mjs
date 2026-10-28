@@ -123,12 +123,26 @@ export function validateDarwinObservation(name, observations) {
           result.exitCode === null && result.signal === null && typeof result.error === "string") &&
         typeof result.stdout === "string" && typeof result.stderr === "string";
       const portNumber = port => Number.isSafeInteger(port) && port >= 0 && port <= 0xffffffff;
+      const signed32 = number => Number.isSafeInteger(number) && number >= -0x80000000 && number <= 0x7fffffff;
       const snapshot = record => record && portNumber(record.bootstrap) &&
         Array.isArray(record.registered) && record.registered.length <= 3 && record.registered.every(portNumber);
       const dns = record => record?.hostname === "example.com" &&
         (Array.isArray(record.addresses) && record.addresses.length > 0 &&
           record.addresses.every(row => [4, 6].includes(row.family) && isIP(row.address) === row.family) ||
           typeof record.error?.code === "string");
+      const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
+      const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
+        command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 2 &&
+        command.argv[0] === "observe-dns" && typeof command.argv[1] === "string" && command.argv[1].startsWith("/") &&
+        (record === null && (command.exitCode !== 0 || command.signal !== null) ||
+          record?.phase === "native-dns" && Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === command.pid &&
+          Number.isSafeInteger(record.uid) && record.uid > 0 && record.hostname === "example.com" &&
+          record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) &&
+          typeof record.socket?.created === "boolean" && record.socket.connectAttempted === record.socket.created &&
+          [-1, 0].includes(record.socket.connectResult) && (record.socket.created || record.socket.connectResult === -1) &&
+          [record.socket.errno, record.socket.connectErrno, record.getaddrinfo?.errno, record.getaddrinfo?.ipv4, record.getaddrinfo?.ipv6]
+            .every(number => Number.isSafeInteger(number) && number >= 0) &&
+          [record.dnssd?.createResult, record.getaddrinfo?.result].every(signed32));
       let hostDns;
       try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
       if (bootstrap?.renderer !== "production-seatbeltProfile" ||
@@ -148,7 +162,11 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
           typeof bootstrap.dnsResolvedEndpoint !== "string" || !bootstrap.dnsResolvedEndpoint.startsWith("/") ||
           !outcome(bootstrap.hostDns) || bootstrap.hostDns.exitCode !== 0 ||
-          !dns(hostDns) || hostDns.error !== undefined)
+          !dns(hostDns) || hostDns.error !== undefined ||
+          !nativeDns(bootstrap.nativeDnsHostCommand, bootstrap.nativeDnsHost) || bootstrap.nativeDnsHostCommand.exitCode !== 0 ||
+          bootstrap.nativeDnsHost?.socket.created !== true || bootstrap.nativeDnsHost.socket.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||
+          bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0)
         throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
       const targets = new Set([bootstrap.positiveTarget]);
       for (const [index, variant] of bootstrap.variants.entries()) {
@@ -172,6 +190,7 @@ export function validateDarwinObservation(name, observations) {
             throw new Error("direct bootstrap service outcome belongs to a different target");
           if (key === "node" &&
               (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
+                attempt.command.argv[11] !== launcher ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
                   (attempt.tools.service === undefined && attempt.tools.complete === false ||
@@ -180,7 +199,9 @@ export function validateDarwinObservation(name, observations) {
             throw new Error("bootstrap Node compatibility outcome is absent or belongs to a different process/target");
           if (key === "node" && attempt.tools?.complete &&
               (!outcome(attempt.tools.git) || attempt.tools.git.executable !== bootstrap.developerTools.git ||
-                !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns)))
+                !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns) ||
+                !nativeDns(attempt.tools.nativeDnsCommand, attempt.tools.nativeDns) ||
+                attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;
@@ -192,7 +213,7 @@ export function validateDarwinObservation(name, observations) {
                   portNumber(restoration.seed) && snapshot(restoration.before) && snapshot(restoration.after) &&
                   restoration.seed === (restoration.before.registered[0] ?? 0) &&
                   (restoration.attempted === true && restoration.seed > 0 && restoration.seed !== 0xffffffff &&
-                    Number.isSafeInteger(restoration.setStatus) && restoration.setStatus >= -0x80000000 && restoration.setStatus <= 0x7fffffff ||
+                    signed32(restoration.setStatus) ||
                     restoration.attempted === false && [0, 0xffffffff].includes(restoration.seed) && restoration.setStatus === null)))
               throw new Error("registered-seed restoration loses its actual call, process, target or capability outcome");
           }
