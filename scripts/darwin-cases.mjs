@@ -119,6 +119,43 @@ export function validateDarwinObservation(name, observations) {
       throw new Error("launchd image observation lacks distinct executed positive controls or image outcome");
     if (name === "launchd-scope" && value.scope?.afterBootout?.otherAcknowledged !== true)
       throw new Error("launchd scope observation lacks its independent live job control");
+    if (name === "launchd-scope") {
+      const scope = value.scope, admission = scope.admission, exit = scope.afterControlledExit;
+      const decimal = text => typeof text === "string" && /^[0-9]+$/.test(text);
+      const query = result => result && typeof result.available === "boolean" &&
+        [0, -1].includes(result.returnCode) && Number.isSafeInteger(result.errno) &&
+        (result.returnCode === 0 ? result.available && result.errno === 0 : result.errno > 0) &&
+        decimal(result.started) && decimal(result.exited);
+      if (exit?.controlledGenerationsExited !== true || !Array.isArray(exit.samples) || exit.samples.length === 0 ||
+          exit.samples.some(sample => !Number.isFinite(sample.elapsedMs) || sample.elapsedMs < 0 ||
+            !query(sample.aggregate) || !query(sample.otherAggregate)))
+        throw new Error("launchd scope lacks paired post-exit kernel queries");
+      if (admission?.privateInterface !== true || typeof admission.available !== "boolean" ||
+          !Number.isSafeInteger(admission.uid) || admission.uid <= 0 ||
+          !decimal(admission.callerResource) || admission.callerResource === "0" ||
+          admission.callerResource !== scope.members?.leader?.resource ||
+          !decimal(scope.control?.resource) || scope.control.resource === "0" ||
+          scope.control.resource === admission.callerResource ||
+          !Array.isArray(admission.attempts) || admission.attempts.length !== 3)
+        throw new Error("launchd scope lacks ordinary-UID adversarial admission controls");
+      const names = ["inherited", "explicit-own", "explicit-other"];
+      const requested = ["0", admission.callerResource, scope.control.resource];
+      for (const [index, attempt] of admission.attempts.entries()) {
+        if (attempt.name !== names[index] || attempt.requestedResource !== requested[index] ||
+            !Number.isSafeInteger(attempt.attributeStatus) || attempt.attributeStatus < 0 ||
+            !Number.isSafeInteger(attempt.spawnStatus) || attempt.spawnStatus < -1 ||
+            (attempt.attributeStatus === 0 ? attempt.spawnStatus < 0 : attempt.spawnStatus !== -1) ||
+            !admission.available && index > 0 && attempt.attributeStatus === 0 ||
+            !Number.isSafeInteger(attempt.pid) || typeof attempt.stopped !== "boolean" ||
+            typeof attempt.joined !== "boolean" ||
+            (attempt.spawnStatus === 0 ? attempt.pid <= 1 || !attempt.joined :
+              attempt.pid !== 0 || attempt.stopped || attempt.joined) ||
+            !Number.isSafeInteger(attempt.coalitionBytes) || attempt.coalitionBytes < 0 ||
+            !Number.isSafeInteger(attempt.coalitionErrno) || attempt.coalitionErrno < 0 ||
+            !decimal(attempt.actualResource) || !Number.isSafeInteger(attempt.waitStatus) || attempt.waitStatus < 0)
+          throw new Error("launchd admission loses its actual API result, cohort or owned-child cleanup");
+      }
+    }
   }
   if (name === "suspended-image") {
     if (value.fixtureOnly !== true || value.scope !== "main-image-only" ||

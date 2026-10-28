@@ -31,11 +31,23 @@ const signalRecord = () => ({ inherited: { returnCode: 0, errno: 0, delivered: t
   fresh: { returnCode: -1, errno: 1, delivered: false },
   nestedApplyReturnCode: -1, nestedApplyErrno: 1, afterNested: { returnCode: 0, errno: 0, delivered: true },
   unreapedPidControl: true, ownedChildrenJoined: true });
+const coalitionQuery = (started = "1", exited = "0") =>
+  ({ available: true, returnCode: 0, errno: 0, started, exited });
+const admissionAttempt = (name, requestedResource, spawned) => ({ name, requestedResource, attributeStatus: 0,
+  spawnStatus: spawned ? 0 : 1, pid: spawned ? 103 : 0, stopped: spawned, joined: spawned,
+  coalitionBytes: spawned ? 40 : 0, coalitionErrno: 0, actualResource: spawned ? "41" : "0", waitStatus: spawned ? 9 : 0 });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
   ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
     cdhashes: ["a".repeat(40), "b".repeat(40)], replacedImage: { markerAfterTwoSeconds: false } }
-    : { scope: { afterBootout: { otherAcknowledged: true } } }) });
+    : { scope: { members: { leader: { resource: "41" } }, control: { resource: "42" },
+      afterBootout: { otherAcknowledged: true },
+      admission: { privateInterface: true, available: true, uid: 501, callerResource: "41",
+        attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
+          admissionAttempt("explicit-other", "42", false)] },
+      afterControlledExit: { controlledGenerationsExited: true,
+        samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
+          otherAggregate: coalitionQuery() }] } } }) });
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
@@ -136,6 +148,28 @@ test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup
   ]) assert.throws(() => validateDarwinObservation("launchd-image", { launchdImage: bad }));
   assert.throws(() => validateDarwinObservation("launchd-scope",
     { launchdScope: { ...launchdRecord("launchd-scope"), scope: { afterBootout: { otherAcknowledged: false } } } }));
+});
+test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child cleanup evidence", () => {
+  const good = launchdRecord("launchd-scope");
+  for (const corrupt of [
+    scope => { delete scope.admission; },
+    scope => { scope.admission.privateInterface = false; },
+    scope => { scope.admission.uid = 0; },
+    scope => { scope.admission.callerResource = "42"; },
+    scope => { scope.admission.attempts[2].requestedResource = "999"; },
+    scope => { scope.admission.available = false; },
+    scope => { scope.admission.attempts[0].joined = false; },
+    scope => { scope.admission.attempts[2].pid = 104; },
+    scope => { delete scope.afterControlledExit; },
+    scope => { scope.afterControlledExit.controlledGenerationsExited = false; },
+    scope => { scope.afterControlledExit.samples = []; },
+    scope => { scope.afterControlledExit.samples[0].aggregate.available = "unknown"; },
+    scope => { scope.afterControlledExit.samples[0].aggregate.errno = 0; },
+    scope => { delete scope.afterControlledExit.samples[0].otherAggregate; },
+  ]) {
+    const bad = structuredClone(good); corrupt(bad.scope);
+    assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
+  }
 });
 
 test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {
