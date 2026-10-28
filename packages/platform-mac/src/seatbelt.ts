@@ -5,6 +5,7 @@
 import { snapshotCommand, type CommandSpec } from "@oma/process/command";
 import { StoreError } from "@oma/domain/errors";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname } from "node:path";
 
 export interface SeatbeltPath { readonly path: string; readonly kind: "file" | "directory" }
 /** Transient trusted launch input, never a model setting or durable grant.
@@ -34,7 +35,7 @@ export interface SeatbeltPolicy {
 }
 const SYSTEM_READS = ["/System/Library", "/usr/lib", "/usr/share", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
-const SYSTEM_FILES = ["/private/etc/hosts", "/private/etc/resolv.conf", "/private/etc/localtime", "/private/etc/services"];
+const SYSTEM_FILES = ["/private/etc/hosts", "/private/etc/resolv.conf", "/private/etc/localtime", "/private/etc/services", "/private/var/select/sh"];
 // getpagesize/sysconf use numeric HW_PAGESIZE, named hw.pagesize_compat in
 // XNU; hw.pagesize is a different OID. Node's allocator needs the former.
 // uname, including Node's os.release(), also reads hostname and kernel version.
@@ -59,9 +60,9 @@ function filter(entry: SeatbeltPath): string {
 function under(value: string, entry: SeatbeltPath): boolean {
   return value === entry.path || entry.kind === "directory" && value.startsWith(`${entry.path}/`);
 }
-/** Pure translation, not a kernel qualification result. Denies are emitted
- * after all allows, including device/IPC rules, so nested denied roots retain
- * precedence. There is no allow-default or unrestricted Unix/Mach access. */
+/** Pure translation, not a kernel qualification result. A specific file
+ * operation outranks file*: trailing denies must repeat the granted operation
+ * families, and protected ancestors cannot move out from under their deny. */
 export function seatbeltProfile(policy: SeatbeltPolicy): string {
   const mapped = policy.mapped;
   if (mapped !== undefined && !Array.isArray(mapped)) refused("Seatbelt mapped roots must be explicit arrays");
@@ -103,7 +104,15 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
     rules.push(`(allow mach-lookup (global-name ${JSON.stringify(service)}))`);
   }
   if (!Array.isArray(policy.denied)) refused("Seatbelt denied roots must be explicit");
-  for (const entry of policy.denied) rules.push(`(deny file* ${filter(entry)})`);
+  const movePins = new Set<string>();
+  for (const entry of policy.denied) {
+    rules.push(`(deny file* file-read* file-write* file-read-data file-read-metadata file-write-data file-map-executable file-ioctl process-exec* ${filter(entry)})`);
+    // Literal directory vnodes only: unrelated writable siblings remain usable.
+    for (let ancestor = entry.path; ancestor !== "/"; ancestor = dirname(ancestor))
+      if (policy.writable.some(root => under(ancestor, root)))
+        movePins.add(`(literal ${JSON.stringify(ancestor)})`);
+  }
+  if (movePins.size) rules.push(`(deny file-write-unlink file-write-create ${[...movePins].join(" ")})`);
   return rules.join("\n") + "\n";
 }
 function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: string, frame: Uint8Array): CommandSpec {
