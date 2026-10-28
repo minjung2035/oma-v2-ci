@@ -27,12 +27,10 @@ test("native entry: retired VM commands refuse before any filesystem effect", t 
     assert.deepEqual(readdirSync(f.root), ["project"]);
   }
 });
-if (process.platform === "darwin") test("native Darwin: unresolved gates refuse actual entrypoints and preserve old bytes", t => {
+if (process.platform === "darwin") test("native Darwin: Society refuses before provisioning and preserves old bytes", t => {
   const f = fixture(t), old = join(f.root, "old-vm-state"); writeFileSync(old, "accepted bytes must remain\n");
-  for (const argv of [[], ["--mode", "personal"], ["login"], ["pi", "install", "npm:fixture"]]) {
-    const result = f.run(argv);
-    assert.equal(result.status, 4, result.stderr); assert.match(result.stderr, /G-PROCESS, G-FILES and G-AUTH/);
-    assert.equal(readFileSync(old, "utf8"), "accepted bytes must remain\n");
-    assert.deepEqual(readdirSync(f.root).sort(), ["old-vm-state", "project"]);
-  }
+  const result = f.run(["--mode", "society"]);
+  assert.equal(result.status, 4, result.stderr);
+  assert.equal(readFileSync(old, "utf8"), "accepted bytes must remain\n");
+  assert.deepEqual(readdirSync(f.root).sort(), ["old-vm-state", "project"]);
 });

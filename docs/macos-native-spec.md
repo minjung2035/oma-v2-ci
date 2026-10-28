@@ -71,7 +71,7 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 |---|---|---|
 | 일반 child + process group | 가장 단순한 실행·정상 cleanup; 기존 runtime 선례 | setsid/double-fork 후손이 생존하는 실제 반례 있음. best-effort 기능에는 사용 가능하나 complete-death 대체로는 배제 |
 | launchd job + audit session | OS가 시작한 job과 session 관측 | session join/재사용, all-owner-death 복구, launch handoff가 미해결. SessionCreate만으로 containment라고 쓰지 않음 |
-| launchd job + resource coalition 관측 | kernel 집계가 PID scan과 다른 종료 증거를 줄 가능성 | **후보**. SDK 노출·비특권 호출·job별 분리·상속/이탈·재시작/외부 재활성화·boot/ID 수명·reap를 실제 확인. process enumeration은 kill 대상을 찾는 보조 수단일 뿐 empty 판정이 아님 |
+| launchd job + resource coalition 관측 | kernel 집계가 PID scan과 다른 종료 증거를 줄 가능성 | job별 분리·fork/setsid 상속·비특권 집계 조회는 실제 확인. **bootout 뒤 detached 후손이 생존**했다. 집계는 종료 제어가 아니며, 재시작/외부 재활성화·닫힌 empty 판정·복구는 미해결 |
 | Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | setsid뿐 아니라 setpgid·posix_spawn attributes·service를 통한 실행까지 필요. 정상 Node/Git/compiler 동작을 깨면 채택하지 않음 |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
@@ -79,6 +79,8 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 Resource coalition의 [고정 XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/coalition.c)에서 `tasks_started/tasks_exited`는 같은 lock 아래 읽힌다. `termrequested`는 empty 알림 요청이며 즉시 fork 차단이 아니다. [같은 revision의 설명](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/doc/observability/coalitions.md)은 ID 비재사용과 loaded service 재시작의 coalition 재사용을 명시한다. 일시적 empty·terminate 요청을 닫힌 실행 범위로 승격하지 않는다. 목표 kernel의 위 전제를 실제 확인하며, SDK에 없는 ABI를 public이라 부르거나 private 제어 syscall로 우회하지 않는다.
 
 Mac15·26 각3회에서 inherited signal은 전달됐지만 동일 SBPL을 fresh 적용한 쪽은 EPERM이었고 nested 재적용도 EPERM이었다. 따라서 SBPL 재적용을 recovery reaper로 사용하지 않는다. `seatbelt-signals`는 unreaped owned child만 쓰는 label 실험이며 permissive fixture profile·EOF 종료를 production policy나 complete-death proof로 옮기지 않는다.
+
+Native `40618265543`의 SIP-disabled Mac15·26에서는 GUI job 생성에 성공했지만, `SpawnConstraint.cdhash=A`에 경로를 B로 교체한 실행이 각3회 실제 B를 실행했다. 이 환경에서 launchd constraint 단독 exact-image 결박은 배제한다. SIP-enabled 환경이나 headless 지원으로 일반화하지 않는다.
 
 [ES descendant API](https://developer.apple.com/documentation/endpointsecurity/es_new_descendants_client(_:_:).md)는 macOS 27+, entitlement 필요, root/TCC 불필요라고 명시한다. 통상의 ES client 조건과 혼동하지 않는다. 이 API도 단독으로 Seatbelt 전체 정책을 대체하지 않는다.
 
