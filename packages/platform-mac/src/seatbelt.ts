@@ -96,7 +96,8 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
   if (policy.unixSockets.length) rules.push("(allow system-socket (socket-domain AF_UNIX))");
   for (const socket of policy.unixSockets) {
     const name = JSON.stringify(path(socket));
-    rules.push(`(allow network-outbound (literal ${name}))`);
+    rules.push(`(allow file-read-metadata (literal ${name}))`,
+      `(allow network-outbound (literal ${name}))`);
   }
   for (const service of [...SYSTEM_MACH, ...policy.machServices]) {
     if (!SYSTEM_MACH.includes(service) && !/^com\.oma\.rpc\.[0-9a-f]{64}$/.test(service))

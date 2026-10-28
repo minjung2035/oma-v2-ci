@@ -46,9 +46,45 @@ unlisted의 예상 밖 성공이나 listed/DNS 실패를 없애거나 SETUP_FAIL
 | 변경 MJS와 실제 생성 Node module | syntax exit0 | Darwin C compile/link 대체 아님 |
 | 실제 fixture의 Linux 실행 | exit1, state 생성 전 실제 OS guard 거절 | Mac 성공이나 sandbox 적용 proof 아님 |
 
-새 source의 실제 SDK15.5/26.5 compile·normal DNS·listed0/unlisted거절은 아직 **NOT_RUN**이다.
-이것을 확인하기 전 정상 기능 수리·Mac 설치 완료·complete-scope/backend 채택·세 gate 완료를 주장하지 않는다.
+위 local checkpoint에서는 SDK15.5/26.5 compile·normal DNS·listed0/unlisted거절이 NOT_RUN이었다.
+이후 실제 실행은 아래에 별도로 기록하며 Mac 설치 완료·complete-scope/backend 채택·세 gate 완료로 합성하지 않는다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
+
+### 후속 실제 Unix 경계와 DNS 잔여 거절
+
+주 `3001f967ae76ec52e7cbd8381f0ebd864d7e0255` / mirror `2b8c6f276db7ee2901ed52697b6c9019871029ed`,
+tree `b930db4f7a5b7c9a62a6349cf76c0e61b5fa44eb`를 발행했다. Native
+[40788082771](https://github.com/minjung2035/oma-v2-ci/actions/runs/40788082771)의 SHA256 확인 ZIP5개를 회수했다.
+clean `45a155109641ad8929d962dc5253b6cb59608cbf1ab73908fc197532e5b7373d` /15687 files와 runtime bytes는 전후 동일이다.
+양 SDK 실제 compile/link·새 case 각3회 OBSERVED다. GUI UID501·SIP-disabled 관측이며 세 gate는 여전히 OPEN이다.
+
+| 두 Mac의3회·3 variant, 총18 actual 실행 | 실제 결과 | 판정 |
+|---|---|---|
+| 같은 read-only 부모의 listed Unix socket |18회 connect0 | 명시된 literal network 허용 확인 |
+| 같은 부모의 unlisted Unix socket |18회 connect -1/EPERM1 | 부모의 file read 접근만으로 IPC까지 허용되지 않음 |
+| 시스템 DNS Unix socket |18회 생성 성공·connect -1/EPERM1 | generic Unix 번역 수리만으로 DNS가 해결되지 않음 |
+| DNS-SD·libc·Node |18회 -65563·getaddrinfo8/errno1·ENOTFOUND | 정상 DNS 기능은 아직 미충족 |
+| selected Git·compiler·자기 쓰기·금지 file canary |모두 기대 결과 | root 제거의 정상 도구 호환성을 DNS까지 확대하지 않음 |
+
+host 두 private listener와 native DNS는 양성이다. endpoint는 `/var/run/mDNSResponder`와 실제 canonical
+`/private/var/run/mDNSResponder`를 선언했고 native/outer stderr는 비어 있다. 같은 경로 grant 부족의 구체적 operation은 아직 분류하지 못했다.
+Mac common은 각254/254, Ubuntu246/246·skip/cancel/todo0이다. 이 source의 두 Mac packed는26/27이며
+기존 Git preparation guard1건이 실패했다. 직전 Mac15 pack ETIMEDOUT는 이 실행에서 재발하지 않았으나 원인 수리 증거는 아니다.
+양 Mac120 executed /108 OBSERVED·12 SETUP_FAILED·product BLOCKED는 유지한다.
+
+원시는 `exact-unix-sockets/actual-unix-dns-{outcomes,summary}.json`·`actual-allowlist-qualification.json`·
+`actual-dns-stderr-and-aliases.json`와 `published-ci/`의 실제 source별 ZIP이다.
+
+### 시스템 endpoint metadata 최소 후보 — 실제 실행 전
+
+로컬 listener에는 명시한 read-only 부모 접근이 있고 시스템 socket에는 없다는 차이를 다음 질문으로 좁혔다.
+[고정 XNU unp_connect](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_usrreq.c#L1290)는
+`namei`·socket 종류 확인·MAC connect 검사·vnode DAC authorization을 거친다. 이것만으로 어떤 Seatbelt operation이 거절됐는지 확정하지 않는다.
+현재 후보는 선언된 exact Unix endpoint에 `file-read-metadata`만 추가한다. file contents·write·조상 subpath·새 Mach service는 허용하지 않는다.
+원래 read-equalized listed/unlisted 반례·DNS 원시 단계·deadline·guard는 유지한다.
+후보의 inventory/review stale/DAG·build와 guard를 유지한 caller regression59/59는 통과했다.
+이 metadata 후보의 실제 Mac 효과는 **NOT_RUN**이며, 효과가 없으면 불필요한 grant로 남기지 않는다.
+
 
 ## Linux 발행 뒤 실제 Mac service 반례 (2026-10-28)
 
@@ -1063,7 +1099,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `45a155109641ad8929d962dc5253b6cb59608cbf1ab73908fc197532e5b7373d` (15687 files).
+verification input digest `24357a4a88c565d0c641f4055096da425874eb83ac585e18b34ba1df062717c6` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

@@ -29,7 +29,7 @@ production Seatbelt의 명시된 Unix endpoint를 top-level literal로 번역하
 host 둘 다 양성, sandbox에서는 listed 양성/unlisted 거절 여부를 각각 raw connect로 기록한다.
 native helper argv·PID/UID·validator·fixture factory를 함께 바꾸고 반례의 예상 밖 성공도 OBSERVED로 남긴다.
 build·focused41/41·caller impact18/18·syntax/잘못된 OS 조기 거절은 통과했다.
-실제 Mac compile·DNS·listed/unlisted 효과는 NOT_RUN이며 세 gate를 닫지 않는다.
+직후 실제 Mac compile·DNS·listed/unlisted 효과는 NOT_RUN이었다. 이후 `2b8c6f276d`의 양 Mac 실제 실행에서 listed 연결/unlisted EPERM18회와 정상 Git/compiler·금지 file canary를 확인했다. DNS는 여전히 EPERM이다. 선언 endpoint의 metadata만 허용하는 최소 후보를 이어 검증하며 아직 실제 실행 전이다. 세 gate·backend 차단은 유지한다.
 출처·새 Linux CI에서 관측한 Mac15 별도 pack timeout은 [검증 owner](validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 구분했다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
 
