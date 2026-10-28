@@ -97,6 +97,8 @@ task handle 복구를 service 실행 권한 복구/탈출로 확대하지 않는
 기존 Git 환경 owner와 native DNS 진단으로 다음 원인을 분리하며 fixture용 광범위 권한·production 실행 허용으로 우회하지 않는다.
 현재 probe는 host/Node Git에 기존 `GIT_ENV`를 적용했고 native DNS 단계별 진단을 추가했다. local41/41과 Linux producer smoke는 통과했지만 이 변경의 Mac compile·Git 정상화·DNS 원인 분류는 NOT_RUN이다. Node resolver·production 정책과 실행 guard를 바꾸지 않았다.
 첫 진단 source `a399fb7fe58`는 Mac26에서 잘못 추가한 `-ldns_sd`가 없어 link 실패했다. Git 환경 효과·DNS API 실행은 미관측이며, default Libsystem의 `system_dnssd` 소유를 대조해 그 독립 flag만 제거했다. 수정 뒤 실제 실행과 취소된 Mac15 job의 대체 실행은 NOT_RUN이며 정상 기능이나 gate 완료로 쓰지 않는다.
+교체 뒤 `e9a939d619`의 Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)에서는 양 Mac 실제 compile/link·각3회 관측을 확인했다. selected Git hash18회는 성공했으며 DNS는 socket 생성 성공 뒤 exact endpoint connect EPERM1로 분류됐다. Unix filter 번역 수정은 아직 미실행이다.
+별도 Linux CI `a399fb7fe58` 병렬 baseline의 rootfs 준비 EAGAIN1건을 확인해 Mac 수정을 멈추고 Linux를 재인수했다. 새 native retry는 동일 held root와 BENEATH/NO_SYMLINKS를 유지한 유한 재시도이며 지속 race·hard denial은 거절한다. 새 compiled·독립 설치본의 실제 추론/복구·전체 병렬/직렬 회귀까지 확인했다([검증 owner](implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)). dirty 실행 입력과 문서 반영 뒤 clean 발행/CI를 구분한다. 다음 Mac 변경은 exact Unix endpoint만 허용하는 번역과 실제 listed/unlisted socket 반례이며 광범위 Unix/Mach grant나 실행 guard 해제로 우회하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.

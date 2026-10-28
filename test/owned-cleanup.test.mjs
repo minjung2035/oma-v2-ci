@@ -144,6 +144,62 @@ for (const operation of ['openDirectory', 'openRegularBeneath'])
       error => both(error, secondary, last));
     assert.deepEqual(returned, [operation === 'openDirectory' ? 11 : 13, 19]);
   });
+
+test('Contained lookup retries transient Linux races without losing real descriptor ownership or confinement', { skip: process.platform !== 'linux' }, t => {
+  const root = fixture(t), inside = join(root, 'inside'), outside = join(root, 'outside');
+  fs.mkdirSync(inside); fs.mkdirSync(outside);
+  fs.writeFileSync(join(inside, 'data'), 'contained bytes');
+  fs.writeFileSync(join(outside, 'sentinel'), 'outside untouched');
+  fs.symlinkSync('data', join(inside, 'inside-link'));
+  fs.symlinkSync(outside, join(inside, 'escape'));
+  const real = require('koffi');
+  let fault = null, injectedErrno = 0;
+  const api = load('packages/native/src/files.ts', {
+    koffi: {
+      errno: () => injectedErrno || real.errno(),
+      load(...arguments_) {
+        const library = real.load(...arguments_);
+        return { func(signature) {
+          const actual = library.func(signature);
+          if (!signature.startsWith('long syscall')) return actual;
+          return (...arguments_) => {
+            if (fault && arguments_[0] === 437 && arguments_[4] === fault.name) {
+              if (++fault.calls > 64) throw new Error('contained lookup did not stop retrying');
+              if (fault.remaining > 0) {
+                --fault.remaining; injectedErrno = fault.code; return -1;
+              }
+            }
+            injectedErrno = 0;
+            return actual(...arguments_);
+          };
+        } };
+      },
+    },
+  });
+  const held = api.openDirectory(inside);
+  const refuse = (name, code) => {
+    let unexpected;
+    try { assert.throws(() => { unexpected = api.openBeneath(held, name, fs.constants.O_RDONLY); }, { code }); }
+    finally { if (unexpected !== undefined) fs.closeSync(unexpected); }
+  };
+  try {
+    fault = { name: 'data', code: 11, remaining: 2, calls: 0 };
+    const file = api.openBeneath(held, 'data', fs.constants.O_RDONLY);
+    try { assert.equal(fs.readFileSync(file, 'utf8'), 'contained bytes'); }
+    finally { fs.closeSync(file); }
+    assert.throws(() => fs.fstatSync(file), { code: 'EBADF' });
+    for (const name of ['inside-link', 'escape/sentinel']) {
+      fault = { name, code: 11, remaining: 2, calls: 0 };
+      refuse(name, 'STORE_CORRUPT');
+    }
+    fault = { name: 'data', code: 11, remaining: Infinity, calls: 0 };
+    refuse('data', 'EAGAIN');
+    fault = { name: 'data', code: 13, remaining: 1, calls: 0 };
+    refuse('data', 'EACCES');
+    assert.equal(fs.readFileSync(join(outside, 'sentinel'), 'utf8'), 'outside untouched');
+    assert.equal(fs.readFileSync(join(inside, 'data'), 'utf8'), 'contained bytes');
+  } finally { fs.closeSync(held); }
+});
 for (const file of ['apps/oma/src/runtime/personal-settings.ts', 'apps/oma/src/engine/settings-files.ts'])
   for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
     const root = fixture(t); let returned = 0, writes = 0;

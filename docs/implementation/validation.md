@@ -2,6 +2,7 @@
 
 DR49 native 전환은 미완료다. 최신 지시는 **Priority 0를 유지해 Linux 검증을 마감한 뒤 지정 work branch를 push하고 macOS 작업을 재개하는 것**이다. 아래 Linux 인수검증을 마쳤으며, 문서 정합성·commit/push와 실제 Mac 관측은 각각 별도 단계다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+추가 CI에서 Linux rootfs 준비의 native EAGAIN1건을 확인해 재인수를 우선했고, 아래 [새 수정 입력의 전체 재인수](#linux-eagain-수리-뒤-실제-재인수)를 마쳤다. 과거 마감/PASS와 원시 실패는 그대로 보존한다. 문서 반영 뒤 clean 발행/CI 입력을 dirty 실행 입력과 합성하지 않는다.
 ## Linux 발행 뒤 실제 Mac service 반례 (2026-10-28)
 
 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9`와 mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`를
@@ -184,6 +185,90 @@ Git 환경·native DNS API는 아직 실행되지 않았다. 경고 억제나 �
 Mac26 common254/254·Ubuntu246/246·skip0은 원시 tests.log에서 별도 확인했다.
 Mac15 두 job은 cancelled·runner_name 비어 있음·artifact 없음이다. 취소 원인은 미확인이며 이 source의 Mac15 실행/PASS로 기록하지 않는다.
 원시는 같은 root의 `git-env-native-dns/observed-link-failure-summary.json`·`native-job-observed-summary.json`·ZIP3개다.
+
+### 후속 actual link·Git 정상화·DNS의 raw connect 거절
+
+주 `5f1f176183aba017ca2e47d3e70029c145204f26` / mirror `e9a939d6197765db65083ec5537e5689fe1427ce`,
+Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)의 ZIP5개 SHA256을 대조했다.
+clean `7670738e80e58d9c0ebe4dabff70b5ec655e67408f95c7ff53983fe7f39817fa` /15687 files·runtime artifacts 전후 동일이다.
+SDK15.5/26.5 실제 compile/link와 새 case각3회 OBSERVED, 전체 각108 OBSERVED·12 SETUP_FAILED다.
+같은 source의 common은 Mac15·26 각254/254, Ubuntu246/246·skip/cancel/todo0이며 source/runtime bytes 전후 동일이다.
+두 Mac의 packed 검증은26/27이다. `@oma/git` preparation의 Linux 전용 guard가 여전히 `UNSUPPORTED_PROFILE`로 거절했다.
+나머지26개를 전부 runtime 실행으로 부르지 않는다: authored installed-runtime PASS16개와 선언 검증만 한10개를 구분한다.
+이 실행도 GUI UID501·SIP-disabled이며 headless/SIP-enabled qualification은 아니다.
+전18 variant의 selected Git hash는 실제 expected bytes와 일치·exit0이고 clang·자기 쓰기·금지 canary도 기대대로다.
+DNS는 host native 세 API가 모두 양성인데 sandboxed AF_UNIX 생성 성공 뒤 connect -1/EPERM1,
+DNSService -65563·getaddrinfo8/errno1·Node ENOTFOUND다. inherited도 같으므로 root 제거 탓으로 쓰지 않는다.
+Unix filter 번역 수정은 아직 미실행이며 실행 guard·세 gate·backend 상태는 바꾸지 않았다.
+원시는 `git-env-native-dns/libsystem-link-fix/actual-git-native-dns-{outcomes,summary}.json`·OS별 row·ZIP이다.
+
+### Linux 추가 CI의 실제 EAGAIN — Git 이력과 분리·새 수리 전체 검증 전
+
+Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926)의 `exit-codes.tsv`는
+`test=1`, 다른 command/lane은0이다. 원시 `test.log`는 사전14/14·main3938/3939·fail1·skip/cancel0이다.
+V10A acceptance-budget 시험이 delivery 이전 rootfs 준비의 `openBeneath→statAt→ensureFile` EAGAIN으로 실패했다.
+타이머 실패나 과거 Git 거절의 재발이 아니며, 실제 rename 경합 주체·시점은 미관측이다.
+같은 source의 독립 serial all3953/3953·5 lane과, 후속 Architecture40748217290의
+baseline14/14+3939/3939·serial3953/3953·5 lane·전체 command0은 각각 통과했다. baselineComparison은 NOT_AVAILABLE다.
+이 통과를 앞선 EAGAIN 원인 수리로 처리하지 않는다. 원시 실패·exit ledger·source별 ZIP SHA는 그대로 보존한다.
+
+[openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html)의 BENEATH EAGAIN 재시도 계약을 적용했다.
+새 leaf는 같은 held fd/path/how와 BENEATH|NO_SYMLINKS로 최대8회만 시도하고 지속 EAGAIN·hard denial은 거절한다.
+open/openat fallback·flags 완화·filesystem validation 생략·delivery timeout 변경은 없다.
+real kernel FD와 실제 inside/outside symlink 경계를 사용하는 좁은 fault 회귀는 수정 전1/1 FAIL,
+수정 후 기존 cleanup 포함25/25 PASS·skip0다. 이것은 원래 CI의 rename 경합을 재현했다는 뜻은 아니다.
+이 수리 직후 checkpoint에서는 compiled/독립 설치·실사용·전체 Linux 검증이 NOT_RUN이었다. 이후 아래 재인수로 그 미실행 범위를 확인했으며 Mac production 정책은 그동안 보류했다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-linux-contained-open/`와
+이전 Mac root의 source별 `clean-source-linux-regression/`·`original-parallel-baseline-failure-classification.json`이다.
+
+### Linux EAGAIN 수리 뒤 실제 재인수
+
+실행 입력은 `02fd1a08633291463c3a79c04622045bbb1b6f73db04e3185b53536873b0003d` /15687 files다.
+사용자 README가 포함된 dirty 입력이며, 결과를 문서에 반영한 뒤의 binding이나 clean publication과 같은 입력이라고 하지 않는다.
+전후 canonical identity는 같고, 아래 최종 전체 실행의 모든 command는 exit0·timeout 없음이다.
+
+| 실제 실행 | 결과 | 판정 경계 |
+|---|---|---|
+| `npm test`, 파일 병렬도4 | 사전14/14 + main3940/3940, fail/cancel/skip/todo0 | 두 phase를 각각 확인. 기존 부분 통과를 합친 결과가 아님 |
+| `verify-lane all`, 파일 직렬 |3954/3954·fail/cancel/skip/todo0·errors[]·baseline COMPARED | 비교 기준은 e9a939d619의 실제 all3953개 이름. build·typecheck·전체 architecture command도 모두0 |
+| 독립 packed workspace 검증 |27/27 PASS | 같은 고정 입력에서 완료한 별도 gate. 이후 성공한 gate를 불필요하게 반복하지 않음 |
+| 실제 compiled native/rootfs | native OS·primitive·ownership21/21, delivery deadlines23/23, 실제 rootfs create·재create·drift defer·owner repair | native syscall/FD/namespace는 실제 실행. deadline lane의 Pi protocol engine은 deterministic fixture이며 live provider proof가 아님 |
+| 새 runtime-only 설치본 |27개 workspace tarball·production dependency만 설치, 설치 내부 links, 두 checkout masked | 개발 source·checkout node_modules를 복사하지 않음. installed native bytes는 새 compiled leaf와 동일 |
+| 실제 Principal·Worker·Personal | 모두 `openai-codex/gpt-6-luna`, `medium`; Worker가 sum.mjs만 수정·실제 test 통과·candidate 제출, Personal은 정확히 `42`+LF | 실제 SDK session의 model/effort와 실제 tool output 확인. 제품 기본 모델 변경 아님 |
+| warm history 재개 | 두 mode 실제 PTY 재진입·기존 history bytes 유지·accepted operation8개 완전 동일 | 화면만이 아니라 public diagnostic snapshot으로 비교 |
+| 자동 보관·cold 복구 | broker drain·Store close 뒤 실제 Restic 검증·checkpoint·hot roots 회수, 원래 key로 복원 | 정상 종료·검증된 복원 경로. physical power loss나 모든 외부 재인증 조건의 proof는 아님 |
+| archive key 손실 | 실제 broker `STORE_CORRUPT`, 대체 key/새 canonical history 없음·원본 DB/checkpoint bytes 유지 | bounded 기존 restart 뒤 ownership loss도 관측. 종료 후 마지막 화면에는 앞선 오류 frame이 없으므로 이를 원시 오류 복사본이라고 하지 않음 |
+| 복원 뒤 실제 manual CLI | 실제 `npm test` exit0·`OWNED_SUM_OK`; 원래 request key가 원래 operation/ref/candidate 반환 | submit1·integrate0·extra Worker0 유지. pre-cold operation8개 bytes 불변, 최종 operation11 succeeded·batch4 completed |
+| 최종 정상 종료 | 모든 UI 종료0, active execution journal0, 두 번째 자동 archive·roots 회수 | confined auth file 제거·실제 host credential 불포함, 원본 Codex auth bytes/mode 보존 |
+
+실제 host UID/GID는1000/1000이다. 앱도1000/1000·CapEff0·NoNewPrivs1이며 privileged daemon을 쓰지 않았다.
+즉시 부모 user namespace의 uid_map(`1000 0 1`)을 host UID0이라는 뜻으로 오독하지 않는다.
+private tool mount만 사용했으며 host `/usr/bin/node`·bwrap이나 사용자 파일 권한을 고치지 않았다.
+
+**실패와 정정도 보존한다.** 첫 전체 serial은3934/3954였다. 빈 검증 HOME에 pinned Restic을 준비하지 않아
+Restic-setup8개 hook와 session-storage12개가 prerequisite assertion으로 실패했다.
+또 npm orchestrator 자체에 test-only `local-test-guard`를 preload해서 baseline/architecture wrapper가 shell 거절로 시험 전에 종료했다.
+이는 production 수리나 성공 조건 변경의 근거가 아니다. 실제 pinned binary를 소유 HOME에 복사한 뒤 원래 installer로 hash/FD-exec 검증했고,
+guard는 npm 상위 실행기에서만 빼고 test-local/verify-lane의 원래 test-child guard는 유지했다.
+해당20개가 먼저20/20 통과한 뒤 **같은 source의 전체 baseline과 전체 serial all**을 다시 실행해 위 통과를 얻었다.
+첫3934개와 후속20개를 합쳐 전체 PASS라고 하지 않는다.
+
+실사용 첫 시도에서도 private `/usr/bin`에 Node binary만 둬 인접 npm module이 없었다.
+완전한 pinned Node26 distribution을 선택한 뒤 실제 복원 Worker의 `npm test`가 성공했다. 이 문제로 production 코드를 바꾸지 않았다.
+Principal tool error3개(빈 inbox 읽기와 GOAL ordinary-mail fields 오류), Worker tool error6개(npm 전제/CLI 사용 오류),
+Personal0개를 보존한다. 첫 GOAL schema는 한 차례 사람이 안내했으며 완전 무개입 성공으로 포장하지 않는다.
+
+실제 CI EAGAIN의 rename 주체·경합 시점은 여전히 미관측이다. 새 회귀는 transient EAGAIN을 좁게 주입한 뒤
+실제 kernel open·FD read/close와 inside/outside symlink 거절을 확인한 것이다. 원래 자연 경합을 재현했다거나
+과거 원인 미상 Git1건이 수리/무해 판정됐다는 뜻이 아니다. flags·여섯 syscall slots·hard-denial·지속 오류 거절·원래 deadline을 유지했다.
+
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-linux-contained-open/`이다.
+`first-full-failure-classification.json`·최초 `all-serial/`·`original-npm-guard-debug.log`가 실패를,
+`prerequisites-corrected/full-regression-result.json`·`all-serial/result.json`이 최종 전체 실행을 소유한다.
+`installed-live-complete-result.json`, `installed-real-npm-and-same-key-replay.json`, redacted 실제 SDK session,
+host/namespace identity와 원래/최종 cold checkpoint를 함께 보존했다.
+clean publication·새 CI는 이 checkpoint에서 아직 미실행이며 별도 source 결과로 기록한다.
+
 
 
 
@@ -931,7 +1016,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `7670738e80e58d9c0ebe4dabff70b5ec655e67408f95c7ff53983fe7f39817fa` (15687 files).
+verification input digest `f334d462f65b19c76fbd658f8171a14f081a5a47a01a22689b5cf04b01dde8d2` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
