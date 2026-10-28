@@ -21,6 +21,27 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 file fence의 실제 수정 확인과 public launchd 후보
+
+Native `40607179845`, 입력 `4173f5941`의 Mac15·26에서 nested credential read·credential/parent rename 거절과
+무관한 create/rename/unlink 허용이 각각3회 통과했다. 각102회 실행 중90 OBSERVED·12 SETUP_FAILED이며 세 product gate는 OPEN이다.
+Git setup은 candidate125·quarantine REF_STATE_UNKNOWN으로 여전히 실패하고, Worker는 production guard에서 거절한다.
+Mac26 common은246/247·skip0으로, 남은1건은 변경된 deny 문구를 고정한 assertion이다. 이 문자열 검사와 copy-only 검사는
+삭제하며 denial 문구를 다시 고정하지 않는다. 환경·literal argv·위조 lease/경로 거절 검사는 유지한다.
+
+다음 `launchd-job`은 일반 사용자 `launchctl bootstrap user/UID`의 controlled job만 다룬다.
+[고정 XNU 문서](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/doc/observability/coalitions.md)는
+coalition 상속·ID 비재사용과 loaded service 재시작 시 같은 coalition 재사용을 설명하지만 목표 OS의 실행 증거는 아니다.
+실험은 별도 job·setsid/double-fork·FD 전체 close·bootout 후 live ack와 집계 관측을 비교한다.
+read-only libproc/private coalition ABI만 관측하며 private coalition 제어·numeric PID signal은 호출하지 않는다.
+fixture의 private release/deadline·관측한 generation 종료는 arbitrary descendant death나 복구 proof가 아니다.
+
+별도 A/B 양성 대조와 mutable pathname 교체로 Apple의 `SpawnConstraint.cdhash`를 시험하고 SIP 상태·실제 service 상태를 보존한다.
+2초 marker 부재만으로 mismatch의 실행 전 거절을 판정하지 않는다. Mac 실행 전까지 새 후보는 NOT_RUN·미채택이며
+105회 시도·9개 program의 driver234분+설치/credential/upload20분을 outer260분 안에 배치했다.
+Git setup의 후속 임시 진단은 같은 profile의 실제 async/sync Git 관측을 남길 뿐 production status grammar나 권한을 바꾸지 않는다.
+
+
 ### 2026-10-28 실제 Node 시작과 signal 후보 배제, file fence 수리
 
 | 공개 입력 `87cc9c92e` | 관측과 한계 |

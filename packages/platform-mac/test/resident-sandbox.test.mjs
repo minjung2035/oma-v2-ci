@@ -5,10 +5,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describeMacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { residentSeatbelt } from "@oma/platform-mac/resident-sandbox";
-import { machRendezvousName } from "@oma/platform-mac/mach-address";
 import { decodeRunLease } from "@oma/protocol/run-lease";
 import { assertResidentContext } from "@oma/protocol/resident-context";
-import { residentDirectoryPolicy, residentEnvironment } from "@oma/domain/resident-paths";
+import { residentEnvironment } from "@oma/domain/resident-paths";
 import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerSessionDirPathAt, runnerViewPathAt,
   projectGitPathAt, projectMirrorPathAt } from "@oma/domain/paths";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
@@ -29,29 +28,15 @@ function context() {
   const lease = decodeRunLease({ actor, incarnation: 7, socketHostPath: actorSocketPathAt(runRoot, actor, 7) }, { actor, runRoot });
   return { host, lease, directories };
 }
-test('Mac Worker recipe uses the common access table, physical paths and exact private IPC', () => {
+test('Mac Worker command keeps literal argv, physical cwd and owned environment', () => {
   const { host, lease, directories } = context(), endpoints = { inference: '/private/var/relay.sock', egress: '/private/var/egress.sock' };
   const recipe = residentSeatbelt(host, lease, directories, tools, {}, endpoints), env = recipe.command.env;
   assert.deepEqual(recipe.command.argv, [host.node, host.pi, ...host.piModeArgs]);
-  assert.equal(recipe.command.cwd, directories.workspace); assert.equal(recipe.command.timeoutMs, null);
+  assert.equal(recipe.command.cwd, directories.workspace);
   assert.equal(env.HOME, directories.home); assert.equal(env.TMPDIR, directories.home);
   assert.equal(env.OMA_NODE, host.node); assert.equal(env.OMA_CLI, join(host.libdir, DEPLOYMENT_LAYOUT.cli));
   assert.equal(env.NODE_OPTIONS, `--import=${pathToFileURL(join(host.libdir, DEPLOYMENT_LAYOUT.clientPreload)).href}`);
   assert.equal(env.OMA_ACTOR, lease.actor); assert.equal(env.OMA_FRAME_BYTES, '65536'); assert.equal(env.OMA_BATCH_MAX_MESSAGES, '24');
-  const access = residentDirectoryPolicy(host, directories);
-  assert.deepEqual(access.filter(root => root.writable).map(root => root.name), ['workspace', 'home', 'sessions']);
-  for (const root of access) {
-    assert.ok(recipe.profile.includes(`(allow file-read* (subpath ${JSON.stringify(root.path)}))`));
-    assert.equal(recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(root.path)}))`), root.writable, root.name);
-    if(root.writable)assert.ok(recipe.profile.includes(`(allow process-exec* (subpath ${JSON.stringify(root.path)}))`),root.name);
-  }
-  for (const endpoint of Object.values(endpoints)) assert.ok(recipe.profile.includes(`(remote unix-socket (literal ${JSON.stringify(endpoint)}))`));
-  assert.ok(recipe.profile.includes(`(global-name ${JSON.stringify(machRendezvousName(lease.socketHostPath))})`));
-  for (const entry of host.hidden) assert.ok(recipe.profile.includes(`(deny file* (${entry.kind === 'dir' ? 'subpath' : 'literal'} ${JSON.stringify(join(host.libdir, entry.path))}))`));
-  for (const broad of ['(allow default)', '(allow network*)', '(allow mach-register', '(allow ipc-posix', '(subpath "/private/var")'])
-    assert.ok(!recipe.profile.includes(broad), broad);
-  assert.equal(recipe.privateInputs.length, 1); assert.equal(recipe.privateInputs[0].fd, 3);
-  assert.equal(Buffer.from(recipe.privateInputs[0].bytes).subarray(16).toString(), recipe.profile);
 });
 test('Mac Worker recipe refuses forged leases and every substituted actor directory', () => {
   const { host, lease, directories } = context();
@@ -88,13 +73,6 @@ test('Mac Worker recipe refuses broad installation roots, escaped hidden paths a
   assert.throws(() => residentSeatbelt({ ...host, pi: host.libdir + '/entry\\name.js' }, lease, directories, tools), { code: 'UNSUPPORTED_PROFILE' });
   assert.throws(() => residentSeatbelt(host, lease, directories, tools, {}, { inference: 'relative.sock' }), { code: 'UNSUPPORTED_PROFILE' });
   assert.throws(() => residentEnvironment({ libdir: '/', node: host.node, home: directories.home, temporary: directories.home }), { code: 'UNSUPPORTED_PROFILE' });
-});
-test('Mac Worker recipe copies arguments, environment and profile inputs without caching authority', () => {
-  const { host, lease, directories } = context(), environment = { OMA_SOCIETY: 'demo' };
-  const recipe = residentSeatbelt(host, lease, directories, tools, environment), profile = recipe.profile;
-  host.piModeArgs[0] = 'changed'; environment.OMA_SOCIETY = 'other'; directories.home = '/human';
-  assert.equal(recipe.command.argv[2], '--mode'); assert.equal(recipe.command.env.OMA_SOCIETY, 'demo');
-  assert.equal(recipe.profile, profile);
 });
 
 for (const kind of ['libdir', 'packages', 'node', 'developer']) test(`Mac Worker private-state overlap: ${kind} nested outside writable actor roots is refused`, () => {

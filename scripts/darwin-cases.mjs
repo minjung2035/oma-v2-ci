@@ -23,6 +23,8 @@ export const DARWIN_PROGRAMS = Object.freeze([
     names: ["git-setup-candidate", "git-setup-quarantine"] }),
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
     names: ["worker-bootstrap", "worker-tools"] }),
+  program({ name: "launchd", fixture: "darwin-launchd.mjs", digest: "launchdProbeDigest", compile: "check-launchd", node: true,
+    names: ["launchd-job"] }),
 ]);
 const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer", "file-descriptors": "fileDescriptors",
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
@@ -34,7 +36,7 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-profile-empty": "seatbeltFault", "seatbelt-profile-syntax": "seatbeltFault", "seatbelt-argv-env": "seatbeltFault",
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
-  "worker-bootstrap": "worker", "worker-tools": "worker" });
+  "worker-bootstrap": "worker", "worker-tools": "worker", "launchd-job": "launchdJob" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -78,6 +80,21 @@ export function validateDarwinObservation(name, observations) {
         !Number.isSafeInteger(value.nestedApplyErrno) || value.nestedApplyErrno < 0 ||
         value.nestedApplyReturnCode === 0 && value.nestedApplyErrno !== 0)
       throw new Error("signal identity observation lacks its inherited positive control or nested apply result");
+  }
+  if (name === "launchd-job") {
+    if (value.fixtureOnly !== true || value.controlledGenerationsExited !== true ||
+        value.jobRegistrationsRemoved !== true || !Array.isArray(value.cleanupFaults) || value.cleanupFaults.length !== 0)
+      throw new Error("launchd observation lacks controlled generation and registration cleanup");
+    if (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
+        !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||
+        value.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)) ||
+        value.cdhashes[0] === value.cdhashes[1])
+      throw new Error("launchd image observation lacks distinct executed positive controls");
+    if (typeof value.replacedImage?.markerAfterTwoSeconds !== "boolean" ||
+        value.scope?.afterBootout?.otherAcknowledged !== true)
+      throw new Error("launchd observation lacks image outcome or independent live job control");
+    if (typeof value.actorSourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.actorSourceSha256))
+      throw new Error("launchd actor source identity is missing");
   }
 }
 export function validateDarwinCaseSet(cases) {

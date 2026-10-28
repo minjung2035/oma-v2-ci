@@ -31,11 +31,16 @@ const signalRecord = () => ({ inherited: { returnCode: 0, errno: 0, delivered: t
   fresh: { returnCode: -1, errno: 1, delivered: false },
   nestedApplyReturnCode: -1, nestedApplyErrno: 1, afterNested: { returnCode: 0, errno: 0, delivered: true },
   unreapedPidControl: true, ownedChildrenJoined: true });
+const launchdRecord = () => ({ fixtureOnly: true, controlledGenerationsExited: true,
+  jobRegistrationsRemoved: true, cleanupFaults: [], matchingA: { variant: 1 }, matchingB: { variant: 2 },
+  cdhashes: ["a".repeat(40), "b".repeat(40)], actorSourceSha256: "c".repeat(64),
+  replacedImage: { markerAfterTwoSeconds: false }, scope: { afterBootout: { otherAcknowledged: true } } });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
-      planned.name === "seatbelt-signals" ? signalRecord() : { fixtureAssertionReturned: true } } }));
+      planned.name === "seatbelt-signals" ? signalRecord() :
+        planned.name === "launchd-job" ? launchdRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
@@ -59,6 +64,20 @@ test("NATIVE-DARWIN: signal observations refuse missing PID, delivery and inheri
     { ...good, afterNested: { returnCode: -1, errno: 0, delivered: false } },
     { ...good, nestedApplyReturnCode: "unknown" },
   ]) assert.throws(() => validateDarwinObservation("seatbelt-signals", { seatbeltSignals: bad }));
+});
+
+test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup and live independent jobs", () => {
+  const good = launchdRecord();
+  for (const bad of [
+    { ...good, fixtureOnly: false },
+    { ...good, controlledGenerationsExited: false },
+    { ...good, jobRegistrationsRemoved: false },
+    { ...good, cleanupFaults: ["unknown child"] },
+    { ...good, matchingB: { variant: 1 } },
+    { ...good, cdhashes: [good.cdhashes[0], good.cdhashes[0]] },
+    { ...good, replacedImage: {} },
+    { ...good, scope: { afterBootout: { otherAcknowledged: false } } },
+  ]) assert.throws(() => validateDarwinObservation("launchd-job", { launchdJob: bad }));
 });
 
 
