@@ -35,11 +35,23 @@ bootout 뒤 ordinary ack는 없지만 detached·독립 other job은 계속 실�
 image의 A/B 양성 대조도 실행됐지만 constraint A의 교체된 B가 실제 variant2 marker를 남겼다.
 SIP-disabled 두 환경에서 launchd constraint를 exact-image proof로 사용할 수 없다. 실제 종료/복구·expected-Broker gate는 OPEN이다.
 
-Personal은 directory 오류를 지나 raw terminal까지 진입했지만 ready=false·빈 출력·아직 살아 있는 child로 실패했다.
-원인을 Keychain이나 TUI로 단정하거나 timeout을 늘리지 말고 owned child의 native/JS 대기 지점을 다음에 관측한다.
+Personal의 ready=false·빈 출력은 확인했지만, 당시 harness의 exited/echo/icanon은 timeout 때의 고정값이었다.
+child 생존·raw mode 진입으로 해석할 수 없다. 실제 waitpid/termios와 owned child의 bounded native sample을 다음에 관측한다.
 Git candidate는 gate release0/REF_STATE_UNKNOWN, quarantine도 REF_STATE_UNKNOWN이다. directory 수리로 해결됐다고 기록하지 않는다.
 네 immutable ZIP의 SHA256은 API digest와 일치하며 원시는 `portable-macos{15,26}-{gates,runtime}/`에 보존했다.
 clean mirror의 첫 검사는 누락된 workspace 설치/선언 때문에 실패했다. `npm ci` 뒤27/27 rebuild와 전체 architecture가 통과했다.
+
+같은 입력의 Architecture `40618265528` native-all은3947/3948·skip0으로 FAIL이었다.
+유일한 실패 R35는 이미 삭제한 SBPL 문자열·recipe copy 검사의 required-name2개가 남은 것이었다.
+그 두 요구만 제거하고 실제 IPC proof로 다시 이름 붙이지 않았다. R35/entry 회귀23/23, 실제 platform lane72/72·skip0이 통과했다.
+이는 후속 WIP 입력의 선택 검증이며 원래 full 결과를 PASS로 바꾸지 않는다.
+
+PTY helper는 exit7·ready 미출력 child도20초 뒤 `exited=false/code=null`로 보고하는 반례를 재현했다.
+실제 waitpid·termios를 보고하고, ready timeout의 unreaped owned child만 bounded sample하도록 고쳤다.
+early exit 회귀와 기존 terminal/mode10/10, Linux live timeout의 실제 flags·owned group cleanup/direct-child join,
+실제 compiled Personal의 ready→Ctrl-D→exit0·terminal 복원을 확인했다. `/usr/bin/sample`은 Linux에서 unavailable로 기록됐으며
+Darwin native sample은 다음 실행 전까지 NOT_RUN이다. group cleanup을 arbitrary-descendant death proof로 사용하지 않는다.
+
 
 
 ### 2026-10-28 readable directory와 portable immutable publication
