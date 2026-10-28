@@ -80,6 +80,32 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
       afterControlledExit: { controlledGenerationsExited: true,
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
+const bootstrapRecord = () => {
+  const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
+    const attempt = kind => {
+      const pid = 120 + index * 2 + (kind === "node" ? 1 : 0);
+      const target = `gui/501/org.oma.probe.test.${name}-${kind}`;
+      return { target, command: { executable: "/owned/bootstrap-exec",
+        argv: [name, "/owned/profile", "/owned/ports", "/owned/work",
+          ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] :
+            ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", "/owned/report"])],
+        pid, exitCode: 0, signal: null, stdout: "", stderr: "" },
+        ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
+          before: { bootstrap: 200, registered: [201] },
+          after: { bootstrap: name === "inherited" ? 200 : 0, registered: name === "bootstrap-and-xpc" ? [0] : [201] },
+          destroyed: name === "inherited" ? [] : [200] }, guestEffect: null,
+        ...(kind === "node" ? { tools: { pid, complete: true,
+          service: { ...launchctlRecord("kickstart", target), pid: 150 + index } } } : {}) };
+    };
+    return { name, profileSha256: "e".repeat(64), canaryPreserved: true, direct: attempt("direct"), node: attempt("node") };
+  });
+  return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
+    cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
+    bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
+      positiveTarget: "gui/501/org.oma.probe.test.positive",
+      positiveKickstart: { ...launchctlRecord("kickstart", "gui/501/org.oma.probe.test.positive"), pid: 119 },
+      positiveControl: { pid: 118 }, variants } };
+};
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
@@ -112,6 +138,7 @@ const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...p
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
       planned.name === "seatbelt-signals" ? signalRecord() :
+        planned.name === "launchd-bootstrap" ? bootstrapRecord() :
         ["launchd-scope", "launchd-image"].includes(planned.name) ? launchdRecord(planned.name) :
           planned.name === "personal-entry" ? personalRecord() :
             planned.name === "suspended-image" ? suspendedRecord() :
@@ -240,6 +267,37 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
     const bad = structuredClone(good); corrupt(bad.scope);
     assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
   }
+});
+
+test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {
+  const good = bootstrapRecord();
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: good });
+  validateDarwinCaseSet(rows());
+  for (const corrupt of [
+    value => { value.bootstrap.variants.pop(); },
+    value => { value.bootstrap.variants[1].name = "inherited"; },
+    value => { value.bootstrap.variants[0].direct.target = value.bootstrap.positiveTarget; },
+    value => { value.bootstrap.positiveKickstart.argv[1] = value.bootstrap.variants[0].direct.target; },
+    value => { value.bootstrap.variants[0].direct.ports = null; value.bootstrap.variants[0].direct.command.exitCode = 2; },
+    value => { value.bootstrap.variants[1].direct.command.argv[6] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[2].direct.ports.sandboxApplied = false; },
+    value => { value.bootstrap.variants[2].direct.ports.pid += 1; },
+    value => { delete value.bootstrap.variants[2].direct.ports.after; },
+    value => { value.bootstrap.variants[2].node.tools = null; },
+    value => { value.bootstrap.variants[2].node.command.argv[6] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[2].node.tools.service.argv[1] = "gui/501/foreign"; },
+    value => { delete value.bootstrap.variants[2].canaryPreserved; },
+  ]) {
+    const bad = structuredClone(good); corrupt(bad);
+    assert.throws(() => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: bad }));
+  }
+  const unknown = structuredClone(good);
+  unknown.bootstrap.variants[2].direct.command = { ...unknown.bootstrap.variants[2].direct.command,
+    exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unknown.bootstrap.variants[2].node.command = { ...unknown.bootstrap.variants[2].node.command, exitCode: 126 };
+  unknown.bootstrap.variants[2].node.tools = null;
+  unknown.bootstrap.variants[2].canaryPreserved = false;
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
 });
 
 test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {

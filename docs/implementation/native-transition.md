@@ -21,6 +21,52 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 service-control 권한 분리의 최소 질문 구현 — Mac 실행 전
+
+실제 fresh-service 반례 뒤 기존 production guard와 Seatbelt·Linux backend·controlled actor를 유지했다.
+deprecated `bootstrap_unprivileged`는 native launchd가 이미 unprivileged port를 사용한다는 header 때문에 해법으로 채택하지 않았다.
+[Chromium V2](https://chromium.googlesource.com/chromium/src/+/dc38dfd79ac22ae4d60fb49a78f63ab0920f958e/sandbox/mac/seatbelt_sandbox_design.md)의
+투명 bootstrap proxy 제약과 과거 pre-exec handoff의 bootstrap/registered-port 구분을 대조했다.
+기존 XNU revision의 registered-port clone/replace/release 코드도 확인했다.
+public Mach API와 libxpc 내부 seed 해석의 지원 조건을 구분하며 새 proxy/framework·제품 fallback은 만들지 않았다.
+
+`darwin-bootstrap-exec.c`와 기존 launchd fixture의 `launchd-bootstrap` mode가 상속 그대로,
+bootstrap만 제거, bootstrap+registered seed 제거를 direct exec 전에 비교한다.
+각각 별도 fresh target의 직접 launchctl·Node 후손 launchctl과 정상 파일 쓰기/금지 canary,
+Git hash·compiler·실제 DNS를 기록한다. signal·deadline·부분 실행·권한 제거 실패를 raw로 남기며
+그 부재를 service 차단으로 해석하지 않는다. 같은 PID의 pre-exec 관측은 실제 exec 완료·role authority가 아니다.
+local parser/policy41/41·생성 script syntax와 기존 실제6건 parser 대조, Linux의 state 전 거절을 확인했다.
+추가 required case3회로 driver worst-case16080초·build/credential/upload 포함288분이므로 CI job 상한은300분이다.
+기존 probe120초·fixture80초·service5초와 제품 timeout은 그대로다.
+새 C helper의 실제 Mac compile/실행은 **NOT_RUN**이며 모든 product gate는 계속 OPEN이다.
+원시는 Mac resume root의 `upstream-bootstrap-authority-research.json`·`bootstrap-local/`가 소유한다.
+
+### 2026-10-28 Linux 발행 뒤 실제 Mac fresh-service 반례 확인
+
+Linux 인수검증 마감 뒤 지정 work branch에 주 `257baab324d0cac93fb49fcf1c69ba0231b24db9`와
+같은 tree의 mirror `2ef7fb517b24e4a48c3ac48646f87f6a81316638`를 push했다.
+사용자 README/WATCHDOG를 제외했고 위임·merge·deploy하지 않았다. primary `[skip ci]`로 중복 paid CI를 피하고
+기존 mirror Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810)를 실행했다.
+clean binding `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` /15686 files는
+각 OS 실행 전후 동일했다. Linux245/245·Mac15/26 각253/253 common·skip0이나 전체 제품 PASS가 아니다.
+양 Mac 독립 설치는26/27이며 Git preparation의 실제 `UNSUPPORTED_PROFILE`을 보존했다.
+gate 각117회는105 OBSERVED·12 SETUP_FAILED, G-PROCESS/G-FILES/G-AUTH OPEN이다.
+
+별도 host 양성 뒤 fresh service의 **최초** sandboxed 요청은 양 Mac 각3회 모두 exit0·joined=true·
+numericCleanupUsed=false였다. production policy·C actor·5초 한도는 동일하다.
+실행된 target actor는 PID1 아래 `sandboxed=false`이고 requester와 다른 CID였다.
+Mac26은1393→1397·1435→1439·1497→1509, Mac15는1217→1221·1249→1251·1267→1271이다.
+이는 **현 Seatbelt+coalition만으로 닫힌 execution scope라는 후보의 실제 반례**다.
+GUI UID501·SIP-disabled 관측이며 headless/SIP-enabled 지원으로 확대하지 않는다.
+과거 같은 job 재사용/재시작 대기 원인은 여전히 추정이고 timeout을 수리했다고 쓰지 않는다.
+
+실행 guard와 Linux namespace/pidfd 경로는 유지한다. 다음 질문은 bootstrap/XPC service-control 권한 분리와
+정상 Node/Git/compiler/DNS의 양립이다. CLI 이름 차단·deadline 연장·새 업무 framework로 대신하지 않는다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/`의 SHA256 확인 ZIP5개와
+`fresh-service-admission-observed.json`·`native-runtime-observed-summaries.json`이 소유한다.
+아래 NOT_RUN과 push 전 상태는 각 당시 checkpoint이며 이 실제 실행으로 구분한다.
+
+
 ### 2026-10-28 Linux 인수검증 마감·독립 설치본 live/recovery·CI 이력 정정
 
 고정 입력 `88d1cf0b1a435a0c7494e67ccd306ca328a28c73ed8b8535c5168c9904a1c76b` /15686 files의

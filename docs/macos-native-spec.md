@@ -71,8 +71,8 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 |---|---|---|
 | 일반 child + process group | 가장 단순한 실행·정상 cleanup; 기존 runtime 선례 | setsid/double-fork 후손이 생존하는 실제 반례 있음. best-effort 기능에는 사용 가능하나 complete-death 대체로는 배제 |
 | launchd job + audit session | OS가 시작한 job과 session 관측 | session join/재사용, all-owner-death 복구, launch handoff가 미해결. SessionCreate만으로 containment라고 쓰지 않음 |
-| launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | job별 분리·fork/setsid 상속·CID 소멸·fresh token 제어·late-fork 재탐색을 실제 확인. **bootout 단독은 detached 후손을 남겼다.** product owner crash·service admission·durable producer는 미해결 |
-| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | setsid뿐 아니라 setpgid·posix_spawn attributes·service를 통한 실행까지 필요. 정상 Node/Git/compiler 동작을 깨면 채택하지 않음 |
+| launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | 상속·CID 소멸·fresh token 제어·late-fork 재탐색은 확인. **bootout 단독은 detached 후손을 남겼고, 현 production Seatbelt에서도 기존 service가 다른 CID·unsandboxed로 실행됐다. 현 조합만으로 complete backend 채택은 배제** |
+| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | `2ef7fb517b`의 두 Mac 각3회 service 최초 실행은 실제 허용됐다. service lookup 제한과 상속된 제어 권한은 구분한다. 권한 분리 후보는 정상 Node/Git/compiler/DNS·manual CLI와 함께 실증해야 하며 CLI 이름 차단은 해법이 아님 |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
 
@@ -86,7 +86,9 @@ inherited spawn은 같은 CID였고 explicit own/다른 CID spawn은 EPERM이었
 peer가 준 port를 kernel task라고 믿지 않는다. unprofiled controlled target의 결과를 role authority나 새 Seatbelt label 복구로 확대하지 않는다.
 `4d140a51d5`의 두 Mac 각3회에서는 CID만으로 첫 snapshot 뒤 생긴 후손을 다음 scan에서 찾아 제어하고 release 전 ID 소멸까지 확인했다. PID count를 bytes로 읽지 않고 scan은 hint로만 쓴다. empty/truncated scan·deadline은 death proof가 아니다.
 `836e2f5963`의 두 Mac 각3회에서 production Seatbelt target·상속 후손도 fresh controller로 제어하고 release 전 CID 소멸을 확인했다. 다만 service 호출은 fixture deadline으로 끝나 명시적 거절/허용을 판정하지 못했다.
-동일 job의 host 양성 후 재시작 대기가 섞였을 가능성은 `[INFERENCE]`다. 재개 후 별도 `service-positive`와 최초 실행 `service-target`으로 분리하고 target 귀속 parser·회귀를 갱신했다. local parser·Seatbelt40/40·직접 grammar smoke는 확인했지만 **새 fixture의 Mac15·26 실행은 NOT_RUN**이다([인계](HANDOFF.md#4-가장-가까운-재개점-service-관측의-혼입-제거)). 다른 service 경로·실제 product owner crash·durable producer의 증명은 여전히 별도다.
+동일 job의 host 양성 후 재시작 대기가 섞였을 가능성은 `[INFERENCE]`다. 별도 `service-positive`와 fresh `service-target`으로 분리한 `2ef7fb517b`의 Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810)에서 양 Mac 각3회 모두 sandboxed launchctl exit0·numeric cleanup 없음, PID1 아래 다른 CID의 unsandboxed actor 실행을 확인했다([인계](HANDOFF.md#4-가장-가까운-재개점-service-관측의-혼입-제거)). 이는 현 policy+coalition의 닫힌 범위 후보에 대한 반례이며 과거 timeout 원인 수리는 아니다. GUI UID501·SIP-disabled 범위를 넘겨 일반화하지 않는다.
+다음 최소 질문은 bootstrap/XPC 제어 권한을 exec 전에 분리할 수 있는지와 정상 도구·DNS의 양립 여부다. public API와 libxpc의 내부 port 전달 관례를 구분하고, 오래된 bootstrap proxy를 바로 제품에 이식하지 않는다. 다른 service 경로·실제 product owner crash·durable producer의 증명도 별도다. 실행 guard·Linux backend·기존 writer/receipt/recovery 계약은 유지한다.
+후보를 바로 제품에 연결하지 않고 `launchd-bootstrap`으로 상속 그대로 / bootstrap 제거 / bootstrap+registered seed 제거를 direct exec 전에 비교하도록 구현했다. 직접 CLI·Node 후손 CLI와 정상 파일/금지 쓰기·Git·compiler·DNS를 함께 남긴다. local parser/policy41/41과 생성 script syntax만 확인했으며 새 helper의 실제 Mac compile/실행은 NOT_RUN이다. [Chromium V2 원본](https://chromium.googlesource.com/chromium/src/+/dc38dfd79ac22ae4d60fb49a78f63ab0920f958e/sandbox/mac/seatbelt_sandbox_design.md)은 macOS10.10에서 오래된 bootstrap 투명 proxy가 성립하지 않았다고 명시한다. public Mach port API와 libxpc 내부 seed 관례는 서로 다른 지원 조건이며 관측 성공만으로 backend를 채택하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.

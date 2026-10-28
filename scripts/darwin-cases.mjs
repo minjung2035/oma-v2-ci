@@ -24,7 +24,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
     names: ["worker-bootstrap", "worker-tools"] }),
   program({ name: "launchd", fixture: "darwin-launchd.mjs", digest: "launchdProbeDigest", compile: "check-launchd", node: true,
-    names: ["launchd-scope", "launchd-image"] }),
+    names: ["launchd-scope", "launchd-image", "launchd-bootstrap"] }),
   program({ name: "personal", fixture: "darwin-personal.mjs", digest: "personalProbeDigest", compile: "check-personal", node: true,
     names: ["personal-entry"] }),
   program({ name: "suspended-image", fixture: "darwin-suspended-image.mjs", digest: "suspendedImageProbeDigest", compile: "check-suspended-image", node: true,
@@ -42,7 +42,8 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
   "worker-bootstrap": "worker", "worker-tools": "worker",
-  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "personal-entry": "personal", "suspended-image": "suspendedImage" });
+  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "launchd-bootstrap": "launchdBootstrap",
+  "personal-entry": "personal", "suspended-image": "suspendedImage" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -106,12 +107,63 @@ export function validateDarwinObservation(name, observations) {
         value.nestedApplyReturnCode === 0 && value.nestedApplyErrno !== 0)
       throw new Error("signal identity observation lacks its inherited positive control or nested apply result");
   }
-  if (name === "launchd-scope" || name === "launchd-image") {
+  if (name === "launchd-scope" || name === "launchd-image" || name === "launchd-bootstrap") {
     if (value.fixtureOnly !== true || value.controlledGenerationsExited !== true ||
         value.jobRegistrationsRemoved !== true || !Array.isArray(value.cleanupFaults) || value.cleanupFaults.length !== 0)
       throw new Error("launchd observation lacks controlled generation and registration cleanup");
     if (typeof value.actorSourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.actorSourceSha256))
       throw new Error("launchd actor source identity is missing");
+    if (name === "launchd-bootstrap") {
+      const bootstrap = value.bootstrap, modes = ["inherited", "bootstrap-only", "bootstrap-and-xpc"];
+      const target = name => typeof name === "string" && name.startsWith(`${value.domain}/org.oma.probe.`);
+      const outcome = result => result && Number.isSafeInteger(result.pid) && result.pid > 0 &&
+        (Number.isSafeInteger(result.exitCode) && result.exitCode >= 0 && result.signal === null ||
+          result.exitCode === null && typeof result.signal === "string") &&
+        typeof result.stdout === "string" && typeof result.stderr === "string";
+      const portNumber = port => Number.isSafeInteger(port) && port >= 0 && port <= 0xffffffff;
+      const snapshot = record => record && portNumber(record.bootstrap) &&
+        Array.isArray(record.registered) && record.registered.length <= 3 && record.registered.every(portNumber);
+      if (bootstrap?.renderer !== "production-seatbeltProfile" ||
+          ![bootstrap.sourceSha256, bootstrap.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
+          !target(bootstrap.positiveTarget) || !outcome(bootstrap.positiveKickstart) ||
+          bootstrap.positiveKickstart.executable !== "/bin/launchctl" ||
+          JSON.stringify(bootstrap.positiveKickstart.argv) !== JSON.stringify(["kickstart", bootstrap.positiveTarget]) ||
+          bootstrap.positiveKickstart.exitCode !== 0 || !Number.isSafeInteger(bootstrap.positiveControl?.pid) ||
+          bootstrap.positiveControl.pid <= 1 || !Array.isArray(bootstrap.variants) || bootstrap.variants.length !== modes.length ||
+          bootstrap.variants[0]?.direct?.ports?.preExecObservation !== true ||
+          bootstrap.variants[0]?.node?.ports?.preExecObservation !== true)
+        throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
+      const targets = new Set([bootstrap.positiveTarget]);
+      for (const [index, variant] of bootstrap.variants.entries()) {
+        if (variant.name !== modes[index] || typeof variant.canaryPreserved !== "boolean" ||
+            typeof variant.profileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(variant.profileSha256))
+          throw new Error("bootstrap variants omit or relabel a rights/compatibility outcome");
+        for (const key of ["direct", "node"]) {
+          const attempt = variant[key], ports = attempt?.ports;
+          if (!target(attempt?.target) || targets.has(attempt.target) || !outcome(attempt.command) ||
+              !Array.isArray(attempt.command.argv) || attempt.command.argv[0] !== variant.name ||
+              !(attempt.guestEffect === null || Number.isSafeInteger(attempt.guestEffect?.pid) && attempt.guestEffect.pid > 1) ||
+              !(ports === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                ports?.mode === variant.name && ports.sandboxApplied === true && ports.preExecObservation === true &&
+                ports.pid === attempt.command.pid && Number.isSafeInteger(ports.uid) && ports.uid > 0 &&
+                snapshot(ports.before) && snapshot(ports.after) && Array.isArray(ports.destroyed) &&
+                ports.destroyed.every(portNumber)))
+            throw new Error("bootstrap attempt loses its actual sandbox, rights, command, target or exit outcome");
+          targets.add(attempt.target);
+          if (key === "direct" &&
+              JSON.stringify(attempt.command.argv.slice(4)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]))
+            throw new Error("direct bootstrap service outcome belongs to a different target");
+          if (key === "node" &&
+              (attempt.command.argv[6] !== attempt.target ||
+                !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                  attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
+                  (attempt.tools.service === undefined && attempt.tools.complete === false ||
+                    attempt.tools.service?.executable === "/bin/launchctl" &&
+                    JSON.stringify(attempt.tools.service.argv) === JSON.stringify(["kickstart", attempt.target])))))
+            throw new Error("bootstrap Node compatibility outcome is absent or belongs to a different process/target");
+        }
+      }
+    }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||
         value.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)) ||
