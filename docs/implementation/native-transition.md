@@ -21,6 +21,29 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 실제 Mac Personal 복원과 다음 generation-control 관측
+
+Native `40637664033` / `4a579cff04`의 두 Mac common은251/251·skip0이다.
+EOF 전 fragmented frame 응답 회귀가 두 OS에서 실제 통과했다. Personal도 각3회 실제 화면 ready,
+Ctrl-D 뒤 exit0, ECHO/ICANON 복원과 Personal birth까지 확인했다. 다만 fixture의
+`dataRoot` 엔트리가 전부 숨김 이름이어야 한다는 가정에서 SETUP_FAILED였다.
+파일명은 session mode가 아니므로 이 가정은 삭제했다. 기존 `readSessionBirth`로 Society birth가
+없음을 확인하고, 별도의 Society exit4·무 provisioning 대조는 유지한다.
+실제 Linux birth API smoke는 비숨김 Human metadata를 허용하고 Society birth는 검출했다
+(`personal-birth-isolation-linux.json`). 원인이 확인된 조사용 preload와 NODE_OPTIONS는 제거했다.
+관측을 통과한 Mac UI와 수정한 clean fixture의 최종 판정은 구분한다.
+원시는 digest 확인한 `stream-fix-macos{15,26}-{gates,runtime}/`다.
+
+다음 `mach-token-control`은 SDK 선언된 `proc_signal_with_audittoken`의 별도 primitive 실험이다.
+SDK header는 private/unstable이며 [고정 wrapper](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/libproc/libproc.c#L479)는
+0 또는 errno 값을 반환한다. raw syscall이나 private entitlement는 추가하지 않았다.
+parent가 unreaped child를 고정하고 kernel Mach trailer를 받은 뒤, 별도 sibling controller가
+signal0·잘못된 generation의 SIGSTOP·실제 SIGKILL을 호출한다. controller에는 새 profile을 적용하지
+않으므로 fresh sandboxed reaper·현재 role·PID 재사용·전체 scope 복구의 proof가 아니다.
+종료 전/후·fixture-only numeric cleanup·두 child join을 구분하고 거절/반례도 그대로 기록한다.
+driver117회·11 program과285분 최악 한도를 맞췄다. parser/policy51/51·skip0은 통과했으나
+새 SDK control C의 실제 compile/실행은 아직 NOT_RUN이다. 제품 guard와 journal은 바꾸지 않았다.
+
 ### 2026-10-28 main-image 검증 통과와 실제 Keychain frame deadlock 수리
 
 Native `40634523433` / `859c9ff3be`의 두 Mac은 각각114회·99 OBSERVED·15 SETUP_FAILED다.

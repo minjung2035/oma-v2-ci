@@ -57,6 +57,12 @@ const suspendedRecord = () => {
       git: { ...attempt(), targetStdout: "git version fixture" }, compiler: { ...attempt(), targetStdout: "clang version fixture" },
       script: { ...attempt(), main: { kind: "script" } } }, mismatch: refused(), restoredPath: refused() };
 };
+const tokenControlRecord = () => ({ scope: "owned-child-generation-only", controllerContext: "sibling-fork-no-profile-applied", sdkInterfacePrivate: true,
+  kernelTokenReceived: true, ownerPid: 100, ownerUid: 501, controllerPid: 101, controllerUid: 501,
+  targetPid: 102, targetUid: 501, targetPidVersion: 7,
+  zeroSignalStatus: 22, wrongVersionStatus: 3, killStatus: 0,
+  exitedBeforeCleanup: true, numericCleanupUsed: false, targetExitCode: null, targetSignal: 9,
+  unreapedPidControl: true, ownedChildrenJoined: true });
 const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...planned,
   execution: "EXECUTED", status: "OBSERVED", exitCode: 0, signal: null, cleanup: "returned",
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
@@ -64,7 +70,34 @@ const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...p
       planned.name === "seatbelt-signals" ? signalRecord() :
         ["launchd-scope", "launchd-image"].includes(planned.name) ? launchdRecord(planned.name) :
           planned.name === "personal-entry" ? personalRecord() :
-            planned.name === "suspended-image" ? suspendedRecord() : { fixtureAssertionReturned: true } } }));
+            planned.name === "suspended-image" ? suspendedRecord() :
+              planned.name === "mach-token-control" ? tokenControlRecord() : { fixtureAssertionReturned: true } } }));
+
+test("NATIVE-DARWIN: generation control retains nonparent identity, SDK status, actual termination and cleanup context", () => {
+  const good = tokenControlRecord();
+  validateDarwinObservation("mach-token-control", { machTokenControl: good });
+  for (const change of [
+    value => { value.kernelTokenReceived = false; },
+    value => { value.sdkInterfacePrivate = false; },
+    value => { value.ownerUid = 0; value.controllerUid = 0; value.targetUid = 0; },
+    value => { value.controllerPid = value.ownerPid; },
+    value => { value.targetUid += 1; },
+    value => { value.targetPidVersion = 0; },
+    value => { value.killStatus = -1; },
+    value => { delete value.wrongVersionStatus; },
+    value => { value.numericCleanupUsed = true; },
+    value => { value.targetSignal = null; },
+    value => { value.ownedChildrenJoined = false; },
+  ]) {
+    const bad = structuredClone(good); change(bad);
+    assert.throws(() => validateDarwinObservation("mach-token-control", { machTokenControl: bad }));
+  }
+  // Real denial or a generation-check counterexample must remain observable,
+  // never be relabelled as a qualified production scope.
+  const denied = { ...good, killStatus: 1, exitedBeforeCleanup: false, numericCleanupUsed: true };
+  validateDarwinObservation("mach-token-control", { machTokenControl: denied });
+  validateDarwinObservation("mach-token-control", { machTokenControl: { ...good, wrongVersionStatus: 0 } });
+});
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
