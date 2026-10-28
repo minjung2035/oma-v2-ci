@@ -252,7 +252,7 @@
     },
     {
       "path": "apps/oma/src/entry/oma.ts",
-      "sha256": "8a42830e767f70d6d88d59921dca59134e660b0e019f5fafe86751e05ae06b82"
+      "sha256": "638c201ce89ce43ff987188ab3ba9dd200de35a07688efdc66ad90d341f6d439"
     },
     {
       "path": "apps/oma/src/entry/personal-host.ts",

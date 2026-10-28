@@ -25,6 +25,8 @@ export const DARWIN_PROGRAMS = Object.freeze([
     names: ["worker-bootstrap", "worker-tools"] }),
   program({ name: "launchd", fixture: "darwin-launchd.mjs", digest: "launchdProbeDigest", compile: "check-launchd", node: true,
     names: ["launchd-job"] }),
+  program({ name: "personal", fixture: "darwin-personal.mjs", digest: "personalProbeDigest", compile: "check-personal", node: true,
+    names: ["personal-entry"] }),
 ]);
 const observationKeys = Object.freeze({ process: "process", files: "files", auth: "auth", "socket-transfer": "socketTransfer", "queued-transfer": "queuedTransfer", "file-descriptors": "fileDescriptors",
   "mach-self": "machSelf", "mach-rendezvous-live": "machRendezvousLive", "mach-rendezvous-exit": "machRendezvousExit",
@@ -36,7 +38,7 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-profile-empty": "seatbeltFault", "seatbelt-profile-syntax": "seatbeltFault", "seatbelt-argv-env": "seatbeltFault",
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
-  "worker-bootstrap": "worker", "worker-tools": "worker", "launchd-job": "launchdJob" });
+  "worker-bootstrap": "worker", "worker-tools": "worker", "launchd-job": "launchdJob", "personal-entry": "personal" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -95,6 +97,13 @@ export function validateDarwinObservation(name, observations) {
       throw new Error("launchd observation lacks image outcome or independent live job control");
     if (typeof value.actorSourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.actorSourceSha256))
       throw new Error("launchd actor source identity is missing");
+  }
+  if (name === "personal-entry") {
+    for (const key of ["actualTerminal", "cleanExit", "terminalRestored", "noSocietyProvisioned", "societyRefusedBeforeState"])
+      if (value[key] !== true) throw new Error(`Personal observation lacks a product control: ${key}`);
+    if (value.birthMode !== "personal" || typeof value.birthCwd !== "string" || !value.birthCwd.startsWith("/") ||
+        value.input !== "ctrl-d" || value.credentialFixture !== false)
+      throw new Error("Personal observation lacks actual birth, input or credential provenance");
   }
 }
 export function validateDarwinCaseSet(cases) {

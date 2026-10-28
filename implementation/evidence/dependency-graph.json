@@ -2421,7 +2421,7 @@
   }
  ],
  "files": 521,
- "runtimeEdges": 1879,
+ "runtimeEdges": 1878,
  "typeOnlyEdges": 788,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 481,
@@ -2436,7 +2436,7 @@
   "L5-entry -> L1-kernel": 154,
   "L5-entry -> L2-facts": 19,
   "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 102,
+  "L5-entry -> L4-orchestration": 101,
   "L5-entry -> L5-entry": 120
  },
  "upwardTypeOnlyEdges": [
@@ -2479,7 +2479,7 @@
   "packages/git/src/context.ts": 15,
   "packages/storage/src/context-snapshot.ts": 15,
   "apps/oma/src/broker/mail-effects.ts": 14,
-  "apps/oma/src/entry/oma.ts": 14
+  "apps/oma/src/entry/runner.ts": 14
  },
  "external": {
   "@earendil-works/pi-ai": 2,

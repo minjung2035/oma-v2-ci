@@ -10,9 +10,9 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, checkpoint parent `6aae20af` + launchd probe/Git diagnostic WIP |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 관측 입력 `4173f594148c57e557c9c467badcd8df98c7b317` |
-| 현재 변경 | file fence의 두 Mac 실제 반례를 닫았다. public launchd job·read-only coalition·SpawnConstraint 후보 관측과 Git inner command 진단을 준비 중이다. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, checkpoint parent `db9186ea` + Personal entry WIP |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch, 최신 제출 `3d9ed7493af12d258485a71b7ebfbe56a13f4668`; 원시 회수 입력은4173f5941 |
+| 현재 변경 | public launchd/coalition 실험을 CI에 제출했다. 별도로 Personal의 모드 선택 전 중복 Darwin 차단을 제거했고 실제 Linux TUI 시작·종료를 확인했다. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
 | 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
@@ -51,7 +51,7 @@ validation binding은 clean committed bytes를 가리키므로 dirty README 입�
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
 3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치와 C target의 FD pruning·same-PID handoff는 확인했다. SDK libproc는 private·변경 가능하므로 지원 OS별 실제 회귀를 유지한다.
 4. DR63 storage cutover는 미커밋 dist가 없는 checkout에서 실제 재빌드·status 회귀로 확인했다. metadata getattrlist도 실제 Mac에서 통과했다. Git packed smoke의 UNSUPPORTED_PROFILE은 실제 shared Linux-only preparation guard이며 기대값을 낮추지 않는다.
-5. Node startup은 실제 두 Mac에서 통과했다. 동일 SBPL의 fresh signal은 EPERM이므로 recovery reaper 후보에서 배제한다. nested credential read·보호 ancestor 이동 거절과 무관한 rename/unlink는 두 Mac 각3회 통과했다. 다음 launchd-job은 아직 NOT_RUN·미채택이고, Git 진단은 실제 async/sync 결과를 구분하기 위한 임시 fixture다.
+5. Node startup은 두 Mac에서 통과했다. fresh 동일 SBPL signal은 EPERM이라 recovery reaper에서 배제했다. nested credential read·ancestor 이동 차단과 무관한 rename/unlink는 두 Mac 각3회 통과했다. launchd-job의 CI 결과는 미회수·미채택이다. 임시 Git 진단은 실제 async/sync 결과를 구분하며, Personal은 별도 Mac TUI 확인을 준비했다.
    `audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU 정의40), saved witness→fresh identity와 throw-only launch는 production proof가 아니다. full-scope·exact exec binding·expected-Broker는 여전히 미해결이다.
 6. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
