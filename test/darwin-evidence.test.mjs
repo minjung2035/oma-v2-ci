@@ -31,10 +31,11 @@ const signalRecord = () => ({ inherited: { returnCode: 0, errno: 0, delivered: t
   fresh: { returnCode: -1, errno: 1, delivered: false },
   nestedApplyReturnCode: -1, nestedApplyErrno: 1, afterNested: { returnCode: 0, errno: 0, delivered: true },
   unreapedPidControl: true, ownedChildrenJoined: true });
-const launchdRecord = () => ({ fixtureOnly: true, controlledGenerationsExited: true,
-  jobRegistrationsRemoved: true, cleanupFaults: [], matchingA: { variant: 1 }, matchingB: { variant: 2 },
-  cdhashes: ["a".repeat(40), "b".repeat(40)], actorSourceSha256: "c".repeat(64),
-  replacedImage: { markerAfterTwoSeconds: false }, scope: { afterBootout: { otherAcknowledged: true } } });
+const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
+  jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
+  ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
+    cdhashes: ["a".repeat(40), "b".repeat(40)], replacedImage: { markerAfterTwoSeconds: false } }
+    : { scope: { afterBootout: { otherAcknowledged: true } } }) });
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
@@ -43,7 +44,7 @@ const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...p
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
       planned.name === "seatbelt-signals" ? signalRecord() :
-        planned.name === "launchd-job" ? launchdRecord() :
+        ["launchd-scope", "launchd-image"].includes(planned.name) ? launchdRecord(planned.name) :
           planned.name === "personal-entry" ? personalRecord() : { fixtureAssertionReturned: true } } }));
 
 test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
@@ -71,7 +72,7 @@ test("NATIVE-DARWIN: signal observations refuse missing PID, delivery and inheri
 });
 
 test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup and live independent jobs", () => {
-  const good = launchdRecord();
+  const good = launchdRecord("launchd-image");
   for (const bad of [
     { ...good, fixtureOnly: false },
     { ...good, controlledGenerationsExited: false },
@@ -80,8 +81,9 @@ test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup
     { ...good, matchingB: { variant: 1 } },
     { ...good, cdhashes: [good.cdhashes[0], good.cdhashes[0]] },
     { ...good, replacedImage: {} },
-    { ...good, scope: { afterBootout: { otherAcknowledged: false } } },
-  ]) assert.throws(() => validateDarwinObservation("launchd-job", { launchdJob: bad }));
+  ]) assert.throws(() => validateDarwinObservation("launchd-image", { launchdImage: bad }));
+  assert.throws(() => validateDarwinObservation("launchd-scope",
+    { launchdScope: { ...launchdRecord("launchd-scope"), scope: { afterBootout: { otherAcknowledged: false } } } }));
 });
 
 test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {

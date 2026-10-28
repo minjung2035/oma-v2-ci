@@ -10,7 +10,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
-assert.equal(process.argv[2], "launchd-job");
+const mode = process.argv[2];
+assert.ok(["launchd-scope", "launchd-image"].includes(mode));
 const root = realpathSync(process.cwd()), started = performance.now();
 const domain = `user/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()}`;
 const commands = [], jobs = [], targets = [];
@@ -92,7 +93,7 @@ try {
   const source = fileURLToPath(new URL("./darwin-launchd-actor.c", import.meta.url));
   observation.actorSourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
   const binaries = [], hashes = [];
-  for (const variant of [1, 2]) {
+  for (const variant of mode === "launchd-image" ? [1, 2] : [1]) {
     const binary = join(root, `actor-${variant}`);
     run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", `-DPROBE_VARIANT=${variant}`, source, "-o", binary]);
     run("/usr/bin/codesign", ["--force", "--sign", "-", binary]);
@@ -100,57 +101,59 @@ try {
     const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
     assert.ok(hash, JSON.stringify(signature)); binaries.push(binary); hashes.push(hash);
   }
-  assert.notEqual(hashes[0], hashes[1], "different controlled programs require different code hashes");
   actor = binaries[0];
   observation.controllerChild = JSON.parse(run(actor, ["describe"]).stdout);
   observation.cdhashes = hashes;
   observation.executables = binaries.map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
-  const selected = join(root, "selected");
-  copyFileSync(actor, selected);
-  const matchA = loadJob("matching-a", selected, "once", hashes[0]);
-  run("/bin/launchctl", ["kickstart", matchA.target]);
-  await waitFor(() => existsSync(join(matchA.directory, "once.json")));
-  observation.matchingA = remember(marker(matchA.directory, "once"));
-  assert.equal(observation.matchingA.variant, 1);
-  bootout(matchA);
-  copyFileSync(binaries[1], `${selected}.next`); renameSync(`${selected}.next`, selected);
-  const mismatch = loadJob("replaced-image", selected, "once", hashes[0]);
-  observation.mismatchKickstart = run("/bin/launchctl", ["kickstart", mismatch.target], false);
-  await delay(2000);
-  const mismatchMarker = join(mismatch.directory, "once.json");
-  observation.replacedImage = { markerAfterTwoSeconds: existsSync(mismatchMarker),
-    service: run("/bin/launchctl", ["print", mismatch.target], false) };
-  if (existsSync(mismatchMarker)) observation.replacedImage.actor = remember(marker(mismatch.directory, "once"));
-  bootout(mismatch);
-  const matchB = loadJob("matching-b", selected, "once", hashes[1]);
-  run("/bin/launchctl", ["kickstart", matchB.target]);
-  await waitFor(() => existsSync(join(matchB.directory, "once.json")));
-  observation.matchingB = remember(marker(matchB.directory, "once"));
-  assert.equal(observation.matchingB.variant, 2);
-  bootout(matchB);
-
-  // Plain controlled jobs separate lifetime observations from constraint policy.
-  const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
-  run("/bin/launchctl", ["kickstart", scope.target]);
-  run("/bin/launchctl", ["kickstart", other.target]);
-  await waitFor(() => ["leader", "ordinary", "detached"].every(name => existsSync(join(scope.directory, `${name}.json`))) &&
-    existsSync(join(other.directory, "other.json")));
-  const members = Object.fromEntries(["leader", "ordinary", "detached"].map(name => [name, remember(marker(scope.directory, name))]));
-  const control = remember(marker(other.directory, "other"));
-  observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
-  for (const member of [...Object.values(members), control]) {
-    const current = inspect(member.pid);
-    assert.equal(current.uniqueBytes, 56); assert.equal(current.unique, member.identity.unique);
+  if (mode === "launchd-image") {
+    assert.notEqual(hashes[0], hashes[1], "different controlled programs require different code hashes");
+    const selected = join(root, "selected");
+    copyFileSync(actor, selected);
+    const matchA = loadJob("matching-a", selected, "once", hashes[0]);
+    run("/bin/launchctl", ["kickstart", matchA.target]);
+    await waitFor(() => existsSync(join(matchA.directory, "once.json")));
+    observation.matchingA = remember(marker(matchA.directory, "once"));
+    assert.equal(observation.matchingA.variant, 1);
+    bootout(matchA);
+    copyFileSync(binaries[1], `${selected}.next`); renameSync(`${selected}.next`, selected);
+    const mismatch = loadJob("replaced-image", selected, "once", hashes[0]);
+    observation.mismatchKickstart = run("/bin/launchctl", ["kickstart", mismatch.target], false);
+    await delay(2000);
+    const mismatchMarker = join(mismatch.directory, "once.json");
+    observation.replacedImage = { markerAfterTwoSeconds: existsSync(mismatchMarker),
+      service: run("/bin/launchctl", ["print", mismatch.target], false) };
+    if (existsSync(mismatchMarker)) observation.replacedImage.actor = remember(marker(mismatch.directory, "once"));
+    bootout(mismatch);
+    const matchB = loadJob("matching-b", selected, "once", hashes[1]);
+    run("/bin/launchctl", ["kickstart", matchB.target]);
+    await waitFor(() => existsSync(join(matchB.directory, "once.json")));
+    observation.matchingB = remember(marker(matchB.directory, "once"));
+    assert.equal(observation.matchingB.variant, 2);
+    bootout(matchB);
+  } else {
+    // No SpawnConstraint: independently qualify ordinary job provisioning.
+    const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
+    run("/bin/launchctl", ["kickstart", scope.target]);
+    run("/bin/launchctl", ["kickstart", other.target]);
+    await waitFor(() => ["leader", "ordinary", "detached"].every(name => existsSync(join(scope.directory, `${name}.json`))) &&
+      existsSync(join(other.directory, "other.json")));
+    const members = Object.fromEntries(["leader", "ordinary", "detached"].map(name => [name, remember(marker(scope.directory, name))]));
+    const control = remember(marker(other.directory, "other"));
+    observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
+    for (const member of [...Object.values(members), control]) {
+      const current = inspect(member.pid);
+      assert.equal(current.uniqueBytes, 56); assert.equal(current.unique, member.identity.unique);
+    }
+    bootout(scope);
+    writeFileSync(join(scope.directory, "ping"), "after owned job removal");
+    writeFileSync(join(other.directory, "ping"), "independent live control");
+    await waitFor(() => existsSync(join(other.directory, "other.ack.json")), 2000);
+    await delay(250);
+    observation.scope.afterBootout = { aggregate: usage(members.leader.resource), otherAggregate: usage(control.resource),
+      ordinaryAcknowledged: existsSync(join(scope.directory, "ordinary.ack.json")),
+      detachedAcknowledged: existsSync(join(scope.directory, "detached.ack.json")), otherAcknowledged: true,
+      removedService: run("/bin/launchctl", ["print", scope.target], false) };
   }
-  bootout(scope);
-  writeFileSync(join(scope.directory, "ping"), "after owned job removal");
-  writeFileSync(join(other.directory, "ping"), "independent live control");
-  await waitFor(() => existsSync(join(other.directory, "other.ack.json")), 2000);
-  await delay(250);
-  observation.scope.afterBootout = { aggregate: usage(members.leader.resource), otherAggregate: usage(control.resource),
-    ordinaryAcknowledged: existsSync(join(scope.directory, "ordinary.ack.json")),
-    detachedAcknowledged: existsSync(join(scope.directory, "detached.ack.json")), otherAcknowledged: true,
-    removedService: run("/bin/launchctl", ["print", scope.target], false) };
 } catch (error) { failure = error; }
 finally {
   cleaning = true;
@@ -173,7 +176,7 @@ finally {
   if (faults.length) failure = new AggregateError([...(failure ? [failure] : []), ...faults], "launchd fixture cleanup failed");
 }
 if (failure) {
-  console.error(JSON.stringify({ case: "launchd-job", error: String(failure), observation }));
+  console.error(JSON.stringify({ case: mode, error: String(failure), observation }));
   throw failure;
 }
-console.log(JSON.stringify({ case: "launchd-job", launchdJob: observation }));
+console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" : "launchdScope"]: observation }));

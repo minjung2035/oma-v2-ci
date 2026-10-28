@@ -36,18 +36,18 @@ function git(cwd,args,success=true){
   if(success)assert.equal(result.exitCode,0,result.stderr.toString());
   return success?decodeProcessText(result.stdout).trim():result.exitCode;
 }
-// Temporary real-command diagnosis: distinguish async spawn from Git refusal
-// under the identical profile. No mock or changed production status grammar.
+// Temporary descriptor-forwarding diagnosis after both pipe-captured runners
+// succeeded on actual Darwin. Production status grammar remains unchanged.
 async function diagnoseGit(recipe,inheritedFds){
   const position=recipe.command.argv.indexOf(host.node);assert.ok(position>=0);
   const script=`import {runProcess} from ${JSON.stringify(import.meta.resolve('@oma/process/async'))};
-    import {runProcessSync} from ${JSON.stringify(import.meta.resolve('@oma/process/run'))};
     import {GIT_ENV} from ${JSON.stringify(import.meta.resolve('@oma/process/policies'))};
     const command={executable:process.argv[1],argv:['--git-dir',process.argv[2],'rev-parse','--show-object-format'],
       env:GIT_ENV,timeoutMs:10000,stdoutBytes:65536,stderrBytes:65536};
     const describe=result=>({...result,stdout:result.stdout.toString(),stderr:result.stderr.toString()});
-    console.log(JSON.stringify({async:describe(await runProcess(command)),sync:describe(runProcessSync(command))}));`;
-  const command={...recipe.command,argv:[...recipe.command.argv.slice(0,position+1),'--input-type=module','-e',script,tools.git,project],timeoutMs:15000};
+    console.log(JSON.stringify({forwarded:describe(await runProcess(command,{stderrFd:2}))}));`;
+  const command={...recipe.command,argv:[...recipe.command.argv.slice(0,position+1),'--input-type=module','-e',script,tools.git,project],
+    timeoutMs:15000,stdoutBytes:65536};
   const result=await execute(command,inheritedFds);
   console.error(JSON.stringify({gitSpawnDiagnostic:JSON.parse(result.stdout.toString())}));
 }
@@ -100,7 +100,7 @@ await withAsyncCleanup(async()=>{
   const result=await task.result;await task.closed;
   const writer=statusWrite;statusWrite=undefined;closeSync(writer);const released=releaseRead;releaseRead=undefined;closeSync(released);
   const setup=await evidence;
-  assert.equal(result.kind,'exited');assert.equal(result.exitCode,0,result.stderr.toString());assert.deepEqual(setup,{kind:'ready'});
+  assert.equal(result.kind,'exited');assert.equal(result.exitCode,0,JSON.stringify({setup,gateReleases,stderr:result.stderr.toString()}));assert.deepEqual(setup,{kind:'ready'});
   assert.equal(gateReleases,1);assert.equal(result.stdout.toString(),'exact-check\n');
 },async()=>{
   task?.cancel();await task?.closed;
