@@ -156,7 +156,7 @@ try {
   if (mode === "launchd-bootstrap") {
     const bootstrapSource = fileURLToPath(new URL("./darwin-bootstrap-exec.c", import.meta.url));
     const launcher = join(root, "bootstrap-exec");
-    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-ldns_sd", "-o", launcher]);
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-o", launcher]);
     const compiler = realpathSync(run("/usr/bin/xcrun", ["--find", "clang"]).stdout.trim());
     const sdk = realpathSync(run("/usr/bin/xcrun", ["--show-sdk-path"]).stdout.trim());
     const selectorHome = join(root, "developer-observation"); mkdirSync(selectorHome, { mode: 0o700 });

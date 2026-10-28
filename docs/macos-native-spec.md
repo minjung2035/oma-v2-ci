@@ -96,6 +96,7 @@ bootstrap-only는 registered seed 재조회·setter0·task bootstrap 복구6회�
 task handle 복구를 service 실행 권한 복구/탈출로 확대하지 않는다. 모든 seed 제거 뒤에는 이 재취득 방법에서 seed0·setter 미호출이었다.
 기존 Git 환경 owner와 native DNS 진단으로 다음 원인을 분리하며 fixture용 광범위 권한·production 실행 허용으로 우회하지 않는다.
 현재 probe는 host/Node Git에 기존 `GIT_ENV`를 적용했고 native DNS 단계별 진단을 추가했다. local41/41과 Linux producer smoke는 통과했지만 이 변경의 Mac compile·Git 정상화·DNS 원인 분류는 NOT_RUN이다. Node resolver·production 정책과 실행 guard를 바꾸지 않았다.
+첫 진단 source `a399fb7fe58`는 Mac26에서 잘못 추가한 `-ldns_sd`가 없어 link 실패했다. Git 환경 효과·DNS API 실행은 미관측이며, default Libsystem의 `system_dnssd` 소유를 대조해 그 독립 flag만 제거했다. 수정 뒤 실제 실행과 취소된 Mac15 job의 대체 실행은 NOT_RUN이며 정상 기능이나 gate 완료로 쓰지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.
