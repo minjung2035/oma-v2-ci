@@ -21,6 +21,25 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 실제 Node 시작과 signal 후보 배제, file fence 수리
+
+| 공개 입력 `87cc9c92e` | 관측과 한계 |
+|---|---|
+| Architecture `40601095851` | full native-all3946/3946·skip0, baseline와 fast/durable/property/stress/platform exit0. 별도 kernel/crash lane은 NOT_RUN이며 실제 파일·필수 oracle은 all에 포함됐다. 후속 WIP의 PASS로 확대하지 않는다 |
+| Native `40601096157`, Mac15·26 각각 | 102회 실행·87 OBSERVED·15 SETUP_FAILED. 각3회의 실제 Node가 stdin과977337-byte profile 전송 뒤 실행됐다. startup SIGABRT는 닫았지만 file/Git/Worker 기능 실패는 별개다 |
+| 같은 입력의 signal label 실험 | 두 OS 각3회 모두 inherited 실제 전달·fresh EPERM·nested 적용 EPERM·적용 실패 후 inherited 전달·owned child join. 같은 profile text로 recovery label을 재구성할 수 없다는 반례다 |
+| 같은 입력의 file fence | 쓰기 허용 root 내부 credential 읽기가 허용되어 실제 negative control이 실패했다. file* deny 뒤라는 소스 문자열 순서는 containment oracle이 아니었다 |
+
+[고정 upstream](https://github.com/anthropic-experimental/sandbox-runtime/blob/98a4016d27609ed34dd1fb43d23ed6efb6eeeb77/src/sandbox/macos-sandbox-utils.ts#L932)은 구체적 operation 우선순위와 보호 경로의 ancestor 이동 차단을 명시한다.
+명시적으로 허용한 file operation을 deny에도 다시 적고 writable ancestor vnode의 unlink/create를 pin한다.
+실제 fixture는 nested credential과 그 parent의 rename 거절을 요구하되 무관한 rename/unlink가 계속 가능한지도 검사한다.
+단순 rule-order assertion은 삭제했다. 이 수리는 후속 Mac 실행 전까지 미확인이다.
+
+Git setup의 실제 실패는 /private/var/select/sh 읽기 거절이다. 그 system selector만 read-only로 추가했으며
+/etc/gitattributes 접근은 허용하지 않고 shared GIT_ENV에서 system attributes를 제외한다.
+실제 Git의 system canary→unspecified 전환을 private root-mapped user/mount namespace에서 확인했다.
+Worker의 남은 종료는 production native-support guard이며 gate를 거짓으로 닫아 우회하지 않는다.
+
 ### 2026-10-28 metadata 완료와 후속 lifetime 실험
 
 Architecture companion `40596658850`의 native-all은 **PRECHECK_FAILED / NOT_RUN**이다.

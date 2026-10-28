@@ -78,7 +78,7 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 
 Resource coalition의 [XNU 관측 코드](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/coalition.c)는 source 조사이지 목표 kernel 증명이 아니다. `tasks_started/tasks_exited`는 같은 lock 아래 읽히지만, 그것만으로 OMA job의 안정적인 닫힌 범위가 성립하지는 않는다. target source revision을 고정하고 위 전제를 확인한다. 공개 SDK에 없는 ABI를 public이라고 부르거나 private 제어 syscall로 우회하지 않는다.
 
-동일 SBPL bytes의 fresh 재적용이 inherited/nested sandbox와 같은 signal identity를 만드는지는 실제 비교한다. `seatbelt-signals`는 unreaped owned child PID만 쓰는 label 실험이며 permissive fixture profile을 production으로 옮기지 않는다. 성공해도 population·owner-loss 보장은 별개다.
+Mac15·26 각3회에서 inherited signal은 전달됐지만 동일 SBPL을 fresh 적용한 쪽은 EPERM이었고 nested 재적용도 EPERM이었다. 따라서 SBPL 재적용을 recovery reaper로 사용하지 않는다. `seatbelt-signals`는 unreaped owned child만 쓰는 label 실험이며 permissive fixture profile·EOF 종료를 production policy나 complete-death proof로 옮기지 않는다.
 
 [ES descendant API](https://developer.apple.com/documentation/endpointsecurity/es_new_descendants_client(_:_:).md)는 macOS 27+, entitlement 필요, root/TCC 불필요라고 명시한다. 통상의 ES client 조건과 혼동하지 않는다. 이 API도 단독으로 Seatbelt 전체 정책을 대체하지 않는다.
 
@@ -114,7 +114,7 @@ path 문법·소유 경계·종류·hardlink·repair 정책·동일 bytes·publi
 | directory-relative open/list/effect | 기존 `mkdirat`·`unlinkat`·directory cursor를 독립 descriptor leaf로 이관. 단일 leaf open은 `openat`+no-follow; 여러 component의 beneath 계약은 별개로 검증 |
 | regular entry pin/repair | accessible O_EVTONLY + held-inode 관측/fchmod 후보; 이미 소유한 I/O FD 유지도 비교. mode-000·FIFO/device의 type-before-I/O는 독립 검증 |
 | 독립 read cursor | 이미 소유한 readable FD의 positioned I/O, kernel reopen, private verified copy를 목적별 비교. duplicate와 copy는 원래 inode의 독립 reopen과 다른 계약 |
-| exact executable | Linux FD-exec 유지. Darwin은 signed launch/spawn constraints, 보호된 immutable installation generation, 검증 가능한 native image binding을 비교. mutable pathname check→exec는 대체 proof가 아님 |
+| exact executable | Linux FD-exec 유지. Darwin은 [launchd `SpawnConstraint.cdhash`](https://developer.apple.com/documentation/security/defining-launch-environment-and-library-constraints), 보호된 immutable installation generation, native image binding을 비교. arch/hash 집합과 mismatch의 실제 실행 전 거절을 검증한다. mutable pathname check→exec는 대체 proof가 아님 |
 | 외부 writer의 root 결박 | held directory 기준 cwd/relative path 또는 해당 VFS의 실제 capability. Node host 전체의 cwd 변경으로 여러 동시 작업을 묶지 않음 |
 
 현재 확인된 반례: Darwin `/dev/fd` duplicate는 cursor를 공유했고 descriptor 경로 exec는 errno13이었다. `/dev/fd/<directory>/<name>`은 directory API가 아니다. O_EVTONLY mode-000은 EACCES였다. `openbyid_np`는 syscall 번호가 보여도 platform/private entitlement 조건이 있으며 현재 일반 CLI 해법이 아니다. [기존 조사](implementation/native-reference-review.md)와 원시 artifact를 먼저 읽고 같은 가정을 반복하지 않는다.

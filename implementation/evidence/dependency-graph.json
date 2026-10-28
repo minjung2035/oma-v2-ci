@@ -2500,7 +2500,7 @@
   "node:module": 5,
   "node:net": 23,
   "node:os": 12,
-  "node:path": 138,
+  "node:path": 139,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,

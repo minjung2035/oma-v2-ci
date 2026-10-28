@@ -4,6 +4,7 @@ import { runProcessSync, decodeProcessText, type ProcessObservation } from "./ru
 export const GIT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
   GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_ATTR_NOSYSTEM: "1",
   GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_CONFIG_COUNT: "3",
   GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",
   GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
