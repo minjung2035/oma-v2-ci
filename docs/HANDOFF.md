@@ -4,6 +4,8 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
+**Linux EAGAIN 수리 뒤 로컬 재인수를 완료했다.** 동일 입력의 병렬 baseline·serial all, 독립 설치·실제 추론/도구·재개/보관/복구를 확인했다. 현재 작업은 아래 실패 이력까지 문서에 남기고 지정 work branch로 발행하는 것이다. clean publication/새 CI 결과는 이 dirty 입력의 실행 근거와 분리한다. Mac production 정책은 아직 바꾸지 않았으며 Linux 발행 뒤 exact Unix socket 양성·음성 경계부터 진행한다.
+
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 
 - accepted plan·request key·receipt·durable bytes·현재 권한·복구 의미를 유지한다. unknown을 dead/absent/success로 바꾸지 않는다.
@@ -30,7 +32,7 @@
 | 첫 bootstrap 실험 source | 주 `3581b838463cd55d1294a362014bcfba2e2ce918` / mirror `41392d6624cc5d6301ea97bf0b2127a053956ea0`, tree `ae563d0f9501943c4281e6660c05bd9c64206f1b` 동일. Native40721951956에서 새 helper compile6건 실패, 권한 분리는 미실행 |
 | SEND right 교체 뒤 실제 source | 주 `3ca06ef0485e5114a3d3f62e55aabd26dca1c9d3` / mirror `a4c398f89a2168f4b5da218a3dc5c3073f4e21ac`, tree `006be93f2bc1c40c2baf98ebe6697b5a0d0817e0` 동일. Native40726395555의 양 Mac 새3건씩 OBSERVED |
 | selected baseline·재취득 실제 source | 주 `f73c315acbc15b48a79b9fc7d3c3a5da0a12b8aa` / mirror `4baca756363b053a18704c828c7e5d013dae5230`, tree `29d2cc1f2698c424ae4d24627191c5e30e3df50c` 동일. Native40735745482의 양 Mac 새3건씩 OBSERVED |
-| 마지막 로컬 실행 | 정상 PATH serial all3952/3952·skip0·errors[], 독립 설치본 실제 Principal/Worker/Personal·재개·자동 보관/cold 복원·같은 key receipt 확인. 유한 작업은 종료했으며 원시와 소유 임시 자원을 구분 |
+| 마지막 로컬 실행 | Linux 수정 입력 `02fd1a08…` /15687 files: baseline14/14+3940/3940·concurrency4, serial all3954/3954·skip/cancel/todo0·errors[]·baseline COMPARED. 같은 입력 독립 패키지27/27·실제 설치본 Luna medium·보관/복구·같은 receipt 통과. 최초 환경 실패도 보존 |
 | 환경 | Linux x64. Mac 실행은 실제 GitHub runner. LSP 미설정 |
 | Node26 | `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | 로컬 제한 | clang/swiftc 없음. macOS SDK snapshot만으로 실제 Mac 실행·qualification 불가 |
@@ -88,6 +90,10 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 
 ## 4. 가장 가까운 재개점: service 관측의 혼입 제거
 
+**새 Linux 우선 재개점:** Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926)의 `test.log`는 사전14/14 뒤 main3938/3939·fail1이다. 실패는 `V10A: an unanswered command ends at the acceptance budget, and says so`의 delivery 전 rootfs 준비에서 `openBeneath→statAt→ensureFile` EAGAIN이다. 같은 source의 별도 serial all3953/3953과5 lane은 통과했다. 최신 `e9a939d619`의 병렬 baseline14/14+3939/3939·serial all3953/3953·나머지 lane도 통과했지만 이를 원인 수리 증거로 쓰지 않는다.
+
+[openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html)는 BENEATH containment를 확인하지 못한 race에서 EAGAIN 재시도를 허용한다. 실제 CI의 rename 주체/경합은 미관측이다. 현재 native leaf는 같은 fd/path/`RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS`로 최대8회만 재시도하고 지속 EAGAIN·hard denial은 원래 오류로 거절한다. open/openat fallback·flags 완화·deadline 변경은 없다. 실제 kernel FD와 링크 거절을 사용하는 fault 회귀와 새 compiled/독립 설치·실사용·전체 검증을 마쳤다. 실행 전제 실수와 정정 뒤 전체 통과는 [검증 owner](implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)에 구분했다. 원래 CI 경합의 자연 재현이나 과거 Git 실패의 수리로 확대하지 않는다.
+
 **Linux 완료·push 뒤 실제 Mac 관측까지 진행했다.** Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810), source `2ef7fb517b24e4a48c3ac48646f87f6a81316638`의 SHA256 확인한 Mac15·26 artifact를 판독했다. 다음 질문은 재시작 대기가 아니라 **상속된 launchd 제어 권한을 정상 도구·DNS·manual CLI와 양립하게 분리할 수 있는가**다.
 
 ### 확인한 사실
@@ -132,6 +138,8 @@ SEND right 교체 뒤 원시는 `bootstrap-rights/send-rights-fix/`다. clean �
 `ae6d72826557e65ad485229f24d1527ca6b8e0e3` / mirror `a399fb7fe5807f2a7a953db28326380de857bee6`의 Native [40743666948](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666948)는 실제로 Mac26 helper link3회가 `ld: library 'dns_sd' not found`로 실패했다. 내 probe의 잘못된 독립 library flag이며 Git 환경 효과·native DNS API는 미실행이다. Apple Libsystem `requiredlibs`의 `system_dnssd` 소유를 대조하고 불필요한 `-ldns_sd`만 제거했다. 경고·성공 조건은 유지하며 교체 뒤 실제 link/실행은 아직 NOT_RUN이다.
 
 이 source의 SHA256 대조 artifact는3개뿐이다. Mac26 common254/254·Ubuntu246/246·skip0이며 gate105 OBSERVED/15 SETUP_FAILED다. Mac15 두 job은 cancelled·runner_name 비어 있음·artifact 없음으로 실행 근거가 없다. 취소 원인은 확인하지 못했고 Mac15 PASS로 합성하지 않는다. 원시는 위 root의 `git-env-native-dns/observed-link-failure-summary.json`·`native-job-observed-summary.json`과 ZIP이다.
+
+이후 `5f1f176183aba017ca2e47d3e70029c145204f26` / mirror `e9a939d6197765db65083ec5537e5689fe1427ce`, Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)의 ZIP5개 SHA256을 대조했다. 양 Mac SDK15.5/26.5에서 helper compile/link·새 case각3회가 실제 OBSERVED이며 각108 OBSERVED·12 SETUP_FAILED다. 모든18 variant의 selected Git hash·clang·자기 쓰기·금지 canary는 기대대로다. DNS는 host 양성에도 sandboxed AF_UNIX socket 생성은 성공·connect가 EPERM1이며 DNSService=-65563·getaddrinfo=8/errno1·Node ENOTFOUND다. 제거 전 inherited도 같으므로 bootstrap 제거 탓으로 쓰지 않는다. exact Unix network filter 번역의 원인설은 아직 추정·수정 미실행이며 새 Linux 오류를 먼저 처리한다. 원시는 `git-env-native-dns/libsystem-link-fix/actual-git-native-dns-{outcomes,summary}.json`이다.
 
 
 ### 현재 관련 파일

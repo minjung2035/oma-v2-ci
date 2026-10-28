@@ -1404,7 +1404,7 @@
     },
     {
       "path": "packages/native/src/files.ts",
-      "sha256": "c019813ee433d4a399a2b548c5ed1b3e133dfb06013be0f44863cf9c7ab024de"
+      "sha256": "bf6e35cb0a058ff72bc0ce8fdfd98620874fb2373c6541a1c59aea40506460a9"
     },
     {
       "path": "packages/native/src/identity.ts",

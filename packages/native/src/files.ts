@@ -113,9 +113,16 @@ export function openBeneath(
   how.writeBigUInt64LE(BigInt(flags | 0o2000000 /* O_CLOEXEC */), 0);
   how.writeBigUInt64LE(BigInt(mode), 8);
   how.writeBigUInt64LE(0x0cn, 16); // RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS
+  // openat2(2) permits retrying a containment-race EAGAIN. Keep the same
+  // held root and security flags; sustained races still fail closed.
+  const open = syscalls().open;
+  let result = -1;
   // glibc reads all six syscall argument slots, including unused ones. Supply
   // both trailing slots: Koffi's foreign stack may end immediately after our args.
-  const result = syscalls().open(437, "int", directory, "const char *", path, "const void *", how, "size_t", how.byteLength, "long", 0, "long", 0);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    result = open(437, "int", directory, "const char *", path, "const void *", how, "size_t", how.byteLength, "long", 0, "long", 0);
+    if (result >= 0 || errno() !== 11 /* Linux EAGAIN */) break;
+  }
   if (result < 0 && [18, 20, 40].includes(errno()))
     throw new StoreError(
       "STORE_CORRUPT",

@@ -21,6 +21,34 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 새 Linux contained-open EAGAIN 우선 수리 — 전체 재인수 전
+
+Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926), `a399fb7fe58`의
+원시 baseline은 사전14/14 뒤 main3938/3939·fail1이다. V10A delivery-deadlines의 rootfs 준비에서
+native `openBeneath→statAt→ensureFile`가 EAGAIN으로 실패했다. 과거 Git 단일 실패의 재발이 아니다.
+같은 source의 별도 serial all3953/3953·5 lane은 PASS이고, 후속 `e9a939d619` baseline·serial·5 lane도 PASS다.
+통과를 원인 수리로 합성하지 않으며 Mac 정책 수정을 보류했다.
+
+[openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html)의 BENEATH race EAGAIN 재시도 계약을 대조했다.
+실제 CI의 rename 경합 주체는 미관측이다. native leaf는 같은 fd/path/how를 최대8회 사용하고,
+containment flags·여섯 FFI argument slots·지속 실패/다른 errno의 거절을 유지한다. fallback·deadline 변경은 없다.
+실제 kernel FD·inside/outside symlink 거절을 쓰는 좁은 fault 회귀는 수정 전 실패, 수정 후 cleanup25/25·skip0다.
+수리 직후 compiled/독립 설치·실사용·전체 Linux 검증은 NOT_RUN이었다. 이어서 같은 held-root 구현의 실제 compiled 경계, tarball-only 설치본의 Luna medium 추론·history·cold 복구·원래 receipt, 고정 입력 전체 병렬/직렬 회귀를 확인했다. 상세 결과와 검증 환경 오류의 정정은 [검증 owner](validation.md#linux-eagain-수리-뒤-실제-재인수)에 기록했다. Linux 발행 전 Mac production 정책은 바꾸지 않았다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-linux-contained-open/`이다.
+
+### 2026-10-28 default Libsystem 실제 link·Git 정상화·DNS connect 거절 분류
+
+주 `5f1f176183aba017ca2e47d3e70029c145204f26` / mirror `e9a939d6197765db65083ec5537e5689fe1427ce`,
+Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)의 원시 ZIP5개 SHA256을 대조했다.
+clean `7670738e80e58d9c0ebe4dabff70b5ec655e67408f95c7ff53983fe7f39817fa` /15687 files와 runtime artifacts 전후 동일이다.
+SDK15.5/26.5 실제 compile/link, 양 Mac 새각3회 OBSERVED·전체108 OBSERVED/12 SETUP_FAILED다.
+selected Git hash·clang·자기 쓰기·금지 canary는18 variant 전부 기대대로다.
+DNS는 같은 host의 세 native API 양성 뒤에도 sandboxed socket 생성 성공·connect EPERM1,
+DNSService -65563·getaddrinfo8/errno1·Node ENOTFOUND다. inherited에서도 같아 port 제거 실패로 분류하지 않는다.
+Unix filter 번역 원인설은 추정·수정은 미실행이다. service admission/death·세 gate OPEN·실행 차단은 유지한다.
+원시는 `git-env-native-dns/libsystem-link-fix/actual-git-native-dns-{outcomes,summary}.json`·OS별 row·ZIP이다.
+
+
 ### 2026-10-28 native DNS probe의 잘못된 link flag 제거 — 수정 실행 전
 
 주 `ae6d72826557e65ad485229f24d1527ca6b8e0e3` / mirror `a399fb7fe5807f2a7a953db28326380de857bee6`,
