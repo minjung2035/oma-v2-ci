@@ -10,9 +10,9 @@
 
 | 항목 | 마지막 확인 사실 |
 |---|---|
-| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, 이번 checkpoint parent `5d95074a` |
-| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch; 마지막 원시 회수 입력 `885c07fedf` |
-| 현재 변경 | 두 Mac common253/253·skip0. fresh kernel task-name token의 membership-correlated SDK 제어·wrong-member 미호출·release 전 CID 소멸 각3회 확인. 다음 late-fork/CID-only discovery의 Mac 실행은 NOT_RUN. Linux parser/policy52/52·skip0. 별도 exploratory 첫 Git reply 거절은 미해결. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
+| 주 작업트리 | `/home/dev/oma-v2`, `work/macos-native-20261025`, 이번 checkpoint parent `d8248ad6` |
+| 공개 CI mirror | `/home/dev/oma-v2-ci`, 같은 branch; 마지막 원시 회수 입력 `4d140a51d5` |
+| 현재 변경 | 두 Mac common253/253·skip0. CID-only 재탐색이 첫 snapshot 뒤 태어난 후손까지 찾아 제어·release 전 CID 소멸 각3회 확인. 다음 production Seatbelt target·service kickstart 시도의 Mac 실행은 NOT_RUN. Linux parser/policy52/52·skip0. 이전 exploratory 첫 Git 거절은 원인 미확정으로 유지. README·WATCHDOG.yml은 사용자 변경으로 제외·보존한다 |
 | 금지 | merge/deploy, reset/clean으로 WIP 정리, 고정 architecture·과거 authored review 재승인 |
 | 환경 | Linux, 실제 Mac은 GitHub CI. LSP 미설정. gh 인증은 없지만 공개 API metadata 조회와 SSH push는 가능. Node26은 `/home/dev/.local/share/oma-toolchain/node-v26.0.0-linux-x64/bin` |
 | CI 주의 | 현재 native workflow는 push로 Mac job이 실행될 수 있음. 재개 시 workflow 조건부터 확인 |
@@ -38,8 +38,8 @@
 - Seatbelt kept-FD 실제 오류는 `Seatbelt target exec: Bad file descriptor`; 다른 helper/worker/setup 실패도 별도다. generic timeout으로 합치지 않는다.
 - 파일 후보 배제 근거: `/home/dev/oma-audit-artifacts/native-2026-10-27-file-binding-feasibility/audit.json`. 새 CI 관측은 그 당시 NOT_RUN 표기보다 최신이다.
 
-직접 회수한 최신 Native run은 `40650124720`(885c07fedf), 최신 Architecture 원시는 `40647938235`(2af0de04a0)이다.
-후자는 full serial native-all3952/3952·skip0과5개 lane PASS다. 단 exploratory `test`의 첫 Git submit reply 거절1건은 미해결이며 baseline 전체 PASS로 읽지 않는다. Mac 세 product gate도 OPEN이다.
+직접 회수한 최신 Native run은 `40654073529`, 최신 Architecture는 `40654073512`(둘 다4d140a51d5)이다.
+후자는 full serial3952/3952·skip0·baseline 모든 exit0·5개 lane PASS다. 이전2af 입력의 exploratory 첫 Git 거절 원인은 미확정이며 이후 PASS로 해결 처리하지 않았다. Mac 세 product gate는 OPEN이다.
 file/Git/Worker의 남은 실패와 source별 수치는 [진행 기록](implementation/native-transition.md)이 소유한다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-descriptor-leaf/`에 보존했다.
 immutable artifact ZIP의 SHA256은 공개 API digest와 일치했다.
@@ -51,8 +51,8 @@ validation binding은 clean committed bytes를 가리키므로 dirty README 입�
 2. [명세 §3–6](macos-native-spec.md)의 후보/판정 절차를 따른다. Darwin full-scope와 exact executable binding, expected-Broker producer는 미해결이다. launchd/coalition/audit-session을 확정 해법으로 읽지 않는다.
 3. 독립 descriptor의 실제 Mac file/snapshot/cursor/hashline·tool-files 설치와 C target의 FD pruning·same-PID handoff는 확인했다. SDK libproc는 private·변경 가능하므로 지원 OS별 실제 회귀를 유지한다.
 4. DR63 storage cutover는 미커밋 dist가 없는 checkout에서 실제 재빌드·status 회귀로 확인했다. metadata getattrlist도 실제 Mac에서 통과했다. Git packed smoke의 UNSUPPORTED_PROFILE은 실제 shared Linux-only preparation guard이며 기대값을 낮추지 않는다.
-5. Node startup·file fence·immutable publication·clean Personal·Society-only guard·suspended main-image와 genuine trailer token 제어는 두 Mac 실제 확인했다. fresh kernel task-name token의 제어와 release 전 CID 소멸도 각3회 확인했지만 controlled/unprofiled 범위다. 다음 late-fork/CID-only 탐색은 NOT_RUN이고 실제 owner crash·Seatbelt/service admission·durable producer·script/library generation·현재 Broker 권한이 남는다. Git REF_STATE_UNKNOWN과 세 product gate는 미해결이다.
-   `packages/native/src/audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU40), PID count를 bytes로 읽는 loop·saved witness→fresh identity와 SDK errno 오해는 production proof가 아니다. `platform-mac/execution-launch`도 아직 throw-only다. 새 primitive를 조립할 때 이 경로/호출자를 cutover하며 shim으로 보존하지 않는다.
+5. main-image·Personal·file/publication 및 fresh kernel token의 제어는 두 Mac 실제 확인했다. CID-only loop가 첫 snapshot 뒤 생긴 후손도 재탐색·제어해 ID 소멸을 관측했지만 unprofiled controlled 범위다. 새 production Seatbelt target·service kickstart 시도는 NOT_RUN이고 실제 owner crash·다른 service admission·durable producer·script/library generation·현재 Broker 권한이 남는다. Git REF_STATE_UNKNOWN과 세 product gate는 미해결이다.
+   `packages/native/src/audit-session.ts`의 scan→empty·32-byte coalition buffer(XNU40), PID count를 bytes로 읽는 loop·pidversion offset36(XNU/실제 C32)·saved witness→fresh identity·SDK errno 오해는 production proof가 아니다. `platform-mac/execution-launch`도 아직 throw-only다. 새 primitive 조립 때 이 경로/호출자를 cutover하며 shim으로 보존하지 않는다.
 6. 실제 primitive 반례를 먼저 닫고 execution journal/auth/caller를 연결한다. 이후 전체 제품·Linux 회귀·packed install·Mac CI·복잡도 검토가 남는다. stop/receipt/archive 보장은 그대로다.
 
 상세 파일별 위치와 이전 조사 전문은 보관 인계에 있다. 이미 실패한 전제를 반복 조사하지 말고 달라진 입력 또는 새로운 반례 질문을 명시한다.

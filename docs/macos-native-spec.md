@@ -71,7 +71,7 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 |---|---|---|
 | 일반 child + process group | 가장 단순한 실행·정상 cleanup; 기존 runtime 선례 | setsid/double-fork 후손이 생존하는 실제 반례 있음. best-effort 기능에는 사용 가능하나 complete-death 대체로는 배제 |
 | launchd job + audit session | OS가 시작한 job과 session 관측 | session join/재사용, all-owner-death 복구, launch handoff가 미해결. SessionCreate만으로 containment라고 쓰지 않음 |
-| launchd job + resource coalition 관측 | kernel 집계가 PID scan과 다른 종료 증거를 줄 가능성 | job별 분리·fork/setsid 상속·비특권 집계 조회는 실제 확인. **bootout 뒤 detached 후손이 생존**했다. 집계는 종료 제어가 아니며, 재시작/외부 재활성화·닫힌 empty 판정·복구는 미해결 |
+| launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | job별 분리·fork/setsid 상속·CID 소멸·fresh token 제어·late-fork 재탐색을 실제 확인. **bootout 단독은 detached 후손을 남겼다.** product owner crash·service admission·durable producer는 미해결 |
 | Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | setsid뿐 아니라 setpgid·posix_spawn attributes·service를 통한 실행까지 필요. 정상 Node/Git/compiler 동작을 깨면 채택하지 않음 |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
@@ -84,13 +84,13 @@ inherited spawn은 같은 CID였고 explicit own/다른 CID spawn은 EPERM이었
 `885c07fedf`의 두 Mac 각3회에서 fresh kernel task-name token과 before/after generation·CID를
 결박한 SDK 제어, wrong-member 미호출, release 전 CID 소멸을 확인했다([기록](implementation/native-transition.md)).
 peer가 준 port를 kernel task라고 믿지 않는다. unprofiled controlled target의 결과를 role authority나 새 Seatbelt label 복구로 확대하지 않는다.
-다음은 **CID만으로** owner 뒤/첫 snapshot 뒤 생긴 후손을 재탐색·제어하는 판정이다.
-PID count를 bytes로 읽지 않고 scan은 hint로만 쓴다. empty/truncated scan·deadline 대신 kernel ID 소멸을 확인한다.
-이 선행 시험을 실제 product owner crash·service admission·durable authority producer의 증명으로 대신하지 않는다.
+`4d140a51d5`의 두 Mac 각3회에서는 CID만으로 첫 snapshot 뒤 생긴 후손을 다음 scan에서 찾아 제어하고 release 전 ID 소멸까지 확인했다. PID count를 bytes로 읽지 않고 scan은 hint로만 쓴다. empty/truncated scan·deadline은 death proof가 아니다.
+다음은 production Seatbelt label의 target·상속 후손 제어와 dormant owned job의 service-mediated 재실행 시도다.
+host의 실제 양성을 먼저 확보하고 거절·성공·불명과 원시 SDK/CLI 결과를 남긴다. 이 선행 시험을 다른 service 경로·실제 product owner crash·durable authority producer의 증명으로 대신하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.
-이 primitive는 role authority·실제 PID 재사용·fresh-profile recovery·임의 후손 token 취득·scope death의 증명이 아니다.
+trailer 대조 단독으로 role authority·실제 PID 재사용·fresh-profile recovery·전체 scope death를 증명하지 않는다.
 
 Mac15·26 각3회에서 inherited signal은 전달됐지만 동일 SBPL을 fresh 적용한 쪽은 EPERM이었고 nested 재적용도 EPERM이었다. 따라서 SBPL 재적용을 recovery reaper로 사용하지 않는다. `seatbelt-signals`는 unreaped owned child만 쓰는 label 실험이며 permissive fixture profile·EOF 종료를 production policy나 complete-death proof로 옮기지 않는다.
 

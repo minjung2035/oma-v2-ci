@@ -50,21 +50,27 @@ const discoveryRound = (pid, closed) => ({ discovery: { hintOnly: true, resource
   otherAggregate: coalitionQuery() });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
+  domain: "gui/501",
   ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
     cdhashes: ["a".repeat(40), "b".repeat(40)], replacedImage: { markerAfterTwoSeconds: false } }
-    : { scope: { members: { leader: { resource: "41" }, detached: { pid: 101 } }, control: { resource: "42", pid: 102 },
+    : { scope: { members: { leader: { resource: "41" }, detached: { pid: 101, sandboxed: true } }, control: { resource: "42", pid: 102 },
       afterBootout: { otherAcknowledged: true },
       admission: { privateInterface: true, available: true, uid: 501, callerResource: "41",
         attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
           admissionAttempt("explicit-other", "42", false)] },
+      seatbelt: { renderer: "production-seatbeltProfile", sha256: "d".repeat(64),
+        serviceTarget: "gui/501/org.oma.probe.test.service-target", positiveServiceControl: { pid: 107 },
+        attempt: { sandboxApplied: true, target: "gui/501/org.oma.probe.test.service-target",
+          spawnStatus: 0, childPid: 108, waitStatus: 256, joined: true, numericCleanupUsed: false },
+        serviceAfter: { exitCode: 0, signal: null }, guestEffect: null },
       recovery: { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
         fixtureReleaseUsedBeforeObservation: false, wrongMember: memberControl(102, false),
         remainingMember: memberControl(101, true), afterAttempt: {
           samples: [{ elapsedMs: 90, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
             otherAggregate: coalitionQuery() }] } },
-      late: { pid: 105, resource: "41" },
+      late: { pid: 105, resource: "41", sandboxed: true },
       discoveryRecovery: { input: "resource-coalition-only", beforeFixtureRelease: true,
-        afterSnapshot: { pid: 106, resource: "41" }, rounds: [discoveryRound(105, false), discoveryRound(106, true)] },
+        afterSnapshot: { pid: 106, resource: "41", sandboxed: true }, rounds: [discoveryRound(105, false), discoveryRound(106, true)] },
       afterControlledExit: { controlledGenerationsExited: true,
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
@@ -206,6 +212,14 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
     scope => { scope.discoveryRecovery.rounds[0].controls = []; },
     scope => { scope.discoveryRecovery.rounds[0].controls[0].targetPid = 106; },
     scope => { delete scope.discoveryRecovery.rounds[1].aggregate; },
+    scope => { delete scope.seatbelt; },
+    scope => { scope.seatbelt.renderer = "permissive fixture"; },
+    scope => { scope.members.detached.sandboxed = false; },
+    scope => { scope.discoveryRecovery.afterSnapshot.sandboxed = false; },
+    scope => { scope.seatbelt.attempt.target = "gui/501/foreign"; },
+    scope => { scope.seatbelt.attempt.joined = false; },
+    scope => { scope.seatbelt.positiveServiceControl.pid = 0; },
+    scope => { delete scope.seatbelt.guestEffect; },
   ]) {
     const bad = structuredClone(good); corrupt(bad.scope);
     assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));

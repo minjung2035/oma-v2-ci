@@ -3,11 +3,12 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
 assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
@@ -135,7 +136,7 @@ try {
   const binaries = [], hashes = [];
   for (const variant of mode === "launchd-image" ? [1, 2] : [1]) {
     const binary = join(root, `actor-${variant}`);
-    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", `-DPROBE_VARIANT=${variant}`, source, "-lproc", "-lbsm", "-o", binary]);
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", `-DPROBE_VARIANT=${variant}`, source, "-lproc", "-lbsm", "-lsandbox", "-o", binary]);
     run("/usr/bin/codesign", ["--force", "--sign", "-", binary]);
     const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", binary]);
     const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
@@ -173,6 +174,17 @@ try {
   } else {
     // No SpawnConstraint: independently qualify ordinary job provisioning.
     const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
+    const serviceTarget = loadJob("service-target", actor, "once");
+    run("/bin/launchctl", ["kickstart", serviceTarget.target]);
+    await waitFor(() => existsSync(join(serviceTarget.directory, "once.json")));
+    const servicePositive = remember(marker(serviceTarget.directory, "once"));
+    await waitFor(() => originalExited(servicePositive.identity));
+    unlinkSync(join(serviceTarget.directory, "once.json"));
+    const profile = seatbeltProfile({ readable: [{ path: actor, kind: "file" }],
+      writable: [{ path: scope.directory, kind: "directory" }], denied: [],
+      executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
+    writeFileSync(join(scope.directory, "profile.sb"), profile, { mode: 0o600 });
+    writeFileSync(join(scope.directory, "service-target"), `${serviceTarget.target}\n`, { mode: 0o600 });
     run("/bin/launchctl", ["kickstart", scope.target]);
     run("/bin/launchctl", ["kickstart", other.target]);
     await waitFor(() => ["leader", "ordinary", "detached"].every(name => existsSync(join(scope.directory, `${name}.json`))) &&
@@ -180,6 +192,12 @@ try {
     const members = Object.fromEntries(["leader", "ordinary", "detached"].map(name => [name, remember(marker(scope.directory, name))]));
     const control = remember(marker(other.directory, "other"));
     observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
+    observation.scope.seatbelt = { renderer: "production-seatbeltProfile",
+      sha256: createHash("sha256").update(profile).digest("hex"), serviceTarget: serviceTarget.target,
+      positiveServiceControl: servicePositive, attempt: marker(scope.directory, "service-admission"),
+      serviceAfter: run("/bin/launchctl", ["print", serviceTarget.target], false),
+      guestEffect: existsSync(join(serviceTarget.directory, "once.json")) ?
+        remember(marker(serviceTarget.directory, "once")) : null };
     assert.match(control.resource, /^[1-9][0-9]*$/);
     const request = join(scope.directory, "admission-request");
     writeFileSync(`${request}.tmp`, `${control.resource}\n`, { flag: "wx" });
@@ -231,6 +249,14 @@ finally {
     try {
       await waitFor(() => targets.every(originalExited), 12000);
       observation.controlledGenerationsExited = true;
+    } catch (error) { faults.push(String(error)); }
+  }
+  observation.jobOutputs = [];
+  for (const job of jobs) {
+    try {
+      const output = name => existsSync(join(job.directory, name)) ?
+        readFileSync(join(job.directory, name)).subarray(0, 65536).toString("utf8") : null;
+      observation.jobOutputs.push({ label: job.label, stdout: output("stdout"), stderr: output("stderr") });
     } catch (error) { faults.push(String(error)); }
   }
   observation.cleanupFaults = faults;
