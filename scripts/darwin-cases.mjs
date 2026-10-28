@@ -24,7 +24,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
     names: ["worker-bootstrap", "worker-tools"] }),
   program({ name: "launchd", fixture: "darwin-launchd.mjs", digest: "launchdProbeDigest", compile: "check-launchd", node: true,
-    names: ["launchd-job"] }),
+    names: ["launchd-scope", "launchd-image"] }),
   program({ name: "personal", fixture: "darwin-personal.mjs", digest: "personalProbeDigest", compile: "check-personal", node: true,
     names: ["personal-entry"] }),
 ]);
@@ -38,7 +38,8 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-profile-empty": "seatbeltFault", "seatbelt-profile-syntax": "seatbeltFault", "seatbelt-argv-env": "seatbeltFault",
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
-  "worker-bootstrap": "worker", "worker-tools": "worker", "launchd-job": "launchdJob", "personal-entry": "personal" });
+  "worker-bootstrap": "worker", "worker-tools": "worker",
+  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "personal-entry": "personal" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -83,20 +84,19 @@ export function validateDarwinObservation(name, observations) {
         value.nestedApplyReturnCode === 0 && value.nestedApplyErrno !== 0)
       throw new Error("signal identity observation lacks its inherited positive control or nested apply result");
   }
-  if (name === "launchd-job") {
+  if (name === "launchd-scope" || name === "launchd-image") {
     if (value.fixtureOnly !== true || value.controlledGenerationsExited !== true ||
         value.jobRegistrationsRemoved !== true || !Array.isArray(value.cleanupFaults) || value.cleanupFaults.length !== 0)
       throw new Error("launchd observation lacks controlled generation and registration cleanup");
-    if (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
-        !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||
-        value.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)) ||
-        value.cdhashes[0] === value.cdhashes[1])
-      throw new Error("launchd image observation lacks distinct executed positive controls");
-    if (typeof value.replacedImage?.markerAfterTwoSeconds !== "boolean" ||
-        value.scope?.afterBootout?.otherAcknowledged !== true)
-      throw new Error("launchd observation lacks image outcome or independent live job control");
     if (typeof value.actorSourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.actorSourceSha256))
       throw new Error("launchd actor source identity is missing");
+    if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
+        !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||
+        value.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)) ||
+        value.cdhashes[0] === value.cdhashes[1] || typeof value.replacedImage?.markerAfterTwoSeconds !== "boolean"))
+      throw new Error("launchd image observation lacks distinct executed positive controls or image outcome");
+    if (name === "launchd-scope" && value.scope?.afterBootout?.otherAcknowledged !== true)
+      throw new Error("launchd scope observation lacks its independent live job control");
   }
   if (name === "personal-entry") {
     for (const key of ["actualTerminal", "cleanExit", "terminalRestored", "noSocietyProvisioned", "societyRefusedBeforeState"])

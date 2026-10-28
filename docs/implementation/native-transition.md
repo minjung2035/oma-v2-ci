@@ -21,6 +21,21 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 launchd setup과 Git forwarding의 관측 분리
+
+Native `40609391051` / `3d9ed7493`의 두 Mac은105회 실행·90 OBSERVED·15 SETUP_FAILED다.
+각3회의 `launchd-job`은 matching A의 user/501 bootstrap이5로 실패해 scope/집계에 도달하지 못했다.
+두 runner의 SIP는 disabled다. 컴파일·서명·직접 child의 PID/coalition 조회는 성공했지만 constraint 지원이나 job 분리는 미확인이다.
+후속은 constraint 없는 `launchd-scope`와 별도 `launchd-image`로 분리해 기본 job 생성과 image 조건을 비교한다.
+기존 failure를 backend 채택 근거로 사용하지 않는다.
+
+Mac26 common은247/247·skip0이다. 같은 profile의 일반 async/sync Git query는 실제 exit0/sha1이었다.
+quarantine 진단은 자체256-byte 출력 한도에서 output-limited가 됐으므로 **진단만**65536으로 고친다.
+production 출력 제한은 유지하고 다음 관측은 production과 같은 stderrFd2 전달에 한정한다.
+기존 installed Personal tools PTY도 Linux에서 실제 read/write/edit/bash와 terminal 복원을 통과했다(선택1개·skip0).
+후속 plan111회·program10개의 driver248분+설치/credential/upload20분은 기존270분 안에 든다.
+
+
 ### 2026-10-28 Personal의 독립 진입 복구
 
 `entry/oma.ts`의 모드 선택 전 Darwin 전체 차단을 제거했다. Personal은 기존 Human OS 권한·history owner를 쓰며
