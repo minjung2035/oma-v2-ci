@@ -21,6 +21,30 @@ gate를 닫지 않는다. OPEN은 exit 1, setup 실패는 exit 2다. CI artifact
 
 ## 진행 기록
 
+### 2026-10-28 main-image 검증 통과와 실제 Keychain frame deadlock 수리
+
+Native `40634523433` / `859c9ff3be`의 두 Mac은 각각114회·99 OBSERVED·15 SETUP_FAILED다.
+각3회 suspended-image에서 A/B·Node·Git·compiler·shebang interpreter가 실제 release/exit0을 보였다.
+잘못된 B/A requirement는-67050, B-map 뒤 pathname을 A로 복원한 첫 lookup의 validation은-67034였고,
+두 반례 모두 constructor/main 실행 없이 SIGKILL·join됐다. main-image primitive의 이 선행 범위는
+검증됐으며 script/module/library bytes·완전한 scope·현재 Broker 권한으로 확대하지 않는다.
+원시는 API digest 확인한 `live-frame-macos{15,26}-{gates,runtime}/`에 있다.
+
+같은 입력의 common은 두 OS 모두250/251·skip0이다. 유일한 실패는 credential-free unknown-op의
+완성된 frame에 EOF 전 응답을 요구한 회귀다. 두 helper 모두5초 deadline까지 답하지 않았고,
+기존 EOF/잘못된 입력 사례는 통과했다. Swift reader를 Foundation의64KiB readData 대신 bounded
+POSIX read와 재사용 scoped buffer로 교체했다. EINTR·partial read·EOF·기존 frame limit/오류는 유지한다.
+credential 정책·storage 형식·helper 소유권·deadline·fallback은 바꾸지 않았다.
+로컬 source binding/ledger/DAG 재생성과2/27 rebuild, 관련 Linux76/76·skip0 및 실제 rebuilt Personal의
+ready→Ctrl-D→exit0·terminal 복원·Personal birth·무 Society provisioning은 확인했다.
+이 수리의 실제 Swift compile·EOF 전 응답·Mac UI 재실행은 아직 NOT_RUN이다.
+
+Architecture `40631668145` / `9e2cbceb9b`의 Linux full native-all은3950/3950·skip0 PASS다.
+baseline check exit는 전부0이고 fast/durable/property/stress/platform도 실제 PASS·skip0이다.
+input before/after는15687 files·`489ab823aa5c95f0c43da6a471ecfdd0bcd6fd94fe88b13b515f0314e8dd9996`으로 같다.
+이전1건 실패 입력과 구분하며 이후 Swift 수정 입력의 새 full PASS라고 기록하지 않는다.
+원시는 digest 확인한 `native-all-9e2cbceb9b/`, `architecture-9e2cbceb9b/`다.
+
 ### 2026-10-28 Keychain 대기 분리와 초기 Mach stop의 실제 의미
 
 Native `40631668104` / `9e2cbceb9b`의 Mac15·26 common은 각각252/252·skip0이며,

@@ -1532,7 +1532,7 @@
     },
     {
       "path": "packages/platform-mac/src/keychain/main.swift",
-      "sha256": "5defb756a73dc496c51f1f7c851c7566dfa4a70f31f48e31f4740f15cdcdae21"
+      "sha256": "35850cf7742217313c63b41ca9bed5fe2329105f27f4a0ce3652fad937edfb96"
     },
     {
       "path": "packages/platform-mac/src/keychain/oma-keychain.entitlements",

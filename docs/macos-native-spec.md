@@ -123,6 +123,8 @@ path 문법·소유 경계·종류·hardlink·repair 정책·동일 bytes·publi
 
 `suspended-image` 선행 시험은 정상 A/B·Node/Git/compiler·interpreter 대조와 **B를 map한 뒤 pathname을 A로 복원하고 첫 dynamic guest lookup**을 시작하는 반례를 함께 기록한다. lookup 성공이나 on-disk signing metadata를 검증 성공으로 바꾸지 않는다. 실제 requirement status와 release 전/후 실행 marker로 판정하며, main-image 검증은 script/module/library bytes·후손 수명·sender role을 보증하지 않는다.
 
+`859c9ff3be`의 Mac15·26 각3회에서 위 main-image 양성과 치환 후 사용자 코드 실행 전 거절을 확인했다([판정 기록](implementation/native-transition.md)). 이 primitive를 후속 조립의 기준 후보로 쓴다. 제품에 연결할 때는 unreaped child 소유, descriptor/cwd 전달, 보호된 script/library generation과 owner-loss 정리를 함께 충족한다. fixture의 process-group supervisor를 production scope backend로 옮기지 않는다.
+
 mode-000 등 안전하게 취득·수리할 수 없는 entry는 unknown으로 남긴다. metadata 조회 뒤 pathname chmod로 다른 inode를 건드리지 않는다. 한 손상 entry 때문에 무관한 cleanup까지 생략하지 않는다. 기존 metadata/history bytes는 보존한다.
 
 ### 6.2 소유권과 publication
