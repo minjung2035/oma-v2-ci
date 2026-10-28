@@ -190,11 +190,21 @@ export function validateDarwinObservation(name, observations) {
       validateMemberControl(recovery.wrongMember, scope.control.pid);
       validateMemberControl(recovery.remainingMember, scope.members?.detached?.pid);
       const seatbelt = scope.seatbelt, service = seatbelt?.attempt;
+      const launchctlResult = (result, command, target) => result?.executable === "/bin/launchctl" &&
+        Array.isArray(result.argv) && result.argv.length === 2 && result.argv[0] === command && result.argv[1] === target &&
+        Number.isSafeInteger(result.exitCode) && result.signal === null &&
+        typeof result.stdout === "string" && typeof result.stderr === "string";
       if (seatbelt?.renderer !== "production-seatbeltProfile" ||
           typeof seatbelt.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(seatbelt.sha256) ||
           scope.members?.detached?.sandboxed !== true || scope.late?.sandboxed !== true ||
           scope.discoveryRecovery?.afterSnapshot?.sandboxed !== true ||
           typeof seatbelt.serviceTarget !== "string" || !seatbelt.serviceTarget.startsWith(`${value.domain}/`) ||
+          typeof seatbelt.positiveServiceTarget !== "string" || !seatbelt.positiveServiceTarget.startsWith(`${value.domain}/`) ||
+          seatbelt.positiveServiceTarget === seatbelt.serviceTarget ||
+          !launchctlResult(seatbelt.positiveServiceKickstart, "kickstart", seatbelt.positiveServiceTarget) ||
+          seatbelt.positiveServiceKickstart.exitCode !== 0 ||
+          !launchctlResult(seatbelt.positiveServiceAfter, "print", seatbelt.positiveServiceTarget) ||
+          !launchctlResult(seatbelt.serviceBefore, "print", seatbelt.serviceTarget) ||
           !Number.isSafeInteger(seatbelt.positiveServiceControl?.pid) || seatbelt.positiveServiceControl.pid <= 1 ||
           service?.sandboxApplied !== true || service.target !== seatbelt.serviceTarget ||
           !Number.isSafeInteger(service.spawnStatus) || service.spawnStatus < 0 ||
@@ -202,7 +212,7 @@ export function validateDarwinObservation(name, observations) {
           typeof service.joined !== "boolean" || typeof service.numericCleanupUsed !== "boolean" ||
           (service.spawnStatus === 0 ? service.childPid <= 1 || !service.joined :
             service.childPid !== 0 || service.joined || service.waitStatus !== 0 || service.numericCleanupUsed) ||
-          !Number.isSafeInteger(seatbelt.serviceAfter?.exitCode) || seatbelt.serviceAfter.signal !== null ||
+          !launchctlResult(seatbelt.serviceAfter, "print", seatbelt.serviceTarget) ||
           !(seatbelt.guestEffect === null ||
             Number.isSafeInteger(seatbelt.guestEffect?.pid) && seatbelt.guestEffect.pid > 1))
         throw new Error("launchd scope lacks the actual production sandbox and controlled service-admission outcome");

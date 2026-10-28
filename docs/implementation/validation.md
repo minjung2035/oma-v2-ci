@@ -1,7 +1,170 @@
 # OMA v2 — 현재 검증 상태
 
-DR49 native 전환은 미완료이며, 최신 사용자 지시로 **개정 spec 기준 구현을 재개**했다.
+DR49 native 전환은 미완료다. 최신 지시는 **Priority 0를 유지해 Linux 검증을 마감한 뒤 지정 work branch를 push하고 macOS 작업을 재개하는 것**이다. 아래 Linux 인수검증을 마쳤으며, 문서 정합성·commit/push와 실제 Mac 관측은 각각 별도 단계다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+
+## Linux 인수검증 마감 — 독립 설치·실제 추론·재개·cold 복구 (2026-10-28)
+
+지정 `work/macos-native-20261025`에서 위임·merge·deploy 없이 실행했다.
+고정 입력 `88d1cf0b1a435a0c7494e67ccd306ca328a28c73ed8b8535c5168c9904a1c76b` /15686 files의
+serial `all`은 **3952/3952 PASS**, fail/cancel/skip/todo0·errors[]·baseline COMPARED다.
+build·전체 typecheck·전체 architecture command도 모두 exit0·signal/timeout 없음이며
+canonical identity와15686개 per-file bytes가 실행 전후 동일했다. 결과 반영 뒤 docs-only binding은 별도다.
+
+첫 전체 실행은3948/3952·4 FAIL이었다. 실행기가 pinned toolchain `PATH`를 전달하지 않아
+`cloc` ENOENT/2.08 prerequisite 오류가 났다. 해당 실패를 보존하고 실제 cloc2.08 resolution 및
+영향받은3개 파일23/23을 확인한 뒤, **같은 입력 전체**를 정상 PATH로 다시 실행해 위 결과를 얻었다.
+제품 코드·성공 조건·timeout·검사 목록은 변경하지 않았다.
+
+| 실제 경로 | 확인한 결과 | 경계 |
+|---|---|---|
+| 독립 runtime-only 설치 | 보존된27개 packed payload의 SHA 검증 후 별도 `npm ci --omit=dev --ignore-scripts`. 모든 workspace link는 설치본 내부 | checkout source/node_modules 복사 없음. 두 checkout을 mount로 가려 package.json조차 보이지 않음을 확인 |
+| Principal·native Worker | 실제 `openai-codex/gpt-6-luna`·`medium`. 실패하던 `add`를 수정하고 기존 검증 통과·commit·submit·Principal 수신 | published candidate `d2df1a46f99c1e7f57f9cbc8f27620539dce92ae`는 `sum.mjs`만 변경. Human checkout은 원본 유지, 추가 Worker·integrate0 |
+| Personal·도구·history | 같은 실제 모델/effort로 read/write/bash·정확한 `42\n` 생성·검증 성공. 실제 history 재개 후 쓰기 없이 재검증 | 모델 응답은 scripted가 아님. 모델·effort는 session metadata와 실제 UI로 확인 |
+| Society 재개·receipt | 재시작 후 기존 accepted fact8건 유지. cold 복원 전11건의 plan/payload/request/result bytes 유지 | 실제 CLI가 원래 key `cli-ed3c0ab0-2bb2-457a-af5c-52b9ae2f258e`로 원래 operation을 반환. git.submit은 끝까지1건 |
+| 실제 broker 보관·복원 | 실제 native drain→Store.close→pinned Restic 보관·검증·cold checkpoint·회수. 원래 credential로 실제 broker cold restore 성공 | 합성 quiescence callback이나 빈 offline journal로 대신하지 않음. 최종 operation14 succeeded·batch8 completed·active journal0·정상 종료0 |
+| 보관 credential 손실 | 실제 cold 재개를 거절하고 DB/checkpoint bytes 보존. credential 대체 생성·canonical 재초기화 없음 | 기본 `repos` 빈 부모만 생겼다. 이를 canonical history 생성으로 잘못 본 첫 smoke oracle도 보존하고 정정 |
+
+실제 환경은 UID/GID1000·CapEff0·NoNewPrivs1, Node26·bwrap0.12.0이다.
+고정 `/usr/bin/bwrap`을 만족시키는 소유 시험 namespace/overlay만 사용했고 host 전역 설정은 바꾸지 않았다.
+기존 Codex OAuth는 원문 노출 없이 검증용 SDK 저장소에 가져왔으며 원래 auth bytes/mode를 보존했다.
+보존한 session은 redacted이며 검증용 credential·프로젝트·설치 트리는 소유 범위에서 정리한다.
+
+무오류 실행으로 쓰지 않는다. Principal의 잘못된 GOAL `kind`1건, Worker의 `--help`·빈 submit·
+replay 명령 끝 마침표3건은 거절 후 수정됐다. 초기 Worker가 요청받은 명시 key를 생략했으므로
+실제 CLI 발급 key를 기록하고, cold 복원 뒤 바로 그 key의 같은 receipt를 확인했다.
+history 재개에는 welcome 문구가 없어 첫 readiness selector가 맞지 않았지만 실제 UI·명령·종료를 확인했다.
+외부 provider 재인증·강제 OAuth refresh·host power loss/reboot·원격 backup 서비스의 모든 조건을 증명하지 않는다.
+
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-linux-resume/`다.
+`all-final/`은 PATH 누락 실패, `all-pinned-path/`·`all-pinned-path-summary.json`은 후속 전체 PASS,
+`installed-live-complete-result.json`·redacted session·ledger·checkpoint·same-key replay는 실제 설치본을 소유한다.
+`feature-evidence-matrix.json`은 기능별 이전 회귀와 후속 실제 경로를 구분한다.
+이전 입력의 설치/package/offline Restic 근거는 아래 기록과 함께 보존하며 새 입력 PASS로 바꾸지 않는다.
+
+### 원인 미상 단일 CI 실패 — 비차단 추적
+
+Architecture [40647938235](https://github.com/minjung2035/oma-v2-ci/actions/runs/40647938235),
+source `2af0de04a041dbc915da87b45c4ba87354104d39`, npm test 파일 병렬도4의
+`audit2` 첫 `gitSame[0]?.ok`가 false였다는 것만 확정이다. OMA `git.submit` 응답이며 GitHub push 거절이 아니다.
+오류 code/body와 임시 out.json이 보존되지 않아 Git 명령·stream·권한·상태·timeout 중 원인을 분류할 수 없다.
+시험 전체4.874초는 요청별 시간/timeout 증거가 아니다(client120초·stream idle1초).
+사용자 정정에 따르면 동일 commit의 별도 전체 suite3952/3952·skip0도 통과했다.
+후속 baseline·이번 fresh/동시/CPU 경합9회와 전체 실행의 통과는 당시 원인을 설명하지 않는다.
+직접 대조한 submit/quarantine/connection/execution owner4개의 bytes도 당시와 같다.
+`2479809d`의 두 assertion 응답 JSON 진단은 유지하며 production Git·timeout·성공 조건은 수리한 적이 없다.
+**확정 Git 결함이나 Linux 완료의 필수 blocker가 아니다.** 이력은 남기되 무해한 flake·수리 완료로 단정하지 않는다.
+재발 또는 실사용 제출 실패·중복 효과·ref/receipt 불일치가 관측되면 응답을 확보하고 즉시 우선순위를 올린다.
+`ci-incident-classification.json`이 이 정정을 기록한다. 추가 전용 재현 반복은 하지 않는다.
+
+## Linux 우선 검증 — 부분 근거와 남은 완료 조건 (2026-10-28)
+
+`work/macos-native-20261025`에서만 작업하며 위임·commit·push·merge·deploy하지 않았다.
+현재 branch push는 Mac job도 시작하므로 보류한다. 원시 root는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-linux-first/`다.
+
+| 실행 입력·범위 | 실제 결과 | 경계 |
+|---|---|---|
+| 수리 후 고정 입력 `c62c180dea0bd613c9ce625567be0005745422c037fd862d5d1864e785a6abe9` /15686 files | serial `all` **3952/3952 PASS**, fail/cancel/skip/todo0·errors[]·exit0. build·전체 typecheck·전체 architecture도 모든 command exit0·signal 없음·timeout 없음 | 실행 전후 per-file digest와 canonical identity 동일. 결과 기록 뒤 docs-only binding은 별도이며 실제 provider 추론·과거 Git 오류 수리를 증명하지 않음 |
+| 최초 고정 입력 `650294ba5b4d11fdbc9aee202c0f84db691036e95c8b18d4c063271451cb9728` /15686 files | full local **3952/3952**, serial14/14·parallel3938/3938, concurrency4, fail/cancel/skip/todo0·exit0·980.926초. 입력 전후 동일 | 아래 독립 설치 verifier 수리 전 입력. 이후 source의 전체 PASS로 재표시하지 않음 |
+| 같은 단계의 build·구조 검사 | build27/27, 전체 architecture/transaction/durable/document/spec 검사 exit0·findings0 | 정적 검사는 runtime proof가 아님 |
+| 일반 UID 첫 Git socket 경로 | `audit2`의 `P0-1/2/3 + P1-7/8` 선택1/1 및 위 동시 전체 실행에서 통과 | 과거 `2af0de04a0`의 첫 Git 거절은 원시 reply 부재로 원인 미확정·미해결 |
+| 독립 workspace 검증 최초 실행 | **23/27 PASS, 4 FAIL**. 완료된 설치 트리 누적으로 `/tmp` ENOSPC | 최초 실패를 보존. 제품 데이터나 사용자 cache를 지워 통과시키지 않음 |
+| verifier 수리 뒤 독립 설치 | **27/27 PASS**·공개 entry·자체 declaration·지정 installed runtime 확인, exit0·289.907초 | 각 workspace 완료 후 그 소유 임시 트리만 정리. 외부 SDK declaration 진단44는 별도이며 자체 오류로 합산하지 않음 |
+| 별도 runtime-only 제품 설치 |27개 workspace의 실제 `npm pack` payload + root manifest/lock에서 `npm ci --omit=dev --ignore-scripts` 성공 | checkout source·checkout node_modules 복사 없음. 원래 설치 입력의 전후 identity 동일 |
+| 그 설치본 실제 터미널·package 사용 | Society/Personal 모두 ready·Ctrl-D·exit0·echo/icanon 복원·expectMissed0. 실제 local package install/list/remove 성공, 사용자 Pi home 미변경 | no-checkout-code/data guard 사용. 실제 provider 추론은 미실행 |
+| 그 설치본 실제 Restic 보관·복원 | 두 cycle 각각 자신의 source/restored digest 일치. closed DB bytes·dirty Git status·hardlink·외부 symlink 대상 보존. unreadable source 회수 거절·분실 credential 재생성 거절·원래 credential 복원 뒤 재복원 확인 | 설치된 Linux backend·빈 실제 journal/owner를 사용하는 offline 저장 시험. live Worker 종료 proof는 아래 실제 scope 회귀와 구분 |
+
+일반 UID1000/GID1000·CapEff0·NoNewPrivs1, Node26.0.0·pinned bwrap0.12.0이다.
+시험 전용 user/mount/PID namespace에 private `/usr/bin` overlay·`/dev`·`/dev/shm`을 배치했다.
+host `/usr/bin`·전역 kernel 설정·사용자 README/WATCHDOG·production policy/C actor는 바꾸지 않는다.
+
+`full-local*`·`initial-build*`·`initial-architecture*`가 첫 고정 입력의 결과다.
+`independent-workspaces*`·`independent-install-repair-input.json`은 ENOSPC 전후를,
+`independent-product-install.json`·`product-tarballs/`는 packed 설치 입력을,
+`installed-real-use*`·`installed-restic*`는 직접 실행·exit·원시 터미널·저장 결과를 소유한다.
+`all-after-install-fix/result.json`·`all-input-after*`·`all-after-install-fix-summary.json`은
+수리 후 serial 전체 실행과15686개 입력 전후 비교를 소유한다.
+`priority-zero-observed-boundaries.json`은 실제 통과한 경계 이름을 기록하며 보편적 완전 증명이 아니다.
+첫 Restic smoke는 두 번째 cycle을 첫 cycle digest와 비교해 실패했다. 중간 실제 `git status`가
+`.git` directory mtime을 바꾸는 것을 별도 metadata 관측으로 확인했다(index bytes 변경 가설은 반증).
+cycle별 source를 동결하도록 throwaway oracle을 수리했고 실패 로그와 두 관측을 모두 보존했다.
+제품 verifier·recovery 기대값·timeout은 바꾸지 않았다.
+
+### 후속 실제 Codex Principal·Worker — 제한된 실환경 PASS
+
+사용자 지시로 기존 Codex 인증을 원문 열람·출력 없이 검증용 SDK `AuthStorage`에 가져왔다.
+`openai-codex/gpt-6-luna`는 번들 catalog에 실제 등록되어 있다. 두 HostConfig model profile의
+`thinking`과 검증용 Principal SDK의 default/model effort를 `medium`으로 설정했다.
+양 역할의 실제 session `model_change`·`thinking_level_change` 및 Principal UI가 같은 선택을 기록했다.
+사용자 원래 Codex auth의 bytes·mode는 전후 동일하며 사용자 Pi·제품 기본 설정은 바꾸지 않았다.
+
+실제 checkout CLI·PTY·native Linux Worker·인증된 외부 provider를 사용했다. scripted 응답은 없다.
+GOAL 게시 후 Worker가 정확한 `LUNA_NATIVE_OK\n`의 `answer.txt`를 만들고 `node verify.mjs`를 통과했다.
+실제 published candidate `a9262dc96163ee8f713ba9871594e97c77171934`의 blob bytes와 변경 경로
+`answer.txt` 하나를 별도로 확인했다. `worker-1-native-answer-submit-v1`은 `git.submit/succeeded`이며
+Principal의 해당 delivery는 presented1이다. accepted operation9 모두 succeeded·batch5 모두 completed,
+DB integrity ok·foreign-key 위반0, 추가 Worker·integrate0, Human checkout과 canonical main은 원래 base다.
+정상 Ctrl-D·exit0 후 execution journal active entry0, Worker 저장 credential 없음도 확인했다.
+실행 중 placeholder 값 자체는 채집하지 않았으므로 live credential exclusion의 모든 경우를 증명하지 않는다.
+첫 종료 후 smoke가 이미 정리된 placeholder의 존재를 잘못 기대해 실패했고, 실제 metadata와 실패 로그를
+보존한 뒤 종료 후 credential 부재를 검사했다. 제품 credential·recovery·timeout은 바꾸지 않았다.
+
+오류도 보존했다. Principal 도구 오류3건은 GOAL의 잘못된 `kind=message`, 첫 배달 전 없는 inbox,
+canonical archive suffix가 빠진 경로였다. Worker 오류3건은 미지원 `--help`, 인자 없는 submit usage,
+자신이 보낸 메일의 ack 거절이었다. 이후 실제 작업·수신을 완료했지만 무오류 실행으로 기록하지 않는다.
+Worker assistant의 `This operation was aborted`2건은 각각 직전 `oma agent wait`와 대조했으며
+외부 provider 인증 거절로 분류하지 않는다. 원시 session·상태·Git 결과는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-live-codex-luna/`의 `bounded-live-result.json`,
+`role-session-summary.json`, redacted session, `final-owner-observations.json`, `execution-scopes.jsonl`,
+`terminal-shutdown-observation.json`에 있다. 원문 credential은 evidence에 저장하지 않는다.
+
+이는 **당시 checkout의 제한된 live 시나리오**다. 그 시점의 설치본 live 추론 미실행은
+위 후속 독립 설치본 실행으로 보완했다. 각 입력·실행의 근거는 합치거나 소급 승격하지 않는다.
+과거 단일 CI 실패는 위 비차단 추적 분류를 따른다. Linux 검증과 보편적 P0 완전 증명은 구분한다.
+
+
+### 사용자 기능과 Priority 0의 실행 근거
+
+| 사용자 경로 | 위 full local·후속 serial all에서 실제 실행한 근거 | 확대 해석 금지 |
+|---|---|---|
+| Society·Principal·Worker·자동 wake | `scenario-society`, `scenario-principal`, `scenario-worker-autonomy`, `native-resident-runtime` | 실제 broker/engine/namespace/receipt, 추론 응답은 scripted provider |
+| manual CLI·현재 grant·sender identity | `audit2`, `runner-channel`, `native-unix-message`, `peer-pid` | UID/PID·과거 receipt를 현재 권한으로 승격하지 않음 |
+| Git submit·candidate/checks·review | `scenario-confined`, `scenario-merge-review`, `scenario-worker-tools`, `native-git-execution` | test-owned repos만 변경. 이 work branch를 merge한 것이 아님 |
+| mail·request key·receipt·restart | `scenario-boundaries`, `scenario-society`, `crash-boundaries`, `global-invariants` | 새 incarnation이 accepted bytes·완료 receipt를 재해석하지 않는 경계 |
+| Personal·Pi/tools·설정·history | `personal-pty`, `session-mode-pty`, `session-history`, `config-generations` |16종 installed PTY는 실제 UI/tools이며 추론은 scripted |
+| package·선택 extension·resource | `pi-packages-cli`, `package-command-ownership`, `scenario-confined` | local registry/engine 명령. 외부 registry 가용성 qualification이 아님 |
+| Restic·원본 보존·복구 | `session-storage`, `session-storage-verification`, `restic-tar`, `restic-setup` | 실제 pinned local Restic. host power loss·원격 backup 서비스는 미실행 |
+| durable witness→현재 authority→release | `native-process-scope`의 publication·revocation·cancel·PID2 pin·setsid/double-fork 및6종 owner SIGKILL | after-opening은 기대한 unknown으로 journal bytes를 보존. direct-child close를 전체 death로 쓰지 않음 |
+
+**현재 판정:** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 위에 기록했다.
+과거 원인 미상 단일 CI 실패는 진단을 유지하는 비차단 이력이며 무한 재현을 완료 조건으로 삼지 않는다.
+앞선 빈 OMA auth·기본 모델·9종 API-key 부재는 당시 사실이다. 후속 사용자 승인 Codex 재사용으로
+checkout 및 독립 설치본 실제 추론을 실행했으며 사용자 `~/.pi`로 대신하지 않았다.
+이 범위의 인수검증을 마감하고 문서 정합성·지정 branch push 후 Mac의 실제 관측을 재개한다.
+이는 무결함·보편적 P0 완전 증명이나 실제 Mac 제품 지원 완료 선언이 아니다.
+
+## Fresh service target — local 검증, 실제 Mac 미실행 (2026-10-28)
+
+지정 `work/macos-native-20261025`에서 재개했다. host positive와 sandboxed 최초 target을
+동일 actor/once 설정의 별도 launchd job으로 분리했고 production source·Seatbelt 정책·C actor의
+5초 deadline/owned-child cleanup은 변경하지 않았다. 변경은 fixture·관측 parser·회귀와 문서다.
+
+- 새 target 귀속 회귀: 수정 전1 FAIL(`Missing expected exception`), 같은 test bytes로 수정 후 통과.
+- `node --test test/darwin-evidence.test.mjs packages/platform-mac/test/seatbelt.test.mjs`:
+  **40/40 PASS**, fail/cancel/skip/todo0·exit0. 변경 MJS3개의 `node --check`도 exit0.
+- 직접 parser smoke: `836e2f5963`의 Mac15·26 기존 각3건을 새 fresh-target 근거로 거절했다.
+  역사 OBSERVED 기록은 보존하며 새 grammar로 소급 재승인하지 않는다.
+  합성 CLI 거절·spawn 실패·deadline 불명·다른 CID effect4종은 grammar로만 수용했다.
+- 실제 Linux launchd fixture 실행은 state 생성 전 exit1/Darwin-only 거절이었다.
+  이는 actual Mac service admission의 허용/거절·complete-death proof가 아니다.
+
+원시 명령·exit·로그·test/parser SHA는
+`/home/dev/oma-audit-artifacts/native-2026-10-28-service-fresh-target/`의
+`red*`, `green*`, `checked-source.json`, `regression-input.json`, `direct-smoke*`에 있다.
+README·WATCHDOG.yml과 production policy/C actor는 보호 digest로 전후 대조한다.
+**새 fixture의 Mac15·26 실행·새 CI는 NOT_RUN**이다. 이 checkpoint 당시 미실행이던 Linux build/architecture/전체 회귀의 후속 결과는 위 Linux 기록으로 구분한다.
+이 local 결과는 아래 이전 canonical binding의 재검증이 아니며 세 product gate는 OPEN이다.
 
 ## DR61 명세 개정 — 구현 재개 (2026-10-28)
 
@@ -582,7 +745,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `1768c39d7c91837d3836041610eba235a06f263657d2994d4b99d87ff1ec4ce9` (15686 files).
+verification input digest `232a303bba403d9e6d6ca122e428a2924d0fa4640f3b8a975178fd0524076716` (15686 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

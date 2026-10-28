@@ -113,6 +113,13 @@ try {
       if (error.stderr) console.error(String(error.stderr));
       failures.push(new Error(`${workspace.manifest.name}: ${error.message}`, { cause: error }));
     }
+    finally {
+      try { rmSync(join(scratch, workspace.manifest.name.slice(5)), { recursive: true, force: true }); }
+      catch (error) {
+        console.error(`${workspace.manifest.name}: isolated cleanup FAIL`);
+        failures.push(new Error(`${workspace.manifest.name}: isolated cleanup failed`, { cause: error }));
+      }
+    }
   }
   if (failures.length) throw new AggregateError(failures, `${failures.length}/${workspaces.length} isolated workspaces failed`);
 } catch (error) {
