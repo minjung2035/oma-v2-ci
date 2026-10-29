@@ -135,6 +135,9 @@ export function validateDarwinObservation(name, observations) {
         record.connectAttempted === record.created && [-1, 0].includes(record.connectResult) &&
         (record.created || record.connectResult === -1) &&
         [record.errno, record.connectErrno].every(number => Number.isSafeInteger(number) && number >= 0);
+      const pathObservation = record => record && [-1, 0].includes(record.result) &&
+        Number.isSafeInteger(record.errno) && record.errno >= 0 &&
+        (record.result === -1 ? record.kind === null : ["symlink", "socket", "directory", "other"].includes(record.kind));
       const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
       const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
         command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
@@ -144,7 +147,9 @@ export function validateDarwinObservation(name, observations) {
           record?.phase === "native-dns" && Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === command.pid &&
           Number.isSafeInteger(record.uid) && record.uid > 0 && record.hostname === "example.com" &&
           record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) &&
-          [record.socket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
+          record.canonicalEndpoint === bootstrap.dnsResolvedEndpoint &&
+          [record.socket, record.canonicalSocket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
+          [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
           [record.getaddrinfo?.errno, record.getaddrinfo?.ipv4, record.getaddrinfo?.ipv6]
             .every(number => Number.isSafeInteger(number) && number >= 0) &&
           [record.dnssd?.createResult, record.getaddrinfo?.result].every(signed32));
@@ -172,6 +177,7 @@ export function validateDarwinObservation(name, observations) {
           !dns(hostDns) || hostDns.error !== undefined ||
           !nativeDns(bootstrap.nativeDnsHostCommand, bootstrap.nativeDnsHost) || bootstrap.nativeDnsHostCommand.exitCode !== 0 ||
           bootstrap.nativeDnsHost?.socket.created !== true || bootstrap.nativeDnsHost.socket.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.canonicalSocket.created !== true || bootstrap.nativeDnsHost.canonicalSocket.connectResult !== 0 ||
           bootstrap.nativeDnsHost.unixAllowlist.listed.created !== true || bootstrap.nativeDnsHost.unixAllowlist.listed.connectResult !== 0 ||
           bootstrap.nativeDnsHost.unixAllowlist.unlisted.created !== true || bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult !== 0 ||
           bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||

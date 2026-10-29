@@ -280,6 +280,17 @@ value.complete = true; save();
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
     }
+    const pids = observation.bootstrap.variants.map(variant => variant.node.tools?.nativeDnsCommand?.pid)
+      .filter(pid => Number.isSafeInteger(pid) && pid > 0);
+    const diagnostics = { purpose: "read-only violations for owned DNS observers; not authority or death proof", pids };
+    if (pids.length && performance.now() - started < 73000) {
+      const selected = pids.map(pid =>
+        `(processIdentifier == ${pid} OR eventMessage CONTAINS "bootstrap-exec(${pid})")`).join(" OR ");
+      const predicate = `(subsystem == "com.apple.sandbox.reporting" OR subsystem == "com.apple.sandbox") AND (${selected})`;
+      try { diagnostics.command = observe("/usr/bin/log", ["show", "--style", "json", "--last", "2m", "--predicate", predicate], 5000); }
+      catch (error) { diagnostics.unavailable = String(error); }
+    } else diagnostics.notRun = "no owned observer PID or insufficient fixture budget";
+    observation.bootstrap.denialDiagnostics = diagnostics;
   } else if (mode === "launchd-image") {
     assert.notEqual(hashes[0], hashes[1], "different controlled programs require different code hashes");
     const selected = join(root, "selected");

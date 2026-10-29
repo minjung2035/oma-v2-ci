@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux 재인수·발행 뒤 Mac actual Unix allowlist 경계를 확인했다.** 주 `3001f967ae` / mirror `2b8c6f276d`의 양 Mac 실제 compile·각3회에서 listed socket 연결과 unlisted EPERM을18 variant 모두 확인했다. Git/compiler·금지 file canary도 정상이나 시스템 DNS socket은 여전히 EPERM이다. DNS 수리 완료가 아니다. 현재는 선언된 endpoint의 metadata만 허용하는 최소 후보를 검증하며 file contents/write·broad Unix/Mach grant·실행 guard를 바꾸지 않는다. 후보의 실제 Mac 실행은 아직 NOT_RUN이다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)의 source별 결과를 따른다.
+**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac exact Unix literal의 listed 연결/unlisted EPERM도 실제18 variant에서 확인했다. 그러나 시스템 DNS는 거절된 채다. 주 `65be121d10` / mirror `f75a06eeeb`의 exact endpoint metadata 후보도 양 Mac에서 효과가 없어 그 grant를 제거했다. 현재는 권한을 더 넓히지 않고 alias/canonical connect·실제 lstat·소유 DNS observer PID의 한정된 denial log를 대조한다. 새 관측의 Mac 실행은 아직 NOT_RUN이며 세 gate·실행 차단은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 
