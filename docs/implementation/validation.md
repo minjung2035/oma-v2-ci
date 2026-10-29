@@ -100,7 +100,7 @@ private listed0/unlisted EPERM은 유지했다. exact leaf metadata 단독으로
 
 ### DNS 경로와 실제 거절 operation 분리 — 실행 전
 
-현재 production은 앞서 실제 확인한 exact network literal만 남겼다.
+이 진단 source의 production은 앞서 실제 확인한 exact network literal만 남겼다.
 작은 C 진단은 libc resolver를 대체하지 않고 alias `/var/run/mDNSResponder`와 canonical
 `/private/var/run/mDNSResponder`의 raw connect를 독립 수행한다. `/var`·alias·canonical의 실제 lstat도 별도로 기록한다.
 오류일 때 종류는 null이며 absent·socket·directory로 추정하지 않는다. PID/UID·path·typed 결과를 validator/factory와 함께 결박했다.
@@ -109,7 +109,29 @@ private listed0/unlisted EPERM은 유지했다. exact leaf metadata 단독으로
 원래 fixture budget 안에서만 수행하고 접근 거절/timeout/미수집을 그대로 남긴다. 로그 부재는 거절 부재·role/scope/death proof가 아니다.
 이 진단을 위해 root·새 sandbox grant·resolver override·성공 조건/timeout 완화를 추가하지 않았다.
 build·guard를 유지한 caller regression59/59·변경 MJS와 실제 생성 Node module syntax는 통과했다.
-새 canonical/metadata/denial 관측의 실제 Mac 실행은 **NOT_RUN**이다. 원시는 `exact-unix-sockets/dns-path-and-denial/`다.
+이 local checkpoint에서는 새 canonical/metadata/denial 관측의 실제 Mac 실행은 **NOT_RUN**이었다.
+원시는 `exact-unix-sockets/dns-path-and-denial/`이고, 이후 실제 결과는 다음과 같다.
+
+주 `d82484b292875ea2a1925cef923f91672534ff55` / mirror `9956e673800acdcb62bd595bb896a165c2be3c1e`,
+tree `a741e95f2b6a82f14106010b78a4c105eaa20d04`, clean `3f31c762e52867065529f7bbed766b8c34ae9d3a37a940d6bc0dfefba0101a29` /15687 files다.
+Native [40794027231](https://github.com/minjung2035/oma-v2-ci/actions/runs/40794027231)의 공개 SHA256 확인 ZIP5개를 회수했다.
+양 SDK compile/link·각3 case OBSERVED이고18 variant 모두 canonical connect0·alias connect -1/EPERM1이다.
+`lstat("/var")`는 host에서는 성공·symlink, sandbox에서는 -1/EPERM1·kind null이다.
+DNS-SD -65563·getaddrinfo8·Node ENOTFOUND는 여전하며 listed0/unlisted EPERM도 유지했다.
+소유 DNS observer PID만의 log6회가 모두 수집됐고 실제 `file-read-metadata /var` 거절을 기록했다.
+canonical leaf의 명시적 lstat도 metadata 거절이나 raw canonical connect는 성공한다. leaf metadata 단독 grant를 복원하지 않는다.
+명시적 lstat 자체의 거절과 resolver 내부 거절을 로그만으로 일대일 귀속하거나 duplicate report를 syscall 횟수로 세지 않는다.
+원시는 `actual-path-outcomes.json`·`actual-scoped-denial-records.json`·`actual-relevant-denials.json`과 source별 ZIP이다.
+이는 alias traversal 원인 후보를 좁힌 근거이며 정상 DNS·complete backend proof가 아니다.
+
+### /var root symlink metadata 후보 — 실제 효과 미검증
+
+기존 DIRECTORY metadata 허용은 `/var` symlink를 포함하지 않는다. production에
+`(allow file-read-metadata (literal "/var"))`만 추가했다. 파일 내용·directory entries·write·broad subpath,
+추가 Mach service·resolver fallback·timeout 완화는 없고 기존 실행 guard·Linux backend도 유지한다.
+inventory·review stale·DAG·build는 exit0, guard를 유지한 caller regression59/59·fail/cancel/skip/todo0다.
+이 후보의 실제 Mac alias connect·DNS-SD·libc/Node 정상화와 listed/unlisted·금지 file canary 보존은 **NOT_RUN**이다.
+원시는 `exact-unix-sockets/var-symlink-metadata/`다. 실제 결과 전에는 DNS 수리나 gate 완료로 기록하지 않는다.
 
 
 
@@ -1126,7 +1148,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `3f31c762e52867065529f7bbed766b8c34ae9d3a37a940d6bc0dfefba0101a29` (15687 files).
+verification input digest `5aefad9164bff84d0e973ec25ac0458e1d5bbacd9f644f71eccd99c6cd2aec2d` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
