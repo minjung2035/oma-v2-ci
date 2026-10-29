@@ -407,9 +407,13 @@ prior lookup·image 초기화·그 밖의 process-local state를 원인으로 �
 Mac common 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic-setup8/8·skip/cancel/todo0다.
 양 Mac package27개 중26 PASS·`@oma/git`1 FAIL은 기존 preparation guard다. 세 gate OPEN·실행 차단은 유지한다.
 `actual-exact-import-node-libc-outcomes.json`·`actual-exact-import-node-libc-qualification.json`·
-`actual-common-and-packaged-runtime.json`에 남겼다. Architecture40821437422의 원시는 이 기록 시점 회수 전이다.
+`actual-common-and-packaged-runtime.json`에 남겼다. 동일 source Architecture
+[40821437422](https://github.com/minjung2035/oma-v2-ci/actions/runs/40821437422)는 completed/success이며 원시를 회수했다.
+all3954/3954·baseline14/14+3940/3940·5 lane PASS·skip/cancel/todo0·errors[]·numeric command exit0다.
+baselineComparison NOT_AVAILABLE·standalone kernel/crash NOT_RUN과 actual native-all 포함 범위는 그대로다.
+`same-image-libc/linked-symbols/published-ci/architecture/clean-source-full-ci-qualification.json`에 source별로 남겼다.
 
-### 다음 대조 — 첫 controlled Node lookup 전후
+### 첫 controlled Node lookup 전후 — 실제 성공, 별도 C 실패는 유지
 
 관측 script는 같은 import/layout·동일 API를 `before-node-lookup`과 `after-node-lookup`으로 각각 기록한다.
 각 stage의 PID/UID·실제 task/global before/after·service443/null 결과를 남긴다.
@@ -417,8 +421,38 @@ Mac common 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic
 cached global restore의 기준 snapshot은 두 stage가 끝난 뒤 새로 읽는다. 서로 다른 시점의 port-name 동일성을 의미로 요구하지 않는다.
 validator/factory는 stage 누락·재라벨·PID 혼입·미완료 snapshot·실제 unavailable를 구분한다.
 local caller59/59·generated module syntax·실제 Linux state 생성 전 거절은 통과했다.
-기존 libc/ABI/import 실제 smoke는 동일 module을 재사용하며 새 stage의 **Mac 실행은 NOT_RUN**이다.
+기존 libc/ABI/import 실제 smoke는 동일 module을 재사용했다. 발행 직전 새 stage의 **Mac 실행은 NOT_RUN**이었다.
 원시는 `same-image-libc/lookup-order/`다. production resolver·허용 권한·제품 timeout은 바꾸지 않았다.
+
+주 `c7469c4383f77313b31401bfe73500b07bcb202e` / mirror `de1624b9aa00558b6d258c941b8a5eb23b6fbfe7`,
+tree `81dd93cd09e25ff980299e1cbb5c55f04b55cdf8`, clean `63f18dbabfd2e0c69aed97a09e93b3ee64335706ceb5423af86f45319211e805` /15688 files다.
+Native [40825109579](https://github.com/minjung2035/oma-v2-ci/actions/runs/40825109579)의 원래 ZIP5개를 official SHA256과 대조했다.
+양 Mac SDK15.5/26.5의 각3 case는 OBSERVED·exit0이고 source/input/runtime 전후·실제 소유 cleanup은 일치했다.
+18 Node mode의 두 stage·service443/null 직접 호출72회는 모두 result0·주소 family를 반환했다.
+각 stage의 nil12 mode는 own task/global0을 전후 유지했고 selected Git/compiler·Node lookup·DNSSD create·socket/file 거절도 유지했다.
+Node-child C의 원래3 context는 inherited18회 성공·nil36회 EAI_NONAME8로 그대로다.
+
+**확정:** 이 controlled Node lookup을 먼저 실행하는 것은 Node 직접 libc 성공의 필수조건이 아니다.
+**미확정:** startup/image·다른 inherited state·task 생성 경로 중 원인은 분리하지 못했다. system/global cache cold나 모든 권한 부재를 증명하지 않는다.
+현재 Node는 pruned launcher task에서 exec됐고, C control은 그 Node가 spawnSync한 child라는 경로 차이가 있다.
+**다음 미실행:** 같은 C image를 같은 pruned launcher task에서 직접 exec하여 기존 Node-child C와 비교한다.
+이는 아직 NOT_RUN이며 task 경로를 원인으로 단정하거나 production에 우회 경로를 추가한 것이 아니다.
+`actual-before-after-node-lookup-outcomes.json`·`actual-before-after-node-lookup-qualification.json`에 실제 결과를 남겼다.
+
+Mac common 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic-setup8/8·skip/cancel/todo0다.
+양 Mac package27개 중26 PASS·`@oma/git`1 FAIL은 기존 preparation guard다. 세 gate OPEN·제품 실행 차단은 유지한다.
+동일 source Architecture [40825108626](https://github.com/minjung2035/oma-v2-ci/actions/runs/40825108626)는 completed/success다.
+원시에서 all3954/3954·baseline14/14+3940/3940·fast881·durable872·property34·stress16·platform72 PASS,
+skip/cancel/todo0·errors[]·numeric command exit0를 대조했다. baselineComparison은 NOT_AVAILABLE이고
+standalone kernel/crash는 NOT_RUN·actual native-all 파일/required names 포함이다.
+`published-ci/architecture/clean-source-full-ci-qualification.json`에 해당 frozen source로 남겼다.
+
+회수 중 observer의 GitHub REST quota403은 reset을 존중해 **같은 원래 run**으로 복구했다.
+Native의 particular-artifact canonical 경로는 redirect 뒤 HTTP500이었고, 문서화된 completed-workflow 경로의
+`?status=completed`와 full-source artifact 이름으로 원래 ZIP5개의 공식 digest가 모두 일치했다.
+CI/test 재실행·새 GitHub 앱 권한·공개 notice 인프라는 추가하지 않았다. 획득 실패는 product/test 실패로 합성하지 않는다.
+후속 문서-only 마감은 동일 implementation의 새 runtime proof를 주장하지 않으며 해당 CI를 다시 실행하지 않는다.
+
 
 
 
@@ -1442,7 +1476,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `63f18dbabfd2e0c69aed97a09e93b3ee64335706ceb5423af86f45319211e805` (15688 files).
+verification input digest `181202004ecf105582524074c1e757deefe4b7cc42ff172d8f1093254bd5f9a6` (15688 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
