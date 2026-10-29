@@ -154,6 +154,16 @@ export function validateDarwinObservation(name, observations) {
         value.afUnspec >= 0 && value.afInet > 0 && value.afInet6 > 0 && value.afInet !== value.afInet6 && value.sockStream > 0;
       const sameLayout = value => abi(value) && abi(layout) && layoutKeys.every(key => value[key] === layout[key]);
       const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
+      const resolverSymbols = bootstrap?.resolverSymbols;
+      const imports = typeof bootstrap?.resolverSymbolsCommand?.stdout === "string"
+        ? bootstrap.resolverSymbolsCommand.stdout.split(/\r?\n/).map(name => name.trim()) : [];
+      const importsMatch = resolverSymbols && Object.keys(resolverSymbols).length === 2 &&
+        ["getaddrinfo", "freeaddrinfo"].every(name => {
+          const matches = imports.filter(symbol => new RegExp(`^_${name}(?:\\$[A-Za-z0-9_]+)*$`).test(symbol));
+          return matches.length === 1 && resolverSymbols[name] === matches[0].slice(1);
+        });
+      const sameSymbols = value => value && resolverSymbols && Object.keys(value).length === 2 &&
+        ["getaddrinfo", "freeaddrinfo"].every(name => value[name] === resolverSymbols[name]);
       const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
         command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
         command.argv[0] === "observe-dns" && typeof command.argv[1] === "string" && command.argv[1].startsWith("/") &&
@@ -233,7 +243,7 @@ export function validateDarwinObservation(name, observations) {
             record.before !== undefined && !nodePorts(record.before) ||
             record.after !== undefined && !nodePorts(record.after)) return false;
         if (record.calls === undefined) return typeof record.unavailable === "string" && !positive;
-        return record.hostname === "example.com" && sameLayout(record.layout) &&
+        return record.hostname === "example.com" && sameLayout(record.layout) && sameSymbols(record.symbols) &&
           record.hints?.flags === 0 && record.hints.family === layout.afUnspec &&
           record.hints.socktype === layout.sockStream && record.hints.protocol === 0 &&
           Array.isArray(record.calls) && record.calls.length === 2 && record.calls.every((call, index) =>
@@ -268,6 +278,9 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.ffi.host.ffiPid !== bootstrap.ffi.host.pid || bootstrap.ffi.host.uid !== bootstrap.nativeDnsHost?.uid ||
           typeof bootstrap.libcProbe?.entry !== "string" || !bootstrap.libcProbe.entry.startsWith("/") ||
           typeof bootstrap.libcProbe.sourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.libcProbe.sourceSha256) ||
+          !importsMatch || !outcome(bootstrap.resolverSymbolsCommand) || bootstrap.resolverSymbolsCommand.exitCode !== 0 ||
+          bootstrap.resolverSymbolsCommand.executable !== "/usr/bin/xcrun" ||
+          JSON.stringify(bootstrap.resolverSymbolsCommand.argv) !== JSON.stringify(["nm", "-uj", launcher]) ||
           !nodeLibc(bootstrap.nativeLibcHost, bootstrap.ffi.host.pid, bootstrap.ffi.host.uid, true) ||
           typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
           unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
@@ -317,6 +330,7 @@ export function validateDarwinObservation(name, observations) {
                 attempt.command.argv[11] !== launcher ||
                 attempt.command.argv[12] !== unix.listed || attempt.command.argv[13] !== unix.unlisted ||
                 attempt.command.argv[16] !== JSON.stringify(layout) ||
+                attempt.command.argv[17] !== JSON.stringify(resolverSymbols) ||
                 attempt.command.argv[15] !== attempt.globalTarget ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&

@@ -89,7 +89,8 @@ const bootstrapRecord = () => {
     connectResult: allowed ? 0 : -1, connectErrno: allowed ? 0 : 1 });
   const layout = { size: 48, pointerBytes: 8, intBytes: 4, flags: 0, family: 4, socktype: 8, protocol: 12, next: 40,
     afUnspec: 0, afInet: 2, afInet6: 30, sockStream: 1 };
-  const nodeLibc = pid => ({ phase: "node-libc-resolver", pid, uid: 501, hostname: "example.com", layout,
+  const resolverSymbols = { getaddrinfo: "getaddrinfo$DARWIN_EXTSN", freeaddrinfo: "freeaddrinfo" };
+  const nodeLibc = pid => ({ phase: "node-libc-resolver", pid, uid: 501, hostname: "example.com", layout, symbols: resolverSymbols,
     hints: { flags: 0, family: 0, socktype: 1, protocol: 0 },
     calls: [{ service: "443", result: 0, ipv4: 1, ipv6: 0 }, { service: null, result: 0, ipv4: 1, ipv6: 0 }] });
   const nativeDns = (pid, bootstrap = 200, seed = 201, sandboxed = true) => ({ phase: "native-dns", pid, uid: 501,
@@ -123,7 +124,8 @@ const bootstrapRecord = () => {
         [name, "/owned/profile", "/owned/ports", "/owned/work",
           ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] : kind === "node" ?
             ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", git, "{}", "/owned/bootstrap-exec",
-              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget, JSON.stringify(layout)] :
+              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget,
+              JSON.stringify(layout), JSON.stringify(resolverSymbols)] :
             ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
           before: { bootstrap: 200, registered: [201] },
@@ -166,6 +168,8 @@ const bootstrapRecord = () => {
       nativeSubsetHostCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/host-subset.json"], 269),
       nativeSubsetHost: nativeSubset(269),
       libcProbe: { entry: "/selected/darwin-libc.mjs", sourceSha256: "c".repeat(64) }, nativeLibcHost: nodeLibc(111),
+      resolverSymbols, resolverSymbolsCommand: command("/usr/bin/xcrun", ["nm", "-uj", "/owned/bootstrap-exec"], 268,
+        "_getaddrinfo$DARWIN_EXTSN\n_freeaddrinfo\n"),
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
@@ -393,6 +397,9 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.variants[1].node.tools.nativeLibc.calls[1].service = "443"; },
     value => { delete value.bootstrap.variants[1].node.tools.nativeLibc.after; },
     value => { value.bootstrap.nativeLibcHost.unavailable = "host direct call not qualified"; },
+    value => { value.bootstrap.resolverSymbols.getaddrinfo = "getaddrinfo"; },
+    value => { value.bootstrap.resolverSymbolsCommand.argv[2] = "/foreign/executable"; },
+    value => { value.bootstrap.variants[1].node.command.argv[17] = "{}"; },
     value => {
       value.bootstrap.variants[1].node.tools.nativeLibc.unavailable = "after-snapshot unavailable";
       value.bootstrap.variants[1].node.tools.nativeLibc.calls[0].result = "8";

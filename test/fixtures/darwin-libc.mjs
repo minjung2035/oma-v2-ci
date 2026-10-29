@@ -1,8 +1,8 @@
-/** Controlled public-libc observation. The compiled SDK supplies the layout;
+/** Controlled public-libc observation. The compiled SDK supplies layout/imports;
  * this is neither a resolver fallback nor an authority/complete-scope proof. */
-export function observeNodeLibc(library, decode, layout, hostname = "example.com") {
-  const lookup = library.func("int getaddrinfo(const char *node, const char *service, const void *hints, void *result)");
-  const free = library.func("void freeaddrinfo(void *result)");
+export function observeNodeLibc(library, decode, layout, symbols, hostname = "example.com") {
+  const lookup = library.func(symbols.getaddrinfo, "int", ["str", "str", "void *", "void *"]);
+  const free = library.func(symbols.freeaddrinfo, "void", ["void *"]);
   const hints = Buffer.alloc(layout.size), pointer = Buffer.alloc(layout.pointerBytes);
   hints.writeInt32LE(layout.afUnspec, layout.family);
   hints.writeInt32LE(layout.sockStream, layout.socktype);
@@ -21,6 +21,6 @@ export function observeNodeLibc(library, decode, layout, hostname = "example.com
     } finally { if (head) free(head); }
     calls.push({ service, result, ipv4, ipv6 });
   }
-  return { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), hostname, layout,
+  return { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), hostname, layout, symbols,
     hints: { flags: 0, family: layout.afUnspec, socktype: layout.sockStream, protocol: 0 }, calls };
 }
