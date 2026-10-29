@@ -4,6 +4,20 @@
 실제 Sol medium 비교와 native Darwin qualification은 미완료다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
 
+## toolset의 OpenAI schema 호환성
+
+`packages/tool-runtime/src/tool-surface.ts`에서 `select` 배열의 `uniqueItems: true`만
+제거했다. 허용 이름 enum과 런타임 중복 거절, 선택 집합 교체·저장 경계는 유지한다.
+
+- tool-runtime workspace build PASS. 기존 tool-surface 회귀10/10 PASS·skip0.
+- 실제 Pi SDK의 Principal·Worker session에서 등록된 toolset을 설치된 OpenAI
+  Responses converter에 전달했다. strict는 유지되고 `uniqueItems`는 없으며 enum은 보존됐다.
+- 양쪽의 실제 tool definition을 실행해 정상 선택·빈 선택 성공, 런타임 집합 검사의
+  중복 선택 거절, 현재 batch의 active set 보존을 확인했다.
+
+외부 API 요청이나 provider 추론은 실행하지 않았다. 실제 서버 수용을 검증한 결과는 아니다.
+임시 smoke는 파일로 남기지 않았고 새 영구 테스트는 추가하지 않았다.
+
 ## Pi 자동 업데이트 안내 숨김
 
 공통 pinned interactive adapter에서 자동 changelog 계산과 새 Pi 버전 안내의 표시
@@ -781,7 +795,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `63938f617925ad48b0c55fa5a8345dd7635590456ec1ff16a1793e61aa1da985` (15681 files).
+verification input digest `459bcfc37a49b5977e39d50f5573476bc6131691e2273338cab684a30ab805d0` (15681 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

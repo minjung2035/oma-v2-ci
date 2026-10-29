@@ -14700,7 +14700,7 @@
     },
     {
       "path": "packages/tool-runtime/src/tool-surface.ts",
-      "sha256": "dc2e84e3a7e00730c3003d0cbac95aaadbacdddc84cfe6806a2f61c01167e28f"
+      "sha256": "6d8bf3faa2748752f27b68a39db5e8e64948a36f14598db7d677ce44db5f7ec7"
     },
     {
       "path": "packages/tool-runtime/src/vendor-bundle.ts",

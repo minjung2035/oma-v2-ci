@@ -125,7 +125,7 @@ export function registerToolSurface(pi: ExtensionAPI, owned: readonly string[], 
     }).join("\n");
     const signature = JSON.stringify([optional, catalog]);
     if (signature !== catalogSignature) {
-      const parameters = Type.Object({ select: Type.Array(stringEnum(optional), { uniqueItems: true,
+      const parameters = Type.Object({ select: Type.Array(stringEnum(optional), {
         description: "Exact, complete list of optional tool names to expose at the next safe turn boundary; replaces the previous selection. [] keeps only core tools." }) }, { additionalProperties: false });
       registerTypedTool(pi, {
         name: TOOLSET_NAME, label: "Select optional tools",

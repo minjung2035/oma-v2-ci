@@ -212,6 +212,8 @@ Scoped `grep` and `find` snapshot only the requested file or subtree plus the an
 
 `toolset`은 W/P 모두 **핵심**, ephemeral이다. 입력은 `{"select": ["허용된 선택 도구 이름", "..."]}`다. `select`는 필수 배열이며 중복·미등록·다른 역할·core 이름은 거절한다. 빈 배열은 core만 남긴다. broker mutation용 request는 받지 않는다.
 
+OpenAI strict-schema 호환성을 위해 `select`의 provider schema에는 `uniqueItems`를 넣지 않는다. 중복 선택은 기존 런타임 집합 검사로 거절하며, enum·입력 shape·안전 경계 검증은 유지한다.
+
 - `select`의 enum은 해당 역할과 provenance admission을 통과한 실제 optional registry에서 만든다. description에는 이름과 짧은 용도 목록을 항상 제공한다. 상세 schema만 선택 전까지 생략한다. 이름을 추측하거나 외부 명령 문서를 열어야 발견할 수 있게 하지 않는다.
 - 의미는 **추가가 아니라 전체 optional 선택 집합 교체**다. core를 해제할 수 없다. 별도 검색 query, raw args 전달, 다른 도구 실행, 자동 작업 계획을 받지 않는다.
 - 선택된 도구는 다음 model request에서 원래 typed tool로 직접 호출한다. `toolset`은 우회 실행 dispatcher가 아니다. `code_intel`·`file_edit`·`web_research` 및 새 management group을 함께 유지하지 않는다.
