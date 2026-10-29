@@ -169,6 +169,30 @@ export function validateDarwinObservation(name, observations) {
         });
       const machStatus = number => signed32(number) && number >= 0;
       const validName = name => portNumber(name) && name > 0 && name < 0xffffffff;
+      const subsetOperations = ["allocate", "makeSend", "subset", "unprivileged", "parent", "releaseParent",
+        "releaseUnprivileged", "releaseSubset", "releaseRequestorSend", "releaseRequestorReceive"];
+      const nativeSubset = (command, record, uid, path) => {
+        if (typeof path !== "string" || !path.startsWith("/") || path.includes("\0") ||
+            !outcome(command) || command.executable !== launcher ||
+            JSON.stringify(command.argv) !== JSON.stringify(["observe-subset", path])) return false;
+        if (record === null) return command.exitCode !== 0 || command.signal !== null;
+        const operations = record?.operations;
+        if (record?.phase !== "native-subset-preflight" || record.pid !== command.pid || record.pid <= 0 ||
+            record.uid !== uid || record.euid !== uid || record.namespaceInstalled !== false ||
+            !portNumber(record.globalBootstrap) || !snapshot(record.before) || !snapshot(record.after) ||
+            !operations || Object.keys(operations).length !== subsetOperations.length ||
+            !subsetOperations.every(key => operations[key] === null || signed32(operations[key])) ||
+            operations.allocate === null) return false;
+        for (const [index, key] of subsetOperations.slice(1, 5).entries())
+          if ((operations[key] !== null) !== (operations[subsetOperations[index]] === 0)) return false;
+        for (const [key, operation] of [["requestor", "allocate"], ["subset", "subset"],
+          ["unprivileged", "unprivileged"], ["parent", "parent"]])
+          if (!(operations[operation] === 0 ? validName(record[key]) : record[key] === 0)) return false;
+        for (const [release, acquired] of [["releaseParent", "parent"], ["releaseUnprivileged", "unprivileged"],
+          ["releaseSubset", "subset"], ["releaseRequestorSend", "makeSend"], ["releaseRequestorReceive", "allocate"]])
+          if ((operations[release] !== null) !== (operations[acquired] === 0)) return false;
+        return true;
+      };
       const nodePorts = record => record && portNumber(record.globalBootstrap) && machStatus(record.globalTypeStatus) &&
         (record.globalTypeStatus === 0 ? portNumber(record.globalRights) : record.globalRights === null) &&
         machStatus(record.taskBootstrapStatus) &&
@@ -228,7 +252,9 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.nativeDnsHost.unixAllowlist.unlisted.created !== true || bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult !== 0 ||
           bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||
           bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0 ||
-          !nativeResolvers(bootstrap.nativeResolverHost, bootstrap.nativeDnsHostCommand.argv[1], bootstrap.nativeDnsHost.uid, true))
+          !nativeResolvers(bootstrap.nativeResolverHost, bootstrap.nativeDnsHostCommand.argv[1], bootstrap.nativeDnsHost.uid, true) ||
+          !nativeSubset(bootstrap.nativeSubsetHostCommand, bootstrap.nativeSubsetHost, bootstrap.nativeDnsHost.uid,
+            bootstrap.nativeSubsetHostCommand?.argv?.[1]))
         throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
       const targets = new Set([bootstrap.positiveTarget]);
       for (const [index, variant] of bootstrap.variants.entries()) {
@@ -273,7 +299,9 @@ export function validateDarwinObservation(name, observations) {
                 !nativeDns(attempt.tools.nativeDnsCommand, attempt.tools.nativeDns) ||
                 attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid ||
                 !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid) ||
-                !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget)))
+                !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget) ||
+                !nativeSubset(attempt.tools.nativeSubsetCommand, attempt.tools.nativeSubset, ports?.uid,
+                  `${attempt.command.argv[14]}.subset.json`)))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;

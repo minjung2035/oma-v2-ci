@@ -100,6 +100,11 @@ const bootstrapRecord = () => {
       observation: { phase: "native-resolver", pid: firstPid + index, uid: 501, hostname: "example.com",
         context, service: service === "none" ? null : service, globalBootstrap: bootstrap,
         ports: { bootstrap, registered: [seed] }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } } }));
+  const nativeSubset = pid => ({ phase: "native-subset-preflight", pid, uid: 501, euid: 501, globalBootstrap: 200,
+    namespaceInstalled: false, requestor: 300, subset: 301, unprivileged: 301, parent: 0,
+    before: { bootstrap: 200, registered: [201] }, after: { bootstrap: 200, registered: [201] },
+    operations: { allocate: 0, makeSend: 0, subset: 0, unprivileged: 0, parent: 1100,
+      releaseParent: null, releaseUnprivileged: 0, releaseSubset: 0, releaseRequestorSend: 0, releaseRequestorReceive: 0 } });
   const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
     const attempt = kind => {
       const pid = 120 + index * 3 + (kind === "direct" ? 0 : kind === "node" ? 1 : 2);
@@ -127,6 +132,8 @@ const bootstrapRecord = () => {
             unixSocketCanary.listed, unixSocketCanary.unlisted], 180 + index),
           nativeDns: nativeDns(180 + index, name === "inherited" ? 200 : 0, seed),
           resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed),
+          nativeSubsetCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/report.subset.json"], 270 + index),
+          nativeSubset: nativeSubset(270 + index),
           bootstrapGlobal: { phase: "node-bootstrap", pid, uid: 501, before: ownPorts, after: { ...ownPorts },
             restore: { attempted: globalBootstrap !== 0, setStatus: globalBootstrap ? 0 : null, registerStatus: globalBootstrap ? 0 : null },
             service: command("/bin/launchctl", ["kickstart", globalTarget], 250 + index) } } } : {}),
@@ -150,6 +157,8 @@ const bootstrapRecord = () => {
         unixSocketCanary.listed, unixSocketCanary.unlisted], 115),
       nativeDnsHost: nativeDns(115, 200, 201, false), unixSocketCanary,
       nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
+      nativeSubsetHostCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/host-subset.json"], 269),
+      nativeSubsetHost: nativeSubset(269),
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
@@ -367,6 +376,15 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { delete value.bootstrap.ffi.nativeRoot; },
     value => { value.bootstrap.ffi.nativeRoot = "/"; },
     value => { value.bootstrap.ffi.host.ffiPid += 1; },
+    value => { value.bootstrap.nativeSubsetHost.uid = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.euid = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubsetCommand.argv[1] = "/foreign/subset.json"; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.namespaceInstalled = true; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeSubset.operations.subset; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.operations.subset = 1100; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.operations.releaseParent = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.parent = 222; },
     value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
     value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
     value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
@@ -412,7 +430,19 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   cached.restore = { attempted: true, setStatus: 0, registerStatus: 0 };
   cached.after = { ...cached.before, taskBootstrap: 222, returnedSendStatus: 0 };
   unknown.bootstrap.variants[1].node.globalGuestEffect = { pid: 999, parent: 1, resource: "different-scope" };
+  const unavailableSubset = unknown.bootstrap.variants[1].node.tools.nativeSubset;
+  unavailableSubset.subset = unavailableSubset.unprivileged = 0;
+  Object.assign(unavailableSubset.operations, { subset: 1100, unprivileged: null, parent: null,
+    releaseUnprivileged: null, releaseSubset: null });
+  const recoveredParent = unknown.bootstrap.nativeSubsetHost;
+  recoveredParent.parent = 222;
+  Object.assign(recoveredParent.operations, { parent: 0, releaseParent: 0 });
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
+  const unavailableHost = structuredClone(unknown);
+  unavailableHost.bootstrap.nativeSubsetHostCommand = { ...unavailableHost.bootstrap.nativeSubsetHostCommand,
+    exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unavailableHost.bootstrap.nativeSubsetHost = null;
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unavailableHost });
 });
 
 test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {

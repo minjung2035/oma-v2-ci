@@ -303,6 +303,18 @@ ordinary UID 생성·parent 재취득·explicit GUI-domain fresh control·정상
 이 새 실기는 **NOT_RUN**이고 privileged service/entitlement·실행 허용·Linux 변경은 없다.
 판단 입력은 `next-candidate-source-contract.json`·`alternative-public-subset-assessment.json`이다.
 
+후속 fixture는 먼저 **생성 가능 여부만** 닫힌 preflight로 묻는다. 같은 C image의 `observe-subset`을 ordinary UID host와
+원래3개 Seatbelt/bootstrap mode 안에서 별도 실행한다. 새 private requestor RECEIVE와 SEND를 만들고 public subset→unprivileged→parent의
+각 실제 status·PID/UID/EUID·task/global before/after·획득한 참조별 해제를 기록한다.
+선행 실패 뒤 미호출은 null이며, API의 실패·음수 status·signal/timeout/unavailable·예상 밖 parent 성공도 보존한다.
+requestor의 SEND/RECEIVE와 반환된 SEND는 각각 소유한 참조만 반납하며 inherited task/registered port를 새 namespace로 바꾸지 않는다.
+기존 fresh service·정상 Node/C resolver·socket/file negative control과 권한 분리 비교는 그대로다.
+이는 **subset 안의 정상 libc/manual CLI·제어 분리 proof가 아니다**. 생성 양성이 먼저 나와야 그 실제 exec 비교로 진행할 수 있다.
+실제 entry와 generated module syntax·caller59/59·실제 Linux의 state 생성 전 거절은 통과했다.
+Darwin compile/link·subset 생성·parent 조회는 이 checkpoint에서 **NOT_RUN**이다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/public-subset-preflight/`다.
+
+
 
 
 
@@ -1320,7 +1332,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `7d6ca65d96606069dad4904fd0a066051a5ef61bb180162f786717b687dee9b1` (15687 files).
+verification input digest `f73776ede038f4f9fa186f17e16b9755b2d270c338f69465a094129658f3cc15` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
