@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac의 exact Unix·root alias·Node DNS와 실제 helper의 허용/거절 회귀는 확인했다. native C resolver는 권한 제거 뒤 계속 실패한다. Node 자신의 post-exec 관측은 FFI loader 실패로 UNAVAILABLE였고 native package가 read/map view 밖임을 확인했다. 권한0으로 간주하지 않는다. 현재 두 exact package root·host FFI 양성 검사를 추가했고 local59/59를 마쳤다. 후속 Mac 효과는 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
+**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac exact Unix·root alias·Node DNS와 실제 helper의 허용/거절 회귀를 확인했다. `1a32554f7d`의 실제 Node 관측도 회수했다. bootstrap 제거12회는 Node 자신의 task/global이0·cached 복원 미호출·fresh service141이며, inherited6회는 실제 범위 밖 actor를 실행했다. native C resolver는 여전히 실패하므로 complete backend는 미채택이다. 다음은 정상 lookup과 제어 분리를 양립할 수 있는 public unprivileged-subset API의 최소 실기다. 현재 선언/과거 계약만 확인했고 새 후보 실행은 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약을 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 
@@ -90,7 +90,9 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 
 ## 4. 가장 가까운 재개점: service 관측의 혼입 제거
 
-**새 Linux 우선 재개점:** Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926)의 `test.log`는 사전14/14 뒤 main3938/3939·fail1이다. 실패는 `V10A: an unanswered command ends at the acceptance budget, and says so`의 delivery 전 rootfs 준비에서 `openBeneath→statAt→ensureFile` EAGAIN이다. 같은 source의 별도 serial all3953/3953과5 lane은 통과했다. 최신 `e9a939d619`의 병렬 baseline14/14+3939/3939·serial all3953/3953·나머지 lane도 통과했지만 이를 원인 수리 증거로 쓰지 않는다.
+**현재 재개점:** 아래는 최초 service/EAGAIN 재인수의 역사다. Linux는 실제 설치·복구·full CI까지 마감했다. Mac의 최신 `1a32554f7d`에서는 Node own post-exec task/global0과 fresh service 결과를 실제 확인했지만 native libc가 계속 실패한다. null-bootstrap을 complete backend로 채택하지 않는다. SDK의 deprecated subset API와 과거 Apple 계약을 현재 지원/격리 proof로 혼동하지 말고, ordinary UID의 subset 생성·parent 재취득·explicit GUI-domain 제어와 정상 lookup을 한정된 반례로 먼저 판정한다. [최신 원시·미실행](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)을 따른다.
+
+**완료한 Linux 우선 재인수의 출발점:** Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926)의 `test.log`는 사전14/14 뒤 main3938/3939·fail1이다. 실패는 `V10A: an unanswered command ends at the acceptance budget, and says so`의 delivery 전 rootfs 준비에서 `openBeneath→statAt→ensureFile` EAGAIN이다. 같은 source의 별도 serial all3953/3953과5 lane은 통과했다. 최신 `e9a939d619`의 병렬 baseline14/14+3939/3939·serial all3953/3953·나머지 lane도 통과했지만 이를 원인 수리 증거로 쓰지 않는다.
 
 [openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html)는 BENEATH containment를 확인하지 못한 race에서 EAGAIN 재시도를 허용한다. 실제 CI의 rename 주체/경합은 미관측이다. 현재 native leaf는 같은 fd/path/`RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS`로 최대8회만 재시도하고 지속 EAGAIN·hard denial은 원래 오류로 거절한다. open/openat fallback·flags 완화·deadline 변경은 없다. 실제 kernel FD와 링크 거절을 사용하는 fault 회귀와 새 compiled/독립 설치·실사용·전체 검증을 마쳤다. 실행 전제 실수와 정정 뒤 전체 통과는 [검증 owner](implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)에 구분했다. 원래 CI 경합의 자연 재현이나 과거 Git 실패의 수리로 확대하지 않는다.
 
