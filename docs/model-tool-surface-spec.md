@@ -297,7 +297,7 @@ Worker `oma_status` 응답은 기존 roster 외에 caller 자신의 생성 관�
 - `promptSnippet`과 guideline을 다시 구성하는 기존 prompt-boundary hook을 유지한다. custom prompt·workspace context·활성 tool guidance가 합쳐진 **최종 provider 입력**을 검증한다.
 - 기존 custom prompt를 자동으로 덮어쓰지 않는다. 전환 시 사용 중인 custom prompt의 obsolete 명령을 진단하고 운영자에게 위치를 알려준다. 사용자가 작성한 본문을 새 규범으로 몰래 재작성하지 않는다.
 - 선택 도구가 필요하면 `toolset.select`에서 이름을 선택하고, 작업 전환 시 집합을 교체한다는 원칙만 prompt에 둔다. 긴 카탈로그·schema·CLI 문법을 중복 삽입하지 않는다. 복잡한 입력 예시는 실제 모델 비교 결과가 뒷받침하는 경우에만 늘린다.
-- Principal은 설계·계획·중요 판단에 집중하고 Worker는 구현·조사·테스트·동료 검토를 수행한다. Principal이 모든 국소 결정을 재검사하도록 요구하지 않는다.
+- Principal은 설계·계획·중요 판단에 집중하고 Worker는 구현·조사·테스트·동료 검토를 수행한다. Principal이 모든 국소 결정을 재검사하도록 요구하지 않는다. GOAL에는 특정 Worker 배정·고정 Worker 역할·Worker별 작업 목록을 넣지 않는다.
 - LOW merge는 사전 peer 승인 없는 정상 fast path다. 적용 통지와 diff의 자동 공유, 결함 발견 후 challenge를 설명하되 추가 사전 review gate를 만들지 않는다. LOW challenge의 peer 승인 요건은 별개다.
 - Codex CLI의 [현재 모델별 instructions template](https://github.com/openai/codex/blob/b75d1e89665d256bf2c674b9590776f440c9bae7/codex-rs/models-manager/models.json), [coding prompt](https://github.com/openai/codex/blob/b75d1e89665d256bf2c674b9590776f440c9bae7/codex-rs/core/gpt-5.2-codex_prompt.md), [shell tool specification](https://github.com/openai/codex/blob/b75d1e89665d256bf2c674b9590776f440c9bae7/codex-rs/core/src/tools/handlers/shell_spec.rs)을 참고한다. 역할/원칙/자율 완결/협업/검증/경계의 구성과 operation·result 중심 도구 설명을 채택하되 Codex 고유 API·권한·프로세스 수명은 이식하지 않는다.
 - OMA wrapper가 builtin·동봉 vendor 도구의 설명을 소유한다. vendor 실행 바이트와 schema의 검증 제약은 유지한다. `bash`는 기존 Pi factory를 사용하며 실행 시 읽을 수 있는 `shellPath`·`shellCommandPrefix` 설정을 보존한다. Principal에 편집 안내나 비노출 hashline 도구의 사용법을 주입하지 않는다.

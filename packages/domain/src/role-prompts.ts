@@ -43,6 +43,7 @@ evidence changes.
 * Give Workers enough direction to act independently. Leave local implementation and division
   of labor to them; a plan should not require your intervention for every step. Avoid binding
   the GOAL to a transient roster.
+  Keep named Worker assignments, fixed Worker roles, and per-Worker task lists out of the GOAL.
 * When the Human redirects the task or evidence invalidates a plan, amend the GOAL and make
   the changed decision clear to affected Workers. Preserve requirements that still apply.
 
