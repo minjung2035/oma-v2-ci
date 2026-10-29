@@ -255,8 +255,54 @@ fixture에는 JS package와 native package 두 exact root만 read/map한다. `no
 process-exec·새 Mach/network 권한·production 기본 policy는 허용하지 않는다.
 validator/factory는 native descriptor·host 양성을 함께 요구하며 원래 unavailable/null/예상 밖 service 효과도 유지한다.
 local actual native package resolve/load/getpid·caller59/59·fail/cancel/skip/todo0·실제 생성 module syntax·Linux OS 거절은 통과했다.
-production 코드는 변하지 않아 성공한 동일 production build를 반복하지 않았다. 실제 Mac parent load와 own bootstrap·cached 복원은 **NOT_RUN**이다.
+production 코드는 변하지 않아 성공한 동일 production build를 반복하지 않았다. 이 local checkpoint에서는 Mac 효과가 **NOT_RUN**이었다.
 원시는 `node-post-exec-bootstrap/native-dependency-closure/`다. 세 gate·실행 차단은 유지하며 관측 없음으로 권한 부재를 증명하지 않는다.
+
+주 `71675642f79a6d550626ba54cace89f628f81d2e` / mirror `1a32554f7debc03a58c8655876198cfe01f10564`,
+tree `067d55320777ab584e3585cd8ecde19e996520d9`, clean `2d65a358fd2a5c2e9b0ef084fb4fa3843de1fa780c8ead1ef46be9d308772f4d` /15687 files다.
+Native [40809360827](https://github.com/minjung2035/oma-v2-ci/actions/runs/40809360827)의 원래 실행 ZIP5개를 SHA256 대조해 회수했다.
+Mac26 SDK26.5·Mac15 SDK15.5의 arm64·GUI UID501·SIP-disabled 관측이며 각3 case OBSERVED·exit0다.
+host FFI의 실제 getpid 양성6회와 Node 자신의 관측18회가 모두 확보됐고 PID/UID·source/input/runtime bytes는 전후 결박됐다.
+
+| Node own post-exec·두 Mac mode별6회 | task/global | cached SEND 복원 | 별도 fresh service 실제 결과 |
+|---|---|---|---|
+| inherited |valid SEND·두 값 nonzero |setter/register0 |6회 exit0·PID1 아래 다른 CID의 unsandboxed actor |
+| bootstrap-only |두 값0·global type status15·rights null |실제 미호출 |6회141·effect 미관측 |
+| bootstrap-and-xpc |두 값0·global type status15·rights null |실제 미호출 |6회141·effect 미관측 |
+
+별도 반환 SEND 참조 반납 status도 원시에 남겼다. Node 자신의 cached global SEND가 DNS 성공을 설명한다는 가설은 지지되지 않았다.
+다른 inherited 권한 전체의 부재·현재 role/expected Broker·complete scope death를 증명한 것은 아니다.
+원래 native C는 inherited6회 성공·제거12회 실패, isolated C는18회 성공·36회 실패로 그대로다.
+Node DNS·DNS-SD·alias/canonical connect·listed0/unlisted EPERM·Git/compiler·금지 file 경계와 소유 cleanup은 모두 유지했다.
+Mac common은 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic-setup8/8·skip/cancel/todo0이다.
+Mac package는 기존 Git preparation의 `UNSUPPORTED_PROFILE`을 기록했고 세 gate OPEN·실행 차단은 유지한다.
+`actual-node-bootstrap-outcomes.json`·`actual-own-node-qualification.json`·`actual-normal-tools-and-boundaries.json`·
+`actual-common-and-packaged-runtime.json`에 실제 결과를 남겼다.
+
+같은 source의 Architecture [40809360865](https://github.com/minjung2035/oma-v2-ci/actions/runs/40809360865)는 completed/success다.
+SHA256 확인 ZIP2개에서 all3954/3954·baseline14/14+3940/3940·모든 numeric command exit0,
+fast881·durable872·property34·stress16·platform72 PASS·skip/cancel/todo0·errors[]를 실제 대조했다.
+baselineComparison은 NOT_AVAILABLE이고 standalone kernel/crash는 NOT_RUN·native-all의 실제 파일/required names 포함이다.
+`published-ci/clean-source-full-ci-qualification.json`과 원시를 현재 code source의 Linux 회귀 근거로 남겼다.
+
+회수 중 기존 `actions/artifacts/<id>.zip` 경로와 run 경로는 HTTP500, 공식 직접 ZIP은401·공개 job log는 인증 필요였다.
+[공식 중계 사용법](https://nightly.link/)의 `suites/<실제 check-suite ID>/artifacts/<id>` 경로는 성공했고 모든 원래 ZIP의 공식 digest가 일치했다.
+시험·CI를 회수 목적으로 재실행하지 않았다. 임시 공개 notice 후보는 발행하지 않고 driver를 원래 snapshot51C4로 정확히 되돌렸다.
+새 권한·출력 채널·재시도 정책·제품 timeout은 추가하지 않았고, 외부 소유 observer만 문서화된 회수 경로로 정정했다.
+
+### 다음 후보: unprivileged subset — 선언/과거 계약, 실제 미실행
+
+null-bootstrap은 native libc 호환성을 충족하지 못하므로 그대로 backend로 연결하지 않는다.
+후보는 public subset namespace로 허용된 lookup을 남기는 방식과, 명시한 좁은 lookup만 중계하는 proxy다.
+private XPC protocol을 근거 없이 투명 forwarding하지 않는 쪽으로 먼저 public subset의 최소 가능 여부를 확인한다.
+SDK는 `bootstrap_subset`을10.10, `bootstrap_unprivileged`를10.5부터 deprecated로 표시한다.
+[고정 Apple 과거 계약](https://github.com/apple-oss-distributions/launchd/blob/d448a1c8f70a61202f8705f94337f686b87c30c4/liblaunch/bootstrap.h#L166-L222)은
+ancestor lookup·requestor receive-right 소멸 뒤 subset 소멸·parent 조회의 EUID-root 조건을 설명하지만 현재 OS의 proof는 아니다.
+native launchd job이 이미 unprivileged port로 시작한다는 사실도 별도 namespace의 제어 제한을 증명하지 않는다.
+ordinary UID 생성·parent 재취득·explicit GUI-domain fresh control·정상 libc/manual CLI를 실제 확인하기 전에는 후보만 유지한다.
+이 새 실기는 **NOT_RUN**이고 privileged service/entitlement·실행 허용·Linux 변경은 없다.
+판단 입력은 `next-candidate-source-contract.json`·`alternative-public-subset-assessment.json`이다.
+
 
 
 
@@ -1274,7 +1320,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `2d65a358fd2a5c2e9b0ef084fb4fa3843de1fa780c8ead1ef46be9d308772f4d` (15687 files).
+verification input digest `7d6ca65d96606069dad4904fd0a066051a5ef61bb180162f786717b687dee9b1` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

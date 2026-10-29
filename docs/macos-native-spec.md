@@ -72,7 +72,8 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 | 일반 child + process group | 가장 단순한 실행·정상 cleanup; 기존 runtime 선례 | setsid/double-fork 후손이 생존하는 실제 반례 있음. best-effort 기능에는 사용 가능하나 complete-death 대체로는 배제 |
 | launchd job + audit session | OS가 시작한 job과 session 관측 | session join/재사용, all-owner-death 복구, launch handoff가 미해결. SessionCreate만으로 containment라고 쓰지 않음 |
 | launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | 상속·CID 소멸·fresh token 제어·late-fork 재탐색은 확인. **bootout 단독은 detached 후손을 남겼고, 현 production Seatbelt에서도 기존 service가 다른 CID·unsandboxed로 실행됐다. 현 조합만으로 complete backend 채택은 배제** |
-| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | `2ef7fb517b`의 두 Mac 각3회 service 최초 실행은 실제 허용됐다. service lookup 제한과 상속된 제어 권한은 구분한다. 권한 분리 후보는 정상 Node/Git/compiler/DNS·manual CLI와 함께 실증해야 하며 CLI 이름 차단은 해법이 아님 |
+| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | inherited service는 실제 범위 밖 실행이다. null task/registered 분리 뒤 Node 자신의 task/global0·fresh service141은 확인했지만 native C resolver가 실패한다. 정상 도구·manual CLI와 양립한 complete backend는 미채택이며 CLI 이름 차단은 해법이 아님 |
+| unprivileged bootstrap subset | 별도 namespace에서 허용된 lookup을 보존할 가능성 | SDK의 deprecated public API와 과거 계약만 확인. ordinary UID 생성·parent 재취득·explicit GUI-domain 제어·정상 libc/manual CLI는 NOT_RUN. 이름/선언만으로 제한된 권한이라 하지 않음 |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
 
@@ -98,7 +99,7 @@ task handle 복구를 service 실행 권한 복구/탈출로 확대하지 않는
 현재 probe는 host/Node Git에 기존 `GIT_ENV`를 적용했고 native DNS 단계별 진단을 추가했다. local41/41과 Linux producer smoke는 통과했지만 이 변경의 Mac compile·Git 정상화·DNS 원인 분류는 NOT_RUN이다. Node resolver·production 정책과 실행 guard를 바꾸지 않았다.
 첫 진단 source `a399fb7fe58`는 Mac26에서 잘못 추가한 `-ldns_sd`가 없어 link 실패했다. Git 환경 효과·DNS API 실행은 미관측이며, default Libsystem의 `system_dnssd` 소유를 대조해 그 독립 flag만 제거했다. 수정 뒤 실제 실행과 취소된 Mac15 job의 대체 실행은 NOT_RUN이며 정상 기능이나 gate 완료로 쓰지 않는다.
 교체 뒤 `e9a939d619`의 Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)에서는 양 Mac 실제 compile/link·각3회 관측을 확인했다. selected Git hash18회는 성공했으며 DNS는 socket 생성 성공 뒤 exact endpoint connect EPERM1로 분류됐다. 이 checkpoint에서는 Unix filter 번역 수정 전이었다.
-Linux의 실제 설치·추론/복구·전체 회귀·clean CI 마감 뒤 Mac을 재개했다([검증 owner](implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)). exact Unix·root alias·Node DNS와 실제 helper의 data/금지 sibling 경계는 확인했다. native C resolver 호환성·complete backend는 미충족이다. Node 자신의 post-exec 관측은 FFI loader 실패로 UNAVAILABLE이며 부재로 간주하지 않는다. 누락된 native package의 exact read/map 입력·host FFI 양성 검사를 추가했고 후속 Mac 효과는 NOT_RUN이다. broad network/Mach·resolver fallback·exec guard 해제로 우회하지 않는다.
+Linux의 실제 설치·추론/복구·전체 회귀·clean CI 마감 뒤 Mac을 재개했다([검증 owner](implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)). exact Unix·root alias·Node DNS와 실제 helper의 경계를 확인했다. native FFI view를 수리한 `1a32554f7d`에서 Node 자신의 task/global0과 fresh service141을 관측했지만 native C resolver는 계속 실패한다. cached global SEND 가설은 지지되지 않았고 complete backend는 미채택이다. 다음 후보는 deprecated public subset API의 최소 실기이며 과거 parent/lookup 계약을 현재 격리 proof로 승격하지 않는다. broad network/Mach·resolver fallback·exec guard 해제로 우회하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.
