@@ -167,6 +167,29 @@ export function validateDarwinObservation(name, observations) {
               (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
                 record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
         });
+      const machStatus = number => signed32(number) && number >= 0;
+      const validName = name => portNumber(name) && name > 0 && name < 0xffffffff;
+      const nodePorts = record => record && portNumber(record.globalBootstrap) && machStatus(record.globalTypeStatus) &&
+        (record.globalTypeStatus === 0 ? portNumber(record.globalRights) : record.globalRights === null) &&
+        machStatus(record.taskBootstrapStatus) &&
+        (record.taskBootstrapStatus === 0 ? portNumber(record.taskBootstrap) : record.taskBootstrap === null) &&
+        (record.taskBootstrapStatus === 0 && validName(record.taskBootstrap)
+          ? machStatus(record.returnedSendStatus) : record.returnedSendStatus === null);
+      const globalRestore = (record, before) => record && nodePorts(before) &&
+        record.attempted === (validName(before.globalBootstrap) && before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) &&
+        (record.attempted ? machStatus(record.setStatus) &&
+          (record.setStatus === 0 ? machStatus(record.registerStatus) : record.registerStatus === null)
+          : record.setStatus === null && record.registerStatus === null);
+      const nodeGlobal = (record, pid, uid, selectedTarget) => record?.phase === "node-bootstrap" &&
+        Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === pid &&
+        Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid && outcome(record.service) &&
+        record.service.executable === "/bin/launchctl" &&
+        JSON.stringify(record.service.argv) === JSON.stringify(["kickstart", selectedTarget]) &&
+        (record.before === undefined || nodePorts(record.before)) &&
+        (record.after === undefined || nodePorts(record.after)) &&
+        (record.restore === undefined || globalRestore(record.restore, record.before)) &&
+        (typeof record.unavailable === "string" || nodePorts(record.before) && nodePorts(record.after) &&
+          globalRestore(record.restore, record.before));
       let hostDns;
       try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
       if (bootstrap?.renderer !== "production-seatbeltProfile" ||
@@ -183,6 +206,9 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.positiveGit.executable !== bootstrap.developerTools.git ||
           typeof bootstrap.gitExpected !== "string" || !/^[0-9a-f]{40}$/.test(bootstrap.gitExpected) ||
           bootstrap.positiveGit.stdout !== `${bootstrap.gitExpected}\n` ||
+          typeof bootstrap.ffi?.root !== "string" || !bootstrap.ffi.root.startsWith("/") || bootstrap.ffi.root === "/" ||
+          typeof bootstrap.ffi.entry !== "string" || !bootstrap.ffi.entry.startsWith(`${bootstrap.ffi.root}/`) ||
+          typeof bootstrap.ffi.entrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.entrySha256) ||
           typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
           unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
           bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
@@ -215,6 +241,12 @@ export function validateDarwinObservation(name, observations) {
                 ports.droppedSendRights.every(portNumber)))
             throw new Error("bootstrap attempt loses its actual sandbox, rights, command, target or exit outcome");
           targets.add(attempt.target);
+          if (key === "node") {
+            if (!target(attempt.globalTarget) || targets.has(attempt.globalTarget) ||
+                !(attempt.globalGuestEffect === null || Number.isSafeInteger(attempt.globalGuestEffect?.pid) && attempt.globalGuestEffect.pid > 1))
+              throw new Error("Node global-bootstrap control is not a separate actual service target");
+            targets.add(attempt.globalTarget);
+          }
           if (key === "direct" &&
               JSON.stringify(attempt.command.argv.slice(4)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]))
             throw new Error("direct bootstrap service outcome belongs to a different target");
@@ -222,6 +254,7 @@ export function validateDarwinObservation(name, observations) {
               (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
                 attempt.command.argv[11] !== launcher ||
                 attempt.command.argv[12] !== unix.listed || attempt.command.argv[13] !== unix.unlisted ||
+                attempt.command.argv[15] !== attempt.globalTarget ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
                   (attempt.tools.service === undefined && attempt.tools.complete === false ||
@@ -233,7 +266,8 @@ export function validateDarwinObservation(name, observations) {
                 !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns) ||
                 !nativeDns(attempt.tools.nativeDnsCommand, attempt.tools.nativeDns) ||
                 attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid ||
-                !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid)))
+                !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid) ||
+                !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget)))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;

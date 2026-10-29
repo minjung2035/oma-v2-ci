@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
@@ -212,13 +212,15 @@ try {
       assert.ok(observation.getaddrinfo.ipv4 + observation.getaddrinfo.ipv6 > 0);
       return { command, observation };
     });
+    const koffiEntry = realpathSync(fileURLToPath(import.meta.resolve("koffi"))), koffiRoot = dirname(koffiEntry);
+    const ffi = { entry: koffiEntry, root: koffiRoot, entrySha256: createHash("sha256").update(readFileSync(koffiEntry)).digest("hex") };
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
-const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report] = process.argv.slice(2);
+const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -249,6 +251,43 @@ for (const [context, service] of ${JSON.stringify(resolverCases)}) {
   value.resolvers.push({ command: result, observation: existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null });
   save();
 }
+value.bootstrapGlobal = { phase: "node-bootstrap", pid: process.pid, uid: process.getuid() };
+try {
+  const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
+  const library = load(null), task = decode.uint(library.symbol("mach_task_self_"));
+  const type = library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)");
+  const get = library.func("int task_get_special_port(unsigned int task, int flavor, void *result)");
+  const set = library.func("int task_set_special_port(unsigned int task, int flavor, unsigned int name)");
+  const register = library.func("int mach_ports_register(unsigned int task, const void *names, unsigned int count)");
+  const deallocate = library.func("int mach_port_deallocate(unsigned int task, unsigned int name)");
+  const snapshot = () => {
+    const globalBootstrap = decode.uint(library.symbol("bootstrap_port")), rights = Buffer.alloc(4), special = Buffer.alloc(4);
+    const globalTypeStatus = type(task, globalBootstrap, rights), taskBootstrapStatus = get(task, 4, special);
+    const taskBootstrap = taskBootstrapStatus === 0 ? special.readUInt32LE(0) : null;
+    // get_special_port returns one owned SEND reference, not the borrowed global.
+    const returnedSendStatus = taskBootstrapStatus === 0 && taskBootstrap > 0 && taskBootstrap < 0xffffffff
+      ? deallocate(task, taskBootstrap) : null;
+    return { globalBootstrap, globalTypeStatus, globalRights: globalTypeStatus === 0 ? rights.readUInt32LE(0) : null,
+      taskBootstrapStatus, taskBootstrap, returnedSendStatus };
+  };
+  const before = snapshot(), restore = { attempted: false, setStatus: null, registerStatus: null };
+  value.bootstrapGlobal.before = before;
+  value.bootstrapGlobal.restore = restore; save();
+  if (before.globalBootstrap > 0 && before.globalBootstrap < 0xffffffff &&
+      before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) {
+    restore.attempted = true;
+    restore.setStatus = set(task, 4, before.globalBootstrap);
+    if (restore.setStatus === 0) {
+      const names = Buffer.alloc(12); names.writeUInt32LE(before.globalBootstrap);
+      restore.registerStatus = register(task, names, 3);
+    }
+  }
+  value.bootstrapGlobal.after = snapshot();
+} catch (error) { value.bootstrapGlobal.unavailable = String(error); }
+save();
+// A separately registered fresh target tests actual service effect, not a
+// port name, successful setter or a previously started actor.
+value.bootstrapGlobal.service = command("/bin/launchctl", ["kickstart", globalTarget]);
 value.complete = true; save();
 `, { flag: "wx" });
     const positive = loadJob("bootstrap-positive", actor, "once");
@@ -259,17 +298,19 @@ value.complete = true; save();
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
-      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, variants: [] };
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, ffi, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
       const directTarget = loadJob(`${name}-direct`, actor, "once"), nodeTarget = loadJob(`${name}-node`, actor, "once");
       const restoredTarget = loadJob(`${name}-restored`, actor, "once");
+      const globalTarget = loadJob(`${name}-global`, actor, "once");
       const profile = seatbeltProfile({ readable: [
         ...[actor, launcher, script, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         { path: developerTools.contents, kind: "directory" },
         { path: unixSocketCanary.directory, kind: "directory" },
         { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
+        mapped: [{ path: koffiRoot, kind: "directory" }],
         writable: [{ path: directory, kind: "directory" }], denied: [],
         executable: [actor, launcher, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         unixSockets: [dnsEndpoint, ...(dnsResolvedEndpoint === dnsEndpoint ? [] : [dnsResolvedEndpoint]), unixSocketCanary.listed],
@@ -280,18 +321,20 @@ value.complete = true; save();
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
         nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport]);
+        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target]);
       const tools = optionalJson(toolsReport);
       const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
       const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,
         "restore-registered-seed", restorationReport, "/bin/launchctl", "kickstart", restoredTarget.target], 5000);
-      for (const [job, result] of [[directTarget, direct], [nodeTarget, tools?.service], [restoredTarget, restored]])
+      for (const [job, result] of [[directTarget, direct], [nodeTarget, tools?.service], [restoredTarget, restored],
+        [globalTarget, tools?.bootstrapGlobal?.service]])
         if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
           await waitFor(() => existsSync(join(job.directory, "once.json")));
       const effect = job => existsSync(join(job.directory, "once.json")) ? remember(marker(job.directory, "once")) : null;
       observation.bootstrap.variants.push({ name, profileSha256: createHash("sha256").update(profile).digest("hex"),
         direct: { target: directTarget.target, command: direct, ports: optionalJson(directPorts), guestEffect: effect(directTarget) },
-        node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget) },
+        node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget),
+          globalTarget: globalTarget.target, globalGuestEffect: effect(globalTarget) },
         restored: { target: restoredTarget.target, command: restored, ports: optionalJson(restoredPorts),
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
