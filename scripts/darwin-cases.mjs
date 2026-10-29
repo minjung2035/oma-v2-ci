@@ -138,6 +138,8 @@ export function validateDarwinObservation(name, observations) {
       const pathObservation = record => record && [-1, 0].includes(record.result) &&
         Number.isSafeInteger(record.errno) && record.errno >= 0 &&
         (record.result === -1 ? record.kind === null : ["symlink", "socket", "directory", "other"].includes(record.kind));
+      const gai = record => signed32(record?.result) &&
+        [record.errno, record.ipv4, record.ipv6].every(number => Number.isSafeInteger(number) && number >= 0);
       const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
       const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
         command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
@@ -150,9 +152,21 @@ export function validateDarwinObservation(name, observations) {
           record.canonicalEndpoint === bootstrap.dnsResolvedEndpoint &&
           [record.socket, record.canonicalSocket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
           [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
-          [record.getaddrinfo?.errno, record.getaddrinfo?.ipv4, record.getaddrinfo?.ipv6]
-            .every(number => Number.isSafeInteger(number) && number >= 0) &&
-          [record.dnssd?.createResult, record.getaddrinfo?.result].every(signed32));
+          gai(record.getaddrinfo) && signed32(record.dnssd?.createResult));
+      const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
+      const nativeResolvers = (records, base, uid, positive = false) => Array.isArray(records) &&
+        records.length === resolverCases.length && records.every((entry, index) => {
+          const [context, service] = resolverCases[index], command = entry?.command, record = entry?.observation;
+          return outcome(command) && command.executable === launcher && Array.isArray(command.argv) &&
+            JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", `${base}.resolver-${context}-${service}.json`, context, service]) &&
+            (record === null && !positive && (command.exitCode !== 0 || command.signal !== null) ||
+              record?.phase === "native-resolver" && record.pid === command.pid && record.pid > 0 &&
+              Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid &&
+              record.hostname === "example.com" && record.context === context && record.service === (service === "none" ? null : service) &&
+              portNumber(record.globalBootstrap) && snapshot(record.ports) && gai(record.getaddrinfo) &&
+              (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
+                record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
+        });
       let hostDns;
       try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
       if (bootstrap?.renderer !== "production-seatbeltProfile" ||
@@ -181,7 +195,8 @@ export function validateDarwinObservation(name, observations) {
           bootstrap.nativeDnsHost.unixAllowlist.listed.created !== true || bootstrap.nativeDnsHost.unixAllowlist.listed.connectResult !== 0 ||
           bootstrap.nativeDnsHost.unixAllowlist.unlisted.created !== true || bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult !== 0 ||
           bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||
-          bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0)
+          bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0 ||
+          !nativeResolvers(bootstrap.nativeResolverHost, bootstrap.nativeDnsHostCommand.argv[1], bootstrap.nativeDnsHost.uid, true))
         throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
       const targets = new Set([bootstrap.positiveTarget]);
       for (const [index, variant] of bootstrap.variants.entries()) {
@@ -217,7 +232,8 @@ export function validateDarwinObservation(name, observations) {
               (!outcome(attempt.tools.git) || attempt.tools.git.executable !== bootstrap.developerTools.git ||
                 !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns) ||
                 !nativeDns(attempt.tools.nativeDnsCommand, attempt.tools.nativeDns) ||
-                attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid))
+                attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid ||
+                !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid)))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;

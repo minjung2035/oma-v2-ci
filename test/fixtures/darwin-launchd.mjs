@@ -203,6 +203,15 @@ try {
     assert.equal(nativeDnsHost.getaddrinfo.result, 0, JSON.stringify(nativeDnsHost));
     for (const socket of Object.values(nativeDnsHost.unixAllowlist))
       assert.equal(socket.connectResult, 0, JSON.stringify(nativeDnsHost));
+    const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
+    const nativeResolverHost = resolverCases.map(([context, service]) => {
+      const path = `${nativeDnsHostPath}.resolver-${context}-${service}.json`;
+      const command = run(launcher, ["observe-resolver", path, context, service]);
+      const observation = JSON.parse(readFileSync(path, "utf8"));
+      assert.equal(observation.getaddrinfo.result, 0, JSON.stringify({ command, observation }));
+      assert.ok(observation.getaddrinfo.ipv4 + observation.getaddrinfo.ipv6 > 0);
+      return { command, observation };
+    });
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
@@ -233,6 +242,13 @@ catch (error) { value.dns = { hostname: "example.com", error: { code: error.code
 const nativeDnsPath = report + ".dns.json";
 value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath, listedSocket, unlistedSocket]);
 value.nativeDns = existsSync(nativeDnsPath) ? JSON.parse(readFileSync(nativeDnsPath, "utf8")) : null;
+value.resolvers = [];
+for (const [context, service] of ${JSON.stringify(resolverCases)}) {
+  const path = report + ".dns.json.resolver-" + context + "-" + service + ".json";
+  const result = command(launcher, ["observe-resolver", path, context, service]);
+  value.resolvers.push({ command: result, observation: existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null });
+  save();
+}
 value.complete = true; save();
 `, { flag: "wx" });
     const positive = loadJob("bootstrap-positive", actor, "once");
@@ -243,7 +259,7 @@ value.complete = true; save();
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
-      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, variants: [] };
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
@@ -280,7 +296,8 @@ value.complete = true; save();
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
     }
-    const pids = observation.bootstrap.variants.map(variant => variant.node.tools?.nativeDnsCommand?.pid)
+    const pids = observation.bootstrap.variants.flatMap(variant => [variant.node.tools?.nativeDnsCommand?.pid,
+      ...(variant.node.tools?.resolvers ?? []).map(record => record.command?.pid)])
       .filter(pid => Number.isSafeInteger(pid) && pid > 0);
     const diagnostics = { purpose: "read-only violations for owned DNS observers; not authority or death proof", pids };
     if (pids.length && performance.now() - started < 73000) {

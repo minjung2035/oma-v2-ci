@@ -29,7 +29,7 @@ production Seatbelt의 명시된 Unix endpoint를 top-level literal로 번역하
 host 둘 다 양성, sandbox에서는 listed 양성/unlisted 거절 여부를 각각 raw connect로 기록한다.
 native helper argv·PID/UID·validator·fixture factory를 함께 바꾸고 반례의 예상 밖 성공도 OBSERVED로 남긴다.
 build·focused41/41·caller impact18/18·syntax/잘못된 OS 조기 거절은 통과했다.
-직후 실제 Mac 효과는 NOT_RUN이었다. 이후 `2b8c6f276d`에서 listed 연결/unlisted EPERM18회와 정상 Git/compiler·금지 file canary를 확인했고, 효과가 없던 `f75a06eeeb`의 endpoint metadata 단독 grant는 제거했다. `9956e67380`의 canonical0/alias EPERM·실제 `/var` metadata 거절 뒤 `46a5c6b442`의 한정된 root symlink metadata 수리로 alias connect·DNS-SD·Node DNS18회가 성공했다. bootstrap 제거 조건의 native C `getaddrinfo`12회는 실패하고 `/etc` metadata 거절이 남았다. 현재 후보는 그 두 번째 symlink의 exact metadata만 추가하며 local build·caller59/59는 통과했다. 새 후보의 실제 Mac 효과는 NOT_RUN이고 broad file/network/Mach·resolver override·timeout 완화는 없다. 세 gate·backend 차단은 유지한다.
+직후 실제 Mac 효과는 NOT_RUN이었다. 이후 exact Unix literal의 listed 연결/unlisted EPERM과 `/var` metadata 수리로 alias connect·DNS-SD·Node DNS18회가 성공했고 Git/compiler·금지 file 경계도 유지했다. `3a131bf0d9`의 `/etc` metadata 추가 뒤에도 bootstrap 제거 조건의 native C `getaddrinfo`12회는 실패한다. 남은 route/sysctl 거절은 성공한 inherited C에 귀속돼 원인이나 추가 grant의 근거로 쓰지 않는다. 현재는 원래 실패를 유지하고 same-image·독립 process에서 service/main/thread 차이를 분리한다. 실제 helper에는 system alias와 허용된 services bytes·금지 passwd sibling의 결정적 회귀를 추가했다. local build·caller59/59·syntax/실제 Linux OS 거절은 통과했으나 새 Mac 비교·회귀는 NOT_RUN이다. 새 진단 권한·fallback·timeout 완화·backend 채택은 없고 세 gate·실행 차단을 유지한다.
 출처·새 Linux CI에서 관측한 Mac15 별도 pack timeout은 [검증 owner](validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 구분했다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
 

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, realpathSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
 import { spawnWithPrivateInputs } from "@oma/process/async";
 import { withAsyncCleanup } from "@oma/native/cleanup";
@@ -23,13 +24,19 @@ const input = "private stdin remains command input\n";
 const env = { HOME: work, TMPDIR: work, PATH: "/usr/bin:/bin", LANG: "C" };
 let program, expected;
 if (mode === "seatbelt-files") {
+  const servicesHash = createHash("sha256").update(readFileSync("/etc/services")).digest("hex");
+  readFileSync("/etc/passwd"); // Unprofiled control: denial below must be Seatbelt, not missing/DAC.
   program = `import assert from 'node:assert/strict';
-    import {readFileSync,writeFileSync,linkSync,renameSync,unlinkSync} from 'node:fs';
+    import {readFileSync,writeFileSync,linkSync,renameSync,unlinkSync,lstatSync} from 'node:fs';
+    import {createHash} from 'node:crypto';
     import {spawnSync} from 'node:child_process';
     const [work,publicFile,secretFile,hiddenFile,protectedParent]=process.argv.slice(1);
     const denied = fn => assert.throws(fn, error => ['EACCES','EPERM'].includes(error.code));
     assert.equal(readFileSync(0,'utf8'),${JSON.stringify(input)});
     assert.equal(readFileSync(publicFile,'utf8'),'read only original');
+    for (const alias of ['/var','/etc']) assert.equal(lstatSync(alias).isSymbolicLink(),true);
+    assert.equal(createHash('sha256').update(readFileSync('/etc/services')).digest('hex'),${JSON.stringify(servicesHash)});
+    denied(()=>readFileSync('/etc/passwd'));
     writeFileSync(work+'/written','allowed');
     renameSync(work+'/written',work+'/renamed'); unlinkSync(work+'/renamed');
     denied(()=>writeFileSync(publicFile,'must not change'));
