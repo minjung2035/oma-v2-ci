@@ -262,8 +262,11 @@ value.git = command(git, ["--no-replace-objects", "hash-object", "--no-filters",
   { ...JSON.parse(gitEnvironment), HOME: process.cwd(), TMPDIR: process.cwd() }); save();
 writeFileSync("compile.c", "int main(void) { return 0; }\\n");
 value.compiler = command(compiler, ["-fsyntax-only", "compile.c"]); save();
-try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
-catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
+const observeDns = async () => {
+  try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
+  catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
+  save();
+};
 const nativeDnsPath = report + ".dns.json";
 value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath, listedSocket, unlistedSocket]);
 value.nativeDns = existsSync(nativeDnsPath) ? JSON.parse(readFileSync(nativeDnsPath, "utf8")) : null;
@@ -279,8 +282,9 @@ value.nativeSubsetCommand = command(launcher, ["observe-subset", subsetPath]);
 value.nativeSubset = existsSync(subsetPath) ? JSON.parse(readFileSync(subsetPath, "utf8")) : null;
 save();
 value.bootstrapGlobal = { phase: "node-bootstrap", pid: process.pid, uid: process.getuid() };
+value.nativeLibcCold = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), stage: "before-node-lookup" };
+value.nativeLibc = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), stage: "after-node-lookup" };
 try {
-  value.nativeLibc = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid() };
   const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
   const library = load(null), task = decode.uint(library.symbol("mach_task_self_"));
   const type = library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)");
@@ -298,16 +302,22 @@ try {
     return { globalBootstrap, globalTypeStatus, globalRights: globalTypeStatus === 0 ? rights.readUInt32LE(0) : null,
       taskBootstrapStatus, taskBootstrap, returnedSendStatus };
   };
+  const layout = JSON.parse(resolverLayout), symbols = JSON.parse(resolverSymbols);
+  const observeLibcStage = (key, stage) => {
+    try {
+      const before = snapshot(); value[key].before = before; save();
+      const result = observeNodeLibc(library, decode, layout, symbols);
+      result.stage = stage; result.before = before; value[key] = result; save();
+      result.after = snapshot();
+    } catch (error) { value[key].unavailable = String(error); }
+    save();
+  };
+  observeLibcStage("nativeLibcCold", "before-node-lookup");
+  await observeDns();
+  observeLibcStage("nativeLibc", "after-node-lookup");
   const before = snapshot(), restore = { attempted: false, setStatus: null, registerStatus: null };
   value.bootstrapGlobal.before = before;
   value.bootstrapGlobal.restore = restore; save();
-  value.nativeLibc.before = before; save();
-  try {
-    const result = observeNodeLibc(library, decode, JSON.parse(resolverLayout), JSON.parse(resolverSymbols));
-    result.before = before; value.nativeLibc = result; save();
-    result.after = snapshot();
-  } catch (error) { value.nativeLibc.unavailable = String(error); }
-  save();
   if (before.globalBootstrap > 0 && before.globalBootstrap < 0xffffffff &&
       before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) {
     restore.attempted = true;
@@ -320,7 +330,9 @@ try {
   value.bootstrapGlobal.after = snapshot();
 } catch (error) {
   value.bootstrapGlobal.unavailable = String(error);
-  value.nativeLibc.unavailable = String(error);
+  for (const key of ["nativeLibcCold", "nativeLibc"])
+    if (value[key].calls === undefined) value[key].unavailable = String(error);
+  if (value.dns === undefined) await observeDns();
 }
 save();
 // A separately registered fresh target tests actual service effect, not a

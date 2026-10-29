@@ -237,11 +237,13 @@ export function validateDarwinObservation(name, observations) {
         (record.restore === undefined || globalRestore(record.restore, record.before)) &&
         (typeof record.unavailable === "string" || nodePorts(record.before) && nodePorts(record.after) &&
           globalRestore(record.restore, record.before));
-      const nodeLibc = (record, pid, uid, positive = false) => {
-        if (record?.phase !== "node-libc-resolver" || record.pid !== pid || !(pid > 0) ||
+      const nodeLibc = (record, pid, uid, positive = false, stage) => {
+        if (record?.phase !== "node-libc-resolver" || record.stage !== stage || record.pid !== pid || !(pid > 0) ||
             record.uid !== uid || !(uid > 0) || positive && record.unavailable !== undefined ||
             record.before !== undefined && !nodePorts(record.before) ||
             record.after !== undefined && !nodePorts(record.after)) return false;
+        if (stage !== undefined && typeof record.unavailable !== "string" &&
+            (!nodePorts(record.before) || !nodePorts(record.after))) return false;
         if (record.calls === undefined) return typeof record.unavailable === "string" && !positive;
         return record.hostname === "example.com" && sameLayout(record.layout) && sameSymbols(record.symbols) &&
           record.hints?.flags === 0 && record.hints.family === layout.afUnspec &&
@@ -347,11 +349,8 @@ export function validateDarwinObservation(name, observations) {
                 !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget) ||
                 !nativeSubset(attempt.tools.nativeSubsetCommand, attempt.tools.nativeSubset, ports?.uid,
                   `${attempt.command.argv[14]}.subset.json`) ||
-                !nodeLibc(attempt.tools.nativeLibc, ports?.pid, ports?.uid) ||
-                typeof attempt.tools.nativeLibc.unavailable !== "string" &&
-                  (!nodePorts(attempt.tools.nativeLibc.before) || !nodePorts(attempt.tools.nativeLibc.after)) ||
-                attempt.tools.bootstrapGlobal.before !== undefined && attempt.tools.nativeLibc.before !== undefined &&
-                  JSON.stringify(attempt.tools.nativeLibc.before) !== JSON.stringify(attempt.tools.bootstrapGlobal.before)))
+                !nodeLibc(attempt.tools.nativeLibcCold, ports?.pid, ports?.uid, false, "before-node-lookup") ||
+                !nodeLibc(attempt.tools.nativeLibc, ports?.pid, ports?.uid, false, "after-node-lookup")))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;
