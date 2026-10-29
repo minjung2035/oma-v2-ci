@@ -49,6 +49,8 @@ export interface SessionProfile {
   readonly society: string;
   readonly provider: string;
   readonly model: string;
+  /** An explicit profile effort overrides the engine default; omission leaves it alone. */
+  readonly thinking?: string | undefined;
   /** The Principal role's recorded extensions. The digest travels with the path
    * so it can be re-checked immediately before spawn, exactly as the Resident
    * path does. The core extension may appear here for verification; argv never
@@ -95,7 +97,7 @@ export function principalSessionDir(stateRoot: string): string {
 }
 
 /** The Principal's private scratch: where its model's tools work and, as for
- * a Resident's home, where its CLI keeps its request cache (FS-003). */
+ * a Resident's home, where its client keeps its request cache (FS-003). */
 export function principalWorkspace(stateRoot: string): string {
   return modelWorkspacePathAt(stateRoot, "principal");
 }
@@ -119,7 +121,7 @@ export function principalEnvironment(
   profile: SessionProfile,
   limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "addresses" | "contextBytes" | "bundleBytes">,
 ): Record<string, string> {
-  // FS-003: the CLI's cache is in the Principal's private scratch.
+  // FS-003: the client's cache is in the Principal's private scratch.
   const home = principalWorkspace(paths.stateRoot);
   return {
     HOME: home,
@@ -142,7 +144,7 @@ export function principalEnvironment(
     OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
     // Its send schema names the wire's own recipient bound.
     OMA_MAIL_ADDRESSES: String(limits.addresses),
-    // P0V-78: the streams the CLI prepares are read only up to these.
+    // P0V-78: the streams the client prepares are read only up to these.
     OMA_CONTEXT_BYTES: String(limits.contextBytes),
     OMA_BUNDLE_BYTES: String(limits.bundleBytes),
     // PR-002: where the broker publishes the Principal's prepared batches, and
@@ -184,6 +186,7 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   for (const theme of profile.packageResources?.themes ?? []) args.push("--theme", theme);
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
+  if (profile.thinking !== undefined) args.push("--thinking", profile.thinking);
   // The role prompt replaces Pi's generated system prompt entirely: pi's base
   // describes a lone coding agent, not the Principal. An authored-empty role
   // runs on the built-in rather than on that default.
@@ -227,13 +230,9 @@ export function sessionEnv(
       ]),
     }),
     ...(paths?.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: paths.piAgentDir }),
-    // REC-007: the engine is told which of its descriptors is the society
-    // lease, because the engine starts children of its own -- the model-facing
-    // CLI, which writes this society's private state -- and a child started
-    // without the lease can outlive it. The number is the child's view of the
-    // descriptor, not this process's, and it names a descriptor rather than
-    // carrying a secret: a process that does not already hold it gains nothing
-    // by reading it in /proc.
+    // REC-007: the engine holds this society lease descriptor. Trusted engine
+    // descendants inherit the same lifetime fence; the number alone grants
+    // nothing to a process that does not already hold the descriptor.
     ...(paths?.fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }),
     // The explicit plumbing hop emits after the ambient strip, so a plan a
     // spawn plan deliberately carries reaches the engine while anything merely

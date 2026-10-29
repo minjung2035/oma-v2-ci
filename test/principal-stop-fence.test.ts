@@ -31,7 +31,7 @@ test("DR27: a Principal stop survives Worker stop, restart and same-key replay; 
   const reopened = new Store(join(f.root, "runtime.sqlite"));
   try {
     const actions = new LifecycleActions(lifecycleLedger(reopened), f.units, { stateRoot: f.root,
-      society: "replay", hasGoal: () => true, activationAllowed: () => true }, new LifecyclePolicy(lifecycleLedger(reopened), () => null), { nextOperationId: generateOperationId });
+      society: "replay", hasGoal: () => true, activationAllowed: () => true }, new LifecyclePolicy(lifecycleLedger(reopened), Object.assign(() => null, { maxWorkers: () => 6 })), { nextOperationId: generateOperationId });
     (await assert.rejects(async () => (await actions.start(f.auth, "a", "after-restart")), /force-stopped/));
     assert.equal((await actions.start(p, "a", "explicit-resume")).state, "succeeded");
     assert.equal((await actions.stop(f.auth, "a", "ordinary-stop")).state, "succeeded");

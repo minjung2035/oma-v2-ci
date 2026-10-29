@@ -56,6 +56,7 @@ export function createPublicDispatchPorts(
     status: (agent, snapshot) => views.statusOf(snapshot, agent),
   };
   const publicLifecycle: PublicLifecyclePort = {
+    creation: auth => lifecycle.creation(auth),
     setSociety: (auth, state, key) => lifecycle.setSociety(auth, state, key),
     create: (auth, input, key) => lifecycle.create(auth, input, key),
     start: (auth, agent, key) => lifecycle.start(auth, agent, key),
@@ -85,7 +86,7 @@ export function createPublicDispatchPorts(
     git: publicGit,
     review: reviews === null ? null : {
       record: (auth, key, input) => reviews.record(auth, key, input),
-      status: (auth, name, frameBytes, responseId) => reviews.status(auth, name, frameBytes, responseId),
+      status: (auth, query, frameBytes, responseId) => reviews.status(auth, query, frameBytes, responseId),
     },
     limits,
   };
@@ -107,7 +108,7 @@ export function createInternalDispatchDataPorts(
       store.preparedBatches(agent).map((batch) => batch.id),
   };
   const internalMail: InternalMailPort = {
-    prepare: (auth) => mail.prepare(auth),
+    prepare: (auth, deferred) => mail.prepare(auth, deferred),
     complete: (auth, evidence) => mail.complete(auth, evidence),
     moveToCur: (agent, ids) => mail.moveToCur(agent, ids),
   };

@@ -14,7 +14,7 @@ import { Store } from "@oma/storage";
 import { StoreError } from "@oma/domain/errors";
 import { RegistryOperations } from "@oma/lifecycle/registry-operations";
 import { LifecyclePolicy } from "@oma/lifecycle/policy";
-import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { withWorkerCapacity, makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-r25-"));
@@ -59,7 +59,7 @@ test("R25: identity-only subscription replay does not authorize a fresh stopped-
 
 test("R25: management scope uses the same lineage and current live lease", t => {
   const f = fixture(); t.after(() => f.close());
-  const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
   assert.doesNotThrow(() => policy.requireManage(f.auth, "alice"));
   assert.doesNotThrow(() => policy.requireManage(f.auth, "child"));
   assert.throws(() => policy.requireManage(f.auth, "peer"), code("CAPABILITY_DENIED"));
@@ -75,6 +75,7 @@ test("R25: host refresh and transaction-time revision comparison are separate", 
     makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), {
     refresh() { assert.equal(f.store.inTransaction, false); refreshes++; },
     revision() { return revision; },
+    maxWorkers: () => 6,
   });
   const policy = new LifecyclePolicy(lifecycleLedger(f.store), resolver);
   const observed = policy.refresh();

@@ -18,17 +18,19 @@ export class LifecycleModule {
   private readonly society: SocietyControl;
   private readonly actions: LifecycleActions;
   private readonly registry: RegistryOperations;
+  private readonly policy: LifecyclePolicy;
   constructor(store: LifecycleLedger, units: LifecycleUnits, paths: LifecyclePaths, resolveSpec: SpecResolver,
     workspace: LifecycleWorkspace, mail: LifecycleMail | null, effects: LifecycleEffects) {
     if (typeof paths.activationAllowed !== "function")
       throw new StoreError("UNSUPPORTED_PROFILE", "lifecycle requires an explicit activation gate");
-    const policy = new LifecyclePolicy(store, resolveSpec);
+    const policy = this.policy = new LifecyclePolicy(store, resolveSpec);
     const gatedPaths = { ...paths, activationAllowed: () => paths.activationAllowed() && store.societyOpen() };
     this.creates = new CreateCoordinator(store, units, gatedPaths, policy, workspace, mail, effects);
     this.actions = new LifecycleActions(store, units, gatedPaths, policy, effects);
     this.society = new SocietyControl(store, units, effects);
     this.registry = new RegistryOperations(store, effects);
   }
+  creation(auth: AuthContext) { return this.policy.observeCreation(auth); }
   setSociety(auth: AuthContext, state: "open" | "closed", key: string): Promise<Receipt> { return this.society.set(auth, state, key); }
   reconcileSociety(id: string): Promise<void> { return this.society.reconcileById(id); }
   bootstrap(config: SeedConfig): Promise<void> { return this.creates.bootstrap(config); }

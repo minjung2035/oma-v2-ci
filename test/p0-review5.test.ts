@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 // Priority 0, fifth review (external whole-codebase review of 18421f0, R01-R13):
@@ -128,8 +129,7 @@ test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt clos
   const f = await preparedFixture(1);
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
-    hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   const health = Reflect.get(broker, "health") as AdmissionGate;
   const publish = async (failure: { readonly read?: unknown; readonly write?: unknown }): Promise<void> => {
@@ -165,8 +165,7 @@ test("P0V-58 / R03, P0-5: a drain that could not prove its Residents ended says 
   const f = await preparedFixture(1);
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
-    hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   let closed = 0;
   const close = f.store.close.bind(f.store);
   (f.store as unknown as { close(): void }).close = () => { closed += 1; close(); };

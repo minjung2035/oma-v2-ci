@@ -1,5 +1,6 @@
 /** V26A: actual pinned PID2/private-channel runner floods its actor endpoint.
  * Kernel credentials, namespace lifetime and FD cleanup are production code. */
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, writeFileSync } from "node:fs";
@@ -22,7 +23,7 @@ test("V26A: a connection flood on an actor socket is bounded, and the Resident i
     f.close();
   });
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos/project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => { throw new Error("flood fixture cannot create agents"); }, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => { throw new Error("flood fixture cannot create agents"); }), f.mail);
   broker = testBroker({ store: f.store, mail: f.mail, units,
     views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle,
     git: null, reviews: null, reconcile: null,

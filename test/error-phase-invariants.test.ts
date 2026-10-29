@@ -7,7 +7,7 @@ import {
   type EffectKnowledge, type ErrorPhase, type ObservationKind,
 } from "@oma/domain/errors";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
-import { receiptNotFound, isRequestNotFound, receiptExit, receiptLines } from "@oma/protocol/receipts";
+import { receiptNotFound, isRequestNotFound, receiptExit } from "@oma/protocol/receipts";
 import { receiptOperation, receiptOperationId } from "./fixtures/receipt-operation.js";
 
 const phases: readonly ErrorPhase[] = ["preaccept", "accepted", "recovering", "terminal"];
@@ -102,11 +102,8 @@ test("one receipt builder retains terminal bytes after the decoder rejects contr
 test("CLI receipt mapping distinguishes pending, terminal failure and unknown effect", () => {
   const pending = receiptOfOperation(receiptOperation());
   assert.equal(receiptExit(pending), 0);
-  assert.equal(receiptLines(pending, "same-key")[0], "Accepted / not yet complete");
-  assert.match(receiptLines(pending, "same-key").join("\n"), /--request same-key/);
   const unknown = receiptOfOperation(receiptOperation({ state: "unknown" }));
   assert.equal(receiptExit(unknown), 3);
-  assert.match(receiptLines(unknown, "same-key")[0]!, /Outcome unknown/);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);
 });

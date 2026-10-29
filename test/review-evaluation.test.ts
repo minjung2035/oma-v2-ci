@@ -7,6 +7,8 @@ import type { ReviewFact } from "@oma/contracts/attestation";
 import { StoreError } from "@oma/domain/errors";
 import { reviewState, planEffects, type ReviewEntry, type ReviewState,
   type ReviewStateInput } from "@oma/domain/review-evaluation";
+import { ReviewAuthorityReader } from "@oma/review/authority";
+import { makeValidAgent } from "./fixtures/spec.js";
 
 const OP = (n: number): OperationId => `op-00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const MID = (n: number): MessageId => `m-00000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
@@ -55,8 +57,8 @@ const withMessages = (entry: ReviewEntry, messages: readonly MessagePlan[]): Rev
 
 const state = (openEntry: ReviewEntry, entries: readonly ReviewEntry[],
     over: Partial<Omit<ReviewStateInput, "open" | "entries">> = {}): ReviewState =>
-  reviewState({ open: openEntry, entries, eligible: over.eligible ?? ELIGIBLE,
-    highPeerFloor: over.highPeerFloor ?? 2, integration: over.integration ?? null });
+  reviewState({ maxWorkers: over.maxWorkers ?? 6, open: openEntry, entries, eligible: over.eligible ?? ELIGIBLE,
+    highPeerFloor: over.highPeerFloor ?? 2, integration: over.integration ?? null});
 const effects = (openEntry: ReviewEntry, before: readonly ReviewEntry[], after: readonly ReviewEntry[],
     over: Partial<Omit<ReviewStateInput, "open" | "entries">> = {}) =>
   planEffects(state(openEntry, before, over), state(openEntry, after, over));
@@ -305,13 +307,37 @@ test("inconsistent inputs are corrupt", () => {
   const o = open("LOW");
   const corrupt = (fn: () => unknown) => assert.throws(fn,
     (e: unknown) => e instanceof StoreError && e.code === "STORE_CORRUPT");
-  corrupt(() => reviewState({ open: o, entries: [vote(3, "bob", "approve"), vote(2, "carol", "approve")],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [vote(1, "bob", "approve")],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [vote(2, "bob", "approve", OP(7))],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: { ...o, fact: { kind: "review", version: 1, request: OP(1), body: "b" } },
-    entries: [], eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [], eligible: ELIGIBLE, highPeerFloor: 0, integration: null }));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(3, "bob", "approve"), vote(2, "carol", "approve")],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(1, "bob", "approve")],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(2, "bob", "approve", OP(7))],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: { ...o, fact: { kind: "review", version: 1, request: OP(1), body: "b" } },
+    entries: [], eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [], eligible: ELIGIBLE, highPeerFloor: 0, integration: null}));
+});
+
+test("reviewer observations preserve counted approvals, stopped rejects and frozen authors", () => {
+  const opened = open("HIGH");
+  assert.equal(opened.fact.kind, "merge.open");
+  if (opened.fact.kind !== "merge.open") throw new Error("wrong fixture");
+  const input = { ...opened, fact: { ...opened.fact, submitters: ["alice", "absent"] } };
+  const agents = [makeValidAgent("alice", { desired: "stopped", capabilities: [] }),
+    makeValidAgent("bob", { capabilities: [] }), makeValidAgent("carol", { desired: "stopped" }),
+    makeValidAgent("dave"), makeValidAgent("principal")];
+  const observed = state(input, [vote(2, "bob", "approve"), vote(3, "carol", "reject"),
+    vote(4, "dave", "reject"), vote(5, "dave", "approve")], { eligible: new Set(["bob", "dave"]) });
+  const authority = new ReviewAuthorityReader({ listAgents: () => agents,
+    attestationFacts: () => [], getOperation: () => null }, 2, 6);
+  const rows = authority.reviewers(observed);
+  assert.deepEqual(observed.approvers, ["bob", "dave"], "present mail capability must not reinterpret accepted votes");
+  assert.deepEqual(observed.rejectors, ["carol"], "stopping a reviewer must not erase a reject");
+  assert.deepEqual(rows, [
+    { name: "absent", desired: null, exclusions: ["author", "missing-agent"], latestVote: null },
+    { name: "alice", desired: "stopped", exclusions: ["author", "not-enabled", "missing-mail-send"], latestVote: null },
+    { name: "bob", desired: "enabled", exclusions: ["missing-mail-send"], latestVote: "approve" },
+    { name: "carol", desired: "stopped", exclusions: ["not-enabled"], latestVote: "reject" },
+    { name: "dave", desired: "enabled", exclusions: [], latestVote: "approve" },
+  ]);
 });

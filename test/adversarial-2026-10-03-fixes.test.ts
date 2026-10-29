@@ -37,7 +37,7 @@ import { requestHash } from "@oma/domain/request-identity";
 import { GitObserver, parseNameStatusZ } from "@oma/git/observe";
 import { observed } from "@oma/domain/git-facts";
 import { isValidWirePath } from "@oma/domain/identifiers";
-import { readBounded } from "#oma-test/app/cli/effects";
+import { readBounded } from "#oma-test/app/runtime/input-effects";
 import { makeValidAgent } from "./fixtures/spec.js";
 import type { MailModule } from "@oma/mail";
 import type { FeatureExecution } from "./fixtures/execution.js";

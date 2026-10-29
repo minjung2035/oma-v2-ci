@@ -37,6 +37,10 @@
 
 [macOS native 전환 명세](macos-native-spec.md)는 VM 없는 공통 TypeScript 제품의 목표·확정 결정·미결정 후보·검증 순서를 정한다. 다음 구현자의 판단 절차와 원본 근거를 포함하며, 후보의 존재·설계 채택·실제 native 지원 완료를 구분한다.
 
+## 모델 도구 표면 전환
+
+[모델 도구 표면 전환 명세](model-tool-surface-spec.md)는 승인된 모델용 OMA CLI 제거, 같은 입력 계약의 action 통합, 전체 core/선택 도구 목록과 exact-selection `toolset`, reviewer 상태 projection, request/session 보존 및 실제 모델 비교 기준을 정한다. 구현 cutover 진행 중이며 runtime·provider·Sol 검증은 별도 관측 증거가 기록되기 전까지 미확인이다. 사람용 제품 CLI와 고정 architecture·accepted history는 제거하거나 소급 수정하지 않는다.
+
 ## 기준본과 결정 기록
 
 | 문서 | 읽는 방법 |

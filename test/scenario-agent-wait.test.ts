@@ -1,15 +1,16 @@
-/** DR27/RUN-003: local fake provider; real confined engine, CLI, broker and runner. */
+/** DR27/RUN-003: local fake provider; real confined engine, typed tools, broker and runner. */
 import test from "node:test";
 import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
 import type { AuthContext } from "@oma/contracts";
 import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "@oma/domain/paths";
 
-for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, RESIDENT_TEST_OPTIONS, async () => {
+for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, RESIDENT_TEST_OPTIONS, async t => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Do one step and yield." })), text("Sent.")]);
     await s.prompt("Send work.");
@@ -23,8 +24,14 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     const pending = s.store.pendingDeliveries("worker-a");
     assert.equal(pending.length, 1);
     const before = s.provider.seen.length;
-    const command = `${ack ? `oma ack ${pending[0]!.messageId} --request explicit-ack && ` : ""}oma agent wait && sleep 0.2 && printf persisted-after-wait > after-wait.txt && printf tool-finished`;
-    s.script([tools(call("bash", { command })), text("Must not call the provider again.")]);
+    s.script([
+      tools(
+        ...(ack ? [call("oma_mail_ack", { messageId: pending[0]!.messageId, request: "explicit-ack" }, "explicit-ack")] : []),
+        call("oma_agent_wait", {}, "yield-run"),
+        call("bash", { command: "sleep 0.2 && printf persisted-after-wait > after-wait.txt && printf tool-finished" }, "durable-work"),
+      ),
+      text("Must not call the provider again."),
+    ]);
     const result = await s.activate("worker-a");
     assert.equal(result.code, 0, result.stderr);
     assert.equal(s.provider.seen.length, before + 1, "no next inference after the wait boundary");
@@ -47,17 +54,32 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     assert.equal(files.length, 1);
     const history = readFileSync(join(sessions, files[0]!), "utf8");
     const entries = history.trim().split("\n").map(line => JSON.parse(line));
-    const output = entries.find(entry => entry.type === "message" && entry.message?.role === "toolResult");
+    const output = entries.find(entry => entry.type === "message" && entry.message?.role === "toolResult" && entry.message.toolCallId === "durable-work");
     assert.ok(output, "tool result persisted before graceful yield");
     assert.match(JSON.stringify(output), /tool-finished/);
+    assert.ok(entries.some(entry => entry.message?.role === "toolResult" && entry.message.toolCallId === "yield-run"),
+      "the typed wait result persisted alongside the work result");
     assert.equal(entries.some(entry => entry.customType === "oma-delivery-boundary"), false);
     const incarnation = s.store.getAgent("worker-a")!.incarnation;
     await s.restartBroker();
-    s.script([tools(call("bash", { command: "oma agent wait --observe true" })), text("Resumed without an inherited wait request.")]);
+    const original = s.broker.dispatch.bind(s.broker);
+    const observations: unknown[] = [];
+    t.mock.method(s.broker, "dispatch", async (...args: Parameters<typeof original>) => {
+      const answer = await original(...args);
+      if (args[1].method === "agent.wait" && args[1].params.observe === true) observations.push(answer);
+      return answer;
+    });
+    const beforeResume = s.provider.seen.length;
+    s.script([tools(call("bash", { command: "printf resumed-tool-result" })), text("Resumed without an inherited wait request.")]);
     const resumed = await s.activate("worker-a");
     assert.equal(resumed.code, 0, resumed.stderr);
     assert.ok(s.store.getAgent("worker-a")!.incarnation > incarnation);
-    assert.match(toolResults(s.provider.seen.at(-1)!.body).at(-1)!.text, /"accepted":false/);
+    assert.equal(s.provider.seen.length, beforeResume + 2, "the new run continues past its tool boundary");
+    assert.match(toolResults(s.provider.seen.at(-1)!.body).at(-1)!.text, /resumed-tool-result/);
+    assert.equal(observations.length, 1);
+    const observation = observations[0];
+    assert.ok(observation !== null && typeof observation === "object" && "result" in observation);
+    assert.deepEqual(observation.result, { accepted: false });
     assert.equal(s.store.preparedBatches("worker-a").length, 0);
     assert.equal(s.store.pendingDeliveries("worker-a").length, 0);
   });
@@ -68,20 +90,24 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
     await withScenario({ residents: ["worker-a"], confined: true }, async s => {
       s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "One step", body: "Perform the requested step." })), text("Sent.")]);
       await s.prompt("Send work.");
-      // Scale only the runner's control-idle budget; the real broker can answer
-      // after it. Authentication and CLI framing still use the production path.
-      // The budget must also clear the confined engine's startup, which BL4's
-      // vendored-bundle verification and evaluation made slower than 2s.
+      // Leave startup room while making the observation exceed the runner's
+      // control-idle budget, not the broker connection's independent 30s budget.
+      // The runner is a separate native process; authentication and transport
+      // still use the production path.
       const config = JSON.parse(readFileSync(s.configPath, "utf8"));
-      config.limits.idleStreamSeconds = 6;
+      config.limits.idleStreamSeconds = 20;
+      const observationDelayMs = (config.limits.idleStreamSeconds + 1) * 1000;
       writeFileSync(s.configPath, JSON.stringify(config));
       const original = s.broker.dispatch.bind(s.broker);
       let observed = 0;
+      let observationElapsedMs = 0;
       t.mock.method(s.broker, "dispatch", async (...args: Parameters<typeof original>) => {
         const request = args[1];
         if (request.method === "agent.wait" && request.params.observe === true) {
           observed++;
-          await new Promise(resolve => setTimeout(resolve, 10000));
+          const started = performance.now();
+          await delay(observationDelayMs);
+          observationElapsedMs = performance.now() - started;
           if (outcome === "unobserved") return { v: 1, id: request.id, ok: false,
             error: { code: "BROKER_UNAVAILABLE", message: "fixture wait observation unavailable", retry: "after-repair" } };
         }
@@ -89,11 +115,17 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
       });
       const message = s.store.pendingDeliveries("worker-a")[0]!.messageId;
       const before = s.provider.seen.length;
-      s.script([tools(call("bash", { command: `${outcome === "wait" ? "oma agent wait && " : ""}printf durable-tool-result` })), text("Continued after observation.")]);
-      const started = performance.now();
+      s.script([
+        tools(
+          ...(outcome === "wait" ? [call("oma_agent_wait", {}, "yield-delayed")] : []),
+          call("bash", { command: "printf durable-tool-result" }, "durable-delayed"),
+        ),
+        text("Continued after observation."),
+      ]);
       const result = await s.activate("worker-a");
-      assert.equal(observed, 1);
-      assert.ok(performance.now() - started >= 10000, "the query actually outlived the control-idle budget");
+      assert.equal(observed, 1, result.stderr);
+      assert.ok(observationElapsedMs >= config.limits.idleStreamSeconds * 1000,
+        "the observation itself outlived the control-idle budget");
       const successful = outcome === "continue";
       assert.equal(result.code, outcome === "unobserved" ? 2 : 0, result.stderr);
       if (outcome === "unobserved") assert.match(result.stderr, /SESSION_BOUNDARY_UNCONFIRMED/);

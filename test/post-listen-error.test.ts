@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Post-listen 'error' settlement (WORKSTREAM §9 — 전신성 부류 전수 스캔):
@@ -120,8 +121,7 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   const f = await preparedFixture();
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   // The drain is also the teardown: an emit that escaped would otherwise
   // leave both listeners bound and the process could never exit.

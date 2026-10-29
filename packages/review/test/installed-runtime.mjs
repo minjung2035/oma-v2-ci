@@ -19,7 +19,7 @@ const reader = new ReviewAuthorityReader({
   attestationFacts: () => facts,
   getOperation: () => null,
   listAgents: () => [{ name: "alice", role: "resident", desired: "enabled" }, bob],
-}, 2);
+}, 2, 6);
 assert.equal(reader.openRequests()[0].operation.id, id);
 assert.throws(() => reader.assertApplicable(id), { code: "INTEGRATION_CONDITIONS" });
 facts.push(entry(2, "bob", { kind: "vote", version: 1, request: id,

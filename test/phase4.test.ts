@@ -29,7 +29,7 @@ import { requestHash } from "@oma/domain/request-identity";
 import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
 import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { StatusRefresh } from "@oma/broker/status-refresh";
-import { makeValidAgent } from "./fixtures/spec.js";
+import { withWorkerCapacity, makeValidAgent } from "./fixtures/spec.js"
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec } from "@oma/contracts";
 
@@ -61,7 +61,7 @@ async function envOf(): Promise<{ env: Env; cleanup: () => Promise<void> }> {
     stateRoot: state, projectGit: join(state, "repos", "project.git"), society,
     hasGoal: () => existsSync(join(state, "world", "context", "current")),
     activationAllowed: () => true,
-  }, resolver, mail);
+  }, withWorkerCapacity(resolver), mail);
   const views = new ViewsModule(store, state, society, "p");
   return {
     env: { dir, society, store, units, mail, lifecycle, views },
@@ -235,6 +235,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
   try {
     const from = seedProjectGit(env);
     const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
+      maxWorkers: 6,
       principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "seed" }],
       modelProfiles: { m: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
       agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null } },
@@ -329,10 +330,10 @@ test("CREATE-003: resolved child policy is rechecked at T-create-intent", async 
     const lifecycle = createLifecycleModule(env.store, env.units, {
       stateRoot: join(env.dir, "state"), projectGit: join(env.dir, "state", "repos", "project.git"), society: env.society, hasGoal: () => false,
       activationAllowed: () => true,
-    }, (_parent, input) => ({
+    }, withWorkerCapacity((_parent, input) => ({
       ...input, modelProfile: "m",
       profile: ++resolutions === 1 ? "child" : "p", capabilities: ["mail.send"],
-    }), env.mail);
+    })), env.mail);
     const receipt = await lifecycle.create(auth("a", ["agent.create"]), { name: "policy-child", from: base, brief: "frozen" }, "policy-race");
     assert.equal(receipt.state, "succeeded");
     assert.equal(env.store.getAgent("policy-child")!.profile, "p");

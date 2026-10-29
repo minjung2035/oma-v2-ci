@@ -103,12 +103,18 @@ export class Broker {
           throw new StoreError("CAPABILITY_DENIED", "wait is a Resident's own run intent");
         const run = this.runLeases.get(auth.actor);
         if (!run) throw new StoreError("STALE_RUN", "wait requires a live run");
-        return run.wait(auth.incarnation, observe);
+        const accepted = run.wait(auth.incarnation, observe);
+        if (!observe) this.reconcile?.wait(auth.actor, auth.incarnation);
+        return accepted;
       },
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
-    const internalPorts = { ...dependencies.internal, peers: projectInternalPeers(this.peers) };
+    const internalPorts = { ...dependencies.internal, peers: projectInternalPeers(this.peers),
+      mail: { ...dependencies.internal.mail,
+        prepare: (auth: AuthContext) => dependencies.internal.mail.prepare(auth, this.reconcile?.deferredWork(auth.actor, auth.incarnation)),
+      },
+    };
     this.internalAdmission = { isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission() };
     this.internalDispatcher = new InternalDispatcher({ ...internalPorts, ...this.internalAdmission,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),

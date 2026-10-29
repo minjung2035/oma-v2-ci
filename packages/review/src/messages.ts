@@ -41,26 +41,12 @@ export class ReviewMessages {
     if (effects.withdraw !== null) emissions.push({
       to: [PRINCIPAL], kind: "message", subject: reviewSubject(`[${before.name}] approval withdrawn`, this.bounds.subjectBytes),
       body: `Approval ${effects.withdraw.id} for ${before.name} is withdrawn: ${effects.withdraw.reason}.\n` +
-        `The request remains open; Workers may vote again.`,
+        `Do not decide with the withdrawn id. Use current review state and any fresh approval mail.`,
       replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: rfcMessageIdFor(effects.withdraw.id, this.society),
         references: this.referencesTo(inputFor, effects.withdraw.id) },
       review: { role: "withdrawn", request: open.operation.id, name: before.name, approval: effects.withdraw.id } });
-    if (effects.approve !== null) {
-      const approvalId = generateMessageId(id, emissions.length);
-      const body = reviewApprovalBody(approvalId, openFact, [...inputFor.entries, newEntry], inputFor.open.actor, effects.approve);
-      // The floor model (mail/review-bounds.ts) covers this body for the
-      // votes the configured floor binds; over it is a bounds bug, not a mail
-      // the Principal cannot read (the notice-part assert has the same shape).
-      if (Buffer.byteLength(body, "utf8") > this.bounds.mailBodyBytes)
-        throw new StoreError("INTERNAL_ERROR", "an approval request exceeds the mail body bound");
-      emissions.push({
-        to: [PRINCIPAL], kind: "approval_required",
-        subject: reviewSubject(`[${before.name}] HIGH approval requested: ${openFact.title}`, this.bounds.subjectBytes),
-        body,
-        approvalFor: openFact.identity,
-        replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
-        review: { role: "approval", request: open.operation.id, name: before.name, votes: [...effects.approve] } });
-    }
+    if (effects.approve !== null)
+      emissions.push(this.approvalEmission(id, emissions.length, after0, openFact, [...inputFor.entries, newEntry], effects.approve));
     if (decision !== null)
       emissions.push({
         to: [PRINCIPAL], kind: "result", subject: reviewSubject(`[${before.name}] decision recorded`, this.bounds.subjectBytes),
@@ -69,6 +55,22 @@ export class ReviewMessages {
           references: this.referencesTo(inputFor, decision.approval) },
         review: { role: "decision", request: open.operation.id, name: before.name, approval: decision.approval } });
     return emissions;
+  }
+
+  approvalEmission(id: OperationId, ordinal: number, state: ReviewState,
+      fact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
+      entries: readonly ReviewEntry[], votes: readonly OperationId[]): Emission {
+    const approvalId = generateMessageId(id, ordinal);
+    const body = reviewApprovalBody(approvalId, fact, entries, state.requester, votes, state.capacityFallback ? state : null);
+    if (Buffer.byteLength(body, "utf8") > this.bounds.mailBodyBytes)
+      throw new StoreError("INTERNAL_ERROR", "an approval request exceeds the mail body bound");
+    return {
+      to: [PRINCIPAL], kind: "approval_required",
+      subject: reviewSubject(`[${state.name}] ${state.capacityFallback ? "Capacity fallback" : "HIGH"} approval requested: ${fact.title}`, this.bounds.subjectBytes),
+      body, approvalFor: fact.identity,
+      replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
+      review: { role: "approval", request: state.request, name: state.name, votes: [...votes] },
+    };
   }
 
   private referencesTo(input: ReviewStateInput, messageId: MessageId): string[] {

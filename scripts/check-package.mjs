@@ -17,14 +17,6 @@ export async function checkPackage(rootInput) {
     const rel = relative(root, realpathSync(path));
     if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error("package file escapes installation root");
   }
-  // AV16: the sandbox's `oma` is installed, executable, and exactly its owner's script.
-  {
-    const command = join(root, layout.modelCommand);
-    requiredFile(command);
-    if ((lstatSync(command).mode & 0o111) === 0) throw new Error(`model command is not executable: ${layout.modelCommand}`);
-    const { modelCommandScript } = await import(pathToFileURL(join(root, layout.modelCommandBuilder)).href);
-    if (readFileSync(command, "utf8") !== modelCommandScript()) throw new Error(`model command differs from its owner: ${layout.modelCommand}`);
-  }
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   // DR18 (C2): the install command is the package's `oma` bin, and it is the
   // product's TUI entry -- the one the deployment layout names -- run by node.

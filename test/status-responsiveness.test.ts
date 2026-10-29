@@ -18,7 +18,7 @@ import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { decodeStatusView, statusViewPath } from "@oma/protocol/status-view";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
@@ -54,8 +54,7 @@ function society(t: TestContext, options: { hang?: () => boolean; fail?: () => b
   const units = modelledUnits(root, meter, options);
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   t.after(async () => { try { await broker.drainAndClose(); } catch { store.close(); } finally { removeTree(root); } });
   const call = async (request: Record<string, unknown>) => {

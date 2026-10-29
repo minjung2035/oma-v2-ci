@@ -24,11 +24,6 @@ const result = (text: string): CompactResult => ({ content: [{ type: "text", tex
 test("B1: the display name drops only the society's prefix", () => {
   assert.equal(toolDisplayName("oma_mail_send"), "mail send");
   assert.equal(toolDisplayName("oma_mail_read"), "mail read");
-  assert.equal(toolDisplayName("oma_merge"), "merge");
-  assert.equal(toolDisplayName("oma_challenge"), "challenge");
-  assert.equal(toolDisplayName("oma_status"), "status");
-  assert.equal(toolDisplayName("oma_society"), "society");
-  assert.equal(toolDisplayName("oma_agent_lifecycle"), "agent lifecycle");
   // Engine built-ins and other extensions keep their own names.
   assert.equal(toolDisplayName("read"), "read");
   assert.equal(toolDisplayName("some_other_tool"), "some_other_tool");
@@ -179,6 +174,30 @@ test("B1: callSummary prefers the argument that names the call", () => {
   assert.equal(callSummary("whatever", { query: "the question" }), "the question");
   const long = callSummary("whatever", { query: "x".repeat(500) })!;
   assert.ok(long.endsWith("…") && long.length <= COMPACT_TOOL_BOUNDS.summaryCells.value);
+});
+
+test("B1: typed calls show their target and operation without exposing body text", () => {
+  const runtime = createCompactToolRuntime();
+  const cases: [string, Record<string, unknown>, string[]][] = [
+    ["oma_merge_open", { tier: "HIGH", title: "Fix ownership", reason: "private prose" }, ["HIGH", "Fix ownership"]],
+    ["oma_challenge_open", { merge: "merge-1", tier: "LOW", title: "Undo regression", reason: "private prose" }, ["merge-1", "LOW", "Undo regression"]],
+    ["oma_review_diff", { name: "merge-1", view: "original", path: "src/main.ts", cursor: 64 }, ["merge-1", "original", "src/main.ts"]],
+    ["oma_review_respond", { name: "merge-1", action: "approve", body: "private prose" }, ["merge-1", "approve"]],
+    ["oma_agent_control", { name: "worker-a", action: "stop" }, ["worker-a", "stop"]],
+    ["oma_topic_subscription", { action: "follow", topic: "dev" }, ["follow", "dev"]],
+    ["oma_context_publish", { directory: "/workspace/context", expectedRevision: null }, ["/workspace/context"]],
+    ["oma_candidate_publish", { candidate: "HEAD", subject: "Share work", body: "private prose" }, ["HEAD", "Share work"]],
+    ["oma_operation_status", { key: "request-1" }, ["request-1"]],
+    ["toolset", { select: ["oma_logs", "oma_review_list"] }, ["oma_logs", "oma_review_list"]],
+  ];
+  for (const [name, args, expected] of cases) {
+    const renderers = runtime.resolver(name, () => undefined)!;
+    const lines = renderers.renderCall!(args, theme, ctx({ args })).render(120);
+    assert.equal(lines.length, 1);
+    const text = plain(lines);
+    for (const part of expected) assert.ok(text.includes(part), `${name} omits ${part}: ${text}`);
+    assert.doesNotMatch(text, /private prose/);
+  }
 });
 
 test("B1: the running dot paints at draw time through the pulse tones", () => {

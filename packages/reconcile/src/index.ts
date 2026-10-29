@@ -23,6 +23,8 @@ export class ReconcileModule {
   private readonly operations: OperationRecovery;
   private freshVerifiedMain: string | undefined;
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
+  private readonly waiting = new Map<Actor, { incarnation: number; specHash: string; messages: ReadonlySet<string> }>();
+  private readonly resuming = new Map<Actor, { incarnation: number; specHash: string; invocationId: string; messages: ReadonlySet<string> }>();
   constructor(private readonly store: ReconcileLedger, private readonly mail: ReconcileMail, private readonly git: ReconcileGit | null,
     private readonly reviews: ReconcileReview | null,
     private readonly units: ReconcileUnits, private readonly lifecycle: ReconcileLifecycle, private readonly paths: ReconcilePaths, private readonly effects: ReconcileEffects) {
@@ -39,6 +41,30 @@ export class ReconcileModule {
   get preacceptCollection(): PreacceptCollection | null { return this.collected; }
   private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
+  /** A live run's explicit wait suppresses only work already eligible then.
+   * It is neither delivery completion nor durable execution intent. */
+  wait(actor: Actor, incarnation: number): void {
+    const agent = this.store.getAgent(actor);
+    if (!agent || agent.role !== "resident" || agent.incarnation !== incarnation)
+      throw new StoreError("STALE_RUN", "wait scheduling requires the current Resident incarnation");
+    const previous = this.waiting.get(actor);
+    if (previous?.incarnation === incarnation && previous.specHash === agent.specHash) return;
+    this.waiting.set(actor, { incarnation, specHash: agent.specHash, messages: new Set(this.effects.pendingWork(actor)) });
+  }
+  /** Only an automatic fresh-work activation may defer the waited batch.
+   * Explicit starts and a recovered broker retain ordinary oldest-first delivery. */
+  deferredWork(actor: Actor, incarnation: number): ReadonlySet<string> | undefined {
+    const resume = this.resuming.get(actor), agent = this.store.getAgent(actor);
+    return resume?.incarnation === incarnation && agent?.incarnation === incarnation && resume.specHash === agent.specHash &&
+      resume.invocationId === this.units.observe(actor).invocationId ? resume.messages : undefined;
+  }
+  private hasRunnableWork(agent: { name: Actor; incarnation: number; specHash: string }): boolean {
+    const waiting = this.waiting.get(agent.name);
+    if (waiting && (waiting.incarnation !== agent.incarnation || waiting.specHash !== agent.specHash)) this.waiting.delete(agent.name);
+    const ignored = this.waiting.get(agent.name)?.messages;
+    for (const message of this.effects.pendingWork(agent.name)) if (!ignored?.has(message)) return true;
+    return false;
+  }
   private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
   /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private async quiesceResidents(): Promise<void> {
@@ -176,9 +202,9 @@ export class ReconcileModule {
             diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); continue;
           }
           if (current.desired === "enabled" && this.activation() && this.paths.hasGoal()) {
-            const hasPendingWork = this.effects.hasPendingWork(current.name);
             const restartDue = this.units.restartDue?.(current.name) === true;
-            const canStart = (state: string): boolean => hasPendingWork && ["inactive", "dead"].includes(state) || restartDue && state === "failed";
+            const canStart = (state: string): boolean =>
+              ["inactive", "dead"].includes(state) && this.hasRunnableWork(current) || restartDue && state === "failed";
             if (canStart(observation.activeState)) {
               const fresh = this.units.observe(current.name);
               if (canStart(fresh.activeState)) {
@@ -190,12 +216,19 @@ export class ReconcileModule {
                 if (!canStart(final.activeState)) continue;
                 if (!this.units.confirmDead(current.name, current.incarnation))
                   throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not confirmed dead");
-                await this.units.start(current.name, false, () => {
-                  const currentNow = this.store.getAgent(current.name);
-                  if (!currentNow || currentNow.incarnation !== current.incarnation || currentNow.desired !== "enabled" ||
-                      !this.activation() || !this.paths.hasGoal())
-                    throw new StoreError("STALE_RUN", "reconcile activation changed before release");
-                });
+                const waiting = this.waiting.get(current.name);
+                this.resuming.delete(current.name);
+                try {
+                  await this.units.start(current.name, false, () => {
+                    const currentNow = this.store.getAgent(current.name);
+                    if (!currentNow || currentNow.incarnation !== current.incarnation || currentNow.desired !== "enabled" ||
+                        !this.activation() || !this.paths.hasGoal())
+                      throw new StoreError("STALE_RUN", "reconcile activation changed before release");
+                    const invocationId = this.units.observe(current.name).invocationId;
+                    if (waiting?.incarnation === current.incarnation && invocationId)
+                      this.resuming.set(current.name, { ...waiting, incarnation: current.incarnation + 1, invocationId });
+                  });
+                } catch (error) { this.resuming.delete(current.name); throw error; }
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }
               if (fresh.activeState === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "final unit observation is unknown");

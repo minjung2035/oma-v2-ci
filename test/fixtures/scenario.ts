@@ -37,6 +37,7 @@ import { defaultHostConfig } from "@oma/config/defaults";
 import { GitModule } from "@oma/git";
 import { CandidateChecks } from "#oma-test/app/runtime/candidate-checks";
 import { integrationPolicyFromConfig } from "@oma/domain/integration-policy";
+import { encodedPrincipalToolSurface } from "@oma/domain/tool-surface";
 import { readCurrentHostPolicy } from "@oma/config";
 import { createChildSpecResolver } from "@oma/config/policy";
 import { residentProjectGit } from "@oma/domain/resident-paths";
@@ -224,7 +225,7 @@ async function composeBroker(root: string, runRoot: string, store: Store, host: 
         worldDir: join(root, "world"), society: SOCIETY,
          checkNode: config.installation.node, checkAssetsDir: config.installation.libdir, };
     const checks = new CandidateChecks(gitPaths, (command, signal, authorize, fds, prepared) => executions.run("candidate", command, signal, authorize, fds, undefined, prepared));
-    const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration),
+    const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicyFromConfig(config), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY)),
         (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize),
         { mailBodyBytes: options.reviewBodyBytes ?? SCENARIO_LIMITS.mailBodyBytes, subjectBytes: SCENARIO_LIMITS.subjectBytes, bundleBytes: SCENARIO_LIMITS.bundleBytes },
         quarantineExecution(gitPaths, executions));
@@ -303,7 +304,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             workspace: principalWorkspace(root), home: principalWorkspace(root),
             // The deliberate plan travels the plumbing field, not the inherited
             // env -- the runner's own hop, applied to the host engine.
-            ...(options.engineEnv?.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: options.engineEnv.OMA_TOOL_SURFACE }) }, profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds }, { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv }, { onLine: line => { lines.push(line); }, onBusy: () => { }, onEnd: reason => { lines.push(`[end] ${reason}`); },
+            toolSurface: options.engineEnv?.OMA_TOOL_SURFACE ?? encodedPrincipalToolSurface() }, profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds }, { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv }, { onLine: line => { lines.push(line); }, onBusy: () => { }, onEnd: reason => { lines.push(`[end] ${reason}`); },
             onUi: event => options.interactive?.onUi(event, started),
             onPromptFailed: (_text, reason) => { lines.push(`[prompt failed] ${reason}`); },
             onPromptUnconfirmed: (_text, reason) => { lines.push(`[prompt unconfirmed] ${reason}`); } });
@@ -419,8 +420,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             work(["add", "-A"]);
             work(["commit", "-m", `${from} change ${key}`]);
             const candidate = work(["rev-parse", "HEAD"]);
-            // The same publication oma submit runs: an export ref bundled off the
-            // clone and handed to the broker as a git.submit stream.
+            // Publish the candidate's export bundle through the broker's raw stream.
             const exportRef = exportRefForRequestKey(key);
             work(["update-ref", exportRef, candidate]);
             const bundlePath = join(root, "scratch", `bundle-${from}-${key}`);

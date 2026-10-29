@@ -1,7 +1,7 @@
 /** mail-v1 review loop end-to-end with a scripted Principal model.
  *
  * A real society runs (provisioned state, broker, PrincipalSession with the
- * trusted extension and the model-facing CLI); Residents act through the
+ * trusted extension and typed client); Residents act through the
  * broker's dispatch (residentCall/residentPushes), the model through the
  * scripted provider. Assertions are durable facts: ledger rows, mailbox
  * files, receipts, provider-seen requests. (Resident *activation* is not part
@@ -26,9 +26,10 @@ const LAST = "line.txt";
 /** The newest tool result the engine handed the model. */
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const receiptIn = (result: string): { operation?: string; state?: string; result?: Record<string, unknown>; error?: { code?: string } } => {
-  const found = result.match(/\{"operation":"[^"]+".*\}/);
-  assert.ok(found, `no receipt in tool result: ${result.slice(0, 300)}`);
-  return JSON.parse(found[0]);
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `no receipt in tool result: ${result.slice(0, 300)}`);
+  return envelope.receipt;
 };
 /** A mail id's Maildir name ends in `:2,`; ids the model can name are without it. */
 const nameOf = (file: string) => file.replace(/:2,.*$/, "");
@@ -95,11 +96,11 @@ test("SCN-R01: HIGH merge end-to-end — approval mail, Principal diff and vote,
         // The approval id is taken from the notice the model saw, not the
         // ledger: the mail path the batch notice printed names the message.
         seenIds = noticed(lastUserText(request));
-        return tools(call("oma_merge", { action: "diff", name }));
+        return tools(call("oma_review_diff", { name }));
       }
       if (index === 1) {
         diffResult = lastResult(request);
-        return tools(call("oma_merge", { action: "vote", name, verdict: "approve", body: "Reviewed; approve.", approval }));
+        return tools(call("oma_review_respond", { name, action: "approve", body: "Reviewed; approve.", approval }));
       }
       return text("Approved.");
     });
@@ -147,10 +148,10 @@ test("SCN-R02: the Principal's own surface refuses Worker actions and worker-mai
     const workerId = nameOf(readdirSync(workerDir).sort()[0]!);
     const opsBefore = s.operations().length;
     s.script([
-      tools(call("oma_merge", { action: "open", tier: "LOW", title: "x", reason: "x" })),
-      tools(call("oma_merge", { action: "status" })),
-      tools(call("oma_merge", { action: "vote", name, verdict: "approve", body: "no approval" })),
-      tools(call("oma_challenge", { action: "review", name: `challenge-${name}`, body: "no" })),
+      tools(call("oma_merge_open", { tier: "LOW", title: "x", reason: "x" })),
+      tools(call("oma_review_status", { name })),
+      tools(call("oma_review_respond", { name, action: "approve", body: "no approval" })),
+      tools(call("oma_review_respond", { action: "comment", name, body: "no", approval: "m-00000000-0000-4000-8000-000000000001-0" })),
       tools(call("oma_mail_read", { messageId: workerId })),
       tools(call("oma_mail_read", { messageId: `/mail/workers/cur/${workerId}:2,` })),
       tools(call("read", { path: join(s.root, "mail", "workers", "cur") })),
@@ -163,13 +164,12 @@ test("SCN-R02: the Principal's own surface refuses Worker actions and worker-mai
     // the specific refusal of its path, so a call that succeeded or failed
     // differently fails this test.
     const resultAt = (index: number) => lastResult(s.provider.seen[index]!.body);
-    assert.match(resultAt(1), /Validation failed for tool "oma_merge"[\s\S]*"action": "open"/,
-      `open: ${resultAt(1).slice(0, 160)}`);
-    assert.match(resultAt(2), /Validation failed for tool "oma_merge"[\s\S]*"action": "status"/,
-      `status: ${resultAt(2).slice(0, 160)}`);
-    assert.match(resultAt(3), /approval message id is not valid: undefined/, `vote w/o approval: ${resultAt(3).slice(0, 160)}`);
-    assert.match(resultAt(4), /Validation failed for tool "oma_challenge"[\s\S]*"action": "review"/,
-      `challenge review: ${resultAt(4).slice(0, 160)}`);
+    const offered = s.provider.seen[0]!.body.tools!.map(tool => tool.function?.name);
+    for (const unavailable of ["oma_merge_open", "oma_review_status"]) assert.ok(!offered.includes(unavailable));
+    assert.match(resultAt(1), /not found|not available|unknown tool/i);
+    assert.match(resultAt(2), /not found|not available|unknown tool/i);
+    assert.match(resultAt(3), /Invalid arguments|Validation failed/);
+    assert.match(resultAt(4), /Invalid arguments|Validation failed/);
     // A workers-audience id does not exist under the public archive the tool resolves to.
     assert.match(resultAt(5), new RegExp(`ENOENT: no such file or directory, open '.*/mail/archive/cur/${workerId}:2,'`),
       `worker id read: ${resultAt(5).slice(0, 160)}`);
@@ -220,12 +220,12 @@ test("SCN-R03: a stale approval id is refused; the fresh approval's id applies",
     let staleResult = "";
     s.script((request, index) => {
       if (index === 0)
-        return tools(call("oma_merge", { action: "vote", name, verdict: "approve", body: "again", approval: first }));
+        return tools(call("oma_review_respond", { name, action: "approve", body: "again", approval: first }));
       if (index === 1) { staleResult = lastResult(request); return text("stale seen"); }
       return text("done");
     });
     await s.deliver();
-    assert.match(staleResult, /APPROVAL_STALE: The named approval is no longer current/, `the stale id must be refused: ${staleResult}`);
+    assert.equal(JSON.parse(staleResult).code, "APPROVAL_STALE", `the stale id must be refused: ${staleResult}`);
     await s.idle();
     assert.equal(s.operations().filter(row => row.kind === "attest.record" && row.actor === "principal").length, 0);
     // bob re-approves -> a new approval mail with a fresh id.
@@ -238,7 +238,7 @@ test("SCN-R03: a stale approval id is refused; the fresh approval's id applies",
       if (index === 0) {
         // The id is taken from the notice the model saw, not the mailbox dir.
         delivered = noticed(lastUserText(request));
-        return tools(call("oma_merge", { action: "vote", name, verdict: "approve", body: "approve now", approval: second }));
+        return tools(call("oma_review_respond", { name, action: "approve", body: "approve now", approval: second }));
       }
       return text("voted");
     });
@@ -258,7 +258,7 @@ test("SCN-R04: a Principal reject closes the request; later Worker votes are ref
     await s.idle();
     const approval = pendingApproval(s, name);
     s.script([
-      tools(call("oma_merge", { action: "vote", name, verdict: "reject", body: "No.", approval })),
+      tools(call("oma_review_respond", { name, action: "reject", body: "No.", approval })),
       text("Rejected."),
     ]);
     assert.equal((await s.deliver()).kind, "delivered");
@@ -281,11 +281,9 @@ test("SCN-R05: MEDIUM applies on one Worker approval; the Principal sees only th
     const { name, candidate } = await openMerge(s, "r05", "MEDIUM", change("r05"));
     // Before the request has applied, the Principal's diff of it is refused:
     // Worker review state is not its sightline.
-    s.script([tools(call("oma_merge", { action: "diff", name })), text("seen")]);
+    s.script([tools(call("oma_review_diff", { name })), text("seen")]);
     await s.prompt("Check the merge.");
-    assert.match(lastResult(s.provider.seen[1]!.body),
-      new RegExp(`CAPABILITY_DENIED: Insufficient permission`),
-      `pre-application diff: ${lastResult(s.provider.seen[1]!.body).slice(0, 160)}`);
+    assert.equal(JSON.parse(lastResult(s.provider.seen[1]!.body)).code, "CAPABILITY_DENIED");
     assert.equal(s.inbox("principal").length, 0, "no request or review mail reached the Principal");
     assert.equal((await vote(s, "bob", name, "approve", "r05-bob")).ok, true);
     await s.idle();
@@ -302,7 +300,7 @@ test("SCN-R05: MEDIUM applies on one Worker approval; the Principal sees only th
         seenIds = noticed(lastUserText(request));
         return tools(call("oma_mail_read", { messageId: notice }));
       }
-      if (index === 1) return tools(call("oma_merge", { action: "diff", name }));
+      if (index === 1) return tools(call("oma_review_diff", { name }));
       return text("Read.");
     });
     assert.equal((await s.deliver()).kind, "delivered");
@@ -326,7 +324,7 @@ test("SCN-R06: an approval accepted while the engine is down delivers exactly on
     // survives and is presented once.
     await s.restartBroker();
     const approval = pendingApproval(s, name);
-    s.script([tools(call("oma_merge", { action: "vote", name, verdict: "approve", body: "ok", approval })), text("voted")]);
+    s.script([tools(call("oma_review_respond", { name, action: "approve", body: "ok", approval })), text("voted")]);
     assert.equal((await s.deliver()).kind, "delivered");
     await s.idle();
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 1);
@@ -387,10 +385,10 @@ test("SCN-R08: a HIGH challenge prepares the revert; the Principal sees both pat
       if (index === 0) {
         // The completed merge's notice may ride in the same batch.
         delivered = noticed(lastUserText(request));
-        return tools(call("oma_challenge", { action: "diff", name: challenge, view: "revert" }));
+        return tools(call("oma_review_diff", { name: challenge, view: "proposal" }));
       }
-      if (index === 1) return tools(call("oma_challenge", { action: "diff", name: challenge, view: "original" }));
-      if (index === 2) return tools(call("oma_challenge", { action: "vote", name: challenge, verdict: "approve", body: "revert", approval }));
+      if (index === 1) return tools(call("oma_review_diff", { name: challenge, view: "original" }));
+      if (index === 2) return tools(call("oma_review_respond", { name: challenge, action: "approve", body: "revert", approval }));
       return text("Reverted.");
     });
     assert.equal((await s.deliver()).kind, "delivered");
@@ -418,9 +416,9 @@ test("SCN-R09: a same-key model vote retry returns the same receipt and records 
     await vote(s, "carol", name, "approve", "r09-carol");
     await s.idle();
     const approval = pendingApproval(s, name);
-    const voteParams = { action: "vote", name, verdict: "approve", body: "yes", approval, request: "principal-vote-r09" };
+    const voteParams = { name, action: "approve", body: "yes", approval, request: "principal-vote-r09" };
     s.script([
-      tools(call("oma_merge", voteParams), call("oma_merge", voteParams)),
+      tools(call("oma_review_respond", voteParams), call("oma_review_respond", voteParams)),
       text("Voted once."),
     ]);
     assert.equal((await s.deliver()).kind, "delivered");

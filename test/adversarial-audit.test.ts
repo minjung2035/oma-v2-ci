@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
@@ -163,7 +164,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
         const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
         const units = new PolicyExecution();
         const views = new ViewsModule(store, root, "demo", "p");
-        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => null, mail);
+        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
         // `sun_path` is 108 bytes including the terminator. A run root of exactly 45
         // bytes keeps the max-length actor name with a short incarnation inside the
         // limit (99) and pushes the largest safe incarnation outside it (114).
@@ -198,7 +199,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
         const units = new PolicyExecution();
         const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
         const views = new ViewsModule(store, root, "demo", "p");
-        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => null, mail);
+        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
         const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) }, limits: LIMITS });
         const reply = await broker.dispatch(auth(), { v: 1, id: "r", method: "status.get", request: "forbidden", params: {} } as never, null);
         assert.equal((reply as {

@@ -171,24 +171,56 @@ DR49: foreground broker가 공통 Resident owner와 execution journal을 소유�
 실행 작업·독립 scope 종료·FD completion을 기다린 뒤 Store를 닫는다. user systemd와
 unit 설치·manager runtime directory는 실행 조건이 아니다. namespace/peer/file primitive가
 없거나 이전 scope가 unknown이면 시작하지 않는다.
-DR37/DR46에서 저장량·실행 자원·agent count quota는 제거했다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
+DR37/DR46에서 저장량·실행 자원·agent count quota를 제거했고, DR66은 아래의 Worker 인원 상한만 복원한다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
 
 ## 현재 실행 제한
 
-로딩 결과는 현재 closed `HostConfig` schema 3로 검증한다(DR46). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
+로딩 결과는 현재 closed `HostConfig` schema 4로 검증한다. 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
 Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
-DR37 이후 OMA는 storage/agent count, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한을 admission이나 systemd property로 집행하지 않는다. DR46의 schema 3은 `quota`와 과거 resource 필드를 거절하며 구버전 설정을 자동 변환하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있다. stream의 선언 크기·해시 일치 검사는 계속 수행한다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하며 OMA에는 비용 상한이 없다.
+모델용 OMA CLI는 제거한다. 사람용 `oma` 실행·설정·로그인은 그대로이며 Worker의 우회 broker 명령이 아니다. 모델은 typed OMA 도구를 사용하고, Git·빌드·테스트에는 `bash`를 사용한다. 기본 부분 편집은 anchor 기반 `read` → `replace`다. Principal에게 실행 불가능한 LSP 진단·수정 도구를 노출하지 않는다.
+
+선택 도구는 `toolset`의 exact-name 목록으로 찾는다. 선택은 누적 group 활성화가 아니라 전체 optional 집합 교체이며 현재 batch 결과 저장 후 다음 turn에 적용한다. core는 남고 빈 선택은 core만 남긴다. 전체 이름·역할별 계약은 [모델 도구 표면 명세](model-tool-surface-spec.md)가 소유한다.
+
+Worker는 commit 후 `oma_merge_open`을 호출하며 필요한 candidate publication은 client가 처리한다. 별도 publication은 공유용이고 미커밋 변경은 포함하지 않는다. `oma_review_respond`의 comment는 토론, approve/reject만 투표다. LOW merge는 사전 comment/vote 없이 기존 policy·integration 검사를 받으며, 모든 적용 변경은 diff와 함께 자동 공유된다. 사후 결함은 challenge로 처리하고 LOW challenge도 원래 peer quorum을 요구한다. 다만 아래 Worker 상한 때문에 정족수 자체를 구성할 수 없으면 가능한 peer 승인 뒤 Principal 승인을 추가한다. reviewer 페이지·생성 조건은 관측일 뿐 권한 grant가 아니다. 기존 peer 재사용과 새 생성은 맥락 재사용·독립 작업 가치·준비 비용을 비교한다. provisioning·enabled·실제 실행과 승인 정족수·적용 완료를 구분한다.
+
+기본 모델 prompt와 도구 안내는 영어다. Principal은 설계·계획·중요 판단, Worker는 자율 실행·조사·테스트·동료 검토에 집중한다. Worker는 작업 시작/담당 범위를 알리고, 대기 중 독립 작업을 진행하며, 증거를 공유하고 통합 결과까지 책임지는 기본 습관을 갖는다. 고정 절차보다 검증된 결과까지의 총 시간·비용을 우선한다. foreground shell은 해당 Worker의 model turn을 점유할 뿐 다른 Worker를 멈추지 않는다. 명시적 background job은 로그·최종 exit 결과를 회수해야 하며 activation 종료를 넘겨 살아 있지 않는다.
+
+사용 중인 custom prompt는 자동 덮어쓰지 않는다. 운영자는 진단에 표시된 prompt 위치에서 과거 model CLI·누적 group·폐기된 도구 안내를 수정해야 한다. 이번 전환의 실제 Pi session·provider 직렬화·설치·sandbox 검증과 한계는 [validation](implementation/validation.md)을 따른다. 실제 Sol medium 행동 비교는 인증·정확한 모델 설정 부재로 NOT_RUN이며, 과거 PASS나 scripted 실행으로 대체하지 않는다.
+
+DR66에서 Worker 인원 상한만 다시 도입한다. 현재 HostConfig 4의 최상위 `maxWorkers`는 양의 safe integer이며 생략 시 6이다. 새 기본 구성의 `initialResidents`는 Worker 3명이고 초기 인원은 상한 이하여야 한다. Principal을 제외한 모든 등록 Worker가 슬롯을 차지하며 provisioning·stopped·retired도 포함한다. 새 생성은 승인 트랜잭션 안에서 다시 검사하고, 초과 시 operation/Worker를 만들기 전에 `LIMIT_EXCEEDED`로 거절한다. 동일 요청 replay와 이미 존재하는 동일 spec 연결은 추가 슬롯을 쓰지 않는다.
+
+Config 화면의 **Maximum workers**는 재시작 적용이다. 상한 변경 뒤 기존 broker는 새 생성에 `POLICY_CHANGED`를 반환하며, 재시작 후 새 상한을 적용한다. 이미 등록된 Worker를 자동 종료·삭제하지 않는다. `oma_status.creation`의 `workerCount`와 `maxWorkers`가 현재 생성 정책을 보여준다.
+
+정상 peer 수는 MEDIUM merge 1명, HIGH merge와 모든 challenge는 `highPeerFloor`다. 해당 요청의 requester와 submitter를 중복 제거한 작성자 수를 `A`라 할 때 실제 요구 수는 `min(정상 peer 수, max(0, maxWorkers − A))`다. 줄어든 경우에는 그 peer 승인을 모두 받은 뒤 Principal 승인이 추가로 필요하다. 0명이면 open과 함께 broker가 승인 메일을 발행한다. HIGH는 기존처럼 Principal 승인이 필요하고 LOW merge fast path는 그대로다. 일시적 부재·중지·생성 실패·반대표는 정족수를 낮추는 사유가 아니다. 현재 승인 메일 id, 자기 심사 금지, Principal delegation, stale base와 최종 CAS 검사는 유지한다.
+
+storage, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한은 여전히 admission이나 systemd property로 집행하지 않는다. 과거 `quota`/resource 필드는 복원하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있으며 stream 크기·해시 검사는 유지한다. S-03의 run 중 steer는 v1에 없고 OMA 비용 상한도 없다.
 
 ### Resident의 현재 run 양보
 
-Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
-다음 모델 호출 없이 현재 run을 끝낸다. `oma agent wait --observe true`는 그 run의
-요청 여부만 JSON으로 읽는다. 이는 작업 완료·ACK·Worker 강제 중지가 아니다.
+Resident의 `oma_agent_wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
+다음 모델 호출 없이 현재 run을 끝낸다. engine 내부 observe 조회는 같은 run의
+요청 여부만 읽는다. blocking receive나 작업 완료·ACK·Worker 강제 중지가 아니다.
 이미 명시적으로 수행한 ACK는 그대로이고, 나머지 메일과 prepared batch는 다음 활성화에
 남는다. 새 incarnation과 broker 재시작에는 wait flag가 넘어가지 않는다.
 조회 실패는 unconfirmed로 남기며, Principal은 이 개별 Worker 양보 명령을 사용하지 않는다.
+
+### Principal 대화의 메일 도착 표시
+
+자동으로 도착한 메일 배치는 분홍색 custom-message 박스 대신 `mail send`와 같은
+컴팩트한 `mail receive` 행으로 표시한다. 기본 상태는 메시지 수와 수신 표시만 보이며,
+기존 도구 펼침 단축키(`Ctrl+O`)로 원래 전달 안내를 열 수 있다. 메일 본문을 읽는
+`oma_mail_read`와 Mail 목록 화면은 변경하지 않는다. `Received`는 대화에 도착했다는
+표시이지 ACK·작업 완료·broker 배달 완료 receipt가 아니다. 모델 입력과 저장된 메일
+내용, batch 식별자·message id 및 기존 완료 판정은 그대로다.
+
+### Pi 업데이트 안내
+
+OMA의 Society·Personal 대화에서는 Pi의 자동 `What's New`/`Updated to` 변경 내역과
+`Update Available` 새 버전 안내를 표시하지 않는다. 직접 입력한 `/changelog`,
+확장 패키지 업데이트 안내, 일반 경고와 메일·도구 표시는 유지한다. 표시 정책만
+적용하며 의존성 버전·업데이트 기능·사용자의 changelog 확인 버전은 변경하지 않는다.
 
 ## 봉인된 Resident의 provider 경로
 
@@ -238,11 +270,11 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 ## Tool 표면 (OMA 내부 정책)
 
-Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보이는 tool 집합의 표현은 OMA가 소유하는 정책이고, 신뢰된 core extension만이 `OMA_TOOL_SURFACE` 환경 변수의 인코딩된 계획을 읽어 적용한다. 어떤 role 파일 필드도 이 표면을 선언할 수 없으며, 선언된 필드가 있으면 설정 로드가 거절된다. production 생산자는 broker의 native Resident launch owner다. 고정한 계획을 `OMA_TOOL_SURFACE_HEX`로 전달하고 runner entry가 decode해 engine spawn plan의 `OMA_TOOL_SURFACE`로 전달한다(현재 계획은 두 role 모두 code_intel group 경계를 선언한다). Resident extension은 변수가 없거나 malformed이면 fail closed한다.
+Tool 표면 투영은 role 설정이 아니라 OMA 내부 정책이다(D23). 신뢰된 core extension만 `OMA_TOOL_SURFACE`의 version 2 계획을 적용한다. role 파일은 표면을 선언할 수 없다. native Resident launch owner는 `OMA_TOOL_SURFACE_HEX`로 고정한 계획을 전달하고 runner가 decode한다. Principal은 host launch owner가 자기 역할의 계획을 고정한다. production launch는 계획 누락이나 malformed 입력을 거절한다.
 
-표면 계획 자체는 변하지 않았다: `defaultMode`(`DIRECT`/`DISABLED`), `direct`/`disabled` 이름 목록, tool과 하위 group의 명시 참조로만 이루어진 `groups`, 진입점 `roots`. 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
+계획은 `defaultMode`, `direct`, `optional`, `disabled`로 core와 선택 카탈로그를 구분한다. Worker 기본 core는 `toolset`을 포함해 19개, Principal은 13개다. `toolset({select:[...]})`는 optional 선택을 **교체**하며 core를 제거하지 않는다. `select:[]`는 core만 남긴다. 선택 도구는 다음 turn부터 직접 호출하고 selector가 대신 실행하지 않는다. 같은 batch에서는 기존 집합을 유지하고 모든 결과가 저장된 `turn_end`에서 확정한다. 확정 snapshot은 session branch에서 복원한다.
 
-엔진 안에서는 시작 시점 검증이 최종 게이트다. 선언된 이름이 registry에 없거나, group 이름이 등록된 tool과 충돌하거나, 활성화가 지시한 대로 적용되지 않으면 세션은 시작되지 않고 엔진이 명시적으로 종료된다(#5). 침묵하는 축소 적용은 없다. 한편 그 호출 경계는 어떤 tool이 실제로 실행될 수 있는지를 이름이 아니라 출처로 판정한다(D25): builtin이거나, 기록된 SHA-256을 다시 확인한 뒤 spawn argv가 고정한 확장 파일에서 온 tool만 허용된다.
+시작·안전 경계·provider 요청 직전에 registry를 검사한다. 계획의 도구가 없거나, OMA 소유 이름이 shadow되거나, 역할·출처가 허용하지 않거나, 활성 집합이 예상과 다르면 명시적으로 거절한다. 침묵하는 축소 적용은 없다. builtin 또는 launch가 고정하고 SHA-256을 검증한 확장만 허용한다(D25). 허용된 추가 확장은 optional 카탈로그로 들어가며 자동 활성화되지 않는다.
 
 표면 표현은 권한이 아니다. 실제 권한은 sandbox mount/FD/network와 capability가 정한다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다. Society Principal은 [DR29](design-revisions.md#dr29--complete-candidate-checks-and-apply-principal-roles-at-execution-boundaries)의 role 제한을 먼저 적용하고 실행 시에도 검사한다.
 

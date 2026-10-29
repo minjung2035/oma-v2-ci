@@ -11,4 +11,5 @@ export interface EnginePresentation {
   stylePanel(lines: readonly string[], theme: Theme): string[];
   registerQuestions(pi: ExtensionAPI, deps: { context(): ExtensionContext | undefined }): void;
   createCompactTools(): CompactPresentation;
+  readonly renderMail: Parameters<ExtensionAPI["registerMessageRenderer"]>[1];
 }

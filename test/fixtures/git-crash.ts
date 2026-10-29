@@ -58,7 +58,7 @@ export function gitFixture(root: string, store: Store, options: { afterImport?: 
     };
     const quarantine = nativeQuarantine(paths, options);
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
-    const git = createGitModule(paths, store, mail, { policyRevision: "crash-policy", protectedPaths: [], checks: [] }, null, null, quarantine);
+    const git = createGitModule(paths, store, mail, {maxWorkers: 6, policyRevision: "crash-policy", protectedPaths: [], checks: []}, null, null, quarantine);
     return { git, mail, paths };
 }
 export function seedGit(root: string, format: "sha1" | "sha256" = "sha1"): void {

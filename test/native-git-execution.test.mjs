@@ -33,7 +33,7 @@ function fixture(t) {
   const checks = new CandidateChecks(paths, (command, signal, authorize, fds, prepared) => executions.run('candidate', command, signal, authorize, fds, undefined, prepared));
   return { root, source, candidate, paths, executions, checks };
 }
-function check(argv) { return snapshotIntegrationPolicy({ policyRevision: 'native-test', protectedPaths: [], checks: [{ id: 'exact', argv, env: {} }] }).checks[0]; }
+function check(argv) { return snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'native-test', protectedPaths: [], checks: [{ id: 'exact', argv, env: {} }]}).checks[0]; }
 test('native candidate: actual exact checkout, read-only canonical mount and private status closed on exec', { timeout: 20000 }, async t => {
   const f = fixture(t); let authorized = 0;
   await f.checks.run(f.candidate, check(['/opt/oma-node/node', '-e', `const a=require('node:assert/strict'),fs=require('node:fs');
@@ -73,9 +73,9 @@ test('native candidate: SIGKILL after exact checkout preserves canonical refs an
 });
 test('native candidate: option-shaped environment values remain literal through namespace controls', { timeout: 20000 }, async t => {
   const f = fixture(t);
-  const literal = snapshotIntegrationPolicy({ policyRevision: 'literal-env', protectedPaths: [], checks: [{ id: 'literal',
+  const literal = snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'literal-env', protectedPaths: [], checks: [{ id: 'literal',
     argv: ['/opt/oma-node/node', '-e', "const a=require('node:assert/strict');a.equal(process.env.RESERVED,'--info-fd');a.equal(process.env.BOUNDARY,'--');"],
-    env: { RESERVED: '--info-fd', BOUNDARY: '--' } }] }).checks[0];
+    env: { RESERVED: '--info-fd', BOUNDARY: '--' } }]}).checks[0];
   await f.checks.run(f.candidate, literal, undefined, () => {});
 });
 test('native candidate: revocation after exact checkout refuses the final exec gate', { timeout: 20000 }, async t => {

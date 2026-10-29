@@ -379,7 +379,7 @@ export function operationPlanCheck(
         const request = fact.kind === "merge.open" || fact.kind === "challenge.open"
           ? context.operationId : fact.request;
         const roles: Record<string, readonly string[]> = {
-          "merge.open": ["thread"], "challenge.open": ["thread"], review: ["thread"],
+          "merge.open": ["thread", "approval"], "challenge.open": ["thread", "approval"], review: ["thread"],
           vote: ["thread", "approval", "withdrawn", "decision"],
           cancel: ["thread", "withdrawn"], refresh: ["thread", "withdrawn", "approval"],
         };
@@ -391,6 +391,9 @@ export function operationPlanCheck(
             return "review message role does not fit its fact";
           if ((fact.kind === "merge.open" || fact.kind === "challenge.open") && meta.name !== fact.name)
             return "review message names a different request";
+          if ((fact.kind === "merge.open" || fact.kind === "challenge.open") && meta.role === "approval" &&
+              (meta.votes.length !== 0 || (fact.kind === "merge.open" && fact.tier === "LOW")))
+            return "an opening approval must bind zero votes and cannot gate a LOW merge";
         }
         return null;
       }

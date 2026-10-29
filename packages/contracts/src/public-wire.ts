@@ -18,11 +18,27 @@ export interface ReviewRequestSummary {
   requester: Actor; display: string;
 }
 export interface ReviewMainObservation { oid: Oid | null; observedAtMs: number }
+export interface ReviewReviewer {
+  name: Actor; desired: AgentStatus["desired"] | null;
+  exclusions: ("author" | "not-enabled" | "missing-mail-send" | "missing-agent")[];
+  latestVote: "approve" | "reject" | null;
+}
+export interface CreationObservation {
+  capability: boolean; childProfile: string | null; childHasMailSend: boolean | null; observedAtMs: number;
+  maxWorkers: number | null; workerCount: number;
+  error?: { code: ErrorCode; message: string };
+}
+export type ReviewStatusQuery =
+  | { name: string; reviewerAfter?: Actor; kind?: never; after?: never }
+  | { kind: "merge" | "challenge"; after?: string; name?: never; reviewerAfter?: never };
 /** The Worker's full request detail. */
 export interface ReviewRequestStatus {
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
   reason: string; requester: Actor; identity: ExactCandidateIdentity;
   display: string; required: number; approvers: Actor[]; rejectors: Actor[];
+  normalRequired: number; maxWorkers: number; capacityFallback: boolean; principalRequired: boolean;
+  observedAtMs: number; remainingApprovals: number; acceptingWorkerVotes: boolean;
+  reviewers: { items: ReviewReviewer[]; next: Actor | null };
   principal: { approval: MessageId | null; sent: boolean; decision: "approve" | "reject" | null;
     /** The approval the latest Principal vote named, even after it lapsed. */
     decisionApproval: MessageId | null };
@@ -33,7 +49,7 @@ export interface ReviewRequestStatus {
 }
 /** The Worker's list answer, newest first, bounded by the frame limit. */
 export interface ReviewRequestList {
-  requests: ReviewRequestSummary[]; omitted: number; main: ReviewMainObservation;
+  requests: ReviewRequestSummary[]; omitted: number; next: string | null; main: ReviewMainObservation;
 }
 /** What the Principal may see: only a request its approval mail named or one
  * already applied, and only these fields. */
@@ -70,12 +86,12 @@ export interface PublicMethods {
   'operation.read': { params: { key: RequestKey; offset: number; sha256?: string }; result: { sha256: string; bytes: number; offset: number; data: string; next: number | null } };
   /** `next` is the exclusive agent-name cursor; absent means the page is complete.
    * Pages are live observations, not a multi-request registry snapshot. */
-  'status.get': { params: { agent?: Actor; after?: Actor }; result: { observedAtMs: number; agents: AgentStatus[]; next?: Actor } };
+  'status.get': { params: { agent?: Actor; after?: Actor }; result: { observedAtMs: number; agents: AgentStatus[]; next?: Actor; creation: CreationObservation } };
   'logs.read': { params: { agent: Actor; sinceSeconds: number }; result: { text: string; truncated: boolean; observedAtMs: number } };
   /** mail-v1 §8: the read model over the review ledger. Workers see every
    * request; the Principal sees only a request its approval mail named (or an
    * applied one), and only the fields the approval flow already gave it. */
-  'review.status': { params: { name?: string }; result: ReviewStatusResult };
+  'review.status': { params: ReviewStatusQuery; result: ReviewStatusResult };
 }
 
 export type PublicMethod = keyof PublicMethods;

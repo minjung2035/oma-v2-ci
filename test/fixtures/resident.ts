@@ -30,7 +30,7 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
     actor, society: "demo", limits,
     profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
     paths: { piCommand: process.execPath, piArgs: [entry], piAgentDir: join(stateRoot, "engine"),
-      coreExtension: join(libdir, "packages/extension/dist/index.js"), cli: join(libdir, "apps/oma/dist/cli.js"),
+      coreExtension: join(libdir, "packages/extension/dist/index.js"),
       workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home, mailArchive: join(directories.archive, "cur"),
       workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket },
     confinement: { host: {  libdir, node: process.execPath, pi: confinedPath({ libdir }, directories, entry),
@@ -47,10 +47,8 @@ export function prepareResident(options: PiAdapterOptions): void {
   writeFileSync(options.paths.socket, "");
   Object.assign(host, {  node: realpathSync(process.execPath) });
   prepareResidentRootfs(residentRootfsPath(host.stateRoot!), layout, process.getuid!(), process.getgid!());
-  // Callers supply test payload bytes; their declared installation directories
-  // follow each current asset path rather than the former extension layout.
-  for (const path of [options.paths.coreExtension, options.paths.cli])
-    mkdirSync(dirname(path), { recursive: true });
+  // Callers supply test payload bytes for the current extension asset.
+  mkdirSync(dirname(options.paths.coreExtension), { recursive: true });
   // w10/E27: the confined engine's NODE_OPTIONS preloads the in-process client
   // from the installation layout's app-owned preload. A fixture libdir
   // must hold every asset the spawn plan names, so the fake file is provided

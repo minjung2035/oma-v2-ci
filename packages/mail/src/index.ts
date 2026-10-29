@@ -209,7 +209,7 @@ export class MailModule {
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }
-  prepare(auth: AuthContext): Promise<PreparedBatch | null> { return this.batches.prepare(auth); }
+  prepare(auth: AuthContext, deferred?: ReadonlySet<string>): Promise<PreparedBatch | null> { return this.batches.prepare(auth, deferred); }
   complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> { return this.batches.complete(auth, evidence); }
   settleFromReceipt(quiescence: SettlementQuiescence, batchId: string): SettlementOutcome { return this.batches.settleFromReceipt(quiescence, batchId); }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number { return this.batches.moveToCur(agent, ids); }

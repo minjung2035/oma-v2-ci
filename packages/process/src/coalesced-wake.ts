@@ -15,13 +15,18 @@ export class CoalescedWake {
     if (this.closed) return this.ended;
     this.requested = true;
     if (this.active !== null) return this.active;
-    const work = this.dispatch(() => Promise.resolve().then(async () => {
-      while (!this.closed && this.requested) {
-        this.requested = false;
-        await this.run();
+    const owned = this.dispatch(() => Promise.resolve().then(async () => {
+      try {
+        while (!this.closed && this.requested) {
+          this.requested = false;
+          await this.run();
+        }
+      } finally {
+        // Release ownership in the same continuation that checks requested.
+        // A later microtask must start a new drain, not join a settled one.
+        this.active = null;
       }
     }));
-    const owned = work.finally(() => { if (this.active === owned) this.active = null; });
     this.active = owned;
     return owned;
   }

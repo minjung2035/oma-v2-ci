@@ -7,7 +7,7 @@ import {
 } from "@oma/domain/errors";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { type OperationLookup } from "@oma/contracts/durable";
-import { receiptExit, receiptLines, receiptNotFound, isRequestNotFound } from "@oma/protocol/receipts";
+import { receiptExit, receiptNotFound, isRequestNotFound } from "@oma/protocol/receipts";
 import { receiptOperation } from "./fixtures/receipt-operation.js";
 
 const pending = receiptOperation();
@@ -105,8 +105,6 @@ test("receipt projection is shared and never reparses or rewrites its decoded op
 
 test("terminal receipt exit codes differ from uncertain direct failures", () => {
   assert.equal(receiptExit(receiptOfOperation(pending)), 0);
-  assert.equal(receiptLines(receiptOfOperation(pending), "frozen-1")[0], "Accepted / not yet complete");
-  assert.match(receiptLines(receiptOfOperation(pending), "frozen-1")[1]!, /--request frozen-1/);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "unknown" }))), 3);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);

@@ -11,7 +11,7 @@ const tools=describeMacDeveloperTools(developer,developer+'/usr/bin/git',develop
 const host={node:'/opt/pinned-node/bin/node',libdir:'/opt/oma installation',tools};
 const root='/private/var/oma/staging/한 글자 "\\line\nstage',project='/private/var/oma/repos/project.git';
 const candidate='a'.repeat(40),view={git:tools.git,project,workspace:root+'/workspace'};
-const check=snapshotIntegrationPolicy({policyRevision:'test',protectedPaths:[],checks:[{id:'exact',argv:['node','literal "\\$()\narg'],
+const check=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', protectedPaths: [], checks: [{id:'exact',argv:['node','literal "\\$()\narg'],
   env:{HOME:'/human',PATH:'/human/bin',GIT_CONFIG_GLOBAL:'/human/gitconfig',CHECK:'literal'}}]}).checks[0];
 test('Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks',()=>{
   const recipe=candidateSeatbelt(host,view,root+'/tmp',candidate,check),env=recipe.command.env;
@@ -45,7 +45,7 @@ test('Mac setup refuses overlapping staging, widened toolchains and loader injec
     assert.throws(()=>candidateSeatbelt(host,view,temporary,candidate,check));
   for(const libdir of ['/private/var/oma',project,view.workspace])
     assert.throws(()=>candidateSeatbelt({...host,libdir},view,root+'/tmp',candidate,check),{code:'UNSUPPORTED_PROFILE'});
-  const injected=snapshotIntegrationPolicy({policyRevision:'test',protectedPaths:[],checks:[{id:'bad',argv:['node'],env:{DYLD_INSERT_LIBRARIES:'/human/inject'}}]}).checks[0];
+  const injected=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', protectedPaths: [], checks: [{id:'bad',argv:['node'],env:{DYLD_INSERT_LIBRARIES:'/human/inject'}}]}).checks[0];
   assert.throws(()=>candidateSeatbelt(host,view,root+'/tmp',candidate,injected),{code:'UNSUPPORTED_PROFILE'});
   for(const input of [['/Applications','/usr/bin/git','/usr/libexec/git-core'],[developer,'/usr/bin/git',tools.execPath],
     [developer,tools.git,'/human/helpers'],[developer+'\n',tools.git,tools.execPath]])assert.throws(()=>describeMacDeveloperTools(...input),{code:'UNSUPPORTED_PROFILE'});

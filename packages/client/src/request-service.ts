@@ -1,6 +1,5 @@
 // MUST [CLI-001..003]/[IPC-004..008]: freeze before transport and never rebuild
 // same-key requests from current HEAD or mutable source files.
-import { randomUUID } from "node:crypto";
 import type { Json, MutationMethod, Receipt } from "@oma/contracts";
 import { ClientError } from "./errors.js";
 import { runtime, type CachePort, type CachedRequest, type Reply } from "./runtime.js";
@@ -13,7 +12,6 @@ export interface FreshBuild {
 }
 export type RequestCall = (method: "operation.get" | MutationMethod, params: Record<string, unknown>,
   key?: string, body?: Uint8Array) => Promise<Reply[]>;
-export function randKey(): string { return `cli-${randomUUID()}`; }
 
 export interface RequestOptions {
   /** Reported in recovery text instead of the frozen request's own key. */
@@ -37,13 +35,13 @@ export class RequestService {
     const observed = this.cache.read(key);
     if (observed.kind === "present") return observed.value;
     if (observed.kind === "absent") return null;
-    return this.fail(`CACHE_${observed.kind === "corrupt" ? "CORRUPT" : "UNAVAILABLE"}: ${key}: ${observed.reason}; Not resending until the original frozen request is restored; --request ${display} with the same command`, 3, display);
+    return this.fail(`CACHE_${observed.kind === "corrupt" ? "CORRUPT" : "UNAVAILABLE"}: ${key}: ${observed.reason}; Not resending until the original frozen request is restored; observe oma_operation_status with key ${display}`, 3, display);
   }
   private frozenBody(entry: CachedRequest, display = entry.key): Uint8Array | undefined {
     if (entry.digest === undefined) return undefined;
     const observed = this.cache.readBody(entry.key, entry.digest);
     if (observed.kind === "present") return observed.value;
-    return this.fail(`frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (Recovery: preserve the original frozen request; do not create a new payload; --request ${display} with the same command)`, 3, display);
+    return this.fail(`frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`}; preserve the original frozen request; observe oma_operation_status with key ${display}; do not create a new payload`, 3, display);
   }
 
   /** WP26: the broker's receipt is the outcome; the request cache only
@@ -106,7 +104,7 @@ export class RequestService {
     return this.acceptanceUnknown(display);
   }
   private acceptanceUnknown(key: string): never {
-    return this.fail(`Acceptance status unknown: ${key} (Recovery: use --request ${key} with the same command; do not rerun with a new key)`, 3, key);
+    return this.fail(`Acceptance status unknown: ${key}; observe oma_operation_status with key ${key}; do not resend under a new request key`, 3, key);
   }
 
   /** The frozen request's outcome: looked up first when it may already have been
@@ -125,22 +123,16 @@ export class RequestService {
       const reply = lookup[0];
       if (reply?.ok === true) {
         const decoded = runtime().decodeReceipt(reply.result, { expectedKind: frozen.method, allowNotFound: true });
-        if (!decoded.ok) this.fail(`invalid operation lookup: ${decoded.reason}; --request ${display}`, 3, display);
+        if (!decoded.ok) this.fail(`invalid operation lookup: ${decoded.reason}; request ${display}`, 3, display);
         if (!runtime().notFound(decoded.value)) return this.recorded(decoded.value, key);
       } else {
         const decoded = runtime().decodeFailure(reply?.error);
         if (!decoded.ok || decoded.value.code !== "REQUEST_NOT_FOUND")
-          this.fail(`operation lookup did not prove REQUEST_NOT_FOUND: ${decoded.ok ? decoded.value.code : "invalid reply"}; --request ${display}`, 3, display);
+          this.fail(`operation lookup did not prove REQUEST_NOT_FOUND: ${decoded.ok ? decoded.value.code : "invalid reply"}; request ${display}`, 3, display);
       }
     }
     const body = this.frozenBody(frozen, display);
-    if (options.beforeSend !== undefined) {
-      try { await options.beforeSend(frozen); }
-      catch (error) {
-        if (error instanceof ClientError) throw error;
-        this.fail(`request preparation: ${error instanceof Error ? error.message : String(error)}`, 3, display);
-      }
-    }
+    if (options.beforeSend !== undefined) await options.beforeSend(frozen);
     let replies;
     try { replies = await this.call(frozen.method, this.payload(frozen.params), key, body); }
     catch { return this.recoverReceipt(frozen, key, display); }
@@ -149,14 +141,14 @@ export class RequestService {
       return this.recoverReceipt(frozen, key, display);
     if (reply?.ok === true) {
       const decoded = runtime().decodeReceipt(reply.result, { expectedKind: frozen.method });
-      if (!decoded.ok) this.fail(`invalid mutation receipt: ${decoded.reason}; --request ${display}`, 3, display);
+      if (!decoded.ok) this.fail(`invalid mutation receipt: ${decoded.reason}; request ${display}`, 3, display);
       return this.recorded(decoded.value, key);
     }
     const decoded = runtime().decodeFailure(reply?.error);
-    if (!decoded.ok) return this.fail(`invalid broker failure: ${decoded.reason}; --request ${display}`, 3, display);
-    const again = decoded.value.retry === "same-key"
-      ? ` (Query again: use --request ${display} with the same command; do not rerun with a new key)` : "";
-    return this.fail(`${runtime().failureText(decoded.value)}${again}`, runtime().failureExit(decoded.value), display);
+    if (!decoded.ok) return this.fail(`invalid broker failure: ${decoded.reason}; request ${display}`, 3, display);
+    return this.fail(JSON.stringify({ ...decoded.value, request: display,
+      ...(decoded.value.retry === "same-key" ? { recovery: "Observe oma_operation_status with this key; reuse only the same request key and frozen input." } : {}) }),
+      runtime().failureExit(decoded.value), display);
   }
 
   /** A corrupt/unavailable cache never reaches a source builder. */

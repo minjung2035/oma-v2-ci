@@ -19,7 +19,7 @@ export type PendingWorkReads = Pick<Store, "pendingDeliveries" | "preparedBatche
  * projection is allowed to count it. A Set detects corruption; it never repairs
  * duplicates by silently counting fewer messages.
  */
-export function pendingWork(store: PendingWorkReads, agent: Actor): PendingWorkSummary {
+function projectPendingWork(store: PendingWorkReads, agent: Actor): { summary: PendingWorkSummary; messages: ReadonlySet<string> } {
   const deliveries = store.pendingDeliveries(agent);
   const batches = store.preparedBatches(agent);
   const messages = new Set<string>();
@@ -44,8 +44,17 @@ export function pendingWork(store: PendingWorkReads, agent: Actor): PendingWorkS
   }
   const pendingMessages = deliveries.length + preparedMessageCount;
   if (!Number.isSafeInteger(pendingMessages)) throw new StoreError("STORE_CORRUPT", "pending message count is not a safe integer");
-  return Object.freeze({ pendingDeliveryMessages: deliveries.length, preparedBatchCount: batches.length,
-    preparedMessageCount, pendingMessages, hasPendingWork: pendingMessages > 0 });
+  return { summary: Object.freeze({ pendingDeliveryMessages: deliveries.length, preparedBatchCount: batches.length,
+    preparedMessageCount, pendingMessages, hasPendingWork: pendingMessages > 0 }), messages };
+}
+
+export function pendingWork(store: PendingWorkReads, agent: Actor): PendingWorkSummary {
+  return projectPendingWork(store, agent).summary;
+}
+
+/** Exact identities for wait scheduling, validated by the same projection as status counts. */
+export function pendingWorkMessages(store: PendingWorkReads, agent: Actor): ReadonlySet<string> {
+  return projectPendingWork(store, agent).messages;
 }
 
 const NONE: PendingWorkSummary = Object.freeze({ pendingDeliveryMessages: 0, preparedBatchCount: 0,

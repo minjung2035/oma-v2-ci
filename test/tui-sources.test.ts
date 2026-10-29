@@ -20,27 +20,24 @@ import { STATUS_STALE_MS, encodeStatusView, statusViewPath } from "@oma/protocol
 import { sessionArgv } from "@oma/engine/principal-session";
 function digest(text: string): string { return createHash("sha256").update(text).digest("hex"); }
 function config(root: string): HostConfig {
-    return {
-        schemaVersion: 4,
-        society: "demo",
-        installation: { node: process.execPath, libdir: root,  deploymentDigest: digest("d") },
-        modelProfiles: {
-            cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
-            strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
-        },
-        agentProfiles: {
-            principal: { modelProfile: "strong", capabilities: [], delegable: [], childProfile: "resident" },
-            resident: { modelProfile: "cheap", capabilities: [], delegable: [], childProfile: null },
-        },
-        principalProfile: "principal",
-        initialResidents: [{ name: "a", profile: "resident", brief: "seed a" }, { name: "b", profile: "resident", brief: "seed b" }],
-        integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
-        limits: {
-            frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64,
-            contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576,
-            batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1,
-        }
-    };
+    return {schemaVersion: 4, maxWorkers: 16, society: "demo",
+    installation: { node: process.execPath, libdir: root,  deploymentDigest: digest("d") },
+    modelProfiles: {
+        cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
+        strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
+    },
+    agentProfiles: {
+        principal: { modelProfile: "strong", capabilities: [], delegable: [], childProfile: "resident" },
+        resident: { modelProfile: "cheap", capabilities: [], delegable: [], childProfile: null },
+    },
+    principalProfile: "principal",
+    initialResidents: [{ name: "a", profile: "resident", brief: "seed a" }, { name: "b", profile: "resident", brief: "seed b" }],
+    integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
+    limits: {
+        frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64,
+        contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576,
+        batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1,
+    }};
 }
 function scratch(prefix: string): string { return mkdtempSync(join(tmpdir(), prefix)); }
 test("T93/TUI-005,009: a Principal model change rewrites only its profile reference", () => {

@@ -57,10 +57,11 @@ export function reviewThreadBody(state: ReviewState, openFact: OpenFact,
 }
 
 export function reviewApprovalBody(approvalId: MessageId, openFact: OpenFact,
-    entries: readonly ReviewEntry[], requester: Actor, votes: readonly OperationId[]): string {
+    entries: readonly ReviewEntry[], requester: Actor, votes: readonly OperationId[],
+    capacity: Pick<ReviewState, "maxWorkers" | "normalRequired" | "required"> | null): string {
   const byOperation = new Map(entries.map(entry => [entry.operation, entry]));
   return approvalBodyText(approvalId, openFact, requester,
-    votes.map(voteId => boundVoteText(voteId, byOperation.get(voteId))));
+    votes.map(voteId => boundVoteText(voteId, byOperation.get(voteId))), capacity);
 }
 
 export function reviewNoticeDocument(integrationId: OperationId, state: ReviewState,
@@ -77,6 +78,7 @@ export function reviewNoticeDocument(integrationId: OperationId, state: ReviewSt
     `\n\nReason:\n${openFact.reason}\n\nReviews and votes:\n` +
     `${lowMerge ? "none — LOW is applied without prior review" : entries.join("\n")}` +
     `\n\nPrincipal: ${principal}\n\n` +
+    `This change is applied. If you find a defect, share the evidence and use a challenge for a correction.\n\n` +
     `Diff (git diff --binary --full-index --no-ext-diff --no-textconv --no-color ` +
     `${state.identity.expectedBase} ${state.identity.candidate}):\n` + diff;
 }

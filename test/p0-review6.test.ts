@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -17,6 +18,11 @@ import { fileURLToPath } from "node:url";
 import { Store, SCHEMA_PATH } from "@oma/storage";
 import { StoreError, errorCodeOf, publicFailure } from "@oma/domain/errors";
 import { AdmissionGate } from "@oma/domain/admission";
+import { principalEnvironment } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { clientEnvironment } from "@oma/extension/mail-tools";
+import { bundleBytes, contextBytes } from "@oma/client/settings";
+import { defaultHostConfig } from "@oma/config/defaults";
 
 const schemaPath = SCHEMA_PATH;
 
@@ -182,9 +188,9 @@ test("P0V-78 / R6-05, INV10: a context tree is read only up to the context strea
   ftruncateSync(big, 64 * 1024 * 1024);
   closeSync(big);
   const prepare = `
-    import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/context"))};
+    import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/runtime/input-effects/context"))};
     process.on("exit", () => process.stdout.write(JSON.stringify({ arrayBuffers: process.memoryUsage().arrayBuffers })));
-    // w10: fail() throws a ClientError the CLI's fatal() ends; the child ends it the same way.
+    // The standalone client process preserves ClientError's exit classification.
     try {
       const prepared = prepareContextEffects(${JSON.stringify(tree)});
       process.stdout.write(JSON.stringify({ bytes: prepared.digest.bytes }) + "\\n");
@@ -221,7 +227,7 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
   git("commit", "-q", "-m", "a");
   const candidate = git("rev-parse", "HEAD");
   const submit = `
-    import { prepareSubmitEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/submit"))};
+    import { prepareSubmitEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/runtime/input-effects/submit"))};
     try {
       const prepared = prepareSubmitEffects(${JSON.stringify(candidate)}, "cli-${randomUUID()}", { hasCandidate: false, prerequisites: [] });
       process.stdout.write(JSON.stringify({ bytes: prepared.content.length }));
@@ -235,18 +241,13 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
   assert.match(over.message, new RegExp(`larger than a request can carry \\(${whole.bytes - 1} bytes\\)`));
 });
 
-test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the society's stream bounds, and an omitted one is the reference value", async () => {
-  const { principalEnvironment } = await import("@oma/engine/principal-session");
-  const { cliEnvironment } = await import("@oma/extension/mail-tools");
-  const { cliBundleBytes, cliContextBytes } = await import("#oma-test/app/cli/transport");
-  const { defaultHostConfig } = await import("@oma/config/defaults");
+test("P0V-78 / R6-05, CFG-003: the client uses the society's stream bounds and rejects malformed bounds", async () => {
   const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 12345, bundleBytes: 67890 };
   const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
     { society: "demo", provider: "pi", model: "current", extensions: [] }, limits);
   assert.equal(principal.OMA_CONTEXT_BYTES, "12345");
   assert.equal(principal.OMA_BUNDLE_BYTES, "67890");
-  // A Resident's engine, whose shell and tools run the same CLI.
-  const { planPiSpawn } = await import("@oma/engine/pi-spawn-plan");
+  // Resident engine and in-process tools share the same configured bounds.
   const options = residentOptions("/srv/oma");
   const resident = planPiSpawn(residentEngineEffects.sandbox, { ...options, limits: { ...options.limits, ...limits } });
   assert.equal(resident.args[resident.args.indexOf("OMA_CONTEXT_BYTES") + 1], "12345");
@@ -255,18 +256,18 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   try {
     process.env.OMA_CONTEXT_BYTES = principal.OMA_CONTEXT_BYTES;
     process.env.OMA_BUNDLE_BYTES = principal.OMA_BUNDLE_BYTES;
-    const forwarded = cliEnvironment("/h", "/s", "/a");
-    assert.equal(forwarded.OMA_CONTEXT_BYTES, "12345", "the tools' CLI environment drops the context bound");
-    assert.equal(forwarded.OMA_BUNDLE_BYTES, "67890", "the tools' CLI environment drops the bundle bound");
-    assert.equal(cliContextBytes(), 12345);
-    assert.equal(cliBundleBytes(), 67890);
+    const forwarded = clientEnvironment("/h", "/s", "/a");
+    assert.equal(forwarded.OMA_CONTEXT_BYTES, "12345", "the client environment drops the context bound");
+    assert.equal(forwarded.OMA_BUNDLE_BYTES, "67890", "the client environment drops the bundle bound");
+    assert.equal(contextBytes(), 12345);
+    assert.equal(bundleBytes(), 67890);
     process.env.OMA_CONTEXT_BYTES = "8 MiB";
-    assert.throws(() => cliContextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
+    assert.throws(() => contextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
     delete process.env.OMA_CONTEXT_BYTES;
     delete process.env.OMA_BUNDLE_BYTES;
     const reference = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) }).limits;
-    assert.equal(cliContextBytes(), reference.contextBytes);
-    assert.equal(cliBundleBytes(), reference.bundleBytes);
+    assert.equal(contextBytes(), reference.contextBytes);
+    assert.equal(bundleBytes(), reference.bundleBytes);
   } finally {
     for (const [name, value] of [["OMA_CONTEXT_BYTES", saved.context], ["OMA_BUNDLE_BYTES", saved.bundle]] as const)
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
@@ -598,8 +599,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const units = new PolicyExecution();
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   let answer: () => boolean = () => false;
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() } });
   const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<unknown>).bind(broker);

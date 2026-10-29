@@ -1,21 +1,21 @@
 import { spawnOwnedRpc } from "@oma/process/async";
 import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/fence";
 
-export interface CliRun {
-  node: string; cli: string; args: readonly string[]; cwd: string;
+export interface OwnedProcessRun {
+  executable: string; args: readonly string[]; cwd: string;
   env: Readonly<Record<string, string>>;
   signal?: AbortSignal | undefined; timeoutMs?: number;
 }
-export interface CliResult { code: number; stdout: string; stderr: string; finished: boolean }
-export function runCliProcess(run: CliRun): Promise<CliResult> {
+export interface OwnedProcessResult { code: number; stdout: string; stderr: string; finished: boolean }
+export function runOwnedProcess(run: OwnedProcessRun): Promise<OwnedProcessResult> {
   if (run.timeoutMs !== undefined && (!Number.isSafeInteger(run.timeoutMs) || run.timeoutMs < 1 || run.timeoutMs > 0x7fffffff))
-    throw new RangeError("CLI phase timeout must be a positive timer-safe integer");
+    throw new RangeError("Process phase timeout must be a positive timer-safe integer");
   if (run.signal?.aborted) return Promise.resolve({ code: 1, stdout: "", stderr: "", finished: false });
   const fence = inheritedFence();
   const env = { ...run.env,
     ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) };
   return new Promise(resolve => {
-    const child = spawnOwnedRpc(run.node, [run.cli, ...run.args], run.cwd, env, false, fence);
+    const child = spawnOwnedRpc(run.executable, run.args, run.cwd, env, false, fence);
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let outBytes = 0, errBytes = 0, stopped = false;
     const stop = () => { stopped = true; child.kill("SIGKILL"); };

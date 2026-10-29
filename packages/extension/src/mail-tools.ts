@@ -1,10 +1,9 @@
 /** OMA's own tools: read, send and acknowledge mail, and read status.
  *
  * Reading goes straight to the immutable archive with bounded, no-follow file
- * access. Everything that changes state goes through the model-facing CLI with
- * a fixed argv, so the broker's request identity and receipts apply.
+ * access. Mutations use the typed client and its frozen request identity and receipts.
  */
-import { closeSync, constants, existsSync, fstatSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -14,29 +13,18 @@ import { isValidFullOid as validFullOid, isValidMessageId as validMessageId } fr
 import { Client } from "@oma/client";
 import { decodeWaitObservation } from "@oma/protocol/client-codecs";
 import { PrincipalChannel } from "./principal-channel.js";
-import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
+import { registerPrincipalTools } from "./principal-tools.js";
+import { registerAgentTools } from "./agent-tools.js";
+import { residentToolSurfaceConfig, principalToolSurfaceConfig } from "@oma/domain/tool-surface";
 import { registerReviewTools } from "./review-tools.js";
-import { REQUEST_PARAMETER_HELP, actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "@oma/tool-runtime/shared";
+import { REQUEST_PARAMETER_HELP, integerEnv, refused, requestKeyOf, textResult, registerTypedTool, stringEnum } from "@oma/tool-runtime/shared";
 import { decodeUtf8 } from "@oma/domain/utf8";
 
-/** TSP-008: tools OMA itself owns. A role projection may reorder or group the
- * extensions' tools, but it can never take these away from the agent. */
-/** mail-v1: the review requests both roles work, through the same two tool
- * names -- the Worker's schema carries the whole vocabulary, the Principal's
- * only diff and vote. */
-export const REVIEW_TOOL_NAMES: readonly string[] = Object.freeze(["oma_merge", "oma_challenge"]);
-export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
-  "oma_mail_read",
-  "oma_mail_send",
-  "oma_mail_ack",
-  "oma_status",
-  ...REVIEW_TOOL_NAMES,
-  // Registered only for the Principal's engine (AV11).
-  ...PRINCIPAL_TOOL_NAMES.filter(name => !REVIEW_TOOL_NAMES.includes(name)),
-]);
+/** Ownership is distinct from initial visibility. The host surface is the
+ * sole inventory owner; optional OMA tools remain owned but not always active. */
 export function omaToolNames(principal: boolean): readonly string[] {
-  return principal ? ["oma_mail_read", "oma_mail_send", ...PRINCIPAL_TOOL_NAMES]
-    : ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status", ...REVIEW_TOOL_NAMES];
+  const plan = principal ? principalToolSurfaceConfig() : residentToolSurfaceConfig();
+  return [...plan.direct, ...plan.optional].filter(name => name.startsWith("oma_"));
 }
 /** A message by any name OMA shows for it (AV15, BATCH-002): its id, the
  * archive path shown for it, that path's file name -- the Maildir name the index
@@ -121,7 +109,7 @@ export function readableMail(text: string): string {
   return `${head}${newline}${newline}${body}`;
 }
 
-/** The archive root this engine's CLI results name paths under (DR1): the
+/** The archive root this engine's client results name paths under (DR1): the
  * sandbox's /mail/archive/cur for a Resident, the host's own for the Principal. */
 const DISPLAYED_ARCHIVE = (): string | null => {
   const root = process.env.OMA_MAIL_ARCHIVE;
@@ -141,7 +129,7 @@ const WORKER_ARCHIVE = (): string | null => {
 /** AV-10: the file a reply targets. The normal archive is consulted first; a
  * Resident's review thread mail lives only in the worker archive mount, so the
  * same source the read path resolves is used here. A message in neither mount
- * keeps the primary path -- the CLI reports the missing reply target. */
+ * keeps the primary path -- the client reports the missing reply target. */
 export function replyPathFor(archive: string, id: string): string {
   const candidate = join(archive, `${id}:2,`);
   if (existsSync(candidate)) return candidate;
@@ -176,16 +164,11 @@ function readBoundedText(path: string, maximum: number): string {
  * is one text for both, so the tool that reads what it names resolves both. */
 const BATCH_INDEX = "/inbox.md";
 
-/** INV09, PR-004: what the model supplies is data. Each value is checked against the
- * grammar of the slot it is going into before the CLI is started, and it goes
- * into that slot and no other: an option's value right after its option, an
- * address after `--`. The CLI refuses an option it does not know or one given
- * twice, so a value that looks like an option cannot become one on either side.
- * The public domain and protocol owners define these slot grammars; the
- * extension imports them without reaching host implementations. */
-const SEND_KINDS: ReadonlySet<string> = new Set(["message", "question", "result", "alert", "critical"]);
+/** INV09, PR-004: model values are data checked against domain/protocol grammars,
+ * never commands or caller-selected broker methods. */
+const SEND_KINDS = ["message", "question", "result", "alert", "critical", "context"] as const;
 
-/** The one spelling of a message the CLI is handed: its id. */
+/** Normalize displayed message references to their durable id. */
 function messageIdOf(value: unknown): string {
   return (typeof value === "string" ? mailId(value) : null) ?? refused("message id or archive path", value);
 }
@@ -219,9 +202,7 @@ function boundedBytes(fd: number, maximum: number): Buffer {
     throw new Error("mail changed while it was read");
   return bytes;
 }
-/** Mirrors the frame- and stream-limit names the CLI reads. The extension cannot import
- * OMA's modules (PI-001); a rule holds the names this file forwards to the
- * names the CLI reads. */
+/** Frame and stream bounds forwarded to the in-process client. */
 const FRAME_BYTES = "OMA_FRAME_BYTES";
 const CONTEXT_BYTES = "OMA_CONTEXT_BYTES";
 const BUNDLE_BYTES = "OMA_BUNDLE_BYTES";
@@ -263,19 +244,18 @@ function indexBound(): number {
  * in client/codecs.ts), because an environment is readable by any process of
  * this user through /proc/<pid>/environ.
  */
-export function cliEnvironment(home: string, socket: string, archive: string): Record<string, string> {
+export function clientEnvironment(home: string, socket: string, archive: string): Record<string, string> {
   const environment: Record<string, string> = {
     HOME: home,
     OMA_SOCKET: socket,
-    // DR1: the archive root in this engine's view, so the CLI shows paths there.
+    // DR1: archive paths are presented in this engine's view.
     OMA_MAIL_ARCHIVE: archive,
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     LANG: "C.UTF-8",
   };
-  // The frame and stream bounds the broker was configured with. Without them
-  // the CLI falls back to its own defaults, which are not necessarily this
-  // society's. OMA_ACTOR is the ambient actor identity, not a secret: the
-  // client's submit notices name the same actor a manual `oma submit` would.
+  // Preserve the broker's frame and stream bounds rather than substituting
+  // client defaults. OMA_ACTOR identifies the candidate notice's sender; it
+  // is an ambient identity, never a credential.
   for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_ACTOR",
       "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT", "OMA_WORKER_ARCHIVE"]) {
     const value = process.env[name];
@@ -309,17 +289,17 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // Read once, here, where every other value this extension needs is read. A
   // command assembled later from whatever the environment happens to hold then
   // would not be the environment the engine was started with.
-  const environment = cliEnvironment(home, socket, archive);
+  const environment = clientEnvironment(home, socket, archive);
   const client = new Client({ cwd, env: environment }, () => channel.current(), signal => channel.waitForGrant(signal));
-  pi.registerTool({
+  registerTypedTool(pi, {
     name: "oma_mail_read",
     label: "Read OMA mail",
     description:
-      "Read one durable mail message by its id or the archive path a notice or tool result showed. `/inbox.md` reads this batch's delivery index.",
-    promptSnippet: "Read mail by id or `/inbox.md`.",
+      "Read one durable message by its id, displayed archive path, archive filename or project-qualified RFC Message-ID. Use /inbox.md for the current delivery batch's index, then read the messages needed for the task. Reading does not acknowledge delivery, cast a vote or complete the requested work.",
+    promptSnippet: "Read durable mail by message reference; /inbox.md lists the current delivery batch.",
     parameters: Type.Object({
       messageId: Type.String({
-        description: "Message id or archive path from a notice, or /inbox.md",
+        description: "Message id, displayed archive path or filename, project-qualified RFC Message-ID, or /inbox.md for the current batch index.",
       }),
     }),
     async execute(_id, params) {
@@ -331,64 +311,75 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       return textResult(readableMail(mail.text), { messageId: mail.id });
     },
   });
-  pi.registerTool({
-    name: "oma_mail_send",
-    label: "Send OMA mail",
-    description: "Send durable mail to agents or shared addresses. `to` names agents or addresses (`commons`/`residents` reach every Worker, `principal` reaches the Principal); `replyTo` threads the message; `kind` marks message/question/result/alert/critical.",
-    promptSnippet: "Send durable society mail.",
+  const recipients = (values: string[]) => values.map(value => {
+    const address = logicalFromDisplay(value, society) ?? value;
+    return validAddress(address) ? address : refused("address", value);
+  });
+  const request = Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP }));
+  const to = Type.Array(Type.String({ description: "Worker name, principal, commons/residents, topic/<name>, or a displayed project address." }), {
+    minItems: 1, maxItems: addresses, description: "Recipients within this project; commons and residents address all Workers. Audience restrictions still apply.",
+  });
+  const subject = Type.String({ maxLength: 998, description: "Single-line message subject." });
+  const kind = Type.Optional({ ...stringEnum(SEND_KINDS), description: "Message classification; defaults to message. Classification grants no review or approval authority." });
+  registerTypedTool(pi, {
+    name: "oma_mail_send", label: "Send OMA mail",
+    description: "Send durable coordination mail with explicit recipients, subject and inline body. Use it to share assignments, interface decisions, reusable evidence, blockers or results; replyTo keeps a related discussion threaded. A successful send is not proof of recipient action. Mail records neither a review vote nor GOAL publication.",
+    promptSnippet: "Send durable assignments, evidence and decisions to the relevant Workers or Principal.",
     parameters: Type.Object({
-      to: Type.Array(Type.String(), { minItems: 1, maxItems: addresses,
-        description: "agent names, or shared addresses: commons / residents (all Workers), principal" }),
-      subject: Type.String({ maxLength: 998 }),
-      body: Type.String(),
-      kind: Type.Optional(
-        Type.Union([
-          Type.Literal("message"),
-          Type.Literal("question"),
-          Type.Literal("result"),
-          Type.Literal("alert"),
-          Type.Literal("critical"),
-        ]),
-      ),
-      ...(channel.attached ? { intent: Type.Optional(Type.Literal("goal", { description: "Explicitly publish this body as GOAL.md and mail it to residents. Requires expectedRevision; preserves other shared context documents." })),
-        expectedRevision: Type.Optional(Type.String({ description: "Current context revision or none for the first GOAL" })) } : {}),
-      replyTo: Type.Optional(Type.String()),
-      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
+      to, subject, body: Type.String({ description: "Inline message text with the context, evidence or requested action recipients need." }), kind,
+      replyTo: Type.Optional(Type.String({ description: "Optional existing message reference to thread this message: id, displayed archive path/filename or project RFC Message-ID." })), request,
     }),
     async execute(id, params, signal, _update, context) {
-      // AV15: the address a header or notice shows is accepted as the logical
-      // address it displays; nothing else is.
-      const to = params.to.map(address => {
-        const logical = logicalFromDisplay(address, society) ?? address;
-        return validAddress(logical) ? logical : refused("address", address);
-      });
-      const intent = "intent" in params ? params.intent : undefined;
-      const expected = "expectedRevision" in params ? params.expectedRevision : undefined;
-      if (intent !== undefined && (!channel.attached || intent !== "goal" || typeof expected !== "string" ||
-          (expected !== "none" && !validFullOid(expected)) ||
-          to.length !== 1 || to[0] !== "residents" || params.kind !== undefined || params.replyTo !== undefined))
-        refused("GOAL mail intent", params);
-      if (intent === undefined && expected !== undefined) refused("expectedRevision without GOAL intent", expected);
-      const kind = params.kind ?? "message";
-      if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
+      const addresses = recipients(params.to);
+      const reply = params.replyTo === undefined ? undefined : replyPathFor(archive, messageIdOf(params.replyTo));
       const key = requestKeyOf(params.request, { id, tool: "oma_mail_send", params, context });
-      const reply = params.replyTo === undefined ? null : replyPathFor(archive, messageIdOf(params.replyTo));
-      if (intent !== "goal") return textResult(await client.sendMail({ to, subject: params.subject, body: params.body, kind,
-        ...(reply === null ? {} : { replyFile: reply }) }, key, signal), { request: key });
-      const temporary = mkdtempSync(join(home, "oma-tool-"));
-      const body = join(temporary, "body.txt");
-      try {
-        writeFileSync(body, params.body, { mode: 0o600 });
-        return textResult(await client.sendGoal(body, expected === "none" ? null : expected as string, params.subject, key, signal), { request: key });
-      } finally { rmSync(temporary, { recursive: true, force: true }); }
+      return textResult(await client.sendMail({ to: addresses, subject: params.subject, body: params.body, kind: params.kind ?? "message",
+        ...(reply === undefined ? {} : { replyFile: reply }) }, key, signal), { request: key });
     },
   });
-  if (!channel.attached) pi.registerTool({
+  registerTypedTool(pi, {
+    name: "oma_mail_reply", label: "Reply to OMA mail",
+    description: "Reply to an existing message with an inline body. Omitted to uses the original reply routing; omitted subject inherits the original subject. Audience restrictions still apply. A reply neither acknowledges the original delivery nor records a review vote.",
+    parameters: Type.Object({
+      messageId: Type.String({ description: "Original message id, displayed archive path/filename or project-qualified RFC Message-ID." }),
+      body: Type.String({ description: "Inline response, including requested evidence, decisions or next actions." }),
+      to: Type.Optional(to), subject: Type.Optional(subject), kind, request,
+    }),
+    async execute(id, params, signal, _update, context) {
+      const replyFile = replyPathFor(archive, messageIdOf(params.messageId));
+      const key = requestKeyOf(params.request, { id, tool: "oma_mail_reply", params, context });
+      return textResult(await client.replyMail({ replyFile, body: params.body,
+        ...(params.to === undefined ? {} : { to: recipients(params.to) }),
+        ...(params.subject === undefined ? {} : { subject: params.subject }),
+        ...(params.kind === undefined ? {} : { kind: params.kind }) }, key, signal), { request: key });
+    },
+  });
+  if (!channel.attached) registerTypedTool(pi, {
+    name: "oma_mail_approval_notice", label: "Send a candidate approval notice",
+    description: "Send the Principal an informational notice about an already published candidate/base/policy tuple, with optional cc. This creates no peer vote, quorum or actionable approval request; only the broker issues the current approval mail used by oma_review_respond, including capacity fallback. Use ordinary mail when an exact candidate-tuple notice is unnecessary.",
+    parameters: Type.Object({
+      subject, body: Type.String({ description: "Inline context and evidence for the candidate notice; this is not a binding approval request." }),
+      candidate: Type.String({ description: "Full OID of the already published candidate commit." }),
+      base: Type.String({ description: "Full expected base commit OID for this candidate tuple." }),
+      policyRevision: Type.String({ minLength: 1, description: "Policy revision identifying the candidate tuple." }),
+      cc: Type.Optional({ ...to, description: "Additional recipients; principal is always included." }),
+      replyTo: Type.Optional(Type.String({ description: "Optional existing message id, displayed archive path/filename or project RFC Message-ID for threading." })), request,
+    }),
+    async execute(id, params, signal, _update, context) {
+      if (!validFullOid(params.candidate) || !validFullOid(params.base)) refused("candidate/base OIDs", params);
+      const key = requestKeyOf(params.request, { id, tool: "oma_mail_approval_notice", params, context });
+      return textResult(await client.approvalNotice({ subject: params.subject, body: params.body, candidate: params.candidate,
+        base: params.base, policyRevision: params.policyRevision,
+        ...(params.cc === undefined ? {} : { cc: recipients(params.cc) }),
+        ...(params.replyTo === undefined ? {} : { replyFile: replyPathFor(archive, messageIdOf(params.replyTo)) }) }, key, signal), { request: key });
+    },
+  });
+  if (!channel.attached) registerTypedTool(pi, {
     name: "oma_mail_ack",
     label: "Acknowledge OMA mail",
-    description: "Durably acknowledge one delivered message so it stops pending. Acknowledge after you have read and acted on it.",
+    description: "Durably acknowledge one message delivered to you so it is no longer pending. Do this after reading it and acting on it or preserving the necessary follow-up. Acknowledgment records delivery handling, not task completion, review approval or project completion.",
     parameters: Type.Object({
-      messageId: Type.String(),
+      messageId: Type.String({ description: "Delivered message id, displayed archive path/filename or project-qualified RFC Message-ID." }),
       request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
     async execute(id, params, signal, _update, context) {
@@ -400,28 +391,10 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       );
     },
   });
-  if (!channel.attached) pi.registerTool({
-    name: "oma_status",
-    label: "OMA status",
-    description: "Read society status or one agent's row. Counts are pending deliveries, not messages read or work done.",
-    parameters: Type.Object({ agent: Type.Optional(Type.String()) }),
-    async execute(_id, params, signal) {
-      return textResult(
-        await client.queryText("status.get", params.agent === undefined ? {}
-          : { agent: actorNameOf(params.agent, society, "agent") }, signal),
-      );
-    },
-  });
-  // mail-v1: Workers open, discuss, vote and read the merge/challenge requests
-  // the broker's review module applies. The Principal's restricted pair of the
-  // same names is registered in registerPrincipalTools.
-  if (!channel.attached)
-    registerReviewTools(pi, { principal: false, client });
-  // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
-  if (channel.attached)
-    registerPrincipalTools(pi, { client, workspace: cwd, society });
-  // RUN-003: observe only at a persisted tool boundary, through the same
-  // authenticated CLI and frozen environment as every collaboration tool.
+  registerAgentTools(pi, client, channel.attached, society);
+  registerReviewTools(pi, { principal: channel.attached, client });
+  if (channel.attached) registerPrincipalTools(pi, client);
+  // Observe only at a persisted tool boundary using this caller's frozen context.
   if (!channel.attached) return async () => {
     return decodeWaitObservation(await client.query("agent.wait", { observe: true })).accepted;
   };

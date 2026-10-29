@@ -75,16 +75,15 @@ export default async function extension(pi: ExtensionAPI) {
   containWorkspaceTools(pi, workspace, sandboxed, channel.attached, readableRoots, workspaceWriter);
   // The bundled pi-lsp extension: vendored bytes verified before tools are
   // registered -- and before any vendored module evaluates, so the await is
-  // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
-  // the filesystem only through the shared contained writer.
+  // load-bearing. Diagnostics/fixes exist only for Workers; lsp_status remains
+  // selectable for both roles. Fixes use the shared contained writer.
   await registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
   // BL3: the bundled pi-hashline-edit-pro extension -- same fail-closed
   // verification before any vendored module evaluates. It registers the
   // anchored `read` (replacing the contained read under the same name) and,
-  // for a role that may write, the file_edit group (replace,
-  // replace_within, insert) whose commits reach the filesystem only
-  // through the shared contained writer. Registered after the contained
-  // tools so its `read` is the effective registration.
+  // for a role that may write, replace, replace_within and insert, whose commits
+  // reach the filesystem only through the shared contained writer. Registered
+  // after the contained tools so its `read` is the effective registration.
   await registerHashlineTools(pi, {
     workspace,
     readableRoots,
@@ -97,9 +96,9 @@ export default async function extension(pi: ExtensionAPI) {
   // verification before any vendored module evaluates. The adapter
   // installs the Society web policy (egress pin, ambient-discovery refusals)
   // and drives upstream's own extension factory through a facade that
-  // admits exactly the web_research group: web_search, source_check,
-  // fetch_content, get_search_content. Commands and curator/browser workflows
-  // use Pi's extension API without changing the four model tool names.
+  // admits exactly web_search, source_check, fetch_content and get_search_content.
+  // Commands and curator/browser workflows use Pi's extension API without
+  // changing the four model tool names.
   // Shared network access makes fixed loopback ports unsafe across Workers.
   // Publish the bridges' actual ports before adapters capture their proxy pin.
   await startInferenceBridge(pi);

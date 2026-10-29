@@ -52,7 +52,7 @@ function envOf(integration: IntegrationPolicy | null = null, policyRevisionReade
         stateRoot: join(dir, "state"), projectGit: join(dir, "state/repos/project.git"), contextGit: join(dir, "state/repos/context.git"),
         worldDir: join(dir, "state/world"), society,
     };
-    const policy = integration ?? { policyRevision: "p1", protectedPaths: [], checks: [] };
+    const policy = integration ?? {maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: []};
     const git = createGitModule(paths, store, mail, policy, policyRevisionReader, null, nativeQuarantine(paths));
     return { dir, society, store, mail, git, paths, seal: () => { store.close(); cleanOwnedFixture(dir); } };
 }
@@ -242,7 +242,7 @@ test("T55/T59: same key resubmits the frozen candidate; a conflicting ref OID is
     }
 });
 test("T60/T61: integrate CAS — first wins, stale/undescendant/protected refused, main unchanged on refusal", async () => {
-    const env = envOf({ policyRevision: "p1", protectedPaths: ["secret/"], checks: [] });
+    const env = envOf({maxWorkers: 6, policyRevision: "p1", protectedPaths: ["secret/"], checks: []});
     try {
         const base = seedProject(env);
         const c1r = join(env.dir, "c1");
@@ -311,7 +311,7 @@ test("INT-003: accepted stop intent cancels before main CAS", async () => {
 test("T62: policy revision is reread before CAS and a race fails closed", async () => {
     // Accepted under p1, changed to p2 before CAS: the re-check fails closed (D02).
     let reads = 0;
-    const env = envOf(null, () => ({ policyRevision: ++reads === 1 ? "p1" : "p2", protectedPaths: [], checks: [] }));
+    const env = envOf(null, () => ({maxWorkers: 6, policyRevision: ++reads === 1 ? "p1" : "p2", protectedPaths: [], checks: []}));
     try {
         const { base, candidate } = publishedFastForward(env);
         await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-race", { candidate, expected: base }), failure("POLICY_CHANGED"));
@@ -326,7 +326,7 @@ test("T62: policy revision is reread before CAS and a race fails closed", async 
 test("DR8 / CFG-005, TUI-007: an integration after a revision-only edit is judged by the host's current revision", async () => {
     // The broker started under p1; the Human's edit made it p2 and left the facts
     // alone. The thirteenth functional run found every later integrate refused.
-    const env = envOf(null, () => ({ policyRevision: "p2", protectedPaths: [], checks: [] }));
+    const env = envOf(null, () => ({maxWorkers: 6, policyRevision: "p2", protectedPaths: [], checks: []}));
     try {
         const { base, candidate } = publishedFastForward(env);
         const receipt = await env.git.integrate(auth("a", ["code.integrate"]), "after-edit", { candidate, expected: base });
@@ -359,7 +359,7 @@ test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integ
     let readable = true;
     const env = envOf(null, () => { reads += 1; if (reads === 2)
         readable = false; if (!readable)
-        throw new Error("EIO"); return { policyRevision: "p1", protectedPaths: [], checks: [] }; });
+        throw new Error("EIO"); return {maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: []}; });
     try {
         const { base, candidate } = publishedFastForward(env);
         await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-gone", { candidate, expected: base }), failure("BROKER_UNAVAILABLE"));
@@ -376,7 +376,7 @@ test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integ
     }
 });
 test("T62-resource / DR18: a policy with integration checks is not supported and fails closed before candidate execution", async () => {
-    const env = envOf({ policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {},  }] });
+    const env = envOf({maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {},  }]});
 
     env.paths.checkAssetsDir = "/trusted/checks";
     try {

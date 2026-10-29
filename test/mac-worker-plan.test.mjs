@@ -16,12 +16,12 @@ function fixture(){
   options.confinement.egress={socketHostPath:'/private/var/egress.sock'};
   return {libdir,options};
 }
-test('Mac Worker shared Pi plan retains physical CLI, session, package, relay and egress paths',()=>{
-  const {libdir,options}=fixture(),sandbox=macResidentSandbox(tools),plan=planPiSpawn(sandbox,options),dirs=options.confinement.directories;
+test('Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI',()=>{
+  const {options}=fixture(),sandbox=macResidentSandbox(tools),plan=planPiSpawn(sandbox,options),dirs=options.confinement.directories;
   assert.equal(plan.args[1],options.confinement.host.pi);
   assert.equal(plan.args[plan.args.indexOf('--session-dir')+1],dirs.sessions);
   assert.equal(plan.args[plan.args.indexOf('-e')+1],options.paths.coreExtension);
-  assert.equal(plan.env.OMA_CLI,join(libdir,'apps/oma/dist/cli.js'));
+  assert.equal(plan.env.OMA_CLI,undefined);
   assert.equal(plan.env.OMA_INFERENCE_SOCKET,options.confinement.inference.socketHostPath);
   assert.equal(plan.env.OMA_EGRESS_PROXY_SOCKET,options.confinement.egress.socketHostPath);
   assert.equal(plan.env.OMA_PACKAGE_STORE,options.confinement.host.packages);

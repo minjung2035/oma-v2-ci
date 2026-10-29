@@ -8,19 +8,9 @@ import { GIT_ENV, requireTextExit, runGitText } from "@oma/process/policies";
 import { runProcessSync } from "@oma/process/run";
 import { fail } from "@oma/client/errors";
 import { currentContext } from "@oma/client/context";
-import { frameBytes as cliFrameBytes } from "@oma/client/settings";
-import { decodeUtf8 } from "@oma/domain/utf8";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
-}
-
-/** A local file a command was given, read as WP26 records for CLI effects:
- * the named file is not followed if it is a link (FS-005), only a regular file
- * is read, and never more than a request frame can carry (INV10) -- anything
- * larger could not be sent, and a device such as /dev/zero would never end. */
-export function readLocalFile(path: string): Buffer {
-  return readLocal(path, cliFrameBytes(), true);
 }
 
 /** P0V-63: the first `bytes` bytes of a local file, with the same checks --
@@ -83,16 +73,6 @@ export function readBounded(fd: number, limit: number, whole: boolean, refuse: (
   return buffer.subarray(0, Math.min(filled, whole ? filled : limit));
 }
 
-export function readBody(path: string | null): string {
-  if (path === null) return "";
-  const bytes = readLocalFile(path);
-  try {
-    return decodeUtf8(bytes)
-      .replace(/\r\n/g, "\n");
-  } catch {
-    return fail(`cannot read UTF-8 text file: ${path}`, 2);
-  }
-}
 
 /** The workspace clone's recorded upstream base (`clone --single-branch main`
  * leaves refs/remotes/origin/main), or null when it is absent. */

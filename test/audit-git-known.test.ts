@@ -21,6 +21,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
     units: { statusSnapshot: unused },
     views: { status: unused },
     lifecycle: {
+      creation: unused,
       create: async () => unused(),
       start: unused,
       stop: unused,

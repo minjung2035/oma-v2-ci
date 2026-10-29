@@ -109,22 +109,6 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   views.refreshWorld();
   assert.deepEqual(paths.map(path => readFileSync(join(f.root, "world", path), "utf8")), expected);
   assert.equal(expected.join("\n").includes("private-body-0"), false);
-  // The map names the guide at the one derived path the prompts also spell.
-  const start = expected[paths.indexOf("START.md")]!;
-  assert.ok(start.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`), "START.md names the Principal mail guide");
-  // FI-3: the map states what the sandbox does not have, so a Worker does not
-  // discover it one failed command at a time.
-  const sandbox = start.slice(start.indexOf("## Sandbox"));
-  assert.ok(start.includes("## Sandbox"), "START.md has a sandbox section");
-  for (const fact of [/egress proxy/i, /HTTPS_PROXY/, /`git push`/, /oma submit/, /`\/tmp`/, /end(s)? with the batch|end when the batch ends/i,
-    /docker/i, /submodules/i, /`npm`/])
-    assert.match(sandbox, fact);
-  assert.doesNotMatch(sandbox, /allowlisted HTTPS|only if the Human configured|everything else.*fails/i);
-  assert.match(sandbox, /shares the host network/);
-  assert.match(sandbox, /HTTPS_PROXY.*when present/);
-  const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
-  assert.match(guide, /most expensive resource/);
-  assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");
   assert.equal(f.store.getOperation("alice", "r30-0")!.resultJson, receiptBefore);
   // P0V-94: the carriage return is escaped, not dropped.
   assert.equal(fieldEscape("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline\\r");

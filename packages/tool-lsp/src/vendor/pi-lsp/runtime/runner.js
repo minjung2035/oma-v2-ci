@@ -141,6 +141,7 @@ export async function runFix(adapter, params, timeoutMs, signal, ctx, statusKey)
             appliedActions: selectedActions.map(({ title, kind }) => ({ title, kind })),
             edits,
             text: params.write ? undefined : newText,
+            inputText: text,
         });
     });
 }

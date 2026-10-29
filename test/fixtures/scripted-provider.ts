@@ -1,7 +1,7 @@
 // Test-only stand-in for a model provider: an OpenAI-compatible chat
 // completions endpoint whose answers a test scripts. The bundled engine is
 // pointed at it through its own models.json, so everything between the model
-// and the society -- the engine, the trusted extension, the CLI it starts, the
+// and the society -- the engine, the trusted extension, its typed client, the
 // broker, the ledger and the mailboxes -- is the product's. Only the model's
 // choices are scripted, and they can depend on what the engine sent: the
 // delivery notice it was given, the result of the tool it called.

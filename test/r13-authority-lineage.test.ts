@@ -70,14 +70,12 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
 });
 
 function config(): HostConfig {
-  return {
-    schemaVersion: 4, society: "demo", installation: { node: "/node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
-    modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p" } },
-    principalProfile: "p", initialResidents: [],
-    integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
-    limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 }
-};
+  return {schemaVersion: 4, maxWorkers: 6, society: "demo", installation: { node: "/node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
+  modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
+  agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p" } },
+  principalProfile: "p", initialResidents: [],
+  integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
+  limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 }};
 }
 
 test("R13: pure delegation never expands Principal; refresh fails closed and never reads inside T", () => {

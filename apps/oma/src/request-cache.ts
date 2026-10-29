@@ -9,12 +9,12 @@ import { requestParamsEqual } from "@oma/domain/request-identity";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { parseJsonObject } from "@oma/protocol/frame";
 import { decodeReceipt, receiptSupersession } from "@oma/protocol/receipt-codec";
-import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
+import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./runtime/request-cache-codec.js";
 import { ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "@oma/storage/durable-fs";
 import { openBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 
-export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
+export type { CachedRequest, StreamDigest } from "./runtime/request-cache-codec.js";
 export type FreezeInput = Omit<CachedRequest, "lastReceipt">;
 export type FileObservation<T> =
   | { readonly kind: "absent" }

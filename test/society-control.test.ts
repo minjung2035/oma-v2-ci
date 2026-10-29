@@ -19,7 +19,7 @@ import { MailModule } from "@oma/mail";
 import { assertCurrentActor } from "@oma/domain/authority";
 import { AcceptedFailure, StoreError } from "@oma/domain/errors";
 import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
-import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent } from "./fixtures/spec.js"
 
 class ControlledUnits extends PolicyExecution {
   readonly stops: { agent: string; incarnation: number | undefined }[] = [];
@@ -166,7 +166,7 @@ test("DR27: closed society keeps queued and prepared mail without an automatic P
 test("DR27: reopen resumes enabled pending-mail Workers through reconciliation, never force-stopped Workers", async t => {
   const f = fixture(t); const mail = createMailModule({ stateRoot: f.root, society: "demo" }, f.store, 64);
   const paths = { stateRoot: f.root, projectGit: join(f.root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true };
-  const lifecycle = createLifecycleModule(f.store, f.units, paths, () => null, mail);
+  const lifecycle = createLifecycleModule(f.store, f.units, paths, withWorkerCapacity(() => null), mail);
   const reconcile = createReconcileModule(f.store, mail, null, null, f.units, lifecycle, paths);
   await mail.send(f.auth(), "work", { to: ["alice", "bob"], subject: "Work", body: "Continue", kind: "message" });
   (await f.control.set(f.auth(), "closed", "close")); await reconcile.sweep();

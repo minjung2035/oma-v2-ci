@@ -121,7 +121,7 @@ test("AV-07/P0: a consumed provisioning proof cannot hide later repository corru
     const paths = { stateRoot: root, projectGit, contextGit: join(root, "repos/context.git"),
         worldDir: join(root, "world"), society: "fixture" };
     const mail = createMailModule(paths, store, 64);
-    const git = createGitModule(paths, store, mail, { policyRevision: "fixture", protectedPaths: [], checks: [] });
+    const git = createGitModule(paths, store, mail, {maxWorkers: 6, policyRevision: "fixture", protectedPaths: [], checks: []});
     const units = new PolicyExecution();
     // No agents or accepted operations exist; lifecycle effects are unreachable.
     const reconcile = createReconcileModule(store, mail, git, null, units, {} as LifecycleModule, { projectGit, freshVerifiedMain: main, hasGoal: () => false, activationAllowed: () => false });

@@ -8,10 +8,13 @@ export interface LifecyclePaths {
 }
 export interface SpecResolver {
   (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: AgentCreateInput): ResolvedAgentSpec | null;
+  maxWorkers(): number;
   refresh?: () => void;
   revision?: () => string;
+  observe?: (parent: { name: Actor; profile: string; capabilities: readonly Capability[] }) =>
+    Pick<ResolvedAgentSpec, "profile" | "capabilities" | "modelProfile"> | null;
 }
-export type SeedConfig = Pick<HostConfig, "initialResidents" | "principalProfile" | "agentProfiles" | "modelProfiles">;
+export type SeedConfig = Pick<HostConfig, "maxWorkers" | "initialResidents" | "principalProfile" | "agentProfiles" | "modelProfiles">;
 export type CreatePlan = Extract<OperationPlan, { kind: "agent.create" }>;
 /** Preparation-only refinements of the existing DDL/wire plan. */
 export type PhysicalCreatePlan = CreatePlan & { initialMessage: MessagePlan; existingCreation: null };

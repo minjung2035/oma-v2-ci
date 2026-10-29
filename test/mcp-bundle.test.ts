@@ -10,10 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { ASK_USER_QUESTION_TOOL_NAME, MCP_PROXY_TOOL_NAME, planToolSurface, principalToolSurfaceConfig, residentToolSurfaceConfig } from "@oma/domain/tool-surface";
 import { admittedChildEnv, CHILD_ENV_SCRATCH_NAMES } from "@oma/tool-runtime/child-env";
-import { omaToolNames } from "@oma/extension/mail-tools";
-import { MCP_TOOL_NAMES, mcpChildEnvironment } from "@oma/tool-mcp";
+import { mcpChildEnvironment } from "@oma/tool-mcp";
 import { vendoredBundleDir, verifyVendorBundle } from "@oma/tool-runtime/vendor-bundle";
 const SRC_BUNDLE = fileURLToPath(new URL("../../packages/tool-mcp/dist/vendor/pi-mcp-adapter/", import.meta.url));
 function tmp(t: import("node:test").TestContext, prefix = "oma-mcp-"): string {
@@ -21,24 +19,6 @@ function tmp(t: import("node:test").TestContext, prefix = "oma-mcp-"): string {
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     return dir;
 }
-test("BL5: both role surface plans name `mcp` DIRECT and no group wraps it", () => {
-    const base = ["read", "write", "edit", "bash", "grep", "find", "ls",
-        "lsp_diagnostics", "lsp_fix", "lsp_status", "replace", "replace_within", "insert",
-        "web_search", "source_check", "fetch_content", "get_search_content"];
-    const residentRegistered = new Set([...base, ...omaToolNames(false), ...MCP_TOOL_NAMES]);
-    const resident = planToolSurface(residentToolSurfaceConfig());
-    for (const name of [...resident.direct, ...resident.disabled, ...resident.grouped])
-        assert.ok(residentRegistered.has(name), `resident surface names unregistered ${name}`);
-    const principalRegistered = new Set([...base, ...omaToolNames(true), ...MCP_TOOL_NAMES, ASK_USER_QUESTION_TOOL_NAME]);
-    const principal = planToolSurface(principalToolSurfaceConfig());
-    for (const name of [...principal.direct, ...principal.disabled, ...principal.grouped])
-        assert.ok(principalRegistered.has(name), `principal surface names unregistered ${name}`);
-    for (const plan of [resident, principal]) {
-        assert.ok(plan.direct.includes(MCP_PROXY_TOOL_NAME), "mcp is DIRECT on the surface");
-        assert.ok(plan.groups.every(group => !group.children.includes("mcp")), "no OMA grouping layer wraps mcp");
-    }
-    assert.equal(MCP_PROXY_TOOL_NAME, "mcp", "the domain constant binds the facade's pinned name");
-});
 test("BL5: every SDK stdio underlay name has an OMA disposition -- a vendored SDK bump cannot silently re-open the ambient leak", async (t) => {
     // SDK_STDIO_ENV_UNDERLAY is generated from the pinned bundle. This test
     // independently checks the generated names against both builds of the

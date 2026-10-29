@@ -222,7 +222,7 @@ test("DR46 schema4: the current DDL contains exactly the six ledger entities", (
 });
 
 test("DR46 check grammar: valid commands stay configured and empty argv is unsupported", () => {
-  const policy = { policyRevision: "wp01", protectedPaths: [], checks: [] };
+  const policy = {maxWorkers: 6, policyRevision: "wp01", protectedPaths: [], checks: []};
   assert.doesNotThrow(() =>
     assertSupportedIntegration(snapshotIntegrationPolicy(policy)),
   );

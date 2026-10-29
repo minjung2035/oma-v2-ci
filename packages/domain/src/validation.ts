@@ -217,7 +217,7 @@ const reviewMailMetaCheck: Check = (value) => {
         name: requestNameCheck, revision: checkInt({ min: 0 }) })(value);
     case "approval": {
       const invalid = checkObject({ role: checkEnum(["approval"] as const), request: operationIdCheck,
-        name: requestNameCheck, votes: checkArray(operationIdCheck, { min: 1 }) })(value);
+        name: requestNameCheck, votes: checkArray(operationIdCheck) })(value);
       if (invalid !== null) return invalid;
       const votes = (value as { votes: string[] }).votes;
       return new Set(votes).size === votes.length ? null : "duplicate approval votes";
@@ -477,9 +477,15 @@ export const statusGetParamsCheck: Check = checkObject({
   agent: checkOptional(checkActor),
   after: checkOptional(checkActor),
 });
-export const reviewStatusParamsCheck: Check = checkObject({
-  name: checkOptional(requestNameCheck),
-});
+const reviewDetailParams = checkObject({ name: requestNameCheck, reviewerAfter: checkOptional(checkActor) });
+const reviewListParams = checkObject({ kind: checkEnum(["merge", "challenge"] as const), after: checkOptional(requestNameCheck) });
+export const reviewStatusParamsCheck: Check = value => {
+  if (reviewDetailParams(value) === null) return null;
+  const error = reviewListParams(value);
+  if (error) return error;
+  const query = value as { kind: "merge" | "challenge"; after?: string };
+  return query.after === undefined || query.after.startsWith(`${query.kind}-`) ? null : "review cursor kind does not match";
+};
 export const logsReadParamsCheck: Check = checkObject({
   agent: checkActor,
   sinceSeconds: checkInt({ min: 1, max: 31536000 }),

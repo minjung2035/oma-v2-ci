@@ -85,14 +85,13 @@ export interface PiAdapterPaths {
    * and sessions separate from any Pi the user installed. */
   readonly piAgentDir?: string | undefined;
   readonly coreExtension: string;
-  readonly cli: string;
   readonly workspace: string;
   readonly sessionDir: string;
   readonly agentHome: string;
   readonly mailArchive: string;
   /** mail-v1: worker-only review mail archive (S/mail/workers/cur). */
   readonly workerArchive: string;
-  /** The society's canonical repository, read-only to a Resident (oma merge). */
+  /** The society's canonical repository, read-only to a Resident for merge preparation. */
   readonly projectGit: string;
   readonly batchView: string;
   readonly socket: string;
@@ -203,11 +202,9 @@ function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
     "rpc",
     "--no-approve",
     "--no-extensions",
-    // AV13: a confined Resident works with the shell its sandbox provides
-    // (SB-001: the rootfs holds Git and a shell; arch §11.1 and CLI-001: it
-    // commits and runs `oma` there, as its START tells it). Every Resident is
-    // confined; the Principal's separate host engine keeps the shell excluded
-    // through its own argv builder (PR-004).
+    // Ordinary development shell remains; editing uses the anchored family.
+    "--exclude-tools",
+    "edit,powershell",
     "--session-dir",
     inside(options.paths.sessionDir),
     // AV14, arch §7: the runner joins one Pi session to the mail queue, and an

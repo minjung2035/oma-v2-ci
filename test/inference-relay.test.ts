@@ -115,6 +115,9 @@ test("T114 the placeholder the sandbox holds is swapped for the real key, and on
 
 test("T114 a WebSocket upgrade is tunnelled with the key swapped, then carried as bytes", async () => {
   const provider = await tlsProvider();
+  provider.upgraded = peer => {
+    peer.on("data", () => { peer.write(Buffer.from([0x81, 16, ...Buffer.from("echo:frame-bytes")])); });
+  };
   const socket = scratchSocket();
   const placeholder = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.PLACEHOLDERsignature00";
   const secret = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.REALsignature111111111";
@@ -131,7 +134,12 @@ test("T114 a WebSocket upgrade is tunnelled with the key swapped, then carried a
       });
       outgoing.on("upgrade", (response, tunnel) => {
         assert.equal(response.statusCode, 101);
-        tunnel.once("data", chunk => { resolve(String(chunk)); tunnel.destroy(); });
+        let received = Buffer.alloc(0);
+        tunnel.on("data", chunk => {
+          received = Buffer.concat([received, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+          // Safe payload plus an empty FIN continuation are valid reframing.
+          if (received.includes(Buffer.from([0x80, 0]))) { resolve(received.subarray(2, 18).toString()); tunnel.destroy(); }
+        });
         tunnel.write("frame-bytes");
       });
       outgoing.on("response", response => { reject(new Error(`no upgrade: ${response.statusCode}`)); });
@@ -258,6 +266,12 @@ test("T114 a relay is refused rather than opened on an unsafe configuration", as
     // A header value carrying CRLF would inject a second header downstream.
     await assert.rejects(() => open("https://example.com", { authorization: "a\r\nx-evil: 1" }),
       (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
+    for (const value of ["한글", "\u0001", "\u007f"]) {
+      await assert.rejects(() => open("https://127.0.0.1:1", { "x-client-label": value }),
+        (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
+      await assert.rejects(() => open("https://127.0.0.1:1", {}, { placeholder: "placeholder-123456", secret: value }),
+        (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
+    }
     // A placeholder short enough to occur by accident would rewrite unrelated text.
     await assert.rejects(() => open("https://example.com", {}, { placeholder: "short", secret: "x".repeat(40) }),
       (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
@@ -572,4 +586,130 @@ test("post-listen: a non-Refusal throw inside 'request' or 'upgrade' ends the co
   assert.equal(seen.refused, 0, "a boundary failure is not a policy refusal");
   assert.deepEqual(escaped, [], "nothing escaped the synchronous emit");
   assert.equal(server.listening, true);
+});
+
+/** A small protocol client: parse complete server frames across TCP chunks.
+ * Captures actual payloads, not source/wiring, and sends a valid masked pong. */
+async function framedResponse(socketPath: string): Promise<{ messages: string[]; pings: string[]; raw: Buffer }> {
+  const { promise, resolve, reject } = Promise.withResolvers<{ messages: string[]; pings: string[]; raw: Buffer }>();
+    const request = httpRequest({ socketPath, path: "/frames", headers: { connection: "Upgrade", upgrade: "websocket" } });
+    request.on("error", reject);
+    request.on("upgrade", (_response, peer, head) => {
+      let pending = Buffer.alloc(0), message = "", raw = Buffer.alloc(0);
+      const messages: string[] = [], pings: string[] = [];
+      const parse = (chunk: Buffer): void => {
+        raw = Buffer.concat([raw, chunk]);
+        pending = Buffer.concat([pending, chunk]);
+        while (pending.length >= 2) {
+          const short = pending[1]! & 127, header = short === 126 ? 4 : 2;
+          if (pending.length < header) return;
+          const size = short === 126 ? pending.readUInt16BE(2) : short;
+          if (pending.length < header + size) return;
+          const opcode = pending[0]! & 15, final = (pending[0]! & 128) !== 0;
+          const payload = pending.subarray(header, header + size);
+          if (opcode === 9) {
+            pings.push(payload.toString());
+            peer.write(Buffer.concat([Buffer.from([0x8a, 0x80 | size, 0, 0, 0, 0]), payload]));
+          } else if (opcode < 8) {
+            message += payload.toString();
+            if (final) { messages.push(message); message = ""; }
+          }
+          pending = pending.subarray(header + size);
+        }
+      };
+      peer.on("data", parse);
+      peer.on("error", () => {});
+      peer.on("close", () => resolve({ messages, pings, raw }));
+      if (head.length > 0) parse(head);
+    });
+    request.on("response", response => { response.resume(); reject(new Error(`upgrade failed: ${response.statusCode}`)); });
+    request.end();
+  return await promise;
+}
+
+test("L3: complete control/data frames progress despite credential prefixes, including split headers and fragments", { timeout: 10000 }, async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const secret = "eySyntheticLocalCredential";
+  let pong = false;
+  provider.upgraded = peer => {
+    peer.write(Buffer.from([0x89]));
+    setImmediate(() => { peer.write(Buffer.from([1, 0x65])); });
+    peer.once("data", bytes => {
+      pong = bytes[0] === 0x8a;
+      // A message ending in a key prefix must finish without another event.
+      peer.write(Buffer.from([0x81, 1, 0x65]));
+      // A fragmented message holds a prefix across an intervening control frame.
+      peer.write(Buffer.from([0x01, 2, 0x65, 0x79, 0x89, 1, 0x65]));
+      peer.write(Buffer.from([0x80, 1, 0x21]));
+      const large = Buffer.alloc(256, 0x61);
+      peer.write(Buffer.from([0x82, 126, 1]));
+      setImmediate(() => { peer.end(Buffer.concat([Buffer.from([0]), large, Buffer.from([0x88, 2, 3, 232])])); });
+    });
+  };
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {},
+    substitute: { placeholder: "placeholder-only-fixture", secret } }, { concurrent: 1, timeoutMs: 1000 });
+  try {
+    const answer = await framedResponse(socket.path);
+    assert.equal(pong, true, "the provider can wait for pong before producing anything else");
+    assert.deepEqual(answer.pings, ["e", "e"]);
+    assert.deepEqual(answer.messages, ["e", "ey!", "a".repeat(256)]);
+    assert.equal(relay.observe().failed, 0);
+    assert.ok(await eventually(() => relay.observe().inFlight === 0, 1000));
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("L3: a credential split across continuation frames is cut before the message can echo it", { timeout: 10000 }, async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const secret = "eySyntheticLocalCredential";
+  provider.upgraded = peer => {
+    peer.write(Buffer.concat([Buffer.from([0x01, 2]), Buffer.from(secret.slice(0, 2)), Buffer.from([0x89, 1, 0x65])]));
+    setImmediate(() => { peer.write(Buffer.concat([Buffer.from([0x80, secret.length - 2]), Buffer.from(secret.slice(2))])); });
+  };
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {},
+    substitute: { placeholder: "placeholder-only-fixture", secret } }, { concurrent: 1, timeoutMs: 1000 });
+  try {
+    const answer = await framedResponse(socket.path);
+    assert.deepEqual(answer.messages, []);
+    assert.equal(answer.raw.includes(Buffer.from(secret)), false);
+    assert.ok(await eventually(() => relay.observe().inFlight === 0, 1000));
+    assert.equal(relay.observe().failed, 1);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("L4: synchronous HTTP and upgrade construction failures settle immediate and queued starts once", { timeout: 15000 }, async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const headers: Record<string, string> = { "x-client-label": "valid" };
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers }, { concurrent: 1, timeoutMs: 3000 });
+  const badUpgrade = (): Promise<number> => {
+    const { promise, resolve, reject } = Promise.withResolvers<number>();
+    const request = httpRequest({ socketPath: socket.path, path: "/realtime", headers: { connection: "Upgrade", upgrade: "websocket" } });
+    request.on("response", response => { response.resume(); response.once("end", () => resolve(response.statusCode ?? 0)); });
+    request.on("error", reject); request.end();
+    return promise;
+  };
+  try {
+    // A caller retaining the target object can mutate it after open. Even a
+    // construction-time failure must obey the request owner's settlement.
+    headers["x-client-label"] = "한글";
+    assert.equal((await throughBridge(socket.path, "/immediate", "{}")).status, 502);
+    assert.equal(await badUpgrade(), 502);
+    assert.deepEqual(relay.observe(), { accepted: 2, failed: 2, refused: 2, inFlight: 0, queued: 0 });
+    for (const upgrade of [false, true]) {
+      headers["x-client-label"] = "valid";
+      provider.reply = { status: 200, chunks: ["ok"], delayMs: 200 };
+      const first = throughBridge(socket.path, "/hold", "{}");
+      assert.ok(await eventually(() => relay.observe().inFlight === 1, 1000));
+      headers["x-client-label"] = "한글";
+      const queued = upgrade ? badUpgrade() : throughBridge(socket.path, "/queued", "{}").then(answer => answer.status);
+      assert.ok(await eventually(() => relay.observe().queued === 1, 1000));
+      assert.equal((await first).status, 200);
+      assert.equal(await queued, 502);
+      assert.equal(relay.observe().inFlight, 0);
+      assert.equal(relay.observe().queued, 0);
+    }
+    headers["x-client-label"] = "valid";
+    assert.equal((await throughBridge(socket.path, "/after", "{}")).status, 200);
+    assert.deepEqual(relay.observe(), { accepted: 7, failed: 4, refused: 4, inFlight: 0, queued: 0 });
+    assert.equal(provider.seen.length, 3, "failed constructions were not sent or retried");
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
 });

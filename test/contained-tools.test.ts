@@ -50,7 +50,6 @@ test("P0V-74 / R6-01: a directory link on the way is refused for every contained
   symlinkSync(outside, join(workspace, "linked"));
   await assert.rejects(run("write", { path: "linked/new.txt", content: "x" }), refused);
   await assert.rejects(run("read", { path: "linked/secret" }), refused);
-  await assert.rejects(run("edit", { path: "linked/secret", edits: [{ oldText: "host", newText: "model" }] }), refused);
   await assert.rejects(run("ls", { path: "linked" }), refused);
   assert.equal(readFileSync(join(outside, "secret"), "utf8"), "host secret\n");
   assert.equal(existsSync(join(outside, "new.txt")), false);
@@ -68,7 +67,7 @@ test("PR-004: inside the workspace the tools work as the engine's own do", async
   const { workspace, run } = world(t);
   await run("write", { path: "a/b/c.txt", content: "one\ntwo\n" });
   assert.equal(readFileSync(join(workspace, "a/b/c.txt"), "utf8"), "one\ntwo\n", "parents are made");
-  await run("edit", { path: "a/b/c.txt", edits: [{ oldText: "two", newText: "three" }] });
+  await run("write", { path: "a/b/c.txt", content: "one\nthree\n" });
   assert.equal(readFileSync(join(workspace, "a/b/c.txt"), "utf8"), "one\nthree\n");
   assert.match(await run("read", { path: "a/b/c.txt" }), /one\s*\n.*three/s);
   assert.match(await run("ls", { path: "a" }), /b\//);
@@ -114,9 +113,8 @@ test("C18 / PR-004: a read the guard admitted under the package-store root reach
   await assert.rejects(run("read", { path: join(outside, "secret") }), /outside the agent workspace/);
   await assert.rejects(run("read", { path: join(store, "..", "host-home", "secret") }), /outside the agent workspace/);
   await assert.rejects(run("ls", { path: outside }), /outside the agent workspace/);
-  // Writes and edits stay inside the workspace even under the admitted store.
+  // Writes stay inside the workspace even under the admitted store.
   await assert.rejects(run("write", { path: join(pkg, "new.md"), content: "x" }), /outside the agent workspace/);
-  await assert.rejects(run("edit", { path: skill, edits: [{ oldText: "dice", newText: "cards" }] }), /outside the agent workspace/);
   assert.equal(existsSync(join(pkg, "new.md")), false);
   assert.equal(readFileSync(skill, "utf8"), "# roll\nroll the dice\n");
   // The link inside the store cannot carry any of the read tools outside.
@@ -127,10 +125,6 @@ test("C18 / PR-004: a read the guard admitted under the package-store root reach
 
 
 
-test("SB-001: inside the sandbox only write and edit are replaced; reading is the mount plan's", t => {
-  const { tools } = world(t, true);
-  assert.deepEqual(Object.keys(tools).sort(), ["edit", "write"]);
-});
 
 test("G10-02: search snapshots hold the source root through replacement and remove private copies on every outcome", async t => {
   const { withSearchSnapshot } = await import("@oma/tool-files");
@@ -740,7 +734,7 @@ test("FI-4: a workspace holding a real project's Git history and installed depen
     writeFileSync(join(workspace, directory, "artifact"), bulk);
   }
   await run("write", { path: "apps/oma/src/index.ts", content: "export const answer = 42;\n" });
-  await run("edit", { path: "apps/oma/src/index.ts", edits: [{ oldText: "42", newText: "43" }] });
+  await run("write", { path: "apps/oma/src/index.ts", content: "export const answer = 43;\n" });
   assert.equal(readFileSync(join(workspace, "apps/oma/src/index.ts"), "utf8"), "export const answer = 43;\n");
   // What the agent authors still counts, wherever it sits outside those trees.
   writeFileSync(join(workspace, "apps/oma/src", "generated.json"), bulk);

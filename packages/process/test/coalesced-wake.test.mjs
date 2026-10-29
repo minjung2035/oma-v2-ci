@@ -22,6 +22,21 @@ test("hints during an active callback request exactly one fresh pass", async () 
   assert.equal(calls, 2);
 });
 
+test("a hint after the drain's last check starts work before its requester settles", async () => {
+  let calls = 0, late;
+  const requested = Promise.withResolvers();
+  const wake = new CoalescedWake(async () => {
+    if (++calls === 1) queueMicrotask(() => queueMicrotask(() => {
+      late = wake.request();
+      requested.resolve();
+    }));
+  });
+  const first = wake.request();
+  await requested.promise;
+  await Promise.all([first, late]);
+  assert.equal(calls, 2, "the late request cannot join an already-drained task");
+});
+
 test("close cancels queued dispatch before any callback runs", async () => {
   let calls = 0;
   const wake = new CoalescedWake(async () => { calls++; });

@@ -19,7 +19,7 @@ import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ReconcileModule } from "@oma/reconcile";
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { removeTree } from "./fixtures/cleanup.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { padTree, removePad } from "./fixtures/storage-pad.js";
@@ -56,8 +56,7 @@ function society(t: TestContext, residents: readonly string[] = ["alice", "carol
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const units = new ScriptedUnits();
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const paths = { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) };
   let broker: Broker | null = null;
   const reconcile = createReconcileModule(store, mail, null, null, units, lifecycle, { projectGit: join(root, "project.git"),

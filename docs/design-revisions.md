@@ -2554,3 +2554,65 @@ snapshot의 projection은 공유한다. Broker가 projection을 await한 다음 
 상태 파일을 되살리지 않는다. public status 응답도 await 뒤 기존 검증 owner로 현재 권한을
 재검사한다. wire/DTO·durable 형식·latency budget은 그대로이며 native golden은 관련 두 port만 갱신한다.
 
+## DR64 — 모델용 CLI를 typed 도구와 core/선택 집합으로 대체한다
+
+[모델 도구 표면 명세](model-tool-surface-spec.md)를 구현한다. Human용 제품 CLI는 유지하고,
+Worker가 broker 업무를 수행하던 모델용 CLI·libexec 자산·구 tool alias·group dispatcher는 제거한다.
+기존 typed Client/request service가 inline brief·body·GOAL, candidate 준비·publication,
+same-key freeze/replay와 receipt 출력을 소유한다. shell 문자열을 조립하는 대체 경로는 없다.
+
+필수 입력이 다른 업무는 별도 도구로 나누고, 동일 계약의 action만 enum으로 묶는다.
+GOAL publication과 mail send를 분리하며 필요한 revision/approval을 schema에서 요구한다.
+Pi의 primitive coercion 전에 non-coercing raw guard를 적용하고 provider 변환은 기존 SDK에 맡긴다.
+
+Worker는 core19/optional21, Principal은 core13/optional8을 제공한다. `toolset`은 선택한 optional
+전체 집합을 교체하며 성공 결과가 저장된 turn 경계에서 적용한다. 재개·branch 전환은 해당
+branch의 확정 snapshot만 복원한다. core·역할·등록 provenance 검사를 유지하고, 편집은 기존
+hashline 계열로 수렴한다. Principal에게 실행 불가능한 LSP 진단·수정 도구는 등록하지 않는다.
+
+reviewer의 현재 capability·작성자/submitter 제외·최신 표·남은 승인 수와 생성 가능한 child
+profile/mail.send를 기존 authority·policy owner에서 관측한다. 관측은 권한 grant가 아니며,
+mutation의 신원·계보·정족수·Principal 승인·expected-old CAS와 accepted history는 바꾸지 않는다.
+
+실제 실행 범위와 한계는 [validation](implementation/validation.md)이 소유한다. Scripted Pi,
+로컬 provider payload와 설치 검사만으로 실제 Sol medium 행동 비교를 통과 처리하지 않는다.
+
+## DR65 — Codex의 실행 중심 prompt 구성을 OMA 역할과 도구 계약에 맞춘다
+
+기본 Principal·Worker prompt, START/Principal handoff, review·redelivery 안내와 전체 모델 도구의
+description·parameter help·guidance를 영어로 정리한다. Codex CLI의 모델별 prompt와 tool
+specification을 참고한 구성·출처는 [모델 도구 표면 명세 §6](model-tool-surface-spec.md#6-prompt와-예시)가 소유한다.
+Codex 전용 shell session·patch·approval API는 가져오지 않는다.
+
+Principal은 설계·계획·중요 판단에 비용을 쓰고 Worker는 구현·조사·테스트·peer review를 수행한다.
+작업 시작과 담당 범위 공유, 독립 작업 분할, 대기 시간 활용, 정확한 증거 전달, 통합까지의 완결을
+유연한 기본 습관으로 명시한다. LOW merge의 사전 승인 없는 fast path와 적용 후 자동 공유·challenge를
+유지하며 추가 review gate를 만들지 않는다. 권한·정족수·same-key·ACK/양보·프로세스 수명은 실제 계약을 따른다.
+
+OMA registration wrapper가 builtin/hashline/LSP/web/MCP 안내를 소유하고 vendor 바이트는 유지한다.
+shell 설명 교체에 필요한 고정 adapter만 기존 Pi factory의 handler로 전달하며, 읽을 수 있게 된
+shell 설정을 반영하고 설정이 바뀔 때만 factory를 갱신한다. Tool selection은 계속 dispatch하지 않는다.
+도구 이름과 schema 검증 제약·custom prompt 보존 정책은 변경하지 않는다.
+
+검증은 실제 Pi prompt 조합·tool 실행·provider payload 직렬화와 관련 회귀로 구분한다.
+실제 모델의 협업 성능 향상은 이 검증으로 입증하지 않으며 실행 범위는 [validation](implementation/validation.md)이 소유한다.
+
+## DR66 — Worker 상한과 구조적 peer 부족의 Principal fallback
+
+사용자 요청으로 Worker 생성 상한을 복원한다. HostConfig 4의 최상위 `maxWorkers`는 기본 6,
+새 구성의 초기 Worker는 3명이다. Principal을 제외한 등록 Worker 전체를 세며 provisioning·
+stopped·retired도 슬롯을 점유한다. 동일 요청 replay/기존 동일 spec 연결은 새 슬롯이 아니고,
+물리적 생성 승인은 같은 트랜잭션에서 상한을 확인한다. 초과는 `LIMIT_EXCEEDED`다.
+상한 수정은 재시작 적용이며 기존 Worker를 자동 삭제하지 않는다.
+
+정상 peer 수는 MEDIUM merge 1, HIGH merge·모든 challenge는 `highPeerFloor`다.
+요청 작성자(requester와 submitter의 합집합)를 제외하고 설정 상한으로 확보 가능한 peer 수가
+정상 수보다 작으면 그 수까지의 peer 승인을 유지하고 Principal 승인을 추가한다.
+peer 0명은 open과 동시에 승인 메일을 발행한다. HIGH의 Principal gate와 LOW merge의
+fast path는 유지한다. 가용성 부족·중지·생성 실패·반대표를 이유로 quorum을 낮추지 않는다.
+
+승인 메일의 exact candidate·현재 id, 작성자 배제, 최신 표, Principal delegation,
+stale-base/CAS 검사를 유지한다. 상한은 integration policy identity에도 포함한다.
+status와 기본 영어 안내는 정상/실제 peer 요구 수와 fallback 원인을 드러낸다.
+실제 실행 결과와 한계는 [validation](implementation/validation.md)이 소유한다.
+

@@ -74,7 +74,7 @@ test("P0: protected-path observation failure cannot reach main CAS", async (t) =
             contextGit: join(repos, "context.git"),
             worldDir: join(state, "world"),
             society: "demo",
-        }, store, mail, { policyRevision: "p1", protectedPaths: ["protected/"], checks: [] });
+        }, store, mail, {maxWorkers: 6, policyRevision: "p1", protectedPaths: ["protected/"], checks: []});
         const auth: AuthContext = {
             actor: "a",
             incarnation: 1,

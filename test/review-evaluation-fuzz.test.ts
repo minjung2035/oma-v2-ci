@@ -224,8 +224,8 @@ const simulate = (seed: number, index: number): string => {
   const withdrawnIds: MessageId[] = [];
   let nextSeq = 2, nextOp = 100, nextMid = 1;
   const st = (entries: readonly ReviewEntry[]) =>
-    reviewState({ open: o, entries: [...entries], eligible: new Set(eligible),
-      highPeerFloor: floor, integration: null });
+    reviewState({maxWorkers: 64, open: o, entries: [...entries], eligible: new Set(eligible),
+      highPeerFloor: floor, integration: null});
   const steps = 4 + int(r, MAX_STEPS - 3);
   for (let j = 0; j < steps; j++) {
     const at = lbl(j);
@@ -357,8 +357,8 @@ const simulate = (seed: number, index: number): string => {
   // Epilogue: an integration projection drives the display deterministically.
   for (const [state, display] of [["pending", "applying"], ["succeeded", "applied"],
       ["failed", "blocked"], ["unknown", "unknown"]] as const) {
-    const projected = reviewState({ open: o, entries: [...ledger], eligible: new Set(eligible),
-      highPeerFloor: floor, integration: { operation: OP(900), state, errorCode: null } });
+    const projected = reviewState({maxWorkers: 64, open: o, entries: [...ledger], eligible: new Set(eligible),
+      highPeerFloor: floor, integration: { operation: OP(900), state, errorCode: null }});
     assert.equal(projected.display, display, `${lbl(-1)}: integration ${state} display`);
   }
   coverage.sequences++;

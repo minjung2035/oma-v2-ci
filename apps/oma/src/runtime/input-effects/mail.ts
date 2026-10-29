@@ -1,7 +1,7 @@
 import { decodeSubject, parseEmlHeaders } from "@oma/mail/headers";
 import { parseMessageId } from "@oma/domain/identifiers";
 import { fail } from "@oma/client/errors";
-import { readLocalHead } from "../effects.js";
+import { readLocalHead } from "../input-effects.js";
 import { MAIL_HEADER_BYTES } from "@oma/domain/mail-values";
 
 export interface ReplyEffects {

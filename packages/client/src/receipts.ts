@@ -2,10 +2,8 @@ import { basename, isAbsolute, join } from "node:path";
 import type { Receipt } from "@oma/contracts";
 import { currentContext } from "./context.js";
 
-/** DR1, SB-002-C: a path this CLI's caller is shown is in the caller's view.
- * The broker records and answers with the host's archive path; the archive
- * root this CLI's environment names -- /mail/archive/cur inside a sandbox, the
- * host's for the Principal -- is where the caller finds the message. */
+/** DR1, SB-002-C: expose archive paths in the caller's view, not the broker's
+ * host view: /mail/archive/cur in a sandbox, the host archive for Principal. */
 export function inCallerView(receipt: Receipt, root = currentContext().env.OMA_MAIL_ARCHIVE): Receipt {
   const result = receipt.result as { archivePath?: unknown } | undefined;
   if (receipt.state !== "succeeded" || typeof result?.archivePath !== "string") return receipt;

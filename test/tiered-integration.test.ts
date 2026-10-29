@@ -51,10 +51,9 @@ function fixture(options: {
     const paths = { stateRoot: root, projectGit, contextGit: join(root, "context.git"), worldDir: join(root, "world"),
         society: "demo" };
     let mail = createMailModule(paths, store, 64);
-    const policy: IntegrationPolicy = { policyRevision: "p1", protectedPaths: [], checks: [],
-        ...(options.tiered === false ? {} : { tiered: {
-                repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: []
-            } }) };
+    const policy: IntegrationPolicy = {maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [], ...(options.tiered === false ? {} : { tiered: {
+            repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: []
+        } })};
     let services = createGitServices(paths, store, mail, policy, () => policy);
     let { git: module, reviews } = services;
     const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",

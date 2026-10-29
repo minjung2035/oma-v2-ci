@@ -43,6 +43,7 @@ import { StoreError } from "./errors.js";
 
 /** Existing internal configuration shape. No wire or durable fields are added. */
 export interface IntegrationPolicy {
+  maxWorkers: number;
   tiered?: TieredPolicy;
   policyRevision: string;
   protectedPaths: string[];
@@ -53,6 +54,7 @@ export interface IntegrationPolicy {
 export type { IntegrationCheckSnapshot as FrozenCheck } from "@oma/contracts/integration";
 import type { IntegrationCheckSnapshot as FrozenCheck } from "@oma/contracts/integration";
 export interface IntegrationSnapshot {
+  readonly maxWorkers: number;
   readonly tiered: Readonly<TieredPolicy> | null;
   readonly policyRevision: string;
   readonly protectedPaths: readonly string[];
@@ -69,16 +71,19 @@ export interface IntegrationSnapshot {
 export type IntegrationPolicyReader = () => IntegrationPolicy;
 
 const policyShape = checkObject({
+  maxWorkers: checkInt({ min: 1 }),
   tiered: checkOptional(tieredPolicyCheck),
   policyRevision: checkString({ min: 1 }), protectedPaths: checkArray(protectedPathCheck), checks: checkArray(integrationCheckCheck),
 });
 
-export function integrationPolicyFromConfig(config: HostConfig["integration"]): IntegrationPolicy {
+export function integrationPolicyFromConfig(config: Pick<HostConfig, "integration" | "maxWorkers">): IntegrationPolicy {
+  const { integration, maxWorkers } = config;
   return {
-    ...(config.tiered === undefined ? {} : { tiered: config.tiered }),
-    policyRevision: config.policyRevision,
-    protectedPaths: [...config.protectedPaths],
-    checks: config.checks.map(check => ({
+    maxWorkers,
+    ...(integration.tiered === undefined ? {} : { tiered: integration.tiered }),
+    policyRevision: integration.policyRevision,
+    protectedPaths: [...integration.protectedPaths],
+    checks: integration.checks.map(check => ({
       id: check.id, argv: [...check.argv], env: { ...check.env },
     })),
   };
@@ -103,9 +108,9 @@ export function snapshotIntegrationPolicy(policy: IntegrationPolicy): Integratio
   const protectedPaths = Object.freeze([...policy.protectedPaths]);
   const frozenChecks = Object.freeze(checks);
   return Object.freeze({
-    tiered, policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks,
+    maxWorkers: policy.maxWorkers, tiered, policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks,
     checkProfileDigest: sha256Hex(canonicalJson(frozenChecks)),
-    policyIdentity: sha256Hex(canonicalJson({ protectedPaths, checks: frozenChecks, ...(tiered === null ? {} : { tiered }) })),
+    policyIdentity: sha256Hex(canonicalJson({ maxWorkers: policy.maxWorkers, protectedPaths, checks: frozenChecks, ...(tiered === null ? {} : { tiered }) })),
   });
 }
 

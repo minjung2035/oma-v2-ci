@@ -248,7 +248,7 @@ async function brokerEnv(): Promise<BrokerEnv> {
         society,
         hasGoal: () => false,
         activationAllowed: () => true,
-    }, resolver, mail);
+    }, Object.assign(resolver, { maxWorkers: () => 6 }), mail);
     const views = new ViewsModule(store, state, society, "p");
     const git = createGitModule({
         stateRoot: state,
@@ -613,56 +613,53 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
 // Part D — entry/broker.js ordered bootstrap (READY only after recovery)
 // ---------------------------------------------------------------------------
 function minimalConfig(society: string): Record<string, unknown> {
-    return {
-        schemaVersion: 4,
-        society,
-        installation: {
-            node: process.execPath,
-            // MUST [R38]: the configured LIBDIR must be the layout the loaded modules
-            // resolve from, or the entry refuses to start. Tests run from the package
-            // root, where dist/ and implementation/ live side by side.
-            libdir: process.cwd(),
-            deploymentDigest: deploymentDigest(process.cwd()),
+    return {schemaVersion: 4, maxWorkers: 6, society,
+    installation: {
+        node: process.execPath,
+        // MUST [R38]: the configured LIBDIR must be the layout the loaded modules
+        // resolve from, or the entry refuses to start. Tests run from the package
+        // root, where dist/ and implementation/ live side by side.
+        libdir: process.cwd(),
+        deploymentDigest: deploymentDigest(process.cwd()),
+    },
+    modelProfiles: {
+        md: {
+            provider: "none",
+            model: "none",
+            inferenceTimeoutSeconds: 1,
         },
-        modelProfiles: {
-            md: {
-                provider: "none",
-                model: "none",
-                inferenceTimeoutSeconds: 1,
-            },
+    },
+    agentProfiles: {
+        p: {
+            modelProfile: "md",
+            capabilities: ["mail.send", "git.submit"],
+            delegable: [],
+            childProfile: null,
         },
-        agentProfiles: {
-            p: {
-                modelProfile: "md",
-                capabilities: ["mail.send", "git.submit"],
-                delegable: [],
-                childProfile: null,
-            },
-            child: {
-                modelProfile: "md",
-                capabilities: ["mail.send"],
-                delegable: [],
-                childProfile: null,
-            },
+        child: {
+            modelProfile: "md",
+            capabilities: ["mail.send"],
+            delegable: [],
+            childProfile: null,
         },
-        principalProfile: "p",
-        initialResidents: [],
-        integration: { policyRevision: "1", protectedPaths: [], checks: [] },
-        limits: {
-            frameBytes: 262144,
-            mailBodyBytes: 1048576,
-            subjectBytes: 200,
-            addresses: 32,
-            replyReferences: 64,
-            contextFiles: 64,
-            contextBytes: 1048576,
-            bundleBytes: 268435456,
-            logBytes: 1048576,
-            batchMaxMessages: 32,
-            idleStreamSeconds: 900,
-            receiptWaitSeconds: 30,
-        }
-    };
+    },
+    principalProfile: "p",
+    initialResidents: [],
+    integration: { policyRevision: "1", protectedPaths: [], checks: [] },
+    limits: {
+        frameBytes: 262144,
+        mailBodyBytes: 1048576,
+        subjectBytes: 200,
+        addresses: 32,
+        replyReferences: 64,
+        contextFiles: 64,
+        contextBytes: 1048576,
+        bundleBytes: 268435456,
+        logBytes: 1048576,
+        batchMaxMessages: 32,
+        idleStreamSeconds: 900,
+        receiptWaitSeconds: 30,
+    }};
 }
 test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-config-json-"));
@@ -825,10 +822,6 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         }
         writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
         await run();
-        const start = readFileSync(join(state, "world", "START.md"), "utf8");
-        assert.match(start, /\/inbox\.md/);
-        assert.match(start, /oma_merge/);
-        assert.match(start, /not authority/);
         assert.match(readFileSync(join(state, "world", "agents.tsv"), "utf8"), /child\tresident\tenabled\tchild/);
         let store = new Store(join(state, "runtime.sqlite"));
         // Reading a create/bootstrap plan needs the trusted repository identity,

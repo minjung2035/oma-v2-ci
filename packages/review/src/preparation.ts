@@ -124,7 +124,7 @@ Challenge ${name}` });
     const eligible = new Set(this.store.listAgents()
       .filter(a => a.role === "resident" && a.desired === "enabled").map(a => a.name));
     const after0 = reviewState({ open: entry, entries: [], integration: null,
-      eligible, highPeerFloor: policy.tiered!.highPeerFloor });
+      eligible, highPeerFloor: policy.tiered!.highPeerFloor, maxWorkers: policy.maxWorkers });
     // Challenges always have a review thread — LOW challenges too (§7).
     const emissions: Emission[] = [{
       to: ["residents"], kind: "message",
@@ -132,6 +132,8 @@ Challenge ${name}` });
       body: reviewThreadBody(after0, fact, [], null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
       audience: "workers", review: { role: "thread", request: id, name, revision: 0 } }];
+    if (after0.principalRequired && after0.required === 0)
+      emissions.push(this.messages.approvalEmission(id, emissions.length, after0, fact, [], []));
     const frozen = await this.messages.freeze(scope, id, auth.actor, emissions);
     return { id, fact, payload: input, emissions, frozen, before: null, after0, name };
   }
@@ -165,13 +167,15 @@ Challenge ${name}` });
     const eligible = new Set(this.store.listAgents()
       .filter(a => a.role === "resident" && a.desired === "enabled").map(a => a.name));
     const after0 = reviewState({ open: entry, entries: [], integration: null,
-      eligible, highPeerFloor: tiered.highPeerFloor });
+      eligible, highPeerFloor: tiered.highPeerFloor, maxWorkers: policy.maxWorkers });
     const emissions: Emission[] = input.tier === "LOW" ? [] : [{
       to: ["residents"], kind: "message",
       subject: reviewSubject(`[${name}] ${input.title} (rev 0)`, this.bounds.subjectBytes),
       body: reviewThreadBody(after0, fact, [], null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
       audience: "workers", review: { role: "thread", request: id, name, revision: 0 } }];
+    if (after0.principalRequired && after0.required === 0)
+      emissions.push(this.messages.approvalEmission(id, emissions.length, after0, fact, [], []));
     const frozen = await this.messages.freeze(scope, id, auth.actor, emissions);
     return { id, fact, payload: input, emissions, frozen, before: null, after0, name };
   }
@@ -195,11 +199,11 @@ Challenge ${name}` });
     if (input.kind === "review") {
       if (principal) throw new StoreError("CAPABILITY_DENIED", "the Principal may only vote on a review request");
       if (agent.role !== "resident") throw new StoreError("CAPABILITY_DENIED", "only a Worker records a review");
-      if (low) throw new StoreError("INVALID_REQUEST", "LOW requests have no review thread; use oma_challenge after it is applied");
+      if (low) throw new StoreError("INVALID_REQUEST", "LOW requests have no review thread; use oma_challenge_open after it is applied");
     } else {
       if (principal) {
-        if (openFact.tier !== "HIGH")
-          throw new StoreError("INVALID_REQUEST", "the Principal votes only on HIGH requests");
+        if (!before.principalRequired)
+          throw new StoreError("INVALID_REQUEST", "this request does not require a Principal decision");
         if (input.approval === undefined || input.approval === null)
           throw new StoreError("INVALID_REQUEST", "a Principal vote names the approval it decides");
         if (!(before.approvalValid && before.approval !== null && before.approval.id === input.approval))
@@ -211,7 +215,7 @@ Challenge ${name}` });
         if (agent.role !== "resident") throw new StoreError("CAPABILITY_DENIED", "only a Worker votes on a review request");
         if (input.approval !== undefined)
           throw new StoreError("INVALID_REQUEST", "a Worker vote does not name an approval");
-        if (low) throw new StoreError("INVALID_REQUEST", "LOW has no prior review; use oma_challenge after it is applied");
+        if (low) throw new StoreError("INVALID_REQUEST", "LOW has no prior review; use oma_challenge_open after it is applied");
         if (before.authors.includes(auth.actor))
           throw new StoreError("SELF_REVIEW", "the requester or a submitter cannot vote on their own change");
       }
@@ -243,7 +247,7 @@ Challenge ${name}` });
       throw new StoreError("CAPABILITY_DENIED", "only the requester cancels a request");
     if (before.integration !== null) {
       if (before.integration.state === "succeeded")
-        throw new StoreError("REQUEST_CLOSED", `request ${input.name} is already applied; use oma_challenge`,
+        throw new StoreError("REQUEST_CLOSED", `request ${input.name} is already applied; use oma_challenge_open`,
           { details: { name: input.name, state: "applied" } });
       if (before.integration.state === "unknown")
         throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");

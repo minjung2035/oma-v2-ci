@@ -128,7 +128,6 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   piArgs: piRuntime.args,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.extension),
-  cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
   ...(packages === undefined ? {} : { packages }),
   confinement }, agent, invocationId, cfg.limits, profile, control, engineEffects);
 let stopping = false;

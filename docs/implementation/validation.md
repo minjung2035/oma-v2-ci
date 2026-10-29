@@ -1,7 +1,147 @@
 # OMA v2 — 현재 검증 상태
 
-DR49 native 전환은 미완료이며, 최신 사용자 지시로 **개정 spec 기준 구현을 재개**했다.
+모델 도구 표면은 DR64의 typed tool/core·optional 계약으로 cutover했다.
+실제 Sol medium 비교와 native Darwin qualification은 미완료다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+
+## Pi 자동 업데이트 안내 숨김
+
+공통 pinned interactive adapter에서 자동 changelog 계산과 새 Pi 버전 안내의 표시
+hook 두 개만 교체했다. Society·Personal 모두 mode 초기화 전에 적용한다.
+버전·hook 존재 검증과 private contact 목록을 함께 갱신했으며 SDK/vendor 바이트,
+설정 파일의 changelog 확인 버전, 업데이트 기능과 명시적 `/changelog`는 변경하지 않았다.
+
+- 전체 build PASS. compatibility/private-contact/Society·Personal lifetime/settings/
+  pi-compat/adapter-boundary 기존 회귀114/114 PASS·skip0.
+- 실제 fullscreen Pi TUI를 두 PTY에서 Society·Personal adapter 경로로 실행했다.
+  changelog 확인 버전을 `0.0.1`로 둔 초기화와 새 버전 표시 이벤트에서 자동 변경
+  내역·업데이트 banner가 없음을 관측했다. 원래 확인 버전은 그대로였고 일반 경고,
+  mail read·mail receive는 보였다.
+- 양쪽에서 실제 `/changelog` 키 입력 뒤 SDK의 변경 내역이 표시되는 것을 확인했다.
+  업데이트 서버 응답은 실제 네트워크 조회가 아니라 표시 이벤트 입력으로 검증했다.
+
+이는 실제 SDK 화면·표시 정책의 검증이며 provider 추론·업데이트 설치 실행·전체 제품
+회귀·새 packed install의 증거가 아니다. 별도 문구 고정 테스트는 추가하지 않았다.
+
+## Worker 공유 기본값·Principal reject 설명
+
+`packages/domain/src/role-prompts.ts`의 Worker communication 절에 메일의 공유 기억 목적과
+commons/개별 메일 수신 범위를 모았다. 이전의 “relevant peers or commons” 선택 문구는
+제거했다. 공유는 기본 습관이며 발송 절차·단계별 보고 의무를 추가하지 않는다.
+`packages/extension/src/review-tools.ts`는 Principal의 `oma_review_respond` description
+한 곳에만 reject가 해당 요청의 영구 종료이며 수정 요청이 아니라는 설명을 추가했다.
+모델용 문구는 영어이고 실행 코드·schema·승인 절차·custom prompt는 바꾸지 않았다.
+
+- `npm run build`: PASS.
+- 기존 tool-surface/prompt-boundary 회귀: 17/17 PASS·skip0.
+- 임시 smoke에서 실제 Pi SDK session·prompt composition·review tool 등록을 실행했다.
+  provider 입력 경계에서 Worker의 새 공유 안내와 이전 수신 선택 문구 부재,
+  Principal의 새 reject 설명, Worker 설명에는 해당 영구 종료 문구가 없는 것을 확인했다.
+  외부 provider와 broker는 호출하지 않았으며 응답 stream은 deterministic fixture다.
+  실제 모델의 발송 습관 변화나 새로운 승인 동작을 검증했다고 주장하지 않는다.
+- 문구 고정용 영구 테스트나 임시 script 파일은 추가하지 않았다.
+
+## Principal 자동 도착 메일의 컴팩트 표시
+
+메일 도착 때 대화에 삽입되는 `oma-mail` custom message에만 공개 message renderer를
+등록했다. `mail send`와 같은 dot·제목·rail을 사용하고 기본 접힘/기존 펼침 키를 따른다.
+실제 tool call이나 성공 receipt를 합성하지 않는다. `oma_mail_read`, 모델 입력, 저장된
+notice와 details, ACK 및 batch 완료 판정은 변경하지 않았다.
+
+- 수정 전 호환성: build, compact/tool surface/Principal 경계/렌더 복사/delivery37개
+  모두 PASS·skip0. 실제 Pi의 Worker core19/전체40, Principal core13/전체21 등록과
+  제거 도구 부재를 확인했다. functional surface의 선택·교체·재개·anchored 편집도 PASS.
+- 수정 후 build와 root 타입 검사 PASS. 관련 기존 회귀81/81 PASS·skip0 및
+  functional surface PASS. 새 UI 동작 확인용 임시 검사는 제거했고 문구 고정 테스트는 추가하지 않았다.
+- 실제 fullscreen Pi TUI를 PTY에서 실행해 production theme·presentation renderer와
+  실제 `oma_mail_read`를 사용했다. 도착 블록은 `mail receive 2 messages`/
+  `Received · 5 lines`로 접혔고 `Ctrl+O` 입력 뒤 원래 전달 안내가 rail 아래 펼쳐졌다.
+  원래 `oma-mail` label과 custom-message 배경색은 없었으며 tool row는 유지됐다.
+  session의 원본 notice 보존을 확인했고 `Ctrl+D`로 exit0 종료했다.
+
+터미널 검증은 실제 SDK 화면과 production 표시 함수의 실행이다. assistant 응답은
+deterministic stream이고 메일 도착 입력은 fixture다. 실제 provider 추론·broker 배달·
+Resident 활성화·전체 제품 회귀나 새 packed install을 검증했다고 주장하지 않는다.
+
+## DR66 Worker 상한·Principal fallback — 이번 실행
+
+`maxWorkers` 기본6·초기 Worker3, 등록 Worker 슬롯의 원자적 생성 제한과 구조적 peer 부족의
+Principal fallback을 구현했다. 모델 prompt/tool 안내는 영어이며 custom prompt는 유지한다.
+
+| 실제 실행 | 관측 결과와 한계 |
+|---|---|
+| 최종 `npm run build` | PASS. workspace와 전체 test caller 타입 검사·설치 자산 정적 검사 포함. 중간 실행은 declaration 파일 재생성 중 `ENOENT`로 실패했고, 파일이 다시 존재하는 것을 확인한 뒤 최종 전체 build가 통과했다 |
+| 첫 관련 회귀 | 100개 중96 PASS/4 FAIL. 초기3명으로 늘어난 bootstrap fixture의 미완료 seed와 동일 값 저장 기대2건, open 시 0-peer 승인 메일을 거절하던 durable grammar2건을 발견·수정했다 |
+| 최종 영향 범위 회귀 | 15개 파일93/93 PASS·skip0. Worker cap/fallback15개, config snapshot/validation/edit/apply-time, status wire, operation kind matrix, authority, Config source, 실제 SIGKILL/TTY owner, integration identity와 Mac command-policy parser 포함. Mac kernel 실행 증거는 아니다 |
+| 별도 생성·설정 smoke | 실제 config writer/readback과 Config renderer에서 초기3·최대6·After restart 표시. cap3에서 새 operation 없이 `LIMIT_EXCEEDED`; 수정 뒤 기존 resolver는 `POLICY_CHANGED`; 새 resolver에서 cap4로 실제 Git workspace 생성 후 HEAD 일치·workerCount4 확인 |
+| 별도 0-peer merge/challenge smoke | 실제 Store·review/mail·canonical Git 경로로 MEDIUM open → 현재 Principal 승인 → main 적용 → LOW challenge → Principal 승인 → 원래 tree 복구. Worker/Principal status를 실제 wire codec으로 decode했고 restart 뒤 approval id도 유지했다 |
+| 발견한 Principal 가시성 회귀 | 최초 직접 실행에서 Worker는 `principal-pending`인데 Principal named status가 `CAPABILITY_DENIED`였다. open의 승인 메일도 가시성과 `principal.sent`에 포함하도록 수정했고 위 smoke·최종 회귀에서 확인했다 |
+
+smoke의 unit 설치/기동 경계는 scripted fixture다. 신규 실제 Resident activation, 실제 모델 추론,
+전체 regression/packed install/Darwin qualification을 이번 결과로 통과 처리하지 않는다.
+Config는 실제 renderer 출력과 설정 저장을 확인했으며 제품의 대화형 전체 세션을 새로 실행한
+증거는 아니다. 영구 regression은 0-peer/1-peer, 다중 작성자, 반대표·중지, stale 승인,
+Principal 미위임, 동시 마지막 슬롯, replay·연결과 재시작을 다룬다.
+
+## DR65 영어 prompt·tool 안내 재작성 — 이번 실행
+
+Codex CLI의 고정 revision과 채택 범위는 [모델 도구 표면 명세 §6](../model-tool-surface-spec.md#6-prompt와-예시)에
+기록했다. 기본 역할·생성 안내·자동 mail·전체 도구 metadata를 영어로 바꿨다.
+사용자 custom prompt와 동봉 vendor 실행 바이트는 덮어쓰지 않았다.
+
+| 실제 실행 | 관측 결과와 한계 |
+|---|---|
+| build·타입 검사 | `npm run build` PASS. 이후 merge의 optional 입력 복구는 `npm run build:extension`, 최종 test caller는 `tsc -p tsconfig.build.json` PASS |
+| 실제 Pi 등록·prompt 조합 | Worker core19/전체40, Principal core13/전체21 유지. 양 역할의 `before_agent_start` 이후 구성과 활성 guidance를 관측. Principal의 편집 guidance, 비노출 hashline 도구 안내 제거 확인 |
+| 전체 입력 계약·provider serializer | 재작성 전후 모든 도구의 required·type·enum·bounds·nested 구조 일치. 비교에서 발견한 `oma_merge_open` candidate/base 필수화 회귀를 고쳤다. Responses는 양 역할61개, Anthropic은 Worker40개 schema를 전송 전 관측; 네트워크·추론 없음 |
+| `node scripts/functional-surface.mjs` | 실제 Pi session의 core19→선택21→교체20→resume20→reset19, anchored replace/replace_within/insert, 제거 도구 거절 PASS. deterministic assistant stream |
+| 실제 Pi shell smoke | 설정한 shell executable과 prefix가 실제 실행 결과에 반영됨. 명시적 background launch 후 독립 명령을 수행하고 최종 로그 `completed`·exit7을 회수. host의 실제 Pi tool pipeline이며 Resident activation 수명 시험은 아님 |
+| 관련 선택 회귀 | prompt boundary·delivery·tool runtime·review documents·contained files/search·confinement·tool surface·Principal·merge/challenge·vendor bundle·mail bounds135개 중 최초132 PASS/3 FAIL. 폐기 CLI PATH/전체 exclude flag 기대와 새 shell test의 불완전 context를 수정. 후속 confinement/Principal27개 및 tool-runtime4개 모두 PASS·skip0. 별도 run을 하나의135/135 실행으로 합산하지 않음 |
+| 실제 Worker typed-tool 시나리오 | default HEAD/base LOW merge·자동 broadcast, MEDIUM peer vote, exact diff paging, HIGH cancel, self-review 거절, HIGH challenge/Principal, same-key replay, Worker-only thread8/8 PASS·skip0. host prerequisite 부재에서는 publication8개가 INTERNAL_ERROR로 실패했고, 임시 bubblewrap0.12.0의 private `/dev`·`/usr/bin` namespace 환경에서 통과. host 설치나 제품 sandbox 우회 없음 |
+| 구조 규칙 회귀 | surface-rule22/22 PASS·skip0. `check:architecture:rules` finding0. 고정 bash registration adapter 이외 임의 handler dispatch는 계속 거절 |
+
+실제 모델이 이 문구를 받아 더 효율적으로 협업하는지는 **NOT_RUN**이다. 기존에 확인한 OMA 인증·
+정확한 Sol model/effort 부재는 그대로이며 scripted 성공을 모델 행동 비교로 대신하지 않는다.
+이번 검증은 현재 source 전체 회귀·새 packed install·Darwin qualification을 주장하지 않는다.
+
+## DR64 모델 도구 표면 — 이번 실행
+
+기준 HEAD `74eadb6fd34c258393a231930fcdf0c85e601af6`, 작업트리
+`/home/dev/oma-v2-model-surface-cleanup`. 모델용 CLI·libexec·구 tool/group을 제거하고
+typed client·core/optional·reviewer/생성 관측·prompt/START·caller·배포 계약을 함께 전환했다.
+Human용 CLI·broker authority·request freeze/replay·receipt·정족수·CAS는 유지한다.
+이 절은 [모델 표면 명세](../model-tool-surface-spec.md)의 실행 범위이며 Darwin 지원 증거가 아니다.
+
+| 실제 실행 | 관측 결과와 한계 |
+|---|---|
+| `npm run build` | 전체 build와 설치 자산 정적 검사 PASS, workspace27개 closure. entrypoint 실행은 별도 |
+| 실제 Pi 등록·provider payload probe | Worker core19/전체40, Principal core13/전체21. 설치된 Responses/Anthropic serializer에서 전체 schema 전달을 확인. OMA·toolset의 Responses strict 변환, 필수 필드·enum·nested replacement 보존. 일부 vendor 도구 non-strict와 Anthropic 최상위 closure 생략은 local guard와 구분. 네트워크·실제 inference 미실행 |
+| `node scripts/functional-surface.mjs` | 실제 Pi session에서 core19→선택21→교체20→resume20→reset19; hashline replace/replace_within/insert 및 제거된 도구 거절 PASS. deterministic assistant stream이며 실제 모델 선택·provider transport·sandbox 증거 아님 |
+| typed client·review·surface 확대 회귀 | private native 환경에서 401개 중398 PASS·3 FAIL·skip0. 옛 status 응답 fixture·approval 안내 문구·mail context-kind 거절 기대를 수정. 후속8개 파일66/66 PASS·skip0으로 세 실패와 status/codec/delivery 경계를 확인. 두 실행을 새 전체401/401 결과로 합산하지 않음 |
+| 실제 설치물 및 composition/document 경계 | `deployment-artifact`와 client/broker composition·review document 검사12/12 PASS·skip0. GOAL 수정 후 최종 설치물의 source-tree 없는 entry/engine/자산·typed Client import·모델 CLI 부재도 별도1/1 PASS |
+| `npm run check:package-isolation` | GOAL 원문 보존 수정 전 입력에서27/27 packed install·public import·authored declaration PASS, 지정 installed-runtime smoke17개 PASS. 외부 SDK declaration 진단44개는 관련 workspace에 반복 보고되며 자체 declaration 오류는0. 후속 GOAL 수정의 실제 실행은 별도 |
+| architecture/문서/소유권 검사 | 최종 production source에서 `npm run check:architecture` 전체 PASS: workspace·legacy·source inventory/digest·architecture rules/gate·transaction·durable boundary·document·spec inventory finding0. 별도 mutation locality PASS·surface/architecture-rule 회귀59/59 PASS. 후속 검증 결과 문서 binding은 구조 기록이지 runtime 재승인이 아님 |
+| workspace 계약 suite | 최초467개 중464 PASS·3 FAIL·skip0. status pagination fixture에 creation 관측을 추가하고, LSP abort의 단어 고정 대신 deadline 내 거절을 확인하도록 수정. 실패한 두 workspace의 후속79/79 PASS·skip0 |
+| confined scenario 확대 실행 | 600초 deadline까지99 PASS·11 FAIL, 전체 run은 TIMEOUT. 생성/초기 brief·협업 reply·candidate/LOW merge·HIGH 승인/challenge·same-key·mail delivery 실제 경로가 실행됨. 옛 optional 노출/GOAL 호출·wait startup 예산·응답 fixture를 수정했고, 후속7/7 PASS·skip0으로 실제 shell/typed Client·설치 extension 선택·양 역할 full/reset·quota 없는 생성 경계를 확인 |
+| GOAL 수정 후 실제 runtime | full build PASS 뒤7개 파일62개 중59 PASS·3 FAIL·skip0. CRLF/BOM 원문·oversize 거절·restart/stale CAS, 실제 Principal core에서 HIGH/challenge9개, Worker 협업/receipt·client 회귀가 통과. 나머지는 delayed-wait fixture가 runner budget뿐 아니라 broker의 독립30초 deadline도 넘긴 경우 |
+| delayed-wait 최종 확인 | runner control-idle20초 < 실제 관측21초 < broker deadline30초로 서로 다른 경계를 분리. 같은 continue/wait/unobserved3개 모두 PASS·skip0. tool 결과가 durable하게 기록된 뒤 continue·yield·unknown을 구분하고 prepared batch/미확정 receipt 의미를 유지 |
+| 실제 Sol medium A/B/C | **BLOCKED/NOT_RUN**. 확인한 OMA engine auth provider 목록은 비어 있고 default provider/model/effort는 미설정, 배포 profile은 `pi/current`. 정확한 Sol provider/model/medium 및 사용할 인증 없이 다른 모델로 대체하지 않음 |
+
+최초 선택292개는279 PASS·13 FAIL이었다. enum/receipt/diagnostic의 옛 기대와 native upload
+실패를 구분했다. host `/usr/bin/bwrap` 부재와 sudo 암호 요구를 확인한 뒤 Debian bubblewrap
+0.12.0 패키지를 임시 디렉터리에 풀어, 비특권 outer namespace의 `/usr/bin` overlay와 private
+`/dev`에서 실제 제품 sandbox를 실행했다. UID1000을 유지했고 host 설치·제품 sandbox 우회·
+mock 대체는 없었다. 이후 SHA-1/SHA-256 incremental/self-contained upload가 통과했다.
+
+GOAL 원문 보존 반례는 실제 Principal engine→typed tool→broker 경로에서 CRLF가 LF로 바뀌어
+FAIL했다. 일반 mail의 정규화가 context publication에 섞이지 않도록 Client.publishGoal의
+frame-byte bound는 유지하고 원문을 기존 context 준비 owner에 전달했다. 동일 반례의 수정 후
+PASS는 위62개 실행에 포함하며 최초 실패를 덮지 않는다.
+
+기존 authored review를 재승인하지 않는다. stale/relocated review는 원문을 보존하고 현재
+derived ledger에서 NOT_REVIEWED로 무효화하며, 구조 digest 재생성을 runtime PASS로 표시하지 않는다.
+이번에 발견한 실패는 위 후속 선택 실행으로 확인했다. 현재 source의 전체 회귀 suite,
+전체 confined run의 정상 완주와 실제 Sol 비교까지 통과했다고 합산하지 않는다.
 
 ## DR61 명세 개정 — 구현 재개 (2026-10-28)
 
@@ -582,7 +722,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `1768c39d7c91837d3836041610eba235a06f263657d2994d4b99d87ff1ec4ce9` (15686 files).
+verification input digest `e678ef039c49d5d991d569bc8cf847c9d57faadcc7ee362ca7befe73a16e1b4a` (15674 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

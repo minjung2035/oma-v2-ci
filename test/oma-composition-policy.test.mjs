@@ -188,7 +188,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
           configPath: configPath ?? path.join(env.XDG_DATA_HOME, "oma", society, "config.json") };
       },
     },
-    "@oma/domain/deployment": { DEPLOYMENT_LAYOUT: { extension: "packages/extension/dist/index.js", cli: "apps/oma/dist/cli.js",
+    "@oma/domain/deployment": { DEPLOYMENT_LAYOUT: { extension: "packages/extension/dist/index.js",
       entries: { interactive: "apps/oma/dist/entry/pi-interactive.js", tui: "apps/oma/dist/entry/oma.js" } } },
     "@oma/domain/mail-values": { storedMailBytes: bodyBytes => bodyBytes },
     "@oma/engine/pi-runtime": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/oma/.engine", source: "bundled" }) },

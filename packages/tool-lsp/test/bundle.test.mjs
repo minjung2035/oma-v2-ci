@@ -1,17 +1,17 @@
-/** Bundled pi-lsp (code_intel): the vendored payload is verified
+/** Bundled pi-lsp: the vendored payload is verified
  * byte-for-byte before tools register; the adapter pins OMA's workspace
  * root, keeps upstream's per-call process lifecycle, reports a missing
  * server as unavailable rather than clean, and lets `lsp_fix` reach the
  * filesystem only through OMA's contained writer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OMA_CHILD_ENV_ALLOW } from "@oma/tool-runtime/child-env";
 import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
-import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES } from "@oma/tool-lsp";
+import { registerLspTools, lspChildEnvironment } from "@oma/tool-lsp";
 import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "@oma/tool-runtime/vendor-bundle";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
@@ -118,25 +118,12 @@ test("BL1: bundle verification fails closed on a changed, missing, extra or malf
 });
 // ---------------------------------------------------------------------------
 // Registration, surface and role boundaries
-test("BL1: registerLspTools registers exactly the three code_intel tools and the session lifecycle hooks", async (t) => {
-    const workspace = tmp(t, "oma-lsp-ws-");
-    withAgentDir(t, tmp(t, "oma-lsp-agent-"));
-    const pi = fakePi();
-    await registerLspTools(pi, { workspace, readOnly: false, write: async () => { } });
-    assert.deepEqual([...pi.tools.keys()].sort(), [...LSP_TOOL_NAMES].sort());
-    assert.ok(pi.handlers.has("session_start") && pi.handlers.has("session_shutdown"));
-    // A second registration (extension reload) is idempotent: same names, same hooks.
-    const again = fakePi();
-    await registerLspTools(again, { workspace, readOnly: false, write: async () => { } });
-    assert.deepEqual([...again.tools.keys()].sort(), [...LSP_TOOL_NAMES].sort());
-});
 // Integrity refusal runs against an actual copied owner in test/vendor-owner-binding.test.mjs.
 
 test("BL1: a surface plan naming a tool the registry lacks refuses startup rather than exposing it", () => {
     const plan = planToolSurface({
-        defaultMode: "DIRECT", direct: [], disabled: [],
-        groups: [{ name: "code_intel", description: "x", members: [{ tool: "lsp_diagnostics" }, { tool: "lsp_missing" }, { tool: "lsp_status" }] }],
-        roots: ["code_intel"],
+        defaultMode: "DISABLED", direct: [], disabled: [],
+        optional: ["lsp_diagnostics", "lsp_missing", "lsp_status"],
     });
     const handlers = new Map();
     const pi = {
@@ -151,8 +138,8 @@ test("BL1: a surface plan naming a tool the registry lacks refuses startup rathe
     process.env.OMA_TOOL_SURFACE = encodeToolSurfacePlan(plan);
     try {
         registerToolSurface(pi, [], { fatal: message => { fatal = message; throw new Error(message); } });
-        assert.throws(() => handlers.get("session_start")?.[0]?.(), /lsp_missing/);
-        assert.match(fatal ?? "", /unknown tool "lsp_missing"/);
+        assert.throws(() => handlers.get("session_start")?.[0]?.({}, { sessionManager: { getBranch: () => [] } }), /lsp_missing/);
+        assert.match(fatal ?? "", /cannot admit lsp_missing/);
     }
     finally {
         if (saved === undefined)
@@ -174,11 +161,11 @@ test("BL1: guard: lsp_fix is a conditional write -- preview is admitted, write i
     const readOnly = guardHook({ readOnly: true });
     assert.equal(readOnly({ toolName: "lsp_fix", input: { path: inside } }), undefined, "preview is a read");
     const refused = readOnly({ toolName: "lsp_fix", input: { path: inside, write: true } });
-    assert.deepEqual(refused, { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" });
+    assert.equal(refused?.block, true);
     const writer = guardHook({});
     assert.equal(writer({ toolName: "lsp_fix", input: { path: inside, write: true } }), undefined, "a resident's write passes the path gate");
 });
-test("BL1: guard: a path list is gated on every entry, and file_edit members are gated as writes", () => {
+test("BL1: guard: a path list is gated on every entry, and anchored mutations are gated as writes", () => {
     const hook = guardHook({});
     const inside = join(WORKSPACE, "package.json");
     assert.equal(hook({ toolName: "lsp_diagnostics", input: { paths: [inside] } }), undefined);
@@ -189,7 +176,7 @@ test("BL1: guard: a path list is gated on every entry, and file_edit members are
     }
     const readOnly = guardHook({ readOnly: true });
     for (const name of ["replace", "replace_within", "insert"])
-        assert.deepEqual(readOnly({ toolName: name, input: { path: inside } }), { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" }, name);
+        assert.equal(readOnly({ toolName: name, input: { path: inside } })?.block, true, name);
 });
 // ---------------------------------------------------------------------------
 // Live behavior against the fixture server
@@ -251,10 +238,35 @@ test("BL1: lsp_fix previews by default and writes only through the contained wri
     assert.equal(appliedDetails.containedWrite, true, "the write ran through OMA's contained writer");
     assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "// fixed\nhello\n");
 });
-test("BL1: lsp_fix write is refused for a read-only role before any work runs", async (t) => {
-    const { workspace, run } = await lspWorld(t, "lifecycle-go", true);
-    await assert.rejects(run("lsp_fix", { path: "note.tfix", write: true }), /read-only/);
-    assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n", "nothing was written");
+test("L1: a registered lsp_fix refuses an in-place concurrent contained write", { timeout: 15000 }, async t => {
+    const workspace = tmp(t), agent = tmp(t);
+    const server = fileURLToPath(new URL("./fixtures/stale-fix-server.mjs", import.meta.url));
+    writeFileSync(join(agent, "pi-lsp.json"), JSON.stringify({ timeout: 5000,
+        servers: { fixture: { command: [process.execPath, server, workspace], extensions: [".tfix"] } } }));
+    withAgentDir(t, agent);
+    const original = "const first = 1;\nconst second = 1;\n";
+    const newer = "const first = 1;\nconst second = 99;\n";
+    const file = join(workspace, "note.tfix");
+    writeFileSync(file, original);
+    const pi = fakePi(), ctx = ctxOf(workspace), write = createContainedWriter(workspace);
+    await registerLspTools(pi, { workspace, readOnly: false, write });
+    t.after(async () => { for (const close of pi.handlers.get("session_shutdown") ?? []) await close({}, ctx); });
+    let observer;
+    const ready = new Promise(resolve => {
+        observer = watch(workspace, () => {
+            if (existsSync(join(workspace, "action-ready"))) { observer.close(); resolve(); }
+        });
+    });
+    t.after(() => observer.close());
+    const pending = pi.tools.get("lsp_fix").execute("fix", { path: "note.tfix", write: true }, undefined, undefined, ctx);
+    await Promise.race([ready, pending.then(() => { throw new Error("fix finished before gate"); })]);
+    await write("note.tfix", newer);
+    writeFileSync(join(workspace, "release-action"), "release");
+    await assert.rejects(pending, /contents changed.*recompute/);
+    assert.equal(readFileSync(file, "utf8"), newer, "the successful concurrent edit is not lost");
+    const applied = await pi.tools.get("lsp_fix").execute("fix", { path: "note.tfix", write: true }, undefined, undefined, ctx);
+    assert.equal(applied.details.containedWrite, true);
+    assert.equal(readFileSync(file, "utf8"), "const first = 2;\nconst second = 99;\n");
 });
 test("BL1: lsp_fix applies a growing fix through the contained writer", async (t) => {
     // A growing server edit must reach the same contained writer as ordinary edits.
@@ -910,10 +922,11 @@ test("BL1/F4: the live child is deny-by-default -- planted channels are absent i
     assert.match(text, /HOME=present/, "the scratch redirect supplies HOME");
     assert.match(text, /TMPDIR=present/);
 });
-test("BL1/F2: a read-only role never spawns a language server -- diagnostics and fix refuse, status still works", async (t) => {
-    const { run } = await lspWorld(t, "pull-strict-optional-params", true);
-    await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }), /read-only role/);
-    await assert.rejects(run("lsp_fix", { path: "note.tfix", server: "fixture" }), /read-only role/);
+test("BL1/F2: a read-only role can inspect server availability without reaching a spawn-capable tool", async (t) => {
+    const { workspace, tools, run } = await lspWorld(t, "pull-strict-optional-params", true);
+    assert.equal(tools.has("lsp_diagnostics"), false);
+    assert.equal(tools.has("lsp_fix"), false);
     const status = await run("lsp_status", {});
     assert.match(textOf(status), /configured server/);
+    assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n");
 });

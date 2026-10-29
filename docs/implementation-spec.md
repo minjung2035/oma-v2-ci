@@ -4,6 +4,8 @@
 
 문서 상태: **현재 구현 계약**. 최초 작성: 2026-09-07. 열린 spike의 설계 선택은 DR18에서 정했으며, 미지원 경로는 거절한다. 실제 구현·실행·release qualification의 완료 여부는 validation을 따른다.
 
+모델 도구 표면 cutover의 승인된 차이는 [model-tool-surface-spec](model-tool-surface-spec.md)가 소유한다. 모델용 CLI와 누적 group은 typed client와 exact-name `toolset` 선택으로 대체한다. 아래 CLI/TSP 요구 ID는 추적을 위해 유지하되 현재 의미로 갱신한다. frozen architecture와 accepted 기록은 소급 수정하지 않으며 runtime·provider·Sol 통과는 별도 검증 증거가 필요하다.
+
 **MUST [N-001]** 구현의 상위 규범은 [docs/architecture.md](architecture.md)이며, WP01 D01–D06, DR41 모듈 경계 및 DR45의 기존 Mail 표면 변경 대조 후 이 계약의 기준본 SHA-256은 `8de5ea0c6c632fa7e09e8188d7035cf94aa3165fdfeb122631af3f39bee132c7`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
 DR45 대조는 이전 기준본 `39613e469209210632007e5f8f91293ff288dc2785dcda010b62f55fe7250e88` 이후의 §23.11 변경 한 건이다. 기존 커밋 `d18f62d1`의 society 전체 공개 메일·실제 발신자·파생 자동 공지 표시를 해당 구현과 대조했다. Principal prompt 전달 범위와 durable 사실의 소유권은 유지하며, 이번 수정에서 architecture 원문은 변경하지 않았다.
@@ -78,13 +80,13 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 ## 2. TypeScript 모듈과 의존성
 
-**MUST [M-001]** application/extension/CLI/runner는 TypeScript로 작성하여 고정된 Node.js runtime에서 실행한다. Pi extension도 TypeScript다. Python supervisor, shell 업무 engine, 별도 Go/Rust broker로 대체하지 않는다. syscall에 필요한 최소 native leaf의 필요성·binding은 `S-01`로 검증한다.
+**MUST [M-001]** application/extension/client/runner는 TypeScript로 작성하여 고정된 Node.js runtime에서 실행한다. Pi extension도 TypeScript다. Python supervisor, shell 업무 engine, 별도 Go/Rust broker로 대체하지 않는다. syscall에 필요한 최소 native leaf의 필요성·binding은 `S-01`로 검증한다.
 
 **MUST [M-002]** 모듈 경계는 다음 표와 [contracts.ts](../packages/contracts/src/index.ts)를 따른다. 같은 책임의 파일 분할은 허용하지만 공개 서비스·권한·durable entity를 늘리지 않는다. 실행 파일 entrypoint는 조립만 하고 로직을 중복하지 않는다.
 
 | 모듈 | 소유 책임·주요 함수 | 의존 가능 경계 | 소유하면 안 되는 것 |
 |---|---|---|---|
-| `cli.ts` | argv, local file 읽기, stable request, bundle 생성, receipt 출력 | actor IPC, sandbox 안 Git | host DB, systemd bus, 업무 계획 |
+| typed client / runtime input-effects | typed 입력, local file 읽기, stable request, bundle 생성, receipt 반환 | actor IPC, sandbox 안 Git | host DB, systemd bus, 업무 계획 |
 | `broker.ts` | socket accept, 인증, method validation, capability, 모듈 조립 | 아래 host 모듈 | LLM task scheduling |
 | `store.ts` | 여섯 entity, migration, 동기 transaction, 쿼리 | SQLite adapter | Git·network await, 본문 저장 |
 | `mail.ts` | eml encoding, snapshot expansion, materialize, batch handoff | store, filesystem, views, wake hint | mail 의미 평가, 승인 추론 |
@@ -107,9 +109,9 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [ID-001]** society와 Resident 이름은 ASCII `[a-z][a-z0-9-]{0,31}`이고 topic은 `[a-z][a-z0-9-]{0,63}`이다. `principal`, `commons`, `residents`, `topic`은 Resident 이름으로 금지한다. 이름은 생성 후 바꾸거나 재사용하지 않는다. actor의 role과 capability는 연결 인증에서만 얻는다.
 
-**MUST [ID-002]** operation/batch ID는 prefix `op-`/`b-`와 소문자 UUIDv4이고, message file ID는 `m-<operation UUID>-<ordinal>`이다. ordinal은 0부터이며 한 operation의 message plan에서 고정한다. Message-ID는 `<file-id@society.oma.invalid>`다. request key는 CLI 생성 UUID 또는 `--request`의 `[A-Za-z0-9._-]{1,96}`이고 actor 범위에서 유일하다. ID를 모델이 수동 생성할 필요는 없다.
+**MUST [ID-002]** operation/batch ID는 prefix `op-`/`b-`와 소문자 UUIDv4이고, message file ID는 `m-<operation UUID>-<ordinal>`이다. ordinal은 0부터이며 한 operation의 message plan에서 고정한다. Message-ID는 `<file-id@society.oma.invalid>`다. request key는 client 생성 UUID 또는 `request`의 `[A-Za-z0-9._-]{1,96}`이고 actor 범위에서 유일하다. ID를 모델이 수동 생성할 필요는 없다.
 
-**MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 CLI가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.
+**MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 client가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.
 
 **MUST [CFG-001]** DR46: `config.json`은 host가 소유하는 폐쇄된 schema 3 `HostConfig`다. society, trusted rootfs/install path, pinned deployment digest, model/agent profile, 초기 Worker, protected path와 candidate check, policy revision, 실제 protocol 한계를 검증한다. 이전 schema와 삭제된 quota/egress 필드, 미지 profile 필드는 명시적으로 거절하며 자동 변환·덮어쓰기·삭제하지 않는다. secret은 설정에 저장하지 않고 실행 시 엔진/host credential owner가 해석한다.
 
@@ -153,7 +155,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 | `S/mail/inboxes/<actor>/{tmp,new,cur}/` | 배달 link/copy | 자기 것만 `/mail/self` RO |
 | `S/agents/<actor>/workspace/` | persistent independent clone | `/workspace` RW |
 | `S/agents/<actor>/workspace.tmp/` | provisioning 중 clone, operation에 연결 | 없음 |
-| `S/agents/<actor>/home/` | Pi session, 개인 notes, CLI local request cache | `/home/agent` RW |
+| `S/agents/<actor>/home/` | Pi session, 개인 notes, client local request cache | `/home/agent` RW |
 | `S/agents/<actor>/runner/view/` | 재생성 inbox index | `/run/oma-view` RO |
 | `S/agents/<actor>/runner/receipts/<batch>.json` | trusted session-boundary 증거, S-03 형식 | 없음 |
 | `S/principal/private/` | Human session handle/extension metadata와 private scratch | scratch 하위만 Principal tools |
@@ -166,7 +168,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 | `R/admin.sock` | host/runner 관리 채널, S-01 인증 | 없음 |
 | `R/` 안의 process-local lock/socket/tmp | 재시작 시 검증 후 재생성 | 없음 |
 
-**MUST [FS-003]** CLI cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal CLI의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.
+**MUST [FS-003]** client cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal client의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.
 
 **MUST [FS-004]** `/inbox.md`는 `/run/oma-view/inbox.md` symlink다. index를 교체할 때 부모 mount를 유지한다. world/mailbox도 부모 directory를 mount한다. 기존 파일 inode의 단일 bind로 live view를 구현하지 않는다. mailbox rename은 broker만 수행한다.
 
@@ -245,19 +247,19 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [IPC-004]** `MutationRequest`는 DB operations.kind에 있는 모든 durable mutation이며 top-level `request: RequestKey`가 타입과 runtime validator 모두에서 필수다. 누락·빈 key·잘못된 형식은 접수 전에 INVALID_REQUEST로 거절한다. `ReadRequest`는 `operation.get`, `operation.read`, `status.get`, `logs.read`, `git.known`이고 top-level request를 금지한다. `operation.get`의 조회 대상 key는 `params.key`에만 둔다. `EphemeralRequest`는 현재 run의 메모리 intent인 `agent.wait`이며 읽기로 분류하지 않고 top-level request와 durable op 생성을 금지한다. 읽기/ephemeral의 `request?: never`는 키를 허용한다는 뜻이 아니며 명시적 undefined도 strict 타입 검사에서 거절한다. `Request<M>`는 이 세 집합의 method-discriminated union이고 미분류 method는 허용하지 않는다. 요청 actor/incarnation/capability는 wire에 넣지 않고 AuthContext에서 주입한다.
 
-**MUST [IPC-005]** request hash는 method+normalized params+stream descriptor를 key 정렬한 canonical UTF-8 JSON의 SHA-256이다. 배열 순서는 의미 있는 경우 보존하고 to/prerequisite/path 집합은 dedupe+lexical sort한다. body bytes와 subject는 trim하지 않는다. CRLF body는 CLI가 LF로 정규화하고 이후 immutable하게 취급한다. request key, transport id, timestamp, actor supplied claim은 hash 입력이 아니다.
+**MUST [IPC-005]** request hash는 method+normalized params+stream descriptor를 key 정렬한 canonical UTF-8 JSON의 SHA-256이다. 배열 순서는 의미 있는 경우 보존하고 to/prerequisite/path 집합은 dedupe+lexical sort한다. body bytes와 subject는 trim하지 않는다. CRLF body는 client가 LF로 정규화하고 이후 immutable하게 취급한다. request key, transport id, timestamp, actor supplied claim은 hash 입력이 아니다.
 
-**MUST [IPC-006]** CLI는 effect 요청 이전에 private cache에 key·normalized payload·고정 OID·stream digest를 atomic write한다. 응답 유실 시 같은 key로 operation.get, 미접수면 동일 payload로 retry한다. 동일 actor/key·동일 hash는 기존 receipt, 다른 hash는 `REQUEST_KEY_REUSED`다. 같은 key의 동시 preaccept 파일이 여러 개 생겨도 DB unique winner의 plan만 공개한다.
+**MUST [IPC-006]** client는 effect 요청 이전에 private cache에 key·normalized payload·고정 OID·stream digest를 atomic write한다. 응답 유실 시 같은 key로 operation.get, 미접수면 동일 payload로 retry한다. 동일 actor/key·동일 hash는 기존 receipt, 다른 hash는 `REQUEST_KEY_REUSED`다. 같은 key의 동시 preaccept 파일이 여러 개 생겨도 DB unique winner의 plan만 공개한다.
 
-**MUST NOT [IPC-007]** timeout을 failed로 바꾸거나 새 key를 자동 만들어 동일 효과를 재실행한다. 새 shell invocation에 새 key가 생기는 것은 별도 요청이며 자연어 의미를 dedup하지 않는다. key가 다르면 같은 candidate라도 새 수신자/result mail을 만드는 정상 제출일 수 있다.
+**MUST NOT [IPC-007]** timeout을 failed로 바꾸거나 새 key를 자동 만들어 동일 효과를 재실행한다. 새 tool 호출에 새 key가 생기는 것은 별도 요청이며 자연어 의미를 dedup하지 않는다. key가 다르면 같은 candidate라도 새 수신자/result mail을 만드는 정상 제출일 수 있다.
 
-**MUST [IPC-008]** operation.get은 새로운 model-facing 명령을 만들지 않고 원래 command의 `--request <key>` 재호출/복구 안내 내부에서 사용한다. CLI가 freeze cache를 찾으면 현재 HEAD를 다시 해석하지 않는다. cache와 사용자 새 인자가 충돌하면 `REQUEST_KEY_REUSED`로 명확히 중단한다. unconfirmed key 복구 안내는 `/inbox.md`에 경로와 원래 command를 짧게 제공한다.
+**MUST [IPC-008]** `oma_operation_status`는 현재 actor의 원래 key로 operation.get을 조회한다. 원래 mutation 재호출은 같은 `request`와 frozen input을 사용한다. client가 freeze cache를 찾으면 현재 HEAD·body·brief·bundle을 다시 만들지 않는다. cache와 새 인자가 충돌하면 `REQUEST_KEY_REUSED`로 중단한다. unconfirmed 복구 안내는 tool 이름과 원래 request/key를 제공하며 shell 명령을 요구하지 않는다.
 
-큰 receipt의 조회도 IPC-006/008의 동일 actor/key 규칙을 따른다. `operation.read`는 원본 JSON의 SHA-256·전체 byte 수·offset·base64 조각·다음 offset을 반환하며 각 응답은 frame 안에 든다. 첫 조각 이후 SHA-256이 없거나 관측이 바뀌면 계속하지 않고 offset 0부터 다시 조회한다. CLI는 큰 mutation/operation.get 응답 뒤 효과를 재전송하지 않고 이 읽기로 회수한다. 조립 상한은 64 MiB이고 초과·중간 단절·해시 불일치는 결과 불명확이며 미접수 증거가 아니다. 로컬 cache 예산보다 큰 receipt는 원래 freeze를 보존하고 영수증·key와 기록 불가 경고를 출력한다. `status.get`의 일부 목록은 `next` agent-name cursor를 명시한다. `oma status --after <next>`로 계속 읽으며 각 페이지는 별도 live 관측이다. 운영 full-set 조회는 기존 진단 row/byte 예산을 재사용하고 초과를 `LIMIT_EXCEEDED`로 거절하며 일부 집합을 전체로 사용하지 않는다.
+큰 receipt의 조회도 IPC-006/008의 동일 actor/key 규칙을 따른다. `operation.read`는 원본 JSON의 SHA-256·전체 byte 수·offset·base64 조각·다음 offset을 반환하며 각 응답은 frame 안에 든다. 첫 조각 이후 SHA-256이 없거나 관측이 바뀌면 계속하지 않고 offset 0부터 다시 조회한다. client는 큰 mutation/operation.get 응답 뒤 효과를 재전송하지 않고 이 읽기로 회수한다. 조립 상한은 64 MiB이고 초과·중간 단절·해시 불일치는 결과 불명확이며 미접수 증거가 아니다. 로컬 cache 예산보다 큰 receipt는 원래 freeze를 보존하고 영수증·key와 기록 불가 경고를 출력한다. `status.get`의 일부 목록은 `next` agent-name cursor를 명시한다. `oma_status`의 `after`로 계속 읽으며 각 페이지는 별도 live 관측이다. 운영 full-set 조회는 기존 진단 row/byte 예산을 재사용하고 초과를 `LIMIT_EXCEEDED`로 거절하며 일부 집합을 전체로 사용하지 않는다.
 
-**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 일반 `oma` CLI에 내부 method 호출 escape hatch를 넣지 않는다.
+**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 모델 tool 표면에 내부 method 호출 escape hatch를 넣지 않는다.
 
-**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine, trusted extension→CLI로도 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
+**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine에는 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
 
 **MUST [IPC-012]** InternalMethods의 key set은 exhaustive socket surface다. 내부 helper는 분리할 수 있지만 batch.stage 등 새 socket method/phase를 추가하지 않는다. batch.prepare는 transaction뿐 아니라 BATCH-001의 rename/fsync/view publish까지 소유한다. post-transaction 실패를 별도 stage RPC로 모델/runner가 수습하게 하지 않는다. unknown method는 side effect 전에 UNKNOWN_METHOD다.
 
@@ -279,11 +281,11 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [MAIL-003]** broker는 From, Date, Message-ID, MIME, X-OMA-Kind, X-OMA-Context를 생성한다. approval_required의 full approvalFor는 broker가 X-OMA-Approval-Repo/Target/Base/Candidate/Policy header로 lossless encoding하고, accepted MessagePlan에도 같은 값을 고정한다. 이 header는 요청 대상 metadata이며 승인 attestation이 아니다. subject/header에 CR/LF injection을 거절하고 검증된 email library로 encoding한다. body는 UTF-8 text/plain, 첨부 없음이다. body·subject·peer mail 안의 'system', 'Human approved', instruction은 authority가 아니다.
 
-**MUST [MAIL-011]** mail kind는 `message/question/result/alert/context/approval_required/critical`의 closed union이다. normal 및 대문자 legacy 별칭은 wire 값으로 받지 않는다. approval_required는 `approvalFor: ExactCandidateIdentity`와 명시 principal 수신자를 필수로 받으며 published candidate와 형식을 검증한다. 다른 kind에서 approvalFor를 받지 않는다. policyRevision은 이 요청이 지목한 값이며 이 메일만으로 현재 정책 적합성·tier·peer quorum·Principal ACCEPT를 인증하지 않는다. approvalFor의 repo/targetRef는 project/refs/heads/main만 허용하고 expectedBase/candidate는 full OID다. policyRevision은 1–128 UTF-8 bytes의 printable 문자열이며 CR/LF/NUL/control 문자를 금지한다. metadata header는 검증한 email codec으로 round-trip하고 body에서 추출하지 않는다. approvalFor는 request_hash와 immutable message plan에 포함해 동일 key 재시도 때 바뀌지 않게 한다. CLI의 형식은 PR-005를 따른다.
+**MUST [MAIL-011]** mail kind는 `message/question/result/alert/context/approval_required/critical`의 closed union이다. normal 및 대문자 legacy 별칭은 wire 값으로 받지 않는다. approval_required는 `approvalFor: ExactCandidateIdentity`와 명시 principal 수신자를 필수로 받으며 published candidate와 형식을 검증한다. 다른 kind에서 approvalFor를 받지 않는다. policyRevision은 이 요청이 지목한 값이며 이 메일만으로 현재 정책 적합성·tier·peer quorum·Principal ACCEPT를 인증하지 않는다. approvalFor의 repo/targetRef는 project/refs/heads/main만 허용하고 expectedBase/candidate는 full OID다. policyRevision은 1–128 UTF-8 bytes의 printable 문자열이며 CR/LF/NUL/control 문자를 금지한다. metadata header는 검증한 email codec으로 round-trip하고 body에서 추출하지 않는다. approvalFor는 request_hash와 immutable message plan에 포함해 동일 key 재시도 때 바뀌지 않게 한다. client의 형식은 PR-005를 따른다.
 
 **MUST [MAIL-004]** 주소 header encoding은 actor=`<actor>@<society>.oma.invalid`, commons/residents/principal은 동명 local part, topic=`topic-<name>@<society>.oma.invalid`다. topic- prefix와 같은 Resident local-part 충돌을 방지하기 위해 `topic-`로 시작하는 Resident 이름도 금지한다. To에는 logical addresses를 표시하고 확장된 전체 identity를 노출할 필요는 없다. receipt에는 recipientCount를 반환한다.
 
-**MUST [MAIL-005]** reply CLI는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID, References는 기존 ancestry+직전 ID이며 최대치 초과 시 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.
+**MUST [MAIL-005]** reply client는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID, References는 기존 ancestry+직전 ID이며 최대치 초과 시 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.
 
 **MUST [MAIL-006]** send 순서는 ① 인증/제한/중복 조회 ② immutable eml stage+fsync ③ broker-only object publish+dir fsync ④ T-send ⑤ accepted pending receipt ⑥ archive/recipient materialize ⑦ operation succeeded다. 수신자가 0명이어도 archive publish 후 succeeded다. 성공은 delivery 완료이고 presentation/답변을 기다리지 않는다.
 
@@ -331,7 +333,7 @@ pi.sendMessage(
 
 **MUST [RUN-002]** inference slot이 부족하면 runner는 bounded 메모리 waiter로 기다린다. new를 남겨 둔 채 즉시 exit/restart를 반복하지 않는다. systemd·broker 취소를 받아 즉시 waiter에서 빠져야 한다. idle일 때 mail 유무를 모델에게 주기적으로 묻지 않는다.
 
-**MUST [RUN-003]** `oma agent continue --note`는 자기 앞으로 일반 message를 보내는 operation이다. continuation task entity는 없다. `oma agent wait`는 인증된 Resident 자신의 live incarnation에만 메모리 flag를 설정한다. `agent.wait {observe:true}`(`oma agent wait --observe true`)는 같은 run의 flag를 바꾸지 않고 조회한다. Principal·다른 incarnation·revoked run은 사용할 수 없다. 도구 결과가 session에 기록된 awaited `turn_end`에서 조회한 뒤 다음 모델 호출 없이 종료하며, 도구 실행이나 접수된 효과를 중간 취소하지 않는다. 조회 중에는 별도의 유한 통신 예산을 쓰고, 조회 실패는 wait 성공이나 배달 증거가 아닌 unconfirmed다. 정상 wait는 별도 control 통지이며 delivery receipt나 batch.complete를 만들지 않는다. pending mail과 prepared batch는 원본을 유지하고 재활성화 정책을 따른다. wait가 mail을 ACK하거나 desired=stopped로 바꾸지는 않으며, broker 재시작 또는 새 incarnation에 flag를 넘기지 않는다.
+**MUST [RUN-003]** `oma_agent_continue`는 자기 앞으로 일반 message를 보내는 operation이다. continuation task entity는 없다. `oma_agent_wait`는 인증된 Resident 자신의 live incarnation에만 메모리 flag를 설정한다. engine 내부 `agent.wait {observe:true}`는 같은 run의 flag를 바꾸지 않고 조회한다. Principal·다른 incarnation·revoked run은 사용할 수 없다. 도구 결과가 session에 기록된 awaited `turn_end`에서 조회한 뒤 다음 모델 호출 없이 종료하며, 도구 실행이나 접수된 효과를 중간 취소하지 않는다. 조회 중에는 별도의 유한 통신 예산을 쓰고, 조회 실패는 wait 성공이나 배달 증거가 아닌 unconfirmed다. 정상 wait는 별도 control 통지이며 delivery receipt나 batch.complete를 만들지 않는다. pending mail과 prepared batch는 원본을 유지하고 재활성화 정책을 따른다. wait가 mail을 ACK하거나 desired=stopped로 바꾸지는 않으며, broker 재시작 또는 새 incarnation에 flag를 넘기지 않는다.
 
 **MUST [PR-001]** Principal logical identity는 bootstrap 때 한 번 만들고 Pi UI attach와 독립적으로 유지한다. 동시에 하나의 attach만 허용하고 두 번째는 ATTACH_CONFLICT다. attach는 host-only channel의 비공개 credential로 인증하며 session handle/path는 모델 payload에서 신뢰하지 않는다. 연결 끊김은 new Principal 생성의 trigger가 아니다.
 
@@ -345,7 +347,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [PR-003]** Principal의 Human context·private memory는 principal/private와 기존 Pi session에 남긴다. context publish는 공유 문서만 전달한다. mailbox urgent alert는 UI 경고일 수 있지만 Human 입력을 위장하거나 현재 깊은 판단을 강제 abort하지 않는다. 모델이 질문에 답하는 데 필요한 peer evidence는 archive/Git에서 선택해서 읽는다.
 
-**MUST [PR-005]** typed Principal mail과 progressive packet은 확장 계약 SEM/PACK을 따른다. 기존 `oma send`의 `--kind approval_required`에 한해 `--candidate <published-oid> --expect <base-oid> --policy-revision <revision>`을 모두 요구하고 CLI가 `approvalFor={repo:project,targetRef:refs/heads/main,expectedBase,candidate,policyRevision}`을 만든다. 그 외 kind에서는 세 flag를 거절한다. 별도 decision/interrupt command 또는 DB를 추가하지 않는다. `critical`은 UI 인지 hint이고 followUp/tool 보존/예산 제한을 우회하지 않는다. `result`는 sender의 결과 보고이며 task/Human 전달 완료의 증거가 아니다. HIGH의 authoritative decision command/record는 여전히 S-08 gate다.
+**MUST [PR-005]** typed Principal mail과 progressive packet은 확장 계약 SEM/PACK을 따른다. `oma_mail_approval_notice`는 published candidate/base/policyRevision으로 고정 candidate tuple을 첨부하며 principal 수신자와 approval_required kind를 고정한다. 이 notice는 recorded vote·정족수·유효 HIGH 승인 요청을 만들지 않으며 HIGH approval 요청은 broker만 생성한다. `critical`은 UI 인지 hint이며 followUp/tool 보존을 우회하지 않는다. `result`는 발신자의 보고이지 task/Human 전달 완료의 증거가 아니다.
 
 **MUST [PR-004]** Principal host Pi의 모든 model-facing shell/read/write/edit 및 동적으로 등록된 tool 경로를 sandbox-backed 구현으로 제한한다. extension attach credential·Human 원본 session·provider credential을 model tool sandbox에 mount하지 않는다. trusted extension은 session 접근이 필요하지만 model에게 그 권한을 위임하지 않는다.
 
@@ -362,8 +364,8 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 | OMA own 초기 bare clone | `git clone --bare --no-local <host-authorized-root> <S/repos/project.git>` |
 | Resident 최초 clone | `git clone --no-local --single-branch --branch main /git/project.git /workspace` |
 | object format | `git --git-dir=<repo> rev-parse --show-object-format` |
-| CLI candidate freeze | `git -C /workspace rev-parse --verify <revision>^{commit}`; 결과 full OID 검사 |
-| CLI export pin | `git -C /workspace update-ref refs/oma/export/<request-hash> <C>` |
+| client candidate freeze | `git -C /workspace rev-parse --verify <revision>^{commit}`; 결과 full OID 검사 |
+| client export pin | `git -C /workspace update-ref refs/oma/export/<request-hash> <C>` |
 | incremental bundle | `git -C /workspace bundle create <local.tmp.bundle> refs/oma/export/<request-hash> ^<P1> ...` |
 | bundle prerequisite 검사 | `git --git-dir=<quarantine> bundle verify <bundle>` |
 | bundle refs 검사 | `git --git-dir=<quarantine> bundle list-heads <bundle>` |
@@ -379,7 +381,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [GIT-004]** `git.known`은 현재 main 및 immutable published refs 중 broker가 실제 보유한 OID의 bounded 목록을 반환한다. 목록에서 로컬에 존재하고 candidate ancestry에 적합한 OID만 prerequisite으로 선택한다. 목록은 최적화 정보이지 권한 증거가 아니다. 없으면 self-contained bundle을 허용하고, candidate가 이미 broker에 존재하면 bundle을 생략한다.
 
-**MUST [GIT-005]** submit은 candidate를 처음 한 번 freeze한다. `.git` dirty 변경을 자동 commit/추가하지 않는다. CLI는 dirty 여부를 표시하되 지정 commit 제출은 허용한다. cache의 candidate/hash를 유지하고 HEAD 이동 뒤 같은 key로 다른 bytes를 보내지 않는다. export ref는 accepted 결과와 재시도에 필요하므로 terminal receipt 후 같은 C를 가리키는지 확인해서 제거할 수 있다.
+**MUST [GIT-005]** submit은 candidate를 처음 한 번 freeze한다. `.git` dirty 변경을 자동 commit/추가하지 않는다. client는 dirty 여부를 표시하되 지정 commit 제출은 허용한다. cache의 candidate/hash를 유지하고 HEAD 이동 뒤 같은 key로 다른 bytes를 보내지 않는다. export ref는 accepted 결과와 재시도에 필요하므로 terminal receipt 후 같은 C를 가리키는지 확인해서 제거할 수 있다.
 
 **MUST [GIT-006]** complete bundle bytes+digest를 staging에 fsync한 뒤 T-submit-accept한다. quarantine은 broker-owned disposable repo, private network namespace, bounded CPU/memory/PID/tmp, trusted config, empty hooks를 사용한다. 입력 bundle에는 정확히 요청 export ref 하나만 허용한다. 불필요한 main/ref를 포함하면 BUNDLE_INVALID로 거절한다. 요청 C가 실제 exported commit인지 확인한다.
 
@@ -413,9 +415,9 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 10. 공유 context 게시
 
-**MUST [CTX-001; arch §8.3]** `oma context publish <directory> --expect <oid|none>`은 기존 문서 구조 `GOAL.md`, `RATIONALE.md`, `decisions/*.md`를 게시한다. GOAL은 필수 UTF-8 regular file이고 비어 있으면 거절한다. symlink/device/hardlink/절대 path/상위 이동을 거절한다. binary/비허용 path는 INVALID_REQUEST다.
+**MUST [CTX-001; arch §8.3]** `oma_context_publish({directory, expectedRevision})`는 기존 문서 구조 `GOAL.md`, `RATIONALE.md`, `decisions/*.md`를 게시한다. 첫 게시의 `expectedRevision`은 null이다. GOAL은 필수 UTF-8 regular file이고 비어 있으면 거절한다. symlink/device/hardlink/절대 path/상위 이동을 거절한다. binary/비허용 path는 INVALID_REQUEST다.
 
-**MUST [CTX-002]** CLI는 경로별 sorted manifest `{path,bytes,sha256}`와 그 순서대로 이어붙인 raw content stream을 만든다. descriptor.bytes는 각 bytes 합계다. broker는 staging에서 각 file 길이/hash를 확인한다. tar를 임의 host path에 추출하지 않는다. 파일별 mode는 고정 regular 0644이며 commit에는 실행 권한을 부여하지 않는다.
+**MUST [CTX-002]** client는 경로별 sorted manifest `{path,bytes,sha256}`와 그 순서대로 이어붙인 raw content stream을 만든다. descriptor.bytes는 각 bytes 합계다. broker는 staging에서 각 file 길이/hash를 확인한다. tar를 임의 host path에 추출하지 않는다. 파일별 mode는 고정 regular 0644이며 commit에는 실행 권한을 부여하지 않는다.
 
 **MUST [CTX-003]** context.git의 canonical ref는 `refs/heads/main`으로 고정한다. 기존 revision을 parent로 한 commit을 broker trusted identity로 생성하고 op plan에 candidate C를 영속화한다. 첫 publish expected=null은 ref absent를 뜻한다. `git update-ref refs/heads/main C B` 또는 첫 생성의 zero-OID CAS를 사용한다. CAS 실패는 CONTEXT_CONFLICT+actual revision이다.
 
@@ -445,11 +447,11 @@ DR49로 Linux reference adapter와 systemd assets를 production에서 제거했�
 
 **MUST [UNIT-005]** .path는 inbox/new에 DirectoryNotEmpty를 사용한다. enabled+GOAL 조건이 충족될 때만 enable/start한다. prepared batch만 cur에 남은 경우 reconcile과 startup DB 조회로 service를 시작한다. path 상태만으로 pending을 판단하지 않는다. default.target에 enable된 path가 reboot 때 잘못 켜져도 broker 인증은 stopped/GOAL 없는 실행을 거절하고 reconcile이 path를 중지한다.
 
-**MUST [UNIT-006]** start-limit failure는 status에 노출하고 reconcile이 자동 reset-failed를 반복하지 않는다. 현재의 명시적 `failed/Result=start-limit-hit`만 start-limit 확정 근거다. 누적 `NRestarts`, 명령 출력에 등장하는 단어·unit 이름, 관측 timeout은 현재 StartLimitIntervalSec 안의 제한 도달 증거가 아니다. manager가 `exit-code`만 남기면 관측된 실패는 표시하되 제한 원인은 미확인이다. `startLimitStatus`의 null은 제한 없음 증명이 아니며, 뒤늦은 상태 조회가 끝나지 않은 start 명령의 unknown을 확정 실패로 바꾸지 않는다(DR27, P0-5). 명시적 `oma agent start <name>` 또는 host repair만 reset-failed를 수행할 수 있다. stopped actor의 new는 계속 저장하되 path/service를 켜지 않는다.
+**MUST [UNIT-006]** start-limit failure는 status에 노출하고 reconcile이 자동 reset-failed를 반복하지 않는다. 현재의 명시적 `failed/Result=start-limit-hit`만 start-limit 확정 근거다. 누적 `NRestarts`, 명령 출력에 등장하는 단어·unit 이름, 관측 timeout은 현재 StartLimitIntervalSec 안의 제한 도달 증거가 아니다. manager가 `exit-code`만 남기면 관측된 실패는 표시하되 제한 원인은 미확인이다. `startLimitStatus`의 null은 제한 없음 증명이 아니며, 뒤늦은 상태 조회가 끝나지 않은 start 명령의 unknown을 확정 실패로 바꾸지 않는다(DR27, P0-5). 명시적 `oma_agent_control`의 start 또는 host repair만 reset-failed를 수행할 수 있다. stopped actor의 new는 계속 저장하되 path/service를 켜지 않는다.
 
-**MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, CLI가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 CLI 옵션·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.
+**MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, client가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 tool 입력·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.
 
-**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
+**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. client/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
 
 **MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.intent.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.
 
@@ -467,7 +469,7 @@ DR49로 Linux reference adapter와 systemd assets를 production에서 제거했�
 
 **MUST [LIFE-004]** start는 retired를 거절하고, 이전 cgroup 사망 및 GOAL을 확인한 뒤 desired=enabled와 operation을 기록한다. GOAL 없으면 GOAL_REQUIRED로 반환하며 desired/path를 변경하지 않는다. path와 필요 시 cur prepared service를 활성화하고 actual unit result를 receipt/status에 반영한다. start가 새로운 논리 agent/session/workspace를 생성하지 않는다.
 
-**MUST [LIFE-005]** retirement는 이름을 보존하는 host 명시 행위다. 기본 model CLI에 retirement/delete/purge를 추가하지 않는다. host 운영 UI/maintenance 구현 범위가 필요하면 기존 stopped→retired와 미래 routing 제외만 제공하고 repo/mail/session의 자동 삭제를 결합하지 않는다.
+**MUST [LIFE-005]** retirement는 이름을 보존하는 host 명시 행위다. 기본 model tool 표면에 retirement/delete/purge를 추가하지 않는다. host 운영 UI/maintenance 구현 범위가 필요하면 기존 stopped→retired와 미래 routing 제외만 제공하고 repo/mail/session의 자동 삭제를 결합하지 않는다.
 
 **MUST [LIFE-006]** broker restart 시 ephemeral waiter/connection을 복원하지 않는다. old run 권한을 폐기하고 cgroup 사망을 확인한 뒤 pending physical effects를 대조한다. Principal attach는 끊고 인증된 재연결을 기다린다. bootstrap이 불완전하면 stage별 실제 파일/ref/DB로 같은 작업을 이어가되 root checkout은 쓰지 않는다.
 
@@ -511,7 +513,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
   --chdir /workspace -- /opt/oma-node/node /opt/oma/<engine entry> --mode rpc <verified-extension-options>
 ```
 
-`/opt/oma`는 OMA 설치 디렉터리의 RO mount다. 동봉 엔진·trusted core extension·model-facing CLI·role extension이 모두 그 아래 있으므로, OMA를 갱신할 때 rootfs를 다시 만들지 않는다. rootfs는 pinned Node/Git/shell/rg/library와 빈 mount target만 갖는다.
+`/opt/oma`는 OMA 설치 디렉터리의 RO mount다. 동봉 엔진·trusted core extension·role extension이 모두 그 아래 있으므로, OMA를 갱신할 때 rootfs를 다시 만들지 않는다. rootfs는 pinned Node/Git/shell/rg/library와 빈 mount target만 갖는다.
 
 `/git/project-mirror.git`은 사람의 project의 bare mirror다. `oma`가 시작할 때마다 project의 `refs/heads/*`를 fetch하고(fsck, file protocol만), actor는 거기서 fetch해 기존 `git.submit`으로 게시한다. mirror가 아직 없으면 mount하지 않는다([DR18](design-revisions.md) D-8).
 
@@ -519,7 +521,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 `--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다. 위 최소 base 환경도 caller가 덮어쓰지 못하며 XDG 디렉터리는 confined home 아래에 mode 0700으로 준비한다. locale는 rootfs의 C.UTF-8 지원으로 시험한다.
 
-**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 중첩된 host root는 가장 구체적인 mount를 선택하며 RO installation root가 RW session/home/workspace mount를 가리지 못한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).
+**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 중첩된 host root는 가장 구체적인 mount를 선택하며 RO installation root가 RW session/home/workspace mount를 가리지 못한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, tool 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 client는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).
 
 **MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident가 provider에 닿는 길은 INF-005의 relay 하나다. credential이나 network를 조용히 열어 다른 길을 만들지 않는다. architecture §16에 비용과 선택지를 적는다.
 
@@ -531,7 +533,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 **MUST [SB-005]** candidate-check sandbox는 staged candidate checkout만 RW, trusted check assets RO, tmp cap, private network, no actor/admin/inference socket이다. Git quarantine은 필요한 broker objects만 RO와 자기 staging만 RW다. Principal tools는 public world/mail/Git RO+자기 scratch RW만 갖고 Human session directory는 없다.
 
-**MUST [SB-006]** sandbox의 writable session/CLI files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.
+**MUST [SB-006]** sandbox의 writable session/client files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.
 
 ## 13. inference·quota·취소
 
@@ -545,7 +547,7 @@ OMA는 Principal 및 Resident를 시작하기 전에 OMA 소유 agent directory�
 
 봉인된 Resident는 `PR-004`로 credential이 없고 `SB-004`로 network가 없다. 엔진이 inference를 소유하려면 그 둘 중 하나를 열어야 하는데, 여는 대신 credential을 sandbox 밖에 두고 바이트만 통과시킨다.
 
-- host의 relay는 요청을 provider로 **해석 없이 전달**하고 헤더에만 진짜 credential을 끼운다. stream을 parse하지 않고, 응답을 재구성하지 않으며, 가격·token·context를 계산하지 않는다. 그 셋은 계속 엔진의 것이다.
+- The host relay forwards inference content without interpreting it and inserts the real credential only into declared slots. It does not calculate prices, tokens or context; those remain the engine's. Response protection may inspect WebSocket framing and reframe unchanged payload bytes solely to prevent credential echo without blocking framed-transport progress.
 - 목적지는 host가 선언한 model profile이 정한 provider endpoint뿐이다. caller가 URL·header·key를 고르지 못한다는 `INF-002`는 그대로다. 임의 URL proxy를 만들지 않는다.
 - `INF-004`는 그대로다. relay는 결과가 불명확한 요청을 스스로 재전송하지 않는다.
 - relay는 OMA가 다시 갖는 유일한 chokepoint다. 요청 수·동시성·취소를 관측하고 제한할 수 있으나, 보고되지 않은 비용을 0으로 간주하지 않는다.
@@ -556,7 +558,7 @@ OMA는 Principal 및 Resident를 시작하기 전에 OMA 소유 agent directory�
 
 sandbox에는 진짜 key와 **같은 모양의 자리표시자**를 준다. provider 코드는 key를 읽는다 — Codex는 OAuth token의 claim에서 계정을 찾고 Anthropic은 key의 접두사로 header 방식을 고른다. 그래서 서명된 token은 header와 claim을 유지하고 서명만 바꾸며, 접두사가 있는 key는 종류를 나타내는 짧은 접두사를 유지하고 나머지를 같은 문자 종류로 바꾼다. 자리표시자는 비밀을 포함하지 않고, 비밀에 포함되지도 않으며, 엔진이 환경 참조나 명령으로 해석할 모양(`$`, `!`, `${`)을 갖지 않는다.
 
-relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key로 바꾼다: 값 전체가 자리표시자이거나 `Bearer <자리표시자>`인 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 값이 자리표시자인 `key` query parameter다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절한다 — provider가 되돌려줄 수 있는 자리(경로를 되읊는 404, 되돌려주는 header)에 진짜 key를 넣으면 sandbox 안에 credential이 생기므로 `INF-007` 위반이다. 같은 이유로 relay는 응답의 상태줄·header·본문에 진짜 key의 바이트가 나타나면 그 바이트가 sandbox에 닿기 전에 응답을 끊는다. 이를 위해 압축된 응답을 요청하지 않는다(`accept-encoding: identity`, WebSocket 확장 제거). 이것은 byte 비교이지 stream 해석·재구성이 아니다. body는 model의 내용이지 credential 자리가 아니므로 읽지도 바꾸지도 않는다. 자리표시자를 담지 않은 caller의 인증 header는 버린다. WebSocket upgrade는 handshake에서 한 번 같은 규칙으로 고쳐 쓴 뒤 양방향 바이트로 나른다.
+The relay substitutes the placeholder only where the provider reads a key: an authority header (`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`) whose whole value is the placeholder or `Bearer <placeholder>`, and a `key` query parameter whose value is the placeholder. A placeholder in a path, other header or other query slot is refused: an echoed path/header must not carry the real credential into the sandbox (INF-007). Caller authority headers without the placeholder are dropped. Response status lines, headers and body bytes carrying the real key are cut before the key reaches the sandbox. Compression is not negotiated (`accept-encoding: identity`; WebSocket extensions removed). HTTP response filtering withholds possible key prefixes across network chunks. For WebSockets, filtering follows payload bytes across continuation frames, while complete control frames progress independently; safe payload bytes may be reframed, and an incomplete key prefix is released at the end of its message. This does not interpret inference content, rewrite request bodies, or buffer whole messages. Invalid configured header values are refused under Node's HTTP header contract before listening; synchronous upstream construction failures fail the request and release its concurrency slot exactly once, including queued HTTP and upgrade starts.
 
 **MUST NOT [INF-007]** 엔진의 agent directory를 Resident mount 계획에 넣지 않는다. sandbox 안에 진짜 credential을 두는 어떤 형태도 — agent별 복사본, society 공용 read-only mount, 환경 변수 — `PR-004` 위반이다. sandbox 안의 provider 설정에 들어가는 key는 relay가 교체할 자리표시자다.
 
@@ -574,30 +576,15 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [INF-010]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
 
-## 14. model-facing CLI와 파생 view
+## 14. 모델 도구와 파생 view
 
-**MUST [CLI-001; arch §§9,14,23.2]** base model-facing command allowlist는 다음과 같다. 이 표는 Resident rootfs 안의 `oma` 실행 파일만 규정하며, host의 동명 TUI 실행 파일은 TUI-002가 별도로 규정한다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력하며 TUI나 Control Panel을 노출하지 않는다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.
+**MUST [CLI-001; arch §§9,14,23.2]** 모델용 OMA CLI를 배포·호출하지 않는다. typed tool 이름·역할별 core/optional 목록·closed 입력의 정본은 [모델 도구 표면 명세 §4](model-tool-surface-spec.md#4-전체-tool-목록과-노출)다. 사람용 `oma` 제품 진입점과 Git·빌드·테스트 bash는 유지한다. 임의 method/argv/raw JSON dispatcher나 host 제품 CLI fallback을 추가하지 않는다.
 
-| command | 의미·기본값 |
-|---|---|
-| `oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]` | default kind=message; approval_required 전용 identity flags는 PR-005; reply가 없고 to가 비면 오류; reply subject 생략 시 원문 Re: |
-| `oma ack <mail-path-or-id> [--request K]` | 자기 delivery 명시 ACK |
-| `oma follow <topic> [--request K]` / `oma unfollow <topic> [--request K]` | 자기 향후 topic routing |
-| `oma agent create <name> --from <rev> --file <brief> [--request K]` | wire는 name/from/brief만; broker가 CREATE-002에 따라 profile/capabilities 확정 |
-| `oma agent start <name> [--request K]` / `oma agent stop <name> [--request K]` | 허용 범위의 물리 lifecycle |
-| `oma agent continue --note <text> [--request K]` | 자기 mail |
-| `oma agent wait` | 현재 run 안전한 종료 요청 |
-| `oma submit <revision> [--to address ...] [--subject S] [--file summary] [--path repo-path ...] [--request K]` | to default commons; revision 필수; summary 없으면 commit/ref metadata만 |
-| `oma integrate <published-full-oid> --expect <full-oid> [--request K]` | project/main CAS |
-| `oma context publish <dir> --expect <oid-or-none> [--request K]` | Principal 공유 의도 |
-| `oma status [agent]` | scoped DB+systemd 관측 |
-| `oma logs <agent> --since <duration>` | scoped journal text; duration은 양의 정수+s/m/h/d |
+**MUST [CLI-002]** client는 inline mail·brief·review body 및 context directory·Git revision을 기존 runtime 효과로 준비한다. 파일 경로를 broker에게 읽으라고 보내지 않는다. commit 후 `oma_merge_open`은 필요할 때만 기존 하위 candidate publication을 수행하고 uncommitted 변경 제외를 알린다. 별도 `oma_candidate_publish`는 공유용이지 merge의 선행 필수 단계가 아니다. 입력 shape 오류는 파일 생성·publication·transport 전에 거절한다.
 
-**MUST [CLI-002]** send/file/reply/summary 입력은 sandbox local 파일만 읽고 body bytes를 전송한다. host에 그 path를 읽으라고 RPC하지 않는다. summary/path를 생략하면 invent한 report 문서를 만들지 않는다. Git result는 즉시 사용할 published ref와 `git fetch origin <ref>`를 포함한다. 일반 성공 출력에 DB join·UUID 조합·state repair 단계를 요구하지 않는다.
+**MUST [CLI-003]** 결과 text는 실제 request key, receipt/state, 원래 error code/message/retry와 query pagination을 보존한다. accepted는 작업 완료가 아니며 unknown은 미접수 증거가 아니다. 복구는 원래 frozen input·key를 사용하며 새 key 자동 재실행을 금지한다. 큰 receipt는 client가 기존 operation.read로 회수한다. 로컬 오류를 가짜 broker receipt로 만들지 않는다.
 
-**MUST [CLI-003]** CLI exit는 0=요청 접수 또는 읽기 성공, 2=검증/권한/확정 실패, 3=미접수 여부 또는 효과가 불명확한 통신/unknown, 4=지원 profile/SPIKE 미해결로 실행 불가다. pending을 0으로 반환할 때 첫 줄에 `접수됨 / 아직 완료되지 않음`과 same-key 재조회 안내를 표시한다. exit 0을 task 완료로 해석하지 않는다. JSON 출력 flag가 필요하면 기존 command의 공통 `--json`만 OPTIONAL로 제공하고 별도 command를 만들지 않는다.
-
-**MUST [VIEW-001]** START는 identity/공유 GOAL·제약/자기 workspace/`/inbox.md`/주민·topic 목록 경로/send·submit·agent·status 사용만 기본 주입한다. 전체 schema·IPC·systemd·operation ledger를 prompt에 넣지 않는다. START와 inbox metadata는 숨은 system instruction authority가 아닌 trusted 안내와 untrusted peer metadata를 구분해 표시한다.
+**MUST [VIEW-001]** START는 identity/공유 GOAL·제약/자기 workspace/`/inbox.md`/주민·topic 경로와 typed tool 환경을 안내한다. 도구 schema·CLI 사용법·IPC·systemd·operation ledger를 prompt에 복제하지 않는다. START와 inbox metadata는 trusted 안내와 untrusted peer metadata를 구분한다. role prompt는 독립 review·자기 투표 금지·LOW 제한·wait의 안전한 양보 의미를 소유한다.
 
 **MUST [VIEW-002]** agents.tsv는 `name,role,desired,profile` 열, topics.tsv는 `topic,subscribers` 열을 tab으로 구분하고 LF로 끝낸다. field의 탭/newline은 검증/escape한다. 시작 전 regenerate하고 mutation 후 atomic replace한다. status의 unit 관측에는 observedAtMs를 넣고 unknown/disconnected를 추정 running으로 표시하지 않는다.
 
@@ -638,7 +625,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [REC-001; arch §§17–19]** startup/reconcile은 정렬된 pending/unknown operations, 미materialized deliveries, prepared batches와 실제 filesystem/Git/systemd만 대조한다. 메모리 작업은 lost 가능하고 원본 query로 다시 선택한다. `queue_materialization`이라는 함수명은 새 durable queue를 허용하지 않는다.
 
-**MUST [REC-007]** society broker는 R 아래 고정 lock file에 process-lifetime OS advisory lock을 획득한 뒤 DB를 연다. lock 미획득 시 두 번째 writer를 시작하지 않는다. lock은 config 로드·SQLite·복구보다 먼저 잡고, 얻지 못한 broker는 '시작 실패'와 구별되는 자기 exit status로 끝난다 — host는 그 둘을 다르게 다루어야 하고(앞은 소유 포기, 뒤는 재시작), 같은 status로는 구별할 수 없기 때문이다. 소유는 broker에서 파생하지 않는다. host는 society의 **state tree**를 이름으로 삼는 자기 lease를 직접 잡고 자기 수명 내내 들고 있으며, 그 lease를 잡기 전에는 설정 생성·state 준비·broker 기동 어느 것도 하지 않는다. lease의 이름은 파일 경로가 아니라 abstract AF_UNIX namespace의 이름이며 `uid`와 state root에서 유도한다 — 경로로 이름 붙인 lock은 그 경로만큼만 배타적이어서, 같은 UID의 아무 프로세스나 그 경로를 unlink·rename하고 새 파일을 놓으면 옛 보유자는 옛 inode의 lock을 계속 쥔 채 새 `oma`가 정규 경로의 새 inode를 잡는다. 한 society에 소유자가 둘이 되고 서로를 볼 수 없으며, 잡은 뒤 경로를 다시 확인하는 것은 검사와 사용이 여전히 두 단계이므로 창을 좁힐 뿐이다 — 같은 UID에서 파일의 속성으로 경계를 주장하지 않는다는 FS-005의 규칙을 mode가 아니라 namespace에 적용한 것이다. abstract namespace에는 갈아치울 directory entry가 없고, 두 번째 bind는 `EADDRINUSE`로 거부되며, 이름은 마지막 descriptor가 닫힐 때 커널이 되돌려준다. lease가 run root가 아니라 state tree의 이름인 이유는 두 writer를 가지면 안 되는 것이 tree이기 때문이다: run root는 boot·session마다 달라지는 교체 가능한 좌표이므로, 하나의 state tree를 서로 다른 두 run root로 가리키면 lease 두 개가 각각 자유롭게 잡힌다. 이미 listening 중인 broker가 있으면 그것이 society의 쓰기를 소유한다 — systemd unit이든 손으로 띄운 것이든 host가 사라진 `oma`의 것이든. 그래서 소유의 질문은 양쪽에서 답한다. host 쪽에서는 소유를 잡은 직후, 설정을 쓰기 전에 그 broker를 먼저 찾는다. broker 쪽에서는, 제품이 시작하지 않은 broker가 society lease를 **자기가** 잡고 잡지 못하면 시작하지 않는다 — host의 확인과 그 뒤의 쓰기는 여전히 두 단계이므로, 그 사이에 올라오는 broker는 host의 probe로는 막을 수 없기 때문이다. 제품이 시작한 broker는 그 lease의 descriptor를 이미 물려받았으므로 이름을 다시 잡지 않으며, 자기가 소유자의 것임을 환경의 선언으로 안다. 선언이 있는데 그 descriptor가 lease가 아니면 시작 실패로 답한다 — 쥐지 않은 society를 쥐었다고 믿는 broker가 그대로 society를 서비스하게 되기 때문이다. `broker.lock`은 남는다: 그것이 답하는 것은 '이 프로세스가 society의 단일 SQLite writer인가'이고, lease가 답하는 것은 '이 society에 무엇이든 행위해도 되는가'다. 이 확인이 provision·repair 뒤에 오면 다른 broker가 이미 Resident의 sandbox를 짓고 있는 rootfs의 `/etc/passwd`·`/etc/group`·symlink를 고쳐 놓은 뒤에야 물러나게 된다. 물러날 때는 lease도 함께 내려놓는다 — 행동하지 않기로 한 society를 쥐고 있으면 다음 `oma`만 막는다. broker의 lock은 broker와 함께 죽으므로 재시작 back-off와 한도 소진 이후가 모두 소유의 공백이 되고, 그 공백에 다른 `oma`가 들어올 수 있기 때문이다. lease를 잡지 못함(다른 프로세스가 쥐고 있음)과 lease를 아예 잡을 수 없음(경로를 신뢰할 수 없다, 이름을 평가할 수 없다)은 다른 답이며, 뒤의 것을 앞의 것으로 보고하지 않는다. 경로에 대한 판단은 lease를 잡기 **전에** 끝난다: 신뢰할 수 없는 run root·state root를 가리킨 `oma`가 먼저 소유를 잡고 설정을 쓰고 provision과 repair까지 한 뒤에야 자기가 검사한 곳이 아님을 아는 순서는, 검사하지 않은 것과 같다. 소유가 확정되기 전에 도는 준비 단계는 이미 있는 것을 다시 쓰지 않는다. 같은 바이트를 다시 쓰는 것도 쓰기이며, 경쟁에서 진 프로세스는 소유자의 트리를 inode와 timestamp까지 그대로 둔 채 물러나야 한다. 그래서 준비와 수리는 두 개의 정책이다: 준비는 없는 것만 만들고 있으면서 다른 것은 손대지 않은 채 보고하며, 수리는 그 보고를 받아 되돌리되 lease 보유자만 실행한다. 준비가 만드는 repository는 같은 부모 아래 임시 이름으로 만든 뒤 rename으로 제자리에 놓는다 — 최종 경로에 직접 만들면 동시에 첫 시작하는 두 `oma`가 서로의 반쯤 만들어진 트리를 보고 실패하며, rename이 진 쪽은 이긴 쪽의 repository를 그대로 받아들인다. lease의 유효 범위는 이 프로세스의 수명이 아니라 **lease 덕분에 시작된 모든 프로세스의 수명**이다. 호출 순서로는 이것을 지킬 수 없다 — host가 SIGKILL로 죽으면 실행할 코드가 없고 커널은 lock을 즉시 놓는데 engine은 살아 있으며, `close()`는 죽음이 아니라 신호다. 그러므로 lease는 open file description이 드는 lock이어야 하고, engine·broker와 그것들이 시작한 모든 것이 그 descriptor를 상속해야 한다. 이름은 상속된 descriptor 중 마지막 하나가 닫힐 때 풀리므로 society는 그 전부가 죽기 전에는 다른 host에게 넘어가지 않는다. 상속은 engine에서 끝나지 않는다: engine 안의 trusted extension이 시작하는 model-facing CLI는 `<stateRoot>/principal/private`와 그 아래 request cache를 쓰는 writer이고, engine에 보낸 signal은 그 자식에게 가지 않으므로 host와 engine이 모두 죽은 뒤에도 자기 timeout 전부를 살아서 쓸 수 있다. 그래서 fence는 고정된 descriptor 번호로 내려가고 그 번호를 환경으로 **선언한다** — descriptor 번호는 비밀이 아니므로 선언해도 아무 권한을 주지 않지만, 선언이 없으면 자식은 자기 부모가 어떻게 spawn되었는지를 알아내야만 lease를 다시 물려줄 수 있다. 선언된 fence가 그 자리에 없거나 lease의 종류가 아니면 자식을 fence 없이 시작하지 않고 실패로 답한다. sandbox(bwrap) 안에서 도는 Resident는 이 규칙의 예외다: listening 이름을 confinement 안으로 넣으면 sandbox 안의 프로세스가 society 소유자를 묻는 probe에 답할 수 있게 되므로, 그 경계는 fence가 아니라 커널이 강제하는 descendant 종료(cgroup)로 닫아야 한다. 이 성질의 결과로 lease를 놓는 일은 너무 이를 수 없고 너무 늦을 수만 있으므로, 정상 종료는 engine의 실제 종료를 기다리되 상한을 두고, 상한을 넘겨 놓더라도 society는 여전히 아무에게도 넘어가지 않는다. 수리는 broker의 startup quiescence가 이전 Resident의 종료를 증명한 뒤, broker가 Resident를 깨울 수 있는 어떤 단계(recovery·listen·activate)보다도 먼저 성공해야 한다(DR16): 증명 전에 고치면 이전 broker가 멈추지 못한 Resident가 아직 돌거나 다시 시작해 sandbox를 짓는 rootfs를 고치게 되고, 늦으면 수리되지 않은 rootfs 위에서 Resident가 먼저 깨어난다. 수리에 실패하면 화면에 적는 것으로 끝내지 않는다: broker의 startup이 실패하므로 broker는 준비를 알리지 않고 Principal 권한도 부여하지 않는다. DR35의 private 대화 준비는 별개이며 Society 효과는 등록 전 실행되지 않는다. PID file 숫자를 singleton 증거로 사용하지 않는다. Node lock/peercredential binding은 S-01로 검증한다. bootstrap/maintenance도 기존 broker 경계를 우회하여 DB/Git를 동시에 쓰지 않는다.
+**MUST [REC-007]** society broker는 R 아래 고정 lock file에 process-lifetime OS advisory lock을 획득한 뒤 DB를 연다. lock 미획득 시 두 번째 writer를 시작하지 않는다. lock은 config 로드·SQLite·복구보다 먼저 잡고, 얻지 못한 broker는 '시작 실패'와 구별되는 자기 exit status로 끝난다 — host는 그 둘을 다르게 다루어야 하고(앞은 소유 포기, 뒤는 재시작), 같은 status로는 구별할 수 없기 때문이다. 소유는 broker에서 파생하지 않는다. host는 society의 **state tree**를 이름으로 삼는 자기 lease를 직접 잡고 자기 수명 내내 들고 있으며, 그 lease를 잡기 전에는 설정 생성·state 준비·broker 기동 어느 것도 하지 않는다. lease의 이름은 파일 경로가 아니라 abstract AF_UNIX namespace의 이름이며 `uid`와 state root에서 유도한다 — 경로로 이름 붙인 lock은 그 경로만큼만 배타적이어서, 같은 UID의 아무 프로세스나 그 경로를 unlink·rename하고 새 파일을 놓으면 옛 보유자는 옛 inode의 lock을 계속 쥔 채 새 `oma`가 정규 경로의 새 inode를 잡는다. 한 society에 소유자가 둘이 되고 서로를 볼 수 없으며, 잡은 뒤 경로를 다시 확인하는 것은 검사와 사용이 여전히 두 단계이므로 창을 좁힐 뿐이다 — 같은 UID에서 파일의 속성으로 경계를 주장하지 않는다는 FS-005의 규칙을 mode가 아니라 namespace에 적용한 것이다. abstract namespace에는 갈아치울 directory entry가 없고, 두 번째 bind는 `EADDRINUSE`로 거부되며, 이름은 마지막 descriptor가 닫힐 때 커널이 되돌려준다. lease가 run root가 아니라 state tree의 이름인 이유는 두 writer를 가지면 안 되는 것이 tree이기 때문이다: run root는 boot·session마다 달라지는 교체 가능한 좌표이므로, 하나의 state tree를 서로 다른 두 run root로 가리키면 lease 두 개가 각각 자유롭게 잡힌다. 이미 listening 중인 broker가 있으면 그것이 society의 쓰기를 소유한다 — systemd unit이든 손으로 띄운 것이든 host가 사라진 `oma`의 것이든. 그래서 소유의 질문은 양쪽에서 답한다. host 쪽에서는 소유를 잡은 직후, 설정을 쓰기 전에 그 broker를 먼저 찾는다. broker 쪽에서는, 제품이 시작하지 않은 broker가 society lease를 **자기가** 잡고 잡지 못하면 시작하지 않는다 — host의 확인과 그 뒤의 쓰기는 여전히 두 단계이므로, 그 사이에 올라오는 broker는 host의 probe로는 막을 수 없기 때문이다. 제품이 시작한 broker는 그 lease의 descriptor를 이미 물려받았으므로 이름을 다시 잡지 않으며, 자기가 소유자의 것임을 환경의 선언으로 안다. 선언이 있는데 그 descriptor가 lease가 아니면 시작 실패로 답한다 — 쥐지 않은 society를 쥐었다고 믿는 broker가 그대로 society를 서비스하게 되기 때문이다. `broker.lock`은 남는다: 그것이 답하는 것은 '이 프로세스가 society의 단일 SQLite writer인가'이고, lease가 답하는 것은 '이 society에 무엇이든 행위해도 되는가'다. 이 확인이 provision·repair 뒤에 오면 다른 broker가 이미 Resident의 sandbox를 짓고 있는 rootfs의 `/etc/passwd`·`/etc/group`·symlink를 고쳐 놓은 뒤에야 물러나게 된다. 물러날 때는 lease도 함께 내려놓는다 — 행동하지 않기로 한 society를 쥐고 있으면 다음 `oma`만 막는다. broker의 lock은 broker와 함께 죽으므로 재시작 back-off와 한도 소진 이후가 모두 소유의 공백이 되고, 그 공백에 다른 `oma`가 들어올 수 있기 때문이다. lease를 잡지 못함(다른 프로세스가 쥐고 있음)과 lease를 아예 잡을 수 없음(경로를 신뢰할 수 없다, 이름을 평가할 수 없다)은 다른 답이며, 뒤의 것을 앞의 것으로 보고하지 않는다. 경로에 대한 판단은 lease를 잡기 **전에** 끝난다: 신뢰할 수 없는 run root·state root를 가리킨 `oma`가 먼저 소유를 잡고 설정을 쓰고 provision과 repair까지 한 뒤에야 자기가 검사한 곳이 아님을 아는 순서는, 검사하지 않은 것과 같다. 소유가 확정되기 전에 도는 준비 단계는 이미 있는 것을 다시 쓰지 않는다. 같은 바이트를 다시 쓰는 것도 쓰기이며, 경쟁에서 진 프로세스는 소유자의 트리를 inode와 timestamp까지 그대로 둔 채 물러나야 한다. 그래서 준비와 수리는 두 개의 정책이다: 준비는 없는 것만 만들고 있으면서 다른 것은 손대지 않은 채 보고하며, 수리는 그 보고를 받아 되돌리되 lease 보유자만 실행한다. 준비가 만드는 repository는 같은 부모 아래 임시 이름으로 만든 뒤 rename으로 제자리에 놓는다 — 최종 경로에 직접 만들면 동시에 첫 시작하는 두 `oma`가 서로의 반쯤 만들어진 트리를 보고 실패하며, rename이 진 쪽은 이긴 쪽의 repository를 그대로 받아들인다. lease의 유효 범위는 이 프로세스의 수명이 아니라 **lease 덕분에 시작된 모든 프로세스의 수명**이다. 호출 순서로는 이것을 지킬 수 없다 — host가 SIGKILL로 죽으면 실행할 코드가 없고 커널은 lock을 즉시 놓는데 engine은 살아 있으며, `close()`는 죽음이 아니라 신호다. 그러므로 lease는 open file description이 드는 lock이어야 하고, engine·broker와 그것들이 시작한 모든 것이 그 descriptor를 상속해야 한다. 이름은 상속된 descriptor 중 마지막 하나가 닫힐 때 풀리므로 society는 그 전부가 죽기 전에는 다른 host에게 넘어가지 않는다. 상속은 engine에서 끝나지 않는다: engine 안의 typed client가 시작하는 runtime helper도 private state를 쓰는 writer일 수 있고, engine에 보낸 signal은 그 자식에게 가지 않으므로 host와 engine이 모두 죽은 뒤에도 살아서 쓸 수 있다. 그래서 fence는 고정된 descriptor 번호로 내려가고 그 번호를 환경으로 **선언한다** — descriptor 번호는 비밀이 아니므로 선언해도 아무 권한을 주지 않지만, 선언이 없으면 자식은 자기 부모가 어떻게 spawn되었는지를 알아내야만 lease를 다시 물려줄 수 있다. 선언된 fence가 그 자리에 없거나 lease의 종류가 아니면 자식을 fence 없이 시작하지 않고 실패로 답한다. sandbox(bwrap) 안에서 도는 Resident는 이 규칙의 예외다: listening 이름을 confinement 안으로 넣으면 sandbox 안의 프로세스가 society 소유자를 묻는 probe에 답할 수 있게 되므로, 그 경계는 fence가 아니라 커널이 강제하는 descendant 종료(cgroup)로 닫아야 한다. 이 성질의 결과로 lease를 놓는 일은 너무 이를 수 없고 너무 늦을 수만 있으므로, 정상 종료는 engine의 실제 종료를 기다리되 상한을 두고, 상한을 넘겨 놓더라도 society는 여전히 아무에게도 넘어가지 않는다. 수리는 broker의 startup quiescence가 이전 Resident의 종료를 증명한 뒤, broker가 Resident를 깨울 수 있는 어떤 단계(recovery·listen·activate)보다도 먼저 성공해야 한다(DR16): 증명 전에 고치면 이전 broker가 멈추지 못한 Resident가 아직 돌거나 다시 시작해 sandbox를 짓는 rootfs를 고치게 되고, 늦으면 수리되지 않은 rootfs 위에서 Resident가 먼저 깨어난다. 수리에 실패하면 화면에 적는 것으로 끝내지 않는다: broker의 startup이 실패하므로 broker는 준비를 알리지 않고 Principal 권한도 부여하지 않는다. DR35의 private 대화 준비는 별개이며 Society 효과는 등록 전 실행되지 않는다. PID file 숫자를 singleton 증거로 사용하지 않는다. Node lock/peercredential binding은 S-01로 검증한다. bootstrap/maintenance도 기존 broker 경계를 우회하여 DB/Git를 동시에 쓰지 않는다.
 
 **MUST [REC-002]** reconcile sweep은 broker가 자기 수명 동안 in-process `setInterval`로 실행하며 간격은 reference 5초이고 모델을 호출하지 않는다(외부 timer unit은 없다). 한 sweep의 filesystem/provider 장애가 나머지 독립 mailbox 점검을 영구 막지 않도록 bounded work를 수행한다. 동시에 두 sweep을 실행하지 않고 이미 실행 중이면 기존 sweep에 합류/skip한다. no-progress retry는 로그와 다음 sweep으로 제한하고 tight loop를 만들지 않는다.
 
@@ -700,15 +687,15 @@ Principal 권한을 완화하지 않는다. 이 ID를 새 native 요구에 재�
 
 **MUST [TUI-001; arch §23.1]** OMA의 공개 UX와 명령 namespace는 OMA가 소유하고 Pi는 내부 실행 엔진이다. Pi command를 이름만 바꾼 wrapper를 만들지 않는다. 이 절은 새 durable entity, 새 daemon, 새 effect queue, 새 socket method, 새 model-facing subcommand를 도입하지 않으며 A-006/A-007의 제한을 그대로 받는다. TUI가 표시하는 모든 값은 기존 관측 경로에서, TUI가 일으키는 모든 변경은 기존 mutation 또는 host config 경계에서 나온다.
 
-**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. 분할 UTF-8의 deadline은 decoder가 스스로 관측 가능해야 한다. 포기한 미완 code point는 U+FFFD로 대체해 prompt에 넣지 않고 그것을 기다리던 decode state와 함께 버리며, terminal이 만든 U+FFFD도 key로 취급하지 않는다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. paste 경계 자체는 host terminal이 DEC 2004를 지킨다는 전제 위에 있으므로(clipboard 안의 `ESC[201~`를 그대로 흘리는 terminal은 그 전제를 깬다), TUI는 그 전제에만 기대지 않는다: paste end marker 뒤 같은 read에 남은 byte는 key로 해석하지 않고 그 paste의 내용으로 흡수하며, paste 종료 후 선언된 짧은 구간 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 처리한다. 이 구간은 선언된 한도이고, 그 안의 Enter를 제출로 인정하지 않는 것은 정상 동작이다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시·paste 경로는 Unicode Cc와 Cf 제어·서식 문자를 제거하되 정상 grapheme 구성을 위한 ZWNJ(U+200C)·ZWJ(U+200D)는 보존한다. paste의 TAB·LF는 편집용으로 보존하며 표시 경로의 TAB은 공백으로 바꾼다. bidi 제어는 표시 순서를 바꿀 수 없어야 하고, 폭 0의 정상 grapheme을 단지 폭이 없다는 이유로 버리지 않는다(DR19).
+**MUST [TUI-002; arch §23.2]** host 설치 PATH의 `oma`는 Human 제품 진입점이며 유지한다. model-facing CLI는 제거하고 typed OMA tool로 대체한다. Human 제품 진입점을 Worker broker fallback으로 노출하지 않는다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. 분할 UTF-8의 deadline은 decoder가 스스로 관측 가능해야 한다. 포기한 미완 code point는 U+FFFD로 대체해 prompt에 넣지 않고 그것을 기다리던 decode state와 함께 버리며, terminal이 만든 U+FFFD도 key로 취급하지 않는다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. paste 경계 자체는 host terminal이 DEC 2004를 지킨다는 전제 위에 있으므로(clipboard 안의 `ESC[201~`를 그대로 흘리는 terminal은 그 전제를 깬다), TUI는 그 전제에만 기대지 않는다: paste end marker 뒤 같은 read에 남은 byte는 key로 해석하지 않고 그 paste의 내용으로 흡수하며, paste 종료 후 선언된 짧은 구간 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 처리한다. 이 구간은 선언된 한도이고, 그 안의 Enter를 제출로 인정하지 않는 것은 정상 동작이다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시·paste 경로는 Unicode Cc와 Cf 제어·서식 문자를 제거하되 정상 grapheme 구성을 위한 ZWNJ(U+200C)·ZWJ(U+200D)는 보존한다. paste의 TAB·LF는 편집용으로 보존하며 표시 경로의 TAB은 공백으로 바꾼다. bidi 제어는 표시 순서를 바꿀 수 없어야 하고, 폭 0의 정상 grapheme을 단지 폭이 없다는 이유로 버리지 않는다(DR19).
 
-**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.
+**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident tool 설명·도움말·오류에서 TUI나 Control Panel을 broker fallback으로 안내하지 않는다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.
 
 **MUST [TUI-004; arch §23.3]** Principal Pi session의 실행 권한은 OMA host가 소유한다. DR22에 따라 대화형 화면은 동봉 Pi InteractiveMode와 원본 pi-open-tui가 담당하고, headless adapter와 Resident는 RPC를 사용한다. 대화형 editor의 제출도 부모 PrincipalSession의 admission을 거쳐야 하며 Pi의 steer/follow-up 경로로 우회하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다. society당 engine은 하나이며 그 하나를 정하는 것은 REC-007의 host lease다. DR35: private 대화 engine은 이 프로세스의 lease·프로젝트 binding·설정·private 경로가 확인되고 broker를 시작한 뒤 준비할 수 있다. Principal 권한은 이 프로세스가 띄운 broker가 복구와 rootfs 수리 뒤 준비를 알리고 같은 engine의 등록에 credential을 발급한 뒤에만 생긴다. engine 생성·broker pid·화면 표시를 Principal 권한이나 Society 준비 완료로 해석하지 않는다. 소유하지 못함이 확정되면(lease를 다른 프로세스가 쥠, 다른 broker가 이미 듣고 있음, broker를 띄우지 못함, 자식이 소유 status로 끝남, 재시작 한도 소진) engine을 시작하지 않는다. 이미 시작한 engine에 대해서도 같다. 소유를 잃는 사건은 통지가 아니라 teardown이다: 그 순간 살아 있던 session을 닫고 전달을 멈춘 **뒤에** lease를 놓는다. 닫았다는 것은 신호를 보냈다는 뜻이고 죽었다는 뜻이 아니므로, 정상 종료는 운영체제가 engine을 거두었음을 확인한 뒤에 lease를 놓는다 — 상한을 두되, REC-007의 상속된 fence가 그 상한을 넘긴 경우까지 덮는다. 소유가 허락하는 모든 것은 한 객체에 묻는다: 시작·전달·설정 쓰기·확장 토글·종료가 각각의 flag가 아니라 같은 tenure에게 묻고, lease를 잡지 못한 Control Panel은 설정과 확장을 포함해 society의 어떤 바이트도 쓰지 못한다. lease를 놓은 다음부터는 다른 `oma`가 society를 가져갈 수 있으므로, 그 경계를 넘어 살아남은 session은 두 번째 engine을 시작하는 것과 같은 위반이다. 소유를 잃은 뒤에 broker가 다시 준비를 알리더라도 engine을 다시 시작하지 않는다. 이 프로세스에는 principal host endpoint와 credential이 없어 그 engine은 society에 요청할 authority가 없으면서 같은 private workspace와 같은 session 기록의 두 번째 writer가 되기 때문이며, 그 경우 제품은 같은 상태를 보는 Control Panel로 남고 그 이유를 화면에 적는다.
 
 **MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfig`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
 
-session 경계를 넘지 않는 per-request 전환은 하지 않는다. inference는 동봉 엔진이 소유하므로(INF-001) OMA에는 요청마다 model을 바꾸거나 예산을 검사하는 경로가 없다. `principal.attach`(IPC-011)는 Principal CLI의 credential handshake이지 model 전환 경로가 아니다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002).
+session 경계를 넘지 않는 per-request 전환은 하지 않는다. inference는 동봉 엔진이 소유하므로(INF-001) OMA에는 요청마다 model을 바꾸거나 예산을 검사하는 경로가 없다. `principal.attach`(IPC-011)는 Principal client의 credential handshake이지 model 전환 경로가 아니다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002).
 
 **MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.
 
@@ -762,21 +749,21 @@ session 경계를 넘지 않는 per-request 전환은 하지 않는다. inferenc
 
 ## 19. Extension tool 표면 투영
 
-**MUST [TSP-001; arch §23.10]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
+**MUST [TSP-001; arch §23.10]** 기본 Society registry는 역할별 명시적 core와 optional로 닫는다. exact 이름과 provenance admission을 검증하며 미분류 도구는 기본 DISABLED다. 누적 group/DAG와 group opener는 유지하지 않는다. 전체 목록과 수는 model-tool-surface-spec §4가 소유한다.
 
-**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfig`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).
+**MUST [TSP-002]** tool 표면은 authored role 설정 필드가 아니라 runtime plumbing이다. 기존 closed config·wire·ledger·DB entity를 늘리지 않는다. 전달 plan이 잘못되면 fail closed한다.
 
-**MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.
+**MUST [TSP-003]** `toolset`은 현재 역할에서 admission을 통과한 optional 이름만 받는다. 중복·unknown·다른 역할·core 이름을 거절하며 빈 선택은 core만 남긴다. 카탈로그의 짧은 설명은 실제 tool metadata에서 파생한다.
 
-**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `packages/domain/src/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.
+**MUST [TSP-004]** 검증된 registry·plan과 기존 runtime surface owner를 재사용한다. LSP/web/MCP의 내부 알고리즘이나 provider codec을 다시 만들지 않는다. Principal에 spawn 불가 LSP diagnostics/fix를 등록하지 않는다.
 
-**MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.
+**MUST [TSP-005]** active set은 core와 선택된 optional의 정확한 합집합이다. OMA-owned 이름 전체를 always-visible로 취급하지 않는다. 선택은 권한 grant가 아니다.
 
-**MUST [TSP-006]** group을 여는 것은 **활성화이며 실행이 아니다**. 직계 자식만 기존 활성 집합에 합집합으로 더하고, 같은 group을 다시 열어도 결과가 같아야 한다. 다른 extension이 활성화한 tool을 제거하지 않는다. OMA가 다른 extension의 tool handler를 대신 호출하거나 인자를 재해석하는 경로를 만들지 않는다. 드러난 tool은 Pi의 기존 pipeline이 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 보존된다.
+**MUST [TSP-006]** `toolset`은 sequential 선택 예약이며 실행 dispatcher가 아니다. 현재 tool batch와 결과 저장 후 turn_end에서 전체 optional 집합을 교체한다. 같은 turn의 마지막 유효 선택이 다음 요청에 적용된다. 이미 제출된 호출을 중간 비활성화하지 않는다. 선택한 도구는 다음 model request에서 원래 schema와 handler로 직접 호출한다.
 
-**MUST [TSP-007]** sandbox가 받은 plan을 읽을 수 없거나 형식이 맞지 않으면 fail closed한다. 모르는 값은 무시하고 진행하는 것이 아니라 OMA 자신이 등록한 tool만 남긴다. 투영 적용 실패가 `DISABLED`로 의도한 tool을 노출시키는 결과로 이어져서는 안 된다.
+**MUST [TSP-007]** 적용 전 이름을 검증하고 다음 provider request 전에 actual active set의 정확한 일치를 확인한다. 실패·registry 불일치를 성공으로 보고 계속하지 않는다. 검증된 extension 변경도 같은 owner와 안전 경계로 처리한다.
 
-**MUST [TSP-008]** 투영은 OMA가 등록한 mail/status tool을 제거하지 못한다. role 선언이 그 이름을 disabled로 지정해도 활성 상태를 유지한다. 투영이 agent를 자기 협업 수단 없이 남기지 않는다.
+**MUST [TSP-008]** core는 제거할 수 없다. resume/fork/branch는 기존 Pi tool-definition/session 기록에서 같은 branch의 마지막 확정 loadout을 복원하며 pending 선택과 구분한다. 별도 DB·queue·일반 retry engine을 만들지 않는다.
 
 **MUST NOT [TSP-009]** 투영을 권한 경계로 표시한다. 실제 권한은 §12의 sandbox mount/FD/network와 AUTH-001의 capability가 정한다. 표면에서 감췄다는 이유로 위험한 tool을 role extension에 추가하거나, PI-001의 신뢰 경계·operations의 SHA-256 재검증을 완화하지 않는다.
 
@@ -997,6 +984,13 @@ configuration stays valid; the closed-schema validator accepts only those
 names. No wire method, persisted plan or other declaration changes. The golden
 surface is not regenerated: the test projects out exactly these two additions,
 each of which must occur once, as it does for IPC-008's receipt paging.
+
+Principal launch carries an explicitly configured `thinking` through the
+application profile, `--thinking` argv and the interactive runtime's
+`createAgentSessionFromServices({ thinkingLevel })` input. Explicit `off` is a
+value, not omission. An omitted effort supplies no override, preserving engine
+settings and resumed-session behavior. `pi/current` still supplies no model flag
+and follows the engine's current/default model selection.
 
 **Reviewed contract change, 2026-09-29 (installed packages, DR25).**
 `HostConfig.installation` gains one optional field, `packages?: string`,

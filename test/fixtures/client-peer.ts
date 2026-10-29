@@ -4,16 +4,16 @@ import { createServer } from "node:net";
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { clientProcessArgs } from "./client-process.js";
 import { RpcConnection } from "@oma/broker/connection";
 import { SharedPeerPin } from "@oma/broker/peer-pin";
 
-/** Actual CLI and RPC framing with a controlled local application peer. No live
+/** Actual typed client and RPC framing with a controlled local application peer. No live
  * broker startup, authentication, user-manager or deployment proof is implied. */
-export async function runCliWithPeer(
+export async function runClientWithPeer(
   home: string,
   cwd: string,
-  args: readonly string[],
+  expression: string,
   handle: (
     request: Record<string, unknown>,
     body: AsyncIterable<Uint8Array> | null,
@@ -83,8 +83,7 @@ export async function runCliWithPeer(
         process.execPath,
         [
           ...(preload ? ["--import", preload] : []),
-          fileURLToPath(new URL("../../../apps/oma/dist/cli.js", import.meta.url)),
-          ...args,
+          ...clientProcessArgs(expression),
         ],
         {
           cwd,
@@ -113,7 +112,7 @@ export async function runCliWithPeer(
     assert.deepEqual(
       errors,
       [],
-      "fixture transport errors are not successful CLI observations",
+      "fixture transport errors are not successful client observations",
     );
     return { ...result, requests };
   } finally {

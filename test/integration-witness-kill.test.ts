@@ -69,7 +69,7 @@ for (const format of ["sha1", "sha256"] as const) for (const effect of ["compare
       store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
       const paths = { stateRoot: root, society: "crash", projectGit, contextGit: join(root, "repos/context.git"), worldDir: join(root, "world") };
       const mail = createMailModule(paths, store, 64);
-      const git = createGitModule(paths, store, mail, { policyRevision: "changed", protectedPaths: ["/"], checks: [] },
+      const git = createGitModule(paths, store, mail, {maxWorkers: 6, policyRevision: "changed", protectedPaths: ["/"], checks: []},
         () => assert.fail("proven historical effect must settle before current policy I/O"));
       const effects = Reflect.get(Reflect.get(git, "integrationCoordinator"), "effects");
       Reflect.set(effects, "compareAndSwap", () => assert.fail("CAS repeated"));

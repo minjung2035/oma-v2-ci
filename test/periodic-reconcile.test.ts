@@ -28,7 +28,7 @@ import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
 import type { ReconcileModule } from "@oma/reconcile";
 import { RECONCILE_INTERVAL_MS } from "@oma/domain/recovery-policy";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { removeTree } from "./fixtures/cleanup.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
@@ -64,8 +64,7 @@ function society(t: TestContext) {
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, undefined, () => broker.hintWork());
   const units = new ScriptedUnits();
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const recovery = countingRecovery();
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: recovery as unknown as ReconcileModule, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   let drained = false;

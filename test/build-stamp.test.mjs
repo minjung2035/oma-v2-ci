@@ -58,7 +58,6 @@ const FILES = {
     workspaces: [{ name: "@oma/contracts", root: "packages/contracts" }, { name: "@oma/domain", root: "packages/domain" }, { name: "@oma/app", root: "apps/oma" }],
     compiledRoot: "apps/oma/dist", contract: "packages/contracts/dist/index.js",
     schema: "packages/domain/dist/schema.sql", extension: "packages/extension/dist/index.js",
-    modelCommand: "apps/oma/dist/libexec/oma", modelCommandBuilder: "packages/domain/dist/resident-paths.js",
     entries: Object.freeze({ tui: "apps/oma/dist/entry/oma.js" }), runtimeDependencies: Object.freeze([]),
   });`,
   "apps/oma/src/runtime/assets.ts": `import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
@@ -72,13 +71,10 @@ const FILES = {
   "apps/oma/package.json": JSON.stringify({ name: "@oma/app", version: "0.1.0", private: true, type: "module",
     dependencies: {"@oma/domain":"0.1.0", "@oma/contracts":"0.1.0"}, bin:{oma:"dist/entry/oma.js"},
     exports:{"./runtime/assets":{types:"./dist/runtime/assets.d.ts",default:"./dist/runtime/assets.js"}},
-    oma:{assets:["test-native"],modelCommand:"libexec/oma"} }),
+    oma:{assets:["test-native"]} }),
   "apps/oma/tsconfig.json": JSON.stringify({compilerOptions:{rootDir:"src",outDir:"dist",module:"nodenext",moduleResolution:"nodenext",
     target:"es2022",strict:true,skipLibCheck:true,types:[],composite:true,declaration:true,tsBuildInfoFile:".tsbuildinfo"},
     include:["src/**/*.ts"],references:[{path:"../../packages/contracts"},{path:"../../packages/domain"}] }),
-  "packages/domain/src/resident-paths.ts": `export function modelCommandScript(): string {
-    return "#!/bin/sh\\nexec node apps/oma/dist/entry/oma.js \\"$@\\"\\n";
-  }`,
   "apps/oma/src/entry/oma.ts": "#!/usr/bin/env node\nexport {};\n",
 };
 

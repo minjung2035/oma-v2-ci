@@ -34,7 +34,7 @@ test('Mac Worker command keeps literal argv, physical cwd and owned environment'
   assert.deepEqual(recipe.command.argv, [host.node, host.pi, ...host.piModeArgs]);
   assert.equal(recipe.command.cwd, directories.workspace);
   assert.equal(env.HOME, directories.home); assert.equal(env.TMPDIR, directories.home);
-  assert.equal(env.OMA_NODE, host.node); assert.equal(env.OMA_CLI, join(host.libdir, DEPLOYMENT_LAYOUT.cli));
+  assert.equal(env.OMA_NODE, host.node); assert.equal(env.OMA_CLI, undefined);
   assert.equal(env.NODE_OPTIONS, `--import=${pathToFileURL(join(host.libdir, DEPLOYMENT_LAYOUT.clientPreload)).href}`);
   assert.equal(env.OMA_ACTOR, lease.actor); assert.equal(env.OMA_FRAME_BYTES, '65536'); assert.equal(env.OMA_BATCH_MAX_MESSAGES, '24');
 });
@@ -52,13 +52,13 @@ test('Mac Worker recipe refuses forged leases and every substituted actor direct
 test('Mac Worker recipe fixes owned environment and refuses ambient secrets and preload substitution', () => {
   const { host, lease, directories } = context();
   const recipe = residentSeatbelt(host, lease, directories, tools, { HOME: '/human', TMPDIR: '/human', PATH: '/host/bin', GIT_EXEC_PATH: '/human/helpers',
-    OMA_NODE: '/host/node', OMA_CLI: '/host/cli', OMA_ACTOR: 'mallory', OMA_FRAME_BYTES: '1' });
+    OMA_NODE: '/host/node', OMA_ACTOR: 'mallory', OMA_FRAME_BYTES: '1' });
   assert.equal(recipe.command.env.HOME, directories.home); assert.equal(recipe.command.env.TMPDIR, directories.home);
   assert.equal(recipe.command.env.OMA_NODE, host.node); assert.equal(recipe.command.env.OMA_ACTOR, lease.actor);
   assert.equal(recipe.command.env.OMA_FRAME_BYTES, '65536');
   assert.equal(recipe.command.env.GIT_EXEC_PATH, tools.execPath);
   assert.ok(recipe.command.env.PATH.split(':').includes(`${developer}/usr/bin`));
-  for (const key of ['AWS_SECRET_ACCESS_KEY', 'ANTHROPIC_API_KEY', 'SSH_AUTH_SOCK', 'DYLD_INSERT_LIBRARIES', 'NODE_PATH'])
+  for (const key of ['OMA_CLI', 'AWS_SECRET_ACCESS_KEY', 'ANTHROPIC_API_KEY', 'SSH_AUTH_SOCK', 'DYLD_INSERT_LIBRARIES', 'NODE_PATH'])
     assert.throws(() => residentSeatbelt(host, lease, directories, tools, { [key]: 'ambient secret' }), { code: 'UNSUPPORTED_PROFILE' }, key);
   for (const options of ['--require=/human/malicious.js', '--inspect=0.0.0.0:9229', '--import=file:///other.js', ''])
     assert.throws(() => residentSeatbelt(host, lease, directories, tools, { NODE_OPTIONS: options }), { code: 'UNSUPPORTED_PROFILE' });

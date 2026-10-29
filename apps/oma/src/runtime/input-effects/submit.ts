@@ -7,7 +7,7 @@ import { exportRefForRequestKey } from "@oma/domain/derived";
 import { runGitText } from "@oma/process/policies";
 import { fail } from "@oma/client/errors";
 import { currentContext } from "@oma/client/context";
-import { readBounded } from "../effects.js";
+import { readBounded } from "../input-effects.js";
 import { bundleBytes as cliBundleBytes } from "@oma/client/settings";
 
 function git(cwd: string, args: string[]): string {

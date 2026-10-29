@@ -584,16 +584,16 @@
     "requirements": [
       "CLI-001"
     ],
-    "owner": "apps/oma/src/cli/arguments.ts#parseArguments",
-    "entrypoint": "apps/oma/src/cli.ts#main",
+    "owner": "packages/extension/src/mail-tools.ts#registerOmaTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "apps/oma/src/cli.ts#main",
-      "apps/oma/src/cli/commands/send.ts#runSendCommand",
-      "apps/oma/src/cli/arguments.ts#parseArguments"
+      "packages/extension/src/index.ts#extension",
+      "packages/extension/src/mail-tools.ts#registerOmaTools",
+      "packages/client/src/index.ts#Client"
     ],
     "negativeTests": [
-      "test/argument-boundary.test.ts#AV1",
-      "test/f2-cli-request.test.ts#F2"
+      "test/surface-rules.test.mjs#product-tool-separation",
+      "test/tool-surface.test.ts#bad shapes and names"
     ]
   },
   {

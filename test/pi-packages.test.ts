@@ -1576,7 +1576,7 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
       projectGit: projectGitPathAt(state), projectMirror: projectMirrorPathAt(state), sessions: runnerSessionDirPathAt(state, "a") };
     for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true });
     const runRoot = join(f.root, "run"); mkdirSync(join(runRoot, "actors", "a", "1"), { recursive: true });
-    const paths = { piCommand: "/usr/bin/node", coreExtension: join(f.installation, CORE_EXTENSION), cli: join(f.installation, "cli.js"),
+    const paths = { piCommand: "/usr/bin/node", coreExtension: join(f.installation, CORE_EXTENSION),
       workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home, mailArchive: dirs.archive,
       workerArchive: dirs.workerArchive, projectGit: dirs.projectGit, batchView: dirs.view,
       socket: actorSocketPathAt(runRoot, "a", 1) };

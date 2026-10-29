@@ -29,9 +29,8 @@ test("DR46: the production sandbox hides host files and shares the host network;
     const options = residentOptions(state, libdir, entry);
     mkdirSync(join(state, "pi"), { recursive: true });
     writeFileSync(join(state, "pi/auth.json"), '{"secret":"host-only"}');
-    for (const file of [options.paths.coreExtension, options.paths.cli]) {
-      mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, "export {};\n");
-    }
+    mkdirSync(dirname(options.paths.coreExtension), { recursive: true });
+    writeFileSync(options.paths.coreExtension, "export {};\n");
     writeFileSync(entry, `import fs from "node:fs"; import net from "node:net"; import os from "node:os";
       const seen = p => { try { fs.accessSync(p); return true; } catch { return false; } };
       const report = { stateRoot: seen(${JSON.stringify(state)}), credential: seen(${JSON.stringify(join(state, "pi/auth.json"))}),

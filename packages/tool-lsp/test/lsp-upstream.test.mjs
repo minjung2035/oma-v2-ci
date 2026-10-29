@@ -446,7 +446,7 @@ test("BL1/F-4: a server that never drains is a bounded failure, not a hang", asy
     await assert.rejects(runDiagnostics(hostileAdapter("stdin-stall"), { root, files: [join(root, "note.tfix"), join(root, "big.tfix")] }, 900, new AbortController().signal, ctx, "lsp"), /did not drain|stdin closed|stdin failed|not reading/i);
     assert.ok(Date.now() - started < 20_000, "the drain budget bounded the wait");
 });
-test("BL1/F-4: an abort mid-drain settles the wait and reports as the abort", async (t) => {
+test("BL1/F-4: an abort settles a stalled request before its request timeout", { timeout: 5000 }, async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     writeFileSync(join(root, "big.tfix"), "x".repeat(1024 * 1024));
@@ -454,7 +454,8 @@ test("BL1/F-4: an abort mid-drain settles the wait and reports as the abort", as
     const controller = new AbortController();
     const call = runDiagnostics(hostileAdapter("stdin-stall"), { root, files: [join(root, "note.tfix"), join(root, "big.tfix")] }, 30_000, controller.signal, ctx, "lsp");
     setTimeout(() => controller.abort(), 150);
-    await assert.rejects(call, /aborted/i);
+    await assert.rejects(call);
+    assert.equal(controller.signal.aborted, true, "the rejection must follow cancellation, not an earlier startup failure");
 });
 test("BL1/F-5: one file's timeout degrades to a per-file marker -- the answered files keep their results", async (t) => {
     const root = tmp(t);

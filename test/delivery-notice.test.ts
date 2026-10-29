@@ -51,7 +51,7 @@ test("AV10 / BATCH-002: the index a notice points to, /inbox.md, is read through
     writeFileSync(join(view, "inbox.md"), "1. m-00000000-0000-4000-8000-000000000001-0\n2. m-00000000-0000-4000-8000-000000000002-0\n");
     const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
     const previous = { ...process.env };
-    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"),
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"),
       OMA_SOCKET: join(root, "control.sock"), OMA_BATCH_VIEW: view });
     try {
       registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
@@ -82,7 +82,7 @@ test("P0 / BATCH-002: the index is not a stored message -- an index past the mai
     assert.ok(Buffer.byteLength(body) > storedBound, "the fixture index must exceed a stored-message bound");
     const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
     const previous = { ...process.env };
-    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"),
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"),
       OMA_SOCKET: join(root, "control.sock"), OMA_BATCH_VIEW: view,
       OMA_MAIL_BYTES: String(storedBound), OMA_BATCH_MAX_MESSAGES: "3000" });
     try {
@@ -193,7 +193,7 @@ test("AV23 / BATCH-002: the read tool shows the decoded body of an archived mess
     writeFileSync(join(archive, `${id}:2,`), eml.text);
     const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
     const previous = { ...process.env };
-    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive, OMA_SOCKET: join(root, "control.sock") });
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive, OMA_SOCKET: join(root, "control.sock") });
     try {
       registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
     } finally {
@@ -340,7 +340,7 @@ test("mail-v1: a Resident reads worker-audience mail by id and by its workers pa
     writeFileSync(join(workers, `${id}:2,`), eml.text);
     const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
     const previous = { ...process.env };
-    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
       OMA_WORKER_ARCHIVE: workers, OMA_SOCKET: join(root, "control.sock") });
     try {
       registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
@@ -358,7 +358,7 @@ test("mail-v1: a Resident reads worker-audience mail by id and by its workers pa
     // A Principal engine has no worker archive: the workers path is unknown.
     const principalTools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
     const before = { ...process.env };
-    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
       OMA_SOCKET: join(root, "control.sock") });
     try {
       registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; principalTools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());

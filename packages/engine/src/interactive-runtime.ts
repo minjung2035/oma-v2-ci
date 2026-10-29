@@ -5,6 +5,7 @@ import type { ExtensionModules } from './extension-modules.js';
 import type { InteractiveConfiguration } from './interactive-configuration.js';
 import type { InteractiveView } from './interactive-view.js';
 import type { InteractiveState } from './interactive-state.js';
+import { EFFORT_LEVELS } from '@oma/domain/settings';
 export async function startInteractiveRuntime(input: {
     settings: EngineSettingsFiles;
 }, config: InteractiveConfiguration, view: InteractiveView, state: InteractiveState, modules: ExtensionModules, extensions: string[], upstream: string, boundary: ExtensionFactory, ownSessions: string) {
@@ -71,11 +72,15 @@ export async function startInteractiveRuntime(input: {
             : services.modelRuntime.getModel(modelName.slice(0, split), modelName.slice(split + 1));
         if (modelName !== undefined && !model)
             throw new Error(`configured model is unavailable: ${modelName}`);
+        const thinking = argv.includes("--thinking") ? EFFORT_LEVELS.find(level => level === flag("--thinking")) : undefined;
+        if (argv.includes("--thinking") && thinking === undefined)
+            throw new Error(`configured thinking level is unavailable: ${flag("--thinking")}`);
         try {
             const created = await createAgentSessionFromServices({
                 services, sessionManager: options.sessionManager, ...(model ? {
                     model
                 } : {}),
+                ...(thinking === undefined ? {} : { thinkingLevel: thinking }),
                 excludeTools: ["bash", "powershell"]
             });
             const reloadSession = created.session.reload.bind(created.session);

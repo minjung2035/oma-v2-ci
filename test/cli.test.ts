@@ -3,11 +3,9 @@ import { createReconcileModule } from "#oma-test/app/broker/reconcile-compositio
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
-// CLI acceptance (P1): the real `oma` CLI binary against the real broker over
-// Unix sockets from a real owned PID namespace and pinned trusted runner.
-// Manual CLI children are authenticated by their actual process descent. Covers IPC-006 freeze-cache semantics, IPC-008 --request
-// recovery, CLI-003 exit codes, and the streamed submit path — through the
-// CLI, never by calling library APIs directly.
+// Typed client acceptance against the real broker over Unix sockets from
+// an owned PID namespace and pinned trusted runner. Child client processes
+// authenticate by actual descent and use production input effects.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, } from "node:fs";
@@ -27,13 +25,12 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { encodeFrame } from "@oma/protocol/frame";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import type { ResolvedAgentSpec } from "@oma/contracts";
+import { clientCall, clientProcessSource } from "./fixtures/client-process.js";
 const G = {
     ...process.env,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
 };
-const ROOT = join(import.meta.dirname ?? process.cwd(), "..", "..");
-const CLI = join(ROOT, "apps", "oma", "dist", "cli.js");
 interface Env {
     dir: string;
     state: string;
@@ -89,7 +86,7 @@ async function envOf(): Promise<Env> {
         society,
         hasGoal: () => false,
         activationAllowed: () => true,
-    }, resolver, mail);
+    }, Object.assign(resolver, { maxWorkers: () => 6 }), mail);
     const views = new ViewsModule(store, state, society, "p");
     const git = createGitModule({
         stateRoot: state,
@@ -161,14 +158,12 @@ function seedProject(env: Env): string {
     return base;
 }
 /**
- * Trusted test runner: run the CLI inside an actually owned PID namespace.
- * The inherited private control socket first obtains a run lease via
- * runner.open (the production path), then executes each scenario's CLI
- * invocation with OMA_SOCKET pointing at the lease's actor socket.
+ * Trusted runner: acquire a real run lease, then execute actual typed Client
+ * calls in child processes authenticated by descent from the owned namespace.
  */
 const WRAP = String.raw `import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync, spawn } from "node:child_process";
-import { connect, Socket } from "node:net";
+import { connect, createServer, Socket } from "node:net";
 import { FrameParser, encodeFrame } from "@ABS_FRAME@";
 const control = new Socket({ fd: 6, readable: true, writable: true });
 
@@ -214,23 +209,64 @@ for (const s of scenarios) {
     results.push({ git: s.git, code: g.status, stdout: g.stdout ?? "", stderr: g.stderr ?? "" });
     continue;
   }
-  const r = spawnSync(process.execPath, [process.env.OMA_CLI, ...s.args], {
+  // Interrupt the actual submit connection after local preparation/freezing.
+  // Queries still reach the real authenticated broker; no effect is mocked.
+  const sockets = new Set();
+  const proxy = s.socket === undefined ? null : createServer(incoming => {
+    sockets.add(incoming);
+    incoming.on("close", () => sockets.delete(incoming));
+    incoming.on("error", () => {});
+    let pending = Buffer.alloc(0);
+    const inspect = bytes => {
+      pending = Buffer.concat([pending, bytes]);
+      if (pending.length < 4 || pending.length < 4 + pending.readUInt32BE(0)) return;
+      const request = JSON.parse(pending.subarray(4, 4 + pending.readUInt32BE(0)));
+      incoming.off("data", inspect);
+      if (request.method === "git.submit") { incoming.destroy(); return; }
+      incoming.pause();
+      const upstream = connect(sock, () => {
+        upstream.write(pending);
+        incoming.pipe(upstream);
+        incoming.resume();
+      });
+      sockets.add(upstream);
+      upstream.on("close", () => { sockets.delete(upstream); incoming.destroy(); });
+      incoming.on("close", () => upstream.destroy());
+      upstream.on("error", () => incoming.destroy());
+      upstream.pipe(incoming);
+    };
+    incoming.on("data", inspect);
+  });
+  if (proxy) await new Promise((resolve, reject) => {
+    proxy.once("error", reject); proxy.listen(s.socket, resolve);
+  });
+  const { promise, resolve, reject } = Promise.withResolvers();
+  const child = spawn(process.execPath, ["--input-type=module", "-e", s.source], {
     cwd: s.cwd ?? "/tmp",
     env: { ...process.env, OMA_SOCKET: s.socket ?? sock, HOME: s.home ?? process.env.OMA_HOME, ...(s.env ?? {}) },
-    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
     timeout: 60000,
   });
-  results.push({ args: s.args, code: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" });
+  let stdout = "", stderr = "";
+  child.stdout.on("data", bytes => { stdout += bytes; });
+  child.stderr.on("data", bytes => { stderr += bytes; });
+  child.once("error", reject);
+  child.once("close", code => resolve({ code, stdout, stderr }));
+  results.push(await promise);
+  if (proxy) {
+    for (const socket of sockets) socket.destroy();
+    await new Promise(resolve => proxy.close(resolve));
+  }
 }
 writeFileSync(process.env.OMA_OUT, JSON.stringify(results));
 process.exit(0);
 `;
-test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submit (real native scope, real sockets)", async (t) => {
+test("Client acceptance: freeze cache, same-key semantics, recovery, streamed submit (real native scope, real sockets)", async (t) => {
     const env = await envOf();
     const society = env.society;
     try {
         const base = seedProject(env);
-        // CLI workdir: a clone with one local commit to submit
+        // Caller workdir: a clone with one local commit to submit.
         const work = join(env.dir, "work");
         const sh = (args: string[], cwd?: string): string => {
             const r = spawnSync("git", args, {
@@ -255,208 +291,49 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
             "cli",
         ], work);
         const candidate = sh(["rev-parse", "HEAD"], work);
-        const bodyFile = join(env.dir, "body.txt");
-        writeFileSync(bodyFile, "hello body\n", "utf8");
-        const briefFile = join(env.dir, "brief.md");
-        writeFileSync(briefFile, "# checker brief\n", "utf8");
         const homeDir = join(env.dir, "home-a");
         mkdirSync(homeDir, { recursive: true });
-        // scenarios (in one unit run; shared HOME = shared freeze cache)
+        const invoke = (expression: string, extra: { socket?: string } = {}) => ({
+            source: clientProcessSource(expression), cwd: work, home: homeDir, ...extra,
+        });
+        const send = (subject = "hello") => clientCall("sendMail", {
+            to: ["b"], subject, body: "hello body\n", kind: "message",
+        }, "k1");
+        const submit = (key: string, to?: string[], subject = "") => clientCall("publishCandidate", {
+            candidate: "HEAD", subject, body: "", ...(to === undefined ? {} : { to }),
+        }, key);
+        const create = (name: string, key: string) => clientCall("createAgent", {
+            name, from: "HEAD", brief: "# checker brief\n",
+        }, key);
+        const moveHead = (message: string) => ({
+            git: ["-c", "user.name=C", "-c", "user.email=c@localhost", "commit", "-qm", message, "--allow-empty"],
+            cwd: work,
+        });
         const scenarios: Array<{
-            args?: string[];
-            git?: string[];
-            frame?: unknown;
-            cwd: string;
-            home?: string;
-            socket?: string;
+            source?: string; git?: string[]; frame?: unknown; cwd?: string; home?: string; socket?: string;
         }> = [
-            {
-                args: [
-                    "send",
-                    "b",
-                    "--subject",
-                    "hello",
-                    "--file",
-                    bodyFile,
-                    "--request",
-                    "k1",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: [
-                    "send",
-                    "b",
-                    "--subject",
-                    "hello",
-                    "--file",
-                    bodyFile,
-                    "--request",
-                    "k1",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: [
-                    "send",
-                    "b",
-                    "--subject",
-                    "other",
-                    "--file",
-                    bodyFile,
-                    "--request",
-                    "k1",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: [
-                    "send",
-                    "b",
-                    "--subject",
-                    "hello",
-                    "--file",
-                    bodyFile,
-                    "--request",
-                    "k1",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: ["submit", "HEAD", "--subject", "cli subm", "--request", "ksub"],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: ["submit", "HEAD", "--request", "ksub2"],
-                cwd: work,
-                home: homeDir,
-                socket: join(env.dir, "dead.sock"),
-            },
-            {
-                args: ["submit", "HEAD", "--request", "ksub2"],
-                cwd: work,
-                home: homeDir,
-            },
-            // P1-6: --to parsing (single / repeatable / default commons)
-            {
-                args: ["submit", "HEAD", "--to", "a", "--request", "kto1"],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: ["submit", "HEAD", "--to", "a", "--to", "b", "--request", "kto2"],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: ["submit", "HEAD", "--request", "kto3"],
-                cwd: work,
-                home: homeDir,
-            },
-            // P1-5: agent create --from HEAD (resolved locally), then frozen recovery
-            {
-                args: [
-                    "agent",
-                    "create",
-                    "checker",
-                    "--from",
-                    "HEAD",
-                    "--file",
-                    briefFile,
-                    "--request",
-                    "kfrom",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                git: [
-                    "-c",
-                    "user.name=C",
-                    "-c",
-                    "user.email=c@localhost",
-                    "commit",
-                    "-qm",
-                    "move-head",
-                    "--allow-empty",
-                ],
-                cwd: work,
-            },
-            {
-                args: [
-                    "agent",
-                    "create",
-                    "checker",
-                    "--from",
-                    "HEAD",
-                    "--file",
-                    briefFile,
-                    "--request",
-                    "kfrom",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                args: [
-                    "agent",
-                    "create",
-                    "checker2",
-                    "--from",
-                    "HEAD",
-                    "--file",
-                    briefFile,
-                    "--request",
-                    "kfrom2",
-                ],
-                cwd: work,
-                home: homeDir,
-            },
-            // P1-4: submit frozen-first after HEAD moves
-            {
-                args: ["submit", "HEAD", "--request", "ksubf"],
-                cwd: work,
-                home: homeDir,
-            },
-            {
-                git: [
-                    "-c",
-                    "user.name=C",
-                    "-c",
-                    "user.email=c@localhost",
-                    "commit",
-                    "-qm",
-                    "move2",
-                    "--allow-empty",
-                ],
-                cwd: work,
-            },
-            {
-                args: ["submit", "HEAD", "--request", "ksubf"],
-                cwd: work,
-                home: homeDir,
-            },
+            invoke(send()), invoke(send()), invoke(send("other")), invoke(send()),
+            invoke(submit("ksub", undefined, "client submit")),
+            invoke(submit("ksub2"), { socket: join(env.dir, "dead.sock") }),
+            invoke(submit("ksub2")), invoke(submit("kto1", ["a"])),
+            invoke(submit("kto2", ["a", "b"])), invoke(submit("kto3")),
+            invoke(create("checker", "kfrom")), moveHead("move-head"),
+            invoke(create("checker", "kfrom")), invoke(create("checker2", "kfrom2")),
+            invoke(submit("ksubf")), moveHead("move2"), invoke(submit("ksubf")),
         ];
         const typedStart = scenarios.length;
         const policyRevision = " 정책-v1 ";
-        const approvalArgs = (key: string, oid = candidate, policy = policyRevision, recipient = "principal") => [
-            "send", recipient, "--kind", "approval_required", "--subject", "exact approval",
-            "--candidate", oid, "--expect", base, "--policy-revision", policy,
-            "--file", bodyFile, "--request", key,
-        ];
-        for (const args of [
-            approvalArgs("approval"), approvalArgs("approval"),
-            approvalArgs("approval", candidate, "changed-policy"),
-            approvalArgs("unpublished-approval", base),
-            approvalArgs("missing-principal", candidate, policyRevision, "b"),
-            approvalArgs("short-oid", candidate.slice(0, 8)),
+        const approvalCall = (key: string, oid = candidate, policy = policyRevision) => clientCall("approvalNotice", {
+            subject: "exact approval", body: "hello body\n", candidate: oid, base, policyRevision: policy,
+        }, key);
+        for (const expression of [
+            approvalCall("approval"), approvalCall("approval"),
+            approvalCall("approval", candidate, "changed-policy"),
+            approvalCall("unpublished-approval", base),
+            clientCall("sendMail", { to: ["b"], subject: "exact approval", body: "hello body\n", kind: "approval_required" }, "missing-principal"),
+            approvalCall("short-oid", candidate.slice(0, 8)),
         ])
-            scenarios.push({ args, cwd: work, home: homeDir });
+            scenarios.push(invoke(expression));
         const identity = { repo: "project", targetRef: "refs/heads/main", candidate, expectedBase: base, policyRevision };
         const validMail = { to: ["principal"], subject: "raw approval", body: "body", kind: "approval_required", approvalFor: identity };
         const invalidMail = [
@@ -499,9 +376,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         writeFileSync(join(contextDir, "RATIONALE.md"), "");
         writeFileSync(join(contextDir, "decisions/a..b.md"), "decision\n");
         for (let retry = 0; retry < 2; retry++)
-            scenarios.push({
-                args: ["context", "publish", contextDir, "--expect", "none", "--request", "ctx-live"], cwd: work, home: homeDir,
-            });
+            scenarios.push(invoke(clientCall("publishContext", contextDir, null, "ctx-live")));
         const contextInvalid: Array<Array<[
             string,
             Buffer
@@ -525,13 +400,13 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         const outPath = join(env.dir, "cli.out.json");
         writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify(scenarios), "utf8");
         const runEnvironment = {
-            OMA_ADMIN_SOCK: "private-runner-control", OMA_ACTOR: "a", OMA_CLI: CLI,
+            OMA_ADMIN_SOCK: "private-runner-control", OMA_ACTOR: "a",
             OMA_HOME: homeDir, OMA_OUT: outPath, OMA_SCENARIOS_FILE: join(env.dir, "scenarios.json"), HOME: env.dir,
         };
         await env.units.runScript("a", wrapPath, runEnvironment);
         assert.ok(existsSync(outPath), "native wrapper produced no output");
         const results = JSON.parse(readFileSync(outPath, "utf8")) as Array<{
-            args: string[];
+            source?: string;
             code: number;
             stdout: string;
             stderr: string;
@@ -539,7 +414,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         // 1) first send: accepted, receipt with an operation id
         const r1 = results[0]!;
         assert.equal(r1.code, 0, `send failed: ${r1.stderr}`);
-        const rec1 = JSON.parse(r1.stdout) as {
+        const rec1 = JSON.parse(r1.stdout).receipt as {
             operation: string;
             state: string;
         };
@@ -553,23 +428,23 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         // 2) same key + same payload -> the SAME receipt (idempotent)
         const r2 = results[1]!;
         assert.equal(r2.code, 0, `re-send failed: ${r2.stderr}`);
-        assert.equal((JSON.parse(r2.stdout) as {
+        assert.equal((JSON.parse(r2.stdout).receipt as {
             operation: string;
         }).operation, rec1.operation);
         // 3) same key + DIFFERENT payload -> REQUEST_KEY_REUSED, exit 2
         const r3 = results[2]!;
         assert.equal(r3.code, 2, `expected exit 2, got ${r3.code}: ${r3.stdout}${r3.stderr}`);
         assert.match(r3.stderr, /REQUEST_KEY_REUSED/);
-        // 4) --request <key> re-invocation of the succeeded op (IPC-008)
+        // 4) Same-key re-invocation of the succeeded operation (IPC-008).
         const r4 = results[3]!;
-        assert.equal(r4.code, 0, `--request replay failed: ${r4.stderr}`);
-        assert.equal((JSON.parse(r4.stdout) as {
+        assert.equal(r4.code, 0, `same-key replay failed: ${r4.stderr}`);
+        assert.equal((JSON.parse(r4.stdout).receipt as {
             operation: string;
         }).operation, rec1.operation);
-        // 5) submit via the CLI (bundle built locally, streamed): succeeded + ref
+        // 5) publishCandidate builds a real local bundle and streams it.
         const r5 = results[4]!;
         assert.equal(r5.code, 0, `submit failed (code ${r5.code}): stdout=${JSON.stringify(r5.stdout)} stderr=${JSON.stringify(r5.stderr)}`);
-        const subRec = JSON.parse(r5.stdout) as {
+        const subRec = JSON.parse(r5.stdout).receipt as {
             result: {
                 publishedRef: string;
                 candidate: string;
@@ -587,11 +462,11 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         assert.equal(r6.code, 3, `expected exit 3 for dead socket, got ${r6.code}: ${r6.stdout}${r6.stderr}`);
         const cachePath = join(homeDir, ".local", "state", "oma", "requests", "ksub2.json");
         assert.ok(existsSync(cachePath), "freeze cache must survive a dead-socket attempt");
-        // 7) --request recovery against the live broker: operation.get miss ->
+        // 7) Same-key recovery against the live broker: operation.get miss ->
         //    replay of the frozen payload -> succeeded with ITS OWN receipt/ref
         const r7 = results[6]!;
         assert.equal(r7.code, 0, `recovery failed (code ${r7.code}): stdout=${JSON.stringify(r7.stdout)} stderr=${JSON.stringify(r7.stderr)}`);
-        const rec2 = JSON.parse(r7.stdout) as {
+        const rec2 = JSON.parse(r7.stdout).receipt as {
             result: {
                 publishedRef: string;
                 candidate: string;
@@ -635,7 +510,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         // ---- P1-5: agent create --from HEAD ----
         const rFrom1 = results[10]!;
         assert.equal(rFrom1.code, 0, `agent create --from HEAD failed: ${rFrom1.stdout}${rFrom1.stderr}`);
-        const fromRec = JSON.parse(rFrom1.stdout) as {
+        const fromRec = JSON.parse(rFrom1.stdout).receipt as {
             operation: string;
             state: string;
         };
@@ -646,8 +521,8 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         // recovery after HEAD moved: MUST use the originally frozen OID (exit 0,
         // same receipt) — the old code would re-resolve HEAD and fail REQUEST_KEY_REUSED.
         const rFrom2 = results[12]!;
-        assert.equal(rFrom2.code, 0, `agent create --from HEAD --request recovery failed: ${rFrom2.stdout}${rFrom2.stderr}`);
-        assert.equal((JSON.parse(rFrom2.stdout) as {
+        assert.equal(rFrom2.code, 0, `createAgent frozen HEAD recovery failed: ${rFrom2.stdout}${rFrom2.stderr}`);
+        assert.equal((JSON.parse(rFrom2.stdout).receipt as {
             operation: string;
         }).operation, fromRec.operation, "recovery must reuse the frozen agent-create request");
         // A fresh local-only HEAD is not in canonical project.git and must fail closed.
@@ -657,7 +532,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         // ---- P1-4: submit frozen-first after HEAD moves ----
         const rSubf1 = results[14]!;
         assert.equal(rSubf1.code, 0, `submit freeze failed: ${rSubf1.stdout}${rSubf1.stderr}`);
-        const subf1 = JSON.parse(rSubf1.stdout) as {
+        const subf1 = JSON.parse(rSubf1.stdout).receipt as {
             operation: string;
             result: {
                 candidate: string;
@@ -667,7 +542,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         assert.equal(git2.code, 0, `git move2: ${git2.stderr}`);
         const rSubf2 = results[16]!;
         assert.equal(rSubf2.code, 0, `submit recovery after HEAD moved failed: ${rSubf2.stdout}${rSubf2.stderr}`);
-        const subf2 = JSON.parse(rSubf2.stdout) as {
+        const subf2 = JSON.parse(rSubf2.stdout).receipt as {
             operation: string;
             result: {
                 candidate: string;
@@ -689,7 +564,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         }
         assert.equal(env.store.getOperation("a", "invalid-wire"), null);
         assert.deepEqual(typed.map((result) => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(typed));
-        assert.equal(JSON.parse(typed[0]!.stdout).operation, JSON.parse(typed[1]!.stdout).operation);
+        assert.equal(JSON.parse(typed[0]!.stdout).receipt.operation, JSON.parse(typed[1]!.stdout).receipt.operation);
         assert.match(typed[2]!.stderr, /REQUEST_KEY_REUSED/);
         assert.match(typed[3]!.stderr, /CANDIDATE_NOT_PUBLISHED/);
         for (const key of ["unpublished-approval", "missing-principal", "short-oid"])
@@ -710,8 +585,8 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         assert.equal(headers["x-oma-approval-base"], base);
         const contexts = results.slice(contextStart);
         assert.deepEqual(contexts.map(result => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(contexts));
-        const firstContext = JSON.parse(contexts[0]!.stdout);
-        assert.equal(firstContext.operation, JSON.parse(contexts[1]!.stdout).operation);
+        const firstContext = JSON.parse(contexts[0]!.stdout).receipt;
+        assert.equal(firstContext.operation, JSON.parse(contexts[1]!.stdout).receipt.operation);
         assert.equal(firstContext.state, "succeeded");
         assert.equal(readFileSync(join(env.state, "world/context/current/GOAL.md"), "utf8"), "# authenticated context\n");
         assert.equal(sh(["--git-dir", join(env.state, "repos/context.git"), "rev-parse", "refs/heads/main"]), firstContext.result.revision);
@@ -722,17 +597,16 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
             assert.equal(result.stderr, "INVALID_REQUEST");
             assert.equal(env.store.getOperation("a", `ctx-wire-${index}`), null);
         }
-        // A new real invocation exercises CLI --reply against an accepted archive object.
+        // A new authenticated invocation replies to an accepted archive object.
         const originalMessage = JSON.parse(env.store.getOperationById(rec1.operation)!.planJson).intent.message;
         const invalidText = join(env.dir, "invalid-text.txt");
         writeFileSync(invalidText, Buffer.from([0xff]));
         writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify([{
-                args: ["send", "--reply", join(env.state, "mail/archive/cur", `${originalMessage.id}:2,`), "--subject", "reply", "--file", bodyFile, "--request", "real-reply"],
-                cwd: work, home: homeDir,
+                ...invoke(clientCall("replyMail", { replyFile: join(env.state, "mail/archive/cur", `${originalMessage.id}:2,`), subject: "reply", body: "hello body\n" }, "real-reply")),
             }, {
-                args: ["send", "--reply", join(env.dir, "missing-reply.eml"), "--subject", "reply", "--file", bodyFile, "--request", "real-reply"],
+                ...invoke(clientCall("replyMail", { replyFile: join(env.dir, "missing-reply.eml"), subject: "reply", body: "hello body\n" }, "real-reply")),
             }, {
-                args: ["send", "b", "--subject", "invalid text", "--file", invalidText, "--request", "invalid-text"],
+                ...invoke(clientCall("replyMail", { replyFile: invalidText, subject: "reply", body: "hello body\n" }, "invalid-text")),
             }, {
                 frame: { v: 1, id: "forged-from", request: "forged-from", method: "mail.send", params: { to: ["b"], subject: "forged", kind: "message", body: "body", from: "principal" } },
             }, {
@@ -744,7 +618,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         const replyResults = JSON.parse(readFileSync(outPath, "utf8"));
         assert.equal(replyResults[0].code, 0, JSON.stringify(replyResults));
         assert.equal(replyResults[1].code, 0, JSON.stringify(replyResults));
-        assert.equal(JSON.parse(replyResults[0].stdout).operation, JSON.parse(replyResults[1].stdout).operation);
+        assert.equal(JSON.parse(replyResults[0].stdout).receipt.operation, JSON.parse(replyResults[1].stdout).receipt.operation);
         assert.equal(replyResults[2].code, 2, JSON.stringify(replyResults));
         assert.equal(env.store.getOperation("a", "invalid-text"), null);
         for (const [index, key] of ["forged-from", "header-injection"].entries()) {

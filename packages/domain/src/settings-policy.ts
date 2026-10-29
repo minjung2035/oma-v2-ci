@@ -11,12 +11,14 @@ export interface FieldSettings {
 export const PRINCIPAL_MODEL = "principal-model";
 export const WORKER_MODEL = "worker-model";
 export const INITIAL_WORKERS = "initial-workers";
+export const MAX_WORKERS = "max-workers";
 export const WORKER_PROFILE = "worker-profile";
 export const WORKER_INTEGRATE = "worker-integrate";
 export const EDITABLE_FIELDS = Object.freeze([
     PRINCIPAL_MODEL,
     WORKER_MODEL,
     INITIAL_WORKERS,
+    MAX_WORKERS,
     WORKER_PROFILE,
     WORKER_INTEGRATE,
 ] as const);
@@ -230,13 +232,26 @@ const DESCRIPTOR_SOURCE = {
         apply: "bootstrap-only",
         blocked: seedsBlocked,
         view: (config: HostConfig) => ({
-            kind: "number" as const, value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value,
+            kind: "number" as const, value: config.initialResidents.length, min: 0, max: Math.min(config.maxWorkers, CONFIG_BOUNDS.maxInitialWorkers.value),
         }),
         transform: (settings: FieldSettings, value: FieldValue) => {
             assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
             // A seed needs a Worker profile only when one is added.
             const count = value as number;
+            assertKnown(count <= settings.config.maxWorkers, "initial workers exceed maximum workers");
             return withSeedCount(settings.config, count, count > settings.config.initialResidents.length ? workerTarget(settings) : "");
+        },
+    }),
+    [MAX_WORKERS]: Object.freeze({
+        label: "Maximum workers",
+        apply: "restart",
+        view: (config: HostConfig) => ({
+            kind: "number" as const, value: config.maxWorkers, min: Math.max(1, config.initialResidents.length), max: Number.MAX_SAFE_INTEGER,
+        }),
+        transform: (settings: FieldSettings, value: FieldValue) => {
+            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "maximum workers must be a positive safe integer");
+            assertKnown((value as number) >= settings.config.initialResidents.length, "maximum workers is below the initial worker count");
+            return { ...settings.config, maxWorkers: value as number };
         },
     }),
     [WORKER_PROFILE]: Object.freeze({

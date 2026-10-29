@@ -8,12 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readContextEntry, assertContextDirectory } from "@oma/storage/context-files";
 import { StoreError } from "@oma/domain/errors";
-import { prepareContextEffects } from "#oma-test/app/cli/effects/context";
+import { prepareContextEffects } from "#oma-test/app/runtime/input-effects/context";
 
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
-test("context CLI keeps the held source after its pathname is replaced", () => {
+test("context input preparation keeps the held source after its pathname is replaced", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-held-source-"));
   const source = join(root, "source"), moved = join(root, "moved"), original = fs.fstatSync;
   const expected = Buffer.from("# held source\n");

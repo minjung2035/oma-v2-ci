@@ -1,6 +1,6 @@
 /** Read-only review projection; observing it grants no authority. */
 import type { AuthContext, Oid, OperationId } from "@oma/contracts";
-import type { ReviewRequestSummary, ReviewStatusResult } from "@oma/contracts/public-wire";
+import type { ReviewRequestSummary, ReviewStatusResult, ReviewStatusQuery, ReviewRequestList } from "@oma/contracts/public-wire";
 import { StoreError } from "@oma/domain/errors";
 import { reviewState, type ReviewState } from "@oma/domain/review-evaluation";
 import { workerReviewStatus } from "./status-projection.js";
@@ -21,12 +21,20 @@ export class ReviewStatus {
 
   /** A pure read over the review ledger: Workers get the full detail or the
    * bounded list; the Principal gets the minimal view of a request it can see. */
-  status(auth: AuthContext, name: string | undefined, frameBytes: number, responseId: string):
-      ReviewStatusResult {
+  status(auth: AuthContext, query: ReviewStatusQuery, frameBytes: number, responseId: string): ReviewStatusResult {
     const main = this.mainObservation();
-    if (auth.role === "principal") return this.principalStatus(name);
-    if (name !== undefined) return this.workerStatus(name, main, frameBytes, responseId);
-    const opens = this.ledger.projection().reverse();   // newest first
+    if (auth.role === "principal") {
+      if (query.reviewerAfter !== undefined) throw new StoreError("CAPABILITY_DENIED", "reviewer observations belong to Workers");
+      return this.principalStatus(query.name);
+    }
+    if (query.name !== undefined) return this.workerStatus(query.name, main, frameBytes, responseId, query.reviewerAfter);
+    const opens = this.ledger.projection().reverse().filter(({ open }) => open.operation.plan.fact.kind === `${query.kind}.open`);
+    let start = 0;
+    if (query.after !== undefined) {
+      const cursor = opens.findIndex(({ open }) => isOpenFact(open.operation.plan.fact) && open.operation.plan.fact.name === query.after);
+      if (cursor < 0) throw new StoreError("INVALID_REQUEST", "unknown review list cursor");
+      start = cursor + 1;
+    }
     const requests: ReviewRequestSummary[] = [];
     const summaryOf = (open: OpenRequest,
         state: ReviewState): ReviewRequestSummary => {
@@ -36,30 +44,32 @@ export class ReviewStatus {
       return { name: state.name, kind: state.kind, tier: state.tier, title: plan.fact.title,
         requester: state.requester, display: state.display };
     };
-    for (const [index, { open, input }] of opens.entries()) {
-      const state = reviewState(input);
-      const candidate = { requests: [...requests, summaryOf(open, state)],
-        omitted: opens.length - (index + 1), main };
-      if (Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result: candidate })) > frameBytes)
+    const result: ReviewRequestList = { requests, omitted: opens.length - start, next: null, main };
+    const baseBytes = Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result }));
+    if (baseBytes > frameBytes) throw new StoreError("FRAME_TOO_LARGE", "review list metadata exceeds the response frame");
+    const initialOmittedBytes = String(result.omitted).length;
+    let rowBytes = 0;
+    for (let index = start; index < opens.length; index++) {
+      const { open, input } = opens[index]!;
+      const row = summaryOf(open, reviewState(input));
+      const cost = Buffer.byteLength(JSON.stringify(row)) + (requests.length ? 1 : 0);
+      const omitted = opens.length - index - 1;
+      const next = omitted > 0 ? row.name : null;
+      const cursorBytes = next === null ? 0 : Buffer.byteLength(JSON.stringify(next)) - 4;
+      if (baseBytes + rowBytes + cost + cursorBytes + String(omitted).length - initialOmittedBytes > frameBytes) {
+        if (requests.length === 0) throw new StoreError("FRAME_TOO_LARGE", "one review list row exceeds the response frame");
         break;
-      requests.push(summaryOf(open, state));
-    }
-    // The omitted count widened since the last probe; shrink until it fits.
-    let result = { requests, omitted: opens.length - requests.length, main };
-    while (requests.length > 0 &&
-        Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result })) > frameBytes) {
-      requests.pop();
-      result = { requests, omitted: opens.length - requests.length, main };
+      }
+      requests.push(row); rowBytes += cost;
+      result.omitted = omitted;
+      result.next = next;
     }
     return result;
   }
 
-  /** AV-20261003-24: the detail answer is bounded like the list answer. The
-   * newest entries are kept; earlier entries that no longer fit are reported
-   * in `missing`, never dropped silently. `entries` is the only unbounded
-   * field — every other field is fixed or quota-bounded. */
+  /** Both reviewer and ledger observations are bounded and explicitly paged. */
   private workerStatus(name: string, main: { oid: Oid | null; observedAtMs: number },
-      frameBytes: number, responseId: string): ReviewStatusResult {
+      frameBytes: number, responseId: string, reviewerAfter?: string): ReviewStatusResult {
     const open = this.ledger.requestByName(name);
     if (open === null) throw new StoreError("INVALID_REQUEST", `unknown request ${name}`);
     const inputFor = this.ledger.inputFor(open);
@@ -78,7 +88,8 @@ export class ReviewStatus {
     }
     if (this.oversize.has(state.request))
       missing.push("the completion notice exceeds the document bound; split the change");
-    return workerReviewStatus(state, openFact, missing, main, frameBytes, responseId);
+    const reviewers = this.ledger.reviewers(state).filter(row => reviewerAfter === undefined || row.name > reviewerAfter);
+    return workerReviewStatus(state, openFact, missing, main, frameBytes, responseId, reviewers);
   }
 
   /** The Principal sees a request only when an approval mail reached it or the
@@ -95,9 +106,11 @@ export class ReviewStatus {
       return "messages" in plan && isOpenFact(plan.fact) && plan.fact.name === name;
     });
     if (open === undefined) return refuse();
-    const state = reviewState(this.ledger.inputFor(open));
-    const visible = state.integration?.state === "succeeded" || state.entries.some(entry =>
-      entry.messages.some(message => message.review?.role === "approval" &&
+    const input = this.ledger.inputFor(open);
+    const state = reviewState(input);
+    const visible = state.integration?.state === "succeeded" ||
+      input.open.messages.some(message => message.review?.role === "approval" && message.recipients.includes(PRINCIPAL)) ||
+      state.entries.some(entry => entry.messages.some(message => message.review?.role === "approval" &&
         message.recipients.includes(PRINCIPAL)));
     if (!visible) return refuse();
     const openPlan = open.operation.plan;

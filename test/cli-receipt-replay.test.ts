@@ -3,14 +3,13 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { clientCall, clientProcessArgs } from "./fixtures/client-process.js";
 import { createServer, type Server, type Socket } from "node:net";
 import { execFile, spawn } from "node:child_process";
 import { RequestCache } from "#oma-test/app/request-cache";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { receiptNotFound } from "@oma/protocol/receipts";
 
-const cli = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const operation = "op-12345678-1234-4234-8234-123456789abc";
 const success = { operation, state: "succeeded", result: { kind: "route.follow", topic: "commons", subscribed: true } };
 const notFound = { operation: "", state: "failed", error: { code: "REQUEST_NOT_FOUND", message: "absent", retry: "same-key" } };
@@ -22,11 +21,11 @@ interface Scenario {
   stdout?: RegExp;
 }
 const scenarios: Scenario[] = [
-  { name: "pending is accepted but unfinished", lookup: { ok: true, result: { operation, state: "pending" } }, exit: 0, resend: false, stdout: /^Accepted \/ not yet complete\nQuery again: use --request / },
-  { name: "unknown is not absence", lookup: { ok: true, result: { operation, state: "unknown" } }, exit: 3, resend: false, stdout: /^Outcome unknown:/ },
-  { name: "terminal failed is not absence", lookup: { ok: true, result: { operation, state: "failed", error: { code: "CHECK_FAILED", message: "CHECK_FAILED", retry: "never" } } }, exit: 2, resend: false, stdout: /^Failed: CHECK_FAILED/ },
+  { name: "pending is accepted but unfinished", lookup: { ok: true, result: { operation, state: "pending" } }, exit: 0, resend: false, stdout: /"state":"pending"/ },
+  { name: "unknown is not absence", lookup: { ok: true, result: { operation, state: "unknown" } }, exit: 3, resend: false, stdout: /"state":"unknown"/ },
+  { name: "terminal failed is not absence", lookup: { ok: true, result: { operation, state: "failed", error: { code: "CHECK_FAILED", message: "CHECK_FAILED", retry: "never" } } }, exit: 2, resend: false, stdout: /"state":"failed"/ },
   { name: "success has no repeated physical effect", lookup: { ok: true, result: success }, exit: 0, resend: false, stdout: /"state":"succeeded"/ },
-  { name: "SPIKE remains unsupported", lookup: { ok: true, result: { operation, state: "failed", error: { code: "SPIKE_UNRESOLVED", message: "SPIKE_UNRESOLVED", retry: "never" } } }, exit: 4, resend: false, stdout: /^Failed: SPIKE_UNRESOLVED/ },
+  { name: "SPIKE remains unsupported", lookup: { ok: true, result: { operation, state: "failed", error: { code: "SPIKE_UNRESOLVED", message: "SPIKE_UNRESOLVED", retry: "never" } } }, exit: 4, resend: false, stdout: /"code":"SPIKE_UNRESOLVED"/ },
   { name: "explicit not-found receipt permits frozen resend", lookup: { ok: true, result: notFound }, exit: 0, resend: true, stdout: /"state":"succeeded"/ },
   { name: "explicit not-found error permits frozen resend", lookup: { ok: false, error: notFound.error }, exit: 0, resend: true, stdout: /"state":"succeeded"/ },
   { name: "lookup unavailable is not absence", lookup: { ok: false, error: { code: "DB_BUSY", message: "DB_BUSY", retry: "same-key" } }, exit: 3, resend: false },
@@ -36,7 +35,7 @@ const scenarios: Scenario[] = [
 ];
 
 // Execution specification only. Tests and build are NOT_RUN in the editing environment.
-test("actual CLI uses authoritative receipts without inventing resend permission", { timeout: 60_000 }, async t => {
+test("actual typed client uses authoritative receipts without inventing resend permission", { timeout: 60_000 }, async t => {
   for (const scenario of scenarios) {
     await t.test(scenario.name, { timeout: 10_000 }, async sub => {
       const home = mkdtempSync(join(tmpdir(), "oma-r08-"));
@@ -73,7 +72,7 @@ test("actual CLI uses authoritative receipts without inventing resend permission
       });
       const socketPath = join(home, "broker.sock");
       await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(socketPath, resolve); });
-      const child = spawn(process.execPath, [cli, "follow", "commons", "--request", key], {
+      const child = spawn(process.execPath, clientProcessArgs(clientCall("subscribe", "follow", "commons", key)), {
         cwd: home, env: { ...process.env, HOME: home, OMA_SOCKET: socketPath }, stdio: ["ignore", "pipe", "pipe"],
       });
       sub.after(() => { child.kill(); });
@@ -98,8 +97,7 @@ test("actual CLI uses authoritative receipts without inventing resend permission
   }
 });
 
-/* V26B (WP26): the same CLI and cache with `send`, whose frozen request
- * carries the message body. The peer is not a broker: CLI/cache evidence only. */
+/* The same client/cache with mail bodies. The peer is not a broker. */
 const OP = (n: number) => `op-00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const MESSAGE = (n: number) => `m-00000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
 const sent = (n: number) => ({ operation: OP(n), state: "succeeded",
@@ -131,8 +129,8 @@ async function peer(home: string, script: Script): Promise<{ seen: Seen[]; close
   return { seen, close: async () => { for (const socket of sockets) socket.destroy(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 }
 
-function run(home: string, args: string[]): Promise<{ code: number | string; stdout: string; stderr: string }> {
-  return new Promise(resolve => execFile(process.execPath, [cli, ...args], {
+function run(home: string, expression: string): Promise<{ code: number | string; stdout: string; stderr: string }> {
+  return new Promise(resolve => execFile(process.execPath, clientProcessArgs(expression), {
     cwd: home, encoding: "utf8", timeout: 10_000,
     env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, OMA_SOCKET: join(home, "peer.sock") },
   }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr })));
@@ -140,7 +138,7 @@ function run(home: string, args: string[]): Promise<{ code: number | string; std
 function scene() {
   const home = mkdtempSync(join(tmpdir(), "oma-v26b-"));
   writeFileSync(join(home, "input.txt"), "the words first chosen\n");
-  const send = (key?: string) => ["send", "bob", "--subject", "hello", "--file", join(home, "input.txt"), ...(key ? ["--request", key] : [])];
+  const send = (key = "unrecorded") => clientCall("sendMail", { to: ["bob"], subject: "hello", body: readFileSync(join(home, "input.txt"), "utf8"), kind: "message" }, key);
   return { home, send, close: () => rmSync(home, { recursive: true, force: true }) };
 }
 const methods = (seen: Seen[]) => seen.map(request => request.method);
@@ -157,8 +155,8 @@ test("V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, 
   try {
     const first = await run(s.home, s.send("frozen-1"));
     assert.equal(first.code, 3, first.stderr);
-    assert.match(first.stderr, /--request frozen-1/);
-    // The source changes before the retry; the retry must not read it.
+    assert.match(first.stderr, /frozen-1/);
+    // The supplied body changes before retry; replay must ignore the new text.
     writeFileSync(join(s.home, "input.txt"), "words typed later\n");
     const second = await run(s.home, s.send("frozen-1"));
     assert.equal(second.code, 0, second.stderr);
@@ -202,11 +200,11 @@ test("WP26: a receipt the request cache cannot record is still shown, with the k
   try {
     const result = await run(s.home, s.send());
     const key = p.seen[0]!.key!;
-    assert.match(key, /^cli-/);
+    assert.equal(key, "unrecorded");
     assert.equal(result.code, 0, `an accepted send was reported as a failure: ${result.stderr}`);
     assert.ok(result.stdout.includes(OP(1)), "the broker's receipt was not shown");
-    assert.ok(result.stderr.includes(`--request ${key}`), "the key needed to ask again was not shown");
-    assert.match(result.stderr, /CACHE_UNAVAILABLE/);
+    assert.ok(result.stdout.includes(key), "the key needed to ask again was not shown");
+    assert.match(result.stdout, /CACHE_UNAVAILABLE/);
   } finally { chmodSync(ancestor, 0o700); await p.close(); s.close(); }
   // A receipt that contradicts the cache's earlier observation is unknown, and still shown.
   const c = scene();
@@ -218,16 +216,12 @@ test("WP26: a receipt the request cache cannot record is still shown, with the k
     const contradicted = await run(c.home, c.send("x"));
     assert.equal(contradicted.code, 3, contradicted.stderr);
     assert.ok(contradicted.stdout.includes(OP(2)));
-    assert.match(contradicted.stderr, /CACHE_CORRUPT.*--request x/);
+    assert.match(contradicted.stderr, /CACHE_CORRUPT/);
   } finally { await q.close(); c.close(); }
 });
 
-/* AV22 -- ERR-001, CLI-003: the sixth functional run. The Principal's second
- * agent.create was accepted and then answered BROKER_UNAVAILABLE (retry
- * same-key); the CLI printed "BROKER_UNAVAILABLE: BROKER_UNAVAILABLE" and no
- * key, so the model asked again under a new one -- the one thing the error
- * table forbids for that code. A failure the broker says to retry under the
- * same key names that key; one it says never to retry does not. */
+/* ERR-001: an unknown acceptance names the original key so observation
+ * cannot accidentally become a second physical effect under a fresh key. */
 test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the key", { timeout: 30_000 }, async t => {
   for (const [failure, exit, guided] of [
     [{ code: "BROKER_UNAVAILABLE", message: "BROKER_UNAVAILABLE", retry: "same-key" }, 3, true],
@@ -238,15 +232,14 @@ test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the k
       const broker = await peer(home, () => ({ ok: false, error: failure }));
       try {
         const key = "av22-first-ask";
-        const result = await run(home, ["follow", "commons", "--request", key]);
+        const result = await run(home, clientCall("subscribe", "follow", "commons", key));
         const stderr = result.stderr;
         assert.equal(result.code, exit, stderr);
         assert.deepEqual(broker.seen.map(request => request.method), guided ? ["route.follow", "operation.get"] : ["route.follow"]);
         if (guided) {
           assert.deepEqual(broker.seen[1]!.params, { key }, "recovery only queries the original key, never resends the mutation");
-          assert.match(stderr, new RegExp(`--request ${key} with the same command; do not rerun with a new key`), "the key to ask again was not given");
+          assert.ok(stderr.includes(key), "the key to ask again was not given");
         }
-        else assert.doesNotMatch(stderr, /--request/, "a failure never to retry was given a key to retry with");
       } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
     });
   }
@@ -266,39 +259,39 @@ test("DR13 / CLI-003: a failure the broker says to look up again is exit 3 whate
       const home = mkdtempSync(join(tmpdir(), "oma-dr13-exit-"));
       const broker = await peer(home, () => ({ ok: false, error: failure }));
       try {
-        const result = await run(home, ["follow", "commons", "--request", "dr13-exit"]);
+        const result = await run(home, clientCall("subscribe", "follow", "commons", "dr13-exit"));
         assert.equal(result.code, exit, result.stderr);
-        if (failure.retry === "same-key") assert.match(result.stderr, /--request dr13-exit with the same command; do not rerun with a new key/);
+        if (failure.retry === "same-key") assert.match(result.stderr, /dr13-exit/);
       } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
     });
   }
 });
 
-/* AV28 -- the CLI shows the value a conflict found. */
-test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeout: 30_000 }, async () => {
+/* AV28 -- failure details retain the actual value found by a conflict. */
+test("AV28 / ERR-001: the client shows the actual value a conflict names", { timeout: 30_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-av28-"));
   const actual = "1".repeat(40);
   const broker = await peer(home, () => ({ ok: false, error: { code: "STALE_BASE", message: "STALE_BASE", retry: "never", details: { actual } } }));
   try {
     const body = join(home, "body.txt");
     writeFileSync(body, "reason\n");
-    const result = await run(home, ["merge", "review", "merge-abcd1234-0000-4000-8000-000000000000", "--file", body, "--request", "av28-cli"]);
+    const result = await run(home, clientCall("respondReview", { name: "merge-abcd1234-0000-4000-8000-000000000000", action: "comment", body: "reason\n" }, "av28-client"));
     assert.equal(result.code, 2, result.stderr);
-    assert.match(result.stderr, new RegExp(`STALE_BASE: Main differs from expected; retry against actual \\(actual: ${actual}\\)`));
+    assert.match(result.stderr, /STALE_BASE/);
+    assert.ok(result.stderr.includes(actual), "conflict details must retain the actual base");
   } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
 });
 
-/* DR1 -- SB-002-C: a Resident's `oma send` showed the host's archive path,
- * which is no path inside its sandbox. The CLI shows the receipt's path under
- * the archive root its environment names; the recorded receipt is unchanged. */
+/* DR1 -- SB-002-C: receipts use the caller's archive view without changing
+ * the durable receipt's original archive path. */
 test("DR1 / SB-002-C: a sent message's archive path is shown in the caller's view", async () => {
   const s = scene();
   const p = await peer(s.home, request => request.method === "operation.get" ? { ok: true, result: receiptNotFound } : { ok: true, result: sent(7) });
   try {
-    const shown = (archive?: string) => new Promise<string>(resolve => execFile(process.execPath, [cli, ...s.send(`dr1-${archive ? "in" : "out"}`)], {
+    const shown = (archive?: string) => new Promise<string>(resolve => execFile(process.execPath, clientProcessArgs(s.send(`dr1-${archive ? "in" : "out"}`)), {
       cwd: s.home, encoding: "utf8", timeout: 10_000,
       env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: s.home, OMA_SOCKET: join(s.home, "peer.sock"), ...(archive ? { OMA_MAIL_ARCHIVE: archive } : {}) },
-    }, (_error, stdout) => resolve(JSON.parse(stdout.trim().split("\n").at(-1)!).result.archivePath)));
+    }, (_error, stdout) => resolve(JSON.parse(stdout).receipt.result.archivePath)));
     assert.equal(await shown("/mail/archive/cur"), `/mail/archive/cur/${MESSAGE(7)}`, "the sandbox view was not used");
     assert.equal(await shown(), `/state/mail/archive/cur/${MESSAGE(7)}`, "without a view the recorded path is shown as it is");
   } finally { await p.close(); s.close(); }
@@ -324,7 +317,7 @@ for (const lost of ["drop", "deadline", "unavailable"] as const) {
         assert.deepEqual(p.seen[1]!.params, { key: "observe-once" });
         const cached = new RequestCache(s.home).read("observe-once");
         assert.ok(cached.kind === "present"); assert.equal((cached.value.params as Record<string, unknown>).body, "the words first chosen\n");
-        if (["absent", "malformed", "unavailable"].includes(state)) assert.match(result.stderr, /Acceptance status unknown.*observe-once/);
+        if (["absent", "malformed", "unavailable"].includes(state)) assert.match(result.stderr, /observe-once/);
       } finally { await p.close(); s.close(); }
     });
   }

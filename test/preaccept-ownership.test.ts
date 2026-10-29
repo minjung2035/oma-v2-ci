@@ -29,9 +29,8 @@ import { workspacePathAt } from "@oma/domain/paths";
 import { residentUnitsFor } from "@oma/domain/derived";
 import { LifecycleModule } from "@oma/lifecycle";
 import { PolicyExecution } from "./fixtures/execution.js";
-import { ALL_CAPS, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidResolvedSpec, makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
-import { makeValidAgent } from "./fixtures/spec.js";
 import { gitAuth, gitCommand, gitFixture, seedGit, submitFixture, contextFixture } from "./fixtures/git-crash.js";
 
 function objectsOf(root: string): string[] {
@@ -162,9 +161,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
     const { mail, paths } = gitFixture(root, store);
     const units = new PolicyExecution();
     const resolve = (name: string, from: string, brief: string) => makeValidResolvedSpec(name, "p", ALL_CAPS, from, brief);
-    const lifecycle = createLifecycleModule(store, units,
-      { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
-      (_parent, input) => resolve(input.name, input.from, input.brief), mail);
+    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => resolve(input.name, input.from, input.brief)), mail);
     const auth = { ...gitAuth, capabilities: new Set(ALL_CAPS) };
     const spec = resolve("child", info.base, "brief");
     const specHash = resolvedSpecDigest(spec);
@@ -582,12 +579,14 @@ function lifecycleOnly(options: { seeded?: boolean } = {}) {
     makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), {
     refresh: () => { if (failRefresh) throw new StoreError("UNSUPPORTED_PROFILE", "injected host policy read failure"); },
     revision: () => "policy-1",
+    maxWorkers: () => 6,
   });
   const lifecycle = createLifecycleModule(store, units,
     { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
     resolver, mail);
   const seed = (names: readonly string[], profile = (name: string) => name === "broken" ? "missing" : "p"): Parameters<LifecycleModule["bootstrap"]>[0] => ({
     principalProfile: "p",
+    maxWorkers: 6,
     initialResidents: names.map(name => ({ name, profile: profile(name), brief: `brief for ${name}` })),
     modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p" } },

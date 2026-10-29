@@ -2,6 +2,7 @@
  * Validated facts and current writer authority retain their durable meaning. */
 import type { AuthContext, OperationId, Receipt } from "@oma/contracts";
 import type { ReviewInput } from "@oma/contracts/attestation";
+import type { ReviewStatusQuery, ReviewStatusResult } from "@oma/contracts/public-wire";
 import type { ReviewLedger } from "./ports.js";
 import type { ReviewMail } from "./ports.js";
 import { assertActorIdentity } from "@oma/domain/authority";
@@ -28,7 +29,8 @@ export class ReviewModule {
   private readonly statusView: ReviewStatus;
   constructor(private readonly store: ReviewLedger, mail: ReviewMail,
     private readonly effects: ReviewEffects, private readonly bounds: ReviewBounds, society: string, authority?: ReviewAuthorityReader) {
-    this.ledger = authority ?? new ReviewAuthorityReader(store, effects.policy()?.tiered?.highPeerFloor ?? 1);
+    const policy = effects.policy();
+    this.ledger = authority ?? new ReviewAuthorityReader(store, policy?.tiered?.highPeerFloor ?? 1, policy?.maxWorkers ?? 1);
     const messages = new ReviewMessages(store, mail, bounds, society);
     this.preparation = new ReviewPreparation(store, this.ledger, messages, effects, bounds);
     this.acceptance = new ReviewAcceptance(store, mail, this.ledger, effects, society);
@@ -95,5 +97,7 @@ export class ReviewModule {
   advance(requestId: OperationId): Promise<void> { return this.advancement.advance(requestId); }
   advanceAll(): Promise<void> { return this.advancement.advanceAll(); }
   assertApplicable(requestId: OperationId): void { this.ledger.assertApplicable(requestId); }
-  status(...args: Parameters<ReviewStatus["status"]>): ReturnType<ReviewStatus["status"]> { return this.statusView.status(...args); }
+  status(auth: AuthContext, query: ReviewStatusQuery, frameBytes: number, responseId: string): ReviewStatusResult {
+    return this.statusView.status(auth, query, frameBytes, responseId);
+  }
 }

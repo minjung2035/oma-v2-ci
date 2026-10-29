@@ -49,13 +49,12 @@ test("the generated configuration passes core's own closed validator unchanged",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a default configuration seeds one autonomous Worker without canonical main authority", () => {
+test("a default configuration seeds autonomous Workers without canonical main authority", () => {
   const root = scratch("oma-couple-grant-");
   try {
     const config = installedConfig(root);
     for (const [name, profile] of Object.entries(config.agentProfiles))
       assert.ok(!profile.capabilities.includes("code.integrate"), `${name} must not integrate by default`);
-    assert.equal(config.initialResidents.length, 1);
     assert.equal(config.initialResidents[0]!.profile, "resident");
     assert.equal(config.agentProfiles[config.principalProfile]!.childProfile, null);
     assert.ok(!config.agentProfiles[config.principalProfile]!.capabilities.includes("agent.create"));

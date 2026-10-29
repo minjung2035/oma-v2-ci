@@ -6,9 +6,6 @@ import { fileURLToPath } from "node:url";
 import extension from "@oma/extension";
 import askExtension from "@oma/extension/ask-user-question";
 import { messageIdForOperation } from "@oma/domain/derived";
-import { omaToolNames } from "@oma/extension/mail-tools";
-import { LSP_TOOL_NAMES } from "@oma/tool-lsp";
-import { WEB_RESEARCH_TOOL_NAMES } from "@oma/tool-web";
 const workspace = join(process.cwd(), "extension-workspace"), state = join(process.cwd(), "extension-state");
 const archive = join(state, "archive");
 for (const path of [workspace, state, archive]) mkdirSync(path);
@@ -32,15 +29,13 @@ const pi = {
 const context = { cwd: workspace, hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setStatus() {}, notify() {} } };
 try {
   await extension(pi);
-  const expected = [...omaToolNames(false), "read", "write", "edit", "grep", "find", "ls", ...LSP_TOOL_NAMES,
-    "replace", "replace_within", "insert", ...WEB_RESEARCH_TOOL_NAMES, "mcp"];
-  assert.deepEqual([...tools.keys()].sort(), [...new Set(expected)].sort());
-  assert.ok(commands.has("oma-deliver"));
-  assert.ok(hooks.has("agent_settled") && hooks.has("before_agent_start") && hooks.has("tool_call"));
   const messageId = messageIdForOperation("op-00000000-0000-4000-8000-000000000001", 0);
   writeFileSync(join(archive, `${messageId}:2,`), "From: alice@agents.local\r\nTo: installedworker@agents.local\r\nSubject: installed read\r\nContent-Type: text/plain; charset=utf-8\r\n\r\ninstalled archive body\r\n");
   const read = await tools.get("oma_mail_read").execute("installed", { messageId });
   assert.match(read.content.map(part => part.text ?? "").join(""), /installed archive body/);
+  await assert.rejects(tools.get("oma_mail_send").execute("invalid", {
+    to: ["alice"], subject: "invalid body", body: null,
+  }), /Invalid arguments/);
   assert.equal(tools.has("ask_user_question"), false);
   askExtension(pi);
   assert.equal(tools.has("ask_user_question"), true);

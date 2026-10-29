@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeCachedRequest } from "#oma-test/app/cli/cache-codec";
+import { decodeCachedRequest } from "#oma-test/app/runtime/request-cache-codec";
 import { decodeReceipt } from "@oma/protocol/receipt-codec";
 
 const operation = "op-12345678-1234-4234-8234-123456789abc";

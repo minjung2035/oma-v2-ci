@@ -9,8 +9,9 @@ const profile = {
 };
 test("R19: host check argv and environment correspond to the runtime snapshot", () => {
     const input = structuredClone(profile);
-    const runtime = integrationPolicyFromConfig(input);
+    const runtime = integrationPolicyFromConfig({ integration: input, maxWorkers: 6 });
     assert.deepEqual(runtime, {
+        maxWorkers: 6,
         policyRevision: "revision-1", protectedPaths: ["secret/", "M secret.txt"],
         checks: [{ id: "check", argv: ["/usr/bin/check", "literal space", "$value"], env: { MODE: "strict" },
             }],
@@ -28,18 +29,19 @@ test("R19: host check argv and environment correspond to the runtime snapshot", 
         assert.equal(Object.isFrozen(value), true);
 });
 test("R19: empty-check digest retains the independent historical SHA256 of []", () => {
-    const snapshot = snapshotIntegrationPolicy({ policyRevision: "p1", protectedPaths: [], checks: [] });
+    const snapshot = snapshotIntegrationPolicy({ maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [] });
     assert.equal(snapshot.checkProfileDigest, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945");
     assert.doesNotThrow(() => assertSupportedIntegration(snapshot));
 });
 test("R19: policy freshness includes same-revision protected paths, argv and environment", () => {
-    const original = integrationPolicyFromConfig(structuredClone(profile));
+    const original = integrationPolicyFromConfig({ integration: structuredClone(profile), maxWorkers: 6 });
     const before = snapshotIntegrationPolicy(original);
     assert.doesNotThrow(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(structuredClone(original))));
     const mutations = [
         policy => { policy.protectedPaths.push("new/"); },
         policy => { policy.checks[0].argv.push("--unsafe"); },
         policy => { policy.checks[0].env.MODE = "other"; },
+        policy => { policy.maxWorkers = 2; },
     ];
     for (const mutate of mutations) {
         const altered = structuredClone(original);
@@ -53,7 +55,7 @@ test("R19: policy freshness includes same-revision protected paths, argv and env
     assert.doesNotThrow(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(revised)));
 });
 test("DR46 current tier policy: fewer than two HIGH peers refuses before freezing a snapshot", () => {
-    const policy = { policyRevision: "p1", protectedPaths: [], checks: [],
+    const policy = { maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [],
         tiered: { repositoryFloor: "LOW", highPeerFloor: 1, principalDelegated: true, rules: [] } };
     assert.throws(() => snapshotIntegrationPolicy(policy), code("UNSUPPORTED_PROFILE"));
     policy.tiered.highPeerFloor = 2;

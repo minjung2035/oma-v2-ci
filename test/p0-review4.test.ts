@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -13,7 +14,8 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResolvedAgentSpec } from "@oma/contracts";
-import { runCliProcess } from "./fixtures/cli-child.js";
+import { runOwnedProcess } from "./fixtures/owned-process.js";
+import { clientProcessArgs } from "./fixtures/client-process.js";
 import { replaceDerivedFile } from "@oma/storage/durable-fs";
 import { StatusRefresh } from "@oma/broker/status-refresh";
 import { Broker } from "@oma/broker";
@@ -21,7 +23,6 @@ import { LifecycleModule } from "@oma/lifecycle";
 import { ViewsModule } from "#oma-test/app/views";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "@oma/domain/errors";
-import { depthOf, planToolSurface, type GroupSpec } from "@oma/domain/tool-surface";
 import { PiRpcClient, type PiEvent } from "@oma/engine/pi-rpc";
 import { validateConfig } from "@oma/config";
 import { defaultHostConfig } from "@oma/config/defaults";
@@ -52,24 +53,21 @@ import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
 
-/** Runs the real CLI transport in a child whose environment still declares
- * the removed credential descriptor, holding `line` on descriptor 3, and makes
- * `calls` requests. Each result is the failure's code and message; there is no
- * broker at the path, so a request fails only on connecting -- never on the
- * credential, because the CLI no longer reads one from anywhere. */
-function cliCalls(line: string, calls: number): Promise<string[]> {
-  const script = `
-    import { callActor } from ${JSON.stringify(join(process.cwd(), "apps/oma/dist/cli/transport.js"))};
+/** Runs the real Client in a child whose environment still declares the
+ * removed credential descriptor, holding `line` on descriptor 3. With no
+ * broker at the path, every query fails only on connecting. */
+function clientCalls(line: string, calls: number): Promise<string[]> {
+  const expression = `(async () => {
     const results = [];
     for (let index = 0; index < ${calls}; index += 1) {
-      try { await callActor("/nonexistent/socket", "status.get", {}); results.push("no error"); }
+      try { await client.query("status.get", {}); results.push("no error"); }
       catch (error) { results.push(String(error.code ?? "") + ":" + String(error.message)); }
     }
-    process.stdout.write(JSON.stringify(results));
-  `;
+    return results;
+  })()`;
   return new Promise(resolve => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", script],
-      { env: { PATH: "/usr/bin:/bin", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio: ["ignore", "pipe", "inherit", "pipe"] });
+    const child = spawn(process.execPath, clientProcessArgs(expression),
+      { env: { PATH: "/usr/bin:/bin", OMA_SOCKET: "/nonexistent/socket", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio: ["ignore", "pipe", "inherit", "pipe"] });
     const socket = child.stdio[3] as unknown as { end(text: string): void; on(event: string, fn: () => void): void };
     socket.on("error", () => {});
     socket.end(line);
@@ -79,16 +77,16 @@ function cliCalls(line: string, calls: number): Promise<string[]> {
   });
 }
 
-test("P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a CLI credential source", async () => {
+test("P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a Client credential source", async () => {
   // E27 removed the extension-spawned CLI and with it the only producer of
   // this contract; the Principal's credential lives in the engine's
   // PrincipalChannel now. A leftover declaration -- even a well-formed line
   // waiting on the descriptor -- is inert: every call the process makes goes
   // unattached and fails only on connecting.
-  const results = await cliCalls(`credential ${CREDENTIAL} ${HANDLE}\n`, 3);
+  const results = await clientCalls(`credential ${CREDENTIAL} ${HANDLE}\n`, 3);
   assert.equal(results.length, 3);
   for (const result of results) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, `a request read the descriptor: ${JSON.stringify(results)}`);
-  const refused = await cliCalls("ready\n", 2);
+  const refused = await clientCalls("ready\n", 2);
   for (const result of refused) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, JSON.stringify(refused));
 });
 
@@ -119,7 +117,7 @@ test("P0V-27 / N03, P0-4: a broker that could not be started is reported, and th
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-35 / N12, P0-2: a CLI's output is decoded as the bytes it wrote, wherever the pipe cut them", async () => {
+test("P0V-35 / N12, P0-2: owned process output is decoded as the bytes it wrote, wherever the pipe cut them", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-cli-utf8-"));
   try {
     const text = "한글✅ 결과";
@@ -135,7 +133,7 @@ test("P0V-35 / N12, P0-2: a CLI's output is decoded as the bytes it wrote, where
         await pause();
         process.stdout.write(bytes.subarray(${cut})); process.stderr.write(bytes.subarray(${cut + 1 > bytes.length ? cut : cut + 1}));
       `);
-      const result = await runCliProcess({ node: process.execPath, cli, args: [], cwd: dir,
+      const result = await runOwnedProcess({ executable: process.execPath, args: [cli], cwd: dir,
         env: { PATH: process.env.PATH ?? "/usr/bin:/bin" }, timeoutMs: 10_000 });
       assert.equal(result.finished, true);
       assert.equal(result.stdout, text, `stdout cut at byte ${cut}`);
@@ -168,8 +166,7 @@ test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progre
   const f = await preparedFixture(1);
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
-    hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   try {
     const listeners = Reflect.get(broker, "listeners") as import("@oma/broker/listeners").BrokerListeners;
@@ -231,38 +228,6 @@ test("P0V-33 / N09, P0-1: a failure restated beside a cleanup failure keeps its 
   }
   const busy = new StoreError("BROKER_UNAVAILABLE", "busy", { details: { reason: "busy" } });
   assert.deepEqual(publicFailure(normalizeStorageFailure(new AggregateError([busy, cleanup]))), publicFailure(busy));
-});
-
-/** A chain of `levels` nested groups, the innermost holding one tool. */
-function chain(levels: number): GroupSpec[] {
-  return Array.from({ length: levels }, (_, index) => ({
-    name: `g${index + 1}`, description: `level ${index + 1}`,
-    members: index + 1 < levels ? [{ group: `g${index + 2}` }] : [{ tool: "read" }],
-  }));
-}
-function orders<T>(items: readonly T[]): T[][] {
-  if (items.length <= 1) return [[...items]];
-  return items.flatMap((item, index) => orders([...items.slice(0, index), ...items.slice(index + 1)]).map(rest => [item, ...rest]));
-}
-
-test("P0V-31 / N07, P0-2: how deep groups nest does not depend on the order they are declared in", () => {
-  const plan = (groups: GroupSpec[]) => planToolSurface({ defaultMode: "DIRECT", direct: [], disabled: [], groups, roots: [] });
-  const tooDeep = orders(chain(5));
-  assert.equal(tooDeep.length, 120);
-  for (const groups of tooDeep)
-    assert.throws(() => plan(groups), /exceeds depth 4/, `accepted ${groups.map(group => group.name).join(",")}`);
-  const deepest = orders(chain(4));
-  for (const groups of deepest)
-    assert.equal(depthOf(plan(groups)), 4, `measured ${groups.map(group => group.name).join(",")} wrong`);
-  // A group shared by a shallow and a deep parent is measured from the deep one.
-  const shared: GroupSpec[] = [
-    { name: "shallow", description: "s", members: [{ group: "leaf" }] },
-    { name: "leaf", description: "l", members: [{ tool: "read" }] },
-    { name: "top", description: "t", members: [{ group: "middle" }] },
-    { name: "middle", description: "m", members: [{ group: "shallow" }] },
-  ];
-  assert.equal(depthOf(plan(shared)), 4);
-  assert.throws(() => plan([...shared, { name: "higher", description: "h", members: [{ group: "top" }] }]), /exceeds depth 4/);
 });
 
 test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line started late is not cut off by the one before it", { timeout: 10_000 }, async t => {
@@ -366,7 +331,7 @@ test("P0V-37 / N14, P0-2: a message path the Principal was shown reads back thro
   const previous = { ...process.env };
   const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
   // The Principal's engine: its archive root is the host's own path (DR1).
-  Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
     OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo" });
   try {
     registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
@@ -403,7 +368,7 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
   const archive = join(root, "archive"); mkdirSync(archive);
   const previous = { ...process.env };
   const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
-  Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
     OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo", OMA_MAIL_BYTES: principal.OMA_MAIL_BYTES });
   try {
     registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);

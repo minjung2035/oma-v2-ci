@@ -79,7 +79,8 @@ test("DR27/AV18: the host seeds a capable Worker without Principal creation/dele
 test("DR27/CREATE-003: Workers delegate through multiple generations; retries and restart do not recreate them", async t => {
   const f = fixture(t); let lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
-  await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
+  for (const seed of f.config.initialResidents)
+    await lifecycle.reconcileCreate(f.store.getOperation("principal", `bootstrap-${seed.name}`)!.id);
   const input = { name: "peer", from: f.from, brief: "Inspect the code and collaborate." };
   const child = await lifecycle.create(f.auth("worker-1"), input, "peer");
   assert.equal(child.state, "succeeded");
@@ -138,11 +139,53 @@ test("DR46: successive Worker creations each retain their accepted identity", as
 
 test("DR27/CFG-002: initial Worker count persists with a non-delegating Principal and accepts zero", t => {
   const f = fixture(t), profiles = readSettings(f.path).config.agentProfiles;
-  for (const count of [3, 0, 2]) {
+  for (const count of [0, 2, 3]) {
     assert.equal(commitField(readSettings(f.path), INITIAL_WORKERS, count, "pending").kind, "saved");
     const saved = readSettings(f.path).config;
     assert.equal(saved.initialResidents.length, count);
     assert.ok(saved.initialResidents.every(seed => seed.profile === "resident" && seed.brief.length > 0));
     assert.deepEqual(saved.agentProfiles, profiles);
   }
+});
+
+test("Worker capacity: concurrent creation reserves the last slot once, including provisioning and stopped Workers", async t => {
+  const f = fixture(t);
+  f.config.maxWorkers = 4;
+  const lifecycle = f.lifecycle();
+  await lifecycle.bootstrap(f.config);
+  await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
+  const auth = f.auth("worker-1");
+  const inputs = ["last-a", "last-b"].map(name => ({ name, from: f.from, brief: "Independent work" }));
+  const results = await Promise.allSettled(inputs.map(input => lifecycle.create(auth, input, input.name)));
+  const winner = results.findIndex(result => result.status === "fulfilled");
+  assert.notEqual(winner, -1);
+  const loser = results[1 - winner]!;
+  assert.equal(loser.status, "rejected");
+  if (loser.status === "rejected") assert.equal(loser.reason.code, "LIMIT_EXCEEDED");
+  const chosen = inputs[winner]!;
+  assert.equal(f.store.getOperation("worker-1", inputs[1 - winner]!.name), null);
+  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 4);
+  f.store.transaction(tx => tx.updateAgent({ name: chosen.name, desired: "stopped" }));
+  await assert.rejects(lifecycle.create(auth, { name: "excess", from: f.from, brief: "No free slot" }, "excess"),
+    { code: "LIMIT_EXCEEDED", details: { resource: "workers", maxWorkers: 4, workerCount: 4 } });
+  assert.equal((await lifecycle.create(auth, chosen, chosen.name)).state, "succeeded");
+  assert.equal((await lifecycle.create(auth, chosen, "linked-retry")).state, "succeeded");
+  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 4);
+  const observed = lifecycle.creation(auth);
+  assert.equal(observed.workerCount, 4);
+  assert.equal(observed.maxWorkers, 4);
+});
+
+test("Worker capacity changes require restart and never remove existing Workers", async t => {
+  const f = fixture(t), lifecycle = f.lifecycle();
+  await lifecycle.bootstrap(f.config);
+  for (const seed of f.config.initialResidents)
+    await lifecycle.reconcileCreate(f.store.getOperation("principal", `bootstrap-${seed.name}`)!.id);
+  const before = f.store.listAgents();
+  f.config.maxWorkers = 2;
+  f.config.initialResidents = [];
+  const input = { name: "excess", from: f.from, brief: "No free slot" };
+  await assert.rejects(lifecycle.create(f.auth("worker-1"), input, "before-restart"), { code: "POLICY_CHANGED" });
+  await assert.rejects(f.lifecycle().create(f.auth("worker-1"), input, "after-restart"), { code: "LIMIT_EXCEEDED" });
+  assert.deepEqual(f.store.listAgents(), before);
 });

@@ -30,47 +30,44 @@ import { copyInstalledProduct } from "./fixtures/installation.js";
 
 const project = fileURLToPath(new URL("../../", import.meta.url));
 function config(root: string): HostConfig {
-  return {
-    schemaVersion: 4,
-    society: "fixture",
-    installation: {
-        node: process.execPath,
-        libdir: root,
-        deploymentDigest: deploymentDigest(root),
-    },
-    modelProfiles: {
-        model: {
-            provider: "fixture",
-            model: "fixture",
-            inferenceTimeoutSeconds: 1,
-        },
-    },
-    agentProfiles: {
-        p: {
-            modelProfile: "model",
-            capabilities: [],
-            delegable: [],
-            childProfile: null,
-        },
-    },
-    principalProfile: "p",
-    initialResidents: [],
-    integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
-    limits: {
-        frameBytes: 262144,
-        mailBodyBytes: 262144,
-        subjectBytes: 512,
-        addresses: 64,
-        replyReferences: 64,
-        contextFiles: 256,
-        contextBytes: 8388608,
-        bundleBytes: 268435456,
-        logBytes: 1048576,
-        batchMaxMessages: 24,
-        idleStreamSeconds: 1,
-        receiptWaitSeconds: 1,
-    }
-};
+  return {schemaVersion: 4, maxWorkers: 6, society: "fixture",
+  installation: {
+      node: process.execPath,
+      libdir: root,
+      deploymentDigest: deploymentDigest(root),
+  },
+  modelProfiles: {
+      model: {
+          provider: "fixture",
+          model: "fixture",
+          inferenceTimeoutSeconds: 1,
+      },
+  },
+  agentProfiles: {
+      p: {
+          modelProfile: "model",
+          capabilities: [],
+          delegable: [],
+          childProfile: null,
+      },
+  },
+  principalProfile: "p",
+  initialResidents: [],
+  integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
+  limits: {
+      frameBytes: 262144,
+      mailBodyBytes: 262144,
+      subjectBytes: 512,
+      addresses: 64,
+      replyReferences: 64,
+      contextFiles: 256,
+      contextBytes: 8388608,
+      bundleBytes: 268435456,
+      logBytes: 1048576,
+      batchMaxMessages: 24,
+      idleStreamSeconds: 1,
+      receiptWaitSeconds: 1,
+  }};
 }
 
 test("P02: canonical deployment manifest pins every selected byte independent of root and traversal order", () => {

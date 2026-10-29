@@ -3,9 +3,9 @@ import { TransportSpool } from "@oma/storage/transport-spool";
  *
  * A real society runs (provisioned state, broker, Principal session); each
  * Resident's tools are the real registration (`registerOmaTools` with a
- * detached channel), invoked directly — no model, no engine. A tool call runs
- * the real `oma` CLI as a child process; the CLI reaches the scenario's real
- * broker over a real unix socket. As the broker's own actor endpoints bind one
+ * detached channel), invoked directly — no model, no engine. Each typed client
+ * reaches the scenario's real broker over a real unix socket. As the broker's
+ * own actor endpoints bind one
  * socket to one agent (the frames carry no actor), each Worker here gets a
  * private socket bridge that dispatches every frame with that actor's resident
  * authority — the same RpcConnection, limits and stream framing the broker
@@ -23,7 +23,6 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Actor, AuthContext, Capability, Request } from "@oma/contracts";
 import { capabilitiesOf } from "@oma/domain/authority";
 import { RpcConnection } from "@oma/broker/connection";
@@ -40,16 +39,16 @@ import { SCENARIO_LIMITS, withScenario, type Scenario } from "./fixtures/scenari
 
 const TIMEOUT = { timeout: 120_000 };
 const SOCIETY = "demo";
-const CLI = fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url));
 const GIT = "/usr/bin/git";
 
-/** The tool result's one text block is the CLI's stdout. */
+/** The registered tool returns a text block with its typed client result. */
 type Tool = { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> };
-/** A printed receipt, from any `succeeded` answer's single JSON line. */
+/** Mutation results retain the request key and complete receipt. */
 const receiptIn = (result: string): { operation?: string; state?: string; result?: Record<string, unknown> } => {
-  const found = result.match(/\{"operation":"[^"]+".*\}/);
-  assert.ok(found, `no receipt in tool result: ${result.slice(0, 300)}`);
-  return JSON.parse(found[0]);
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `no receipt in tool result: ${result.slice(0, 300)}`);
+  return envelope.receipt;
 };
 const nameOf = (file: string): string => file.replace(/:2,.*$/, "");
 const canonicalMain = (s: Scenario): string =>
@@ -161,7 +160,7 @@ interface Worker {
   readonly home: string;
   readonly tools: Map<string, Tool>;
   readonly bridge: Bridge;
-  /** Runs the registered tool and returns its one text block (CLI stdout). */
+  /** Runs the registered tool and returns its one text block. */
   call(tool: string, params: Record<string, unknown>): Promise<string>;
 }
 
@@ -184,8 +183,7 @@ async function openWorker(s: Scenario, actor: Actor): Promise<Worker> {
   const bridge = await actorSocket(s, actor, frames);
   const tools = new Map<string, Tool>();
   const previous = { ...process.env };
-  // The engine's per-actor values are the registration's — it freezes them
-  // into the environment every CLI this actor ever runs is started with.
+  // Registration freezes the engine's per-actor values into its typed client.
   Object.assign(process.env, {
     OMA_AGENT_HOME: home, OMA_SOCKET: bridge.path, OMA_BATCH_VIEW: view, OMA_ACTOR: actor,
   });
@@ -215,7 +213,6 @@ interface WorkerRig {
 async function workerRig(s: Scenario, actors: readonly Actor[]): Promise<WorkerRig> {
   const previous = { ...process.env };
   Object.assign(process.env, {
-    OMA_CLI_PATH: CLI,
     OMA_MAIL_ARCHIVE: archiveDir(s),
     OMA_WORKER_ARCHIVE: workersDir(s),
     OMA_SOCIETY: SOCIETY,
@@ -276,8 +273,7 @@ test("SCN-W01: a LOW merge through a Worker's own tools applies and notifies com
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob");
       const { candidate } = commitWork(alice, "w01", work => writeFileSync(join(work, "w01.txt"), "content w01\n"));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "LOW", title: "w01 change", reason: "the reason for w01", request: "w01.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "LOW", title: "w01 change", reason: "the reason for w01", request: "w01.open" }));
       assert.equal(opened.state, "succeeded", `open: ${JSON.stringify(opened).slice(0, 300)}`);
       const name = requestNameOf(opened);
       assert.match(name, /^merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -317,21 +313,19 @@ test("SCN-W02: a MEDIUM merge needs one peer vote; the other Worker supplies it 
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob");
       const { candidate } = commitWork(alice, "w02", work => writeFileSync(join(work, "w02.txt"), "content w02\n"));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "MEDIUM", title: "w02", reason: "the reason for w02", request: "w02.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "MEDIUM", title: "w02", reason: "the reason for w02", request: "w02.open" }));
       assert.equal(opened.state, "succeeded");
       const name = requestNameOf(opened);
-      const before = JSON.parse(await bob.call("oma_merge", { action: "status", name })) as
+      const before = JSON.parse(await bob.call("oma_review_status", { name })) as
         { display: string; required: number; approvers: string[] };
       assert.equal(before.display, "peer-needed");
       assert.equal(before.required, 1);
       assert.deepEqual(before.approvers, []);
-      const voted = receiptIn(await bob.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "bob approves w02", request: "w02.bob" }));
+      const voted = receiptIn(await bob.call("oma_review_respond", { name, action: "approve", body: "bob approves w02", request: "w02.bob" }));
       assert.equal(voted.state, "succeeded");
       await s.idle();
       assert.equal(canonicalMain(s), candidate);
-      const after = JSON.parse(await alice.call("oma_merge", { action: "status", name })) as
+      const after = JSON.parse(await alice.call("oma_review_status", { name })) as
         { display: string; approvers: string[] };
       assert.equal(after.display, "applied");
       assert.deepEqual(after.approvers, ["bob"]);
@@ -350,7 +344,7 @@ test("SCN-W02: a MEDIUM merge needs one peer vote; the other Worker supplies it 
   });
 });
 
-test("SCN-W03: oma_merge diff pages the exact base→candidate patch and refuses bad cursors", TIMEOUT, async () => {
+test("SCN-W03: review diff pages the exact base→candidate patch and refuses bad cursors", TIMEOUT, async () => {
   await withScenario({ residents: ["alice"] }, async s => {
     const rig = await workerRig(s, ["alice"]);
     try {
@@ -358,18 +352,16 @@ test("SCN-W03: oma_merge diff pages the exact base→candidate patch and refuses
       const lines = Array.from({ length: 4200 }, (_, i) => `row ${i} ${"x".repeat(24)}`).join("\n");
       const { candidate, base } = commitWork(alice, "w03",
         work => writeFileSync(join(work, "big.txt"), `${lines}\n한 줄\n`));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "LOW", title: "w03 big", reason: "a diff bigger than a page", request: "w03.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "LOW", title: "w03 big", reason: "a diff bigger than a page", request: "w03.open" }));
       const name = requestNameOf(opened);
-      // The byte-exact patch the CLI's merge-diff flags produce.
+      // Independently compute the exact patch with Git.
       const expected = execFileSync(GIT, ["--git-dir", projectGitPathAt(s.root), "diff",
         "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate]);
       assert.ok(expected.length > 64 * 1024, `the fixture diff must exceed a page (${expected.length})`);
       interface Page { sha256: string; bytes: number; cursor: number; next: number | null; text: string; base: string; candidate: string }
       const pages: Page[] = [];
       for (let cursor: number | undefined; ;) {
-        const page = JSON.parse(await alice.call("oma_merge",
-          { action: "diff", name, ...(cursor === undefined ? {} : { cursor }) })) as Page;
+        const page = JSON.parse(await alice.call("oma_review_diff", { name, ...(cursor === undefined ? {} : { cursor }) })) as Page;
         pages.push(page);
         if (page.next === null) break;
         assert.ok(pages.length < 64, "diff paging did not converge");
@@ -388,14 +380,14 @@ test("SCN-W03: oma_merge diff pages the exact base→candidate patch and refuses
       }
       assert.equal(Buffer.concat(pages.map(page => Buffer.from(page.text, "utf8"))).equals(expected), true,
         "the pages reassemble the exact diff");
-      // Cursor refusals surface through the tool as CLI failures.
-      await assert.rejects(() => alice.call("oma_merge", { action: "diff", name, cursor: expected.length }),
+      // Invalid boundaries are refused rather than skipping or duplicating bytes.
+      await assert.rejects(() => alice.call("oma_review_diff", { name, cursor: expected.length }),
         /not at a page boundary/);
       const continuation = expected.findIndex((byte, index) => index > 0 && (byte & 0xc0) === 0x80);
       assert.ok(continuation > 0, "the fixture diff carries a UTF-8 continuation byte");
-      await assert.rejects(() => alice.call("oma_merge", { action: "diff", name, cursor: continuation }),
+      await assert.rejects(() => alice.call("oma_review_diff", { name, cursor: continuation }),
         /not at a page boundary/);
-      await assert.rejects(() => alice.call("oma_merge", { action: "diff", name, cursor: "abc" }), /invalid cursor/);
+      await assert.rejects(() => alice.call("oma_review_diff", { name, cursor: "abc" }), /Invalid arguments/);
     } finally { await rig.close(); }
   });
 });
@@ -406,17 +398,14 @@ test("SCN-W04: the requester cancels a HIGH merge; a later Worker vote is refuse
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob");
       commitWork(alice, "w04", work => writeFileSync(join(work, "w04.txt"), "content w04\n"));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "HIGH", title: "w04", reason: "the reason for w04", request: "w04.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "HIGH", title: "w04", reason: "the reason for w04", request: "w04.open" }));
       const name = requestNameOf(opened);
-      const cancelled = receiptIn(await alice.call("oma_merge",
-        { action: "cancel", name, reason: "superseded by a newer change", request: "w04.cancel" }));
+      const cancelled = receiptIn(await alice.call("oma_review_cancel", { name, reason: "superseded by a newer change", request: "w04.cancel" }));
       assert.equal(cancelled.state, "succeeded");
-      const status = JSON.parse(await alice.call("oma_merge", { action: "status", name })) as { display: string };
+      const status = JSON.parse(await alice.call("oma_review_status", { name })) as { display: string };
       assert.equal(status.display, "cancelled");
       const opsBefore = s.operations().length;
-      await assert.rejects(() => bob.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "a late approve", request: "w04.bob" }), /REQUEST_CLOSED/);
+      await assert.rejects(() => bob.call("oma_review_respond", { name, action: "approve", body: "a late approve", request: "w04.bob" }), /REQUEST_CLOSED/);
       assert.equal(s.operations().length, opsBefore, "a closed request records nothing");
     } finally { await rig.close(); }
   });
@@ -428,25 +417,20 @@ test("SCN-W05: self-review is refused, a Worker's approval field never reaches t
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob");
       commitWork(alice, "w05", work => writeFileSync(join(work, "w05.txt"), "content w05\n"));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "HIGH", title: "w05", reason: "the reason for w05", request: "w05.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "HIGH", title: "w05", reason: "the reason for w05", request: "w05.open" }));
       const name = requestNameOf(opened);
-      await assert.rejects(() => alice.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "approving my own", request: "w05.self" }), /SELF_REVIEW/);
+      await assert.rejects(() => alice.call("oma_review_respond", { name, action: "approve", body: "approving my own", request: "w05.self" }), /SELF_REVIEW/);
       // A Worker's vote has no approval field; the refusal is local.
       const framesBefore = bob.bridge.frames.length, opsBefore = s.operations().length;
-      await assert.rejects(() => bob.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "b", approval: "m-00000000-0000-4000-8000-000000000001-0", request: "w05.bad" }),
-        /approval is only the Principal's field is not valid/);
+      await assert.rejects(() => bob.call("oma_review_respond", { name, action: "approve", body: "b", approval: "m-00000000-0000-4000-8000-000000000001-0", request: "w05.bad" }),
+        /Invalid arguments/);
       assert.equal(bob.bridge.frames.length, framesBefore, "the refusal never reached the wire");
       assert.equal(s.operations().length, opsBefore);
-      const first = receiptIn(await bob.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "first look is fine", request: "w05.v1" }));
+      const first = receiptIn(await bob.call("oma_review_respond", { name, action: "approve", body: "first look is fine", request: "w05.v1" }));
       assert.equal(first.state, "succeeded");
-      const second = receiptIn(await bob.call("oma_merge",
-        { action: "vote", name, verdict: "approve", body: "second look still fine", request: "w05.v2" }));
+      const second = receiptIn(await bob.call("oma_review_respond", { name, action: "approve", body: "second look still fine", request: "w05.v2" }));
       assert.equal(second.state, "succeeded");
-      const status = JSON.parse(await alice.call("oma_merge", { action: "status", name })) as
+      const status = JSON.parse(await alice.call("oma_review_status", { name })) as
         { display: string; approvers: string[]; entries: { kind: string; actor: string; verdict?: string }[] };
       assert.deepEqual(status.approvers, ["bob"], "the latest approve supersedes, it does not add");
       assert.deepEqual(status.entries.filter(entry => entry.kind === "vote" && entry.actor === "bob").map(entry => entry.verdict),
@@ -465,29 +449,26 @@ test("SCN-W06: a HIGH challenge opened by tool reverts the applied merge on the 
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob"), carol = rig.worker("carol");
       const { candidate } = commitWork(alice, "w06", work => writeFileSync(join(work, "w06.txt"), "content w06\n"));
-      const merged = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "LOW", title: "w06", reason: "the reason for w06", request: "w06.open" }));
+      const merged = receiptIn(await alice.call("oma_merge_open", { tier: "LOW", title: "w06", reason: "the reason for w06", request: "w06.open" }));
       const mergeName = requestNameOf(merged);
       assert.equal(canonicalMain(s), candidate);
-      const opened = receiptIn(await alice.call("oma_challenge",
-        { action: "open", merge: mergeName, tier: "HIGH", title: "revert w06", reason: "a regression", request: "w06.ch" }));
+      const opened = receiptIn(await alice.call("oma_challenge_open", { merge: mergeName, tier: "HIGH", title: "revert w06", reason: "a regression", request: "w06.ch" }));
       assert.equal(opened.state, "succeeded");
       const challenge = requestNameOf(opened);
       assert.match(challenge, /^challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
       for (const [worker, key] of [[bob, "w06.bob"], [carol, "w06.carol"]] as const) {
-        const voted = receiptIn(await worker.call("oma_challenge",
-          { action: "vote", name: challenge, verdict: "approve", body: `${worker.actor} approves the revert`, request: key }));
+        const voted = receiptIn(await worker.call("oma_review_respond", { name: challenge, action: "approve", body: `${worker.actor} approves the revert`, request: key }));
         assert.equal(voted.state, "succeeded");
       }
       await s.idle();
       // Both peer approvals produced the Principal's approval mail.
       const approval = pendingApproval(s, challenge);
       // A Worker's diff sees the revert patch and, on request, the original.
-      const revert = JSON.parse(await bob.call("oma_challenge", { action: "diff", name: challenge, view: "revert" })) as
+      const revert = JSON.parse(await bob.call("oma_review_diff", { name: challenge, view: "proposal" })) as
         { view: string; text: string };
-      assert.equal(revert.view, "revert");
+      assert.equal(revert.view, "proposal");
       assert.match(revert.text, /-content w06/, "the revert patch removes the change");
-      const original = JSON.parse(await bob.call("oma_challenge", { action: "diff", name: challenge, view: "original" })) as
+      const original = JSON.parse(await bob.call("oma_review_diff", { name: challenge, view: "original" })) as
         { view: string; text: string };
       assert.match(original.text, /\+content w06/, "the original patch adds the change");
       // The Principal's decision goes over the same wire fact its tools send.
@@ -499,7 +480,7 @@ test("SCN-W06: a HIGH challenge opened by tool reverts the applied merge on the 
       assert.notEqual(head, candidate, "main moved off the merged commit");
       const applied = execFileSync(GIT, ["--git-dir", projectGitPathAt(s.root), "diff", candidate, head], { encoding: "utf8" });
       assert.match(applied, /-content w06/, "the revert commit removed the change");
-      const status = JSON.parse(await alice.call("oma_challenge", { action: "status", name: challenge })) as { display: string };
+      const status = JSON.parse(await alice.call("oma_review_status", { name: challenge })) as { display: string };
       assert.equal(status.display, "applied");
     } finally { await rig.close(); }
   });
@@ -511,14 +492,14 @@ test("SCN-W07: a same-key open through the tool replays the frozen request — o
     try {
       const alice = rig.worker("alice");
       commitWork(alice, "w07", work => writeFileSync(join(work, "w07.txt"), "content w07\n"));
-      const params = { action: "open", tier: "LOW", title: "w07", reason: "the same key twice", request: "w07.open" } as const;
-      const first = receiptIn(await alice.call("oma_merge", params));
-      const second = receiptIn(await alice.call("oma_merge", params));
+      const params = { tier: "LOW", title: "w07", reason: "the same key twice", request: "w07.open" } as const;
+      const first = receiptIn(await alice.call("oma_merge_open", params));
+      const second = receiptIn(await alice.call("oma_merge_open", params));
       assert.equal(first.state, "succeeded");
       assert.equal(second.state, "succeeded");
       assert.equal(first.operation, second.operation, "the replay returned the first operation's receipt");
       assert.equal(requestNameOf(first), requestNameOf(second));
-      // The CLI's request cache froze the open: the second run asked the ledger
+      // The client's request cache froze the open: the second run asked the ledger
       // for the frozen key rather than rebuilding anything from the workspace.
       const ops = s.operations("alice");
       assert.equal(ops.filter(row => row.kind === "attest.record" && row.request_key === "w07.open").length, 1);
@@ -536,14 +517,12 @@ test("SCN-W08: a Worker review adds a thread revision naming the open; the Princ
     try {
       const alice = rig.worker("alice"), bob = rig.worker("bob");
       commitWork(alice, "w08", work => writeFileSync(join(work, "w08.txt"), "content w08\n"));
-      const opened = receiptIn(await alice.call("oma_merge",
-        { action: "open", tier: "MEDIUM", title: "w08", reason: "the reason for w08", request: "w08.open" }));
+      const opened = receiptIn(await alice.call("oma_merge_open", { tier: "MEDIUM", title: "w08", reason: "the reason for w08", request: "w08.open" }));
       const name = requestNameOf(opened);
       const rev0 = threadRevision(s, name, 0);
       assert.ok(rev0 !== null, "the open's rev-0 thread was materialized");
       const rev0Id = rev0.match(/^Message-ID: <([^@>]+)@demo\.oma\.invalid>/m)![1]!;
-      const reviewed = receiptIn(await bob.call("oma_merge",
-        { action: "review", name, body: "looks fine, but see the tests", request: "w08.review" }));
+      const reviewed = receiptIn(await bob.call("oma_review_respond", { action: "comment", name, body: "looks fine, but see the tests", request: "w08.review" }));
       assert.equal(reviewed.state, "succeeded");
       const rev1 = threadRevision(s, name, 1);
       assert.ok(rev1 !== null, "the review's rev-1 thread revision exists");

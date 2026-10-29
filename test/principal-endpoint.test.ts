@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
@@ -124,9 +125,7 @@ async function startSociety(prefix: string, supervised = true, host?: HostChanne
   const units = new PolicyExecution();
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units,
-    { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    () => null, mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
   const channel = supervised ? host ?? new HostChannel(runRoot) : null;
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, limits: LIMITS, principalHost: channel ?? undefined });
   await broker.start();

@@ -7,6 +7,7 @@ export interface ParentAuthoritySnapshot {
   readonly name: string; readonly profile: string; readonly capabilities: readonly Capability[];
 }
 export interface ChildPolicySnapshot {
+  readonly maxWorkers: number;
   readonly agentProfiles: Readonly<Record<string, {
     readonly modelProfile: string; readonly capabilities: readonly Capability[];
     readonly delegable: readonly Capability[]; readonly childProfile: string | null;
@@ -14,15 +15,16 @@ export interface ChildPolicySnapshot {
   readonly modelProfiles: Readonly<Record<string, unknown>>;
 }
 export interface ChildSpecInput { readonly name: string; readonly from: string; readonly brief: string }
+export type ResolvedChildPolicy = Pick<ResolvedAgentSpec, "profile" | "capabilities" | "modelProfile">;
 
 /** DR4, A-002: `code.integrate` is the host's to give, by the child's profile;
  * no agent delegates it, so a parent's holding or `delegable` has no effect on
  * it. Every other capability is the intersection below. */
 export const HOST_GRANTED: readonly Capability[] = Object.freeze(["code.integrate"]);
 
-export function resolveChildSpec(
-  cfg: ChildPolicySnapshot, parent: ParentAuthoritySnapshot, input: ChildSpecInput,
-): { spec: ResolvedAgentSpec } | null {
+export function resolveChildPolicy(
+  cfg: ChildPolicySnapshot, parent: ParentAuthoritySnapshot,
+): ResolvedChildPolicy | null {
   const parentProfile = Object.hasOwn(cfg.agentProfiles, parent.profile) ? cfg.agentProfiles[parent.profile] : undefined;
   if (!parentProfile) throw new StoreError("UNSUPPORTED_PROFILE", `parent profile ${parent.profile} is not configured`);
   const childName = parentProfile.childProfile;
@@ -33,8 +35,12 @@ export function resolveChildSpec(
   const intersection = parent.capabilities.filter(capability => !HOST_GRANTED.includes(capability) &&
     parentProfile.delegable.includes(capability) && child.capabilities.includes(capability));
   const granted = child.capabilities.filter(capability => HOST_GRANTED.includes(capability));
-  return { spec: {
-    name: input.name, from: input.from, brief: input.brief, profile: childName,
-    capabilities: [...new Set([...intersection, ...granted])].sort(), modelProfile: child.modelProfile,
-  } };
+  return { profile: childName, capabilities: [...new Set([...intersection, ...granted])].sort(), modelProfile: child.modelProfile };
+}
+
+export function resolveChildSpec(
+  cfg: ChildPolicySnapshot, parent: ParentAuthoritySnapshot, input: ChildSpecInput,
+): { spec: ResolvedAgentSpec } | null {
+  const child = resolveChildPolicy(cfg, parent);
+  return child === null ? null : { spec: { ...input, ...child } };
 }

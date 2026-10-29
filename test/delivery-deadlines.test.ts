@@ -120,7 +120,7 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
   try {
     const options = residentOptions(root, root, fakePi(root, pacing, everyMs, forMs));
     prepareResident(options);
-    writeFileSync(options.paths.coreExtension, "export default function() {}\n"); writeFileSync(options.paths.cli, "\n");
+    writeFileSync(options.paths.coreExtension, "export default function() {}\n");
     const adapter = new PiAdapter(residentEngineEffects, { ...options,
       profile: { ...options.profile, inferenceSeconds: budgets.model },
       limits: { ...options.limits, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept } });

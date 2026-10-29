@@ -22,7 +22,7 @@ function composeGit(paths: GitPaths, store: Store, mail: MailModule,
     attestationFacts: () => store.attestationFacts(),
     getOperation: (actor, key) => store.getOperation(actor, key),
     listAgents: () => store.listAgents(),
-  }, policy?.tiered?.highPeerFloor ?? 1);
+  }, policy?.tiered?.highPeerFloor ?? 1, policy?.maxWorkers ?? 1);
   const git = new GitModule(ledger, gitMessaging(mail), repository, policy, reader, check, {
     assertApplicable: request => authority.assertApplicable(request),
   });

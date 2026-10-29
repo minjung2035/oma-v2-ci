@@ -1,4 +1,4 @@
-/** TS-001: host contract owner. Declarations only; current host configuration schema 3. */
+/** TS-001: host contract owner. Declarations only; current host configuration schema 4. */
 import type { Actor, Capability } from "./identity.js";
 import type { AgentCreateInput, RiskTier } from "./values.js";
 
@@ -57,6 +57,7 @@ export interface HostConfig {
   modelProfiles: Record<string, ModelProfile>;
   agentProfiles: Record<string, AgentProfile>;
   principalProfile: string;
+  maxWorkers: number;
   initialResidents: { name: Actor; profile: string; brief: string }[];
   integration: {
     policyRevision: string; protectedPaths: string[];

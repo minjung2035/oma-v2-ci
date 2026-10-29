@@ -294,11 +294,11 @@ function validateAttestation(plan: PlanFor<"attest.record">, value: CheckedOpera
     };
     const problem = reviewFactRelationProblem(value.actor, fact, request);
     if (problem !== null) corrupt(problem);
-    if (request !== null && request.open !== null) {
+    if (fact.kind === "merge.open" || (request !== null && request.open !== null)) {
       // An open fact's messages name the new request itself; every other
       // fact's name the request it references.
       const isOpen = fact.kind === "merge.open" || fact.kind === "challenge.open";
-      const open = isOpen ? fact : request.open;
+      const open = isOpen ? fact : request!.open!;
       const requestId = isOpen ? value.id : fact.request;
       const named = (payload as { name?: unknown }).name;
       if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel") && named !== open.name)

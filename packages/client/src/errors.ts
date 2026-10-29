@@ -1,6 +1,8 @@
+import type { Failure } from "@oma/contracts";
+
 export class ClientError extends Error {
   constructor(message: string, readonly exitCode: 2 | 3 | 4, readonly request?: string,
-    readonly receipt?: unknown, readonly contradicted = false, readonly code?: string) {
+    readonly receipt?: unknown, readonly contradicted = false, readonly code?: string, readonly failure?: Failure) {
     super(message);
     this.name = "ClientError";
   }

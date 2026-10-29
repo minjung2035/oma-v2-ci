@@ -14,6 +14,7 @@ export interface ReviewTransaction {
   setOperationSucceeded(id: OperationId, resultJson: string): void;
 }
 export interface ReviewLedger extends ReviewAuthorityLedger, MailRoutingReader {
+  listAgents(): ReturnType<ReviewAuthorityLedger["listAgents"]>;
   getAgent(actor: Actor): AgentRow | null;
   societyOpen(): boolean;
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent";

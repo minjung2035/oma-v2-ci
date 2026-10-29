@@ -130,7 +130,7 @@ export class PublicDispatcher {
           if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
           const current = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", false);
           if (!current.ok) return errorAnswer(current.id, current.failure);
-          return statusPage(id, snapshot.observedAtMs, agents, this.deps.limits.frameBytes, params.after);
+          return statusPage(id, snapshot.observedAtMs, agents, this.deps.limits.frameBytes, lifecycle.creation(auth), params.after);
         }
         case "operation.read":
           return receiptChunk(id, store.getReceipt(auth.actor, params.key) ?? receiptNotFound, params, this.deps.limits.frameBytes);
@@ -190,7 +190,7 @@ export class PublicDispatcher {
         }
         case "review.status": {
           if (!this.deps.review) throw new StoreError("UNSUPPORTED_PROFILE", "review status owner is unavailable");
-          return okAnswer(id, this.deps.review.status(auth, params.name, this.deps.limits.frameBytes, id));
+          return okAnswer(id, this.deps.review.status(auth, params, this.deps.limits.frameBytes, id));
         }
         case "logs.read": {
           if (this.deps.store.getAgent(params.agent) === null)

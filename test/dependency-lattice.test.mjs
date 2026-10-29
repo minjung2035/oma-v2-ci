@@ -30,13 +30,13 @@ function analyze(files) {
 const typeRef = to => `import type { Value } from "${to}";\nexport type Held = Value;\n`;
 
 test("P5 lattice: the measured layer order is kernel < facts < workflow < orchestration < entry", () => {
-  assert.deepEqual(["packages/domain/src/identifiers.ts", "packages/tool-runtime/src/contained-search.ts", "packages/mail/src/index.ts", "packages/broker/src/index.ts", "apps/oma/src/cli.ts", "packages/contracts/src/index.ts"]
+  assert.deepEqual(["packages/domain/src/identifiers.ts", "packages/tool-runtime/src/contained-search.ts", "packages/mail/src/index.ts", "packages/broker/src/index.ts", "apps/oma/src/entry/broker.ts", "packages/contracts/src/index.ts"]
     .map(file => [file, layerOf(file)?.name]), [
     ["packages/domain/src/identifiers.ts", "L1-kernel"],
     ["packages/tool-runtime/src/contained-search.ts", "L2-facts"],
     ["packages/mail/src/index.ts", "L3-workflow"],
     ["packages/broker/src/index.ts", "L4-orchestration"],
-    ["apps/oma/src/cli.ts", "L5-entry"],
+    ["apps/oma/src/entry/broker.ts", "L5-entry"],
     ["packages/contracts/src/index.ts", "L0-contracts"],
   ]);
   assert.equal(layerOf("packages/domain/src/identifiers.ts").index < layerOf("packages/mail/src/index.ts").index, true);

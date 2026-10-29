@@ -2,12 +2,12 @@
  *
  * The society declares its generated rootfs, so the product's runner starts a
  * Resident's engine under bubblewrap exactly as a deployment does: the
- * trusted extension, bash, the `oma` CLI on the pinned Node, no network, and
+ * trusted extension and bash, no network, and
  * the provider reached only through the runner's relay, which swaps the
  * placeholder the sandbox holds for the key. The scripted provider speaks
  * TLS as one of the engine's own catalogue providers (fixtures/
  * scripted-provider.ts), and the broker has its Git module, so a Resident's
- * commit, `oma submit` and `oma merge open` run through quarantine, review
+ * commit, typed candidate publication and merge open run through quarantine, review
  * and CAS. Not provider evidence (P0-5; INF-001).
  */
 import test from "node:test";
@@ -26,9 +26,10 @@ const lastResult = (request: ChatRequest | undefined): string => toolResults(req
 const git = (s: Scenario, ...args: string[]): string => execFileSync("git", ["--git-dir", projectGitPathAt(s.root), ...args], { encoding: "utf8" }).trim();
 const bash = (command: string) => tools(call("bash", { command }));
 const receiptIn = (result: string): { operation: string; state: string; result?: Record<string, string> } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at, result.lastIndexOf("}") + 1)) as { operation: string; state: string; result?: Record<string, string> };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 async function assign(s: Scenario, to: string, body: string, key: string): Promise<string> {
   const principal = s.store.getAgent("principal")!;
@@ -43,18 +44,21 @@ const COMMIT = "cd /workspace && echo fixed > fix.txt && git add fix.txt && git 
 test("SCN-C01: a confined Resident commits and submits; the candidate is published, and the Principal gets the result mail", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "fix.txt를 만들어 제출하세요.", "c01");
-    s.script(request => (continuesTurn(request) ? text("제출했습니다.")
-      : bash(`${COMMIT} && oma submit HEAD --to principal --subject '수정 제출' --request sub-c01`)));
+    s.script([
+      tools(call("bash", { command: COMMIT }), call("toolset", { select: ["oma_candidate_publish"] })),
+      tools(call("oma_candidate_publish", { candidate: "HEAD", to: ["principal"], subject: "수정 제출", body: "수정했습니다.", request: "sub-c01" })),
+      text("제출했습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const receipt = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body));
+    const receipt = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body));
     assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
     const published = receipt.result!.publishedRef!;
     assert.match(published, /^refs\/oma\/published\/worker-a\//);
     assert.equal(git(s, "rev-parse", published), receipt.result!.candidate);
     assert.equal(git(s, "show", `${published}:fix.txt`), "fixed");
     assert.equal(s.operations("worker-a").filter(row => row.kind === "git.submit").length, 1);
-    // The result mail tells the Principal how to fetch it (CLI-002).
+    // The result mail tells the Principal how to fetch the published candidate.
     const [result] = s.inbox("principal");
     assert.ok(result, "the Principal got no result mail");
     s.script(request => (continuesTurn(request) ? text("제출을 확인했습니다.") : tools(call("oma_mail_read", { messageId: result! }))));
@@ -83,14 +87,20 @@ test("SCN-C02: inside the sandbox the provider key is only a placeholder; the re
 test("SCN-C03: submitting the same request twice publishes one candidate under one operation", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "두 번 제출해 보세요.", "c03");
-    const submit = "oma submit HEAD --to principal --subject '반복' --request sub-c03";
-    s.script((request, index) => (index === 0 ? bash(`${COMMIT} && ${submit} && ${submit}`) : text("두 번 불렀습니다.")));
+    const submit = { candidate: "HEAD", to: ["principal"], subject: "반복", body: "같은 후보입니다.", request: "sub-c03" };
+    s.script([
+      tools(call("bash", { command: COMMIT }), call("toolset", { select: ["oma_candidate_publish"] })),
+      tools(call("oma_candidate_publish", submit, "submit-first")),
+      tools(call("oma_candidate_publish", submit, "submit-repeat")),
+      text("두 번 불렀습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const results = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
-    const operations = [...results.matchAll(/"operation":"(op-[0-9a-f-]+)"/g)].map(match => match[1]);
-    assert.equal(operations.length, 2, results);
-    assert.equal(operations[0], operations[1], "the repeat was a second operation");
+    const resident = s.provider.seen.filter(entry => isResident(entry.body));
+    const first = receiptIn(lastResult(resident[2]!.body));
+    const repeated = receiptIn(lastResult(resident[3]!.body));
+    assert.equal(first.state, "succeeded", JSON.stringify(first));
+    assert.deepEqual(repeated, first, "the repeat did not return the original receipt");
     assert.equal(s.operations("worker-a").filter(row => row.kind === "git.submit").length, 1);
     assert.equal(git(s, "for-each-ref", "refs/oma/published/").split("\n").filter(Boolean).length, 1);
     assert.equal(s.inbox("principal").length, 1, "the Principal was told twice");
@@ -101,13 +111,14 @@ test("SCN-C04: a Resident's LOW merge request applies itself; main moves exactly
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const before = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "제출하고 통합하세요.", "c04");
-    s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && echo 통합 > /tmp/reason.md && oma merge open --tier LOW --title 통합 --file /tmp/reason.md --request mrg-c04`);
-      return text("통합했습니다.");
-    });
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge_open", { tier: "LOW", title: "통합", reason: "통합", request: "mrg-c04" })),
+      text("통합했습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const opened = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body));
+    const opened = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body));
     assert.equal(opened.state, "succeeded", JSON.stringify(opened));
     const candidate = git(s, "for-each-ref", "--format=%(objectname)", "refs/oma/published/");
     assert.equal(git(s, "rev-parse", "refs/heads/main"), candidate, "main did not move to the candidate");
@@ -120,20 +131,27 @@ test("SCN-C05: a merge open on a base main has left is refused with the actual m
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "지난 기준으로 통합해 보세요.", "c05");
-    s.script((request, index) => {
-      // The workspace's origin/main stays at the fetched base; after the first
-      // request applies, opening on it is stale.
-      if (index === 0) return bash(`${COMMIT} && echo 첫번째 > /tmp/r1.md && oma merge open --tier LOW --title 첫번째 --file /tmp/r1.md --request mrg-c05a`);
-      if (index === 1) return bash(`${COMMIT.replace("echo fixed", "echo second")} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
-      return text("거절됐습니다.");
-    });
+    // The workspace's origin/main stays at the fetched base; after the first
+    // request applies, opening on it is stale.
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge_open", { tier: "LOW", title: "첫번째", reason: "첫번째", request: "mrg-c05a" })),
+      bash(COMMIT.replace("echo fixed", "echo second")),
+      tools(call("oma_merge_open", { tier: "LOW", title: "두번째", reason: "두번째", base: "refs/remotes/origin/main", request: "mrg-c05b" })),
+      text("거절됐습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
+    const resident = s.provider.seen.filter(entry => isResident(entry.body));
+    const opened = receiptIn(lastResult(resident[2]!.body));
+    assert.equal(opened.state, "succeeded", JSON.stringify(opened));
+    const refused = lastResult(resident[4]!.body);
     assert.match(refused, /STALE_BASE/, refused);
-    assert.match(refused, /exit=2/, "a refused open did not exit as a settled failure (CLI-003)");
     const after = git(s, "rev-parse", "refs/heads/main");
     assert.notEqual(after, main, "the first LOW merge should have applied");
+    assert.ok(refused.includes(after), "the refusal does not name the actual main");
+    const integrated = s.operations("worker-a").filter(row => row.kind === "git.integrate" && row.state === "succeeded");
+    assert.equal(integrated.length, 1, "the stale request must not integrate");
     assert.equal(s.operations("worker-a").filter(row => row.kind === "attest.record" && row.state === "succeeded").length, 1,
       "only the fresh request was accepted");
   });
@@ -143,7 +161,7 @@ test("SCN-C06: the Principal publishes the shared context; a confined Resident r
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const goal = "# 목표\n로그인 오류를 없앤다.\n";
     s.script(request => (continuesTurn(request) ? text("게시했습니다.")
-      : tools(call("oma_mail_send", { to: ["residents"], subject: "Goal", body: goal, intent: "goal", expectedRevision: "none", request: "ctx-1" }))));
+      : tools(call("oma_goal_publish", { subject: "Goal", body: goal, expectedRevision: null, request: "ctx-1" }))));
     await s.prompt("목표를 게시해");
     const published = receiptIn(lastResult(s.provider.seen[1]!.body));
     assert.equal(published.state, "succeeded", JSON.stringify(published));
@@ -159,16 +177,17 @@ test("SCN-C07: without git.submit a Resident's merge open is refused and main do
   await withScenario({ residents: ["worker-a"], confined: true, submit: false }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "통합해 보세요.", "c07");
-    s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && echo 이유 > /tmp/r.md && oma merge open --tier LOW --title 통합 --file /tmp/r.md --request mrg-c07; echo "exit=$?"`);
-      return text("권한이 없습니다.");
-    });
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge_open", { tier: "LOW", title: "통합", reason: "이유", request: "mrg-c07" })),
+      text("권한이 없습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
+    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
     assert.match(refused, /CAPABILITY_DENIED/, refused);
-    assert.match(refused, /exit=2/);
     assert.equal(git(s, "rev-parse", "refs/heads/main"), main);
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "git.integrate").length, 0);
   });
 });
 
@@ -204,13 +223,18 @@ test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident
       const commit = execFileSync("git", ["-C", human, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
       assert.equal(refreshProjectMirror(s.root, human), null);
       await assign(s, "worker-a", "사람의 새 커밋을 가져와 제출하세요.", "c09");
-      s.script(request => (continuesTurn(request) ? text("제출했습니다.")
-        : bash("cd /workspace && git fetch -q /git/project-mirror.git main:refs/heads/human && git log -1 --format=%s human && oma submit human --to principal --subject '사람 커밋' --request sub-c09")));
+      s.script([
+        tools(call("bash", { command: "cd /workspace && git fetch -q /git/project-mirror.git main:refs/heads/human && git log -1 --format=%s human" }, "fetch-human"),
+          call("toolset", { select: ["oma_candidate_publish"] })),
+        tools(call("oma_candidate_publish", { candidate: "human", to: ["principal"], subject: "사람 커밋", body: "사람의 새 커밋입니다.", request: "sub-c09" })),
+        text("제출했습니다."),
+      ]);
       const run = await s.activate("worker-a");
       assert.equal(run.code, 0, run.stderr);
-      const result = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
-      assert.match(result, /human work/, `the Resident did not see the human's commit: ${result.slice(0, 300)}`);
-      const receipt = receiptIn(result);
+      const resident = s.provider.seen.filter(entry => isResident(entry.body));
+      const fetched = toolResults(resident[1]!.body).find(result => result.id === "fetch-human")!.text;
+      assert.match(fetched, /human work/, `the Resident did not see the human's commit: ${fetched.slice(0, 300)}`);
+      const receipt = receiptIn(lastResult(resident[2]!.body));
       assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
       assert.equal(receipt.result!.candidate, commit, "the submitted candidate is not the human's commit");
       assert.equal(git(s, "show", `${receipt.result!.publishedRef!}:human.txt`), "from the human");
@@ -244,16 +268,31 @@ test(`SCN-C10 / DR25: a confined Resident's engine loads an installed package's 
     commitRoleSet(inline.snapshot!, inline.config, { ...roles, [worker]: { ...roles[worker]!, extensions: [...roles[worker]!.extensions, entry] } });
     await s.restartBroker();
     await assign(s, "worker-a", "설치된 확장을 확인하세요.", "c10");
-    s.script(request => (continuesTurn(request) ? text("확인했습니다.")
-      : bash("test -f /opt/oma-packages/npm/node_modules/oma-hello-ext/extensions/hello.ts && echo store-visible; " +
-        "touch /opt/oma-packages/x 2>/dev/null && echo store-writable || echo store-read-only; " +
-        "grep -c '[.]engine' /proc/self/mountinfo || true")));
+    s.script((request, index) => {
+      if (index === 0) {
+        assert.ok(!(request.tools ?? []).some(tool => tool.function?.name === "hello_ext"),
+          "the installed optional tool was active before selection");
+        const catalog = request.tools?.find(tool => tool.function?.name === "toolset");
+        assert.ok(JSON.stringify(catalog ?? {}).includes('"hello_ext"'), "the installed tool was missing from the optional catalog");
+        return tools(call("toolset", { select: ["hello_ext"] }));
+      }
+      if (index === 1) {
+        assert.ok(request.tools?.some(tool => tool.function?.name === "hello_ext"),
+          "the selected extension was not active on the next turn");
+        return tools(call("hello_ext", {}, "installed-hello"),
+          call("bash", { command: "test -f /opt/oma-packages/npm/node_modules/oma-hello-ext/extensions/hello.ts && echo store-visible; " +
+            "touch /opt/oma-packages/x 2>/dev/null && echo store-writable || echo store-read-only; " +
+            "grep -c '[.]engine' /proc/self/mountinfo || true" }, "installed-containment"));
+      }
+      return text("확인했습니다.");
+    });
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const requests = s.provider.seen.filter(item => isResident(item.body));
-    assert.ok((requests[0]!.body.tools ?? []).some(tool => tool.function?.name === "hello_ext"),
-      "the confined engine did not show the installed extension's tool");
-    const said = lastResult(requests[1]!.body);
+    const results = toolResults(requests[2]!.body);
+    assert.equal(results.find(result => result.id === "installed-hello")?.text, "hello",
+      "the installed extension did not execute successfully");
+    const said = results.find(result => result.id === "installed-containment")?.text ?? "";
     assert.match(said, /store-visible/);
     assert.match(said, /store-read-only/);
     assert.match(said.trim().split("\n").at(-1) ?? "", /^0$/, `the Human's login is visible inside: ${said}`);

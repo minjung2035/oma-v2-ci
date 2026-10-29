@@ -25,7 +25,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "packages/native/src/pty.ts": "the slave device of a pseudo-terminal this process just made (/dev/pts), opened to hand to the session's program",
   "packages/platform-mac/src/files.ts": "the Mac host's one publication owner, for its own files in the app's support directory (record, archives, snapshots), outside any society's state tree",
   "packages/platform-mac/src/archive-crypto.ts": "the Mac host's archive files in its own support directory, outside any society's state tree",
-  "apps/oma/src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
+  "apps/oma/src/runtime/input-effects/submit.ts": "the Client caller's own temporary directory",
   "packages/tool-lsp/src/lsp-call-scope.ts": "a fresh mkdtemp directory under the OS temp directory -- the LSP child's own per-call HOME/XDG/TMP scratch, removed when the call ends; no society's tree is written (PI-001)",
   "packages/tool-mcp/src/index.ts": "the MCP adapter's own state directory under the engine's agent dir (the credential key, the OAuth root, the per-session child-env scratch), or a fresh ephemeral tmp dir when no agent dir was provisioned -- engine-owned, rotated and removed by the adapter; the extension cannot import the storage primitives (PI-001)",
   "packages/extension/src/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",

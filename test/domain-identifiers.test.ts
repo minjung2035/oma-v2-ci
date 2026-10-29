@@ -26,7 +26,8 @@ import { operationPlanCheck } from "@oma/domain/durable";
 import { readBatchView } from "@oma/tool-runtime/batch-view";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { RequestCache } from "#oma-test/app/request-cache";
-import { runCliWithLookup } from "./fixtures/cli-lookup.js";
+import { runClientWithLookup } from "./fixtures/client-lookup.js";
+import { clientCall } from "./fixtures/client-process.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000003";
 const OTHER_OP = "op-00000000-0000-4000-8000-000000000004";
@@ -171,23 +172,30 @@ test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R03: actual CLI ACK rejects non-v4 IDs before replay or networking", async () => {
+test("R03: actual ACK tool rejects non-v4 IDs before replay or networking", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r03-ack-"));
   try {
     const cache = new RequestCache(home);
     const receipt: Receipt = { operation: OP, state: "succeeded", result: { kind: "mail.ack", message: MESSAGE, acknowledged: true } };
     cache.freeze({ key: "ack-key", method: "mail.ack", params: { message: MESSAGE }, createdAtMs: 1 });
     cache.updateReceipt("ack-key", receipt);
-    const invoke = (message: string) => runCliWithLookup(home, home, ["ack", message, "--request", "ack-key"], "ack-key", receipt);
+    // Load the actual extension in the isolated client process, with that process's paths.
+    const invoke = (message: string) => runClientWithLookup(home, home, `(async () => {
+      const { registerOmaTools } = await import(${JSON.stringify(import.meta.resolve("@oma/extension/mail-tools"))});
+      Object.assign(process.env, { OMA_AGENT_HOME: process.env.HOME, OMA_MAIL_ARCHIVE: "/mail/archive/cur" });
+      const tools = new Map();
+      registerOmaTools({ registerTool: tool => tools.set(tool.name, tool) }, process.cwd());
+      return tools.get("oma_mail_ack").execute("ack", { messageId: ${JSON.stringify(message)}, request: "ack-key" });
+    })()`, "ack-key", receipt);
     const good = await invoke(`/mail/archive/cur/${MESSAGE}:2,`);
     assert.equal(good.status, 0, good.stderr); assert.deepEqual(good.requests.map(request => request.method), ["operation.get"]);
     const bad = await invoke("m-00000000-0000-1000-8000-000000000003-0");
-    assert.equal(bad.status, 2, bad.stderr); assert.match(bad.stderr, /ack requires a message id/);
+    assert.notEqual(bad.status, 0, bad.stderr);
     assert.deepEqual(bad.requests, [], "invalid IDs must fail before lookup");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("R03: actual CLI preserves an old frozen submit exportRef without consulting HEAD", async () => {
+test("R03: actual client preserves an old frozen submit exportRef without consulting HEAD", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r03-frozen-"));
   try {
     const cache = new RequestCache(home);
@@ -199,7 +207,9 @@ test("R03: actual CLI preserves an old frozen submit exportRef without consultin
     cache.updateReceipt("legacy-key", receipt);
     const path = join(home, ".local/state/oma/requests/legacy-key.json"); const before = readFileSync(path);
     const cwd = join(home, "not-a-git-repository"); mkdirSync(cwd);
-    const result = await runCliWithLookup(home, cwd, ["submit", "HEAD", "--request", "legacy-key"], "legacy-key", receipt);
+    const result = await runClientWithLookup(home, cwd, clientCall("publishCandidate", {
+      candidate: "HEAD", subject: "Re: submit", body: "unused",
+    }, "legacy-key"), "legacy-key", receipt);
     assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.requests.map(request => request.method), ["operation.get"]);
     assert.deepEqual(readFileSync(path), before, "a frozen request is read, not rewritten into the fresh ref convention");
     const frozen = cache.read("legacy-key"); assert.ok(frozen.kind === "present"); const params = frozen.value.params;

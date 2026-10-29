@@ -15,7 +15,7 @@ import { publicFailure } from "@oma/domain/errors";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { generateOperationId } from "@oma/native/identity";
 import { requestHash } from "@oma/domain/request-identity";
-import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./spec.js";
+import { withWorkerCapacity, makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./spec.js"
 
 export type ActionKind = "agent.start" | "agent.stop";
 /** Only physical systemd observations/effects are controlled. Store, decoding,
@@ -63,8 +63,7 @@ export function lifecycleReplayFixture() {
   const mail = createMailModule({ stateRoot: root, society: "replay" }, store, 64);
   const controls = { hasGoal: true, allowActivation: true };
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "replay",
-    hasGoal: () => controls.hasGoal, activationAllowed: () => controls.allowActivation },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+    hasGoal: () => controls.hasGoal, activationAllowed: () => controls.allowActivation }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const capabilities = new Set(ALL_CAPS);
   const auth: AuthContext = { actor: "manager", incarnation: 1, role: "resident", channel: "actor", capabilities,
     peer: { pid: process.pid, uid: 1000, gid: 1000 } };

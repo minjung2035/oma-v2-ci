@@ -1,6 +1,36 @@
-# 현재 인계 — native spec 기준 구현 재개
+# 현재 인계 — 모델 도구 표면 cutover
 
-## 사용자 지시
+## 현재 작업
+
+사용자가 승인한 [모델 도구 표면 명세](model-tool-surface-spec.md)의 구현을
+`/home/dev/oma-v2-model-surface-cleanup`에서 진행했다. 기준 HEAD는
+`74eadb6fd34c258393a231930fcdf0c85e601af6`이며 merge/deploy는 하지 않았다.
+
+모델용 CLI·구 도구/group을 제거하고 typed Client·role별 core/optional·exact `toolset`·
+reviewer/생성 관측·hashline 편집·prompt/START·설치 caller를 함께 전환했다.
+Human용 CLI와 broker authority·accepted history는 유지한다. 결정은 DR64,
+실행별 결과와 남은 한계는 [validation](implementation/validation.md)이 소유한다.
+
+후속 DR65에서는 Codex CLI의 모델별 prompt/tool spec을 대조해 기본 모델 문구를 영어로
+재작성했다. Principal의 고가 판단과 Worker의 자율 실행을 구분하고, 시작/담당 범위 공유·
+대기 중 독립 작업·증거 전달·검증/통합 완결을 유연한 기본 습관으로 명시했다.
+LOW의 사전 승인 없는 fast path와 적용 후 자동 통지·challenge는 유지한다.
+builtin/hashline/LSP/web/MCP 설명도 OMA wrapper에서 바꾸며 vendor 바이트·입력 계약은 보존한다.
+최신 사용자 지시는 **서브에이전트 금지**이며 추가 위임 없이 직접 마무리한다.
+
+후속 DR66은 `maxWorkers` 기본6·초기 Worker3, 트랜잭션 내 생성 상한, 설정 상한상 불가능한
+peer quorum의 Principal fallback을 구현한다. 가능한 peer 승인은 먼저 유지하고 0명이면
+open 승인 메일로 바로 Principal 결정을 요청한다. 일시적 부족·반대표는 fallback이 아니다.
+상한 변경은 broker 재시작 적용이며 이미 등록된 Worker는 자동 삭제하지 않는다.
+현재 검증 결과와 제약은 [validation](implementation/validation.md)의 DR66 절을 따른다.
+
+실제 Sol medium A/B/C 비교는 NOT_RUN이다. OMA engine auth가 비어 있고 확인한
+배포 profile은 `pi/current`다. 정확한 provider/model/medium 설정과 사용할 인증 없이
+다른 모델이나 scripted provider로 대체 통과시키지 않는다.
+
+아래는 이전 native 작업의 인계이며 이번 tool surface 변경의 검증 결과가 아니다.
+
+## 이전 native 작업의 사용자 지시
 
 최신 지시는 **개정 spec을 따라 작업을 시작하는 것**이다. 앞선 spec 작성 후 중단 지시는 재개 요청으로 대체됐다. tool-files의 directory-relative 연산 전환부터 실제 검증하며, work branch만 사용하고 merge/deploy하지 않는다. 에이전트 위임은 사용하지 않는다.
 

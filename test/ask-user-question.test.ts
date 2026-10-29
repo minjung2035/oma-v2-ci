@@ -38,12 +38,6 @@ import { QuestionnaireModel } from "@oma/domain/ask-user-question/model";
 import askExtension, { registerAskUserQuestion } from "@oma/extension/ask-user-question";
 import { registerAskUserQuestionPresenter } from "@oma/tui/ask-user-question/presenter";
 import { createAskComponent } from "@oma/tui/ask-user-question/component";
-import {
-  ASK_USER_QUESTION_TOOL_NAME as SURFACE_NAME,
-  planToolSurface,
-  principalToolSurfaceConfig,
-  residentToolSurfaceConfig,
-} from "@oma/domain/tool-surface";
 
 // ---------- fixtures ----------
 
@@ -139,10 +133,6 @@ const toolExecute = async (
 
 // ---------- contract / validation ----------
 
-test("BL2: the registered name and the surface plan bind the same spelling", () => {
-  assert.equal(ASK_USER_QUESTION_TOOL_NAME, "ask_user_question");
-  assert.equal(SURFACE_NAME, ASK_USER_QUESTION_TOOL_NAME);
-});
 
 test("BL2/upstream: bounds are 1-4 questions of 2-4 options each", () => {
   assert.equal(MAX_QUESTIONS, 4);
@@ -649,19 +639,3 @@ test("BL2: presenter registration is idempotent — one claim, one dialog per re
   await outcomePromise;
 });
 
-// ---------- role surface ----------
-
-test("BL2: the tool is DIRECT on the Principal surface and absent from the Resident surface", () => {
-  assert.ok(principalToolSurfaceConfig().direct.includes(ASK_USER_QUESTION_TOOL_NAME));
-  const resident = residentToolSurfaceConfig();
-  const residentNames = [
-    ...resident.direct,
-    ...resident.disabled,
-    ...resident.groups.flatMap(spec => spec.members.map(member => ("tool" in member ? member.tool : member.group))),
-    ...resident.roots,
-  ];
-  assert.equal(residentNames.includes(ASK_USER_QUESTION_TOOL_NAME), false);
-  const plan = planToolSurface(principalToolSurfaceConfig());
-  assert.ok(plan.direct.includes(ASK_USER_QUESTION_TOOL_NAME));
-  assert.equal(plan.grouped.includes(ASK_USER_QUESTION_TOOL_NAME), false, "direct exposure, never grouped");
-});

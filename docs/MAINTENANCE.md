@@ -63,7 +63,7 @@ Run은 actor 문자열이나 PID 하나가 아니다. 필요한 경계에서 inc
 
 Oracle은 실제 계약을 검사한다. 계산한 expected를 production planner에서 다시 얻거나 helper 이름·임시 경로만 고정하지 않는다. durable bytes·crash ordering·scope/ref 관계에는 실제 물리 관측을 사용한다.
 
-모델→도구→CLI→broker→원장/메일→다음 전달을 바꾸면 기존 `test/scenario-*.test.ts`와 scripted-provider/scenario fixture로 정상·provider 실패·끊김·kill/restart·같은 key retry를 확인한다. 화면만 보지 않고 ledger·mailbox·receipt·session으로 판정한다. scripted provider는 실제 provider의 증거가 아니다.
+모델→typed 도구→client→broker→원장/메일→다음 전달을 바꾸면 기존 `test/scenario-*.test.ts`와 scripted-provider/scenario fixture로 정상·provider 실패·끊김·kill/restart·같은 key retry를 확인한다. 화면만 보지 않고 ledger·mailbox·receipt·session으로 판정한다. scripted provider는 실제 provider의 증거가 아니다.
 
 현재 scripts가 명령의 정본이다.
 

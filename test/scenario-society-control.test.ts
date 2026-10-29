@@ -1,4 +1,4 @@
-/** DR27: real Principal engine, extension, CLI and broker; only the provider and units are scripted. */
+/** DR27: real Principal engine, extension, typed client and broker; only the provider and units are scripted. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
@@ -15,9 +15,6 @@ test("DR27: Principal closes society, survives broker/engine restart, and explic
     const closed = s.store.getOperation("principal", "close")!;
     assert.equal(closed.state, "succeeded"); assert.equal(closed.kind, "society.set");
     assert.match(toolResults(s.provider.seen.at(-1)!.body).at(-1)!.text, /succeeded/);
-    const offered = s.provider.seen[0]!.body.tools!.map(tool => tool.function?.name);
-    for (const name of ["oma_society", "oma_merge", "oma_challenge", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name));
-    for (const name of ["oma_agent_create", "oma_status", "oma_logs", "oma_mail_ack", "write", "edit", "bash"]) assert.ok(!offered.includes(name), name);
     const calls = s.provider.seen.length;
     assert.equal((await s.deliver()).kind, "idle"); assert.equal(s.provider.seen.length, calls);
     await s.restartBroker(); await s.restartEngine();

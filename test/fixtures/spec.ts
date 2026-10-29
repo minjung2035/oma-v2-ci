@@ -6,6 +6,12 @@ import { resolvedSpecDigest } from "@oma/domain/spec-identity";
 import { resolvedSpecCheck } from "@oma/domain/durable";
 import type { ResolvedAgentSpec } from "@oma/contracts";
 import type { NewAgent } from "@oma/contracts/ledger";
+import type { SpecResolver } from "@oma/lifecycle/contracts";
+
+export function withWorkerCapacity(resolve: (...args: Parameters<SpecResolver>) => ResolvedAgentSpec | null,
+    maxWorkers = 6): SpecResolver {
+  return Object.assign(resolve, { maxWorkers: () => maxWorkers });
+}
 
 export const ALL_CAPS: readonly Capability[] = CAPABILITIES;
 export function makeValidResolvedSpec(

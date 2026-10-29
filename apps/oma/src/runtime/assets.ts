@@ -35,7 +35,6 @@ export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: s
   };
   requireEntry(assets.schema, false); requireEntry(assets.contract, false); requireEntry(assets.extension, false);
   for (const entry of Object.values(assets.entries)) requireEntry(entry, false);
-  requireEntry(join(root, DEPLOYMENT_LAYOUT.modelCommandBuilder), false);
   assertWorkspaceResolution(root, moduleDirectories);
 }
 

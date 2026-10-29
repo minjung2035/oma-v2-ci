@@ -66,27 +66,36 @@ export class BatchCoordinator {
     });
     return batch;
   }
-  async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
+  async prepare(auth: AuthContext, deferred?: ReadonlySet<string>): Promise<PreparedBatch | null> {
     // A closed society keeps queued mail, but starts no automatic model turn.
     if (!this.store.societyOpen()) return null;
     const existing = this.store.preparedBatches(auth.actor);
-    if (existing.length > 0) {
-      const row = existing[0]!;
+    if (existing.some(batch => batch.incarnation > auth.incarnation))
+      throw new StoreError("BATCH_CONFLICT", "prepared batch belongs to a later run");
+    // A fresh-work wake may leave an older waited batch prepared, but never
+    // runs two deliveries concurrently. Its exact manifest remains untouched.
+    const row = existing.find(batch => !deferred || this.snapshot(batch, auth.actor, auth.incarnation).messageIds.some(id => !deferred.has(id)));
+    if (row) {
       // DR9: the batch is presented in this lease's attempt; its row, and so
       // the attempt it was first prepared in, stays as it was.
-      if (row.incarnation > auth.incarnation) throw new StoreError("BATCH_CONFLICT", "prepared batch belongs to a later run");
       const prepared = this.snapshot(row, auth.actor, auth.incarnation);
       return this.finishPrepared({ ...prepared, notice: this.noticeFor(auth.actor, prepared.messageIds, true) });
     }
     const candidates = function* (owner: BatchCoordinator) {
       for (const value of owner.store.pendingDeliveryRows(auth.actor)) {
+        if (deferred?.has(value.messageId)) continue;
         const message = owner.messagePlan(value);
         yield { value, publicList: message.kind === "message" && message.to.length > 0 &&
           message.to.every(to => to === "commons" || to === "residents" || to.startsWith("topic/")) };
       }
     };
     const pending = selectBatch(candidates(this), this.maximum);
-    if (pending.length === 0) return null;
+    if (pending.length === 0) {
+      const previous = existing[0];
+      if (!previous) return null;
+      const prepared = this.snapshot(previous, auth.actor, auth.incarnation);
+      return this.finishPrepared({ ...prepared, notice: this.noticeFor(auth.actor, prepared.messageIds, true) });
+    }
     const batch = { id: this.effects.nextBatchId(), agent: auth.actor, incarnation: auth.incarnation,
       messageIds: pending.map(delivery => delivery.messageId), sessionPath: null };
     const prepared = batchOf(batch, auth.actor, this.noticeFor(auth.actor, batch.messageIds));
@@ -166,7 +175,7 @@ export class BatchCoordinator {
 }
 function oneLine(value: string | null): string { return (value ?? "").replace(/\s+/g, " ").trim(); }
 /** DR6: true whether or not the earlier preparation ever reached the engine. */
-export const REDELIVERY_NOTICE = "Redelivery: this batch was prepared before, but its completion was not confirmed, so it is delivered again. You may have received it already. If this session has work on this batch, continue whatever is unfinished.";
+export const REDELIVERY_NOTICE = "Redelivery: completion of this prepared batch was not confirmed. Use the saved session and recorded operation outcomes to continue unfinished work; do not repeat completed effects under new request keys.";
 export function batchOf(batch: { id: string; incarnation: number; messageIds: string[]; sessionPath: string | null }, agent: Actor, notice = batchNotice(batch.messageIds)): PreparedBatch {
   return { id: batch.id, agent, incarnation: batch.incarnation, messageIds: batch.messageIds,
     sessionPath: batch.sessionPath, deliveryMode: "followUp", notice, indexPath: "/inbox.md" };

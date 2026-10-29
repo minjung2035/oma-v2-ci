@@ -3,22 +3,22 @@ import { createServer, type Socket } from "node:net";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { clientProcessArgs } from "./client-process.js";
 import type { Receipt } from "@oma/contracts";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
-export interface CliLookupResult {
+export interface ClientLookupResult {
   readonly status: number | null;
   readonly stdout: string;
   readonly stderr: string;
   readonly requests: readonly Record<string, unknown>[];
 }
 /** A socket primitive, not a fake receipt-cache authority or Git implementation.
- * The actual CLI must ask operation.get; mutations are never handled here.
+ * The actual typed client must ask operation.get; mutations are never handled here.
  */
-export async function runCliWithLookup(
-  home: string, cwd: string, args: readonly string[], key: string, receipt: Receipt,
-): Promise<CliLookupResult> {
+export async function runClientWithLookup(
+  home: string, cwd: string, expression: string, key: string, receipt: Receipt,
+): Promise<ClientLookupResult> {
   const socketPath = join(home, `lookup-${randomUUID().slice(0, 8)}.sock`);
   const sockets = new Set<Socket>();
   const requests: Record<string, unknown>[] = [];
@@ -51,7 +51,7 @@ export async function runCliWithLookup(
       server.listen(socketPath, () => { server.off("error", reject); resolve(); });
     });
     server.on("error", error => errors.push(error));
-    child = spawn(process.execPath, [fileURLToPath(new URL("../../../apps/oma/dist/cli.js", import.meta.url)), ...args], {
+    child = spawn(process.execPath, clientProcessArgs(expression), {
       cwd, env: { ...process.env, HOME: home, OMA_SOCKET: socketPath },
       stdio: ["ignore", "pipe", "pipe"], timeout: 5000, killSignal: "SIGKILL",
     });
@@ -60,7 +60,7 @@ export async function runCliWithLookup(
     let outputBytes = 0;
     const capture = (bytes: Buffer, output: boolean): void => {
       outputBytes += bytes.length;
-      if (outputBytes > 1024 * 1024) { errors.push(new Error("CLI fixture output overflow")); processHandle.kill("SIGKILL"); return; }
+      if (outputBytes > 1024 * 1024) { errors.push(new Error("Client fixture output overflow")); processHandle.kill("SIGKILL"); return; }
       if (output) stdout += bytes.toString("utf8"); else stderr += bytes.toString("utf8");
     };
     child.stdout?.on("data", (bytes: Buffer) => capture(bytes, true));

@@ -25,7 +25,7 @@ export const KERNEL_ZONES = Object.freeze([
       // BL2: the ask_user_question contract — bounds, question/answer/result
       // shapes, reserved labels, normalizer and the fail-closed validator.
       "packages/domain/src/ask-user-question/questionnaire.ts",
-      "apps/oma/src/cli/request-intent.ts",
+      "apps/oma/src/runtime/request-intent.ts",
       "packages/domain/src/admission.ts",
       "packages/domain/src/attestation-relations.ts",
       "packages/domain/src/canonical-json.ts",
@@ -67,7 +67,7 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "packages/native/src/metadata-observation.ts",
       "packages/protocol/src/client-codecs.ts",
-      "apps/oma/src/cli/cache-codec.ts",
+      "apps/oma/src/runtime/request-cache-codec.ts",
       "packages/domain/src/attestation.ts",
       "packages/domain/src/agent-spec.ts",
       "packages/domain/src/integration-policy.ts",

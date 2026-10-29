@@ -23,7 +23,7 @@ import type { IntegrationPolicy } from "@oma/domain/integration-policy";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitCommand, seedGit, submitFixture, nativeQuarantine } from "./fixtures/git-crash.js";
-const POLICY: IntegrationPolicy = { policyRevision: "crash-policy", protectedPaths: [], checks: [] };
+const POLICY: IntegrationPolicy = {maxWorkers: 6, policyRevision: "crash-policy", protectedPaths: [], checks: []};
 function repository(t: TestContext, format: "sha1" | "sha256" = "sha1") {
     const root = mkdtempSync(join(tmpdir(), "oma-git-evidence-"));
     const store = new Store(join(root, "runtime.sqlite"));

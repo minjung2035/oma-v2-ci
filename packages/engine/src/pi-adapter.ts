@@ -167,7 +167,6 @@ export class PiAdapter {
       // The vendored engine entry is an asset too, not just an argument.
       ...(options.paths.piArgs ?? []),
       options.paths.coreExtension,
-      options.paths.cli,
       options.paths.workspace,
       options.paths.sessionDir,
       options.paths.agentHome,

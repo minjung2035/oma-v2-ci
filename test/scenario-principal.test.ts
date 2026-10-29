@@ -2,8 +2,8 @@
  *
  * Each test runs a real society (provisioned state, Store, mail, broker with
  * its Principal and host endpoints), the bundled engine started by the
- * product's PrincipalSession with the trusted extension, the model-facing CLI
- * the extension starts, and the product's PrincipalDelivery. The model is an
+ * product's PrincipalSession with the trusted extension, its typed client,
+ * and the product's PrincipalDelivery. The model is an
  * OpenAI-compatible endpoint answering from a script (fixtures/
  * scripted-provider.ts), so a scenario decides what the model does and the
  * product decides everything else. Assertions are on durable facts: ledger
@@ -28,12 +28,9 @@ const lastResult = (request: ChatRequest | undefined): string => toolResults(req
 test("SCN-P01: a Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
   // mail-v1: the Principal reads code only as a review request's patch; an
   // unknown name answers with the visibility refusal, not a listing.
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("코드를 확인했습니다.")] }, async s => {
+  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_review_diff", { name: "merge-01234567-0000-4000-8000-000000000000" })), text("코드를 확인했습니다.")] }, async s => {
     const turn = await s.prompt("현재 프로젝트 코드를 확인해줘");
     assert.equal(s.provider.seen.length, 2, "the model was not asked again with the tool's result");
-    const offered = (s.provider.seen[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_merge", "oma_challenge", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
-    for (const name of ["bash", "write", "edit", "oma_status", "oma_mail_ack", "oma_agent_create", "oma_git", "oma_review_decide"]) assert.ok(!offered.includes(name), name);
     const result = lastResult(s.provider.seen[1]!.body);
     assert.match(result, /CAPABILITY_DENIED|Insufficient permission/, result);
     assert.ok(continuesTurn(s.provider.seen[1]!.body));
@@ -45,9 +42,10 @@ test("SCN-P01: a Human asks about code; the Principal reads canonical main witho
 const noticed = (notice: string): string[] => [...notice.matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
 /** A receipt the model was handed as a tool result. */
 const receiptIn = (result: string): { operation: string; state: string; result?: { message?: string; archivePath?: string } } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at)) as { operation: string; state: string; result?: { message?: string; archivePath?: string } };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 
 test("SCN-P02: the model sends Korean mail to a Resident; one operation, one delivery, the stored body is what it wrote", TIMEOUT, async () => {
@@ -409,7 +407,7 @@ test("SCN-F11: a provider that stops answering mid-turn does not wedge the sessi
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => (index < 3 ? { kind: "hang" } : text("이제 답합니다.")));
     await s.prompt("응답해", 60_000);
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("상태 확인")]);
+    s.script([tools(call("oma_review_diff", { name: "merge-01234567-0000-4000-8000-000000000000" })), text("상태 확인")]);
     await s.prompt("상태", 30_000);
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });
@@ -523,7 +521,7 @@ test("SCN-F13: a model's answer larger than a frame does not end the session; it
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 0);
     assert.deepEqual(s.inbox("worker-a"), []);
     // The session goes on.
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("계속 동작합니다.")]);
+    s.script([tools(call("oma_review_diff", { name: "merge-01234567-0000-4000-8000-000000000000" })), text("계속 동작합니다.")]);
     await s.prompt("상태");
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });

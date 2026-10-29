@@ -6,7 +6,7 @@ import { directoryNames } from "@oma/file-descriptors";
 import { statAt } from "@oma/native/posix-files";
 import { contextFileCheck } from "@oma/domain/context-policy";
 import { fail } from "@oma/client/errors";
-import { readBounded, sha256Hex } from "../effects.js";
+import { readBounded, sha256Hex } from "../input-effects.js";
 import { contextBytes as cliContextBytes } from "@oma/client/settings";
 
 type ContextFile = { path: string; bytes: number; sha256: string; data: Uint8Array };

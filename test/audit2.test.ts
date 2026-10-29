@@ -90,7 +90,7 @@ async function envOf(): Promise<Env> {
         society,
         hasGoal: () => true,
         activationAllowed: () => true,
-    }, resolver, mail);
+    }, Object.assign(resolver, { maxWorkers: () => 6 }), mail);
     const views = new ViewsModule(store, state, society, "p");
     const git = createGitModule({
         stateRoot: state,
@@ -98,7 +98,7 @@ async function envOf(): Promise<Env> {
         contextGit: join(state, "repos", "context.git"),
         worldDir: join(state, "world"),
         society,
-    }, store, mail, { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] }, null, null, units.quarantine({ stateRoot: state, projectGit: join(state, "repos/project.git"), contextGit: join(state, "repos/context.git"), worldDir: join(state, "world"), society }));
+    }, store, mail, {maxWorkers: 6, policyRevision: "audit", protectedPaths: ["x.txt"], checks: []}, null, null, units.quarantine({ stateRoot: state, projectGit: join(state, "repos/project.git"), contextGit: join(state, "repos/context.git"), worldDir: join(state, "world"), society }));
     const recon = createReconcileModule(store, mail, git, null, units, lifecycle, {
         hasGoal: () => true,
         activationAllowed: () => true,

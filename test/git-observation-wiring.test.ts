@@ -33,7 +33,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
                 incarnation: 0, profile: "p", createdBy: null, specJson,
             }));
             const mail = createMailModule({ stateRoot, society: "demo" }, store, 16);
-            const policy = { policyRevision: "p1", protectedPaths: [path], checks: [] };
+            const policy = {maxWorkers: 6, policyRevision: "p1", protectedPaths: [path], checks: []};
             const module = createGitModule({
                 stateRoot, society: "demo", projectGit: join(stateRoot, "project.git"), contextGit: join(stateRoot, "context.git"),
                 worldDir: join(stateRoot, "world"),

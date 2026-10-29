@@ -1,6 +1,6 @@
 /** Scenario tests at the boundaries the sixth review fixed, with only the
  * model scripted (fixtures/scenario.ts): the Resident's file tools on
- * the confined workspace (P0V-74), the inputs its CLI reads (P0V-78), the shared
+ * the confined workspace (P0V-74), bounded runtime inputs (P0V-78), the shared
  * context, and the order mail is delivered in when the clock goes back
  * (P0V-87). Each asserts durable facts -- files on the host, ledger rows,
  * what the model was handed -- for the normal path and its failure.
@@ -23,20 +23,21 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 const TIMEOUT = { timeout: 180_000 };
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const receiptIn = (result: string): { operation: string; state: string; result?: Record<string, unknown> } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at)) as { operation: string; state: string; result?: Record<string, unknown> };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 const noticed = (notice: string): string[] => [...notice.matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
 
-const goalMail = (body: string, expectedRevision: string, request: string) => tools(call("oma_mail_send", {
-  to: ["residents"], subject: "Shared goal", body, intent: "goal", expectedRevision, request,
+const goalMail = (body: string, expectedRevision: string | null, request: string) => tools(call("oma_goal_publish", {
+  subject: "Shared goal", body, expectedRevision, request,
 }));
 
 test("SCN-B01: Principal GOAL mail preserves the exact other documents from its expected revision", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // The trusted host seeds historical multi-document context, not the model.
-    // The model may now change only GOAL; the CLI carries other bytes forward.
+    // The model may change only GOAL; the typed client carries other bytes forward.
     const files = [["GOAL.md", "# Before\n"], ["RATIONALE.md", "﻿Why\r\n"], ["decisions/001.md", "결정: 재시도는 세 번.\n"]] as const;
     const content = Buffer.from(files.map(([, body]) => body).join(""));
     const authority: AuthContext = { actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
@@ -66,17 +67,17 @@ test("SCN-B01: Principal GOAL mail preserves the exact other documents from its 
   });
 });
 
-test("SCN-B02: the retained context CLI input refuses an oversized stream before transport or acceptance (P0V-78)", TIMEOUT, async () => {
+test("SCN-B02: context runtime input refuses an oversized stream before transport or acceptance (P0V-78)", TIMEOUT, async () => {
   await withScenario({}, async s => {
     const directory = join(principalWorkspace(s.root), "context");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, "GOAL.md"), "# 목표\n");
     const big = openSync(join(directory, "RATIONALE.md"), "w");
     try { ftruncateSync(big, 9 * 1024 * 1024); } finally { closeSync(big); }
-    // Exercise the CLI's production input owner without restoring the removed
-    // model-facing directory tool or weakening the separate mail body bound.
+    // Exercise the production input owner without weakening the separate
+    // mail body bound; ClientError owns the settled-failure classification.
     const result = spawnSync(process.execPath, ["--input-type=module", "-e",
-      `import { prepareContextEffects } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/cli/effects/context")).href)}; import { fatal } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/cli/exit")).href)}; try { prepareContextEffects(process.argv[1]); } catch (error) { fatal(error); }`, directory],
+      `import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/runtime/input-effects/context"))}; import { ClientError } from ${JSON.stringify(import.meta.resolve("@oma/client"))}; try { prepareContextEffects(process.argv[1]); } catch (error) { if (!(error instanceof ClientError)) throw error; process.stderr.write(error.message + "\\n"); process.exitCode = error.exitCode; }`, directory],
     { encoding: "utf8", env: { OMA_CONTEXT_BYTES: String(SCENARIO_LIMITS.contextBytes) }, timeout: 10_000 });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /larger than a request can carry \(8388608 bytes\)/);
@@ -134,12 +135,12 @@ test("SCN-B05: mail accepted after the clock was set back reaches the Principal 
 
 test("SCN-B06: a second publication on a stale base is refused with the actual base; on the actual base it moves the context", TIMEOUT, async () => {
   await withScenario({}, async s => {
-    s.script([goalMail("# 목표 1\n", "none", "ctx-1"), text("게시했습니다.")]);
+    s.script([goalMail("# 목표 1\n", null, "ctx-1"), text("게시했습니다.")]);
     await s.prompt("목표를 게시해");
     const current = join(s.root, "world", "context", "current");
     const first = readlinkSync(current).slice("revisions/".length);
     // The model still believes nothing is published.
-    s.script([goalMail("# 목표 2\n", "none", "ctx-2"), text("충돌했습니다.")]);
+    s.script([goalMail("# 목표 2\n", null, "ctx-2"), text("충돌했습니다.")]);
     await s.prompt("새 목표를 게시해");
     const refused = lastResult(s.provider.seen.at(-1)!.body);
     assert.match(refused, /CONTEXT_CONFLICT/, refused);

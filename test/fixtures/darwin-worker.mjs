@@ -1,4 +1,4 @@
-/** Actual Pi/bootstrap/CLI/tool observations on Darwin. The production client
+/** Actual Pi/bootstrap/typed-tool observations on Darwin. The production client
  * preload and native guards stay intact: an unresolved guard is a failed
  * attempt, never a skip or a successful boot. Direct-child closure below is
  * not arbitrary-descendant death, exact-file binding or Broker authorization. */
@@ -41,7 +41,7 @@ const limits={frameBytes:1<<20,idleStreamSeconds:60,receiptWaitSeconds:30,batchM
   mailBodyBytes:1<<20,addresses:64,contextBytes:1<<20,bundleBytes:1<<20};
 const options={actor,society,limits,profile:{provider:'pi',model:'current',inferenceSeconds:600,prompt:'',extensions:[]},
   paths:{piCommand:runtime.executable,piArgs:runtime.args,piAgentDir:runtime.agentDir,coreExtension:join(libdir,DEPLOYMENT_LAYOUT.extension),
-    cli:join(libdir,DEPLOYMENT_LAYOUT.cli),workspace:dirs.workspace,sessionDir:dirs.sessions,agentHome:dirs.home,
+    workspace:dirs.workspace,sessionDir:dirs.sessions,agentHome:dirs.home,
     mailArchive:join(dirs.archive,'cur'),workerArchive:join(dirs.workerArchive,'cur'),projectGit:dirs.projectGit,batchView:dirs.view,socket},
   confinement:{host:{libdir,node,pi:runtime.bundle,piModeArgs:[],stateRoot,runRoot,limits,
     hidden:DEPLOYMENT_LAYOUT.productSurface.map(path=>({path,kind:/\.[jt]s$/.test(path)?'file':'dir'}))},lease,directories:dirs}};
@@ -49,9 +49,10 @@ const prior=join(dirs.sessions,'2026-01-01T00-00-00-000Z_prior.jsonl'),sessionId
 writeFileSync(prior,JSON.stringify({type:'session',version:3,id:sessionId,timestamp:'2026-01-01T00:00:00.000Z',cwd:dirs.workspace})+'\n');
 const plan=planPiSpawn(macResidentSandbox(tools),options);
 assert.equal(plan.env.HOME,dirs.home);assert.equal(plan.env.GIT_EXEC_PATH,tools.execPath);
-assert.equal(plan.env.OMA_CLI,join(libdir,DEPLOYMENT_LAYOUT.cli));assert.ok(plan.env.NODE_OPTIONS.includes('client-preload.js'));
+assert.equal(plan.env.OMA_CLI,undefined);assert.ok(plan.env.NODE_OPTIONS.includes('client-preload.js'));
 assert.equal(plan.privateInputs.length,1);assert.equal(plan.privateInputs[0].fd,3);
 const profileDigest=createHash('sha256').update(plan.privateInputs[0].bytes).digest('hex');
+writeFileSync(join(dirs.view,'inbox.md'),'# Delivery index\nTyped tool archive view\n');
 const probe=join(dirs.workspace,'worker-tools.mjs');
 writeFileSync(probe,`import assert from 'node:assert/strict';import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';import {spawnSync} from 'node:child_process';
 const {dirs,secret,other,tools,libdir}=JSON.parse(process.argv[2]);
@@ -66,10 +67,15 @@ function run(file,args,code=0){const r=spawnSync(file,args,{env:process.env,enco
 assert.equal(run('git',['--exec-path']).stdout.trim(),tools.execPath);run('git',['--version']);run('npm',['--version']);
 run('git',['init','-q']);writeFileSync('literal.txt','exact\\r\\n$literal\\n');run('git',['add','literal.txt']);run('git',['commit','-qm','actor commit']);
 assert.equal(run('git',['log','-1','--format=%an']).stdout.trim(),'alice');
-const cli=run('oma',['--help'],2);assert.match(cli.stderr,/usage:/);assert.match(cli.stderr,/oma status/);
+const absent=spawnSync('oma',['status'],{env:process.env,encoding:'utf8',timeout:10000});assert.equal(absent.error?.code,'ENOENT');
+assert.equal(process.env.OMA_CLI,undefined);
+const {registerOmaTools}=await import(libdir+'/packages/extension/dist/mail-tools.js');
+const registered=new Map();registerOmaTools({registerTool:tool=>registered.set(tool.name,tool)},process.cwd());
+const mail=await registered.get('oma_mail_read').execute('native-mail-read',{messageId:'/inbox.md'});
+assert.equal(mail.content[0].text,'# Delivery index\\nTyped tool archive view\\n');
 writeFileSync('own-script.sh','#!/bin/sh\\nprintf "own-script\\\\n"\\n',{mode:0o755});assert.equal(run('./own-script.sh',[]).stdout,'own-script\\n');
 writeFileSync('own-native.c','int main(void){return 0;}');run('cc',['own-native.c','-o','own-native']);run('./own-native',[]);
-console.log(JSON.stringify({git:true,npm:true,cli:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true}));`);
+console.log(JSON.stringify({git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true}));`);
 const quote=value=>"'"+value.replaceAll("'","'\"'\"'")+"'";
 const command=[quote(node),quote(probe),quote(JSON.stringify({dirs,secret,other,tools,libdir}))].join(' ');
 const child=spawnWithPrivateInputs(plan.command,plan.args,plan.cwd,plan.env,plan.privateInputs);
@@ -92,10 +98,10 @@ await withAsyncCleanup(async()=>{
   if(mode==='worker-tools'){
     const executed=await request({id:'actual-tools',type:'bash',command,excludeFromContext:true});
     assert.equal(executed.exitCode,0,executed.output+'\n'+stderr);assert.equal(executed.cancelled,false);assert.equal(executed.truncated,false);
-    assert.deepEqual(JSON.parse(executed.output.trim()),{git:true,npm:true,cli:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true});
+    assert.deepEqual(JSON.parse(executed.output.trim()),{git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true});
     for(const path of [dirs.workspace,dirs.home,dirs.sessions])assert.equal(readFileSync(join(path,'own-canary'),'utf8'),'own bytes');
     assert.ok(existsSync(join(dirs.workspace,'own-native')));assert.ok(readFileSync(prior,'utf8').includes('bashExecution'));
-    result={...result,git:true,npm:true,cli:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true};
+    result={...result,git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true};
   }
 },async()=>{
   clearTimeout(deadline);rpc.close();if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');

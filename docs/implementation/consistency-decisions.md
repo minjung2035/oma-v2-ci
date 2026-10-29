@@ -81,6 +81,30 @@ must independently qualify engine persistence and process/power-loss boundaries.
 Rollout: validator/publication before consumers and rollover; no migration of old
 mismatches. Code revert must not undo completed rows, receipts or external effects.
 
+### RUN-003 — wait scheduling and delivery evidence
+
+An accepted `agent.wait` records the live Resident incarnation's memory-only
+pending-message identities in the reconciliation owner. Repeated requests do not
+move that checkpoint. Successful scope exit and duplicate wake hints do not
+reactivate that unchanged work. Newly materialized mail remains eligible even
+when it arrives between the accepted wait and actual scope exit.
+
+For that automatic fresh-work activation only, preparation selects eligible
+messages outside the checkpoint before redelivering a deferred batch. A later
+run may therefore leave older batches prepared while delivering one fresh batch;
+there is still only one in-flight delivery. Retained manifests, first-attempt
+incarnations and receipts are not rewritten. Another wait checkpoints both old
+and new pending work without marking either presented or acknowledged. Explicit
+start retains oldest-first delivery, and a restarted broker has no inherited
+wait checkpoint: normal receipt settlement and redelivery apply to every retained
+batch. Only the existing verified-boundary receipt path completes a batch.
+
+`CoalescedWake` releases its active drain in the same continuation as the last
+requested-work check. A hint after that check starts a fresh drain rather than
+joining an already-drained task. Close still cancels queued callbacks, not the
+callback already owned by its caller; callback failures remain observable.
+
+
 ### D02 — ACCEPTED C2; WP11–14 implementation/compatibility gates pending
 
 Keep inline-v1 and manual operations-v1 readers. Manual concurrent multi-file
@@ -603,7 +627,7 @@ which needs bubblewrap and openssl on the host (a skip there is not a pass).
 | cgroup death, unit state, start limit | kernel / user manager | kernel lane (T36, T38, V25A, V07B, V23B) | a pid, a signal or a socket close |
 | session and receipt durability under power loss | not proven | -- | NOT_RUN (WP30) |
 | a model-supplied tool value (extension → CLI) | runtime, at its slot | the extension's slot grammar (bound to the wire owner) and `parseArguments`; AV1 | that the value is true, only that it is data in the slot its grammar names |
-| where the relay writes a credential, and that none comes back | runtime, at the relay | declared slots, refusal elsewhere, response tripwire; AV2 | that a compressed or frame-split echo is seen -- compression is refused, frame splitting is a stated residual |
+| where the relay writes a credential, and that none comes back | runtime, at the relay | declared slots, refusal elsewhere, streaming HTTP and message-payload WebSocket tripwires; AV2, L3 | inference-content interpretation; compression is refused, and WebSocket continuations are inspected without whole-message buffering |
 | a model's tool scope | runtime, at engine start and at each tool call | `assertModelScope` and the workspace guard; AV3 | anything a tool the Human installed does outside the guard's path tools |
 | a check of a state-tree entry covers the effect on it | runtime (one resolution), static (rule) | held parents and the `state-tree-held-parent` rule; AV4, AV5 | data flow of a path through a function, and the quarantine script inside its namespace |
 | a peer or the Principal's engine has ended | runtime, at each observation | `pidfdLiveness` (running / exited / failed; EINTR asked again at most eight times) and `processEnded` (/proc answers); AV6 | that an unanswered question is reported as unavailable -- authority refuses it as CAPABILITY_DENIED (stated residual) |
@@ -978,9 +1002,7 @@ is a Resident the host delegated `code.integrate` to (A-002), and with that
 delegation a Resident integrated a submitted candidate and main moved; the
 Principal's own status is refused by the wire grammar.
 
-Residuals: a WebSocket frame header inside the key's bytes would hide it from the
-byte tripwire (with compression refused, the provider would have to fragment its
-own echo there); the quarantine's shell script names its mount targets by path
+Residuals: the quarantine's shell script names its mount targets by path
 inside its private mount namespace. After AV6, a live authority the broker could
 not observe (a unit observation that is unknown, or a peer liveness still
 unanswered after the bounded retry) is refused, as INV06 requires, but reported
@@ -1149,3 +1171,38 @@ Stated, not changed. A receipt the 0.87.1 adapter wrote for a batch not yet sett
 is `conflicting` after the upgrade, exactly as ENG1 recorded for 0.85.1: an existing
 society upgrades only after every prepared batch has settled. The `fullscreen` key
 an old open-tui.json may still carry is inert under 0.3.11.
+
+### 2026-10-30 — Linux read/modify/write and relay settlement (L1–L4)
+
+- **L1:** `lsp_fix` carries the exact text opened by the language server into
+  the shared contained writer. The descriptor's input bytes are compared inside
+  write serialization, before truncation; a stale result refuses and must be
+  recomputed. Preview remains non-mutating and hashline's inode-identity
+  expectation is unchanged. The pi-lsp divergence is generated and integrity
+  pinned, not a hand-maintained runtime patch.
+- **L2:** a session's followed-project version is the manifest digest recorded
+  in the configuration loader's source snapshot. A newer commit during session
+  derivation remains pending instead of being marked applied. A failed complete
+  observation still leaves the last complete settings/extension view intact.
+- **L3:** credential filtering tracks WebSocket message payloads across network
+  chunks and continuation frames. Safe bytes are reframed incrementally; a
+  message-ending partial prefix is released and complete control frames do not
+  wait for unrelated bytes. Full keys in a message or control payload still
+  cut the connection. Compression remains unnegotiated.
+- **L4:** configured and substituted header values use Node's header validators.
+  Both HTTP and upgrade construction failures settle accepted ownership exactly
+  once and return failure, including queued starts; offering a freed slot is
+  reentrancy-safe. No retry or queue timeout was introduced.
+
+Permanent oracles are the L1 registered-tool race in
+`packages/tool-lsp/test/bundle.test.mjs`, the real managed-commit race in
+`test/project-session-settings-managed.test.ts`, and the L3/L4 framed-progress,
+fragmented-key, and immediate/queued failure cases in
+`test/inference-relay.test.ts`. The focused final run passed 100/100 tests with
+no skips. Separate rebuilt-production smokes observed stale-fix refusal with
+the concurrent edit preserved, settings convergence, a real TLS/WebSocket
+ping/pong and close 1000, and capacity returned after synchronous construction
+failure. These local results do not qualify external providers or a confined
+Runner; the known unavailable bubblewrap and unrelated full-suite failures were
+not rerun.
+

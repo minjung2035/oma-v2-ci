@@ -51,6 +51,7 @@ export interface PublicViewsPort {
   readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => Promise<AgentStatus[]>;
 }
 export interface PublicLifecyclePort {
+  readonly creation: (auth: AuthContext) => PublicMethods["status.get"]["result"]["creation"];
   readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt | Promise<Receipt>;
   readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
   readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt | Promise<Receipt>;
@@ -60,7 +61,7 @@ export interface PublicLifecyclePort {
 }
 export interface PublicReviewPort {
   record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt>;
-  status(auth: AuthContext, name: string | undefined, frameBytes: number, responseId: string): PublicMethods["review.status"]["result"];
+  status(auth: AuthContext, query: PublicMethods["review.status"]["params"], frameBytes: number, responseId: string): PublicMethods["review.status"]["result"];
 }
 export interface PublicGitPort {
   readonly knownRefs: () => { main: string; published: string[] };
@@ -95,7 +96,7 @@ export interface InternalStorePort {
   readonly preparedBatchIds: (agent: Actor) => readonly string[];
 }
 export interface InternalMailPort {
-  readonly prepare: (auth: AuthContext) => Promise<PreparedBatch | null>;
+  readonly prepare: (auth: AuthContext, deferred?: ReadonlySet<string>) => Promise<PreparedBatch | null>;
   readonly complete: (
     auth: AuthContext,
     evidence: BoundaryEvidence,
@@ -159,7 +160,11 @@ export interface BrokerViews {
   publishStatus(snapshot: StatusSnapshot, agents: readonly AgentStatus[]): void;
   observeRunnerSource(read: (actor: Actor) => RunnerObservation | null): void;
 }
-export interface BrokerReconcile { sweep(): Promise<RecoveryCounts> }
+export interface BrokerReconcile {
+  sweep(): Promise<RecoveryCounts>;
+  wait(actor: Actor, incarnation: number): void;
+  deferredWork(actor: Actor, incarnation: number): ReadonlySet<string> | undefined;
+}
 export interface BrokerStatusRefresh { request(): Promise<StatusSnapshot> }
 /** Endpoint mechanics supplied by an OS adapter. Readiness and close are
  * observed separately from the Broker's authority and durable lifetime. */

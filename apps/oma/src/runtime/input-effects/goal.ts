@@ -5,13 +5,13 @@ import { contextFileCheck, contextPathsCheck } from "@oma/domain/context-policy"
 import { runGitText } from "@oma/process/policies";
 import { contextBytes as cliContextBytes } from "@oma/client/settings";
 import { currentContext } from "@oma/client/context";
-import { readLocalFile, sha256Hex } from "../effects.js";
+import { sha256Hex } from "../input-effects.js";
 import { fail } from "@oma/client/errors";
 import type { PreparedContextEffects } from "./context.js";
 
-export function prepareGoalEffects(file: string, expected: string | null): PreparedContextEffects {
+export function prepareGoalEffects(body: string, expected: string | null): PreparedContextEffects {
   const maximum = cliContextBytes();
-  const files = new Map<string, Buffer>([["GOAL.md", readLocalFile(file)]]);
+  const files = new Map<string, Buffer>([["GOAL.md", Buffer.from(body, "utf8")]]);
   let total = files.get("GOAL.md")!.length;
   if (expected !== null) {
     const repo = currentContext().env.OMA_CONTEXT_GIT;

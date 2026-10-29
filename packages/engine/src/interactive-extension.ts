@@ -24,6 +24,7 @@ export function createInteractiveExtension(input: {
         // OMA's, and Pi's own renderers still draw a row's opened body.
         const compact = input.presentation.createCompactTools();
         pi.registerToolRenderer(compact.resolver);
+        pi.registerMessageRenderer("oma-mail", input.presentation.renderMail);
         pi.on("agent_start", () => compact.agentStarted());
         pi.on("agent_end", () => compact.agentEnded());
         pi.on("tool_execution_start", event => compact.toolStarted(event.toolCallId));

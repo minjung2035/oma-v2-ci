@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { readCode } from "#oma-test/app/cli/effects/code";
+import { readCode } from "#oma-test/app/runtime/input-effects/code";
 import { GIT_ENV } from "@oma/process/policies";
 
 function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256") {

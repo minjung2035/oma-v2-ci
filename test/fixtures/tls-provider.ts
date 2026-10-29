@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingHttpHeaders } from "node:http";
+import type { Duplex } from "node:stream";
 import { createServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +26,7 @@ export interface TlsProvider {
   readonly seen: SeenRequest[];
   /** `gapMs` spaces the chunks out, so a reader can tell streaming from buffering. */
   reply: { status: number; chunks: string[]; delayMs: number; gapMs?: number; headers?: Record<string, string> };
+  upgraded?: ((socket: Duplex) => void) | undefined;
   close(): Promise<void>;
 }
 
@@ -37,7 +39,8 @@ export async function tlsProvider(): Promise<TlsProvider> {
   execFileSync("openssl", ["req", "-new", "-x509", "-key", keyPath, "-out", certPath, "-days", "1",
     "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"], { stdio: "ignore" });
   const seen: SeenRequest[] = [];
-  const state: { reply: TlsProvider["reply"] } = { reply: { status: 200, chunks: ["a", "b"], delayMs: 0 } };
+  const state: { reply: TlsProvider["reply"]; upgraded?: ((socket: Duplex) => void) | undefined } =
+    { reply: { status: 200, chunks: ["a", "b"], delayMs: 0 } };
   const server = createServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) }, (request, response) => {
     const record: SeenRequest = { method: request.method, path: request.url, headers: request.headers, body: "", upgrade: false };
     seen.push(record);
@@ -69,7 +72,8 @@ export async function tlsProvider(): Promise<TlsProvider> {
     seen.push(record);
     socket.once("close", () => { record.cut = true; });
     socket.write("HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\n\r\n");
-    socket.on("data", chunk => { socket.write(Buffer.concat([Buffer.from("echo:"), chunk])); });
+    if (state.upgraded !== undefined) state.upgraded(socket);
+    else socket.on("data", chunk => { socket.write(Buffer.concat([Buffer.from("echo:"), chunk])); });
     socket.on("error", () => {});
   });
   await new Promise<void>(resolve => { server.listen(0, "127.0.0.1", () => { resolve(); }); });
@@ -80,6 +84,8 @@ export async function tlsProvider(): Promise<TlsProvider> {
     seen,
     get reply() { return state.reply; },
     set reply(value) { state.reply = value; },
+    get upgraded() { return state.upgraded; },
+    set upgraded(value) { state.upgraded = value; },
     close: () => new Promise<void>(resolve => {
       server.closeAllConnections();
       server.close(() => { rmSync(dir, { recursive: true, force: true }); resolve(); });

@@ -18,7 +18,7 @@ const rows = [agent("principal", null, "principal"), agent("alice", "principal")
 let open = true;
 const reader = { getAgent: name => rows.find(row => row.name === name) ?? null,
   listAgents: () => rows, societyOpen: () => open };
-const policy = new LifecyclePolicy(reader, () => null);
+const policy = new LifecyclePolicy(reader, Object.assign(() => null, { maxWorkers: () => 6 }));
 const auth = { actor: "alice", role: "resident", incarnation: 1, channel: "actor", capabilities: new Set(caps),
   peer: { pid: process.pid, uid: 1000, gid: 1000 } };
 policy.requireManage(auth, "alice"); policy.requireManage(auth, "bob");

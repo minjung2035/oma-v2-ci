@@ -1,6 +1,6 @@
-/** Bundled pi-hashline-edit-pro (file_edit): the vendored payload is
+/** Bundled pi-hashline-edit-pro: the vendored payload is
  * verified byte-for-byte before any vendored module evaluates; the adapter
- * registers only the anchored `read` and the three file_edit mutations;
+ * registers the anchored read and three mutations;
  * reads are admitted through the same boundary the workspace guard applies
  * and writes reach the filesystem only through OMA's shared contained
  * writer — serialization, and the read snapshot's
@@ -161,20 +161,7 @@ test("BL3: the vendored dependency closure and upstream test tree are inside the
 });
 // ---------------------------------------------------------------------------
 // Registration, surface and role boundaries
-test("BL3: registerHashlineTools registers exactly the anchored read and the file_edit tools, plus the lifecycle hooks", async (t) => {
-    const { pi } = await hashlineWorld(t);
-    assert.deepEqual([...pi.tools.keys()].sort(), [HASHLINE_READ_TOOL_NAME, ...HASHLINE_EDIT_TOOL_NAMES].sort());
-    for (const event of ["session_start", "session_shutdown", "message_end", "turn_end", "tool_result", "tool_call"])
-        assert.ok(pi.handlers.has(event), `${event} handler is registered`);
-    // A second registration (extension reload) is idempotent.
-    const again = fakePi();
-    const workspace = tmp(t, "oma-hashline-ws-");
-    await registerHashlineTools(again, {
-        workspace, readableRoots: [], sandboxed: false, readOnly: false, write: async () => { },
-    });
-    assert.deepEqual([...again.tools.keys()].sort(), [HASHLINE_READ_TOOL_NAME, ...HASHLINE_EDIT_TOOL_NAMES].sort());
-});
-test("BL3: a read-only role gets the anchored read but no file_edit mutation tools", async (t) => {
+test("BL3: a read-only role cannot reach anchored mutations", async (t) => {
     const { pi } = await hashlineWorld(t, { readOnly: true });
     assert.deepEqual([...pi.tools.keys()], [HASHLINE_READ_TOOL_NAME]);
     for (const name of HASHLINE_EDIT_TOOL_NAMES)
@@ -182,11 +169,10 @@ test("BL3: a read-only role gets the anchored read but no file_edit mutation too
 });
 // Integrity refusal runs against an actual copied owner in test/vendor-owner-binding.test.mjs.
 
-test("BL3: a surface plan naming a file_edit member the registry lacks refuses startup", () => {
+test("BL3: a surface plan naming an optional editor the registry lacks refuses startup", () => {
     const plan = planToolSurface({
-        defaultMode: "DIRECT", direct: [], disabled: [],
-        groups: [{ name: "file_edit", description: "x", members: [{ tool: "replace" }, { tool: "hashline_missing" }] }],
-        roots: ["file_edit"],
+        defaultMode: "DISABLED", direct: [], disabled: [],
+        optional: ["replace", "hashline_missing"],
     });
     const handlers = new Map();
     const pi = {
@@ -201,8 +187,8 @@ test("BL3: a surface plan naming a file_edit member the registry lacks refuses s
     process.env.OMA_TOOL_SURFACE = encodeToolSurfacePlan(plan);
     try {
         registerToolSurface(pi, [], { fatal: message => { fatal = message; throw new Error(message); } });
-        assert.throws(() => handlers.get("session_start")?.[0]?.(), /hashline_missing/);
-        assert.match(fatal ?? "", /unknown tool "hashline_missing"/);
+        assert.throws(() => handlers.get("session_start")?.[0]?.({}, { sessionManager: { getBranch: () => [] } }), /hashline_missing/);
+        assert.match(fatal ?? "", /cannot admit hashline_missing/);
     }
     finally {
         if (saved === undefined)

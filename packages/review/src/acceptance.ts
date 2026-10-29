@@ -36,7 +36,7 @@ export class ReviewAcceptance {
         const main = this.effects.main();
         if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
         if (main.kind === "present" && main.value === prepared.before.identity.candidate)
-          throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge");
+          throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge_open");
         if (main.kind !== "present" || main.value !== prepared.before.identity.expectedBase)
           throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");
       }

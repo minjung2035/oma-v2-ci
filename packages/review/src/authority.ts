@@ -2,6 +2,8 @@
 import type { ReviewFact } from "@oma/contracts/attestation";
 import type { Actor, OperationId, RequestKey } from "@oma/contracts";
 import type { AgentRow } from "@oma/contracts/ledger";
+import type { ReviewReviewer } from "@oma/contracts/public-wire";
+import { capabilitiesOf } from "@oma/domain/authority";
 import type { DecodedOperation } from "@oma/protocol/operation-codec";
 import { StoreError } from "@oma/domain/errors";
 import { applyRequestKeyFor } from "@oma/domain/identifiers";
@@ -10,11 +12,11 @@ import { isOpenFact, type OpenRequest, type PreparedReview } from "./types.js";
 export interface ReviewAuthorityLedger {
   attestationFacts(): readonly OpenRequest[];
   getOperation(actor: Actor, key: RequestKey): DecodedOperation | null;
-  listAgents(): readonly { readonly name: Actor; readonly role: AgentRow["role"]; readonly desired: AgentRow["desired"] }[];
+  listAgents(): readonly Pick<AgentRow, "name" | "role" | "desired" | "specJson">[];
 }
 export class ReviewAuthorityReader {
   constructor(private readonly store: ReviewAuthorityLedger,
-    private readonly highPeerFloor: number) {}
+    private readonly highPeerFloor: number, private readonly maxWorkers: number) {}
   /** Live open requests in attestation sequence order. */
   openRequests(): OpenRequest[] {
     return this.store.attestationFacts().filter(entry =>
@@ -57,8 +59,29 @@ export class ReviewAuthorityReader {
       ({ open, input: this.inputFrom(open, entries.get(open.operation.id) ?? [], eligible) }));
   }
 
-  private eligible(): ReadonlySet<string> {
-    return new Set(this.store.listAgents().filter(agent => agent.role === "resident" && agent.desired === "enabled").map(agent => agent.name));
+  private eligible(agents = this.store.listAgents()): ReadonlySet<string> {
+    return new Set(agents.filter(agent => agent.role === "resident" && agent.desired === "enabled").map(agent => agent.name));
+  }
+
+  /** Explanatory facts share the live eligibility and frozen authors used by
+   * the evaluator. Capability observations never reinterpret accepted votes. */
+  reviewers(state: ReviewState): ReviewReviewer[] {
+    const agents = this.store.listAgents(), eligible = this.eligible(agents);
+    const byName = new Map(agents.map(agent => [agent.name, agent]));
+    const names = new Set([...agents.filter(agent => agent.role === "resident").map(agent => agent.name), ...state.authors]);
+    names.delete("principal");
+    return [...names].sort().map(name => {
+      const agent = byName.get(name), exclusions: ReviewReviewer["exclusions"] = [];
+      if (state.authors.includes(name)) exclusions.push("author");
+      if (agent === undefined) exclusions.push("missing-agent");
+      else {
+        if (!eligible.has(name)) exclusions.push("not-enabled");
+        if (!capabilitiesOf(agent).has("mail.send")) exclusions.push("missing-mail-send");
+      }
+      const vote = state.latestVotes.get(name);
+      return { name, desired: agent?.desired ?? null, exclusions,
+        latestVote: vote?.fact.kind === "vote" ? vote.fact.verdict : null };
+    });
   }
 
   private inputFrom(open: OpenRequest, facts: readonly OpenRequest[], eligible: ReadonlySet<string>): ReviewStateInput {
@@ -81,7 +104,7 @@ export class ReviewAuthorityReader {
         : { operation: applied.id, state: applied.state,
             errorCode: applied.state === "failed" ? applied.errorCode : null },
       eligible,
-      highPeerFloor: this.highPeerFloor };
+      highPeerFloor: this.highPeerFloor, maxWorkers: this.maxWorkers };
   }
 
   /** Last synchronous policy gate before CAS. The pending integration itself

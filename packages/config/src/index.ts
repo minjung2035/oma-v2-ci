@@ -11,7 +11,7 @@ import {
   type RoleSettings,
 } from "./operations.js";
 import type { AgentProfile, EffortLevel, HostConfig, ModelProfile } from "@oma/contracts";
-import { HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
+import { DEFAULT_MAX_WORKERS, HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
 import { StoreError } from "@oma/domain/errors";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "@oma/domain/identifiers";
 import { isCapability } from "@oma/domain/capabilities";
@@ -174,7 +174,8 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const cfg = needRecord(raw, "root");
   if (cfg.schemaVersion !== HOST_CONFIGURATION_VERSION)
     err(`unsupported development configuration schema; expected ${HOST_CONFIGURATION_VERSION}. Use a new development state directory`);
-  closedKeys(cfg, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "integration", "limits"], "root");
+  closedKeys(cfg, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "integration", "limits"], "root", ["maxWorkers"]);
+  const maxWorkers = cfg.maxWorkers === undefined ? DEFAULT_MAX_WORKERS : needInt(cfg.maxWorkers, "maxWorkers", 1);
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
   const installation = closedRecord(cfg.installation, ["node", "libdir", "deploymentDigest"], "installation", ["packages"]);
@@ -209,6 +210,7 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const principalProfile = needString(cfg.principalProfile, "principalProfile");
   if (!profileNames.has(principalProfile)) err("principalProfile unknown");
   const initialResidents = needArray(cfg.initialResidents, "initialResidents");
+  if (initialResidents.length > maxWorkers) err("initialResidents exceeds maxWorkers");
   const residentNames = new Set<string>();
   for (const value of initialResidents) {
     const row = closedRecord(value, ["name", "profile", "brief"], "initialResidents entry");
@@ -242,12 +244,10 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   // floors are measured by the same constants the emission paths use
   // (mail/review-bounds.ts, domain/limits.ts via mail/batch-policy.ts), so
   // they track the runtime rather than duplicating it.
-  // An approval request carries the requester's reason plus one bound vote
-  // body per vote the floor requires: the floor model must cover the votes
-  // the policy can bind (the runtime falls back to one vote when a live
-  // policy has no tiered rules -- a request opened under an earlier policy
-  // can still emit one).
-  const approvalVotes = (integration.tiered as { highPeerFloor?: number } | undefined)?.highPeerFloor ?? 1;
+  // Bound all possible peer bundles under this capacity. Model at least one
+  // vote conservatively so zero-peer fallback mail also fits.
+  const normalPeerFloor = (integration.tiered as { highPeerFloor?: number } | undefined)?.highPeerFloor ?? 1;
+  const approvalVotes = Math.max(1, Math.min(normalPeerFloor, maxWorkers - 1));
   if (!mailBodyBytesFits(limits.mailBodyBytes as number, limits.subjectBytes as number, approvalVotes)) {
     const minimum = minimumMailBodyBytes(limits.subjectBytes as number, approvalVotes);
     if (minimum === null)
@@ -262,7 +262,7 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
     schemaVersion: HOST_CONFIGURATION_VERSION, society, installation: { node, libdir, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfig["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfig["agentProfiles"],
-    principalProfile, initialResidents: initialResidents as HostConfig["initialResidents"],
+    principalProfile, maxWorkers, initialResidents: initialResidents as HostConfig["initialResidents"],
     integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfig["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfig["integration"]["checks"] },
     limits: limits as unknown as HostConfig["limits"],
   });

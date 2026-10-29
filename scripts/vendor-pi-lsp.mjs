@@ -559,8 +559,14 @@ export declare class LspClient {`,
       "is worse than the refusal. The resolve loop itself is unbounded: " +
       "each codeAction/resolve round-trip is already bounded by the " +
       "request timeout and the call's stall window resets on every " +
-      "answered frame, so a large legitimate action set completes.",
+      "answered frame, so a large legitimate action set completes. Fix previews " +
+      "retain the exact didOpen input for OMA's serialized stale-content check.",
     edits: [
+      {
+        find: `            text: params.write ? undefined : newText,`,
+        replace: `            text: params.write ? undefined : newText,
+            inputText: text,`,
+      },
       {
         find: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "./text-edits.js";`,
         replace: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits, OMA_MAX_WORKSPACE_EDITS, OMA_MAX_WORKSPACE_EDIT_BYTES } from "./text-edits.js";

@@ -25,7 +25,7 @@ import { ReconcileModule } from "@oma/reconcile";
 import { LifecycleModule } from "@oma/lifecycle";
 import { GitModule, type GitPaths } from "@oma/git";
 import type { Capability } from "@oma/contracts";
-import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js"
 import { sendWithStop } from "./fixtures/mail-faults.js";
 const G = {
     ...process.env,
@@ -83,12 +83,12 @@ function envOf(withGit: boolean): Env {
         society,
         hasGoal: () => false,
         activationAllowed: () => true,
-    }, (_parent, input) => ({
+    }, withWorkerCapacity((_parent, input) => ({
         ...input,
         modelProfile: "m",
         profile: "p",
         capabilities: [],
-    }), mail);
+    })), mail);
     const recon = createReconcileModule(store, mail, git, null, units, lifecycle, {
         activationAllowed: () => true,
         projectGit: join(dir, "state", "repos", "project.git"),

@@ -10,7 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Socket } from "node:net";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
-import { callActor } from "#oma-test/app/cli/transport";
+import { Client } from "@oma/client";
+import { installRuntime } from "@oma/client/runtime";
+import { CLIENT_RUNTIME } from "#oma-test/app/runtime/client-runtime";
 import type { AuthContext, Receipt, Request } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { Broker } from "@oma/broker";
@@ -22,11 +24,13 @@ import { ViewsModule } from "#oma-test/app/views";
 import type { FeatureExecution } from "./fixtures/execution.js";
 import { requestHash } from "@oma/domain/request-identity";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
 import { collectReceipt, receiptChunk } from "@oma/protocol/receipt-chunks";
 import { decodeRpcReply } from "@oma/protocol/response-codec";
 import { RequestCache, readCacheFile } from "#oma-test/app/request-cache";
+
+installRuntime(CLIENT_RUNTIME);
 
 const operation = "op-12345678-1234-4234-8234-123456789abc";
 const receipt: Receipt = { operation, state: "succeeded", result: { kind: "agent.stop", agent: "alice", desired: "stopped",
@@ -68,7 +72,7 @@ test("G03-broker-01: a changed receipt, missing version or discontinuous bytes n
   }), /connection lost/);
 });
 
-test("G03-broker-01: CLI recovers a handled oversized answer across connections without repeating its effect", async t => {
+test("G03-broker-01: Client recovers a handled oversized answer across connections without repeating its effect", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-wire-"));
   const sockets = new Set<Socket>(); let effects = 0; let reads = 0;
   const previous = process.env.OMA_FRAME_BYTES;
@@ -80,8 +84,8 @@ test("G03-broker-01: CLI recovers a handled oversized answer across connections 
       assert.ok(Buffer.isBuffer(bytes));
       for (const frame of parser.feed(bytes)) {
         const request = frame.raw;
-        if (request.method === "agent.stop") {
-          effects++;
+        if (request.method === "agent.stop" || request.method === "operation.get") {
+          if (request.method === "agent.stop") effects++;
           socket.end(encodeFrame({ v: 1, id: request.id, ok: false,
             error: { code: "FRAME_TOO_LARGE", message: "handled answer too large", retry: "same-key" } }));
         } else {
@@ -100,8 +104,11 @@ test("G03-broker-01: CLI recovers a handled oversized answer across connections 
     rmSync(root, { recursive: true, force: true });
     if (previous === undefined) delete process.env.OMA_FRAME_BYTES; else process.env.OMA_FRAME_BYTES = previous;
   });
-  const result = await callActor(join(root, "socket"), "agent.stop", { agent: "alice" }, "stop-1");
-  assert.deepEqual(result, [{ ok: true, result: receipt }]);
+  const client = new Client({ cwd: root, env: { ...process.env, HOME: root, OMA_SOCKET: join(root, "socket") } });
+  const result = await client.controlAgent("stop", "alice", "stop-1");
+  assert.match(result, /"state":"succeeded"/);
+  assert.match(result, /stop-1/);
+  assert.deepEqual(await client.query("operation.get", { key: "stop-1" }), receipt);
   assert.equal(effects, 1); assert.ok(reads > 1);
 });
 
@@ -109,12 +116,11 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-deadline-"));
   const sockets = new Set<Socket>(); let calls = 0; let clock = 0;
   t.mock.method(performance, "now", () => clock);
-  const { installRuntime } = await import("@oma/client/runtime");
-  const { CLIENT_RUNTIME, installClientRuntime } = await import("#oma-test/app/runtime/client-runtime");
+  const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket") } });
   // A 1 s observation window (the smallest legal policy): the chunk read's own
   // budget, small enough to see stall detection on a deliberately silent peer.
   installRuntime({ ...CLIENT_RUNTIME, observationSeconds: 1 });
-  t.after(() => installClientRuntime());
+  t.after(() => installRuntime(CLIENT_RUNTIME));
   const server = createServer(socket => {
     sockets.add(socket); socket.on("error", () => {}); socket.once("close", () => sockets.delete(socket));
     const parser = new FrameParser(262144);
@@ -122,7 +128,7 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
       assert.ok(Buffer.isBuffer(bytes));
       for (const { raw } of parser.feed(bytes)) {
         calls++;
-        if (raw.method === "agent.stop") {
+        if (raw.method === "operation.get") {
           // The original call's own window is already spent when its answer
           // lands -- if the chunk read shared that deadline it could never
           // even be sent. Under progress-reset observation it gets its own
@@ -141,7 +147,7 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
   });
   await new Promise<void>(resolve => server.listen(join(root, "socket"), resolve));
   const started = Date.now();
-  await assert.rejects(callActor(join(root, "socket"), "agent.stop", { agent: "alice" }, "stop-1"), { code: "BROKER_UNAVAILABLE" });
+  await assert.rejects(client.query("operation.get", { key: "stop-1" }), { code: "BROKER_UNAVAILABLE" });
   const elapsed = Date.now() - started;
   // The chunk read ran and, past the shared deadline, still got its own
   // window (~1 s) before the silent broker was refused.
@@ -150,7 +156,7 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
 });
 
 test("G03-broker-01: durable stop receipt survives a lost chunk and broker restart without repeating the effect or crossing actors", { timeout: 15000 }, async t => {
-  // Real ledger, lifecycle, dispatch, framing and CLI. Only peer authentication
+  // Real ledger, lifecycle, dispatch, framing and Client. Only peer authentication
   // and the unit-manager boundary are fixtures; this is not kernel-auth evidence.
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-ledger-"));
   const limits = { ...TEST_PROTOCOL_LIMITS, frameBytes: 1024 };
@@ -164,8 +170,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
     const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 24);
     const views = new ViewsModule(store, root, "demo", "p", limits);
     const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo",
-      hasGoal: () => true, activationAllowed: () => true },
-      (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+      hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
     return { store, broker: testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => true }, limits: limits }) };
   };
   let current = open();
@@ -190,7 +195,9 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
         async handle(raw, stream) {
           if (raw.method === "operation.read") {
             reads++;
-            if (drop && (raw.params as { offset: number }).offset > 0) { drop = false; socket.destroy(); }
+            const params = raw.params;
+            assert.ok(params !== null && typeof params === "object" && "offset" in params && typeof params.offset === "number");
+            if (drop && params.offset > 0) socket.destroy();
           }
           return current.broker.dispatch(auth(actor), raw as unknown as Request, stream);
         } });
@@ -206,8 +213,9 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
     if (previous === undefined) delete process.env.OMA_FRAME_BYTES; else process.env.OMA_FRAME_BYTES = previous;
   });
   await Promise.all(servers.map(({ actor, server }) => new Promise<void>(resolve => server.listen(join(root, actor), resolve))));
-  const path = join(root, "alice");
-  await assert.rejects(callActor(path, "agent.stop", { agent: "worker" }, "stop-durable"));
+  const client = new Client({ cwd: root, env: { ...process.env, HOME: root, OMA_SOCKET: join(root, "alice") } });
+  const foreignClient = new Client({ cwd: root, env: { ...process.env, OMA_SOCKET: join(root, "bob") } });
+  await assert.rejects(client.controlAgent("stop", "worker", "stop-durable"), /Acceptance status unknown/);
   await Promise.all(tasks);
   const recorded = receiptOfOperation(current.store.getOperation("alice", "stop-durable")!)!;
   assert.equal(recorded.state, "succeeded");
@@ -215,22 +223,17 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
   assert.equal(effects, 1); assert.ok(reads >= 2);
   await current.broker.drainAndClose();
   current = open();
+  drop = false;
   assert.deepEqual(receiptOfOperation(current.store.getOperation("alice", "stop-durable")!), recorded);
-  assert.deepEqual(await callActor(path, "operation.get", { key: "stop-durable" }), [{ ok: true, result: recorded }]);
-  assert.deepEqual(await callActor(path, "agent.stop", { agent: "worker" }, "stop-durable"), [{ ok: true, result: recorded }]);
+  assert.deepEqual(await client.query("operation.get", { key: "stop-durable" }), recorded);
+  assert.match(await client.controlAgent("stop", "worker", "stop-durable"), /"state":"succeeded"/);
   assert.equal(effects, 1, "same-key recovery repeated the stop effect");
-  const first = (await callActor(path, "operation.read", { key: "stop-durable", offset: 0 }))[0]!;
-  assert.equal(first.ok, true);
-  if (!first.ok) throw new Error("missing first chunk");
-  const chunk = first.result as { sha256: string; next: number };
-  const foreign = await callActor(join(root, "bob"), "operation.read", { key: "stop-durable", offset: chunk.next, sha256: chunk.sha256 });
-  assert.equal(foreign[0]?.ok, false);
-  if (foreign[0]?.ok === false) assert.equal(foreign[0].error.code, "INVALID_REQUEST");
-  const missing = await collectReceipt("stop-durable", 100000, async params => {
-    const reply = (await callActor(join(root, "bob"), "operation.read", params))[0]!;
-    assert.equal(reply.ok, true);
-    return reply.result as ReturnType<typeof receiptChunk>["result"];
-  });
+  const chunk = await client.query("operation.read", { key: "stop-durable", offset: 0 });
+  assert.notEqual(chunk.next, null);
+  await assert.rejects(foreignClient.query("operation.read", { key: "stop-durable", offset: chunk.next!, sha256: chunk.sha256 }),
+    { code: "INVALID_REQUEST" });
+  const missing = await collectReceipt("stop-durable", 100000,
+    params => foreignClient.query("operation.read", params));
   assert.equal(missing.operation, "");
   assert.equal(missing.state, "failed");
   assert.equal(missing.error?.code, "REQUEST_NOT_FOUND");

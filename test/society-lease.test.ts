@@ -39,7 +39,7 @@ import { pathToFileURL } from "node:url";
 import type { Readable } from "node:stream";
 import { CHANNEL_FD, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, spawnSupervisedService } from "@oma/process/async";
 import { societyLeaseName, tryHoldSociety } from "#oma-test/app/runtime/society-lease";
-import { runCliProcess, type CliResult } from "./fixtures/cli-child.js";
+import { runOwnedProcess, type OwnedProcessResult } from "./fixtures/owned-process.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-lease-"));
 
@@ -579,7 +579,7 @@ test("T119/REC-007 a supervised service keeps its supervision channel and its fe
  * society, engine inherits the lease, engine starts the CLI, host and engine
  * are killed outright, and the question is whether another `oma` can take the
  * society while that CLI is still writing. Nothing is stood in for -- these
- * are three real processes and the product's own `runCliProcess`.
+ * are three real processes using the product's owned process launcher.
  */
 function engineStartingACli(scriptRoot: string, fence: number, declare: boolean): {
   readonly engine: ChildProcess;
@@ -711,10 +711,10 @@ test("T119/REC-007 a declared fence that is not there stops the CLI from startin
     const plainFile = join(root, "not-a-socket");
     writeFileSync(plainFile, "");
     const notASocket = openSync(plainFile, "r");
-    const start = (declared: string): CliResult | Promise<CliResult> => {
+    const start = (declared: string): OwnedProcessResult | Promise<OwnedProcessResult> => {
       process.env[SOCIETY_FENCE_ENV] = declared;
       try {
-        return runCliProcess({ node: process.execPath, cli: "-e", args: ["0"], cwd: "/",
+        return runOwnedProcess({ executable: process.execPath, args: ["-e", "0"], cwd: "/",
           env: { ...childEnv }, timeoutMs: 5000 });
       } finally { delete process.env[SOCIETY_FENCE_ENV]; }
     };

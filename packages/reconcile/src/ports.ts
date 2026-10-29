@@ -34,5 +34,5 @@ export interface ReconcileEffects {
   collectUnacceptedArtifacts(): PreacceptCollection;
   canonicalMain(): GitObservation<string>;
   assertCanonicalHealthy(): Promise<void>;
-  hasPendingWork(actor: Actor): boolean;
+  pendingWork(actor: Actor): ReadonlySet<string>;
 }

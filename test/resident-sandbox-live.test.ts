@@ -30,6 +30,9 @@ import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/r
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
 import { tlsProvider } from "./fixtures/tls-provider.js";
 import { observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
+import { FrameParser, encodeFrame } from "@oma/protocol/frame";
+import { clientCall, clientProcessArgs } from "./fixtures/client-process.js";
+import type { ChildProcessWithoutNullStreams } from "@oma/process/async";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const bwrapAvailable = spawnSync("bwrap", ["--version"]).status === 0;
@@ -100,7 +103,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -211,7 +214,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -320,7 +323,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -406,7 +409,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -459,14 +462,13 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
   }
 });
 
-test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the installed CLI on the pinned Node", {
+test("AV16: the production sandbox keeps the development shell and typed Client, not a model CLI", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 60000,
 }, async () => {
-  // A Resident's START tells it to run `oma send`, `oma submit HEAD`; the
-  // functional run found no `oma` and no `node` on the sandbox's PATH.
   const work = mkdtempSync(join(tmpdir(), "oma-live-command-"));
   let control: Server | null = null;
+  let client: ChildProcessWithoutNullStreams | null = null;
   try {
     const stateRoot = join(work, "s");
     const runRoot = join(work, "r");
@@ -481,7 +483,25 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
     const leaseSocket = actorSocketPathAt(runRoot, actor, 1);
     mkdirSync(dirname(leaseSocket), { recursive: true });
-    control = createServer(socket => { socket.destroy(); });
+    const requests: Record<string, unknown>[] = [];
+    const errors: unknown[] = [];
+    const answer = { observedAtMs: 1, agents: [],
+      creation: { capability: false, childProfile: null, childHasMailSend: false, observedAtMs: 1, maxWorkers: 6, workerCount: 0 } };
+    control = createServer(socket => {
+      const parser = new FrameParser(262144);
+      socket.on("error", error => errors.push(error));
+      socket.on("data", bytes => {
+        try {
+          assert.ok(Buffer.isBuffer(bytes));
+          for (const { raw } of parser.feed(bytes)) {
+            requests.push(raw);
+            assert.equal(raw.method, "status.get");
+            assert.deepEqual(raw.params, {});
+            socket.end(encodeFrame({ v: 1, id: raw.id, ok: true, result: answer }));
+          }
+        } catch (error) { errors.push(error); socket.destroy(); }
+      });
+    });
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
@@ -491,7 +511,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
-        coreExtension: join(root, "packages/extension/dist/index.js"), cli: join(root, "apps/oma/dist/cli.js"),
+        coreExtension: join(root, "packages/extension/dist/index.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
         mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
@@ -509,16 +529,31 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     // The production plan, with a shell in the engine's place.
     const at = plan.args.lastIndexOf("--");
     const probe = withFilter(plan, stdio => spawnSync(plan.command, [...plan.args.slice(0, at + 1), "/bin/sh", "-c",
-      "command -v oma; command -v node; node --version; oma; echo \"exit=$?\""], { encoding: "utf8", timeout: 30000, stdio }));
+      "set -eu; if command -v oma; then exit 1; fi; test ! -e /opt/oma/apps/oma/dist/libexec/oma; command -v node; node --version; printf 'development-shell\\n'"],
+    { encoding: "utf8", timeout: 30000, stdio, env: plan.env }));
     const lines = `${probe.stdout}\n${probe.stderr}`;
-    assert.match(lines, /^\/opt\/oma\/apps\/oma\/dist\/libexec\/oma$/m, `oma is not on the sandbox's PATH: ${lines.slice(0, 600)}`);
+    assert.equal(probe.status, 0, lines);
     assert.match(lines, /^\/opt\/oma-node\/node$/m, "node on the PATH is not the pinned Node");
     assert.match(lines, new RegExp(`^${process.version.replace(/\./g, "\\.")}$`, "m"));
-    // The CLI itself ran: without arguments it prints its usage and exits 2 (CLI-003).
-    assert.doesNotMatch(lines, /not found|No such file/);
-    assert.match(lines, /^  oma submit <revision>/m);
-    assert.match(lines, /^exit=2$/m);
+    assert.match(lines, /^development-shell$/m);
+    // The helper imports the production Client and input effects from the
+    // installation, whose host prefix is mounted at /opt/oma in this sandbox.
+    const args = clientProcessArgs(clientCall("queryText", "status.get", {}))
+      .map(argument => argument.replaceAll(root, "/opt/oma/"));
+    client = spawnSandboxed([plan.command, ...plan.args.slice(0, at + 1), "/opt/oma-node/node", ...args], plan.env, plan.input);
+    let stdout = ""; let stderr = "";
+    client.stdout.on("data", chunk => { stdout += String(chunk); });
+    client.stderr.on("data", chunk => { stderr += String(chunk); });
+    const closed = Promise.withResolvers<number | null>();
+    client.once("error", closed.reject);
+    client.once("close", closed.resolve);
+    const status = await closed.promise;
+    assert.equal(status, 0, stderr);
+    assert.deepEqual(errors, []);
+    assert.equal(requests.length, 1, "the typed Client must reach the bound actor socket");
+    assert.deepEqual(JSON.parse(stdout), answer);
   } finally {
+    if (client && client.exitCode === null) client.kill("SIGKILL");
     await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
     rmSync(work, { recursive: true, force: true });
   }

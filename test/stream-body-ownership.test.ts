@@ -17,7 +17,7 @@ import { LifecycleModule } from "@oma/lifecycle";
 import { StoreError } from "@oma/domain/errors";
 import { encodeFrame } from "@oma/protocol/frame";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitFixture, seedGit } from "./fixtures/git-crash.js";
 import { padTree, removePad } from "./fixtures/storage-pad.js";
@@ -70,8 +70,7 @@ function society(t: TestContext) {
   const units = new PolicyExecution();
   t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" }));
   const views = new ViewsModule(store, root, "crash", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const paths = { stateRoot: root, runRoot: join(root, "run"), society: "crash", hasGoal: goalPublishedAt(root) };
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: null, reconcile: null, paths: paths, limits: LIMITS });
   // This fixture supplies scripted bytes to the public framing/ownership

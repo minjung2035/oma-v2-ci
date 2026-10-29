@@ -23,6 +23,8 @@ import type { OperationOf } from "@oma/protocol/operation-codec";
 export async function* empty(): AsyncIterable<Uint8Array> { }
 export interface FixtureOptions {
     readonly principalDelegated?: boolean;
+    readonly maxWorkers?: number;
+    readonly workers?: readonly string[];
     readonly protectedPaths?: readonly string[];
     readonly rules?: readonly {
         path: string;
@@ -59,18 +61,17 @@ export function fixture(options: FixtureOptions = {}) {
         mkdirSync(join(root, "mail", "workers", dir), { recursive: true });
     const agents = () => {
         store.transaction(tx => {
-            for (const actor of ["principal", "alice", "bob", "carol", "dave", "ellen"])
+            for (const actor of ["principal", ...(options.workers ?? ["alice", "bob", "carol", "dave", "ellen"])])
                 tx.insertAgent(makeValidAgent(actor, actor === "ellen" ? { desired: "stopped" } : {}));
-            tx.insertAgent(makeValidAgent("frank", { desired: "retired" }));
+            if (options.workers === undefined) tx.insertAgent(makeValidAgent("frank", { desired: "retired" }));
         });
     };
     agents();
     const paths = { stateRoot: root, projectGit, contextGit: join(root, "context.git"), worldDir: join(root, "world"),
         society: "demo" };
     let mail = createMailModule(paths, store, 64);
-    const policy: IntegrationPolicy = { policyRevision: "p1", protectedPaths: [...(options.protectedPaths ?? [])],
-        checks: [...(options.checks ?? [])], tiered: { repositoryFloor: "LOW", highPeerFloor: 2,
-            principalDelegated: options.principalDelegated ?? true, rules: [...(options.rules ?? [])] } };
+    const policy: IntegrationPolicy = { maxWorkers: options.maxWorkers ?? 6, policyRevision: "p1", protectedPaths: [...(options.protectedPaths ?? [])], checks: [...(options.checks ?? [])], tiered: { repositoryFloor: "LOW", highPeerFloor: 2,
+        principalDelegated: options.principalDelegated ?? true, rules: [...(options.rules ?? [])] }};
     const bounds = { mailBodyBytes: options.mailBodyBytes ?? 256 * 1024, subjectBytes: 512,
         bundleBytes: options.bundleBytes ?? 256 * 1024 };
     let services = createGitServices(paths, store, mail, policy, options.reader === undefined ? () => policy : () => options.reader!(policy), options.runCheck === undefined ? null
@@ -144,7 +145,7 @@ export function fixture(options: FixtureOptions = {}) {
             integration: applied === null ? null : { operation: applied.id, state: applied.state,
                 errorCode: applied.state === "failed" ? applied.errorCode : null },
             eligible: new Set(store.listAgents().filter(a => a.role === "resident" && a.desired === "enabled").map(a => a.name)),
-            highPeerFloor: 2 });
+            highPeerFloor: 2, maxWorkers: policy.maxWorkers });
     };
     return { root, base, projectGit, git, candidateWith, submit, open, challenge, review, vote, cancel, requestName, stateOf, auth, stop,
         policy, applyOp: (actor: string, openKey: string) => {

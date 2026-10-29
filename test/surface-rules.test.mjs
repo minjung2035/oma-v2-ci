@@ -102,6 +102,18 @@ test("extension-dynamic-load and extension-execute: no run-time loading, no invo
     findings => assert.ok(has(findings, "extension-execute")));
   withTree({ "packages/extension/src/a.ts": "export const run = (tool: any) => tool.execute.call(tool);" },
     findings => assert.ok(has(findings, "extension-execute")));
+  withTree({
+    "packages/tool-runtime/src/shared.ts": 'import { Compile } from "typebox/compile"; export function registerTypedTool(pi, tool) { pi.registerTool({ execute(...args) { return tool.execute(...args); } }); }',
+  }, findings => clean(findings, "extension-closure", "extension-execute"));
+  withTree({
+    "packages/tool-runtime/src/shared.ts": 'export function dispatch(tool) { return tool.execute(); }',
+  }, findings => assert.ok(has(findings, "extension-execute")));
+  withTree({
+    "packages/tool-runtime/src/contained-tools.ts": 'export function registerDevelopmentShell(pi) { const configured = {}; pi.registerTool({ execute(...args) { return configured.execute(...args); } }); }',
+  }, findings => clean(findings, "extension-closure", "extension-execute"));
+  withTree({
+    "packages/tool-runtime/src/contained-tools.ts": 'export function dispatch(configured) { return configured.execute(); }',
+  }, findings => assert.ok(has(findings, "extension-execute")));
 });
 
 test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed layout", () => {
@@ -164,24 +176,24 @@ test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", ()
   }, findings => clean(findings, "tui-write-owner", "tui-ledger", "tui-transport-owner", "tui-internal-method"));
 });
 
-test("product-cli-separation and resident-product-surface: closures do not cross", () => {
+test("product-tool-separation and resident-product-surface: closures do not cross", () => {
   withTree({
     "apps/oma/src/entry/oma.ts": "import { a } from \"../../../../packages/tui/src/app.js\";", "packages/tui/src/app.ts": "export const a = 1;",
-    "apps/oma/src/cli.ts": 'import { b } from "./cli/effects.js";', "apps/oma/src/cli/effects.ts": "export const b = 1;",
+    "packages/client/src/index.ts": 'import { b } from "./runtime.js";', "packages/client/src/runtime.ts": "export const b = 1;",
     "apps/oma/src/entry/runner.ts": 'import { c } from "../runner.js";', "apps/oma/src/runner.ts": "export const c = 1;",
-  }, findings => clean(findings, "product-cli-separation", "resident-product-surface"));
-  withTree({ "apps/oma/src/entry/oma.ts": 'import { parse } from "../cli/arguments.js";', "apps/oma/src/cli/arguments.ts": "export const parse = 1;" },
-    findings => assert.ok(has(findings, "product-cli-separation")));
-  withTree({ "apps/oma/src/cli.ts": "import { a } from \"../../../packages/tui/src/app.js\";", "packages/tui/src/app.ts": "export const a = 1;" },
-    findings => assert.ok(has(findings, "product-cli-separation")));
+  }, findings => clean(findings, "product-tool-separation", "resident-product-surface"));
+  withTree({ "apps/oma/src/entry/oma.ts": 'import { Client } from "@oma/client";', "packages/client/src/index.ts": "export class Client {}" },
+    findings => assert.ok(has(findings, "product-tool-separation")));
+  withTree({ "packages/client/src/index.ts": "import { a } from \"../../tui/src/app.js\";", "packages/tui/src/app.ts": "export const a = 1;" },
+    findings => assert.ok(has(findings, "product-tool-separation")));
   withTree({ "apps/oma/src/entry/runner.ts": 'const entry = "apps/oma/dist/entry/oma.js";' },
     findings => assert.ok(has(findings, "resident-product-surface")));
   // Near miss: a type-only import is erased and carries nothing at run time.
   withTree({ "apps/oma/src/entry/runner.ts": "import type { State } from \"../../../../packages/tui/src/model.js\";", "packages/tui/src/model.ts": "export interface State {}" },
-    findings => clean(findings, "product-cli-separation", "resident-product-surface"));
+    findings => clean(findings, "product-tool-separation", "resident-product-surface"));
   // The deployment layout names the product surface to hide it; that is allowed.
   withTree({ "apps/oma/src/entry/runner.ts": "import { L } from \"../../../../packages/domain/src/deployment.js\";", "packages/domain/src/deployment.ts": 'export const L = ["packages/tui/dist"];' },
-    findings => clean(findings, "product-cli-separation", "resident-product-surface"));
+    findings => clean(findings, "product-tool-separation", "resident-product-surface"));
 });
 
 test("product closures: dynamic import, require and re-export carry the same runtime boundaries", () => {
@@ -189,28 +201,28 @@ test("product closures: dynamic import, require and re-export carry the same run
     withTree({
       "apps/oma/src/entry/oma.ts": `export const start = ${load};`,
       "apps/oma/src/entry/oma-society.ts": 'export { start } from "../runtime/hidden.js";',
-      "apps/oma/src/runtime/hidden.ts": 'export const start = () => import("../cli/arguments.js");',
-      "apps/oma/src/cli/arguments.ts": "export const parse = 1;",
-    }, findings => assert.ok(findings.some(value => value.rule === "product-cli-separation" && value.file === "apps/oma/src/cli/arguments.ts")));
+      "apps/oma/src/runtime/hidden.ts": 'export const start = () => import("@oma/client");',
+      "packages/client/src/index.ts": "export class Client {}",
+    }, findings => assert.ok(findings.some(value => value.rule === "product-tool-separation" && value.file === "packages/client/src/index.ts")));
     withTree({
       "apps/oma/src/entry/oma.ts": `export const start = ${load};`,
       "apps/oma/src/entry/oma-society.ts": "export const start = () => import(\"../../../../packages/storage/src/store.js\");",
       "packages/storage/src/store.ts": "export class Store {}",
     }, findings => assert.ok(has(findings, "tui-ledger")));
   }
-  withTree({ "apps/oma/src/entry/oma.ts": 'export type { State } from "../cli/arguments.js";',
-    "apps/oma/src/cli/arguments.ts": "export interface State {}" }, findings => clean(findings, "product-cli-separation"));
+  withTree({ "apps/oma/src/entry/oma.ts": 'export type { State } from "@oma/client";',
+    "packages/client/src/index.ts": "export interface State {}" }, findings => clean(findings, "product-tool-separation"));
 });
 
 test("product entries: every independently launched host entry is covered and hidden from Residents", () => {
   for (const { file, compiled } of productHosts) {
-    const cli = relative(dirname(file), "apps/oma/src/cli/arguments.js");
-    withTree({ [file]: `import { parse } from "${cli}";`, "apps/oma/src/cli/arguments.ts": "export const parse = 1;" },
-      findings => assert.ok(has(findings, "product-cli-separation"), file));
-    for (const origin of ["apps/oma/src/entry/runner.ts", "apps/oma/src/cli.ts"]) {
+    const client = relative(dirname(file), "packages/client/src/index.js");
+    withTree({ [file]: `import { Client } from "${client}";`, "packages/client/src/index.ts": "export class Client {}" },
+      findings => assert.ok(has(findings, "product-tool-separation"), file));
+    for (const origin of ["apps/oma/src/entry/runner.ts", "packages/client/src/index.ts"]) {
       const target = relative(dirname(origin), file).replace(/\.ts$/, ".js");
       withTree({ [origin]: `export const start = () => import("${target.startsWith(".") ? target : "./" + target}");`, [file]: "export {};" },
-        findings => assert.ok(has(findings, origin === "apps/oma/src/cli.ts" ? "product-cli-separation" : "resident-product-surface"), file));
+        findings => assert.ok(has(findings, origin === "packages/client/src/index.ts" ? "product-tool-separation" : "resident-product-surface"), file));
     }
     withTree({ "apps/oma/src/entry/runner.ts": `export const entry = "${compiled}";` },
       findings => assert.ok(has(findings, "resident-product-surface"), file));
@@ -228,10 +240,10 @@ test("product-pi-command and model-surface-product-words", () => {
   for (const { file } of productHosts)
     withTree({ [file]: 'export const hint = "run pi install";' },
       findings => assert.ok(has(findings, "product-pi-command"), file));
-  withTree({ "apps/oma/src/cli/exit.ts": 'export const usage = "press Ctrl+X";' },
+  withTree({ "packages/client/src/errors.ts": 'export const usage = "press Ctrl+X";' },
     findings => assert.ok(has(findings, "model-surface-product-words")));
   // Near miss: the same words in a comment are not shown to anyone.
-  withTree({ "apps/oma/src/cli/exit.ts": "// the host has a Control Panel (Ctrl+X)\nexport const usage = \"usage\";" },
+  withTree({ "packages/client/src/errors.ts": "// the host has a Control Panel (Ctrl+X)\nexport const usage = \"usage\";" },
     findings => assert.deepEqual(findings, []));
 });
 
@@ -273,8 +285,9 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
     findings => assert.ok(has(findings, "closed-switch")));
   withTree({ "packages/broker/src/public-dispatcher.ts": "import { Store } from \"../../storage/src/store.js\";", "packages/storage/src/store.ts": "export class Store {}" },
     findings => assert.ok(has(findings, "module-port-import")));
-  withTree({ "apps/oma/src/cli.ts": "import { m } from \"../../../packages/mail/src/index.js\";", "packages/mail/src/index.ts": "export const m = 1;" },
-    findings => assert.ok(has(findings, "module-port-import")));
+  for (const file of ["packages/client/src/index.ts", "apps/oma/src/runtime/input-effects/mail.ts"])
+    withTree({ [file]: 'import { m } from "@oma/mail";', "packages/mail/src/index.ts": "export const m = 1;" },
+      findings => assert.ok(has(findings, "module-port-import"), file));
 });
 
 test("principal-turn-owner: the host never asks the engine to fold a prompt into a run already going", () => {
@@ -324,7 +337,7 @@ export async function callActor() {
   // engine for the tools' client.
   const tools = copied => `
 const FRAME_BYTES = "OMA_FRAME_BYTES";
-export function cliEnvironment(home, socket) {
+export function clientEnvironment(home, socket) {
   const environment = { HOME: home, OMA_SOCKET: socket, LANG: "C.UTF-8" };
   for (const name of [${copied}]) {
     const value = process.env[name];
@@ -338,11 +351,11 @@ export function cliEnvironment(home, socket) {
     "packages/extension/src/mail-tools.ts": tools(copied),
   });
 
-  // Accept: everything the CLI reads at call time is put there by the
+  // Accept: everything the Client reads at call time is put there by the
   // forwarder, and everything copied from the engine is set by the host.
   withTree(tree(), findings => clean(findings, "principal-session-env", "principal-secret-env"));
 
-  // Reject: the tools stop copying the frame bound the CLI reads.
+  // Reject: the tools stop copying the frame bound the Client reads.
   withTree(tree({ copied: "" }), findings => {
     assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_FRAME_BYTES")));
   });
@@ -356,13 +369,13 @@ export function cliEnvironment(home, socket) {
   withTree(tree({ producerExtra: 'OMA_PRINCIPAL_CREDENTIAL: "x",' }), findings => {
     assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "packages/engine/src/principal-launch.ts"));
   });
-  withTree({ ...tree(), "apps/oma/src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_SESSION"];' }, findings => {
-    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "apps/oma/src/cli/extra.ts"));
+  withTree({ ...tree(), "packages/client/src/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_SESSION"];' }, findings => {
+    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "packages/client/src/extra.ts"));
   });
 
   // Near miss: the removed descriptor's name shares the prefix and is not a
   // secret -- the rule distinguishes a descriptor number from the credential.
-  withTree({ ...tree(), "apps/oma/src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_CREDENTIAL_FD"];' },
+  withTree({ ...tree(), "packages/client/src/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_CREDENTIAL_FD"];' },
     findings => assert.ok(!findings.some(value => value.rule === "principal-secret-env")));
   // Near miss: names the consumer reads only to derive an endpoint are not
   // requirements of a caller that was given one.

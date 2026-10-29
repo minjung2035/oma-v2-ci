@@ -65,9 +65,10 @@
  * - Mutation: `lsp_fix` is preview-only by default (`write` absent or
  *   false returns the computed text, like upstream). `write: true`
  *   reaches the filesystem only through OMA's contained writer -- the
- *   same byte-budgeted, workspace-contained serialized path the `write`
- *   tool uses -- never through upstream's own writeFileSync branch, which
- *   stays armed at `write: false`.
+ *   same workspace-contained serialized path the `write` tool uses, with
+ *   an exact input-text comparison inside that mutation boundary. A stale
+ *   result refuses instead of overwriting another edit. Upstream's own
+ *   writeFileSync branch stays armed at `write: false`.
  * - Authority: the workspace guard lists `lsp_fix` in its conditional
  *   write gate, so a read-only role (the Principal) is refused before
  *   execute runs; the checks here are defense in depth, the guard is
@@ -134,7 +135,7 @@ export interface LspToolOptions {
    * in the workspace it indexes) is never spawned for it. */
   readonly readOnly: boolean;
   /** OMA's contained serialized writer (the same seam `write` uses). */
-  readonly write: (path: string, content: string) => Promise<void>;
+  readonly write: (path: string, content: string, expected: { text: string }) => Promise<void>;
   /** Silence window for the whole call across every route it fans out
    * to; defaults to LSP_CALL_STALL_MS and is never tighter than the
    * call's per-request timeout. Any inbound LSP frame restarts it --
@@ -202,27 +203,27 @@ function liveFiles(files: string[]): string[] {
 
 const DiagnosticsParameters = Type.Object({
   paths: Type.Optional(Type.Array(Type.String(), {
-    description: "Files or directories to check, relative to the workspace root (default: whole workspace).",
+    description: "Workspace-relative files or directories to check; omitted means the whole workspace.",
   })),
   limit: Type.Optional(Type.Number({
-    description: "Maximum files to check per selected server (default: all collected files).",
+    description: "Maximum collected files per selected server; omitted means all. Supplied values are floored to an integer and raised to at least 1.",
   })),
   server: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())], {
-    description: "Optional configured LSP server name, or names. Defaults to all servers matching the file extension.",
+    description: "Configured server name or names to select; omitted uses the applicable configured routes.",
   })),
 });
 
 const FixParameters = Type.Object({
-  path: Type.String({ description: "File to fix, relative to the workspace root. The server is selected from configured file extensions." }),
-  kind: Type.Optional(Type.String({ description: "Source action kind. Defaults to source.fixAll." })),
-  server: Type.Optional(Type.String({ description: "Optional configured LSP server name. Required when several servers support the file." })),
+  path: Type.String({ description: "Workspace-relative file to fix; its extension selects the applicable configured servers." }),
+  kind: Type.Optional(Type.String({ description: "LSP source action kind; default source.fixAll. For import organization, use source.organizeImports if supported." })),
+  server: Type.Optional(Type.String({ description: "Configured server name; required if several servers support the file." })),
   write: Type.Optional(Type.Boolean({
-    description: "Write the computed edits through OMA's contained writer (default false: preview only). A read-only role cannot write.",
+    description: "Apply computed edits to the workspace file when true; false or omitted returns a preview without applying them.",
   })),
 });
 
 const StatusParameters = Type.Object({
-  server: Type.Optional(Type.String({ description: "Only report the named LSP server." })),
+  server: Type.Optional(Type.String({ description: "Configured server name to report; omitted reports all. An unknown name is an error." })),
 });
 
 type ToolResult = { content: { type: "text"; text: string }[]; details: unknown };
@@ -375,19 +376,16 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
   const callStall = (tool: string, signal: AbortSignal, timeoutMs: number, adapters: ReadonlySet<LspServerAdapter>) =>
     observeLspCall(tool, signal, timeoutMs, options.callStallMs ?? LSP_CALL_STALL_MS, adapters, omaOnInboundFrame);
 
-  pi.registerTool({
+  if (!options.readOnly) pi.registerTool({
     name: "lsp_diagnostics",
     label: "LSP Diagnostics",
     description:
-      "Run diagnostics for workspace files using configured, language-agnostic LSP server routes. " +
-      "Servers whose command is not installed are reported unavailable; a file checked by a running " +
-      "server with no diagnostics is clean -- the two are never conflated.",
-    promptSnippet: "Get diagnostics from configured LSP servers selected by file extension (missing servers are reported unavailable).",
+      "Collect diagnostics for workspace files using configured language servers. Returns per-route results, checked file counts, diagnostics and unavailable or failed routes. " +
+      "Each call starts and closes its server processes; it does not leave a daemon running. Missing servers and partial failures are not clean checks; all applicable routes unavailable or failed is an error.",
+    promptSnippet: "Check workspace files with configured language servers and report coverage and failures.",
     promptGuidelines: [
-      "Use lsp_diagnostics when files need diagnostics from a configured LSP server.",
-      "Use the server parameter only when the user asks for a specific configured LSP server or multiple servers match the same extension.",
-      "If a configured server command is missing, report it as unavailable -- install it or update the server's command in pi-lsp.json.",
-      "Use lsp_status to see which language servers are available before interpreting an empty result.",
+      "Scope paths to the files needed for the check. Inspect route coverage, truncation and failures before interpreting a zero-diagnostic result.",
+      "Use lsp_status to investigate server availability; command availability alone does not prove a server can check the project.",
     ],
     parameters: DiagnosticsParameters,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -480,24 +478,19 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
     },
   });
 
-  pi.registerTool({
+  if (!options.readOnly) pi.registerTool({
     name: "lsp_fix",
     label: "LSP Fix",
     description:
-      "Compute language-server code-action fixes for one file. Preview by default: the " +
-      "computed replacement text is returned without writing. With write: true the edits are " +
-      "applied through OMA's contained writer; a read-only role is refused.",
-    promptSnippet: "Compute LSP source fixes for a file (preview only; write: true applies them)",
+      "Compute source-action fixes for one workspace file using a configured language server. Returns computed replacement text without applying it by default; write: true applies changed text through the contained workspace writer. " +
+      "The server runs only for this call. A later apply call recomputes the action; it does not commit a stored preview.",
+    promptSnippet: "Preview or apply a language server's source-action fixes to one file.",
     promptGuidelines: [
-      "Use lsp_fix for files handled by a configured LSP code-action server.",
-      "Use kind when the server needs a specific source action kind such as source.organizeImports.",
-      "Preview first: call without write, then apply with write: true once the edits look right.",
+      "Choose kind for the intended source action. Inspect the returned changes and use ordinary project checks to establish their correctness.",
     ],
     parameters: FixParameters,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       requireSpawnRole("lsp_fix");
-      if (params.write === true && options.readOnly)
-        throw new WorkspaceRefusal("lsp_fix write requested but this role is read-only: preview the computed changes instead");
       const scope = sessionFor(ctx.sessionManager).scope;
       return await scope.run(signal, async (ownedSignal) => await withLspScratch(async (scratch) => {
         const runtime = configuredRuntime(options.workspace);
@@ -535,9 +528,10 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
         ownedSignal.throwIfAborted();
         const relativePath = typeof details.path === "string" ? details.path : params.path;
         const newText = typeof details.text === "string" ? details.text : "";
-        await options.write(relativePath, newText);
+        if (typeof details.inputText !== "string") throw new Error("LSP fix did not retain its input snapshot");
+        await options.write(relativePath, newText, { text: details.inputText });
         return textResult(`${adapter.name} LSP fix updated ${relativePath}.`, {
-          ...details, write: true, text: undefined, containedWrite: true,
+          ...details, write: true, text: undefined, inputText: undefined, containedWrite: true,
         });
       }));
     },
@@ -547,9 +541,8 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
     name: "lsp_status",
     label: "LSP Status",
     description:
-      "Report which configured language servers are available (command found on PATH) " +
-      "and which are unavailable (command missing). Never reports a missing server as clean.",
-    promptSnippet: "Show configured language servers and whether each is available on PATH",
+      "List configured language servers, supported extensions, commands and whether each command can be found. Does not start a language server or check source files; ready means command available, not diagnostics passed.",
+    promptSnippet: "Inspect language-server configuration and command availability without starting servers.",
     parameters: StatusParameters,
     async execute(_toolCallId, params, _signal, _update, _ctx) {
       const runtime = configuredRuntime(options.workspace);

@@ -210,7 +210,7 @@ export class IntegrationCoordinator {
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
     if (policy.tiered !== null)
-      throw new StoreError("UNSUPPORTED_PROFILE", "this society reviews with oma_merge/oma_challenge");
+      throw new StoreError("UNSUPPORTED_PROFILE", "this society uses oma_merge_open/oma_challenge_open and oma_review_status/oma_review_diff/oma_review_respond");
     if (policy.tiered === null && input.tier !== undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
     this.requireWriterSlot();

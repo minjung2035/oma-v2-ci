@@ -65,7 +65,7 @@ for (const scenario of [
             git(["update-ref", "refs/heads/main", base]);
             const mail = createMailModule({ stateRoot: state, society: "demo" }, store, 8);
             const module = createGitModule({ stateRoot: state, society: "demo", projectGit: join(repo, ".git"),
-                contextGit: join(state, "context.git"), worldDir: join(state, "world") }, store, mail, { policyRevision: "p1", protectedPaths: scenario.protected, checks: [] });
+                contextGit: join(state, "context.git"), worldDir: join(state, "world") }, store, mail, {maxWorkers: 6, policyRevision: "p1", protectedPaths: scenario.protected, checks: []});
             if (scenario.rejected) {
                 await assert.rejects(module.integrate(actor("alice"), "protect", { expected: base, candidate }), (error: unknown) => error instanceof StoreError && error.code === "PROTECTED_PATH");
                 assert.equal(git(["rev-parse", "refs/heads/main"]), base);

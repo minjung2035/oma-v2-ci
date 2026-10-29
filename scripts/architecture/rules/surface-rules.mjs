@@ -8,7 +8,7 @@ import { extractEdges } from "../../dependency-graph.mjs";
 import { authoredFiles, eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip, isVendoredExtension } from "./shared.mjs";
 
 const EXTENSION_ENTRY = "packages/extension/src/index.ts";
-const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox"]);
+const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox", "typebox/compile"]);
 // TUI-020: each engine primitive has one owner, and only these names are borrowed.
 const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
   // DR37: this pinned compatibility seam updates Pi's existing autocomplete
@@ -75,10 +75,10 @@ const DISPATCHER_FORBIDDEN = Object.freeze({
   "packages/broker/src/public-dispatcher.ts": ["packages/storage/src/store.ts", "packages/mail/src/index.ts", "packages/platform-linux/src/units.ts", "apps/oma/src/views.ts", "packages/lifecycle/src/index.ts", "packages/git/src/index.ts", "packages/reconcile/src/index.ts"],
   "packages/broker/src/internal-dispatcher.ts": ["packages/storage/src/store.ts", "packages/mail/src/index.ts", "packages/reconcile/src/index.ts"],
 });
-// The model-facing CLI parses only mail headers; it never loads the mail module.
-const CLI_MAIL_FORBIDDEN = Object.freeze({
-  "apps/oma/src/cli.ts": ["packages/mail/src/index.ts"],
-  "apps/oma/src/cli/effects/mail.ts": ["packages/mail/src/index.ts"],
+// Client input preparation parses only mail headers, never the mail service.
+const CLIENT_MAIL_FORBIDDEN = Object.freeze({
+  "packages/client/src/index.ts": ["packages/mail/src/index.ts"],
+  "apps/oma/src/runtime/input-effects/mail.ts": ["packages/mail/src/index.ts"],
 });
 
 const present = (root, files) => files.filter(file => exists(root, file));
@@ -211,12 +211,32 @@ function extensionRules(root, findings) {
           findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time outside a verified vendored bundle"));
       } else if (["require", "createRequire"].includes(calleeName(node)))
         findings.push(finding("extension-dynamic-load", file, "the trusted extension loads no code at run time outside a verified vendored bundle"));
-      // TSP-006: opening a group activates tools; Pi's own pipeline runs them.
+      // Selection never dispatches another tool. Two fixed registration adapters
+      // forward only their own handler: typed validation and configured builtin bash.
       const callee = strip(node.expression);
       const executes = ts.isPropertyAccessExpression(callee) && (callee.name.text === "execute" ||
         (["call", "apply"].includes(callee.name.text) && ts.isPropertyAccessExpression(strip(callee.expression)) &&
           strip(callee.expression).name.text === "execute"));
-      if (executes) findings.push(finding("extension-execute", file, "the extension never invokes a tool handler itself"));
+      const registrationGuard = file === "packages/tool-runtime/src/shared.ts" &&
+        ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "tool" && callee.name.text === "execute" &&
+        (() => {
+          for (let owner = node.parent; owner; owner = owner.parent) {
+            if (ts.isFunctionDeclaration(owner)) return owner.name?.text === "registerTypedTool";
+          }
+          return false;
+        })();
+      const configuredShell = file === "packages/tool-runtime/src/contained-tools.ts" &&
+        ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "configured" && callee.name.text === "execute" &&
+        (() => {
+          for (let owner = node.parent; owner; owner = owner.parent) {
+            if (ts.isFunctionDeclaration(owner)) return owner.name?.text === "registerDevelopmentShell";
+          }
+          return false;
+        })();
+      if (executes && !registrationGuard && !configuredShell)
+        findings.push(finding("extension-execute", file, "only fixed registration adapters may forward their own tool handler"));
     });
   }
   for (const file of authoredFiles(root)) {
@@ -285,15 +305,14 @@ function surfaceEffectRules(root, findings) {
 
 function closureRules(root, findings) {
   for (const file of runtimeClosure(root, PRODUCT_ENTRIES)) {
-    if (file === "apps/oma/src/cli.ts" || file.startsWith("apps/oma/src/cli/commands/") || file === "apps/oma/src/cli/arguments.ts" || file === "apps/oma/src/cli/exit.ts")
-      findings.push(finding("product-cli-separation", file, "the host product reaches the model-facing command surface"));
+    if (file === "packages/client/src/index.ts" || file.startsWith("packages/extension/src/"))
+      findings.push(finding("product-tool-separation", file, "the host product reaches the model-facing tool surface"));
     if (TUI_FORBIDDEN_CLOSURE.includes(file))
       findings.push(finding("tui-ledger", file, "the host product reaches the durable store owner"));
   }
-  if (exists(root, "apps/oma/src/cli.ts"))
-    for (const file of runtimeClosure(root, "apps/oma/src/cli.ts"))
-      if (isProductFile(file))
-        findings.push(finding("product-cli-separation", file, "the model-facing CLI reaches the host product"));
+  for (const file of runtimeClosure(root, ["packages/client/src/index.ts", EXTENSION_ENTRY]))
+    if (isProductFile(file))
+      findings.push(finding("product-tool-separation", file, "the model-facing tools reach the host product"));
   // TUI-003: nothing a Resident runs can reach or name the product entrypoint.
   const resident = new Set([...runtimeClosure(root, "apps/oma/src/entry/runner.ts"), ...runtimeClosure(root, EXTENSION_ENTRY)]);
   for (const file of resident) {
@@ -320,7 +339,7 @@ function vocabularyRules(root, findings) {
       if (/(?<!\boma )\bpi (?:config|install|update)\b/.test(text))
         findings.push(finding("product-pi-command", file, `offers a Pi command (${text})`));
   // TUI-003: the model-facing surfaces do not advertise the Human's panel.
-  for (const file of [...filesUnder(root, "apps/oma/src/cli"), ...present(root, ["apps/oma/src/cli.ts", "apps/oma/src/views.ts"])])
+  for (const file of [...filesUnder(root, "packages/client/src"), ...filesUnder(root, "packages/extension/src"), ...present(root, ["apps/oma/src/views.ts"])])
     for (const { text } of literalTexts(sourceOf(root, file)))
       if (/Ctrl\+X|Control Panel/.test(text))
         findings.push(finding("model-surface-product-words", file, `advertises the Control Panel (${text})`));
@@ -396,7 +415,7 @@ function ownerShapeRules(root, findings) {
     if (!found || !closed)
       findings.push(finding("closed-switch", file, `the switch over ${discriminant} must end in assertNever(${subject})`));
   }
-  for (const [file, forbidden] of Object.entries({ ...DISPATCHER_FORBIDDEN, ...CLI_MAIL_FORBIDDEN })) {
+  for (const [file, forbidden] of Object.entries({ ...DISPATCHER_FORBIDDEN, ...CLIENT_MAIL_FORBIDDEN })) {
     if (!exists(root, file)) continue;
     for (const edge of edges(sourceOf(root, file))) {
       const target = normalizeRelativeImport(file, edge.specifier);
@@ -406,17 +425,13 @@ function ownerShapeRules(root, findings) {
   }
 }
 
-// The places the Principal's session environment passes through. They broke
-// apart once already: the host produced the credential, the CLI required it,
-// and the tools in between rebuilt the environment from a list that never
-// mentioned it, so every OMA tool failed authentication while every test
-// passed.
+// The Principal host, tool context and Client must agree on session environment
+// requirements. A missing forwarded name must fail here, not at authentication.
 const ENV_PRODUCER = "packages/engine/src/principal-launch.ts";
 const ENV_PRODUCER_FUNCTION = "principalEnvironment";
-// Everything the tools put in the CLI's environment: the list copied from the
-// engine's own environment, and what the process owner adds itself.
+// The tool context copies engine environment and adds the caller's local roots.
 const ENV_FORWARDERS = Object.freeze([
-  { file: "packages/extension/src/mail-tools.ts", fn: "cliEnvironment" },
+  { file: "packages/extension/src/mail-tools.ts", fn: "clientEnvironment" },
 ]);
 const ENV_CONSUMER = "packages/client/src/settings.ts";
 // `socketPath` reads names only to derive an endpoint when none was given; a
@@ -471,7 +486,7 @@ const isProcessEnv = value =>
   ((ts.isIdentifier(value.expression) && value.expression.text === "process") ||
     (ts.isCallExpression(value.expression) && calleeName(value.expression) === "currentContext"));
 
-/** Names the forwarders put into the CLI's environment, and the subset they
+/** Names the forwarders put into the Client's environment, and the subset they
  * copy from the engine's own environment (which the host must therefore set). */
 function forwardedNames(root) {
   const forwarded = new Set();

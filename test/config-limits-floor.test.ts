@@ -245,7 +245,8 @@ test("FJ-5: the approval floor's boundary -- just inside validates, just outside
         actor: ORACLE_LONGEST_ACTOR, messages: [], fact: { kind: "vote", version: 1, request: ORACLE_LONGEST_OPERATION,
           verdict: "approve", body: "x".repeat(quarter), approval: null } });
       return Buffer.byteLength(approvalBodyText(`m-${"0".repeat(36)}-${Number.MAX_SAFE_INTEGER}` as MessageId, fact,
-        ORACLE_LONGEST_ACTOR, [vote, vote]), "utf8");
+        ORACLE_LONGEST_ACTOR, [vote, vote],
+        { maxWorkers: Number.MAX_SAFE_INTEGER, normalRequired: Number.MAX_SAFE_INTEGER, required: Number.MAX_SAFE_INTEGER }), "utf8");
     };
     assert.ok(maximal(floor) <= floor, "a maximal approval request fits the floor");
     assert.ok(maximal(floor - 1) > floor - 1, "and exceeds the bound just under it");

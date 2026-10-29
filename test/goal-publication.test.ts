@@ -238,11 +238,9 @@ test("CTX-003/P0: a no-op witness naming another revision is corruption, not aut
 test("DR27/CTX-001: a full GOAL stream may retain zero-byte documents at the exact context bound", async (t) => {
     const f = fixture(t);
     await f.publish("seed", { "GOAL.md": "first", "RATIONALE.md": "why", "decisions/empty.md": "" }, null);
-    const file = join(f.root, "goal.txt");
-    writeFileSync(file, "x".repeat(125));
-    const script = `import { prepareGoalEffects } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/cli/effects/goal")).href)};
-    process.stdout.write(JSON.stringify(prepareGoalEffects(process.argv[1], process.argv[2])));`;
-    const prepare = (maximum: number) => spawnSync(process.execPath, ["--input-type=module", "-e", script, file, f.revision()], { encoding: "utf8", timeout: 10000, env: { OMA_CONTEXT_GIT: f.contextGit, OMA_CONTEXT_BYTES: String(maximum) } });
+    const script = `import { prepareGoalEffects } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/input-effects/goal")).href)};
+    process.stdout.write(JSON.stringify(prepareGoalEffects("x".repeat(125), process.argv[1])));`;
+    const prepare = (maximum: number) => spawnSync(process.execPath, ["--input-type=module", "-e", script, f.revision()], { encoding: "utf8", timeout: 10000, env: { OMA_CONTEXT_GIT: f.contextGit, OMA_CONTEXT_BYTES: String(maximum) } });
     const exact = prepare(128);
     assert.equal(exact.status, 0, exact.stderr);
     const result = JSON.parse(exact.stdout);

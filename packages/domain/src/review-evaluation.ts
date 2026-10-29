@@ -37,6 +37,7 @@ export interface ReviewStateInput {
   /** Current reviewers: role resident && desired "enabled". */
   readonly eligible: ReadonlySet<Actor>;
   readonly highPeerFloor: number;
+  readonly maxWorkers: number;
 }
 export type ReviewDisplay = "peer-needed" | "principal-pending" | "applying" | "blocked" |
   "rejected" | "cancelled" | "stale" | "applied" | "unknown";
@@ -53,6 +54,10 @@ export interface ReviewState {
   /** Worker votes only — the Principal is excluded — latest by sequence. */
   readonly latestVotes: ReadonlyMap<Actor, ReviewEntry>;
   readonly required: number;
+  readonly normalRequired: number;
+  readonly maxWorkers: number;
+  readonly capacityFallback: boolean;
+  readonly principalRequired: boolean;
   readonly approvers: readonly Actor[];
   /** Latest-vote rejects are never erased by eligibility loss. */
   readonly rejectors: readonly Actor[];
@@ -61,6 +66,7 @@ export interface ReviewState {
   readonly bundle: readonly OperationId[];
   readonly approval: { readonly id: MessageId; readonly votes: readonly OperationId[] } | null;
   readonly approvalValid: boolean;
+  readonly approvalSent: boolean;
   readonly principal: ReviewEntry | null;
   readonly terminal: "cancelled" | "rejected" | "stale" | null;
   readonly integration: ReviewStateInput["integration"];
@@ -99,6 +105,8 @@ export function reviewState(input: ReviewStateInput): ReviewState {
     throw new StoreError("STORE_CORRUPT", "review open entry is not a merge/challenge open fact");
   if (!Number.isSafeInteger(input.highPeerFloor) || input.highPeerFloor < 1)
     throw new StoreError("STORE_CORRUPT", "invalid high peer floor");
+  if (!Number.isSafeInteger(input.maxWorkers) || input.maxWorkers < 1)
+    throw new StoreError("STORE_CORRUPT", "invalid Worker capacity");
   let previous = open.sequence;
   for (const entry of entries) {
     if (!Number.isSafeInteger(entry.sequence) || entry.sequence <= previous)
@@ -108,10 +116,15 @@ export function reviewState(input: ReviewStateInput): ReviewState {
       throw new StoreError("STORE_CORRUPT", "review entry names another request");
   }
   const kind = fact.kind === "merge.open" ? "merge" : "challenge";
-  const required = kind === "challenge" ? input.highPeerFloor
+  const normalRequired = kind === "challenge" ? input.highPeerFloor
     : fact.tier === "HIGH" ? input.highPeerFloor
     : fact.tier === "MEDIUM" ? 1 : 0;
   const authors = [...new Set<Actor>([open.actor, ...fact.submitters])].sort();
+  // Only configured capacity can lower the peer floor, never live availability,
+  // failed provisioning, stopped reviewers or their votes.
+  const required = Math.min(normalRequired, Math.max(0, input.maxWorkers - authors.length));
+  const capacityFallback = required < normalRequired;
+  const principalRequired = fact.tier === "HIGH" || capacityFallback;
   const authorSet = new Set(authors);
 
   const latestVotes = new Map<Actor, ReviewEntry>();
@@ -139,13 +152,17 @@ export function reviewState(input: ReviewStateInput): ReviewState {
     .map(entry => entry.actor).sort();
 
   // The current approval is the last approval message no later withdrawn
-  // message names. Open facts can only own thread mail; scan them anyway.
+  // message names. Zero-peer capacity fallback can send it with the open fact.
   let approval: ReviewState["approval"] = null;
+  let approvalSent = false;
   for (const entry of [open, ...entries]) {
     for (const message of entry.messages) {
       const meta = message.review;
       if (meta === undefined) continue;
-      if (meta.role === "approval") approval = { id: message.id, votes: [...meta.votes] };
+      if (meta.role === "approval") {
+        approval = { id: message.id, votes: [...meta.votes] };
+        approvalSent = true;
+      }
       else if (meta.role === "withdrawn" && approval !== null && meta.approval === approval.id) approval = null;
     }
   }
@@ -154,7 +171,7 @@ export function reviewState(input: ReviewStateInput): ReviewState {
   // vote regains eligibility) without invalidating it.
   const byOperation = new Map<OperationId, ReviewEntry>();
   for (const entry of [open, ...entries]) byOperation.set(entry.operation, entry);
-  const approvalValid = approval !== null && approval.votes.length === required &&
+  const approvalValid = principalRequired && approval !== null && approval.votes.length === required &&
     approval.votes.every(voteId => {
       const vote = byOperation.get(voteId);
       if (vote === undefined) return false;
@@ -172,8 +189,8 @@ export function reviewState(input: ReviewStateInput): ReviewState {
         principal = entry;   // ascending order: the last match is the latest
   const ready = terminal === null && integration === null && rejectors.length === 0 && (
     (kind === "merge" && fact.tier === "LOW") ||
-    (fact.tier !== "HIGH" && approvers.length >= required) ||
-    (fact.tier === "HIGH" && approvalValid && principal !== null &&
+    (!principalRequired && approvers.length >= required) ||
+    (principalRequired && approvalValid && principal !== null &&
       principal.fact.kind === "vote" && principal.fact.verdict === "approve"));
   const display: ReviewDisplay =
     integration !== null ? (
@@ -183,7 +200,7 @@ export function reviewState(input: ReviewStateInput): ReviewState {
     terminal !== null ? terminal :
     rejectors.length > 0 ? "blocked" :
     ready ? "applying" :
-    fact.tier === "HIGH" && approvalValid ? "principal-pending" : "peer-needed";
+    principalRequired && approvalValid ? "principal-pending" : "peer-needed";
   const missing: string[] = [];
   if (terminal === "cancelled") missing.push("cancelled");
   else if (terminal === "rejected") missing.push("rejected by the Principal");
@@ -198,7 +215,7 @@ export function reviewState(input: ReviewStateInput): ReviewState {
     const shortfall = required - approvers.length;
     if (shortfall > 0)
       missing.push(`${shortfall} more approving Worker review${shortfall === 1 ? "" : "s"} (have ${approvers.length} of ${required})`);
-    else if (fact.tier === "HIGH" && !ready) {
+    else if (principalRequired && !ready) {
       if (approval === null) missing.push("peer approval not yet sent");
       else if (!approvalValid) missing.push("approval is no longer current");
       else missing.push(`Principal decision on approval ${approval.id}`);
@@ -207,7 +224,8 @@ export function reviewState(input: ReviewStateInput): ReviewState {
   return freeze({
     request: open.operation, name: fact.name, kind, tier: fact.tier, identity: fact.identity,
     requester: open.actor, authors, entries, latestVotes, required, approvers, rejectors,
-    bundle, approval, approvalValid, principal, terminal, integration, ready, display, missing,
+    normalRequired, maxWorkers: input.maxWorkers, capacityFallback, principalRequired,
+    bundle, approval, approvalValid, approvalSent, principal, terminal, integration, ready, display, missing,
   });
 }
 
@@ -233,13 +251,13 @@ function withdrawReason(before: ReviewState, after: ReviewState): string {
 
 /** The Principal mail a newly accepted fact must cause: a withdrawn notice for
  * a current approval that just lost validity, then a new approval when quorum
- * still holds for HIGH. A further approve that leaves the bundle valid causes
+ * still holds for a Principal decision. A further approve that leaves the bundle valid causes
  * neither. */
 export function planEffects(before: ReviewState, after: ReviewState): PrincipalEffects {
   const withdraw = before.approval !== null && after.approval !== null &&
     after.approval.id === before.approval.id && !after.approvalValid
     ? { id: before.approval.id, reason: withdrawReason(before, after) } : null;
-  const approve = after.tier === "HIGH" && after.terminal === null && after.rejectors.length === 0 &&
+  const approve = after.principalRequired && after.terminal === null && after.rejectors.length === 0 &&
     after.approvers.length >= after.required && after.integration === null &&
     (after.approval === null || withdraw !== null || !after.approvalValid)
     ? [...after.bundle] : null;
@@ -252,6 +270,7 @@ export function sameReviewDecision(left: ReviewState, right: ReviewState): boole
   const project = (s: ReviewState) => ({
     name: s.name, kind: s.kind, tier: s.tier, identity: s.identity, requester: s.requester,
     authors: s.authors, required: s.required, approvers: s.approvers, rejectors: s.rejectors,
+    normalRequired: s.normalRequired, maxWorkers: s.maxWorkers, capacityFallback: s.capacityFallback, principalRequired: s.principalRequired,
     bundle: s.bundle, approval: s.approval, approvalValid: s.approvalValid,
     principal: s.principal?.operation ?? null, terminal: s.terminal, integration: s.integration,
     ready: s.ready, display: s.display,

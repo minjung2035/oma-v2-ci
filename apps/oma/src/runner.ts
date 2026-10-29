@@ -76,7 +76,6 @@ export interface RunnerPaths {
   /** OMA-owned Pi agent directory; keeps the engine off the user's ~/.pi. */
   readonly piAgentDir?: string;
   readonly coreExtension?: string;
-  readonly cli?: string;
   /** DR25/C18: the installed-package store's real host root. Confined engines
    * reach it through the mount. Absent means no packages are installed. */
   readonly packages?: string;
@@ -202,7 +201,7 @@ export class RunnerModule {
     });
   }
   private adapter(batch: PreparedBatch, inference?: PiInference, egress?: PiEgress): PiAdapter {
-    const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension, cli } = this.paths;
+    const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension } = this.paths;
     if (
       !this.lease ||
       !this.limits ||
@@ -210,8 +209,7 @@ export class RunnerModule {
       !stateRoot ||
       !society ||
       !piCommand ||
-      !coreExtension ||
-      !cli
+      !coreExtension
     )
       throw new StoreError(
         "UNSUPPORTED_PROFILE",
@@ -271,7 +269,6 @@ export class RunnerModule {
         ...(piArgs === undefined ? {} : { piArgs }),
         ...(piAgentDir === undefined ? {} : { piAgentDir }),
         coreExtension,
-        cli,
         workspace: workspacePathAt(stateRoot, this.agent),
         sessionDir,
         agentHome: join(root, "home"),

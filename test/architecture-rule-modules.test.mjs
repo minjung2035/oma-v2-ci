@@ -5,7 +5,6 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { sourceOf, withSourceSnapshot } from "../scripts/architecture/rules/shared.mjs";
-import { importRuleFindings } from "../scripts/architecture/rules/import-rules.mjs";
 import { transactionRuleFindings } from "../scripts/architecture/rules/transaction-rules.mjs";
 import { ownershipRuleFindings } from "../scripts/architecture/rules/ownership-rules.mjs";
 import { schemaDuplicationFindings } from "../scripts/architecture/rules/schema-duplication-rules.mjs";
@@ -40,7 +39,7 @@ const ownerMap = () => ({
   registryOwners: {
     method: { path: "packages/protocol/src/methods.ts", symbolTemplate: 'PUBLIC_METHODS["{mutation}"]' },
   },
-  requiredMutationDimensions: ["workflow", "persistence", "recovery", "cli", "tests"],
+  requiredMutationDimensions: ["workflow", "persistence", "recovery", "client", "tests"],
   recoveryStrategies: { "transaction-complete": "db", "physical-replay": "physical" },
   fanoutStages: ["method", "tests"],
   mutations: {
@@ -48,19 +47,11 @@ const ownerMap = () => ({
       workflow: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
       persistence: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
       recovery: { strategy: "transaction-complete", owners: [] },
-      cli: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
+      client: [{ path: "apps/oma/src/owner.ts", symbol: "run" }],
       tests: [{ path: "test/owner.test.ts", symbol: "oracle" }],
     },
   },
 });
-
-test("architecture imports rule accepts helper-based command orchestration", () => withFixture({
-  "apps/oma/src/cli/commands/send.ts": `import { readBody } from "../effects.js"; export const run = readBody;`,
-}, root => assert.deepEqual(importRuleFindings(root), [])));
-
-test("architecture imports rule rejects raw command I/O", () => withFixture({
-  "apps/oma/src/cli/commands/send.ts": `import { readFileSync } from "node:fs"; export const run = readFileSync;`,
-}, root => assert.ok(importRuleFindings(root).some(value => value.rule === "cli-command-import"))));
 
 test("architecture transaction rule accepts transaction-complete owner with no replay", () => withFixture({
   "implementation/mutation-owners.json": ownerMap(),
@@ -130,25 +121,35 @@ test("architecture contract-direction refuses implementation and internal-port a
   "packages/contracts/src/index.ts": 'export type Store = import("../../../src/ports/ledger.js").StorePort;',
 }, root => assert.equal(contractDirectionFindings(root).length, 2)));
 
-test("architecture effect ownership rule accepts dedicated effect, transport and exit owners", () => withFixture({
-  "apps/oma/src/cli/effects.ts": `import { readFileSync } from "node:fs"; export const read = readFileSync;`,
-  "apps/oma/src/cli/transport.ts": `import { existsSync } from "node:fs"; export const probe = existsSync;`,
-  "apps/oma/src/cli/exit.ts": `export const stop = () => process.exit(2);`,
+test("architecture effect ownership accepts injected effects and dedicated network owners", () => withFixture({
+  "apps/oma/src/runtime/input-effects.ts": `import { readFileSync } from "node:fs"; export const read = readFileSync;`,
+  "packages/client/src/transport.ts": `import { existsSync } from "node:fs"; export const probe = existsSync;`,
+  "packages/client/src/channel.ts": `import { connect } from "node:net"; export const dial = connect;`,
+  "packages/client/src/connection.ts": `import { Socket } from "node:net"; export const socket = Socket;`,
 }, root => assert.deepEqual(effectOwnershipFindings(root), [])));
 
-test("architecture effect ownership rule rejects raw I/O and exit outside owners", () => withFixture({
-  "apps/oma/src/cli/rogue.ts": `import { readFileSync } from "node:fs"; export const stop = () => { readFileSync('x'); process.exit(2); };`,
+test("architecture effect ownership rejects raw I/O and host termination in the client", () => withFixture({
+  "packages/client/src/rogue.ts": `import { readFileSync } from "node:fs"; export const stop = () => { readFileSync('x'); process.exit(2); };`,
 }, root => {
   const findings = effectOwnershipFindings(root);
-  assert.ok(findings.some(value => value.rule === "cli-effect-owner"));
-  assert.ok(findings.some(value => value.rule === "cli-exit-owner"));
+  assert.ok(findings.some(value => value.rule === "client-effect-owner"));
+  assert.ok(findings.some(value => value.rule === "client-process-exit"));
 }));
 
-/** V29A (WP29): the exit-owner rule's exact scope. It follows the spellings
+test("architecture effect ownership keeps network and concrete cache behind their owners", () => withFixture({
+  "packages/client/src/index.ts": `import { connect } from "node:net";
+import { RequestCache } from "../../../apps/oma/src/request-cache.js";`,
+}, root => {
+  const findings = effectOwnershipFindings(root);
+  assert.ok(findings.some(value => value.rule === "client-transport-owner"));
+  assert.ok(findings.some(value => value.rule === "client-request-cache-owner"));
+}));
+
+/** The client host-lifetime rule's exact scope. It follows the spellings
  * that reach the global `process.exit` without the literal call -- a reference,
  * element access, destructuring, `globalThis.process`, a `node:process` import --
  * and leaves alone what only looks similar. Arbitrary data flow is out of scope. */
-test("V29A: the exit-owner rule catches every spelling of process.exit it claims to", () => {
+test("client host-lifetime rule catches every supported process.exit spelling", () => {
   for (const [name, text] of [
     ["direct call", "export const stop = () => process.exit(2);"],
     ["reference", "export const stop = process.exit;"],
@@ -158,12 +159,12 @@ test("V29A: the exit-owner rule catches every spelling of process.exit it claims
     ["globalThis", "export const stop = () => globalThis.process.exit(2);"],
     ["module import", "import { exit } from 'node:process'; export const stop = () => exit(2);"],
     ["default module import", "import proc from 'process'; export const stop = () => proc.exit(2);"],
-  ]) withFixture({ "apps/oma/src/cli/rogue.ts": text }, root =>
-    assert.ok(effectOwnershipFindings(root).some(value => value.rule === "cli-exit-owner"), `${name} escaped the rule`));
+  ]) withFixture({ "packages/client/src/rogue.ts": text }, root =>
+    assert.ok(effectOwnershipFindings(root).some(value => value.rule === "client-process-exit"), `${name} escaped the rule`));
 });
 
-test("V29A: the exit-owner rule leaves alone what only looks like process.exit", () => withFixture({
-  "apps/oma/src/cli/similar.ts": [
+test("client host-lifetime rule leaves alone what only looks like process.exit", () => withFixture({
+  "packages/client/src/similar.ts": [
     "const app = { exit: (code: number) => code, process: { exit: () => 0 } };",
     "export const a = () => app.exit(2);",
     "export const b = () => app.process.exit();",
@@ -171,7 +172,6 @@ test("V29A: the exit-owner rule leaves alone what only looks like process.exit",
     "// process.exit(2) in a comment",
     "export const d = () => process.env.HOME;",
   ].join("\n"),
-  "apps/oma/src/cli/exit.ts": "export const stop = () => process.exit(2);",
 }, root => assert.deepEqual(effectOwnershipFindings(root), [])));
 
 /** REC-007: the rule that has to catch the next unfenced child.

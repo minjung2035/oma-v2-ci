@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { Store } from "@oma/storage";
 import { LifecycleModule as Lifecycle } from "@oma/lifecycle";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 
 /** Leaves, in `root`, one of every artifact a request makes before its
  * acceptance, as a broker that died before accepting would leave them. */
@@ -250,9 +250,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
     // transaction); an edit lands right after acceptance and would resolve a
     // child with fewer capabilities from then on.
     let resolutions = 0;
-    const lifecycle = createLifecycleModule(store, units,
-      { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
-      (_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief), mail);
+    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief)), mail);
     const receipt = await lifecycle.create({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, { name: "child", from: info.base, brief: "brief" }, "p0v10");
     assert.equal(receipt.state, "succeeded", "the accepted plan is completed with the spec it froze");
     assert.deepEqual([...JSON.parse(store.getAgent("child")!.specJson).capabilities].sort(), [...ALL_CAPS].sort());
@@ -360,8 +358,7 @@ test("P0-7: a draining broker removes its status view, so a view that is there i
   const f = await preparedFixture();
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   try {
     await broker.start();

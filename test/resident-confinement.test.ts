@@ -16,14 +16,13 @@ import { RunnerModule } from "#oma-test/app/runner";
 import { RESIDENT_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "@oma/engine/pi-spawn-plan";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
-import { containWorkspaceTools, createContainedWriter } from "@oma/tool-runtime/contained-tools";
+import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
 import { principalEnvironment, sessionEnv } from "@oma/engine/principal-session";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentProjectGit } from "@oma/domain/resident-paths";
 import { residentArgv } from "@oma/platform-linux/sandbox";
 import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 import { decodeRunLease } from "@oma/protocol/run-lease";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
-import { createEditToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const RESOURCES = Object.freeze({
   memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100,
@@ -68,13 +67,12 @@ function fixture(): Fixture {
     piCommand: process.execPath,
     piEntry: join(libdir, "engine", "cli.js"),
     coreExtension: join(libdir, "packages", "extension", "dist", "index.js"),
-    cli: join(libdir, "apps", "oma", "dist", "cli.js"),
     piAgentDir: join(stateRoot, "pi"),
     mailArchive: join(dirs.archive, "cur"),
     workerArchive: join(dirs.workerArchive, "cur"), projectGit: dirs.projectGit,
     socket: actorSocketPathAt(runRoot, actor, 1),
   });
-  for (const file of [paths.piEntry, paths.coreExtension, paths.cli]) writeFileSync(file, "export {};\n");
+  for (const file of [paths.piEntry, paths.coreExtension]) writeFileSync(file, "export {};\n");
   const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: paths.socket }, { actor, runRoot });
   const confinement: PiConfinement = {
     host: {
@@ -90,7 +88,7 @@ function fixture(): Fixture {
   };
   const adapterPaths = {
     piCommand: paths.piCommand, piArgs: [paths.piEntry], piAgentDir: paths.piAgentDir,
-    coreExtension: paths.coreExtension, cli: paths.cli,
+    coreExtension: paths.coreExtension,
     workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home,
     mailArchive: paths.mailArchive, workerArchive: paths.workerArchive, projectGit: paths.projectGit, batchView: dirs.view, socket: paths.socket,
   };
@@ -113,7 +111,7 @@ function missingConfinementAdapter(f: Fixture): PiAdapter {
     },
     paths: {
       piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
-      coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
+      coreExtension: f.paths.coreExtension!,
       workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
       mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
     },
@@ -131,7 +129,7 @@ test("F34/F35: Resident environment is deterministic, confined, and never inheri
     for (let i = 0; i < plan.args.length; i++)
       if (plan.args[i] === "--setenv") env[plan.args[i + 1]!] = plan.args[i + 2]!;
     assert.deepEqual(Object.fromEntries(["HOME", "PATH", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR", "SHELL", "USER", "LOGNAME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"].map(key => [key, env[key]])), {
-      HOME: "/home/agent", PATH: "/opt/oma/apps/oma/dist/libexec:/opt/oma-node:/home/agent/.local/bin:/usr/bin:/bin",
+      HOME: "/home/agent", PATH: "/opt/oma-node:/home/agent/.local/bin:/usr/bin:/bin",
       LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: "/tmp",
       SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent", XDG_DATA_HOME: "/home/agent/.local/share", XDG_RUNTIME_DIR: "/home/agent/.run",
     });
@@ -227,7 +225,7 @@ test("T113 the engine's system prompt is the role's, or the built-in Resident pr
         extensions: [] },
       paths: {
         piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
-        coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
+        coreExtension: f.paths.coreExtension!,
         workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
         mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
       },
@@ -291,7 +289,7 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
     writeFileSync(file, "export default function () {}\n");
     const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [{ path: file, sha256: "0".repeat(64) }] };
     const adapterPaths = { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
-      coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
+      coreExtension: f.paths.coreExtension!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
       agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket! };
     const plan = new PiAdapter(residentEngineEffects, { actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
       confinement: { ...f.confinement, host: { ...f.confinement.host, packages } } }).spawnPlan();
@@ -353,7 +351,8 @@ test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's
   try {
     const confined = f.adapter.spawnPlan();
     const engine = confined.args.slice(confined.args.lastIndexOf("--") + 1);
-    assert.equal(engine.includes("--exclude-tools"), false, "the confined Resident cannot run the commands its START names");
+    const excluded = engine.includes("--exclude-tools") ? engine[engine.indexOf("--exclude-tools") + 1]!.split(",") : [];
+    assert.equal(excluded.includes("bash"), false, "the confined Resident must retain its development shell");
     assert.ok(confined.args.includes(`${TOOL_SCOPE_ENV}=${TOOL_SCOPE_SANDBOX}`) ||
       confined.args.some((arg, i) => arg === "--setenv" && confined.args[i + 1] === TOOL_SCOPE_ENV && confined.args[i + 2] === TOOL_SCOPE_SANDBOX),
       "the confined engine was not told it runs in the sandbox");
@@ -406,7 +405,7 @@ test("C18 / PR-004: a host engine's reads reach the package store its argv adver
     assert.equal(guard({ toolName: "read", input: { path: join(store, "..", "host.txt") } })?.block, true);
     // Writes and edits stay inside the workspace: the store is read-only.
     assert.equal(guard({ toolName: "write", input: { path: join(store, "npm", "pkg", "new.md"), content: "x" } })?.block, true);
-    assert.equal(guard({ toolName: "edit", input: { path: join(store, "npm", "pkg", "skills", "roll", "SKILL.md") } })?.block, true);
+    assert.equal(guard({ toolName: "replace", input: { path: join(store, "npm", "pkg", "skills", "roll", "SKILL.md") } })?.block, true);
     // A link inside the store cannot smuggle a host path into the read set.
     symlinkSync(outside, join(store, "npm", "pkg", "link.md"));
     assert.equal(guard({ toolName: "read", input: { path: join(store, "npm", "pkg", "link.md") } })?.block, true);
@@ -453,35 +452,6 @@ test("PathView policy adapter keeps the issued spawn view for the returned sessi
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-/** AV25 -- BATCH-006, TSP-009: the seventh functional run. A Resident's edit of
- * a 35 KB workspace was refused "agent workspace quota would be exceeded"
- * under a 2 GiB quota. Since the engine update (ENG1) the edit tool takes
- * `edits: [{ oldText, newText }]`, and the guard read the older top-level
- * `newText`: every edit, by every agent, was refused. P0V-122 (G10-03): the
- * guard no longer decides the quota at all; the contained write, its one
- * owner, decides it from the edit's exact growth. */
-test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth at the write, whatever form the model sent", async () => {
-  const workspace = mkdtempSync(join(tmpdir(), "oma-av25-"));
-  try {
-    writeFileSync(join(workspace, "a.txt"), `one\ntwo\n${"z".repeat(900)}\n`);
-    const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<unknown> }> = {};
-    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, true);
-    const edit = (params: Record<string, unknown>): Promise<unknown> => tools.edit!.execute("call", params, undefined, undefined, { cwd: workspace });
-    let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
-    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, true);
-    const tool = createEditToolDefinition(workspace);
-    // Both forms a model may send reach the guard as the engine prepares them, and pass it.
-    for (const raw of [{ path: "a.txt", edits: [{ oldText: "one", newText: "uno" }, { oldText: "two", newText: "dos" }] },
-      { path: "a.txt", oldText: "one", newText: "uno" }])
-      assert.equal(handler!({ toolName: "edit", input: tool.prepareArguments!(raw) as Record<string, unknown> }), undefined);
-    await edit({ path: "a.txt", edits: [{ oldText: "one", newText: "uno" }] });
-    // Replacing 900 bytes with 900 others grows nothing: it fits a workspace near its quota.
-    await edit({ path: "a.txt", edits: [{ oldText: "z".repeat(900), newText: "y".repeat(900) }] });
-    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\ntwo\ny{900}\n$/);
-    await edit({ path: "a.txt", edits: [{ oldText: "two", newText: "x".repeat(2048) }] });
-    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\nx{2048}\n/, "large edits retain their content");
-  } finally { rmSync(workspace, { recursive: true, force: true }); }
-});
 
 // Required-name prefix restored (see AV13 above): w11 made confinement
 // unconditional, so "reaches at the host path when not [sealed]" became
@@ -549,7 +519,7 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
   const runnerPaths = {
     runRoot: join(f.root, "run"), stateRoot: f.stateRoot, society: "s",
     piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
-    coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
+    coreExtension: f.paths.coreExtension!,
     confinement: {  libdir: f.libdir, node: "/usr/bin/node",
        },
   };

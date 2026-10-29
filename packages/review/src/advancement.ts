@@ -48,7 +48,8 @@ export class ReviewAdvancement {
             main ??= this.effects.main();
             if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
             const stale = main.kind === "present" && main.value !== state.identity.expectedBase;
-            if (!state.ready && !stale && (state.approval === null || state.approvalValid)) this.repairChallenge(open);
+            if (!state.ready && !stale && (state.approval === null || state.approvalValid) &&
+                planEffects(state, state).approve === null) this.repairChallenge(open);
             else {
               // Only discovery is shared. Re-read live authority inside the
               // request, then discard the main observation after every await.
@@ -90,7 +91,7 @@ export class ReviewAdvancement {
       if (main.kind === "present" && main.value !== state.identity.expectedBase) {
         await this.acceptRefresh(open, state, main.value);
         state = reviewState(this.ledger.inputFor(open));
-      } else if (state.approval !== null && !state.approvalValid) {
+      } else if ((state.approval !== null && !state.approvalValid) || planEffects(state, state).approve !== null) {
         await this.acceptRefresh(open, state, null);
         state = reviewState(this.ledger.inputFor(open));
       }

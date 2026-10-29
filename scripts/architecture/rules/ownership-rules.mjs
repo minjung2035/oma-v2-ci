@@ -21,7 +21,7 @@ export function ownershipRuleFindings(root) {
       if (!Object.hasOwn(spec, dimension))
         findings.push(finding("mutation-owner-dimension", file, `${mutation} is missing ${dimension}`));
     }
-    for (const dimension of ["workflow", "persistence", "cli", "tests"]) {
+    for (const dimension of ["workflow", "persistence", "client", "tests"]) {
       const owners = spec[dimension];
       if (!Array.isArray(owners) || owners.length === 0) {
         findings.push(finding("mutation-owner-empty", file, `${mutation}.${dimension} must name at least one owner`));

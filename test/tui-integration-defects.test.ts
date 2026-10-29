@@ -9,7 +9,7 @@ import type { HostConfig } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { configurationLayout as layoutOf, readConfigurationSource } from "@oma/config/operations";
-import { encodeToolSurfacePlan } from "@oma/domain/tool-surface";
+import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
 import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 import { PRINCIPAL_MODEL, WORKER_MODEL, commitField, readSettings, } from "#oma-test/app/application/settings";
 import { PACKAGE_STORE_ENV, principalEnvironment, projectEvent, sessionArgv, sessionEnv } from "@oma/engine/principal-session";
@@ -17,6 +17,8 @@ import { principalSessionProfile } from "#oma-test/app/engine/principal-profile"
 import { PACKAGE_STORE_ENV as GUARD_PACKAGE_STORE_ENV } from "@oma/tool-runtime/workspace-guard";
 import { PRINCIPAL_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
 import { loadConfiguration } from "@oma/config";
+import { PrincipalSession } from "@oma/engine/principal-session";
+import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
 import { assertExtensionIntegrity } from "#oma-test/app/runtime/extension-integrity";
 import { verifiedPaths } from "@oma/domain/extension-paths";
@@ -33,15 +35,12 @@ function bundle(root: string): string {
     writeFileSync(join(libdir, CORE), "export {};\n");
     writeFileSync(join(libdir, "extensions", "review.js"), "export {};\n");
     writeFileSync(join(root, "prompt.md"), "");
-    const host: Partial<HostConfig> = {
-        schemaVersion: 4,
-        society: "demo",
-        installation: { node: process.execPath, libdir,  deploymentDigest: digest("d") },
-        principalProfile: "principal",
-        initialResidents: [{ name: "a", profile: "resident", brief: "seed" }],
-        integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
-        limits: { frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576, batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1 }
-    };
+    const host: Partial<HostConfig> = {schemaVersion: 4, maxWorkers: 6, society: "demo",
+    installation: { node: process.execPath, libdir,  deploymentDigest: digest("d") },
+    principalProfile: "principal",
+    initialResidents: [{ name: "a", profile: "resident", brief: "seed" }],
+    integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
+    limits: { frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576, batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1 }};
     writeFileSync(join(root, "host.json"), JSON.stringify(host, null, 2));
     writeFileSync(join(root, "models.json"), JSON.stringify({
         cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
@@ -195,10 +194,9 @@ test("D23/TSP-005: a stray ambient OMA_TOOL_SURFACE never reaches the Principal'
     // The plan channel is runner→Resident plumbing only. A malformed plan would
     // exit(1) the host engine at session_start; a crafted-valid one would narrow
     // its tools -- the inherited environment must carry neither.
-    const crafted = encodeToolSurfacePlan({
-        version: 1, defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"],
-        grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
-    });
+    const crafted = encodeToolSurfacePlan(planToolSurface({
+        defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"], optional: ["fetch"],
+    }));
     for (const ambient of ["{not json", crafted]) {
         const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", OMA_TOOL_SURFACE: ambient }, {
             society: "demo", provider: "pi", model: "current", extensions: [],
@@ -238,94 +236,92 @@ test("the Principal session is built from its role, not from defaults", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-interface FakeHost {
-    setActiveTools(names: string[]): void;
-    getActiveTools(): string[];
-    getAllTools(): {
-        name: string;
-    }[];
-    registerTool(tool: unknown): void;
-    on(event: string, handler: () => void): void;
-}
-function fakeHost(overrides: Partial<FakeHost> = {}): FakeHost & {
-    active: string[];
-    registered: string[];
-    start(): void;
-} {
-    const state = { active: ["read", "fetch", "danger"], registered: [] as string[] };
-    const handlers: Array<() => void> = [];
-    const host = {
-        ...state,
-        setActiveTools(names: string[]) { state.active = [...names]; },
-        getActiveTools() { return [...state.active]; },
-        getAllTools() { return ["read", "fetch", "danger", "oma_mail_read"].map(name => ({ name })); },
-        registerTool(tool: unknown) { state.registered.push((tool as {
-            name: string;
-        }).name); },
-        // The engine rejects action methods during extension loading, so the
-        // projection runs from this handler, not from registration.
-        on(event: string, handler: () => void) { if (event === "session_start")
-            handlers.push(handler); },
-        start() { for (const handler of handlers)
-            handler(); },
+
+test("explicit Principal thinking survives configuration and the actual child launch", async () => {
+    const root = scratch("oma-principal-thinking-");
+    try {
+        const configPath = bundle(root);
+        for (const [provider, model, thinking] of [
+            ["p", "strong", "high"], ["p", "strong", "off"], ["p", "strong", undefined],
+            ["pi", "current", undefined], ["pi", "current", "high"],
+        ] as const) {
+            writeFileSync(join(root, "models.json"), JSON.stringify({
+                cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
+                strong: { provider, model, inferenceTimeoutSeconds: 1, ...(thinking === undefined ? {} : { thinking }) },
+            }));
+            const profile = principalSessionProfile(configPath, "demo");
+            assert.equal(profile.thinking, thinking);
+            const capture = join(root, "argv.json"), workspace = join(root, "work"), sessions = join(root, "sessions");
+            mkdirSync(workspace, { recursive: true }); mkdirSync(sessions, { recursive: true });
+            const session = PrincipalSession.start(engineStartEffects, {
+                piCommand: process.execPath, piArgs: ["--input-type=module", "-e",
+                    'import {writeFileSync} from "node:fs";writeFileSync(process.env.CAPTURE,JSON.stringify(process.argv.slice(1)));', "--"],
+                coreExtension: join(root, "lib", CORE), sessionDir: sessions, workspace, home: root,
+            }, profile, { frameBytes: 262144, idleStreamSeconds: 5, receiptWaitSeconds: 5 },
+            { HOME: root, PATH: "/usr/bin:/bin", CAPTURE: capture }, {
+                onLine() {}, onBusy() {}, onEnd() {}, onPromptFailed() {},
+            });
+            try { await session.exited; }
+            finally { session.close(); }
+            const argv: string[] = JSON.parse(readFileSync(capture, "utf8"));
+            assert.equal(argv.includes("--thinking"), thinking !== undefined);
+            if (thinking !== undefined) assert.equal(argv[argv.indexOf("--thinking") + 1], thinking);
+            assert.equal(argv.includes("--model"), provider !== "pi" || model !== "current");
+        }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});
+function fakeSurfaceHost(overrides: {
+    setActiveTools?: (names: string[]) => void;
+    getAllTools?: () => unknown[];
+} = {}) {
+    let active = ["read", "fetch", "danger"];
+    const tools = new Map<string, unknown>(["read", "fetch", "danger"].map(name =>
+        [name, { name, description: name, parameters: {} }]));
+    const handlers = new Map<string, (event: unknown, context: unknown) => unknown>();
+    return {
+        setActiveTools(names: string[]) { active = [...names]; },
+        getActiveTools() { return [...active]; },
+        getAllTools() { return [...tools.values()]; },
+        registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
+        on(event: string, handler: (event: unknown, context: unknown) => unknown) { handlers.set(event, handler); },
+        start() { return handlers.get("session_start")?.({}, { sessionManager: { getBranch: () => [] } }); },
+        blocked(name: string) {
+            const result = handlers.get("tool_call")?.({ toolName: name }, {});
+            return typeof result === "object" && result !== null && "block" in result && result.block === true;
+        },
         ...overrides,
-    };
-    Object.defineProperty(host, "active", { get: () => state.active });
-    Object.defineProperty(host, "registered", { get: () => state.registered });
-    return host as FakeHost & {
-        active: string[];
-        registered: string[];
-        start(): void;
     };
 }
 test("the tool surface fails closed when the host refuses to apply it", () => {
-    const plan = encodeToolSurfacePlan({
-        version: 1, defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"],
-        grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
-    });
-    // The real `fatal` ends the engine process; here it throws so the test host survives.
+    const plan = encodeToolSurfacePlan(planToolSurface({
+        defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"], optional: ["fetch"],
+    }));
+    // The real fatal ends the engine; throwing lets us also inspect its effect fence.
     const fatal = (message: string): never => { throw new Error(message); };
     const previous = process.env.OMA_TOOL_SURFACE;
     try {
         process.env.OMA_TOOL_SURFACE = plan;
-        const refusing = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
-        // Loading must succeed: an extension that throws while loading never loads.
-        assert.doesNotThrow(() => registerToolSurface(refusing as never, ["oma_mail_read"], { fatal }));
-        assert.throws(() => refusing.start(), /could not be applied/, "a refused projection must not be swallowed");
-        // A malformed plan must also fail loudly rather than leaving the surface as is.
-        process.env.OMA_TOOL_SURFACE = "{not json";
-        const malformed = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
-        registerToolSurface(malformed as never, ["oma_mail_read"], { fatal });
-        assert.throws(() => malformed.start(), /malformed/);
-        // An unreadable active set must never be treated as empty.
+        const refusing = fakeSurfaceHost({ setActiveTools() { throw new Error("host refused"); } });
+        assert.doesNotThrow(() => registerToolSurface(refusing as never, [], { fatal }));
+        assert.throws(() => refusing.start(), /host refused/);
+        assert.equal(refusing.blocked("read"), true,
+            "a host that refuses deactivation must still be fenced at the effect boundary");
+
+        for (const malformedPlan of ["{not json", JSON.stringify({ version: 1 })]) {
+            process.env.OMA_TOOL_SURFACE = malformedPlan;
+            const malformed = fakeSurfaceHost();
+            registerToolSurface(malformed as never, [], { fatal });
+            assert.throws(() => malformed.start(), /malformed/);
+            assert.deepEqual(malformed.getActiveTools(), []);
+            assert.equal(malformed.blocked("read"), true);
+        }
+
         process.env.OMA_TOOL_SURFACE = plan;
-        const blind = fakeHost({ getAllTools() { throw new Error("no registry"); } });
-        registerToolSurface(blind as never, ["oma_mail_read"], { fatal });
-        assert.throws(() => blind.start(), /could not read the registered tools/);
-    }
-    finally {
-        if (previous === undefined)
-            delete process.env.OMA_TOOL_SURFACE;
-        else
-            process.env.OMA_TOOL_SURFACE = previous;
-    }
-});
-test("the tool surface applies the projection when the host accepts it", () => {
-    const previous = process.env.OMA_TOOL_SURFACE;
-    try {
-        process.env.OMA_TOOL_SURFACE = encodeToolSurfacePlan({
-            version: 1, defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"],
-            grouped: ["fetch"], groups: [{ name: "web", description: "web", children: ["fetch"] }], roots: ["web"],
-        });
-        const host = fakeHost();
-        registerToolSurface(host as never, ["oma_mail_read"], { fatal: message => { throw new Error(message); } });
-        assert.deepEqual(host.registered, [], "groups cannot overwrite tools before the complete registry is known");
-        assert.deepEqual(host.active, ["read", "fetch", "danger"], "loading must not touch the active set");
-        host.start();
-        assert.deepEqual(host.registered, ["web"]);
-        assert.deepEqual(host.active, ["oma_mail_read", "read", "web"]);
-        assert.ok(!host.active.includes("danger"));
-        assert.ok(!host.active.includes("fetch"));
+        const blind = fakeSurfaceHost({ getAllTools() { throw new Error("no registry"); } });
+        registerToolSurface(blind as never, [], { fatal });
+        assert.throws(() => blind.start(), /no registry/);
+        assert.deepEqual(blind.getActiveTools(), []);
+        assert.equal(blind.blocked("read"), true);
     }
     finally {
         if (previous === undefined)

@@ -82,6 +82,7 @@ function fixture() {
     review: null,
 git: null,
     lifecycle: {
+      creation: unused,
       create: async () => unused(),
       start: unused,
       stop: unused,

@@ -84,17 +84,14 @@ test("the shared params decoder is closed and consumes the caller's host limits"
 });
 
 function configFixture() {
-  return {
-    schemaVersion: 4,
-    society: "example",
-    installation: { node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) },
-    modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null } },
-    principalProfile: "resident",
-    initialResidents: [{ name: "alice", profile: "resident", brief: "brief" }],
-    integration: { policyRevision: "test", protectedPaths: [], checks: [] },
-    limits
-};
+  return {schemaVersion: 4, maxWorkers: 6, society: "example",
+  installation: { node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) },
+  modelProfiles: { model: { provider: "test", model: "test", inferenceTimeoutSeconds: 1 } },
+  agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null } },
+  principalProfile: "resident",
+  initialResidents: [{ name: "alice", profile: "resident", brief: "brief" }],
+  integration: { policyRevision: "test", protectedPaths: [], checks: [] },
+  limits};
 }
 
 test("integration rejects unknown keys and initial residents reject a repeated name", () => {

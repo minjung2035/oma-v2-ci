@@ -14,7 +14,7 @@ import { WorkspaceCoordinator } from "@oma/git/workspace";
 import { LifecyclePolicy } from "@oma/lifecycle/policy";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
-import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { withWorkerCapacity, makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { StoreError, publicFailure } from "@oma/domain/errors";
 
@@ -122,7 +122,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
   const units = new PolicyExecution();
   let unitPublications = 0;
   units.ensureResident = () => { unitPublications++; throw new Error("unit publication must not be reached after revocation"); };
-  const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
   const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
   let work: Promise<unknown> | undefined;
   try {
@@ -160,7 +160,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       const units = new PolicyExecution();
       // Stop after the workspace: this is about what the preparation left.
       units.ensureResident = () => { throw new Error("stop after the workspace"); };
-      const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+      const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
       const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
       await creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-origin").catch(() => undefined);
       const accepted = f.store.getOperation("a", "create-origin");

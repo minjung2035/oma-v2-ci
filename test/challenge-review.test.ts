@@ -100,7 +100,6 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(existsSync(mailInboxPathAt(f.root, "bob", thread.id, "new")), true);
     const body = messageText(f.root, thread.id);
     assert.match(body, /Target merge: merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/);
-    assert.match(body, /oma_challenge diff name=challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12} view=revert\|original/);
     // One approval is not enough (highPeerFloor = 2); requester cannot vote.
     await assert.rejects(f.vote("alice", chName, "approve", "mine"), { code: "SELF_REVIEW" });
     await f.vote("bob", chName, "approve", "revert it", "v1");
@@ -115,7 +114,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(f.stateOf(chName).display, "applied");
     // The original merge stays applied.
     assert.equal(f.stateOf(name).display, "applied");
-    const mergeStatus = f.reviews.status(f.auth("dave"), name, 64 * 1024, "s1");
+    const mergeStatus = f.reviews.status(f.auth("dave"), { name: name }, 64 * 1024, "s1");
     assert.ok("entries" in mergeStatus); assert.equal(mergeStatus.display, "applied");
     assert.equal(mergeStatus.entries.at(-1)?.kind, "challenge.open", "the challenge is an entry of its merge");
     // The completion notice: revert title, target line, revert diff.
@@ -132,7 +131,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     const retried = await f.vote("carol", chName, "approve", "revert it", "v2");
     assert.equal(retried.operation, applying.operation);
     assert.equal(f.store.attestations.all().filter(r => r.operation.actor === "carol").length, 1);
-    const status = f.reviews.status(f.auth("dave"), chName, 64 * 1024, "s2");
+    const status = f.reviews.status(f.auth("dave"), { name: chName }, 64 * 1024, "s2");
     assert.ok("entries" in status);
     assert.deepEqual(status.target, { name, integration: f.applyOp("alice", "open-m")!.id,
       identity: openFact(f, chName).target.identity });

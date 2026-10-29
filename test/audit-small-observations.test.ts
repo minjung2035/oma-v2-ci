@@ -1,14 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execFile, spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { createServer } from "node:net";
-import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
-import { receiptExit, receiptLines } from "@oma/protocol/receipts";
+import { receiptExit } from "@oma/protocol/receipts";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { generateOperationId } from "@oma/native/identity";
 import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
@@ -19,21 +15,8 @@ import type { MailHeaderExpectation } from "#oma-test/app/diagnostics/mail";
 test("NB-28: receipt presentation cannot invent a failed outcome without a failure", () => {
   const invalid = { operation: generateOperationId(), state: "failed" as const };
   assert.throws(() => receiptExit(invalid), /failed receipt.*failure/);
-  assert.throws(() => receiptLines(invalid, "original"), /failed receipt.*failure/);
 });
 
-for (const action of ["finishReceipt", "finishUnrecordedReceipt"] as const) {
-  test(`NB-28: ${action} refuses a failed receipt without error as unknown`, () => {
-    const exits = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/cli/exit")));
-    const result = spawnSync(process.execPath, ["--input-type=module", "-e",
-      `import { ${action} } from ${JSON.stringify(exits)}; ${action}({operation:${JSON.stringify(generateOperationId())},state:'failed'}, 'original', 'cache unavailable', false);`],
-    { encoding: "utf8", timeout: 5000 });
-    assert.equal(result.status, 3, result.stderr);
-    assert.match(result.stderr, /invalid.*receipt/);
-    assert.match(result.stderr, /--request original/);
-    assert.doesNotMatch(result.stdout, /Failed:\?/);
-  });
-}
 
 test("NB-28: immutable mail over the production header bound is corrupt, observation budget stays unknown", t => {
   const home = mkdtempSync(join(tmpdir(), "oma-nb28-header-"));

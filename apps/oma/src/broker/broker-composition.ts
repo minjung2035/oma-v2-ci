@@ -84,7 +84,10 @@ export function createBroker(input: BrokerComposition): Broker {
       bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
     views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => views.publishStatus(snapshot, agents),
       observeRunnerSource: read => views.observeRunnerSource(read) }),
-    reconcile: reconcile === null ? null : Object.freeze({ sweep: () => reconcile.sweep() }),
+    reconcile: reconcile === null ? null : Object.freeze({
+      sweep: () => reconcile.sweep(), wait: (actor: string, incarnation: number) => reconcile.wait(actor, incarnation),
+      deferredWork: (actor: string, incarnation: number) => reconcile.deferredWork(actor, incarnation),
+    }),
     status: Object.freeze({ request: () => status.request() }),
     public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits),
     internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot),

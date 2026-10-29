@@ -1,4 +1,4 @@
-/** IPC-006/008: stable CLI intent, with no file reads or revision resolution. */
+/** IPC-006/008: frozen request intent, without source reads or revision resolution. */
 import type { MutationMethod } from "@oma/contracts";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { firstRequestProjectionMismatch } from "@oma/domain/request-identity";

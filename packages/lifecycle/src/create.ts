@@ -56,6 +56,8 @@ export class CreateCoordinator {
       }
       return;
     }
+    if (config.initialResidents.length > config.maxWorkers)
+      throw new StoreError("LIMIT_EXCEEDED", "initial Workers exceed the configured Worker capacity");
     const mail = this.requireMail();
     const from = this.workspace.canonicalMain();
     const principal = resolve("principal", config.principalProfile, "Principal", from);
@@ -121,6 +123,7 @@ export class CreateCoordinator {
       if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
       return this.settleLinked(id, original.id, input.name);
     }
+    this.policy.assertWorkerCapacity();
     this.workspace.assertCanonicalBase(input.from);
     // P0V-26: refused before acceptance, rather than accepted and then unable
     // to install its units.
@@ -149,6 +152,7 @@ export class CreateCoordinator {
             payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(linked) });
           return { outcome, linked: original.id };
         }
+        this.policy.assertWorkerCapacity();
         const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
         if (outcome === "inserted") {

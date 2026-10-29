@@ -235,7 +235,7 @@ async function main(): Promise<void> {
             developerTools = await toolPreparation;
             if (stopping !== null) { await stopping; return; }
         }
-        const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
+        const integrationPolicy = integrationPolicyFromConfig(cfg);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
         const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
         lifetime.retainStore(() => store.close());
@@ -254,7 +254,7 @@ async function main(): Promise<void> {
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
             () => executionOwner.confirmDead("candidate"));
-        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
+        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
             bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();
         const lifecycle = createLifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,

@@ -79,11 +79,12 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
     const root = mkdtempSync(join(tmpdir(), "oma-env-live-"));
     let child: ReturnType<typeof spawnSandboxed> | undefined;
     try {
-        const options = residentOptions(root, process.cwd(), join(process.cwd(), "apps/oma/dist/cli.js"));
+        const options = residentOptions(root, process.cwd(), join(process.cwd(), "packages/extension/dist/index.js"));
         prepareResident(options);
         const bin = join(options.paths.agentHome, ".local/bin");
         mkdirSync(bin, { recursive: true });
         writeFileSync(join(bin, "local-probe"), "#!/bin/sh\nprintf local-ok\n", { mode: 0o700 });
+        writeFileSync(join(options.paths.batchView, "inbox.md"), "# Delivery index\nTyped tool archive view\n");
         const layout = hostSystemLayout();
         const targets = layout.binds.filter(path => SUPPORT_PATHS.includes(path));
         const before = targets.filter(path => statSync(path).isFile()).map(path => [path, readFileSync(path).toString("base64")] as const);
@@ -94,17 +95,23 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
             assert.equal(lstatSync(join(residentRootfsPath(options.confinement.host.stateRoot!), path)).isSymbolicLink(), false);
         }
         const body = `
+      import { createRequire } from 'node:module';
+      import { registerOmaTools } from '${RESIDENT_PATHS.libdir}/packages/extension/dist/mail-tools.js';
+      const require = createRequire(import.meta.url);
       const fs = require('fs'), cp = require('child_process');
       const paths = ${JSON.stringify(targets)};
       const files = paths.map(path => { let writable = false; try { fs.accessSync(path, fs.constants.W_OK); writable = true; } catch {} return [path, writable]; });
-      console.log(JSON.stringify({ env: process.env, user: require('os').userInfo(), files,
+      const tools = new Map();
+      registerOmaTools({ registerTool: tool => tools.set(tool.name, tool) }, process.cwd());
+      const mail = await tools.get('oma_mail_read').execute('sandbox-mail-read', { messageId: '/inbox.md' });
+      console.log(JSON.stringify({ env: process.env, user: require('os').userInfo(), files, mail: mail.content[0].text,
         locale: cp.execFileSync('/usr/bin/locale', ['charmap'], { encoding: 'utf8' }).trim(),
         local: cp.execFileSync('/bin/sh', ['-c', 'local-probe'], { encoding: 'utf8' }),
         routes: fs.readFileSync('/proc/net/route', 'utf8').trim().split('\\n').length,
         modes: ['XDG_DATA_HOME', 'XDG_RUNTIME_DIR'].map(key => fs.statSync(process.env[key]).mode & 511),
         tmp: (() => { fs.writeFileSync(process.env.TMPDIR + '/probe', 'temp'); return fs.readFileSync('/tmp/probe', 'utf8'); })() }));
     `;
-        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "-e", body], plan.env, plan.input, plan.cwd);
+        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "--input-type=module", "-e", body], plan.env, plan.input, plan.cwd);
         let out = "", err = "";
         child.stdout.on("data", chunk => { out += String(chunk); });
         child.stderr.on("data", chunk => { err += String(chunk); });
@@ -122,6 +129,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         assert.equal(report.user.shell, "/bin/sh");
         assert.equal(report.locale, "UTF-8");
         assert.equal(report.local, "local-ok");
+        assert.equal(report.mail, "# Delivery index\nTyped tool archive view\n");
         assert.equal(report.tmp, "temp");
         assert.deepEqual(report.modes, [0o700, 0o700]);
         assert.ok(report.routes > 1, "the sandbox shares the host network");
@@ -203,7 +211,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
     const root = mkdtempSync(join(tmpdir(), "oma-dev-live-"));
     let child: ReturnType<typeof spawnSandboxed> | undefined;
     try {
-        const options = residentOptions(root, process.cwd(), join(process.cwd(), "apps/oma/dist/cli.js"));
+        const options = residentOptions(root, process.cwd(), join(process.cwd(), "packages/extension/dist/index.js"));
         prepareResident(options);
         const plan = new PiAdapter(residentEngineEffects, { ...options, profile: { ...options.profile } } as PiAdapterOptions).spawnPlan();
         // `timeout` bounds each step a missing editor would hang; 124 is that hang.
@@ -224,6 +232,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
             "out npmVersion \"$(timeout 60 npm --version 2>/dev/null)\"",
             "out npxVersion \"$(timeout 60 npx --version 2>/dev/null)\"",
             "out corepackVersion \"$(timeout 60 corepack --version 2>/dev/null)\"",
+            "oma status >/dev/null 2>&1; out modelCommand $?",
             "out cpus \"${OMA_CPUS-unset}\"",
         ].join("\n");
         child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), "/bin/sh", "-c", script], plan.env, plan.input, plan.cwd);
@@ -243,6 +252,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
         assert.match(report.npmVersion ?? "", /^\d+\.\d+\.\d+$/);
         assert.match(report.npxVersion ?? "", /^\d+\.\d+\.\d+$/);
         assert.match(report.corepackVersion ?? "", /^\d+\.\d+\.\d+$/);
+        assert.equal(report.modelCommand, "127", "the removed model command is not available");
         assert.equal(report.cpus, "unset");
     }
     finally {

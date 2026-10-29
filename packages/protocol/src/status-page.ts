@@ -2,13 +2,15 @@
 import type { AgentStatus, PublicMethods } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 
-export function statusPage(id: string, observedAtMs: number, rows: Iterable<AgentStatus>, frameBytes: number, after?: string) {
-  const result: PublicMethods["status.get"]["result"] = { observedAtMs, agents: [] };
+export function statusPage(id: string, observedAtMs: number, rows: Iterable<AgentStatus>, frameBytes: number,
+  creation: PublicMethods["status.get"]["result"]["creation"], after?: string) {
+  const result: PublicMethods["status.get"]["result"] = { observedAtMs, agents: [], creation };
   const answer = { v: 1 as const, id, ok: true as const, result };
   // The empty array is already included. Each row and separator adds only
   // its own bytes; the continuation field remains reserved exactly as before.
   // Re-encoding every growing prefix makes a burst of status reads quadratic.
   let encodedBytes = Buffer.byteLength(JSON.stringify(answer));
+  if (encodedBytes > frameBytes) throw new StoreError("FRAME_TOO_LARGE", "status metadata exceeds the response frame budget");
   const continuationPrefixBytes = Buffer.byteLength(',"next":');
   for (const row of rows) {
     if (after !== undefined && row.agent <= after) continue;

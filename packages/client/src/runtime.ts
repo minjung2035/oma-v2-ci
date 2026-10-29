@@ -41,11 +41,13 @@ export interface RuntimePort {
   notFound(receipt: Receipt): boolean;
   mutation(method: PublicMethod): boolean;
   collectReceipt(key: string, maximum: number, read: (part: PublicMethods["operation.read"]["params"]) => Promise<PublicMethods["operation.read"]["result"]>): Promise<Receipt>;
+  failure(error: unknown): Failure;
   failureText(failure: Failure): string;
   failureExit(failure: Failure): 2 | 3 | 4;
-  receiptText(receipt: Receipt, key: string): string;
+  receiptText(receipt: Receipt, key: string, phase?: "candidate-publication"): string;
   receiptExit(receipt: Receipt): 0 | 2 | 3 | 4;
-  goal(file: string, expected: string | null): PreparedContext;
+  goal(body: string, expected: string | null): PreparedContext;
+  context(directory: string): PreparedContext;
   reply(file: string, inheritSubject: boolean): { replyToMessage: string; inheritedSubject?: string };
   fullOid(value: unknown): value is string;
   resolveOid(revision: string): string;

@@ -12,12 +12,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
 import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
 import { runnerReceiptPathAt, workspacePathAt } from "@oma/domain/paths";
+import { readableBody } from "@oma/mail/display";
 
 import { RESIDENT_TEST_OPTIONS as TIMEOUT } from "./fixtures/resident.js";
 import { CONFINED_MODEL, CONFINED_MODEL_2, CONFINED_THINKING_MODEL } from "./fixtures/scripted-provider.js";
@@ -26,9 +27,10 @@ const lastResult = (request: ChatRequest | undefined): string => toolResults(req
 const noticed = (request: ChatRequest): string[] =>
   [...request.messages.map(textOf).join("\n").matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
 const receiptIn = (result: string): { operation: string; state: string; result?: { message?: string } } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at)) as { operation: string; state: string; result?: { message?: string } };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.request, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 /** The Principal sends one mail through the broker, as its tool would. */
 async function principalSends(s: Scenario, to: string[], subject: string, body: string, key: string): Promise<string> {
@@ -71,9 +73,10 @@ test("SCN-R02: a Resident is offered its own tools and not the Principal's", TIM
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const offered = (residentRequests(s)[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"]) assert.ok(offered.includes(name), `${name} missing`);
+    for (const name of ["oma_agent_create", "oma_agent_wait", "oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"])
+      assert.ok(offered.includes(name), `${name} missing`);
     assert.ok(offered.includes("bash"), "the confined Resident lost its sandbox shell");
-    for (const name of ["oma_agent_create", "oma_agent_lifecycle", "oma_context_publish", "oma_route"])
+    for (const name of ["oma_society", "oma_goal_publish", "oma_agent_control", "oma_context_publish"])
       assert.ok(!offered.includes(name), `${name} was offered to a Resident`);
     assert.match(lastResult(residentRequests(s)[1]!.body), /worker-a/);
   });
@@ -214,8 +217,9 @@ test("SCN-S03: mail that arrives while a Resident's run is going is left for its
 test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries retain identity and conflicting briefs refuse", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await principalSends(s, ["worker-a"], "Collaborate", "Create a peer.", "create-task");
-    const create = (brief: string, request: string) => tools(call("bash", { command:
-      `printf '%s' '${brief}' > brief.txt && oma agent create worker-n --from HEAD --file brief.txt --request ${request}` }));
+    const create = (brief: string, request: string) => tools(call("oma_agent_create", {
+      name: "worker-n", from: "HEAD", brief, request,
+    }));
     const creatorReplies = [create("Review the README.", "create-1"), create("Review the README.", "create-1"), create("Different task", "create-2"), text("Ready.")];
     let creatorStep = 0, childRead = false;
     const creatorRequests: ChatRequest[] = [];
@@ -237,11 +241,14 @@ test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries r
     const agent = s.store.getAgent("worker-n")!; assert.deepEqual([agent.desired, agent.createdBy], ["enabled", "worker-a"]);
     const [brief] = [...s.inbox("worker-n"), ...s.inbox("worker-n", "cur")]; assert.ok(brief, "the peer has no initial brief");
     const id = brief.replace(/:2,.*$/, "");
+    assert.equal(readableBody(s.archived(id)), "Review the README.");
     const deadline = Date.now() + 30_000;
     while ((!childRead || s.store.getDelivery(id, "worker-n")?.presented !== 1) && Date.now() < deadline)
       await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(childRead, true, "the automatically started first run did not read its brief");
     assert.equal(s.store.getDelivery(id, "worker-n")?.presented, 1);
+    const finished = await s.residentFinished("worker-n");
+    assert.equal(finished.execMainStatus, 0, JSON.stringify(finished));
     assert.equal(s.operations("worker-a").filter(row => row.kind === "agent.create" && row.state === "succeeded").length, 1);
     assert.equal(s.operations("principal").filter(row => row.kind === "agent.create").length, 0);
   });
@@ -261,8 +268,9 @@ test("NATIVE-SCN-01: accepted creation starts its first real Resident without a 
         }
         return tools(call("oma_mail_read", { messageId: brief }));
       }
-      return continuesTurn(request) ? text("Created.") : tools(call("bash", { command:
-        "printf '%s' 'Read the exact initial brief.' > auto-brief.txt && oma agent create worker-auto --from HEAD --file auto-brief.txt --request auto-create" }));
+      return continuesTurn(request) ? text("Created.") : tools(call("oma_agent_create", {
+        name: "worker-auto", from: "HEAD", brief: "Read the exact initial brief.", request: "auto-create",
+      }));
     });
     const creator = await s.activate("worker-a");
     assert.equal(creator.code, 0, creator.stderr);
@@ -274,16 +282,19 @@ test("NATIVE-SCN-01: accepted creation starts its first real Resident without a 
     assert.equal(operation.state, "succeeded");
     const [brief] = [...s.inbox("worker-auto"), ...s.inbox("worker-auto", "cur")];
     assert.ok(brief);
+    assert.equal(readableBody(s.archived(brief.replace(/:2,.*$/, ""))), "Read the exact initial brief.");
     const delivered = s.store.getDelivery(brief.replace(/:2,.*$/, ""), "worker-auto")!;
     assert.equal(delivered.presented, 1);
     assert.equal(s.store.getBatch(delivered.batchId!)?.state, "completed");
     assert.ok(existsSync(runnerReceiptPathAt(s.root, "worker-auto", delivered.batchId!)));
+    const finished = await s.residentFinished("worker-auto");
+    assert.equal(finished.execMainStatus, 0, JSON.stringify(finished));
   });
 });
 
 test("SCN-L06: a stopped Resident is not run; its mail waits; started again, its next run gets the mail", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    const lifecycle = (action: "start" | "stop", request: string) => tools(call("oma_agent_lifecycle", { name: "worker-a", action, request }));
+    const lifecycle = (action: "start" | "stop", request: string) => tools(call("oma_agent_control", { name: "worker-a", action, request }));
     s.script([lifecycle("stop", "stop-1"), text("멈췄습니다.")]);
     await s.prompt("worker-a 멈춰");
     assert.equal(s.store.getAgent("worker-a")?.desired, "stopped", lastResult(s.provider.seen[1]!.body));
@@ -339,7 +350,7 @@ test("SCN-X01: a Worker model changed in the configuration applies from the next
   });
 });
 
-test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers is loaded by a Worker's engine, its tool shown directly", TIMEOUT, async () => {
+test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers is selectable and executable on the next activation", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // The package store as the engine's package manager leaves it, beside every session.
     const packages = join(dirname(s.root), ".packages");
@@ -354,6 +365,9 @@ test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers i
     assert.equal((await s.activate("worker-a")).code, 0);
     const named = (index: number) => (residentRequests(s).at(index)!.body.tools ?? []).map(tool => tool.function?.name);
     assert.ok(!named(-1).includes("hello_ext"), "an extension no role chose was loaded");
+    const initialCatalog = residentRequests(s).at(-1)!.body.tools?.find(tool => tool.function?.name === "toolset");
+    assert.ok(!JSON.stringify(initialCatalog ?? {}).includes('"hello_ext"'),
+      "an extension no role chose was offered in the optional catalog");
     // Turned on for the Workers: the configuration names the store and the role names the package's file.
     const current = readSettings(s.configPath);
     writeSettings(s.configPath, { ...current.config, installation: { ...current.config.installation, packages } });
@@ -363,9 +377,26 @@ test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers i
     commitRoleSet(inline.snapshot!, inline.config, { ...roles, [worker]: { ...roles[worker]!, extensions: [...roles[worker]!.extensions, entry] } });
     await principalSends(s, ["worker-a"], "둘째", "확장 도구를 쓰세요", "p-x03b");
     await s.restartBroker();
-    s.script([text("둘째 완료")]);
-    assert.equal((await s.activate("worker-a")).code, 0);
-    assert.ok(named(-1).includes("hello_ext"), `the Worker's engine did not show the installed extension's tool: ${named(-1).join(", ")}`);
+    s.script((request, index) => {
+      if (index === 0) {
+        assert.ok(!(request.tools ?? []).some(tool => tool.function?.name === "hello_ext"),
+          "the installed optional tool was active before selection");
+        const catalog = request.tools?.find(tool => tool.function?.name === "toolset");
+        assert.ok(JSON.stringify(catalog ?? {}).includes('"hello_ext"'), "the installed tool was missing from the optional catalog");
+        return tools(call("toolset", { select: ["hello_ext"] }));
+      }
+      if (index === 1) {
+        assert.ok(request.tools?.some(tool => tool.function?.name === "hello_ext"),
+          "the selected extension was not active on the next turn");
+        return tools(call("hello_ext", {}, "installed-hello"));
+      }
+      assert.equal(toolResults(request).find(result => result.id === "installed-hello")?.text, "hello",
+        "the installed extension did not execute successfully");
+      return text("둘째 완료");
+    });
+    const run = await s.activate("worker-a");
+    assert.equal(run.code, 0, run.stderr);
+    assert.equal(toolResults(residentRequests(s).at(-1)!.body).find(result => result.id === "installed-hello")?.text, "hello");
   });
 });
 

@@ -46,8 +46,8 @@ const LAYERS = Object.freeze([
       "packages/tool-files/src/",
       "packages/protocol/src/",
       "packages/storage/src/",
-      "apps/oma/src/cli/cache-codec.ts",
-      "apps/oma/src/cli/request-intent.ts",
+      "apps/oma/src/runtime/request-cache-codec.ts",
+      "apps/oma/src/runtime/request-intent.ts",
       "packages/client/src/",
       "packages/mail/src/addresses.ts",
       "packages/mail/src/facts.ts",
@@ -101,8 +101,6 @@ const LAYERS = Object.freeze([
       "packages/platform-linux/src/",
       "packages/platform-mac/src/",
       "apps/oma/src/engine/",
-      "apps/oma/src/cli/effects.ts",
-      "apps/oma/src/cli/effects/",
       "apps/oma/src/runner.ts",
       "packages/platform-linux/src/sandbox.ts",
       // macOS host and hidden-VM guest services (docs/macos-platform.md):
@@ -118,10 +116,7 @@ const LAYERS = Object.freeze([
       "apps/oma/src/engine/presentation.ts",
       "apps/oma/src/engine/personal-composition.ts",
       "apps/oma/src/engine/personal-entry.ts",
-      "apps/oma/src/cli/",
-      "apps/oma/src/cli.ts",
-      // The product surface is an entry surface, like the model-facing CLI: it
-      // consumes lower layers and nothing below it imports the TUI.
+      // The product surface consumes lower layers; nothing below imports the TUI.
       "packages/tui/src/",
       // The trusted extension's parts; the entry above composes them and the
       // extension-closure rule keeps them free of OMA runtime imports.

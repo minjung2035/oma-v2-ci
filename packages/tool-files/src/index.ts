@@ -150,18 +150,30 @@ export function writeWithin(root: string, path: string, content: string | Buffer
  * on a paraphrase. */
 export const FILE_CHANGED_REFUSAL = "tool path resolves to a different file than the one read";
 
-/** The read-modify-write commit: opens the named file (no O_CREAT — a name
- * that is gone is a changed file, not a new one) and refuses before any
- * byte is written unless the opened inode is the exact dev+ino the caller
- * observed when it read. This is the check the bundled hashline runtime's
- * writeAtomic performs, moved inside the containment walk so the decision
- * is made on the opened file itself. */
-export function writeWithinUnchanged(root: string, path: string, content: string, expected: { dev: number; ino: number }): void {
-  const fd = openEntryWithin(root, path, constants.O_WRONLY);
+/** Inode identity for anchored edits, or exact input text for computed fixes. */
+export type WriteExpectation = { dev: number; ino: number } | { text: string };
+export const FILE_CONTENT_CHANGED_REFUSAL = "tool file contents changed since the fix was computed; recompute the fix";
+
+/** Open without O_CREAT and check the caller's expectation on that descriptor
+ * before truncation. Hashline retains its dev+ino identity semantics; computed
+ * fixes compare exact UTF-8 input bytes to detect in-place concurrent writes.
+ * The shared tool writer calls this inside its serialization boundary. */
+export function writeWithinUnchanged(root: string, path: string, content: string, expected: WriteExpectation): void {
+  const fd = openEntryWithin(root, path, "text" in expected ? constants.O_RDWR : constants.O_WRONLY);
   try {
     ownedFile(fd);
     const stat = fstatSync(fd);
-    if (stat.dev !== expected.dev || stat.ino !== expected.ino) throw new WorkspaceRefusal(FILE_CHANGED_REFUSAL);
+    if ("text" in expected) {
+      const bytes = Buffer.alloc(stat.size);
+      let filled = 0;
+      while (filled < bytes.length) {
+        const count = readSync(fd, bytes, filled, bytes.length - filled, filled);
+        if (count === 0) break;
+        filled += count;
+      }
+      if (!bytes.subarray(0, filled).equals(Buffer.from(expected.text, "utf8")))
+        throw new WorkspaceRefusal(FILE_CONTENT_CHANGED_REFUSAL);
+    } else if (stat.dev !== expected.dev || stat.ino !== expected.ino) throw new WorkspaceRefusal(FILE_CHANGED_REFUSAL);
     ftruncateSync(fd, 0);
     const bytes = Buffer.from(content, "utf8");
     for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at, bytes.length - at, at);

@@ -7,7 +7,7 @@ import { CandidateSetupStatus, decodeCandidateSetupStatus } from "@oma/git/candi
 import { snapshotIntegrationPolicy } from "@oma/domain/integration-policy";
 const host = { rootfs: "/tmp/oma-check/rootfs", node: process.execPath, libdir: "/tmp/oma-check/product" };
 const candidate = "a".repeat(40);
-const check = snapshotIntegrationPolicy({ policyRevision: "test", protectedPaths: [], checks: [{ id: "exact", argv: ["/bin/test", "literal $variable", "=", "literal $variable"], env: { CHECK: "selected" } }] }).checks[0]!;
+const check = snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: "test", protectedPaths: [], checks: [{ id: "exact", argv: ["/bin/test", "literal $variable", "=", "literal $variable"], env: { CHECK: "selected" } }]}).checks[0]!;
 test("INT-002: exact argv and inherited canonical capability without execution quotas", () => {
   const command = candidateSandbox(host, candidate, check, ["/usr", "/lib"]);
   assert.equal(command.executable, "/usr/bin/bwrap");

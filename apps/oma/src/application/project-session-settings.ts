@@ -1,5 +1,6 @@
 /** DR24/DR25: the settings and extension view of one live Society session. */
 import { CONFIGURATION_DOCUMENT_BYTES } from "@oma/config/operations";
+import { createHash } from "node:crypto";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { readPackageIndex } from "../runtime/packages/index.js";
 import { readUserFile } from "../runtime/user-files.js";
@@ -50,7 +51,11 @@ export class ProjectSessionSettings {
   private version(): string | null {
     // The managed pointer is small. Compare its actual bytes through the
     // existing inode-checked reader: equal mtime/size is not equal content.
-    try { return readUserFile(this.projectPath, CONFIGURATION_DOCUMENT_BYTES); } catch { return null; }
+    try {
+      const bytes = readUserFile(this.projectPath, CONFIGURATION_DOCUMENT_BYTES);
+      return bytes === null ? null : createHash("sha256").update(bytes).digest("hex");
+    }
+    catch { return null; }
   }
   changed(): boolean { const version = this.version(); return version === null || version !== this.snapshot.seen; }
 
@@ -62,7 +67,10 @@ export class ProjectSessionSettings {
     // A Human's --config parent is outside the OMA repair boundary.
     const derived = deriveSessionSettings(projectSettings, configPath, this.options.own(digest),
       externalConfig ? undefined : dataRoot);
-    return this.makeSnapshot(derived.settings, projectSettings, derived.missing, this.version());
+    // Use the pointer observed by the loader, not one read after derivation:
+    // a newer generation committed during own()/derivation still needs following.
+    const seen = projectSettings.snapshot?.sourceFiles.find(file => file.path === this.projectPath)?.sha256 ?? null;
+    return this.makeSnapshot(derived.settings, projectSettings, derived.missing, seen);
   }
 
   private makeSnapshot(current: Settings, projectSettings: Settings | null, leftOut: readonly string[],

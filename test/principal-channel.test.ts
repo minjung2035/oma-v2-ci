@@ -2,7 +2,7 @@
  *
  * The trusted extension uses the protocol's channel names and credential codec.
  * These tests exercise every line either end could see, and the extension's
- * reader and bounded mail read directly, plus the CLI's indifference to the
+ * reader and bounded mail read directly, plus the Client's indifference to the
  * credential-descriptor contract that no longer has a producer.
  */
 import { test } from "node:test";
@@ -20,7 +20,8 @@ import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_FD as HOST_PLACES } from 
 import { PrincipalChannel } from "@oma/extension/principal-channel";
 import { registerOmaTools } from "@oma/extension/mail-tools";
 
-import { runCliProcess } from "./fixtures/cli-child.js";
+import { runOwnedProcess } from "./fixtures/owned-process.js";
+import { clientProcessArgs } from "./fixtures/client-process.js";
 
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
@@ -155,20 +156,19 @@ test("T114: an engine started without the product's channel holds nothing", () =
   assert.equal(PrincipalChannel.open({ [HOST_CHANNEL_ENV]: "4" }).current(), null);
 });
 
-/** Runs the real CLI transport in a child that still has the removed
+/** Runs the real Client in a child that still has the removed
  * credential contract's environment declared, with `fd3` on descriptor 3.
  * The call can only fail on connecting: there is no broker at the path. */
-function cliCalls(fd3: "socket" | "none", line: string | null): Promise<string> {
-  const script = `
-    import { callActor } from ${JSON.stringify(join(process.cwd(), "apps/oma/dist/cli/transport.js"))};
-    try { await callActor("/nonexistent/socket", "status.get", {}); process.stdout.write("no error"); }
-    catch (error) { process.stdout.write(String(error.code ?? error.message) + ":" + String(error.message)); }
-  `;
+function clientCalls(fd3: "socket" | "none", line: string | null): Promise<string> {
+  const expression = `(async () => {
+    try { await client.query("status.get", {}); return "no error"; }
+    catch (error) { return String(error.code ?? error.message) + ":" + String(error.message); }
+  })()`;
   const stdio: ("ignore" | "pipe" | "inherit")[] = ["ignore", "pipe", "inherit"];
   if (fd3 === "socket") stdio.push("pipe");
   return new Promise(resolve => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", script],
-      { env: { PATH: "/usr/bin:/bin", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio });
+    const child = spawn(process.execPath, clientProcessArgs(expression),
+      { env: { PATH: "/usr/bin:/bin", OMA_SOCKET: "/nonexistent/socket", OMA_PRINCIPAL_CREDENTIAL_FD: "3" }, stdio });
     if (fd3 === "socket") {
       const socket = child.stdio[3] as unknown as { end(text?: string): void; on(event: string, fn: () => void): void };
       socket.on("error", () => {});
@@ -180,14 +180,13 @@ function cliCalls(fd3: "socket" | "none", line: string | null): Promise<string> 
   });
 }
 
-test("T114/E27: a credential descriptor named in the environment is not this CLI's credential", async () => {
-  // The contract is dead -- nothing hands a CLI process a credential; the
-  // Principal's lives in the engine's PrincipalChannel. An environment that
-  // still declares the descriptor is ignored outright, well-formed line or
-  // not, so the call fails only on connecting and never with AUTH_FAILED.
+test("T114/E27: a credential descriptor named in the environment is not the Client's credential", async () => {
+  // The Principal's credential lives in the engine's PrincipalChannel.
+  // A leftover descriptor declaration is ignored outright, well-formed line
+  // or not, so the call fails only on connecting and never with AUTH_FAILED.
   for (const line of [`credential ${CREDENTIAL} ${HANDLE}\n`, "not a channel message\n", ""])
-    assert.match(await cliCalls("socket", line), /BROKER_UNAVAILABLE|ENOENT|connect/, `read ${JSON.stringify(line)}`);
-  assert.match(await cliCalls("none", null), /BROKER_UNAVAILABLE|ENOENT|connect/);
+    assert.match(await clientCalls("socket", line), /BROKER_UNAVAILABLE|ENOENT|connect/, `read ${JSON.stringify(line)}`);
+  assert.match(await clientCalls("none", null), /BROKER_UNAVAILABLE|ENOENT|connect/);
 });
 
 test("T114: reading mail never returns more than its bound, even while the file grows", async () => {
@@ -199,7 +198,7 @@ test("T114: reading mail never returns more than its bound, even while the file 
   const previous = { ...process.env };
   const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
   Object.assign(process.env, {
-    OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: root,
+    OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: root,
     OMA_SOCKET: "/nonexistent/socket", OMA_MAIL_BYTES: String(maximum),
   });
   try {
@@ -260,7 +259,7 @@ test("T114: reading mail never returns more than its bound, even while the file 
   process.stderr.write(`# bounded read: ${successes} within the bound, ${refused} refused, ${raced} caught mid-read\n`);
 });
 
-test("T114: the CLI's output cap counts bytes, not decoded characters", async () => {
+test("T114: the owned process output cap counts bytes, not decoded characters", async () => {
   // A UTF-8 character is up to four bytes, so a cap on decoded string length
   // would hold several times the bytes it claims. The child writes far more
   // than the cap in three-byte characters; the owner must stop it at the
@@ -270,10 +269,10 @@ test("T114: the CLI's output cap counts bytes, not decoded characters", async ()
     const chunk = "가".repeat(64 * 1024);
     for (let i = 0; i < 64; i++) process.stdout.write(chunk);
   `;
-  const result = await runCliProcess({
-    node: process.execPath, cli: "--input-type=module", args: ["-e", flood],
+  const result = await runOwnedProcess({
+    executable: process.execPath, args: ["--input-type=module", "-e", flood],
     cwd: process.cwd(), env: { PATH: "/usr/bin:/bin" }, timeoutMs: 30_000,
   });
   assert.ok(Buffer.byteLength(result.stdout) <= cap,
-    `the CLI's output kept ${Buffer.byteLength(result.stdout)} bytes past a ${cap}-byte cap`);
+    `the process output kept ${Buffer.byteLength(result.stdout)} bytes past a ${cap}-byte cap`);
 });

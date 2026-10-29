@@ -27,7 +27,7 @@ function world(t: import("node:test").TestContext, tmpBytes = 256 * 1024 * 1024)
     const paths = { stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"),
         society: "crash" };
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);
-    const git = createGitModule(paths, store, mail, { policyRevision: "s05", protectedPaths: [], checks: [] }, null, null, nativeQuarantine(paths));
+    const git = createGitModule(paths, store, mail, {maxWorkers: 6, policyRevision: "s05", protectedPaths: [], checks: []}, null, null, nativeQuarantine(paths));
     const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as {
         base: string;
         candidate: string;

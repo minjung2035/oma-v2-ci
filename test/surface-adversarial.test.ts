@@ -107,7 +107,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     assert.doesNotThrow(() => render({ state, data, transcript: [], body: { text: "본문", truncated: false }, notice: null, busy: false, columns: 0, rows: 0 }));
 });
 test("a tool surface declaration cannot smuggle an oversized or malformed name", () => {
-    const base = (overrides: Partial<ToolSurfaceConfig>): ToolSurfaceConfig => ({ defaultMode: "DISABLED", direct: [], disabled: [], groups: [], roots: [], ...overrides });
+    const base = (overrides: Partial<ToolSurfaceConfig>): ToolSurfaceConfig => ({ defaultMode: "DISABLED", direct: [], disabled: [], optional: [], ...overrides });
     const long = "a".repeat(200);
     for (const candidate of [
         base({ direct: [long] }),
@@ -115,14 +115,12 @@ test("a tool surface declaration cannot smuggle an oversized or malformed name",
         base({ direct: ["9leading"] }),
         base({ direct: ["has space"] }),
         base({ direct: ["has/slash"] }),
-        base({ groups: [{ name: long, description: "d", members: [] }] }),
-        base({ groups: [{ name: "g", description: "x".repeat(SURFACE_LIMITS.descriptionBytes + 1), members: [] }] }),
-        base({ groups: [{ name: "g", description: "", members: [] }] }),
+        base({ optional: [long] }),
+        base({ optional: Array.from({ length: SURFACE_LIMITS.names + 1 }, (_, index) => `t${index}`) }),
     ])
         assert.throws(() => planToolSurface(candidate), invalid);
-    // A description at exactly the limit is accepted; the bound is inclusive.
     assert.doesNotThrow(() => planToolSurface(base({
-        groups: [{ name: "g", description: "x".repeat(SURFACE_LIMITS.descriptionBytes), members: [{ tool: "t" }] }],
+        optional: Array.from({ length: SURFACE_LIMITS.names }, (_, index) => `t${index}`),
     })));
 });
 test("mail reading survives malformed, empty and non-file entries", () => {

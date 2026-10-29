@@ -38,6 +38,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     hideThinkingBlock = true;
     shutdown() {} renderProjectTrustWarningIfNeeded() {} suggestBugReport() {} crashReportInstructions() {}
     updateTerminalTitle() {} getPathCommandArgument() {} showSessionSelector() {} toggleThinkingBlockVisibility() {}
+    getChangelogForDisplay() {} showNewVersionNotification() {}
     stop() {}
     async handleFatalRuntimeError(_prefix, error) { modules.push(['fatal', error]); }
     handleExportCommand() {} getCrashExtensionHint() {} showManagedToolStatus() {}
@@ -68,7 +69,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
       async createAgentSessionServices(options) {
         overrides.push(options.resourceLoaderOptions.extensionsOverride);
         options.resourceLoaderOptions.extensionFactories[0]({ registerMarkdownTransformer() {}, registerCommand(name, command) { commands[name] = command; }, registerShortcut() {},
-          registerToolRenderer() {}, on(event, handler) { hooks[event] = handler; },
+          registerToolRenderer() {}, registerMessageRenderer() {}, on(event, handler) { hooks[event] = handler; },
           // BL2: the ask presenter subscribes the request seam on the bus; the
           // fixture only needs it reachable.
           events: { on() {}, emit() {} } });
@@ -108,7 +109,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     '@oma/tui/ask-user-question/presenter': { registerAskUserQuestionPresenter(pi, deps) { modules.push('ask-presenter'); } },
     '@oma/domain/unseen-text': { UNSEEN: /[\x00-\x1f]/g, UNSEEN_EXCEPT_LAYOUT: /[\x00-\x08]/g },
     "@oma/domain/errors": { StoreError: class extends Error { constructor(code, message) { super(message); this.code = code; } } },
-    "@oma/config": { EFFORT_LEVELS: ['off', 'high'] },
+    "@oma/domain/settings": { EFFORT_LEVELS: ['off', 'high'] },
   };
   const module = { exports: sourceWorld("interactive.ts", dependencies, { URL, Buffer,
     process: { argv: ['node', 'fake', '--session-dir', '/sessions'], env: {
@@ -121,6 +122,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   await module.exports.runInteractive({ version: 'test', settings: {}, presentation: {
     ...dependencies['./open-tui-brand.js'], stylePanel: dependencies['@oma/tui/panel-style'].stylePanel,
     createCompactTools: dependencies['@oma/tui/compact-tools'].createCompactToolRuntime,
+    renderMail() { throw new Error("This lifetime fixture does not draw mail."); },
     registerQuestions: dependencies['@oma/tui/ask-user-question/presenter'].registerAskUserQuestionPresenter,
   } });
   if (!observe) modules.length = 0;

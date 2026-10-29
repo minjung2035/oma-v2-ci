@@ -43,7 +43,13 @@ const reviewTarget = checkObject({ name: checkString({ min: 1 }), integration: o
 const reviewStatusDetail = checkObject({
   name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string, reason: string,
   requester: actor, identity: exactCandidateCheck, display: string, required: nonnegative,
+  normalRequired: nonnegative, maxWorkers: checkInt({ min: 1 }), capacityFallback: checkBool(), principalRequired: checkBool(),
   approvers: checkArray(actor), rejectors: checkArray(actor),
+  observedAtMs: nonnegative, remainingApprovals: nonnegative, acceptingWorkerVotes: checkBool(),
+  reviewers: checkObject({ items: checkArray(checkObject({ name: actor,
+    desired: nullable(checkEnum(["provisioning", "enabled", "stopped", "retired"] as const)),
+    exclusions: checkArray(checkEnum(["author", "not-enabled", "missing-mail-send", "missing-agent"] as const)),
+    latestVote: nullable(checkEnum(["approve", "reject"] as const)) })), next: nullable(actor) }),
   principal: checkObject({ approval: nullable(messageId), sent: checkBool(),
     decision: nullable(checkEnum(["approve", "reject"] as const)),
     decisionApproval: nullable(messageId) }),
@@ -57,7 +63,7 @@ const reviewStatusDetail = checkObject({
 const reviewStatusList = checkObject({
   requests: checkArray(checkObject({ name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier,
     title: string, requester: actor, display: string })),
-  omitted: nonnegative, main: reviewMain,
+  omitted: nonnegative, next: nullable(checkString({ min: 1 })), main: reviewMain,
 });
 const reviewStatusPrincipal = checkObject({
   name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string,
@@ -77,7 +83,10 @@ const checks = {
     data: checkString({ min: 1, re: /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/ }), next: nullable(nonnegative) }),
   "agent.wait": checkObject({ accepted: checkBool() }),
   "git.known": checkObject({ hasCandidate: checkBool(), prerequisites: checkArray(checkOid) }),
-  "status.get": checkObject({ observedAtMs: nonnegative, agents: checkArray(agentStatus), next: checkOptional(actor) }),
+  "status.get": checkObject({ observedAtMs: nonnegative, agents: checkArray(agentStatus), next: checkOptional(actor),
+    creation: checkObject({ capability: checkBool(), childProfile: nullable(string), childHasMailSend: nullable(checkBool()),
+      maxWorkers: nullable(checkInt({ min: 1 })), workerCount: nonnegative,
+      observedAtMs: nonnegative, error: checkOptional(checkObject({ code: string, message: string })) }) }),
   "review.status": reviewStatusResult,
   "logs.read": checkObject({ text: string, truncated: checkBool(), observedAtMs: nonnegative }),
   "runner.open": checkObject({ actor, incarnation: nonnegative, socketHostPath: checkString({ min: 1 }) }),

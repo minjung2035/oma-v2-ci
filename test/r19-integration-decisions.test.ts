@@ -22,7 +22,7 @@ import { makeValidAgent } from "./fixtures/spec.js";
 const BASE = "1".repeat(40); const CANDIDATE = "2".repeat(40); const THIRD = "3".repeat(40);
 const EMPTY_DIGEST = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 const input = { candidate: CANDIDATE, expected: BASE };
-const basePolicy = (): IntegrationPolicy => ({ policyRevision: "p1", protectedPaths: [], checks: [] });
+const basePolicy = (): IntegrationPolicy => ({maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: []});
 const checkedPolicy = (): IntegrationPolicy => ({ ...basePolicy(), checks: [{ id: "trusted", argv: ["/bin/true"], env: {},
    }] });
 const evidence: GitProcessEvidence = { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };

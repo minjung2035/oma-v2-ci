@@ -18,6 +18,7 @@ export function principalSessionProfile(configPath: string, society: string): Se
   const packageResources = packageResourcePaths(packageStore);
   return {
     society, provider: model.provider, model: model.model, inferenceSeconds: model.inferenceTimeoutSeconds,
+    ...(model.thinking === undefined ? {} : { thinking: model.thinking }),
     extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
     ...(packageStore === undefined ? {} : { packageStore }),
     ...(packageResources === undefined ? {} : { packageResources }),

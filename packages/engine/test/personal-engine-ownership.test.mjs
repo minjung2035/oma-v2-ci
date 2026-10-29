@@ -34,6 +34,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     renderProjectTrustWarningIfNeeded() {} suggestBugReport() {} crashReportInstructions() {}
     updateTerminalTitle() {} handleExportCommand() {} getPathCommandArgument() {} getCrashExtensionHint() {}
     showManagedToolStatus() {} showSessionSelector() {} getRegisteredToolDefinition() {} toggleThinkingBlockVisibility() {}
+    getChangelogForDisplay() {} showNewVersionNotification() {}
     stop() { calls.push('stop'); if (fail === 'stop') throw new Error('injected stop'); }
     async shutdown() { await runtime.dispose(); calls.push('upstream-exit'); }
     async handleFatalRuntimeError(_prefix, error) { calls.push(['upstream-fatal', error]); }

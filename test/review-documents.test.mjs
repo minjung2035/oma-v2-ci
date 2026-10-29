@@ -13,7 +13,7 @@ const open = { sequence: 1, operation: request, actor: "alice", fact, messages: 
 const operation = index => `op-22222222-2222-4222-8222-${String(index).padStart(12, "0")}`;
 const entry = index => ({ sequence: index + 1, operation: operation(index), actor: "bob",
   fact: { kind: "review", version: 1, request, body: `의견 🐈 ${index}` }, messages: [] });
-const state = entries => reviewState({ open, entries, integration: null, eligible: new Set(["bob"]), highPeerFloor: 1 });
+const state = entries => reviewState({maxWorkers: 64, open, entries, integration: null, eligible: new Set(["bob"]), highPeerFloor: 1});
 
 test("DR39 review documents: Unicode subject is cut only between code points", () => {
   assert.equal(reviewSubject("a🐈나끝", 9), "a🐈...");
@@ -50,7 +50,7 @@ test("DR39 review documents: bound vote order and completion evidence follow fro
   for (const current of entries) current.fact = { kind: "vote", version: 1, request,
     verdict: "approve", body: current.fact.body, approval: null };
   const approval = reviewApprovalBody("m-11111111-1111-4111-8111-111111111111-0", fact, entries, "alice",
-    [operation(2), operation(1), operation(3)]);
+    [operation(2), operation(1), operation(3)], null);
   assert.ok(approval.indexOf("의견 🐈 2") < approval.indexOf("의견 🐈 1"));
   assert.ok(approval.includes(`${operation(3)}\n(unavailable)`));
   const document = reviewNoticeDocument(operation(4), state(entries), fact, "diff bytes\n");

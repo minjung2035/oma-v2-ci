@@ -1,161 +1,117 @@
-/** mail-v1 review tools (spec §2/§4): `oma_merge` and `oma_challenge` run the
- * model-facing review CLI with a fixed argv under a stable request key. The
- * Worker's schema carries the whole vocabulary; the Principal's only diff and
- * vote -- and its vote must name the approval mail it answers.
- *
- * INV09/PR-004 as in mail-tools: every value is checked against the grammar of
- * its slot before the CLI starts; an option's value follows its option, and a
- * name goes after `--` so nothing a caller supplies can become an option. The
- * extension mirrors the CLI's request-name grammar here (PI-001 forbids the
- * runtime import); a test binds the two (INV04). */
-import type { Client, ReviewInput } from "@oma/client";
+/** Review contracts share inputs, never authority or quorum calculations. */
+import type { Client } from "@oma/client";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { REQUEST_PARAMETER_HELP, refused, requestKeyOf, textResult } from "@oma/tool-runtime/shared";
-import { isValidMessageId as validMessageId } from "@oma/domain/identifiers";
-
-export type ReviewKind = "merge" | "challenge";
-/** Mirrors the CLI's request-name grammar (merge-/challenge- + the request's
- * operation UUID in full; the short 8-hex shape stays readable for facts
- * accepted before the full-UUID mint); a test binds it to
- * domain/identifiers.ts. */
-const UUID_TAIL = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
-const NAME_RE: Readonly<Record<ReviewKind, RegExp>> = {
-  merge: new RegExp(`^merge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
-  challenge: new RegExp(`^challenge-(?:[0-9a-f]{8}|${UUID_TAIL})$`),
-};
-
-export interface ReviewToolContext {
-  readonly client: Client;
-  /** Principal registration carries only diff and vote. */
-  readonly principal: boolean;
-}
+import { REQUEST_PARAMETER_HELP, refused, requestKeyOf, textResult, registerTypedTool, stringEnum } from "@oma/tool-runtime/shared";
+import { isReviewRequestName, isValidMessageId } from "@oma/domain/identifiers";
 
 const request = Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP }));
-const nameField = Type.Optional(Type.String({ description: "the request's generated name (merge-/challenge- + the request's full UUID)" }));
-const string = Type.String();
-const verdictType = Type.Union([Type.Literal("approve"), Type.Literal("reject")]);
-const cursorType = Type.Optional(Type.Integer({ minimum: 0 }));
-const viewType = (kind: ReviewKind) => kind === "challenge"
-  ? { view: Type.Optional(Type.Union([Type.Literal("revert"), Type.Literal("original")])) } : {};
+const name = Type.String({ description: "Exact request name: merge-<full UUID> or challenge-<full UUID>." });
+const text = Type.String({ minLength: 1, pattern: "\\S" });
+const revision = Type.String({ minLength: 1 });
+const requiredName = (value: string): string => isReviewRequestName(value) ? value : refused("review request name", value);
 
-/** Which parameters an action takes. Anything else is refused before the CLI
- * starts -- a field the action does not own is a model error, never a
- * silently ignored one. */
-const ALLOWED: Readonly<Record<string, ReadonlySet<string>>> = {
-  open: new Set(["action", "tier", "title", "reason", "candidate", "base", "request"]),
-  diff: new Set(["action", "name", "view", "path", "cursor"]),
-  review: new Set(["action", "name", "body", "request"]),
-  vote: new Set(["action", "name", "verdict", "body", "approval", "request"]),
-  status: new Set(["action", "name"]),
-  cancel: new Set(["action", "name", "reason", "request"]),
-};
-const WORKER_ACTIONS = ["open", "diff", "review", "vote", "status", "cancel"] as const;
-const PRINCIPAL_ACTIONS = ["diff", "vote"] as const;
-type ReviewAction = (typeof WORKER_ACTIONS)[number];
-
-function only(kind: ReviewKind, action: ReviewAction, params: Record<string, unknown>): void {
-  const allowed = kind === "challenge" && action === "open" ? new Set([...ALLOWED.open!, "merge"]) : ALLOWED[action]!;
-  for (const key of Object.keys(params))
-    if (params[key] !== undefined && !allowed.has(key)) refused(`field for ${action}`, key);
-}
-
-function nameOf(kind: ReviewKind, params: Record<string, unknown>): string {
-  return (typeof params.name === "string" && NAME_RE[kind].test(params.name))
-    ? params.name : refused(`${kind} request name`, params.name);
-}
-
-const textField = (params: Record<string, unknown>, what: string, key: string): string =>
-  typeof params[key] === "string" && (params[key] as string).length > 0 ? (params[key] as string) : refused(what, params[key]);
-
-const workSchema = (kind: ReviewKind) => Type.Object({
-  action: Type.Union([Type.Literal("open"), Type.Literal("diff"), Type.Literal("review"),
-    Type.Literal("vote"), Type.Literal("status"), Type.Literal("cancel")]),
-  name: nameField,
-  ...(kind === "challenge"
-    ? { merge: Type.Optional(Type.String({ description: "the applied merge-<UUID> request this challenge reverts" })) } : {}),
-  tier: Type.Optional(kind === "merge"
-    ? Type.Union([Type.Literal("LOW"), Type.Literal("MEDIUM"), Type.Literal("HIGH")])
-    : Type.Union([Type.Literal("LOW"), Type.Literal("HIGH")])),
-  title: Type.Optional(string), reason: Type.Optional(string), body: Type.Optional(string),
-  verdict: Type.Optional(verdictType),
-  candidate: Type.Optional(string), base: Type.Optional(string),
-  path: Type.Optional(string), cursor: cursorType, ...viewType(kind), request,
-});
-const principalSchema = (kind: ReviewKind) => Type.Object({
-  action: Type.Union([Type.Literal("diff"), Type.Literal("vote")]),
-  name: nameField,
-  verdict: Type.Optional(verdictType), body: Type.Optional(string),
-  approval: Type.Optional(Type.String({ description: "the approval message id the vote answers; required" })),
-  path: Type.Optional(string), cursor: cursorType, ...viewType(kind), request,
-});
-
-/** The whole pair of tools: one execute, argv assembled per action. */
-export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext): void {
+export function registerReviewTools(pi: ExtensionAPI, context: { client: Client; principal: boolean }): void {
   const { client, principal } = context;
-  const actions: readonly string[] = principal ? PRINCIPAL_ACTIONS : WORKER_ACTIONS;
-  for (const kind of ["merge", "challenge"] as const) {
-    const tool = `oma_${kind}`;
-    pi.registerTool({
-      name: tool,
-      label: kind === "merge" ? "Merge review requests" : "Challenge an applied merge",
-      description: principal
-        ? kind === "merge"
-          ? "Decide the HIGH merge request an approval mail named. diff pages its exact base→candidate patch; vote is approve or reject with approval set to that mail's id. Open, review and cancel belong to Workers; LOW and MEDIUM arrive as result notices."
-          : "Decide a challenge's approval when its mail reaches you. diff pages the patch -- view selects the revert (default) or the merge it undoes; vote names the approval id. Only recorded votes count."
-        : kind === "merge"
-          ? "Drive a merge request through peer review. open freezes candidate and base under a tier; review adds discussion; vote records the binding verdict -- recorded votes only, never your own request; status reads the ledger; cancel withdraws an unapplied request; diff pages the exact base→candidate patch. Tiers: LOW applies alone, MEDIUM needs one peer approve, HIGH needs two then the Principal."
-          : "Revert a merge that already applied, through the same review path as a merge request. open prepares the revert (or takes your own candidate+base); diff's view selects the revert (default) or the original patch.",
-      // One line of the system prompt per tool. The Principal's registration
-      // carries diff and vote alone, so its snippet names those -- never the
-      // Worker verbs open/review/cancel it cannot call.
-      promptSnippet: principal
-        ? kind === "merge"
-          ? "diff and vote a HIGH merge's approval"
-          : "diff and vote a challenge's approval"
-        : kind === "merge"
-          ? "open and review merge requests"
-          : "revert an applied merge",
-      parameters: principal ? principalSchema(kind) : workSchema(kind),
-      async execute(id, raw, signal, _update, engine) {
-        const params = raw as Record<string, unknown>;
-        const action = params.action as ReviewAction;
-        if (!actions.includes(action)) refused(`${kind} action`, action);
-        only(kind, action, params);
-        const key = requestKeyOf(params.request, { id, tool, params, context: engine });
-        const input: ReviewInput = { action };
-        if (action !== "open" && (action !== "status" || params.name !== undefined)) input.name = nameOf(kind, params);
-        if (action === "open") {
-          input.title = textField(params, "title", "title");
-          input.reason = textField(params, "reason", "reason");
-          input.tier = params.tier === "LOW" || params.tier === "HIGH" || (kind === "merge" && params.tier === "MEDIUM")
-            ? params.tier as string : refused(`${kind} tier`, params.tier);
-          if (kind === "challenge") {
-            input.merge = typeof params.merge === "string" && NAME_RE.merge.test(params.merge)
-              ? params.merge : refused("target merge request name", params.merge);
-            if ((params.candidate === undefined) !== (params.base === undefined)) refused("candidate and base go together", params);
-          }
-          if (params.candidate !== undefined) input.candidate = String(params.candidate);
-          if (params.base !== undefined) input.base = String(params.base);
-        }
-        if (action === "review" || action === "vote") input.body = textField(params, `${action} body`, "body");
-        if (action === "cancel") input.reason = textField(params, "cancel reason", "reason");
-        if (action === "vote") {
-          input.verdict = params.verdict === "approve" || params.verdict === "reject" ? params.verdict : refused("verdict", params.verdict);
-          if (principal) input.approval = typeof params.approval === "string" && validMessageId(params.approval)
-            ? params.approval : refused("approval message id", params.approval);
-          else if (params.approval !== undefined) refused("approval is only the Principal's field", params.approval);
-        }
-        if (action === "diff") {
-          if (params.view !== undefined) input.view = params.view === "revert" || params.view === "original" ? params.view : refused("view", params.view);
-          if (params.path !== undefined) input.path = String(params.path);
-          if (params.cursor !== undefined) {
-            if (!/^[0-9]+$/.test(String(params.cursor)) || !Number.isSafeInteger(Number(params.cursor))) throw new Error("invalid cursor");
-            input.cursor = Number(params.cursor);
-          }
-        }
-        return textResult(await client.review(kind, input, key, signal), action === "status" || action === "diff" ? {} : { request: key });
-      },
-    });
-  }
+  registerTypedTool(pi, {
+    name: "oma_review_diff", label: "Read exact review diff",
+    description: "Read the exact committed patch for a merge or challenge, with candidate/base identity, hash and byte pagination. proposal (default) is the request's frozen patch; original on a challenge is its target merge's patch. Keep name, view and path fixed while passing next as cursor until null. One page or a path-filtered patch is not the whole change.",
+    parameters: Type.Object({
+      name, view: Type.Optional({ ...stringEnum(["proposal", "original"]), description: "proposal reads this request's patch; original reads the target merge for a challenge. Defaults to proposal." }),
+      path: Type.Optional(Type.String({ description: "Optional repository path restricting the displayed diff, not the review's scope." })),
+      cursor: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, description: "Byte cursor from the previous page's next field; omit to start at zero." })),
+    }),
+    async execute(_id, params, signal) {
+      requiredName(params.name);
+      return textResult(await client.reviewDiff(params, signal));
+    },
+  });
+  registerTypedTool(pi, {
+    name: "oma_review_respond", label: "Comment or cast an independent vote",
+    description: principal
+      ? "Approve or reject a HIGH or capacity-fallback review using its current broker-issued approval mail. Supply name, action, reasoned body and that mail's approval id. The decision applies to the frozen request identity; stale or ordinary mail is not approval authority. A Principal reject permanently closes this request; it is not a request for revisions."
+      : "Comment on a merge or challenge, or record an independent approve/reject vote after examining its exact change and relevant evidence. comment is discussion only. Supply name, action and a reasoned body; contributors cannot vote on their own work. LOW merges have no pre-review comments or votes: raise a challenge only after application.",
+    promptSnippet: principal ? "Decide a review using its current broker-issued approval mail id." : "Record binding review votes with approve/reject; comments and mail are discussion, not votes.",
+    parameters: Type.Object({
+      name, action: { ...stringEnum(principal ? ["approve", "reject"] as const : ["comment", "approve", "reject"] as const), description: principal ? "Binding Principal decision for the current broker-issued approval request." : "comment adds discussion; approve or reject records your independent vote." },
+      body: { ...text, description: "Inline rationale with relevant evidence, findings or unresolved risks for this exact request." },
+      ...(principal ? { approval: Type.String({ description: "Message id of the current broker-issued approval request, not an ordinary candidate notice." }) } : {}), request,
+    }),
+    async execute(id, params, signal, _update, engine) {
+      requiredName(params.name);
+      const approval = "approval" in params ? params.approval : undefined;
+      if (principal && !isValidMessageId(approval)) refused("approval message id", approval);
+      const key = requestKeyOf(params.request, { id, tool: "oma_review_respond", params, context: engine });
+      return textResult(await client.respondReview({ name: params.name, action: params.action, body: params.body,
+        ...(typeof approval === "string" ? { approval } : {}) }, key, signal), { request: key });
+    },
+  });
+  if (principal) return;
+  registerTypedTool(pi, {
+    name: "oma_merge_open", label: "Open a merge request",
+    description: "Open a merge for an exact committed candidate, publishing it automatically if needed. candidate defaults to HEAD and base to the recorded upstream base; uncommitted edits are excluded. LOW applies without pre-review; MEDIUM normally needs one independent approval; HIGH needs the configured peer floor, then Principal approval. If maxWorkers cannot fit the normal quorum after excluding authors, the broker requires the peer approvals that can fit, then Principal approval. Temporary unavailability or rejection never enables fallback. An opening receipt is not proof of integration: inspect oma_review_status.",
+    parameters: Type.Object({
+      tier: { ...stringEnum(["LOW", "MEDIUM", "HIGH"]), description: "Risk tier under project policy; determines peer and Principal approval requirements." },
+      title: { ...text, description: "Short description of the committed change." },
+      reason: { ...text, description: "Inline purpose, tier rationale, scope and verification evidence, including remaining integration risks." },
+      candidate: Type.Optional({ ...revision, description: "Exact committed candidate OID or local revision; defaults to HEAD and is frozen for this request." }),
+      base: Type.Optional({ ...revision, description: "Base commit OID or local revision; defaults to the recorded upstream base. Required explicitly if no base is recorded." }), request,
+    }),
+    async execute(id, params, signal, _update, engine) {
+      const key = requestKeyOf(params.request, { id, tool: "oma_merge_open", params, context: engine });
+      return textResult(await client.openMerge(params, key, signal), { request: key });
+    },
+  });
+  registerTypedTool(pi, {
+    name: "oma_challenge_open", label: "Challenge an applied merge",
+    description: "Open a post-application challenge to an applied merge, explaining the defect and evidence. Omit replacement for a broker-prepared revert on canonical main; otherwise supply both replacement candidate and base commits, with automatic publication. All challenges normally require the configured peer floor; HIGH also requires Principal approval. When maxWorkers cannot fit that quorum after excluding authors, the broker requires the peers that can fit, then Principal approval, including for LOW. A HIGH merge cannot be challenged as LOW. Opening is not application: inspect oma_review_status.",
+    parameters: Type.Object({
+      merge: { ...name, description: "Exact merge-<full UUID> name of an already applied merge." },
+      tier: { ...stringEnum(["LOW", "HIGH"]), description: "Challenge risk tier; use HIGH when required by policy or when challenging a HIGH merge." },
+      title: { ...text, description: "Short description of the defect and proposed correction." },
+      reason: { ...text, description: "Inline defect evidence, impact, tier rationale and why a revert or replacement is appropriate." },
+      replacement: Type.Optional(Type.Object({
+        candidate: { ...text, description: "Committed replacement candidate OID or local revision; uncommitted edits are excluded." },
+        base: { ...text, description: "Base commit OID or local revision for the replacement patch." },
+      }, { additionalProperties: false, description: "Optional replacement patch identity; both commits are required. Omit to request a revert." })), request,
+    }),
+    async execute(id, params, signal, _update, engine) {
+      if (!requiredName(params.merge).startsWith("merge-")) refused("target merge", params.merge);
+      const key = requestKeyOf(params.request, { id, tool: "oma_challenge_open", params, context: engine });
+      return textResult(await client.openChallenge(params, key, signal), { request: key });
+    },
+  });
+  registerTypedTool(pi, {
+    name: "oma_review_status", label: "Read review state and eligible peers",
+    description: "Read a request's ledger state, approval requirements, reviewer candidates/exclusions and integration outcome. Prefer available eligible peers with relevant context and avoid redundant review. remainingApprovals=0 does not prove application or Principal approval. Pass reviewers.next as reviewerAfter to read further reviewer pages.",
+    parameters: Type.Object({
+      name, reviewerAfter: Type.Optional(Type.String({ description: "Cursor from reviewers.next; omit for the first reviewer page." })),
+    }),
+    async execute(_id, params, signal) {
+      requiredName(params.name);
+      return textResult(await client.queryText("review.status", params, signal));
+    },
+  });
+  registerTypedTool(pi, {
+    name: "oma_review_list", label: "List review requests",
+    description: "List merge or challenge requests, newest first. Supply kind and pass next as after until null when more history is needed. A page is not the full history; use oma_review_status for one request's outcome.",
+    parameters: Type.Object({
+      kind: { ...stringEnum(["merge", "challenge"]), description: "Request kind to list." },
+      after: Type.Optional({ ...name, description: "Previous page's next request name; must match kind. Omit for the first page." }),
+    }),
+    async execute(_id, params, signal) {
+      if (params.after !== undefined && !requiredName(params.after).startsWith(`${params.kind}-`)) refused("list cursor kind", params.after);
+      return textResult(await client.queryText("review.status", params, signal));
+    },
+  });
+  registerTypedTool(pi, {
+    name: "oma_review_cancel", label: "Cancel your review request",
+    description: "Cancel your own review request with an inline reason. Only the requester may cancel, and an applied merge cannot be cancelled; use a post-application challenge for a defect in an applied merge.",
+    parameters: Type.Object({ name, reason: { ...text, description: "Why this request is being withdrawn." }, request }),
+    async execute(id, params, signal, _update, engine) {
+      requiredName(params.name);
+      const key = requestKeyOf(params.request, { id, tool: "oma_review_cancel", params, context: engine });
+      return textResult(await client.cancelReview(params.name, params.reason, key, signal), { request: key });
+    },
+  });
 }

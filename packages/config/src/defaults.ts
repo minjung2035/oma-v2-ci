@@ -12,7 +12,7 @@
  * editable in the Control Panel (CFG-002, arch §23.6).
  */
 import type { HostConfig } from "@oma/contracts";
-import { HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
+import { DEFAULT_MAX_WORKERS, HOST_CONFIGURATION_VERSION } from "@oma/domain/config-format";
 import { StoreError } from "@oma/domain/errors";
 
 export const DEFAULT_PRINCIPAL_PROFILE = "principal";
@@ -97,9 +97,12 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfig {
       },
     },
     principalProfile: DEFAULT_PRINCIPAL_PROFILE,
+    maxWorkers: DEFAULT_MAX_WORKERS,
     // LIFE-004: prepared by the host, activated only once GOAL is published.
-    initialResidents: [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE,
-      brief: "You have woken in an OMA society. Read /world/START.md for the map, then /inbox.md and the mail it lists. The shared objective is /world/context/current/GOAL.md -- find an unheld piece of it, say so on the board, and start." }],
+    initialResidents: [1, 2, 3].map(index => ({
+      name: `worker-${index}`, profile: DEFAULT_RESIDENT_PROFILE,
+      brief: "Read /world/START.md, your delivered mail, and the shared GOAL. Coordinate with the other initial Workers before taking an unowned outcome. Announce your scope, avoid duplicate work, and carry it through verification and integration.",
+    })),
     integration: {
       policyRevision: "default-1",
       protectedPaths: [],
