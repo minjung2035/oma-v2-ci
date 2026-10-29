@@ -105,24 +105,31 @@ const bootstrapRecord = () => {
       const pid = 120 + index * 3 + (kind === "direct" ? 0 : kind === "node" ? 1 : 2);
       const target = `gui/501/org.oma.probe.test.${name}-${kind}`;
       const seed = name === "bootstrap-and-xpc" ? 0 : 201;
+      const globalTarget = `gui/501/org.oma.probe.test.${name}-global`, globalBootstrap = name === "inherited" ? 200 : 0;
+      const ownPorts = { globalBootstrap, globalTypeStatus: globalBootstrap ? 0 : 15,
+        globalRights: globalBootstrap ? 0x10000 : null, taskBootstrapStatus: 0,
+        taskBootstrap: globalBootstrap, returnedSendStatus: globalBootstrap ? 0 : null };
       return { target, command: command("/owned/bootstrap-exec",
         [name, "/owned/profile", "/owned/ports", "/owned/work",
           ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] : kind === "node" ?
             ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", git, "{}", "/owned/bootstrap-exec",
-              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report"] :
+              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget] :
             ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
           before: { bootstrap: 200, registered: [201] },
           after: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
           droppedSendRights: name === "inherited" ? [] : [200] }, guestEffect: null,
-        ...(kind === "node" ? { tools: { pid, complete: true,
+        ...(kind === "node" ? { globalTarget, globalGuestEffect: null, tools: { pid, complete: true,
           service: command("/bin/launchctl", ["kickstart", target], 150 + index),
           git: command(git, ["hash-object"], 160 + index, `${digest}\n`),
           compiler: command("/owned/clang", ["-fsyntax-only", "compile.c"], 170 + index), dns,
           nativeDnsCommand: command("/owned/bootstrap-exec", ["observe-dns", "/owned/report.dns.json",
             unixSocketCanary.listed, unixSocketCanary.unlisted], 180 + index),
           nativeDns: nativeDns(180 + index, name === "inherited" ? 200 : 0, seed),
-          resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed) } } : {}),
+          resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed),
+          bootstrapGlobal: { phase: "node-bootstrap", pid, uid: 501, before: ownPorts, after: { ...ownPorts },
+            restore: { attempted: globalBootstrap !== 0, setStatus: globalBootstrap ? 0 : null, registerStatus: globalBootstrap ? 0 : null },
+            service: command("/bin/launchctl", ["kickstart", globalTarget], 250 + index) } } } : {}),
         ...(kind === "restored" ? { restoration: { pid, uid: 501, phase: "restore-registered-seed", seed,
           attempted: seed !== 0, setStatus: seed ? 0 : null,
           before: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
@@ -143,6 +150,7 @@ const bootstrapRecord = () => {
         unixSocketCanary.listed, unixSocketCanary.unlisted], 115),
       nativeDnsHost: nativeDns(115, 200, 201, false), unixSocketCanary,
       nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
+      ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64) },
       dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
@@ -346,6 +354,14 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.service = "https"; },
     value => { value.bootstrap.nativeResolverHost[0].observation.getaddrinfo.result = 8; },
     value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.globalBootstrap = -1; },
+    value => { value.bootstrap.variants[1].node.globalTarget = value.bootstrap.variants[1].node.target; },
+    value => { value.bootstrap.variants[1].node.command.argv[15] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.service.argv[1] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.before.globalTypeStatus = 0; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.restore.attempted = true; },
+    value => { value.bootstrap.variants[0].node.tools.bootstrapGlobal.before.taskBootstrapStatus = 5; },
     value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
     value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
     value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
@@ -382,6 +398,15 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   unknown.bootstrap.variants[1].node.tools.resolvers[1].command = {
     ...unknown.bootstrap.variants[1].node.tools.resolvers[1].command, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
   unknown.bootstrap.variants[1].node.tools.resolvers[1].observation = null;
+  unknown.bootstrap.variants[0].node.tools.bootstrapGlobal = {
+    phase: "node-bootstrap", pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501,
+    unavailable: "native observation unavailable", service: unknown.bootstrap.variants[0].node.tools.bootstrapGlobal.service };
+  const cached = unknown.bootstrap.variants[1].node.tools.bootstrapGlobal;
+  cached.before = { globalBootstrap: 222, globalTypeStatus: 0, globalRights: 0x10000,
+    taskBootstrapStatus: 0, taskBootstrap: 0, returnedSendStatus: null };
+  cached.restore = { attempted: true, setStatus: 0, registerStatus: 0 };
+  cached.after = { ...cached.before, taskBootstrap: 222, returnedSendStatus: 0 };
+  unknown.bootstrap.variants[1].node.globalGuestEffect = { pid: 999, parent: 1, resource: "different-scope" };
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
 });
 

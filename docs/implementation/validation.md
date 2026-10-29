@@ -194,8 +194,47 @@ host 세 양성·실제 argv/report 경로·PID/UID를 validator/factory와 함�
 기존 strict `seatbelt-files`에는 실제 `/var`·`/etc` metadata, host hash와 같은 `/etc/services` bytes,
 host에서 읽을 수 있는 `/etc/passwd`의 sandbox 거절을 추가했다. 외부 DNS 없이 실제 helper의 alias/data 경계를 검증한다.
 새 build·caller59/59·fail/cancel/skip/todo0·변경 MJS/실제 생성 module syntax·Linux의 state 생성 전 OS 거절은 통과했다.
-새 C의 Mac compile/link·resolver 비교와 alias 회귀는 **NOT_RUN**이다. 세 gate와 실행 차단도 유지한다.
-원시는 `exact-unix-sockets/libc-isolated-comparison/`·`alias-boundary-regression/`다.
+이 local checkpoint에서는 Mac compile/link·resolver 비교·alias 회귀가 **NOT_RUN**이었다.
+원시는 `exact-unix-sockets/libc-isolated-comparison/`·`alias-boundary-regression/`이고 이후 실제 결과는 다음과 같다.
+
+주 `bf0f3e7aee5057a2058dca46628417c1d91b11b3` / mirror `2abeceb800b6805b35a3af80548b20cbd428c799`,
+tree `3d7e1f849302d6325ec1fb8096f547f734b7a69b`, clean `25f0fb06d4d1f81ce4178f815b9f103705db5d6a1104c01c42e101c42d8e7336` /15687 files다.
+Native [40803548005](https://github.com/minjung2035/oma-v2-ci/actions/runs/40803548005)의 SHA256 확인 ZIP5개를 회수했다.
+양 Mac SDK compile/link·bootstrap 각3 case OBSERVED이며 새 비교는 총54개 실제 owned process다.
+
+| 같은 C image의 독립 호출 | inherited | bootstrap-only | bootstrap-and-xpc |
+|---|---|---|---|
+| main·service443 |6회 성공 |6회 EAI_NONAME8 |6회 EAI_NONAME8 |
+| main·null service |6회 성공 |6회 EAI_NONAME8 |6회 EAI_NONAME8 |
+| pthread·service443 |6회 성공 |6회 EAI_NONAME8 |6회 EAI_NONAME8 |
+
+실패한 isolated C의 task/global bootstrap은 모두0이다. service 유무·thread 전환·선행 DNS-SD 호출만으로 실패를 설명하지 못한다.
+원래 C 실패12회·Node DNS 성공18회와 listed0/unlisted EPERM·금지 file 거절도 그대로 보존됐다.
+새 비교를 정상 libc 수리로 부르지 않는다. Node 자신의 post-exec task/global 상태는 이 source에서 관측하지 않았다.
+
+두 Mac의 strict `seatbelt-files` 각3회도 실제 helper·exit0·OBSERVED다. `/var`·`/etc` metadata와 host hash와 같은 services bytes,
+host에서 읽히는 passwd의 sandbox 거절·기존 file/symlink/hardlink/상속 후손 경계를 함께 확인했다.
+이는 `/etc` exact metadata의 실제 filesystem alias 이익이며 native libc 수리나 G-FILES 전체 완료는 아니다.
+`actual-isolated-resolver-outcomes.json`·`actual-original-outcomes.json`·`actual-matrix-qualification.json`·
+`alias-boundary-regression/actual-runtime-qualification.json`에 결과를 남겼다. 양 Mac120 executed/108 OBSERVED·12 SETUP_FAILED·세 gate OPEN은 유지한다.
+
+### Node 자신의 post-exec bootstrap·cached/global 복원 — 실제 Mac 실행 전
+
+pre-exec snapshot과 별도 C child의 상태를 Node 자신의 상태로 간주하지 않는다.
+기존 Koffi의 실제 선택 entry/hash·단일 package root를 기록하고 fixture 입력으로 read/map만 허용한다.
+process-exec·새 Mach/network service·production 정책 기본값은 넓히지 않았다.
+Node가 정상 도구/DNS/C 비교를 마친 뒤 자신의 global `bootstrap_port`, task special-port4, 실제 권리 종류·raw Mach status를 기록한다.
+`get_special_port`가 반환한 별도 SEND 참조는 정확히 반납하고 그 status도 남긴다. borrowed global 참조를 파괴하지 않는다.
+[SDK task special-port](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/mach/task_special_ports.h)와 실제 로컬 SDK를 대조했다.
+
+valid SEND가 실제 관측됐을 때만 own task/registered port 복원을 시도한다. setter 성공을 탈출로 부르지 않고,
+각 mode에 별도로 등록한 fresh target의 실제 launchctl·actor 효과·cleanup과 대조한다.
+관측 오류·Mach 실패·port0·effect 미관측을 성공/죽음으로 바꾸지 않는다. PID/UID·argv15·별도 target·typed nullable 결과를
+validator/factory와 함께 cutover했고, 예상 밖 cached SEND·범위 밖 service 효과도 OBSERVED로 보존한다.
+build·caller59/59·fail/cancel/skip/todo0·실제 생성 module syntax·Linux state 생성 전 OS 거절은 통과했다.
+최초 local synthetic case는 이미 tools=null인 variant에 새 관측을 붙여58/59였다. 원래 null case를 보존하고 새 unavailable 관측의 variant만 고쳐59/59이며 원시 실패도 보존했다.
+새 Node 자신의 실제 Mac 관측·복원 효과는 **NOT_RUN**이다. 원시는 `exact-unix-sockets/node-post-exec-bootstrap/`다.
+실행 guard·Linux backend·세 product gate와 현재 권한/receipt/recovery 계약은 유지한다.
 
 
 
@@ -1212,7 +1251,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `25f0fb06d4d1f81ce4178f815b9f103705db5d6a1104c01c42e101c42d8e7336` (15687 files).
+verification input digest `1a19aee9c05f958860115700d2fef071073f3ba4dcf77b68052f03780c398473` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

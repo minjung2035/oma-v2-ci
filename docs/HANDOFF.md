@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac은 `/var` root symlink metadata 수리 뒤 양 Mac의 alias connect·DNS-SD·Node DNS18회와 금지 socket/file 거절을 확인했다. 하지만 bootstrap 제거 조건의 native C `getaddrinfo`12회는 `/etc` metadata 추가 뒤 `3a131bf0d9`에서도 실패한다. 관련 route/sysctl 거절은 성공한 inherited C에서 나왔으므로 더 넓힐 근거가 아니다. 현재는 원래 실패를 유지한 채 같은 실행파일의 service 유무·main/thread 호출을 독립 process로 분리하고, 허용된 system-file alias/금지 sibling은 실제 helper의 결정적 회귀로 고정한다. local build·caller59/59·실제 생성 module syntax·Linux OS 거절은 통과했지만 새 Mac 비교·회귀는 NOT_RUN이다. 세 gate·실행 차단·Linux backend와 credential/receipt/recovery 계약은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
+**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac의 exact Unix·root alias·Node DNS 수리와 실제 helper의 허용/거절 회귀는 확인했다. 하지만 권한 제거 뒤 native C resolver는 service/thread 분리에서도 실패하므로 정상 도구 호환성·complete backend는 미충족이다. 다음은 Node 자신의 post-exec task/global bootstrap과 cached 권한 복원 반례다. 구현·local59/59는 마쳤고 새 Mac 실행은 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 
