@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac exact Unix·root alias·Node DNS와 실제 helper 경계를 확인했다. Node task/global0 뒤 fresh service141은 확인했지만 native C resolver는 계속 실패한다. public subset 후보도 `73cfdb7591`의 양 Mac ordinary-UID host부터 API status125로 생성하지 못했다. unprivileged/parent·subset 안의 정상 도구는 미호출이며 후보는 미채택이다. 다음은 같은 Node image에서 public libc `getaddrinfo`를 직접 호출해 별도 C image와 비교하는 것이다. 이 새 비교는 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약을 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
+**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac exact Unix·root alias·Node DNS와 실제 helper 경계를 확인했다. public subset은 ordinary host부터 생성 실패해 미채택이다. `d11c53da0c`에서는 실제 C import 이름/layout을 맞춘 Node 내부 libc36회가 성공했고 nil task/global도 전후 유지했지만 별도 C resolver는 계속 실패한다. 아직 먼저 실행한 Node lookup의 영향은 분리하지 않았다. 다음은 동일 Node에서 그 lookup 전후의 순서를 명시한 대조이며 새 Mac 실행은 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약을 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 
@@ -90,7 +90,7 @@ Linux full의 before/after 입력은15686 files, `7461a8886f3ad044027eb7eb96de5f
 
 ## 4. 가장 가까운 재개점: service 관측의 혼입 제거
 
-**현재 재개점:** 아래는 최초 service/EAGAIN 재인수의 역사다. Linux는 실제 설치·복구·full CI까지 마감했다. Mac은 Node own task/global0에서도 Node DNS는 성공하지만 별도 C resolver는 실패한다. public subset은 SDK15.5/26.5·UID501의 host와 inherited에서 API125로 생성하지 못했다. parent 조회의 성공/거절이나 subset 호환성을 판정한 것이 아니다. 동일 후보를 맹목 재시도하거나 private XPC forwarding을 만들어 우회하지 않는다. 다음은 같은 Node image에서 public libc를 같은 hints로 직접 호출하는 비교다. 실제 SDK ABI부터 결박하고 Node의 lookup·별도 C image와 대조하며 production resolver를 대체하지 않는다. [최신 원시·미실행](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)을 따른다.
+**현재 재개점:** 아래는 최초 service/EAGAIN 재인수의 역사다. Linux는 실제 설치·복구·full CI까지 마감했다. Mac의 `d11c53da0c`는 SDK import 이름·layout 일치와 Node 내부 libc 성공을 확인했지만 별도 C는 실패한다. 모든 직접 Node 호출 앞에 controlled Node lookup이 있었다는 순서 혼입이 남아 있다. 다음은 그 lookup 전후의 동일 API를 같은 Node에서 각각 관측하는 것이다. 여기서 “전”은 global DNS cache cold를 뜻하지 않는다. public subset의 같은 실패를 맹목 재시도하거나 private XPC forwarding·production resolver 교체로 우회하지 않는다. [최신 원시·미실행](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)을 따른다.
 
 **완료한 Linux 우선 재인수의 출발점:** Architecture [40743666926](https://github.com/minjung2035/oma-v2-ci/actions/runs/40743666926)의 `test.log`는 사전14/14 뒤 main3938/3939·fail1이다. 실패는 `V10A: an unanswered command ends at the acceptance budget, and says so`의 delivery 전 rootfs 준비에서 `openBeneath→statAt→ensureFile` EAGAIN이다. 같은 source의 별도 serial all3953/3953과5 lane은 통과했다. 최신 `e9a939d619`의 병렬 baseline14/14+3939/3939·serial all3953/3953·나머지 lane도 통과했지만 이를 원인 수리 증거로 쓰지 않는다.
 

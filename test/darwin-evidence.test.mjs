@@ -141,7 +141,8 @@ const bootstrapRecord = () => {
           resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed),
           nativeSubsetCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/report.subset.json"], 270 + index),
           nativeSubset: nativeSubset(270 + index),
-          nativeLibc: { ...nodeLibc(pid), before: ownPorts, after: { ...ownPorts } },
+          nativeLibcCold: { ...nodeLibc(pid), stage: "before-node-lookup", before: ownPorts, after: { ...ownPorts } },
+          nativeLibc: { ...nodeLibc(pid), stage: "after-node-lookup", before: ownPorts, after: { ...ownPorts } },
           bootstrapGlobal: { phase: "node-bootstrap", pid, uid: 501, before: ownPorts, after: { ...ownPorts },
             restore: { attempted: globalBootstrap !== 0, setStatus: globalBootstrap ? 0 : null, registerStatus: globalBootstrap ? 0 : null },
             service: command("/bin/launchctl", ["kickstart", globalTarget], 250 + index) } } } : {}),
@@ -396,6 +397,10 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.variants[1].node.tools.nativeLibc.hints.flags = 1; },
     value => { value.bootstrap.variants[1].node.tools.nativeLibc.calls[1].service = "443"; },
     value => { delete value.bootstrap.variants[1].node.tools.nativeLibc.after; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibcCold.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibcCold.stage = "after-node-lookup"; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeLibcCold.after; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.stage = "before-node-lookup"; },
     value => { value.bootstrap.nativeLibcHost.unavailable = "host direct call not qualified"; },
     value => { value.bootstrap.resolverSymbols.getaddrinfo = "getaddrinfo"; },
     value => { value.bootstrap.resolverSymbolsCommand.argv[2] = "/foreign/executable"; },
@@ -460,7 +465,7 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   unknown.bootstrap.variants[1].node.tools.nativeLibc.before = { ...cached.before };
   unknown.bootstrap.variants[1].node.tools.nativeLibc.calls[0] = { service: "443", result: 8, ipv4: 0, ipv6: 0 };
   unknown.bootstrap.variants[0].node.tools.nativeLibc = { phase: "node-libc-resolver",
-    pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501, unavailable: "direct call not observed" };
+    pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501, stage: "after-node-lookup", unavailable: "direct call not observed" };
   unknown.bootstrap.variants[1].node.globalGuestEffect = { pid: 999, parent: 1, resource: "different-scope" };
   const unavailableSubset = unknown.bootstrap.variants[1].node.tools.nativeSubset;
   unavailableSubset.subset = unavailableSubset.unprivileged = 0;

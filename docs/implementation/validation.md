@@ -378,6 +378,49 @@ caller59/59·generated syntax·실제 Linux early refusal와 explicit-symbol get
 기존 성공한 실제 compiler layout을 재사용했으며 actual Mac import·정확한 import를 쓰는 비교는 **NOT_RUN**이다.
 원시는 `same-image-libc/linked-symbols/`다. product policy·권한·timeout은 그대로다.
 
+초기 `9bed777fd9`의 Native [40820214517](https://github.com/minjung2035/oma-v2-ci/actions/runs/40820214517) 원시에서는
+unversioned 직접 호출이18 Node mode·36회 모두 성공했고 nil12 mode의 task/global0도 전후 유지했다.
+별도 C 실패는 그대로다. `actual-unversioned-node-libc-outcomes.json`·`actual-unversioned-node-libc-qualification.json`에 남겼다.
+동일 source Architecture [40820214651](https://github.com/minjung2035/oma-v2-ci/actions/runs/40820214651)는 completed/success이며
+원시에서 all3954/3954·baseline14/14+3940/3940·5 lane PASS·skip/cancel/todo0·errors[]·numeric command exit0를 대조했다.
+baselineComparison NOT_AVAILABLE·standalone kernel/crash NOT_RUN과 actual native-all 포함 범위도 보존했다.
+`same-image-libc/published-ci/architecture/clean-source-full-ci-qualification.json`에 source별로 남겼다.
+
+### 실제 C import와 일치한 Node 호출 — 별도 C와 차이는 남음
+
+주 `2342f6d2bd4e4d0695aecf3b6b738eb46445dc65` / mirror `d11c53da0c3074a300c103cd21b5c6829b90cf4a`,
+tree `b8e8e96f9d98b4b6e299161f23c3d023023f1b07`, clean `572995020a7f1d6b9e96e2d350d8e05e93743b6be20e6f8a14696432a1e5ffaf` /15688 files다.
+Native [40821437608](https://github.com/minjung2035/oma-v2-ci/actions/runs/40821437608)의 원래 ZIP5개를 SHA256 대조해 회수했다.
+실제 SDK15.5/26.5·arm64·GUI UID501·SIP-disabled의 각3 case가 OBSERVED·exit0다.
+양쪽 actual import는 getaddrinfo/freeaddrinfo이며 별도 Darwin alias 이름은 선택되지 않았다.
+SDK layout·선택 이름·source bytes·PID/UID·host FFI 양성과 실제 주소 family 수를 대조했다.
+
+| mode·각6 Node process | Node 직접 API·2 service·12회 | 별도 C·3 context·18회 | Node task/global·호출 전후 |
+|---|---|---|---|
+| inherited |모두 result0·주소 반환 |모두 result0 |valid SEND 유지 |
+| bootstrap-only |모두 result0·주소 반환 |모두 EAI_NONAME8 |둘 다0 유지 |
+| bootstrap-and-xpc |모두 result0·주소 반환 |모두 EAI_NONAME8 |둘 다0 유지 |
+
+각 Node의 직접 호출은 **이미 controlled Node lookup이 끝난 뒤**였다. import 이름/layout의 차이는 관측되지 않았지만
+prior lookup·image 초기화·그 밖의 process-local state를 원인으로 확정하지 않았다. 실제 code/image의 다른 권한 전체 부재도 증명하지 않는다.
+정상 Node lookup·selected Git hash/compiler·DNSSD create·socket/file 거절·별도 fresh service와 소유 cleanup은 유지됐다.
+Mac common 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic-setup8/8·skip/cancel/todo0다.
+양 Mac package27개 중26 PASS·`@oma/git`1 FAIL은 기존 preparation guard다. 세 gate OPEN·실행 차단은 유지한다.
+`actual-exact-import-node-libc-outcomes.json`·`actual-exact-import-node-libc-qualification.json`·
+`actual-common-and-packaged-runtime.json`에 남겼다. Architecture40821437422의 원시는 이 기록 시점 회수 전이다.
+
+### 다음 대조 — 첫 controlled Node lookup 전후
+
+관측 script는 같은 import/layout·동일 API를 `before-node-lookup`과 `after-node-lookup`으로 각각 기록한다.
+각 stage의 PID/UID·실제 task/global before/after·service443/null 결과를 남긴다.
+이는 system/global DNS cache cold를 주장하지 않는다. 별도 C 원래3 context는 그대로이며 Node lookup은 FFI 미가용 때도 독립적으로 한 번 관측한다.
+cached global restore의 기준 snapshot은 두 stage가 끝난 뒤 새로 읽는다. 서로 다른 시점의 port-name 동일성을 의미로 요구하지 않는다.
+validator/factory는 stage 누락·재라벨·PID 혼입·미완료 snapshot·실제 unavailable를 구분한다.
+local caller59/59·generated module syntax·실제 Linux state 생성 전 거절은 통과했다.
+기존 libc/ABI/import 실제 smoke는 동일 module을 재사용하며 새 stage의 **Mac 실행은 NOT_RUN**이다.
+원시는 `same-image-libc/lookup-order/`다. production resolver·허용 권한·제품 timeout은 바꾸지 않았다.
+
+
 
 
 
@@ -1399,7 +1442,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `572995020a7f1d6b9e96e2d350d8e05e93743b6be20e6f8a14696432a1e5ffaf` (15688 files).
+verification input digest `63f18dbabfd2e0c69aed97a09e93b3ee64335706ceb5423af86f45319211e805` (15688 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
