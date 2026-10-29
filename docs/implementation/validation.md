@@ -22,8 +22,13 @@ Ubuntu job은 success이고 common246/246·Linux integration433/433·execution46
 `spawnSync npm` ETIMEDOUT였다. 원인은 미분류이며 installed workspace qualification에 도달하지 못했다.
 이미 stdout은 소유 파일로 streaming하고 있어 buffer overflow로 단정하지 않는다. timeout·성공 조건을 늘리거나 전용 재현 loop를 만들지 않았다.
 양 Mac gate는120 executed /108 OBSERVED·product BLOCKED, G-PROCESS/G-FILES/G-AUTH 모두 OPEN이다.
-Architecture [40784728753](https://github.com/minjung2035/oma-v2-ci/actions/runs/40784728753)은 마지막 조회에서 in_progress였으며
-새 clean source의 전체 CI PASS로 기록하지 않는다. 원시는 Linux 재인수 root의 `published-ci/`다.
+Architecture [40784728753](https://github.com/minjung2035/oma-v2-ci/actions/runs/40784728753)은 이후 completed/success를 확인했다.
+같은 clean source `ae819c1c8a`·input `f334d462…`의 실제 serial all3954/3954·errors[]와
+baseline14/14+3940/3940·fail/cancel/skip/todo0, 모든 numeric command exit0를 원시에서 대조했다.
+fast881·durable872·property34·stress16·platform72도 모두 PASS·skip0다. CI baselineComparison은 NOT_AVAILABLE이며
+앞선 local COMPARED와 혼합하지 않는다. kernel/crash standalone은 NOT_RUN이고 native-all의 실제 파일·required names로 포함됐다.
+ZIP12860411239/12861155478의 공개 SHA256을 확인했다. `clean-source-full-ci-qualification.json`·원시 exit ledger·
+lane reports는 Linux 재인수 root의 `published-ci/`에 있다. 이 통과로 원래 CI 경합 주체나 과거 Git 실패 원인을 확정하지 않는다.
 
 그 뒤 Mac production `seatbeltProfile`의 Unix 규칙을
 `network-outbound (remote unix-socket (literal …))`에서 `network-outbound (literal …)`로 좁게 바꿨다.
@@ -80,10 +85,32 @@ Mac common은 각254/254, Ubuntu246/246·skip/cancel/todo0이다. 이 source의 
 로컬 listener에는 명시한 read-only 부모 접근이 있고 시스템 socket에는 없다는 차이를 다음 질문으로 좁혔다.
 [고정 XNU unp_connect](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_usrreq.c#L1290)는
 `namei`·socket 종류 확인·MAC connect 검사·vnode DAC authorization을 거친다. 이것만으로 어떤 Seatbelt operation이 거절됐는지 확정하지 않는다.
-현재 후보는 선언된 exact Unix endpoint에 `file-read-metadata`만 추가한다. file contents·write·조상 subpath·새 Mach service는 허용하지 않는다.
+당시 후보는 선언된 exact Unix endpoint에 `file-read-metadata`만 추가했다. file contents·write·조상 subpath·새 Mach service는 허용하지 않았다.
 원래 read-equalized listed/unlisted 반례·DNS 원시 단계·deadline·guard는 유지한다.
 후보의 inventory/review stale/DAG·build와 guard를 유지한 caller regression59/59는 통과했다.
-이 metadata 후보의 실제 Mac 효과는 **NOT_RUN**이며, 효과가 없으면 불필요한 grant로 남기지 않는다.
+이 checkpoint에서는 실제 Mac 효과가 NOT_RUN이었다. 아래 교체 실행에서 효과가 없음을 확인해 그 grant를 제거했다.
+
+주 `65be121d10a4b5a7179951d8cc18047f0c477eaa` / mirror `f75a06eeeb7e647aa0ac5a6ebb33d670604053c9`,
+tree `d7882eb2f1377c0c328c30b10dc2ac4b2b4d926a`, clean `24357a4a88c565d0c641f4055096da425874eb83ac585e18b34ba1df062717c6` /15687 files다.
+Native [40791224507](https://github.com/minjung2035/oma-v2-ci/actions/runs/40791224507)의 실제 양 Mac 각3회·18 variant는
+metadata 후보 뒤에도 시스템 connect EPERM1·DNS-SD -65563·getaddrinfo8·Node ENOTFOUND로 같았다.
+private listed0/unlisted EPERM은 유지했다. exact leaf metadata 단독으로 DNS가 수리된다는 가설은 지지되지 않았고,
+관측된 이익이 없는 grant를 production에 남기지 않았다. metadata가 언제나 불필요하다는 일반 명제는 아니다.
+원시는 `endpoint-metadata-candidate/actual-metadata-{outcomes,summary}.json`·`candidate-rejection.json`·source별 ZIP이다.
+
+### DNS 경로와 실제 거절 operation 분리 — 실행 전
+
+현재 production은 앞서 실제 확인한 exact network literal만 남겼다.
+작은 C 진단은 libc resolver를 대체하지 않고 alias `/var/run/mDNSResponder`와 canonical
+`/private/var/run/mDNSResponder`의 raw connect를 독립 수행한다. `/var`·alias·canonical의 실제 lstat도 별도로 기록한다.
+오류일 때 종류는 null이며 absent·socket·directory로 추정하지 않는다. PID/UID·path·typed 결과를 validator/factory와 함께 결박했다.
+[Apple의 공식 진단 절차](https://developer.apple.com/documentation/security/discovering-and-diagnosing-app-sandbox-violations.md)에 따라
+가능하면 실제 소유 DNS observer PID만의 `com.apple.sandbox.reporting`/`com.apple.sandbox` violation을 read-only 수집한다.
+원래 fixture budget 안에서만 수행하고 접근 거절/timeout/미수집을 그대로 남긴다. 로그 부재는 거절 부재·role/scope/death proof가 아니다.
+이 진단을 위해 root·새 sandbox grant·resolver override·성공 조건/timeout 완화를 추가하지 않았다.
+build·guard를 유지한 caller regression59/59·변경 MJS와 실제 생성 Node module syntax는 통과했다.
+새 canonical/metadata/denial 관측의 실제 Mac 실행은 **NOT_RUN**이다. 원시는 `exact-unix-sockets/dns-path-and-denial/`다.
+
 
 
 ## Linux 발행 뒤 실제 Mac service 반례 (2026-10-28)
@@ -1099,7 +1126,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `24357a4a88c565d0c641f4055096da425874eb83ac585e18b34ba1df062717c6` (15687 files).
+verification input digest `3f31c762e52867065529f7bbed766b8c34ae9d3a37a940d6bc0dfefba0101a29` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

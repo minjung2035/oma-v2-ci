@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -100,10 +101,30 @@ static void print_unix(FILE *output, const struct unix_observation *value) {
     value->created ? "true" : "false", value->socket_errno, value->created ? "true" : "false",
     value->connected, value->connect_errno);
 }
+struct path_observation { int result, error; const char *kind; };
+static void observe_path(const char *path, struct path_observation *value) {
+  struct stat metadata;
+  errno = 0;
+  value->result = lstat(path, &metadata);
+  value->error = value->result < 0 ? errno : 0;
+  value->kind = value->result < 0 ? NULL : S_ISLNK(metadata.st_mode) ? "symlink" :
+    S_ISSOCK(metadata.st_mode) ? "socket" : S_ISDIR(metadata.st_mode) ? "directory" : "other";
+}
+static void print_path(FILE *output, const struct path_observation *value) {
+  fprintf(output, "{\"result\":%d,\"errno\":%d,\"kind\":", value->result, value->error);
+  if (value->kind == NULL) fputs("null", output);
+  else fprintf(output, "\"%s\"", value->kind);
+  fputs("}", output);
+}
 static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {
   struct snapshot ports = snapshot();
-  struct unix_observation dns_socket = {0}, listed_socket = {0}, unlisted_socket = {0};
+  struct unix_observation dns_socket = {0}, canonical_socket = {0}, listed_socket = {0}, unlisted_socket = {0};
+  struct path_observation var_alias, dns_alias, dns_canonical;
+  observe_path("/var", &var_alias);
+  observe_path("/var/run/mDNSResponder", &dns_alias);
+  observe_path("/private/var/run/mDNSResponder", &dns_canonical);
   observe_unix("/var/run/mDNSResponder", &dns_socket);
+  observe_unix("/private/var/run/mDNSResponder", &canonical_socket);
   observe_unix(listed, &listed_socket);
   observe_unix(unlisted, &unlisted_socket);
   DNSServiceRef service = NULL;
@@ -126,6 +147,11 @@ static int observe_dns(const char *report_path, const char *listed, const char *
   fputs(",\"socket\":", output); print_unix(output, &dns_socket);
   fputs(",\"unixAllowlist\":{\"listed\":", output); print_unix(output, &listed_socket);
   fputs(",\"unlisted\":", output); print_unix(output, &unlisted_socket);
+  fputs("},\"canonicalEndpoint\":\"/private/var/run/mDNSResponder\",\"canonicalSocket\":", output);
+  print_unix(output, &canonical_socket);
+  fputs(",\"pathMetadata\":{\"varAlias\":", output); print_path(output, &var_alias);
+  fputs(",\"dnsAlias\":", output); print_path(output, &dns_alias);
+  fputs(",\"dnsCanonical\":", output); print_path(output, &dns_canonical);
   fprintf(output, "},\"dnssd\":{\"createResult\":%d},\"getaddrinfo\":{\"result\":%d,\"errno\":%d,\"ipv4\":%u,\"ipv6\":%u}}\n",
     dns_status, gai_status, gai_errno, ipv4, ipv6);
   require(fclose(output) == 0, "complete DNS report");

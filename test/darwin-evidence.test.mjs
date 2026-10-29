@@ -90,6 +90,9 @@ const bootstrapRecord = () => {
   const nativeDns = (pid, bootstrap = 200, seed = 201, sandboxed = true) => ({ phase: "native-dns", pid, uid: 501,
     hostname: "example.com", endpoint: "/var/run/mDNSResponder", ports: { bootstrap, registered: [seed] },
     socket: socket(true), unixAllowlist: { listed: socket(true), unlisted: socket(!sandboxed) },
+    canonicalEndpoint: "/private/var/run/mDNSResponder", canonicalSocket: socket(true),
+    pathMetadata: { varAlias: { result: 0, errno: 0, kind: "symlink" },
+      dnsAlias: { result: 0, errno: 0, kind: "socket" }, dnsCanonical: { result: 0, errno: 0, kind: "socket" } },
     dnssd: { createResult: 0 }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } });
   const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
     const attempt = kind => {
@@ -326,6 +329,8 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult = -1; value.bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectErrno = 1; },
     value => { value.bootstrap.variants[1].node.tools.nativeDnsCommand.argv[3] = "/foreign/socket"; },
     value => { delete value.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns.pathMetadata.varAlias.result = -1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns.canonicalEndpoint = "/foreign/socket"; },
     value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
     value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
     value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
@@ -354,6 +359,7 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   unknown.bootstrap.variants[1].node.tools.nativeDns.getaddrinfo = { result: -2, errno: 1, ipv4: 0, ipv6: 0 };
   unknown.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist.unlisted.connectResult = 0;
   unknown.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist.unlisted.connectErrno = 0;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.pathMetadata.varAlias = { result: -1, errno: 1, kind: null };
   unknown.bootstrap.variants[0].node.tools.nativeDnsCommand = {
     ...unknown.bootstrap.variants[0].node.tools.nativeDnsCommand, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
   unknown.bootstrap.variants[0].node.tools.nativeDns = null;
