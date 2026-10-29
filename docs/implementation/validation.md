@@ -130,8 +130,39 @@ canonical leaf의 명시적 lstat도 metadata 거절이나 raw canonical connect
 `(allow file-read-metadata (literal "/var"))`만 추가했다. 파일 내용·directory entries·write·broad subpath,
 추가 Mach service·resolver fallback·timeout 완화는 없고 기존 실행 guard·Linux backend도 유지한다.
 inventory·review stale·DAG·build는 exit0, guard를 유지한 caller regression59/59·fail/cancel/skip/todo0다.
-이 후보의 실제 Mac alias connect·DNS-SD·libc/Node 정상화와 listed/unlisted·금지 file canary 보존은 **NOT_RUN**이다.
-원시는 `exact-unix-sockets/var-symlink-metadata/`다. 실제 결과 전에는 DNS 수리나 gate 완료로 기록하지 않는다.
+이 local checkpoint에서는 후보의 실제 Mac 효과가 **NOT_RUN**이었다. 이후 실행은 다음과 같다.
+원시는 `exact-unix-sockets/var-symlink-metadata/`다.
+
+주 `c68aa2826d24baf14749db1503b67452b1f175fe` / mirror `46a5c6b4427fe67e2f5a797fa53845dad74ad180`,
+tree `a768c5ce3fbda9cc63e011b47724b343fd52d672`, clean `5aefad9164bff84d0e973ec25ac0458e1d5bbacd9f644f71eccd99c6cd2aec2d` /15687 files다.
+Native [40796369607](https://github.com/minjung2035/oma-v2-ci/actions/runs/40796369607)의 SHA256 확인 ZIP5개를 회수했다.
+두 Mac 실제 compile/link·각3 case OBSERVED이며 source/input/runtime bytes는 전후 동일하다.
+
+| 두 Mac·각3회, mode별6 variant | alias connect·DNS-SD | Node lookup | native C getaddrinfo |
+|---|---|---|---|
+| inherited |6회 모두0 |6회 성공 |6회 성공 |
+| bootstrap-only |6회 모두0 |6회 성공 |6회 EAI_NONAME8/errno1 |
+| bootstrap-and-xpc |6회 모두0 |6회 성공 |6회 EAI_NONAME8/errno1 |
+
+listed0/unlisted EPERM·Git/compiler0·자기 쓰기·금지 file EPERM은 모든 variant에서 유지했다.
+`/var` lstat는 이제 성공·symlink이며 DNS socket leaf의 명시적 metadata 조회는 계속 거절된다.
+성공한 getaddrinfo의 잔여 errno1은 API 실패로 해석하지 않는다. resolver나 native C의 hostname/service/flags를 바꾸지 않았다.
+bootstrap 제거 조건의 C 실패와 Node 성공을 합쳐 “DNS 전체 완료”라고 하지 않는다.
+소유 PID log는 새 `file-read-metadata /etc` 거절을 기록했고 syslog/notification-center 거절도 보존했다.
+그 incidental service에 새 권한을 주지 않는다. inherited의 범위 밖 service 실행 반례도 남아 있어 backend 채택·세 gate 완료가 아니다.
+Mac common은 각254/254·Ubuntu246/246, Linux integration433/433·execution46/46·Restic-setup8/8·모두 skip/cancel/todo0이다.
+Mac packed는 기존 Git preparation `UNSUPPORTED_PROFILE`을 계속 기록했다.
+`actual-dns-and-boundary-outcomes.json`·`actual-dns-qualification.json`·`actual-owned-pid-denials.json`·
+`actual-relevant-denials.json`·`actual-common-runtime-and-package-result.json`에 부분 수리와 잔여 실패를 함께 남겼다.
+
+### /etc root symlink metadata 후보 — 실제 효과 미검증
+
+이미 read 허용된 canonical system files에 도달하는 `/etc` symlink의 metadata만 추가했다.
+production rule은 exact `/var`와 `/etc` metadata이며 data/write·조상 subpath·추가 Unix/Mach service는 허용하지 않는다.
+기존 native C의 `getaddrinfo("example.com", "443", …)`를 그대로 유지해 잔여 실패 수리 여부를 판정한다.
+inventory·review stale·DAG·build는 exit0, guard를 유지한 caller regression59/59·fail/cancel/skip/todo0다.
+이 후보의 실제 Mac libc 효과와 기존 양성/거절 보존은 **NOT_RUN**이고 guard·세 gate도 그대로다.
+원시는 `exact-unix-sockets/etc-symlink-metadata/`다.
 
 
 
@@ -1148,7 +1179,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `5aefad9164bff84d0e973ec25ac0458e1d5bbacd9f644f71eccd99c6cd2aec2d` (15687 files).
+verification input digest `7c5727c253aabaf79ced528df0d581e1bce073140b402dec067ab95e87207d7c` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

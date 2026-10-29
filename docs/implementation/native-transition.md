@@ -29,7 +29,7 @@ production Seatbelt의 명시된 Unix endpoint를 top-level literal로 번역하
 host 둘 다 양성, sandbox에서는 listed 양성/unlisted 거절 여부를 각각 raw connect로 기록한다.
 native helper argv·PID/UID·validator·fixture factory를 함께 바꾸고 반례의 예상 밖 성공도 OBSERVED로 남긴다.
 build·focused41/41·caller impact18/18·syntax/잘못된 OS 조기 거절은 통과했다.
-직후 실제 Mac 효과는 NOT_RUN이었다. 이후 `2b8c6f276d`의 양 Mac 실행에서 listed 연결/unlisted EPERM18회와 정상 Git/compiler·금지 file canary를 확인했다. DNS는 계속 EPERM이며 `f75a06eeeb`의 exact endpoint metadata 단독 후보도 효과가 없어 제거했다. `9956e67380`의 실제18회는 canonical connect0·alias EPERM이고, 소유 PID의 제한된 violation log는 `file-read-metadata /var`를 기록했다. 현재 후보는 이 root symlink의 exact metadata만 추가하며 local build·caller59/59는 통과했다. 새 후보의 실제 Mac DNS 효과는 NOT_RUN이고 broad file/network/Mach나 resolver override를 추가하지 않았다. 세 gate·backend 차단은 유지한다.
+직후 실제 Mac 효과는 NOT_RUN이었다. 이후 `2b8c6f276d`에서 listed 연결/unlisted EPERM18회와 정상 Git/compiler·금지 file canary를 확인했고, 효과가 없던 `f75a06eeeb`의 endpoint metadata 단독 grant는 제거했다. `9956e67380`의 canonical0/alias EPERM·실제 `/var` metadata 거절 뒤 `46a5c6b442`의 한정된 root symlink metadata 수리로 alias connect·DNS-SD·Node DNS18회가 성공했다. bootstrap 제거 조건의 native C `getaddrinfo`12회는 실패하고 `/etc` metadata 거절이 남았다. 현재 후보는 그 두 번째 symlink의 exact metadata만 추가하며 local build·caller59/59는 통과했다. 새 후보의 실제 Mac 효과는 NOT_RUN이고 broad file/network/Mach·resolver override·timeout 완화는 없다. 세 gate·backend 차단은 유지한다.
 출처·새 Linux CI에서 관측한 Mac15 별도 pack timeout은 [검증 owner](validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 구분했다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
 

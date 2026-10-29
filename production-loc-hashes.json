@@ -1576,7 +1576,7 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "7a37154959dc6310b4b1cf7cff2f16a7afefdcd30844efa674868774bf565adc"
+      "sha256": "7f3dcd431a83f75cbb9a0ef7c1dbfa26890a53fd2f0876ea7435aefa9958db04"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
