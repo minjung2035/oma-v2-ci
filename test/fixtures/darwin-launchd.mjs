@@ -160,6 +160,13 @@ try {
     const bootstrapSource = fileURLToPath(new URL("./darwin-bootstrap-exec.c", import.meta.url));
     const launcher = join(root, "bootstrap-exec");
     run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-o", launcher]);
+    const resolverSymbolsCommand = run("/usr/bin/xcrun", ["nm", "-uj", launcher]);
+    const imports = resolverSymbolsCommand.stdout.split(/\r?\n/).map(name => name.trim()), resolverSymbols = {};
+    for (const name of ["getaddrinfo", "freeaddrinfo"]) {
+      const matches = imports.filter(symbol => new RegExp(`^_${name}(?:\\$[A-Za-z0-9_]+)*$`).test(symbol));
+      assert.equal(matches.length, 1, JSON.stringify({ name, resolverSymbolsCommand }));
+      resolverSymbols[name] = matches[0].slice(1); // Mach-O's leading C underscore is not part of dlsym's name.
+    }
     const compiler = realpathSync(run("/usr/bin/xcrun", ["--find", "clang"]).stdout.trim());
     const sdk = realpathSync(run("/usr/bin/xcrun", ["--show-sdk-path"]).stdout.trim());
     const selectorHome = join(root, "developer-observation"); mkdirSync(selectorHome, { mode: 0o700 });
@@ -227,7 +234,7 @@ try {
       host: { pid: process.pid, uid: process.getuid(), ffiPid } };
     const libcEntry = realpathSync(fileURLToPath(new URL("./darwin-libc.mjs", import.meta.url)));
     const libcProbe = { entry: libcEntry, sourceSha256: createHash("sha256").update(readFileSync(libcEntry)).digest("hex") };
-    const nativeLibcHost = observeNodeLibc(hostLoad(null), hostDecode, nativeDnsHost.addrinfoLayout);
+    const nativeLibcHost = observeNodeLibc(hostLoad(null), hostDecode, nativeDnsHost.addrinfoLayout, resolverSymbols);
     assert.ok(nativeLibcHost.calls.every(call => call.result === 0 && call.ipv4 + call.ipv6 > 0), JSON.stringify(nativeLibcHost));
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
@@ -236,7 +243,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
-const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout] = process.argv.slice(2);
+const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout, resolverSymbols] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -296,7 +303,7 @@ try {
   value.bootstrapGlobal.restore = restore; save();
   value.nativeLibc.before = before; save();
   try {
-    const result = observeNodeLibc(library, decode, JSON.parse(resolverLayout));
+    const result = observeNodeLibc(library, decode, JSON.parse(resolverLayout), JSON.parse(resolverSymbols));
     result.before = before; value.nativeLibc = result; save();
     result.after = snapshot();
   } catch (error) { value.nativeLibc.unavailable = String(error); }
@@ -330,7 +337,7 @@ value.complete = true; save();
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
       unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, nativeSubsetHostCommand, nativeSubsetHost,
-      libcProbe, nativeLibcHost, ffi, variants: [] };
+      libcProbe, nativeLibcHost, resolverSymbolsCommand, resolverSymbols, ffi, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
@@ -353,7 +360,8 @@ value.complete = true; save();
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
         nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target, JSON.stringify(nativeDnsHost.addrinfoLayout)]);
+        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target,
+        JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
       const tools = optionalJson(toolsReport);
       const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
       const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,

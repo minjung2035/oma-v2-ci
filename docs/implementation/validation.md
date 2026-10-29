@@ -365,6 +365,20 @@ service443/null 모두 status0·ipv4=1/ipv6=0·목록 순회/해제를 확인했
 [Node26 호출부](https://github.com/nodejs/node/blob/v26.0.0/src/cares_wrap.cc#L1987-L2004)와
 [bundled libuv](https://github.com/nodejs/node/blob/v26.0.0/deps/uv/src/unix/getaddrinfo.c#L94-L100)의 source 경로도 확인했지만 실제 image 관측을 대신하지 않는다.
 
+초기 same-image source는 주 `a991ae173fdfbc95e2cb75e18fe9fcabdc83420c` / mirror `9bed777fd93eb0fb5feefa63b3297d08498df2fa`,
+tree `6a7000bf8c3af69ce553190ab3c05a26709d9d5e`, clean `caba96186c412fb7b864b7b3b35f744ef61bfb86758ebd5267ab2835ec646c3b` /15688 files다.
+이 checkpoint는 **unversioned export**를 직접 호출했다. C compiler가 선택한 Darwin alias/import 이름은 미관측이므로
+그 결과만으로 차이를 image 초기화에 귀속하거나 동일 C symbol이라고 단정하지 않는다. 원래 Native40820214517·Architecture40820214651은 별도 source로 추적한다.
+
+후속 수리는 실제 launcher의 `xcrun nm -uj` 출력에서 getaddrinfo/freeaddrinfo import를 각각 정확히 하나 선택하고
+Mach-O의 선행 C underscore만 제거한 **그 이름**을 host/child의 classic FFI binding에 필수로 전달한다.
+이름 선택이 없거나 여러 개면 거절하며 unversioned 대체·missing-symbol fallback은 없다.
+실제 nm command/출력·선택된 두 이름·Node argv와 결과 record를 함께 결박한다. SDK feature macro의 alias 혼입을 image 차이로 오인하지 않기 위한 조건이다.
+caller59/59·generated syntax·실제 Linux early refusal와 explicit-symbol getaddrinfo/목록 해제는 통과했다.
+기존 성공한 실제 compiler layout을 재사용했으며 actual Mac import·정확한 import를 쓰는 비교는 **NOT_RUN**이다.
+원시는 `same-image-libc/linked-symbols/`다. product policy·권한·timeout은 그대로다.
+
+
 
 
 
@@ -1385,7 +1399,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `caba96186c412fb7b864b7b3b35f744ef61bfb86758ebd5267ab2835ec646c3b` (15688 files).
+verification input digest `572995020a7f1d6b9e96e2d350d8e05e93743b6be20e6f8a14696432a1e5ffaf` (15688 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
