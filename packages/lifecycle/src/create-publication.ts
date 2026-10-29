@@ -5,6 +5,7 @@ import type { LifecycleLedger } from "./ports.js";
 import type { LifecycleUnits } from "./ports.js";
 import { StoreError } from "@oma/domain/errors";
 import { isWorkspacePathFor } from "@oma/domain/paths";
+import type { LifecyclePolicy } from "./policy.js";
 
 const readyBrand: unique symbol = Symbol("observed create readiness");
 const issued = new WeakMap<object, { id: string; actor: string; planJson: string }>();
@@ -13,8 +14,8 @@ const issued = new WeakMap<object, { id: string; actor: string; planJson: string
  * desired=enabled nor a caller boolean is workspace/unit installation proof.
  */
 export class CreationPublicationObserver {
-  constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "ensureResident">, private readonly stateRoot: string,
-    private readonly workspace: Pick<LifecycleWorkspace, "observeProvisioningHead">) {}
+  constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "ensureResident" | "confirmDead">, private readonly stateRoot: string,
+    private readonly workspace: Pick<LifecycleWorkspace, "observeProvisioningHead">, private readonly policy: LifecyclePolicy) {}
   ready(operation: OperationOf<"agent.create">): CreationPublicationEvidence {
     const plan = operation.plan;
     if ("unitNames" in plan) throw new StoreError("UNSUPPORTED_PROFILE", "historical unit installation intent cannot publish native readiness");
@@ -38,11 +39,15 @@ export class CreationPublicationObserver {
     }
     // The native execution owner verifies the frozen references and owns the actor slot.
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.modelProfile);
+    const capacity = agent.desired === "provisioning" ? this.policy.observeReleasedCapacity(this.units) : null;
     this.store.transaction(tx => {
       const current = this.store.getAgent(plan.spec.name);
       if (!current || current.specHash !== plan.specHash || current.incarnation !== agent.incarnation)
         throw new StoreError("STORE_CORRUPT", "creation identity changed before readiness commit");
-      if (current.desired === "provisioning") tx.updateAgent({ name: current.name, desired: "enabled" });
+      if (current.desired === "provisioning") {
+        this.policy.assertWorkerCapacity(current.name, capacity);
+        tx.updateAgent({ name: current.name, desired: "enabled" });
+      }
     });
     const proof = Object.freeze({ [readyBrand]: true as const });
     issued.set(proof, { id: operation.id, actor: operation.actor, planJson: operation.planJson });

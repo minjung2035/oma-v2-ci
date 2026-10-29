@@ -94,6 +94,75 @@ const attestationMessages = (f: ReturnType<typeof fixture>) =>
 const mailOfRole = (f: ReturnType<typeof fixture>, role: "approval" | "withdrawn" | "decision" | "thread" | "notice") =>
   attestationMessages(f).filter(m => m.review?.role === role);
 
+for (const kind of ["merge", "challenge"] as const) test(
+  `submitter provenance changing after ${kind} mail freeze refuses stale authority and permits fresh independent review`,
+  { timeout: 10_000 }, async () => {
+    const f = fixture();
+    const frozen = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const freeze = f.mail.freezeReviewMessage.bind(f.mail);
+    let paused = false;
+    try {
+      let base = f.base;
+      let target: string | undefined;
+      if (kind === "challenge") {
+        const candidate = f.candidateWith({ "target.txt": "original\n" });
+        await f.submit("alice", candidate, "target-submit");
+        await f.open("alice", { tier: "LOW", candidate }, "target-open");
+        target = f.requestName("target-open");
+        base = candidate;
+      }
+      const candidate = f.candidateWith({ "replacement.txt": "review this\n" }, base);
+      await f.submit("alice", candidate, "first-submit");
+      f.mail.freezeReviewMessage = async (...args) => {
+        const result = await freeze(...args);
+        if (!paused && result.message.review?.role === "thread") {
+          paused = true;
+          frozen.resolve();
+          await resume.promise;
+        }
+        return result;
+      };
+      const input = kind === "merge"
+        ? { kind: "merge.open" as const, title: "freshness", reason: "review it", tier: "MEDIUM" as const, candidate, base }
+        : { kind: "challenge.open" as const, merge: target!, title: "freshness", reason: "review it", tier: "LOW" as const, candidate, base };
+      const pending = settle(f.reviews.record(f.auth("alice"), "freshness-open", input));
+      await frozen.promise;
+      const submitted = await f.submit("bob", candidate, "late-submit");
+      assert.equal(submitted.state, "succeeded", "new provenance is durably published before acceptance");
+      const before = f.store.attestations.all().length;
+      const delivered = inboxCount(f, "bob");
+      resume.resolve();
+      const outcome = await pending;
+      assert.equal(codeOf(outcome), "BROKER_UNAVAILABLE");
+      assert.equal(f.store.getOperation("alice", "freshness-open"), null, "stale open owns no accepted identity");
+      assert.equal(f.store.attestations.all().length, before, "stale mail cannot become durable authority");
+      assert.equal(inboxCount(f, "bob"), delivered, "stale frozen thread is not delivered");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      assert.equal((await f.reviews.record(f.auth("alice"), "freshness-open", input)).state, "succeeded",
+        "same key can prepare fresh provenance");
+      const name = f.requestName("freshness-open");
+      assert.deepEqual(f.stateOf(name).authors, ["alice", "bob"]);
+      await assert.rejects(f.vote("alice", name, "approve", "requester's vote", "self-requester"), { code: "SELF_REVIEW" });
+      await assert.rejects(f.vote("bob", name, "approve", "new submitter's vote", "self-submitter"), { code: "SELF_REVIEW" });
+      assert.deepEqual(f.stateOf(name).approvers, []);
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "self review never applies main");
+      const independent = await f.vote("carol", name, "approve", "independently checked", "fresh-peer");
+      if (kind === "challenge") {
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "challenge still requires two peers");
+        await f.vote("dave", name, "approve", "second independent check", "fresh-peer-2");
+      }
+      assert.equal(f.stateOf(name).display, "applied");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+      assert.equal((await f.vote("carol", name, "approve", "independently checked", "fresh-peer")).operation,
+        independent.operation, "accepted vote retry keeps its identity");
+    } finally {
+      resume.resolve();
+      f.mail.freezeReviewMessage = freeze;
+      f.close();
+    }
+  });
+
 test("8 concurrent Worker votes on one HIGH request: serialized acceptance, one op per key, one approval", async () => {
   const f = fixture(); try {
     addAgents(f, ["erin", "fred", "gail", "henry", "iris"]);

@@ -148,32 +148,30 @@ test("DR27/CFG-002: initial Worker count persists with a non-delegating Principa
   }
 });
 
-test("Worker capacity: concurrent creation reserves the last slot once, including provisioning and stopped Workers", async t => {
+test("Worker capacity: provisioning does not occupy slots and accepted seeds recover after release", async t => {
   const f = fixture(t);
   f.config.maxWorkers = 4;
   const lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
+  assert.equal(lifecycle.creation(f.auth("principal")).workerCount, 0);
   await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
   const auth = f.auth("worker-1");
-  const inputs = ["last-a", "last-b"].map(name => ({ name, from: f.from, brief: "Independent work" }));
-  const results = await Promise.allSettled(inputs.map(input => lifecycle.create(auth, input, input.name)));
-  const winner = results.findIndex(result => result.status === "fulfilled");
-  assert.notEqual(winner, -1);
-  const loser = results[1 - winner]!;
-  assert.equal(loser.status, "rejected");
-  if (loser.status === "rejected") assert.equal(loser.reason.code, "LIMIT_EXCEEDED");
-  const chosen = inputs[winner]!;
-  assert.equal(f.store.getOperation("worker-1", inputs[1 - winner]!.name), null);
-  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 4);
-  f.store.transaction(tx => tx.updateAgent({ name: chosen.name, desired: "stopped" }));
-  await assert.rejects(lifecycle.create(auth, { name: "excess", from: f.from, brief: "No free slot" }, "excess"),
-    { code: "LIMIT_EXCEEDED", details: { resource: "workers", maxWorkers: 4, workerCount: 4 } });
-  assert.equal((await lifecycle.create(auth, chosen, chosen.name)).state, "succeeded");
-  assert.equal((await lifecycle.create(auth, chosen, "linked-retry")).state, "succeeded");
-  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 4);
-  const observed = lifecycle.creation(auth);
-  assert.equal(observed.workerCount, 4);
-  assert.equal(observed.maxWorkers, 4);
+  const inputs = ["last-a", "last-b", "last-c"].map(name => ({ name, from: f.from, brief: "Independent work" }));
+  for (const input of inputs) assert.equal((await lifecycle.create(auth, input, input.name)).state, "succeeded");
+  const waiting = f.store.getOperation("principal", "bootstrap-worker-2")!;
+  await lifecycle.reconcileCreate(waiting.id);
+  assert.equal(f.store.getAgent("worker-2")?.desired, "provisioning");
+  assert.equal(lifecycle.creation(auth).workerCount, 4);
+  await assert.rejects(lifecycle.create(auth, { name: "full", from: f.from, brief: "full" }, "full"), { code: "LIMIT_EXCEEDED" });
+  assert.equal(f.store.getOperation("worker-1", "full"), null);
+  f.store.transaction(tx => tx.updateAgent({ name: "last-a", desired: "stopped" }));
+  await lifecycle.reconcileCreate(waiting.id);
+  assert.equal(f.store.getAgent("worker-2")?.desired, "enabled");
+  assert.equal((await lifecycle.create(auth, inputs[0]!, "last-a")).state, "succeeded");
+  assert.equal((await lifecycle.create(auth, inputs[0]!, "linked-retry")).state, "succeeded");
+  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 6);
+  assert.equal(lifecycle.creation(auth).workerCount, 4);
+  assert.equal(lifecycle.creation(auth).maxWorkers, 4);
 });
 
 test("Worker capacity changes require restart and never remove existing Workers", async t => {
@@ -186,6 +184,6 @@ test("Worker capacity changes require restart and never remove existing Workers"
   f.config.initialResidents = [];
   const input = { name: "excess", from: f.from, brief: "No free slot" };
   await assert.rejects(lifecycle.create(f.auth("worker-1"), input, "before-restart"), { code: "POLICY_CHANGED" });
-  await assert.rejects(f.lifecycle().create(f.auth("worker-1"), input, "after-restart"), { code: "LIMIT_EXCEEDED" });
+  await assert.rejects(f.lifecycle().create(f.auth("worker-1"), input, "after-restart"), { code: "UNSUPPORTED_PROFILE" });
   assert.deepEqual(f.store.listAgents(), before);
 });

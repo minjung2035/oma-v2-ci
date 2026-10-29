@@ -31,6 +31,7 @@ export class LifecycleModule {
     this.registry = new RegistryOperations(store, effects);
   }
   creation(auth: AuthContext) { return this.policy.observeCreation(auth); }
+  assertActiveCapacity(): void { this.policy.assertActiveCapacity(); }
   setSociety(auth: AuthContext, state: "open" | "closed", key: string): Promise<Receipt> { return this.society.set(auth, state, key); }
   reconcileSociety(id: string): Promise<void> { return this.society.reconcileById(id); }
   bootstrap(config: SeedConfig): Promise<void> { return this.creates.bootstrap(config); }

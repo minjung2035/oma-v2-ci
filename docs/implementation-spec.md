@@ -531,6 +531,8 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
 
 **MUST [SB-004]** DR37/DR46: Resident의 네트워크와 실제 OS 용량을 제한하는 OMA 정책은 두지 않는다. project CONNECT proxy는 대상 host와 port 문법을 검증하고 요청 header를 proxy에서 끝내며, 연결·dial·queue 자원은 실제 종료까지 owner가 보유한다. macOS guest의 CONNECT는 host가 발급한 현재 run identity에만 연결하고 lease 종료·boot 변경 뒤 새 연결을 열지 않는다. protocol 7은 guest의 옛 role/allow 선언을 거부한다. provider credential은 별도의 host relay가 소유하며 project tunnel에 넘기지 않는다.
 
+For plain HTTP forwarding, an upstream abort, response error or incomplete message close aborts the downstream response rather than leaving it waiting or fabricating a complete body. The downstream response-close boundary releases the request's owned connection resources. A normally completed response remains streamable, including subsequent requests through the same proxy.
+
 **MUST [SB-005]** candidate-check sandbox는 staged candidate checkout만 RW, trusted check assets RO, tmp cap, private network, no actor/admin/inference socket이다. Git quarantine은 필요한 broker objects만 RO와 자기 staging만 RW다. Principal tools는 public world/mail/Git RO+자기 scratch RW만 갖고 Human session directory는 없다.
 
 **MUST [SB-006]** sandbox의 writable session/client files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.

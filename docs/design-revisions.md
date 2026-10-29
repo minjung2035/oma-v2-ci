@@ -2599,17 +2599,29 @@ shell 설정을 반영하고 설정이 바뀔 때만 factory를 갱신한다. To
 
 ## DR66 — Worker 상한과 구조적 peer 부족의 Principal fallback
 
-사용자 요청으로 Worker 생성 상한을 복원한다. HostConfig 4의 최상위 `maxWorkers`는 기본 6,
-새 구성의 초기 Worker는 3명이다. Principal을 제외한 등록 Worker 전체를 세며 provisioning·
-stopped·retired도 슬롯을 점유한다. 동일 요청 replay/기존 동일 spec 연결은 새 슬롯이 아니고,
-물리적 생성 승인은 같은 트랜잭션에서 상한을 확인한다. 초과는 `LIMIT_EXCEEDED`다.
-상한 수정은 재시작 적용이며 기존 Worker를 자동 삭제하지 않는다.
+The corrected DR66 limit is active Worker capacity, not lifetime registration count.
+HostConfig 4 keeps `maxWorkers` at 6 by default and seeds 3 initial Workers.
+Only resident rows with `desired=enabled` occupy active slots; idle enabled Workers
+still count, while Principal, provisioning, stopped and retired rows do not.
+Fresh create refuses with `LIMIT_EXCEEDED` before acceptance when active capacity
+is full. Creation publication and stopped-to-enabled start recheck admission
+atomically. A previously accepted creation that loses a slot race remains
+pending/provisioning, without publishing readiness or its initial delivery, and
+existing reconciliation completes it after a slot is released. Same-key replay
+and an already-enabled start do not consume another slot.
+Unconfirmed physical termination retains the existing execution safety fence;
+an inactive desired state is not proof of death. Capacity changes require broker
+restart. A cap below the enabled registry fails closed rather than deleting or
+retiring Workers; stop enough Workers before lowering it.
 
-정상 peer 수는 MEDIUM merge 1, HIGH merge·모든 challenge는 `highPeerFloor`다.
-요청 작성자(requester와 submitter의 합집합)를 제외하고 설정 상한으로 확보 가능한 peer 수가
-정상 수보다 작으면 그 수까지의 peer 승인을 유지하고 Principal 승인을 추가한다.
-peer 0명은 open과 동시에 승인 메일을 발행한다. HIGH의 Principal gate와 LOW merge의
-fast path는 유지한다. 가용성 부족·중지·생성 실패·반대표를 이유로 quorum을 낮추지 않는다.
+Normal peer requirements remain one for MEDIUM merge and `highPeerFloor` for
+HIGH merge and every challenge. Potential independent capacity is `maxWorkers`
+minus currently enabled resident authors (the requester/submitter union).
+All historical authors remain excluded from voting, including inactive ones.
+Only structural capacity insufficiency reduces the peer count and adds explicit
+Principal approval; zero-peer fallback issues its approval mail at opening.
+Missing/stopped reviewers, failed provisioning and negative votes do not lower
+quorum. HIGH's Principal gate and LOW merge's fast path remain unchanged.
 
 승인 메일의 exact candidate·현재 id, 작성자 배제, 최신 표, Principal delegation,
 stale-base/CAS 검사를 유지한다. 상한은 integration policy identity에도 포함한다.

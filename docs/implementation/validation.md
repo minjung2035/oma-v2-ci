@@ -63,10 +63,69 @@ notice와 details, ACK 및 batch 완료 판정은 변경하지 않았다.
 deterministic stream이고 메일 도착 입력은 fixture다. 실제 provider 추론·broker 배달·
 Resident 활성화·전체 제품 회귀나 새 packed install을 검증했다고 주장하지 않는다.
 
-## DR66 Worker 상한·Principal fallback — 이번 실행
+## Benchmark-essential Linux fixes and active Worker capacity
 
-`maxWorkers` 기본6·초기 Worker3, 등록 Worker 슬롯의 원자적 생성 제한과 구조적 peer 부족의
-Principal fallback을 구현했다. 모델 prompt/tool 안내는 영어이며 custom prompt는 유지한다.
+Scope is the six requested findings (4, 5, 9, 18, 23, 26), plus the user's
+subsequent correction of `maxWorkers` from lifetime registrations to active
+Workers. Other findings remain deferred. No macOS implementation was changed.
+
+Implemented behavior:
+- Review acceptance refuses stale authenticated submitter provenance after
+  asynchronous preparation; replacement challenges obey deterministic tier floors.
+- Scoped grep/find no longer depend on unrelated sibling traversal.
+- Interrupted plain HTTP responses abort downstream without hanging or
+  fabricating successful completion, and release their owned connections.
+- The functional-surface owner regression exercises the installed SDK instead
+  of the deleted RPC seam; valid zero-peer approval grammar remains accepted.
+- Worker publication and reactivation enforce active capacity atomically.
+  Historical registrations release slots after stop/retirement; provisioning
+  races remain pending and recover after release. Unknown physical termination
+  stays fenced. Review capacity subtracts active authors while excluding all
+  historical authors from voting, and invalidates changed approval requirements.
+
+| Executed verification | Observed result |
+|---|---|
+| `npm run build` | PASS; 25/27 workspaces recompiled, root typecheck/test emit and static installation checks passed. Static package validation did not start product entrypoints. |
+| `npm run check:transactions` | PASS with the active-capacity admission implementation; physical observations remain outside SQLite transactions. |
+| `npm run check:architecture:rules` | PASS; zero findings. This is not the entire architecture qualification lane. |
+| Affected regression coverage | 265 current tests PASS across staged runs: 232 unchanged passing tests plus the final 33/33 rerun of both corrected test files. No skips. |
+| Expanded regression run before test-only corrections | 267 tests: 264 PASS, 3 FAIL. Two new fixtures attempted the forbidden stopped-to-provisioning transition; those impossible cases were removed. An old assertion pinned the deleted `code_intel` group name; it was deleted without replacing it with another wording assertion. Actual runner input refusal/acceptance coverage remains. |
+| Final corrected-file verification | Root typecheck and test emit PASS; `review-active-capacity.test.js` and `operations-config.test.js` PASS. No product source changed after the full build. |
+| Standalone review scenarios | Fresh merge/challenge provenance races refuse and retry; HIGH replacements respect Principal delegation; zero-peer requests apply only after current Principal approval. |
+| Standalone scoped-search scenario | Real registered grep/find with an unreadable sibling, ancestor ignores, explicit files, root controls, link refusal, abort and private-snapshot cleanup PASS. Executed as uid 1000. |
+| Standalone HTTP scenario | Actual local TCP upstream and Unix downstream: truncated Content-Length and chunked responses close as incomplete; a subsequent healthy response returns its full body. Owned tunnel count returns to zero. |
+| Standalone functional gate | Installed SDK production gate PASS: selection/replacement, persisted resume/reset, anchored tools and genuine removed-tool refusal; gate-owned workspace removed. |
+| Standalone lifecycle scenario | Seven historical Worker registrations with cap two retain exactly two active Workers. Stop/new-name reuse, fresh full-cap refusal, start/publication race, pending replay, idempotent start and restart recovery PASS. |
+| Standalone active-author review scenario | Cap two with one active author still requires an independent peer despite an inactive historical coauthor; the peer's actual vote applies main. Cap one with an active requester requires explicit zero-peer Principal approval before main changes. |
+| Actual Config renderer | Production defaults and descriptors display `Initial workers 3`, `Active Worker capacity 6`, and `After restart`. This was renderer execution, not a full interactive session. |
+
+Earlier search/proxy/functional verification fixtures also required corrections
+to setup, owner-close observation and persisted SDK-result observation. The
+passing results above follow those corrections, not the failing attempts.
+
+An additional `review-closure.test.mjs` qualification check failed with stale
+authored review digests for `apps/oma/src/broker/broker-composition.ts`,
+`packages/broker/src/index.ts` and `packages/tool-files/src/index.ts`. Its review
+ledger was not regenerated or approved, and that extra qualification was not
+repeated after further source edits. No full-suite or release approval is claimed.
+
+Lifecycle/review scenarios use real Store, Mail, Git, Lifecycle and Reconcile
+owners with an explicitly controlled execution port. The SDK surface gate uses
+a deterministic assistant stream. Native confined Worker launch, real provider
+inference, benchmark execution, packed-install qualification and macOS runtime
+verification were NOT_RUN. Missing bubblewrap was not bypassed.
+
+Owned throwaway programs and their private state were removed after execution.
+Shared runtime artifacts retain the commands, initial failures, corrected
+results and smoke source; they are not a substitute for a committed review or
+benchmark result.
+
+## DR66 initial implementation — historical verification
+
+The following evidence belongs to the initial DR66 implementation, which counted
+registered Workers. The user's later correction changes the limit to active
+Workers; current verification is recorded separately below. These historical
+results do not certify the current source tree.
 
 | 실제 실행 | 관측 결과와 한계 |
 |---|---|

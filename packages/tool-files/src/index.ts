@@ -12,8 +12,10 @@ import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
 
 import { WorkspaceRefusal } from "./errors.js";
-import { descriptorPath, directoryNames, mkdirAt, openAt, openRoot, reopenDirectory, unlinkAt } from "./descriptor-files.js";
+import { descriptorPath, directoryNames, mkdirAt, openAt, openRoot, unlinkAt } from "./descriptor-files.js";
 export { WorkspaceRefusal } from "./errors.js";
+
+const ANCESTOR_IGNORE_FILES = [".gitignore", ".ignore", ".rgignore", ".fdignore"] as const;
 
 /** The components of a path inside the workspace, or a refusal. */
 export function componentsWithin(root: string, path: string): string[] {
@@ -195,9 +197,9 @@ export function existsWithin(root: string, path: string): boolean {
 }
 
 /** G10-02: pathname walkers see only a private copy of approved inodes, never
- * the mutable workspace. The root and every descendant stay held while read.
- * Entry metadata costs one byte of the same finite workspace budget. No links
- * are copied. Depth is not refused: the source side holds one descriptor per
+ * the mutable workspace. The selected file/subtree and its ancestor ignore
+ * files stay held while read; unrelated siblings are never walked.
+ * No links are copied. Depth is not refused: the source side holds one descriptor per
  * open level -- the workspace is the untrusted tree, so a component swapped
  * mid-copy cannot redirect a read -- and the destination side holds one per
  * open level too. The private `oma-search-*` tree is only mode-700: a same-uid
@@ -248,6 +250,7 @@ async function searchSnapshot<T>(root: string, path: string,
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
   progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
   const parts = componentsWithin(root, path);
+  if (parts.includes(".git")) throw new WorkspaceRefusal("repository internals are not a search input");
   const temp = openDirectoryWithin(tmpdir(), [], false);
   let baseName = "";
   try {
@@ -327,23 +330,54 @@ async function searchSnapshot<T>(root: string, path: string,
   };
   try {
     destination = openAt(temp, baseName, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    const fd = openDirectoryWithin(root, [], false);
+    // Hold the selected entry, not just a validation of its pathname. Ancestor
+    // descriptors supply only ignore files, never a walk of their siblings.
+    const sources: number[] = [openDirectoryWithin(root, [], false)];
     try {
-      // Validate the explicit target beneath the same held root we copy. Do not
-      // resolve the workspace pathname a second time between check and use.
-      let selected = reopenDirectory(fd);
-      try {
-        for (const [index, part] of parts.entries()) {
-          let next: number;
-          try { next = openAt(selected, part, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK |
-            (index < parts.length - 1 ? constants.O_DIRECTORY : 0)); }
-          catch (error) { refusedLink(error); }
-          closeSync(selected); selected = next;
-        }
-        if (!fstatSync(selected).isDirectory()) ownedFile(selected);
-      } finally { closeSync(selected); }
-      await copy(fd, destination, "workspace");
-    } finally { closeSync(fd); }
+      for (const [index, part] of parts.entries()) {
+        check();
+        try { sources.push(openAt(sources.at(-1)!, part, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK |
+          (index < parts.length - 1 ? constants.O_DIRECTORY : 0))); }
+        catch (error) { refusedLink(error); }
+      }
+      const selected = sources.at(-1)!;
+      if (!fstatSync(selected).isDirectory()) ownedFile(selected);
+      if (parts.length === 0) {
+        await copy(selected, destination, "workspace");
+      } else {
+        mkdirAt(destination, "workspace", 0o700);
+        let into = openDestination(destination, "workspace", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+        try {
+          for (const [index, part] of parts.entries()) {
+            // Keep the ancestor chain at its original workspace-relative
+            // location so rooted ignore patterns and result paths retain
+            // their meaning. Only engine-recognized ignore inputs belong in
+            // this skeleton; copying any other sibling defeats scoped search.
+            for (const ignore of ANCESTOR_IGNORE_FILES) {
+              check();
+              if (index === parts.length - 1 && ignore === part) continue;
+              let held: number;
+              try { held = openAt(sources[index]!, ignore, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+              catch (error) {
+                if (["ENOENT", "ELOOP"].includes(errnoCode(error) ?? "")) continue;
+                throw error;
+              }
+              try {
+                const stat = fstatSync(held);
+                if (stat.isFile() && stat.nlink === 1) await copy(held, into, ignore);
+              } finally { closeSync(held); }
+            }
+            if (index === parts.length - 1) {
+              await copy(selected, into, part);
+            } else {
+              mkdirAt(into, part, 0o700);
+              const next = openDestination(into, part, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+              closeSync(into); into = next;
+            }
+          }
+        } finally { closeSync(into); }
+      }
+    } finally { for (let index = sources.length - 1; index >= 0; index--) closeSync(sources[index]!); }
     const copied = openAt(destination, "workspace", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     try { mkdirAt(copied, ".git", 0o700); } finally { closeSync(copied); }
     check();

@@ -165,6 +165,50 @@ test("mail-v1: a HIGH challenge asks the Principal before applying", async () =>
   } finally { f.close(); }
 });
 
+for (const floor of ["MEDIUM", "HIGH"] as const) for (const delegated of [false, true]) test(
+  `replacement challenge honors ${floor} path floor and Principal delegation=${delegated}`,
+  async () => {
+    const f = fixture({ principalDelegated: delegated,
+      rules: [{ path: "sensitive.txt", tier: floor, statuses: ["A", "M", "D", "T"] }] });
+    try {
+      const { name: target, candidate: base } = await appliedMerge(f, "benign");
+      const candidate = f.candidateWith({ "file.txt": "benign", "sensitive.txt": "tier-controlled replacement\n" }, base);
+      await f.submit("bob", candidate, "replacement-submit");
+      await assert.rejects(f.open("bob", { tier: "LOW", candidate, base }, "replacement-low-merge"),
+        { code: "INTEGRATION_CONDITIONS" });
+      await assert.rejects(f.challenge("bob", { merge: target, tier: "LOW", candidate, base }, "replacement-low-challenge"),
+        { code: "INTEGRATION_CONDITIONS" });
+      assert.equal(f.store.getOperation("bob", "replacement-low-merge"), null);
+      assert.equal(f.store.getOperation("bob", "replacement-low-challenge"), null);
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      // Challenges have no MEDIUM tier: a floor above LOW requires HIGH.
+      await f.challenge("bob", { merge: target, tier: "HIGH", candidate, base }, "replacement-high");
+      const name = f.requestName("replacement-high", "bob");
+      assert.equal(openFact(f, name).tier, "HIGH");
+      assert.deepEqual(f.stateOf(name).authors, ["bob"]);
+      await assert.rejects(f.vote("bob", name, "approve", "own replacement"), { code: "SELF_REVIEW" });
+      await f.vote("alice", name, "approve", "independent of replacement", "replacement-peer-1");
+      assert.equal(f.stateOf(name).display, "peer-needed");
+      await f.vote("carol", name, "approve", "second independent review", "replacement-peer-2");
+      assert.equal(f.stateOf(name).display, "principal-pending");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "two peers cannot bypass Principal");
+      const approval = messages(f, "carol", "replacement-peer-2").find(m => m.review?.role === "approval")!;
+      assert.ok(approval);
+      const decision = f.vote("principal", name, "approve", "approve the HIGH replacement", "replacement-principal", approval.id);
+      if (delegated) {
+        assert.equal((await decision).state, "succeeded");
+        assert.equal(f.stateOf(name).display, "applied");
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+        assert.equal(f.git(["show", "refs/heads/main:sensitive.txt"]), "tier-controlled replacement");
+      } else {
+        await assert.rejects(decision, { code: "CAPABILITY_DENIED" });
+        assert.equal(f.store.getOperation("principal", "replacement-principal"), null);
+        assert.equal(f.stateOf(name).display, "principal-pending");
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      }
+    } finally { f.close(); }
+  });
+
 test("mail-v1: a conflicting revert refuses with the path and leaves no ref", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "first");

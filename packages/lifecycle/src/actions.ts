@@ -39,6 +39,7 @@ export class LifecycleActions {
         throw new StoreError("STORE_CORRUPT", "start replay differs from accepted identity");
       if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    if (!prior) this.policy.refresh();
     const target = this.requireTarget(agent);
     if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     if (!prior && auth.channel === "actor" && auth.role === "principal" &&
@@ -53,12 +54,14 @@ export class LifecycleActions {
       throw new StoreError("RUN_TERMINATION_UNKNOWN", `previous execution scope of ${agent} not confirmed dead`);
     const id = prior?.id ?? this.effects.nextOperationId();
     if (!prior) {
+      const capacity = target.desired === "enabled" ? null : this.policy.observeReleasedCapacity(this.units);
       const accepted = this.store.transaction(tx => {
         this.policy.requireManage(auth, agent);
         this.requireStartRelease(auth.actor, agent);
         const current = this.requireTarget(agent);
         if (current.incarnation !== target.incarnation || current.desired !== target.desired)
           throw new StoreError("STALE_RUN", "target changed before start acceptance");
+        this.policy.assertWorkerCapacity(agent, capacity);
         const result = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.start",
           payloadJson: JSON.stringify({ agent }), planJson: encodeOperationPlan({ kind: "agent.start", agent,
             previousIncarnation: target.incarnation, desired: "enabled", remainingOperations: [] }) });
@@ -72,9 +75,11 @@ export class LifecycleActions {
     // The start intent is accepted: a failure from here is reported as accepted.
     try {
       if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation }, id)) return this.unconfirmed(id);
+      this.policy.assertActiveCapacity();
       try { if (!alreadyRunning) await this.units.start(agent, true, () => {
         this.policy.requireManage(auth, agent);
         this.requireStartRelease(auth.actor, agent);
+        this.policy.assertActiveCapacity();
         if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation }, id) ||
             !this.paths.hasGoal() || !this.paths.activationAllowed())
           throw new StoreError("STALE_RUN", "accepted start is no longer current before execution");
@@ -138,6 +143,7 @@ export class LifecycleActions {
     if (!this.currentIntent(plan, id)) { this.unconfirmed(id); return; }
     try {
       if (plan.kind === "agent.start") {
+        this.policy.assertActiveCapacity();
         this.requireStartRelease(operation.actor, plan.agent);
         if (!allowActivation || this.paths.activationAllowed() !== true || !this.paths.hasGoal()) return;
         const observed = this.units.observe(plan.agent);
@@ -146,6 +152,7 @@ export class LifecycleActions {
           if (!this.currentIntent(plan, id)) { this.unconfirmed(id); return; }
           await this.units.start(plan.agent, false, () => {
             this.requireStartRelease(operation.actor, plan.agent);
+            this.policy.assertActiveCapacity();
             if (!this.currentIntent(plan, id) || !this.paths.hasGoal() || !this.paths.activationAllowed())
               throw new StoreError("STALE_RUN", "recovered start is no longer current before execution");
           });

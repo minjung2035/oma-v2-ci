@@ -9,7 +9,7 @@ import { reviewRequestNameFor } from "@oma/domain/identifiers";
 import { deterministicTier, type IntegrationSnapshot } from "@oma/domain/integration-policy";
 import { maximumTier } from "@oma/domain/risk-tier";
 import { protectedPathMatches, requireNoGitlinks } from "@oma/domain/git-facts";
-import { type GitObservation } from "@oma/contracts/git";
+import { type ChangedPath, type GitObservation } from "@oma/contracts/git";
 import { reviewSubject, reviewThreadBody } from "@oma/mail/review-documents";
 import { planEffects, reviewState, type ReviewEntry, type ReviewState, type ReviewStateInput } from "@oma/domain/review-evaluation";
 import type { MailPreacceptScope as PreacceptScope } from "@oma/mail/ports";
@@ -79,13 +79,13 @@ export class ReviewPreparation {
     const id = this.effects.nextOperationId();
     const name = reviewRequestNameFor("challenge", id);
     let candidate: Oid, expectedBase: Oid, submitters: string[], prepared: boolean;
+    let changes: readonly ChangedPath[];
     if (input.candidate !== undefined) {
-      // A caller-provided revert faces the same live checks as a merge.open
-      // candidate except the tier floor: challenge tiers are LOW or HIGH by rule.
+      // Caller-provided replacements share merge candidate checks and tier floor.
       candidate = input.candidate; expectedBase = input.base!;
       if (candidate === expectedBase)
         throw new StoreError("INVALID_REQUEST", "challenge candidate equals its base");
-      this.observeCandidate(expectedBase, candidate, policy);
+      changes = this.observeCandidate(expectedBase, candidate, policy);
       submitters = [...this.effects.submitters(expectedBase, candidate)].sort();
       prepared = false;
     } else {
@@ -103,11 +103,12 @@ Challenge ${name}` });
       // A main carrying gitlinks makes even the broker's own revert a candidate
       // the CAS cannot validate; refuse it the same way, naming the paths.
       requireNoGitlinks(observed(this.effects.gitlinks(candidate), "prepared revert gitlinks"));
-      const changes = observed(this.effects.changedPaths(expectedBase, candidate), "revert changed paths");
+      changes = observed(this.effects.changedPaths(expectedBase, candidate), "revert changed paths");
       if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
         throw new StoreError("PROTECTED_PATH", "the prepared revert touches a protected path");
       submitters = [];
     }
+    this.assertTierFloor(input.tier, changes, policy);
     const fact: ReviewFact = { kind: "challenge.open", version: 1, name, title: input.title,
       reason: input.reason, tier: input.tier,
       identity: { repo: "project", targetRef: "refs/heads/main", expectedBase, candidate,
@@ -150,9 +151,7 @@ Challenge ${name}` });
       throw new StoreError("INVALID_REQUEST", "merge candidate equals its base; submit a different candidate");
     const changes = this.observeCandidate(input.base, input.candidate, policy);
     const tiered = policy.tiered!;
-    const floor = maximumTier(tiered.repositoryFloor, deterministicTier(tiered, changes).tier);
-    if (tierRank(input.tier) < tierRank(floor))
-      throw new StoreError("INTEGRATION_CONDITIONS", `tier must be at least ${floor} for this candidate`);
+    this.assertTierFloor(input.tier, changes, policy);
     const submitters = this.effects.submitters(input.base, input.candidate);
     const id = this.effects.nextOperationId();
     const name = reviewRequestNameFor("merge", id);
@@ -275,6 +274,13 @@ Challenge ${name}` });
     const frozen = await this.messages.freeze(scope, id, auth.actor, emissions);
     return { id, fact, payload: input, emissions, frozen, before, after0, name: before.name };
   }
+  private assertTierFloor(tier: RiskTier, changes: readonly ChangedPath[], policy: IntegrationSnapshot): void {
+    const tiered = policy.tiered!;
+    const floor = maximumTier(tiered.repositoryFloor, deterministicTier(tiered, changes).tier);
+    if (tierRank(tier) < tierRank(floor))
+      throw new StoreError("INTEGRATION_CONDITIONS", `tier must be at least ${floor} for this candidate`);
+  }
+
   /** Caller candidates share exactly the same observation policy. Broker-built
    * reverts keep their distinct preparation and postaccept publication order. */
   private observeCandidate(base: Oid, candidate: Oid, policy: IntegrationSnapshot) {

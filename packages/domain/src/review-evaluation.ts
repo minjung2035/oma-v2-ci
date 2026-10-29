@@ -120,9 +120,13 @@ export function reviewState(input: ReviewStateInput): ReviewState {
     : fact.tier === "HIGH" ? input.highPeerFloor
     : fact.tier === "MEDIUM" ? 1 : 0;
   const authors = [...new Set<Actor>([open.actor, ...fact.submitters])].sort();
-  // Only configured capacity can lower the peer floor, never live availability,
-  // failed provisioning, stopped reviewers or their votes.
-  const required = Math.min(normalRequired, Math.max(0, input.maxWorkers - authors.length));
+  // Only active authors occupy configured Worker slots. Historical authors
+  // stay excluded from voting, but stopped/retired/provisioning identities do
+  // not shrink potential independent capacity. Missing or stopped reviewers
+  // alone never lower the peer floor.
+  let activeAuthors = 0;
+  for (const author of authors) if (eligible.has(author)) activeAuthors++;
+  const required = Math.min(normalRequired, Math.max(0, input.maxWorkers - activeAuthors));
   const capacityFallback = required < normalRequired;
   const principalRequired = fact.tier === "HIGH" || capacityFallback;
   const authorSet = new Set(authors);

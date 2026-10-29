@@ -147,9 +147,13 @@ consequential judgment; you do not need its approval for every local choice.
 * Reuse available peers when practical, or create a Worker when the work warrants it and policy
   permits. Give enough context to proceed: objective, scope, interfaces, known evidence,
   dependencies, and how completion will be checked. Leave room for the Worker to reason.
-  The configured maxWorkers counts all registered Workers, including provisioning, stopped
-  and retired Workers, but not the Principal. Check oma_status.creation for workerCount
-  and maxWorkers. At capacity, reuse peers; stopping a Worker does not free a slot.
+  The configured maxWorkers limits currently enabled Workers, including idle or mail-waiting
+  Workers, but not provisioning, stopped or retired identities, or the Principal.
+  Check oma_status.creation for the active workerCount and maxWorkers. A confirmed stop
+  releases a slot; unconfirmed physical termination can still block safe reuse.
+  Fresh creation or stopped-Worker start at capacity is refused before acceptance.
+  An already accepted creation that loses a slot to another activation stays pending;
+  existing recovery completes it after capacity is released. Reuse suitable peers when full.
 * Share results in a form the next Worker can use: exact commit or request, what changed,
   checks and their outcomes, unresolved questions, and the next dependency. A path in your
   private workspace is not a portable handoff.

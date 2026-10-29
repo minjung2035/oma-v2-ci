@@ -6,7 +6,7 @@
  * them. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
@@ -219,6 +219,50 @@ test("G10-02: contained grep and find preserve regex, glob and workspace ignore 
   assert.match(await run("grep", { pattern: "secret", ignoreCase: true, glob: "*.js" }), /a.js:1: secret javascript/);
   const find = await run("find", { pattern: "*.txt" });
   assert.match(find, /a.txt/); assert.doesNotMatch(find, /ignored|a.js|oma-search-/);
+});
+
+test("R4: registered scoped grep/find ignore unreadable siblings and preserve nested, file and root search boundaries", async t => {
+  const { workspace, outside, run } = world(t);
+  mkdirSync(join(workspace, "area/selected/deep"), { recursive: true });
+  mkdirSync(join(workspace, "unreadable"));
+  writeFileSync(join(workspace, ".gitignore"), "/area/selected/from-root.txt\n");
+  writeFileSync(join(workspace, "area/.ignore"), "from-parent.txt\n");
+  writeFileSync(join(workspace, "area/selected/.gitignore"), "local.txt\n");
+  for (const [path, text] of [
+    ["root.txt", "needle root"],
+    ["area/sibling.txt", "needle sibling"],
+    ["area/selected/keep.txt", "needle kept"],
+    ["area/selected/deep/nested.txt", "needle nested"],
+    ["area/selected/from-root.txt", "needle root ignored"],
+    ["area/selected/from-parent.txt", "needle parent ignored"],
+    ["area/selected/local.txt", "needle local ignored"],
+    ["unreadable/unrelated.txt", "needle unrelated"],
+  ]) writeFileSync(join(workspace, path!), `${text}\n`);
+  writeFileSync(join(outside, "secret.txt"), "needle outside\n");
+  symlinkSync(outside, join(workspace, "area/selected/link"));
+  linkSync(join(outside, "secret.txt"), join(workspace, "area/selected/alias.txt"));
+  const lines = (text: string) => text.trim().split("\n").sort();
+  chmodSync(join(workspace, "unreadable"), 0);
+  try {
+    assert.equal(await run("grep", { pattern: "needle", path: "area/selected/keep.txt" }), "keep.txt:1: needle kept");
+    assert.deepEqual(lines(await run("grep", { pattern: "needle", path: "area/selected" })),
+      ["deep/nested.txt:1: needle nested", "keep.txt:1: needle kept"]);
+    assert.deepEqual(lines(await run("find", { pattern: "*.txt", path: "area/selected" })),
+      ["deep/nested.txt", "keep.txt"]);
+    // Explicit files retain ripgrep's normal override of ancestor ignores.
+    assert.equal(await run("grep", { pattern: "needle", path: "area/selected/from-root.txt" }),
+      "from-root.txt:1: needle root ignored");
+  } finally { chmodSync(join(workspace, "unreadable"), 0o700); }
+  assert.deepEqual(lines(await run("grep", { pattern: "needle" })), [
+    "area/selected/deep/nested.txt:1: needle nested",
+    "area/selected/keep.txt:1: needle kept",
+    "area/sibling.txt:1: needle sibling",
+    "root.txt:1: needle root",
+    "unreadable/unrelated.txt:1: needle unrelated",
+  ]);
+  assert.deepEqual(lines(await run("find", { pattern: "*.txt" })), [
+    "area/selected/deep/nested.txt", "area/selected/keep.txt", "area/sibling.txt", "root.txt", "unreadable/unrelated.txt",
+  ]);
 });
 
 test("G10-02 / P0-4: killing the search caller during copying leaves no snapshot or live search process", { timeout: 15000 }, async t => {

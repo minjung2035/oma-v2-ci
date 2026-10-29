@@ -1,6 +1,7 @@
 import type { LifecycleWorkspace, LifecycleEffects } from "./ports.js";
 import { encodeOperationPlan } from "@oma/protocol/operation-codec";
 import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "@oma/contracts";
+import type { CreationPublicationEvidence } from "@oma/contracts/publication";
 import type { LifecycleLedger } from "./ports.js";
 import { reused } from "@oma/domain/request-identity";
 import { type AgentRow } from "@oma/contracts/ledger";
@@ -25,10 +26,10 @@ import { CreationPublicationObserver } from "./create-publication.js";
 export class CreateCoordinator {
   private readonly publication: CreationPublicationObserver;
   private completing: { readonly id: string; readonly task: Promise<Receipt> } | null = null;
-  constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "assertResidentNamesFree" | "ensureResident" | "start">,
+  constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "assertResidentNamesFree" | "ensureResident" | "start" | "confirmDead">,
     private readonly paths: LifecyclePaths, private readonly policy: LifecyclePolicy,
     private readonly workspace: LifecycleWorkspace, private readonly mail: LifecycleMail | null, private readonly effects: LifecycleEffects) {
-    this.publication = new CreationPublicationObserver(store, units, paths.stateRoot, workspace);
+    this.publication = new CreationPublicationObserver(store, units, paths.stateRoot, workspace, policy);
   }
 
   async bootstrap(config: SeedConfig): Promise<void> {
@@ -123,7 +124,7 @@ export class CreateCoordinator {
       if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
       return this.settleLinked(id, original.id, input.name);
     }
-    this.policy.assertWorkerCapacity();
+    this.policy.assertCreationCapacity();
     this.workspace.assertCanonicalBase(input.from);
     // P0V-26: refused before acceptance, rather than accepted and then unable
     // to install its units.
@@ -152,7 +153,7 @@ export class CreateCoordinator {
             payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(linked) });
           return { outcome, linked: original.id };
         }
-        this.policy.assertWorkerCapacity();
+        this.policy.assertCreationCapacity();
         const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
         if (outcome === "inserted") {
@@ -241,16 +242,24 @@ export class CreateCoordinator {
     assertCurrent();
     this.effects.ensureAgentDirectories(plan.spec.name);
     // Current authority -> installation/readiness is a synchronous section.
-    const proof = this.publication.ready(fresh);
+    let proof: CreationPublicationEvidence;
+    try { proof = this.publication.ready(fresh); }
+    catch (error) {
+      if (error instanceof StoreError && (error.code === "LIMIT_EXCEEDED" || error.code === "RUN_TERMINATION_UNKNOWN"))
+        return lifecycleReceipt(this.store, id);
+      throw error;
+    }
     await mail.publishGated(id, proof);
     // P0V-92: the row the check just read, not a second read assumed present.
     const current = assertCurrent();
     const desired = current.desired;
     if (desired === "enabled" && this.paths.hasGoal()) {
+      this.policy.assertActiveCapacity();
       if (!allowActivation || this.paths.activationAllowed() !== true) return lifecycleReceipt(this.store, id);
       // No await between current identity/stop/activation checks and start.
       await this.units.start(plan.spec.name, false, () => {
         const current = assertCurrent();
+        this.policy.assertActiveCapacity();
         if (current.desired !== "enabled" || !this.paths.hasGoal() || !this.paths.activationAllowed())
           throw new StoreError("STALE_RUN", "creation activation is no longer permitted");
       });

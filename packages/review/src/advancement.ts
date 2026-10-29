@@ -82,7 +82,7 @@ export class ReviewAdvancement {
     this.repairChallenge(open);
     let state = reviewState(this.ledger.inputFor(open));
     // 1. A broker-derived refresh fact: main moved (request goes stale), or a
-    // sent approval drifted invalid through reviewer eligibility alone. A
+    // sent approval drifted invalid through reviewer/active-author state. A
     // refresh is a new durable intent + mail, accepted by the ledger owner.
     if (state.terminal === null && state.integration === null) {
       const main = this.effects.main();

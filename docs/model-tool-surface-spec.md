@@ -125,7 +125,7 @@ Strict 지원 provider에서는 기존 engine의 strict 기능을 사용한다. 
 
 생성 반환은 `provisioning`, `enabled`, 실제 실행 시작을 구분한다. 모델은 receipt와 named status로 관측한다. GOAL·activation·profile·capability 거절을 prompt 추측으로 대체하지 않는다. 자식 권한 계산은 기존 delegation intersection과 host-granted 예외를 유지한다.
 
-DR66: 최상위 `maxWorkers`의 기본은 6, 새 구성의 초기 Worker는 3명이다. Principal을 제외한 등록 Worker 전체가 슬롯을 차지하며 provisioning·stopped·retired도 포함한다. 생성 승인 트랜잭션에서 상한을 재검사하고 초과 시 `LIMIT_EXCEEDED`로 거절한다. 동일 요청 replay와 동일 spec 연결은 추가 슬롯을 쓰지 않는다. 상한 변경은 broker 재시작이 필요하다.
+DR66: `maxWorkers` defaults to 6 active Workers and a new configuration starts with 3 Workers. Active means resident plus `desired=enabled`, including idle enabled Workers; Principal, provisioning, stopped and retired rows do not count. Historical registration has no lifetime cap. Fresh create at full active capacity refuses with `LIMIT_EXCEEDED` before acceptance. Publication and stopped-to-enabled start check the same capacity atomically; an already-accepted creation that loses a slot race stays pending/provisioning until reconciliation can activate it. Replay and already-enabled start do not consume another slot. Unknown physical termination still blocks unsafe reuse. Capacity changes require broker restart; fresh create/start on stale policy refuse, and a cap below the enabled registry fails closed without automatically deleting Workers.
 
 Worker의 control은 무관한 peer 제어 권한을 주지 않는다. Principal start는 자신의 force-stop 해제이며 일반 작업 배정 기능이 아니다. Principal에게 create·continue·wait·roster/log 도구를 노출하지 않는다.
 
@@ -175,7 +175,7 @@ Challenge는 applied merge만 대상으로 한다. HIGH merge를 LOW로 challeng
 
 공통 diff의 기본 `proposal`은 merge의 frozen base→candidate 또는 challenge의 준비된 revert/replacement다. `original`은 대상 원래 merge의 patch이며, merge request에서는 proposal과 동일하다. 종류별 기존 client 경로를 사용하고 불필요한 diff를 추가 계산하지 않는다. 결과에 실제 source request·view·base·candidate·policyRevision·digest·전체 크기·next를 명시한다. 기존 64 KiB UTF-8 페이지·path 축소·전체 document bound를 보존한다.
 
-LOW merge에는 사전 comment/vote를 허용하지 않는다. Worker vote는 해당 request의 작성자에게 approve/reject 모두 금지한다. MEDIUM merge는 원래 1명, HIGH merge와 모든 challenge는 원래 `highPeerFloor`를 요구한다. 작성자(requester·submitter 합집합) 수를 뺀 `maxWorkers`가 이 수보다 작으면 가능한 peer 수만큼 승인받고 Principal 승인을 추가한다. 0-peer fallback은 open과 함께 승인 메일을 발행한다. 일시적인 reviewer 부재·중지·생성 실패·반대표는 fallback 원인이 아니다. HIGH는 항상 Principal 결정을 요구하고 LOW merge는 바뀌지 않는다. 원래 merge 작성자라는 이유만으로 challenge에서 추가 배제하지 않는다.
+LOW merge does not accept advance comments/votes. All request authors are excluded from Worker approve/reject votes. Normal peer requirements are one for MEDIUM merge and `highPeerFloor` for HIGH merge and every challenge. Potential peer capacity is `maxWorkers` minus currently enabled resident authors in the requester/submitter union, not the number of all historical authors. If that capacity is insufficient, the broker requires the independent approvals that fit, followed by Principal approval; zero-peer fallback emits approval mail with opening. Missing/stopped reviewers, provisioning failures and negative votes are not fallback reasons. HIGH always requires Principal approval; LOW merge is unchanged. Being an author of the original merge does not alone exclude an actor from reviewing its challenge.
 
 Principal respond에는 approval이 필수이고 comment가 없다. Principal에게 open/list/status/cancel을 추가하지 않는다. diff 내부 좁은 status 조회와 승인 메일로 받은 요청의 기존 가시성을 유지한다. cancel의 requester·terminal 제한도 기존 broker가 판단한다.
 
@@ -203,6 +203,8 @@ Principal respond에는 approval이 필수이고 comment가 없다. Principal에
 | `ask_user_question` | — | 핵심 | 사람이 붙어 있는 Principal에서 질문 |
 
 기본 편집기는 새로 만들지 않는다. 현재 hashline read→replace의 anchor/session·stale/identity 검사와 contained writer를 재사용한다. 중복 literal `edit`은 Society 모델 표면에서 제거한다. Linux/macOS 기본 loadout의 미지정 `powershell`도 자동 노출하지 않는다. 검증된 사용자 extension은 별도 admission을 거쳐야 하며 기본 숫자에 몰래 포함하지 않는다.
+
+Scoped `grep` and `find` snapshot only the requested file or subtree plus the ancestor ignore inputs needed to preserve search semantics. An unrelated sibling is not traversed or required to be readable. Workspace-relative result paths, explicit-file ignore behavior, link restrictions, repository-metadata isolation and private-snapshot cleanup remain unchanged.
 
 `insert`/`replace_within`은 삭제하지 않고 선택 도구로 보존한다. LSP/web/MCP 내부 동작·vendor 알고리즘은 이번 변경에서 재작성하지 않는다. 현재 없는 독립 `definition`/`references`/`rename`, 브라우저 클릭·스크린샷, 다른 제품의 `task`/`todo`/`eval`을 지원 도구로 기재하지 않는다.
 
@@ -277,6 +279,8 @@ DR66의 detail은 `normalRequired`, 실제 peer 요구 수 `required`, `maxWorke
 ### 5.3 자신의 생성 조건
 
 Worker `oma_status` 응답은 기존 roster 외에 caller 자신의 생성 관측을 포함한다. `creation`은 `capability: boolean`, `childProfile: string|null`, `childHasMailSend: boolean|null`, `workerCount: number`, `maxWorkers: number|null`, `observedAtMs`를 가진다. 정책을 관측할 수 없으면 관련 필드를 null로 두고 기존 허용 오류 정보를 함께 반환하며 false로 추정하지 않는다.
+
+`creation.workerCount` is the current enabled-resident count, not all registered identities. An available logical slot is not a promise of immediate execution: physical stop confirmation, current policy and the existing readiness/activation gates still apply.
 
 현재 caller capability와 기존 child resolver의 결과를 재사용한다. 실행이 없는 delegation 계산을 공유할 필요가 있으면 기존 owner 안에서 분리한다. 가짜 agent 이름/from/brief로 실제 create를 실행하거나 두 번째 policy interpreter를 만들지 않는다. 이 정보는 이름 충돌·canonical commit·GOAL·activation·host 오류까지 통과했다는 보증이 아니다. 다른 agent의 전체 capability/profile 비밀을 roster에 공개하지 않는다.
 

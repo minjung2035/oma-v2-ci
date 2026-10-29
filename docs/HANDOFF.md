@@ -16,13 +16,17 @@ Human용 CLI와 broker authority·accepted history는 유지한다. 결정은 DR
 대기 중 독립 작업·증거 전달·검증/통합 완결을 유연한 기본 습관으로 명시했다.
 LOW의 사전 승인 없는 fast path와 적용 후 자동 통지·challenge는 유지한다.
 builtin/hashline/LSP/web/MCP 설명도 OMA wrapper에서 바꾸며 vendor 바이트·입력 계약은 보존한다.
-최신 사용자 지시는 **서브에이전트 금지**이며 추가 위임 없이 직접 마무리한다.
+The current requested scope is six benchmark-essential Linux findings plus the active-Worker-capacity correction. Other findings remain deferred; implementation may use subagents.
 
-후속 DR66은 `maxWorkers` 기본6·초기 Worker3, 트랜잭션 내 생성 상한, 설정 상한상 불가능한
-peer quorum의 Principal fallback을 구현한다. 가능한 peer 승인은 먼저 유지하고 0명이면
-open 승인 메일로 바로 Principal 결정을 요청한다. 일시적 부족·반대표는 fallback이 아니다.
-상한 변경은 broker 재시작 적용이며 이미 등록된 Worker는 자동 삭제하지 않는다.
-현재 검증 결과와 제약은 [validation](implementation/validation.md)의 DR66 절을 따른다.
+DR66 now uses active Worker capacity: default `maxWorkers=6`, initial Workers 3.
+Only enabled residents occupy active slots; historical stopped/retired identities
+do not permanently consume capacity. Creation publication and reactivation use
+atomic admission, and accepted provisioning waits for a released slot after a race.
+Unconfirmed execution termination remains fenced. Capacity changes require restart;
+stop enough Workers before lowering the cap below the enabled population.
+Review fallback subtracts only active authors while excluding every historical
+author from voting. Temporary reviewer shortage and rejection do not lower quorum.
+Current execution evidence and limitations are recorded in [validation](implementation/validation.md).
 
 실제 Sol medium A/B/C 비교는 NOT_RUN이다. OMA engine auth가 비어 있고 확인한
 배포 profile은 `pi/current`다. 정확한 provider/model/medium 설정과 사용할 인증 없이

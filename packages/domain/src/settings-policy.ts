@@ -238,19 +238,19 @@ const DESCRIPTOR_SOURCE = {
             assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
             // A seed needs a Worker profile only when one is added.
             const count = value as number;
-            assertKnown(count <= settings.config.maxWorkers, "initial workers exceed maximum workers");
+            assertKnown(count <= settings.config.maxWorkers, "initial workers exceed active Worker capacity");
             return withSeedCount(settings.config, count, count > settings.config.initialResidents.length ? workerTarget(settings) : "");
         },
     }),
     [MAX_WORKERS]: Object.freeze({
-        label: "Maximum workers",
+        label: "Active Worker capacity",
         apply: "restart",
         view: (config: HostConfig) => ({
             kind: "number" as const, value: config.maxWorkers, min: Math.max(1, config.initialResidents.length), max: Number.MAX_SAFE_INTEGER,
         }),
         transform: (settings: FieldSettings, value: FieldValue) => {
-            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "maximum workers must be a positive safe integer");
-            assertKnown((value as number) >= settings.config.initialResidents.length, "maximum workers is below the initial worker count");
+            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "active Worker capacity must be a positive safe integer");
+            assertKnown((value as number) >= settings.config.initialResidents.length, "active Worker capacity is below the initial worker count");
             return { ...settings.config, maxWorkers: value as number };
         },
     }),

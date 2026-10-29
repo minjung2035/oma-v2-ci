@@ -104,7 +104,8 @@ test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git
     let ensured = 0;
     const agent = { specHash: "h", incarnation: 0, desired: "enabled" };
     const store = { getAgent: () => agent, transaction: (body: (tx: unknown) => unknown) => body({ updateAgent: () => { throw new Error("no change is due"); } }) };
-    const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root, workspaces);
+    const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root, workspaces,
+      { assertWorkerCapacity() { throw new Error("settled readiness must not request another slot"); } } as never);
     const operation = { id: "op", actor: "principal", planJson: "{}", state: "pending",
       plan: { existingCreation: null, initialMessage: {}, workspacePath: workspace, specHash: "h", spec: { name: "alice", from: oid, profile: "p" } } } as never;
     assert.doesNotThrow(() => observer.ready(operation));

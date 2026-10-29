@@ -4,6 +4,7 @@ import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, Socket } from "node:net";
+import { request as httpRequest, Server as HttpServer } from "node:http";
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -249,6 +250,89 @@ const until = async (condition: () => boolean, what: string): Promise<void> => {
   for (let i = 0; i < 200 && !condition(); i++) await new Promise(r => setTimeout(r, 10));
   assert.ok(condition(), what);
 };
+
+for (const framing of [
+  { name: "Content-Length", header: "Content-Length: 20", payload: "short" },
+  { name: "chunked", header: "Transfer-Encoding: chunked", payload: "5\r\nshort\r\n" },
+]) test(`HTTP proxy: truncated ${framing.name} keep-alive responses abort downstream and release ownership`, { timeout: 10_000 }, async t => {
+  const peers = new Set<Socket>();
+  let interruptedPeer: Socket | undefined;
+  const upstream = createServer(socket => {
+    peers.add(socket);
+    socket.once("close", () => peers.delete(socket));
+    socket.on("error", () => {});
+    let head = "";
+    const receive = (chunk: Buffer): void => {
+      head += chunk.toString("latin1");
+      if (!head.includes("\r\n\r\n")) return;
+      socket.off("data", receive);
+      if (head.startsWith("GET /broken ")) {
+        interruptedPeer = socket;
+        socket.write(`HTTP/1.1 200 OK\r\n${framing.header}\r\nConnection: keep-alive\r\n\r\n${framing.payload}`);
+      } else {
+        socket.write("HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: keep-alive\r\n\r\nhea");
+        setImmediate(() => socket.end("lthy!"));
+      }
+    };
+    socket.on("data", receive);
+  });
+  t.after(async () => {
+    for (const peer of peers) peer.destroy();
+    if (upstream.listening) {
+      const closed = once(upstream, "close");
+      upstream.close();
+      await closed;
+    }
+  });
+  await once(upstream.listen(0, "127.0.0.1"), "listening");
+  const address = upstream.address();
+  assert.ok(address !== null && typeof address === "object");
+  const port = address.port;
+  const { proxy, socketPath } = await proxyWorld(t, makePublicDial());
+  const listener = Reflect.get(proxy, "server");
+  assert.ok(listener instanceof HttpServer);
+  const get = (path: string) => {
+    const { promise, resolve, reject } = Promise.withResolvers<{
+      status: number | undefined; body: string; complete: boolean; aborted: boolean; ended: boolean;
+    }>();
+    const ownerClosed = Promise.withResolvers<void>();
+    // Client EOF can arrive before the proxy's own response-close callback.
+    listener.once("request", (_request, response) => response.once("close", () => ownerClosed.resolve()));
+    const client = httpRequest({ socketPath, path: `http://127.0.0.1:${port}/${path}`,
+      headers: { Connection: "keep-alive" }, agent: false }, response => {
+      let body = "", aborted = false, ended = false;
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => {
+        body += chunk;
+        // Cut the real upstream only after downstream has received its prefix.
+        if (path === "broken" && body === "short") interruptedPeer!.destroy();
+      });
+      response.once("aborted", () => { aborted = true; });
+      response.once("end", () => { ended = true; });
+      response.on("error", () => {});
+      response.once("close", () => {
+        resolve({ status: response.statusCode, body, complete: response.complete, aborted, ended });
+      });
+    });
+    const cancelled = (): void => {
+      reject(t.signal.reason);
+      client.destroy();
+    };
+    t.signal.addEventListener("abort", cancelled, { once: true });
+    t.after(() => { t.signal.removeEventListener("abort", cancelled); client.destroy(); });
+    client.once("error", reject);
+    client.end();
+    return Promise.all([promise, ownerClosed.promise]).then(([result]) => result);
+  };
+  assert.deepEqual(await get("broken"), {
+    status: 200, body: "short", complete: false, aborted: true, ended: false,
+  });
+  assert.equal(proxy.activeTunnels, 0, "the interrupted HTTP request released its ownership");
+  assert.deepEqual(await get("healthy"), {
+    status: 200, body: "healthy!", complete: true, aborted: false, ended: true,
+  });
+  assert.equal(proxy.activeTunnels, 0, "the subsequent complete HTTP response released its ownership");
+});
 
 test("DR34: a refused request dies with its answer -- no socket lingers in keep-alive or upgrade state", async t => {
   const dials: string[] = [];

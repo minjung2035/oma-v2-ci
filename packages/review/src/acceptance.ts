@@ -18,7 +18,7 @@ import { ReviewAuthorityReader } from "./authority.js";
 import { isOpenFact, PRINCIPAL, type OpenRequest, type PreparedReview, type ReviewEffects } from "./types.js";
 export class ReviewAcceptance {
   constructor(private readonly store: ReviewLedger, private readonly mail: Pick<ReviewMail, "materialize">,
-    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "publishCandidateRef" | "main" | "cancelMerge">,
+    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "publishCandidateRef" | "main" | "submitters" | "cancelMerge">,
     private readonly society: string) {}
   /** The shared acceptance tail: T re-derivation, recipients, operation +
    * deliveries, settle, materialize, succeeded. `auth` is null for
@@ -29,6 +29,19 @@ export class ReviewAcceptance {
       key: string, hash: string, scope: PreacceptScope): Promise<Receipt> {
     let txClaim: "inserted" | "retry";
     try {
+      // Freezing mail yields to other submissions. Re-observe provenance now,
+      // outside T, with no await before acceptance; stale authors require fresh
+      // messages, never an in-place rewrite of the frozen authority.
+      if (isOpenFact(prepared.fact) &&
+          !(prepared.fact.kind === "challenge.open" && prepared.fact.prepared) &&
+          this.store.claimKey(actor, key, hash) === "absent") {
+        const { identity: { expectedBase, candidate }, submitters: frozenSubmitters } = prepared.fact;
+        const submitters = this.effects.submitters(expectedBase, candidate);
+        if (submitters.length !== frozenSubmitters.length ||
+            submitters.some(actor => !frozenSubmitters.includes(actor)))
+          throw new StoreError("BROKER_UNAVAILABLE", "candidate submitters changed; retry the same request key",
+            { details: { reason: "busy" } });
+      }
       // There is no await between this observation and acceptance. A CAS may
       // already have happened while its notices are still materializing (or
       // before a crash); a pending DB row alone cannot authorize cancellation.

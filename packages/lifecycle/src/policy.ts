@@ -3,7 +3,7 @@ import type { AgentCreateInput } from "@oma/contracts/values";
 import type { AuthContext } from "@oma/contracts/runtime";
 import type { Receipt } from "@oma/contracts/durable";
 import type { ResolvedAgentSpec } from "@oma/contracts/host";
-import type { LifecycleLedger } from "./ports.js";
+import type { LifecycleLedger, LifecycleUnits } from "./ports.js";
 import { StoreError, publicFailure } from "@oma/domain/errors";
 import type { CreationObservation } from "@oma/contracts/public-wire";
 import { LineageSnapshot } from "@oma/domain/lineage";
@@ -12,6 +12,12 @@ import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { assertActorIdentity, assertCurrentActor, effectiveCapabilitiesOf } from "@oma/domain/authority";
 import type { SpecResolver } from "./contracts.js";
 
+interface ReleasedWorkerObservation {
+  readonly specHash: string; readonly incarnation: number; readonly desired: "stopped" | "retired";
+  readonly action: string | null; readonly confirmedDead: boolean;
+}
+export type ActivationCapacityObservation = ReadonlyMap<Actor, ReleasedWorkerObservation>;
+
 export function lifecycleReceipt(store: Pick<LifecycleLedger, "getOperationById">, id: string): Receipt {
   const operation = store.getOperationById(id);
   if (!operation) throw new StoreError("STORE_CORRUPT", "accepted lifecycle operation missing");
@@ -19,19 +25,62 @@ export function lifecycleReceipt(store: Pick<LifecycleLedger, "getOperationById"
 }
 export class LifecyclePolicy {
   constructor(private readonly store: LifecycleLedger, private readonly resolver: SpecResolver) {}
-  private workerCount(): number {
+  private workerCount(agents = this.store.listAgents()): number {
     let count = 0;
-    for (const agent of this.store.listAgents()) if (agent.role === "resident") count++;
+    for (const agent of agents) if (agent.role === "resident" && agent.desired === "enabled") count++;
     return count;
   }
-  assertWorkerCapacity(): void {
+  private supportedCapacity(workerCount: number): number {
     const maxWorkers = this.resolver.maxWorkers();
     if (!Number.isSafeInteger(maxWorkers) || maxWorkers < 1)
-      throw new StoreError("UNSUPPORTED_PROFILE", "invalid Worker capacity");
-    const workerCount = this.workerCount();
-    if (workerCount >= maxWorkers)
-      throw new StoreError("LIMIT_EXCEEDED", `Worker capacity is ${maxWorkers}; ${workerCount} slots are already occupied`,
+      throw new StoreError("UNSUPPORTED_PROFILE", "invalid active Worker capacity");
+    if (workerCount > maxWorkers)
+      throw new StoreError("UNSUPPORTED_PROFILE", `configured active Worker capacity ${maxWorkers} is below ${workerCount} enabled Workers; stop Workers or restore the capacity before activation`,
         { details: { resource: "workers", maxWorkers, workerCount } });
+    return maxWorkers;
+  }
+  assertActiveCapacity(): void { this.supportedCapacity(this.workerCount()); }
+  assertCreationCapacity(): void {
+    const workerCount = this.workerCount();
+    const maxWorkers = this.supportedCapacity(workerCount);
+    if (workerCount >= maxWorkers)
+      throw new StoreError("LIMIT_EXCEEDED", `active Worker capacity is ${maxWorkers}; ${workerCount} slots are already occupied`,
+        { details: { resource: "workers", maxWorkers, workerCount } });
+  }
+  /** Physical death is observed outside SQLite, immediately before admission. */
+  observeReleasedCapacity(units: Pick<LifecycleUnits, "confirmDead">): ActivationCapacityObservation {
+    const observed = new Map<Actor, ReleasedWorkerObservation>();
+    for (const agent of this.store.listAgents()) {
+      if (agent.role !== "resident" || (agent.desired !== "stopped" && agent.desired !== "retired")) continue;
+      const action = this.store.latestAgentAction(agent.name)?.id ?? null;
+      observed.set(agent.name, { specHash: agent.specHash, incarnation: agent.incarnation, desired: agent.desired,
+        action, confirmedDead: units.confirmDead(agent.name, agent.incarnation) });
+    }
+    return observed;
+  }
+  /** Called in the same synchronous transaction as the promotion to enabled. */
+  assertWorkerCapacity(target: Actor, observed: ActivationCapacityObservation | null): void {
+    const agents = this.store.listAgents();
+    const workerCount = this.workerCount(agents);
+    const maxWorkers = this.supportedCapacity(workerCount);
+    const current = this.store.getAgent(target);
+    if (current?.role === "principal" || current?.desired === "enabled") return;
+    if (workerCount >= maxWorkers)
+      throw new StoreError("LIMIT_EXCEEDED", `active Worker capacity is ${maxWorkers}; ${workerCount} slots are already occupied`,
+        { details: { resource: "workers", maxWorkers, workerCount } });
+    // A stopped identity releases its entitlement, not an unproven physical
+    // scope. Do not reuse the space of a scope whose stop is still unresolved.
+    let unconfirmed = 0;
+    for (const agent of agents) {
+      if (agent.role !== "resident" || (agent.desired !== "stopped" && agent.desired !== "retired")) continue;
+      const proof = observed?.get(agent.name);
+      if (!proof || proof.specHash !== agent.specHash || proof.incarnation !== agent.incarnation ||
+          proof.desired !== agent.desired || proof.action !== (this.store.latestAgentAction(agent.name)?.id ?? null))
+        throw new StoreError("RUN_TERMINATION_UNKNOWN", "released Worker identity changed after termination observation");
+      if (!proof.confirmedDead) unconfirmed++;
+    }
+    if (workerCount + unconfirmed >= maxWorkers)
+      throw new StoreError("RUN_TERMINATION_UNKNOWN", "released Worker capacity awaits confirmed execution termination");
   }
   observeCreation(auth: AuthContext): CreationObservation {
     const parent = assertActorIdentity(this.store, auth);
@@ -39,6 +88,7 @@ export class LifecyclePolicy {
     const observed = { capability: capabilities.includes("agent.create"), workerCount: this.workerCount(), observedAtMs: Date.now() };
     try {
       this.resolver.refresh?.();
+      this.supportedCapacity(observed.workerCount);
       if (!this.resolver.observe) throw new StoreError("UNSUPPORTED_PROFILE", "child policy cannot be observed by this resolver");
       const child = this.resolver.observe({ name: parent.name, profile: parent.profile, capabilities });
       return { ...observed, maxWorkers: this.resolver.maxWorkers(),

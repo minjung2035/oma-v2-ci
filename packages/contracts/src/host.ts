@@ -57,6 +57,7 @@ export interface HostConfig {
   modelProfiles: Record<string, ModelProfile>;
   agentProfiles: Record<string, AgentProfile>;
   principalProfile: string;
+  /** Maximum currently enabled resident identities; historical registrations do not consume slots. */
   maxWorkers: number;
   initialResidents: { name: Actor; profile: string; brief: string }[];
   integration: {

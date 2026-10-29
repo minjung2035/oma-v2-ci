@@ -257,11 +257,15 @@ async function main(): Promise<void> {
         const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
             bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();
+        const activationAllowed = (): boolean => {
+            lifecycle.assertActiveCapacity();
+            return lifetime.permitsActivation;
+        };
         const lifecycle = createLifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
-            hasGoal, activationAllowed: () => lifetime.permitsActivation,
+            hasGoal, activationAllowed,
             residentProjectGit: residentProjectGit() }, resolveSpec, mail);
         const reconcile = createReconcileModule(store, mail, git, reviews, units, lifecycle, {
-            projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
+            projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed,
             ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
             sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
         });
@@ -297,6 +301,7 @@ async function main(): Promise<void> {
                             console.error(`Restored rootfs entry to its expected value: ${path}`);
                     await lifecycle.bootstrap(cfg);
                     validateStoredProfiles();
+                    lifecycle.assertActiveCapacity();
                 });
                 if (store.getAgent("principal")) {
                     for (const directory of ["new", "cur", "tmp"])

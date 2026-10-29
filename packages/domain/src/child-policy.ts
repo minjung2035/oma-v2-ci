@@ -7,6 +7,7 @@ export interface ParentAuthoritySnapshot {
   readonly name: string; readonly profile: string; readonly capabilities: readonly Capability[];
 }
 export interface ChildPolicySnapshot {
+  /** Maximum enabled resident identities, not lifetime registrations. */
   readonly maxWorkers: number;
   readonly agentProfiles: Readonly<Record<string, {
     readonly modelProfile: string; readonly capabilities: readonly Capability[];

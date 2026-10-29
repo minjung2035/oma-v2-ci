@@ -69,7 +69,7 @@ export interface PreparedReview {
   readonly emissions: readonly Emission[];
   readonly frozen: readonly { readonly message: MessagePlan; readonly artifact: PreacceptArtifactOwner }[];
   /** The state before and after the new fact without its own messages; null
-   * for merge.open, whose concurrent check is the duplicate scan only. */
+   * before an opening, whose frozen capacity decision is also rechecked. */
   readonly before: ReviewState | null;
   readonly after0: ReviewState;
   readonly name: string;

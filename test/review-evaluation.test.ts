@@ -118,6 +118,36 @@ test("HIGH: one approve emits nothing; the second approves with the bundle in vo
   assert.equal(s.ready, false); assert.equal(s.display, "peer-needed");
 });
 
+test("approval vote identities must bind current eligible independent approvals, not merely valid operation IDs", () => {
+  const o = open("HIGH");
+  const entries = [
+    vote(2, "bob", "approve"),
+    vote(3, "carol", "approve"),
+    review(4, "dave"),
+    vote(5, "alice", "approve"),
+    vote(6, "dave", "reject"),
+    vote(7, "dave", "approve"),
+    vote(8, "bob", "approve"),
+  ];
+  for (const [label, votes] of [
+    ["unknown", [OP(90), OP(9)]],
+    ["opening fact", [OP(1), OP(9)]],
+    ["non-vote review", [OP(4), OP(9)]],
+    ["author", [OP(5), OP(9)]],
+    ["superseded rejection", [OP(6), OP(9)]],
+    ["superseded approval", [OP(2), OP(9)]],
+  ] as const) {
+    const approved = withMessages(vote(9, "carol", "approve"), [approvalMessage(MID(9), votes)]);
+    const s = state(o, [...entries, approved]);
+    assert.equal(s.approvalValid, false, label);
+    assert.equal(s.ready, false, label);
+  }
+  const approved = withMessages(vote(9, "carol", "approve"), [approvalMessage(MID(9), [OP(8), OP(9)])]);
+  assert.equal(state(o, [...entries, approved]).approvalValid, true, "current independent approvals remain valid");
+  assert.equal(state(o, [...entries, approved], { eligible: new Set(["alice", "carol", "dave"]) }).approvalValid,
+    false, "an ineligible bundled voter is not binding");
+});
+
 test("a third approve leaves the bundle valid and emits no Principal mail", () => {
   const o = open("HIGH");
   const entries = [
@@ -340,4 +370,45 @@ test("reviewer observations preserve counted approvals, stopped rejects and froz
     { name: "carol", desired: "stopped", exclusions: ["not-enabled"], latestVote: "reject" },
     { name: "dave", desired: "enabled", exclusions: [], latestVote: "approve" },
   ]);
+});
+
+for (const kind of ["merge.open", "challenge.open"] as const) test(
+  `${kind}: only active author occupancy reduces potential peer capacity; every author stays excluded`, () => {
+    const original = open(kind === "merge.open" ? "MEDIUM" : "LOW", kind);
+    if (original.fact.kind !== kind) throw new Error("wrong opening fixture");
+    const opened = { ...original, fact: { ...original.fact, submitters: ["alice", "bob", "retired", "provisioning"] } };
+    const pending = state(opened, [vote(2, "bob", "approve")], {
+      maxWorkers: 2, eligible: new Set(["alice"]),
+    });
+    assert.deepEqual(pending.authors, ["alice", "bob", "provisioning", "retired"]);
+    assert.equal(pending.required, 1, "inactive historical authors leave the other slot available");
+    assert.equal(pending.capacityFallback, kind === "challenge.open", "challenge keeps the high peer floor");
+    assert.deepEqual(pending.approvers, [], "a stopped historical author's vote is never independent");
+    assert.equal(pending.ready, false);
+    const occupied = state(opened, [vote(2, "bob", "approve")], {
+      maxWorkers: 2, eligible: new Set(["alice", "bob"]),
+    });
+    assert.equal(occupied.required, 0, "two active authors occupy both slots");
+    assert.equal(occupied.principalRequired, true);
+    assert.deepEqual(occupied.approvers, [], "reactivation never makes an author independent");
+    const noAuthorsActive = state(opened, [], { maxWorkers: 2, eligible: new Set() });
+    assert.equal(noAuthorsActive.required, kind === "merge.open" ? 1 : 2,
+      "missing live reviewers do not create capacity fallback");
+    assert.equal(noAuthorsActive.capacityFallback, false);
+  });
+
+test("active author departure invalidates zero-peer approval and its Principal decision", () => {
+  const opened = withMessages(open("HIGH"), [approvalMessage(MID(1), [])]);
+  const decision = vote(2, "principal", "approve", OP(1), MID(1));
+  const before = state(opened, [decision], { maxWorkers: 1, eligible: new Set(["alice"]) });
+  assert.equal(before.required, 0);
+  assert.equal(before.approvalValid, true);
+  assert.equal(before.ready, true);
+  const after = state(opened, [decision], { maxWorkers: 1, eligible: new Set() });
+  assert.equal(after.required, 1, "the freed active slot can hold an independent reviewer");
+  assert.equal(after.approvalValid, false);
+  assert.equal(after.ready, false);
+  assert.deepEqual(planEffects(before, after), {
+    withdraw: { id: MID(1), reason: "approval superseded" }, approve: null,
+  });
 });

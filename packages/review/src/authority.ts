@@ -133,6 +133,19 @@ export class ReviewAuthorityReader {
   /** The ledger view inside T must yield the decision the frozen messages were
    * built from; drift is a refusal to retry under the same key. */
   assertUnchanged(prepared: PreparedReview): void {
+    if (isOpenFact(prepared.fact)) {
+      // Mail freezing yields: an author may release or acquire an active slot.
+      // Re-derive the opening decision before accepting its frozen approval.
+      const fresh = reviewState({
+        open: { sequence: 0, operation: prepared.id, actor: prepared.after0.requester,
+          fact: prepared.fact, messages: [] },
+        entries: [], integration: null, eligible: this.eligible(),
+        highPeerFloor: this.highPeerFloor, maxWorkers: this.maxWorkers,
+      });
+      if (!sameReviewDecision(prepared.after0, fresh))
+        throw new StoreError("BROKER_UNAVAILABLE", "review state changed; retry the same request key",
+          { details: { reason: "busy" } });
+    }
     if (prepared.fact.kind === "merge.open") {
       const duplicate = this.duplicateName(prepared.fact);
       if (duplicate !== null)

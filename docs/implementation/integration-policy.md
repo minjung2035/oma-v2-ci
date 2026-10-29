@@ -60,6 +60,8 @@ effectiveTier = max(
 
 **SPIKE [S-08]** 기존 승인 옵션 spike의 범위를 tiered의 필수 attestation 구현 gate로 승격한다. 기본 peer floor 1, zero OBJECT, HIGH Principal ACCEPT는 여기서 확정한다. 다만 eligible peer/author provenance·계통 신뢰 설정, append-only fact와 revoke의 정확한 DDL/closed IPC/CLI, 순서가 엇갈린 Principal 결정의 유효성, policy snapshot 저장은 검증 후 확정한다. Git Author 문자열을 인증 identity로 사용하거나 republish로 self-review 제한을 우회하지 못해야 한다.
 
+Acceptance re-observes authenticated submitter provenance after asynchronous preparation and before the acceptance transaction. This Git observation stays outside the transaction. A changed submitter set refuses the prepared request with retryable `BROKER_UNAVAILABLE`; a same-key retry must prepare current provenance rather than accept stale self-review authority.
+
 **MUST [TIER-009]** 추가 model command를 개발자가 만들어 넣지 않는다. 기존 approve/object/revoke를 재사용할 수 있는 정확한 문법과 Principal 결정 표현은 S-08 산출물로 추가한다. Resident requested tier의 wire 위치·stable-key hash 포함 방식도 그 산출물에서 고정한다. 현재 base IPC의 git.integrate에 unknown `tier` field를 보내도 조용히 수용하지 않는다.
 
 ## 3. 통합 공개와 crash/idempotency
@@ -77,6 +79,8 @@ effectiveTier = max(
 **MUST [CHAL-002]** 구조는 `authenticated report → public investigation → authorized finding → corrective/revert candidate 및 필요한 floor`다. 이 순서는 의미 구분이며 pending/reviewing/appealed 등의 runtime workflow state를 추가하는 허가가 아니다. 판정은 최소 append-only authenticated fact로 표현하는 방향만 허용하고 저장 schema는 S-10에서 확정한다.
 
 **MUST [CHAL-003]** revert는 Resident가 현재 main을 base로 새 commit을 만들고 submit→동일 integrate boundary를 통과하는 변경이다. broker는 자동 reset/force-push/history rewind/revert conflict resolution을 하지 않는다. rollback/revert commit도 현재 expected base와 checks·policy를 만족해야 한다. 즉시 피해 대응이 필요하면 critical을 보내고 host의 기존 명시 권한을 사용한다. 숨은 emergency bypass를 추가하지 않는다.
+
+Caller-provided replacement challenges and broker-prepared revert candidates use the same deterministic repository, path and candidate tier floors as an ordinary merge. A requested LOW tier cannot lower those floors or the challenged request's tier; the resulting peer and Principal requirements still apply.
 
 **MUST [CHAL-004]** 유효하다고 판정된 LOW 결함의 동일/직접 후속 변경은 최소 MEDIUM, host policy상 중대한 architecture/security/data-loss 판정은 HIGH floor를 적용할 수 있어야 한다. floor는 session 종료·broker restart·revert·재게시로 사라지지 않는다. challenge를 접수한 actor 자신이 본문에 HIGH라고 적은 것만으로 authoritative floor를 만들 수 없다.
 

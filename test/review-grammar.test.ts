@@ -20,6 +20,7 @@ import { requestHash } from "@oma/domain/request-identity";
 import { generateOperationId } from "@oma/native/identity";
 import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { fixture as reviewFixture, messages as reviewMessages } from "./fixtures/review-fixture.js";
 
 const CANDIDATE = "2".repeat(40);
 const BASE = "1".repeat(40);
@@ -124,7 +125,7 @@ test("durable: review mail metadata per role", () => {
   messageOk(approval);
   messageBad({ ...approval, audience: "workers" });
   messageBad({ ...approval, approvalFor: undefined });
-  messageBad({ ...approval, review: { ...approval.review, votes: [] } });
+  messageOk({ ...approval, review: { ...approval.review, votes: [] } });
   messageBad({ ...approval, review: { ...approval.review, votes: [OP, OP] } });
   messageBad({ ...approval, review: { ...approval.review, votes: ["bad"] } });
   const withdrawn = { ...baseMessage, to: ["principal"], recipients: ["principal"],
@@ -144,6 +145,30 @@ test("durable: review mail metadata per role", () => {
   messageOk(baseMessage);
   messageBad({ ...baseMessage, review: { role: "bogus" } });
   messageBad({ ...baseMessage, review: { role: "thread", request: OP, name: "bad", revision: 0 } });
+});
+
+test("DR66: real zero-peer HIGH approval passes grammar and gates application on Principal", async () => {
+  const f = reviewFixture({ maxWorkers: 1, workers: ["alice"], principalDelegated: true });
+  try {
+    const candidate = f.candidateWith({ "capacity.txt": "one configured Worker\n" });
+    await f.submit("alice", candidate, "capacity-submit");
+    await f.open("alice", { tier: "HIGH", candidate }, "capacity-open");
+    const name = f.requestName("capacity-open");
+    const state = f.stateOf(name);
+    assert.equal(state.required, 0);
+    assert.equal(state.capacityFallback, true);
+    assert.equal(state.principalRequired, true);
+    assert.equal(state.approvalValid, true);
+    assert.equal(state.display, "principal-pending");
+    const approval = reviewMessages(f, "alice", "capacity-open").find(m => m.review?.role === "approval")!;
+    assert.ok(approval?.review?.role === "approval");
+    assert.deepEqual(approval.review.votes, []);
+    messageOk(approval);
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base, "zero peers does not mean automatic approval");
+    await f.vote("principal", name, "approve", "approve capacity fallback", "capacity-principal", approval.id);
+    assert.equal(f.stateOf(name).display, "applied");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+  } finally { f.close(); }
 });
 
 test("durable: frozen review fact grammar", () => {

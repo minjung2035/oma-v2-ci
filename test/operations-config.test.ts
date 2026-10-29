@@ -345,7 +345,6 @@ test("F5: runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX befor
     // A well-formed plan still passes the gate.
     const ok = runnerEntry(f, base);
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.selected.profile.toolSurface ?? "", /code_intel/);
   } finally {
     f.close();
   }

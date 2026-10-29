@@ -46,7 +46,7 @@ export function createChildSpecResolver(
         current = null;
         const policy = freezePolicy(readConfig());
         if (boundMaxWorkers !== null && policy.maxWorkers !== boundMaxWorkers)
-          throw new StoreError("POLICY_CHANGED", "Worker capacity changed; restart the broker to apply it");
+          throw new StoreError("POLICY_CHANGED", "active Worker capacity changed; restart the broker to apply it");
         boundMaxWorkers = policy.maxWorkers;
         current = Object.freeze({ policy, revision: sha256Hex(canonicalJson(policy)) });
       },

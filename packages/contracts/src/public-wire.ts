@@ -25,6 +25,7 @@ export interface ReviewReviewer {
 }
 export interface CreationObservation {
   capability: boolean; childProfile: string | null; childHasMailSend: boolean | null; observedAtMs: number;
+  /** Active resident capacity and current enabled resident count, excluding the Principal and provisioning/history. */
   maxWorkers: number | null; workerCount: number;
   error?: { code: ErrorCode; message: string };
 }
