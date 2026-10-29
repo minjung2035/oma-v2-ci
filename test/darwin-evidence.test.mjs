@@ -150,7 +150,9 @@ const bootstrapRecord = () => {
         unixSocketCanary.listed, unixSocketCanary.unlisted], 115),
       nativeDnsHost: nativeDns(115, 200, 201, false), unixSocketCanary,
       nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
-      ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64) },
+      ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
+        nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
+        nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
       dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
@@ -362,6 +364,9 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.before.globalTypeStatus = 0; },
     value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.restore.attempted = true; },
     value => { value.bootstrap.variants[0].node.tools.bootstrapGlobal.before.taskBootstrapStatus = 5; },
+    value => { delete value.bootstrap.ffi.nativeRoot; },
+    value => { value.bootstrap.ffi.nativeRoot = "/"; },
+    value => { value.bootstrap.ffi.host.ffiPid += 1; },
     value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
     value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
     value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },

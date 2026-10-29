@@ -233,8 +233,31 @@ valid SEND가 실제 관측됐을 때만 own task/registered port 복원을 시�
 validator/factory와 함께 cutover했고, 예상 밖 cached SEND·범위 밖 service 효과도 OBSERVED로 보존한다.
 build·caller59/59·fail/cancel/skip/todo0·실제 생성 module syntax·Linux state 생성 전 OS 거절은 통과했다.
 최초 local synthetic case는 이미 tools=null인 variant에 새 관측을 붙여58/59였다. 원래 null case를 보존하고 새 unavailable 관측의 variant만 고쳐59/59이며 원시 실패도 보존했다.
-새 Node 자신의 실제 Mac 관측·복원 효과는 **NOT_RUN**이다. 원시는 `exact-unix-sockets/node-post-exec-bootstrap/`다.
+이 local checkpoint에서는 Node 자신의 실제 Mac 관측·복원 효과는 **NOT_RUN**이었다.
+원시는 `exact-unix-sockets/node-post-exec-bootstrap/`다.
 실행 guard·Linux backend·세 product gate와 현재 권한/receipt/recovery 계약은 유지한다.
+
+주 `37d266a61d2cb5f21930380611f84cca68edfd84` / mirror `7928f8079a1572be4202b9d0844d26fa910c6e16`,
+tree `d3d70089edea9d50f23ed3a89ed3ecdc551290d5`, clean `1a19aee9c05f958860115700d2fef071073f3ba4dcf77b68052f03780c398473` /15687 files다.
+Native [40807222485](https://github.com/minjung2035/oma-v2-ci/actions/runs/40807222485)의 SHA256 확인 ZIP5개에서
+두 Mac bootstrap 각3 case OBSERVED·exit0를 확인했다. 그러나18개 Node own 관측은 모두 **UNAVAILABLE**이다.
+actual error는 Koffi loader의 `Cannot find module …/@koromix/koffi-darwin-arm64`였다.
+JS package root만 read/map했고 이 native optional package는 그 밖에 있다. view closure 누락은 확인했지만
+오류 문구만으로 설치 결함·유일 원인까지 확정하지 않는다. own bootstrap0·cached 복원 성공/실패로 세지 않는다.
+관측 뒤의 별도 fresh service는 inherited6회 실제 actor 성공·나머지12회141/effect 미관측이다.
+이는 cached 복원이 실행된 결과가 아니다. `actual-node-bootstrap-outcomes.json`·`actual-observation-unavailable.json`에 보존했다.
+
+### FFI native dependency closure 수리 — 실제 Mac 실행 전
+
+외부 parent가 실제 `@koromix/koffi-${platform}-${arch}` entry를 resolve/realpath하고 선택 entry/hash·그 package root를 기록한다.
+같은 Koffi의 native `getpid()`가 parent PID와 같은지 먼저 실제 확인한 뒤 child의 결과와 구분한다.
+fixture에는 JS package와 native package 두 exact root만 read/map한다. `node_modules`나 그 parent 전체,
+process-exec·새 Mach/network 권한·production 기본 policy는 허용하지 않는다.
+validator/factory는 native descriptor·host 양성을 함께 요구하며 원래 unavailable/null/예상 밖 service 효과도 유지한다.
+local actual native package resolve/load/getpid·caller59/59·fail/cancel/skip/todo0·실제 생성 module syntax·Linux OS 거절은 통과했다.
+production 코드는 변하지 않아 성공한 동일 production build를 반복하지 않았다. 실제 Mac parent load와 own bootstrap·cached 복원은 **NOT_RUN**이다.
+원시는 `node-post-exec-bootstrap/native-dependency-closure/`다. 세 gate·실행 차단은 유지하며 관측 없음으로 권한 부재를 증명하지 않는다.
+
 
 
 
@@ -1251,7 +1274,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `1a19aee9c05f958860115700d2fef071073f3ba4dcf77b68052f03780c398473` (15687 files).
+verification input digest `2d65a358fd2a5c2e9b0ef084fb4fa3843de1fa780c8ead1ef46be9d308772f4d` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

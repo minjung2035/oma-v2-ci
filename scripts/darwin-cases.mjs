@@ -209,6 +209,12 @@ export function validateDarwinObservation(name, observations) {
           typeof bootstrap.ffi?.root !== "string" || !bootstrap.ffi.root.startsWith("/") || bootstrap.ffi.root === "/" ||
           typeof bootstrap.ffi.entry !== "string" || !bootstrap.ffi.entry.startsWith(`${bootstrap.ffi.root}/`) ||
           typeof bootstrap.ffi.entrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.entrySha256) ||
+          typeof bootstrap.ffi.nativeName !== "string" || !/^@koromix\/koffi-darwin-(?:arm64|x64)$/.test(bootstrap.ffi.nativeName) ||
+          typeof bootstrap.ffi.nativeRoot !== "string" || !bootstrap.ffi.nativeRoot.startsWith("/") || bootstrap.ffi.nativeRoot === "/" ||
+          typeof bootstrap.ffi.nativeEntry !== "string" || !bootstrap.ffi.nativeEntry.startsWith(`${bootstrap.ffi.nativeRoot}/`) ||
+          typeof bootstrap.ffi.nativeEntrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.nativeEntrySha256) ||
+          !Number.isSafeInteger(bootstrap.ffi.host?.pid) || bootstrap.ffi.host.pid <= 0 ||
+          bootstrap.ffi.host.ffiPid !== bootstrap.ffi.host.pid || bootstrap.ffi.host.uid !== bootstrap.nativeDnsHost?.uid ||
           typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
           unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
           bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||

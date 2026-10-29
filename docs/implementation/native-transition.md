@@ -29,7 +29,7 @@ production Seatbelt의 명시된 Unix endpoint를 top-level literal로 번역하
 host 둘 다 양성, sandbox에서는 listed 양성/unlisted 거절 여부를 각각 raw connect로 기록한다.
 native helper argv·PID/UID·validator·fixture factory를 함께 바꾸고 반례의 예상 밖 성공도 OBSERVED로 남긴다.
 build·focused41/41·caller impact18/18·syntax/잘못된 OS 조기 거절은 통과했다.
-직후 실제 Mac 효과는 NOT_RUN이었다. 후속 exact Unix·root alias 수리로 Node DNS·허용된 IPC와 금지 socket/file 경계를 확인했다. `2abeceb800`의 두 Mac strict helper 회귀도 통과했지만, 독립 C54회 비교는 service/main/thread 차이로 bootstrap 제거 뒤 resolver 실패를 설명하지 못했다. 현재는 Node 자신의 post-exec task/global bootstrap·SEND 종류와 cached/global 복원 뒤 별도 fresh service 효과를 관측한다. source·PID/UID·argv·target을 validator/factory에 결박했고 local build·caller59/59·syntax/실제 Linux OS 거절을 마쳤다. 새 Mac 실행은 NOT_RUN이며 세 gate·실행 차단을 유지한다.
+직후 실제 Mac 효과는 NOT_RUN이었다. 후속 exact Unix·root alias 수리로 Node DNS·허용된 IPC와 금지 socket/file 경계를 확인했고 strict helper 회귀도 통과했다. 독립 C54회 비교는 service/main/thread 차이로 권한 제거 뒤 실패를 설명하지 못했다. `7928f8079a`의 Node own 관측은 FFI loader 실패로 UNAVAILABLE였고 native package는 view 밖이었다. fresh service의 inherited 성공·제거 조건141은 남겼지만 cached 복원은 미실행이다. 현재 두 exact package root·host getpid 양성 검사를 추가했다. local59/59·syntax·실제 Linux loader/OS 거절은 통과했으나 후속 Mac 효과는 NOT_RUN이고 세 gate·실행 차단을 유지한다.
 출처·새 Linux CI에서 관측한 Mac15 별도 pack timeout은 [검증 owner](validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)에 구분했다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/exact-unix-sockets/`다.
 
