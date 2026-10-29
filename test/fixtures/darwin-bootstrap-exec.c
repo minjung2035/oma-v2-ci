@@ -5,6 +5,7 @@
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <servers/bootstrap.h>
 #include <libproc.h>
 #include <sandbox.h>
 #include <dns_sd.h>
@@ -205,6 +206,62 @@ static int observe_resolver(const char *report_path, const char *context, const 
   release_snapshot(&ports, NULL, 0);
   return 0;
 }
+/* Availability/parent preflight only. Never install the candidate namespace,
+ * mutate the inherited task ports, or call failure a compatible backend. */
+struct subset_observation {
+  kern_return_t status[10];
+  unsigned attempted;
+  mach_port_t requestor, subset, unprivileged, parent;
+};
+static int subset_status(struct subset_observation *value, unsigned index, kern_return_t status) {
+  value->attempted |= 1U << index;
+  value->status[index] = status;
+  return status == KERN_SUCCESS;
+}
+static int observe_subset(const char *report_path) {
+  struct snapshot before = snapshot();
+  struct subset_observation value = {0};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  if (subset_status(&value, 0, mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &value.requestor)) &&
+      subset_status(&value, 1, mach_port_insert_right(mach_task_self(), value.requestor, value.requestor, MACH_MSG_TYPE_MAKE_SEND)) &&
+      subset_status(&value, 2, bootstrap_subset(before.bootstrap, value.requestor, &value.subset)) &&
+      subset_status(&value, 3, bootstrap_unprivileged(value.subset, &value.unprivileged)))
+    subset_status(&value, 4, bootstrap_parent(value.unprivileged, &value.parent));
+#pragma clang diagnostic pop
+  // Each successful API result owns one reference, even if names alias.
+  if ((value.attempted & (1U << 4)) && value.status[4] == KERN_SUCCESS && MACH_PORT_VALID(value.parent))
+    subset_status(&value, 5, mach_port_deallocate(mach_task_self(), value.parent));
+  if ((value.attempted & (1U << 3)) && value.status[3] == KERN_SUCCESS && MACH_PORT_VALID(value.unprivileged))
+    subset_status(&value, 6, mach_port_deallocate(mach_task_self(), value.unprivileged));
+  if ((value.attempted & (1U << 2)) && value.status[2] == KERN_SUCCESS && MACH_PORT_VALID(value.subset))
+    subset_status(&value, 7, mach_port_deallocate(mach_task_self(), value.subset));
+  if ((value.attempted & (1U << 1)) && value.status[1] == KERN_SUCCESS)
+    subset_status(&value, 8, mach_port_deallocate(mach_task_self(), value.requestor));
+  if ((value.attempted & 1U) && value.status[0] == KERN_SUCCESS)
+    subset_status(&value, 9, mach_port_mod_refs(mach_task_self(), value.requestor, MACH_PORT_RIGHT_RECEIVE, -1));
+  struct snapshot after = snapshot();
+  FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive subset preflight report");
+  fprintf(output, "{\"phase\":\"native-subset-preflight\",\"pid\":%d,\"uid\":%u,\"euid\":%u,"
+    "\"globalBootstrap\":%u,\"namespaceInstalled\":false,\"requestor\":%u,\"subset\":%u,"
+    "\"unprivileged\":%u,\"parent\":%u,\"before\":",
+    getpid(), (unsigned)getuid(), (unsigned)geteuid(), bootstrap_port,
+    value.requestor, value.subset, value.unprivileged, value.parent);
+  print_snapshot(output, &before); fputs(",\"after\":", output); print_snapshot(output, &after);
+  static const char *const names[] = { "allocate", "makeSend", "subset", "unprivileged", "parent", "releaseParent",
+    "releaseUnprivileged", "releaseSubset", "releaseRequestorSend", "releaseRequestorReceive" };
+  fputs(",\"operations\":{", output);
+  for (unsigned i = 0; i < sizeof names / sizeof names[0]; ++i) {
+    fprintf(output, "%s\"%s\":", i ? "," : "", names[i]);
+    if (value.attempted & (1U << i)) fprintf(output, "%d", value.status[i]);
+    else fputs("null", output);
+  }
+  fputs("}}\n", output);
+  require(fclose(output) == 0, "complete subset preflight report");
+  release_snapshot(&before, NULL, 0); release_snapshot(&after, NULL, 0);
+  return 0;
+}
+
 /* Executed after the sandboxed pruning helper execs this same controlled
  * image. An ordinary program can try these SDK calls; no new grant is used. */
 static int restore_registered(char **argv) {
@@ -229,6 +286,7 @@ static int restore_registered(char **argv) {
 }
 int main(int argc, char **argv) {
   require(getuid() != 0, "ordinary user required");
+  if (argc == 3 && strcmp(argv[1], "observe-subset") == 0) return observe_subset(argv[2]);
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);
   require(argc >= 6, "mode profile report cwd executable [args]");

@@ -212,6 +212,9 @@ try {
       assert.ok(observation.getaddrinfo.ipv4 + observation.getaddrinfo.ipv6 > 0);
       return { command, observation };
     });
+    const nativeSubsetHostPath = join(root, "host-subset.json");
+    const nativeSubsetHostCommand = observe(launcher, ["observe-subset", nativeSubsetHostPath], 5000);
+    const nativeSubsetHost = existsSync(nativeSubsetHostPath) ? JSON.parse(readFileSync(nativeSubsetHostPath, "utf8")) : null;
     const koffiEntry = realpathSync(fileURLToPath(import.meta.resolve("koffi"))), koffiRoot = dirname(koffiEntry);
     const nativeName = `@koromix/koffi-${process.platform}-${process.arch}`;
     const nativeEntry = realpathSync(fileURLToPath(import.meta.resolve(nativeName))), nativeRoot = dirname(nativeEntry);
@@ -258,6 +261,10 @@ for (const [context, service] of ${JSON.stringify(resolverCases)}) {
   value.resolvers.push({ command: result, observation: existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null });
   save();
 }
+const subsetPath = report + ".subset.json";
+value.nativeSubsetCommand = command(launcher, ["observe-subset", subsetPath]);
+value.nativeSubset = existsSync(subsetPath) ? JSON.parse(readFileSync(subsetPath, "utf8")) : null;
+save();
 value.bootstrapGlobal = { phase: "node-bootstrap", pid: process.pid, uid: process.getuid() };
 try {
   const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
@@ -305,7 +312,7 @@ value.complete = true; save();
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
-      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, ffi, variants: [] };
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, nativeSubsetHostCommand, nativeSubsetHost, ffi, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
