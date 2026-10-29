@@ -81,6 +81,9 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
   // Directory metadata suffices for ancestor traversal, without reading
   // unrelated files. Device access is confined to these kernel devices.
   rules.push("(allow file-read-metadata (vnode-type DIRECTORY))");
+  // /var is a root symlink on Darwin, not a DIRECTORY vnode. Permit its
+  // metadata traversal without granting directory entries, data or writes.
+  rules.push('(allow file-read-metadata (literal "/var"))');
   // libignition opens this one directory as its openat root before main.
   // This permits root dirent names, not reads or execution in its subtrees.
   rules.push('(allow file-read-data (literal "/"))');
