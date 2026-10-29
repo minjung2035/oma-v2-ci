@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -158,6 +159,52 @@ static int observe_dns(const char *report_path, const char *listed, const char *
   release_snapshot(&ports, NULL, 0);
   return 0;
 }
+/* Isolated libc controls: no preceding DNS-SD calls or replacement resolver.
+ * Keep service and execution context explicit; the original DNS observation
+ * above remains unchanged and retains any failure. */
+struct resolver_observation {
+  const char *service;
+  int result, error;
+  unsigned ipv4, ipv6;
+};
+static void *resolve_once(void *opaque) {
+  struct resolver_observation *value = opaque;
+  struct addrinfo hints = {0}, *addresses = NULL;
+  hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM;
+  errno = 0;
+  value->result = getaddrinfo("example.com", value->service, &hints, &addresses);
+  value->error = errno;
+  for (const struct addrinfo *item = value->result == 0 ? addresses : NULL; item != NULL; item = item->ai_next) {
+    if (item->ai_family == AF_INET) ++value->ipv4;
+    if (item->ai_family == AF_INET6) ++value->ipv6;
+  }
+  if (value->result == 0 && addresses != NULL) freeaddrinfo(addresses);
+  return NULL;
+}
+static int observe_resolver(const char *report_path, const char *context, const char *service) {
+  int threaded = strcmp(context, "thread") == 0;
+  require(threaded || strcmp(context, "main") == 0, "closed resolver context");
+  require(strcmp(service, "none") == 0 || strcmp(service, "443") == 0, "closed resolver service");
+  struct snapshot ports = snapshot();
+  struct resolver_observation value = { .service = strcmp(service, "none") == 0 ? NULL : "443" };
+  if (threaded) {
+    pthread_t thread;
+    int status = pthread_create(&thread, NULL, resolve_once, &value);
+    if (status != 0) { fprintf(stderr, "resolver pthread_create: status %d\n", status); _Exit(2); }
+    status = pthread_join(thread, NULL);
+    if (status != 0) { fprintf(stderr, "resolver pthread_join: status %d\n", status); _Exit(2); }
+  } else resolve_once(&value);
+  FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive isolated resolver report");
+  fprintf(output, "{\"phase\":\"native-resolver\",\"pid\":%d,\"uid\":%u,\"hostname\":\"example.com\","
+    "\"context\":\"%s\",\"service\":%s,\"globalBootstrap\":%u,\"ports\":",
+    getpid(), (unsigned)getuid(), context, value.service == NULL ? "null" : "\"443\"", bootstrap_port);
+  print_snapshot(output, &ports);
+  fprintf(output, ",\"getaddrinfo\":{\"result\":%d,\"errno\":%d,\"ipv4\":%u,\"ipv6\":%u}}\n",
+    value.result, value.error, value.ipv4, value.ipv6);
+  require(fclose(output) == 0, "complete isolated resolver report");
+  release_snapshot(&ports, NULL, 0);
+  return 0;
+}
 /* Executed after the sandboxed pruning helper execs this same controlled
  * image. An ordinary program can try these SDK calls; no new grant is used. */
 static int restore_registered(char **argv) {
@@ -183,6 +230,7 @@ static int restore_registered(char **argv) {
 int main(int argc, char **argv) {
   require(getuid() != 0, "ordinary user required");
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
+  if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);
   require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];

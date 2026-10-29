@@ -154,6 +154,12 @@ Mac common은 각254/254·Ubuntu246/246, Linux integration433/433·execution46/4
 Mac packed는 기존 Git preparation `UNSUPPORTED_PROFILE`을 계속 기록했다.
 `actual-dns-and-boundary-outcomes.json`·`actual-dns-qualification.json`·`actual-owned-pid-denials.json`·
 `actual-relevant-denials.json`·`actual-common-runtime-and-package-result.json`에 부분 수리와 잔여 실패를 함께 남겼다.
+Architecture [40796369599](https://github.com/minjung2035/oma-v2-ci/actions/runs/40796369599)도 completed/success다.
+같은 clean `46a5c6b442`·`5aefad91…`의 SHA256 확인 ZIP2개에서 all3954/3954·baseline14/14+3940/3940·
+모든 numeric command exit0와 fast881·durable872·property34·stress16·platform72 PASS·skip/cancel/todo0·errors[]를 대조했다.
+baselineComparison은 NOT_AVAILABLE이고 standalone kernel/crash는 NOT_RUN·native-all 실제 파일/required names 포함이다.
+`published-ci/clean-source-full-ci-qualification.json`에 원시 artifact metadata와 함께 남겼으며 이후 source로 소급하지 않는다.
+
 
 ### /etc root symlink metadata 후보 — 실제 효과 미검증
 
@@ -161,8 +167,35 @@ Mac packed는 기존 Git preparation `UNSUPPORTED_PROFILE`을 계속 기록했�
 production rule은 exact `/var`와 `/etc` metadata이며 data/write·조상 subpath·추가 Unix/Mach service는 허용하지 않는다.
 기존 native C의 `getaddrinfo("example.com", "443", …)`를 그대로 유지해 잔여 실패 수리 여부를 판정한다.
 inventory·review stale·DAG·build는 exit0, guard를 유지한 caller regression59/59·fail/cancel/skip/todo0다.
-이 후보의 실제 Mac libc 효과와 기존 양성/거절 보존은 **NOT_RUN**이고 guard·세 gate도 그대로다.
-원시는 `exact-unix-sockets/etc-symlink-metadata/`다.
+이 local checkpoint에서는 후보의 실제 Mac 효과가 **NOT_RUN**이었다. 이후 주 `b83250394c6c94482fc0619f70a369cd677072f7` /
+mirror `3a131bf0d9039330f3e17124eb404c0b67bef5e5`, tree `1ba6bee2c2ad0c72896f20846271c22c36ca2c7b`,
+clean `7c5727c253aabaf79ced528df0d581e1bce073140b402dec067ab95e87207d7c` /15687 files를 발행했다.
+Native [40799190650](https://github.com/minjung2035/oma-v2-ci/actions/runs/40799190650)의 SHA256 확인 ZIP5개에서
+양 Mac 각3 case OBSERVED·18 variant를 확인했다. alias connect·DNS-SD·Node DNS·listed0/unlisted EPERM·
+Git/compiler·금지 file 경계는 유지됐지만 native C는 inherited6회 성공·bootstrap 제거12회 EAI_NONAME8/errno1로 그대로다.
+따라서 `/etc` metadata 단독은 native libc 수리가 아니다.
+소유 PID를 mode와 대조하니 route sysctl·networkd preference·AF_SYSTEM 거절은 **성공한 inherited C**에만 기록됐다.
+이를 failing mode의 원인으로 바꾸거나 새 권한을 주지 않는다. `/etc` alias의 실제 filesystem 효과는 아래 결정적 helper 회귀에서 별도로 판정한다.
+원시는 `exact-unix-sockets/etc-symlink-metadata/actual-dns-and-boundary-outcomes.json`·
+`actual-libc-candidate-qualification.json`·`actual-denials-by-mode.json`·source별 ZIP이다.
+
+### 동일 libc 호출의 service·thread 분리와 alias 회귀 — 실제 Mac 실행 전
+
+[Node26 binding](https://github.com/nodejs/node/blob/v26.0.0/src/cares_wrap.cc#L1946-L2005)은 null service를
+[libuv worker](https://github.com/nodejs/node/blob/v26.0.0/deps/uv/src/unix/getaddrinfo.c#L94-L100)에서 호출한다.
+기존 C는 main에서 socket/DNS-SD 관측 뒤 service443을 호출했다. 두 차이를 원인으로 단정하지 않는다.
+[고정 Libinfo wrapper](https://github.com/apple-oss-distributions/Libinfo/blob/39b70c515baee5b609e7e91693edbd934b6845a1/lookup.subproj/libinfo.c#L2450-L2508)와
+SDK15.5/26.5는 flags0의 AI_DEFAULT 전환을 명시하지만 이 upstream revision과 설치된 binary의 일치는 미확인이다.
+
+원래 C 호출과 raw 실패는 그대로 남겼다. 별도 owned process로 같은 C image의 main/service443·main/null service·
+pthread/service443을 실행하고 실제 PID/UID·context/service·task/registered/global bootstrap·raw getaddrinfo를 기록한다.
+host 세 양성·실제 argv/report 경로·PID/UID를 validator/factory와 함께 결박했고 실패/timeout/null도 OBSERVED로 보존한다.
+추가 network/file/Mach grant·원래 flag 변경·resolver override·timeout 확대는 없다.
+기존 strict `seatbelt-files`에는 실제 `/var`·`/etc` metadata, host hash와 같은 `/etc/services` bytes,
+host에서 읽을 수 있는 `/etc/passwd`의 sandbox 거절을 추가했다. 외부 DNS 없이 실제 helper의 alias/data 경계를 검증한다.
+새 build·caller59/59·fail/cancel/skip/todo0·변경 MJS/실제 생성 module syntax·Linux의 state 생성 전 OS 거절은 통과했다.
+새 C의 Mac compile/link·resolver 비교와 alias 회귀는 **NOT_RUN**이다. 세 gate와 실행 차단도 유지한다.
+원시는 `exact-unix-sockets/libc-isolated-comparison/`·`alias-boundary-regression/`다.
 
 
 
@@ -1179,7 +1212,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `7c5727c253aabaf79ced528df0d581e1bce073140b402dec067ab95e87207d7c` (15687 files).
+verification input digest `25f0fb06d4d1f81ce4178f815b9f103705db5d6a1104c01c42e101c42d8e7336` (15687 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

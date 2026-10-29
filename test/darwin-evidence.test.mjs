@@ -94,6 +94,12 @@ const bootstrapRecord = () => {
     pathMetadata: { varAlias: { result: 0, errno: 0, kind: "symlink" },
       dnsAlias: { result: 0, errno: 0, kind: "socket" }, dnsCanonical: { result: 0, errno: 0, kind: "socket" } },
     dnssd: { createResult: 0 }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } });
+  const nativeResolvers = (base, firstPid, bootstrap = 200, seed = 201) =>
+    [["main", "443"], ["main", "none"], ["thread", "443"]].map(([context, service], index) => ({
+      command: command("/owned/bootstrap-exec", ["observe-resolver", `${base}.resolver-${context}-${service}.json`, context, service], firstPid + index),
+      observation: { phase: "native-resolver", pid: firstPid + index, uid: 501, hostname: "example.com",
+        context, service: service === "none" ? null : service, globalBootstrap: bootstrap,
+        ports: { bootstrap, registered: [seed] }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } } }));
   const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
     const attempt = kind => {
       const pid = 120 + index * 3 + (kind === "direct" ? 0 : kind === "node" ? 1 : 2);
@@ -115,7 +121,8 @@ const bootstrapRecord = () => {
           compiler: command("/owned/clang", ["-fsyntax-only", "compile.c"], 170 + index), dns,
           nativeDnsCommand: command("/owned/bootstrap-exec", ["observe-dns", "/owned/report.dns.json",
             unixSocketCanary.listed, unixSocketCanary.unlisted], 180 + index),
-          nativeDns: nativeDns(180 + index, name === "inherited" ? 200 : 0, seed) } } : {}),
+          nativeDns: nativeDns(180 + index, name === "inherited" ? 200 : 0, seed),
+          resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed) } } : {}),
         ...(kind === "restored" ? { restoration: { pid, uid: 501, phase: "restore-registered-seed", seed,
           attempted: seed !== 0, setStatus: seed ? 0 : null,
           before: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
@@ -135,6 +142,7 @@ const bootstrapRecord = () => {
       nativeDnsHostCommand: command("/owned/bootstrap-exec", ["observe-dns", "/owned/host-native-dns.json",
         unixSocketCanary.listed, unixSocketCanary.unlisted], 115),
       nativeDnsHost: nativeDns(115, 200, 201, false), unixSocketCanary,
+      nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
       dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
@@ -331,6 +339,13 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { delete value.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist; },
     value => { value.bootstrap.variants[1].node.tools.nativeDns.pathMetadata.varAlias.result = -1; },
     value => { value.bootstrap.variants[1].node.tools.nativeDns.canonicalEndpoint = "/foreign/socket"; },
+    value => { delete value.bootstrap.variants[1].node.tools.resolvers; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].command.argv[2] = "thread"; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.service = "https"; },
+    value => { value.bootstrap.nativeResolverHost[0].observation.getaddrinfo.result = 8; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.globalBootstrap = -1; },
     value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
     value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
     value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
@@ -363,6 +378,10 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
   unknown.bootstrap.variants[0].node.tools.nativeDnsCommand = {
     ...unknown.bootstrap.variants[0].node.tools.nativeDnsCommand, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
   unknown.bootstrap.variants[0].node.tools.nativeDns = null;
+  unknown.bootstrap.variants[1].node.tools.resolvers[0].observation.getaddrinfo = { result: 8, errno: 1, ipv4: 0, ipv6: 0 };
+  unknown.bootstrap.variants[1].node.tools.resolvers[1].command = {
+    ...unknown.bootstrap.variants[1].node.tools.resolvers[1].command, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unknown.bootstrap.variants[1].node.tools.resolvers[1].observation = null;
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
 });
 
