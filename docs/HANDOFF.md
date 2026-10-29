@@ -4,7 +4,7 @@
 
 **최신 지시는 Linux 검증·문서 마감 후 지정 work branch를 push하고 macOS 작업을 이어가는 것이다.** Linux의 전체 회귀·독립 설치·실제 추론/도구·재개/보관/복구 근거를 확보했다. 원인 미상 단일 CI 실패는 비차단 추적으로 정정한다. 기존 기능·보안·복구 보장과 사용자 변경을 보존하며, 에이전트 위임·merge·deploy 없이 진행한다.
 
-**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac의 exact Unix·root alias·Node DNS 수리와 실제 helper의 허용/거절 회귀는 확인했다. 하지만 권한 제거 뒤 native C resolver는 service/thread 분리에서도 실패하므로 정상 도구 호환성·complete backend는 미충족이다. 다음은 Node 자신의 post-exec task/global bootstrap과 cached 권한 복원 반례다. 구현·local59/59는 마쳤고 새 Mac 실행은 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
+**Linux 재인수·발행·clean 전체 CI까지 통과했다.** Mac의 exact Unix·root alias·Node DNS와 실제 helper의 허용/거절 회귀는 확인했다. native C resolver는 권한 제거 뒤 계속 실패한다. Node 자신의 post-exec 관측은 FFI loader 실패로 UNAVAILABLE였고 native package가 read/map view 밖임을 확인했다. 권한0으로 간주하지 않는다. 현재 두 exact package root·host FFI 양성 검사를 추가했고 local59/59를 마쳤다. 후속 Mac 효과는 NOT_RUN이다. 세 gate·실행 차단·Linux backend·credential/receipt/recovery 계약은 유지한다. [판정 owner](implementation/validation.md#mac-exact-unix-socket-번역--실제-kernel-검증-전)를 따른다.
 
 목표는 VM 없이 macOS·Linux에서 같은 제품을 실행하는 것이다. TypeScript 업무 owner를 공유하고 OS adapter는 좁은 native primitive만 맡는다. Society·Personal·Principal/Worker·manual CLI·Pi/tools·Git/checks/review·mail·설정/package/history·Restic backup/restore가 모두 범위다. **제품은 아직 미완료다.**
 

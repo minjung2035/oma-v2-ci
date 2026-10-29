@@ -213,7 +213,14 @@ try {
       return { command, observation };
     });
     const koffiEntry = realpathSync(fileURLToPath(import.meta.resolve("koffi"))), koffiRoot = dirname(koffiEntry);
-    const ffi = { entry: koffiEntry, root: koffiRoot, entrySha256: createHash("sha256").update(readFileSync(koffiEntry)).digest("hex") };
+    const nativeName = `@koromix/koffi-${process.platform}-${process.arch}`;
+    const nativeEntry = realpathSync(fileURLToPath(import.meta.resolve(nativeName))), nativeRoot = dirname(nativeEntry);
+    const { load: hostLoad } = (await import(pathToFileURL(koffiEntry).href)).default;
+    const ffiPid = hostLoad(null).func("int getpid()")();
+    assert.equal(ffiPid, process.pid, "the exact selected FFI must load in the unsandboxed positive control");
+    const ffi = { entry: koffiEntry, root: koffiRoot, entrySha256: createHash("sha256").update(readFileSync(koffiEntry)).digest("hex"),
+      nativeName, nativeEntry, nativeRoot, nativeEntrySha256: createHash("sha256").update(readFileSync(nativeEntry)).digest("hex"),
+      host: { pid: process.pid, uid: process.getuid(), ffiPid } };
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
@@ -310,7 +317,7 @@ value.complete = true; save();
         { path: developerTools.contents, kind: "directory" },
         { path: unixSocketCanary.directory, kind: "directory" },
         { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
-        mapped: [{ path: koffiRoot, kind: "directory" }],
+        mapped: [{ path: koffiRoot, kind: "directory" }, { path: nativeRoot, kind: "directory" }],
         writable: [{ path: directory, kind: "directory" }], denied: [],
         executable: [actor, launcher, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         unixSockets: [dnsEndpoint, ...(dnsResolvedEndpoint === dnsEndpoint ? [] : [dnsResolvedEndpoint]), unixSocketCanary.listed],
