@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -146,6 +147,12 @@ static int observe_dns(const char *report_path, const char *listed, const char *
   fprintf(output, "{\"phase\":\"native-dns\",\"pid\":%d,\"uid\":%u,"
     "\"hostname\":\"example.com\",\"endpoint\":\"/var/run/mDNSResponder\",\"ports\":", getpid(), (unsigned)getuid());
   print_snapshot(output, &ports);
+  fprintf(output, ",\"addrinfoLayout\":{\"size\":%zu,\"pointerBytes\":%zu,\"intBytes\":%zu,"
+    "\"flags\":%zu,\"family\":%zu,\"socktype\":%zu,\"protocol\":%zu,\"next\":%zu,"
+    "\"afUnspec\":%d,\"afInet\":%d,\"afInet6\":%d,\"sockStream\":%d}",
+    sizeof(struct addrinfo), sizeof(void *), sizeof(int), offsetof(struct addrinfo, ai_flags),
+    offsetof(struct addrinfo, ai_family), offsetof(struct addrinfo, ai_socktype), offsetof(struct addrinfo, ai_protocol),
+    offsetof(struct addrinfo, ai_next), AF_UNSPEC, AF_INET, AF_INET6, SOCK_STREAM);
   fputs(",\"socket\":", output); print_unix(output, &dns_socket);
   fputs(",\"unixAllowlist\":{\"listed\":", output); print_unix(output, &listed_socket);
   fputs(",\"unlisted\":", output); print_unix(output, &unlisted_socket);
