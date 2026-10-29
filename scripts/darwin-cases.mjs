@@ -140,6 +140,19 @@ export function validateDarwinObservation(name, observations) {
         (record.result === -1 ? record.kind === null : ["symlink", "socket", "directory", "other"].includes(record.kind));
       const gai = record => signed32(record?.result) &&
         [record.errno, record.ipv4, record.ipv6].every(number => Number.isSafeInteger(number) && number >= 0);
+      const layoutKeys = ["size", "pointerBytes", "intBytes", "flags", "family", "socktype", "protocol", "next",
+        "afUnspec", "afInet", "afInet6", "sockStream"];
+      const layout = bootstrap?.nativeDnsHost?.addrinfoLayout;
+      const abi = value => value && layoutKeys.every(key => Number.isSafeInteger(value[key])) &&
+        value.size >= 24 && value.size <= 256 && value.pointerBytes === 8 && value.intBytes === 4 &&
+        ["flags", "family", "socktype", "protocol"].every(key => value[key] >= 0 &&
+          value[key] % value.intBytes === 0 && value[key] + value.intBytes <= value.size &&
+          (value[key] + value.intBytes <= value.next || value[key] >= value.next + value.pointerBytes)) &&
+        new Set([value.flags, value.family, value.socktype, value.protocol]).size === 4 &&
+        value.next >= 0 && value.next % value.pointerBytes === 0 && value.next + value.pointerBytes <= value.size &&
+        [value.afUnspec, value.afInet, value.afInet6, value.sockStream].every(signed32) &&
+        value.afUnspec >= 0 && value.afInet > 0 && value.afInet6 > 0 && value.afInet !== value.afInet6 && value.sockStream > 0;
+      const sameLayout = value => abi(value) && abi(layout) && layoutKeys.every(key => value[key] === layout[key]);
       const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
       const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
         command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
@@ -148,7 +161,7 @@ export function validateDarwinObservation(name, observations) {
         (record === null && (command.exitCode !== 0 || command.signal !== null) ||
           record?.phase === "native-dns" && Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === command.pid &&
           Number.isSafeInteger(record.uid) && record.uid > 0 && record.hostname === "example.com" &&
-          record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) &&
+          record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) && sameLayout(record.addrinfoLayout) &&
           record.canonicalEndpoint === bootstrap.dnsResolvedEndpoint &&
           [record.socket, record.canonicalSocket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
           [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
@@ -214,6 +227,20 @@ export function validateDarwinObservation(name, observations) {
         (record.restore === undefined || globalRestore(record.restore, record.before)) &&
         (typeof record.unavailable === "string" || nodePorts(record.before) && nodePorts(record.after) &&
           globalRestore(record.restore, record.before));
+      const nodeLibc = (record, pid, uid, positive = false) => {
+        if (record?.phase !== "node-libc-resolver" || record.pid !== pid || !(pid > 0) ||
+            record.uid !== uid || !(uid > 0) || positive && record.unavailable !== undefined ||
+            record.before !== undefined && !nodePorts(record.before) ||
+            record.after !== undefined && !nodePorts(record.after)) return false;
+        if (record.calls === undefined) return typeof record.unavailable === "string" && !positive;
+        return record.hostname === "example.com" && sameLayout(record.layout) &&
+          record.hints?.flags === 0 && record.hints.family === layout.afUnspec &&
+          record.hints.socktype === layout.sockStream && record.hints.protocol === 0 &&
+          Array.isArray(record.calls) && record.calls.length === 2 && record.calls.every((call, index) =>
+            call?.service === (index === 0 ? "443" : null) && signed32(call.result) &&
+            [call.ipv4, call.ipv6].every(number => Number.isSafeInteger(number) && number >= 0) &&
+            (!positive || call.result === 0 && call.ipv4 + call.ipv6 > 0));
+      };
       let hostDns;
       try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
       if (bootstrap?.renderer !== "production-seatbeltProfile" ||
@@ -239,6 +266,9 @@ export function validateDarwinObservation(name, observations) {
           typeof bootstrap.ffi.nativeEntrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.nativeEntrySha256) ||
           !Number.isSafeInteger(bootstrap.ffi.host?.pid) || bootstrap.ffi.host.pid <= 0 ||
           bootstrap.ffi.host.ffiPid !== bootstrap.ffi.host.pid || bootstrap.ffi.host.uid !== bootstrap.nativeDnsHost?.uid ||
+          typeof bootstrap.libcProbe?.entry !== "string" || !bootstrap.libcProbe.entry.startsWith("/") ||
+          typeof bootstrap.libcProbe.sourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.libcProbe.sourceSha256) ||
+          !nodeLibc(bootstrap.nativeLibcHost, bootstrap.ffi.host.pid, bootstrap.ffi.host.uid, true) ||
           typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
           unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
           bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
@@ -286,6 +316,7 @@ export function validateDarwinObservation(name, observations) {
               (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
                 attempt.command.argv[11] !== launcher ||
                 attempt.command.argv[12] !== unix.listed || attempt.command.argv[13] !== unix.unlisted ||
+                attempt.command.argv[16] !== JSON.stringify(layout) ||
                 attempt.command.argv[15] !== attempt.globalTarget ||
                 !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
                   attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
@@ -301,7 +332,12 @@ export function validateDarwinObservation(name, observations) {
                 !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid) ||
                 !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget) ||
                 !nativeSubset(attempt.tools.nativeSubsetCommand, attempt.tools.nativeSubset, ports?.uid,
-                  `${attempt.command.argv[14]}.subset.json`)))
+                  `${attempt.command.argv[14]}.subset.json`) ||
+                !nodeLibc(attempt.tools.nativeLibc, ports?.pid, ports?.uid) ||
+                typeof attempt.tools.nativeLibc.unavailable !== "string" &&
+                  (!nodePorts(attempt.tools.nativeLibc.before) || !nodePorts(attempt.tools.nativeLibc.after)) ||
+                attempt.tools.bootstrapGlobal.before !== undefined && attempt.tools.nativeLibc.before !== undefined &&
+                  JSON.stringify(attempt.tools.nativeLibc.before) !== JSON.stringify(attempt.tools.bootstrapGlobal.before)))
             throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
           if (key === "restored") {
             const restoration = attempt.restoration;

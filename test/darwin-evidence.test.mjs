@@ -87,9 +87,14 @@ const bootstrapRecord = () => {
   const unixSocketCanary = { directory: "/owned/unix", listed: "/owned/unix/allowed", unlisted: "/owned/unix/denied" };
   const socket = allowed => ({ created: true, errno: 0, connectAttempted: true,
     connectResult: allowed ? 0 : -1, connectErrno: allowed ? 0 : 1 });
+  const layout = { size: 48, pointerBytes: 8, intBytes: 4, flags: 0, family: 4, socktype: 8, protocol: 12, next: 40,
+    afUnspec: 0, afInet: 2, afInet6: 30, sockStream: 1 };
+  const nodeLibc = pid => ({ phase: "node-libc-resolver", pid, uid: 501, hostname: "example.com", layout,
+    hints: { flags: 0, family: 0, socktype: 1, protocol: 0 },
+    calls: [{ service: "443", result: 0, ipv4: 1, ipv6: 0 }, { service: null, result: 0, ipv4: 1, ipv6: 0 }] });
   const nativeDns = (pid, bootstrap = 200, seed = 201, sandboxed = true) => ({ phase: "native-dns", pid, uid: 501,
     hostname: "example.com", endpoint: "/var/run/mDNSResponder", ports: { bootstrap, registered: [seed] },
-    socket: socket(true), unixAllowlist: { listed: socket(true), unlisted: socket(!sandboxed) },
+    addrinfoLayout: layout, socket: socket(true), unixAllowlist: { listed: socket(true), unlisted: socket(!sandboxed) },
     canonicalEndpoint: "/private/var/run/mDNSResponder", canonicalSocket: socket(true),
     pathMetadata: { varAlias: { result: 0, errno: 0, kind: "symlink" },
       dnsAlias: { result: 0, errno: 0, kind: "socket" }, dnsCanonical: { result: 0, errno: 0, kind: "socket" } },
@@ -118,7 +123,7 @@ const bootstrapRecord = () => {
         [name, "/owned/profile", "/owned/ports", "/owned/work",
           ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] : kind === "node" ?
             ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", git, "{}", "/owned/bootstrap-exec",
-              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget] :
+              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget, JSON.stringify(layout)] :
             ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
           before: { bootstrap: 200, registered: [201] },
@@ -134,6 +139,7 @@ const bootstrapRecord = () => {
           resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed),
           nativeSubsetCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/report.subset.json"], 270 + index),
           nativeSubset: nativeSubset(270 + index),
+          nativeLibc: { ...nodeLibc(pid), before: ownPorts, after: { ...ownPorts } },
           bootstrapGlobal: { phase: "node-bootstrap", pid, uid: 501, before: ownPorts, after: { ...ownPorts },
             restore: { attempted: globalBootstrap !== 0, setStatus: globalBootstrap ? 0 : null, registerStatus: globalBootstrap ? 0 : null },
             service: command("/bin/launchctl", ["kickstart", globalTarget], 250 + index) } } } : {}),
@@ -159,6 +165,7 @@ const bootstrapRecord = () => {
       nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
       nativeSubsetHostCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/host-subset.json"], 269),
       nativeSubsetHost: nativeSubset(269),
+      libcProbe: { entry: "/selected/darwin-libc.mjs", sourceSha256: "c".repeat(64) }, nativeLibcHost: nodeLibc(111),
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
@@ -376,6 +383,20 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     value => { delete value.bootstrap.ffi.nativeRoot; },
     value => { value.bootstrap.ffi.nativeRoot = "/"; },
     value => { value.bootstrap.ffi.host.ffiPid += 1; },
+    value => { value.bootstrap.nativeDnsHost.addrinfoLayout.next = 1000; },
+    value => { value.bootstrap.nativeLibcHost.calls[0].result = 8; },
+    value => { value.bootstrap.nativeLibcHost.calls[1].ipv4 = 0; },
+    value => { value.bootstrap.variants[1].node.command.argv[16] = "{}"; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.hints.flags = 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.calls[1].service = "443"; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeLibc.after; },
+    value => { value.bootstrap.nativeLibcHost.unavailable = "host direct call not qualified"; },
+    value => {
+      value.bootstrap.variants[1].node.tools.nativeLibc.unavailable = "after-snapshot unavailable";
+      value.bootstrap.variants[1].node.tools.nativeLibc.calls[0].result = "8";
+    },
     value => { value.bootstrap.nativeSubsetHost.uid = 0; },
     value => { value.bootstrap.variants[1].node.tools.nativeSubset.pid += 1; },
     value => { value.bootstrap.variants[1].node.tools.nativeSubset.euid = 0; },
@@ -429,6 +450,10 @@ test("NATIVE-DARWIN: bootstrap evidence retains rights, actual targets, compatib
     taskBootstrapStatus: 0, taskBootstrap: 0, returnedSendStatus: null };
   cached.restore = { attempted: true, setStatus: 0, registerStatus: 0 };
   cached.after = { ...cached.before, taskBootstrap: 222, returnedSendStatus: 0 };
+  unknown.bootstrap.variants[1].node.tools.nativeLibc.before = { ...cached.before };
+  unknown.bootstrap.variants[1].node.tools.nativeLibc.calls[0] = { service: "443", result: 8, ipv4: 0, ipv6: 0 };
+  unknown.bootstrap.variants[0].node.tools.nativeLibc = { phase: "node-libc-resolver",
+    pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501, unavailable: "direct call not observed" };
   unknown.bootstrap.variants[1].node.globalGuestEffect = { pid: 999, parent: 1, resource: "different-scope" };
   const unavailableSubset = unknown.bootstrap.variants[1].node.tools.nativeSubset;
   unavailableSubset.subset = unavailableSubset.unprivileged = 0;

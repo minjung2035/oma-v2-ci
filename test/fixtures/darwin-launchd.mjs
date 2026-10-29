@@ -13,6 +13,7 @@ import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { runProcessSync } from "@oma/process/run";
 import { GIT_ENV } from "@oma/process/policies";
+import { observeNodeLibc } from "./darwin-libc.mjs";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
 assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
@@ -218,19 +219,24 @@ try {
     const koffiEntry = realpathSync(fileURLToPath(import.meta.resolve("koffi"))), koffiRoot = dirname(koffiEntry);
     const nativeName = `@koromix/koffi-${process.platform}-${process.arch}`;
     const nativeEntry = realpathSync(fileURLToPath(import.meta.resolve(nativeName))), nativeRoot = dirname(nativeEntry);
-    const { load: hostLoad } = (await import(pathToFileURL(koffiEntry).href)).default;
+    const { load: hostLoad, decode: hostDecode } = (await import(pathToFileURL(koffiEntry).href)).default;
     const ffiPid = hostLoad(null).func("int getpid()")();
     assert.equal(ffiPid, process.pid, "the exact selected FFI must load in the unsandboxed positive control");
     const ffi = { entry: koffiEntry, root: koffiRoot, entrySha256: createHash("sha256").update(readFileSync(koffiEntry)).digest("hex"),
       nativeName, nativeEntry, nativeRoot, nativeEntrySha256: createHash("sha256").update(readFileSync(nativeEntry)).digest("hex"),
       host: { pid: process.pid, uid: process.getuid(), ffiPid } };
+    const libcEntry = realpathSync(fileURLToPath(new URL("./darwin-libc.mjs", import.meta.url)));
+    const libcProbe = { entry: libcEntry, sourceSha256: createHash("sha256").update(readFileSync(libcEntry)).digest("hex") };
+    const nativeLibcHost = observeNodeLibc(hostLoad(null), hostDecode, nativeDnsHost.addrinfoLayout);
+    assert.ok(nativeLibcHost.calls.every(call => call.result === 0 && call.ipv4 + call.ipv6 > 0), JSON.stringify(nativeLibcHost));
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
-const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget] = process.argv.slice(2);
+import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
+const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -267,6 +273,7 @@ value.nativeSubset = existsSync(subsetPath) ? JSON.parse(readFileSync(subsetPath
 save();
 value.bootstrapGlobal = { phase: "node-bootstrap", pid: process.pid, uid: process.getuid() };
 try {
+  value.nativeLibc = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid() };
   const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
   const library = load(null), task = decode.uint(library.symbol("mach_task_self_"));
   const type = library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)");
@@ -287,6 +294,13 @@ try {
   const before = snapshot(), restore = { attempted: false, setStatus: null, registerStatus: null };
   value.bootstrapGlobal.before = before;
   value.bootstrapGlobal.restore = restore; save();
+  value.nativeLibc.before = before; save();
+  try {
+    const result = observeNodeLibc(library, decode, JSON.parse(resolverLayout));
+    result.before = before; value.nativeLibc = result; save();
+    result.after = snapshot();
+  } catch (error) { value.nativeLibc.unavailable = String(error); }
+  save();
   if (before.globalBootstrap > 0 && before.globalBootstrap < 0xffffffff &&
       before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) {
     restore.attempted = true;
@@ -297,7 +311,10 @@ try {
     }
   }
   value.bootstrapGlobal.after = snapshot();
-} catch (error) { value.bootstrapGlobal.unavailable = String(error); }
+} catch (error) {
+  value.bootstrapGlobal.unavailable = String(error);
+  value.nativeLibc.unavailable = String(error);
+}
 save();
 // A separately registered fresh target tests actual service effect, not a
 // port name, successful setter or a previously started actor.
@@ -312,7 +329,8 @@ value.complete = true; save();
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
       compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
-      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, nativeSubsetHostCommand, nativeSubsetHost, ffi, variants: [] };
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, nativeSubsetHostCommand, nativeSubsetHost,
+      libcProbe, nativeLibcHost, ffi, variants: [] };
     const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
       const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
@@ -320,7 +338,7 @@ value.complete = true; save();
       const restoredTarget = loadJob(`${name}-restored`, actor, "once");
       const globalTarget = loadJob(`${name}-global`, actor, "once");
       const profile = seatbeltProfile({ readable: [
-        ...[actor, launcher, script, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
+        ...[actor, launcher, script, libcEntry, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         { path: developerTools.contents, kind: "directory" },
         { path: unixSocketCanary.directory, kind: "directory" },
         { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
@@ -335,7 +353,7 @@ value.complete = true; save();
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
         nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target]);
+        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target, JSON.stringify(nativeDnsHost.addrinfoLayout)]);
       const tools = optionalJson(toolsReport);
       const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
       const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,

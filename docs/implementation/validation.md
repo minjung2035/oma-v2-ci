@@ -290,7 +290,7 @@ baselineComparison은 NOT_AVAILABLE이고 standalone kernel/crash는 NOT_RUN·na
 시험·CI를 회수 목적으로 재실행하지 않았다. 임시 공개 notice 후보는 발행하지 않고 driver를 원래 snapshot51C4로 정확히 되돌렸다.
 새 권한·출력 채널·재시도 정책·제품 timeout은 추가하지 않았고, 외부 소유 observer만 문서화된 회수 경로로 정정했다.
 
-### 다음 후보: unprivileged subset — 선언/과거 계약, 실제 미실행
+### Public subset preflight — 실제 namespace 생성 실패
 
 null-bootstrap은 native libc 호환성을 충족하지 못하므로 그대로 backend로 연결하지 않는다.
 후보는 public subset namespace로 허용된 lookup을 남기는 방식과, 명시한 좁은 lookup만 중계하는 proxy다.
@@ -300,7 +300,7 @@ SDK는 `bootstrap_subset`을10.10, `bootstrap_unprivileged`를10.5부터 depreca
 ancestor lookup·requestor receive-right 소멸 뒤 subset 소멸·parent 조회의 EUID-root 조건을 설명하지만 현재 OS의 proof는 아니다.
 native launchd job이 이미 unprivileged port로 시작한다는 사실도 별도 namespace의 제어 제한을 증명하지 않는다.
 ordinary UID 생성·parent 재취득·explicit GUI-domain fresh control·정상 libc/manual CLI를 실제 확인하기 전에는 후보만 유지한다.
-이 새 실기는 **NOT_RUN**이고 privileged service/entitlement·실행 허용·Linux 변경은 없다.
+최초 이 후보를 정리할 때 실기는 **NOT_RUN**이었다. privileged service/entitlement·실행 허용·Linux 변경은 없다.
 판단 입력은 `next-candidate-source-contract.json`·`alternative-public-subset-assessment.json`이다.
 
 후속 fixture는 먼저 **생성 가능 여부만** 닫힌 preflight로 묻는다. 같은 C image의 `observe-subset`을 ordinary UID host와
@@ -313,6 +313,59 @@ requestor의 SEND/RECEIVE와 반환된 SEND는 각각 소유한 참조만 반납
 실제 entry와 generated module syntax·caller59/59·실제 Linux의 state 생성 전 거절은 통과했다.
 Darwin compile/link·subset 생성·parent 조회는 이 checkpoint에서 **NOT_RUN**이다.
 원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/public-subset-preflight/`다.
+
+주 `9afdcb0fe999171ae29557ae7b3f0c82d43f14d8` / mirror `73cfdb7591fa34423bd016ac4372b4b906d343cb`,
+tree `15bb312dbd7d30a4212ec3fbbbd5c22f2cc7bf58`, clean `f73776ede038f4f9fa186f17e16b9755b2d270c338f69465a094129658f3cc15` /15687 files다.
+Native [40815606074](https://github.com/minjung2035/oma-v2-ci/actions/runs/40815606074)의 원래 ZIP5개를 SHA256 대조해 회수했다.
+양 Mac은 SDK15.5/26.5·arm64·GUI UID/EUID501·SIP-disabled이며 원래3회 case가 각각 OBSERVED·exit0다.
+
+| 실제 preflight·양 Mac 합계 | 횟수 | `bootstrap_subset` API 반환 | namespace | unprivileged/parent 호출 |
+|---|---:|---:|---|---|
+| sandbox 밖 ordinary host |6 |125 |없음 |NOT_RUN |
+| inherited production Seatbelt |6 |125 |없음 |NOT_RUN |
+| bootstrap-only |6 |141 |없음 |NOT_RUN |
+| bootstrap-and-xpc |6 |141 |없음 |NOT_RUN |
+
+위125/141은 **API 반환값**이다. 각 관측 C process의 exit는0이며 launchctl exit141이나 signal로 바꾸어 읽지 않는다.
+24회 모두 새 requestor allocate/make-SEND·SEND/RECEIVE 반납0, task/registered before/after는 같고 namespaceInstalled=false다.
+parent의0 값은 반환된 port가 아니라 선행 실패 뒤 미호출의 초기값이다. parent 재취득 거절·subset 안의 libc/manual CLI/fresh control은 증명하지 않았다.
+ordinary host에서부터 namespace 생성 전제가 실패했으므로 이 환경의 후보로 채택하지 않는다. 다른 OS/사용자 조건의 불가능성이나 private protocol의 안전성까지 단정하지 않는다.
+제한된 API preflight는 재현 가능한 qualification 진단으로 남기며 production task/registered port를 수정하는 backend로 연결하지 않는다.
+
+원래18 mode는 Node DNS·DNS-SD·Git/compiler·alias/canonical/listed 허용과 unlisted/file 거절·canary 보존을 유지했다.
+own Node task/global·cached restore·별도 fresh service 결과도 이전과 같다. C는 원래6회 성공/12회 실패·isolated18회 성공/36회 실패다.
+실제 소유 generation 종료·job 해제·빈 cleanupFaults와 source/input/runtime 전후 일치를 대조했다.
+Mac common 각254/254, Ubuntu246/246·integration433/433·execution46/46·Restic-setup8/8·skip/cancel/todo0다.
+양 Mac package-isolation은 **package27개 중26 PASS·`@oma/git`1 FAIL**이며 기존 preparation의 `UNSUPPORTED_PROFILE`이다.
+이는 Node test27/26라는 수치가 아니며 Mac 독립 설치 완료가 아니다. 세 gate OPEN·제품 실행 차단도 유지한다.
+`actual-subset-preflight-outcomes.json`·`actual-subset-qualification.json`·`actual-normal-tools-and-boundaries.json`·
+`actual-common-and-packaged-runtime.json`에 실제 결과를 남겼다.
+동일 source의 Architecture [40815606050](https://github.com/minjung2035/oma-v2-ci/actions/runs/40815606050)는 completed/success다.
+verification/all 원시2개와 별도 source ZIP의 공식 digest를 대조했다. all3954/3954·baseline14/14+3940/3940·
+fast881·durable872·property34·stress16·platform72 PASS·skip/cancel/todo0·errors[]·모든 numeric command exit0다.
+baselineComparison은 NOT_AVAILABLE, standalone kernel/crash는 NOT_RUN·native-all의 실제 파일/required names 포함이다.
+`published-ci/architecture/clean-source-full-ci-qualification.json`에 남겼으며 시험을 재실행하거나 새 dirty 입력의 proof로 합성하지 않았다.
+
+**권장 다음 질문:** 같은 Node image의 public libc 직접 호출도 별도 C image처럼 실패하는가?
+실제 SDK의 ABI를 먼저 고정하고 같은 hints의 직접 `getaddrinfo`·Node lookup·별도 native C를 비교한다.
+새 비교는 **NOT_RUN**이며 replacement resolver·특정 도구 우회·추가 network/Mach 권한은 아니다.
+namespace/proxy가 필요하다고 미리 결론 내리지 않는다. private XPC forwarding은 현재 ABI·닫힌 요청/응답·권리 반환 계약 없이는 구현/채택하지 않는다.
+
+후속 `darwin-libc.mjs`는 host와 generated Node가 **같은 함수**로 public getaddrinfo/freeaddrinfo를 호출한다.
+별도 C image가 실제 SDK로 `sizeof/offsetof`·AF/SOCK 상수를 기록하고 동일 layout을 Node argv에 결박한다.
+두 service443/null·flags0/AF_UNSPEC/SOCK_STREAM의 결과와 주소 family 수를 기록하며 성공 때 반환 목록을 한 번 해제한다.
+Node 호출 전후 자신의 task/global snapshot과 PID/UID를 저장하고 cached restore는 그 뒤 원래 별도 fresh target으로 수행한다.
+함수 source는 exact readable file로만 추가하며 mapped/exec·Mach/network 권한·production resolver·기존 C 조건은 바꾸지 않는다.
+host 같은 FFI 양성을 요구하고, malformed ABI/다른 PID/UID/잘못된 hints·service·partial unavailable를 validator/factory에 함께 반영했다.
+
+local caller59/59·skip/cancel/todo0, 실제3-interpolation generated module syntax, 실제 Linux의 state 생성 전 거절은 통과했다.
+동일 C layout 출력문을 실제 Linux compiler의 `-Wall -Wextra -Werror`로 compile하고 실제 Node의 public libc로 numeric127.0.0.1을 조회했다.
+service443/null 모두 status0·ipv4=1/ipv6=0·목록 순회/해제를 확인했다. **Mac DNS/authority proof는 아니며 실제 Mac 비교는 NOT_RUN**이다.
+원시는 `/home/dev/oma-audit-artifacts/native-2026-10-28-macos-resume/same-image-libc/`다.
+[Node26 호출부](https://github.com/nodejs/node/blob/v26.0.0/src/cares_wrap.cc#L1987-L2004)와
+[bundled libuv](https://github.com/nodejs/node/blob/v26.0.0/deps/uv/src/unix/getaddrinfo.c#L94-L100)의 source 경로도 확인했지만 실제 image 관측을 대신하지 않는다.
+
+
 
 
 
@@ -1332,7 +1385,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `f73776ede038f4f9fa186f17e16b9755b2d270c338f69465a094129658f3cc15` (15687 files).
+verification input digest `caba96186c412fb7b864b7b3b35f744ef61bfb86758ebd5267ab2835ec646c3b` (15688 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 
