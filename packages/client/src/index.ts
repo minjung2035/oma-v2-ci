@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { readResult } from "@oma/tool-files/results";
 import { createHash } from "node:crypto";
 import type { MutationMethod, PublicMethod, PublicMethods, Receipt } from "@oma/contracts";
 import { currentContext, inContext, type ClientContext } from "./context.js";
@@ -33,7 +35,7 @@ export interface ChallengeOpenInput {
   replacement?: { candidate: string; base: string };
 }
 export interface ReviewDiffInput {
-  name: string; view?: "proposal" | "original"; path?: string; cursor?: number;
+  name: string; view?: "proposal" | "original" | "applied" | "context"; path?: string; cursor?: number;
 }
 export interface ReviewResponseInput {
   name: string; action: "comment" | "approve" | "reject"; body: string; approval?: string;
@@ -240,11 +242,22 @@ export class Client {
     if (!Number.isSafeInteger(input.cursor ?? 0) || (input.cursor ?? 0) < 0) throw new ClientError("invalid cursor", 2);
     return this.scope(signal, async () => {
       const detail = await this.query("review.status", { name: input.name }, signal) as {
+        diff?: import("@oma/contracts/files").ReviewDiffArtifact;
+        contextDiff?: import("@oma/contracts/files").ReviewDiffArtifact;
+        proposal?: { candidate?: string; expectedBase?: string; policyRevision?: string };
         identity?: { candidate?: string; expectedBase?: string; policyRevision?: string };
         target?: { name: string; identity?: { candidate?: string; expectedBase?: string; policyRevision?: string } };
       };
       const view = input.view ?? "proposal";
-      const identity = view === "original" && kind === "challenge" ? detail.target?.identity : detail.identity;
+      if (view === "applied" || view === "context") {
+        const diff = view === "applied" ? detail.diff : detail.contextDiff, repository = this.context.env.OMA_PROJECT_GIT;
+        if (!diff || !repository) throw new ClientError("no stored integration diff is visible for this request", 2);
+        if (input.path !== undefined) throw new ClientError("stored diff pages have no path filter", 2);
+        const page = readResult(join(repository, "oma-results"), diff.reference, { byteOffset: input.cursor ?? 0, byteLimit: PAGE, encoding: "base64" });
+        if (page.bytes !== diff.bytes || page.sha256 !== diff.sha256) throw new ClientError("stored diff differs from its accepted identity", 2);
+        return this.bounded(JSON.stringify({ name: input.name, view, base: diff.base, candidate: diff.candidate, ...page }));
+      }
+      const identity = view === "original" && kind === "challenge" ? detail.target?.identity : detail.proposal ?? detail.identity;
       if (!fullOid(identity?.candidate) || !fullOid(identity.expectedBase)) throw new ClientError(`${kind} status carries no diff identity for ${input.name}`, 2);
       const repository = this.context.env.OMA_PROJECT_GIT;
       if (!repository) throw new ClientError("no canonical code repository was provided", 2);
@@ -289,6 +302,14 @@ export class Client {
       const params = frozen.params as Record<string, unknown>;
       if (fullOid(params.candidate)) await this.ensurePublished(params.candidate, key);
     } });
+  }
+  controlReview(input: { name: string; kind: "review.withdraw" | "review.invalidate"; vote: string; reason: string } |
+      { name: string; kind: "review.adopt"; reason: string } |
+      { name: string; kind: "review.retry"; expectedAttempt: string | null; expectedRevision?: number; reason: string } |
+      { name: string; kind: "review.revise"; expectedRevision: number; base: string; candidate: string; reason: string }, key: string, signal?: AbortSignal): Promise<string> {
+    return this.effect("attest.record", key, () => ({ method: "attest.record", params: input }), () => ({ ...input }), signal, input.kind === "review.revise" ? { beforeSend: async frozen => {
+      const params = frozen.params as {candidate:string}; await this.ensurePublished(params.candidate,key);
+    } } : undefined);
   }
   respondReview(input: ReviewResponseInput, key: string, signal?: AbortSignal): Promise<string> {
     const params = { name: input.name, ...(input.action === "comment" ? { kind: "review" } : {

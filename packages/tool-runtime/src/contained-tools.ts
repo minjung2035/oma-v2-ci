@@ -21,7 +21,8 @@ import {
 import {
   WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, withFileWithin, writeWithin, writeWithinUnchanged, type WriteExpectation,
 } from "@oma/tool-files";
-import { searchWorkspace } from "./contained-search.js";
+import { resultReadSurface } from "./result-read.js";
+import { searchWorkspace, resultRootFor } from "./contained-search.js";
 import { admittedRoot } from "./workspace-guard.js";
 
 /** Replace help only; preserve validation, rendering and execution metadata. */
@@ -126,7 +127,7 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, sandb
   const grepDefinition = { ...grep,
     description: sandboxed
       ? "Search file contents for a regex or literal pattern, respecting ignore rules. Returns matching paths and lines. Default limit is 100 matches; output and long lines may be truncated. Narrow the search or adjust limit when coverage is incomplete."
-      : "Search admitted files for a regex or literal pattern, respecting ignore rules. Returns matching paths and lines from a contained snapshot. Only an explicit limit bounds matches; large complete output is returned inline for a read-only role or saved at the reported workspace path.",
+      : "Search admitted files for a regex or literal pattern, respecting ignore rules. Returns matching paths and lines from a contained snapshot. Only an explicit limit bounds matches; large output is retained in a private runtime result file with a bounded preview and paginated read reference.",
     promptSnippet: "Search file contents and inspect matching paths and lines.",
     parameters: parameterHelp(grep.parameters, {
       pattern: "Regular expression to match, or literal text when literal is true.",
@@ -141,7 +142,7 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, sandb
   const findDefinition = { ...find,
     description: sandboxed
       ? "Find file paths matching a glob under a directory, respecting ignore rules. Paths are relative to that directory. Default limit is 1000 results; inspect truncation notices before treating the list as complete."
-      : "Find file paths matching a glob under an admitted directory, respecting ignore rules. Only an explicit limit bounds results; large complete output is returned inline for a read-only role or saved at the reported workspace path.",
+      : "Find file paths matching a glob under an admitted directory, respecting ignore rules. Only an explicit limit bounds results; large output is retained in a private runtime result file with a bounded preview and paginated read reference.",
     promptSnippet: "Find files by glob before reading their contents.",
     parameters: parameterHelp(find.parameters, {
       pattern: "File glob to match, for example src/**/*.ts.",
@@ -170,7 +171,7 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, sandb
     if (root === null) throw new WorkspaceRefusal("tool path is outside the agent workspace");
     return root;
   };
-  pi.registerTool(createReadToolDefinition(workspace, { operations: {
+  resultReadSurface(pi, resultRootFor(workspace)).registerTool(createReadToolDefinition(workspace, { operations: {
     readFile: async path => readWithin(rootFor(path), path),
     access: async path => { accessWithin(rootFor(path), path, false); },
     detectImageMimeType: async path => withFileWithin(rootFor(path), path, held => detectSupportedImageMimeTypeFromFile(held)),
@@ -178,13 +179,8 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, sandb
   // G10-02: the engine's walkers only see approved copies, including the
   // context=0 fast path which never invokes a custom readFile operation. The
   // snapshot's root is the one the search's own path was admitted under.
-  // A complete answer too large for one result is spilled into the
-  // workspace's own `.oma/search-results/` through the same contained
-  // writer -- contained and serialized like any authored file, so the
-  // named path is one the model's read/grep/find can open. A read-only
-  // surface gets no spool (it must not write where its role cannot) and
-  // the answer rides inline in full instead.
-  const spool = readOnly ? undefined : { workspace, write };
+  // Runtime result storage has its own owner, independent of source writes.
+  const spool = { root: resultRootFor(workspace) };
   pi.registerTool({ ...grepDefinition, execute: async (id, params, signal, update, ctx) =>
     searchWorkspace("grep", rootFor(params.path ?? "."), params, signal, undefined, spool) });
   pi.registerTool({ ...findDefinition, execute: async (id, params, signal, update, ctx) =>

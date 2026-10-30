@@ -260,6 +260,11 @@
           "file": "test/merge-review.test.ts",
           "title": "a requester stopped before the CAS cancels the application",
           "injection": "logical"
+        },
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "IMP-R30: SIGKILL",
+          "injection": "sigkill"
         }
       ]
     },
@@ -297,6 +302,11 @@
           "file": "test/git-effect-evidence.test.ts",
           "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
           "injection": "logical"
+        },
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "IMP-R30: SIGKILL",
+          "injection": "sigkill"
         }
       ]
     },
@@ -948,7 +958,7 @@
       "tests": [
         {
           "file": "test/merge-review.test.ts",
-          "title": "a bound reviewer's retirement withdraws and re-asks the approval",
+          "title": "a bound reviewer's retirement preserves the existing approval",
           "injection": "logical"
         },
         {
@@ -969,7 +979,7 @@
         },
         {
           "file": "test/merge-review.test.ts",
-          "title": "only the first ready request on a base applies; the other goes stale by refresh",
+          "title": "disjoint ready requests on one base both apply without rewriting old intent",
           "injection": "logical"
         }
       ]
@@ -1572,7 +1582,7 @@
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archive",
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archiveHeld",
       "fact": "verified immutable snapshot/checkpoint and cold selection precede cache reclamation; interrupted deletion restores the same bytes",
       "tests": [
         {
@@ -1583,7 +1593,7 @@
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restore",
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restoreHeld",
       "fact": "verified staged restoration is recoverable while cold; hot selection follows complete publication",
       "tests": [
         {
@@ -1633,6 +1643,72 @@
         {
           "file": "test/native-git-execution.test.mjs",
           "title": "native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/pipeline-recorder.ts#PipelineRecorder.constructor",
+      "fact": "Started evidence survives receipt publication failure; unknown is never success and a retry has its own directory. In-process fault, not power-cut qualification.",
+      "tests": [
+        {
+          "file": "test/architecture-boundaries.test.mjs",
+          "title": "pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/pipeline-recorder.ts#PipelineRecorder.finish",
+      "fact": "Started evidence survives receipt publication failure; unknown is never success and a retry has its own directory. In-process fault, not power-cut qualification.",
+      "tests": [
+        {
+          "file": "test/architecture-boundaries.test.mjs",
+          "title": "pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.transition",
+      "fact": "Selected generation survives cold publication failure and exact checkpoint recovers.",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/download-cache.ts#fillDownloadCache",
+      "fact": "Corrupt content becomes a miss; exact integrity is required on refill and credential-bearing/private URLs are excluded.",
+      "tests": [
+        {
+          "file": "test/architecture-p2-cache.test.mjs",
+          "title": "P2 download cache: scope/toolchain/setup keys differ, corruption misses, and only anonymous integrity-pinned public tarballs qualify",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration-preparation.ts#collectPreparedIntegrations",
+      "fact": "Only quiescent proven-unaccepted preparations lose refs; unknown ledger reads and live leases retain them, accepted ref and plan bytes survive.",
+      "tests": [
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "IMP-R29: prepared-ref collection retains active, unknown and accepted ownership",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.recoverFirst",
+      "fact": "Explicit host repair seeds a legacy empty Society exactly once across restart without ordinary Principal creation authority.",
+      "tests": [
+        {
+          "file": "test/worker-autonomy.test.ts",
+          "title": "IMP-R09: host recovery seeds exactly one legacy zero-Resident Society",
           "injection": "logical"
         }
       ]

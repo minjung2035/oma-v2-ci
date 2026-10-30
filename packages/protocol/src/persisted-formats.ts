@@ -8,12 +8,11 @@
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { isMutationMethod } from "./receipt-codec.js";
 
-/** The version this build reads and writes. v0.1.0 is a pre-release: no
- * backward compatibility with development-time formats is owed, so the only
- * readable version is the one this build writes. Any other persisted version
- * is fail-closed: no migration is attempted and no rewrite happens. */
-export const SCHEMA_USER_VERSION_WRITTEN = 4;
-export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([SCHEMA_USER_VERSION_WRITTEN]);
+/** Version 5 gates durable review/resource changes. Version 4 is read only
+ * long enough for the Store owner to make a durable backup and advance the
+ * schema gate. Historical intent/result bytes are never rewritten. */
+export const SCHEMA_USER_VERSION_WRITTEN = 5;
+export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([4, SCHEMA_USER_VERSION_WRITTEN]);
 export const WIRE_PROTOCOL_VERSION = 1;
 /** DR51: process-crash recovery observations, not accepted intent or a task queue. */
 export const EXECUTION_JOURNAL_VERSION = 2 as const;

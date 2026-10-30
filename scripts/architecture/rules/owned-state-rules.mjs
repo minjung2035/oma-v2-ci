@@ -117,6 +117,8 @@ export const OWNED_STATE_OWNERS = Object.freeze([
  * entry says the path the call touches is not an OMA-owned tail, or why the
  * plain call on it is already refused-and-reported. */
 export const OWNED_STATE_EXEMPTIONS = Object.freeze({
+  "packages/platform-linux/src/workload-budget.ts": "the delegated cgroup2 kernel filesystem, checked by statfs; only the owned workload subtree is mutated, never Society state or ancestor controllers; cgroupfs cannot contain user-created symlinks and permission failure reports unsupported/refuses execution",
+  "packages/tool-files/src/descriptor-files.ts": "SDK-free held-descriptor owner for workspace, private snapshots and actor result roots; no-follow opens refuse aliasing and errors, with per-level held parents. PI-001 excludes a storage dependency; no caller path is silently repaired",
   "packages/git/src/host-project.ts": "MacGit.run creates its own output-spool scratch with mkdtemp under the OS temp directory and removes that same scratch after the bounded Git command; metadata-only reads inspect the Human repository, never repair or rewrite its ancestors",
   "packages/storage/src/mail-notices.ts": "read-only Human observation of a bounded broker projection; no-follow descriptor reads report missing, malformed or unreadable metadata explicitly and never repair state without broker ownership",
   "packages/storage/src/published-mail.ts": "read-only publication-link inventory for Human mail and broker projection; metadata probes reject links, report unreadable directories and never turn observation into permission repair",

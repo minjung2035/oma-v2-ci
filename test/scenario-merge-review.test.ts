@@ -154,7 +154,7 @@ test("SCN-R02: the Principal's own surface refuses Worker actions and worker-mai
       tools(call("oma_review_respond", { action: "comment", name, body: "no", approval: "m-00000000-0000-4000-8000-000000000001-0" })),
       tools(call("oma_mail_read", { messageId: workerId })),
       tools(call("oma_mail_read", { messageId: `/mail/workers/cur/${workerId}:2,` })),
-      tools(call("read", { path: join(s.root, "mail", "workers", "cur") })),
+      tools(call("read", { path: join(s.root, "mail", "workers", "cur"), offset: 1, limit: 100 })),
       text("done"),
     ]);
     await s.prompt("Try the review actions.");

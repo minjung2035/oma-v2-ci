@@ -2,7 +2,80 @@
 
 모델 도구 표면은 DR64의 typed tool/core·optional 계약으로 cutover했다.
 실제 Sol medium 비교와 native Darwin qualification은 미완료다.
-아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
+아래 실행 결과는 각각 고정된 당시 입력의 기록이다. 현재 변경의 최종 결과는 첫 절에 둔다.
+
+## Architecture improvement P1–P4 final verification — 2026-10-30
+
+P1a/P1b/P1c, P2, P3, P4a/P4b/P4c의 구현이 이 작업 트리에 있다.
+항목별 owner와 검증 범위는 [구현 계약](architecture-improvements.md)에 연결한다.
+기존 accepted bytes와 terminal receipts, unknown 및 requester 권한을 유지한다.
+
+- 최초 전체 실행: 4,000개 중 3,866 PASS / 134 FAIL / skip 0.
+- 첫 수리 검증: 449개 중 441 PASS / 8 FAIL / skip 0.
+- 둘째 수리 검증: 84개 중 83 PASS / 1 FAIL / skip 0.
+- 추가 검증: 81개 중 77 PASS / 4 FAIL / skip 0. Linux scripted scenarios,
+  실제 CAS 전후 SIGKILL, binary rename 및 native pipeline은 통과했다.
+  남은 네 실패는 공통 Worker 환경에 추가된 Linux NODE_PATH 때문이므로
+  그 추가를 제거했다. Darwin 구현 확장이나 native qualification을 뜻하지 않는다.
+- 위 실패 로그를 삭제하거나 PASS로 바꾸지 않았다. 최종 전체 재실행은 별도 기록한다.
+- 둘째 전체 실행: 4,003개 중 4,001 PASS / 2 FAIL / skip 0. 두 실패는
+  broker/TUI provisioning의 mkdir 경계에서 발생한 EAGAIN이었다. 같은 입력의
+  해당 두 시험은 별도 재실행에서 2/2 PASS였으며, 근본 원인은 확정하지 않았다.
+- mkdir의 불확실한 결과 뒤 실제 held directory 관측이 성공하는 경우만 기존
+  디렉터리 요구를 충족하도록 보완했다. 없는 경로·링크·권한 거절은 계속 실패한다.
+  새 회귀는 수정 전 1/4 PASS, 수정 후 4/4 PASS였다. 실제 broker/TUI와 기존
+  directory/preparation을 포함한 후속 검증 30/30 PASS, skip 0.
+
+최종 전체 실행 상태: **PASS — 4,007/4,007**, fail/cancel/skip/todo 0.
+직렬 14개와 병렬 3,993개가 모두 통과했다. `npm run build` 및 전체 architecture,
+transaction, durable-boundary, document, spec-inventory 검사도 통과했다.
+이 실행의 고정 입력은 `4367b38229507b1d5ed93af7d83edbe8e217a838c2a759b18062e0be2cf3a8d2`
+(15,733개)이며 실행 전후 동일했다. 별도 기록한 변경 입력 192개 SHA도 모두 같았다.
+이후 변경은 결과 문서와 증거·변경 경로 목록뿐이며, runtime PASS를 후속 문서 입력의
+새 실행으로 재해석하지 않는다. 간헐적 EAGAIN의 native 원인 자체는 미확정이다.
+
+호스트 기본 cloc2.10 및 Corepack 누락 대신 CI와 같은 cloc2.08/Corepack0.34.0을
+ignored `.scratch/verify-toolchain`에 설치했다. Node는 호스트 실행 파일의 byte-identical
+복사다. npm의 호스트 배포판 의존성도 복사본 내부에 포함해 격리 환경에서 ambient
+NODE_PATH 없이 실행되도록 했다. 전역 설치·인증 정보는 바꾸지 않았다. 실제 provider/model 요청,
+SWE-Milestone benchmark, push/merge는 실행하지 않았다. 독립 authored review,
+전원 차단 전수 조합 및 host 전체 3+3 자원 판정은 이 로컬 시험의 범위가 아니다.
+
+[최초 전체 로그](../../implementation/evidence/architecture-improvements/full.log),
+[첫 수리](../../implementation/evidence/architecture-improvements/repair1.log),
+[둘째 수리](../../implementation/evidence/architecture-improvements/repair2.log),
+[추가 검증](../../implementation/evidence/architecture-improvements/final-targeted.log).
+[둘째 전체 로그](../../implementation/evidence/architecture-improvements/full2.log),
+[디렉터리 경계 검증](../../implementation/evidence/architecture-improvements/directory-regression.log).
+
+[최종 전체 로그](../../implementation/evidence/architecture-improvements/full3.log),
+[고정 입력](../../implementation/evidence/architecture-improvements/full3-inputs.json),
+[실행 전후 확인](../../implementation/evidence/architecture-improvements/full3-result.json),
+[최종 빌드](../../implementation/evidence/architecture-improvements/full3-build.log),
+[최종 구조 검사](../../implementation/evidence/architecture-improvements/full3-architecture.log),
+[전체 변경 경로](../../implementation/evidence/architecture-improvements/changed-paths.txt).
+
+## Architecture improvement P1/P2 checkpoint — 2026-10-30
+
+이 기록은 구현 중인 작업 트리의 단계별 시험이다. 전체 명세 완료나 전체 suite PASS를
+뜻하지 않으며, P3/P4와 최종 architecture inventory 검사는 아직 남아 있다.
+
+- `npm run build`: PASS.
+- P1a/P1b/P1c, 실제 Linux resource limits, 기존 merge/Worker/reconcile,
+  execution recovery와 새 pipeline/cache를 묶어 80 tests PASS, fail 0, skip 0.
+- 실제 cgroup CPU throttling, 128 MiB 범위의 OOM, 24-task ceiling,
+  자식 포함 및 제어 프로세스 제외를 관측했다. host 전체 고갈 시험은 하지 않았다.
+- 실제 격리 pipeline에서 setup 산출물/HOME 공유, fresh retry, 별도 로그,
+  candidate JSON의 비신뢰 처리, tracked code generation, timeout 뒤 scope death,
+  검증 cache를 이용한 offline npm ci와 후속 check를 실행했다.
+- native recovery의 SIGKILL 경계도 실행했다. opening witness가 없는 경우는
+  unknown으로 유지했으며, 이를 성공한 종료 증거로 바꾸지 않았다.
+- [고정 명령과 원시 로그](../../implementation/evidence/architecture-improvements/p1-p2.log).
+  이 로그의 PASS는 이 시점 입력에만 해당한다. 이후 수정은 새 실행으로 구분한다.
+
+실제 provider/model 호출, SWE-Milestone benchmark, push/merge는 실행하지 않았다.
+캐시 구현은 npm의 [cache integrity 계약](https://docs.npmjs.com/cli/cache/)과 설치된
+cacache 구현을 사용한다. P1/P2의 모든 수용 조합을 이 80개가 망라한다고 주장하지 않는다.
 
 ## wait 직전 도착한 미전달 메일 재활성화 — 2026-10-30
 
@@ -816,7 +889,7 @@ NOT_RUN이며 유료 Mac CI도 실행하지 않았다. 원문은
 
 아래 값은 **구조 검사의 현재 입력 identity**다. digest 생성은 runtime PASS를 만들지 않는다.
 
-verification input digest `459bcfc37a49b5977e39d50f5573476bc6131691e2273338cab684a30ab805d0` (15681 files).
+verification input digest `73358e2cd53c9d6c7d29864689961dc22b8d184492f52acafe5f75c573cfd462` (15739 files).
 
 현재 source 목록은 [production-files.txt](../../production-files.txt), per-file SHA-256은 [production-loc-hashes.json](../../production-loc-hashes.json)이 소유한다. `npm run check:inventory`는 cloc 없이 source bytes를 확인한다. `npm run evidence:refresh`의 구조 재생성과 실제 runtime 실행은 별도다.
 

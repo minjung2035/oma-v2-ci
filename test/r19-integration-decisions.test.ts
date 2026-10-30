@@ -12,7 +12,7 @@ import type { OperationOf } from "@oma/protocol/operation-codec";
 import { generateOperationId } from "@oma/native/identity";
 import { requestHash } from "@oma/domain/request-identity";
 import { IntegrationCoordinator, type IntegrationEffects } from "@oma/git/integration";
-import type { IntegrationPolicy, IntegrationPolicyReader } from "@oma/domain/integration-policy";
+import { snapshotIntegrationPolicy, type IntegrationPolicy, type IntegrationPolicyReader } from "@oma/domain/integration-policy";
 import type { GitObservation, GitProcessEvidence, ChangedPath } from "@oma/contracts/git";
 import type { RefAfterCas } from "@oma/git/observe";
 import { makeValidAgent } from "./fixtures/spec.js";
@@ -78,7 +78,7 @@ function operation(store: Store, key: string): OperationOf<"git.integrate"> {
 }
 function accept(store: Store, key: string): string {
   const id = generateOperationId();
-  const plan = {policyIdentity: "02c010d0ad2a2e60c59a05b83368e8699b97567828b4f75ffa160dfd35b1bb70", noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
+  const plan = {policyIdentity: snapshotIntegrationPolicy(basePolicy()).policyIdentity, noopRef: null,  kind: "git.integrate", repo: "project", target: "refs/heads/main", base: BASE,
     candidate: CANDIDATE, policyRevision: "p1", checkProfileDigest: EMPTY_DIGEST,
     };
   store.transaction(tx => tx.acceptOperation({ id, actor: "alice", requestKey: key, kind: "git.integrate",

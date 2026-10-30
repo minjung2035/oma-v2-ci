@@ -35,7 +35,7 @@ test("V11A: the inline writer validates before replacement", () => {
 for (const mode of ["inline", "split"] as const) {
     for (const [field, value, message] of [
         ["worker-limit", 3, /not editable|Unknown|unknown|unsupported/i],
-        [INITIAL_WORKERS, -1, /non-negative|Invalid|invalid|integer/i],
+        [INITIAL_WORKERS, -1, /at least (?:1|one)|non-negative|Invalid|invalid|integer/i],
     ] as const) {
         test(`V11A: invalid ${mode} ${field} edit is rejected before every authored file`, () => {
             const fixture = createCompleteConfigurationFixture();

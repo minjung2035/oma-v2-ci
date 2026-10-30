@@ -10,6 +10,7 @@
  *
  * DR37: admission checks containment, not workspace bytes or quota.
  */
+import { isResultReference } from "@oma/tool-files";
 import { lstatSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -120,6 +121,8 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
         reason: "shell tools are disabled outside the OMA sandbox",
       };
     if (!PATH_TOOLS.includes(event.toolName)) return undefined;
+    // The read owner resolves this opaque reference only inside this actor's result root.
+    if (isResultReference(input.path)) return event.toolName === "read" ? undefined : { block: true, reason: "immutable result references are read-only; use read to page their bytes" };
     if (sandboxed && !writes) return undefined;
     // C18: a read may also reach an installed-package resource root -- the
     // same store root the engine's argv names -- under the same

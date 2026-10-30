@@ -16,7 +16,7 @@ async function main(argv: readonly string[]): Promise<void> {
   enableProcessCompileCache();
   const command = parseOmaArguments(argv);
   if (command.kind === "help") {
-    process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
+    process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma login\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
     return;
   }
   if (command.kind !== "session") { await import("./oma-society.js"); return; }

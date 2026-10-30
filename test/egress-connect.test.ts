@@ -580,7 +580,7 @@ function hostWith(egress: unknown): Parameters<typeof validateConfig>[0] {
 
 test("DR46: current host configuration refuses removed policy fields and prior schema", () => {
   const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
-  assert.equal(config.schemaVersion, 4);
+  assert.equal(config.schemaVersion, 5);
   assert.throws(() => validateConfig({ ...config, schemaVersion: 1 }), /unsupported development configuration schema/);
   assert.throws(() => validateConfig({ ...config, quota: { storageBytes: 1 } }), /unknown top-level field quota/);
   assert.throws(() => validateConfig(hostWith({ allow: ["*"] })), /unknown top-level field egress/);

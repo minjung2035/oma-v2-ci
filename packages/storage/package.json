@@ -184,7 +184,8 @@
   },
   "oma": {
     "assets": [
-      "schema-v4.sql"
+      "schema-v4.sql",
+      "schema-v5.sql"
     ]
   }
 }

@@ -124,13 +124,16 @@ const integrateFields = {
   checkProfileDigest: sha256Check,
   policyIdentity: sha256Check,
   noopRef: (value: unknown) => value === null ? null : nonEmpty(value),
-  merge: checkOptional(checkObject({
-    version: (value) => value === 1 ? null : "merge plan must declare version 1",
-    request: operationIdCheck,
-    name: (value) => isReviewRequestName(value) ? null : "invalid merge request name",
-    tier: checkEnum(["LOW", "MEDIUM", "HIGH"] as const),
-    notice: checkArray(messagePlanCheck),
-  })),
+  merge: checkOptional(value => {
+    const v2 = value !== null && typeof value === "object" && [2,3].includes(Number((value as { version?: unknown }).version));
+    return checkObject({
+      version: (value: unknown) => value === 1 || value === 2 || value === 3 ? null : "unsupported merge plan version",
+      request: operationIdCheck, name: (value: unknown) => isReviewRequestName(value) ? null : "invalid merge request name",
+      tier: checkEnum(["LOW", "MEDIUM", "HIGH"] as const), notice: checkArray(messagePlanCheck),
+      ...((value as {version?:unknown})?.version === 3 ? { preparation: operationIdCheck } : {}),
+      ...(v2 ? { revision: checkInt({ min: 0 }), attemptNumber: checkInt({ min: 0 }), diff: checkOptional(checkObject({ version: (v: unknown) => v === 1 ? null : "invalid diff version", base: checkOid, candidate: checkOid, reference: (v: unknown) => typeof v === "string" && /^oma-result:[a-f0-9-]{36}:[a-f0-9]{64}$/.test(v) ? null : "invalid diff reference", bytes: checkInt({ min: 0 }), sha256: sha256Check })) } : {}),
+    })(value);
+  }),
 
 };
 const integrateBaseCheck = checkObject(integrateFields);
@@ -381,6 +384,15 @@ export function operationPlanCheck(
         const roles: Record<string, readonly string[]> = {
           "merge.open": ["thread", "approval"], "challenge.open": ["thread", "approval"], review: ["thread"],
           vote: ["thread", "approval", "withdrawn", "decision"],
+          "review.withdraw": ["thread", "withdrawn", "approval"],
+          "review.invalidate": ["thread", "withdrawn", "approval"],
+          "review.adopt": ["thread", "withdrawn", "approval"],
+          "review.retry": ["thread", "withdrawn", "approval"],
+          "review.preparation-failed": [],
+          "review.revise": ["thread","withdrawn","approval"],
+          "review.integration": ["thread","withdrawn","approval"],
+          "review.supersede": ["thread","withdrawn","approval"],
+          "review.included": ["thread","withdrawn"],
           cancel: ["thread", "withdrawn"], refresh: ["thread", "withdrawn", "approval"],
         };
         for (const message of plan.messages) {

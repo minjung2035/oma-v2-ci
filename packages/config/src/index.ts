@@ -1,3 +1,4 @@
+import { checkPipelineCheck, frozenPipeline } from "@oma/domain/check-pipeline";
 import { EFFORT_LEVELS } from "@oma/domain/settings";
 import { tieredPolicyCheck } from "@oma/domain/integration-policy";
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
@@ -83,12 +84,16 @@ function validatedSnapshot(config: HostConfig): ValidatedConfigCandidate {
   });
   const snapshot = {
     ...config,
+    ...(config.storage === undefined ? {} : { storage: Object.freeze({ ...config.storage }) }),
+    ...(config.resources === undefined ? {} : { resources: Object.freeze({ ...config.resources }) }),
     installation: Object.freeze({ ...config.installation }),
     modelProfiles: Object.freeze(modelProfiles),
     agentProfiles: Object.freeze(agentProfiles),
+    ...(config.firstWorkerRecovery === undefined ? {} : { firstWorkerRecovery: Object.freeze({ ...config.firstWorkerRecovery }) }),
     initialResidents: Object.freeze(config.initialResidents.map(row => Object.freeze({ ...row }))),
     integration: Object.freeze({
       ...config.integration,
+      ...(config.integration.pipeline === undefined ? {} : { pipeline: frozenPipeline(config.integration.pipeline) }),
       ...(config.integration.tiered === undefined ? {} : { tiered: Object.freeze({ ...config.integration.tiered,
         rules: Object.freeze(config.integration.tiered.rules.map(rule => Object.freeze({ ...rule,
           statuses: Object.freeze([...rule.statuses]) }))) }) }),
@@ -172,9 +177,9 @@ export function readCurrentHostPolicy(path: string, society: string, load: (path
 
 export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const cfg = needRecord(raw, "root");
-  if (cfg.schemaVersion !== HOST_CONFIGURATION_VERSION)
+  if (cfg.schemaVersion !== 4 && cfg.schemaVersion !== HOST_CONFIGURATION_VERSION)
     err(`unsupported development configuration schema; expected ${HOST_CONFIGURATION_VERSION}. Use a new development state directory`);
-  closedKeys(cfg, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "integration", "limits"], "root", ["maxWorkers"]);
+  closedKeys(cfg, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "integration", "limits"], "root", ["maxWorkers", "firstWorkerRecovery", "resources", "storage"]);
   const maxWorkers = cfg.maxWorkers === undefined ? DEFAULT_MAX_WORKERS : needInt(cfg.maxWorkers, "maxWorkers", 1);
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
@@ -209,7 +214,40 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   }
   const principalProfile = needString(cfg.principalProfile, "principalProfile");
   if (!profileNames.has(principalProfile)) err("principalProfile unknown");
+  let storage: HostConfig["storage"];
+  if (cfg.storage !== undefined) {
+    if (cfg.schemaVersion !== 5) err("storage requires configuration version 5");
+    const value = closedRecord(cfg.storage, ["closeMode"], "storage");
+    if (value.closeMode !== "keep-hot" && value.closeMode !== "on-close") err("storage.closeMode must be keep-hot or on-close");
+    storage = { closeMode: value.closeMode as "keep-hot" | "on-close" };
+  }
+  let resources: HostConfig["resources"];
+  if (cfg.resources !== undefined) {
+    if (cfg.schemaVersion !== 5) err("resource profiles require configuration version 5");
+    const resource = closedRecord(cfg.resources, ["version"], "resources", ["cpuCores", "memoryMaxBytes", "swapMaxBytes", "tasksMax", "checkWallTimeMs", "tmpfsMaxBytes", "maxConcurrentCheckPipelines"]);
+    if (resource.version !== 1) err("unsupported resource profile version");
+    for (const [key, value] of Object.entries(resource)) {
+      if (key === "version") continue;
+      if (key === "cpuCores") { if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) err("resources.cpuCores must be positive"); }
+      else needInt(value, `resources.${key}`, key === "swapMaxBytes" ? 0 : 1);
+    }
+    resources = resource as unknown as HostConfig["resources"];
+  }
   const initialResidents = needArray(cfg.initialResidents, "initialResidents");
+  if (cfg.schemaVersion === 5 && initialResidents.length < 1) err("new Society settings require at least one initial Worker");
+  let firstWorkerRecovery: HostConfig["firstWorkerRecovery"];
+  if (cfg.firstWorkerRecovery !== undefined) {
+    if (cfg.schemaVersion !== 5) err("first Worker recovery requires configuration version 5");
+    const recovery = closedRecord(cfg.firstWorkerRecovery, ["version", "key", "name", "profile", "brief"], "firstWorkerRecovery");
+    if (recovery.version !== 1) err("unsupported first Worker recovery version");
+    const key = needString(recovery.key, "firstWorkerRecovery.key");
+    if (!/^[a-zA-Z0-9_-]{1,96}$/.test(key)) err("invalid first Worker recovery key");
+    const name = needString(recovery.name, "firstWorkerRecovery.name");
+    if (!isValidActorName(name)) err("invalid first Worker recovery name");
+    const profile = needString(recovery.profile, "firstWorkerRecovery.profile");
+    if (!profileNames.has(profile) || profile === principalProfile) err("first Worker recovery requires a Worker profile");
+    firstWorkerRecovery = { version: 1, key, name, profile, brief: needString(recovery.brief, "firstWorkerRecovery.brief") };
+  }
   if (initialResidents.length > maxWorkers) err("initialResidents exceeds maxWorkers");
   const residentNames = new Set<string>();
   for (const value of initialResidents) {
@@ -222,12 +260,13 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
     if (!profileNames.has(profile)) err("initialResidents.profile unknown");
     needString(row.brief, "initialResidents.brief");
   }
-  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered"]);
+  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered", "pipeline"]);
   if (integration.tiered !== undefined && tieredPolicyCheck(integration.tiered) !== null) err("integration.tiered has invalid rules or authority");
   const policyRevision = needString(integration.policyRevision, "integration.policyRevision");
   const protectedPaths = needArray(integration.protectedPaths, "integration.protectedPaths");
   if (protectedPaths.some(value => typeof value !== "string" || (value !== "/" && !isValidWirePath(value.endsWith("/") ? value.slice(0, -1) : value)) || /[*?[\]{}!]/.test(value))) err("integration.protectedPaths must be safe literal paths");
   const checks = needArray(integration.checks, "integration.checks");
+  if (integration.pipeline !== undefined && (cfg.schemaVersion !== 5 || checkPipelineCheck(integration.pipeline) !== null || checks.length !== 0)) err("a version 2 pipeline requires configuration 5 and replaces the legacy checks array (which must be empty)");
   for (const [index, value] of checks.entries()) {
     const row = closedRecord(value, ["id", "argv", "env"], `integration.checks[${index}]`);
     needString(row.id, `integration.checks[${index}].id`);
@@ -259,11 +298,11 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   if ((limits.batchMaxMessages as number) < MIN_MIXED_BATCH_MESSAGES)
     err(`limits.batchMaxMessages must be at least ${MIN_MIXED_BATCH_MESSAGES}; a single-message batch starves an actor whose direct and public mail are both pending`);
   return validatedSnapshot({
-    schemaVersion: HOST_CONFIGURATION_VERSION, society, installation: { node, libdir, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
+    schemaVersion: cfg.schemaVersion as 4 | 5, society, ...(storage === undefined ? {} : { storage }), ...(resources === undefined ? {} : { resources }), ...(firstWorkerRecovery === undefined ? {} : { firstWorkerRecovery }), installation: { node, libdir, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfig["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfig["agentProfiles"],
     principalProfile, maxWorkers, initialResidents: initialResidents as HostConfig["initialResidents"],
-    integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfig["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfig["integration"]["checks"] },
+    integration: { policyRevision, ...(integration.pipeline === undefined ? {} : { pipeline: integration.pipeline as NonNullable<HostConfig["integration"]["pipeline"]> }), ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfig["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfig["integration"]["checks"] },
     limits: limits as unknown as HostConfig["limits"],
   });
 }

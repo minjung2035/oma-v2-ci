@@ -83,7 +83,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
             } },
         "../broker/lifecycle-composition.js": { createLifecycleModule(_store, _units, options) {
                 calls.push("Lifecycle"); paths.push(options); constructorGoal = options.hasGoal();
-                return { async bootstrap() { calls.push("bootstrap"); } };
+                return { assertActiveCapacity() {}, async recoverFirstWorker() {}, async bootstrap() { calls.push("bootstrap"); } };
             } },
         "../broker/reconcile-composition.js": { createReconcileModule(_store, _mail, _git, reviews, _units, _lifecycle, options) { assert.equal(reviews, reviewOwner); calls.push("Reconcile"); paths.push(options); return {
                 async startup(activation, bootstrap) { assert.equal(activation, false); calls.push("recover"); await bootstrap(); },
@@ -272,12 +272,12 @@ test("P1 composition root: the host going away stops the broker", async () => {
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(calls.includes("shutdown"), "the broker did not stop when its host went away");
 });
-test("DR48 composition: cold restoration precedes SQLite and archival follows drain and Store.close", async () => {
+test("DR69 composition: cold restoration precedes SQLite and default close keeps workspaces hot", async () => {
     const { calls, supervision } = await compose({ OMA_HOST_CHANNEL: "3" }, { storage: true });
     assert.ok(calls.indexOf("restore-workspaces") < calls.indexOf("Store"));
     supervision.onHostGone("host ended"); await new Promise(resolve => setImmediate(resolve));
     assert.ok(calls.indexOf("native-quiescence") < calls.indexOf("Store.close"));
-    assert.ok(calls.indexOf("Store.close") < calls.indexOf("archive-workspaces"));
+    assert.equal(calls.includes("archive-workspaces"), false);
 });
 test("DR48 composition: an unreadable cold snapshot opens no Store and grants no activation", async () => {
     const { calls, exitCode } = await compose(undefined, { storage: true, restoreFails: true });

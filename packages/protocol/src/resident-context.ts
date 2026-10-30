@@ -12,6 +12,7 @@ import { validBatchViewLimits } from "./batch-view.js";
 /** Shared installation grammar. Rootfs and system mounts belong to the Linux
  * adapter; the code, Node and engine grammar is identical on both. */
 export function assertSandboxInstallation(host: SandboxHost): void {
+  if (host.tmpfsMaxBytes !== undefined && (!Number.isSafeInteger(host.tmpfsMaxBytes) || host.tmpfsMaxBytes < 1)) throw new StoreError("UNSUPPORTED_PROFILE", "invalid tmpfs workload bound");
   if (Object.hasOwn(host, "rootfs") || Object.hasOwn(host, "systemBinds"))
     throw new StoreError("UNSUPPORTED_PROFILE", "common Worker installation cannot select Linux roots or mounts");
   if (!trustedAbsolutePath(host.libdir) || !trustedAbsolutePath(host.node) || !trustedAbsolutePath(host.pi) ||

@@ -235,7 +235,15 @@ function extensionRules(root, findings) {
           }
           return false;
         })();
-      if (executes && !registrationGuard && !configuredShell)
+      const resultReadAdapter = file === "packages/tool-runtime/src/result-read.ts" &&
+        ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "tool" && callee.name.text === "execute" &&
+        (() => {
+          for (let owner = node.parent; owner; owner = owner.parent)
+            if (ts.isFunctionDeclaration(owner)) return owner.name?.text === "resultReadSurface";
+          return false;
+        })();
+      if (executes && !registrationGuard && !configuredShell && !resultReadAdapter)
         findings.push(finding("extension-execute", file, "only fixed registration adapters may forward their own tool handler"));
     });
   }

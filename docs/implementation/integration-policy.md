@@ -137,3 +137,17 @@ UNCERTAINTY              미검증 부분/반대 증거/확신의 한계
 **MUST [POL-008]** 구현 순서는 기존 physical substrate → S-08/S-10 정책 spike → deterministic evaluator+attestation → post-CAS integration mail+challenge/floor recovery → HIGH Principal 연결 → optional S-11 → long-task benchmark다. HIGH approver가 없거나 evidence가 부족하면 독립적인 사회 작업은 계속할 수 있지만 해당 main mutation은 진행하지 않는다. 정책 대기로 agent lifecycle을 중앙에서 배정하지 않는다.
 
 **MUST [POL-009]** S-09에 tier-enabled/disabled 비교를 추가한다. false LOW/불필요한 HIGH, peer 오류 탐지율, 유효 challenge 후 반복 결함, Principal queue/latency/token, 전체 비용과 품질을 각각 기록한다. clean-room optional ablation도 지원할 경우 분리한다. tier policy가 attention을 더 잘 배분한다는 것은 검증할 가설이며 new governance feature를 더 쌓기 전에 long-task 결과를 확인한다.
+
+## DR67 versioned review and check execution
+
+Version 2 qualified votes retain their acceptance evidence across reviewer run
+state changes. Frozen quorum, explicit withdrawal/invalidation, independent
+integration attempts and version 2 shared pipelines follow
+[the version 5 implementation contracts](architecture-improvements.md).
+Legacy facts/checks keep their original interpretation until the explicit
+adoption boundary. Requester/provenance/policy and final CAS checks stay live.
+
+DR68 extends new opens to v3 proposals and separates original B/C from prepared
+M/I. Normal merge ancestry, conservative context review, revision/adoption facts,
+unknown fencing and exact accepted-attempt recovery follow the same linked owner.
+DR69's provenance index remains derived and never omits live publication checks.

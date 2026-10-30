@@ -7,6 +7,7 @@ import type { ReviewState } from "@oma/domain/review-evaluation";
 import type { IntegrationSnapshot } from "@oma/domain/integration-policy";
 import type { ChangedPath, GitObservation } from "@oma/contracts/git";
 export interface ReviewEffects {
+  executionPhase?(request: OperationId): "preparing" | "checking" | "applying" | undefined;
   nextOperationId(): OperationId;
   newPreacceptScope(): import("@oma/mail/ports").MailPreacceptScope;
   /** The policy the broker bound at start; null when the society has none. */
@@ -27,6 +28,8 @@ export interface ReviewEffects {
   /** §6: the canonical merge diff for the completion notice, as raw bytes;
    * one owner renders them for text consumers (never U+FFFD substitution).
    * Output bounded at maxBytes; LIMIT_EXCEEDED marks the request oversize. */
+  prepareIntegration?(operation: string, base: Oid, candidate: Oid, main: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ candidate: Oid; preparedRef: string | null; reusable: boolean }>;
+  prepareDiff?(operation: string, base: Oid, candidate: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ diff: import("@oma/contracts/files").ReviewDiffArtifact; preview: Buffer }>;
   mergeDiff(base: Oid, candidate: Oid, maxBytes: number): Buffer;
   /** §7: the broker's revert commit on canonical main — merge-tree against the
    * applied merge's candidate, commit-tree with the OMA identity. Throws

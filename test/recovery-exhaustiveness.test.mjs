@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
+import { AsyncLocalStorage } from "node:async_hooks";
 import ts from "typescript";
 import { StoreError } from "@oma/domain/errors";
 import { assertNever } from "@oma/domain/exhaustive";
@@ -43,6 +44,7 @@ function harness(entries, globals) {
 function fixture() {
   const calls = [];
   const value = harness([recover, startup], {
+    recoveryActivation: new AsyncLocalStorage(),
     observeStoreFailure: () => {},
     recoveryCategory: kind => kind,
     // DR10: startup's collection of artifacts made before an acceptance.
@@ -55,6 +57,7 @@ function fixture() {
   Object.assign(value, {
     effects: { observeStoreFailure() {}, assertCanonicalHealthy: async () => { calls.push(["health"]); }, collectUnacceptedArtifacts() { calls.push(["collect"]); return { removed: [], kept: [] }; } },
     starting: false, inFlight: null, mail: { reconcileOperation: async id => { calls.push(["mail", id]); } }, paths: {},
+    sweepPass(observe) { calls.push(["scheduled-recovery", observe]); return Promise.resolve(); },
     activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
       reconcileSociety: id => { calls.push(["society", id]); },
@@ -103,17 +106,9 @@ test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only h
   await value.startup(false, async () => { calls.push(["prepare"]); });
   // DR10: the collection runs after the quiesce and before anything is prepared.
   assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
-  // mail-v1: startup ends with a reviews advance sweep for requests that
-  // became ready while the broker was down.
-  assert.deepEqual(calls.at(-1), ["reviews"]);
-  const physical = calls.slice(5, -1);
-  assert.equal(physical.length, kinds.length - 3);
-  assert.deepEqual(physical, kinds.filter(kind => !["mail.ack", "route.follow", "route.unfollow"].includes(kind)).map(kind =>
-    kind === "agent.create" ? ["create", kind, false]
-      : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
-      : kind === "society.set" ? ["society", kind]
-      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind]));
-  assert.ok(physical.every(call => !["mail.ack", "route.follow", "route.unfollow"].includes(call[1])));
+  // Startup establishes integrity and schedules recovery without waiting for
+  // long physical effects. Closed-kind routing is exercised separately above.
+  assert.deepEqual(calls.slice(5), [["scheduled-recovery", false]]);
   assert.equal(value.starting, false);
 });
 
@@ -177,7 +172,7 @@ function diagnostics(entry, { extraKind = false, omitKind } = {}) {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 test("P3 recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking", () => {
-  for (const entry of [recover, startup, gitReconcile]) {
+  for (const entry of [recover, gitReconcile]) {
     assert.deepEqual(diagnostics(entry).map(error => ts.flattenDiagnosticMessageText(error.messageText, "\n")), []);
     for (const mutation of [{ extraKind: true }, { omitKind: "git.submit" }]) {
       const errors = diagnostics(entry, mutation);

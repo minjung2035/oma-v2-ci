@@ -18,7 +18,7 @@ import { ResticProcess } from "@oma/process/restic";
 import { openResticTool } from "@oma/storage/restic-tool";
 import { verifyResticDump } from "@oma/storage/restic-tar";
 import { verifyResticInventory } from "@oma/storage/restic-verification";
-import { parseStorageState, readStorageText, type SessionStorageState, type StorageCheckpoint, type StorageResident } from "./session-storage-state.js";
+import { parseStorageState, readStorageText, type SessionStorageState, type StorageCheckpoint, type StorageResident, type StoragePhase } from "./session-storage-state.js";
 
 interface StorageOptions {
   readonly stateRoot: string; readonly society: string; readonly fence: number;
@@ -48,6 +48,48 @@ export class SessionStorage {
   }
   private get hot(): SessionStorageState {
     return { kind: "oma-session-storage-v1", society: this.options.society, project: this.project, checkpoint: null };
+  }
+  private actionLock: ProcessLock | null = null;
+  private async exclusive<T>(run: () => Promise<T>): Promise<T> {
+    if (this.actionLock !== null) throw new StoreError("BROKER_UNAVAILABLE", "session storage action is already running");
+    const path = join(this.options.stateRoot, "session-storage.lock");
+    repairOwnedEntryMode(path);
+    const lock = ProcessLock.tryAcquire(path);
+    if (lock === null) throw new StoreError("BROKER_UNAVAILABLE", "session storage action is already running");
+    this.actionLock = lock;
+    try { return await run(); } finally { this.actionLock = null; lock.close(); }
+  }
+  private transition(expected: SessionStorageState | null, phase: StoragePhase, checkpoint: StorageCheckpoint | null): SessionStorageState {
+    this.actionLock!.assertHeld(this.actionLock!.path);
+    if (JSON.stringify(this.selection()) !== JSON.stringify(expected))
+      throw new StoreError("REF_STATE_UNKNOWN", "session storage generation changed; existing data retained");
+    const next: SessionStorageState = { ...this.hot, kind: "oma-session-storage-v2", phase,
+      generation: (expected?.kind === "oma-session-storage-v2" ? expected.generation : 0) + 1, checkpoint };
+    parseStorageState(JSON.stringify(next), this.options.society, this.project);
+    replaceDerivedFile(this.statePath, JSON.stringify(next));
+    publishNoReplace(this.enabledPath, JSON.stringify(this.hot));
+    return next;
+  }
+  /** A metadata observation only; never opens SQLite or materializes a cold tree. */
+  isArchived(): boolean { return this.selection()?.checkpoint != null; }
+  private assertHotRepository(): void {
+    let database: number;
+    try { database = withinDirectory(join(this.options.stateRoot, "runtime.sqlite"), (parent, name) => openRegularBeneath(parent, name)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    try {
+      if (fstatSync(database).nlink !== 1 || !cacheDirectoryPresent(join(this.options.stateRoot, "repos/project.git")))
+        throw new StoreError("STORE_CORRUPT", "an existing session has no canonical repository or cold checkpoint; provisioning was refused");
+    } finally { closeSync(database); }
+  }
+  async close(residents: readonly StorageResident[], mode: "keep-hot" | "on-close" = "keep-hot"): Promise<void> {
+    if (mode === "on-close") return this.archive(residents);
+    await this.exclusive(async () => {
+      const selected = this.selection();
+      if (selected?.checkpoint) throw new StoreError("STORE_CORRUPT", "cold session cannot be closed as hot");
+      await this.options.quiesce(residents, "confirm");
+      this.assertHotRepository();
+      this.transition(selected, "hot", null);
+    });
   }
   private selection(): SessionStorageState | null {
     const text = readStorageText(this.statePath), enabled = readStorageText(this.enabledPath);
@@ -147,17 +189,23 @@ export class SessionStorage {
   /** Must run before prepareSociety or opening SQLite. Missing recovery metadata
    * never licenses seeding a fresh canonical repository over an existing DB. */
   async restore(signal?: AbortSignal): Promise<void> {
+    return this.exclusive(() => this.restoreHeld(signal));
+  }
+  private async restoreHeld(signal?: AbortSignal): Promise<void> {
     const selected = this.selection(), checkpoint = selected?.checkpoint;
     if (checkpoint === null || checkpoint === undefined) {
-      if (await optionalDigest(join(this.options.stateRoot, "runtime.sqlite"), signal) !== null &&
-          !cacheDirectoryPresent(join(this.options.stateRoot, "repos/project.git")))
-        throw new StoreError("STORE_CORRUPT", "an existing session has no canonical repository or cold checkpoint; provisioning was refused");
+      this.assertHotRepository();
+      // An interrupted archive never reclaimed its hot source before cold selection.
+      if (selected?.kind === "oma-session-storage-v2" && selected.phase === "archiving") this.transition(selected, "hot", null);
       return;
     }
     const committed = readStorageText(join(this.options.stateRoot, "session-checkpoints", `${checkpoint.snapshot}.json`));
-    if (committed !== JSON.stringify(selected)) throw new StoreError("STORE_CORRUPT", "the selected immutable session checkpoint is missing or differs");
+    if (committed === null || (selected!.kind === "oma-session-storage-v1" ? committed !== JSON.stringify(selected) :
+        JSON.stringify(parseStorageState(committed, this.options.society, this.project).checkpoint) !== JSON.stringify(checkpoint)))
+      throw new StoreError("STORE_CORRUPT", "the selected immutable session checkpoint is missing or differs");
     await this.assertLedger(checkpoint.ledger, signal);
     await this.options.quiesce(checkpoint.residents, "stop");
+    const restoring = this.transition(selected!, "restoring", checkpoint);
     this.options.log("Restoring archived session workspace…");
     await this.repository(true, async (restic, stage, lock) => {
       writeExclusiveFsyncedFile(join(stage, "restore-snapshot"), checkpoint.snapshot);
@@ -179,7 +227,7 @@ export class SessionStorage {
       await this.assertLedger(checkpoint.ledger, signal);
       await this.options.quiesce(checkpoint.residents, "confirm");
       signal?.throwIfAborted(); lock.assertHeld(lock.path);
-      replaceDerivedFile(this.statePath, JSON.stringify(this.hot));
+      this.transition(restoring, "hot", null);
       // A fresh verified restore supersedes only old stages of this exact
       // immutable snapshot, and only after every inherited lease is free.
       for (const entry of listOwnedDirectory(this.options.stateRoot, { required: true })) {
@@ -195,7 +243,20 @@ export class SessionStorage {
   /** Called only after the Broker drain and Store.close have both completed.
    * Failure before cold selection leaves every original workspace in place. */
   async archive(residents: readonly StorageResident[]): Promise<void> {
-    if (this.selection()?.checkpoint) throw new StoreError("STORE_CORRUPT", "a cold session cannot be archived again before restoration");
+    return this.exclusive(async () => {
+      const selected = this.selection();
+      if (selected?.checkpoint) throw new StoreError("STORE_CORRUPT", "a cold session cannot be archived again before restoration");
+      await this.options.quiesce(residents, "stop");
+      this.assertHotRepository();
+      const archiving = this.transition(selected, "archiving", null);
+      try { await this.archiveHeld(residents, archiving); }
+      finally {
+        // Post-cold failures keep their immutable recovery source selected.
+        if (JSON.stringify(this.selection()) === JSON.stringify(archiving)) this.transition(archiving, "hot", null);
+      }
+    });
+  }
+  private async archiveHeld(residents: readonly StorageResident[], archiving: SessionStorageState): Promise<void> {
     await this.repository(false, async (restic, stage, lock) => {
       await this.options.quiesce(residents, "stop");
       const roots = ["repos", "staging", ...residents.flatMap(actor => [`agents/${actor.name}/workspace`, `agents/${actor.name}/home`])]
@@ -224,7 +285,7 @@ export class SessionStorage {
       if (readStorageText(this.statePath) === null) publishNoReplace(this.statePath, JSON.stringify(this.hot));
       publishNoReplace(this.enabledPath, JSON.stringify(this.hot));
       await this.options.quiesce(residents, "confirm"); await this.assertLedger(ledger); lock.assertHeld(lock.path);
-      replaceDerivedFile(this.statePath, text);
+      this.transition(archiving, "cold", checkpoint);
       for (const root of roots) removeOwnedTree(join(this.options.stateRoot, root));
       this.options.log(`Session workspace archived; reclaimed ${before.bytes} logical file bytes.`);
     });

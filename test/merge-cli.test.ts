@@ -67,7 +67,9 @@ function canonical(root: string, fileBytes = 150 * 1024): { repo: string; base: 
 const principalStatus = (name: string, base: string, candidate: string) => ({
   name, kind: "merge", tier: "LOW", title: "t",
   identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" },
-  approval: null, display: "peer-needed",
+  approval: null, display: "peer-needed", revision: 0, scope: null,
+  proposal: { repo: "project", targetRef: "refs/heads/main", expectedBase: base, candidate, policyRevision: "p1" },
+  integrationPhase: "review-needed", notice: "none", retryable: false, nextAction: "review", attemptNumber: 0,
 });
 
 test("Review client: merge open resolves HEAD + origin/main, submits once, then opens", async t => {
@@ -201,7 +203,7 @@ test("Review client: a `.git` that is present but damaged is not an absent works
 });
 
 test("Review client: a bare repository has no work tree that could be dirty", async t => {
-  const home = mkdtempSync(join(tmpdir(), "oma-merge-bare-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const home = mkdtempSync(join("/var/tmp", "oma-merge-bare-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const bare = join(home, "bare.git");
   git(home, ["init", "-q", "--bare", bare]);
   // "this operation must be run in a work tree" is git's own positive
@@ -221,7 +223,7 @@ test("Review client: a bare repository has no work tree that could be dirty", as
 });
 
 test("Review client: open outside a repository has no workspace to observe", async t => {
-  const home = mkdtempSync(join(tmpdir(), "oma-merge-norepo-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const home = mkdtempSync(join("/var/tmp", "oma-merge-norepo-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const dir = join(home, "nowhere");
   mkdirSync(dir);
   // Both revisions are explicit full OIDs, so nothing about the request needs
@@ -286,7 +288,7 @@ test("Review client: exact diff pagination and challenge original view use froze
   const past = await runClientWithPeer(home, cwd, clientCall("reviewDiff", { name, cursor: fullBytes.length }), handler);
   assert.equal(past.status, 2); assert.match(past.stderr, /not at a page boundary/);
   // An empty diff is a single empty page; only cursor 0 stands.
-  const empty = { ...statusReply, identity: { ...statusReply.identity, candidate: base } };
+  const empty = { ...statusReply, identity: { ...statusReply.identity, candidate: base }, proposal: { ...statusReply.proposal, candidate: base } };
   const noDiff = JSON.parse((await runClientWithPeer(home, cwd, clientCall("reviewDiff", { name }),
     (request) => frame(request, empty))).stdout);
   assert.equal(noDiff.bytes, 0); assert.equal(noDiff.next, null); assert.equal(noDiff.text, "");
@@ -303,7 +305,7 @@ test("Review client: exact diff pagination and challenge original view use froze
   assert.equal(orig.view, "original");
   assert.equal(orig.base, base); assert.equal(orig.candidate, candidate);
   const revert = JSON.parse((await runClientWithPeer(home, cwd, clientCall("reviewDiff", { name: challengeName }),
-    (request) => frame(request, { ...challengeStatus, identity: { repo: "project", targetRef: "refs/heads/main",
+    (request) => frame(request, { ...challengeStatus, proposal: { ...challengeStatus.proposal, expectedBase: candidate, candidate: base }, identity: { repo: "project", targetRef: "refs/heads/main",
       expectedBase: candidate, candidate: base, policyRevision: "p1" } }))).stdout);
   assert.equal(revert.view, "proposal"); assert.equal(revert.base, candidate); assert.equal(revert.candidate, base);
 });

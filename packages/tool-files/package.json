@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./results": {
+      "types": "./dist/results.d.ts",
+      "default": "./dist/results.js"
     }
   },
   "scripts": {

@@ -25,14 +25,14 @@ export class ReviewMessages {
       inputFor: ReviewStateInput, before: ReviewState, after0: ReviewState, newEntry: ReviewEntry,
       effects: ReturnType<typeof planEffects>,
       decision: { approval: MessageId; verdict: "approve" | "reject"; body: string } | null): Emission[] {
-    const hasThread = !(openFact.kind === "merge.open" && openFact.tier === "LOW");
+    const hasThread = !(after0.kind === "merge" && after0.tier === "LOW");
     const priorThread = this.lastThreadMessage(inputFor);
     const revision = this.threadRevisionCount(inputFor);
     const emissions: Emission[] = [];
     if (hasThread) emissions.push({
       to: ["residents"], kind: "message",
       subject: reviewSubject(`[${before.name}] ${openFact.title} (rev ${revision})`, this.bounds.subjectBytes),
-      body: reviewThreadBody(after0, openFact, [...inputFor.entries, newEntry], priorThread?.id ?? null, this.bounds.mailBodyBytes),
+      body: reviewThreadBody(after0, { ...openFact, identity: after0.identity, tier: after0.tier } as typeof openFact, [...inputFor.entries, newEntry], priorThread?.id ?? null, this.bounds.mailBodyBytes),
       replyHeaders: { replyTo: ["residents"],
         inReplyTo: priorThread === null ? null : rfcMessageIdFor(priorThread.id, this.society),
         references: priorThread === null ? []
@@ -61,15 +61,15 @@ export class ReviewMessages {
       fact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
       entries: readonly ReviewEntry[], votes: readonly OperationId[]): Emission {
     const approvalId = generateMessageId(id, ordinal);
-    const body = reviewApprovalBody(approvalId, fact, entries, state.requester, votes, state.capacityFallback ? state : null);
+    const body = reviewApprovalBody(approvalId, { ...fact, identity: state.identity, tier: state.tier } as typeof fact, entries, state.requester, votes, state.capacityFallback ? state : null);
     if (Buffer.byteLength(body, "utf8") > this.bounds.mailBodyBytes)
       throw new StoreError("INTERNAL_ERROR", "an approval request exceeds the mail body bound");
     return {
       to: [PRINCIPAL], kind: "approval_required",
       subject: reviewSubject(`[${state.name}] ${state.capacityFallback ? "Capacity fallback" : "HIGH"} approval requested: ${fact.title}`, this.bounds.subjectBytes),
-      body, approvalFor: fact.identity,
+      body, approvalFor: state.identity,
       replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
-      review: { role: "approval", request: state.request, name: state.name, votes: [...votes] },
+      review: { role: "approval", request: state.request, name: state.name, votes: [...votes], ...(fact.version === 3 || state.revision > 0 || state.scope !== null ? {basis: state.scope ?? state.revisionSource} : {}) },
     };
   }
 

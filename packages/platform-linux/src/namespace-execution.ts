@@ -14,6 +14,7 @@ import { parseBubblewrapArguments } from "./bubblewrap-arguments.js";
 
 export type { NamespaceInitIdentity };
 export interface NamespaceLaunchOptions {
+  readonly placementFd?: number;
   readonly signal?: AbortSignal; readonly inheritedFds?: readonly number[];
   readonly stdoutSink?: (bytes: Uint8Array) => void; readonly stderrSink?: (bytes: Uint8Array) => void;
   readonly stderrFd?: number;
@@ -50,7 +51,7 @@ export async function launchBlockedNamespace(command: CommandSpec, controls: Nam
   const abort = (): void => task?.cancel();
   try {
     task = startProcess({ ...command, argv: ["--info-fd", "3", "--block-fd", "4", "--sync-fd", "5", ...command.argv] },
-      { inheritedFds: [info.write, gate.read, gate.write, ...(controls.inheritedFds ?? [])],
+      { ...(controls.placementFd === undefined ? {} : { placementFd: controls.placementFd }), inheritedFds: [info.write, gate.read, gate.write, ...(controls.inheritedFds ?? [])],
         ...(controls.stdoutSink === undefined ? {} : { stdoutSink: controls.stdoutSink }),
         ...(controls.stderrFd === undefined ? {} : { stderrFd: controls.stderrFd }),
         ...(controls.stderrSink === undefined ? {} : { stderrSink: controls.stderrSink }) });

@@ -43,6 +43,10 @@
     "./workspace-guard": {
       "types": "./dist/workspace-guard.d.ts",
       "default": "./dist/workspace-guard.js"
+    },
+    "./result-read": {
+      "types": "./dist/result-read.d.ts",
+      "default": "./dist/result-read.js"
     }
   },
   "scripts": {

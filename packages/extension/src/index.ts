@@ -19,6 +19,8 @@ import { registerPromptBoundary } from "./prompt-boundary.js";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { containWorkspaceTools, createContainedWriter, logicalReadPathView } from "@oma/tool-runtime/contained-tools";
+import { resultReadSurface } from "@oma/tool-runtime/result-read";
+import { resultRootFor } from "@oma/tool-runtime/contained-search";
 import { registerLspTools } from "@oma/tool-lsp";
 import { registerHashlineTools } from "@oma/tool-hashline";
 import { registerWebTools } from "@oma/tool-web";
@@ -84,7 +86,7 @@ export default async function extension(pi: ExtensionAPI) {
   // for a role that may write, replace, replace_within and insert, whose commits
   // reach the filesystem only through the shared contained writer. Registered
   // after the contained tools so its `read` is the effective registration.
-  await registerHashlineTools(pi, {
+  await registerHashlineTools(resultReadSurface(pi, resultRootFor(workspace)), {
     workspace,
     readableRoots,
     sandboxed,

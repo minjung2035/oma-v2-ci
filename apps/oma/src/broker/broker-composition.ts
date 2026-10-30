@@ -86,6 +86,7 @@ export function createBroker(input: BrokerComposition): Broker {
       observeRunnerSource: read => views.observeRunnerSource(read) }),
     reconcile: reconcile === null ? null : Object.freeze({
       sweep: () => reconcile.sweep(),
+      pulse: () => reconcile.pulse?.(),
       wait: (actor: string, incarnation: number, messages: readonly string[]) => reconcile.wait(actor, incarnation, messages),
       deferredWork: (actor: string, incarnation: number) => reconcile.deferredWork(actor, incarnation),
     }),

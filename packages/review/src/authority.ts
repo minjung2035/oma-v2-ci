@@ -16,7 +16,8 @@ export interface ReviewAuthorityLedger {
 }
 export class ReviewAuthorityReader {
   constructor(private readonly store: ReviewAuthorityLedger,
-    private readonly highPeerFloor: number, private readonly maxWorkers: number) {}
+    private readonly highPeerFloor: number, private readonly maxWorkers: number,
+    private readonly provenance?: (base: string, candidate: string) => readonly string[]) {}
   /** Live open requests in attestation sequence order. */
   openRequests(): OpenRequest[] {
     return this.store.attestationFacts().filter(entry =>
@@ -98,13 +99,22 @@ export class ReviewAuthorityReader {
         return { sequence: candidate.sequence, operation: candidate.operation.id,
           actor: candidate.operation.actor, fact: plan.fact, messages: plan.messages };
       });
-    const applied = this.store.getOperation(open.operation.actor, applyRequestKeyFor(open.operation.id));
+    const attemptNumber = entries.reduce((n, entry) => ["review.retry", "review.revise", "review.supersede", "review.adopt"].includes(entry.fact.kind) && "attemptNumber" in entry.fact ? entry.fact.attemptNumber : n, 0);
+    const applied = this.store.getOperation(open.operation.actor, applyRequestKeyFor(open.operation.id, attemptNumber));
     return { open: openEntry, entries,
       integration: applied === null ? null
         : { operation: applied.id, state: applied.state,
+            ...(applied.kind === "git.integrate" ? { identity: {repo:"project" as const,targetRef:"refs/heads/main" as const,expectedBase:applied.plan.base,candidate:applied.plan.candidate,policyRevision:applied.plan.policyRevision} } : {}),
+            ...(applied.kind === "git.integrate" && applied.plan.merge !== undefined && applied.plan.merge.version !== 1 && applied.plan.merge.diff !== undefined ? { diff: applied.plan.merge.diff } : {}),
             errorCode: applied.state === "failed" ? applied.errorCode : null },
       eligible,
       highPeerFloor: this.highPeerFloor, maxWorkers: this.maxWorkers };
+  }
+
+  executionConditions(state: ReviewState): string[] {
+    const requester = this.store.listAgents().find(agent => agent.name === state.requester);
+    if (!requester || requester.desired !== "enabled") return ["requester execution is stopped, retired or unavailable"];
+    return capabilitiesOf(requester).has("git.submit") ? [] : ["requester lacks current git.submit authority"];
   }
 
   /** Last synchronous policy gate before CAS. The pending integration itself
@@ -112,7 +122,13 @@ export class ReviewAuthorityReader {
   assertApplicable(requestId: OperationId): void {
     const open = this.openRequests().find(candidate => candidate.operation.id === requestId);
     if (open === undefined) throw new StoreError("STORE_CORRUPT", "merge plan names a missing review request");
-    const state = reviewState({ ...this.inputFor(open), integration: null });
+    const input = this.inputFor(open), fact = input.open.fact;
+    const state = reviewState({ ...input, integration: null });
+    if (isOpenFact(fact) && !(fact.kind === "challenge.open" && fact.prepared) && this.provenance !== undefined) {
+      const current = this.provenance(state.sourceIdentity.expectedBase, state.sourceIdentity.candidate);
+      if (current.length !== state.sourceSubmitters.length || current.some(actor => !state.sourceSubmitters.includes(actor)))
+        throw new StoreError("INTEGRATION_CONDITIONS", "authenticated submitter provenance changed; fresh review authority is required");
+    }
     if (state.terminal === "cancelled")
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before main CAS");
     if (!state.ready)
@@ -124,7 +140,10 @@ export class ReviewAuthorityReader {
     if (fact === null || typeof fact !== "object") return false;
     const f = fact as { kind?: string; request?: unknown; target?: { request?: unknown } };
     switch (f.kind) {
-      case "review": case "vote": case "cancel": case "refresh": return f.request === request;
+      case "review": case "vote": case "cancel": case "refresh":
+      case "review.withdraw": case "review.invalidate": case "review.adopt":
+      case "review.revise": case "review.integration": case "review.supersede": case "review.included":
+    case "review.retry": case "review.preparation-failed": return f.request === request;
       case "challenge.open": return f.target?.request === request;
       default: return false;
     }
@@ -136,9 +155,13 @@ export class ReviewAuthorityReader {
     if (isOpenFact(prepared.fact)) {
       // Mail freezing yields: an author may release or acquire an active slot.
       // Re-derive the opening decision before accepting its frozen approval.
+      const fact = prepared.fact;
+      const authors = new Set([prepared.after0.requester, ...fact.submitters]);
+      const currentFact = fact.version !== 1 ? { ...fact, reviewPolicy: { ...fact.reviewPolicy,
+        authorSlots: [...this.eligible()].filter(actor => authors.has(actor)).length } } : fact;
       const fresh = reviewState({
         open: { sequence: 0, operation: prepared.id, actor: prepared.after0.requester,
-          fact: prepared.fact, messages: [] },
+          fact: currentFact, messages: [] },
         entries: [], integration: null, eligible: this.eligible(),
         highPeerFloor: this.highPeerFloor, maxWorkers: this.maxWorkers,
       });
@@ -167,7 +190,7 @@ export class ReviewAuthorityReader {
     // A concurrently-accepted entry makes the frozen sequence stale: that is a
     // changed review state, not corruption.
     let freshAfter: ReviewState;
-    try { freshAfter = reviewState({ ...fresh, entries: [...fresh.entries, last] }); }
+    try { freshAfter = reviewState({ ...fresh, ...(["review.retry", "review.revise", "review.supersede", "review.adopt"].includes(last.fact.kind) ? { integration: null } : {}), entries: [...fresh.entries, last] }); }
     catch (error) {
       if (error instanceof StoreError && error.code === "STORE_CORRUPT")
         throw new StoreError("BROKER_UNAVAILABLE", "review state changed; retry the same request key",

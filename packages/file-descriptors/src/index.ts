@@ -51,7 +51,8 @@ export function reopenDirectory(fd: number): number {
   return checked((native ??= initialize()).open(fd, ".", constants.O_RDONLY | constants.O_DIRECTORY | closeOnExec(), "unsigned int", 0));
 }
 
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+export function utf8Decoder(): TextDecoder { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }); }
+const utf8 = utf8Decoder();
 /** fdopendir consumes only our fresh cursor; the caller's FD remains untouched. */
 export function directoryNames(fd: number): string[] {
   const duplicate = reopenDirectory(fd), api = native!;

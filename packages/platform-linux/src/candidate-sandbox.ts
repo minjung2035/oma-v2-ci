@@ -8,7 +8,7 @@ import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { StoreError } from "@oma/domain/errors";
 import { assertIntegrationCheck, integrationCheckEnvironment, type FrozenCheck } from "@oma/domain/integration-policy";
-export interface CandidateSandboxHost { readonly rootfs: string; readonly node: string; readonly libdir: string }
+export interface CandidateSandboxHost { readonly rootfs: string; readonly node: string; readonly libdir: string; readonly downloadCache?: { key: string; files: readonly string[] } }
 export function candidateSandbox(host: CandidateSandboxHost, candidate: string, check: FrozenCheck,
   systemBinds: readonly string[] = hostSystemLayout().binds): CommandSpec {
   assertIntegrationCheck(check);
@@ -28,9 +28,10 @@ export function candidateSandbox(host: CandidateSandboxHost, candidate: string, 
     "--ro-bind", host.libdir, RESIDENT_PATHS.libdir,
     "--ro-bind-fd", "7", RESIDENT_PATHS.projectGit,
     "--proc", "/proc", "--dev", "/dev",
-    "--tmpfs", "/workspace", "--tmpfs", "/tmp", "--clearenv",
+    "--tmpfs", "/workspace", "--tmpfs", "/tmp",
+    ...(host.downloadCache === undefined ? [] : ["--ro-bind-fd", "9", "/tmp/oma-downloads"]), "--clearenv",
     ...Object.entries(environment).flatMap(([key, value]) => ["--setenv", key, value]),
-    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv,
+    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv, ...(host.downloadCache === undefined ? {} : { downloadCache: host.downloadCache }), ...(check.pipeline === undefined ? {} : { pipeline: check.pipeline }),
       view: { git: "/usr/bin/git", project: RESIDENT_PATHS.projectGit, workspace: RESIDENT_PATHS.workspace } })];
   return {
     executable: sandbox[0]!, argv: sandbox.slice(1),

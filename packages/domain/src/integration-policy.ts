@@ -1,4 +1,5 @@
 /** TIER-002/CFG-005: one closed grammar for host and retained policy facts. */
+import { checkPipelineCheck, frozenPipeline } from "./check-pipeline.js";
 import { isValidWirePath } from "./identifiers.js";
 import { checkArray, checkBool, checkEnum, checkInt, checkObject, checkOptional, checkString, type Check } from "./validation.js";
 export const riskTierCheck = checkEnum(["LOW", "MEDIUM", "HIGH"]);
@@ -27,7 +28,7 @@ const environment: Check = value => {
   return null;
 };
 export const integrationCheckCheck = checkObject({
-  id: checkString({ min: 1 }), argv: checkArray(commandString, { min: 1 }), env: environment,
+  pipeline: checkOptional(checkPipelineCheck), id: checkString({ min: 1 }), argv: checkArray(commandString, { min: 1 }), env: environment,
 });
 
 
@@ -48,7 +49,7 @@ export interface IntegrationPolicy {
   policyRevision: string;
   protectedPaths: string[];
   checks: Array<{
-    id: string; argv: string[]; env: Record<string, string>;
+    id: string; argv: string[]; env: Record<string, string>; pipeline?: import("@oma/contracts/integration").CheckPipeline;
   }>;
 }
 export type { IntegrationCheckSnapshot as FrozenCheck } from "@oma/contracts/integration";
@@ -83,9 +84,9 @@ export function integrationPolicyFromConfig(config: Pick<HostConfig, "integratio
     ...(integration.tiered === undefined ? {} : { tiered: integration.tiered }),
     policyRevision: integration.policyRevision,
     protectedPaths: [...integration.protectedPaths],
-    checks: integration.checks.map(check => ({
+    checks: integration.pipeline === undefined ? integration.checks.map(check => ({
       id: check.id, argv: [...check.argv], env: { ...check.env },
-    })),
+    })) : [{ id: "pipeline:v2", argv: ["oma-pipeline-v2"], env: { ...integration.pipeline.env }, pipeline: frozenPipeline(integration.pipeline) }],
   };
 }
 
@@ -97,6 +98,7 @@ export function snapshotIntegrationPolicy(policy: IntegrationPolicy): Integratio
     if (!check.argv[0] || ids.has(check.id)) throw new StoreError("UNSUPPORTED_PROFILE", "empty check executable or duplicate check identity");
     ids.add(check.id);
     return Object.freeze({
+      ...(check.pipeline === undefined ? {} : { pipeline: frozenPipeline(check.pipeline) }),
       id: check.id, argv: Object.freeze([...check.argv]), env: Object.freeze({ ...check.env }),
     });
   });
@@ -131,7 +133,8 @@ export function assertIntegrationCheck(check: FrozenCheck): void {
  * hooks, attributes or replacement-object policy used for committed bytes. */
 export function integrationCheckEnvironment(check: FrozenCheck, home: string, path: string): Readonly<Record<string, string>> {
   assertIntegrationCheck(check);
-  const environment = { ...check.env, HOME: home, PATH: path, LANG: "C", LC_ALL: "C",
+  const environment = { ...check.env, HOME: home, PATH: path,
+    ...(check.pipeline === undefined ? {} : { NODE_PATH: "/opt/oma-node/lib/node_modules:/usr/lib/node_modules" }), LANG: "C", LC_ALL: "C",
     GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
     GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_ATTR_NOSYSTEM: "1", GIT_CONFIG_COUNT: "2",
     GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",

@@ -26,6 +26,7 @@
 
 | 계약 | 소유 범위 |
 |---|---|
+| [architecture improvement contracts](implementation/architecture-improvements.md) | 요청한 개선의 versioned cutover와 단계별 소유 경계 |
 | [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면·물리 순서·Store·unit renderer |
 | [integration-policy](implementation/integration-policy.md) | 기존 tiered integration 정책. 수용된 변경은 해당 DR과 함께 확인 |
 | [macos-platform](macos-platform.md) | DR49 native 전환·VM 폐기·선행 gate·모듈 경계 계약 |
@@ -40,6 +41,10 @@
 ## 모델 도구 표면 전환
 
 [모델 도구 표면 전환 명세](model-tool-surface-spec.md)는 승인된 모델용 OMA CLI 제거, 같은 입력 계약의 action 통합, 전체 core/선택 도구 목록과 exact-selection `toolset`, reviewer 상태 projection, request/session 보존 및 실제 모델 비교 기준을 정한다. 구현 cutover 진행 중이며 runtime·provider·Sol 검증은 별도 관측 증거가 기록되기 전까지 미확인이다. 사람용 제품 CLI와 고정 architecture·accepted history는 제거하거나 소급 수정하지 않는다.
+
+## 진행성과 통합 및 자원 관리 개선안
+
+[아키텍처 개선 명세](architecture-improvement-spec.md)는 진행·상태, 벤치마크 준비, 변경안과 통합 시도 분리, 누적 비용의 네 단계와 12개 개선 항목을 다룬다. 목표 동작·책임·호환성·검증 시나리오를 정한 구현 전 설계안이다. 현재 실행 계약이나 과거 검증 결과를 대체하지 않으며, 구현 cutover 때 주제별 owner 계약과 결정 기록을 함께 갱신한다.
 
 ## 기준본과 결정 기록
 

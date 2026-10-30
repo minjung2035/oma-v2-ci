@@ -161,6 +161,7 @@ export interface BrokerViews {
   observeRunnerSource(read: (actor: Actor) => RunnerObservation | null): void;
 }
 export interface BrokerReconcile {
+  pulse?(): void;
   sweep(): Promise<RecoveryCounts>;
   wait(actor: Actor, incarnation: number, handedMessages: readonly string[]): void;
   deferredWork(actor: Actor, incarnation: number): ReadonlySet<string> | undefined;

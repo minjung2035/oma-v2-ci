@@ -126,6 +126,7 @@ test("AV-07/P0: a consumed provisioning proof cannot hide later repository corru
     // No agents or accepted operations exist; lifecycle effects are unreachable.
     const reconcile = createReconcileModule(store, mail, git, null, units, {} as LifecycleModule, { projectGit, freshVerifiedMain: main, hasGoal: () => false, activationAllowed: () => false });
     await reconcile.startup(false);
+    await reconcile.sweep();
     mkdirSync(join(projectGit, "objects/aa"), { recursive: true });
     writeFileSync(join(projectGit, "objects/aa", "b".repeat(38)), "damaged object");
     await assert.rejects(reconcile.startup(false), { code: "STORE_CORRUPT" });

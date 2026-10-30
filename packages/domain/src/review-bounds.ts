@@ -60,9 +60,13 @@ export function describeEntryText(ordinal: number, entry: ReviewEntry): string {
     : fact.kind === "cancel" ? "cancel"
     : fact.kind === "refresh" ? "refresh"
     : fact.kind === "vote" ? (entry.actor === PRINCIPAL ? `principal ${fact.verdict}` : `vote ${fact.verdict}`)
-    : "fact";
+    : fact.kind;
   const text = fact.kind === "review" || fact.kind === "vote" ? fact.body
-    : fact.kind === "cancel" ? fact.reason
+    : fact.kind === "cancel" || fact.kind === "review.withdraw" || fact.kind === "review.invalidate" || fact.kind === "review.adopt" || fact.kind === "review.retry" || fact.kind === "review.preparation-failed" ? fact.reason
+    : fact.kind === "review.revise" ? `Proposal revision ${fact.revision}: ${fact.reason}`
+    : fact.kind === "review.integration" ? `${fact.context ? "Integration-context review required" : "Proposal approvals reusable"}: revision ${fact.revision}, main ${fact.identity.expectedBase}, result ${fact.identity.candidate}, check profile ${fact.checkProfileDigest}. Exact diff: ${JSON.stringify(fact.diff)}. Read oma_review_diff with view=context.`
+    : fact.kind === "review.supersede" ? fact.reason
+    : fact.kind === "review.included" ? `Already included: ${fact.candidate} is an ancestor of observed main ${fact.main}; no CAS claimed.`
     : fact.kind === "refresh" ? (fact.main === null
       ? "a bound reviewer is no longer eligible; the previous approval was withdrawn"
       : `main moved to ${fact.main}; this request is stale; open a new request on the latest main`)

@@ -15,6 +15,8 @@ export interface GitReviewRepository {
   changedPaths(base: Oid, candidate: Oid): GitObservation<readonly ChangedPath[]>;
   gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   submitters(base: Oid, candidate: Oid): readonly string[];
+  prepareIntegration?(operation: string, base: Oid, candidate: Oid, main: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ candidate: Oid; preparedRef: string | null; reusable: boolean }>;
+  prepareDiff?(operation: string, base: Oid, candidate: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ diff: import("@oma/contracts/files").ReviewDiffArtifact; preview: Buffer }>;
   mergeDiff(base: Oid, candidate: Oid, maxBytes: number): Buffer;
   prepareRevert(input: { readonly mergeBase: Oid; readonly main: Oid; readonly base: Oid; readonly message: string }): Oid;
   publishCandidateRef(ref: string, candidate: Oid): void;

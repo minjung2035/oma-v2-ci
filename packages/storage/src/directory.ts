@@ -213,12 +213,22 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
       current = join(current, component);
       const owned = index >= boundary.components.length - 1;
       const make = (): number => {
+        let uncertain: unknown;
         try { mkdirAt(parent, component, mode); created.push(current); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+        catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "EAGAIN") uncertain = error;
+          else if (code !== "EEXIST") throw error;
+        }
         try {
+          // A transient mkdir observation does not prove existence or absence.
+          // Only the usual held, no-link directory validation can settle it.
           return owned ? openOwnedDirectory(parent, component)
             : openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY);
         } catch (error) {
+          // Keep both observations and never enter stray-leaf repair when the
+          // preceding creation is uncertain. No blind retry or errno rewrite.
+          if (uncertain !== undefined) throw new AggregateError([uncertain, error], "directory creation and observation remain unsettled");
           if (error instanceof StoreError) throw error;
           throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
         }

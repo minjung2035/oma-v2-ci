@@ -7,17 +7,34 @@ import type { ReviewState } from "@oma/domain/review-evaluation";
 import { StoreError } from "@oma/domain/errors";
 
 const PRINCIPAL = "principal";
+export function integrationStatus(state: ReviewState, main: { oid: Oid | null }, blocked = false, live?: string) {
+  const applied = state.integration?.state === "succeeded" ||
+    ((state.integration?.state === "pending" || state.integration?.state === "unknown") && main.oid === (state.integration.diff?.candidate ?? state.identity.candidate));
+  const integrationPhase = state.included !== null && state.integration === null ? "already-included" : applied ? "applied" : main.oid === null ? "unknown" : blocked ? "blocked" : live ??
+    (["peer-needed", "principal-pending"].includes(state.display) ? "review-needed" : state.display);
+  const retryable = main.oid !== null && !applied && state.terminal === null && !blocked && (state.preparationFailure !== null || state.integration?.state === "failed");
+  return { revision: state.revision, scope: state.scope, proposal: state.sourceIdentity,
+    ...(state.preparation ? {contextDiff:state.preparation.fact.diff} : {}), attemptNumber: state.attemptNumber, ...(state.integration?.diff === undefined ? {} : { diff: state.integration.diff }),
+    integrationPhase, notice: applied ? state.integration?.state === "succeeded" ? "delivered" as const : "pending" as const : "none" as const,
+    retryable, nextAction: applied ? "none" : main.oid === null ? "observe-main" : state.integration?.state === "unknown" || state.integration?.state === "pending" ? "observe-existing-attempt"
+      : blocked ? "resolve-current-conditions" : retryable ? "requester-retry" : state.ready ? "await-integration" : "review" };
+}
+export function reviewDisplay(state: ReviewState, main: { oid: Oid | null }, blocked = false, live?: string): string {
+  const phase = integrationStatus(state, main, blocked, live).integrationPhase;
+  return phase === "review-needed" ? state.display : phase;
+}
 export function workerReviewStatus(state: ReviewState,
     openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
     missing: readonly string[], main: { readonly oid: Oid | null; readonly observedAtMs: number },
-    frameBytes: number, responseId: string, reviewers: readonly ReviewReviewer[]): ReviewRequestStatus {
+    frameBytes: number, responseId: string, reviewers: readonly ReviewReviewer[], blocked = false, live?: string): ReviewRequestStatus {
   const sent = state.approvalSent;
   const latestPrincipal = [...state.entries].reverse()
     .find(entry => entry.fact.kind === "vote" && entry.actor === PRINCIPAL);
   const fixed = {
     name: state.name, kind: state.kind, tier: state.tier, title: openFact.title,
     reason: openFact.reason, requester: state.requester, identity: { ...state.identity },
-    display: state.display, required: state.required,
+    ...integrationStatus(state, main, blocked, live),
+    display: reviewDisplay(state, main, blocked, live), required: state.required,
     normalRequired: state.normalRequired, maxWorkers: state.maxWorkers,
     capacityFallback: state.capacityFallback, principalRequired: state.principalRequired,
     approvers: [...state.approvers], rejectors: [...state.rejectors],

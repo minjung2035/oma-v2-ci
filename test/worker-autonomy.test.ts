@@ -137,9 +137,10 @@ test("DR46: successive Worker creations each retain their accepted identity", as
   assert.equal(f.store.getOperation("worker-1", "excess")?.state, "succeeded");
 });
 
-test("DR27/CFG-002: initial Worker count persists with a non-delegating Principal and accepts zero", t => {
+test("DR27/CFG-002: initial Worker count persists with a non-delegating Principal and rejects zero", t => {
   const f = fixture(t), profiles = readSettings(f.path).config.agentProfiles;
-  for (const count of [0, 2, 3]) {
+  assert.throws(() => commitField(readSettings(f.path), INITIAL_WORKERS, 0, "pending"), /at least one/);
+  for (const count of [1, 2, 3]) {
     assert.equal(commitField(readSettings(f.path), INITIAL_WORKERS, count, "pending").kind, "saved");
     const saved = readSettings(f.path).config;
     assert.equal(saved.initialResidents.length, count);
@@ -186,4 +187,24 @@ test("Worker capacity changes require restart and never remove existing Workers"
   await assert.rejects(lifecycle.create(f.auth("worker-1"), input, "before-restart"), { code: "POLICY_CHANGED" });
   await assert.rejects(f.lifecycle().create(f.auth("worker-1"), input, "after-restart"), { code: "UNSUPPORTED_PROFILE" });
   assert.deepEqual(f.store.listAgents(), before);
+});
+
+
+test("IMP-R09: host recovery seeds exactly one legacy zero-Resident Society", async t => {
+  const f = fixture(t);
+  f.store.transaction(tx => tx.insertAgent(makeValidAgent("principal", { profile: "principal", from: f.from,
+    capabilities: [...f.config.agentProfiles.principal!.capabilities] })));
+  const recovery = { ...f.config, firstWorkerRecovery: { version: 1 as const, key: "legacy-one", name: "recovered", profile: "resident", brief: "Recover this Society" } };
+  const lifecycle = f.lifecycle();
+  await Promise.all([lifecycle.bootstrap(recovery), lifecycle.bootstrap(recovery)]);
+  assert.equal(f.store.listAgents().filter(agent => agent.role === "resident").length, 1);
+  const operation = f.store.getOperation("principal", "recover-first-legacy-one")!;
+  assert.equal(operation.state, "pending");
+  f.reopen(); const resumed = f.lifecycle();
+  await resumed.bootstrap(recovery); await resumed.reconcileCreate(operation.id);
+  assert.equal(f.store.getOperationById(operation.id)!.state, "succeeded");
+  assert.equal(f.store.pendingDeliveries("recovered").length, 1);
+  await assert.rejects(resumed.create(f.auth("principal"), { name: "forbidden", from: f.from, brief: "work" }, "no"), { code: "CAPABILITY_DENIED" });
+  f.store.transaction(tx => tx.updateAgent({ name: "recovered", desired: "stopped" }));
+  await assert.rejects(resumed.bootstrap({ ...recovery, firstWorkerRecovery: { ...recovery.firstWorkerRecovery, key: "another", name: "second" } }), { code: "AGENT_CONFLICT" });
 });

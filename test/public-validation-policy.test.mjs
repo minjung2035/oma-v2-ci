@@ -69,7 +69,7 @@ function fixture(transform = source => source) {
       getReceipt() { calls.receiptReads = (calls.receiptReads ?? 0) + 1; return null; },
     },
     mail: { send: effect }, units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
-    views: { status: async () => [] }, lifecycle: {}, limits: {},
+    views: { status: async () => [] }, lifecycle: { creation: () => ({ capability: true, childProfile: "worker", childHasMailSend: true, maxWorkers: 6, workerCount: 1, observedAtMs: 1 }) }, limits: {},
     review: null,
 git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
     waitRun: () => true,

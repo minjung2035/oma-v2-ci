@@ -211,6 +211,10 @@
     "./actor-address": {
       "types": "./dist/actor-address.d.ts",
       "default": "./dist/actor-address.js"
+    },
+    "./check-pipeline": {
+      "types": "./dist/check-pipeline.d.ts",
+      "default": "./dist/check-pipeline.js"
     }
   },
   "scripts": {

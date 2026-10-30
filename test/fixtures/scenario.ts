@@ -477,7 +477,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         },
         async activate(agent, timeoutMs = 90000) {
             assert.equal(RESIDENT_TEST_OPTIONS.skip, false, String(RESIDENT_TEST_OPTIONS.skip));
-            assert.equal(readCurrentHostPolicy(configPath, SOCIETY).schemaVersion, 4);
+            assert.equal(readCurrentHostPolicy(configPath, SOCIETY).schemaVersion, 5);
             // What provisioning a created Resident leaves: its home and its workspace.
             const home = join(agentRootPathAt(root, agent), "home");
             for (const path of [home, runnerViewPathAt(root, agent)])

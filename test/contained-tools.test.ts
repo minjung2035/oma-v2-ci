@@ -11,10 +11,21 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
+import { readResult } from "@oma/tool-files";
+import { resultRootFor } from "@oma/tool-runtime/contained-search";
 import { containWorkspaceTools } from "@oma/tool-runtime/contained-tools";
 import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 
-type Tool = { name: string; execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<{ content: { type: string; text?: string }[] }> };
+type ToolResult = { content: { type: string; text?: string }[]; details?: { result?: { reference?: string; complete?: boolean; limitReached?: boolean; reason?: string } } };
+function completeText(result: ToolResult,workspace: string): string {
+  const meta=result.details?.result;
+  if (!meta) return result.content.map(part=>part.text??"").join("");
+  assert.equal(meta.complete,true,JSON.stringify(meta)); assert.ok(meta.reference);
+  const pages: Buffer[]=[];let offset=0;
+  for(;;){const page=readResult(resultRootFor(workspace),meta.reference,{byteOffset:offset});pages.push(Buffer.from(page.dataBase64,"base64"));if(page.next===null)break;offset=page.next;}
+  return Buffer.concat(pages).toString("utf8").replace(/\n$/,"");
+}
+type Tool = { name: string; execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<ToolResult> };
 
 function world(t: import("node:test").TestContext, sandboxed = false) {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-contained-")));
@@ -25,7 +36,7 @@ function world(t: import("node:test").TestContext, sandboxed = false) {
   containWorkspaceTools({ registerTool: (tool: Tool) => { tools[tool.name] = tool; } } as never, workspace, sandboxed);
   const run = async (name: string, params: Record<string, unknown>): Promise<string> => {
     const result = await tools[name]!.execute("call", params, undefined, undefined, { cwd: workspace });
-    return result.content.map(part => part.text ?? "").join("");
+    return name === "grep" || name === "find" ? completeText(result,workspace) : result.content.map(part => part.text ?? "").join("");
   };
   return { base, workspace, outside, tools, run };
 }
@@ -131,14 +142,11 @@ test("G10-02: search snapshots hold the source root through replacement and remo
   const { workspace, outside } = world(t);
   writeFileSync(join(workspace, "a.txt"), "workspace text");
   writeFileSync(join(outside, "secret.txt"), "host secret");
-  const pending = withSearchSnapshot(workspace, ".", undefined, async snapshot => {
-    assert.equal(readFileSync(join(snapshot, "a.txt"), "utf8"), "workspace text");
-    assert.equal(existsSync(join(snapshot, "secret.txt")), false);
-    return snapshot;
-  });
+  let announced="";
+  const pending = withSearchSnapshot(workspace, ".", undefined, async () => assert.fail("changed source must refuse"),undefined,name=>{announced=name;});
   renameSync(workspace, workspace + "-held"); symlinkSync(outside, workspace);
-  const snapshot = await pending;
-  assert.equal(existsSync(snapshot), false);
+  await assert.rejects(pending,/changed/);
+  assert.equal(existsSync(join(tmpdir(),announced)), false);
   rmSync(workspace); renameSync(workspace + "-held", workspace);
   let failedSnapshot = "";
   await assert.rejects(withSearchSnapshot(workspace, ".", undefined, async path => {
@@ -312,7 +320,7 @@ for (const outcome of ["abort", "parent-death"] as const) test(`G10-02 / P0-4: $
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     const controller=new AbortController();
     if(process.argv[3]==='abort'){process.stdin.resume();process.stdin.once('data',()=>controller.abort());}
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},controller.signal);process.exitCode=2;}
+    try{const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},controller.signal);process.exitCode=result.details?.result?.complete===false?0:2;}
     catch{process.exitCode=0;}finally{process.stdin.pause();}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
     new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace, outcome],
@@ -350,7 +358,7 @@ test("G10-02 / P0-4: a search child killed externally mid-copy still has its ann
   // an OOM killer or an operator would. The child cannot run its own cleanup
   // then, so the announced-name sweep on `close` is the only owner left.
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
+    try{const r=await searchWorkspace('grep',process.argv[2],{pattern:'needle'});if(r.details?.result?.complete===false)throw Error(r.details.result.reason);process.exitCode=3;}
     catch{process.exitCode=0;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
     new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
@@ -382,7 +390,7 @@ test("G10-02 / P0-4: a child killed the moment its snapshot exists still leaves 
   // A copy long enough that the directory is observable before it finishes.
   for (let n = 0; n < 300; n++) writeFileSync(join(workspace, `${n}.txt`), "needle\n".repeat(300));
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
+    try{const r=await searchWorkspace('grep',process.argv[2],{pattern:'needle'});if(r.details?.result?.complete===false)throw Error(r.details.result.reason);process.exitCode=3;}
     catch{process.exitCode=0;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
     new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
@@ -477,7 +485,7 @@ test("G10-02 / P0: a hidden walker result bound is not the answer -- find return
   // Past the engine's own 1000-result default.
   for (let n = 0; n < 1100; n++) writeFileSync(join(workspace, `f${String(n).padStart(4, "0")}.txt`), "");
   const result = await tools["find"]!.execute("call", { pattern: "f*.txt" }, undefined, undefined, { cwd: workspace });
-  const found = result.content.map(part => part.text ?? "").join("");
+  const found = completeText(result,workspace);
   const rows = found.split("\n").filter(line => /^f\d+\.txt$/.test(line));
   assert.equal(rows.length, 1100, `${rows.length} of 1100 results were returned`);
   const details = (result as { details?: Record<string, unknown> }).details;
@@ -500,7 +508,7 @@ test("G10-02: explicit fd limit zero remains unlimited during complete rendering
   const { workspace, tools } = world(t);
   for (let n = 0; n < 300; n++) writeFileSync(join(workspace, `z${String(n).padStart(3, "0")}${"x".repeat(190)}.txt`), "");
   const result = await tools["find"]!.execute("call", { pattern: "z*.txt", limit: 0 }, undefined, undefined, { cwd: workspace });
-  const text = result.content.map(part => part.text ?? "").join("");
+  const text = completeText(result,workspace);
   assert.equal(text.split("\n").filter(line => /^z\d{3}x+\.txt$/.test(line)).length, 300);
   assert.equal((result as { details?: Record<string, unknown> }).details?.resultLimitReached, undefined);
 });
@@ -509,56 +517,34 @@ test("G10-02: grep completion keeps Pi's fractional limit and discards buffered 
   const { workspace, tools } = world(t);
   for (let n = 0; n < 6; n++) writeFileSync(join(workspace, `q${n}.txt`), `needle${"x".repeat(594)}\n`);
   const result = await tools["grep"]!.execute("call", { pattern: "needle", limit: 2.5 }, undefined, undefined, { cwd: workspace });
-  const hits = result.content.map(part => part.text ?? "").join("").split("\n").filter(line => /^q\d\.txt:1: needle/.test(line));
+  const hits = completeText(result,workspace).split("\n").filter(line => /^q\d\.txt:1: needle/.test(line));
   assert.equal(hits.length, 3); assert.ok(hits.every(line => line.length === "q0.txt:1: ".length + 600));
   assert.equal((result as { details?: Record<string, unknown> }).details?.linesTruncated, undefined);
-  assert.equal((result as { details?: Record<string, unknown> }).details?.matchLimitReached, 2.5);
+  assert.equal(result.details?.result?.limitReached,true);
 });
 
-test("G10-02 / P0: an answer beyond one result is spooled into the workspace, and the named path is one the model's own tools can read", { timeout: 90000 }, async t => {
-  const { workspace, tools, run } = world(t);
-  // One 1.3 MiB matching line: the complete answer cannot ride inline.
-  writeFileSync(join(workspace, "huge.txt"), `needle${"y".repeat(1_300_000)}\n`);
-  const result = await tools["grep"]!.execute("call", { pattern: "needle" }, undefined, undefined, { cwd: workspace });
-  const text = result.content.map((part: { text?: string }) => part.text ?? "").join("");
-  assert.match(text, /oma: \[preview\] the complete \d+-byte result is at /);
-  const file = / is at (\S+)/.exec(text)?.[1];
-  const spoolDir = join(workspace, ".oma", "search-results");
-  assert.ok(file !== undefined && file.startsWith(`${spoolDir}${sep}`),
-    `the named path is not inside the workspace spool: ${file}`);
-  assert.equal((result as { details?: { complete?: { path?: string; bytes?: number } } }).details?.complete?.path, file,
-    "details.complete does not name the admitted path");
-  // Reachability is the guard's verdict, not file existence: the same
-  // admission the tool_call gate gives, then the same contained operations
-  // the registered tools make.
-  let hook: ((event: { toolName: string; input: unknown }) => { block: boolean; reason: string } | undefined) | undefined;
-  guardWorkspaceTools({ on: (_: string, handler: typeof hook) => { hook = handler; } } as never, workspace, false);
-  for (const tool of ["read", "grep", "find", "ls"])
-    assert.equal(hook!({ toolName: tool, input: { path: file!, pattern: "needle" } }), undefined,
-      `${tool} is refused at the spool path the result named`);
-  // The tools themselves reach it: ls and find list it, read opens it (the
-  // single line is past the read renderer's own cap -- proof it read THIS
-  // file), and grep over it completes the whole pipeline on the path.
-  const name = basename(file!);
-  assert.match(await run("ls", { path: spoolDir }), new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(await run("find", { pattern: "oma-search-result-*.txt", path: spoolDir }), /oma-search-result-.*\.txt/);
-  assert.match(await run("read", { path: file! }), /exceeds|Line 1/, "read did not reach the spooled file");
-  const searched = await run("grep", { pattern: "needle", path: file!, limit: 1 });
-  assert.match(searched, /needle/, "grep could not read the file the result named");
-  // The model can read every byte of the saved answer.
-  const saved = readFileSync(file!, "utf8");
-  assert.ok(saved.startsWith("huge.txt:1: needle"), "the saved answer is not the complete rendering");
-  assert.equal(Buffer.byteLength(saved) > 1_300_000, true);
+test("G10-02 / P0: large search result is immutable, paged through read and cannot become a source write", {timeout:90000},async t=>{
+  const {workspace,tools,run}=world(t);
+  writeFileSync(join(workspace,"huge.txt"),`needle${"y".repeat(1_300_000)}\n`);
+  const result=await tools["grep"]!.execute("call",{pattern:"needle"},undefined,undefined,{cwd:workspace});
+  const preview=result.content.map(p=>p.text??"").join("");assert.ok(Buffer.byteLength(preview)<18000);
+  const reference=result.details?.result?.reference;assert.ok(reference?.startsWith("oma-result:"));
+  let hook: ((event:{toolName:string;input:unknown})=>unknown)|undefined;
+  guardWorkspaceTools({on:(_:string,handler:typeof hook)=>{hook=handler;}} as never,workspace,false);
+  assert.equal(hook!({toolName:"read",input:{path:reference}}),undefined);
+  assert.ok(hook!({toolName:"write",input:{path:reference,content:"replacement"}}));
+  const pages:Buffer[]=[];let offset=0;
+  for(;;){const page=JSON.parse(await run("read",{path:reference,byteOffset:offset})) as {dataBase64:string;next:number|null};
+    pages.push(Buffer.from(page.dataBase64,"base64"));if(page.next===null)break;offset=page.next;}
+  assert.equal(Buffer.concat(pages).toString(),`huge.txt:1: needle${"y".repeat(1_300_000)}\n`);
 });
-
-
 
 test("G10-02 / P0: a stalled child is refused and its group and copy are swept", { timeout: 20000 }, async t => {
   const { base, workspace } = world(t);
   const temporary = join(base, "temporary"); mkdirSync(temporary);
   writeFileSync(join(workspace, "a.txt"), "needle\n");
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,300);process.exitCode=3;}
+    try{const r=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,300);if(r.details?.result?.complete===false)throw Error(r.details.result.reason);process.exitCode=3;}
     catch(error){process.exitCode=/produced no output/.test(String(error&&error.message))?0:2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
     new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
@@ -593,8 +579,9 @@ const {setTimeout:delay}=require('node:timers/promises');
 (async()=>{
 if(process.argv.includes('--version')) process.exit(0);
 const target=process.argv.at(-1);
+if(process.argv.includes('--files')){process.stdout.write('a.txt'+String.fromCharCode(0));return;}
 await delay(1500);
-console.log(JSON.stringify({type:'match',data:{path:{text:target+'/a.txt'},line_number:1,lines:{text:'needle\\n'}}}));
+console.log('a.txt:1:needle');
 })();
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
@@ -626,7 +613,7 @@ process.on('SIGTERM',()=>{});
 setInterval(()=>{},1000);
 `, { mode: 0o755 });
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,600);process.exitCode=3;}
+    try{const r=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,600);if(r.details?.result?.complete===false)throw Error(r.details.result.reason);process.exitCode=3;}
     catch(error){process.exitCode=/only heartbeats/.test(String(error&&error.message))?0:2;}`;
   const parent = spawn(process.execPath, ["--input-type=module", "-e", script,
     new URL(import.meta.resolve("@oma/tool-runtime/contained-search"), import.meta.url).href, workspace],
@@ -656,19 +643,12 @@ test("G10-02 / P0: sparse real progress outlives the heartbeat-only ceiling -- a
   const temporary = join(base, "temporary"); mkdirSync(temporary);
   const agent = join(base, "agent"); const bin = join(agent, "bin"); mkdirSync(bin, { recursive: true });
   writeFileSync(join(workspace, "a.txt"), "needle\n");
-  // Pass one floods past the engine's 100-match default so the hidden bound
-  // triggers the completion pass; the pinned walker's second run then emits
-  // one match every 400 ms. 10 drips is 4 s -- past a 3 s heartbeat-only
-  // ceiling -- and each line is a real {p:"r"} frame, so nothing cuts it.
-  writeFileSync(join(bin, "rg"), `#!${process.execPath}
-if(process.argv.includes('--version')) process.exit(0);
-const fs=require('node:fs');
-const target=process.argv.at(-1);
-const line=i=>JSON.stringify({type:'match',data:{path:{text:target+'/m'+i+'.txt'},line_number:1,lines:{text:'needle\\n'}}});
-const mark=process.env.PI_CODING_AGENT_DIR+'/rg-drip-mark';
-if(!fs.existsSync(mark)){fs.writeFileSync(mark,'1');for(let i=0;i<150;i++)console.log(line(i));}
-else{(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;i<10;i++){await d(400);console.log(line(i));}})();}
-`, { mode: 0o755 });
+  // Names select one real source; match output drips for longer than ten
+  // stall windows. Each payload chunk must reset the progress deadline.
+  writeFileSync(join(bin,"rg"),`#!${process.execPath}
+if(process.argv.includes('--files')){process.stdout.write('a.txt'+String.fromCharCode(0));process.exit(0);}
+(async()=>{const{setTimeout:d}=require('node:timers/promises');for(let i=0;i<10;i++){await d(400);console.log('m'+i+'.txt:1:needle');}})();
+`,{mode:0o755});
   const script = `const {searchWorkspace}=await import(process.argv[1]);
     try{
       const result=await searchWorkspace('grep',process.argv[2],{pattern:'needle'},undefined,300);
@@ -708,7 +688,7 @@ test("G10-02 / P0-4: a descriptor-starved copy refuses in words -- EMFILE/ENFILE
   for (let n = 0; n < 400; n++) { deep = join(deep, "d"); mkdirSync(deep); }
   writeFileSync(join(deep, "leaf.txt"), "needle\n");
   const script = `const {searchWorkspace}=await import(process.argv[1]);
-    try{await searchWorkspace('grep',process.argv[2],{pattern:'needle'});process.exitCode=3;}
+    try{const r=await searchWorkspace('grep',process.argv[2],{pattern:'needle'});if(r.details?.result?.complete===false)throw Error(r.details.result.reason);process.exitCode=3;}
     catch(error){const m=String(error&&error.message||error);process.stdout.write(m);
       process.exitCode=/file descriptors/.test(m)?0:2;}`;
   // The fd ceiling is set with prlimit's direct argv -- the local lane

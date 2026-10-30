@@ -155,13 +155,14 @@ test("P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the ge
 
 test("P0V-72 / F5, P0-5: a journal read that returns less than was asked is read on, and one that ends early keeps everything", async t => {
   const f = createCompleteConfigurationFixture();
-  t.after(() => { syncBuiltinESMExports(); f.close(); });
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); f.close(); });
   // A, B, C and A again: the current generation is A, and C is what its last commit replaced.
   const [a, , c] = commitEach(f, [5, 6, 7, 5]);
   const real = fs.readSync;
   // The first read returns only the journal's first record, as read(2) may.
-  let reads = 0; let endEarly = false;
+  let reads = 0; let endEarly = false; let selectedJournal = journalOf(f);
   t.mock.method(fs, "readSync", ((fd: number, buffer: Buffer, offset: number, length: number, position: number | null) => {
+    if (fs.readlinkSync(`/proc/self/fd/${fd}`) !== selectedJournal) return real(fd, buffer, offset, length, position);
     reads += 1;
     if (reads === 1) {
       const whole = Buffer.alloc(length);
@@ -183,7 +184,7 @@ test("P0V-72 / F5, P0-5: a journal read that returns less than was asked is read
   try {
     const committed = commitEach(again, [5, 6, 7, 5]);
     const before = loadConfigurationSnapshot(again.path);
-    reads = 0; endEarly = true;
+    selectedJournal = journalOf(again); reads = 0; endEarly = true;
     collectManagedGenerations(before);
     endEarly = false;
     assert.deepEqual(new Set(readdirSync(generationsOf(again))), new Set(committed), "a journal read that ended early removed a generation");

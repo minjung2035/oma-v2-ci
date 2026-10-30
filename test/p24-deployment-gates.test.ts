@@ -77,7 +77,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
     "apps/oma/dist/nested/a.js": "a\n",
     "packages/contracts/dist/index.js": "export {};\n",
     "packages/platform-linux/dist/systemd/resident.path.in": "[Path]\n",
-    "packages/storage/dist/schema-v4.sql": "schema\n",
+    "packages/storage/dist/schema-v5.sql": "schema\n",
     // AV16: the sandbox's `oma` command is pinned with the rest.
     "apps/oma/dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",

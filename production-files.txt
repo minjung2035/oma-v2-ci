@@ -5,6 +5,7 @@ apps/oma/src/application/local-packages.ts
 apps/oma/src/application/mail.ts
 apps/oma/src/application/project-session-settings.ts
 apps/oma/src/application/project-settings.ts
+apps/oma/src/application/session-archive.ts
 apps/oma/src/application/settings.ts
 apps/oma/src/application/society-bootstrap.ts
 apps/oma/src/application/society-conversation.ts
@@ -36,6 +37,7 @@ apps/oma/src/engine/settings-files.ts
 apps/oma/src/engine/start-effects.ts
 apps/oma/src/entry/broker.ts
 apps/oma/src/entry/candidate-check.ts
+apps/oma/src/entry/download-cache.ts
 apps/oma/src/entry/module-conformance.ts
 apps/oma/src/entry/oma-society.ts
 apps/oma/src/entry/oma.ts
@@ -81,6 +83,8 @@ apps/oma/src/runtime/packages/store.ts
 apps/oma/src/runtime/personal-models.ts
 apps/oma/src/runtime/personal-session.ts
 apps/oma/src/runtime/personal-settings.ts
+apps/oma/src/runtime/pipeline-cache.ts
+apps/oma/src/runtime/pipeline-recorder.ts
 apps/oma/src/runtime/principal-delivery.ts
 apps/oma/src/runtime/project-binding.ts
 apps/oma/src/runtime/provision.ts
@@ -138,6 +142,7 @@ packages/config/src/state-format.ts
 packages/contracts/package.json
 packages/contracts/src/assets.ts
 packages/contracts/src/attestation.ts
+packages/contracts/src/check-pipeline.ts
 packages/contracts/src/credentials.ts
 packages/contracts/src/durable.ts
 packages/contracts/src/errors.ts
@@ -168,6 +173,7 @@ packages/domain/src/authority.ts
 packages/domain/src/batch-settlement.ts
 packages/domain/src/canonical-json.ts
 packages/domain/src/capabilities.ts
+packages/domain/src/check-pipeline.ts
 packages/domain/src/child-policy.ts
 packages/domain/src/config-format.ts
 packages/domain/src/context-policy.ts
@@ -280,10 +286,13 @@ packages/git/package.json
 packages/git/src/candidate-check.ts
 packages/git/src/canonical-command.ts
 packages/git/src/canonical-health.ts
+packages/git/src/check-pipeline.ts
 packages/git/src/context-publication.ts
 packages/git/src/context-repository.ts
 packages/git/src/context.ts
+packages/git/src/download-cache.ts
 packages/git/src/index.ts
+packages/git/src/integration-preparation.ts
 packages/git/src/integration-publication.ts
 packages/git/src/integration.ts
 packages/git/src/observe.ts
@@ -291,6 +300,7 @@ packages/git/src/paths.ts
 packages/git/src/ports.ts
 packages/git/src/project-preparation.ts
 packages/git/src/project-snapshot.ts
+packages/git/src/provenance-index.ts
 packages/git/src/publication.ts
 packages/git/src/quarantine-worker.ts
 packages/git/src/quarantine.ts
@@ -298,6 +308,7 @@ packages/git/src/read-port.ts
 packages/git/src/repository-health.ts
 packages/git/src/repository-port.ts
 packages/git/src/repository.ts
+packages/git/src/review-artifact.ts
 packages/git/src/submit.ts
 packages/git/src/workspace.ts
 packages/lifecycle/package.json
@@ -361,6 +372,7 @@ packages/platform-linux/src/runner-scope.ts
 packages/platform-linux/src/sandbox-seccomp.ts
 packages/platform-linux/src/sandbox.ts
 packages/platform-linux/src/worker-spawn.ts
+packages/platform-linux/src/workload-budget.ts
 packages/platform-mac/package.json
 packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/developer-tools.ts
@@ -434,6 +446,7 @@ packages/protocol/src/status-page.ts
 packages/protocol/src/status-view.ts
 packages/reconcile/package.json
 packages/reconcile/src/index.ts
+packages/reconcile/src/lane.ts
 packages/reconcile/src/operations.ts
 packages/reconcile/src/ports.ts
 packages/reconcile/src/preaccept-event.ts
@@ -482,6 +495,7 @@ packages/storage/src/restic-tool.ts
 packages/storage/src/restic-verification.ts
 packages/storage/src/rows.ts
 packages/storage/src/schema-v4.sql
+packages/storage/src/schema-v5.sql
 packages/storage/src/socket-name.ts
 packages/storage/src/staged-tree.ts
 packages/storage/src/store-access.ts
@@ -495,6 +509,7 @@ packages/tool-files/package.json
 packages/tool-files/src/descriptor-files.ts
 packages/tool-files/src/errors.ts
 packages/tool-files/src/index.ts
+packages/tool-files/src/results.ts
 packages/tool-hashline/package.json
 packages/tool-hashline/src/index.ts
 packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE
@@ -3671,6 +3686,7 @@ packages/tool-runtime/src/child-env.ts
 packages/tool-runtime/src/contained-search.ts
 packages/tool-runtime/src/contained-tools.ts
 packages/tool-runtime/src/provenance.ts
+packages/tool-runtime/src/result-read.ts
 packages/tool-runtime/src/shared.ts
 packages/tool-runtime/src/tool-surface.ts
 packages/tool-runtime/src/vendor-bundle.ts

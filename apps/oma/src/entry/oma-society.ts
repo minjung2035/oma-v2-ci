@@ -25,7 +25,7 @@ import { SocietyInteraction } from "../application/society-interaction.js";
 import { SocietyTransition } from "../application/society-transition.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" +
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma login\n" +
     `${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n`);
   process.exit(0);
 }
@@ -111,6 +111,11 @@ async function main(argv: readonly string[]): Promise<void> {
   const command = parseOmaArguments(argv);
   if (command.kind === "help") usage();
   assertNativeRuntime();
+  if (command.kind === "archive") {
+    const { archiveSociety } = await import("../application/session-archive.js");
+    await archiveSociety(command.society, command.config, process.env, line => process.stderr.write(line + "\n"));
+    return;
+  }
   if (command.kind === "session" && command.mode === "personal")
     fail("Personal cannot start through the Society entry", exitFor("INVALID_REQUEST"));
   const packages = command.kind === "pi" ? packageCommand(command.args) : null;

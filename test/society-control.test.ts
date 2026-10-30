@@ -24,7 +24,8 @@ import { withWorkerCapacity, ALL_CAPS, makeValidAgent } from "./fixtures/spec.js
 class ControlledUnits extends PolicyExecution {
   readonly stops: { agent: string; incarnation: number | undefined }[] = [];
   readonly failures = new Map<string, Error>();
-  readonly alive = new Set<string>();
+  readonly alive = new Set<string>(); // externally controlled stubborn scopes
+  readonly started = new Set<string>();
   readonly starts: string[] = [];
   observing: (() => Promise<void>) | undefined;
   onStop: (() => void) | undefined;
@@ -32,15 +33,15 @@ class ControlledUnits extends PolicyExecution {
   override stop(agent: string, incarnation: number): ExecutionObservation {
     this.stops.push({ agent, incarnation }); this.onStop?.();
     const failure = this.failures.get(agent); if (failure) throw failure;
-    return this.observe();
+    this.started.delete(agent); return this.observe(agent);
   }
-  override start(agent: string, _repair: boolean, authorize?: () => void): void { authorize?.(); this.starts.push(agent); }
-  override observe(): ExecutionObservation {
-    return { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0,
+  override start(agent: string, _repair: boolean, authorize?: () => void): void { authorize?.(); this.starts.push(agent); this.started.add(agent); }
+  override observe(agent?: string): ExecutionObservation {
+    return { activeState: agent && (this.alive.has(agent) || this.started.has(agent)) ? "active" : "inactive", subState: "dead", result: "success", execMainStatus: 0,
       scope: "", invocationId: "" };
   }
-  override async observeAsync(): Promise<ExecutionObservation> { await this.observing?.(); return this.observe(); }
-  override confirmDead(agent: string): boolean { return !this.alive.has(agent); }
+  override async observeAsync(agent?: string): Promise<ExecutionObservation> { await this.observing?.(); return this.observe(agent); }
+  override confirmDead(agent: string): boolean { return !this.alive.has(agent) && !this.started.has(agent); }
 }
 function fixture(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-society-control-")); const path = join(root, "runtime.sqlite");

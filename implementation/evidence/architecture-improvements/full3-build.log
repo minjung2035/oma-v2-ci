@@ -1,0 +1,151 @@
+npm notice run oma-core-v1@0.1.0 build
+npm notice run node scripts/build.mjs
+Workspace build: 2/27 recompiled
+{
+  "status": "STATIC_PACKAGE_CHECKED",
+  "root": "/home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2",
+  "entries": {
+    "candidateCheck": "apps/oma/dist/entry/candidate-check.js",
+    "quarantine": "apps/oma/dist/entry/quarantine.js",
+    "broker": "apps/oma/dist/entry/broker.js",
+    "preparation": "apps/oma/dist/entry/prepare-society.js",
+    "runner": "apps/oma/dist/entry/runner.js",
+    "tui": "apps/oma/dist/entry/oma.js",
+    "interactive": "apps/oma/dist/entry/pi-interactive.js",
+    "society": "apps/oma/dist/entry/oma-society.js",
+    "personalHost": "apps/oma/dist/entry/personal-host.js",
+    "personal": "apps/oma/dist/entry/pi-personal.js"
+  },
+  "runtimeDependencies": {
+    "@earendil-works/pi-coding-agent": {
+      "installed": "1.0.1",
+      "locked": "1.0.1",
+      "declaredRange": "1.0.1",
+      "owners": [
+        {
+          "name": "@oma/tool-runtime",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/tool-lsp",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/tool-mcp",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/tool-web",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/tool-hashline",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/extension",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        },
+        {
+          "name": "@oma/engine",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-coding-agent"
+        }
+      ]
+    },
+    "@earendil-works/pi-tui": {
+      "installed": "1.0.1",
+      "locked": "1.0.1",
+      "declaredRange": "1.0.1",
+      "owners": [
+        {
+          "name": "@oma/tui",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-tui"
+        },
+        {
+          "name": "@oma/tool-mcp",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-tui"
+        },
+        {
+          "name": "@oma/tool-web",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-tui"
+        },
+        {
+          "name": "@oma/tool-hashline",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-tui"
+        },
+        {
+          "name": "@oma/engine",
+          "declaredRange": "1.0.1",
+          "installedAt": "node_modules/@earendil-works/pi-tui"
+        }
+      ]
+    },
+    "pi-open-tui": {
+      "installed": "0.3.11",
+      "locked": "0.3.11",
+      "declaredRange": "0.3.11",
+      "owners": [
+        {
+          "name": "@oma/engine",
+          "declaredRange": "0.3.11",
+          "installedAt": "node_modules/pi-open-tui"
+        }
+      ]
+    },
+    "koffi": {
+      "installed": "3.2.1",
+      "locked": "3.2.1",
+      "declaredRange": "^3.2.1",
+      "owners": [
+        {
+          "name": "@oma/native",
+          "declaredRange": "^3.2.1",
+          "installedAt": "node_modules/koffi"
+        },
+        {
+          "name": "@oma/file-descriptors",
+          "declaredRange": "^3.2.1",
+          "installedAt": "node_modules/koffi"
+        },
+        {
+          "name": "@oma/platform-linux",
+          "declaredRange": "^3.2.1",
+          "installedAt": "node_modules/koffi"
+        },
+        {
+          "name": "@oma/platform-mac",
+          "declaredRange": "^3.2.1",
+          "installedAt": "node_modules/koffi"
+        }
+      ]
+    },
+    "nodemailer": {
+      "installed": "10.0.16",
+      "locked": "10.0.16",
+      "declaredRange": "10.0.16",
+      "owners": [
+        {
+          "name": "@oma/mail",
+          "declaredRange": "10.0.16",
+          "installedAt": "node_modules/nodemailer"
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "entrypoints not started",
+    "native kernel/rootfs/Pi pins not attested",
+    "deploymentDigest bytes not synthesized"
+  ]
+}

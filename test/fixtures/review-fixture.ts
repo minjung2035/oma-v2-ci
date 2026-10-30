@@ -140,9 +140,11 @@ export function fixture(options: FixtureOptions = {}) {
                     request?: unknown;
                 };
             }, openRow.operation.id)).map(of);
-        const applied = store.getOperation(openRow.operation.actor, applyRequestKeyFor(openRow.operation.id));
+        const attemptNumber = entries.reduce((n, entry) => ["review.retry", "review.revise", "review.supersede", "review.adopt"].includes(entry.fact.kind) && "attemptNumber" in entry.fact ? entry.fact.attemptNumber : n, 0);
+        const applied = store.getOperation(openRow.operation.actor, applyRequestKeyFor(openRow.operation.id, attemptNumber));
         return evaluate({ open: of(openRow), entries,
             integration: applied === null ? null : { operation: applied.id, state: applied.state,
+                ...(applied.kind === "git.integrate" ? {identity:{repo:"project" as const,targetRef:"refs/heads/main" as const,expectedBase:applied.plan.base,candidate:applied.plan.candidate,policyRevision:applied.plan.policyRevision}} : {}),
                 errorCode: applied.state === "failed" ? applied.errorCode : null },
             eligible: new Set(store.listAgents().filter(a => a.role === "resident" && a.desired === "enabled").map(a => a.name)),
             highPeerFloor: 2, maxWorkers: policy.maxWorkers });
@@ -176,7 +178,7 @@ export const namesRequest = (fact: {
     target?: {
         request?: unknown;
     };
-}, request: string): boolean => (fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel" || fact.kind === "refresh")
+}, request: string): boolean => (fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel" || fact.kind === "refresh" || fact.kind === "review.withdraw" || fact.kind === "review.invalidate" || fact.kind === "review.adopt" || fact.kind === "review.retry" || fact.kind === "review.preparation-failed" || fact.kind === "review.revise" || fact.kind === "review.integration" || fact.kind === "review.supersede" || fact.kind === "review.included")
     ? fact.request === request : fact.kind === "challenge.open" && fact.target?.request === request;
 export const messages = (f: ReturnType<typeof fixture>, actor: string, key: string): readonly MessagePlan[] => {
     const op = f.store.getOperation(actor, key)!;

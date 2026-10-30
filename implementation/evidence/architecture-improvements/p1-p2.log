@@ -1,0 +1,104 @@
+✔ IMP-R03: accepted reviewer evidence survives stopped and restart (393.604437ms)
+✔ IMP-R03: accepted reviewer evidence survives retired and restart (337.585915ms)
+✔ IMP-R03/R04: explicit withdrawal changes approval; another Worker cannot invalidate (215.227753ms)
+{"event":"review.advance","request":"op-b96ef9c9-5df0-47ad-acd1-62d814a97b35","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R04: author stop cannot change frozen quorum and requester stop still fences main (227.007936ms)
+✔ IMP-R01/R02: held recovery and one held unit do not block independent wake; hints coalesce (2.004321ms)
+✔ IMP-R09: current zero seed config rejects; legacy zero remains readable (1.158786ms)
+✔ IMP-M01: version gate preserves accepted bytes and creates a complete legacy backup (61.477922ms)
+{"event":"review.advance","request":"op-ed1a6490-55d4-49a9-9395-4db5ab4bdfbe","code":"CHECK_FAILED"}
+{"event":"review.advance","request":"op-ed1a6490-55d4-49a9-9395-4db5ab4bdfbe","code":"BROKER_UNAVAILABLE"}
+✔ IMP-R05/R06: explicit same-request retry preserves votes and the first failure; concurrent replay has one successor (447.730839ms)
+✔ IMP-R10: notice preparation failure survives restart as blocked and explicit retry succeeds (249.108276ms)
+{"event":"review.advance","request":"op-0ccdf1af-64b0-4000-b2dc-ef3641f36db4","code":"RUN_TERMINATION_UNKNOWN"}
+✔ IMP-R06: an unknown check scope cannot be retried into a second attempt (147.241545ms)
+{"event":"review.advance","request":"op-86a932dc-eb06-4a8e-b1c4-0f20a1b21886","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R03: withdrawing an accepted peer vote while checks run wins the final CAS gate (223.357957ms)
+✔ IMP-R10: a held notice preparation is preparing, not an executing check (189.996297ms)
+✔ IMP-R07: Principal streams a 1.8 MB UTF-8 line and pages reconstruct exact result (504.210064ms)
+✔ IMP-R08: storage failure is bounded partial output; explicit match limit is reported separately (913.045763ms)
+✔ IMP-R08: immutable result detects content replacement and line range preserves UTF-8 (0.955995ms)
+✔ IMP-R11: large automatic diff is accepted as an exact readable artifact under a small notice bound (245.433736ms)
+✔ IMP-B01/B02: native cgroup enforces CPU, memory and tasks before execution; broker stays outside (1975.294791ms)
+✔ IMP-B03: an unrepresentable requested CPU profile refuses before launch; omitted limits remain omitted (0.724344ms)
+✔ mail-v1: a LOW merge request applies itself and mails the completion notice (245.324715ms)
+✔ mail-v1: merge request opens observe live Git facts and refuse bad ones (330.932377ms)
+✔ UX-09: merge.open refuses a candidate whose tree still carries gitlinks, naming every path (80.903616ms)
+✔ UX-09: a candidate that removes a gitlink from a gitlink-bearing main applies (192.288208ms)
+✔ UX-09: a caller-built challenge candidate carrying gitlinks refuses the same way (235.593692ms)
+✔ mail-v1: protected paths and the host tier floor refuse an under-tiered open (189.994606ms)
+✔ mail-v1: MEDIUM review thread revisions stay in the worker archive and reach Workers only (436.612607ms)
+✔ FJ-5: an approval request over the mail body bound is refused at emission, never frozen (135.637842ms)
+✔ mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval (1533.523781ms)
+✔ mail-v1: an undelegated Principal cannot decide (174.750994ms)
+✔ DR46 current grammar: removed attestation inputs are invalid and direct tiered integration refuses (54.729316ms)
+✔ mail-v1: a LOW cancel owns no mail and closes the request (109.3143ms)
+✔ mail-v1: a frozen request names the host's current policy revision, not the broker's bound one (303.920531ms)
+✔ mail-v1: an over-bound thread revision anchors every omitted entry at the revision that added it (361.18067ms)
+{"event":"review.advance","request":"op-cfbdd667-6eb2-41f3-8a31-8c3425ae0bac","code":"CHECK_FAILED"}
+✔ mail-v1: a failed host check leaves the request blocked and unreapplied (207.912862ms)
+{"event":"review.advance","request":"op-0ab25dea-f60c-44c9-b49e-4f80d4f02e0e","code":"CANCELLED_BEFORE_COMMIT"}
+✔ mail-v1: a requester stopped before the CAS cancels the application (213.052421ms)
+{"event":"review.advance","request":"op-20c813ef-ecb4-4ec7-a462-fe942d619aca","code":"BROKER_UNAVAILABLE"}
+✔ mail-v1: cancelling a request with a pending integration wins the pre-CAS check (254.747005ms)
+{"event":"review.advance","request":"op-78d36839-33b7-4d1e-ad73-89272684db45","code":"CANCELLED_BEFORE_COMMIT"}
+✔ mail-v1: a running check permits context publication and is stopped by an accepted cancel (356.134962ms)
+✔ DR45: review history is decoded once per waiting/terminal sweep and status list (1540.053114ms)
+{"event":"review.advance","request":"op-0ac61ae6-217f-4a24-a837-507e51d91c3f","code":"CANCELLED_BEFORE_COMMIT"}
+✔ DR45: accepted cancel interrupts checks even when its preparation cleanup fails (222.178309ms)
+✔ mail-v1: only the first ready request on a base applies; the other goes stale by refresh (479.910511ms)
+✔ durable review: a bound reviewer's retirement preserves the existing approval (222.153229ms)
+✔ mail-v1: a large completion notice is split into parts that reassemble exactly (237.678453ms)
+✔ mail-v1: an oversize completion notice is remembered and never recomputed (103.628599ms)
+{"event":"review.advance","request":"op-41645cb0-35e8-4675-9f01-cc56be5b4512","code":"BROKER_UNAVAILABLE"}
+✔ mail-v1: a skipped advance and a lost application are both recovered once (685.742531ms)
+✔ mail-v1: review.status lists newest first and counts what the frame cannot carry (433.372939ms)
+✔ mail-v1/AV-20261003-24: a request detail keeps the newest entries inside the frame and reports the rest (2605.883232ms)
+✔ mail-v1: review.status reports an unobservable main as null (21.253144ms)
+✔ mail-v1: the review.status wire method filters the Principal and rejects bad params (238.246206ms)
+✔ mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes (435.46637ms)
+✔ AV20 / REC-002, D03: a foreground broker sweeps once per interval while it admits work, and not after (20.647531ms)
+✔ AV20 / REC-002: the drain waits for a sweep the interval started, as for any dispatched task (5.799721ms)
+✔ native wake: a burst and in-flight hints retain one active sweep and one fresh pass (7.633241ms)
+✔ native wake: closing admission cancels a hint queued before dispatch (3.088097ms)
+✔ native wake: committed Mail reaches the live Broker and a same-key receipt does not wake again (27.326228ms)
+✔ AV20 / D03, INV04: no external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner (0.217391ms)
+✔ DR27/AV18: the host seeds a capable Worker without Principal creation/delegation authority (119.688116ms)
+✔ DR27/CREATE-003: Workers delegate through multiple generations; retries and restart do not recreate them (250.2194ms)
+✔ DR27/P0: new default capabilities never widen a previously frozen Worker (39.175231ms)
+✔ DR27/CREATE-002: host delegation and current lease can narrow child capabilities (124.994054ms)
+✔ DR46: successive Worker creations each retain their accepted identity (169.282823ms)
+✔ DR27/CFG-002: initial Worker count persists with a non-delegating Principal and rejects zero (43.346434ms)
+✔ Worker capacity: provisioning does not occupy slots and accepted seeds recover after release (263.015789ms)
+✔ Worker capacity changes require restart and never remove existing Workers (153.298597ms)
+✔ IMP-R09: host recovery seeds exactly one legacy zero-Resident Society (91.921956ms)
+✔ P1a execution owner: a held recovery fences its slot without delaying a different slot (11.01269ms)
+✔ P2 download cache: scope/toolchain/setup keys differ, corruption misses, and only anonymous integrity-pinned public tarballs qualify (20.988683ms)
+✔ P2 native shared pipeline: fresh retry, setup dependency, separate logs, tracked generation and private receipts (344.82885ms)
+✔ P2 native step timeout stops pipeline and proves whole scope death before fresh retry (456.329892ms)
+✔ P2 native npm cache: restore verified downloads into a private cache; cache hit still runs all checks (502.35795ms)
+✔ native scope: durable witness and fresh authority precede the first arbitrary effect (42.855551ms)
+✔ native scope: revoked authority leaves no effect and retires only after kernel death (17.319453ms)
+✔ native scope: cancellation after witness publication cannot release the blocked init (15.438593ms)
+✔ native scope: trusted child is a separately pinned namespace PID 2, not the launcher (15.591954ms)
+✔ native journal: read-only diagnostics cannot repair mode-000 data into a successful empty observation (1.254187ms)
+✔ native scope: setsid double-fork descendant with all inherited FDs closed ends with its namespace (76.206531ms)
+✔ native recovery: real owner SIGKILL at after-initialize (69.674996ms)
+✔ native recovery: real owner SIGKILL at after-opening (68.223228ms)
+ℹ Unconfirmed execution evidence retained at /tmp/oma-execution-crash-zP2AYB
+✔ native recovery: real owner SIGKILL at after-witness (79.207627ms)
+ℹ {"phase":"after-witness","beforeRecovery":{"kind":"running","identity":{"kind":"linux-namespace","pid":1442541,"bootId":"a9fedd59-df47-43bf-8c63-5af47cd94ab4","startTime":"15904785","namespaceDevice":"5","namespaceInode":"4026532673"}}}
+✔ native recovery: real owner SIGKILL at after-effect (103.80622ms)
+ℹ {"phase":"after-effect","beforeRecovery":{"kind":"exited"}}
+✔ native recovery: real owner SIGKILL at before-closed (102.758584ms)
+ℹ {"phase":"before-closed","beforeRecovery":{"kind":"exited"}}
+✔ native recovery: real owner SIGKILL at after-closed (95.743977ms)
+ℹ {"phase":"after-closed","beforeRecovery":{"kind":"exited"}}
+ℹ tests 80
+ℹ suites 0
+ℹ pass 80
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24017.722783

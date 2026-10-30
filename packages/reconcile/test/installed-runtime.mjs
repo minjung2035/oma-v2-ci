@@ -7,7 +7,7 @@ const calls=[];
 const reads={recoverableOperations:()=>[],getOperationById:()=>null,listAgents:()=>[row],getAgent:()=>row,societyOpen:()=>open};
 let observe=()=>({activeState:'inactive'});
 const units={observeAsync:async()=>observe(),observe:()=>observe(),confirmDead:()=>true,
- stop:()=>{calls.push('stop');return {activeState:'inactive'};},start:()=>calls.push('start'),startLimitStatus:()=>null};
+ stop:()=>{calls.push('stop');units.confirmDead=()=>true;return {activeState:'inactive'};},start:()=>calls.push('start'),startLimitStatus:()=>null};
 const effects={observeStoreFailure:error=>{throw error;},quiesceResidents:()=>calls.push('quiesce'),
  collectUnacceptedArtifacts:()=>{calls.push('collect');return Object.freeze({removed:[],kept:[]});},
  canonicalMain:()=>{assert.fail('no canonical owner configured');},assertCanonicalHealthy:async()=>{assert.fail('no Git owner configured');},

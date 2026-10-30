@@ -127,33 +127,33 @@ test("SCN-C04: a Resident's LOW merge request applies itself; main moves exactly
   });
 });
 
-test("SCN-C05: a merge open on a base main has left is refused with the actual main, and changes nothing", OPTIONS, async () => {
+test("SCN-C05: a proposal on an earlier base is accepted and its changed integration context requires review", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "지난 기준으로 통합해 보세요.", "c05");
     // The workspace's origin/main stays at the fetched base; after the first
-    // request applies, opening on it is stale.
+    // request applies, the second proposal retains that original base.
     s.script([
       bash(COMMIT),
       tools(call("oma_merge_open", { tier: "LOW", title: "첫번째", reason: "첫번째", request: "mrg-c05a" })),
       bash(COMMIT.replace("echo fixed", "echo second")),
       tools(call("oma_merge_open", { tier: "LOW", title: "두번째", reason: "두번째", base: "refs/remotes/origin/main", request: "mrg-c05b" })),
-      text("거절됐습니다."),
+      text("통합 문맥 검토가 필요합니다."),
     ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const resident = s.provider.seen.filter(entry => isResident(entry.body));
     const opened = receiptIn(lastResult(resident[2]!.body));
     assert.equal(opened.state, "succeeded", JSON.stringify(opened));
-    const refused = lastResult(resident[4]!.body);
-    assert.match(refused, /STALE_BASE/, refused);
+    const second = receiptIn(lastResult(resident[4]!.body));
+    assert.equal(second.state, "succeeded", JSON.stringify(second));
     const after = git(s, "rev-parse", "refs/heads/main");
     assert.notEqual(after, main, "the first LOW merge should have applied");
-    assert.ok(refused.includes(after), "the refusal does not name the actual main");
     const integrated = s.operations("worker-a").filter(row => row.kind === "git.integrate" && row.state === "succeeded");
-    assert.equal(integrated.length, 1, "the stale request must not integrate");
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "attest.record" && row.state === "succeeded").length, 1,
-      "only the fresh request was accepted");
+    assert.equal(integrated.length, 1, "the changed integration context cannot apply without review");
+    const openedFacts = s.operations("worker-a").filter(row => row.kind === "attest.record" &&
+      row.state === "succeeded" && ["mrg-c05a", "mrg-c05b"].includes(row.request_key));
+    assert.equal(openedFacts.length, 2, "both proposals are accepted independently of current main");
   });
 });
 

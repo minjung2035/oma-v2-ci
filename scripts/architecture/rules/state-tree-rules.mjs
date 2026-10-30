@@ -16,6 +16,7 @@ export const STATE_TREE_PRIMITIVES = Object.freeze([
 ]);
 /** Files whose path-taking mutations are outside the state tree, and why. */
 export const OUTSIDE_STATE_TREE = Object.freeze({
+  "packages/platform-linux/src/workload-budget.ts": "the delegated cgroup2 kernel filesystem, checked by statfs; only the owned workload subtree is mutated, never Society state or ancestor controllers; cgroupfs cannot contain user-created symlinks and permission failure reports unsupported/refuses execution",
   "packages/git/src/host-project.ts": "MacGit.run creates its own output-spool scratch with mkdtemp under the OS temp directory and removes that same scratch after the bounded Git command; metadata-only reads inspect the Human repository, never repair or rewrite its ancestors",
   "apps/oma/src/entry/broker.ts": "the run root (XDG_RUNTIME_DIR) the broker listens in",
   "apps/oma/src/runtime/inference-relay.ts": "the relay's socket in the run's own run-root directory",
@@ -30,7 +31,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "packages/tool-mcp/src/index.ts": "the MCP adapter's own state directory under the engine's agent dir (the credential key, the OAuth root, the per-session child-env scratch), or a fresh ephemeral tmp dir when no agent dir was provisioned -- engine-owned, rotated and removed by the adapter; the extension cannot import the storage primitives (PI-001)",
   "packages/extension/src/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",
   "packages/tool-files/src/descriptor-files.ts": "the search snapshot's private copy -- a fresh `oma-search-*` directory under the OS temp directory this call names before it exists and removes itself, written and removed by the same holder; source and destination are both written through held per-level descriptors (a same-uid racer cannot swap a component out from under either), so depth stays unbounded by anything but the OS descriptor table; the extension cannot import the storage primitives (PI-001)",
-  "packages/tool-runtime/src/contained-search.ts": "the same private snapshot's sweep of an announced name under the OS temp directory; the complete-result spool is not written here -- it goes through the serialized contained writer in contained-tools.ts (PI-001)",
+  "packages/tool-runtime/src/contained-search.ts": "the same private snapshot's sweep of an announced name under the OS temp directory; result bytes go through the actor-owned descriptor primitive in tool-files/results.ts; this adapter only creates its runtime result root and cleans its private snapshot (PI-001)",
   "packages/extension/src/principal-tools.ts": "the same fresh mkdtemp directory under the Principal's scratch for an agent brief, written once and removed (PI-001)",
   "packages/extension/src/review-tools.ts": "the same fresh mkdtemp directory under the caller's own working directory for a vote/review/open body file, written once and removed (PI-001)",
   "packages/native/src/process-lock.ts": "the broker's lock file, which both callers keep in the run root",

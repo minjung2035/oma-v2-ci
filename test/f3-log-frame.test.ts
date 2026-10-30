@@ -55,7 +55,7 @@ function dispatcher(text: string, frameBytes: number) {
     review: null,
 git: null,
     lifecycle: {
-      creation: unused,
+      creation: () => ({ capability: false, childProfile: null, childHasMailSend: null, maxWorkers: 6, workerCount: 1, observedAtMs: 1 }),
       create: async () => unused(),
       start: unused,
       stop: unused,

@@ -40,9 +40,13 @@ const riskTier = checkEnum(["LOW", "MEDIUM", "HIGH"] as const);
 const reviewKind = checkEnum(["merge", "challenge"] as const);
 const reviewMain = checkObject({ oid: nullable(checkOid), observedAtMs: nonnegative });
 const reviewTarget = checkObject({ name: checkString({ min: 1 }), integration: operationId, identity: exactCandidateCheck });
+const reviewDiff = checkOptional(checkObject({ version: (v: unknown) => v === 1 ? null : "invalid diff version", base: checkOid, candidate: checkOid,
+  reference: checkString({ re: /^oma-result:[a-f0-9-]{36}:[a-f0-9]{64}$/ }), bytes: nonnegative, sha256: checkString({ re: /^[a-f0-9]{64}$/ }) }));
+const integrationStatus = { revision: nonnegative, scope: nullable(operationId), proposal: exactCandidateCheck, contextDiff: reviewDiff, observedAtMs: checkOptional(checkInt({ min: 0 })), integrationPhase: string, notice: checkEnum(["none", "pending", "delivered"] as const),
+  retryable: checkBool(), nextAction: string, attemptNumber: nonnegative, diff: reviewDiff };
 const reviewStatusDetail = checkObject({
   name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string, reason: string,
-  requester: actor, identity: exactCandidateCheck, display: string, required: nonnegative,
+  ...integrationStatus, requester: actor, identity: exactCandidateCheck, display: string, required: nonnegative,
   normalRequired: nonnegative, maxWorkers: checkInt({ min: 1 }), capacityFallback: checkBool(), principalRequired: checkBool(),
   approvers: checkArray(actor), rejectors: checkArray(actor),
   observedAtMs: nonnegative, remainingApprovals: nonnegative, acceptingWorkerVotes: checkBool(),
@@ -56,7 +60,7 @@ const reviewStatusDetail = checkObject({
   integration: nullable(checkObject({ operation: operationId,
     state: checkEnum(["pending", "succeeded", "failed", "unknown"] as const), error: nullable(string) })),
   entries: checkArray(checkObject({ index: checkInt({ min: 1 }), sequence: nonnegative, actor,
-    kind: checkEnum(["review", "vote", "cancel", "refresh", "challenge.open"] as const),
+    kind: checkEnum(["review", "vote", "cancel", "refresh", "challenge.open", "review.withdraw", "review.invalidate", "review.adopt", "review.retry", "review.preparation-failed", "review.revise", "review.integration", "review.supersede", "review.included"] as const),
     verdict: checkOptional(checkEnum(["approve", "reject"] as const)) })),
   missing: checkArray(string), main: reviewMain, target: checkOptional(reviewTarget),
 });
@@ -67,7 +71,7 @@ const reviewStatusList = checkObject({
 });
 const reviewStatusPrincipal = checkObject({
   name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string,
-  identity: exactCandidateCheck, approval: nullable(messageId), display: string,
+  ...integrationStatus, identity: exactCandidateCheck, approval: nullable(messageId), display: string,
   target: checkOptional(reviewTarget),
 });
 /** The answer's variant is decided by shape: entries → Worker detail,

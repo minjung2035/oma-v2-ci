@@ -1,3 +1,4 @@
+import { utf8Decoder } from "./descriptor-files.js";
 /** The model's file effects, contained by the way they are made (R6-01,
  * PR-004, architecture §4: the check and the effect are one resolution).
  *
@@ -7,7 +8,7 @@
  */
 import { closeSync, constants, fstatSync, ftruncateSync, readSync, writeSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setImmediate } from "node:timers/promises";
 
@@ -217,11 +218,20 @@ export function existsWithin(root: string, path: string): boolean {
  * fs effect -- a copy that exists was always declared first. A `named` that
  * cannot carry the declaration must throw: the snapshot then fails before
  * anything is made rather than exist undeclared. */
+export interface SearchSnapshotSelection {
+  /** Runs the pinned tool over names and allowed ignore controls only. */
+  select?: (snapshot: string, target: string) => AsyncIterable<string>;
+  namesOnly?: boolean;
+  observed?: (metrics: {paths:number;selectedFiles:number;readBytes:number;copiedBytes:number;elapsedMs:number}) => void;
+}
+const fingerprint = (fd: number): string => {
+  const s=fstatSync(fd,{bigint:true});return [s.dev,s.ino,s.size,s.mode,s.nlink,s.mtimeNs,s.ctimeNs].join(":");
+};
 export async function withSearchSnapshot<T>(root: string, path: string,
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
-  progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
+  progress?: () => void, named?: (snapshotName: string) => void, selection?: SearchSnapshotSelection): Promise<T> {
   try {
-    return await searchSnapshot(root, path, signal, use, progress, named);
+    return await searchSnapshot(root, path, signal, use, progress, named, selection);
   } catch (error) {
     // One boundary wording for the descriptor bound, wherever it fired.
     return descriptorRefusal(error);
@@ -248,7 +258,7 @@ function removeSnapshotAt(parent: number, name: string): void {
 
 async function searchSnapshot<T>(root: string, path: string,
   signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>,
-  progress?: () => void, named?: (snapshotName: string) => void): Promise<T> {
+  progress?: () => void, named?: (snapshotName: string) => void, selection?: SearchSnapshotSelection): Promise<T> {
   const parts = componentsWithin(root, path);
   if (parts.includes(".git")) throw new WorkspaceRefusal("repository internals are not a search input");
   const temp = openDirectoryWithin(tmpdir(), [], false);
@@ -266,7 +276,12 @@ async function searchSnapshot<T>(root: string, path: string,
     }
   } catch (error) { closeSync(temp); throw error; }
   const snapshot = join(tmpdir(), baseName, "workspace");
-  let destination: number | undefined;
+  let destination: number | undefined, metadata: number | undefined;
+  const started=Date.now(), metrics={paths:0,selectedFiles:0,readBytes:0,copiedBytes:0,elapsedMs:0};
+  const record=(path:string,stamp:string):void=>{
+    if(metadata === undefined)return;
+    const bytes=Buffer.from(JSON.stringify({path,stamp})+"\n");for(let at=0;at<bytes.length;)at+=writeSync(metadata,bytes,at,bytes.length-at);
+  };
   const check = (): void => { if (signal?.aborted) throw new WorkspaceRefusal("search aborted"); };
   /** A fresh name inside a held destination directory. The private tree is
    * mode-700 -- permission bits do not stop a same-uid racer -- so every
@@ -280,10 +295,11 @@ async function searchSnapshot<T>(root: string, path: string,
   // `fd` is the descriptor held on the source entry and `parent` the one
   // held on its name's directory inside the private copy, so neither side
   // can be swapped out from under the entry this call resolves.
-  const copy = async (fd: number, parent: number, name: string): Promise<void> => {
+  const copy = async (fd: number, parent: number, name: string, sourceRelative: string): Promise<void> => {
     check(); progress?.();
-    const stat = fstatSync(fd);
+    const stat = fstatSync(fd), stamp=fingerprint(fd); metrics.paths++;
     if (stat.isDirectory()) {
+      record(sourceRelative,stamp);
       mkdirAt(parent, name, 0o700);
       const into = openDestination(parent, name, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       try {
@@ -294,7 +310,7 @@ async function searchSnapshot<T>(root: string, path: string,
           // A listed name is one directory entry -- anything else is not one.
           if (entry === ".git" || entry === "." || entry === ".." || entry.includes("/") || entry.includes("\0")) continue;
           let child: number;
-          try { child = openAt(fd, entry, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+          try { child = openAt(fd, entry, (selection !== undefined && process.platform === "linux" && !ANCESTOR_IGNORE_FILES.includes(entry as typeof ANCESTOR_IGNORE_FILES[number]) ? 0x200000 /* O_PATH: names need no payload access */ : constants.O_RDONLY) | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
           catch (error) {
             if (["ENOENT", "ELOOP"].includes(errnoCode(error) ?? "")) continue;
             throw error;
@@ -302,7 +318,7 @@ async function searchSnapshot<T>(root: string, path: string,
           try {
             const current = fstatSync(child);
             if (current.isDirectory() || (current.isFile() && current.nlink === 1))
-              await copy(child, into, entry);
+              await copy(child, into, entry, sourceRelative ? `${sourceRelative}/${entry}` : entry);
           } finally { closeSync(child); }
         }
       } finally { closeSync(into); }
@@ -311,25 +327,34 @@ async function searchSnapshot<T>(root: string, path: string,
       const out = openDestination(parent, name,
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try {
+        if (selection !== undefined && !ANCESTOR_IGNORE_FILES.includes(name as typeof ANCESTOR_IGNORE_FILES[number])) {
+          const bytes=Buffer.from(JSON.stringify({stamp}));
+          for(let at=0;at<bytes.length;)at+=writeSync(out,bytes,at,bytes.length-at);
+          return;
+        }
+        record(sourceRelative,stamp);
         const buffer = Buffer.alloc(Math.min(stat.size + 1, 64 * 1024));
         let used = 0;
         for (;;) {
           check(); progress?.();
           const count = readSync(fd, buffer, 0, buffer.length, null);
           if (count === 0) break;
-          used += count;
+          used += count;metrics.readBytes+=count;metrics.copiedBytes+=count;
           if (used > stat.size) throw new WorkspaceRefusal("search input grew during snapshot");
           for (let at = 0; at < count;) at += writeSync(out, buffer, at, count - at);
           await setImmediate();
         }
         if (used !== stat.size) throw new WorkspaceRefusal("search input changed during snapshot");
         ownedFile(fd);
+        if(fingerprint(fd)!==stamp)throw new WorkspaceRefusal("search input changed during snapshot");
       } finally { closeSync(out); }
     }
+    if(fingerprint(fd)!==stamp)throw new WorkspaceRefusal("search input changed during snapshot");
     await setImmediate();
   };
   try {
     destination = openAt(temp, baseName, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    if(selection !== undefined)metadata=openDestination(destination,"metadata",constants.O_RDWR|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
     // Hold the selected entry, not just a validation of its pathname. Ancestor
     // descriptors supply only ignore files, never a walk of their siblings.
     const sources: number[] = [openDirectoryWithin(root, [], false)];
@@ -343,12 +368,13 @@ async function searchSnapshot<T>(root: string, path: string,
       const selected = sources.at(-1)!;
       if (!fstatSync(selected).isDirectory()) ownedFile(selected);
       if (parts.length === 0) {
-        await copy(selected, destination, "workspace");
+        await copy(selected, destination, "workspace", "");
       } else {
         mkdirAt(destination, "workspace", 0o700);
         let into = openDestination(destination, "workspace", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
         try {
           for (const [index, part] of parts.entries()) {
+            record(parts.slice(0,index).join("/"),fingerprint(sources[index]!));
             // Keep the ancestor chain at its original workspace-relative
             // location so rooted ignore patterns and result paths retain
             // their meaning. Only engine-recognized ignore inputs belong in
@@ -364,11 +390,11 @@ async function searchSnapshot<T>(root: string, path: string,
               }
               try {
                 const stat = fstatSync(held);
-                if (stat.isFile() && stat.nlink === 1) await copy(held, into, ignore);
+                if (stat.isFile() && stat.nlink === 1) await copy(held, into, ignore, [...parts.slice(0,index),ignore].join("/"));
               } finally { closeSync(held); }
             }
             if (index === parts.length - 1) {
-              await copy(selected, into, part);
+              await copy(selected, into, part, parts.join("/"));
             } else {
               mkdirAt(into, part, 0o700);
               const next = openDestination(into, part, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
@@ -381,8 +407,53 @@ async function searchSnapshot<T>(root: string, path: string,
     const copied = openAt(destination, "workspace", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     try { mkdirAt(copied, ".git", 0o700); } finally { closeSync(copied); }
     check();
+    if(selection?.select !== undefined && !selection.namesOnly) {
+      for await(const selectedPath of selection.select(snapshot,join(snapshot,...parts))) {
+        check();progress?.();
+        const selectedParts=componentsWithin(snapshot,selectedPath), path=selectedParts.join("/");
+        if(selectedParts.includes(".git"))throw new WorkspaceRefusal("selection entered repository internals");
+        metrics.selectedFiles++;
+        // Ignore control bytes were already copied and are checked below.
+        if(ANCESTOR_IGNORE_FILES.includes(basename(path) as typeof ANCESTOR_IGNORE_FILES[number]))continue;
+        const marker=JSON.parse(readWithin(snapshot,path).toString("utf8")) as {stamp?:unknown};
+        if(typeof marker.stamp!=="string")throw new WorkspaceRefusal("search metadata changed during selection");
+        const source=openEntryWithin(root,path,constants.O_RDONLY|constants.O_NONBLOCK);
+        try {
+          ownedFile(source);if(fingerprint(source)!==marker.stamp)throw new WorkspaceRefusal("search input changed during selection");
+          const destination=openEntryWithin(snapshot,path,constants.O_WRONLY);
+          try {
+            ownedFile(destination);ftruncateSync(destination,0);
+            const bytes=Buffer.alloc(65536);let used=0;
+            for(;;){check();progress?.();const count=readSync(source,bytes,0,bytes.length,null);if(count===0)break;
+              used+=count;metrics.readBytes+=count;metrics.copiedBytes+=count;
+              for(let at=0;at<count;)at+=writeSync(destination,bytes,at,count-at);await setImmediate();
+            }
+            if(fingerprint(source)!==marker.stamp || used!==fstatSync(source).size)throw new WorkspaceRefusal("search input changed during copy");
+            record(path,marker.stamp);
+          }finally{closeSync(destination);}
+        }finally{closeSync(source);}
+      }
+    }
+    if(metadata !== undefined) {
+      // Directory/control/selected-file observations are spooled, not a
+      // whole-tree path array. A renamed tree or changed ignore file refuses.
+      const bytes=Buffer.alloc(65536);let offset=0,tail="";
+      const decoder=utf8Decoder();
+      for(;;){const count=readSync(metadata,bytes,0,bytes.length,offset);offset+=count;
+        tail+=decoder.decode(bytes.subarray(0,count),{stream:count>0});
+        for(;;){const end=tail.indexOf("\n");if(end<0)break;const item=JSON.parse(tail.slice(0,end)) as {path:string;stamp:string};tail=tail.slice(end+1);
+          const held=openEntryWithin(root,item.path,process.platform === "linux" ? 0x200000 : constants.O_RDONLY);
+          try{if(fingerprint(held)!==item.stamp)throw new WorkspaceRefusal("search paths or ignore controls changed during selection");}finally{closeSync(held);}
+          check();progress?.();
+        }
+        if(count===0)break;await setImmediate();
+      }
+      if(tail)throw new WorkspaceRefusal("search metadata is incomplete");
+    }
+    metrics.elapsedMs=Date.now()-started;selection?.observed?.(metrics);
     return await use(snapshot, join(snapshot, ...parts));
   } finally {
+    if(metadata !== undefined)closeSync(metadata);
     if (destination !== undefined) closeSync(destination);
     try { removeSnapshotAt(temp, baseName); } finally { closeSync(temp); }
   }
@@ -392,3 +463,6 @@ export function readdirWithin(root: string, path: string): string[] {
   const fd = openDirectoryWithin(root, componentsWithin(root, path), false);
   try { return directoryNames(fd); } finally { closeSync(fd); }
 }
+
+export { createResult, readResult, isResultReference, utf8Prefix, RESULT_PREVIEW_BYTES, RESULT_PAGE_BYTES } from "./results.js";
+export type { ResultReference, ResultRange } from "./results.js";

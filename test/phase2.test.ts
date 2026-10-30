@@ -46,7 +46,7 @@ function rawFrame(text: string): Buffer {
 }
 function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
-test("DR46 schema4: fresh DDL applies; six entities; reapply rejected", () => {
+test("DR67 schema5: fresh DDL applies; six entities; reapply rejected", () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -57,10 +57,10 @@ test("DR46 schema4: fresh DDL applies; six entities; reapply rejected", () => {
       ["agents", "attestations", "batches", "deliveries", "operations", "subscriptions"]);
     store.close(); closed = true;
     mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 4);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 5);
       assert.throws(() => raw.exec(sql), /already exists/);
       raw.exec("ROLLBACK");
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 4);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 5);
     });
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

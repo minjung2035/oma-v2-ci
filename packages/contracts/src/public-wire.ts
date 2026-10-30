@@ -11,7 +11,7 @@ import type { AgentCreateInput, BlobDescriptor, ContextEntry, MailInput } from "
 /** mail-v1 §8: one request entry in a Worker-facing review status answer. */
 export interface ReviewStatusEntry {
   index: number; sequence: number; actor: Actor;
-  kind: "review" | "vote" | "cancel" | "refresh" | "challenge.open"; verdict?: "approve" | "reject";
+  kind: "review" | "vote" | "cancel" | "refresh" | "challenge.open" | "review.withdraw" | "review.invalidate" | "review.adopt" | "review.retry" | "review.preparation-failed" | "review.revise" | "review.integration" | "review.supersede" | "review.included"; verdict?: "approve" | "reject";
 }
 export interface ReviewRequestSummary {
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
@@ -36,6 +36,10 @@ export type ReviewStatusQuery =
 export interface ReviewRequestStatus {
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
   reason: string; requester: Actor; identity: ExactCandidateIdentity;
+  revision: number; scope: string | null; proposal: ExactCandidateIdentity; contextDiff?: import("./files.js").ReviewDiffArtifact;
+  attemptNumber: number; diff?: import("./files.js").ReviewDiffArtifact;
+  integrationPhase: string; notice: "none" | "pending" | "delivered";
+  retryable: boolean; nextAction: string;
   display: string; required: number; approvers: Actor[]; rejectors: Actor[];
   normalRequired: number; maxWorkers: number; capacityFallback: boolean; principalRequired: boolean;
   observedAtMs: number; remainingApprovals: number; acceptingWorkerVotes: boolean;
@@ -55,8 +59,11 @@ export interface ReviewRequestList {
 /** What the Principal may see: only a request its approval mail named or one
  * already applied, and only these fields. */
 export interface ReviewPrincipalStatus {
+  revision: number; scope: string | null; proposal: ExactCandidateIdentity; contextDiff?: import("./files.js").ReviewDiffArtifact;
+  observedAtMs?: number;
+  integrationPhase: string; notice: "none" | "pending" | "delivered"; retryable: boolean; nextAction: string; attemptNumber: number;
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
-  identity: ExactCandidateIdentity; approval: MessageId | null; display: string;
+  identity: ExactCandidateIdentity; diff?: import("./files.js").ReviewDiffArtifact; approval: MessageId | null; display: string;
   target?: { name: string; integration: OperationId; identity: ExactCandidateIdentity };
 }
 export type ReviewStatusResult = ReviewRequestStatus | ReviewRequestList | ReviewPrincipalStatus;

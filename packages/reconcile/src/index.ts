@@ -6,6 +6,7 @@ import { StoreError, classifyError, errorCodeOf } from "@oma/domain/errors";
 import { assertNever } from "@oma/domain/exhaustive";
 import type { RecoveryCounts, PreacceptCollection } from "@oma/contracts/runtime";
 import { OperationRecovery, type RecoveryRow } from "./operations.js";
+import { ReconcileLane } from "./lane.js";
 import { preacceptEvent } from "./preaccept-event.js";
 
 export interface ReconcilePaths {
@@ -16,11 +17,16 @@ export interface ReconcilePaths {
   sweepBudgetSeconds?: number;
 }
 export interface UnitRecoveryDiagnostic { readonly agent: string; readonly outcome: "observed" | "started" | "stopped" | "unknown"; readonly reason: string | null }
+const recoveryActivation = new AsyncLocalStorage<boolean>();
 const sweepScope = new AsyncLocalStorage<ReconcileModule>();
 export class ReconcileModule {
   private starting = false;
   private inFlight: Promise<RecoveryCounts> | null = null;
   private readonly operations: OperationRecovery;
+  private readonly reviewLane: ReconcileLane;
+  private readonly unitLanes = new Map<Actor, ReconcileLane>();
+  private closed = false;
+  private corrupt = false;
   private freshVerifiedMain: string | undefined;
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
   private readonly waiting = new Map<Actor, { incarnation: number; specHash: string; messages: ReadonlySet<string> }>();
@@ -30,9 +36,11 @@ export class ReconcileModule {
     private readonly units: ReconcileUnits, private readonly lifecycle: ReconcileLifecycle, private readonly paths: ReconcilePaths, private readonly effects: ReconcileEffects) {
     if (typeof paths.activationAllowed !== "function")
       throw new StoreError("UNSUPPORTED_PROFILE", "recovery requires an explicit activation gate");
+    this.reviewLane = new ReconcileLane(async () => { if (this.git !== null) await this.reviews?.advanceAll(); },
+      error => this.retainRecoveryFailure(error));
     this.freshVerifiedMain = paths.freshVerifiedMain;
     this.operations = new OperationRecovery({ snapshot: () => store.recoverableOperations(), read: id => store.getOperationById(id),
-      recover: operation => this.recover(operation, true), failure: error => this.retainRecoveryFailure(error),
+      recover: operation => this.recover(operation, recoveryActivation.getStore() !== false), failure: error => this.retainRecoveryFailure(error),
       ...(paths.sweepBudgetSeconds === undefined ? {} : { budgetSeconds: paths.sweepBudgetSeconds }) });
   }
   get operationOutcomes() { return this.operations.lastOutcomes; }
@@ -69,7 +77,7 @@ export class ReconcileModule {
     for (const message of this.effects.pendingWork(agent.name)) if (!ignored?.has(message)) return true;
     return false;
   }
-  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
+  private activation(allowed = true): boolean { return !this.corrupt && !this.closed && allowed && recoveryActivation.getStore() !== false && this.paths.activationAllowed() === true && this.store.societyOpen(); }
   /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private async quiesceResidents(): Promise<void> {
     await this.effects.quiesceResidents();
@@ -77,12 +85,33 @@ export class ReconcileModule {
   /** D03: the drain of a broker whose Residents are bound to no unit. The
    * same per-resident stop and death proof as startup, so a later startup finds
    * nothing it has to stop. */
-  quiesceForShutdown(): Promise<void> { return this.quiesceResidents(); }
+  async quiesceForShutdown(): Promise<void> {
+    this.closed = true;
+    // Physical owners receive cancellation through the broker lifetime before
+    // this drain. A cancellation request is never treated as death proof.
+    await Promise.all([this.inFlight, this.reviewLane.close(), ...[...this.unitLanes.values()].map(lane => lane.close())]);
+    await this.quiesceResidents();
+  }
+  /** Fast triggers reach each resource owner even while recovery is blocked. */
+  pulse(): void {
+    if (this.closed || this.corrupt || this.starting) return;
+    this.reviewLane.request();
+    for (const agent of this.store.listAgents()) {
+      if (agent.role !== "resident" || agent.desired === "retired") continue;
+      let lane = this.unitLanes.get(agent.name);
+      if (!lane) {
+        lane = new ReconcileLane(() => this.observeUnit(agent.name), error => this.retainRecoveryFailure(error));
+        this.unitLanes.set(agent.name, lane);
+      }
+      lane.request();
+    }
+  }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
     this.starting = true;
     try {
       await this.quiesceResidents();
+      await this.effects.validateRecoveryArtifacts?.();
       // DR10: before any request is admitted, and before bootstrap freezes its
       // own briefs. The state root is the Store's (store.ts planContext).
       this.collected = this.effects.collectUnacceptedArtifacts();
@@ -98,38 +127,11 @@ export class ReconcileModule {
         await this.quiesceResidents();
       }
       await prepare?.();
-      const snapshot = [...new Set(this.store.recoverableOperations())];
-      for (const id of snapshot) {
-        const operation = this.store.getOperationById(id);
-        if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) continue;
-        switch (operation.kind) {
-          case "attest.record": case "mail.send": case "agent.continue":
-            try {
-              await this.mail.reconcileOperation(id);
-            }
-            catch (error) { this.retainRecoveryFailure(error); }
-            break;
-          case "society.set": case "agent.create": case "agent.start": case "agent.stop":
-          case "git.submit": case "git.integrate": case "context.publish":
-            // AV-20: one operation's recoverable failure must not end startup;
-            // the same containment the sweep applies retains it. Corruption
-            // still propagates (retainRecoveryFailure rethrows store-blocks).
-            try { await this.recover(operation, allowActivation); }
-            catch (error) { this.retainRecoveryFailure(error); }
-            break;
-          // These operations commit their complete effect within a single DB T.
-          // Preserve startup's lack of a physical replay for a nonterminal row.
-          case "mail.ack": case "route.follow": case "route.unfollow": break;
-          default: assertNever(operation);
-        }
-      }
-      // mail-v1 §5.4: startup advances every request that became ready while
-      // the broker was down; a failure is a recovery observation, not a gate.
-      if (this.git !== null)
-        try { await this.reviews?.advanceAll(); }
-        catch (error) { this.retainRecoveryFailure(error); }
+      // Accepted plans already fence their resources. Physical recovery belongs
+      // to the operation lane and need not finish before unrelated activation.
     } catch (error) { this.effects.observeStoreFailure(error); throw error; }
     finally { this.starting = false; }
+    void recoveryActivation.run(allowActivation, () => this.sweepPass(allowActivation)).catch(error => this.effects.observeStoreFailure(error));
   }
   private async recover(operation: RecoveryRow, allowed: boolean): Promise<void> {
     switch (operation.kind) {
@@ -150,6 +152,7 @@ export class ReconcileModule {
     const policy = classifyError({ code, phase: "recovering", effectKnowledge: "possible",
       observationKind: code === "STORE_CORRUPT" || code === "STREAM_INVALID" ? "corrupt" : "unavailable" });
     if (policy.blockScope === "store") {
+      this.corrupt = true;
       // The closed code and the store block are the contract; the original
       // reason is preserved so startup diagnostics keep the observed fact.
       const failure = new StoreError(policy.code, error instanceof StoreError ? error.message : "recovery observation is corrupt");
@@ -159,51 +162,62 @@ export class ReconcileModule {
   }
   /** Deliberately not async: all concurrent callers receive the identical Promise. */
   sweep(): Promise<RecoveryCounts> {
+    return this.sweepPass(true);
+  }
+  private sweepPass(observe: boolean): Promise<RecoveryCounts> {
     if (sweepScope.getStore() === this) return Promise.reject(new StoreError("INTERNAL_ERROR", "a handler cannot await its own recovery sweep"));
     if (this.starting) return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "startup recovery is active"));
+    if (this.closed) return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "recovery owner is draining"));
+    // Startup(false) recovers accepted effects but does not create unit lanes
+    // under its temporary activation prohibition. A later ordinary pulse owns
+    // its own activation context, even when it joins this operation pass.
+    if (observe) this.pulse();
     if (this.inFlight) return this.inFlight;
     const work = Promise.resolve().then(() => sweepScope.run(this, async () => {
       try {
         const counts = await this.operations.sweep();
-        // mail-v1 §5.4: the 5 s sweep retries advance for ready requests; the
-        // refresh/integration effects it creates are newly admitted work.
-        if (this.git !== null)
-          try { await this.reviews?.advanceAll(); }
-          catch (error) { this.retainRecoveryFailure(error); }
-        await this.observeUnits();
+        if (observe) this.pulse();
+        await Promise.all([this.reviewLane.join(), ...[...this.unitLanes.values()].map(lane => lane.join())]);
         return counts;
       } catch (error) { this.effects.observeStoreFailure(error); throw error; }
     }));
     const owned = work.finally(() => { if (this.inFlight === owned) this.inFlight = null; });
     this.inFlight = owned; return owned;
   }
-  private async observeUnits(): Promise<void> {
+  private async observeUnit(actor: Actor): Promise<void> {
     const diagnostics: UnitRecoveryDiagnostic[] = [];
     try {
-      for (const agent of this.store.listAgents()) {
-        if (agent.role !== "resident" || agent.desired === "retired") continue;
+      const agent = this.store.getAgent(actor);
+      if (!agent || agent.role !== "resident" || agent.desired === "retired") return;
+      // An unresolved lifecycle intent owns this incarnation, including the
+      // interval before its physical action has started.
+      if (this.store.recoverableOperations().some(id => {
+        const op = this.store.getOperationById(id);
+        return op?.kind === "agent.create" ? op.plan.spec.name === actor
+          : op?.kind === "agent.start" || op?.kind === "agent.stop" ? op.plan.agent === actor : false;
+      })) return;
         try {
           const observation = await this.units.observeAsync(agent.name);
           const current = this.store.getAgent(agent.name);
           if (!current || current.role !== "resident" || current.incarnation !== agent.incarnation || current.specHash !== agent.specHash) {
-            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "identity_changed" }); continue;
+            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "identity_changed" }); return;
           }
           if (current.desired === "retired") {
-            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "retired_during_observation" }); continue;
+            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "retired_during_observation" }); return;
           }
           if (current.desired === "stopped" || !this.store.societyOpen()) {
             // Do not trust an old async inactive observation as death proof.
             if (!this.units.confirmDead(current.name, current.incarnation)) {
               const latest = this.store.getAgent(current.name);
               if (!latest || latest.incarnation !== current.incarnation ||
-                (latest.desired !== "stopped" && this.store.societyOpen())) continue;
+                (latest.desired !== "stopped" && this.store.societyOpen())) return;
               await this.units.stop(current.name, current.incarnation);
               diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
             } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
-            continue;
+            return;
           }
           if (observation.activeState === "unknown") {
-            diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); continue;
+            diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); return;
           }
           if (current.desired === "enabled" && this.activation() && this.paths.hasGoal()) {
             const restartDue = this.units.restartDue?.(current.name) === true;
@@ -215,9 +229,9 @@ export class ReconcileModule {
                 // Current desired/incarnation/activation check -> start has no await.
                 const latest = this.store.getAgent(current.name);
                 if (!latest || latest.incarnation !== current.incarnation || latest.specHash !== current.specHash ||
-                  latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) continue;
+                  latest.desired !== "enabled" || !this.activation() || !this.paths.hasGoal()) return;
                 const final = this.units.observe(current.name);
-                if (!canStart(final.activeState)) continue;
+                if (!canStart(final.activeState)) return;
                 if (!this.units.confirmDead(current.name, current.incarnation))
                   throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not confirmed dead");
                 const waiting = this.waiting.get(current.name);
@@ -233,7 +247,7 @@ export class ReconcileModule {
                       this.resuming.set(current.name, { ...waiting, incarnation: current.incarnation + 1, invocationId });
                   });
                 } catch (error) { this.resuming.delete(current.name); throw error; }
-                diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
+                diagnostics.push({ agent: current.name, outcome: "started", reason: null }); return;
               }
               if (fresh.activeState === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "final unit observation is unknown");
             }
@@ -245,8 +259,8 @@ export class ReconcileModule {
           diagnostics.push({ agent: agent.name, outcome: "unknown", reason });
           console.error(JSON.stringify({ event: "reconcile.unit", agent: agent.name, code: reason }));
         }
-      }
-    } finally { this.diagnostics = Object.freeze(diagnostics.map(value => Object.freeze(value))); }
+    } finally { this.diagnostics = Object.freeze([
+      ...this.diagnostics.filter(value => value.agent !== actor), ...diagnostics.map(value => Object.freeze(value))]); }
   }
   startLimitState(): Array<{ agent: Actor; why: string }> {
     const result: Array<{ agent: Actor; why: string }> = [];

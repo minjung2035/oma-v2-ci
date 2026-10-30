@@ -391,7 +391,7 @@ test("T114/E27: the engine attaches in-process; credentials never enter its envi
   await withEngine("oma-principal-probe-", async (society, engine, grant) => {
     const answer = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.ok(answer.ok, `in-process attach did not work: ${answer.error}`);
-    assert.equal(JSON.parse(answer.text!).state, "succeeded", "the CLI probe was run instead of the real client");
+    assert.equal(JSON.parse(answer.text!).receipt.state, "succeeded", "the CLI probe was run instead of the real client");
     assert.equal(readdirSync(join(society.root, "mail/archive/cur")).length, 1);
     const reading = engine.next(event => event.type === "environ" && event.id === "grant-env");
     engine.send({ op: "environ", id: "grant-env" });

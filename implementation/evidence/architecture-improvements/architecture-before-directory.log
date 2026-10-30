@@ -1,0 +1,26 @@
+npm notice run oma-core-v1@0.1.0 check:architecture
+npm notice run npm run check:modules && npm run check:legacy && npm run check:inventory && npm run check:architecture:rules && node scripts/architecture-check.mjs && npm run check:transactions && npm run check:boundaries && npm run check:documents && npm run check:spec-inventory
+npm notice run oma-core-v1@0.1.0 check:modules
+npm notice run node scripts/check-modules.mjs
+Workspace boundaries: PASS; 0 findings
+npm notice run oma-core-v1@0.1.0 check:legacy
+npm notice run node scripts/check-legacy.mjs
+Completed legacy removals: PASS; 0 findings
+npm notice run oma-core-v1@0.1.0 check:inventory
+npm notice run node scripts/production-inventory.mjs
+{"status":"SOURCE_LIST_CURRENT","files":14339,"sourceDigests":"SOURCE_DIGESTS_CURRENT","loc":"CI_ARTIFACT_ONLY","runtimeProof":false}
+npm notice run oma-core-v1@0.1.0 check:architecture:rules
+npm notice run node scripts/architecture/rule-check.mjs
+Architecture rule modules: PASS; 0 findings.
+Architecture gate: PASS; 0 findings. Static coverage is not runtime proof.
+npm notice run oma-core-v1@0.1.0 check:transactions
+npm notice run node scripts/transaction-check.mjs
+npm notice run oma-core-v1@0.1.0 check:boundaries
+npm notice run node scripts/durable-boundaries.mjs
+Durable boundaries: PASS; 0 findings. Strongest injection per boundary: sigkill 64, in-process-fault 18, logical 21.
+npm notice run oma-core-v1@0.1.0 check:documents
+npm notice run node scripts/document-integrity.mjs
+Document integrity: PASS; 0 findings.
+npm notice run oma-core-v1@0.1.0 check:spec-inventory
+npm notice run node scripts/spec-inventory.mjs
+Spec inventory: PASS; 0 drifted clause records.

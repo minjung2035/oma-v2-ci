@@ -1,0 +1,16 @@
+✔ F36: optional system binds are closed, absence-gated, and include symlink targets (1.948899ms)
+✔ F34/F35: explicit entries cannot override the normalized base environment (7.062261ms)
+✔ U1: config validation and Resident plans reject missing confinement and host-root profiles (1.898678ms)
+✔ F34/F35/F36 live: locale, identity, temp, user-local PATH and support files work without host env or network (240.142214ms)
+✔ FI-1: a Resident's Git commits as its actor, and no Git flow waits on an editor or a prompt (0.850194ms)
+✔ FI-2: the pinned Node's npm, npx and corepack are mounted and linked beside it (9.12085ms)
+✔ FI-2: the toolchain contract -- this host's pinned Node ships the commands a Worker is promised (0.196871ms)
+✔ FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx (393.082459ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 761.74105

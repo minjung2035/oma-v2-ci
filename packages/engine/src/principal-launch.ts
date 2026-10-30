@@ -145,6 +145,7 @@ export function principalEnvironment(
     // Its send schema names the wire's own recipient bound.
     OMA_MAIL_ADDRESSES: String(limits.addresses),
     // P0V-78: the streams the client prepares are read only up to these.
+    OMA_RESULT_ROOT: join(principalSessionDir(paths.stateRoot), "results"),
     OMA_CONTEXT_BYTES: String(limits.contextBytes),
     OMA_BUNDLE_BYTES: String(limits.bundleBytes),
     // PR-002: where the broker publishes the Principal's prepared batches, and

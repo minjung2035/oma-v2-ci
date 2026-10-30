@@ -44,22 +44,16 @@ test("V15A: seed fields are editable only while they can still take effect, and 
         f.close();
     }
 });
-test("V15A: with no seeds the bootstrap profile is shown with no target, not hidden or silently kept", () => {
+test("V15A: a new Society refuses zero seeds without changing authored configuration", () => {
     const f = createCompleteConfigurationFixture();
     try {
-        assert.equal(commitField(readSettings(f.path), INITIAL_WORKERS, 0, "pending").kind, "saved");
-        const settings = readSettings(f.path);
-        assert.equal(settings.config.initialResidents.length, 0);
-        const fields = fieldsOf(settings.config, settings.workerProfile, "pending");
-        assert.match(blocked(fields, WORKER_PROFILE) ?? "", /No bootstrap workers/);
         const before = readFileSync(f.path);
-        assert.throws(() => commitField(settings, WORKER_PROFILE, "verifier", "pending"));
-        assert.deepEqual(readFileSync(f.path), before, "a profile choice with no seed to carry it was stored somewhere");
-    }
-    finally {
-        f.close();
-    }
+        assert.throws(() => commitField(readSettings(f.path), INITIAL_WORKERS, 0, "pending"), /at least one/);
+        assert.deepEqual(readFileSync(f.path), before);
+        assert.ok(readSettings(f.path).config.initialResidents.length >= 1);
+    } finally { f.close(); }
 });
+
 test("V15A: the bootstrap profile changes the seeds only, never a profile's childProfile", () => {
     const f = createCompleteConfigurationFixture();
     try {

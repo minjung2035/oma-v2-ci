@@ -37,11 +37,12 @@ const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", 
 
 class ScriptedUnits extends PolicyExecution {
   starts: string[] = [];
-  override observe(): ExecutionObservation { return idle; }
-  override async observeAsync(): Promise<ExecutionObservation> { return idle; }
-  override confirmDead(): boolean { return true; }
-  override start(agent: string): void { this.starts.push(agent); }
-  override stop(): ExecutionObservation { return idle; }
+  private active = new Set<string>();
+  override observe(actor: string): ExecutionObservation { return this.active.has(actor) ? { ...idle, activeState: "active", subState: "running" } : idle; }
+  override async observeAsync(actor: string): Promise<ExecutionObservation> { return this.observe(actor); }
+  override confirmDead(actor: string): boolean { return !this.active.has(actor); }
+  override start(agent: string): void { this.starts.push(agent); this.active.add(agent); }
+  override stop(actor: string): ExecutionObservation { this.active.delete(actor); return idle; }
 }
 const work: MailInput = { to: ["carol"], subject: "work", kind: "message", body: "work" };
 

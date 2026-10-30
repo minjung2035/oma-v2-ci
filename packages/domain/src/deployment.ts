@@ -40,7 +40,7 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   settingsPreload: "apps/oma/dist/entry/pi-settings-preload.js",
   clientPreload: "apps/oma/dist/runtime/client-preload.js",
   contract: "packages/contracts/dist/index.js",
-  schema: "packages/storage/dist/schema-v4.sql",
+  schema: "packages/storage/dist/schema-v5.sql",
   extension: "packages/extension/dist/index.js",
   // BL2: the Personal host's `-e` path — the ask_user_question entry point is
   // its own extension file so Personal gets the tool without loading the

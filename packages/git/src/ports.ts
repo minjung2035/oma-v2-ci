@@ -24,6 +24,7 @@ export interface GitLedger {
   retriedOperation(actor: Actor, key: RequestKey): DecodedOperation;
   getOperationById(id: OperationId): DecodedOperation | null;
   recoverableOperations(): OperationId[];
+  findSucceededIntegration?(candidate: Oid): OperationOf<"git.integrate"> | null;
   findSucceededContext(revision: Oid): OperationOf<"context.publish"> | null;
   submissions(): readonly OperationOf<"git.submit">[];
   transaction<T>(body: (tx: GitTransaction) => SynchronousResult<T>): T;

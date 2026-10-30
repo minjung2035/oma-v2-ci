@@ -65,7 +65,7 @@ const effects = (openEntry: ReviewEntry, before: readonly ReviewEntry[], after: 
 
 test("LOW merge is ready immediately; missing is empty", () => {
   const s = state(open("LOW"), []);
-  assert.equal(s.ready, true); assert.equal(s.display, "applying");
+  assert.equal(s.ready, true); assert.equal(s.display, "ready");
   assert.deepEqual(s.missing, []); assert.equal(s.required, 0);
   assert.equal(s.name, "merge-00000000-0000-4000-8000-000000000000"); assert.equal(s.requester, "alice");
   assert.deepEqual(s.authors, ["alice"]);
@@ -240,7 +240,7 @@ test("Principal approve on the current approval makes a HIGH request ready", () 
   const s = state(o, entries);
   assert.equal(s.approvalValid, true);
   assert.equal(s.principal?.operation, OP(4));
-  assert.equal(s.ready, true); assert.equal(s.display, "applying"); assert.deepEqual(s.missing, []);
+  assert.equal(s.ready, true); assert.equal(s.display, "ready"); assert.deepEqual(s.missing, []);
   const waiting = state(o, entries.slice(0, 2));
   assert.equal(waiting.display, "principal-pending");
   assert.deepEqual(waiting.missing, [`Principal decision on approval ${MID(1)}`]);
@@ -307,7 +307,7 @@ test("integration state drives the display", () => {
   const ready = state(open("LOW"), []);
   const integration = (s: "pending" | "unknown" | "succeeded" | "failed") =>
     ({ operation: OP(50), state: s, errorCode: null }) as const;
-  assert.equal(state(open("LOW"), [], { integration: integration("pending") }).display, "applying");
+  assert.equal(state(open("LOW"), [], { integration: integration("pending") }).display, "waiting-resources");
   assert.equal(state(open("LOW"), [], { integration: integration("succeeded") }).display, "applied");
   assert.equal(state(open("LOW"), [], { integration: integration("failed") }).display, "blocked");
   assert.equal(state(open("LOW"), [], { integration: integration("unknown") }).display, "unknown");

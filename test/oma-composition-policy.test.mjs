@@ -11,6 +11,7 @@ import * as settingsPolicy from "@oma/domain/settings-policy";
  * the real `apps/oma/src/entry/oma-society.ts` with controlled module boundaries and no host
  * I/O, and asserts the order and the values it passes between them.
  */
+import * as crypto from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -421,6 +422,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   // Exercise the actual extracted settings owner with the same effect
   // boundaries as the entry, so write ownership and read-back still run.
   modules["../application/project-session-settings.js"] = loadSource("apps/oma/src/application/project-session-settings.ts", {
+    "node:crypto": crypto,
     "../runtime/user-files.js": { readUserFile: projectPointerRead },
     "@oma/config/operations": { CONFIGURATION_DOCUMENT_BYTES: 16777216 },
     "../runtime/deployment-manifest.js": modules["../runtime/deployment-manifest.js"],

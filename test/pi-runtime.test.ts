@@ -300,7 +300,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
     assert.equal(model.model, "current");
 
     // DR37: resource/count limits are disabled; integration remains explicit.
-    assert.ok(loaded.schemaVersion === 4);
+    assert.ok(loaded.schemaVersion === 5);
     assert.ok(!("quota" in loaded));
     assert.deepEqual(loaded.integration.checks, []);
     assert.deepEqual(loaded.integration.protectedPaths, []);
@@ -310,7 +310,7 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
     assert.ok(!loaded.agentProfiles[DEFAULT_PRINCIPAL_PROFILE]!.capabilities.includes("code.integrate"));
     // DR27: one host seed, still gated on GOAL before activation.
     assert.deepEqual(loaded.initialResidents.map(seed => ({ name: seed.name, profile: seed.profile })),
-      [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE }]);
+      [1, 2, 3].map(index => ({ name: `worker-${index}`, profile: DEFAULT_RESIDENT_PROFILE })));
 
     // Every generated value is reachable from the Control Panel.
     const fields = readSettings(path).fields.map(field => field.id);

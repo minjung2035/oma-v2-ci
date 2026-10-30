@@ -1,0 +1,37 @@
+✔ IMP-R03: accepted reviewer evidence survives stopped and restart (478.565803ms)
+✔ IMP-R03: accepted reviewer evidence survives retired and restart (413.282328ms)
+✔ IMP-R03/R04: explicit withdrawal changes approval; another Worker cannot invalidate (210.831256ms)
+{"event":"review.advance","request":"op-d8b5e6c7-13c5-4095-82e5-022127ebc0f9","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R04: author stop cannot change frozen quorum and requester stop still fences main (281.538153ms)
+✔ IMP-R01/R02: held recovery and one held unit do not block independent wake; hints coalesce (1.980908ms)
+✔ IMP-R09: current zero seed config rejects; legacy zero remains readable (1.171704ms)
+✔ IMP-M01: version gate preserves accepted bytes and creates a complete legacy backup (56.716872ms)
+{"event":"review.advance","request":"op-a5dd9a68-78e3-47dd-a5ad-0245ae498d45","code":"CHECK_FAILED"}
+{"event":"review.advance","request":"op-a5dd9a68-78e3-47dd-a5ad-0245ae498d45","code":"BROKER_UNAVAILABLE"}
+✔ IMP-R05/R06: explicit same-request retry preserves votes and the first failure; concurrent replay has one successor (578.040414ms)
+✔ IMP-R10: notice preparation failure survives restart as blocked and explicit retry succeeds (307.871836ms)
+{"event":"review.advance","request":"op-b58b8041-2f1a-4574-9058-32fe75b5c9a4","code":"RUN_TERMINATION_UNKNOWN"}
+✔ IMP-R06: an unknown check scope cannot be retried into a second attempt (183.169628ms)
+{"event":"review.advance","request":"op-81e09544-4d0f-47d2-9f4b-79688cf4c7ef","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R03: withdrawing an accepted peer vote while checks run wins the final CAS gate (293.155808ms)
+✔ IMP-R10: a held notice preparation is preparing, not an executing check (238.483954ms)
+✔ IMP-R16: reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta (1278.731849ms)
+{"event":"review.advance","request":"op-1e17d847-92f1-4a5b-a8f6-ad89dad16454","code":"CHECK_FAILED"}
+✔ IMP-R17: individual changes pass but combined invariant fails on prepared I (525.153698ms)
+✔ IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-context vote (642.899869ms)
+{"event":"review.advance","request":"op-46a8ab84-208b-43e3-85c2-67659c0349a4","code":"CHECK_FAILED"}
+✔ IMP-R19: revision preserves old failure bytes, resets code approval and races expectedRevision (688.85071ms)
+{"event":"review.advance","request":"op-197f7549-ce9a-48ff-93af-9f19f71dc989","code":"STALE_BASE"}
+✔ IMP-R20: known main movement before CAS supersedes only the attempt and automatically prepares again (402.654478ms)
+✔ IMP-R21: already-included is a separate fact with no integration receipt (118.827626ms)
+{"event":"review.advance","request":"op-b9a5c07f-cc9b-48e1-9a98-1409a7250a78","code":"CHECK_FAILED"}
+✔ IMP-R19: policy adoption preserves qualified code votes but creates current policy authority; host retry is explicit (711.321089ms)
+✔ IMP-R18: conflict stays blocked without repeated preparation and explicit revision resolves it (743.846256ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8656.061991

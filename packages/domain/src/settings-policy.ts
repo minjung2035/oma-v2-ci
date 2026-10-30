@@ -232,10 +232,10 @@ const DESCRIPTOR_SOURCE = {
         apply: "bootstrap-only",
         blocked: seedsBlocked,
         view: (config: HostConfig) => ({
-            kind: "number" as const, value: config.initialResidents.length, min: 0, max: Math.min(config.maxWorkers, CONFIG_BOUNDS.maxInitialWorkers.value),
+            kind: "number" as const, value: config.initialResidents.length, min: 1, max: Math.min(config.maxWorkers, CONFIG_BOUNDS.maxInitialWorkers.value),
         }),
         transform: (settings: FieldSettings, value: FieldValue) => {
-            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
+            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "Society requires at least one initial Worker");
             // A seed needs a Worker profile only when one is added.
             const count = value as number;
             assertKnown(count <= settings.config.maxWorkers, "initial workers exceed active Worker capacity");

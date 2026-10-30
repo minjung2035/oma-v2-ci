@@ -59,6 +59,7 @@ export interface RunnerProfile {
  * composition owns its roots and mechanism; every engine requires confinement.
  * Receipt-only recovery constructs no engine or execution recipe. */
 export interface RunnerConfinement {
+  readonly tmpfsMaxBytes?: number;
   /** Host path of the OMA installation, mounted read-only inside. */
   readonly libdir: string;
   /** DR25: host path of the installed packages, mounted read-only inside. */
@@ -302,6 +303,7 @@ export class RunnerModule {
       );
     const host = {
       libdir: declared.libdir,
+      ...(declared.tmpfsMaxBytes === undefined ? {} : { tmpfsMaxBytes: declared.tmpfsMaxBytes }),
       ...(declared.packages === undefined ? {} : { packages: declared.packages }),
       node: declared.node,
       hidden: productSurfaceMasks(declared.libdir),

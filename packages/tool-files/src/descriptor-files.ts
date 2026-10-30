@@ -1,7 +1,7 @@
 /** The only native boundary of the SDK-free file policy (NATIVE-025). */
 import { constants, openSync } from "node:fs";
 import { WorkspaceRefusal } from "./errors.js";
-export { directoryNames, mkdirAt, openAt, reopenDirectory, unlinkAt } from "@oma/file-descriptors";
+export { utf8Decoder, directoryNames, mkdirAt, openAt, reopenDirectory, unlinkAt } from "@oma/file-descriptors";
 
 function assertProfile(): void {
   if (process.platform !== "linux" && process.platform !== "darwin")

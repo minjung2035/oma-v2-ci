@@ -87,7 +87,7 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
     assert.equal(status.integration?.operation, integration.id);
     assert.equal(status.integration?.state, "succeeded");
     assert.equal(status.integration?.error, null);
-    assert.deepEqual(status.entries, []); assert.deepEqual(status.missing, []);
+    assert.deepEqual(status.entries.map(e => e.kind), ["review.integration"]); assert.deepEqual(status.missing, []);
     assert.deepEqual(status.principal, { approval: null, sent: false, decision: null, decisionApproval: null });
     assert.deepEqual(status.main, { oid: candidate, observedAtMs: status.main.observedAtMs });
     assert.equal(status.tier, "LOW"); assert.equal(status.requester, "alice");
@@ -117,9 +117,9 @@ test("mail-v1: merge request opens observe live Git facts and refuse bad ones", 
     f.git(["update-ref", "refs/heads/main", moved]);
     const stale = f.candidateWith({ "stale.txt": "y" }, moved);
     await f.submit("alice", stale, "submit-stale");
-    await assert.rejects(f.open("alice", { tier: "LOW", candidate: stale, base: f.base }, "stale"),
-      (error: unknown) => error instanceof Object && (error as { code: string }).code === "STALE_BASE" &&
-        (error as { details?: { actual?: string } }).details?.actual === moved);
+    const oldBase = await f.open("alice", { tier: "MEDIUM", candidate: stale, base: f.base }, "old-base");
+    assert.equal(oldBase.state, "succeeded");
+    assert.equal(f.stateOf(f.requestName("old-base")).sourceIdentity.expectedBase,f.base);
     const orphan = (() => { const tree = f.git(["mktree"], ""); return f.git(["commit-tree", tree, "-m", "orphan"]); })();
     await f.submit("alice", orphan, "submit-orphan");
     await assert.rejects(f.open("alice", { tier: "LOW", candidate: orphan, base: moved }, "orphan"), { code: "NOT_DESCENDANT" });
@@ -277,7 +277,7 @@ test("mail-v1: MEDIUM review thread revisions stay in the worker archive and rea
     assert.ok("entries" in afterVote);
     assert.equal(afterVote.display, "applied");
     assert.deepEqual(afterVote.entries.map(e => [e.index, e.actor, e.kind, e.verdict]),
-      [[1, "bob", "review", undefined], [2, "bob", "vote", "approve"]]);
+      [[1, "bob", "review", undefined], [2, "bob", "vote", "approve"], [3, "alice", "review.integration", undefined]]);
     assert.deepEqual(afterVote.approvers, ["bob"]);
   } finally { f.close(); }
 });
@@ -370,7 +370,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     assert.equal(pending.principal.sent, true); assert.equal(pending.principal.decision, null);
     const principalView = f.reviews.status(f.auth("principal"), { name: name }, 64 * 1024, "p2");
     assert.deepEqual(Object.keys(principalView).sort(),
-      ["approval", "display", "identity", "kind", "name", "tier", "title"],
+      ["approval", "attemptNumber", "display", "identity", "integrationPhase", "kind", "name", "nextAction", "notice", "observedAtMs", "proposal", "retryable", "revision", "scope", "tier", "title"],
       "the Principal's view is the minimal shape");
     assert.ok(!("entries" in principalView) && !("requests" in principalView));
     assert.equal(principalView.approval, approval2.id);
@@ -501,9 +501,9 @@ test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
     const openOp = f.store.getOperation("alice", "open-low")!;
     assert.equal(f.store.getOperation("alice", applyRequestKeyFor(openOp.id)), null,
       "a revision drift before apply leaves the request unintegrated");
-    assert.equal(f.stateOf(name).display, "applying");
+    assert.equal(f.stateOf(name).display, "ready");
     const drifted = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s10");
-    assert.ok("entries" in drifted); assert.equal(drifted.display, "applying");
+    assert.ok("entries" in drifted); assert.equal(drifted.display, "blocked");
     assert.ok(drifted.missing.some(m => m.includes("host policy revision changed (now p2)")));
     const cancelled = await f.cancel("alice", name, "c-1");
     assert.equal(cancelled.state, "succeeded");
@@ -742,7 +742,7 @@ test("DR45: accepted cancel interrupts checks even when its preparation cleanup 
   } finally { PreacceptScope.prototype.settle = settle; release(); await voting; f.close(); }
 });
 
-test("mail-v1: only the first ready request on a base applies; the other goes stale by refresh", async () => {
+test("proposal v3: disjoint ready requests on one base both apply without rewriting old intent", async () => {
   const f = fixture(); try {
     const one = f.candidateWith({ "one.txt": "a" });
     const two = f.candidateWith({ "two.txt": "b" });
@@ -753,58 +753,35 @@ test("mail-v1: only the first ready request on a base applies; the other goes st
     const name2 = f.requestName("open-2");
     await f.vote("bob", name1, "approve", "ok", "v1");
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), one, "first applied");
-    // Voting on the second request is accepted, then advance marks it stale.
     await f.vote("carol", name2, "approve", "ok", "v2");
     const state2 = f.stateOf(name2);
-    assert.equal(state2.terminal, "stale"); assert.equal(state2.display, "stale");
-    const refresh = state2.entries.at(-1)!;
-    assert.equal(refresh.fact.kind, "refresh");
-    assert.equal(refresh.fact.kind === "refresh" ? refresh.fact.main : null, one);
-    const open2 = f.store.getOperation("alice", "open-2")!;
-    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open2.id)), null, "no second integration");
-    const refreshOp = refresh.operation;
-    const thread = (f.store.getOperationById(refreshOp)!.plan as { messages: MessagePlan[] }).messages
-      .find(m => m.review?.role === "thread")!;
-    assert.match(messageText(f.root, thread.id), new RegExp(`main moved to ${one}`));
-    assert.match(messageText(f.root, thread.id), /this request is stale/);
-    await assert.rejects(f.vote("dave", name2, "approve", "late", "v-late"), { code: "REQUEST_CLOSED" });
-    const stale = f.reviews.status(f.auth("bob"), { name: name2 }, 64 * 1024, "s11");
-    assert.ok("entries" in stale); assert.equal(stale.display, "stale");
-    assert.equal(stale.entries.at(-1)?.kind, "refresh");
-    assert.equal(stale.main.oid, one);
-    assert.equal(f.git(["rev-parse", "refs/heads/main"]), one, "main unchanged by the second");
+    assert.equal(state2.terminal,null); assert.equal(state2.display,"applied");
+    assert.equal(state2.sourceIdentity.expectedBase,f.base);assert.equal(state2.sourceIdentity.candidate,two);
+    assert.equal(state2.integration?.identity?.expectedBase,one);
+    const applied=state2.integration!.identity!.candidate;
+    assert.notEqual(applied,two);assert.equal(f.git(["show",`${applied}:one.txt`]),"a");
+    assert.equal(f.git(["show",`${applied}:two.txt`]),"b");
+    assert.equal(state2.preparation?.fact.context,false);
+    const operation=f.applyOp("alice","open-2");assert.equal(operation?.state,"succeeded");
+    const preserved=operation!.planJson;f.reopen();
+    assert.equal(f.stateOf(name2).display,"applied");assert.equal(f.store.getOperationById(operation!.id)?.planJson,preserved);
   } finally { f.close(); }
 });
 
-test("mail-v1: a bound reviewer's retirement withdraws and re-asks the approval", async () => {
+test("durable review: a bound reviewer's retirement preserves the existing approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
-    await f.submit("alice", candidate);
-    await f.open("alice", { tier: "HIGH", candidate }, "open");
+    await f.submit("alice", candidate); await f.open("alice", { tier: "HIGH", candidate }, "open");
     const name = f.requestName("open");
     await f.vote("bob", name, "approve", "bob ok", "v-bob");
     await f.vote("carol", name, "approve", "carol ok", "v-carol");
     await f.vote("dave", name, "approve", "dave ok", "v-dave");
-    const first = messages(f, "carol", "v-carol").find(m => m.review?.role === "approval")!;
-    const principalBefore = inboxCount(f, "principal");
-    // Retire a bundled voter: the approval is invalid only through eligibility.
-    f.stop("bob", "retired");
-    await f.reviews.advanceAll();
-    const state = f.stateOf(name);
-    const refresh = state.entries.at(-1)!;
-    assert.equal(refresh.fact.kind, "refresh");
-    assert.equal(refresh.fact.kind === "refresh" ? refresh.fact.main : "?", null);
-    const owned = (f.store.getOperationById(refresh.operation)!.plan as { messages: MessagePlan[] }).messages;
-    const withdrawn = owned.find(m => m.review?.role === "withdrawn")!;
-    assert.equal(withdrawn.review?.role === "withdrawn" ? withdrawn.review.approval : null, first.id);
-    assert.equal(existsSync(mailInboxPathAt(f.root, "principal", withdrawn.id, "new")), true);
-    // Quorum still holds with other votes: a new approval request was sent.
-    const again = owned.find(m => m.review?.role === "approval")!;
-    assert.notEqual(again.id, first.id);
-    assert.deepEqual(again.review?.role === "approval" ? [...again.review.votes] : [],
-      [f.store.getOperation("carol", "v-carol")!.id, f.store.getOperation("dave", "v-dave")!.id]);
-    assert.equal(inboxCount(f, "principal"), principalBefore + 2, "withdrawn + new approval");
-    assert.equal(f.stateOf(name).display, "principal-pending");
+    const before = f.stateOf(name), principalBefore = inboxCount(f, "principal");
+    f.stop("bob", "retired"); await f.reviews.advanceAll();
+    assert.deepEqual(f.stateOf(name).approval, before.approval);
+    assert.equal(f.stateOf(name).approvalValid, true);
+    assert.equal(f.stateOf(name).entries.length, before.entries.length);
+    assert.equal(inboxCount(f, "principal"), principalBefore);
   } finally { f.close(); }
 });
 
@@ -884,10 +861,10 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
     await counting.advanceAll();
     await counting.advanceAll();
     assert.equal(diffs, before, "an oversize notice is never recomputed");
-    assert.equal(f.stateOf(f.requestName("open")).display, "applying", "the request stays ready");
+    assert.equal(f.stateOf(f.requestName("open")).display, "blocked", "the preparation failure is durable");
     const oversized = counting.status(f.auth("bob"), { name: f.requestName("open") }, 64 * 1024, "s12");
     assert.ok("entries" in oversized);
-    assert.ok(oversized.missing.some(m => m.includes("completion notice exceeds the document bound")));
+    assert.ok(oversized.missing.some(m => m.includes("notice preparation failed")));
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
   } finally { f.close(); }
 });
@@ -909,6 +886,7 @@ test("mail-v1: a skipped advance and a lost application are both recovered once"
     unreadable = false;
     f.reopen();
     await f.reviews.advanceAll();
+    await f.module.reconcile(f.applyOp("alice", "open")!.id);
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate, "applied once after recovery");
     const applied = f.applyOp("alice", "open")!;
     assert.equal(applied.state, "succeeded");

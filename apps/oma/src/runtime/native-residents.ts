@@ -69,6 +69,8 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
             OMA_PROFILE_HEX: Buffer.from(references.profile).toString("hex"),
             OMA_MODEL_PROFILE_HEX: Buffer.from(references.modelProfile).toString("hex"),
             OMA_TOOL_SURFACE_HEX: Buffer.from(toolSurface).toString("hex") };
+          delete env.OMA_TMPFS_MAX_BYTES;
+          if (config.resources?.tmpfsMaxBytes !== undefined) env.OMA_TMPFS_MAX_BYTES = String(config.resources.tmpfsMaxBytes);
           delete env.OMA_SOCIETY_FENCE_FD; delete env.OMA_HOST_CHANNEL;
           // Explicit trusted launch input, never inherited ambient data. The
           // Runner decodes it before constructing its Worker effects.

@@ -254,8 +254,9 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     mkdirSync(goal, { recursive: true });
     const start = env.units.start.bind(env.units);
     Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
-    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
+    const reconcile = createReconcileModule(env.store, env.mail, null, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
     await reconcile.startup(false);
+    await reconcile.sweep();
     assert.equal(env.store.getOperationById(op.id)!.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
     assert.equal(env.store.pendingDeliveries("child").length, 1);

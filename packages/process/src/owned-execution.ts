@@ -88,6 +88,7 @@ export class ExecutionCoordinator<Witness> {
   private stopping = false;
   private failure: unknown = null;
   private recovering: Promise<void> | null = null;
+  private readonly slotRecovery = new Map<string, Promise<void>>();
   private fullyDrained = false;
   constructor(private readonly journal: ExecutionJournalPort<Witness>,
     private readonly observe: (identity: Witness) => Observation<Witness>,
@@ -99,8 +100,17 @@ export class ExecutionCoordinator<Witness> {
    */
   recover(): Promise<void> {
     if (this.recovering !== null) return this.recovering;
+    const task = Promise.allSettled([...new Set(this.journal.entries().map(entry => entry.slot))].map(slot => this.recoverSlot(slot))).then(answers => {
+      const errors = answers.flatMap(answer => answer.status === "rejected" ? [answer.reason] : []);
+      if (errors.length) throw new StoreError(errors.some(error => error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", "previous execution scopes remain owned", { cause: new AggregateError(errors) });
+    });
+    const owned = task.finally(() => { if (this.recovering === owned) this.recovering = null; });
+    this.recovering = owned; return owned;
+  }
+  private recoverSlot(slot: string): Promise<void> {
+    const existing = this.slotRecovery.get(slot); if (existing) return existing;
     const task = Promise.resolve().then(async () => {
-      const entries = this.journal.entries().filter(entry => !this.active.has(entry.slot));
+      const entries = this.journal.entries().filter(entry => entry.slot === slot && !this.active.has(entry.slot));
       const answers = await Promise.allSettled(entries.map(async entry => {
         if (entry.witness === null) throw new Error("opening execution has no durable kernel witness");
         const observed = this.observe(entry.witness);
@@ -128,20 +138,22 @@ export class ExecutionCoordinator<Witness> {
       if (failures.length) throw new StoreError(failures.some(error => error instanceof StoreError && error.code === "STORE_CORRUPT")
         ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", "previous execution scopes are not confirmed dead",
         { cause: new AggregateError(failures, "execution recovery observations") });
-    });
-    const owned = task.finally(() => { if (this.recovering === owned) this.recovering = null; });
-    this.recovering = owned; return owned;
+
+    }).catch(error => { if (error instanceof StoreError && error.code === "STORE_CORRUPT") this.failure ??= error; throw error; });
+    const owned = task.finally(() => { if (this.slotRecovery.get(slot) === owned) this.slotRecovery.delete(slot); });
+    this.slotRecovery.set(slot, owned); return owned;
   }
   async run(request: ExecutionRequest<Witness>): Promise<ProcessObservation> {
     return (await this.begin(request)).completion;
   }
   async begin(request: ExecutionRequest<Witness>): Promise<ExecutionTicket<Witness>> {
     if (this.stopping || this.failure !== null) throw new StoreError("BROKER_UNAVAILABLE", "execution owner is stopping or uncertain");
-    for (const [slot, owner] of this.active) if (owner.uncertain) await this.settle(slot, owner);
+    const previous = this.active.get(request.slot);
+    if (previous?.uncertain) await this.settle(request.slot, previous);
     if (this.stopping || this.failure !== null) throw new StoreError("BROKER_UNAVAILABLE", "execution owner changed during cleanup");
     if (request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled before launch");
     if (this.active.has(request.slot)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution slot is still owned");
-    await this.recover();
+    await this.recoverSlot(request.slot);
     if (this.stopping || this.failure !== null) throw new StoreError("BROKER_UNAVAILABLE", "execution owner ended during recovery");
     if (request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled during recovery");
     if (this.active.has(request.slot)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution slot was acquired during recovery");
@@ -176,7 +188,7 @@ export class ExecutionCoordinator<Witness> {
         if (this.active.has(request.slot)) try { await this.settle(request.slot, owner); } catch (error) { failures.push(error); }
       }
       if (failures.length) throw new StoreError([...(primary === null ? [] : [primary.error]), ...failures].some(error =>
-        error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", "execution or scope cleanup is unconfirmed",
+        error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", "execution or scope cleanup is unconfirmed",
         { cause: new AggregateError(primary === null ? failures : [primary.error, ...failures], "owned execution failures") });
       if (primary !== null) throw primary.error;
       if (observation === undefined) throw new StoreError("REF_STATE_UNKNOWN", "execution returned no observation");
@@ -200,6 +212,8 @@ export class ExecutionCoordinator<Witness> {
     this.stopping = true;
     const failures: unknown[] = [];
     if (this.recovering !== null) try { await this.recovering; } catch (error) { failures.push(error); }
+    const recovery = await Promise.allSettled([...this.slotRecovery.values()]);
+    failures.push(...recovery.flatMap(answer => answer.status === "rejected" ? [answer.reason] : []));
     const answers = await Promise.allSettled([...this.active].map(([slot, owner]) => this.settle(slot, owner)));
     failures.push(...answers.flatMap(answer => answer.status === "rejected" ? [answer.reason] : []));
     if (this.failure !== null) failures.push(this.failure);

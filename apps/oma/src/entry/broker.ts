@@ -126,6 +126,7 @@ async function main(): Promise<void> {
     let storagePreparation: Promise<void> | null = null;
     let toolPreparation: Promise<MacDeveloperTools | undefined> | null = null;
     let sessionStorage: SessionStorage | null = null;
+    let storageCloseMode: "keep-hot" | "on-close" = "keep-hot";
     let executions: ExecutionRuntime | null = null;
     let residents: NativeResidents | null = null;
     let storageResidents: readonly StorageResident[] | null = null;
@@ -145,7 +146,7 @@ async function main(): Promise<void> {
                 await toolPreparation.catch(() => { });
             await lifetime.shutdown();
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
-                try { await sessionStorage.archive(storageResidents); }
+                try { await sessionStorage.close(storageResidents, storageCloseMode); }
                 catch (error) { console.error("Session workspace reclamation did not finish; recovery data retained:", error instanceof Error ? error.message : String(error)); }
             }
             principalHost?.close();
@@ -184,6 +185,9 @@ async function main(): Promise<void> {
     try {
         const cfg = loadConfig(configPath);
         graceSeconds = cfg.limits.receiptWaitSeconds;
+        storageCloseMode = cfg.storage?.closeMode ?? "keep-hot";
+        if (cfg.schemaVersion === 4 && cfg.storage === undefined)
+            console.error("Session storage now defaults to keep-hot: closing retains workspace disk usage. Use oma archive --society " + society + " or storage.closeMode=on-close in configuration v5 to reclaim it.");
         if (cfg.society !== society)
             throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
         assertHostDirectoryLayout(cfg.installation.libdir);
@@ -194,6 +198,10 @@ async function main(): Promise<void> {
         const nativeOwner = executions;
         lifetime.retainNative(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()));
         await executions.recover();
+        if (cfg.resources !== undefined) {
+            const resources = executions.configureResources(cfg.resources, stateRoot);
+            console.error(JSON.stringify({ event: "workload.resources", observedAtMs: Date.now(), ...resources }));
+        }
         sessionStorage = SessionStorage.forSociety({ stateRoot, society, fence: claim.fence,
             log: line => console.error(line), quiesce: (residents, action) => {
                 // SQLite is closed here. This projection is bound to its exact
@@ -253,8 +261,8 @@ async function main(): Promise<void> {
             checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
-            () => executionOwner.confirmDead("candidate"));
-        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
+            () => executionOwner.confirmDead("candidate"), cfg.resources);
+        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize, attempt) => checks.run(candidate, check, cancellation, authorize, attempt), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
             bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();
         const activationAllowed = (): boolean => {

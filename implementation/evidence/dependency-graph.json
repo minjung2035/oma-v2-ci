@@ -6,6 +6,7 @@
   "apps/oma/src/application/mail.ts",
   "apps/oma/src/application/project-session-settings.ts",
   "apps/oma/src/application/project-settings.ts",
+  "apps/oma/src/application/session-archive.ts",
   "apps/oma/src/application/settings.ts",
   "apps/oma/src/application/society-bootstrap.ts",
   "apps/oma/src/application/society-conversation.ts",
@@ -37,6 +38,7 @@
   "apps/oma/src/engine/start-effects.ts",
   "apps/oma/src/entry/broker.ts",
   "apps/oma/src/entry/candidate-check.ts",
+  "apps/oma/src/entry/download-cache.ts",
   "apps/oma/src/entry/module-conformance.ts",
   "apps/oma/src/entry/oma-society.ts",
   "apps/oma/src/entry/oma.ts",
@@ -82,6 +84,8 @@
   "apps/oma/src/runtime/personal-models.ts",
   "apps/oma/src/runtime/personal-session.ts",
   "apps/oma/src/runtime/personal-settings.ts",
+  "apps/oma/src/runtime/pipeline-cache.ts",
+  "apps/oma/src/runtime/pipeline-recorder.ts",
   "apps/oma/src/runtime/principal-delivery.ts",
   "apps/oma/src/runtime/project-binding.ts",
   "apps/oma/src/runtime/provision.ts",
@@ -135,6 +139,7 @@
   "packages/config/src/state-format.ts",
   "packages/contracts/src/assets.ts",
   "packages/contracts/src/attestation.ts",
+  "packages/contracts/src/check-pipeline.ts",
   "packages/contracts/src/credentials.ts",
   "packages/contracts/src/durable.ts",
   "packages/contracts/src/errors.ts",
@@ -164,6 +169,7 @@
   "packages/domain/src/batch-settlement.ts",
   "packages/domain/src/canonical-json.ts",
   "packages/domain/src/capabilities.ts",
+  "packages/domain/src/check-pipeline.ts",
   "packages/domain/src/child-policy.ts",
   "packages/domain/src/config-format.ts",
   "packages/domain/src/context-policy.ts",
@@ -271,10 +277,13 @@
   "packages/git/src/candidate-check.ts",
   "packages/git/src/canonical-command.ts",
   "packages/git/src/canonical-health.ts",
+  "packages/git/src/check-pipeline.ts",
   "packages/git/src/context-publication.ts",
   "packages/git/src/context-repository.ts",
   "packages/git/src/context.ts",
+  "packages/git/src/download-cache.ts",
   "packages/git/src/index.ts",
+  "packages/git/src/integration-preparation.ts",
   "packages/git/src/integration-publication.ts",
   "packages/git/src/integration.ts",
   "packages/git/src/observe.ts",
@@ -282,6 +291,7 @@
   "packages/git/src/ports.ts",
   "packages/git/src/project-preparation.ts",
   "packages/git/src/project-snapshot.ts",
+  "packages/git/src/provenance-index.ts",
   "packages/git/src/publication.ts",
   "packages/git/src/quarantine-worker.ts",
   "packages/git/src/quarantine.ts",
@@ -289,6 +299,7 @@
   "packages/git/src/repository-health.ts",
   "packages/git/src/repository-port.ts",
   "packages/git/src/repository.ts",
+  "packages/git/src/review-artifact.ts",
   "packages/git/src/submit.ts",
   "packages/git/src/workspace.ts",
   "packages/lifecycle/src/actions.ts",
@@ -347,6 +358,7 @@
   "packages/platform-linux/src/sandbox-seccomp.ts",
   "packages/platform-linux/src/sandbox.ts",
   "packages/platform-linux/src/worker-spawn.ts",
+  "packages/platform-linux/src/workload-budget.ts",
   "packages/platform-mac/src/audit-peer.ts",
   "packages/platform-mac/src/developer-tools.ts",
   "packages/platform-mac/src/execution-launch.ts",
@@ -412,6 +424,7 @@
   "packages/protocol/src/status-page.ts",
   "packages/protocol/src/status-view.ts",
   "packages/reconcile/src/index.ts",
+  "packages/reconcile/src/lane.ts",
   "packages/reconcile/src/operations.ts",
   "packages/reconcile/src/ports.ts",
   "packages/reconcile/src/preaccept-event.ts",
@@ -469,6 +482,7 @@
   "packages/tool-files/src/descriptor-files.ts",
   "packages/tool-files/src/errors.ts",
   "packages/tool-files/src/index.ts",
+  "packages/tool-files/src/results.ts",
   "packages/tool-hashline/src/index.ts",
   "packages/tool-lsp/src/index.ts",
   "packages/tool-lsp/src/lsp-call-scope.ts",
@@ -479,6 +493,7 @@
   "packages/tool-runtime/src/contained-search.ts",
   "packages/tool-runtime/src/contained-tools.ts",
   "packages/tool-runtime/src/provenance.ts",
+  "packages/tool-runtime/src/result-read.ts",
   "packages/tool-runtime/src/shared.ts",
   "packages/tool-runtime/src/tool-surface.ts",
   "packages/tool-runtime/src/vendor-bundle.ts",
@@ -572,6 +587,7 @@
      "packages/domain/src/agent-spec.ts",
      "packages/domain/src/ask-user-question/envelope.ts",
      "packages/domain/src/attestation.ts",
+     "packages/domain/src/check-pipeline.ts",
      "packages/domain/src/durable.ts",
      "packages/domain/src/git-facts.ts",
      "packages/domain/src/integration-policy.ts",
@@ -701,7 +717,8 @@
      "packages/storage/src/transport-spool.ts",
      "packages/storage/src/tree-lease.ts",
      "packages/tool-files/src/descriptor-files.ts",
-     "packages/tool-files/src/index.ts"
+     "packages/tool-files/src/index.ts",
+     "packages/tool-files/src/results.ts"
     ]
    },
    {
@@ -724,11 +741,11 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 33,
-   "K1-codecs -> K0-values": 67,
-   "K1-codecs -> K1-codecs": 28,
-   "K2-mechanisms -> K0-values": 133,
-   "K2-mechanisms -> K1-codecs": 16,
-   "K2-mechanisms -> K2-mechanisms": 179,
+   "K1-codecs -> K0-values": 68,
+   "K1-codecs -> K1-codecs": 30,
+   "K2-mechanisms -> K0-values": 135,
+   "K2-mechanisms -> K1-codecs": 18,
+   "K2-mechanisms -> K2-mechanisms": 187,
    "K3-ledger -> K0-values": 22,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -741,7 +758,7 @@
    "K1-codecs -> K3-ledger": 1,
    "K2-mechanisms -> K0-values": 4,
    "K2-mechanisms -> K1-codecs": 4,
-   "K2-mechanisms -> K2-mechanisms": 6,
+   "K2-mechanisms -> K2-mechanisms": 7,
    "K2-mechanisms -> K3-ledger": 1,
    "K3-ledger -> K0-values": 2,
    "K3-ledger -> K1-codecs": 1,
@@ -841,6 +858,11 @@
    {
     "from": "packages/config/src/index.ts",
     "to": "packages/domain/src/capabilities.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/check-pipeline.ts",
     "kind": "runtime"
    },
    {
@@ -979,6 +1001,11 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/domain/src/check-pipeline.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/domain/src/durable.ts",
     "to": "packages/domain/src/capabilities.ts",
     "kind": "runtime"
@@ -1081,6 +1108,11 @@
    {
     "from": "packages/domain/src/validation.ts",
     "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/git/src/candidate-check.ts",
+    "to": "packages/domain/src/check-pipeline.ts",
     "kind": "runtime"
    },
    {
@@ -1895,6 +1927,11 @@
    },
    {
     "from": "packages/storage/src/preaccept-collection.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/preaccept-collection.ts",
     "to": "packages/domain/src/identifiers.ts",
     "kind": "runtime"
    },
@@ -2080,6 +2117,11 @@
    },
    {
     "from": "packages/tool-files/src/index.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/tool-files/src/results.ts",
     "to": "packages/tool-files/src/errors.ts",
     "kind": "runtime"
    }
@@ -2303,7 +2345,7 @@
     "implementation/",
     "apps/oma/src/ports/"
    ],
-   "files": 22
+   "files": 23
   },
   {
    "index": 1,
@@ -2333,7 +2375,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 187
+   "files": 189
   },
   {
    "index": 2,
@@ -2343,7 +2385,7 @@
     "apps/oma/src/diagnostics/",
     "apps/oma/src/request-cache.ts"
    ],
-   "files": 14
+   "files": 15
   },
   {
    "index": 3,
@@ -2363,7 +2405,7 @@
     "packages/review/src/index.ts",
     "packages/review/src/"
    ],
-   "files": 60
+   "files": 66
   },
   {
    "index": 4,
@@ -2382,7 +2424,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 155
+   "files": 158
   },
   {
    "index": 5,
@@ -2400,27 +2442,27 @@
     "packages/tool-web/src/",
     "packages/tool-hashline/src/"
    ],
-   "files": 70
+   "files": 72
   }
  ],
- "files": 508,
- "runtimeEdges": 1808,
- "typeOnlyEdges": 789,
+ "files": 523,
+ "runtimeEdges": 1897,
+ "typeOnlyEdges": 832,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 481,
-  "L2-facts -> L1-kernel": 34,
-  "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 263,
-  "L3-workflow -> L3-workflow": 69,
-  "L4-orchestration -> L1-kernel": 404,
+  "L1-kernel -> L1-kernel": 495,
+  "L2-facts -> L1-kernel": 37,
+  "L2-facts -> L2-facts": 6,
+  "L3-workflow -> L1-kernel": 293,
+  "L3-workflow -> L3-workflow": 76,
+  "L4-orchestration -> L1-kernel": 416,
   "L4-orchestration -> L2-facts": 1,
-  "L4-orchestration -> L3-workflow": 25,
-  "L4-orchestration -> L4-orchestration": 196,
-  "L5-entry -> L1-kernel": 136,
-  "L5-entry -> L2-facts": 20,
-  "L5-entry -> L3-workflow": 8,
-  "L5-entry -> L4-orchestration": 90,
-  "L5-entry -> L5-entry": 76
+  "L4-orchestration -> L3-workflow": 29,
+  "L4-orchestration -> L4-orchestration": 200,
+  "L5-entry -> L1-kernel": 141,
+  "L5-entry -> L2-facts": 22,
+  "L5-entry -> L3-workflow": 9,
+  "L5-entry -> L4-orchestration": 95,
+  "L5-entry -> L5-entry": 77
  },
  "upwardTypeOnlyEdges": [
   {
@@ -2431,34 +2473,34 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 247,
-  "packages/domain/src/identifiers.ts": 81,
-  "packages/native/src/cleanup.ts": 44,
-  "packages/storage/src/directory.ts": 40,
-  "packages/native/src/files.ts": 39,
+  "packages/domain/src/errors.ts": 256,
+  "packages/domain/src/identifiers.ts": 83,
+  "packages/native/src/cleanup.ts": 45,
+  "packages/storage/src/directory.ts": 43,
+  "packages/native/src/files.ts": 42,
+  "packages/storage/src/durable-fs.ts": 34,
+  "packages/domain/src/canonical-json.ts": 32,
   "packages/domain/src/paths.ts": 32,
-  "packages/domain/src/canonical-json.ts": 30,
-  "packages/storage/src/durable-fs.ts": 30,
   "packages/file-descriptors/src/index.ts": 25,
   "packages/domain/src/request-identity.ts": 22,
-  "packages/domain/src/utf8.ts": 21,
+  "packages/domain/src/utf8.ts": 22,
   "packages/domain/src/deployment.ts": 20,
   "packages/domain/src/derived.ts": 20,
   "packages/domain/src/surface-bounds.ts": 20,
-  "packages/process/src/async.ts": 18
+  "packages/process/src/async.ts": 19
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 40,
   "apps/oma/src/runtime/client-runtime.ts": 22,
   "packages/mail/src/index.ts": 22,
-  "apps/oma/src/entry/oma-society.ts": 20,
+  "apps/oma/src/entry/oma-society.ts": 21,
   "packages/broker/src/index.ts": 19,
   "apps/oma/src/application/society-bootstrap.ts": 18,
   "packages/git/src/context-repository.ts": 18,
   "apps/oma/src/runner.ts": 17,
   "apps/oma/src/runtime/provision.ts": 17,
   "packages/engine/src/interactive.ts": 17,
-  "packages/extension/src/index.ts": 15,
+  "packages/extension/src/index.ts": 17,
   "packages/git/src/context.ts": 15,
   "packages/storage/src/context-snapshot.ts": 15,
   "apps/oma/src/broker/mail-effects.ts": 14,
@@ -2466,38 +2508,38 @@
  },
  "external": {
   "@earendil-works/pi-ai": 2,
-  "@earendil-works/pi-coding-agent": 49,
+  "@earendil-works/pi-coding-agent": 50,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
   "koffi": 16,
   "node:async_hooks": 5,
-  "node:buffer": 1,
+  "node:buffer": 2,
   "node:child_process": 6,
-  "node:crypto": 42,
+  "node:crypto": 49,
   "node:dns": 1,
   "node:events": 3,
-  "node:fs": 119,
+  "node:fs": 126,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
-  "node:module": 5,
+  "node:module": 6,
   "node:net": 23,
   "node:os": 12,
-  "node:path": 138,
+  "node:path": 149,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
-  "node:stream": 11,
-  "node:stream/promises": 1,
+  "node:stream": 13,
+  "node:stream/promises": 2,
   "node:string_decoder": 1,
-  "node:timers/promises": 7,
+  "node:timers/promises": 8,
   "node:url": 14,
   "node:util": 10,
   "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
   "proper-lockfile": 1,
-  "typebox": 8,
+  "typebox": 10,
   "typebox/compile": 1
  },
  "unresolved": []

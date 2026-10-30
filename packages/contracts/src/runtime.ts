@@ -81,6 +81,7 @@ export interface SandboxDirectories {
 
 
 export interface SandboxHost {
+  tmpfsMaxBytes?: number;
   /** Host path of the OMA installation, read-only to the Worker. It carries
    * the vendored engine, the trusted core extension and the model-facing CLI,
    * independently of the platform confinement mechanism. */

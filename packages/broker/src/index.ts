@@ -252,6 +252,7 @@ export class Broker {
     const reconcile = this.reconcile;
     if (reconcile === null || !this.running || this.draining) return;
     try { this.health.assertAdmission(); } catch { return; }
+    reconcile.pulse?.();
     const task = this.sweepWake.request();
     if (this.sweepTask === task) return;
     this.sweepTask = task;

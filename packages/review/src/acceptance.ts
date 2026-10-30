@@ -32,7 +32,7 @@ export class ReviewAcceptance {
       // Freezing mail yields to other submissions. Re-observe provenance now,
       // outside T, with no await before acceptance; stale authors require fresh
       // messages, never an in-place rewrite of the frozen authority.
-      if (isOpenFact(prepared.fact) &&
+      if ((isOpenFact(prepared.fact) || prepared.fact.kind === "review.revise" || (prepared.fact.kind === "review.adopt" && prepared.fact.version === 3)) &&
           !(prepared.fact.kind === "challenge.open" && prepared.fact.prepared) &&
           this.store.claimKey(actor, key, hash) === "absent") {
         const { identity: { expectedBase, candidate }, submitters: frozenSubmitters } = prepared.fact;
@@ -42,20 +42,32 @@ export class ReviewAcceptance {
           throw new StoreError("BROKER_UNAVAILABLE", "candidate submitters changed; retry the same request key",
             { details: { reason: "busy" } });
       }
+      if (prepared.fact.kind === "review.integration" && prepared.before !== null) {
+        const current = this.effects.submitters(prepared.fact.source.expectedBase,prepared.fact.source.candidate);
+        if (current.length !== prepared.before.sourceSubmitters.length || current.some(a => !prepared.before!.sourceSubmitters.includes(a)))
+          throw new StoreError("INTEGRATION_CONDITIONS","source provenance changed during integration preparation");
+      }
       // There is no await between this observation and acceptance. A CAS may
       // already have happened while its notices are still materializing (or
       // before a crash); a pending DB row alone cannot authorize cancellation.
-      if (prepared.fact.kind === "cancel" && prepared.before?.integration?.state === "pending") {
+      if (["cancel", "review.withdraw", "review.invalidate"].includes(prepared.fact.kind) && prepared.before?.integration?.state === "pending") {
         const main = this.effects.main();
         if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-        if (main.kind === "present" && main.value === prepared.before.identity.candidate)
+        if (main.kind === "present" && main.value === (prepared.before.integration?.identity ?? prepared.before.identity).candidate)
           throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge_open");
-        if (main.kind !== "present" || main.value !== prepared.before.identity.expectedBase)
+        if (main.kind !== "present" || main.value !== (prepared.before.integration?.identity ?? prepared.before.identity).expectedBase)
           throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");
       }
       txClaim = this.store.transaction(tx => {
         if (auth !== null) {
           const agent = assertCurrentActor(this.store, auth, "mail.send");
+          if (prepared.fact.kind === "vote" && prepared.fact.version !== 1 &&
+              (prepared.fact.qualification.specHash !== agent.specHash || prepared.fact.qualification.incarnation !== agent.incarnation))
+            throw new StoreError("STALE_RUN", "review qualification changed before acceptance");
+          if (["review.retry", "review.revise"].includes(prepared.fact.kind) && !(prepared.fact.kind === "review.retry" && prepared.fact.version === 3 && prepared.fact.host === true && auth.channel === "host" && agent.role === "principal") && !capabilitiesOf(agent).has("git.submit"))
+            throw new StoreError("CAPABILITY_DENIED", "retry requires current submit authority");
+          if (prepared.fact.kind === "review.invalidate" && (auth.channel !== "host" || agent.role !== "principal"))
+            throw new StoreError("CAPABILITY_DENIED", "vote invalidation requires host authority");
           if (isOpenFact(prepared.fact) && !capabilitiesOf(agent).has("git.submit"))
             throw new StoreError("CAPABILITY_DENIED", "git.submit was revoked before acceptance",
               { details: { capability: "git.submit" } });
@@ -82,7 +94,7 @@ export class ReviewAcceptance {
     } catch (error) { return scope.settleFailure(error); }
     // The committed control must reach the process owner even if releasing
     // preparation artifacts or materializing its notice subsequently fails.
-    if (txClaim === "inserted" && prepared.fact.kind === "cancel") this.effects.cancelMerge?.(prepared.fact.request);
+    if (txClaim === "inserted" && (prepared.fact.kind === "cancel" || prepared.fact.kind === "review.withdraw" || prepared.fact.kind === "review.invalidate")) this.effects.cancelMerge?.(prepared.fact.request);
     scope.settle();
     if (txClaim === "retry") return receiptOfOperation(this.store.retriedOperation(actor, key));
     // §7: the accepted prepared challenge's revert is published under the
@@ -134,8 +146,11 @@ export class ReviewAcceptance {
    * Git checks, diff creation, publication and application stay outside T. */
   acceptIntegration(open: OpenRequest, current: ReviewState, policy: IntegrationSnapshot,
     id: OperationId, hash: string, payload: { candidate: Oid; expected: Oid; tier: RiskTier },
-    frozen: PreparedReview["frozen"]): "created" | "skipped" | "drifted" {
-    const applyKey = applyRequestKeyFor(open.operation.id);
+    frozen: PreparedReview["frozen"], diff?: import("@oma/contracts/files").ReviewDiffArtifact): "created" | "skipped" | "drifted" {
+    const applyKey = applyRequestKeyFor(open.operation.id, current.attemptNumber);
+    // The last asynchronous freeze may have admitted a new authenticated
+    // submitter. Recheck outside T immediately before its synchronous gate.
+    this.ledger.assertApplicable(current.request);
     return this.store.transaction(tx => {
       const fresh = reviewState(this.ledger.inputFor(open));
       // An integration already at the apply key surfaces in fresh.integration;
@@ -150,11 +165,12 @@ export class ReviewAcceptance {
       const recipients = [...expandAddresses(this.store, ["commons", PRINCIPAL], this.society).recipients].sort();
       const plans = frozen.map(part => ({ ...part.message, recipients }));
       const plan = { kind: "git.integrate" as const, repo: "project" as const, target: "refs/heads/main" as const,
-        base: current.identity.expectedBase, candidate: current.identity.candidate,
+        base: current.preparation?.fact.identity.expectedBase ?? current.identity.expectedBase, candidate: current.preparation?.fact.identity.candidate ?? current.identity.candidate,
         policyRevision: current.identity.policyRevision, checkProfileDigest: policy.checkProfileDigest,
         policyIdentity: policy.policyIdentity, noopRef: null,
-        merge: { version: 1 as const, request: current.request, name: current.name, tier: current.tier,
-          notice: plans } };
+        merge: { version: current.preparation === null ? 2 as const : 3 as const, revision: current.revision,
+          ...(current.preparation === null ? {} : { preparation: current.preparation.operation }), attemptNumber: current.attemptNumber, request: current.request, name: current.name, tier: current.tier,
+          notice: plans, ...(diff === undefined ? {} : { diff }) } };
       const accepted = tx.acceptOperation({ id, actor: current.requester, requestKey: applyKey,
         requestHash: hash, kind: "git.integrate", payloadJson: JSON.stringify(payload),
         planJson: encodeOperationPlan(plan) });

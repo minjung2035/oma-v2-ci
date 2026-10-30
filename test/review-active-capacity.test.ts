@@ -170,7 +170,7 @@ for (const kind of ["merge", "challenge"] as const)
     }
   });
 
-test("active-capacity production smoke: author stop/start invalidates and replaces existing HIGH approval bundles", async () => {
+test("active-capacity production smoke: author stop/start preserves frozen HIGH approval bundles", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice"] });
   try {
     addHistoricalAuthorAndPeer(f);
@@ -178,39 +178,19 @@ test("active-capacity production smoke: author stop/start invalidates and replac
     const prepared = await candidateFor(f, "merge");
     await f.open("alice", { tier: "HIGH", candidate: prepared.candidate }, "high-open");
     const name = f.requestName("high-open");
-    const oldApproval = f.stateOf(name).approval!.id;
+    const approval = f.stateOf(name).approval!.id;
+    await lifecycle.stop(f.auth("bob"), "bob", "stop-author");
+    await f.reviews.advanceAll();
     assert.equal(f.stateOf(name).required, 0);
     assert.equal(f.stateOf(name).approvalValid, true);
-    await lifecycle.stop(f.auth("bob"), "bob", "stop-author");
-    assert.equal(f.stateOf(name).required, 1);
-    assert.equal(f.stateOf(name).approvalValid, false);
-    await assert.rejects(f.vote("principal", name, "approve", "stale zero-peer decision", "stale-decision", oldApproval),
-      { code: "APPROVAL_STALE" });
-    await f.reviews.advanceAll();
-    assert.equal(f.stateOf(name).approval, null);
-    const withdrawn = f.store.attestations.all().flatMap(row => "messages" in row.operation.plan ? row.operation.plan.messages : [])
-      .find(message => message.review?.role === "withdrawn" && message.review.approval === oldApproval);
-    assert.ok(withdrawn, "a durable withdrawal informs the Principal of changed author occupancy");
-    assert.equal(f.git(["rev-parse", "refs/heads/main"]), prepared.base);
+    assert.equal(f.stateOf(name).approval!.id, approval);
     await lifecycle.start(f.auth("alice"), "carol", "activate-peer");
-    await f.vote("carol", name, "approve", "independent HIGH review", "fresh-peer");
-    const current = f.stateOf(name).approval!.id;
-    assert.notEqual(current, oldApproval);
-    await assert.rejects(f.vote("principal", name, "approve", "old approval", "old-again", oldApproval),
-      { code: "APPROVAL_STALE" });
     await lifecycle.stop(f.auth("carol"), "carol", "stop-independent-peer");
     await lifecycle.start(f.auth("alice"), "bob", "reactivate-author");
-    assert.equal(f.stateOf(name).required, 0);
-    assert.equal(f.stateOf(name).approvalValid, false, "the old one-peer bundle no longer matches active capacity");
     await assert.rejects(f.vote("bob", name, "approve", "reactivated author", "self-vote"), { code: "SELF_REVIEW" });
-    await assert.rejects(f.vote("principal", name, "approve", "superseded one-peer approval", "stale-peer-decision", current),
-      { code: "APPROVAL_STALE" });
-    await f.reviews.advanceAll();
-    const replacement = f.stateOf(name).approval!;
-    assert.notEqual(replacement.id, current);
-    assert.deepEqual(replacement.votes, []);
-    assert.equal(f.stateOf(name).approvalValid, true);
-    await f.vote("principal", name, "approve", "fresh active-capacity decision", "current-decision", replacement.id);
+    assert.equal(f.stateOf(name).required, 0);
+    assert.equal(f.stateOf(name).approval!.id, approval);
+    await f.vote("principal", name, "approve", "frozen-capacity decision", "current-decision", approval);
     assert.equal(f.stateOf(name).display, "applied");
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), prepared.candidate);
   } finally { f.close(); }
@@ -256,7 +236,7 @@ test("active-capacity production smoke: absent or stopped non-author reviewers n
   } finally { f.close(); }
 });
 
-test("active-capacity production smoke: Principal decision frozen before author departure cannot pass acceptance or apply authority",
+test("active-capacity production smoke: Principal decision remains valid across historical author departure",
   { timeout: 10_000 }, async () => {
     const f = fixture({ maxWorkers: 2, workers: ["alice"] });
     const frozen = Promise.withResolvers<void>();
@@ -281,17 +261,15 @@ test("active-capacity production smoke: Principal decision frozen before author 
         return result;
       };
       pending = f.vote("principal", name, "approve", "frozen zero-peer decision", "racing-decision", approval);
-      const refused = assert.rejects(pending, { code: "BROKER_UNAVAILABLE" });
       await frozen.promise;
       await lifecycle.stop(f.auth("bob"), "bob", "stop-during-decision");
       resume.resolve();
-      await refused;
-      assert.equal(f.store.getOperation("principal", "racing-decision"), null);
-      assert.equal(f.stateOf(name).approvalValid, false);
-      assert.equal(f.stateOf(name).required, 1);
-      assert.throws(() => f.reviews.assertApplicable(f.store.getOperation("alice", "race-open")!.id),
-        { code: "INTEGRATION_CONDITIONS" });
-      assert.equal(f.git(["rev-parse", "refs/heads/main"]), prepared.base);
+      await pending;
+      assert.equal(f.store.getOperation("principal", "racing-decision")?.state, "succeeded");
+      assert.equal(f.stateOf(name).required, 0);
+      assert.equal(f.stateOf(name).approval!.id, approval);
+      assert.equal(f.stateOf(name).display, "applied");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), prepared.candidate);
     } finally {
       resume.resolve();
       await pending?.catch(() => {});

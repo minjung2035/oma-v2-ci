@@ -253,7 +253,7 @@ test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is ref
   const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const principal = defaults.agentProfiles[defaults.principalProfile]!;
   // A valid configuration with a Principal only.
-  const config = validateConfig({ ...defaults, agentProfiles: { [defaults.principalProfile]: { ...principal, childProfile: null } }, initialResidents: [] });
+  const config = validateConfig({ ...defaults, schemaVersion: 4, agentProfiles: { [defaults.principalProfile]: { ...principal, childProfile: null } }, initialResidents: [] });
   const settings = settingsOf("/nonexistent/config.json", config);
   assert.equal(settings.workerProfile, null, "the Principal's profile was taken for the Workers'");
   const fields = fieldsOf(config, settings.workerProfile);
@@ -271,7 +271,7 @@ test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is ref
   assert.equal(settingsOf("/nonexistent/config.json", defaults).workerProfile, worker);
   assert.ok(applyField(settingsOf("/nonexistent/config.json", defaults), WORKER_INTEGRATE, "on").agentProfiles[worker]!.capabilities.includes("code.integrate"));
   // A legacy profile the Principal names as its child is still the Workers' own.
-  const legacy = validateConfig({ ...defaults, initialResidents: [], agentProfiles: {
+  const legacy = validateConfig({ ...defaults, schemaVersion: 4, initialResidents: [], agentProfiles: {
     ...defaults.agentProfiles, [defaults.principalProfile]: { ...principal, childProfile: worker },
   } });
   assert.equal(settingsOf("/nonexistent/config.json", legacy).workerProfile, worker);

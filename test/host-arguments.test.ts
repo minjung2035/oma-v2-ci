@@ -54,3 +54,11 @@ test("Personal resume refuses a non-OMA history before preparing any state", () 
     assert.equal(existsSync(data), false); assert.equal(existsSync(home), false); assert.equal(existsSync(run), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+
+test("explicit archive is a host-only command with an exact existing Society selector",()=>{
+  assert.deepEqual(parseOmaArguments(["archive","--society","demo","--config","/tmp/config.json"]),
+    {kind:"archive",society:"demo",config:"/tmp/config.json"});
+  for(const args of [["archive"],["archive","--society","../demo"],["archive","--society","demo","--mode","personal"],
+    ["archive","--society","demo","--resume","x"]])assert.throws(()=>parseOmaArguments(args),{code:"INVALID_REQUEST"});
+});

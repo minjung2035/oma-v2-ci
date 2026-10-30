@@ -1062,3 +1062,15 @@ native 실행에 적용하지 않는다. 원본 renderer와 시험은 [보관 �
 **MUST [UNIT-TPL-003]** template에 없는 task service, inference daemon, Git daemon, mail server, supervisor를 추가하지 않는다. host.js는 기존 broker에 host-only IPC를 호출하고 종료하는 entrypoint다. unit 이름을 model이 임의 제공하지 못한다.
 
 **MUST [UNIT-TPL-004]** 실제 설치 전 rendered units에 `systemd-analyze --user verify` 또는 지원 환경의 동등한 verify를 실행한다. ExecStart를 true로 바꾼 검사본은 문법/dependency 검사일 뿐 runtime 통과가 아니다. Type=notify와 SO_PEERCRED/cgroup/종료 경계는 S-01/S-06 실서비스 검증이 필요하다.
+
+## Version 5 architecture improvement cutover
+
+DR67의 independent recovery/wake, durable review qualification, explicit retry,
+bounded result files, host first-Worker recovery와 optional workload/pipeline 계약은
+[architecture improvement contracts](implementation/architecture-improvements.md)가 소유한다.
+이 확장은 해당 version의 새 fact/config에 적용하며 기존 terminal receipts와 accepted
+intent를 재직렬화하지 않는다. 단계별 실행 판정은 validation을 확인한다.
+
+DR68/DR69의 proposal/integration identity 분리, 파생 provenance index, 선택 검색과
+keep-hot/명시적 archive 역시 위 owner 계약의 적용 범위다. 과거 고정 architecture
+본문과 authored approval은 이 전환을 이유로 다시 쓰지 않는다.

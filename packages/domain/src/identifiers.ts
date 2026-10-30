@@ -58,14 +58,17 @@ const DERIVED_REFRESH_RE = /^~refresh\.(.+)\.(\d+)$/;
 const PLAIN_ORDINAL_RE = /^(0|[1-9][0-9]*)$/;
 export function isDerivedRequestKey(value: unknown): value is string {
   if (typeof value !== "string") return false;
+  const attempt = /^~attempt\.(op-[a-f0-9-]+)\.(0|[1-9][0-9]*)$/.exec(value);
+  if (attempt !== null) return isValidOperationId(attempt[1]) && Number.isSafeInteger(Number(attempt[2]));
   const apply = DERIVED_APPLY_RE.exec(value);
   if (apply !== null) return isValidOperationId(apply[1]);
   const refresh = DERIVED_REFRESH_RE.exec(value);
   return refresh !== null && isValidOperationId(refresh[1]) &&
     PLAIN_ORDINAL_RE.test(refresh[2]!) && Number.isSafeInteger(Number(refresh[2]));
 }
-export function applyRequestKeyFor(operationId: string): string {
-  return `~apply.${operationId}`;
+export function applyRequestKeyFor(operationId: string, attemptNumber = 0): string {
+  if (!Number.isSafeInteger(attemptNumber) || attemptNumber < 0) throw new TypeError("invalid integration attempt number");
+  return attemptNumber === 0 ? `~apply.${operationId}` : `~attempt.${operationId}.${attemptNumber}`;
 }
 export function refreshRequestKeyFor(operationId: string, ordinal: number): string {
   if (!Number.isSafeInteger(ordinal) || ordinal < 0) throw new TypeError("refresh ordinal must be a non-negative integer");

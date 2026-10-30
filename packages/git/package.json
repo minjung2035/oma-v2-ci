@@ -95,6 +95,18 @@
     "./candidate-check": {
       "types": "./dist/candidate-check.d.ts",
       "default": "./dist/candidate-check.js"
+    },
+    "./download-cache": {
+      "types": "./dist/download-cache.d.ts",
+      "default": "./dist/download-cache.js"
+    },
+    "./integration-preparation": {
+      "types": "./dist/integration-preparation.d.ts",
+      "default": "./dist/integration-preparation.js"
+    },
+    "./provenance-index": {
+      "types": "./dist/provenance-index.d.ts",
+      "default": "./dist/provenance-index.js"
     }
   },
   "scripts": {
@@ -109,7 +121,8 @@
     "@oma/native": "0.1.0",
     "@oma/file-descriptors": "0.1.0",
     "@oma/process": "0.1.0",
-    "@oma/storage": "0.1.0"
+    "@oma/storage": "0.1.0",
+    "@oma/tool-files": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

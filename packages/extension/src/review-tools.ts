@@ -17,7 +17,7 @@ export function registerReviewTools(pi: ExtensionAPI, context: { client: Client;
     name: "oma_review_diff", label: "Read exact review diff",
     description: "Read the exact committed patch for a merge or challenge, with candidate/base identity, hash and byte pagination. proposal (default) is the request's frozen patch; original on a challenge is its target merge's patch. Keep name, view and path fixed while passing next as cursor until null. One page or a path-filtered patch is not the whole change.",
     parameters: Type.Object({
-      name, view: Type.Optional({ ...stringEnum(["proposal", "original"]), description: "proposal reads this request's patch; original reads the target merge for a challenge. Defaults to proposal." }),
+      name, view: Type.Optional({ ...stringEnum(["proposal", "original", "applied", "context"]), description: "applied pages the stored exact integration diff (dataBase64 preserves arbitrary bytes); proposal reads this request's patch; original reads the target merge for a challenge. Defaults to proposal." }),
       path: Type.Optional(Type.String({ description: "Optional repository path restricting the displayed diff, not the review's scope." })),
       cursor: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, description: "Byte cursor from the previous page's next field; omit to start at zero." })),
     }),
@@ -30,18 +30,28 @@ export function registerReviewTools(pi: ExtensionAPI, context: { client: Client;
     name: "oma_review_respond", label: "Comment or cast an independent vote",
     description: principal
       ? "Approve or reject a HIGH or capacity-fallback review using its current broker-issued approval mail. Supply name, action, reasoned body and that mail's approval id. The decision applies to the frozen request identity; stale or ordinary mail is not approval authority. A Principal reject permanently closes this request; it is not a request for revisions."
-      : "Comment on a merge or challenge, or record an independent approve/reject vote after examining its exact change and relevant evidence. comment is discussion only. Supply name, action and a reasoned body; contributors cannot vote on their own work. LOW merges have no pre-review comments or votes: raise a challenge only after application.",
+      : "Comment on a merge or challenge, or record an independent approve/reject vote after examining its exact change and relevant evidence. comment is discussion only. Use action {kind:\"withdraw\",vote:\"op-...\"} to withdraw your exact vote, or {kind:\"adopt\"} as requester to adopt a legacy request under durable review rules; unproven old votes need fresh review. Use action {kind:\"retry\",expectedAttempt:\"op-...\"} as requester to retry a settled failure, or null after preparation failure. Supply name, action and a reasoned body; contributors cannot vote on their own work. A LOW proposal may require a separate MEDIUM integration-context review after main changes. Inspect status.scope and view context before voting. Use action {kind:\"revise\",expectedRevision:0,base:\"full OID\",candidate:\"full OID\"} to replace your proposal; code votes reset.",
     promptSnippet: principal ? "Decide a review using its current broker-issued approval mail id." : "Record binding review votes with approve/reject; comments and mail are discussion, not votes.",
     parameters: Type.Object({
-      name, action: { ...stringEnum(principal ? ["approve", "reject"] as const : ["comment", "approve", "reject"] as const), description: principal ? "Binding Principal decision for the current broker-issued approval request." : "comment adds discussion; approve or reject records your independent vote." },
+      name, action: { ...(principal ? stringEnum(["approve", "reject"] as const) : Type.Union([stringEnum(["comment", "approve", "reject"] as const), Type.Object({ kind: Type.Literal("withdraw"), vote: Type.String() }, { additionalProperties: false }), Type.Object({ kind: Type.Literal("adopt") }, { additionalProperties: false }), Type.Object({ kind: Type.Literal("revise"), expectedRevision: Type.Integer({minimum:0}), base: Type.String(), candidate: Type.String() }, {additionalProperties:false}), Type.Object({ kind: Type.Literal("retry"), expectedRevision: Type.Integer({minimum:0}), expectedAttempt: Type.Union([Type.String(), Type.Null()]) }, { additionalProperties: false })])), description: principal ? "Binding Principal decision for the current broker-issued approval request." : "comment adds discussion; approve or reject records your independent vote." },
       body: { ...text, description: "Inline rationale with relevant evidence, findings or unresolved risks for this exact request." },
       ...(principal ? { approval: Type.String({ description: "Message id of the current broker-issued approval request, not an ordinary candidate notice." }) } : {}), request,
     }),
     async execute(id, params, signal, _update, engine) {
       requiredName(params.name);
+      const key = requestKeyOf(params.request, { id, tool: "oma_review_respond", params, context: engine });
+      if (typeof params.action === "object") {
+        const control = params.action.kind === "withdraw"
+          ? { kind: "review.withdraw" as const, name: params.name, vote: params.action.vote, reason: params.body }
+          : params.action.kind === "revise"
+          ? {kind:"review.revise" as const,name:params.name,expectedRevision:params.action.expectedRevision,base:params.action.base,candidate:params.action.candidate,reason:params.body}
+          : params.action.kind === "retry"
+          ? { kind: "review.retry" as const, name: params.name, expectedAttempt: params.action.expectedAttempt, expectedRevision: params.action.expectedRevision, reason: params.body }
+          : { kind: "review.adopt" as const, name: params.name, reason: params.body };
+        return textResult(await client.controlReview(control, key, signal), { request: key });
+      }
       const approval = "approval" in params ? params.approval : undefined;
       if (principal && !isValidMessageId(approval)) refused("approval message id", approval);
-      const key = requestKeyOf(params.request, { id, tool: "oma_review_respond", params, context: engine });
       return textResult(await client.respondReview({ name: params.name, action: params.action, body: params.body,
         ...(typeof approval === "string" ? { approval } : {}) }, key, signal), { request: key });
     },
@@ -49,7 +59,7 @@ export function registerReviewTools(pi: ExtensionAPI, context: { client: Client;
   if (principal) return;
   registerTypedTool(pi, {
     name: "oma_merge_open", label: "Open a merge request",
-    description: "Open a merge for an exact committed candidate, publishing it automatically if needed. candidate defaults to HEAD and base to the recorded upstream base; uncommitted edits are excluded. LOW applies without pre-review; MEDIUM normally needs one independent approval; HIGH needs the configured peer floor, then Principal approval. Available peer capacity is maxWorkers minus currently active authors, not all historical authors. Every author remains excluded from voting. If that active-slot capacity cannot fit the normal quorum, the broker requires the peer approvals that can fit, then Principal approval. Temporary unavailability or rejection never enables fallback. An opening receipt is not proof of integration: inspect oma_review_status.",
+    description: "Open a merge for an exact committed candidate, publishing it automatically if needed. candidate defaults to HEAD and base to the recorded upstream base; uncommitted edits are excluded. LOW applies without pre-review; MEDIUM normally needs one independent approval; HIGH needs the configured peer floor, then Principal approval. Available peer capacity is maxWorkers minus authors occupying capacity when the revision was accepted, not all historical authors. Every author remains excluded from voting. If that active-slot capacity cannot fit the normal quorum, the broker requires the peer approvals that can fit, then Principal approval. Temporary unavailability or rejection never enables fallback. An opening receipt is not proof of integration: inspect oma_review_status.",
     parameters: Type.Object({
       tier: { ...stringEnum(["LOW", "MEDIUM", "HIGH"]), description: "Risk tier under project policy; determines peer and Principal approval requirements." },
       title: { ...text, description: "Short description of the committed change." },
@@ -64,7 +74,7 @@ export function registerReviewTools(pi: ExtensionAPI, context: { client: Client;
   });
   registerTypedTool(pi, {
     name: "oma_challenge_open", label: "Challenge an applied merge",
-    description: "Open a post-application challenge to an applied merge, explaining the defect and evidence. Omit replacement for a broker-prepared revert on canonical main; otherwise supply both replacement candidate and base commits, with automatic publication. All challenges normally require the configured peer floor; HIGH also requires Principal approval. Available peer capacity is maxWorkers minus currently active authors, while every historical author remains excluded from voting. When that active-slot capacity cannot fit the quorum, the broker requires the peers that can fit, then Principal approval, including for LOW. Temporary unavailability or rejection never enables fallback. A HIGH merge cannot be challenged as LOW. Opening is not application: inspect oma_review_status.",
+    description: "Open a post-application challenge to an applied merge, explaining the defect and evidence. Omit replacement for a broker-prepared revert on canonical main; otherwise supply both replacement candidate and base commits, with automatic publication. All challenges normally require the configured peer floor; HIGH also requires Principal approval. Available peer capacity is maxWorkers minus authors occupying capacity when the revision was accepted, while every historical author remains excluded from voting. When that active-slot capacity cannot fit the quorum, the broker requires the peers that can fit, then Principal approval, including for LOW. Temporary unavailability or rejection never enables fallback. A HIGH merge cannot be challenged as LOW. Opening is not application: inspect oma_review_status.",
     parameters: Type.Object({
       merge: { ...name, description: "Exact merge-<full UUID> name of an already applied merge." },
       tier: { ...stringEnum(["LOW", "HIGH"]), description: "Challenge risk tier; use HIGH when required by policy or when challenging a HIGH merge." },

@@ -100,7 +100,7 @@ test("Capacity fallback excludes every submitter and cannot override disabled Pr
   } finally { f.close(); }
 });
 
-test("Temporary peer shortage never enables capacity fallback; restart can apply a new configured cap", async () => {
+test("Temporary peer shortage and restart do not rewrite the accepted capacity snapshot", async () => {
   const f = fixture({ maxWorkers: 6, workers: ["alice"] });
   try {
     const candidate = f.candidateWith({ "change.txt": "await independent review\n" });
@@ -114,13 +114,13 @@ test("Temporary peer shortage never enables capacity fallback; restart can apply
     f.policy.maxWorkers = 1;
     f.reopen();
     await f.reviews.advanceAll();
-    assert.equal(f.stateOf(name).display, "principal-pending");
-    assert.equal(f.stateOf(name).required, 0);
+    assert.equal(f.stateOf(name).display, "peer-needed");
+    assert.equal(f.stateOf(name).required, 1);
     assert.equal(f.git(["rev-parse", "main"]), f.base);
   } finally { f.close(); }
 });
 
-test("HIGH merge capacity fallback cannot bypass a stopped peer or reuse a withdrawn approval", async () => {
+test("HIGH merge capacity fallback preserves a stopped peer approval", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice", "bob"] });
   try {
     const candidate = f.candidateWith({ "critical.txt": "requires scrutiny\n" });
@@ -134,10 +134,9 @@ test("HIGH merge capacity fallback cannot bypass a stopped peer or reuse a withd
     f.stop("bob", "stopped");
     await f.reviews.advanceAll();
     assert.equal(f.stateOf(name).required, 1);
-    assert.equal(f.stateOf(name).approval, null);
-    await assert.rejects(f.vote("principal", name, "approve", "Cannot bypass stopped peer", "stale", oldApproval),
-      { code: "APPROVAL_STALE" });
-    assert.equal(f.git(["rev-parse", "main"]), f.base);
+    assert.equal(f.stateOf(name).approval?.id, oldApproval);
+    await f.vote("principal", name, "approve", "Review evidence is unchanged", "decision", oldApproval);
+    assert.equal(f.git(["rev-parse", "main"]), candidate);
   } finally { f.close(); }
 });
 

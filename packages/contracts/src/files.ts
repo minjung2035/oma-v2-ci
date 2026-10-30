@@ -25,3 +25,7 @@ export interface ConnectionSpool {
   releaseConnection(): void;
 }
 
+
+/** Exact broker-produced patch stored before integration acceptance. */
+export interface ReviewDiffArtifact { readonly version: 1; readonly base: string; readonly candidate: string;
+  readonly reference: string; readonly bytes: number; readonly sha256: string }

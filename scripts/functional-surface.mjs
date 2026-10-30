@@ -108,7 +108,7 @@ if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
         return stream;
       };
       await session.prompt("Execute the deterministic surface smoke.");
-      assert.equal(index, steps.length, "every scripted boundary must execute");
+      assert.equal(index, steps.length, "every scripted boundary must execute: " + JSON.stringify({extensionErrors,errors:session.messages.filter(message => message.isError || message.stopReason === "error")}));
       assert.deepEqual(extensionErrors, [], "extension failures must not be swallowed");
     };
     const observations = () => readFileSync(probeOut, "utf8").trim().split("\n").map(line => JSON.parse(line));
@@ -128,13 +128,13 @@ if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
     const selected = active(["insert", "replace_within"]);
     const replaced = active(["insert"]);
     await run([
-      { active: core, calls: [call("read-initial", "read", { path: "sample.txt" }),
+      { active: core, calls: [call("read-initial", "read", { path: "sample.txt", offset: 1, limit: 100 }),
         call("select", "toolset", { select: ["insert", "replace_within"] })] },
       { active: selected, calls: () => {
         const served = anchor("read-initial");
         return [call("replace", "replace", { remove_from: served, remove_to: served, replacement_lines: "ALPHA" })];
       } },
-      { active: selected, calls: [call("read-after-replace", "read", { path: "sample.txt" })] },
+      { active: selected, calls: [call("read-after-replace", "read", { path: "sample.txt", offset: 1, limit: 100 })] },
       { active: selected, calls: () => [call("replace-selection", "toolset", { select: ["insert"] }),
         call("within-old-loadout", "replace_within", { replace_from: anchor("read-after-replace"),
           replace_to: anchor("read-after-replace"), replace_old: "ALPHA", replace_new: "Alpha" })] },
@@ -156,7 +156,7 @@ if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
     await open(SessionManager.open(file, sessionDir), "resume");
     exact(replaced, "restored committed selection");
     await run([
-      { active: replaced, calls: [call("read-resumed", "read", { path: "sample.txt" })] },
+      { active: replaced, calls: [call("read-resumed", "read", { path: "sample.txt", offset: 1, limit: 100 })] },
       { active: replaced, calls: () => [call("reset", "toolset", { select: [] }),
         call("insert-old-loadout", "insert", { anchor: anchor("read-resumed"), direction: "after", lines: "inserted" })] },
       { active: core, calls: [call("insert-refused", "insert", { anchor: "unused", direction: "after", lines: "forbidden" })] },

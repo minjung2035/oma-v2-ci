@@ -1,0 +1,37 @@
+{
+  "endedAt": "2026-10-30T06:43:45.251Z",
+  "verificationBefore": {
+    "files": 15733,
+    "digest": "4367b38229507b1d5ed93af7d83edbe8e217a838c2a759b18062e0be2cf3a8d2"
+  },
+  "verificationAfter": {
+    "files": 15733,
+    "digest": "4367b38229507b1d5ed93af7d83edbe8e217a838c2a759b18062e0be2cf3a8d2"
+  },
+  "verificationUnchanged": true,
+  "changedInputCount": 192,
+  "mismatches": [],
+  "serialAndParallel": {
+    "tests": [
+      14,
+      3993
+    ],
+    "pass": [
+      14,
+      3993
+    ],
+    "fail": [
+      0,
+      0
+    ],
+    "skipped": [
+      0,
+      0
+    ],
+    "cancelled": [
+      0,
+      0
+    ]
+  },
+  "exitCode": 0
+}

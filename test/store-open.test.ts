@@ -124,7 +124,7 @@ for (const alias of ["uri", "hardlink"] as const) {
       );
       assert.equal(child.error, undefined);
       assert.equal(child.signal, "SIGKILL");
-      assert.equal(readFileSync(path).readUInt32BE(60), 4);
+      assert.equal(readFileSync(path).readUInt32BE(60), 5);
       const candidate =
         alias === "uri" ? pathToFileURL(path).href : join(root, "alias.sqlite");
       if (alias === "hardlink") linkSync(path, candidate);

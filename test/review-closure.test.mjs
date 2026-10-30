@@ -5,6 +5,7 @@
  * reviewed counted as reviewed, a review with no oracle or an oracle that is not
  * a test, a missing file, a hand-edited summary. */
 import test from "node:test";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -105,8 +106,9 @@ test("V32A: an assignment is not a review, and a claimed review needs real oracl
 
 test("V32A: with every file reviewed and every lane run, and only then, the verdict is approval", () => {
   const value = ledger();
-  for (const entry of value.files) if (entry.status !== "REMOVED" && entry.status !== "CHANGED_WITH_ORACLE" && entry.status !== "READ_UNCHANGED")
-    Object.assign(entry, { status: "READ_UNCHANGED", by: ["WP32"], oracles: ["V32A"] });
+  for (const entry of value.files) if (entry.status !== "REMOVED")
+    Object.assign(entry, { status: "CHANGED_WITH_ORACLE", by: ["fixture-only"], oracles: ["V32A"],
+      sha256: createHash("sha256").update(readFileSync(entry.path)).digest("hex") });
   const counted = {}; for (const entry of value.files) counted[entry.status] = (counted[entry.status] ?? 0) + 1; value.summary = counted;
   assert.equal(approval(".", value).approved, false, "approved with lanes not run");
   for (const lane of Object.keys(value.lanes)) value.lanes[lane] = "PASS";

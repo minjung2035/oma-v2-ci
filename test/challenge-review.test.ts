@@ -338,7 +338,7 @@ test("mail-v1: a caller-provided revert candidate excludes its submitters from a
   } finally { f.close(); }
 });
 
-test("mail-v1: duplicate and stale challenges of one merge", async () => {
+test("proposal v3: duplicate challenge identity is refused and other proposals remain reviewable", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "dup");
     await f.challenge("alice", { merge: name, tier: "LOW", title: "first revert" }, "ch-a");
@@ -348,21 +348,20 @@ test("mail-v1: duplicate and stale challenges of one merge", async () => {
     const chB = f.requestName("ch-b", "bob");
     // An identical revert identity is a duplicate while the first is live.
     const aliceRevert = openFact(f, chA).identity.candidate;
-    await f.submit("carol", aliceRevert, "s-dupe");   // same candidate+base+tier+revision
     await assert.rejects(
-      f.challenge("carol", { merge: name, tier: "LOW", candidate: aliceRevert, base: f.git(["rev-parse", "refs/heads/main"]) }, "ch-dup"),
+      f.challenge("alice", { merge: name, tier: "LOW", candidate: aliceRevert, base: f.git(["rev-parse", "refs/heads/main"]) }, "ch-dup"),
       (error: unknown) => {
         assert.ok(error instanceof StoreError); assert.equal(error.code, "REQUEST_EXISTS");
         assert.equal((error as { details?: { name?: string } }).details?.name, chA);
         return true;
       });
-    // The first challenge applies; the second goes stale by refresh.
+    // The first challenge applies; the second retains its proposal for review.
     await f.vote("bob", chA, "approve", "ok", "a1");
     await f.vote("carol", chA, "approve", "ok", "a2");
     assert.equal(f.stateOf(chA).display, "applied");
     await f.reviews.advanceAll();
-    assert.equal(f.stateOf(chB).display, "stale");
-    await assert.rejects(f.vote("dave", chB, "approve", "late", "b1"), { code: "REQUEST_CLOSED" });
+    assert.equal(f.stateOf(chB).terminal, null);
+    await f.vote("dave", chB, "approve", "still reviewable", "b1");
     // A new challenge after one applied names the applied one.
     await assert.rejects(f.challenge("dave", { merge: name, tier: "LOW" }, "ch-after"), (error: unknown) => {
       assert.ok(error instanceof StoreError); assert.equal(error.code, "REQUEST_EXISTS");

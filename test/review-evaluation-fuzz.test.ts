@@ -174,7 +174,7 @@ const assertStateShape = (after: ReviewState, o: ReviewEntry, ledger: readonly R
   // Display and the missing/shortfall strings agree with the computed sets.
   const expectedDisplay = after.terminal !== null ? after.terminal
     : after.rejectors.length > 0 ? "blocked"
-    : after.ready ? "applying"
+    : after.ready ? "ready"
     : after.tier === "HIGH" && after.approvalValid ? "principal-pending" : "peer-needed";
   assert.equal(after.display, expectedDisplay, `${lbl}: display`);
   if (after.terminal === "cancelled") assert.ok(after.missing.includes("cancelled"), `${lbl}: missing cancelled`);
@@ -355,7 +355,7 @@ const simulate = (seed: number, index: number): string => {
       `|${after.display}`);
   }
   // Epilogue: an integration projection drives the display deterministically.
-  for (const [state, display] of [["pending", "applying"], ["succeeded", "applied"],
+  for (const [state, display] of [["pending", "waiting-resources"], ["succeeded", "applied"],
       ["failed", "blocked"], ["unknown", "unknown"]] as const) {
     const projected = reviewState({maxWorkers: 64, open: o, entries: [...ledger], eligible: new Set(eligible),
       highPeerFloor: floor, integration: { operation: OP(900), state, errorCode: null }});

@@ -1,0 +1,22 @@
+✔ IMP-R16: reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta (1194.636151ms)
+{"event":"review.advance","request":"op-f565edc9-0e6b-4a31-a3f2-3cc2d9165dc8","code":"CHECK_FAILED"}
+✔ IMP-R17: individual changes pass but combined invariant fails on prepared I (437.281949ms)
+✔ IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-context vote (554.557783ms)
+{"event":"review.advance","request":"op-bf029354-f99e-4a40-9233-043d1014c912","code":"CHECK_FAILED"}
+✔ IMP-R19: revision preserves old failure bytes, resets code approval and races expectedRevision (620.62103ms)
+{"event":"review.advance","request":"op-a099c379-86ca-4de2-b24a-f4d38856b8ba","code":"STALE_BASE"}
+✔ IMP-R20: known main movement before CAS supersedes only the attempt and automatically prepares again (377.321086ms)
+✔ IMP-R21: already-included is a separate fact with no integration receipt (114.904265ms)
+{"event":"review.advance","request":"op-9aa508a1-8866-44c6-8c21-c84e469d2ce6","code":"CHECK_FAILED"}
+✔ IMP-R19: policy adoption preserves qualified code votes but creates current policy authority; host retry is explicit (674.71116ms)
+✔ IMP-R18: conflict stays blocked without repeated preparation and explicit revision resolves it (612.400318ms)
+{"event":"provenance.batch.measurement","counts":[{"submissions":1,"warmProcesses":2,"actors":["bob"]},{"submissions":8,"warmProcesses":2,"actors":["alice","bob","carol","dave"]},{"submissions":32,"warmProcesses":2,"actors":["alice","bob","carol","dave"]},{"submissions":128,"warmProcesses":2,"actors":["alice","bob","carol","dave"]}],"metrics":{"queries":8,"rebuilds":4,"refRecords":128,"graphCommits":129,"actorCommitPairs":510,"gitCalls":20}}
+✔ IMP-R22/R23: native batch index matches historical oracle at 1/8/32/128 submissions; warm calls stay two (5952.832033ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10876.691828

@@ -115,7 +115,10 @@ ensureOwnedDirectory(piRuntime.agentDir, dirname(stateRoot), 0o700);
 // plan can name the store's skills, prompt templates and themes on the argv.
 const packages = cfg.installation.packages === undefined ? undefined
   : packageStoreRoot(cfg.installation.packages) ?? undefined;
+const tmpfs = process.env.OMA_TMPFS_MAX_BYTES;
+if (tmpfs !== undefined && (!/^[1-9][0-9]*$/.test(tmpfs) || !Number.isSafeInteger(Number(tmpfs)))) throw new Error("invalid broker tmpfs bound");
 const confinement = {
+  ...(tmpfs === undefined ? {} : { tmpfsMaxBytes: Number(tmpfs) }),
   libdir: cfg.installation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in.

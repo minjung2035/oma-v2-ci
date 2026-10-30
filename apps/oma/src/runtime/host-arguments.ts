@@ -31,11 +31,19 @@ function options(args: readonly string[], spec: Readonly<Record<string, "flag" |
 export type OmaArguments =
   | { readonly kind: "help" }
   | { readonly kind: "login" }
+  | { readonly kind: "archive"; readonly society: string; readonly config: string | undefined }
   | { readonly kind: "pi"; readonly args: readonly string[] }
   | { readonly kind: "session"; readonly society: string | undefined; readonly config: string | undefined; readonly bindProject: boolean; readonly mode?: SessionMode; readonly resume?: string; readonly noProjectExtensions?: true };
 export function parseOmaArguments(args: readonly string[]): OmaArguments {
   if (["attach", "open", "bind", "stop", "status", "list"].includes(args[0] ?? ""))
     refuse("The macOS VM commands have been retired. Start a native session with oma; existing VM data is preserved and is not migrated.");
+  if (args[0] === "archive") {
+    const parsed = options(args.slice(1), { "--society": "value", "--config": "value" }, 0);
+    if (parsed.help) return { kind: "help" };
+    const society = parsed.value("--society");
+    if (society === undefined || !isValidSocietyName(society)) refuse("archive requires a valid --society");
+    return { kind: "archive", society, config: parsed.value("--config") };
+  }
   if (args[0] === "pi") return { kind: "pi", args: args.slice(1) };
   if (args[0] === "login") {
     const parsed = options(args.slice(1), {}, 0);

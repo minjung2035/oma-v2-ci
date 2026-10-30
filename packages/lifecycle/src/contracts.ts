@@ -14,7 +14,7 @@ export interface SpecResolver {
   observe?: (parent: { name: Actor; profile: string; capabilities: readonly Capability[] }) =>
     Pick<ResolvedAgentSpec, "profile" | "capabilities" | "modelProfile"> | null;
 }
-export type SeedConfig = Pick<HostConfig, "maxWorkers" | "initialResidents" | "principalProfile" | "agentProfiles" | "modelProfiles">;
+export type SeedConfig = Pick<HostConfig, "maxWorkers" | "initialResidents" | "principalProfile" | "agentProfiles" | "modelProfiles" | "firstWorkerRecovery">;
 export type CreatePlan = Extract<OperationPlan, { kind: "agent.create" }>;
 /** Preparation-only refinements of the existing DDL/wire plan. */
 export type PhysicalCreatePlan = CreatePlan & { initialMessage: MessagePlan; existingCreation: null };

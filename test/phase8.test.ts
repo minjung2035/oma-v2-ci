@@ -161,8 +161,8 @@ test("T68a: reconcile startup completes a pending accepted mail (accepted-before
         const opId = env.store.getOperation("a", "kp")!.id;
         const before = env.store.transaction((_t) => env.store.getOperationById(opId))!;
         assert.equal(before.state, "pending");
-        const res = await env.recon.startup();
-        void res;
+        await env.recon.startup();
+        await env.recon.sweep();
         const after = env.store.transaction((_t) => env.store.getOperationById(opId))!;
         assert.equal(after.state, "succeeded");
         assert.equal(existsSync(join(env.dir, "state", "mail", "archive", "cur")), true);

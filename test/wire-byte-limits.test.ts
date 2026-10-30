@@ -13,7 +13,7 @@ import { BrokerChannel } from "@oma/client/channel";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 
 const ID = `rpc-${"0".repeat(8)}-0000-4000-8000-${"0".repeat(12)}`;
-const status = (reason: string) => ({ observedAtMs: 1, agents: [{ agent: "alice", desired: "enabled", activeState: null, subState: null,
+const status = (reason: string) => ({ observedAtMs: 1, creation: { capability: true, childProfile: "worker", childHasMailSend: true, maxWorkers: 6, workerCount: 1, observedAtMs: 1 }, agents: [{ agent: "alice", desired: "enabled", activeState: null, subState: null,
   unitResult: null, execMainStatus: null, pending: 0, preparedBatches: 0, reason, runnerObservedAtMs: null }] });
 const encodedBody = (value: object) => encodeFrame(value).length - 4;
 

@@ -45,7 +45,7 @@ export interface MessagePlan {
  * pins the allowed kind/addressing/audience per role. */
 export type ReviewMailMeta =
   | { role: "thread"; request: OperationId; name: string; revision: number }
-  | { role: "approval"; request: OperationId; name: string; votes: OperationId[] }
+  | { role: "approval"; request: OperationId; name: string; votes: OperationId[]; basis?: OperationId }
   | { role: "withdrawn"; request: OperationId; name: string; approval: MessageId }
   | { role: "decision"; request: OperationId; name: string; approval: MessageId }
   | { role: "notice"; request: OperationId; name: string; part: number; parts: number; sha256: string; bytes: number };
@@ -66,7 +66,7 @@ export type OperationPlan =
       publishedRef: string; message: MessagePlan }
   | { kind: 'git.integrate'; repo: 'project'; target: 'refs/heads/main'; base: Oid;
       candidate: Oid; policyRevision: string; checkProfileDigest: string; policyIdentity: string; noopRef: string | null;
-      merge?: { version: 1; request: OperationId; name: string; tier: RiskTier; notice: MessagePlan[] } }
+      merge?: ({ version: 1 } | { version: 2 | 3; revision: number; attemptNumber: number; diff?: import("./files.js").ReviewDiffArtifact; preparation?: OperationId }) & { request: OperationId; name: string; tier: RiskTier; notice: MessagePlan[] } }
   | { kind: 'context.publish'; base: Oid | null; candidate: Oid;
       target: 'refs/heads/main'; entries: ContextEntry[]; stagingPath: string; message: MessagePlan; goalMail?: { subject: string }; noopRef: string | null };
 

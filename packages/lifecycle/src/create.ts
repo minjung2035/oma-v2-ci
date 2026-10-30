@@ -33,6 +33,7 @@ export class CreateCoordinator {
   }
 
   async bootstrap(config: SeedConfig): Promise<void> {
+    if (config.firstWorkerRecovery !== undefined) await this.recoverFirst(config);
     if (this.paths.hasGoal()) return;
     const agents = this.store.listAgents();
     const recorded = agents.flatMap(agent => {
@@ -57,6 +58,8 @@ export class CreateCoordinator {
       }
       return;
     }
+    if (config.initialResidents.length < 1)
+      throw new StoreError("INVALID_REQUEST", "new Society requires at least one initial Worker");
     if (config.initialResidents.length > config.maxWorkers)
       throw new StoreError("LIMIT_EXCEEDED", "initial Workers exceed the configured Worker capacity");
     const mail = this.requireMail();
@@ -93,6 +96,62 @@ export class CreateCoordinator {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
+  }
+
+  /** Host configuration is the authorization. This is never an actor tool and
+   * cannot add a Worker to a Society which has ever had one. */
+  private async recoverFirst(config: SeedConfig): Promise<void> {
+    const request = config.firstWorkerRecovery!;
+    const key = `recover-first-${request.key}`;
+    const previous = this.store.getOperation("principal", key);
+    if (previous !== null) {
+      if (previous.kind !== "agent.create" || previous.plan.spec.name !== request.name ||
+          previous.plan.spec.profile !== request.profile || previous.plan.spec.brief !== request.brief)
+        throw new StoreError("REQUEST_KEY_REUSED", "first Worker recovery key already names another seed");
+      return;
+    }
+    const assertEmpty = () => {
+      const principal = this.store.getAgent("principal");
+      if (!principal || principal.role !== "principal" || this.store.listAgents().some(agent => agent.role === "resident"))
+        throw new StoreError("AGENT_CONFLICT", "first Worker recovery requires an existing Society with no Resident history");
+      this.policy.assertCreationCapacity();
+      return principal;
+    };
+    const principal = assertEmpty(), selected = config.agentProfiles[request.profile];
+    if (!selected || request.profile === config.principalProfile || !config.modelProfiles[selected.modelProfile])
+      throw new StoreError("UNSUPPORTED_PROFILE", "first Worker recovery requires an explicit Worker profile");
+    const from = this.workspace.canonicalMain();
+    this.workspace.assertCanonicalBase(from);
+    this.units.assertResidentNamesFree(request.name);
+    const spec: ResolvedAgentSpec = { name: request.name, profile: request.profile, brief: request.brief, from,
+      modelProfile: selected.modelProfile, capabilities: [...new Set(selected.capabilities)].sort() };
+    const auth: AuthContext = { actor: "principal", role: "principal", incarnation: principal.incarnation,
+      channel: "host", capabilities: new Set(resolvedSpecOf(principal).capabilities), peer: this.effects.bootstrapPeer() };
+    const id = this.effects.nextOperationId(), scope = this.effects.newPreacceptScope();
+    try {
+      const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, request.name, request.brief);
+      scope.register({ operationId: id, resource: initialMessage.id, owner: artifact,
+        observe: () => frozenMessageDisposition(this.store, id, initialMessage) });
+      const input = { name: spec.name, from, brief: spec.brief };
+      const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash: resolvedSpecDigest(spec), parent: "principal",
+        workspacePath: workspacePathAt(this.paths.stateRoot, spec.name), execution: "native", initialMessage, existingCreation: null };
+      this.store.transaction(tx => {
+        const replay = this.store.getOperation("principal", key);
+        if (replay !== null) {
+          if (replay.kind !== "agent.create" || replay.plan.specHash !== plan.specHash)
+            throw new StoreError("REQUEST_KEY_REUSED", "first Worker recovery changed during preparation");
+          return;
+        }
+        assertEmpty();
+        tx.acceptOperation({ id, actor: "principal", requestKey: key, requestHash: requestHash("agent.create", input),
+          kind: "agent.create", payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
+        tx.insertAgent({ name: spec.name, specHash: plan.specHash, role: "resident", desired: "provisioning", incarnation: 0,
+          profile: spec.profile, createdBy: "principal", specJson: JSON.stringify(spec) });
+        tx.insertDeliveries([{ messageId: initialMessage.id, recipient: spec.name, operationId: id }]);
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
+    // The ordinary operation recovery owner provisions, publishes and starts it.
   }
 
   async create(auth: AuthContext, source: AgentCreateInput, key: string): Promise<Receipt> {

@@ -2628,3 +2628,53 @@ stale-base/CAS 검사를 유지한다. 상한은 integration policy identity에�
 status와 기본 영어 안내는 정상/실제 peer 요구 수와 fallback 원인을 드러낸다.
 실제 실행 결과와 한계는 [validation](implementation/validation.md)이 소유한다.
 
+
+## DR67 — 진행·검토·결과 파일과 검사 실행의 수명을 분리한다
+
+사용자가 architecture-improvement-spec의 구현을 요청했다. version 5 저장/설정
+경계에서 reviewer 실행 상태와 수락된 vote의 유효성, 긴 복구와 독립 wake,
+변경 검토와 실패한 검사 재시도, 결과의 전체 bytes와 모델의 초기 preview를 분리한다.
+현재 requester 권한·provenance·unknown·단일 writer·최종 CAS는 유지한다.
+기존 accepted/terminal bytes를 새 규칙으로 다시 쓰지 않는다.
+
+선택적 Linux workload budget과 version 2 검사 pipeline은 기존 native owner와
+후손 종료 증거를 재사용한다. pipeline은 한 checkout/HOME을 공유하되 재시도는
+fresh scope다. 단계 로그는 제어 채널과 구분하고, package cache는 검증된 공개
+다운로드만 private attempt로 복원한다. 새 일반 scheduler나 job DB는 추가하지 않는다.
+
+계약과 단계별 cutover는 [architecture improvement contracts](implementation/architecture-improvements.md),
+실제 시험과 미실행 범위는 [validation](implementation/validation.md)이 소유한다.
+이 결정은 아직 구현하지 않은 P3/P4의 완료 또는 과거 authored review의 재승인이 아니다.
+
+
+## DR68 — 변경안 검토와 실제 통합 결과의 수명을 분리한다
+
+2026-10-30. architecture-improvement-spec P3의 구현 결정이다. 새 open은
+version 3이며 B/C revision과 준비된 M/I를 별도 fact로 연결한다. Git의 정상
+merge ancestry로 clean merge를 준비하고 immutable broker ref와 정확한 diff를
+접수 기록에 연결한다. 충돌은 Worker의 명시적 revise로 해결한다. 원본 delta와
+경로 영향이 보수적 재사용 조건을 만족할 때만 코드 승인을 재사용하며 그 밖에는
+최소 MEDIUM의 M/I context 검토를 받는다. HIGH context는 별도의 Principal
+approval identity를 갖는다. 실제 I를 검사하고 현재 권한·정책·원본 작성자와
+승인을 확인한 뒤 main CAS를 한다. 알려진 pre-CAS main 변경은 시도만 대체하고
+unknown은 계속 writer를 막는다. 단순 descendant가 아니라 완료된 CAS 링크의
+연쇄만 과거 반영 증거로 사용할 수 있다. 이미 포함된 C는 별도 included fact다.
+기존 accepted plan, terminal receipt, 과거 vote bytes는 다시 쓰지 않는다.
+
+## DR69 — 누적 조회와 검색 복사, 정상 종료의 필수 비용을 줄인다
+
+2026-10-30. P4a/P4b/P4c 구현 결정이다. 작성자는 인증된 제출과 매번 새로 관측한
+ref batch로부터 계산하는 파생 인덱스를 사용한다. 검색은 이름과 ignore 제어를
+먼저 관측하고 실제 선택된 파일만 복사하며 inode/제어 파일 변경을 다시 확인한다.
+전체 검색과 diff 결과는 SDK-free tool-files/results의 불변 파일·읽기 계약을
+공유한다. Git/Client는 이 subpath만 사용하며 모델 도구와 storage ledger를
+서로 가져오지 않는다. npm 캐시는 pinned read-only toolchain의 기존 cacache를
+사용하고 자체 registry credential/설치 트리 캐시는 만들지 않는다.
+
+기본 종료는 keep-hot이다. 명시적 host archive 또는 선택된 on-close만 기존의
+backup·내용 검증·checkpoint·cold 선택·회수 절차를 수행한다. v2 저장 선택은
+phase/generation과 동일 Society 소유권·action lock으로 archive/resume를 막는다.
+기존 immutable v1 checkpoint는 그대로 읽고, hot 재개에서 전체 해시를 하지
+않는다. active Society의 회수나 종료 후 남겨둔 background 작업은 없다.
+기존 고정 architecture 및 과거 authored review는 변경하지 않는다. 이 결정의
+현지 검증 범위와 제한은 implementation/architecture-improvements.md에 기록한다.

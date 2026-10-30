@@ -1,0 +1,34 @@
+✔ IMP-R07: Principal streams a 1.8 MB UTF-8 line and pages reconstruct exact result (521.088927ms)
+✔ IMP-R08: storage failure is bounded partial output; explicit match limit is reported separately (932.331937ms)
+✔ IMP-R08: immutable result detects content replacement and line range preserves UTF-8 (0.979696ms)
+✔ IMP-R11: large automatic diff is accepted as an exact readable artifact under a small notice bound (305.470623ms)
+{"event":"search.selection.measurement","ignoredBytes":33554432,"paths":10,"selectedFiles":5,"readBytes":91,"copiedBytes":91,"elapsedMs":13}
+✔ IMP-R24: ignored 32MiB payload is never copied; nested rules, hidden, negation, glob and explicit file retain rg semantics (1906.969847ms)
+✔ IMP-R25: rename between selection and payload copy refuses (3.646494ms)
+✔ IMP-R25: symlink between selection and payload copy refuses (1.807322ms)
+✔ IMP-R25: ignore between selection and payload copy refuses (1.665051ms)
+✔ session storage restores Git index, local refs, dirty/ignored files, modes, links and runner history (5772.8815ms)
+✔ session storage shares one repository across sessions and preserves independently restored changes (9585.74649ms)
+ℹ {"sharedSourceBytes":8388608,"storedUniqueBytes":4235447}
+✔ unknown native death retains original workspaces and prevents cold restoration (4702.734151ms)
+✔ changed ledger or lost checkpoint fails closed without provisioning new repositories (5241.257411ms)
+✔ missing tool leaves a hot workspace intact and refuses an archived session (5218.153767ms)
+✔ corrupted backup data never replaces a partial cold cache (5953.594601ms)
+✔ failure after cold commit and partial reclamation recovers the exact checkpoint (5986.975136ms)
+✔ interrupted publication keeps cold selection and recovers without replaying partial cache (6572.372541ms)
+✔ unreadable files and extended attributes retain the complete original workspace (2967.592052ms)
+✔ repository initialization retries an interrupted credential publication using the same key (5754.698107ms)
+✔ a lost cold repository credential is never replaced with a new key (5055.206796ms)
+✔ read-only inspection of a cold SQLite DB may create an empty WAL without stranding its workspace (5757.519025ms)
+{"event":"storage.hot.measurement","ignoredBytes":33554432,"payloadReads":0,"repositoryCreated":false}
+✔ IMP-C05: default hot close/resume reads no payload, hashes no trees and starts no restic (127.998073ms)
+✔ IMP-C06: same-session archive/resume and separate storage objects cannot overlap (5796.713565ms)
+✔ IMP-C07: legacy cold selection remains readable, checkpoint bytes unchanged (5754.574254ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 85112.866543

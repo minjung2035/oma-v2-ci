@@ -208,7 +208,7 @@ test("unreadable files and extended attributes retain the complete original work
     execFileSync("python3", ["-c", "import os,sys; os.setxattr(sys.argv[1], 'user.oma-test', b'preserve')", file]);
     await assert.rejects(a.storage.archive(a.residents), /unpreserved metadata/);
     assert.equal(readFileSync(file, "utf8"), "ignored private bytes\n");
-    assert.equal(existsSync(join(a.stateRoot, "session-storage.json")), false);
+    assert.equal(selection(a).phase, "hot");
   } finally { f.close(); }
 });
 
@@ -254,4 +254,50 @@ test("read-only inspection of a cold SQLite DB may create an empty WAL without s
     const reopened = new Store(database, undefined, { society: "first" });
     try { assert.equal(reopened.getAgent("worker").incarnation, 2); } finally { reopened.close(); }
   } finally { f.close(); }
+});
+
+
+test("IMP-C05: default hot close/resume reads no payload, hashes no trees and starts no restic", async () => {
+  const f=fixture(); const original=fs.readSync;
+  try {
+    const a=f.society("hot"); writeFileSync(join(a.workspace,"ignored/large"),Buffer.alloc(32*1024*1024,42));
+    const before=await digestCacheTrees(a.stateRoot,a.roots);let payloadReads=0;
+    fs.readSync=(fd,...args)=>{
+      const path=readlinkSync(`/proc/self/fd/${fd}`);
+      if(path===join(a.stateRoot,"runtime.sqlite") || a.roots.some(root=>path.startsWith(join(a.stateRoot,root)+"/"))) {payloadReads++;throw Error("hot path must not read payload");}
+      return original(fd,...args);
+    };syncBuiltinESMExports();
+    await a.storage.close(a.residents);await a.storage.restore();
+    assert.equal(payloadReads,0);assert.equal(existsSync(a.storage.projectRoot),false);assert.equal(selection(a).phase,"hot");
+    fs.readSync=original;syncBuiltinESMExports();
+    assert.equal((await digestCacheTrees(a.stateRoot,a.roots)).digest,before.digest);
+    console.log(JSON.stringify({event:"storage.hot.measurement",ignoredBytes:32*1024*1024,payloadReads,repositoryCreated:false}));
+  } finally {fs.readSync=original;syncBuiltinESMExports();f.close();}
+});
+
+test("IMP-C06: same-session archive/resume and separate storage objects cannot overlap",async()=>{
+  const f=fixture();
+  try {
+    const a=f.society("race");let release;const gate=new Promise(resolve=>release=resolve);let entered;
+    const atGate=new Promise(resolve=>entered=resolve);
+    const held=SessionStorage.forSociety({stateRoot:a.stateRoot,society:"race",fence:999,log:()=>{},quiesce:async()=>{entered();await gate;}});
+    const closing=held.close(a.residents);await atGate;
+    await assert.rejects(held.restore(),/already running/);await assert.rejects(a.storage.archive(a.residents),/already running/);
+    release();await closing;assert.equal(selection(a).phase,"hot");
+    const generation=selection(a).generation;
+    await a.storage.close(a.residents,"on-close");assert.equal(selection(a).phase,"cold");assert.ok(selection(a).generation>generation);
+    const cold=selection(a);const immutable=readFileSync(join(a.stateRoot,"session-checkpoints",cold.checkpoint.snapshot+".json"));
+    await a.storage.restore();assert.equal(selection(a).phase,"hot");assert.ok(selection(a).generation>cold.generation);
+    assert.deepEqual(readFileSync(join(a.stateRoot,"session-checkpoints",cold.checkpoint.snapshot+".json")),immutable);
+  }finally{f.close();}
+});
+
+test("IMP-C07: legacy cold selection remains readable, checkpoint bytes unchanged",async()=>{
+  const f=fixture();try{
+    const a=f.society("legacy");await a.storage.archive(a.residents);const checkpoint=selection(a).checkpoint;
+    const immutable=readFileSync(join(a.stateRoot,"session-checkpoints",checkpoint.snapshot+".json"));
+    writeFileSync(join(a.stateRoot,"session-storage.json"),immutable,{mode:0o600});
+    await a.storage.restore();assert.equal(selection(a).phase,"hot");
+    assert.deepEqual(readFileSync(join(a.stateRoot,"session-checkpoints",checkpoint.snapshot+".json")),immutable);
+  }finally{f.close();}
 });

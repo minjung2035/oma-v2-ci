@@ -107,3 +107,16 @@ test("V11C: config edits do not rewrite accepted Store identities or frozen spec
     fixture.close();
   }
 });
+
+
+test("storage config v5 preserves explicit on-close and freezes the validated value",async()=>{
+  const f=createCompleteConfigurationFixture();try{
+    const {validateConfig}=await import("@oma/config");
+    const raw={...structuredClone(f.config),schemaVersion:5,storage:{closeMode:"on-close"}};
+    const config=validateConfig(raw);assert.equal(config.storage?.closeMode,"on-close");assert.equal(Object.isFrozen(config.storage),true);
+    assert.equal(validateConfig({...raw,storage:{closeMode:"keep-hot"}}).storage?.closeMode,"keep-hot");
+    assert.throws(()=>validateConfig({...raw,storage:{closeMode:"silent-eviction"}}));
+    assert.throws(()=>validateConfig({...raw,storage:{closeMode:"keep-hot",background:true}}));
+    assert.throws(()=>validateConfig({...raw,schemaVersion:4}));
+  }finally{f.close();}
+});

@@ -1,6 +1,9 @@
 /** Application composition only: common execution policy + storage recovery
  * observations + the selected kernel/sandbox primitives. No command replay.
  */
+import { WorkloadBudget } from "@oma/platform-linux/workload-budget";
+import { configurePreparationPlacement, preparationShutdownBarrier } from "@oma/process/preparation";
+import type { WorkloadResourceProfile } from "@oma/contracts/host";
 import { ExecutionCoordinator, ExecutionNotStarted, type BlockedExecution, type RecoveryScope } from "@oma/process/owned-execution";
 import type { CommandSpec } from "@oma/process/command";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
@@ -48,6 +51,25 @@ export async function recoverExecutionState(stateRoot: string, fresh: boolean): 
   await withAsyncCleanup(() => new ExecutionCoordinator(journal, selected.observe, selected.acquire).recover(), () => journal.close());
 }
 export class ExecutionRuntime {
+  private workload: WorkloadBudget | undefined;
+  private releasePlacement: (() => void) | undefined;
+  configureResources(profile: WorkloadResourceProfile, identity: string) {
+    if (this.workload) throw new StoreError("INTERNAL_ERROR", "workload profile is already bound");
+    this.workload = new WorkloadBudget(profile, identity);
+    this.releasePlacement = configurePreparationPlacement(() => this.workload?.acquire());
+    return this.workload.observation;
+  }
+  private async launch(command: CommandSpec, options: Record<string, unknown>) {
+    const budget = this.workload, lease = budget?.acquire();
+    try {
+      const scope = await this.selected.launch(budget?.command(command) ?? command, { ...options, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
+      return { ...scope, result: scope.result.then(result => ({ ...result, ...(lease === undefined ? {} : { resources: { ...lease.events(), scope: lease.path } }) })),
+        close: () => { scope.close(); lease?.close(); } };
+    } catch (error) {
+      if (lease !== undefined) try { lease.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "workload launch remains owned"); }
+      throw error;
+    }
+  }
   private readonly journal: ExecutionJournal;
   private readonly selected = backend();
   private readonly owner: ExecutionCoordinator<ExecutionWitness>;
@@ -58,7 +80,7 @@ export class ExecutionRuntime {
   recover(): Promise<void> { return this.owner.recover(); }
   run(slot: string, command: CommandSpec, signal: AbortSignal | undefined, authorize: () => void, inheritedFds: readonly number[] = [],
     stderrFd?: number, prepared?: () => void) {
-    return this.owner.run({ slot, launch: () => this.selected.launch(command, { inheritedFds,
+    return this.owner.run({ slot, launch: () => this.launch(command, { inheritedFds,
       ...(stderrFd === undefined ? {} : { stderrFd }), ...(signal === undefined ? {} : { signal }) }), authorize,
       ...(signal === undefined ? {} : { signal }), ...(prepared === undefined ? {} : { prepared }) });
   }
@@ -68,9 +90,9 @@ export class ExecutionRuntime {
     return this.owner.begin({ slot, launch: execution => {
       let spec: CommandSpec;
       try { spec = command(execution); } catch (error) { throw new ExecutionNotStarted(error); }
-      return this.selected.launch(spec, { signal, inheritedFds, ...output });
+      return this.launch(spec, { signal, inheritedFds, ...output });
     }, authorize, prepared, signal });
   }
   confirmDead(slot: string): boolean { return this.owner.confirmDead(slot); }
-  async close(): Promise<void> { await this.owner.drain(); this.journal.close(); }
+  async close(): Promise<void> { await this.owner.drain(); await preparationShutdownBarrier(); this.releasePlacement?.(); this.workload?.close(); this.journal.close(); }
 }

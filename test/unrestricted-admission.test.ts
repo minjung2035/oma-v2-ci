@@ -37,7 +37,7 @@ class ScriptedUnits extends PolicyExecution {
   override observe(agent: string): ExecutionObservation { return this.state.get(agent) ?? idle; }
   override async observeAsync(agent: string): Promise<ExecutionObservation> { return this.observe(agent); }
   override confirmDead(agent: string): boolean { return this.observe(agent).activeState !== "active"; }
-  override start(agent: string): void { this.starts.push(agent); }
+  override start(agent: string): void { this.starts.push(agent); this.state.set(agent, running); }
   override stop(agent: string): ExecutionObservation {
     this.stops.push(agent);
     if (!this.stubborn.has(agent)) this.state.set(agent, idle);

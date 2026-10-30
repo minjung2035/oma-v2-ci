@@ -849,7 +849,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact accepted mail operation", async (t) => {
+test("NATIVE-AUDIT-READY-01: foreground readiness verifies accepted evidence and independently recovers the exact mail operation", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-d1-"));
     const society = `au${Date.now().toString(36)}`;
     const runRoot = join(dir, "runtime");
@@ -920,11 +920,17 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
         await entryReady(child, () => stderr);
         // at READY time the admin socket must already exist (start before READY)
         assert.equal(existsSync(join(runRoot, "oma", society, "admin.sock")), true);
-        // and the pending mail op was recovered BEFORE READY (ordered bootstrap)
+        // Readiness verifies accepted evidence; physical publication has its own
+        // lane. Observe this exact receipt, never infer success from readiness.
         const storeAfter = new Store(join(stateRoot, "runtime.sqlite"));
-        const op = storeAfter.transaction((_t) => storeAfter.getOperationById(recoveryId));
+        const deadline = Date.now() + 10000;
+        let op = storeAfter.getOperationById(recoveryId);
+        while (op?.state !== "succeeded" && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            op = storeAfter.getOperationById(recoveryId);
+        }
         assert.equal(op?.state, "succeeded");
-        assert.equal(existsSync(join(stateRoot, "mail", "archive", "cur")), true, "result mail materialized before READY");
+        assert.equal(existsSync(join(stateRoot, "mail", "archive", "cur")), true, "exact result mail materialized");
         storeAfter.close();
         await stopEntry(child);
         void stderr;

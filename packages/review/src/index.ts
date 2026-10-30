@@ -35,7 +35,7 @@ export class ReviewModule {
     this.preparation = new ReviewPreparation(store, this.ledger, messages, effects, bounds);
     this.acceptance = new ReviewAcceptance(store, mail, this.ledger, effects, society);
     this.advancement = new ReviewAdvancement(store, this.ledger, messages, this.acceptance, effects, bounds);
-    this.statusView = new ReviewStatus(this.ledger, effects, this.advancement.oversize);
+    this.statusView = new ReviewStatus(this.ledger, { ...effects, executionPhase: request => effects.executionPhase?.(request) ?? (this.advancement.preparing.has(request) ? "preparing" : undefined) });
   }
 
   async record(auth: AuthContext, key: string, input: ReviewInput): Promise<Receipt> {
@@ -68,7 +68,7 @@ export class ReviewModule {
     // §5.4: an accepted open or vote may make the request ready; advance inside
     // its own try/catch so no application failure rewrites this receipt.
     if ((receipt.state === "succeeded" || receipt.state === "pending" || receipt.state === "unknown") &&
-        (value.kind === "merge.open" || value.kind === "challenge.open" || value.kind === "vote")) {
+        (value.kind === "merge.open" || value.kind === "challenge.open" || value.kind === "vote" || value.kind === "review.retry" || value.kind === "review.revise")) {
       const requestId = (value.kind === "merge.open" || value.kind === "challenge.open")
         ? this.store.getOperation(auth.actor, key)?.id
         : this.ledger.requestByName(value.name)?.operation.id;

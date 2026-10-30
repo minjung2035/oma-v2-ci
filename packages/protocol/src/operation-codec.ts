@@ -165,10 +165,26 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
                 payload.body !== fact.body || fact.approval !== (payload.approval ?? null))
               corrupt("vote payload differs from frozen fact");
             return;
+          case "review.withdraw": case "review.invalidate":
+            if (payload.kind !== fact.kind || payload.vote !== fact.vote || payload.reason !== fact.reason)
+              corrupt("review revocation payload differs from frozen fact");
+            return;
+          case "review.revise":
+            if (payload.kind !== fact.kind || payload.expectedRevision !== fact.revision - 1 || payload.base !== fact.identity.expectedBase || payload.candidate !== fact.identity.candidate || payload.reason !== fact.reason) corrupt("revision payload differs from frozen fact");
+            return;
+          case "review.retry":
+            if (payload.kind !== fact.kind || payload.reason !== fact.reason || payload.expectedAttempt !== fact.expectedAttempt)
+              corrupt("review retry payload differs from frozen fact");
+            return;
+          case "review.adopt":
+            if (payload.kind !== fact.kind || payload.reason !== fact.reason) corrupt("review adoption payload differs from frozen fact");
+            return;
           case "cancel":
             if (!record(payload) || payload.kind !== "cancel" || payload.reason !== fact.reason)
               corrupt("cancel payload differs from frozen fact");
             return;
+          case "review.integration": case "review.supersede": case "review.included":
+          case "review.preparation-failed":
           case "refresh":
             if (!same(payload, fact)) corrupt("refresh payload differs from frozen fact");
             return;
@@ -261,12 +277,12 @@ function assertOperationRecord(value: unknown): asserts value is CheckedOperatio
 function validateDerivedKey(plan: PlanFor<MutationMethod>, requestKey: RequestKey): void {
   // Broker-derived keys exist only for a merge plan's apply or a refresh fact.
   const mergePlan = plan.kind === "git.integrate" ? plan.merge : undefined;
-  const refreshFact = plan.kind === "attest.record" && "messages" in plan && plan.fact.kind === "refresh"
+  const refreshFact = plan.kind === "attest.record" && "messages" in plan && ["refresh", "review.preparation-failed", "review.integration", "review.supersede", "review.included"].includes(plan.fact.kind)
     ? plan.fact : undefined;
   if (mergePlan !== undefined) {
-    if (requestKey !== applyRequestKeyFor(mergePlan.request)) corrupt("merge integration requires its derived apply key");
+    if (requestKey !== applyRequestKeyFor(mergePlan.request, mergePlan.version !== 1 ? mergePlan.attemptNumber : 0)) corrupt("merge integration requires its derived apply key");
   } else if (refreshFact !== undefined) {
-    if (refreshKeyOrdinalOf(requestKey, refreshFact.request) === null)
+    if (refreshKeyOrdinalOf(requestKey, "request" in refreshFact ? refreshFact.request : "") === null)
       corrupt("refresh fact requires its derived request key");
   } else if (isDerivedRequestKey(requestKey)) {
     corrupt("a derived request key belongs only to a merge plan or refresh fact");
@@ -294,6 +310,34 @@ function validateAttestation(plan: PlanFor<"attest.record">, value: CheckedOpera
     };
     const problem = reviewFactRelationProblem(value.actor, fact, request);
     if (problem !== null) corrupt(problem);
+    if (fact.kind === "review.integration") {
+      const rawSource=context.relations.operation(fact.sourceOperation), source=rawSource === null ? null : decode(rawSource);
+      const sf=source?.kind === "attest.record" ? source.plan.fact : null;
+      const sourceIndex=source === null ? null : context.relations.attestation?.(source.id);
+      const sourceIdentity=sf && (sf.kind === "merge.open" || sf.kind === "challenge.open" || sf.kind === "review.revise" || (sf.kind === "review.adopt" && sf.version === 3)) ? sf.identity : null;
+      if (!source || !sf || !same(sourceIdentity,fact.source) || !record(sourceIndex) || !safeInteger(sourceIndex.sequence) || sourceIndex.sequence >= index.sequence ||
+          (source.id !== fact.request && (!("request" in sf) || sf.request !== fact.request)) ||
+          fact.preparedRef !== (fact.identity.expectedBase === fact.source.expectedBase ? null : `refs/oma/prepared/${value.id}`) ||
+          (fact.preparedRef === null && fact.identity.candidate !== fact.source.candidate) ||
+          fact.diff.base !== fact.identity.expectedBase || fact.diff.candidate !== fact.identity.candidate ||
+          fact.diff.reference !== `oma-result:${value.id.slice(3)}:${fact.diff.sha256}`)
+        corrupt("prepared integration ownership or proposal link differs");
+    }
+    if (fact.kind === "vote" && fact.version === 3 && fact.scope !== null) {
+      const rawScope = context.relations.operation(fact.scope), scope = rawScope === null ? null : decode(rawScope);
+      const scopeIndex = scope === null ? null : context.relations.attestation?.(scope.id);
+      if (scope?.kind !== "attest.record" || scope.plan.fact.kind !== "review.integration" ||
+          scope.plan.fact.request !== fact.request || scope.plan.fact.revision !== fact.revision || !scope.plan.fact.context ||
+          !record(scopeIndex) || !safeInteger(scopeIndex.sequence) || scopeIndex.sequence >= index.sequence)
+        corrupt("context vote must bind its earlier prepared integration and proposal revision");
+    }
+    if (fact.kind === "review.withdraw" || fact.kind === "review.invalidate") {
+      const rawVote = context.relations.operation(fact.vote), vote = rawVote === null ? null : decode(rawVote);
+      const voteIndex = vote === null ? null : context.relations.attestation?.(vote.id);
+      if (vote?.kind !== "attest.record" || vote.plan.fact.kind !== "vote" || vote.plan.fact.request !== fact.request ||
+        !record(voteIndex) || !safeInteger(voteIndex.sequence) || voteIndex.sequence >= index.sequence ||
+        (fact.kind === "review.withdraw" && vote.actor !== value.actor)) corrupt("revocation must name its earlier authenticated vote on this request");
+    }
     if (fact.kind === "merge.open" || (request !== null && request.open !== null)) {
       // An open fact's messages name the new request itself; every other
       // fact's name the request it references.
@@ -301,13 +345,24 @@ function validateAttestation(plan: PlanFor<"attest.record">, value: CheckedOpera
       const open = isOpen ? fact : request!.open!;
       const requestId = isOpen ? value.id : fact.request;
       const named = (payload as { name?: unknown }).name;
-      if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel") && named !== open.name)
+      if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel" || fact.kind === "review.retry" || fact.kind === "review.revise" || fact.kind === "review.adopt" || fact.kind === "review.withdraw" || fact.kind === "review.invalidate") && named !== open.name)
         corrupt("review payload names a different request");
       for (const message of plan.messages) {
         if (message.review === undefined || message.review.name !== open.name || message.review.request !== requestId)
           corrupt("review message differs from its request");
-        if (message.review.role === "approval" && !same(message.approvalFor ?? null, open.identity))
-          corrupt("approval mail names a different candidate identity");
+        if (message.review.role === "approval") {
+          let identity = open.identity;
+          if (message.review.basis !== undefined && message.review.basis !== requestId) {
+            const basisRaw = message.review.basis === value.id ? null : context.relations.operation(message.review.basis);
+            const basis = message.review.basis === value.id ? fact : basisRaw === null ? null : (() => {
+              const op = decode(basisRaw); return op.kind === "attest.record" ? op.plan.fact : null;
+            })();
+            if (!basis || (basis.kind !== "review.integration" && basis.kind !== "review.revise" && !(basis.kind === "review.adopt" && basis.version === 3)) || basis.request !== requestId)
+              corrupt("approval basis is not this proposal or its integration context");
+            identity = basis.identity;
+          }
+          if (!same(message.approvalFor ?? null, identity)) corrupt("approval mail names a different scoped identity");
+        }
       }
       // A succeeded review result names the request's frozen name.
       const result = value.state === "succeeded" && typeof value.result_json === "string"
@@ -325,7 +380,23 @@ function validateIntegration(plan: PlanFor<"git.integrate">, value: CheckedOpera
       (request.plan.fact.kind !== "merge.open" && request.plan.fact.kind !== "challenge.open"))
     corrupt("merge integration names no review request");
   const open = request.plan.fact;
+  if (plan.merge.version !== 1 && plan.merge.diff !== undefined) {
+    const diff = plan.merge.diff;
+    if (diff.base !== plan.base || diff.candidate !== plan.candidate ||
+        diff.reference !== `oma-result:${value.id.slice(3)}:${diff.sha256}`)
+      corrupt("integration diff identity differs from its owning attempt");
+  }
   if (request.actor !== value.actor) corrupt("merge integration actor differs from its requester");
+  if (plan.merge.version === 3) {
+    const preparationRaw = plan.merge.preparation === undefined ? null : context.relations.operation(plan.merge.preparation);
+    const preparation = preparationRaw === null ? null : decode(preparationRaw);
+    const fact = preparation?.kind === "attest.record" ? preparation.plan.fact : null;
+    if (!fact || fact.kind !== "review.integration" || fact.request !== request.id || fact.revision !== plan.merge.revision ||
+      fact.identity.expectedBase !== plan.base || fact.identity.candidate !== plan.candidate || fact.identity.policyRevision !== plan.policyRevision ||
+      fact.checkProfileDigest !== plan.checkProfileDigest || fact.policyIdentity !== plan.policyIdentity || fact.tier !== plan.merge.tier || open.name !== plan.merge.name)
+      corrupt("integration differs from its immutable prepared context");
+    return;
+  }
   if (open.name !== plan.merge.name || open.tier !== plan.merge.tier ||
       open.identity.expectedBase !== plan.base || open.identity.candidate !== plan.candidate ||
       open.identity.policyRevision !== plan.policyRevision)

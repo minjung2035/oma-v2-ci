@@ -3,13 +3,12 @@ import type { AuthContext, Oid, OperationId } from "@oma/contracts";
 import type { ReviewRequestSummary, ReviewStatusResult, ReviewStatusQuery, ReviewRequestList } from "@oma/contracts/public-wire";
 import { StoreError } from "@oma/domain/errors";
 import { reviewState, type ReviewState } from "@oma/domain/review-evaluation";
-import { workerReviewStatus } from "./status-projection.js";
+import { workerReviewStatus, integrationStatus, reviewDisplay } from "./status-projection.js";
 import { ReviewAuthorityReader } from "./authority.js";
 import { PRINCIPAL, isOpenFact, type OpenRequest, type ReviewEffects } from "./types.js";
 export class ReviewStatus {
   constructor(private readonly ledger: ReviewAuthorityReader,
-    private readonly effects: Pick<ReviewEffects, "main" | "currentPolicy">,
-    private readonly oversize: ReadonlySet<OperationId>) {}
+    private readonly effects: Pick<ReviewEffects, "main" | "currentPolicy" | "executionPhase">) {}
   /** The main observation shared by every status answer: present → oid,
    * anything unobservable → null, corrupt → STORE_CORRUPT. */
   private mainObservation(): { oid: Oid | null; observedAtMs: number } {
@@ -25,7 +24,7 @@ export class ReviewStatus {
     const main = this.mainObservation();
     if (auth.role === "principal") {
       if (query.reviewerAfter !== undefined) throw new StoreError("CAPABILITY_DENIED", "reviewer observations belong to Workers");
-      return this.principalStatus(query.name);
+      return this.principalStatus(query.name, main);
     }
     if (query.name !== undefined) return this.workerStatus(query.name, main, frameBytes, responseId, query.reviewerAfter);
     const opens = this.ledger.projection().reverse().filter(({ open }) => open.operation.plan.fact.kind === `${query.kind}.open`);
@@ -42,7 +41,7 @@ export class ReviewStatus {
       if (!("messages" in plan) || !isOpenFact(plan.fact))
         throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
       return { name: state.name, kind: state.kind, tier: state.tier, title: plan.fact.title,
-        requester: state.requester, display: state.display };
+        requester: state.requester, display: reviewDisplay(state, main, this.blockingConditions(state).length > 0, this.effects.executionPhase?.(state.request)) };
     };
     const result: ReviewRequestList = { requests, omitted: opens.length - start, next: null, main };
     const baseBytes = Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result }));
@@ -78,23 +77,23 @@ export class ReviewStatus {
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
     const openFact = openPlan.fact;
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
-    const missing = [...state.missing];
-    if (state.ready) {
-      try {
-        const current = this.effects.currentPolicy();
-        if (current.policyRevision !== state.identity.policyRevision)
-          missing.push(`the host policy revision changed (now ${current.policyRevision}); open a new request`);
-      } catch { missing.push("the host policy cannot be read now"); }
-    }
-    if (this.oversize.has(state.request))
-      missing.push("the completion notice exceeds the document bound; split the change");
+    const conditions = this.blockingConditions(state);
+    const missing = [...state.missing, ...conditions], blocked = conditions.length > 0;
     const reviewers = this.ledger.reviewers(state).filter(row => reviewerAfter === undefined || row.name > reviewerAfter);
-    return workerReviewStatus(state, openFact, missing, main, frameBytes, responseId, reviewers);
+    return workerReviewStatus(state, openFact, missing, main, frameBytes, responseId, reviewers, blocked, this.effects.executionPhase?.(state.request));
+  }
+
+  private blockingConditions(state: ReviewState): string[] {
+    if (state.terminal !== null || state.integration?.state === "succeeded") return [];
+    const conditions = this.ledger.executionConditions(state);
+    try { const current = this.effects.currentPolicy(); if (current.policyRevision !== state.identity.policyRevision) conditions.push(`the host policy revision changed (now ${current.policyRevision}); adopt the current policy`); }
+    catch { conditions.push("host policy cannot be read now"); }
+    return conditions;
   }
 
   /** The Principal sees a request only when an approval mail reached it or the
    * request applied; an unseen name and a hidden one get the same refusal. */
-  private principalStatus(name: string | undefined): ReviewStatusResult {
+  private principalStatus(name: string | undefined, main: { oid: Oid | null; observedAtMs: number }): ReviewStatusResult {
     const refuse = (): never => {
       throw new StoreError("CAPABILITY_DENIED",
         name === undefined ? "no request is visible to the Principal"
@@ -108,7 +107,7 @@ export class ReviewStatus {
     if (open === undefined) return refuse();
     const input = this.ledger.inputFor(open);
     const state = reviewState(input);
-    const visible = state.integration?.state === "succeeded" ||
+    const visible = integrationStatus(state, main).integrationPhase === "applied" ||
       input.open.messages.some(message => message.review?.role === "approval" && message.recipients.includes(PRINCIPAL)) ||
       state.entries.some(entry => entry.messages.some(message => message.review?.role === "approval" &&
         message.recipients.includes(PRINCIPAL)));
@@ -117,11 +116,12 @@ export class ReviewStatus {
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
     const openFact = openPlan.fact;
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
+    const blocked = this.blockingConditions(state).length > 0;
     return {
       name: state.name, kind: state.kind, tier: state.tier, title: openFact.title,
-      identity: { ...state.identity },
+      observedAtMs: main.observedAtMs, identity: { ...state.identity }, ...integrationStatus(state, main, blocked, this.effects.executionPhase?.(state.request)),
       approval: state.approval !== null && state.approvalValid ? state.approval.id : null,
-      display: state.display,
+      display: reviewDisplay(state, main, blocked, this.effects.executionPhase?.(state.request)),
       ...(openFact.kind === "challenge.open" ? { target: { name: openFact.target.name,
         integration: openFact.target.integration, identity: { ...openFact.target.identity } } } : {}),
     };

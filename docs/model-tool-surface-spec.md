@@ -480,3 +480,14 @@ Scripted provider는 plumbing 검증이고 실제 모델 선택의 증거가 아
 - 설치물·launch·manifest·prompt·현재 문서·테스트 caller에 실행 가능한 구 모델용 CLI나 tool alias가 남지 않는다.
 - 전체 기능을 카탈로그에 보존하고, core는 항상 보이며, 선택은 누적이 아니라 교체된다. 역할·provenance·schema와 실제 호출 가능 도구가 일치한다.
 - §9의 실제 수행 결과가 완료 주장을 뒷받침한다. static/schema 통과, mock 성공, 미구현 인터페이스 존재만으로 완료라 하지 않는다.
+
+## DR67 result and review actions
+
+The existing review action surface includes own-vote withdrawal, legacy adoption
+and explicit failed-attempt retry. Host invalidation/recovery does not become an
+ordinary Worker/Principal authority. Status reports preparation, execution,
+application and notice delivery separately. `read` accepts actor-scoped
+`oma-result:` references with bounded byte/line pages; automatic applied diffs
+are available through the existing review diff action. Full result retention
+does not change source-write permission. The versioned owner contract is
+[architecture improvements](implementation/architecture-improvements.md).

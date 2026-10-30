@@ -217,7 +217,7 @@ const reviewMailMetaCheck: Check = (value) => {
         name: requestNameCheck, revision: checkInt({ min: 0 }) })(value);
     case "approval": {
       const invalid = checkObject({ role: checkEnum(["approval"] as const), request: operationIdCheck,
-        name: requestNameCheck, votes: checkArray(operationIdCheck) })(value);
+        name: requestNameCheck, votes: checkArray(operationIdCheck), basis: checkOptional(operationIdCheck) })(value);
       if (invalid !== null) return invalid;
       const votes = (value as { votes: string[] }).votes;
       return new Set(votes).size === votes.length ? null : "duplicate approval votes";
