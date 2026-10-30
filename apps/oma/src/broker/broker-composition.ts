@@ -85,7 +85,8 @@ export function createBroker(input: BrokerComposition): Broker {
     views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => views.publishStatus(snapshot, agents),
       observeRunnerSource: read => views.observeRunnerSource(read) }),
     reconcile: reconcile === null ? null : Object.freeze({
-      sweep: () => reconcile.sweep(), wait: (actor: string, incarnation: number) => reconcile.wait(actor, incarnation),
+      sweep: () => reconcile.sweep(),
+      wait: (actor: string, incarnation: number, messages: readonly string[]) => reconcile.wait(actor, incarnation, messages),
       deferredWork: (actor: string, incarnation: number) => reconcile.deferredWork(actor, incarnation),
     }),
     status: Object.freeze({ request: () => status.request() }),

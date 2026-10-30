@@ -103,16 +103,30 @@ export class Broker {
           throw new StoreError("CAPABILITY_DENIED", "wait is a Resident's own run intent");
         const run = this.runLeases.get(auth.actor);
         if (!run) throw new StoreError("STALE_RUN", "wait requires a live run");
-        const accepted = run.wait(auth.incarnation, observe);
-        if (!observe) this.reconcile?.wait(auth.actor, auth.incarnation);
-        return accepted;
+        // Validate the handoff and record its scheduling boundary before
+        // accepting wait. A failed observation must not leave a half-set intent.
+        if (!observe) {
+          const messages = run.waitMessages(auth.incarnation);
+          this.reconcile?.wait(auth.actor, auth.incarnation, messages);
+        }
+        return run.wait(auth.incarnation, observe);
       },
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
     const internalPorts = { ...dependencies.internal, peers: projectInternalPeers(this.peers),
       mail: { ...dependencies.internal.mail,
-        prepare: (auth: AuthContext) => dependencies.internal.mail.prepare(auth, this.reconcile?.deferredWork(auth.actor, auth.incarnation)),
+        prepare: async (auth: AuthContext) => {
+          const run = this.runLeases.get(auth.actor);
+          if (!run) throw new StoreError("STALE_RUN", "batch handoff requires a live run");
+          run.wait(auth.incarnation, true); // Validate without requesting wait.
+          const batch = await dependencies.internal.mail.prepare(auth, this.reconcile?.deferredWork(auth.actor, auth.incarnation));
+          if (this.runLeases.get(auth.actor) !== run)
+            throw new StoreError("STALE_RUN", "run changed during batch preparation");
+          run.wait(auth.incarnation, true);
+          if (batch !== null) run.recordBatch(batch);
+          return batch;
+        },
       },
     };
     this.internalAdmission = { isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission() };

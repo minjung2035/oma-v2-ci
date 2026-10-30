@@ -41,15 +41,19 @@ export class ReconcileModule {
   get preacceptCollection(): PreacceptCollection | null { return this.collected; }
   private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
-  /** A live run's explicit wait suppresses only work already eligible then.
-   * It is neither delivery completion nor durable execution intent. */
-  wait(actor: Actor, incarnation: number): void {
+  /** Wait suppresses only the batch handed to this run and earlier waits
+   * inherited by this exact automatic invocation. Unhanded mail stays runnable,
+   * even if it arrived before wait or exceeded the current batch's capacity. */
+  wait(actor: Actor, incarnation: number, handedMessages: readonly string[]): void {
     const agent = this.store.getAgent(actor);
     if (!agent || agent.role !== "resident" || agent.incarnation !== incarnation)
       throw new StoreError("STALE_RUN", "wait scheduling requires the current Resident incarnation");
     const previous = this.waiting.get(actor);
     if (previous?.incarnation === incarnation && previous.specHash === agent.specHash) return;
-    this.waiting.set(actor, { incarnation, specHash: agent.specHash, messages: new Set(this.effects.pendingWork(actor)) });
+    const deferred = new Set([...(this.deferredWork(actor, incarnation) ?? []), ...handedMessages]);
+    const pending = this.effects.pendingWork(actor);
+    this.waiting.set(actor, { incarnation, specHash: agent.specHash,
+      messages: new Set([...deferred].filter(message => pending.has(message))) });
   }
   /** Only an automatic fresh-work activation may defer the waited batch.
    * Explicit starts and a recovered broker retain ordinary oldest-first delivery. */

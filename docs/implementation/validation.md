@@ -4,6 +4,27 @@
 실제 Sol medium 비교와 native Darwin qualification은 미완료다.
 아래 실행 결과는 각 당시 입력의 기록이며 현재 source의 전체 PASS가 아니다.
 
+## wait 직전 도착한 미전달 메일 재활성화 — 2026-10-30
+
+기존 wait는 당시 pending 전체를 보류해, 현재 batch 밖에서 도착한 메일까지 다음
+자동 실행에서 제외했다. broker가 live run에 교부한 정확한 batch를 기록하고,
+그 메시지와 동일 automatic invocation이 이어받은 이전 보류 메시지만 제외하도록 수정했다.
+wait는 ACK·delivery 완료를 만들지 않으며 explicit start·broker 복구의 재전달은 유지한다.
+
+- 수정 전: `benchmark-reliability`의 before-wait·before-prepare(batch 한도 초과)
+  회귀 2개가 실제로 실패했고 기존 3개는 통과했다.
+- 수정 후: 해당 회귀, run identity·handoff, wait boundary, periodic reconcile,
+  recovery accounting, mail settlement 관련 29개 PASS·skip0.
+- 실제 Linux 격리 runner/engine의 `scenario-agent-wait` 5개 PASS·skip0.
+  ACK 유무, tool 결과 저장, 지연된 wait 관측, 복구 시 재전달을 검사했다.
+- 전체 build와 architecture/transaction/boundary/document/spec inventory 검사 PASS.
+- 실제 일반 OMA: Principal `gpt-6-astra`/xhigh, Worker 3명 `gpt-6.1-sol`/medium.
+  GOAL 뒤 commons에 질문을 한 번만 보냈다. 세 Worker 모두 질문이 첫 batch에 없고
+  첫 wait 전에 도착했음을 ledger·session 기록으로 확인했다. 추가 독촉 없이 두 번째
+  batch로 처리하여 42·43·44를 각각 회신했고 Principal이 세 답변을 수신했다.
+
+이는 해당 wait 경계의 회귀·실행 검증이며 SWE-Milestone 본 실행이나 전체 suite 결과는 아니다.
+
 ## toolset의 OpenAI schema 호환성
 
 `packages/tool-runtime/src/tool-surface.ts`에서 `select` 배열의 `uniqueItems: true`만

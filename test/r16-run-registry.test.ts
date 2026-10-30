@@ -128,3 +128,34 @@ test("DR27/RUN-003: wait belongs only to a live incarnation and never survives r
   registry.close();
   assert.throws(() => replacement.wait(2, false), { code: "STALE_RUN" });
 });
+
+test("wait can defer only the immutable batch handed to the same live run", () => {
+  const old = observedPin(10), next = observedPin(11);
+  let acquisitions = 0;
+  const registry = new RunRegistry(() => acquisitions++ === 0 ? old.pin : next.pin);
+  const run = registry.begin("alice", 1, first, "/alice");
+  const batch = { id: "batch-a", agent: "alice", incarnation: 1, messageIds: ["A"] };
+  try {
+    assert.throws(() => run.recordBatch(batch), { code: "STALE_RUN" });
+    run.publish({ socketHostPath: "/a", done() {} });
+    assert.throws(() => run.waitMessages(1), { code: "BATCH_CONFLICT" });
+    assert.throws(() => run.recordBatch({ ...batch, agent: "bob" }), { code: "BATCH_CONFLICT" });
+    assert.throws(() => run.recordBatch({ ...batch, incarnation: 2 }), { code: "STALE_RUN" });
+    run.recordBatch(batch);
+    run.recordBatch({ ...batch, messageIds: ["A"] }); // Exact handoff retry.
+    batch.messageIds.push("unhanded-B");
+    assert.deepEqual(run.waitMessages(1), ["A"]);
+    assert.ok(Object.isFrozen(run.waitMessages(1)));
+    assert.throws(() => run.recordBatch(batch), { code: "BATCH_CONFLICT" });
+    assert.throws(() => run.recordBatch({ ...batch, id: "batch-b" }), { code: "BATCH_CONFLICT" });
+    assert.equal(run.wait(1, false), true);
+    run.revoke();
+    assert.throws(() => run.waitMessages(1), { code: "STALE_RUN" });
+    assert.throws(() => run.recordBatch(batch), { code: "STALE_RUN" });
+    old.population("empty");
+    const replacement = registry.begin("alice", 2, second, "/alice");
+    replacement.publish({ socketHostPath: "/b", done() {} });
+    assert.throws(() => replacement.waitMessages(2), { code: "BATCH_CONFLICT" });
+    assert.equal(replacement.wait(2, true), false);
+  } finally { registry.close(); }
+});

@@ -20,7 +20,7 @@ import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec, withWorkerCapacity } f
 import { testBroker } from "./helpers/broker-fixture.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-for (const arrival of ["after-exit", "before-exit", "interrupted-before-open"] as const)
+for (const arrival of ["after-exit", "before-exit", "before-wait", "before-prepare", "interrupted-before-open"] as const)
   test(`wait scheduling: ${arrival} preserves fresh-work and redelivery ownership`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-wait-scheduling-"));
     const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
@@ -45,7 +45,8 @@ for (const arrival of ["after-exit", "before-exit", "interrupted-before-open"] a
     }, () => 0);
     const units = Object.assign(runtime, { bindRunRevoker: () => {}, bindIncarnationReader: () => {}, scopeRoot: () => null, runnerAlive: () => false,
       readLogs: async () => ({ text: "", truncated: false, observedAtMs: 0 }) });
-    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS, () => broker?.hintWork());
+    const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64,
+      arrival === "before-prepare" ? 1 : 24, TEST_VIEW_LIMITS, () => broker?.hintWork());
     const paths = { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true };
     const lifecycle = createLifecycleModule(store, units, paths,
       withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name)), mail);
@@ -60,6 +61,10 @@ for (const arrival of ["after-exit", "before-exit", "interrupted-before-open"] a
     const send = (key: string) => mail.send(auth("principal"), key, { to: ["alice"], subject: key, kind: "message", body: `mail ${key}` });
     const prepare = async (): Promise<PreparedBatch> => {
       await owner.openRun("alice", runtime.observe("alice").invocationId);
+      const premature = await broker!.dispatch(auth("alice"), { v: 1, id: "no-batch", method: "agent.wait", params: {} }, null);
+      assert.equal((premature as { error: { code: string } }).error.code, "BATCH_CONFLICT");
+      const observed = await broker!.dispatch(auth("alice"), { v: 1, id: "observe-wait", method: "agent.wait", params: { observe: true } }, null);
+      assert.deepEqual((observed as { result: unknown }).result, { accepted: false }, "refused wait must leave no intent");
       const batch = await owner.internalDispatcher.deps.mail.prepare(auth("alice")); assert.ok(batch); return batch;
     };
     const wait = async () => {
@@ -70,9 +75,13 @@ for (const arrival of ["after-exit", "before-exit", "interrupted-before-open"] a
     try {
       await broker.start(); await send("A"); await drain();
       assert.equal(runs.length, 1);
+      if (arrival === "before-prepare") await send("B");
       const a = await prepare(), original = store.getBatch(a.id);
+      assert.equal(a.messageIds.length, 1, "only A has been handed to the live run");
+      if (arrival === "before-wait") await send("B");
       await wait();
-      if (arrival !== "after-exit") { await send("B"); await wait(); }
+      if (arrival === "before-exit" || arrival === "interrupted-before-open") await send("B");
+      await wait(); // Repeated requests must not absorb mail outside the handed batch.
       runs[0]!.finish(); await drain();
       if (arrival === "after-exit") {
         for (let i = 0; i < 12; i++) { broker.hintWork(); await drain(); }

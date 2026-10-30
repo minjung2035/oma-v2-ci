@@ -162,7 +162,7 @@ export interface BrokerViews {
 }
 export interface BrokerReconcile {
   sweep(): Promise<RecoveryCounts>;
-  wait(actor: Actor, incarnation: number): void;
+  wait(actor: Actor, incarnation: number, handedMessages: readonly string[]): void;
   deferredWork(actor: Actor, incarnation: number): ReadonlySet<string> | undefined;
 }
 export interface BrokerStatusRefresh { request(): Promise<StatusSnapshot> }

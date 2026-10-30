@@ -131,6 +131,8 @@ Worker의 control은 무관한 peer 제어 권한을 주지 않는다. Principal
 
 `oma_agent_wait`는 blocking receive도 durable mutation도 아니다. 현재 run에 의도를 남기고 실행 중 tool과 accepted 효과를 손상시키지 않는 기존 delivery 경계에서 continuation을 끝낸다. `observe: true`는 engine 내부 관측으로만 남긴다. wait를 정상 delivery 완료 receipt로 승격하지 않는다.
 
+wait의 보류 대상은 broker가 현재 live run에 교부한 정확한 batch의 message IDs와 해당 automatic invocation이 이어받은 이전 보류 IDs뿐이다. 아직 교부하지 않은 메일은 wait 전에 도착했거나 batch 크기 제한으로 남았어도 다음 activation 대상이다. 첫 wait를 반복해도 보류 범위를 넓히지 않으며, 이전 실행의 늦은 batch 준비 응답은 새 run에 연결하지 않는다. explicit start와 broker 복구는 기존 oldest-first 재전달 정책을 유지한다.
+
 `oma_status.after`는 기존 `next`를 이어 읽는다. `agent`와 `after`의 기존 필터 의미를 보존하며, 다음 페이지를 얻기 위해 모델이 이름을 추측하게 하지 않는다.
 
 ### 4.2 Mail·구독·context·candidate
