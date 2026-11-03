@@ -15,6 +15,7 @@ import type { InternalDispatchDependencies, InternalMailPort, InternalPeerPort, 
 import type { PublicDispatchDependencies, PublicGitPort, PublicReviewPort, PublicLifecyclePort, PublicMailPort, PublicStorePort, PublicUnitsPort, PublicViewsPort } from "@oma/broker/ports";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 
+import type { HostInvocations } from "../runtime/host-invocations.js";
 export function createPublicDispatchPorts(
   store: Store,
   mail: MailModule,
@@ -24,6 +25,7 @@ export function createPublicDispatchPorts(
   git: GitModule | null,
   reviews: PublicReviewPort | null,
   limits: ProtocolLimits,
+  invocations?: HostInvocations,
 ): PublicDispatchPorts {
   const publicStore: PublicStorePort = {
     // WP23.03: parameter checks need which names exist, not every decoded row.
@@ -46,8 +48,12 @@ export function createPublicDispatchPorts(
     hasOperation: (actor, key) => store.getOperation(actor, key) !== null,
   };
   const publicMail: PublicMailPort = {
-    send: (auth, key, input, requestContext) =>
-      mail.send(auth, key, input, requestContext),
+    send: async (auth, key, input, requestContext, stream) => {
+      const linked = invocations?.guardMail(auth, key, input, requestContext) === true;
+      const receipt = await mail.send(auth, key, input, requestContext, stream);
+      if (linked) invocations!.recordMutation(auth, key, requestContext?.kind ?? "mail.send", receipt);
+      return receipt;
+    },
   };
   const publicUnits: PublicUnitsPort = {
     statusSnapshot: () => status.request(),
@@ -57,13 +63,43 @@ export function createPublicDispatchPorts(
   };
   const publicLifecycle: PublicLifecyclePort = {
     creation: auth => lifecycle.creation(auth),
-    setSociety: (auth, state, key) => lifecycle.setSociety(auth, state, key),
-    create: (auth, input, key) => lifecycle.create(auth, input, key),
-    start: (auth, agent, key) => lifecycle.start(auth, agent, key),
-    stop: (auth, agent, key) => lifecycle.stop(auth, agent, key),
-    ack: (auth, message, key) => lifecycle.ack(auth, message, key),
-    follow: (auth, topic, subscribe, key) =>
-      lifecycle.follow(auth, topic, subscribe, key),
+    setSociety: async (auth, state, key) => {
+      const linked = invocations?.guardMutation(auth, key, "society.set", { state }) === true;
+      const receipt = await lifecycle.setSociety(auth, state, key);
+      if (linked) invocations!.recordMutation(auth, key, "society.set", receipt);
+      return receipt;
+    },
+    create: async (auth, input, key, stream) => {
+      const linked = invocations?.guardMutation(auth, key, "agent.create", input) === true;
+      const receipt = await lifecycle.create(auth, input, key, stream, linked ? invocations!.createExpectation(auth, key) : undefined);
+      if (linked) invocations!.recordMutation(auth, key, "agent.create", receipt);
+      return receipt;
+    },
+    start: async (auth, agent, key) => {
+      const linked = invocations?.guardMutation(auth, key, "agent.start", { agent }) === true;
+      const receipt = await lifecycle.start(auth, agent, key);
+      if (linked) invocations!.recordMutation(auth, key, "agent.start", receipt);
+      return receipt;
+    },
+    stop: async (auth, agent, key) => {
+      const linked = invocations?.guardMutation(auth, key, "agent.stop", { agent }) === true;
+      const receipt = await lifecycle.stop(auth, agent, key);
+      if (linked) invocations!.recordMutation(auth, key, "agent.stop", receipt);
+      return receipt;
+    },
+    ack: (auth, message, key) => {
+      const linked = invocations?.guardMutation(auth, key, "mail.ack", { message }) === true;
+      const receipt = lifecycle.ack(auth, message, key);
+      if (linked) invocations!.recordMutation(auth, key, "mail.ack", receipt);
+      return receipt;
+    },
+    follow: (auth, topic, subscribe, key) => {
+      const method = subscribe ? "route.follow" : "route.unfollow";
+      const linked = invocations?.guardMutation(auth, key, method, { topic }) === true;
+      const receipt = lifecycle.follow(auth, topic, subscribe, key);
+      if (linked) invocations!.recordMutation(auth, key, method, receipt);
+      return receipt;
+    },
   };
   const publicGit: PublicGitPort | null =
     git === null
@@ -71,13 +107,28 @@ export function createPublicDispatchPorts(
       : {
           knownRefs: () => git.knownRefs(),
           isPublished: (oid) => git.isPublished(oid),
-          submit: (auth, key, input, bytes) =>
-            git.submit(auth, key, input, bytes),
-          integrate: (auth, key, input) => git.integrate(auth, key, input),
-          publishContext: (auth, key, input, bytes) =>
-            git.publishContext(auth, key, input, bytes),
+          hasSharedCommit: oid => git.hasSharedCommit(oid),
+          submit: async (auth, key, input, bytes) => {
+            const linked = invocations?.guardMutation(auth, key, "git.submit", input) === true;
+            const receipt = await git.submit(auth, key, input, bytes);
+            if (linked) invocations!.recordMutation(auth, key, "git.submit", receipt);
+            return receipt;
+          },
+          integrate: async (auth, key, input) => {
+            const linked = invocations?.guardMutation(auth, key, "git.integrate", input) === true;
+            const receipt = await git.integrate(auth, key, input);
+            if (linked) invocations!.recordMutation(auth, key, "git.integrate", receipt);
+            return receipt;
+          },
+          publishContext: async (auth, key, input, bytes) => {
+            const linked = invocations?.guardMutation(auth, key, "context.publish", input) === true;
+            const receipt = await git.publishContext(auth, key, input, bytes);
+            if (linked) invocations!.recordMutation(auth, key, "context.publish", receipt);
+            return receipt;
+          },
         };
   return {
+    ...(invocations === undefined ? {} : { invocations }),
     store: publicStore,
     mail: publicMail,
     units: publicUnits,
@@ -85,7 +136,12 @@ export function createPublicDispatchPorts(
     lifecycle: publicLifecycle,
     git: publicGit,
     review: reviews === null ? null : {
-      record: (auth, key, input) => reviews.record(auth, key, input),
+      record: async (auth, key, input) => {
+        const linked = invocations?.guardMutation(auth, key, "attest.record", input) === true;
+        const receipt = await reviews.record(auth, key, input, linked ? invocations!.reviewExpectation(auth, key) : undefined);
+        if (linked) invocations!.recordMutation(auth, key, "attest.record", receipt);
+        return receipt;
+      },
       status: (auth, query, frameBytes, responseId) => reviews.status(auth, query, frameBytes, responseId),
     },
     limits,
@@ -96,6 +152,7 @@ export function createInternalDispatchDataPorts(
   store: Store,
   mail: MailModule,
   stateRoot: string,
+  prepare?: InternalMailPort["prepare"],
 ): InternalDispatchDataPorts {
   const internalStore: InternalStorePort = {
     getAgentIdentity: (actor) => {
@@ -108,7 +165,7 @@ export function createInternalDispatchDataPorts(
       store.preparedBatches(agent).map((batch) => batch.id),
   };
   const internalMail: InternalMailPort = {
-    prepare: (auth, deferred) => mail.prepare(auth, deferred),
+    prepare: (auth, deferred, responseId) => prepare ? prepare(auth, deferred, responseId) : mail.prepare(auth, deferred),
     complete: (auth, evidence) => mail.complete(auth, evidence),
     moveToCur: (agent, ids) => mail.moveToCur(agent, ids),
   };

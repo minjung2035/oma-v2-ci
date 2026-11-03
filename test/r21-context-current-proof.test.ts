@@ -1,7 +1,8 @@
+import { removeTree as cleanup } from "./fixtures/cleanup.js";
 // R21: a derived path alone must not be treated as a completed GOAL.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, lstatSync, readdirSync, chmodSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "@oma/storage";
@@ -9,16 +10,9 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { seedGit, gitFixture, gitAuth } from "./fixtures/git-crash.js";
 
-function cleanup(root: string): void {
-  const walk = (path: string): void => {
-    if (!lstatSync(path).isDirectory()) return;
-    chmodSync(path, 0o700);
-    for (const name of readdirSync(path)) walk(join(path, name));
-  };
-  walk(root); rmSync(root, { recursive: true, force: true });
-}
 
-test("R21: forged current path never activates GOAL and corruption does not silently repair it", async () => {
+
+test("001. Forged current path never activates GOAL and corruption does not silently repair it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-activation-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {

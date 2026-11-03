@@ -4,7 +4,7 @@ import type { AuthContext } from "@oma/contracts/runtime";
 import type { Receipt } from "@oma/contracts/durable";
 import type { ResolvedAgentSpec } from "@oma/contracts/host";
 import type { LifecycleLedger, LifecycleUnits } from "./ports.js";
-import { StoreError, publicFailure } from "@oma/domain/errors";
+import { StoreError, publicFailure, errorCodeOf } from "@oma/domain/errors";
 import type { CreationObservation } from "@oma/contracts/public-wire";
 import { LineageSnapshot } from "@oma/domain/lineage";
 import { resolvedSpecDigest } from "@oma/domain/spec-identity";
@@ -24,6 +24,18 @@ export function lifecycleReceipt(store: Pick<LifecycleLedger, "getOperationById"
   return receiptOfOperation(operation);
 }
 export class LifecyclePolicy {
+  /** Metadata-only diagnostic reuse, scoped to this original ledger owner. */
+  private creationCount: { readonly stamp: string; readonly count: number } | null = null;
+  private observedWorkerCount(): number {
+    // Never reuse a display observation for T-local rows or admission. Ports
+    // without the original Store's invalidation/state retain full reads.
+    if (this.store.inTransaction !== false || this.store.observationStamp === undefined) return this.workerCount();
+    const stamp = this.store.observationStamp(); // A failed probe cannot return cached success.
+    if (this.creationCount?.stamp === stamp) return this.creationCount.count;
+    const count = this.workerCount(); // Full original row/lineage validation precedes cache publication.
+    this.creationCount = { stamp, count };
+    return count;
+  }
   constructor(private readonly store: LifecycleLedger, private readonly resolver: SpecResolver) {}
   private workerCount(agents = this.store.listAgents()): number {
     let count = 0;
@@ -82,10 +94,26 @@ export class LifecyclePolicy {
     if (workerCount + unconfirmed >= maxWorkers)
       throw new StoreError("RUN_TERMINATION_UNKNOWN", "released Worker capacity awaits confirmed execution termination");
   }
+  /** Shared name/capacity preflight. It creates no reservation or restart alias. */
+  existingCreation(name: Actor, specHash: string, selected: boolean) {
+    const existing = this.store.getAgent(name);
+    if (existing === null) return null;
+    if (selected && (existing.desired === "stopped" || existing.desired === "retired"))
+      throw new StoreError("AGENT_CONFLICT", "the existing Worker name is stopped or retired; creation cannot restart it");
+    if (existing.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${name} already exists with a different resolved spec`);
+    return existing;
+  }
+  freezeCreation(auth: AuthContext, input: AgentCreateInput): import("@oma/contracts/values").CreateResolution {
+    const policyRevision = this.refresh();
+    if (policyRevision === null) throw new StoreError("UNSUPPORTED_PROFILE", "selected creation requires a stable child-policy revision");
+    const { specHash } = this.resolve(auth, input);
+    if (this.existingCreation(input.name, specHash, true) === null) this.assertCreationCapacity();
+    return { specHash, policyRevision };
+  }
   observeCreation(auth: AuthContext): CreationObservation {
     const parent = assertActorIdentity(this.store, auth);
     const capabilities = effectiveCapabilitiesOf(auth, parent);
-    const observed = { capability: capabilities.includes("agent.create"), workerCount: this.workerCount(), observedAtMs: Date.now() };
+    const observed = { capability: capabilities.includes("agent.create"), workerCount: this.observedWorkerCount(), observedAtMs: Date.now() };
     try {
       this.resolver.refresh?.();
       this.supportedCapacity(observed.workerCount);
@@ -94,7 +122,7 @@ export class LifecyclePolicy {
       return { ...observed, maxWorkers: this.resolver.maxWorkers(),
         childProfile: child?.profile ?? null, childHasMailSend: child?.capabilities.includes("mail.send") ?? false };
     } catch (error) {
-      if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+      if (errorCodeOf(error) === "STORE_CORRUPT") throw error;
       const failure = publicFailure(error);
       return { ...observed, maxWorkers: null, childProfile: null, childHasMailSend: null, error: { code: failure.code, message: failure.message } };
     }
@@ -112,7 +140,7 @@ export class LifecyclePolicy {
   }
   resolve(auth: AuthContext, input: AgentCreateInput): { spec: ResolvedAgentSpec; specHash: string } {
     const parent = assertCurrentActor(this.store, auth, "agent.create");
-    const spec = this.resolver({ name: parent.name, profile: parent.profile, role: parent.role, desired: parent.desired, capabilities: effectiveCapabilitiesOf(auth, parent) }, input);
+    const spec = this.resolver({ name: parent.name, profile: parent.profile, role: parent.role, desired: parent.desired, capabilities: effectiveCapabilitiesOf(auth, parent) }, { name: input.name, from: input.from, brief: input.brief });
     if (!spec) throw new StoreError("CAPABILITY_DENIED", "no delegable child profile");
     return { spec, specHash: resolvedSpecDigest(spec) };
   }

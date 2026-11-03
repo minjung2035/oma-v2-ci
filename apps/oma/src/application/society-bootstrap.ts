@@ -6,12 +6,12 @@ import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
 import { hostLaunchLocation } from "../runtime/assets.js";
 import { defaultSocietyFor, sessionSocietyName } from "@oma/config/defaults";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety, provisionSociety, type ProvisionReport } from "../runtime/provision.js";
+import { assertProjectStateBoundary, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety, provisionSociety, type ProvisionReport } from "../runtime/provision.js";
 import { brokerListening } from "../runtime/broker-supervisor.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { sessionBirthForHistory } from "../runtime/session-catalog.js";
-import { newSessionBirth, publishSessionBirth } from "../runtime/session-mode.js";
+import { newSessionBirth, publishSessionBirth, readSessionBirth, requireCollaborationSociety } from "../runtime/session-mode.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import { packageStoreDir } from "../runtime/packages/index.js";
 import { collectManagedGenerations } from "@oma/config/generations";
@@ -37,6 +37,7 @@ export async function bootstrapSociety(options: {
   readonly requestedSociety: string | undefined;
   readonly externalConfigPath: string | undefined;
   readonly bindRequested: boolean;
+  readonly surface?: "collaboration-v1" | undefined;
   readonly resume: string | undefined;
   readonly dataRoot: string;
   readonly project: string;
@@ -64,6 +65,16 @@ export async function bootstrapSociety(options: {
   // process starts is handed it rather than deriving its own.
   const location = hostLaunchLocation(society, process.env, configArgument);
   const { stateRoot, runRoot, configPath } = location;
+  try { assertProjectStateBoundary(canonicalProjectPath, stateRoot); }
+  catch (error) { fail(`Cannot use the society state directory: ${exceptionText(error)}`, codeFor(error)); }
+  const originalBirth = readSessionBirth(stateRoot);
+  // No implicit promotion, including --surface on an existing old/versionless
+  // Society. Fresh admission is separately closed; retiring its old default is
+  // not permission to provision a new collaboration-v1 Society.
+  if (originalBirth === null && !stateRootHasSociety(stateRoot))
+    fail("collaboration-v1 fresh admission is not qualified; no Society birth or new execution was created", exitFor("SPIKE_UNRESOLVED"));
+  requireCollaborationSociety(originalBirth, society);
+  const selectedSurface = originalBirth.surface;
   // TUI-004/REC-007: before a byte of this society's state is written and
   // before any broker is started, this process either owns the society or it
   // does not. Ownership is this tenure and nothing else -- not a spawned pid,
@@ -155,9 +166,9 @@ export async function bootstrapSociety(options: {
     }
   }
   if (tenure !== null)
-    publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", canonicalProjectPath));
+    publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", canonicalProjectPath, selectedSurface));
   return { dataRoot, project, canonicalProjectPath, society, stateRoot, runRoot, configPath,
-    configArgument, sessionFile, tenure, createdHere, ownershipRefusal };
+    configArgument, sessionFile, tenure, createdHere, ownershipRefusal, surface: selectedSurface };
 }
 export type SocietyBootstrap = Awaited<ReturnType<typeof bootstrapSociety>>;
 /** Settings and conversation tree are prepared only after identity admission.

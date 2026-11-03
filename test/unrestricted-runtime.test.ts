@@ -17,7 +17,7 @@ import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
 
-test("DR37: concurrent writes preserve complete bytes and ordinary tree names", async t => {
+test("001. Concurrent writes preserve complete bytes and ordinary tree names", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-no-quota-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = createContainedWriter(root);
@@ -26,7 +26,7 @@ test("DR37: concurrent writes preserve complete bytes and ordinary tree names", 
   assert.equal(readFileSync(join(root, "dist/source.ts"), "utf8"), "authored");
 });
 
-test("DR37: HTTP and more than four CONNECTs reach literal loopback on arbitrary ports", { timeout: 15000 }, async t => {
+test("002. HTTP and more than four CONNECTs reach literal loopback on arbitrary ports", { timeout: 15000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-open-network-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const server = createServer((req, res) => { assert.equal(req.headers["proxy-authorization"], undefined); res.end(`${req.method}:${req.url}:${req.headers.authorization ?? ""}`); });
@@ -52,7 +52,7 @@ test("DR37: HTTP and more than four CONNECTs reach literal loopback on arbitrary
   for (const socket of sockets) socket.destroy();
 });
 
-test("DR37: two actual confined Workers reach host TCP and UDP concurrently", RESIDENT_TEST_OPTIONS, async t => {
+test("003. Two actual confined Workers reach host TCP and UDP concurrently", RESIDENT_TEST_OPTIONS, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-sandbox-network-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const tcp = createServer((_req, res) => res.end("tcp-ok")); tcp.listen(0, "127.0.0.1"); await once(tcp, "listening");
@@ -70,7 +70,7 @@ test("DR37: two actual confined Workers reach host TCP and UDP concurrently", RE
   }));
 });
 
-test("Native package reads leave retired generation trees and import evidence unchanged", t => {
+test("004. Native package reads leave retired generation trees and import evidence unchanged", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-retired-packages-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const retired = join(root, ".packages-generations", `p-${"a".repeat(64)}`);

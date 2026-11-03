@@ -111,7 +111,7 @@ class PersistedFuzzer {
   }
 }
 
-test("P9 fuzz plan_json: rejected plans are closed failures with no repair and no physical effect", () => {
+test("001. Fuzz plan_json: rejected plans are closed failures with no repair and no physical effect", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p9-plan-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -119,23 +119,29 @@ test("P9 fuzz plan_json: rejected plans are closed failures with no repair and n
     store.transaction(() => store.insertAgent(makeValidAgent("a")));
     const before = snapshot(root), rowsBefore = rowDigest(path);
     const random = new PersistedFuzzer(0x9a1e);
-    const corpus: unknown[] = [...PLAN_INVALID];
+    const corpus: unknown[] = [...PLAN_VALID, ...PLAN_INVALID];
     for (const plan of PLAN_VALID) {
       const text = JSON.stringify(plan);
       for (let index = 0; index < cases / PLAN_VALID.length; index++)
         corpus.push(random.json(text));
     }
+    for (const plan of PLAN_VALID) assert.equal(operationPlanCheck(plan.kind, PLAN_API)(plan), null, `positive control ${plan.kind}`);
+    for (const plan of PLAN_INVALID) {
+      const kind = plan !== null && typeof plan === "object" && "kind" in plan ? plan.kind : undefined;
+      if (isMutationMethod(kind)) assert.notEqual(operationPlanCheck(kind, PLAN_API)(plan), null, JSON.stringify(plan));
+    }
     let closed = 0, accepted = 0;
     for (const plan of corpus) {
       const classification = classifyPersistedPlan({ version: 2, intent: plan });
       let shape: string | null;
-      try { shape = operationPlanCheck("route.follow", PLAN_API)(plan); }
+      const kind = plan !== null && typeof plan === "object" && "kind" in plan ? plan.kind : undefined;
+      try { shape = isMutationMethod(kind) ? operationPlanCheck(kind, PLAN_API)(plan) : "unknown plan kind"; }
       catch (error) { assert.fail(`plan check escaped its rejection type: ${String(error)}`); }
       if (classification.format === "v2" && shape === null) { accepted++; continue; }
       closed++;
       assert.notEqual(classification.format === "unknown" ? "unknown" : shape, null, JSON.stringify(plan)?.slice(0, 120));
     }
-    assert.ok(closed > 0 && accepted >= 0);
+    assert.ok(closed > 0 && accepted > 0);
     assert.equal(snapshot(root), before, "fuzzed plans must not create, repair or rewrite any file");
     assert.equal(rowDigest(path), rowsBefore, "fuzzed plans must not change any durable row");
     store.close();
@@ -143,7 +149,7 @@ test("P9 fuzz plan_json: rejected plans are closed failures with no repair and n
   } finally { removeTree(root); }
 });
 
-test("P9 fuzz result_json: a closed result never disagrees with its accepted plan", () => {
+test("002. Fuzz result_json: a closed result never disagrees with its accepted plan", () => {
   const random = new PersistedFuzzer(0x5e77);
   const corpus: unknown[] = [...RESULT_INVALID];
   for (const result of RESULT_VALID) for (let index = 0; index < 32; index++) corpus.push(random.json(JSON.stringify(result)));
@@ -165,7 +171,7 @@ test("P9 fuzz result_json: a closed result never disagrees with its accepted pla
   assert.ok(closed > 0);
 });
 
-test("P9 fuzz agent spec: a corrupt frozen spec is never degraded to an empty permission set", () => {
+test("003. Fuzz agent spec: a corrupt frozen spec is never degraded to an empty permission set", () => {
   const random = new PersistedFuzzer(0x1234);
   const corpus: unknown[] = [...SPEC_INVALID];
   for (let index = 0; index < 64; index++) corpus.push(random.json(JSON.stringify(SPEC_VALID)));
@@ -185,7 +191,7 @@ test("P9 fuzz agent spec: a corrupt frozen spec is never degraded to an empty pe
   assert.ok(closed > 0, "the corrupt corpus must exercise the closed failure path");
 });
 
-test("P9 fuzz context manifest: unsafe paths and byte/digest coercion are rejected, never repaired", () => {
+test("004. Fuzz context manifest: unsafe paths and byte/digest coercion are rejected, never repaired", () => {
   const random = new PersistedFuzzer(0xc0ffee);
   const corpus: unknown[] = [...MANIFEST_INVALID];
   for (let index = 0; index < 64; index++) corpus.push(random.json(JSON.stringify(MANIFEST_VALID)));
@@ -201,7 +207,7 @@ test("P9 fuzz context manifest: unsafe paths and byte/digest coercion are reject
   assert.ok(closed > 0);
 });
 
-test("P9 fuzz persisted version classifier: unknown formats stay unknown and are never upgraded", () => {
+test("005. Fuzz persisted version classifier: unknown formats stay unknown and are never upgraded", () => {
   const random = new PersistedFuzzer(0xbeef);
   const corpus: unknown[] = [...PLAN_INVALID, ...PLAN_VALID];
   for (const plan of PLAN_VALID) for (let index = 0; index < 16; index++) corpus.push(random.json(JSON.stringify(plan)));
@@ -221,7 +227,7 @@ test("P9 fuzz persisted version classifier: unknown formats stay unknown and are
   assert.ok(unknown > 0);
 });
 
-test("P9 fuzz replay metadata and corpus preservation are recorded", () => {
+test("006. Fuzz replay metadata and corpus preservation are recorded", () => {
   const metadata = replayMetadata(0x9a1e, { cases, corpus: "test/fuzz/persisted-corpus.ts", targets: 6 });
   assert.equal(metadata.schema, 1);
   assert.equal(metadata.prngRevision.length > 0, true);
@@ -239,7 +245,7 @@ test("P9 fuzz replay metadata and corpus preservation are recorded", () => {
   assert.match(corpusText, /MANIFEST_INVALID/);
 });
 
-test("P9 fuzz raw persisted row: a fuzzed plan_json leaves the database bytes untouched", () => {
+test("007. Fuzz raw persisted row: a fuzzed plan_json leaves the database bytes untouched", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p9-row-"));
   const path = join(root, "runtime.sqlite");
   const OP = "op-00000000-0000-4000-8000-0000000000e9";
@@ -262,24 +268,34 @@ test("P9 fuzz raw persisted row: a fuzzed plan_json leaves the database bytes un
     try { control = String((raw.prepare("SELECT plan_json FROM operations WHERE id=?").get(OP) as { plan_json: string }).plan_json); }
     finally { raw.close(); }
     const random = new PersistedFuzzer(0x77aa);
-    for (let index = 0; index < 64; index++) {
-      const candidate = random.json(control);
-      const fuzzed = typeof candidate === "string" ? candidate : (JSON.stringify(candidate) ?? "");
+    const corpus: { intent: unknown; expected?: "accepted" | "corrupt" }[] = [
+      { intent: plan, expected: "accepted" },
+      { intent: { ...plan, message: { ...plan.message, bytes: 0 } }, expected: "corrupt" },
+      ...Array.from({ length: 64 }, () => ({ intent: random.json(JSON.stringify(plan)) })),
+    ];
+    let accepted = 0, closed = 0;
+    for (const { intent, expected } of corpus) {
+      // Mutate the intent, not its version wrapper: semantic validators must run.
+      const fuzzed = serializePlanIntent(intent);
+      assert.equal(JSON.parse(fuzzed).version, 2);
       const database = new DatabaseSync(path);
       try {
-        try { database.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(fuzzed, OP); }
-        catch (error) {
-          // The storage layer rejects non-JSON bytes; that is a closed failure
-          // with no effect, and the accepted row keeps its bytes.
-          assert.match(String(error), /json_valid|CHECK|constraint/i);
-          assert.equal(String((database.prepare("SELECT plan_json FROM operations WHERE id=?").get(OP) as { plan_json: string }).plan_json), control);
-          continue;
-        }
-        // A read must be a closed failure or a decoded row; never a rewrite.
+        database.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(fuzzed, OP);
+        const beforeFiles = snapshot(root), beforeRows = rowDigest(path);
+        let decoded = false;
         const reopened = new Store(path);
-        try { reopened.getOperationById(OP as never); }
-        catch (error) { assert.ok(error instanceof StoreError, String(error)); }
-        finally { reopened.close(); }
+        try { assert.notEqual(reopened.getOperationById(OP), null); decoded = true; }
+        catch (error) {
+          assert.ok(error instanceof StoreError, String(error));
+          assert.equal(error.code, "STORE_CORRUPT");
+          closed++;
+        } finally { reopened.close(); }
+        if (decoded) accepted++;
+        if (expected !== undefined) assert.equal(decoded, expected === "accepted", `oracle control ${expected}`);
+        const shape = operationPlanCheck("mail.send", { ...PLAN_API, operationId: OP, stateRoot: root })(intent);
+        if (shape !== null) assert.equal(decoded, false, "a known semantically invalid intent cannot pass the Store decoder");
+        assert.equal(snapshot(root), beforeFiles, "decoding cannot create, repair or rewrite a non-database file");
+        assert.equal(rowDigest(path), beforeRows, "decoding cannot repair a persisted row");
         const observed = new DatabaseSync(path);
         try { assert.equal(String((observed.prepare("SELECT plan_json FROM operations WHERE id=?").get(OP) as { plan_json: string }).plan_json), fuzzed, "the persisted bytes are never repaired"); }
         finally { observed.close(); }
@@ -288,6 +304,7 @@ test("P9 fuzz raw persisted row: a fuzzed plan_json leaves the database bytes un
         database.close();
       }
     }
+    assert.ok(accepted > 0 && closed > 0, "both the production positive and corruption paths must execute");
     const final = new DatabaseSync(path);
     try { assert.equal(String((final.prepare("SELECT plan_json FROM operations WHERE id=?").get(OP) as { plan_json: string }).plan_json), control); }
     finally { final.close(); }

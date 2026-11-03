@@ -7,7 +7,7 @@ import ts from "typescript";
 import { resolveExportDeclaration } from "../scripts/contract-surface.mjs";
 import { analyzeProgram } from "../scripts/architecture-check.mjs";
 
-test("P2 contracts: architecture exhaustiveness follows type re-exports instead of declaration location", () => {
+test("001. Contracts: architecture exhaustiveness follows type re-exports instead of declaration location", () => {
   const directory = mkdtempSync(join(tmpdir(), "oma-contract-export-"));
   try {
     const fixture = {

@@ -4,7 +4,7 @@ import type { ReviewFact } from "./attestation.js";
 import type { Failure } from "./errors.js";
 import type { ResolvedAgentSpec } from "./host.js";
 import type { Actor, Address, MessageId, Oid, OperationId } from "./identity.js";
-import type { ContextEntry, ExactCandidateIdentity, MailInput } from "./values.js";
+import type { CreateSourcePlan, ContextEntry, ExactCandidateIdentity, MailAttachmentPlan, MailInput } from "./values.js";
 
 export type OperationResult =
   | { kind: "society.set"; state: "open" | "closed" }
@@ -53,11 +53,12 @@ export type ReviewMailMeta =
 export type OperationPlan =
   | { kind: "society.set"; state: "open" | "closed" }
   | { kind: "attest.record"; fact: ReviewFact; messages: MessagePlan[] }
-  | { kind: 'mail.send' | 'agent.continue'; message: MessagePlan }
+  | { kind: 'mail.send'; message: MessagePlan; attachments?: MailAttachmentPlan }
+  | { kind: 'agent.continue'; message: MessagePlan }
   | { kind: 'mail.ack'; recipient: Actor; message: MessageId }
   | { kind: 'route.follow' | 'route.unfollow'; topic: string; agent: Actor }
   | ({ kind: 'agent.create'; spec: ResolvedAgentSpec; specHash: string; parent: Actor;
-      workspacePath: string; initialMessage: MessagePlan | null; existingCreation: OperationId | null } &
+      source?: CreateSourcePlan; workspacePath: string; initialMessage: MessagePlan | null; existingCreation: OperationId | null } &
       ({ execution: 'native' } | { unitNames: string[] }))
   | { kind: 'agent.start' | 'agent.stop'; agent: Actor; previousIncarnation: number;
       desired: 'enabled' | 'stopped'; remainingOperations: OperationId[] }

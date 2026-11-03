@@ -67,7 +67,7 @@ if (process.platform === "linux") {
     ["verified executable survives pathname replacement", { action: "replace" }],
     ["verified executable survives pathname unlink", { action: "unlink" }],
     ["newly installed executable survives pathname replacement", { action: "replace", install: true }],
-  ]) test(`Restic setup: ${name}`, t => {
+  ]) test(`001. Restic setup: ${name}`, t => {
     const value = run(t, options); assertPinned(value);
     assert.equal(value.observed.mutations, 1);
     assert.deepEqual(value.observed.held, value.observed.before);
@@ -75,28 +75,28 @@ if (process.platform === "linux") {
     assert.equal(value.observed.heldLinksAtLaunch, options.action === "unlink" ? "0" : "1");
     assert.equal(value.observed.downloads, options.install ? 1 : 0);
   });
-  test("Restic setup: a replacement before published-file verification is retained and never executed", t => {
+  test("002. Restic setup: a replacement before published-file verification is retained and never executed", t => {
     const { result, observed, target } = run(t, { action: "replace-publication", install: true });
     assert.notEqual(result.status, 0); assert.match(result.stderr, /differs from the pinned release/);
     assert.equal(observed.mutations, 1); assert.equal(observed.execution, null);
     assert.equal(hash(readFileSync(target)), hash(readFileSync(replacement)));
   });
-  test("Restic setup: an existing mismatched executable is retained and never executed", t => {
+  test("003. Restic setup: an existing mismatched executable is retained and never executed", t => {
     const { result, observed, target } = run(t, { corrupt: true });
     assert.notEqual(result.status, 0); assert.match(result.stderr, /differs from the pinned release/);
     assert.equal(observed.execution, null); assert.equal(observed.downloads, 0);
     assert.equal(hash(readFileSync(target)), hash(readFileSync(replacement)));
   });
-  test("Restic setup: mode-zero repair still verifies and executes the same installed file", t => {
+  test("004. Restic setup: mode-zero repair still verifies and executes the same installed file", t => {
     const value = run(t, { mode: 0 }); assertPinned(value);
     assert.equal(lstatSync(value.target).mode & 0o777, 0o755); assert.equal(value.observed.downloads, 0);
   });
-  test("Restic setup: a real execution failure closes the verified descriptor", t => {
+  test("005. Restic setup: a real execution failure closes the verified descriptor", t => {
     const { result, observed } = run(t, { action: "deny-execution" });
     assert.notEqual(result.status, 0); assert.match(result.stderr, /Installed Restic could not run/);
     assert.equal(observed.execution.error, "EACCES"); assert.equal(observed.descriptorClosed, true);
   });
-  test("Restic setup: an unverified archive is never published or executed", t => {
+  test("006. Restic setup: an unverified archive is never published or executed", t => {
     const { result, observed, target } = run(t, { install: true, corruptArchive: true });
     assert.notEqual(result.status, 0); assert.match(result.stderr, /Restic archive checksum mismatch/);
     assert.equal(observed.execution, null); assert.equal(observed.downloads, 1); assert.equal(existsSync(target), false);

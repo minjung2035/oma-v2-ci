@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { RunLease } from "@oma/contracts";
 import type { SandboxHost, SandboxDirectories } from "@oma/contracts/runtime";
 import { StoreError } from "@oma/domain/errors";
-import { agentRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt,
+import { agentRootPathAt, collaborationRecordRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt,
   runnerViewPathAt, runnerSessionDirPathAt } from "@oma/domain/paths";
 import { assertValidatedRunLease, trustedAbsolutePath } from "./run-lease.js";
 import { validBatchViewLimits } from "./batch-view.js";
@@ -17,7 +17,8 @@ export function assertSandboxInstallation(host: SandboxHost): void {
     throw new StoreError("UNSUPPORTED_PROFILE", "common Worker installation cannot select Linux roots or mounts");
   if (!trustedAbsolutePath(host.libdir) || !trustedAbsolutePath(host.node) || !trustedAbsolutePath(host.pi) ||
       host.libdir.includes("\\") || host.pi.includes("\\") ||
-      host.packages !== undefined && !trustedAbsolutePath(host.packages))
+      host.packages !== undefined && !trustedAbsolutePath(host.packages) ||
+      host.recordRoot !== undefined && !trustedAbsolutePath(host.recordRoot))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
   if (host.hidden !== undefined && (!Array.isArray(host.hidden) || host.hidden.some(entry =>
     typeof entry?.path !== "string" || !entry.path || entry.path.startsWith("/") || entry.path.includes("\0") ||
@@ -32,6 +33,8 @@ export function assertResidentContext(host: SandboxHost, lease: RunLease, direct
   if (!trustedAbsolutePath(host.stateRoot) || !trustedAbsolutePath(host.runRoot) || !validBatchViewLimits(host.limits))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident sandbox requires trusted roots and explicit batch view limits");
   assertValidatedRunLease(lease, host.runRoot);
+  if (host.recordRoot !== undefined && host.recordRoot !== collaborationRecordRootPathAt(host.stateRoot, lease.actor))
+    throw new StoreError("AUTH_FAILED", "record mount does not match the trusted actor root");
   const expected: SandboxDirectories = {
     workspace: workspacePathAt(host.stateRoot, lease.actor), home: join(agentRootPathAt(host.stateRoot, lease.actor), "home"),
     archive: join(host.stateRoot, "mail", "archive"), workerArchive: join(host.stateRoot, "mail", "workers"),

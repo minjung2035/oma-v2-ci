@@ -1,3 +1,4 @@
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** AV14 -- arch §7: the runner joins one Pi session to the mail queue, and an
  * activation resumes it ("resume Pi session or create a new session"); PR-003/TUI-004:
@@ -22,10 +23,10 @@ import { residentOptions, prepareResident, RESIDENT_TEST_OPTIONS } from "./fixtu
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
-import { sessionArgv } from "@oma/engine/principal-session";
+import { principalWorkspace, principalSessionDir, sessionArgv } from "@oma/engine/principal-session";
 
 const LIBDIR = fileURLToPath(new URL("../../", import.meta.url));
-const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
+const LIMITS = { subjectBytes: 512, frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
 
 /** Starts the engine with this argv and returns the session file it reports. */
 async function openedSession(command: string, args: readonly string[], cwd: string, env: Record<string, string>, filter?: Uint8Array): Promise<string> {
@@ -66,7 +67,7 @@ function priorSession(dir: string, cwd: string): string {
   return path;
 }
 
-test("AV14 / arch §7: a Resident's activation resumes its existing session instead of starting another", { ...RESIDENT_TEST_OPTIONS, timeout: 60_000 }, async () => {
+test("001. A Resident's activation resumes its existing session instead of starting another", { ...RESIDENT_TEST_OPTIONS, timeout: 60_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av14-resident-"));
   try {
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
@@ -80,14 +81,15 @@ test("AV14 / arch §7: a Resident's activation resumes its existing session inst
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session", { timeout: 60_000 }, async () => {
+test("002. A TUI run resumes the Principal's existing session", { timeout: 60_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av14-principal-"));
   try {
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
-    const workspace = join(root, "workspace"); const sessions = join(root, "sessions"); const agent = join(root, "agent");
+    const workspace = principalWorkspace(root); const sessions = principalSessionDir(root); const agent = join(root, "agent");
     for (const path of [workspace, sessions, agent]) mkdirSync(path, { recursive: true });
-    const args = sessionArgv({ piCommand: runtime.executable, piArgs: [...runtime.args], coreExtension: join(LIBDIR, "packages/extension/dist/index.js"),
-      sessionDir: sessions, workspace, home: workspace, piAgentDir: agent } as never,
+    const extension = join(root, "metadata-probe.mjs"); writeFileSync(extension, "export default () => {};\n");
+    const args = sessionArgv({ piCommand: runtime.executable, piArgs: [...runtime.args], coreExtension: extension,
+      sessionDir: sessions, workspace, home: workspace, piAgentDir: agent, toolSurface: JSON.stringify(collaborationSurface("principal")), collaborationStateRoot: root } as never,
       { society: "s", provider: "pi", model: "current", extensions: [] } as never);
     const prior = priorSession(sessions, workspace);
     assert.equal(await openedSession(runtime.executable, [...runtime.args, ...args], workspace,

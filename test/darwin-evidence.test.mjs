@@ -111,7 +111,7 @@ const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...p
             planned.name === "suspended-image" ? suspendedRecord() :
               planned.name === "mach-token-control" ? tokenControlRecord() : { fixtureAssertionReturned: true } } }));
 
-test("NATIVE-DARWIN: generation control retains nonparent identity, SDK status, actual termination and cleanup context", () => {
+test("001. Native darwin: generation control retains nonparent identity, SDK status, actual termination and cleanup context", () => {
   const good = tokenControlRecord();
   validateDarwinObservation("mach-token-control", { machTokenControl: good });
   for (const change of [
@@ -137,7 +137,7 @@ test("NATIVE-DARWIN: generation control retains nonparent identity, SDK status, 
   validateDarwinObservation("mach-token-control", { machTokenControl: { ...good, wrongVersionStatus: 0 } });
 });
 
-test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
+test("002. Native darwin: descriptor inheritance records require PID, hard-limit, stdio and refusal controls", () => {
   const good = keptDescriptorRecord();
   assert.doesNotThrow(() => validateDarwinObservation("seatbelt-kept-fds", { seatbeltFault: good }));
   for (const key of Object.keys(good)) {
@@ -149,7 +149,7 @@ test("NATIVE-DARWIN: descriptor inheritance records require PID, hard-limit, std
   }
 });
 
-test("NATIVE-DARWIN: signal observations refuse missing PID, delivery and inherited positive controls", () => {
+test("003. Native darwin: signal observations refuse missing PID, delivery and inherited positive controls", () => {
   const good = signalRecord();
   for (const bad of [
     { ...good, unreapedPidControl: false },
@@ -161,7 +161,7 @@ test("NATIVE-DARWIN: signal observations refuse missing PID, delivery and inheri
   ]) assert.throws(() => validateDarwinObservation("seatbelt-signals", { seatbeltSignals: bad }));
 });
 
-test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup and live independent jobs", () => {
+test("004. Native darwin: launchd observations reject missing image controls, cleanup and live independent jobs", () => {
   const good = launchdRecord("launchd-image");
   for (const bad of [
     { ...good, fixtureOnly: false },
@@ -175,7 +175,7 @@ test("NATIVE-DARWIN: launchd observations reject missing image controls, cleanup
   assert.throws(() => validateDarwinObservation("launchd-scope",
     { launchdScope: { ...launchdRecord("launchd-scope"), scope: { afterBootout: { otherAcknowledged: false } } } }));
 });
-test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child cleanup evidence", () => {
+test("005. Native darwin: launchd scope refuses ambiguous lookup, admission and child cleanup evidence", () => {
   const good = launchdRecord("launchd-scope");
   for (const corrupt of [
     scope => { delete scope.admission; },
@@ -226,7 +226,7 @@ test("NATIVE-DARWIN: launchd scope refuses ambiguous lookup, admission and child
   }
 });
 
-test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {
+test("006. Native darwin: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {
   const good = personalRecord();
   for (const bad of [
     { ...good, societyRefusedBeforeState: false }, { ...good, noSocietyProvisioned: false },
@@ -234,7 +234,7 @@ test("NATIVE-DARWIN: Personal startup cannot hide a Society gate bypass or a cha
   ]) assert.throws(() => validateDarwinObservation("personal-entry", { personal: bad }));
 });
 
-test("NATIVE-DARWIN: suspended image observations require real positive contexts and coherent pre-release validation", () => {
+test("007. Native darwin: suspended image observations require real positive contexts and coherent pre-release validation", () => {
   const good = suspendedRecord();
   assert.doesNotThrow(() => validateDarwinObservation("suspended-image", { suspendedImage: good }));
   // START_SUSPENDED is a kernel task stop, not delivery of a particular signal.
@@ -285,11 +285,11 @@ for (const [name, change] of [
   ["wrong observation owner", list => { list[0].observations = { files: { returned: true } }; }],
   ["empty observation", list => { list[0].observations = { process: {} }; }],
   ["extra observation", list => { list[0].observations.files = { returned: true }; }],
-]) test(`NATIVE-DARWIN: evidence refuses ${name}`, () => {
+]) test(`008. Native darwin: evidence refuses ${name}`, () => {
   const list = rows(); change(list); assert.throws(() => validateDarwinCaseSet(list));
 });
 
-test("NATIVE-DARWIN: failed attempts remain explicit failures, never observations", () => {
+test("009. Native darwin: failed attempts remain explicit failures, never observations", () => {
   const list = rows(); list[0] = { ...darwinCasePlan()[0], execution: "NOT_RUN", status: "SETUP_FAILED", error: "SDK unavailable" };
   assert.doesNotThrow(() => validateDarwinCaseSet(list));
   for (const value of [null, [], "completed", true, 0, {}])
@@ -298,7 +298,7 @@ test("NATIVE-DARWIN: failed attempts remain explicit failures, never observation
 });
 
 
-if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refuses Darwin and records every NOT_RUN", () => {
+if (process.platform === "linux") test("010. Native darwin: actual Linux driver refuses Darwin and records every NOT_RUN", () => {
   const out = mkdtempSync(join(tmpdir(), "oma-darwin-refusal-"));
   try {
     const child = spawnSync(process.execPath, [join(root, "scripts/verify-native.mjs"), out],
@@ -323,7 +323,7 @@ if (process.platform === "linux") test("NATIVE-DARWIN: actual Linux driver refus
   } finally { rmSync(out, { recursive: true, force: true }); }
 });
 
-test("NATIVE-DARWIN: real FD oracle distinguishes an inherited canary from a returned descriptor", () => {
+test("011. Native darwin: real FD oracle distinguishes an inherited canary from a returned descriptor", () => {
   const out = mkdtempSync(join(tmpdir(), "oma-fd-oracle-")); let fd;
   try {
     const binary = join(out, "observer"), source = join(root, "test/fixtures/darwin-fd-observer.c");
@@ -346,7 +346,7 @@ test("NATIVE-DARWIN: real FD oracle distinguishes an inherited canary from a ret
   } finally { if (fd !== undefined) closeSync(fd); rmSync(out, { recursive: true, force: true }); }
 });
 
-if (process.platform === "linux") test("NATIVE-DARWIN: Worker fixture refuses the actual Linux kernel before creating state", () => {
+if (process.platform === "linux") test("012. Native darwin: Worker fixture refuses the actual Linux kernel before creating state", () => {
   const work = mkdtempSync(join(tmpdir(), "oma-worker-refusal-"));
   try {
     const child = spawnSync(process.execPath, [join(root, "test/fixtures/darwin-worker.mjs"), "worker-bootstrap"],

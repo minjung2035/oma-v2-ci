@@ -21,7 +21,7 @@ export class LifecycleActions {
   constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "start" | "stop" | "observe" | "confirmDead">,
     private readonly paths: LifecyclePaths, private readonly policy: LifecyclePolicy, private readonly effects: Pick<LifecycleEffects, "nextOperationId">) {}
 
-  async start(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> {
+  async start(auth: AuthContext, agent: Actor, key: string, beforeAccept?: () => undefined): Promise<Receipt> {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("agent.start", { agent });
     const claim = this.store.claimKey(auth.actor, key, hash);
@@ -39,6 +39,8 @@ export class LifecycleActions {
         throw new StoreError("STORE_CORRUPT", "start replay differs from accepted identity");
       if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    if (!prior && beforeAccept && beforeAccept() !== undefined)
+      throw new StoreError("INTERNAL_ERROR", "host control guard must be synchronous");
     if (!prior) this.policy.refresh();
     const target = this.requireTarget(agent);
     if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
@@ -57,6 +59,7 @@ export class LifecycleActions {
       const capacity = target.desired === "enabled" ? null : this.policy.observeReleasedCapacity(this.units);
       const accepted = this.store.transaction(tx => {
         this.policy.requireManage(auth, agent);
+        if (beforeAccept && beforeAccept() !== undefined) throw new StoreError("INTERNAL_ERROR", "host control guard must be synchronous");
         this.requireStartRelease(auth.actor, agent);
         const current = this.requireTarget(agent);
         if (current.incarnation !== target.incarnation || current.desired !== target.desired)
@@ -90,7 +93,7 @@ export class LifecycleActions {
     } catch (error) { throw acceptedFailure(error); }
   }
 
-  async stop(auth: AuthContext, agent: Actor, key: string): Promise<Receipt> {
+  async stop(auth: AuthContext, agent: Actor, key: string, beforeAccept?: () => undefined): Promise<Receipt> {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("agent.stop", { agent });
     const claim = this.store.claimKey(auth.actor, key, hash);
@@ -105,12 +108,15 @@ export class LifecycleActions {
         throw new StoreError("STORE_CORRUPT", "stop replay differs from accepted identity");
       if (!this.currentIntent(prior.plan, prior.id)) return this.unconfirmed(prior.id);
     }
+    if (!prior && beforeAccept && beforeAccept() !== undefined)
+      throw new StoreError("INTERNAL_ERROR", "host control guard must be synchronous");
     const target = this.requireTarget(agent);
     const id = prior?.id ?? this.effects.nextOperationId();
     const incarnation = prior?.kind === "agent.stop" ? prior.plan.previousIncarnation : target.incarnation;
     if (!prior) {
       const accepted = this.store.transaction(tx => {
         this.policy.requireManage(auth, agent);
+        if (beforeAccept && beforeAccept() !== undefined) throw new StoreError("INTERNAL_ERROR", "host control guard must be synchronous");
         const current = this.requireTarget(agent);
         if (current.incarnation !== target.incarnation || current.desired !== target.desired)
           throw new StoreError("STALE_RUN", "target changed before stop acceptance");

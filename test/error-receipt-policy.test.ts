@@ -14,7 +14,7 @@ const pending = receiptOperation();
 const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 
 // Source specifications only. No test execution or generated PASS evidence is implied.
-test("error classification preserves phase, observation and effect knowledge separately", () => {
+test("001. Error classification preserves phase, observation and effect knowledge separately", () => {
   const cases: Array<{
     input: ErrorContext;
     code: ErrorCode;
@@ -44,7 +44,7 @@ test("error classification preserves phase, observation and effect knowledge sep
   }
 });
 
-test("all public error codes preserve terminal rows and cannot authorize ambiguous resend", () => {
+test("002. All public error codes preserve terminal rows and cannot authorize ambiguous resend", () => {
   for (const rawCode of Object.keys(ERROR_METADATA)) {
     assert.ok(isErrorCode(rawCode));
     for (const phase of ["preaccept", "accepted", "recovering", "terminal"] as const) {
@@ -69,7 +69,7 @@ test("all public error codes preserve terminal rows and cannot authorize ambiguo
   assert.equal(isErrorCode("NEW_UNREVIEWED_ERROR"), false);
 });
 
-test("receipt projection is shared and never reparses or rewrites its decoded operation", () => {
+test("003. Receipt projection is shared and never reparses or rewrites its decoded operation", () => {
   const rows: OperationLookup[] = [
     pending,
     receiptOperation({ state: "unknown" }),
@@ -103,7 +103,7 @@ test("receipt projection is shared and never reparses or rewrites its decoded op
   }
 });
 
-test("terminal receipt exit codes differ from uncertain direct failures", () => {
+test("004. Terminal receipt exit codes differ from uncertain direct failures", () => {
   assert.equal(receiptExit(receiptOfOperation(pending)), 0);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "unknown" }))), 3);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
@@ -116,7 +116,7 @@ test("terminal receipt exit codes differ from uncertain direct failures", () => 
   assert.equal(isRequestNotFound(receiptOfOperation(receiptOperation({ state: "failed", error_code: "REQUEST_NOT_FOUND" }))), false);
 });
 
-test("public failures omit exception payloads and retain repair or lookup guidance", () => {
+test("005. Public failures omit exception payloads and retain repair or lookup guidance", () => {
   const privateText = "private provider response and mail body";
   assert.deepEqual(publicFailure(new StoreError("STORE_CORRUPT", privateText)), {
     code: "STORE_CORRUPT", message: "STORE_CORRUPT", retry: "after-repair",

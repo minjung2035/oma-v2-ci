@@ -14,7 +14,7 @@ import { ledgerFixture, routeOperation, routeResult, agentRecord } from "./helpe
 
 const code = expected => error => error?.code === expected;
 
-test("P4 facets: frozen descriptors cover ledger entities and compatibility writes exactly once", () => {
+test("001. Facets: frozen descriptors cover ledger entities and compatibility writes exactly once", () => {
   const groups = ["agents", "batches", "deliveries", "operations", "subscriptions"];
   assert.deepEqual(Object.keys(READ_FACETS).sort(), [...groups, "attestations"].sort());
   assert.deepEqual(Object.keys(WRITE_FACETS).sort(), groups);
@@ -27,7 +27,7 @@ test("P4 facets: frozen descriptors cover ledger entities and compatibility writ
   assert.deepEqual([...WRITE_METHODS].sort(), mapped.sort());
 });
 
-test("P4 facets: read views remain live, immutable and contain no write capability", t => {
+test("002. Facets: read views remain live, immutable and contain no write capability", t => {
   const { store } = ledgerFixture(t), operation = routeOperation();
   const read = store.operations;
   assert.equal(read.getById(operation.id), null);
@@ -48,7 +48,7 @@ test("P4 facets: read views remain live, immutable and contain no write capabili
   assert.equal(store.operations.succeed, undefined);
 });
 
-test("P4 facets: every escaped write and extracted function refuses a later transaction", t => {
+test("003. Facets: every escaped write and extracted function refuses a later transaction", t => {
   const { store } = ledgerFixture(t);
   let stale;
   store.transaction(tx => { stale = tx; });
@@ -61,7 +61,7 @@ test("P4 facets: every escaped write and extracted function refuses a later tran
   assert.deepEqual(store.subscriptions.subscribers("live"), ["alice"]);
 });
 
-test("P4 facets: operation, agent, subscription and batch writes roll back together", t => {
+test("004. Facets: operation, agent, subscription and batch writes roll back together", t => {
   const { store } = ledgerFixture(t), operation = routeOperation(), batch = generateBatchId();
   assert.throws(() => store.transaction(tx => {
     tx.agents.insert(agentRecord("bob", "principal"));
@@ -78,7 +78,7 @@ test("P4 facets: operation, agent, subscription and batch writes roll back toget
   assert.equal(store.batches.get(batch), null);
 });
 
-test("P4 facets: admission blocks new intents but permits explicit existing settlement", t => {
+test("005. Facets: admission blocks new intents but permits explicit existing settlement", t => {
   const { store } = ledgerFixture(t), operation = routeOperation();
   store.transaction(tx => tx.operations.accept(operation));
   const id = generateOperationId(), message = generateMessageId(id, 0);
@@ -107,7 +107,7 @@ test("P4 facets: admission blocks new intents but permits explicit existing sett
   assert.equal(store.operations.recoverableIds().length, 2);
 });
 
-test("P4 facets: escaped asynchronous continuation never borrows fresh root authority", async t => {
+test("006. Facets: escaped asynchronous continuation never borrows fresh root authority", async t => {
   const { store } = ledgerFixture(t), operation = routeOperation();
   let escaped;
   assert.throws(() => store.transaction(tx => {
@@ -125,7 +125,7 @@ test("P4 facets: escaped asynchronous continuation never borrows fresh root auth
   assert.deepEqual(store.subscriptions.all(), []);
 });
 
-test("P4 facets: compile-time method separation and argument types remain enforced", () => {
+test("007. Facets: compile-time method separation and argument types remain enforced", () => {
   const dir = mkdtempSync(join(process.cwd(), "test", ".facets-types-"));
   try {
     const file = join(dir, "fixture.ts");

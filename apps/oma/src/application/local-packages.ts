@@ -186,25 +186,26 @@ function copyIntoStage(source: string, area: StageArea, rel: string, budget: Sta
 
 /** One staging area inside the store (a rename must stay on one file system),
  * always given back; what it produced is renamed out before it goes. */
-function staging(root: string, fill: (area: StageArea) => { readonly made: string; readonly name: string }): string {
+function staging(root: string, fill: (area: StageArea) => { readonly made: string; readonly name: string }, beforePublish?: (source: string) => void): string {
   const area = ownedStaging(root);
   try {
     const { made, name } = fill(area);
+    beforePublish?.(`${PACKAGE_LOCAL_DIR}/${name}`);
     area.publish(made, name);
     return `${PACKAGE_LOCAL_DIR}/${name}`;
   } finally { area.close(); }
 }
 
-function stageDirectory(store: string, source: string): string {
+function stageDirectory(store: string, source: string, beforePublish?: (source: string) => void): string {
   const { name: manifest } = packageManifest(source);
   const name = stagedName(manifest, basename(source));
   return staging(store, area => {
     copyIntoStage(source, area, "", { entries: 0 });
     return { made: "", name };
-  });
+  }, beforePublish);
 }
 
-function stageFile(store: string, source: string): string {
+function stageFile(store: string, source: string, beforePublish?: (source: string) => void): string {
   const name = basename(source);
   return staging(store, area => {
     const fd = openSync(source, constants.O_RDONLY);
@@ -217,13 +218,13 @@ function stageFile(store: string, source: string): string {
         throw new StoreError("POLICY_CHANGED", `the local file changed while it was read: ${name}`);
     } finally { closeSync(fd); }
     return { made: name, name };
-  });
+  }, beforePublish);
 }
 
 /** `oma pi install <path>`: copy the local package into the store and answer
  * the store-relative source (`local/<name>`) the engine is then asked to
  * install -- never the path the Human gave. */
-export async function stageLocalPackage(store: string, given: string): Promise<string> {
+export async function stageLocalPackage(store: string, given: string, beforePublish?: (source: string) => void): Promise<string> {
   const source = localSourcePath(given);
   // The store's own slot is oma's: a file or a link where the store root
   // must be a directory can hold no staged copies -- the same stray the
@@ -248,10 +249,10 @@ export async function stageLocalPackage(store: string, given: string): Promise<s
   const root = packageStoreRoot(store) ?? refuse("the package store does not exist");
   checkStoreBoundary(root, source);
   const observed = lstatSync(source);
-  if (observed.isDirectory()) return stageDirectory(root, source);
+  if (observed.isDirectory()) return stageDirectory(root, source, beforePublish);
   if (observed.isFile()) {
-    if (extensionEntryProblem(basename(source)) === null) return stageFile(root, source);
-    return await stageArchive(root, source);
+    if (extensionEntryProblem(basename(source)) === null) return stageFile(root, source, beforePublish);
+    return await stageArchive(root, source, beforePublish);
   }
   return refuse(`not a package source (not a directory, an archive or a JS/TS file): ${given}`);
 }
@@ -268,7 +269,7 @@ export async function stageLocalPackage(store: string, given: string): Promise<s
  * sweep collects if it is left), a `.tar` is read in place, and entries are
  * parsed and copied header by header, member bytes streaming to the staged
  * file. An archive the old whole-buffer path refused on size alone stages. */
-async function stageArchive(store: string, source: string): Promise<string> {
+async function stageArchive(store: string, source: string, beforePublish?: (source: string) => void): Promise<string> {
   const before = (() => {
     try { return lstatSync(source); }
     catch (error) { throw unobserved(error, "the local package") ?? refuse(`the package archive could not be read (${exceptionText(error)})`); }
@@ -318,7 +319,7 @@ async function stageArchive(store: string, source: string): Promise<string> {
         const { name: manifest } = packageManifest(made === "" ? area.path : join(area.path, made));
         const name = stagedName(manifest, archiveName(source));
         return { made, name };
-      });
+      }, beforePublish);
     } finally { closeSync(fd); }
     // The file that staged the package is checked after the read too: an
     // archive swapped mid-read did not stage what its stat named.

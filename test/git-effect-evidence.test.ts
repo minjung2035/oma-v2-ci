@@ -80,7 +80,7 @@ function loseNextMainObservation(t: TestContext, f: Repository): void {
     });
 }
 for (const format of ["sha1", "sha256"] as const) {
-    test(`V24A: ${format} a main CAS that finds a third writer leaves it untouched and recovery never reports it applied`, async (t) => {
+    test(`001. Git effect evidence: ${format} a main CAS that finds a third writer leaves it untouched and recovery never reports it applied`, async (t) => {
         const f = repository(t, format);
         await published(f);
         const other = f.third();
@@ -103,7 +103,7 @@ for (const format of ["sha1", "sha256"] as const) {
 // nothing rewrites after creation; a current check can still refuse through
 // the desired state and the host's policy, the two cases below.
 for (const change of ["unchanged", "stop", "policy"] as const) {
-    test(`V24B: a no-op integration recovered after ${change} repeats the current checks instead of trusting main == candidate`, async (t) => {
+    test(`002. A no-op integration recovered after ${change} repeats the current checks instead of trusting main == candidate`, async (t) => {
         const f = repository(t);
         await published(f);
         assert.equal((await f.git.integrate(gitAuth, "advance", { expected: f.info.base, candidate: f.info.candidate })).state, "succeeded");
@@ -130,7 +130,7 @@ for (const change of ["unchanged", "stop", "policy"] as const) {
         assert.equal(f.main(), f.info.candidate, "a no-op moves nothing");
     });
 }
-test("V24B: an applied non-no-op CAS is settled as history even after stop and policy change", async (t) => {
+test("003. An applied non-no-op CAS is settled as history even after stop and policy change", async (t) => {
     const f = repository(t);
     await published(f);
     const transaction = f.store.transaction.bind(f.store);
@@ -151,7 +151,7 @@ test("V24B: an applied non-no-op CAS is settled as history even after stop and p
     assert.equal(f.operation("applied").state, "succeeded", "authority changed afterwards does not undo a proven effect");
     assert.equal(f.main(), f.info.candidate);
 });
-test("V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied", async (t) => {
+test("004. A recovery CAS that loses to a third writer after its checks is unknown, never applied", async (t) => {
     // How many times recovery rereads the policy, so the writer can arrive at the
     // last reread -- after the still-at-base check, before the CAS.
     const reads = async (move: boolean): Promise<{

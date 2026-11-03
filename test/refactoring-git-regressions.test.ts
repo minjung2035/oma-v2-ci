@@ -32,7 +32,7 @@ for (const scenario of [
     { title: "status-like actual filename is protected", file: "M secret.txt", existing: true, protected: ["M secret.txt"], rejected: true, status: "M" },
     { title: "status token A is not a filename", file: "ordinary.txt", existing: false, protected: ["A"], rejected: false, status: "A" },
 ]) {
-    test(`R01 INT-001: ${scenario.title}`, async () => {
+    test(`001. Refactoring git regressions: ${scenario.title}`, async () => {
         const root = mkdtempSync(join(tmpdir(), "oma-r01-git-"));
         const repo = join(root, "project");
         const state = join(root, "state");
@@ -86,7 +86,7 @@ for (const scenario of [
     });
 }
 for (const corrupt of [false, true]) {
-    test(`R01 CTX/DB-009: accepted context ${corrupt ? "path traversal stops before recovery effects" : "valid control recovers"}`, async () => {
+    test(`002. Context recovery: accepted context ${corrupt ? "path traversal stops before recovery effects" : "valid control recovers"}`, async () => {
         const root = mkdtempSync(join(tmpdir(), "oma-r01-context-"));
         const path = join(root, "runtime.sqlite");
         const store = new Store(path);

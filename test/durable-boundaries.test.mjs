@@ -7,12 +7,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { checkDurableBoundaries, durableBoundaries } from "../scripts/durable-boundaries.mjs";
 
-test("P0-7: every durable boundary in the code has a registered kill/retry/restart test", () => {
+test("001. Every durable boundary in the code has a registered kill/retry/restart test", () => {
   assert.deepEqual(checkDurableBoundaries(), []);
   assert.ok(durableBoundaries().length > 40, "the scan finds the product's boundaries");
 });
 
-test("P0-7: a new boundary without a test, a stale entry, or a test that does not exist is a finding", () => {
+test("002. A new boundary without a test, a stale entry, or a test that does not exist is a finding", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-"));
   try {
     mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "test")); mkdirSync(join(root, "implementation"));
@@ -32,7 +32,7 @@ test("P0-7: a new boundary without a test, a stale entry, or a test that does no
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0-7, P0V-59: a primitive imported under another name is still a boundary", () => {
+test("003. A primitive imported under another name is still a boundary", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-alias-"));
   try {
     mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "implementation"));
@@ -45,7 +45,7 @@ test("P0-7, P0V-59: a primitive imported under another name is still a boundary"
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-83 / R6-08: a test says how it stops the process, and its code has to show it", () => {
+test("004. A test says how it stops the process, and its code has to show it", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-7-injection-"));
   try {
     mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "test/fixtures"), { recursive: true }); mkdirSync(join(root, "implementation"));

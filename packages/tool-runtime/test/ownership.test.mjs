@@ -8,7 +8,7 @@ import { createToolProvenance } from "@oma/tool-runtime/provenance";
 import { Type } from "typebox";
 import { registerTypedTool, textResult } from "@oma/tool-runtime/shared";
 
-test("a refused queued write does not poison the next contained write", async t => {
+test("001. A refused queued write does not poison the next contained write", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-tool-runtime-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const workspace = join(root, "workspace");
@@ -21,7 +21,7 @@ test("a refused queued write does not poison the next contained write", async t 
   assert.equal(existsSync(join(root, "escape")), false);
   assert.equal(readFileSync(join(workspace, "nested", "answer"), "utf8"), "complete");
 });
-test("a later tool shadow is checked against the current registry", () => {
+test("002. A later tool shadow is checked against the current registry", () => {
   let tools = [{ name: "read", sourceInfo: { source: "builtin" } }];
   const proof = createToolProvenance(() => tools, "/owned/core.js", []);
   assert.equal(proof.permitted("read"), true);
@@ -32,7 +32,7 @@ test("a later tool shadow is checked against the current registry", () => {
   assert.equal(proof.permitted("read"), false);
 });
 
-test("raw and direct-call guards reject coercion before effects and preserve required CAS null", async () => {
+test("003. Raw and direct-call guards reject coercion before effects and preserve required CAS null", async () => {
   let registered, effects = 0;
   registerTypedTool({ registerTool(tool) { registered = tool; } }, {
     name: "guarded_effect", label: "Guarded effect", description: "Exercise the shared effect boundary.",
@@ -68,7 +68,7 @@ test("raw and direct-call guards reject coercion before effects and preserve req
   assert.equal(result.details.expectedRevision, null);
 });
 
-test("shell metadata adaptation preserves configured executable and changing command prefixes", async t => {
+test("004. Shell metadata adaptation preserves configured executable and changing command prefixes", async t => {
   const workspace = mkdtempSync(join(tmpdir(), "oma-shell-settings-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
   const shell = join(workspace, "shell");

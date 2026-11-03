@@ -55,7 +55,7 @@ const methodsOwner = `
   export const INTERNAL_METHODS = {};
 `;
 
-test("positive syntax/type-only fixtures do not confuse comments, grants, or custom add with schema bugs", () => {
+test("001. Positive syntax/type-only fixtures do not confuse comments, grants, or custom add with schema bugs", () => {
   const output = fixture({
     "packages/domain/src/capabilities.ts": capabilityOwner,
     "packages/domain/src/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/;`,
@@ -65,11 +65,11 @@ test("positive syntax/type-only fixtures do not confuse comments, grants, or cus
   assert.equal(output.status, 0, JSON.stringify(output.findings));
 });
 
-test("native Set.add used for truthiness is rejected, including a local alias of the Set", () => {
+test("002. Native Set.add used for truthiness is rejected, including a local alias of the Set", () => {
   rejects("set-add-membership", { "apps/oma/src/bad.ts": `const seen = new Set<string>(); const alias = seen; if (!alias.add("x")) throw new Error();` });
 });
 
-test("set-add-membership fires on aliased callees -- the resolved signature, not the accessed name, decides", () => {
+test("003. Set-add-membership fires on aliased callees -- the resolved signature, not the accessed name, decides", () => {
   // A callee that resolves to Set.add's declaration under another name is the
   // same misuse spelled differently: no syntactic name gate may stand between
   // the boolean-position test and the signature resolution.
@@ -88,7 +88,7 @@ test("set-add-membership fires on aliased callees -- the resolved signature, not
   assert.deepEqual(fired.map(finding => finding.line), [4, 5, 6, 7], JSON.stringify(output.findings));
 });
 
-test("executable capability, method, identifier and protocol limit schema copies are rejected", () => {
+test("004. Executable capability, method, identifier and protocol limit schema copies are rejected", () => {
   rejects("duplicate-capability-schema", {
     "packages/domain/src/capabilities.ts": capabilityOwner,
     "apps/oma/src/bad.ts": `const copy = ["mail.send", "git.submit", "code.integrate"] as const;`,
@@ -112,7 +112,7 @@ test("executable capability, method, identifier and protocol limit schema copies
   });
 });
 
-test("pure boundaries, runtime test dependencies, dynamic imports, and raw effects have owners", () => {
+test("005. Pure boundaries, runtime test dependencies, dynamic imports, and raw effects have owners", () => {
   rejects("pure-boundary-import", { "packages/domain/src/bad.ts": `import {readFileSync} from "node:fs"; export const read = readFileSync;` });
   rejects("pure-boundary-import", {
     "packages/storage/src/store.ts": `export class Store {}`,
@@ -132,7 +132,7 @@ test("pure boundaries, runtime test dependencies, dynamic imports, and raw effec
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
-test("persisted JSON aliases and independent request-byte construction cannot bypass owners", () => {
+test("006. Persisted JSON aliases and independent request-byte construction cannot bypass owners", () => {
   rejects("persisted-plan-cast", {
     "packages/contracts/src/index.ts": `export type OperationPlan = {kind: "one"};`,
     "apps/oma/src/bad.ts": `import type {OperationPlan} from "@oma/contracts";
@@ -142,7 +142,7 @@ test("persisted JSON aliases and independent request-byte construction cannot by
     export const raw = canonicalJson({method: "mail.send", params: {to: []}});` });
 });
 
-test("transaction analysis follows local call aliases and rejects filesystem and thenable effects", () => {
+test("007. Transaction analysis follows local call aliases and rejects filesystem and thenable effects", () => {
   const store = `class Store {transaction(callback: () => unknown) {return callback();}} const store = new Store();`;
   rejects("transaction-effect", { "apps/oma/src/bad.ts": `import {writeFileSync as write} from "node:fs";
     ${store} function helper() {write("/tmp/not-executed", "data");} const alias = helper; store.transaction(() => alias());` });
@@ -152,7 +152,7 @@ test("transaction analysis follows local call aliases and rejects filesystem and
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
-test("runtime and type-only SCCs are rejected by their own dependency rules", () => {
+test("008. Runtime and type-only SCCs are rejected by their own dependency rules", () => {
   rejects("runtime-import-cycle", {
     "apps/oma/src/a.ts": `import {b} from "./b.js"; export const a = () => b;`,
     "apps/oma/src/b.ts": `import {a} from "./a.js"; export const b = () => a;`,
@@ -178,7 +178,7 @@ function registryFixture(missingResult: boolean): Record<string, string> {
   };
 }
 
-test("all operation kinds need plan/result/relation decoders and method maps must be exhaustive", () => {
+test("009. All operation kinds need plan/result/relation decoders and method maps must be exhaustive", () => {
   const positive = fixture(registryFixture(false), true);
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
   rejects("operation-exhaustiveness", registryFixture(true), true);
@@ -187,7 +187,7 @@ test("all operation kinds need plan/result/relation decoders and method maps mus
   }, true);
 });
 
-test("the real project gate is an executable non-warning check", () => {
+test("010. The real project gate is an executable non-warning check", () => {
   const output = spawnSync(process.execPath, [script, "--root", process.cwd()], { encoding: "utf8", timeout: 60_000 });
   assert.equal(output.error, undefined);
   assert.equal(output.status, 0, `${output.stdout}\n${output.stderr}`);

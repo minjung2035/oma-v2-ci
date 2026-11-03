@@ -43,7 +43,7 @@ import type { MailModule } from "@oma/mail";
 import type { FeatureExecution } from "./fixtures/execution.js";
 import type { LifecycleModule } from "@oma/lifecycle";
 
-test("AV-20261003-18: a failure after the staging lease is taken releases the lease", async t => {
+test("001. A failure after the staging lease is taken releases the lease", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-av18-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const id = generateOperationId();
@@ -85,7 +85,7 @@ test("AV-20261003-18: a failure after the staging lease is taken releases the le
   }
 });
 
-test("AV-20261003-18: a failed context revision preparation releases its staging lease", t => {
+test("002. A failed context revision preparation releases its staging lease", t => {
   // The same leak shape as the staging-root case above: TreeLease.take() ran,
   // then the audited code reached the tree's own directory creation OUTSIDE
   // the guarded try. This injection fails the first mkdir whose leaf is the
@@ -133,7 +133,7 @@ test("AV-20261003-18: a failed context revision preparation releases its staging
   }
 });
 
-test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision trees", t => {
+test("003. Startup collection owns unaccepted .prepare-* revision trees", t => {
   const stateRoot = mkdtempSync(join(tmpdir(), "oma-av19-"));
   t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
   const revisions = join(stateRoot, "world", "context", "revisions");
@@ -172,7 +172,7 @@ test("AV-20261003-19: startup collection owns unaccepted .prepare-* revision tre
   assert.equal(existsSync(join(revisions, ".prepare-not-an-oid")), true, "a name the grammar does not derive is untouched");
 });
 
-test("AV-20261003-19: an orphaned lease the grammar does not derive is reported and kept", t => {
+test("004. An orphaned lease the grammar does not derive is reported and kept", t => {
   // The recovery contract for every other name in these directories is
   // "unprovable = reported and kept" -- but the audited loops decided *.lease
   // entries by whether they could be derived and simply fell through on the
@@ -214,7 +214,7 @@ test("AV-20261003-19: an orphaned lease the grammar does not derive is reported 
   assert.equal(existsSync(revisionStray), true);
 });
 
-test("AV-20261003-20: startup contains a recoverable non-mail failure like the sweep does", async t => {
+test("005. Startup contains a recoverable non-mail failure like the sweep does", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-av20-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const store = new Store(join(root, "runtime.sqlite"));
@@ -245,7 +245,7 @@ test("AV-20261003-20: startup contains a recoverable non-mail failure like the s
   } finally { try { store.close(); } catch { /* fixture teardown */ } }
 });
 
-test("AV-20261003-25: a changed-path name outside the grammar is a candidate-scope refusal", () => {
+test("006. A changed-path name outside the grammar is a candidate-scope refusal", () => {
   const evidence = (stdout: Uint8Array) => ({ status: 0, signal: null, stdout, stderr: Buffer.alloc(0) });
   // diff-tree --name-status -z output: a valid record, then a name with a
   // byte no UTF-8 string can represent. On the audited code this whole
@@ -265,13 +265,13 @@ test("AV-20261003-25: a changed-path name outside the grammar is a candidate-sco
   assert.equal((parseNameStatusZ(Buffer.from("X\0name\0")) as { scope: string }).scope, "output");
 });
 
-test("AV-20261003-25: the wire-path grammar refuses a lone surrogate, not a paired one", () => {
+test("007. The wire-path grammar refuses a lone surrogate, not a paired one", () => {
   assert.equal(isValidWirePath("bad-\uD800.md"), false, "a lone high surrogate is unrepresentable");
   assert.equal(isValidWirePath("bad-\uDC00.md"), false, "a lone low surrogate is unrepresentable");
   assert.equal(isValidWirePath("emoji-\uD800\uDC00.md"), true, "a paired astral character is a valid name");
 });
 
-test("NB-18: a whole bounded read refuses a file that shrank or was rewritten during it", t => {
+test("008. A whole bounded read refuses a file that shrank or was rewritten during it", t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-nb18-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const refusal = (captured: { code: string | null }) => (code: string): never => {
@@ -327,7 +327,7 @@ test("NB-18: a whole bounded read refuses a file that shrank or was rewritten du
   finally { closeSync(fd); }
 });
 
-test("FJ-7: a cleanup failure while a context revision publish is already failing retains both errors", t => {
+test("009. A cleanup failure while a context revision publish is already failing retains both errors", t => {
   // The audited `finally` ran removeOwnedTree + removeOwnedFile inside a bare
   // try: a failure of the owned cleanup replaced the publish error that was
   // already propagating. The lease must still be released exactly once, and

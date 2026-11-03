@@ -46,7 +46,7 @@ for (const subject of [
   "a".repeat(8192),
   "한😀 spaced  ".repeat(300),
 ]) {
-  test(`EML admission: ${Buffer.byteLength(subject)} subject bytes preserve value within RFC lines`, async () => {
+  test(`001. EML admission: ${Buffer.byteLength(subject)} subject bytes preserve value within RFC lines`, async () => {
     const eml = await buildEml({
       from: "a@crash.oma.invalid",
       to: ["b@crash.oma.invalid"],
@@ -111,7 +111,7 @@ function fixture() {
   };
 }
 
-test("EML admission: long submit mail stays recoverable and does not fence later admission", async () => {
+test("002. EML admission: long submit mail stays recoverable and does not fence later admission", async () => {
   const f = fixture();
   try {
     const publish = f.mail.publishGated.bind(f.mail);
@@ -155,7 +155,7 @@ test("EML admission: long submit mail stays recoverable and does not fence later
   }
 });
 
-test("EML admission: unsupported MIME output is rejected before submit/context/mail acceptance", async (t) => {
+test("003. EML admission: unsupported MIME output is rejected before submit/context/mail acceptance", async (t) => {
   const f = fixture();
   try {
     // Controlled dependency fault, not a live broker or malformed-request attack.
@@ -213,7 +213,7 @@ test("EML admission: unsupported MIME output is rejected before submit/context/m
   }
 });
 
-test("EML admission: context preparation disables autonomous maintenance before durable observation", async t => {
+test("004. EML admission: context preparation disables autonomous maintenance before durable observation", async t => {
   const f = fixture();
   try {
     const trace = join(f.root, "git-trace.jsonl");

@@ -1,8 +1,9 @@
+import { removeTree as cleanup } from "./fixtures/cleanup.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createRequire, syncBuiltinESMExports } from "node:module";
-import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { publishContextRevision, verifyContextRevision } from "@oma/storage/context-snapshot";
@@ -23,17 +24,9 @@ function fixture() {
   const target = join(world, "context", "revisions", revision);
   return { root, source, world, target };
 }
-function cleanup(root: string): void {
-  const walk = (path: string): void => {
-    const stat = lstatSync(path);
-    if (!stat.isDirectory()) return;
-    chmodSync(path, 0o700);
-    for (const name of readdirSync(path)) walk(join(path, name));
-  };
-  walk(root); rmSync(root, { recursive: true, force: true });
-}
 
-test("context revision replay retains exact bytes modes and parent-only current target", () => {
+
+test("001. Context revision replay retains exact bytes modes and parent-only current target", () => {
   const f = fixture();
   try {
     const mask = process.umask(0o077);
@@ -57,7 +50,7 @@ test("context revision replay retains exact bytes modes and parent-only current 
   } finally { cleanup(f.root); }
 });
 
-test("context rejects a linked source without deleting it or publishing a revision", () => {
+test("002. Context rejects a linked source without deleting it or publishing a revision", () => {
   const f = fixture();
   try {
     linkSync(join(f.source, "GOAL.md"), join(f.root, "alias"));
@@ -69,7 +62,7 @@ test("context rejects a linked source without deleting it or publishing a revisi
   } finally { cleanup(f.root); }
 });
 
-test("recursive flush distinguishes legitimate hardlinks and never follows workspace symlinks", () => {
+test("003. Recursive flush distinguishes legitimate hardlinks and never follows workspace symlinks", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-tree-policy-"));
   try {
     writeFileSync(join(root, "object"), "immutable");
@@ -85,7 +78,7 @@ test("recursive flush distinguishes legitimate hardlinks and never follows works
 });
 
 for (const phase of ["file-before-rename", "directory-after-rename"] as const) {
-  test(`derived replacement preserves evidence on ${phase} failure`, t => {
+  test(`004. Derived replacement preserves evidence on ${phase} failure`, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-derived-io-"));
     const path = join(root, "view");
     const foreign = join(root, ".view.other-owner.tmp");

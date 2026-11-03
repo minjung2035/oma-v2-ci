@@ -6,6 +6,7 @@
  * OMA's; and Pi's built-in MCP can never coexist. */
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { spawn } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect, Server } from "node:net";
@@ -55,6 +56,55 @@ function fakePi() {
     };
     return pi;
 }
+function engineScratch(agentDir) {
+    const root = join(agentDir, MCP_STATE_DIR_NAME);
+    const children = readdirSync(root).filter(name => /^scratch-engine-[0-9]+-/.test(name));
+    assert.ok(children.length <= 1, "single-engine fixture must have one scratch owner");
+    return children.length ? join(root, children[0]) : root;
+}
+
+test("027. Two real engine processes sharing one agent directory retain separate live scratch", { timeout: 15000 }, async t => {
+    const children = [];
+    t.after(async () => {
+        for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+        await Promise.all(children.filter(child => child.exitCode === null && child.signalCode === null).map(child => once(child, "close")));
+    });
+    const agentDir = tmp(t, "oma-mcp-shared-agent-");
+    const external = tmp(t);
+    mkdirSync(join(agentDir, MCP_STATE_DIR_NAME));
+    symlinkSync(external, join(agentDir, MCP_STATE_DIR_NAME, "scratch"));
+    writeFileSync(join(external, "sentinel"), "legacy alias is never traversed");
+    const entry = fileURLToPath(new URL("../dist/index.js", import.meta.url));
+    const script = `import {registerMcpTools} from ${JSON.stringify(new URL("file://" + entry).href)};
+      const fakePi = ${fakePi.toString()};
+      await registerMcpTools(fakePi(), {agentDir:${JSON.stringify(agentDir)},config:{mcpServers:{}}});
+      process.stdout.write("READY\\n"); process.stdin.resume();`;
+    const start = async () => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["pipe", "pipe", "pipe"] });
+        children.push(child); let output = "", diagnostic = "";
+        child.stderr.on("data", bytes => { diagnostic = (diagnostic + bytes).slice(-2000); });
+        await new Promise((resolve, reject) => {
+            child.stdout.on("data", bytes => { output += bytes; if (output.includes("READY")) resolve(); });
+            child.once("exit", code => reject(new Error(`engine exited before registration: ${code}: ${diagnostic}`)));
+            child.once("error", reject);
+        });
+        return child;
+    };
+    const first = await start(), scratch = engineScratch(agentDir), marker = join(scratch, "first-engine-live");
+    writeFileSync(marker, "first engine owns this while alive");
+    const second = await start();
+    assert.equal(readFileSync(join(external, "sentinel"), "utf8"), "legacy alias is never traversed");
+    assert.notEqual(first.pid, second.pid);
+    assert.equal(existsSync(marker), true, "registering the second engine deleted the live first engine's scratch");
+    second.kill("SIGTERM"); await once(second, "close");
+    assert.equal(existsSync(marker), true, "ending a different engine must preserve the first owner's scratch");
+});
+
+test("028. A per-server resource setting cannot reopen OMA's disabled resource exposure", t => {
+    const stateDir = tmp(t);
+    assert.throws(() => normalizeOmaMcpConfig({ mcpServers: { s: { command: "server", exposeResources: true } } }, { stateDir }), /resource exposure/u);
+    assert.equal(normalizeOmaMcpConfig({ mcpServers: { s: { command: "server", exposeResources: false } } }, { stateDir }).mcpServers.s.exposeResources, false);
+});
 function withEgress(t, present, port = 47851) {
     const socket = process.env.OMA_EGRESS_PROXY_SOCKET;
     const priorPort = process.env.OMA_EGRESS_PROXY_PORT;
@@ -80,7 +130,7 @@ function withEgress(t, present, port = 47851) {
 const textOf = (result) => result.content.map(part => part.text ?? "").join("");
 // ---------------------------------------------------------------------------
 // Bundle integrity
-test("BL5: the vendored pi-mcp-adapter bundle verifies: source tree and the dist copy the adapter loads", () => {
+test("001. The vendored pi-mcp-adapter bundle verifies: source tree and the dist copy the adapter loads", () => {
     const source = verifyVendorBundle(SRC_BUNDLE);
     assert.equal(source.package, "pi-mcp-adapter");
     assert.equal(source.version, "5.0.0");
@@ -93,7 +143,7 @@ test("BL5: the vendored pi-mcp-adapter bundle verifies: source tree and the dist
     assert.ok(existsSync(join(SRC_BUNDLE, "node_modules", "@modelcontextprotocol", "client", "package.json")));
     assert.ok(existsSync(join(SRC_BUNDLE, "node_modules", "undici", "package.json")));
 });
-test("BL5: bundle verification fails closed on a changed, missing, extra, linked or malformed member", t => {
+test("002. Bundle verification fails closed on a changed, missing, extra, linked or malformed member", t => {
     const copy = (label) => {
         const dir = join(tmp(t), label);
         cpSync(SRC_BUNDLE, dir, { recursive: true });
@@ -119,7 +169,7 @@ test("BL5: bundle verification fails closed on a changed, missing, extra, linked
     writeFileSync(join(broken, "manifest.json"), "not json");
     fails(broken, /manifest is missing or unreadable/);
 });
-test("BL5: upstream-tests is the vendored commit's own test tree", () => {
+test("003. Upstream-tests is the vendored commit's own test tree", () => {
     const stat = statSync(join(SRC_BUNDLE, "upstream-tests"));
     assert.ok(stat.isDirectory(), "the vendored commit's test tree is preserved");
     // The suite surface the manifest documents: the vitest config and the
@@ -133,7 +183,7 @@ test("BL5: upstream-tests is the vendored commit's own test tree", () => {
 });
 // ---------------------------------------------------------------------------
 // Registration, facade and surface
-test("BL5: registerMcpTools registers exactly `mcp` and drops upstream's commands, flag and shortcuts", async () => {
+test("004. RegisterMcpTools registers exactly `mcp` and drops upstream's commands, flag and shortcuts", async () => {
     const pi = fakePi();
     await registerMcpTools(pi, { config: { mcpServers: {} }, agentDir: undefined });
     assert.deepEqual([...pi.tools.keys()], [...MCP_TOOL_NAMES], "exactly the one proxy tool");
@@ -147,7 +197,7 @@ test("BL5: registerMcpTools registers exactly `mcp` and drops upstream's command
     for (const event of ["session_start", "session_shutdown"])
         assert.ok(pi.handlers.has(event), `expected a forwarded ${event} hook`);
 });
-test("BL5: the vendored adapter exposes no Pi built-in MCP coexistence path", async () => {
+test("005. The vendored adapter exposes no Pi built-in MCP coexistence path", async () => {
     // The facade offers no registerMcpServer/getMcpServers, so vendored
     // piSupportsMcp() is false: the pi-builtin-mcp lazy import never runs,
     // setPiMcpConfigEnabled is skipped under programmatic config, and
@@ -164,7 +214,7 @@ test("BL5: the vendored adapter exposes no Pi built-in MCP coexistence path", as
 
 // ---------------------------------------------------------------------------
 // OMA-owned configuration
-test("BL5: config validation forbids the surfaces, sinks and escapes upstream defaults allow", t => {
+test("006. Config validation forbids the surfaces, sinks and escapes upstream defaults allow", t => {
     const stateDir = tmp(t, "oma-mcp-cfg-");
     const rejects = [
         // The no-fetch rule matches the command's basename -- a path-qualified
@@ -221,7 +271,7 @@ test("BL5: config validation forbids the surfaces, sinks and escapes upstream de
     const nonInteractive = normalizeOmaMcpConfig({ settings: {} }, { interactive: false, stateDir });
     assert.equal(nonInteractive.settings.sampling, false);
 });
-test("BL5: the OMA-owned config file is read from the engine's own agent dir, and a malformed file fails closed", async (t) => {
+test("007. The OMA-owned config file is read from the engine's own agent dir, and a malformed file fails closed", async (t) => {
     const agentDir = tmp(t, "oma-mcp-agent-");
     // No file: empty config, `mcp` still registers.
     const pi = fakePi();
@@ -237,7 +287,7 @@ test("BL5: the OMA-owned config file is read from the engine's own agent dir, an
     writeFileSync(join(agentDir, MCP_CONFIG_FILE_NAME), "{ not json");
     await assert.rejects(registerMcpTools(fakePi(), { agentDir }), /E_OMA_MCP_CONFIG.*not valid JSON/);
 });
-test("DR37: MCP credential helpers, custom CA, npm servers and auth/install settings are accepted", t => {
+test("008. MCP credential helpers, custom CA, npm servers and auth/install settings are accepted", t => {
     const config = normalizeOmaMcpConfig({ settings: { autoAuth: true, allowInstall: true }, mcpServers: {
             npm: { command: "npx", args: ["-y", "server"], env: { KEY: "!printf token" } },
             http: { url: "https://internal.example/", caFile: "/workspace/ca.pem", bearerToken: "!printf token",
@@ -248,7 +298,55 @@ test("DR37: MCP credential helpers, custom CA, npm servers and auth/install sett
     assert.equal(config.settings?.autoAuth, true);
     assert.equal(config.settings?.allowInstall, true);
 });
-test("DR37: installing through the actual MCP proxy connects and persists to the OMA configuration", { timeout: 15000 }, async (t) => {
+test("030. MCP refuses SDK timer overflow before dispatch and retains the largest supported healthy connection", async t => {
+    const maximum = 0x7fffffff;
+    for (const scope of ["settings", "server"]) {
+        const config = timeout => scope === "settings" ? { settings: { requestTimeoutMs: timeout } }
+            : { mcpServers: { local: { command: "server", requestTimeoutMs: timeout } } };
+        assert.doesNotThrow(() => normalizeOmaMcpConfig(config(maximum)));
+        assert.throws(() => normalizeOmaMcpConfig(config(maximum + 1)), /E_OMA_MCP_CONFIG.*SDK timer limit/u);
+    }
+    const { McpServerManager } = await import("../dist/vendor/pi-mcp-adapter/runtime/server-manager.js");
+    const utils = await import("../dist/vendor/pi-mcp-adapter/runtime/utils.js");
+    const { Client } = await import("../dist/vendor/pi-mcp-adapter/node_modules/@modelcontextprotocol/client/dist/index.mjs");
+    utils.omaInstallMcpPolicy(undefined);
+    const manager = new McpServerManager();
+    assert.equal(manager.buildRequestOptions({ requestTimeoutMs: maximum + 1 }).timeout, maximum + 1,
+        "the declared divergence is inert without OMA's installed policy");
+    const pi = fakePi(), agentDir = tmp(t);
+    await registerMcpTools(pi, { agentDir, config: { mcpServers: {} } });
+    t.after(async () => {
+        for (const hook of pi.handlers.get("session_shutdown") ?? [])
+            await hook({}, { hasUI: false, cwd: agentDir, sessionManager: { getBranch: () => [] } });
+    });
+    manager.setDefaultRequestTimeoutMs(maximum);
+    assert.throws(() => manager.setDefaultRequestTimeoutMs(maximum + 1), /E_OMA_MCP_CONFIG.*SDK timer limit/u);
+    assert.equal(manager.buildRequestOptions({}).timeout, maximum, "a rejected update preserves the supported default");
+    assert.throws(() => manager.buildRequestOptions({ requestTimeoutMs: maximum + 1 }), /E_OMA_MCP_CONFIG.*SDK timer limit/u);
+    for (const timeout of [3000, maximum]) {
+        const client = new Client({ name: "healthy-timer-probe", version: "1" }, { capabilities: {} });
+        const timers = new Set();
+        const transport = {
+            async start() {},
+            async close() { for (const timer of timers) clearTimeout(timer); timers.clear(); this.onclose?.(); },
+            async send(message) {
+                if (message.id === undefined) return;
+                const timer = setTimeout(() => {
+                    timers.delete(timer);
+                    this.onmessage?.({ jsonrpc: "2.0", id: message.id, result: {
+                        protocolVersion: message.params.protocolVersion, capabilities: { tools: {} },
+                        serverInfo: { name: "healthy", version: "1" },
+                    } });
+                }, 25);
+                timers.add(timer);
+            },
+        };
+        try { await client.connect(transport, manager.buildRequestOptions({ requestTimeoutMs: timeout })); }
+        finally { await client.close(); }
+        assert.equal(timers.size, 0);
+    }
+});
+test("009. Installing through the actual MCP proxy connects and persists to the OMA configuration", { timeout: 15000 }, async (t) => {
     withEgress(t, false);
     const agentDir = tmp(t), methods = [];
     const server = createServer((req, res) => {
@@ -291,7 +389,7 @@ test("DR37: installing through the actual MCP proxy connects and persists to the
     const saved = JSON.parse(readFileSync(join(agentDir, MCP_CONFIG_FILE_NAME), "utf8"));
     assert.equal(saved.mcpServers.local.url, url);
 });
-test("BL5: inaccessible state is an observable error -- only ENOENT means absent", async (t) => {
+test("010. Inaccessible state is an observable error -- only ENOENT means absent", async (t) => {
     const agentDir = tmp(t, "oma-mcp-agent-");
     const configPath = join(agentDir, MCP_CONFIG_FILE_NAME);
     const eacces = (error) => error?.code === "EACCES";
@@ -322,7 +420,7 @@ test("BL5: inaccessible state is an observable error -- only ENOENT means absent
     chmodSync(keyPath, 0o600);
     assert.equal(readFileSync(keyPath, "utf8"), sealed, "the denied read never rewrote the key");
 });
-test("BL5: OMA-owned state holds the credential key and scratch; shutdown removes scratch", async (t) => {
+test("011. OMA-owned state holds the credential key and scratch; shutdown removes scratch", async (t) => {
     const agentDir = tmp(t, "oma-mcp-agent-");
     const pi = fakePi();
     await registerMcpTools(pi, { agentDir, config: { mcpServers: {} } });
@@ -332,24 +430,158 @@ test("BL5: OMA-owned state holds the credential key and scratch; shutdown remove
     const key = readFileSync(keyPath, "utf8").trim();
     assert.match(key, /^[A-Za-z0-9+/]{43}=$/, "canonical base64 of 32 bytes");
     assert.equal(statSync(keyPath).mode & 0o777, 0o600, "the key file is owner-only");
-    const scratch = join(stateDir, "scratch");
+    const scratch = engineScratch(agentDir);
     assert.ok(existsSync(join(scratch, "spill")), "the output-guard spill root exists");
     writeFileSync(join(scratch, "stale"), "x");
-    // handlers[0] is OMA's -- the adapter registers its scratch lifecycle
-    // before upstream's factory adds upstream's own session hooks.
-    const start = pi.handlers.get("session_start")?.[0];
-    assert.ok(start, "OMA's session_start hook is registered");
-    start();
+    // Drive the registered hooks the way Pi's ExtensionRunner does: every
+    // handler for the event, sequentially in registration order, a throwing
+    // handler journaled and skipped. The scratch lifecycle is OMA's in any
+    // position relative to the adapter's own hooks.
+    const dispatch = async (event, ctx) => {
+        for (const hook of pi.handlers.get(event) ?? []) {
+            try { await hook({}, ctx); } catch { /* ExtensionRunner journals and continues */ }
+        }
+    };
+    await dispatch("session_start", {});
     assert.ok(!existsSync(join(scratch, "stale")), "session_start rotates the scratch");
     assert.ok(existsSync(scratch));
-    const shutdown = pi.handlers.get("session_shutdown")?.[0];
-    assert.ok(shutdown, "OMA's session_shutdown hook is registered");
-    shutdown();
+    await dispatch("session_shutdown", {});
     assert.ok(!existsSync(scratch), "session_shutdown removes the scratch");
 });
 // ---------------------------------------------------------------------------
+// Scratch lifetime vs. stdio child death (AUD-18)
+test("012. A live stdio child dies before its scratch is removed -- no exit-path write can recreate the tree", { timeout: 15000 }, async (t) => {
+    // AUD-18: the scratch removal used to be registered before the vendored
+    // factory. Pi awaits session_shutdown handlers sequentially in
+    // registration order, so the removal ran while the stdio child still
+    // held HOME/TMP inside the scratch -- a child recreating its cache/tmp
+    // on the way out put residue back after the deletion. This drives a real
+    // child through the vendored transport whose own exit path is
+    // observable: it logs its HOME at spawn and at EOF, watches for
+    // deletion-while-alive, then recreates HOME and writes a late file the
+    // way a live writer would. The ordering assertion is on the child's
+    // observed exit and on the residue it would have left -- never on
+    // registration positions.
+    const dir = tmp(t, "oma-mcp-lifetime-");
+    const logOut = join(dir, "child.log");
+    const probePath = join(dir, "lifetime-server.cjs");
+    writeFileSync(probePath, `'use strict';
+const fs = require("node:fs");
+const path = require("node:path");
+const readline = require("node:readline");
+const logOut = process.argv[2];
+const log = (line) => fs.appendFileSync(logOut, line + "\\n");
+const home = process.env.HOME;
+const pid = process.pid;
+log("spawned pid=" + pid + " home=" + home + " home-present=" + fs.existsSync(home));
+// A running child holds HOME/TMP: a scratch that disappears underneath it is
+// a live-writer deletion, recorded as the defect's own signature.
+const watchScratch = () => {
+  if (!fs.existsSync(home)) { log("scratch-deleted-while-alive pid=" + pid); return; }
+  setTimeout(watchScratch, 2);
+};
+watchScratch();
+readline.createInterface({ input: process.stdin, terminal: false }).on("line", line => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.id === undefined) return;
+  const respond = result => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");
+  if (msg.method === "initialize")
+    return respond({ protocolVersion: msg.params && msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "lifetime", version: "0.0.0" } });
+  if (msg.method === "tools/list") return respond({ tools: [] });
+  respond({});
+}).on("close", () => {
+  // stdin ended: the transport's close path began. Record what this writer
+  // sees, then perform the late write an exiting MCP child performs,
+  // recreating HOME if a premature removal took it.
+  log("eof home-at-exit=" + (fs.existsSync(home) ? "present" : "missing") + " pid=" + pid);
+  fs.mkdirSync(path.join(home, "recreated"), { recursive: true });
+  fs.writeFileSync(path.join(home, "late-write"), "late source");
+  fs.writeFileSync(path.join(home, "recreated", "deep"), "deep");
+  log("late-write-done pid=" + pid);
+  // Hold the exit briefly so the deletion boundary is observable in wall
+  // time on both sides.
+  setTimeout(() => { log("exit-at=" + Date.now() + " pid=" + pid); process.exit(0); }, 75);
+});
+`);
+    const agentDir = tmp(t, "oma-mcp-agent-");
+    const pi = fakePi();
+    await registerMcpTools(pi, { agentDir, config: { mcpServers: { lifetime: { command: process.execPath, args: [probePath, logOut] } } } });
+    const scratch = engineScratch(agentDir);
+    const ctx = { hasUI: false };
+    let pid;
+    t.after(() => {
+        if (pid !== undefined) {
+            try { process.kill(pid, "SIGKILL"); } catch { /* already dead */ }
+        }
+    });
+    const connected = await pi.tools.get("mcp").execute("connect", { connect: "lifetime" }, undefined, undefined, ctx);
+    assert.equal(connected.details?.error, undefined, textOf(connected));
+    const deadline = Date.now() + 10000;
+    while ((!existsSync(logOut) || !readFileSync(logOut, "utf8").includes("spawned ")) && Date.now() < deadline)
+        await new Promise(resolve => setTimeout(resolve, 10));
+    // The SDK spawns a disposable version-negotiation sibling before the live
+    // connection; the live writer under test is the last spawned child.
+    const spawnedLines = readFileSync(logOut, "utf8").split("\n").filter(line => line.startsWith("spawned "));
+    assert.ok(spawnedLines.length > 0, "the child logged its spawn");
+    const fields = Object.fromEntries(spawnedLines.at(-1).split(" ").slice(1).map(entry => entry.split("=")));
+    pid = Number(fields.pid);
+    assert.ok(Number.isInteger(pid) && pid > 0, `parsed child pid from ${spawnedLines.at(-1)}`);
+    assert.equal(fields["home-present"], "true");
+    assert.equal(fields.home, scratch, "the child's HOME (and TMP) is the scratch OMA removes");
+    assert.doesNotThrow(() => process.kill(pid, 0), "the live child was still running when shutdown began");
+    // Timestamp the removal from outside the child; the child timestamps its
+    // own exit. Ordering is asserted on those two observations.
+    let removalAt;
+    const poll = setInterval(() => {
+        if (removalAt === undefined && !existsSync(scratch))
+            removalAt = Date.now();
+    }, 1);
+    const handlerFailures = [];
+    for (const hook of pi.handlers.get("session_shutdown") ?? []) {
+        try { await hook({}, ctx); }
+        catch (error) { handlerFailures.push(error); }
+    }
+    clearInterval(poll);
+    if (removalAt === undefined && !existsSync(scratch))
+        removalAt = Date.now();
+    const log = readFileSync(logOut, "utf8");
+    // Every child line carries its own pid; the assertions below are the live
+    // writer's own observations, not the sibling's.
+    const writerPattern = new RegExp(`(?:^| )pid=${pid}(?: |$)`);
+    const writerLog = log.split("\n").filter(line => writerPattern.test(line)).join("\n");
+    assert.ok(!writerLog.includes("scratch-deleted-while-alive"), `the live child never observed its scratch removed:\n${writerLog}`);
+    assert.ok(writerLog.includes("home-at-exit=present"), `the live child's exit path still owned HOME -- the removal had not run:\n${writerLog}`);
+    assert.ok(writerLog.includes("late-write-done"), `the live child completed its late write into HOME:\n${writerLog}`);
+    const exitAt = Number(/exit-at=(\d+)/.exec(writerLog)?.[1]);
+    assert.ok(Number.isInteger(exitAt) && exitAt > 0, `the live child timestamped its exit:\n${writerLog}`);
+    assert.ok(removalAt !== undefined,
+        `the scratch was removed (handler failures: ${handlerFailures.map(error => error?.message).join("; ") || "none"}):\n${log}`);
+    assert.ok(removalAt >= exitAt, `scratch removal (${removalAt}) preceded the live child's exit (${exitAt}):\n${writerLog}`);
+    assert.throws(() => process.kill(pid, 0), (error) => error.code === "ESRCH", "the stdio child is not alive after shutdown");
+    assert.ok(!existsSync(scratch), "session_shutdown removed the scratch");
+    assert.ok(!existsSync(join(scratch, "late-write")), "the child's exit-path write was swept with the scratch");
+});
+test("013. A failed MCP connection still leaves no scratch after shutdown", async (t) => {
+    // Preserve cleanup on connection failure: whether a server ever
+    // connected, the session's shutdown removes the scratch (and this failed
+    // connect attempted a spawn nobody took ownership of).
+    const agentDir = tmp(t, "oma-mcp-agent-");
+    const pi = fakePi();
+    await registerMcpTools(pi, { agentDir, config: { mcpServers: { broken: { command: "/nonexistent/oma-mcp-binary" } } } });
+    const scratch = engineScratch(agentDir);
+    const ctx = { hasUI: false };
+    const failed = await pi.tools.get("mcp").execute("connect", { connect: "broken" }, undefined, undefined, ctx);
+    assert.notEqual(failed.details?.error, undefined, `connecting a missing command fails: ${textOf(failed)}`);
+    assert.ok(existsSync(scratch), "the scratch existed through the failed connection");
+    for (const hook of pi.handlers.get("session_shutdown") ?? []) {
+        try { await hook({}, ctx); } catch { /* ExtensionRunner journals and continues */ }
+    }
+    assert.ok(!existsSync(scratch), "the failed connection still cleaned up its scratch");
+});
+// ---------------------------------------------------------------------------
 // Child env scrub
-test("BL5: the stdio child env is the shared scrub -- allowlist, declared filter, scratch redirects", t => {
+test("014. The stdio child env is the shared scrub -- allowlist, declared filter, scratch redirects", t => {
     withEgress(t, true, 47861);
     const scratch = join(tmp(t), "scratch");
     const priorSecret = process.env.OMA_TEST_MCP_SECRET;
@@ -396,7 +628,7 @@ test("BL5: the stdio child env is the shared scrub -- allowlist, declared filter
     }
     assert.ok(!Object.hasOwn(env, "API_KEY"), "a non-underlay denied name is absent outright");
 });
-test("BL5: through the vendored SDK transport's underlay union, denied names stay absent in a real child", async (t) => {
+test("015. Through the vendored SDK transport's underlay union, denied names stay absent in a real child", async (t) => {
     // StdioClientTransport spawns with `{ ...getDefaultEnvironment(), ...env }`:
     // ambient HOME/LOGNAME/PATH/SHELL/TERM/USER (win32: the other list) would
     // resurface beneath the adapter's env unless each unsanctioned underlay
@@ -445,7 +677,7 @@ test("BL5: through the vendored SDK transport's underlay union, denied names sta
 });
 // ---------------------------------------------------------------------------
 // Policy seam inside the vendored runtime
-test("BL5: the installed policy is live inside the vendored runtime", async (t) => {
+test("016. The installed policy is live inside the vendored runtime", async (t) => {
     withEgress(t, false);
     const agentDir = tmp(t, "oma-mcp-agent-");
     const pi = fakePi();
@@ -481,7 +713,7 @@ test("BL5: the installed policy is live inside the vendored runtime", async (t) 
     assert.equal(typeof finished.HOME, "string", "scratch HOME was layered");
     assert.ok(Object.hasOwn(finished, "SHELL") && finished.SHELL === undefined, "an unsanctioned underlay name is an explicit tombstone");
 });
-test("BL5: with egress wiring the vendored fetch leaf rides the pin; loopback stays direct", async (t) => {
+test("017. With egress wiring the vendored fetch leaf rides the pin; loopback stays direct", async (t) => {
     withEgress(t, true, 47871);
     const agentDir = tmp(t, "oma-mcp-agent-");
     const pi = fakePi();
@@ -500,7 +732,7 @@ test("BL5: with egress wiring the vendored fetch leaf rides the pin; loopback st
     const loopback = await utils.omaPinnedFetch("http://127.0.0.1:1/x", { signal: AbortSignal.timeout(3000) }).then(() => "unexpected success", () => "direct-refused");
     assert.equal(loopback, "direct-refused");
 });
-test("BL5: without egress wiring the leaf is upstream's own fetch", async (t) => {
+test("018. Without egress wiring the leaf is upstream's own fetch", async (t) => {
     withEgress(t, false);
     const agentDir = tmp(t, "oma-mcp-agent-");
     const pi = fakePi();
@@ -512,7 +744,7 @@ test("BL5: without egress wiring the leaf is upstream's own fetch", async (t) =>
 });
 // ---------------------------------------------------------------------------
 // Interactive-UI refusal (the "ui-session" permit, deny-by-default)
-test("BL5: maybeStartUiSession and the glimpse viewer refuse before any host work runs", async (t) => {
+test("019. MaybeStartUiSession and the glimpse viewer refuse before any host work runs", async (t) => {
     withEgress(t, false);
     const agentDir = tmp(t, "oma-mcp-agent-");
     const pi = fakePi();
@@ -529,7 +761,7 @@ test("BL5: maybeStartUiSession and the glimpse viewer refuse before any host wor
     // call is also proof no host-global package was resolved or imported.
     await assert.rejects(glimpse.openGlimpseWindow("<html/>", {}), /E_OMA_MCP_AUTHORITY/);
 });
-test("BL5: a uiResourceUri tool call returns the structured refusal; the server sees no UI machinery", async (t) => {
+test("020. A uiResourceUri tool call returns the structured refusal; the server sees no UI machinery", async (t) => {
     // A real stdio MCP server (spawned through the vendored transport, so the
     // child env is also the F1 oracle) that logs every request method it
     // receives. A `ui://` tool call must come back as a structured
@@ -613,7 +845,7 @@ readline.createInterface({ input: process.stdin, terminal: false }).on("line", l
     const childEnv = JSON.parse(readFileSync(envOut, "utf8"));
     assert.equal(childEnv.SHELL, undefined, "ambient SHELL never reached the spawned server");
     assert.equal(childEnv.HOMEDRIVE, undefined, "no underlay win32 names either");
-    assert.equal(childEnv.HOME, join(agentDir, MCP_STATE_DIR_NAME, "scratch"), "HOME is the OMA scratch");
+    assert.equal(childEnv.HOME, engineScratch(agentDir), "HOME is this engine’s private scratch");
 });
 // ---------------------------------------------------------------------------
 // Post-listen 'error' absorption (the vendored listen boundaries)
@@ -656,7 +888,7 @@ async function stillDialing(port) {
     await once(probe, "connect");
     probe.destroy();
 }
-test("BL5: the OAuth callback listener absorbs post-listen errors -- the first is journaled, the second cannot escape", async (t) => {
+test("021. The OAuth callback listener absorbs post-listen errors -- the first is journaled, the second cannot escape", async (t) => {
     // Upstream armed a `once("error", reject)` for the server's whole life:
     // the first post-listen error was silently consumed by the settled
     // reject and a second met zero listeners and escaped its emit as the
@@ -686,7 +918,7 @@ test("BL5: the OAuth callback listener absorbs post-listen errors -- the first i
     await stillDialing(provider.getOAuthCallbackPort());
     assert.deepEqual(escaped, []);
 });
-test("BL5: both vendored UI-session listeners absorb post-listen errors", async (t) => {
+test("022. Both vendored UI-session listeners absorb post-listen errors", async (t) => {
     // The host server's retry loop re-arms a once-listener per port
     // candidate and drops it on success; the sandbox proxy's once-listener
     // is dropped the same way -- two instances of the class the sweep fixed
@@ -719,4 +951,12 @@ test("BL5: both vendored UI-session listeners absorb post-listen errors", async 
     await stillDialing(handle.port);
     await stillDialing(handle.proxyPort);
     assert.deepEqual(escaped, []);
+});
+
+test("029. Resource exposure stays pinned after the vendored runtime merges a later server definition",async t=>{
+ const agentDir=tmp(t),pi=fakePi();await registerMcpTools(pi,{agentDir,config:{mcpServers:{}}});
+ const {loadMcpConfig}=await import('../dist/vendor/pi-mcp-adapter/runtime/config.js');
+ const override=join(agentDir,'later.json');writeFileSync(override,JSON.stringify({mcpServers:{later:{url:'http://127.0.0.1:1/mcp',exposeResources:true}},settings:{exposeResources:true}}));
+ const loaded=loadMcpConfig(override,agentDir);
+ assert.equal(loaded.mcpServers.later.exposeResources,false);
 });

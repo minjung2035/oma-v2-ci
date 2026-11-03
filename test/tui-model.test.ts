@@ -53,7 +53,7 @@ function drive(start: State, keys: readonly Key[]): { state: State; effects: Eff
   return { state, effects };
 }
 
-test("T92/arch 23.4: Ctrl+X opens and closes the Control Panel from the conversation", () => {
+test("001. Ctrl+X opens and closes the Control Panel from the conversation", () => {
   assert.equal(INITIAL.open, false);
   const opened = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(opened.open, true);
@@ -62,7 +62,7 @@ test("T92/arch 23.4: Ctrl+X opens and closes the Control Panel from the conversa
   assert.equal(closed.open, false);
 });
 
-test("arch 23.4: left and right move across exactly the three categories", () => {
+test("002. Left and right move across exactly the three categories", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(categoryOf(drive(open, [KEY.right]).state), "config");
   assert.equal(categoryOf(drive(open, [KEY.right, KEY.right]).state), "mail");
@@ -70,7 +70,7 @@ test("arch 23.4: left and right move across exactly the three categories", () =>
   assert.equal(categoryOf(drive(open, [KEY.left]).state), "mail");
 });
 
-test("arch 23.4: item cursor never leaves the current category's range", () => {
+test("003. Item cursor never leaves the current category's range", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const top = drive(open, [KEY.right, KEY.up, KEY.up, KEY.up]).state;
   assert.equal(cursorOf(top, data), 0);
@@ -78,26 +78,26 @@ test("arch 23.4: item cursor never leaves the current category's range", () => {
   assert.equal(cursorOf(bottom, data), data.config.length - 1);
 });
 
-test("T96/TUI-007: a confirmed choice saves immediately with no separate save step", () => {
+test("004. A confirmed choice saves immediately with no separate save step", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { effects } = drive(open, [KEY.right, KEY.enter, KEY.up, KEY.enter]);
   assert.deepEqual(effects, [{ kind: "set-choice", field: "principal-model", value: "cheap" }]);
 });
 
-test("TUI-007: Esc during an edit reverts and emits no effect", () => {
+test("005. Esc during an edit reverts and emits no effect", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { state, effects } = drive(open, [KEY.right, KEY.enter, KEY.up, KEY.escape]);
   assert.deepEqual(effects, []);
   assert.equal(state.edit.kind, "none");
 });
 
-test("TUI-007: confirming the unchanged value produces no write", () => {
+test("006. Confirming the unchanged value produces no write", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { effects } = drive(open, [KEY.right, KEY.enter, KEY.enter]);
   assert.deepEqual(effects, []);
 });
 
-test("TUI-007: a number edit commits only a digit string inside the declared range", () => {
+test("007. A number edit commits only a digit string inside the declared range", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const start = [KEY.right, KEY.down, KEY.enter] as const;
   const committed = drive(open, [...start, KEY.backspace, KEY.char("1"), KEY.char("2"), KEY.enter]);
@@ -109,14 +109,14 @@ test("TUI-007: a number edit commits only a digit string inside the declared ran
   assert.deepEqual(emptied.effects, []);
 });
 
-test("arch 23.4: only Extensions and Mail open a detail screen", () => {
+test("008. Only Extensions and Mail open a detail screen", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(drive(open, [KEY.enter]).state.detail.kind, "none");
   assert.equal(drive(open, [KEY.right, KEY.down, KEY.down, KEY.enter]).state.detail.kind, "extensions");
   assert.equal(drive(open, [KEY.right, KEY.right, KEY.enter]).state.detail.kind, "mail");
 });
 
-test("T97/TUI-010: the locked core extension cannot be toggled, other rows can", () => {
+test("009. The locked core extension cannot be toggled, other rows can", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const toExtensions = [KEY.right, KEY.down, KEY.down, KEY.enter] as const;
   assert.deepEqual(drive(open, [...toExtensions, KEY.enter]).effects, []);
@@ -126,7 +126,7 @@ test("T97/TUI-010: the locked core extension cannot be toggled, other rows can",
     [{ kind: "set-extension", id: "extensions/review.js", role: "workers", enabled: false }]);
 });
 
-test("arch 23.4: Esc leaves a detail screen before it closes the panel", () => {
+test("010. Esc leaves a detail screen before it closes the panel", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const inDetail = drive(open, [KEY.right, KEY.down, KEY.down, KEY.enter]).state;
   const back = step(inDetail, KEY.escape, data, FRAME_BYTES).state;
@@ -135,7 +135,7 @@ test("arch 23.4: Esc leaves a detail screen before it closes the panel", () => {
   assert.equal(step(back, KEY.escape, data, FRAME_BYTES).state.open, false);
 });
 
-test("conversation keys build a prompt and submit it exactly once", () => {
+test("011. Conversation keys build a prompt and submit it exactly once", () => {
   const typed = drive(INITIAL, [KEY.char("h"), KEY.char("i"), KEY.char("!"), KEY.backspace]);
   assert.equal(typed.state.prompt.text, "hi");
   const submitted = step(typed.state, KEY.enter, data, FRAME_BYTES);
@@ -144,7 +144,7 @@ test("conversation keys build a prompt and submit it exactly once", () => {
   assert.deepEqual(step(submitted.state, KEY.enter, data, FRAME_BYTES).effects, []);
 });
 
-test("conversation Backspace removes one grapheme without leaving broken Unicode", () => {
+test("012. Conversation Backspace removes one grapheme without leaving broken Unicode", () => {
   for (const value of ["😀", "e\u0301", "👨‍👩‍👧‍👦"]) {
     const typed = drive(INITIAL, [KEY.char("a"), ...[...value].map(KEY.char)]);
     const erased = step(typed.state, KEY.backspace, data, FRAME_BYTES).state;
@@ -153,7 +153,7 @@ test("conversation Backspace removes one grapheme without leaving broken Unicode
   }
 });
 
-test("cursors stay valid when the underlying data shrinks to empty", () => {
+test("013. Cursors stay valid when the underlying data shrinks to empty", () => {
   const empty: PanelData = { ...data, mail: Object.freeze([]), config: Object.freeze([]) };
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const onMail = drive(open, [KEY.right, KEY.right, KEY.down]).state;
@@ -162,7 +162,7 @@ test("cursors stay valid when the underlying data shrinks to empty", () => {
   assert.equal(step(onMail, KEY.enter, empty, FRAME_BYTES).state.detail.kind, "none");
 });
 
-test("key decoding maps arrows, Ctrl+X and text without leaking escape sequences", () => {
+test("014. Key decoding maps arrows, Ctrl+X and text without leaking escape sequences", () => {
   const esc = String.fromCharCode(27);
   assert.deepEqual(decodeKeys(Buffer.from(`${esc}[A${esc}[B${esc}[C${esc}[D`)),
     [{ kind: "up" }, { kind: "down" }, { kind: "right" }, { kind: "left" }]);
@@ -177,7 +177,7 @@ test("key decoding maps arrows, Ctrl+X and text without leaking escape sequences
   assert.deepEqual(decodeKeys(Buffer.from("가a")), [{ kind: "char", value: "가" }, { kind: "char", value: "a" }]);
 });
 
-test("rendering keeps every line inside the terminal width for wide characters", () => {
+test("015. Rendering keeps every line inside the terminal width for wide characters", () => {
   assert.equal(cellWidth("가"), 2);
   assert.equal(cellWidth("a"), 1);
   assert.equal(fit("가가가", 5), "가가");
@@ -189,7 +189,7 @@ test("rendering keeps every line inside the terminal width for wide characters",
   }
 });
 
-test("B4: the open message names its sender and its recipients", () => {
+test("016. The open message names its sender and its recipients", () => {
   // B4: the rows carry the screen's names already; the detail shows From and To.
   const named: PanelData = Object.freeze({ ...data,
     mail: Object.freeze([
@@ -209,7 +209,7 @@ test("B4: the open message names its sender and its recipients", () => {
   assert.doesNotMatch(without, /^To:/m);
 });
 
-test("TUI-007: the panel always shows when a setting takes effect", () => {
+test("017. The panel always shows when a setting takes effect", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const config = step(open, KEY.right, data, FRAME_BYTES).state;
   const text = render({ state: config, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
@@ -217,7 +217,7 @@ test("TUI-007: the panel always shows when a setting takes effect", () => {
   assert.match(text, /After restart/);
 });
 
-test("P0V-108 / F-06, TUI-002: what reorders or hides letters is not drawn, and the joiners that shape them are", () => {
+test("018. What reorders or hides letters is not drawn, and the joiners that shape them are", () => {
   // A subject that would read "evil txt.exe": the override is gone, the letters are in order.
   assert.equal(fit("evil‮exe.txt", 40), "evilexe.txt");
   for (const unseen of ["‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "⁨", "⁩", "‎", "‏",
@@ -230,7 +230,7 @@ test("P0V-108 / F-06, TUI-002: what reorders or hides letters is not drawn, and 
   assert.equal(fit("́ab", 1), "́a");
 });
 
-test("P0V-108: a paste loses what the screen would not show, so the draft the Human reads is the text that is sent", () => {
+test("019. A paste loses what the screen would not show, so the draft the Human reads is the text that is sent", () => {
   const pasted = (text: string): Key[] => decodeKeys(Buffer.from(`\u001b[200~${text}\u001b[201~`));
   const keys = pasted("rm -rf ‮/ ; echo​ ok\tdone\r\nnext\u{E0049}");
   const paste = keys.find(key => key.kind === "paste") as { kind: "paste"; value: string } | undefined;
@@ -239,7 +239,7 @@ test("P0V-108: a paste loses what the screen would not show, so the draft the Hu
 });
 
 
-test("TUI-007 / CFG-001: number editing accepts safe integers beyond nine digits, never rounded integers", () => {
+test("020. Number editing accepts safe integers beyond nine digits, never rounded integers", () => {
   const wide: PanelData = { ...data, config: [{ kind: "number", id: "worker-limit", label: "Worker limit",
     value: 8, min: 0, max: Number.MAX_SAFE_INTEGER, apply: "restart", blocked: null }] };
   for (const text of ["0", "1000000000", String(Number.MAX_SAFE_INTEGER), "9007199254740992"]) {

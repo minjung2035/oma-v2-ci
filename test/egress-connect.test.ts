@@ -1,3 +1,4 @@
+import { beforeDeadline } from "./fixtures/timeout.js";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** CONNECT egress: authority grammar, unrestricted destination
  * routing, address pinning, socket protocol and owned connection lifetime. */
@@ -24,7 +25,7 @@ import { residentOptions } from "./fixtures/resident.js";
 
 /* ---------------- authority grammar ---------------- */
 
-test("DR34: the CONNECT authority is host:port or [literal]:port, strictly", () => {
+test("001. The CONNECT authority is host:port or [literal]:port, strictly", () => {
   for (const url of ["registry.npmjs.org:443", "EXAMPLE.com:443", "a.b.c.org:1"]) {
     const { target, problem } = parseConnectTarget(url);
     assert.equal(problem, null, url);
@@ -50,7 +51,7 @@ test("DR34: the CONNECT authority is host:port or [literal]:port, strictly", () 
 
 /* ---------------- unrestricted destination routing ---------------- */
 
-test("DR37/39: the actual dial admits local, private, mapped and public addresses on any port", async () => {
+test("002. The actual dial admits local, private, mapped and public addresses on any port", async () => {
   const addresses = ["10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.0.1",
     "::1", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:127.0.0.1", "64:ff9b::10.0.0.1", "2002:0a00:0001::1",
     "8.8.8.8", "2001:4860:4860::8888"];
@@ -67,7 +68,7 @@ test("DR37/39: the actual dial admits local, private, mapped and public addresse
 
 /* ---------------- the pinned dial ---------------- */
 
-test("DR34: the dial resolves once and pins the chosen address", async () => {
+test("003. The dial resolves once and pins the chosen address", async () => {
   const dialed: string[] = [];
   const connect = async (address: string, _port: number): Promise<Socket> => {
     dialed.push(address);
@@ -79,14 +80,14 @@ test("DR34: the dial resolves once and pins the chosen address", async () => {
   assert.deepEqual(dialed, ["10.0.0.9"], "the first resolved address is dialed literally");
 });
 
-test("DR37: a private resolver answer reaches the connect boundary", async () => {
+test("004. A private resolver answer reaches the connect boundary", async () => {
   let connects = 0;
   const dial = makePublicDial({ lookup: async () => [{ address: "169.254.169.254", family: 4 }], connect: async () => { connects += 1; return new Socket(); } });
   (await dial("metadata.internal", 443)).destroy();
   assert.equal(connects, 1);
 });
 
-test("DR37: resolver answers are pinned; absence fails and a failed address permits the next", async () => {
+test("005. Resolver answers are pinned; absence fails and a failed address permits the next", async () => {
   // Loopback is a valid destination. Resolve once, then dial its literal.
   const dial = makePublicDial({ lookup: async () => [{ address: "127.0.0.1", family: 4 }, { address: "::1", family: 6 }], connect: async () => new Socket() });
   (await dial("registry.npmjs.org", 443)).destroy();
@@ -159,7 +160,7 @@ async function collect(trailing: Buffer[], ms = 3000): Promise<string> {
   return Buffer.concat(trailing.splice(0)).toString("latin1");
 }
 
-test("DR34: an allowlisted CONNECT answers 200 and the tunnel carries bytes end to end", async t => {
+test("006. An allowlisted CONNECT answers 200 and the tunnel carries bytes end to end", async t => {
   const port = await echo(t);
   const audits: EgressAudit[] = [];
   const { socketPath } = await proxyWorld(t, async () => connect({ host: "127.0.0.1", port }), e => audits.push(e));
@@ -172,7 +173,7 @@ test("DR34: an allowlisted CONNECT answers 200 and the tunnel carries bytes end 
   assert.deepEqual([audits[0]!.actor, audits[0]!.target, audits[0]!.decision], ["alice", "registry.npmjs.org:443", "allow"]);
 });
 
-test("DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 403 and nothing is dialed", async t => {
+test("007. Refused CONNECTs -- unlisted names, literals, other ports -- answer 403 and nothing is dialed", async t => {
   let dialed = 0;
   const audits: EgressAudit[] = [];
   const { socketPath } = await proxyWorld(t, async () => { dialed += 1; return new Socket(); }, e => audits.push(e));
@@ -185,7 +186,7 @@ test("DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 
   assert.ok(audits.every(e => e.reason.length > 0));
 });
 
-test("DR34: a dial refusal answers 502/403 and the error stays a refusal, never a tunnel", async t => {
+test("008. A dial refusal answers 502/403 and the error stays a refusal, never a tunnel", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const refused = await ConnectProxy.open({ socketPath: join(dir, "a.sock"), actor: "alice",
@@ -197,7 +198,7 @@ test("DR34: a dial refusal answers 502/403 and the error stays a refusal, never 
   assert.equal((await connectRaw(join(dir, "b.sock"), "CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n")).status, 502);
 });
 
-test("DR34: malformed requests -- non-CONNECT, garbage, oversized heads -- are refused or destroyed", async t => {
+test("009. Malformed requests -- non-CONNECT, garbage, oversized heads -- are refused or destroyed", async t => {
   const { socketPath } = await proxyWorld(t, async () => new Socket());
   // A plain GET is not a tunnel: refused with a status.
   const get = await connectRaw(socketPath, "GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
@@ -212,15 +213,12 @@ test("DR34: malformed requests -- non-CONNECT, garbage, oversized heads -- are r
   const oversized = connect(socketPath);
   await once(oversized, "connect");
   oversized.write(`CONNECT registry.npmjs.org:443 HTTP/1.1\r\nX-Pad: ${"p".repeat(20000)}\r\n\r\n`);
-  const closed = await Promise.race([
-    once(oversized, "close").then(() => true),
-    new Promise(r => setTimeout(() => r(false), 3000)),
-  ]);
+  const closed = await beforeDeadline(once(oversized, "close").then(() => true), 3000, false);
   assert.equal(closed, true, "an oversized request head is destroyed");
   oversized.destroy();
 });
 
-test("DR34: credential-bearing headers die at the proxy -- the tunnel carries only post-200 bytes", async t => {
+test("010. Credential-bearing headers die at the proxy -- the tunnel carries only post-200 bytes", async t => {
   const port = await echo(t);
   const { socketPath } = await proxyWorld(t, async () => connect({ host: "127.0.0.1", port }));
   // The CONNECT request's own headers (Proxy-Authorization et al.) end at the
@@ -235,7 +233,7 @@ test("DR34: credential-bearing headers die at the proxy -- the tunnel carries on
   socket.destroy();
 });
 
-test("DR34: bytes written with the CONNECT (a racing ClientHello) are forwarded", async t => {
+test("011. Bytes written with the CONNECT (a racing ClientHello) are forwarded", async t => {
   const port = await echo(t);
   const { socketPath } = await proxyWorld(t, async () => connect({ host: "127.0.0.1", port }));
   const { status, trailing, socket } = await connectRaw(socketPath,
@@ -254,7 +252,7 @@ const until = async (condition: () => boolean, what: string): Promise<void> => {
 for (const framing of [
   { name: "Content-Length", header: "Content-Length: 20", payload: "short" },
   { name: "chunked", header: "Transfer-Encoding: chunked", payload: "5\r\nshort\r\n" },
-]) test(`HTTP proxy: truncated ${framing.name} keep-alive responses abort downstream and release ownership`, { timeout: 10_000 }, async t => {
+]) test(`012. HTTP proxy: truncated ${framing.name} keep-alive responses abort downstream and release ownership`, { timeout: 10_000 }, async t => {
   const peers = new Set<Socket>();
   let interruptedPeer: Socket | undefined;
   const upstream = createServer(socket => {
@@ -334,7 +332,7 @@ for (const framing of [
   assert.equal(proxy.activeTunnels, 0, "the subsequent complete HTTP response released its ownership");
 });
 
-test("DR34: a refused request dies with its answer -- no socket lingers in keep-alive or upgrade state", async t => {
+test("013. A refused request dies with its answer -- no socket lingers in keep-alive or upgrade state", async t => {
   const dials: string[] = [];
   const audits: EgressAudit[] = [];
   const { socketPath } = await proxyWorld(t, async host => { dials.push(host); return new Socket(); }, e => audits.push(e));
@@ -347,7 +345,7 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   get.write("GET /?api_key=SECRET HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n");
   let getBytes = Buffer.alloc(0);
   get.on("data", (chunk: Buffer) => { getBytes = Buffer.concat([getBytes, chunk]); });
-  const [getClosed] = await Promise.race([once(get, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  const [getClosed] = await beforeDeadline(once(get, "close").then(() => [true]), 2000, [false]);
   assert.equal(getClosed, true, "the 405 connection must close, not linger");
   assert.match(getBytes.toString("latin1"), /^HTTP\/1\.1 502 .*\r\n(.*\r\n)*?[Cc]onnection: close\r\n/s,
     "the refusal carries Connection: close");
@@ -356,7 +354,7 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   const up = connect(socketPath);
   await once(up, "connect");
   up.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\nConnection: upgrade\r\nUpgrade: websocket\r\n\r\n");
-  const [upClosed] = await Promise.race([once(up, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  const [upClosed] = await beforeDeadline(once(up, "close").then(() => [true]), 2000, [false]);
   assert.equal(upClosed, true, "an upgrade request is refused and destroyed, not left open");
 
   // A CONNECT pipelined behind a refused request is still policy-checked and
@@ -366,14 +364,14 @@ test("DR34: a refused request dies with its answer -- no socket lingers in keep-
   both.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\nCONNECT user:password@registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n");
   let bothBytes = Buffer.alloc(0);
   both.on("data", (chunk: Buffer) => { bothBytes = Buffer.concat([bothBytes, chunk]); });
-  const [bothClosed] = await Promise.race([once(both, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  const [bothClosed] = await beforeDeadline(once(both, "close").then(() => [true]), 2000, [false]);
   assert.equal(bothClosed, true, "the refused connection closes");
   assert.equal(bothBytes.includes("200 Connection Established"), false, "no tunnel was established behind the refused request");
   await until(() => audits.some(e => e.decision === "refuse"), "the pipelined CONNECT is audited");
   assert.equal(dials.length, 0, "nothing was dialed -- every request on the refused socket stayed refused");
 });
 
-test("DR34: the audit journal carries the normalized host:port or a redaction marker -- never request bytes", async t => {
+test("014. The audit journal carries the normalized host:port or a redaction marker -- never request bytes", async t => {
   const audits: EgressAudit[] = [];
   const { socketPath } = await proxyWorld(t, async () => new Socket(), e => audits.push(e));
   // A credential-bearing authority is refused at the grammar and must not
@@ -395,7 +393,7 @@ test("DR34: the audit journal carries the normalized host:port or a redaction ma
   assert.ok(audits.filter(e => e.decision === "refuse").every(e => e.target.length > 0 && e.target.length < 300));
 });
 
-test("DR34: the proxy socket obeys the same 0600 ownership discipline as every sibling listener", async t => {
+test("015. The proxy socket obeys the same 0600 ownership discipline as every sibling listener", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "egress.sock");
@@ -405,7 +403,7 @@ test("DR34: the proxy socket obeys the same 0600 ownership discipline as every s
     "the unix listener is private to this user whatever the umask");
 });
 
-test("DR34: a failure after the dial ends the upstream it opened -- nothing is orphaned", async t => {
+test("016. A failure after the dial ends the upstream it opened -- nothing is orphaned", async t => {
   const port = await echo(t);
   const dialed: Socket[] = [];
   // The audit callback throws on the allow line -- the tunnel is half-built.
@@ -419,7 +417,7 @@ test("DR34: a failure after the dial ends the upstream it opened -- nothing is o
   assert.ok(socket.destroyed, "the client socket is destroyed too");
 });
 
-test("DR34: an audit sink that throws cannot crash the proxy's synchronous listeners -- the refusal still stands", async t => {
+test("017. An audit sink that throws cannot crash the proxy's synchronous listeners -- the refusal still stands", async t => {
   // The "request" and "upgrade" listeners run inside `server.emit`: a sink
   // throw there escaped whole and took the runner -- every tunnel and relay
   // of the delivery -- down with it. Now the journal is best-effort at
@@ -432,7 +430,7 @@ test("DR34: an audit sink that throws cannot crash the proxy's synchronous liste
   const up = connect(socketPath);
   await once(up, "connect");
   up.write("GET / HTTP/1.1\r\nHost: registry.npmjs.org\r\nConnection: upgrade\r\nUpgrade: websocket\r\n\r\n");
-  const [upClosed] = await Promise.race([once(up, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  const [upClosed] = await beforeDeadline(once(up, "close").then(() => [true]), 2000, [false]);
   assert.equal(upClosed, true, "an upgrade is refused and destroyed with the journal dead");
   // A refused CONNECT dies through the connect handler's own boundary --
   // refused and destroyed, still no escape. (A dead journal means no 403
@@ -440,7 +438,7 @@ test("DR34: an audit sink that throws cannot crash the proxy's synchronous liste
   const refused = connect(socketPath);
   await once(refused, "connect");
   refused.write("CONNECT pypi.org:443 HTTP/1.1\r\n\r\n");
-  const [rClosed] = await Promise.race([once(refused, "close").then(() => [true]), new Promise<boolean[]>(r => setTimeout(() => r([false]), 2000))]);
+  const [rClosed] = await beforeDeadline(once(refused, "close").then(() => [true]), 2000, [false]);
   assert.equal(rClosed, true, "a refused CONNECT dies through its own boundary");
   // This test itself still running is the process-survives proof; the
   // listener also kept answering -- a second non-CONNECT refusal lands.
@@ -449,7 +447,7 @@ test("DR34: an audit sink that throws cannot crash the proxy's synchronous liste
   await until(() => again.socket.destroyed, "the second refused socket is destroyed too");
 });
 
-test("DR34: an upstream-initiated close ends the tunnel and frees its slot at once", async t => {
+test("018. An upstream-initiated close ends the tunnel and frees its slot at once", async t => {
   // The target's end of the tunnel dying -- here a RST from the server side
   // of the dialed connection -- must end the client half too. Without the
   // propagation the client stayed open and held its `tunnels` slot until the
@@ -468,15 +466,12 @@ test("DR34: an upstream-initiated close ends the tunnel and frees its slot at on
   // server sees it a turn later. Wait for the peer before ending it.
   await until(() => upstreamPeers.length === 1, "the dialed upstream connected");
   upstreamPeers[0]!.resetAndDestroy();
-  const [closed] = await Promise.race([
-    once(socket, "close").then(() => [true]),
-    new Promise<boolean[]>(r => setTimeout(() => r([false]), 3000)),
-  ]);
+  const [closed] = await beforeDeadline(once(socket, "close").then(() => [true]), 3000, [false]);
   assert.equal(closed, true, "the client half followed the upstream's end");
   await until(() => proxy.activeTunnels === 0, "the tunnel slot was freed without waiting for idleMs");
 });
 
-test("DR34: the tunnel working set queues -- it never refuses; a close grants, a queued close withdraws", async t => {
+test("019. The tunnel working set queues -- it never refuses; a close grants, a queued close withdraws", async t => {
   const port = await echo(t);
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -517,7 +512,7 @@ test("DR34: the tunnel working set queues -- it never refuses; a close grants, a
   granted.socket.destroy();
 });
 
-test("DR34: closing the proxy ends its tunnels and removes its name", async t => {
+test("020. Closing the proxy ends its tunnels and removes its name", async t => {
   const port = await echo(t);
   const dir = mkdtempSync(join(tmpdir(), "oma-connect-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -540,7 +535,7 @@ test("DR34: closing the proxy ends its tunnels and removes its name", async t =>
 
 /* ---------------- Resident wiring ---------------- */
 
-test("DR34: with an egress socket the plan binds it and exports the proxy environment; without one it exposes nothing", () => {
+test("021. With an egress socket the plan binds it and exports the proxy environment; without one it exposes nothing", () => {
   const options = residentOptions("/state");
   const plain = planPiSpawn(residentEngineEffects.sandbox, options).args;
   assert.equal(plain.includes(RESIDENT_PATHS.egress), false);
@@ -578,7 +573,7 @@ function hostWith(egress: unknown): Parameters<typeof validateConfig>[0] {
   return { ...config, egress } as Parameters<typeof validateConfig>[0];
 }
 
-test("DR46: current host configuration refuses removed policy fields and prior schema", () => {
+test("022. Current host configuration refuses removed policy fields and prior schema", () => {
   const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   assert.equal(config.schemaVersion, 5);
   assert.throws(() => validateConfig({ ...config, schemaVersion: 1 }), /unsupported development configuration schema/);

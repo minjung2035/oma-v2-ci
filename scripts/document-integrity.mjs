@@ -84,6 +84,9 @@ export function projectDocuments(root = ".") {
     for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
       if (ignored.has(entry.name)) continue;
       const path = relative ? `${relative}/${entry.name}` : entry.name;
+      // Root agent control/session state is already gitignored, not project
+      // documentation. Do not hide similarly named authored subdirectories.
+      if (path === ".pi") continue;
       if (entry.isDirectory()) { if (!VENDORED_EXTENSION_DIRS.includes(path)) walk(path); }
       else if (entry.name.endsWith(".md")) files.push(path);
     }

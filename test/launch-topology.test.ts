@@ -1,3 +1,4 @@
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 /** Actual broker entry, native Resident and restart recovery. Only model replies
  * use a scripted TLS provider; no manager, execution or authentication stand-in. */
 import test, { type TestContext } from "node:test";
@@ -66,6 +67,7 @@ async function topology(t: TestContext) {
   git(["init", "-q", "-b", "main"]); writeFileSync(join(seed, "README.md"), "native topology\n"); git(["add", "."]);
   git(["-c", "user.name=Topology", "-c", "user.email=topology@example.invalid", "commit", "-qm", "seed"]);
   provisionSociety(stateRoot, { projectDir: seed });
+  publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", seed, "collaboration-v1"));
   // This test created the disposable tree and knows no earlier execution exists.
   ExecutionJournal.initialize(stateRoot);
   provider = await scriptedProvider(() => ({ kind: "hang" }), { tls: true });
@@ -113,7 +115,7 @@ async function topology(t: TestContext) {
   return { root, stateRoot, runRoot, configPath, env, argv, start, scope, goal, provider };
 }
 
-test("NATIVE-TOPO-01: actual broker entry uses its explicit roots without a user manager and drains", { timeout: 120_000 }, async t => {
+test("001. Actual broker entry uses its explicit roots without a user manager and drains", { timeout: 120_000 }, async t => {
   const f = await topology(t), broker = await f.start();
   assert.equal(existsSync(join(f.root, "wrong-data/oma/demo/runtime.sqlite")), false);
   assert.deepEqual(ExecutionJournal.inspect(f.stateRoot), []);
@@ -123,7 +125,7 @@ test("NATIVE-TOPO-01: actual broker entry uses its explicit roots without a user
   assert.deepEqual(ExecutionJournal.inspect(f.stateRoot), []);
 });
 
-test("NATIVE-TOPO-02: actual broker entry starts its runner and recovers a witnessed scope after SIGKILL", { timeout: 180_000 }, async t => {
+test("002. Actual broker entry starts its runner and recovers a witnessed scope after SIGKILL", { timeout: 180_000 }, async t => {
   const f = await topology(t); let broker = await f.start();
   broker.child.kill("SIGTERM"); assert.equal(await broker.exited, 0, broker.output());
   await f.goal(); broker = await f.start();

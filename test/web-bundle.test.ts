@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const SRC_BUNDLE = fileURLToPath(new URL("../../packages/tool-web/src/vendor/pi-web-access/", import.meta.url));
 // ---------------------------------------------------------------------------
 // Manifest metadata
-test("BL4: manifest metadata binds the pinned identity, dependency closure and divergence table", async () => {
+test("001. Manifest metadata binds the pinned identity, dependency closure and divergence table", async () => {
     const specifier = "../../scripts/vendor-pi-web-access.mjs";
     const { manifestMetadataProblems } = await import(specifier) as {
         manifestMetadataProblems: (manifest: {

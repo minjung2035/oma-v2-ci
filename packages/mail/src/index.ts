@@ -1,16 +1,19 @@
 import type { RecoveryCounts } from "@oma/contracts/runtime";
+import type { BatchReplyBudget } from "@oma/protocol/batch-view";
 import type { MailNotificationDraft } from "@oma/contracts/values";
 import { encodeOperationPlan } from "@oma/protocol/operation-codec";
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
 import { ownedMessages } from "@oma/domain/durable";
 
-import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "@oma/contracts";
-import type { MailLedger, MailEffects, MailPreacceptScope } from "./ports.js";
+import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BatchCompletionInput, Receipt } from "@oma/contracts";
+import type { MailLedger, MailEffects, MailPreacceptScope, SharedAttachmentPort } from "./ports.js";
 import type { PreacceptArtifactOwner } from "@oma/contracts/files";
 import { StoreError, acceptedFailure } from "@oma/domain/errors";
 import { receiptOfOperation as receiptOf } from "@oma/protocol/receipt-projector";
 import { assertCurrentActor } from "@oma/domain/authority";
-import { messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { mailAttachmentRootId, messageIdForOperation as generateMessageId } from "@oma/domain/derived";
+import { decodeMutationPayload } from "@oma/protocol/request-codec";
+import type { MailAttachmentPlan } from "@oma/contracts/values";
 
 import { parseMessageId } from "@oma/domain/identifiers";
 import { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt } from "@oma/domain/paths";
@@ -27,6 +30,8 @@ import { BatchCoordinator } from "./batches.js";
 import type { SettlementQuiescence } from "@oma/contracts/runtime";
 import type { SettlementOutcome } from "@oma/domain/batch-settlement";
 import { reconcileMailOperation, reconcileOrdinaryMail } from "./reconcile.js";
+import { MailRecordReader, type MailRecordObservation } from "./records.js";
+export type { MailRecordFacts, MailRecordObservation } from "./records.js";
 import type { BatchViewLimits } from "@oma/protocol/batch-view";
 export { expandAddresses } from "./routing.js";
 export type { RouteResult } from "./routing.js";
@@ -54,11 +59,30 @@ export interface MailSociety { stateRoot: string; society: string }
 export class MailModule {
   private readonly materializer: MailMaterializer;
   private readonly batches: BatchCoordinator;
+  private readonly records: MailRecordReader;
+  private sharedAttachments: SharedAttachmentPort | undefined;
+  bindSharedAttachments(port: SharedAttachmentPort): void {
+    if (this.sharedAttachments !== undefined) throw new StoreError("INTERNAL_ERROR", "shared attachment observations are already bound");
+    this.sharedAttachments = port;
+  }
+  private observeAttachments(attachments: MailAttachmentPlan): undefined {
+    if (attachments.sources.length === 0) return undefined;
+    if (!this.sharedAttachments) throw new StoreError("UNSUPPORTED_PROFILE", "shared attachment observations are unavailable");
+    if (this.sharedAttachments.observe(attachments.sources) !== undefined)
+      throw new StoreError("INTERNAL_ERROR", "shared attachment observation must be synchronous");
+    return undefined;
+  }
   constructor(private readonly paths: MailSociety, private readonly store: MailLedger, private readonly maxReplyReferences: number, private readonly effects: MailEffects,
     batchMaxMessages = 24, viewLimits?: BatchViewLimits) {
-    this.materializer = new MailMaterializer(store, paths.society, effects);
+    this.materializer = new MailMaterializer(store, paths.society, effects, operation => {
+      if (operation.kind === "mail.send" && operation.plan.attachments !== undefined) return this.observeAttachments(operation.plan.attachments);
+      return undefined;
+    });
+    this.records = new MailRecordReader(store, paths.society, this.materializer);
     this.batches = new BatchCoordinator(store, paths.stateRoot, this.materializer, effects, batchMaxMessages, viewLimits);
   }
+  /** Internal projection read; not a new model tool or wire method. */
+  readRecord(actor: Actor, id: MessageId): MailRecordObservation { return this.records.read(actor, id); }
   objectPath(id: MessageId): string { return mailObjectPathAt(this.paths.stateRoot, id); }
   /** The archive a message belongs to by audience: workers-only mail publishes
    * to S/mail/workers instead of the public archive. */
@@ -68,58 +92,96 @@ export class MailModule {
   }
   inboxNewPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "new"); }
   inboxCurPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "cur"); }
-  async send(auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
-    return this.sendOwned(auth, key, input, requestContext);
+  async send(auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }, stream?: AsyncIterable<Uint8Array>): Promise<Receipt> {
+    return this.sendOwned(auth, key, input, requestContext, stream);
   }
   private async sendOwned(auth: AuthContext, key: RequestKey, input: MailInput,
-    requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
+    requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }, stream?: AsyncIterable<Uint8Array>): Promise<Receipt> {
     const operationKind = requestContext?.kind ?? "mail.send";
-    const requestParams = requestContext?.params ?? input as unknown as Json;
+    // SAFETY: MailInput is a closed JSON wire payload; canonicalRequestParams validates it before hashing.
+    let requestParams = requestContext?.params ?? input as unknown as Json;
+    if (input.collaboration !== undefined) {
+      if (operationKind !== "mail.send") throw new StoreError("INVALID_REQUEST", "continuation cannot acquire mail attachments");
+      input = decodeMutationPayload("mail.send", input);
+      requestParams = canonicalRequestParams(operationKind, input);
+    }
     const society = this.paths.society;
     const newHash = requestHash(operationKind, canonicalRequestParams(operationKind, requestParams));
     const claim = this.store.claimKey(auth.actor, key, newHash);
     if (claim === "retry") return receiptOf(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
-    let parent: ParsedEmlHeaders | null = null;
-    if (input.replyToMessage) parent = this.replyHeaders(input.replyToMessage);
+    if (input.collaboration?.freeze !== undefined && input.collaboration.freeze.operation !== mailAttachmentRootId(auth.actor, key))
+      throw new StoreError("INVALID_REQUEST", "attachment root belongs to another original request");
+    let attachments: MailAttachmentPlan | undefined;
+    if (input.collaboration !== undefined) assertCurrentActor(this.store, auth, "mail.send");
+    let parent: { headers: ParsedEmlHeaders; audience?: "workers" } | null = null;
+    if (input.replyToMessage) parent = this.replyMessage(input.replyToMessage);
+    const audience = parent?.audience;
+    if (audience === "workers" && (auth.actor === "principal" || input.to.includes("principal")))
+      throw new StoreError("CAPABILITY_DENIED", "a workers-only thread cannot be widened to principal");
     const targetAddresses: Address[] = [...input.to];
     if (targetAddresses.length === 0) {
-      const inherited = parent ? parent.replyTo ?? (parent.from ? [parent.from] : []) : ["commons" as Address];
+      const inherited = parent ? parent.headers.replyTo ?? (parent.headers.from ? [parent.headers.from] : []) : ["commons" as Address];
       const logical = inherited.map(value => logicalReplyAddress(this.store, value, society));
       if (logical.some(value => value === null)) throw new StoreError("INVALID_REQUEST", "reply target has no valid logical recipient");
       targetAddresses.push(...logical as Address[]);
     }
     const logicalTo = [...new Set(targetAddresses)].sort() as Address[];
     const route = expandAddresses(this.store, logicalTo, society);
-    const opId = this.effects.nextOperationId(); const messageId = generateMessageId(opId, 0);
+    const opId = input.collaboration?.freeze?.operation ?? this.effects.nextOperationId(); const messageId = generateMessageId(opId, 0);
+    const scope: MailPreacceptScope = this.effects.newPreacceptScope();
+    let txClaim: "inserted" | "retry";
+    try {
+    if (input.collaboration !== undefined) {
+      if (input.content !== undefined) {
+        if (!this.sharedAttachments?.stage) throw new StoreError("UNSUPPORTED_PROFILE", "accepted attachment publication preparation is unavailable");
+        attachments = await this.sharedAttachments.stage(auth, opId, key, input, stream, scope);
+      } else {
+        if (stream !== undefined) throw new StoreError("STREAM_INVALID", "attachment bytes have no original descriptor");
+        const commits = input.collaboration.attachments.map(source => source.commit);
+        if (commits.length > 0 && !this.sharedAttachments) throw new StoreError("UNSUPPORTED_PROFILE", "shared attachment observations are unavailable");
+        const sources = (commits.length === 0 ? [] : this.sharedAttachments!.prepare(commits)).map(source => Object.freeze({ ...source }));
+        attachments = { version: "collaboration-v1", ...(input.collaboration.freeze === undefined ? {} : { freeze: { ...input.collaboration.freeze } }),
+          observedAtMs: Date.now(), sources: Object.freeze(sources) };
+      }
+    }
     let replyHeaders: { replyTo: Address[]; inReplyTo: string | null; references: string[] } = { replyTo: defaultLogicalReplyTo(auth.actor, logicalTo), inReplyTo: null, references: [] };
     if (parent) {
-      const ancestry = [...parent.references];
-      if (parent.inReplyTo && !ancestry.includes(parent.inReplyTo)) ancestry.push(parent.inReplyTo);
-      if (!ancestry.includes(parent.messageId!)) ancestry.push(parent.messageId!);
-      const references = ancestry.slice(-this.maxReplyReferences);
-      if (ancestry.length > this.maxReplyReferences) references[0] = ancestry[0]!;
-      replyHeaders = { replyTo: replyHeaders.replyTo, inReplyTo: parent.messageId, references };
+      const ancestry = [...parent.headers.references];
+      if (parent.headers.inReplyTo && !ancestry.includes(parent.headers.inReplyTo)) ancestry.push(parent.headers.inReplyTo);
+      if (!ancestry.includes(parent.headers.messageId!)) ancestry.push(parent.headers.messageId!);
+      replyHeaders = { replyTo: replyHeaders.replyTo, inReplyTo: parent.headers.messageId, references: this.truncateReferences(ancestry) };
     }
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society, to: logicalTo,
+      ...(input.collaboration?.freeze === undefined ? {} : { dateMs: input.collaboration.freeze.dateMs }),
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
     // The frozen object is owned by nobody until the plan that names it is
     // accepted; one settlement decides it and reports a refusal first.
-    const scope: MailPreacceptScope = this.effects.newPreacceptScope();
-    let txClaim: "inserted" | "retry";
-    try {
       const artifact = this.freezeObject(messageId, eml);
       scope.register({ operationId: opId, resource: artifact.path, owner: artifact,
         observe: () => frozenMessageDisposition(this.store, opId, { id: messageId, sha256: eml.sha256 }) });
+      if (attachments !== undefined) {
+        if (attachments.sources.some(source => source.local !== undefined)) {
+          if (!this.sharedAttachments?.finalize) throw new StoreError("UNSUPPORTED_PROFILE", "attachment preparation validation is unavailable");
+          attachments = this.sharedAttachments.finalize(attachments);
+        }
+        this.observeAttachments({ ...attachments, sources: attachments.sources.filter(source => source.local === undefined) });
+        attachments = { ...attachments, observedAtMs: Date.now() };
+      }
       txClaim = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "mail.send");
+        if (attachments?.sources.length && this.sharedAttachments!.assertUnchanged(attachments.sources.filter(source => source.local === undefined)) !== undefined)
+          throw new StoreError("INTERNAL_ERROR", "attachment relationship guard must be synchronous");
+        if (attachments?.sources.some(source => source.local !== undefined)) assertCurrentActor(this.store, auth, "git.submit");
         const current = this.store.claimKey(auth.actor, key, newHash);
         if (current === "retry") return "retry" as const;
         if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
-        route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
-        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
+        route.recipients = expandAddresses(this.store, logicalTo, society).recipients
+          .filter(recipient => audience !== "workers" || recipient !== "principal");
+        const plan = { kind: operationKind, message: { ...messagePlanFrom(eml, route.recipients),
+          ...(audience === undefined ? {} : { audience }) }, ...(attachments === undefined ? {} : { attachments }) };
         const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
           kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: encodeOperationPlan(plan) });
         if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
@@ -130,7 +192,7 @@ export class MailModule {
     if (txClaim === "retry") return receiptOf(this.store.retriedOperation(auth.actor, key));
     // From here the intent is accepted: a failure is reported as accepted, never as a refusal.
     try {
-      const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
+      const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId, audience) };
       let materializedAll = true;
       try { await this.materialize(opId); }
       catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
@@ -142,7 +204,7 @@ export class MailModule {
   }
   /** MAIL-005: a caller-selected operation is not yet evidence of message ownership.
    * Store decoding and accepted-byte validation retain their corruption semantics. */
-  private replyHeaders(id: MessageId): ParsedEmlHeaders {
+  private replyMessage(id: MessageId): { headers: ParsedEmlHeaders; audience?: "workers" } {
     const parsed = parseMessageId(id);
     const operation = parsed && this.store.getOperationById(parsed.operationId);
     if (!operation) throw new StoreError("INVALID_REQUEST", "reply target is not accepted");
@@ -150,12 +212,24 @@ export class MailModule {
     if (owned.length === 0) throw new StoreError("INVALID_REQUEST", "reply target owns no message");
     const message = owned.find(candidate => candidate.id === id);
     if (message === undefined) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
-    return this.materializer.headers(message);
+    return { headers: this.materializer.headers(message), ...(message.audience === undefined ? {} : { audience: message.audience }) };
   }
-  async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifactOwner }> {
+  /** MAIL-005: the newest `maxReplyReferences` entries with the thread root
+   * kept at the front when there is room for both. The immediate parent --
+   * the ancestry's last entry, named by In-Reply-To -- is never evicted:
+   * under a bound of one it is the one that must survive, because a reply
+   * whose immediate parent is not in References cannot be told apart from a
+   * forged workers-only thread (the ledger's reply rule requires it). */
+  private truncateReferences(ancestry: readonly string[]): string[] {
+    const references = ancestry.slice(-this.maxReplyReferences);
+    if (ancestry.length > this.maxReplyReferences && this.maxReplyReferences > 1) references[0] = ancestry[0]!;
+    return references;
+  }
+  async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string, dateMs?: number): Promise<{ message: MessagePlan; artifact: PreacceptArtifactOwner }> {
     const messageId = generateMessageId(operationId, 0);
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,
       to: [recipient], kind: "message", contextRevision: null,
+      ...(dateMs === undefined ? {} : { dateMs }),
       replyHeaders: { replyTo: [auth.actor], inReplyTo: null, references: [] },
     }, { subject: "initial brief", body: brief });
     const artifact = this.freezeObject(messageId, eml);
@@ -184,12 +258,10 @@ export class MailModule {
   async freezeReviewMessage(operationId: OperationId, ordinal: number, sender: Actor,
       input: ReviewEmission): Promise<{ message: MessagePlan; artifact: PreacceptArtifactOwner }> {
     const messageId = generateMessageId(operationId, ordinal);
-    const ancestry = [...input.replyHeaders.references];
-    const references = ancestry.slice(-this.maxReplyReferences);
-    if (ancestry.length > this.maxReplyReferences) references[0] = ancestry[0]!;
     const eml = await buildFrozenMessage({ id: messageId, sender, society: this.paths.society, to: [...input.to],
       kind: input.kind, contextRevision: null,
-      replyHeaders: { replyTo: [...input.replyHeaders.replyTo], inReplyTo: input.replyHeaders.inReplyTo, references },
+      replyHeaders: { replyTo: [...input.replyHeaders.replyTo], inReplyTo: input.replyHeaders.inReplyTo,
+        references: this.truncateReferences(input.replyHeaders.references) },
       ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }) },
       { subject: input.subject, body: input.body });
     const artifact = this.freezeObject(messageId, eml);
@@ -208,9 +280,16 @@ export class MailModule {
     return this.effects.freezeMailObject(messageId, eml.text, eml.sha256 ?? sha256Hex(eml.text));
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
-  async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }
-  prepare(auth: AuthContext, deferred?: ReadonlySet<string>): Promise<PreparedBatch | null> { return this.batches.prepare(auth, deferred); }
-  complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> { return this.batches.complete(auth, evidence); }
+  async materialize(operationId: string): Promise<void> {
+    const operation = this.store.getOperationById(operationId);
+    if (operation?.kind === "mail.send" && operation.plan.attachments?.sources.some(source => source.local !== undefined)) {
+      if (!this.sharedAttachments?.complete) throw new StoreError("UNSUPPORTED_PROFILE", "accepted attachment publication owner is unavailable");
+      await this.sharedAttachments.complete(operationId);
+    }
+    this.materializer.ordinary(operationId);
+  }
+  prepare(auth: AuthContext, deferred?: ReadonlySet<string>, reply?: BatchReplyBudget): Promise<PreparedBatch | null> { return this.batches.prepare(auth, deferred, reply); }
+  complete(auth: AuthContext, evidence: BatchCompletionInput): Promise<void> { return this.batches.complete(auth, evidence); }
   settleFromReceipt(quiescence: SettlementQuiescence, batchId: string): SettlementOutcome { return this.batches.settleFromReceipt(quiescence, batchId); }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number { return this.batches.moveToCur(agent, ids); }
   reconcilePending(): Promise<RecoveryCounts> { return reconcileOrdinaryMail(this.store, this, this.effects); }

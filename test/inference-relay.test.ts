@@ -68,7 +68,7 @@ test.afterEach(() => {
   else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting;
 });
 
-test("T114 the relay carries a request to the provider and attaches the host credential", async () => {
+test("001. The relay carries a request to the provider and attaches the host credential", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path,
@@ -90,7 +90,18 @@ test("T114 the relay carries a request to the provider and attaches the host cre
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 the placeholder the sandbox holds is swapped for the real key, and only it", async () => {
+test("030. An IPv6 literal provider reaches the real loopback socket with the normal relay path", { timeout: 10000 }, async () => {
+  const provider = await tlsProvider("::1"), socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: { authorization: "Bearer fixture-secret" } },
+    { concurrent: 1, timeoutMs: 3000 });
+  try {
+    const result = await throughBridge(socket.path, "/v1/messages", '{"ipv6":true}');
+    assert.equal(result.status, 200); assert.equal(result.body, "ab");
+    assert.equal(provider.seen.length, 1); assert.equal(provider.seen[0]!.headers.authorization, "Bearer fixture-secret");
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("002. The placeholder the sandbox holds is swapped for the real key, and only it", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "sk-ant-api03-PLACEHOLDERxxxxxxxxxxxxxxxxxxxx";
@@ -113,7 +124,7 @@ test("T114 the placeholder the sandbox holds is swapped for the real key, and on
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 a WebSocket upgrade is tunnelled with the key swapped, then carried as bytes", async () => {
+test("003. A WebSocket upgrade is tunnelled with the key swapped, then carried as bytes", async () => {
   const provider = await tlsProvider();
   provider.upgraded = peer => {
     peer.on("data", () => { peer.write(Buffer.from([0x81, 16, ...Buffer.from("echo:frame-bytes")])); });
@@ -153,7 +164,7 @@ test("T114 a WebSocket upgrade is tunnelled with the key swapped, then carried a
   } finally { bridged.close(); await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 the relay refuses a path that leaves the declared provider endpoint", async () => {
+test("004. The relay refuses a path that leaves the declared provider endpoint", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path,
@@ -187,7 +198,7 @@ test("T114 the relay refuses a path that leaves the declared provider endpoint",
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 a provider that never answers is reported, not retried", async () => {
+test("005. A provider that never answers is reported, not retried", async () => {
   const provider = await tlsProvider();
   provider.reply = { status: 200, chunks: ["x"], delayMs: 3000 };
   const socket = scratchSocket();
@@ -203,7 +214,7 @@ test("T114 a provider that never answers is reported, not retried", async () => 
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 the relay queues beyond its concurrency limit instead of refusing", async () => {
+test("006. The relay queues beyond its concurrency limit instead of refusing", async () => {
   const provider = await tlsProvider();
   provider.reply = { status: 200, chunks: ["x"], delayMs: 400 };
   const socket = scratchSocket();
@@ -227,7 +238,7 @@ test("T114 the relay queues beyond its concurrency limit instead of refusing", a
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 a queued request's own close withdraws it -- no provider call is spent on nobody", async () => {
+test("007. A queued request's own close withdraws it -- no provider call is spent on nobody", async () => {
   const provider = await tlsProvider();
   provider.reply = { status: 200, chunks: ["x"], delayMs: 600 };
   const socket = scratchSocket();
@@ -253,7 +264,7 @@ test("T114 a queued request's own close withdraws it -- no provider call is spen
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("T114 a relay is refused rather than opened on an unsafe configuration", async () => {
+test("008. A relay is refused rather than opened on an unsafe configuration", async () => {
   const socket = scratchSocket();
   try {
     const open = (origin: string, headers: Record<string, string>, substitute?: { placeholder: string; secret: string }) =>
@@ -278,7 +289,7 @@ test("T114 a relay is refused rather than opened on an unsafe configuration", as
   } finally { socket.clean(); }
 });
 
-test("V27B: the relay hands a provider's answer on as it arrives; it never holds the whole response", async () => {
+test("009. The relay hands a provider's answer on as it arrives; it never holds the whole response", async () => {
   const provider = await tlsProvider();
   provider.reply = { status: 200, chunks: ["first ", "second"], delayMs: 0, gapMs: 1500 };
   const socket = scratchSocket();
@@ -313,7 +324,7 @@ async function eventually(ready: () => boolean, ms: number): Promise<boolean> {
   return true;
 }
 
-test("P0V-34 / N11, P0-4: an engine that goes away mid-answer takes the provider call with it, and its slot comes back", async () => {
+test("010. An engine that goes away mid-answer takes the provider call with it, and its slot comes back", async () => {
   const provider = await tlsProvider();
   // Three seconds of answer, a chunk at a time.
   provider.reply = { status: 200, chunks: Array.from({ length: 10 }, (_, index) => `chunk-${index} `), delayMs: 0, gapMs: 300 };
@@ -334,7 +345,7 @@ test("P0V-34 / N11, P0-4: an engine that goes away mid-answer takes the provider
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("P0V-34 / N11, P0-4: a tunnel whose engine leaves before the upgrade completes leaves no provider connection behind", async () => {
+test("011. A tunnel whose engine leaves before the upgrade completes leaves no provider connection behind", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 4, timeoutMs: 10_000 });
@@ -356,7 +367,7 @@ test("P0V-34 / N11, P0-4: a tunnel whose engine leaves before the upgrade comple
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("V27B: idle connections to the relay are bounded, and a request is carried once they end", { timeout: 30_000 }, async () => {
+test("012. Idle connections to the relay are bounded, and a request is carried once they end", { timeout: 30_000 }, async () => {
   const { RELAY_CONNECTIONS_PER_REQUEST } = await import("#oma-test/app/runtime/inference-relay");
   const provider = await tlsProvider();
   const socket = scratchSocket();
@@ -398,7 +409,7 @@ function collect(socketPath: string, path: string, headers: Record<string, strin
   });
 }
 
-test("AV2 / INF-007, INV09: the key is written only into its declared slots; a placeholder anywhere else is refused", async () => {
+test("013. The key is written only into its declared slots; a placeholder anywhere else is refused", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -434,7 +445,7 @@ test("AV2 / INF-007, INV09: the key is written only into its declared slots; a p
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("AV2 / INF-007: a response that carries the key back is cut off before it reaches the sandbox", async () => {
+test("014. A response that carries the key back is cut off before it reaches the sandbox", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -468,7 +479,7 @@ test("AV2 / INF-007: a response that carries the key back is cut off before it r
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("AV2 / INF-007: a WebSocket upgrade keeps the same slots and is not compressed", async () => {
+test("015. A WebSocket upgrade keeps the same slots and is not compressed", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.PLACEHOLDERsignature00";
@@ -495,7 +506,7 @@ test("AV2 / INF-007: a WebSocket upgrade keeps the same slots and is not compres
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("DR27 / WP10: a response with progress can exceed its silence budget; one that stalls is cut", { timeout: 10_000 }, async () => {
+test("016. A response with progress can exceed its silence budget; one that stalls is cut", { timeout: 10_000 }, async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 500 });
   try {
@@ -516,7 +527,7 @@ test("DR27 / WP10: a response with progress can exceed its silence budget; one t
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("DR27 / WP10: upgraded streams retain a silence budget without limiting their total duration", { timeout: 10_000 }, async () => {
+test("017. Upgraded streams retain a silence budget without limiting their total duration", { timeout: 10_000 }, async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 500 });
   try {
@@ -542,7 +553,7 @@ test("DR27 / WP10: upgraded streams retain a silence budget without limiting the
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("DR27 / WP10: a relay's silence budget beyond the native timer range does not expire immediately", async () => {
+test("018. A relay's silence budget beyond the native timer range does not expire immediately", async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 40 * 24 * 3600 * 1000 });
   try {
@@ -552,7 +563,7 @@ test("DR27 / WP10: a relay's silence budget beyond the native timer range does n
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("post-listen: a non-Refusal throw inside 'request' or 'upgrade' ends the connection, never the emit", async t => {
+test("019. Post-listen: a non-Refusal throw inside 'request' or 'upgrade' ends the connection, never the emit", async t => {
   // `admit` refuses by value, but a non-Refusal failure -- here an incoming
   // message whose headers member cannot be read -- rethrows, and 'request'
   // and 'upgrade' are synchronous emits: unguarded, the rethrow escapes
@@ -627,7 +638,7 @@ async function framedResponse(socketPath: string): Promise<{ messages: string[];
   return await promise;
 }
 
-test("L3: complete control/data frames progress despite credential prefixes, including split headers and fragments", { timeout: 10000 }, async () => {
+test("020. Complete control/data frames progress despite credential prefixes, including split headers and fragments", { timeout: 10000 }, async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const secret = "eySyntheticLocalCredential";
   let pong = false;
@@ -658,7 +669,7 @@ test("L3: complete control/data frames progress despite credential prefixes, inc
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("L3: a credential split across continuation frames is cut before the message can echo it", { timeout: 10000 }, async () => {
+test("021. A credential split across continuation frames is cut before the message can echo it", { timeout: 10000 }, async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const secret = "eySyntheticLocalCredential";
   provider.upgraded = peer => {
@@ -676,7 +687,7 @@ test("L3: a credential split across continuation frames is cut before the messag
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("L4: synchronous HTTP and upgrade construction failures settle immediate and queued starts once", { timeout: 15000 }, async () => {
+test("022. Synchronous HTTP and upgrade construction failures settle immediate and queued starts once", { timeout: 15000 }, async () => {
   const provider = await tlsProvider(), socket = scratchSocket();
   const headers: Record<string, string> = { "x-client-label": "valid" };
   const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers }, { concurrent: 1, timeoutMs: 3000 });

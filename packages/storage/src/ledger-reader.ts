@@ -10,7 +10,7 @@
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from "node:sqlite";
 import { setImmediate } from "node:timers/promises";
 import { isValidOperationId, isValidActor, type OperationId } from "@oma/domain/identifiers";
-import { ownedMessages, type RepositoryIdentity } from "@oma/domain/durable";
+import { publicationSources, ownedMessages, type RepositoryIdentity } from "@oma/domain/durable";
 import { LineageSnapshot } from "@oma/domain/lineage";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "@oma/protocol/operation-codec";
 import { decodeAgentRow, decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow, decodeBatchManifest, decodeOperationIdProjection, fullRow, rowCorrupt, safeInteger } from "./rows.js";
@@ -160,6 +160,10 @@ export class LedgerReader {
     return { stateRoot: this.stateRoot, repositoryIdentity: this.identity(), relations: {
       attestation: id => this.db.prepare("SELECT * FROM attestations WHERE operation_id=?").get(id) ?? null,
       operation: id => this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) ?? null,
+      sequence: id => {
+        const row = this.db.prepare("SELECT rowid AS sequence FROM operations WHERE id=?").get(id);
+        return row === undefined ? null : safeInteger(row.sequence, "operation acceptance sequence", 1);
+      },
       agent: name => {
         const raw = this.rawAgent(name);
         if (raw !== undefined) this.lineage(decodeAgentRow(raw));
@@ -188,6 +192,39 @@ export class LedgerReader {
     const raw = this.db.prepare("SELECT * FROM operations WHERE id=?").get(id);
     return raw === undefined ? null : this.operationRow(raw);
   }
+  /** Acceptance/order cursor for a fully decoded fact, not a change sequence.
+   * Mutable receipt or delivery updates do not advance this value. */
+  operationSequence(id: string): number | null {
+    const raw = this.db.prepare("SELECT rowid AS sequence, * FROM operations WHERE id=?").get(id);
+    if (raw === undefined) return null;
+    const { sequence, ...row } = raw;
+    const operation = this.operationRow(row);
+    if (operation.id !== id) return rowCorrupt("operation sequence query identity mismatch");
+    return safeInteger(sequence, "operation acceptance sequence", 1);
+  }
+  /** Bounded traversal of accepted facts. `through` fixes the membership range,
+   * not mutable receipt/delivery state or a cross-page database snapshot. */
+  acceptedOperationPage(after = 0, through?: number, maximum = 128): {
+    readonly through: number; readonly next: number | null;
+    readonly items: readonly { readonly sequence: number; readonly operation: DecodedOperation }[];
+  } {
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(maximum) || maximum < 1 || maximum > 128 ||
+        (through !== undefined && (!Number.isSafeInteger(through) || through < after)))
+      throw new RangeError("invalid accepted-operation page range");
+    const high = through ?? safeInteger(this.db.prepare("SELECT COALESCE(MAX(rowid),0) AS sequence FROM operations").get()!.sequence,
+      "operation acceptance high water", 0);
+    if (after > high) throw new RangeError("accepted-operation cursor exceeds the current range");
+    const rows = this.all("SELECT rowid AS sequence, * FROM operations WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT ?", after, high, maximum);
+    let previous = after;
+    const items = rows.map(raw => {
+      const { sequence: rawSequence, ...row } = raw;
+      const sequence = safeInteger(rawSequence, "operation acceptance sequence", 1);
+      if (sequence <= previous || sequence > high) return rowCorrupt("accepted-operation page order differs from its range");
+      previous = sequence;
+      return Object.freeze({ sequence, operation: this.operationRow(row) });
+    });
+    return Object.freeze({ through: high, next: rows.length === maximum && previous < high ? previous : null, items: Object.freeze(items) });
+  }
   /** DR27: the last accepted whole-society intent, ordered independently of time. */
   latestSocietyAction(): OperationOf<"society.set"> | null {
     const raw = this.db.prepare("SELECT * FROM operations WHERE kind='society.set' ORDER BY rowid DESC LIMIT 1").get();
@@ -215,6 +252,13 @@ export class LedgerReader {
       if (operation.kind !== "git.submit") return rowCorrupt("submission query returned another kind");
       return operation;
     });
+  }
+  attachmentRoots(): readonly (OperationOf<"mail.send"> | OperationOf<"agent.create">)[] {
+    return this.all("SELECT * FROM operations WHERE kind IN ('mail.send','agent.create') ORDER BY rowid").map(raw => {
+      const operation = this.operationRow(raw);
+      if (operation.kind !== "mail.send" && operation.kind !== "agent.create") return rowCorrupt("publication root query returned another kind");
+      return operation;
+    }).filter(operation => publicationSources(operation.plan).some(source => source.local !== undefined));
   }
   attestations(): readonly { readonly sequence: number; readonly operation: OperationOf<"attest.record"> }[] {
     // LEFT JOIN exposes a missing index too; it must never erase an accepted fact.

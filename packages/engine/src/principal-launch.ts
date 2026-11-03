@@ -2,18 +2,20 @@ import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 /** Principal launch inputs, verified role profile and environment construction.
  * Session admission and child lifetime are owned by PrincipalSession. */
 import { randomBytes } from "node:crypto";
-import { join } from "node:path";
+import { join, isAbsolute, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ProtocolLimits } from "@oma/contracts";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/async";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "@oma/protocol/host-channel";
-import { modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "@oma/domain/paths";
+import { collaborationRecordRootPathAt, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "@oma/domain/paths";
 import { verifiedPaths } from "@oma/domain/extension-paths";
 import { type VerifiedExtension } from "@oma/contracts/assets";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { storedMailBytes } from "@oma/domain/mail-values";
 import { type PackageResourcePaths } from "@oma/contracts/assets";
-import { PRINCIPAL_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
+import { requireCollaborationSurface } from "@oma/domain/collaboration-surface";
+import { collaborationProfilePrompt } from "@oma/domain/collaboration-prompts";
+import { StoreError } from "@oma/domain/errors";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -43,8 +45,20 @@ export interface SessionPaths {
    * than degrading it. It is never inherited and never authored
    * configuration. */
   readonly toolSurface?: string | undefined;
+  /** Trusted application hop, required only for an explicitly selected v3
+   * Principal. The record root is derived, never accepted from ambient env. */
+  readonly collaborationStateRoot?: string;
 }
 
+type PrincipalSurfacePaths = Partial<Pick<SessionPaths, "toolSurface" | "collaborationStateRoot" | "workspace" | "sessionDir">>;
+function collaborationLaunch(paths?: PrincipalSurfacePaths): { readonly stateRoot: string; readonly recordRoot: string; readonly workspace: string } {
+  requireCollaborationSurface(paths?.toolSurface, "principal");
+  const root = paths?.collaborationStateRoot;
+  if (root === undefined || !isAbsolute(root) || normalize(root) !== root || root === "/" || root.includes("\0") ||
+      paths?.workspace !== principalWorkspace(root) || paths?.sessionDir !== principalSessionDir(root))
+    throw new StoreError("UNSUPPORTED_PROFILE", "selected Principal surface requires its exact host-bound workspace, session and record scope");
+  return { stateRoot: root, recordRoot: collaborationRecordRootPathAt(root, "principal"), workspace: principalWorkspace(root) };
+}
 export interface SessionProfile {
   readonly society: string;
   readonly provider: string;
@@ -119,7 +133,7 @@ export const PACKAGE_STORE_ENV = "OMA_PACKAGE_STORE";
 export function principalEnvironment(
   paths: PrincipalPaths,
   profile: SessionProfile,
-  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "addresses" | "contextBytes" | "bundleBytes">,
+  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "addresses" | "contextBytes" | "bundleBytes"> & Partial<Pick<ProtocolLimits, "subjectBytes">>,
 ): Record<string, string> {
   // FS-003: the client's cache is in the Principal's private scratch.
   const home = principalWorkspace(paths.stateRoot);
@@ -142,6 +156,8 @@ export function principalEnvironment(
     OMA_FRAME_BYTES: String(limits.frameBytes),
     // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
     OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
+    OMA_BODY_BYTES: String(limits.mailBodyBytes),
+    ...(limits.subjectBytes === undefined ? {} : { OMA_SUBJECT_BYTES: String(limits.subjectBytes) }),
     // Its send schema names the wire's own recipient bound.
     OMA_MAIL_ADDRESSES: String(limits.addresses),
     // P0V-78: the streams the client prepares are read only up to these.
@@ -166,6 +182,7 @@ export function principalEnvironment(
  * configuration, never from defaults. An undeclared model is refused. */
 
 export function sessionArgv(paths: SessionPaths, profile: SessionProfile): readonly string[] {
+  const selected = collaborationLaunch(paths);
   const args = [
     "--mode", "rpc",
     "--no-approve",
@@ -192,7 +209,7 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   // describes a lone coding agent, not the Principal. An authored-empty role
   // runs on the built-in rather than on that default.
   args.push("--system-prompt",
-    profile.prompt !== undefined && profile.prompt.length > 0 ? profile.prompt : PRINCIPAL_SYSTEM_PROMPT);
+    collaborationProfilePrompt("principal", profile.prompt));
   return Object.freeze(args);
 }
 
@@ -213,15 +230,21 @@ const TOOL_SURFACE_ENV = "OMA_TOOL_SURFACE";
 export function sessionEnv(
   base: Readonly<Record<string, string>>,
   profile: SessionProfile,
-  paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension" | "toolSurface">>,
+  paths?: Partial<Pick<SessionPaths, "piAgentDir" | "fence" | "coreExtension" | "toolSurface" | "collaborationStateRoot" | "workspace" | "sessionDir">>,
 ): Record<string, string> {
+  const selected = collaborationLaunch(paths);
+  collaborationProfilePrompt("principal", profile.prompt);
+  if ([base.OMA_SUBJECT_BYTES, base.OMA_BODY_BYTES, base.OMA_FRAME_BYTES, base.OMA_CONTEXT_BYTES].some(value =>
+      value === undefined || !Number.isSafeInteger(Number(value)) || Number(value) < 1))
+    throw new StoreError("UNSUPPORTED_PROFILE", "selected Principal surface requires effective source and frame byte bounds");
   // D23/TSP-005: the surface plan travels only the declared hop -- the
   // broker-owned runner launch environment for Residents, this paths field for
   // a host engine. A stray OMA_TOOL_SURFACE in the user's shell must not
   // reach the Principal's host engine -- where a malformed plan would exit(1)
   // at session_start and a crafted-valid one would narrow its tools -- so
   // the inherited set never carries it.
-  const { OMA_TOOL_SURFACE: _ambientToolSurface, ...inherited } = base;
+  const { OMA_TOOL_SURFACE: _ambientToolSurface, OMA_RECORD_ROOT: _ambientRecordRoot,
+    OMA_WORLD_ROOT: _ambientWorkerWorld, OMA_WORKER_ARCHIVE: _ambientWorkerArchive, OMA_COLLABORATION_ROLE_PROMPT: _ambientRolePrompt, ...inherited } = base;
   return {
     ...inherited,
     ...(paths?.coreExtension === undefined ? {} : {
@@ -239,5 +262,10 @@ export function sessionEnv(
     // spawn plan deliberately carries reaches the engine while anything merely
     // inherited does not.
     ...(paths?.toolSurface === undefined ? {} : { [TOOL_SURFACE_ENV]: paths.toolSurface }),
+    OMA_ACTOR: "principal", OMA_SOCIETY: profile.society,
+    HOME: selected.workspace, OMA_AGENT_HOME: selected.workspace,
+    OMA_RECORD_ROOT: selected.recordRoot,
+    OMA_PROJECT_GIT: projectGitPathAt(selected.stateRoot), OMA_CONTEXT_GIT: join(selected.stateRoot, "repos", "context.git"),
+    OMA_COLLABORATION_ROLE_PROMPT: profile.prompt ?? "",
   };
 }

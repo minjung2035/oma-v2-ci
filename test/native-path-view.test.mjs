@@ -25,16 +25,16 @@ function assertView(layout) {
       assert.throws(() => view.map(outside), { code: "AUTH_FAILED" });
     assert.equal(view.sessionPathToHost(view.map(`${dirs.workspace}/pretend.jsonl`)), null);
 }
-test("PathView mounted: one mapping covers paths, exact endpoints and session reversal", () => assertView("mounted"));
-test("PathView host: one mapping covers paths, exact endpoints and session reversal", () => assertView("host"));
-test("PathView policy freezes the session relation and admits no missing relay endpoint", () => {
+test("001. PathView mounted: one mapping covers paths, exact endpoints and session reversal", () => assertView("mounted"));
+test("002. PathView host: one mapping covers paths, exact endpoints and session reversal", () => assertView("host"));
+test("003. PathView policy freezes the session relation and admits no missing relay endpoint", () => {
   const dirs = directories(), original = dirs.sessions;
   const view = residentPathView(installation, dirs, { socket: endpoints.socket }, "host");
   dirs.sessions = "/human/private-sessions";
   assert.equal(view.sessionPathToHost(`${original}/session.jsonl`), `${original}/session.jsonl`);
   assert.throws(() => view.map(endpoints.inference), { code: "AUTH_FAILED" });
 });
-test("Mac PathView adapter requires the decoded root-bound lease without changing physical paths", () => {
+test("004. Mac PathView adapter requires the decoded root-bound lease without changing physical paths", () => {
   const dirs = directories(), runRoot = "/private/var/oma-run", actor = "alice";
   const socket = actorSocketPathAt(runRoot, actor, 1);
   const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: socket }, { actor, runRoot });

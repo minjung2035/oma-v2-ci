@@ -19,6 +19,9 @@ import {
 export function agentRootPathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, agentRootFor(actor));
 }
+export function collaborationRecordRootPathAt(stateRoot: string, actor: string): string {
+  return join(agentRootPathAt(stateRoot, actor), "records");
+}
 export function workspacePathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, workspaceFor(actor));
 }
@@ -88,6 +91,10 @@ export function submitStagingPathAt(stateRoot: string, operationId: string): str
 export function submitBundlePathAt(stateRoot: string, operationId: string): string {
   return join(stateRoot, submitBundleFor(operationId));
 }
+export function attachmentBundlePathAt(stateRoot: string, operationId: string, ordinal: number): string {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) throw new TypeError("invalid attachment ordinal");
+  return join(submitStagingPathAt(stateRoot, operationId), `attachment-${ordinal}.bundle`);
+}
 export function contextStagingPathAt(stateRoot: string, operationId: string): string {
   return join(stateRoot, contextStagingFor(operationId));
 }
@@ -126,8 +133,8 @@ export function isContextStagingPathFor(value: unknown, expected: { stateRoot: s
 export function isMailObjectPathFor(value: unknown, expected: { stateRoot: string; messageId: string }): boolean {
   return matches(value, () => mailObjectPathAt(expected.stateRoot, expected.messageId));
 }
-export function isMailArchivePathFor(value: unknown, expected: { stateRoot: string; messageId: string }): boolean {
-  return matches(value, () => mailArchivePathAt(expected.stateRoot, expected.messageId));
+export function isMailArchivePathFor(value: unknown, expected: { stateRoot: string; messageId: string; audience?: "workers" }): boolean {
+  return matches(value, () => expected.audience === "workers" ? mailWorkersPathAt(expected.stateRoot, expected.messageId) : mailArchivePathAt(expected.stateRoot, expected.messageId));
 }
 export function isActorSocketPathFor(value: unknown, expected: { runRoot: string; actor: string; incarnation: number }): boolean {
   return matches(value, () => actorSocketPathAt(expected.runRoot, expected.actor, expected.incarnation));

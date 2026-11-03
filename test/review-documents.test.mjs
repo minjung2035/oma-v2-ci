@@ -15,12 +15,12 @@ const entry = index => ({ sequence: index + 1, operation: operation(index), acto
   fact: { kind: "review", version: 1, request, body: `의견 🐈 ${index}` }, messages: [] });
 const state = entries => reviewState({maxWorkers: 64, open, entries, integration: null, eligible: new Set(["bob"]), highPeerFloor: 1});
 
-test("DR39 review documents: Unicode subject is cut only between code points", () => {
+test("001. Review documents: Unicode subject is cut only between code points", () => {
   assert.equal(reviewSubject("a🐈나끝", 9), "a🐈...");
   assert.equal(reviewSubject("a🐈나끝", 11), "a🐈나끝");
 });
 
-test("DR39 review documents: a long thread keeps its newest complete entry and names omitted history", () => {
+test("002. Review documents: a long thread keeps its newest complete entry and names omitted history", () => {
   const entries = Array.from({ length: 20000 }, (_, index) => entry(index + 1));
   const current = state(entries);
   const body = reviewThreadBody(current, fact, entries, null, 2048);
@@ -34,7 +34,7 @@ test("DR39 review documents: a long thread keeps its newest complete entry and n
   assert.ok(Buffer.byteLength(body) + Buffer.byteLength(earlier) > 2048);
 });
 
-test("DR39 review documents: anchored omission preserves the prior revision and byte boundary", () => {
+test("003. Review documents: anchored omission preserves the prior revision and byte boundary", () => {
   const entries = [entry(1), entry(2), entry(3)];
   entries[0].fact.body = "옛 의견".repeat(300);
   const current = state(entries);
@@ -45,7 +45,7 @@ test("DR39 review documents: anchored omission preserves the prior revision and 
   assert.throws(() => reviewThreadBody(current, fact, entries, null, 1), error => error.code === "INTERNAL_ERROR");
 });
 
-test("DR39 review documents: bound vote order and completion evidence follow frozen facts", () => {
+test("004. Review documents: bound vote order and completion evidence follow frozen facts", () => {
   const entries = [entry(1), entry(2)];
   for (const current of entries) current.fact = { kind: "vote", version: 1, request,
     verdict: "approve", body: current.fact.body, approval: null };
@@ -59,7 +59,7 @@ test("DR39 review documents: bound vote order and completion evidence follow fro
   assert.ok(document.endsWith("diff bytes\n"));
 });
 
-test("DR39 review documents: notice parts fit including a newline exactly at the boundary", () => {
+test("005. Review documents: notice parts fit including a newline exactly at the boundary", () => {
   for (const document of ["x".repeat(8) + "\ny", "🐈가나\n🐈끝\n".repeat(20)]) {
     const chunks = splitReviewNotice(document, NOTICE_PART_OVERHEAD + 8);
     assert.equal(chunks.join(""), document);

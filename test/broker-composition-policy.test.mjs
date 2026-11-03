@@ -3,6 +3,7 @@ import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
 import * as cleanupMeaning from "@oma/native/cleanup";
+import { newSessionBirth, requireCollaborationSociety } from "#oma-test/app/runtime/session-mode";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -36,6 +37,12 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
         "@oma/native/cleanup": cleanupMeaning,
+        // Explicit isolated current birth; shape/binding is not peer authentication.
+        "../runtime/session-mode.js": {
+            readSessionBirth: root => newSessionBirth(root, "society", "/project", "collaboration-v1"),
+            requireCollaborationSociety,
+            collaborationSocietyBirth() { throw new Error("composition policy must not observe review records"); },
+        },
         "../runtime/execution-runtime.js": { ExecutionRuntime: class {
             constructor() { calls.push("ExecutionRuntime"); }
             async recover() { calls.push("execution-recover"); }
@@ -45,7 +52,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         } },
         "../runtime/native-residents.js": { createNativeResidents(_store, _execution, location) {
             calls.push("NativeResidents"); residentLocation = location;
-            return { async close() { calls.push("residents-close"); } };
+            return { workerSurface: "collaboration-v1", async close() { calls.push("residents-close"); } };
         } },
         "../runtime/quarantine-execution.js": { quarantineExecution() {
             return { execute() { throw new Error("composition policy must not run quarantine"); },
@@ -76,6 +83,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "../views.js": { ViewsModule: class {
                 constructor() { calls.push("Views"); }
                 refreshWorld() { calls.push("refresh"); }
+                bindCollaborationRecords(records) { assert.equal(typeof records.reviews, "function"); assert.equal(typeof records.logs, "function"); calls.push("bind-records"); }
             } },
         "../broker/git-composition.js": { createGitServices(paths) {
                 calls.push("Git"); gitPaths = paths;
@@ -199,7 +207,7 @@ if (name === "@oma/domain/deployment" && !Object.hasOwn(modules, name)) return d
     }
     return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, residentLocation, gitPaths, lines };
 }
-test("D03 composition: the product runs the broker itself, so Residents render at its location and are stopped on drain", async () => {
+test("001. Composition: the product runs the broker itself, so Residents render at its location and are stopped on drain", async () => {
     const product = await compose({ OMA_HOST_CHANNEL: "3" }, { claim: "inherited",
         argv: ["--society", "fixture", "--config", "/c/x.json", "--state-root", "/s/oma/fixture", "--run-root", "/r/oma/fixture"] });
     // The product runs the broker itself: there is no broker unit a Resident
@@ -213,13 +221,13 @@ test("D03 composition: the product runs the broker itself, so Residents render a
     const manual = await compose();
     assert.equal(manual.residentLocation.configPath, "/data/oma/fixture/config.json");
 });
-test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
+test("002. Composition root: Git exists when Lifecycle receives its context reader", async () => {
     const result = await compose();
     assert.equal(result.constructorGoal, true);
     assert.ok(result.calls.indexOf("Git") < result.calls.indexOf("Lifecycle"));
     assert.ok(result.calls.indexOf("Lifecycle") < result.calls.indexOf("Reconcile"));
 });
-test("P1 composition root: all consumers share a live reader that preserves observation failure", async () => {
+test("003. Composition root: all consumers share a live reader that preserves observation failure", async () => {
     const { paths, observation } = await compose();
     assert.equal(paths.length, 3);
     assert.ok(paths.every(options => options.hasGoal === paths[0].hasGoal));
@@ -232,14 +240,14 @@ test("P1 composition root: all consumers share a live reader that preserves obse
     for (const options of paths)
         assert.throws(() => options.hasGoal(), caught => caught === error);
 });
-test("P1 composition root: startup still wires recovery before listen, notify and activation", async () => {
+test("004. Composition root: startup still wires recovery before listen, notify and activation", async () => {
     const { calls } = await compose();
     assert.deepEqual(calls.slice(calls.indexOf("recover")), ["recover", "repair:/data/oma/fixture", "bootstrap", "listen", "notify", "activate", "refresh"]);
     assert.equal(calls.filter(value => value === "Store").length, 1);
     assert.ok(calls.indexOf("digest") < calls.indexOf("Store"));
     assert.equal(calls.includes("storage-quota"), false);
 });
-test("P1 composition root: only a broker the product started has a Principal endpoint", async () => {
+test("005. Composition root: only a broker the product started has a Principal endpoint", async () => {
     // PR-001: a broker started by systemd or by hand has no host to register a
     // session with, and opens nothing a stranger could attach to.
     const unsupervised = await compose();
@@ -255,7 +263,7 @@ test("P1 composition root: only a broker the product started has a Principal end
     // recovery still takes this broker with it.
     assert.ok(supervised.calls.indexOf("supervision:3") < supervised.calls.indexOf("Store"));
 });
-test("P0V-28 / N04, P0-5: a broker told it is supervised whose channel cannot be established opens nothing and gives the society back", async () => {
+test("006. A broker told it is supervised whose channel cannot be established opens nothing and gives the society back", async () => {
     const { calls, exitCode } = await compose({ OMA_HOST_CHANNEL: "3" }, { supervisionEstablished: false });
     assert.ok(calls.includes("supervision:3"));
     for (const opened of ["config", "Store", "Mail", "Git", "Broker"])
@@ -263,7 +271,7 @@ test("P0V-28 / N04, P0-5: a broker told it is supervised whose channel cannot be
     assert.ok(calls.includes("shutdown"), "the society's lock was not given back through the lifetime");
     assert.equal(exitCode, 1);
 });
-test("P1 composition root: the host going away stops the broker", async () => {
+test("007. Composition root: the host going away stops the broker", async () => {
     // LIFE-006: the audit's orphan. However the host ended, its descriptor
     // closes, and the broker hears it through the channel and shuts down.
     const { calls, supervision } = await compose({ OMA_HOST_CHANNEL: "3" });
@@ -272,19 +280,19 @@ test("P1 composition root: the host going away stops the broker", async () => {
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(calls.includes("shutdown"), "the broker did not stop when its host went away");
 });
-test("DR69 composition: cold restoration precedes SQLite and default close keeps workspaces hot", async () => {
+test("008. Composition: cold restoration precedes SQLite and default close keeps workspaces hot", async () => {
     const { calls, supervision } = await compose({ OMA_HOST_CHANNEL: "3" }, { storage: true });
     assert.ok(calls.indexOf("restore-workspaces") < calls.indexOf("Store"));
     supervision.onHostGone("host ended"); await new Promise(resolve => setImmediate(resolve));
     assert.ok(calls.indexOf("native-quiescence") < calls.indexOf("Store.close"));
     assert.equal(calls.includes("archive-workspaces"), false);
 });
-test("DR48 composition: an unreadable cold snapshot opens no Store and grants no activation", async () => {
+test("009. Composition: an unreadable cold snapshot opens no Store and grants no activation", async () => {
     const { calls, exitCode } = await compose(undefined, { storage: true, restoreFails: true });
     assert.equal(exitCode, 1); assert.ok(calls.includes("restore-workspaces"));
     for (const forbidden of ["Store", "Git", "Broker", "listen", "activate", "archive-workspaces"]) assert.equal(calls.includes(forbidden), false);
 });
-test("P1 composition root: the host's credential channel is the kind of descriptor the broker requires", async () => {
+test("010. Composition root: the host's credential channel is the kind of descriptor the broker requires", async () => {
     // The guard above admits a pipe. This asserts the supervisor actually opens
     // one, so the two halves cannot drift into a broker that always refuses.
     const probe = "const s = require('node:fs').fstatSync(3);" +
@@ -298,7 +306,7 @@ test("P1 composition root: the host's credential channel is the kind of descript
     // those are where an inherited registration would spill a credential.
     assert.deepEqual(JSON.parse(answer), { pipe: true, file: false, tty: false });
 });
-test("P1 composition root: the society lock is taken before anything is opened", async () => {
+test("011. Composition root: the society lock is taken before anything is opened", async () => {
     // REC-007. Config, SQLite and recovery all touch state the owner owns, so
     // none of them may run before this process knows it is the owner.
     const { calls } = await compose();
@@ -307,7 +315,7 @@ test("P1 composition root: the society lock is taken before anything is opened",
     for (const after of ["config", "Store", "Broker", "listen"])
         assert.ok(order("lock") < order(after), `${after} happened before the society lock`);
 });
-test("P1 composition root: a society that already has an owner ends with its own status, opening nothing", async () => {
+test("012. Composition root: a society that already has an owner ends with its own status, opening nothing", async () => {
     // The host tells ownership from failure by this status alone: "another oma
     // owns this" must not be restarted, and "I fell over" must be. A generic
     // startup failure here makes the second indistinguishable from the first.
@@ -316,7 +324,7 @@ test("P1 composition root: a society that already has an owner ends with its own
     for (const opened of ["config", "Store", "Broker", "listen", "recover"])
         assert.equal(calls.includes(opened), false, `${opened} ran for a society this process does not own`);
 });
-test("P1 composition root: a broker the product did not start takes the society lease itself", async () => {
+test("013. Composition root: a broker the product did not start takes the society lease itself", async () => {
     // REC-007. `broker.lock` answers "may this process be the single SQLite
     // writer". It never answered "may anything act on this society at all", so a
     // systemd or hand-started broker left that name free and an `oma` took it,
@@ -336,7 +344,7 @@ test("P1 composition root: a broker the product did not start takes the society 
     // must not leave this society's singleton held by a process that stopped.
     assert.ok(refused.calls.includes("unlock"), "a refused broker kept the society's writer lock");
 });
-test("P1 composition root: a broker the product started inherits the lease and never takes the name twice", async () => {
+test("014. Composition root: a broker the product started inherits the lease and never takes the name twice", async () => {
     // The host holds this society's lease and hands the descriptor down. Taking
     // the name again would be this broker asking its own host for permission --
     // and being refused, because the name is held by the description it is
@@ -354,7 +362,7 @@ test("P1 composition root: a broker the product started inherits the lease and n
     for (const forbidden of ["tryHoldSociety", "inheritedFence", "SOCIETY_FENCE_FD", "fstatSync"])
         assert.equal(source.includes(forbidden), false, `the entrypoint names ${forbidden}: deciding what a lease is belongs to the module that takes it`);
 });
-test("P1 composition root: a fence declaration that cannot be honoured is a startup failure, not ownership", async () => {
+test("015. Composition root: a fence declaration that cannot be honoured is a startup failure, not ownership", async () => {
     // Starting anyway is the unfenced writer the declaration existed to prevent,
     // and reporting it as ownership would stop the host from restarting a broker
     // that merely fell over.
@@ -371,14 +379,14 @@ test("P1 composition root: a fence declaration that cannot be honoured is a star
     for (const opened of ["config", "Store", "Broker", "listen"])
         assert.equal(result.calls.includes(opened), false, `${opened} ran for a fence that could not be honoured`);
 });
-test("AV31 / D03, LIFE-006: the broker ends through its drain on every host-loss signal, registered before anything slow", async () => {
+test("016. The broker ends through its drain on every host-loss signal, registered before anything slow", async () => {
     const { calls } = await compose();
     const order = name => calls.indexOf(name);
     assert.ok(order("host-loss") >= 0, "the entrypoint does not stop on host loss through the one signal owner");
     for (const after of ["config", "Store", "Broker", "listen"])
         assert.ok(order("host-loss") < order(after), `${after} happened before host loss could stop the broker`);
 });
-test("P0V-58 / R03, DR16: the rootfs is put right after the startup quiescence and before anything can wake on it", async () => {
+test("017. The rootfs is put right after the startup quiescence and before anything can wake on it", async () => {
     // The stand-in startup records "recover" -- the quiescence that proves every
     // earlier Resident ended -- and only then runs what startup prepares.
     const { calls, lines } = await compose();
@@ -389,7 +397,7 @@ test("P0V-58 / R03, DR16: the rootfs is put right after the startup quiescence a
     assert.equal(calls.filter(name => name.startsWith("repair:")).length, 1);
     assert.ok(lines.some(line => /Restored rootfs entry to its expected value: \/data\/oma\/fixture\/rootfs\/etc\/passwd/.test(line)), lines.join(" | "));
 });
-test("P0V-58 / DR16: a rootfs that could not be put right ends startup: nothing listens and nothing wakes", async () => {
+test("018. A rootfs that could not be put right ends startup: nothing listens and nothing wakes", async () => {
     const { calls, lines } = await compose(undefined, { repairFails: true });
     assert.ok(calls.includes("repair:/data/oma/fixture"));
     for (const never of ["bootstrap", "listen", "notify", "activate"])

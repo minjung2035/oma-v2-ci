@@ -54,7 +54,7 @@ function fixture(t: TestContext) {
     reopen() { store.close(); store = new Store(join(root, "runtime.sqlite")); } };
 }
 
-test("DR27/AV18: the host seeds a capable Worker without Principal creation/delegation authority", async t => {
+test("001. The host seeds a capable Worker without Principal creation/delegation authority", async t => {
   const f = fixture(t), lifecycle = f.lifecycle();
   const principal = f.config.agentProfiles.principal!, resident = f.config.agentProfiles.resident!;
   assert.deepEqual(principal.capabilities, ["mail.send", "agent.manage.descendants", "context.publish"]);
@@ -76,7 +76,7 @@ test("DR27/AV18: the host seeds a capable Worker without Principal creation/dele
   assert.equal(f.store.getOperation("principal", "principal-create"), null);
 });
 
-test("DR27/CREATE-003: Workers delegate through multiple generations; retries and restart do not recreate them", async t => {
+test("002. Workers delegate through multiple generations; retries and restart do not recreate them", async t => {
   const f = fixture(t); let lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
   for (const seed of f.config.initialResidents)
@@ -104,7 +104,7 @@ test("DR27/CREATE-003: Workers delegate through multiple generations; retries an
   assert.equal(f.store.pendingDeliveries("peer").length, 1);
 });
 
-test("DR27/P0: new default capabilities never widen a previously frozen Worker", async t => {
+test("003. New default capabilities never widen a previously frozen Worker", async t => {
   const f = fixture(t), old = makeValidAgent("legacy", { profile: "resident", from: f.from,
     capabilities: ["mail.send", "route.follow", "git.submit", "agent.manage.self"] });
   f.store.transaction(tx => { tx.insertAgent(old); });
@@ -116,7 +116,7 @@ test("DR27/P0: new default capabilities never widen a previously frozen Worker",
   assert.equal(f.store.getOperation("legacy", "child"), null);
 });
 
-test("DR27/CREATE-002: host delegation and current lease can narrow child capabilities", async t => {
+test("004. Host delegation and current lease can narrow child capabilities", async t => {
   const f = fixture(t), lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
   await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
@@ -127,7 +127,7 @@ test("DR27/CREATE-002: host delegation and current lease can narrow child capabi
   assert.deepEqual(resolvedSpecOf(f.store.getAgent("child")!).capabilities, ["agent.create", "mail.send"]);
 });
 
-test("DR46: successive Worker creations each retain their accepted identity", async t => {
+test("005. Successive Worker creations each retain their accepted identity", async t => {
   const f = fixture(t), lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
   await lifecycle.reconcileCreate(f.store.getOperation("principal", "bootstrap-worker-1")!.id);
@@ -137,7 +137,7 @@ test("DR46: successive Worker creations each retain their accepted identity", as
   assert.equal(f.store.getOperation("worker-1", "excess")?.state, "succeeded");
 });
 
-test("DR27/CFG-002: initial Worker count persists with a non-delegating Principal and rejects zero", t => {
+test("006. Initial Worker count persists with a non-delegating Principal and rejects zero", t => {
   const f = fixture(t), profiles = readSettings(f.path).config.agentProfiles;
   assert.throws(() => commitField(readSettings(f.path), INITIAL_WORKERS, 0, "pending"), /at least one/);
   for (const count of [1, 2, 3]) {
@@ -149,7 +149,7 @@ test("DR27/CFG-002: initial Worker count persists with a non-delegating Principa
   }
 });
 
-test("Worker capacity: provisioning does not occupy slots and accepted seeds recover after release", async t => {
+test("007. Worker capacity: provisioning does not occupy slots and accepted seeds recover after release", async t => {
   const f = fixture(t);
   f.config.maxWorkers = 4;
   const lifecycle = f.lifecycle();
@@ -175,7 +175,7 @@ test("Worker capacity: provisioning does not occupy slots and accepted seeds rec
   assert.equal(lifecycle.creation(auth).maxWorkers, 4);
 });
 
-test("Worker capacity changes require restart and never remove existing Workers", async t => {
+test("008. Worker capacity changes require restart and never remove existing Workers", async t => {
   const f = fixture(t), lifecycle = f.lifecycle();
   await lifecycle.bootstrap(f.config);
   for (const seed of f.config.initialResidents)
@@ -190,7 +190,7 @@ test("Worker capacity changes require restart and never remove existing Workers"
 });
 
 
-test("IMP-R09: host recovery seeds exactly one legacy zero-Resident Society", async t => {
+test("009. Host recovery seeds exactly one legacy zero-Resident Society", async t => {
   const f = fixture(t);
   f.store.transaction(tx => tx.insertAgent(makeValidAgent("principal", { profile: "principal", from: f.from,
     capabilities: [...f.config.agentProfiles.principal!.capabilities] })));

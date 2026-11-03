@@ -1,4 +1,4 @@
-/** DR27/RUN-003: local fake provider; real confined engine, typed tools, broker and runner. */
+/** DR27/RUN-003: local fake provider; real confined engine, current tools and historical ACK fixtures, broker and runner. */
 import test from "node:test";
 import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
@@ -9,10 +9,12 @@ import { withScenario } from "./fixtures/scenario.js";
 import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
 import type { AuthContext } from "@oma/contracts";
 import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "@oma/domain/paths";
+import { requestHash } from "@oma/domain/request-identity";
+import { serializePlanIntent } from "./fixtures/plan.js";
 
-for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; explicit ACK=${ack}`, RESIDENT_TEST_OPTIONS, async t => {
+for (const ack of [false, true]) test(`001. Wait persists tools, not delivery; historical ACK=${ack}`, RESIDENT_TEST_OPTIONS, async t => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Do one step and yield." })), text("Sent.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "Work", content: { kind: "text", value: "Do one step and yield." } })), text("Sent.")]);
     await s.prompt("Send work.");
     const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() };
     for (const [actor, role, channel, code] of [["principal", "principal", "principal-extension", "CAPABILITY_DENIED"],
@@ -23,11 +25,21 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     }
     const pending = s.store.pendingDeliveries("worker-a");
     assert.equal(pending.length, 1);
+    // The retired ACK action is not callable. Seed an explicit historical
+    // terminal fact, not a new ACK disguised as ordinary mail/wait behavior.
+    if (ack) s.store.transaction(tx => {
+      const message = pending[0]!.messageId, id = "op-00000000-0000-4000-8000-000000000001";
+      tx.acceptOperation({ id, actor: "worker-a", requestKey: "historical-ack", kind: "mail.ack",
+        requestHash: requestHash("mail.ack", { message }), payloadJson: JSON.stringify({ message }),
+        planJson: serializePlanIntent({ kind: "mail.ack", recipient: "worker-a", message }) });
+      tx.markAcknowledged(message, "worker-a");
+      tx.setOperationSucceeded(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
+    });
+    const historical = s.store.getOperation("worker-a", "historical-ack");
     const before = s.provider.seen.length;
     s.script([
       tools(
-        ...(ack ? [call("oma_mail_ack", { messageId: pending[0]!.messageId, request: "explicit-ack" }, "explicit-ack")] : []),
-        call("oma_agent_wait", {}, "yield-run"),
+        call("oma_wait", {}, "yield-run"),
         call("bash", { command: "sleep 0.2 && printf persisted-after-wait > after-wait.txt && printf tool-finished" }, "durable-work"),
       ),
       text("Must not call the provider again."),
@@ -46,6 +58,7 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     assert.equal(delivery.materialized, 1);
     assert.equal(s.store.getAgent("worker-a")!.desired, "enabled");
     assert.deepEqual(s.operations("worker-a").map(row => row.kind), ack ? ["mail.ack"] : []);
+    assert.deepEqual(s.store.getOperation("worker-a", "historical-ack"), historical, "yield cannot rewrite original ACK plan, hash or receipt");
     const sessions = runnerSessionDirPathAt(s.root, "worker-a");
     // <sessions>/hashline/ holds the bundled extension's anchor sidecars,
     // not the engine's session journal.
@@ -82,13 +95,14 @@ for (const ack of [false, true]) test(`DR27: wait persists tools, not delivery; 
     assert.deepEqual(observation.result, { accepted: false });
     assert.equal(s.store.preparedBatches("worker-a").length, 0);
     assert.equal(s.store.pendingDeliveries("worker-a").length, 0);
+    assert.deepEqual(s.store.getOperation("worker-a", "historical-ack"), historical, "restart and successful delivery preserve historical ACK facts");
   });
 });
 
 for (const outcome of ["continue", "wait", "unobserved"] as const)
-  test(`DR27: delayed wait observation ${outcome} preserves the persisted tool boundary`, RESIDENT_TEST_OPTIONS, async t => {
+  test(`002. Delayed wait observation ${outcome} preserves the persisted tool boundary`, RESIDENT_TEST_OPTIONS, async t => {
     await withScenario({ residents: ["worker-a"], confined: true }, async s => {
-      s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "One step", body: "Perform the requested step." })), text("Sent.")]);
+      s.script([tools(call("oma_send", { to: ["worker-a"], subject: "One step", content: { kind: "text", value: "Perform the requested step." } })), text("Sent.")]);
       await s.prompt("Send work.");
       // Leave startup room while making the observation exceed the runner's
       // control-idle budget, not the broker connection's independent 30s budget.
@@ -117,7 +131,7 @@ for (const outcome of ["continue", "wait", "unobserved"] as const)
       const before = s.provider.seen.length;
       s.script([
         tools(
-          ...(outcome === "wait" ? [call("oma_agent_wait", {}, "yield-delayed")] : []),
+          ...(outcome === "wait" ? [call("oma_wait", {}, "yield-delayed")] : []),
           call("bash", { command: "printf durable-tool-result" }, "durable-delayed"),
         ),
         text("Continued after observation."),

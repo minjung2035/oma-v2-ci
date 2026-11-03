@@ -10,7 +10,7 @@ import { controlPipe, controlSocketPair, closeOnExec } from '@oma/native/control
 assert.ok(['linux', 'darwin'].includes(process.platform));
 const fcntl = load(null).func('int fcntl(int fd, int command, ...)');
 const openDescriptors = () => Array.from({ length: 512 }, (_, fd) => fd).filter(fd => fcntl(fd, 1) !== -1);
-test('POSIX control pipe: actual byte transfer, CLOEXEC and exact descriptor return', () => {
+test("001. POSIX control pipe: actual byte transfer, CLOEXEC and exact descriptor return", () => {
   const before = openDescriptors();
   for (let n = 0; n < 64; n++) {
     const pipe = controlPipe();
@@ -23,7 +23,7 @@ test('POSIX control pipe: actual byte transfer, CLOEXEC and exact descriptor ret
   }
   assert.deepEqual(openDescriptors(), before);
 });
-test('POSIX control socket: actual cross-process duplex handoff, EOF and joined close', { timeout: 15000 }, async () => {
+test("002. POSIX control socket: actual cross-process duplex handoff, EOF and joined close", { timeout: 15000 }, async () => {
   const pair = controlSocketPair(); let parent, child;
   try {
     assert.equal(fcntl(pair.parent, 1) & 1, 1); assert.equal(fcntl(pair.child, 1) & 1, 1);
@@ -39,7 +39,7 @@ test('POSIX control socket: actual cross-process duplex handoff, EOF and joined 
     const [code, signal] = await joined; assert.equal(code, 0); assert.equal(signal, null);
   } finally { parent.destroy(); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await joined; }
 });
-test('POSIX CLOEXEC: direct exec replacement cannot retain a marked capability', { timeout: 15000 }, async () => {
+test("003. POSIX CLOEXEC: direct exec replacement cannot retain a marked capability", { timeout: 15000 }, async () => {
   const pair = controlPipe(); let child;
   try {
     child = spawn(process.execPath, ['--input-type=module', '-e', `import {load} from 'koffi'; import {closeOnExec} from '@oma/native/control-socket';

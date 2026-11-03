@@ -12,7 +12,7 @@ import { loadPackageMcpConfigs } from "./package-mcp-loader.js";
 import { validateJevSettings } from "./jev-client.js";
 import { formatServerNamespace, isServerDisabled } from "./types.js";
 import { getMissingEnvVars, parseJsonWithComments, providerAuthUrlError, stripUtf8Bom, toStringRecord } from "./utils.js";
-import { omaAmbientEnv } from "./utils.js";
+import { omaAmbientEnv, omaPolicyActive } from "./utils.js";
 const GENERIC_GLOBAL_CONFIG_PATH = join(homedir(), ".config", "mcp", "mcp.json");
 const AGENTS_GLOBAL_CONFIG_PATHS = [
     join(homedir(), ".agents", "mcp.json"),
@@ -427,11 +427,11 @@ function mergeClaudePluginMcpDefaults(plugins, higherPrecedenceConfig, cwd, load
     return applySettingDefaults(mergeConfigs({ mcpServers: defaults }, higherPrecedenceConfig));
 }
 function applySettingDefaults(config) {
-    const exposeResources = config.settings?.exposeResources;
+    const exposeResources = omaPolicyActive() ? false : config.settings?.exposeResources;
     if (exposeResources === undefined)
         return config;
     const mcpServers = Object.fromEntries(Object.entries(config.mcpServers)
-        .map(([name, entry]) => [name, entry.exposeResources === undefined ? { ...entry, exposeResources } : entry]));
+        .map(([name, entry]) => [name, omaPolicyActive() || entry.exposeResources === undefined ? { ...entry, exposeResources } : entry]));
     return { ...config, mcpServers };
 }
 function getMergedSettings(overridePath, cwd = process.cwd()) {

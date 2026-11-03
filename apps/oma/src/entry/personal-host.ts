@@ -50,17 +50,6 @@ export async function personalMain(options: { readonly dataRoot: string; readonl
     process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui), "--mode", ended.next.mode], env);
     return;
   }
-  if (ended.next.society !== undefined) {
-    // `/society`: a fresh Society birth for this session's own project, never
-    // this session resumed — no RESUME_SESSION_ENV and no saved history.
-    // The child declared the name its gate freed; it is this project's
-    // canonical name or the request does not stand.
-    const project = defaultSocietyFor(cwd, sha256Hex(cwd));
-    if (ended.next.society !== project)
-      throw new StoreError("INVALID_REQUEST", `A Personal session can only start its own project's Society ${project}, not ${ended.next.society}`);
-    process.chdir(cwd);
-    process.execve(process.execPath, [process.execPath, ...process.execArgv, join(libdir, DEPLOYMENT_LAYOUT.entries.tui), "--society", project], env);
-  }
   if (ended.next.session !== undefined) {
       const birth = await sessionBirthForHistory(options.dataRoot, ended.next.session, cwd);
       env[RESUME_SESSION_ENV] = ended.next.session;

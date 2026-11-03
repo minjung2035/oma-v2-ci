@@ -3,7 +3,7 @@ import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** A7/A4: the Pi compatibility boundary, held to the vendored engine itself.
  *
  * The oracle tests do not mirror Pi's literals: they read them out of the
- * installed 1.0.1 package, so an upstream change in the session-environment
+ * installed pinned package, so an upstream change in the session-environment
  * names, the exit hint or the wire emission fails here rather than drifting
  * past the boundary silently.
  */
@@ -34,7 +34,7 @@ const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 // from its ESM entry (dist/index.js), as resolvePiRuntime finds it too.
 const PI_ROOT = dirname(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))));
 
-test("A7 oracle: the session-environment strip list covers every name the vendored engine clears", () => {
+test("001. Oracle: the session-environment strip list covers every name the vendored engine clears", () => {
   // Pi exports these into commands it starts (core/tools/bash.js); an `oma`
   // launched inside one must not hand a parent session's identity onward.
   const bash = readFileSync(join(PI_ROOT, "dist", "core", "tools", "bash.js"), "utf8");
@@ -45,19 +45,19 @@ test("A7 oracle: the session-environment strip list covers every name the vendor
       `the engine exports ${name} into subprocesses but the strip list omits it`);
 });
 
-test("A7 oracle: the resume hint is the text the vendored interactive mode emits", () => {
+test("002. Oracle: the resume hint is the text the vendored interactive mode emits", () => {
   const mode = readFileSync(join(PI_ROOT, "dist", "modes", "interactive", "interactive-mode.js"), "utf8");
   assert.ok(mode.includes(PI_RESUME_HINT), `the engine no longer emits ${JSON.stringify(PI_RESUME_HINT)}`);
 });
 
-test("A7 oracle: every private InteractiveMode member OMA overrides still exists on the vendored prototype", async () => {
+test("003. Oracle: every private InteractiveMode member OMA overrides still exists on the vendored prototype", async () => {
   const { InteractiveMode } = await import("@earendil-works/pi-coding-agent");
   for (const name of PI_INTERACTIVE_PRIVATE_MEMBERS)
     assert.equal(typeof (InteractiveMode.prototype as unknown as Record<string, unknown>)[name], "function",
       `the engine's InteractiveMode no longer carries ${name}; the overrides in the entries now write a member nothing calls`);
 });
 
-test("B2 oracle: the thinking-visibility field OMA reads is still the vendored engine's own", () => {
+test("004. Oracle: the thinking-visibility field OMA reads is still the vendored engine's own", () => {
   // Instance fields never reach the prototype; the vendored source is the
   // only place they can be pinned. `toggleThinkingBlockVisibility` itself is
   // a prototype method, covered by the members oracle above.
@@ -67,11 +67,11 @@ test("B2 oracle: the thinking-visibility field OMA reads is still the vendored e
       `the engine no longer carries ${field}; the /thinking show|hide set would read a member nothing writes`);
 });
 
-test("A6: the session header probe accepts only the identity the engine could have written", async () => {
+test("005. The session header probe accepts only the identity the engine could have written", async () => {
   const cwd = "/work/project";
   const good = { type: "session", id: "abc-123_X.y", timestamp: "2026-01-01T00:00:00.000Z", cwd, version: 3 };
   assert.deepEqual(await sessionHeaderIdentity(structuredClone(good), cwd), { id: good.id, timestamp: good.timestamp });
-  // A header without a version predates versioned files and is still admitted.
+  // Versionless history must not be implicitly migrated by this release.
   const unversioned = { ...good } as Record<string, unknown>; delete unversioned.version;
   assert.equal(await sessionHeaderIdentity(unversioned, cwd), null);
   for (const header of [
@@ -81,7 +81,7 @@ test("A6: the session header probe accepts only the identity the engine could ha
   ]) assert.equal(await sessionHeaderIdentity(header, cwd), null, JSON.stringify(header));
 });
 
-test("A7/U1: a Resident's confined spawn is explicit-only -- ambient process.env never reaches it", t => {
+test("006. A Resident's confined spawn is explicit-only -- ambient process.env never reaches it", t => {
   const root = scratch("oma-spawn-env-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const ambient: Record<string, string> = { OMA_KEEP: "1", HOME: "/host-home" };
@@ -106,7 +106,7 @@ test("A7/U1: a Resident's confined spawn is explicit-only -- ambient process.env
   } finally { process.env = saved; }
 });
 
-test("U1: a spawn plan without confinement is refused, not silently unconfined", () => {
+test("007. A spawn plan without confinement is refused, not silently unconfined", () => {
   const options = residentOptions(scratch("oma-spawn-refuse-"));
   // Simulate the deleted unconfined arm: a caller that drops confinement must
   // meet the refusal, never a direct host spawn.
@@ -114,7 +114,7 @@ test("U1: a spawn plan without confinement is refused, not silently unconfined",
   assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, unconstrained), { code: "UNSUPPORTED_PROFILE" });
 });
 
-test("A4: absent settings get OMA's interactive defaults through the engine's own manager", t => {
+test("008. Absent settings get OMA's interactive defaults through the engine's own manager", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   prepareEngineInteractiveSettings(engineSettingsFiles, root);
@@ -129,7 +129,7 @@ test("A4: absent settings get OMA's interactive defaults through the engine's ow
   assert.equal(settings.fullscreenExitOutput, "resume-hint");
 });
 
-test("A4: the Human's choices are kept, telemetry is always off, and fields the engine does not own survive", t => {
+test("009. The Human's choices are kept, telemetry is always off, and fields the engine does not own survive", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json");
@@ -154,7 +154,7 @@ test("A4: the Human's choices are kept, telemetry is always off, and fields the 
   assert.equal(readFileSync(path, "utf8"), before);
 });
 
-test("A4: quietStartup 'header' survives as the literal Pi 1.0.1 widened in, not flattened to true", t => {
+test("010. QuietStartup 'header' survives as the literal Pi 1.0.1 widened in, not flattened to true", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json");
@@ -165,7 +165,7 @@ test("A4: quietStartup 'header' survives as the literal Pi 1.0.1 widened in, not
   assert.equal(JSON.parse(readFileSync(path, "utf8")).quietStartup, "header");
 });
 
-test("A4: the settings bridge and the retry owner compose in both orders under one lock", t => {
+test("011. The settings bridge and the retry owner compose in both orders under one lock", t => {
   for (const retryFirst of [false, true]) {
     const root = scratch("oma-compat-settings-");
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -180,7 +180,7 @@ test("A4: the settings bridge and the retry owner compose in both orders under o
   }
 });
 
-test("A4: malformed or non-object settings are refused with the bytes untouched", t => {
+test("012. Malformed or non-object settings are refused with the bytes untouched", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json");
@@ -198,7 +198,7 @@ test("A4: malformed or non-object settings are refused with the bytes untouched"
   }
 });
 
-test("A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and the retry after release lands", t => {
+test("013. A held settings lock refuses the write, keeps the bytes, and the retry after release lands", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json");
@@ -215,7 +215,7 @@ test("A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and th
   assert.equal(settings.fullscreenExitOutput, "resume-hint");
 });
 
-test("A4: the engine's project scope has no OMA file; a write through it is refused, a read is absent", t => {
+test("014. The engine's project scope has no OMA file; a write through it is refused, a read is absent", t => {
   const root = scratch("oma-compat-settings-");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const storage = new OmaSettingsStorage(engineSettingsFiles, root);
@@ -228,7 +228,7 @@ test("A4: the engine's project scope has no OMA file; a write through it is refu
     error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
 });
 
-test("A2/A7: every wire event kind the engine emits reaches an observer intact, beside the frame-overflow marker", { timeout: 10000 }, async t => {
+test("015. Every wire event kind the engine emits reaches an observer intact, beside the frame-overflow marker", { timeout: 10000 }, async t => {
   const lines = [
     { type: "response", id: "1", command: "get_state", success: true, data: { sessionId: "s" } },
     { type: "agent_start" },
@@ -256,7 +256,7 @@ test("A2/A7: every wire event kind the engine emits reaches an observer intact, 
   client.close(); await ended;
 });
 
-test("A2: an RpcCommand serializes verbatim on the wire; a non-command is refused at compile time", { timeout: 10000 }, async t => {
+test("016. An RpcCommand serializes verbatim on the wire; a non-command is refused at compile time", { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, ["-e", "process.stdin.pipe(process.stdout)"], { stdio: ["pipe", "pipe", "pipe"] });
   const ended = once(child, "close");
   const client = new PiRpcClient(child, { frameBytes: 4096, idleStreamSeconds: 2, receiptWaitSeconds: 2 });
@@ -271,7 +271,7 @@ test("A2: an RpcCommand serializes verbatim on the wire; a non-command is refuse
   client.close(); await ended;
 });
 
-test("A2/DR15: the frame-overflow marker still reaches observers as OMA's own event", { timeout: 10000 }, async t => {
+test("017. The frame-overflow marker still reaches observers as OMA's own event", { timeout: 10000 }, async t => {
   const big = JSON.stringify({ type: "agent_end", payload: "x".repeat(20000) });
   const child = spawn(process.execPath, ["-e",
     `process.stdout.write(${JSON.stringify(`{"type":"agent_start"}\n${big}\n{"type":"agent_end"}\n`)}); setInterval(() => {}, 1000)`],
@@ -289,7 +289,7 @@ test("A2/DR15: the frame-overflow marker still reaches observers as OMA's own ev
   client.close(); await ended;
 });
 
-test("A7: the compat module is the only importer of engine wire names", () => {
+test("018. The compat module is the only importer of engine wire names", () => {
   // The boundary fails closed by convention: production modules name Pi's
   // wire types through pi-compat, never the package directly (rpc surface).
   const source = readFileSync(join(process.cwd(), "packages", "engine", "src", "pi-rpc.ts"), "utf8");
@@ -300,7 +300,7 @@ test("A7: the compat module is the only importer of engine wire names", () => {
 assert.ok(existsSync(join(PI_ROOT, "dist", "core", "tools", "bash.js")), "the vendored engine tree is not readable");
 
 
-test("DR40: Pi UI adaptation releases only the methods owned by this session", () => {
+test("019. Pi UI adaptation releases only the methods owned by this session", () => {
   const seen: string[] = [];
   const base = { setEditorComponent() {}, setHeader() {}, setFooter() {}, notify(message: string) { seen.push(message); } };
   const ui = { ...base } as unknown as ExtensionContext["ui"];

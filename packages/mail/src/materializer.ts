@@ -38,10 +38,20 @@ export function operationMessage(operation: OperationRow, messageId?: string): M
  * to the Store's validated rows. Missing rows are not an empty fanout success.
  */
 export class MailMaterializer {
-  constructor(private readonly store: MailLedger, private readonly society: string, private readonly effects: MailEffects) {}
+  constructor(private readonly store: MailLedger, private readonly society: string, private readonly effects: MailEffects,
+    private readonly verifyAttachments?: (operation: OperationRow) => undefined) {}
   headers(message: MessagePlan): ParsedEmlHeaders { return this.checked(message).headers; }
-  private checked(message: MessagePlan): { headers: ParsedEmlHeaders; bytes: Buffer } {
-    const bytes = this.effects.readMessage(message);
+  /** Observation only: a frozen object is not evidence that a gated archive
+   * was published. Absence stays pending; inaccessible evidence stays unknown. */
+  published(message: MessagePlan): { headers: ParsedEmlHeaders; bytes: Buffer } | null {
+    const observation = this.effects.observeArchive(message);
+    if (observation.kind === "absent") return null;
+    mailEntryPresent(observation, "mail archive");
+    if (observation.kind !== "present") throw new StoreError("INTERNAL_ERROR", "mail archive observation lost its bytes");
+    return this.checked(message, observation.bytes);
+  }
+  private checked(message: MessagePlan, publishedBytes?: Buffer): { headers: ParsedEmlHeaders; bytes: Buffer } {
+    const bytes = publishedBytes ?? this.effects.readMessage(message);
     let headers: ParsedEmlHeaders;
     try { headers = parseEmlHeaders(bytes, { maxHeaderBytes: message.bytes }); }
     catch { throw new StoreError("STORE_CORRUPT", `unsupported or corrupt accepted mail headers: ${message.id}`); }
@@ -84,6 +94,11 @@ export class MailMaterializer {
     const operation = this.requiredOperation(id);
     if (operation.kind !== "attest.record" && operation.kind !== "mail.send" && operation.kind !== "agent.continue")
       throw new StoreError("INVALID_REQUEST", `operation ${operation.kind} uses gated publication`);
+    if (operation.kind === "mail.send" && operation.plan.attachments?.sources.length) {
+      if (!this.verifyAttachments) throw new StoreError("UNSUPPORTED_PROFILE", "accepted attachment verification is unavailable");
+      if (this.verifyAttachments(operation) !== undefined)
+        throw new StoreError("INTERNAL_ERROR", "accepted attachment verification must be synchronous");
+    }
     this.publish(operation);
   }
   gated(id: string, proof: PublicationEvidence | undefined): void {
@@ -105,6 +120,7 @@ export class MailMaterializer {
     const ownedIds = new Set(messages.map(message => message.id));
     if (deliveries.some(delivery => !ownedIds.has(delivery.messageId)))
       throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+    const failures: unknown[] = [];
     for (const message of messages) {
       const owned = deliveries.filter(delivery => delivery.messageId === message.id);
       const expected = new Set(message.recipients);
@@ -126,10 +142,16 @@ export class MailMaterializer {
       }
       this.effects.publishMailArchive(message);
       for (const delivery of owned) {
-        this.publishDelivery(message, delivery);
-        this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+        try {
+          this.publishDelivery(message, delivery);
+          this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+        } catch (error) {
+          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+          failures.push(error);
+        }
       }
     }
+    if (failures.length) throw new AggregateError(failures, "mail fanout is not fully materialized");
   }
   private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {
     const inbox = this.effects.openInbox(delivery.recipient);
@@ -144,7 +166,7 @@ export class MailMaterializer {
       } else { inbox.publishInboxMessage("new", message); arrivedNew = true; }
       // This is the same pinned inbox that owns the delivery directories.
       // Its full arrival record and parent are durable before materialized.
-      if (arrivedNew) inbox.appendMailArrival(message.id);
+      if (arrivedNew && delivery.materialized !== 1) inbox.appendMailArrival(message.id);
     } finally { inbox.close(); }
   }
   

@@ -92,7 +92,7 @@ function context(fixture: Fixture): OperationDecodeContext {
 }
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 
-test("P1 registry: every entry is bound to its own kind, not a neighbouring one", () => {
+test("001. Registry: every entry is bound to its own kind, not a neighbouring one", () => {
   // The registry binds each key to a closure over its kind. If an entry were
   // pasted from a neighbour, its own plan would still decode here but a foreign
   // plan would be accepted, so both directions are checked for all thirteen kinds.
@@ -115,7 +115,7 @@ test("P1 registry: every entry is bound to its own kind, not a neighbouring one"
   }
 });
 
-test("all thirteen kinds preserve raw bytes and decode consistent state-specific values", () => {
+test("002. All thirteen kinds preserve raw bytes and decode consistent state-specific values", () => {
   assert.equal(new Set(fixtures.map(fixture => fixture.kind)).size, 13);
   for (const fixture of fixtures) {
     const input = raw(fixture);
@@ -145,7 +145,7 @@ test("all thirteen kinds preserve raw bytes and decode consistent state-specific
   }
 });
 
-test("DR46 plan envelope: bare, prior-version and embedded-result plans refuse without rewriting input", () => {
+test("003. Plan envelope: bare, prior-version and embedded-result plans refuse without rewriting input", () => {
   const fixture = fixtures.find(entry => entry.kind === "git.integrate");
   assert.ok(fixture);
   const input = raw(fixture);
@@ -160,7 +160,7 @@ test("DR46 plan envelope: bare, prior-version and embedded-result plans refuse w
   }
 });
 
-test("create unit ownership cannot be inferred from a plan without trusted society identity", () => {
+test("004. Create unit ownership cannot be inferred from a plan without trusted society identity", () => {
   const fixture = fixtures.find(entry => entry.kind === "agent.create");
   assert.ok(fixture);
   assert.throws(() => decodeOperation(raw(fixture), { ...context(fixture), repositoryIdentity: null }), isCorrupt);

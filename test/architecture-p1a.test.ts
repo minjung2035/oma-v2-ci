@@ -9,7 +9,7 @@ import { validateConfig } from "@oma/config";
 import { defaultHostConfig } from "@oma/config/defaults";
 
 for (const desired of ["stopped", "retired"] as const)
-  test(`IMP-R03: accepted reviewer evidence survives ${desired} and restart`, async () => {
+  test(`001. Accepted reviewer evidence survives ${desired} and restart`, async () => {
     const f = fixture();
     try {
       const candidate = f.candidateWith({ "one.txt": "a\n" });
@@ -27,7 +27,7 @@ for (const desired of ["stopped", "retired"] as const)
     } finally { f.close(); }
   });
 
-test("IMP-R03/R04: explicit withdrawal changes approval; another Worker cannot invalidate", async () => {
+test("002. Explicit withdrawal changes approval; another Worker cannot invalidate", async () => {
   const f = fixture();
   try {
     const candidate = f.candidateWith({ "one.txt": "a\n" });
@@ -43,7 +43,7 @@ test("IMP-R03/R04: explicit withdrawal changes approval; another Worker cannot i
   } finally { f.close(); }
 });
 
-test("IMP-R04: author stop cannot change frozen quorum and requester stop still fences main", async () => {
+test("003. Author stop cannot change frozen quorum and requester stop still fences main", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice", "bob"] });
   try {
     const candidate = f.candidateWith({ "one.txt": "a\n" });
@@ -57,7 +57,7 @@ test("IMP-R04: author stop cannot change frozen quorum and requester stop still 
   } finally { f.close(); }
 });
 
-test("IMP-R01/R02: held recovery and one held unit do not block independent wake; hints coalesce", async () => {
+test("004. Held recovery and one held unit do not block independent wake; hints coalesce", async () => {
   const recovery = Promise.withResolvers<void>(), slowUnit = Promise.withResolvers<void>();
   const agents = [makeValidAgent("alpha"), makeValidAgent("beta")];
   let recovering = 0, observedAlpha = 0, startedBeta = 0, reviews = 0, terminal = false;
@@ -88,13 +88,13 @@ test("IMP-R01/R02: held recovery and one held unit do not block independent wake
   assert.equal(recovering, 1);
 });
 
-test("IMP-R09: current zero seed config rejects; legacy zero remains readable", () => {
+test("005. Current zero seed config rejects; legacy zero remains readable", () => {
   const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), deploymentDigest: "a".repeat(64) });
   assert.throws(() => validateConfig({ ...config, initialResidents: [] }), /at least one/);
   assert.equal(validateConfig({ ...config, schemaVersion: 4, initialResidents: [] }).initialResidents.length, 0);
 });
 
-test("IMP-M01: version gate preserves accepted bytes and creates a complete legacy backup", async () => {
+test("006. Version gate preserves accepted bytes and creates a complete legacy backup", async () => {
   const { DatabaseSync } = await import("node:sqlite");
   const { readdirSync } = await import("node:fs");
   const f = fixture();

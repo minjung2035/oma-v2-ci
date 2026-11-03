@@ -30,7 +30,7 @@ export const GIT_PLUMBING_LIMITS = Object.freeze({ timeout: 120000, maxBuffer: 4
 
 /** Authored test declarations, including workspace-owned tests. Source text
  * inside a comment, fixture string or vendored payload is not an oracle. */
-export function testNames(root) {
+export function testDeclarations(root) {
   const names = [];
   const directory = path => {
     const stat = lstatSync(join(root, path), { throwIfNoEntry: false });
@@ -49,8 +49,8 @@ export function testNames(root) {
       const visit = node => {
         if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "test") {
           const label = node.arguments[0];
-          if (label && ts.isStringLiteralLike(label)) names.push(label.text);
-          else if (label && ts.isTemplateExpression(label)) names.push(label.getText(source).slice(1, -1));
+          if (label && ts.isStringLiteralLike(label)) names.push({ file: path, name: label.text });
+          else if (label && ts.isTemplateExpression(label)) names.push({ file: path, name: label.getText(source).slice(1, -1) });
         }
         ts.forEachChild(node, visit);
       };
@@ -65,6 +65,10 @@ export function testNames(root) {
   return names;
 }
 /** An oracle id is present when some test name starts with it. */
+export function testNames(root) {
+  return testDeclarations(root).map(entry => entry.name);
+}
+
 export function oraclePresent(names, id) {
   return names.some(name => name === id || name.startsWith(`${id}:`) || name.startsWith(`${id} `) || name.startsWith(`${id}/`));
 }

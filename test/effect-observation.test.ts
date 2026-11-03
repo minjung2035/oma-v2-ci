@@ -26,7 +26,7 @@ import { gitAuth } from "./fixtures/git-crash.js";
 
 // These are local module effects. gitAuth is synthetic fixture authority, not
 // native socket/current-peer qualification; no model or systemd is invoked.
-test("V02C: independent raw SQL and physical Mail effects detect duplicate replay", async () => {
+test("001. Independent raw SQL and physical Mail effects detect duplicate replay", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-effect-observe-"));
   const dbPath = join(root, "runtime.sqlite");
   const store = new Store(dbPath);
@@ -101,7 +101,7 @@ test("V02C: independent raw SQL and physical Mail effects detect duplicate repla
   }
 });
 
-test("V02A: config editor performs an observable replacement and remains loadable", () => {
+test("002. Config editor performs an observable replacement and remains loadable", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const role = join(f.output, "roles/resident.json");
@@ -137,7 +137,7 @@ test("V02A: config editor performs an observable replacement and remains loadabl
   }
 });
 
-test("V02C: controlled unit requests are counted apart from committed lifecycle facts", async () => {
+test("003. Controlled unit requests are counted apart from committed lifecycle facts", async () => {
   const f = lifecycleReplayFixture();
   try {
     await f.dispatch("agent.stop", "stop-once");

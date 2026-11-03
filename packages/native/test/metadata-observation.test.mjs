@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeMetadataObservation } from "../dist/metadata-observation.js";
 
-test("directory metadata helper protocol rejects absent, truncated, extra and noncanonical observations", () => {
+test("001. Directory metadata helper protocol rejects absent, truncated, extra and noncanonical observations", () => {
   for (const [size, flags, acl] of [[0n, 0, false], [1n, 1, true], [9007199254740993n, 2147483648, false], [9223372036854775807n, 4294967295, true]])
     assert.deepEqual(decodeMetadataObservation(Buffer.from(`${size} ${flags} ${Number(acl)}\n`)),
       { extendedAttributeBytes: size, darwin: { bsdFlags: flags, aclPresent: acl } });

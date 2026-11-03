@@ -510,8 +510,9 @@ export class InferenceRelay {
   }
 
   private upstreamOptions(method: string, path: string, headers: Record<string, string | string[]>) {
+    const hostname = this.origin.hostname;
     return {
-      protocol: this.origin.protocol, hostname: this.origin.hostname,
+      protocol: this.origin.protocol, hostname: hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname,
       ...(this.origin.port.length > 0 ? { port: Number(this.origin.port) } : {}),
       method, path, headers,
     };

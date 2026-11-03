@@ -10,7 +10,8 @@ export interface ReplyEffects {
 }
 
 /** Read and validate a reply source without mixing filesystem/header work into command orchestration. */
-export function prepareReplyEffects(path: string, inheritSubject: boolean): ReplyEffects {
+export function prepareReplyEffects(path: string, inheritSubject: boolean, subjectBytes = 512): ReplyEffects {
+  if (!Number.isSafeInteger(subjectBytes) || subjectBytes < 1) fail("invalid subject byte bound", 2);
   let id: string | undefined;
   let inheritedSubject: string | undefined;
   // P0V-63: the stored message's headers, within the budget every stored
@@ -20,7 +21,16 @@ export function prepareReplyEffects(path: string, inheritSubject: boolean): Repl
   try {
     const headers = parseEmlHeaders(source, { maxHeaderBytes: MAIL_HEADER_BYTES });
     id = headers.messageId?.split("@", 1)[0];
-    if (inheritSubject) inheritedSubject = `Re: ${decodeSubject(headers.subject)}`;
+    if (inheritSubject) {
+      const derived = `Re: ${decodeSubject(headers.subject).replace(/^(?:Re:\s*)+/iu, "")}`;
+      inheritedSubject = "";
+      let bytes = 0;
+      for (const point of derived) {
+        bytes += Buffer.byteLength(point);
+        if (bytes > subjectBytes) break;
+        inheritedSubject += point;
+      }
+    }
   } catch {
     fail("reply file has invalid OMA headers", 2);
   }

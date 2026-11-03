@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { stylePanel } from "@oma/tui/panel-style";
-test("Control panel: each line coloured by its role, framing padding dropped", () => {
+test("001. Control panel: each line coloured by its role, framing padding dropped", () => {
     const theme = {
         fg: (color, text) => `<${color}>${text}</>`,
         bold: (text) => `<b>${text}</b>`,

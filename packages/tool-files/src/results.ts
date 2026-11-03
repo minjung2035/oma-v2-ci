@@ -47,7 +47,11 @@ export function createResult(root: string, id: string = randomUUID()) {
 }
 export interface ResultRange { byteOffset?: number; byteLimit?: number; line?: number; encoding?: "base64" }
 /** Hash verification is bounded-memory and checks the opened file, not a path
- * observed before opening. UTF-8 pages can reconstruct the exact result. */
+ * observed before opening. UTF-8 pages can reconstruct the exact result.
+ * The returned page is captured from the very bytes this call hashed, so the
+ * page and the reported digest always describe one validated snapshot: a
+ * writer that mutates the same inode after the pass cannot substitute page
+ * bytes under a digest it never had. */
 export function readResult(root: string, reference: string, range: ResultRange = {}) {
   const match = referencePattern.exec(reference);
   if (!match) throw new WorkspaceRefusal("invalid result reference");
@@ -62,20 +66,28 @@ export function readResult(root: string, reference: string, range: ResultRange =
   try {
     const before = fstatSync(fd);
     if (!before.isFile() || before.nlink !== 1) throw new WorkspaceRefusal("result must be an unlinked regular file name");
+    // One pass over the descriptor: hash every byte read and keep the page
+    // window out of those same reads -- the page is bytes that the digest
+    // covers, never a later read of a name a writer can replace.
     const hash = createHash("sha256"), block = Buffer.alloc(64 * 1024);
     let offset = range.byteOffset ?? 0, at = 0, line = 1, selected = range.line === undefined || range.line === 1;
+    let window = Buffer.alloc(0);
+    const windowBytes = limit + 4;
     for (;;) {
       const n = readSync(fd, block, 0, block.length, at); if (!n) break;
       hash.update(block.subarray(0, n));
       if (!selected) for (let i = 0; i < n; i++) if (block[i] === 10 && ++line === range.line) { offset = at + i + 1; selected = true; break; }
+      if (selected && window.length < windowBytes && at + n > offset) {
+        const from = Math.max(offset, at), take = Math.min(at + n - from, windowBytes - window.length);
+        if (take > 0) window = Buffer.concat([window, block.subarray(from - at, from - at + take)]);
+      }
       at += n;
     }
     const sha256 = hash.digest("hex"), after = fstatSync(fd);
     if (sha256 !== match[2] || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
       throw new WorkspaceRefusal("result changed or its digest does not match");
     if (!selected || offset > at) throw new WorkspaceRefusal("result range is past the end");
-    const page = Buffer.alloc(Math.min(limit + 4, at - offset));
-    const n = readSync(fd, page, 0, page.length, offset), loaded = page.subarray(0, n);
+    const loaded = window.subarray(0, Math.min(window.length, at - offset));
     if (range.encoding !== "base64" && loaded.length && (loaded[0]! & 0xc0) === 0x80) throw new WorkspaceRefusal("byte offset is not a UTF-8 boundary; use next");
     const shown = range.encoding === "base64" ? loaded.subarray(0, limit) : utf8Prefix(loaded, limit), next = offset + shown.length;
     return { reference, sha256, bytes: at, byteOffset: offset, text: isUtf8(shown) ? shown.toString("utf8") : "[binary page; use dataBase64]", dataBase64: shown.toString("base64"), next: next < at ? next : null };

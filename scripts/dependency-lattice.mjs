@@ -47,6 +47,7 @@ const LAYERS = Object.freeze([
       "packages/protocol/src/",
       "packages/storage/src/",
       "apps/oma/src/runtime/request-cache-codec.ts",
+      "apps/oma/src/runtime/invocation-codec.ts",
       "apps/oma/src/runtime/request-intent.ts",
       "packages/client/src/",
       "packages/mail/src/addresses.ts",

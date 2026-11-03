@@ -162,6 +162,20 @@ try {
   report.failure = error instanceof Error ? error.message : String(error);
   if (report.status === "PASS" || report.execution === "EXECUTED") report.status = "FAIL";
 } finally {
+  if (Object.keys(report.sourceDigests).length > 0) {
+    try {
+      report.sourceDigestsAfter = verificationSourceDigests(root);
+      report.sourceChanges = [...new Set([...Object.keys(report.sourceDigests), ...Object.keys(report.sourceDigestsAfter)])]
+        .filter(file => report.sourceDigests[file] !== report.sourceDigestsAfter[file]).sort();
+      if (report.sourceChanges.length > 0) {
+        report.status = "FAIL";
+        report.failure = "verification inputs changed during execution; results do not qualify the final source";
+      }
+    } catch (error) {
+      report.status = "FAIL";
+      report.failure = `post-execution source identity could not be observed: ${String(error)}`;
+    }
+  }
   report.endedAt = new Date().toISOString();
   writeFileSync(join(output, "result.json"), JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
   console.error(`${name}: ${report.status}; ${report.execution}; artifacts=${output}`);

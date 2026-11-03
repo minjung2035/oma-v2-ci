@@ -10,7 +10,7 @@ function fixture(t) {
   for (const name of ["src", "dist", "outside"]) mkdirSync(join(root, name));
   return root;
 }
-test("DR46: directory assets include exact payload bytes and empty directories", t => {
+test("001. Directory assets include exact payload bytes and empty directories", t => {
   const root = fixture(t);
   mkdirSync(join(root, "src/vendor/pi-lsp/empty"), { recursive: true });
   const bytes = Buffer.from([0, 255, 10, 0]);
@@ -22,7 +22,7 @@ test("DR46: directory assets include exact payload bytes and empty directories",
   writeFileSync(join(root, "dist/vendor/pi-lsp/extra"), "unlisted");
   assert.notDeepEqual(workspaceAssetSnapshot(root, "src", ["vendor/pi-lsp"]), workspaceAssetSnapshot(root, "dist", ["vendor/pi-lsp"]));
 });
-test("DR46: asset copy refuses linked sources and destinations, traversal and compiler output collisions", t => {
+test("002. Asset copy refuses linked sources and destinations, traversal and compiler output collisions", t => {
   const root = fixture(t);
   writeFileSync(join(root, "outside/sentinel"), "unchanged");
   symlinkSync(join(root, "outside"), join(root, "src/linked"));

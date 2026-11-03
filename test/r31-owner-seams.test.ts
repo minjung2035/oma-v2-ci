@@ -22,7 +22,7 @@ import { goalPublishedAt } from "./fixtures/goal.js";
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: 1000, gid: 1000 } };
 
-test("R31 public facade delegates status and mutation with the original authority and receipt semantics", async t => {
+test("001. Public facade delegates status and mutation with the original authority and receipt semantics", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-r31-composition-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
@@ -55,7 +55,7 @@ test("R31 public facade delegates status and mutation with the original authorit
   assert.equal(expandAddresses, routingOwner, "the compatibility facade reexports one owner, not a second definition");
 });
 
-test("R31 acceptance fault hook still intercepts the physical Store transaction after SQL owner movement", async t => {
+test("002. Acceptance fault hook still intercepts the physical Store transaction after SQL owner movement", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-r31-fault-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });

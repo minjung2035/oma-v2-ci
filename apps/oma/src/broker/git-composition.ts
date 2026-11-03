@@ -17,7 +17,7 @@ function composeGit(paths: GitPaths, store: Store, mail: MailModule,
   policy: IntegrationPolicy | null, reader: IntegrationPolicyReader | null, check: CandidateCheck | null, quarantine: QuarantineExecution | null) {
   store.bindRepositoryIdentity({ society: paths.society });
   const ledger = gitLedger(store);
-  const repository = new GitRepository(paths, { submissions: () => ledger.submissions() }, quarantine);
+  const repository = new GitRepository(paths, { submissions: () => ledger.submissions(), attachmentRoots: () => ledger.attachmentRoots?.() ?? [] }, quarantine);
   const authority = new ReviewAuthorityReader({
     attestationFacts: () => store.attestationFacts(),
     getOperation: (actor, key) => store.getOperation(actor, key),
@@ -26,6 +26,10 @@ function composeGit(paths: GitPaths, store: Store, mail: MailModule,
   const git = new GitModule(ledger, gitMessaging(mail), repository, policy, reader, check, {
     assertApplicable: request => authority.assertApplicable(request),
   });
+  mail.bindSharedAttachments({ prepare: commits => git.sharedAttachments(commits),
+    observe: sources => git.observeSharedAttachments(sources), assertUnchanged: sources => git.assertSharedAttachments(sources),
+    stage: (...args) => git.stageMailAttachments(...args), finalize: plan => git.finalizeMailAttachments(plan),
+    complete: root => git.completeMailAttachments(root) });
   return { git, repository, authority };
 }
 export function createGitModule(paths: GitPaths, store: Store, mail: MailModule,

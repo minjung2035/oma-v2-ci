@@ -1,4 +1,5 @@
 // MUST [DB-009/M-003]: closed durable shapes and mandatory intrinsic relations.
+import type { MailAttachmentSource } from "@oma/contracts/values";
 // No Store, filesystem reads, current defaults, or physical effects belong here.
 import { reviewFactProblem } from "./attestation.js";
 import { isAbsolute } from "node:path";
@@ -17,8 +18,10 @@ import {
   isMailObjectRelativePathFor,
   isPublishedRefFor,
   residentUnitsFor,
+  createSourcePublicationId, attachmentPublicationId, publishedRefFor,
 } from "./derived.js";
 import {
+  attachmentBundlePathAt,
   isWorkspacePathFor,
   isSubmitBundlePathFor,
   isContextStagingPathFor,
@@ -91,6 +94,11 @@ const sha256Check = checkString({ re: /^[0-9a-f]{64}$/ });
 const nonEmpty = checkString({ min: 1 });
 const actorOrPrincipal: Check = (value) =>
   isValidActor(value) ? null : "invalid actor";
+/** Accepted relationships only; neither a publication observation nor effect authority. */
+export function publicationSources(plan: OperationPlan): readonly MailAttachmentSource[] {
+  return plan.kind === "mail.send" ? plan.attachments?.sources ?? [] :
+    plan.kind === "agent.create" && plan.source?.publication !== undefined ? [plan.source.publication] : [];
+}
 export const resolvedSpecCheck: Check = checkObject({
   name: actorOrPrincipal,
   from: checkOid,
@@ -104,10 +112,6 @@ const nullableMessagePlan: Check = (value) =>
 const nullableOperationId: Check = (value) =>
   value === null ? null : operationIdCheck(value);
 const nullableOid: Check = (value) => (value === null ? null : checkOid(value));
-const createFields = { kind: checkEnum(["agent.create"] as const), spec: resolvedSpecCheck, specHash: sha256Check,
-  parent: actorOrPrincipal, workspacePath: nonEmpty, initialMessage: nullableMessagePlan, existingCreation: nullableOperationId };
-const nativeCreateCheck = checkObject({ ...createFields, execution: checkEnum(["native"] as const) });
-const historicalCreateCheck = checkObject({ ...createFields, unitNames: checkArray(nonEmpty) });
 
 /** The domain policy owns context paths, closed fields, ordering and byte sums.
  * Accepted rows keep their exact bytes; this boundary never sorts or repairs them.
@@ -145,6 +149,35 @@ const publishedRefShape: Check = (value) => {
     ? null
     : "invalid published ref";
 };
+const sharedCommitReferenceShape = checkObject({ commit: checkOid, objectFormat: checkEnum(["sha1", "sha256"]),
+  publication: value => value === null ? null : operationIdCheck(value),
+  publicationOrdinal: checkOptional(checkInt({ min: 0 })), publishedRef: value => value === "refs/heads/main" ? null : publishedRefShape(value),
+  reachableFrom: checkOptional(checkOid),
+  local: checkOptional(checkObject({ dependency: operationIdCheck, exportRef: checkExportRef, prerequisites: checkArray(checkOid),
+    bundle: checkObject({ path: nonEmpty, bytes: checkInt({ min: 1 }), sha256: sha256Check }) })) });
+const sharedCommitReferenceCheck: Check = value => {
+  const problem = sharedCommitReferenceShape(value);
+  if (problem) return problem;
+  const source = value as import("@oma/contracts/values").MailAttachmentSource;
+  if (source.reachableFrom !== undefined && source.reachableFrom.length !== source.commit.length)
+    return "shared commit and reachability anchor use different object formats";
+  if (source.publication === null)
+    return source.publishedRef === "refs/heads/main" && source.reachableFrom !== undefined && source.local === undefined && source.publicationOrdinal === undefined
+      ? null : "canonical attachment requires its exact observed main anchor, not publication authority";
+  if (source.publishedRef === "refs/heads/main" || source.local !== undefined && source.reachableFrom !== undefined)
+    return "published attachment mixes canonical and local publication identities";
+  return null;
+};
+const mailAttachmentPlanCheck = checkObject({ version: checkEnum(["collaboration-v1"]),
+  freeze: checkOptional(checkObject({ version: checkEnum(["mail-root-v1"]), operation: operationIdCheck, dateMs: checkInt({ min: 0, max: 8640000000000000 }) })),
+  observedAtMs: checkInt({ min: 0 }), sources: checkArray(sharedCommitReferenceCheck) });
+const createSourceCheck = checkObject({ version: checkEnum(["collaboration-v1"]),
+  freeze: checkObject({ version: checkEnum(["create-root-v1"]), operation: operationIdCheck, dateMs: checkInt({ min: 0, max: 8640000000000000 }) }),
+  observedAtMs: checkInt({ min: 0 }), publication: checkOptional(sharedCommitReferenceCheck) });
+const createFields = { kind: checkEnum(["agent.create"] as const), spec: resolvedSpecCheck, specHash: sha256Check,
+  source: checkOptional(createSourceCheck), parent: actorOrPrincipal, workspacePath: nonEmpty, initialMessage: nullableMessagePlan, existingCreation: nullableOperationId };
+const nativeCreateCheck = checkObject({ ...createFields, execution: checkEnum(["native"] as const) });
+const historicalCreateCheck = checkObject({ ...createFields, unitNames: checkArray(nonEmpty) });
 const checks = {
   "society.set": checkObject({ kind: checkEnum(["society.set"]), state: checkEnum(["open", "closed"]) }),
   "attest.record": checkObject({ kind: checkEnum(["attest.record"] as const),
@@ -152,6 +185,7 @@ const checks = {
   "mail.send": checkObject({
     kind: checkEnum(["mail.send"] as const),
     message: messagePlanCheck,
+    attachments: checkOptional(mailAttachmentPlanCheck),
   }),
   "agent.continue": checkObject({
     kind: checkEnum(["agent.continue"] as const),
@@ -243,8 +277,10 @@ export function operationPlanCheck(
     const reviewOwned = (plan.kind === "attest.record" && "messages" in plan) ||
       (plan.kind === "git.integrate" && plan.merge !== undefined);
     for (const [ordinal, message] of messages.entries()) {
-      if (!reviewOwned && (message.review !== undefined || message.audience !== undefined))
+      if (!reviewOwned && (message.review !== undefined || (message.audience !== undefined && plan.kind !== "mail.send")))
         return "a non-review plan cannot own review mail";
+      if (!reviewOwned && message.audience === "workers" && context.actor === "principal")
+        return "the Principal cannot author workers-only mail";
       if (
         message.id !== messageIdForOperation(context.operationId, ordinal) ||
         !isMailObjectRelativePathFor(message.objectPath, {
@@ -256,6 +292,22 @@ export function operationPlanCheck(
         return "duplicate frozen recipient";
     }
     switch (plan.kind) {
+      case "mail.send":
+        if (plan.attachments?.freeze !== undefined && (plan.attachments.freeze.operation !== context.operationId ||
+            plan.attachments.freeze.dateMs !== plan.message.dateMs || plan.attachments.freeze.dateMs % 1000 !== 0))
+          return "attachment root and Date differ from their frozen mail facts";
+        if (plan.attachments !== undefined) for (const [ordinal, source] of plan.attachments.sources.entries()) {
+          if (source.objectFormat !== (source.commit.length === 40 ? "sha1" : "sha256")) return "attachment object format differs from its OID";
+          if (source.local !== undefined) {
+            if (context.actor === "principal" || plan.attachments.freeze === undefined || source.local.prerequisites.some(oid => oid.length !== source.commit.length) || source.publication !== context.operationId || source.publicationOrdinal !== ordinal ||
+                source.local.dependency !== attachmentPublicationId(context.operationId, ordinal) ||
+                source.publishedRef !== publishedRefFor(context.actor, source.local.dependency) ||
+                source.local.bundle.path !== attachmentBundlePathAt(context.stateRoot, context.operationId, ordinal))
+              return "local attachment differs from its exact accepted root delegation";
+          } else if (source.publication !== null && (source.publication === context.operationId || source.publicationOrdinal === undefined && source.publishedRef.split("/")[4] !== source.publication))
+            return "shared attachment reference differs from its original publication";
+        }
+        return null;
       case "society.set": return context.actor === "principal" ? null : "society control requires the Principal actor";
       case "mail.ack":
         return plan.recipient === context.actor
@@ -277,6 +329,17 @@ export function operationPlanCheck(
           return "continue message must belong to the accepted actor";
         return null;
       case "agent.create": {
+        if (plan.source !== undefined) {
+          if (context.actor === "principal" || "unitNames" in plan || plan.source.freeze.operation !== context.operationId ||
+              plan.source.freeze.dateMs % 1000 !== 0 || plan.initialMessage !== null && plan.initialMessage.dateMs !== plan.source.freeze.dateMs)
+            return "creation source differs from its original Worker root and brief Date";
+          const source = plan.source.publication;
+          if (source !== undefined && (!source.local || plan.existingCreation !== null || source.publication !== context.operationId || source.publicationOrdinal !== 0 ||
+              source.commit !== plan.spec.from || source.objectFormat !== (source.commit.length === 40 ? "sha1" : "sha256") ||
+              source.local.dependency !== createSourcePublicationId(context.operationId) || source.publishedRef !== publishedRefFor(context.actor, source.local.dependency) ||
+              source.local.bundle.path !== attachmentBundlePathAt(context.stateRoot, context.operationId, 0) ||
+              source.local.prerequisites.some(oid => oid.length !== source.commit.length))) return "creation publication differs from its exact accepted root";
+        }
         const identity = context.repositoryIdentity;
         if (!identity || !isValidSocietyName(identity.society))
           return "create requires trusted repository/society identity";
@@ -411,7 +474,6 @@ export function operationPlanCheck(
       }
       case "agent.start":
       case "agent.stop":
-      case "mail.send":
         return null;
     }
   };
@@ -462,6 +524,7 @@ export function operationResultRelationCheck(
       return isMailArchivePathFor(row.archivePath, {
         stateRoot: context.stateRoot,
         messageId: plan.message.id,
+        ...(plan.message.audience === undefined ? {} : { audience: plan.message.audience }),
       })
         ? null
         : "archive path differs from accepted message";

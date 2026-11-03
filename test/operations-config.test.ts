@@ -9,11 +9,11 @@ import { closeEvery } from "@oma/native/files";
 import { withCleanup } from "@oma/native/cleanup";
 import { loadConfig, loadConfiguration } from "@oma/config";
 
-import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 import { writePackageIndex } from "#oma-test/app/runtime/packages/store";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
-test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
+test("001. OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
   const f = fixture();
   try {
     const before = readFileSync(f.input);
@@ -41,7 +41,7 @@ test("OPS config: migration preserves the closed host contract and does not over
   }
 });
 
-test("OPS config: role models/prompts/extensions change only in a newly loaded snapshot", () => {
+test("002. OPS config: role models/prompts/extensions change only in a newly loaded snapshot", () => {
   const f = fixture();
   try {
     const old = loadConfiguration(f.path);
@@ -133,7 +133,7 @@ for (const [name, file, update] of [
     },
   ],
 ] as const) {
-  test(`OPS config: rejects ${name} without fallback defaults`, () => {
+  test(`003. OPS config: rejects ${name} without fallback defaults`, () => {
     const f = fixture();
     try {
       f.edit(file, update);
@@ -150,7 +150,7 @@ for (const [name, file, update] of [
  * beside the accepted profile and model reference, so a call that does not override it gets
  * the deployment's resident plan. */
 function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string | undefined>) {
-  env = { OMA_TOOL_SURFACE_HEX: hex(encodedResidentToolSurface()), ...env };
+  env = { OMA_TOOL_SURFACE_HEX: hex(JSON.stringify(collaborationSurface("resident"))), ...env };
   // An explicit undefined removes the default: the variable is absent, the
   // way a unit that never rendered it would leave it.
   if (env.OMA_TOOL_SURFACE_HEX === undefined) delete env.OMA_TOOL_SURFACE_HEX;
@@ -204,7 +204,7 @@ function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string |
 }
 const hex = (text: string): string => Buffer.from(text, "utf8").toString("hex");
 
-test("U1: the retired rootfs setting fails startup before RunnerModule can run", () => {
+test("004. The retired rootfs setting fails startup before RunnerModule can run", () => {
   const f = fixture();
   try {
     f.edit("host.json", host => { host.installation.rootfs = "/"; });
@@ -217,7 +217,7 @@ test("U1: the retired rootfs setting fails startup before RunnerModule can run",
   } finally { f.close(); }
 });
 
-test("OPS config: runner entry selects the broker-rendered role at startup without executing Pi", () => {
+test("005. OPS config: runner entry selects the broker-rendered role at startup without executing Pi", () => {
   const f = fixture();
   try {
     const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") });
@@ -235,7 +235,7 @@ test("OPS config: runner entry selects the broker-rendered role at startup witho
   }
 });
 
-test("DR46-F01: a later role edit cannot retarget an accepted model reference", () => {
+test("006. A later role edit cannot retarget an accepted model reference", () => {
   const f = fixture();
   try {
     const accepted = { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") };
@@ -281,7 +281,7 @@ const richPackage = {
   "themes/dark.json": JSON.stringify({ name: "dark", colors: {} }),
 };
 
-test("DR25/C18: the runner entry hands the package store to the spawn plan, so package resources reach a Resident's argv", async () => {
+test("007. The runner entry hands the package store to the spawn plan, so package resources reach a Resident's argv", async () => {
   const f = fixture();
   try {
     const packages = store(f.root, { "oma-rich": richPackage });
@@ -304,7 +304,7 @@ test("DR25/C18: the runner entry hands the package store to the spawn plan, so p
   } finally { f.close(); }
 });
 
-test("OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runner refuses at startup -- not at first delivery", () => {
+test("008. OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runner refuses at startup -- not at first delivery", () => {
   const f = fixture();
   try {
     const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review"),
@@ -320,7 +320,7 @@ test("OMA_PI_COMMAND: an override supplies no shipped engine entry, so the runne
 
 
 
-test("F5: runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs", () => {
+test("009. Runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs", () => {
   const f = fixture();
   try {
     const base = { OMA_PROFILE_HEX: hex("verifier"), OMA_MODEL_PROFILE_HEX: hex("review") };
@@ -350,7 +350,7 @@ test("F5: runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX befor
   }
 });
 
-test("OPS config: rejects symlinked and oversized prompt assets", () => {
+test("010. OPS config: rejects symlinked and oversized prompt assets", () => {
   const f = fixture();
   try {
     const prompt = join(f.output, "prompts/verifier.md");
@@ -376,7 +376,7 @@ for (const format of ["inline", "operations"] as const) {
     { name: "protocol limits", file: "host.json", inline: ["limits"], split: ["limits"], field: "logBytes", error: /limits\.logBytes is required/ },
     { name: "model relation", file: "roles/resident.json", inline: ["agentProfiles", "resident"], split: ["agentProfile"], field: "modelProfile", error: /modelProfile unknown/ },
   ]) {
-    test(`V02A: ${format} fixture rejects deliberately missing ${defect.name}`, () => {
+    test(`011. Operations config: ${format} fixture rejects deliberately missing ${defect.name}`, () => {
       const f = fixture();
       try {
         const source = format === "inline" ? f.input : f.path;

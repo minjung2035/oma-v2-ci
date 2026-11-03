@@ -136,7 +136,7 @@ function seedLargeLedger(root: string): { path: string; batchId: string; firstMe
   return { path, batchId, firstMessage: sent[0]!, lastMessage: sent.at(-1)!, sampleOpId };
 }
 
-test("G02-ledger-r2: operational reads return complete results past the former diagnostic cap", async (t) => {
+test("001. Operational reads return complete results past the former diagnostic cap", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-opread-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const seeded = seedLargeLedger(root);
@@ -207,7 +207,7 @@ test("G02-ledger-r2: operational reads return complete results past the former d
   assert.throws(() => readDiagnosticSnapshot(root), { code: "LIMIT_EXCEEDED" });
 });
 
-test("G02-ledger-r2: operational reads propagate query failure, never a partial or empty answer", async () => {
+test("002. Operational reads propagate query failure, never a partial or empty answer", async () => {
   const db = { prepare: () => { throw new StoreError("STORE_CORRUPT", "synthetic read failure"); } } as unknown as Pick<DatabaseSync, "prepare">;
   const reader = new LedgerReader(db, "/unused", () => null);
   for (const read of [() => reader.agentNames(), () => reader.recoverableIds(), () => reader.pendingDeliveries("alice"),
@@ -216,7 +216,7 @@ test("G02-ledger-r2: operational reads propagate query failure, never a partial 
   await assert.rejects(() => reader.pendingWorkRows(), { code: "STORE_CORRUPT" });
 });
 
-test("G02-ledger-r2: delivery keyset pages close before yielding and exclude later accepts", () => {
+test("003. Delivery keyset pages close before yielding and exclude later accepts", () => {
   const db = new DatabaseSync(":memory:");
   try {
     db.exec("CREATE TABLE deliveries(message_id TEXT, recipient TEXT, materialized INTEGER, presented INTEGER, batch_id TEXT)");

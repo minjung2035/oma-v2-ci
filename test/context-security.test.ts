@@ -22,7 +22,7 @@ const cases = [
   { name: "traversal", path: "decisions/../escape.md", bytes: Buffer.from("escape") },
 ];
 
-test("CTX-001: broker-domain rejects unsupported paths and non-text before acceptance", async () => {
+test("001. Broker-domain rejects unsupported paths and non-text before acceptance", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-security-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -54,7 +54,7 @@ test("CTX-001: broker-domain rejects unsupported paths and non-text before accep
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", async () => {
+test("002. A rejected context publish leaves no staging artifact", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-staging-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -93,7 +93,7 @@ test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", as
   } finally { store.close(); removeTree(root); }
 });
 
-test("CTX-001: real client rejects symlink, hardlink, metadata and binary before connecting", () => {
+test("003. Real client rejects symlink, hardlink, metadata and binary before connecting", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-cli-"));
   try {
     for (const name of ["symlink", "directory-link", "hardlink", ...cases.filter(item => item.name !== "traversal").map(item => item.name)]) {

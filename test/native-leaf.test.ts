@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createServer, connect } from "node:net";
 import { hasNativeLeaf, peerCred, socketDescriptor } from "@oma/native/linux";
 
-test("AUTH-003: the one runtime internal peer identity depends on is named and checked", async () => {
+test("001. The one runtime internal peer identity depends on is named and checked", async () => {
   // Node publishes no accessor for an accepted socket's descriptor, and
   // SO_PEERCRED needs one. The dependency lives in the leaf with the other
   // primitives that have no public API, so a Node release that removes it fails

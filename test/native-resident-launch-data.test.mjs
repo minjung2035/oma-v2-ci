@@ -1,3 +1,4 @@
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 /** App launch composition over actual Linux namespace/pidfd/control effects.
  * The receiver is a fixture program, not the product Runner or a Mac scope.
  * No process identity, ownership observation or kernel result is replaced. */
@@ -13,14 +14,15 @@ import {createNativeResidents} from '#oma-test/app/runtime/native-residents';
 import {defaultHostConfig} from '@oma/config/defaults';
 import {describeMacDeveloperTools,decodeMacDeveloperToolsHex} from '@oma/protocol/mac-developer-tools';
 import {withAsyncCleanup} from '@oma/native/cleanup';
-import {makeValidAgent} from '../dist/test/fixtures/spec.js';
+import {makeValidAgent,ALL_CAPS} from '../dist/test/fixtures/spec.js';
 assert.equal(process.platform,'linux','launch data tests use the actual Linux backend');
 const developer='/Applications/한 글자 Xcode.app/Contents/Developer';
 const observed=describeMacDeveloperTools(developer,`${developer}/usr/bin/git`,`${developer}/usr/libexec/git-core`);
-for(const explicit of [false,true])test(`native launch data: ${explicit?'explicit observed tools replace ambient data':'ambient tools are absent without explicit launch data'}`,{timeout:20000},async t=>{
-  const root=mkdtempSync(join(tmpdir(),'oma-launch-data-'));ExecutionJournal.initialize(root);
+for(const explicit of [false,true])test(`001. Native launch data: ${explicit?'explicit observed tools replace ambient data':'ambient tools are absent without explicit launch data'}`,{timeout:20000},async t=>{
+  const parent=mkdtempSync(join(tmpdir(),'oma-launch-data-')), root=join(parent,'demo');mkdirSync(root);ExecutionJournal.initialize(root);
+  publishSessionBirth(root,newSessionBirth(root,'society',process.cwd(),'collaboration-v1'));
   const executions=new ExecutionRuntime(root);await executions.recover();
-  const store=new Store(join(root,'runtime.sqlite'));store.transaction(tx=>tx.insertAgent(makeValidAgent()));
+  const store=new Store(join(root,'runtime.sqlite'));store.transaction(tx=>tx.insertAgent(makeValidAgent("alice",{capabilities:ALL_CAPS.filter(capability=>capability!=="context.publish")})));
   const libdir=join(root,'installation'),entry=join(libdir,'apps/oma/dist/entry/runner.js');mkdirSync(dirname(entry),{recursive:true});
   writeFileSync(entry,`import {Socket} from 'node:net';
     const socket=new Socket({fd:6,readable:true,writable:true});socket.on('error',()=>{});
@@ -40,7 +42,7 @@ for(const explicit of [false,true])test(`native launch data: ${explicit?'explici
       let line='';socket.on('data',bytes=>{line+=bytes;if(line.includes('\n'))answer(JSON.parse(line.slice(0,line.indexOf('\n'))));});
       socket.on('error',fail);socket.resume();
     },()=>{},actor=>store.getAgent(actor)?.incarnation??null,launch);
-  t.after(async()=>{clearTimeout(timer);await withAsyncCleanup(()=>units.close(),()=>executions.close());store.close();rmSync(root,{recursive:true,force:true});});
+  t.after(async()=>{clearTimeout(timer);await withAsyncCleanup(()=>units.close(),()=>executions.close());store.close();rmSync(parent,{recursive:true,force:true});});
   changing.git='/human/replaced-git';changing.execPath='/human/replaced-helpers';environment.OMA_DEVELOPER_TOOLS_HEX='ambient-later';
   timer=setTimeout(()=>fail(new Error('actual inherited receiver did not report its launch environment')),10000);
   await units.start('alice',false);const value=await received;clearTimeout(timer);

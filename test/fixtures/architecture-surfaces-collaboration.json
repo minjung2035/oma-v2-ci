@@ -1,0 +1,206 @@
+{
+  "schema": 4,
+  "note": "collaboration-v1 / DR72 current consumer interfaces. The DR49–69 native snapshot remains in architecture-surfaces-native.json. This fixture records the explicit original-invocation, accepted publication/review and role-record ports; it is a source contract, not authored approval or runtime/platform/provider qualification. 2026-11-04 reviewed delta: internal prepare forwards the actual response budget and completion accepts compact identity while retaining canonical receipt proof; no model/public mutation method was added.",
+  "dispatch": {
+    "packages/broker/src/ports.ts": {
+      "PeerIdentity": {
+        "exported": true,
+        "sha256": "8f3f7b9c955031dcfe56b5fd72496aa82853c718121e15f920e700180e071e3b"
+      },
+      "PinnedPeerIdentity": {
+        "exported": true,
+        "sha256": "153b5f2b764bed5d06b9477018ad7c412e8cd77b7438f3ab71b71ddbd3947ea6"
+      },
+      "PublicAgentView": {
+        "exported": true,
+        "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2"
+      },
+      "PublicStorePort": {
+        "exported": true,
+        "sha256": "20dd961b2dcc6eed5b428c6d85e88e6974f2486c71fa53fa4cf9eb29200ddca6"
+      },
+      "PublicMailPort": {
+        "exported": true,
+        "sha256": "5176eff9cec01bc23ed6358335854f62686548c2a8d1fd076e5ada911f2b241d"
+      },
+      "PublicUnitsPort": {
+        "exported": true,
+        "sha256": "fe831326695d1e368d6e55b1c7ff39ed245e07784c116d41e3ac8739db68f017"
+      },
+      "PublicViewsPort": {
+        "exported": true,
+        "sha256": "ea7fbb790520e81fec912a0240d24d48cdba7b9848b41a3451f9b2d9ae835b85"
+      },
+      "PublicLifecyclePort": {
+        "exported": true,
+        "sha256": "5c6e3553b4fcc667d2fb155c360621a23ef280e803da2b704a90197e17dfe3e9"
+      },
+      "PublicReviewPort": {
+        "exported": true,
+        "sha256": "5d0483f8dde7f79ddd51da1f3a297de87aa58f172b69d3cd5dcc9322fd0d2a1d"
+      },
+      "PublicGitPort": {
+        "exported": true,
+        "sha256": "aaccc601b644458dfefa97bd423dffe37714ec743796739984fa9c16315e07b1"
+      },
+      "PublicInvocationPort": {
+        "exported": true,
+        "sha256": "40ec8be92494fa0d4c64d32a7f253bd072ece9993c99bed9d5e5ced145211453"
+      },
+      "PublicDispatchDependencies": {
+        "exported": true,
+        "sha256": "b4c1440529916ae3c2abdb98f74ac3c8727aaafe911bde1d31a49e6aa808fe09"
+      },
+      "InternalStorePort": {
+        "exported": true,
+        "sha256": "1762329b0b87a7037b9226fcdc55fa85a61aa9984e7830ee330f2d991f5329cd"
+      },
+      "InternalMailPort": {
+        "exported": true,
+        "sha256": "2c560e0c1c2a8810847a052966c34529586bb565c73a6eb69532ea3ba2d38975"
+      },
+      "InternalPeerPort": {
+        "exported": true,
+        "sha256": "6d6ef0d75b0ed91cbf2ae8574d623193bfa462109434da13f686b45733069cac"
+      },
+      "InternalDispatchDependencies": {
+        "exported": true,
+        "sha256": "6bedae7b5d673ffbceb2e496876313dc3c37b5cf678a75cb647de3a1ca043f80"
+      },
+      "BrokerTransaction": {
+        "exported": true,
+        "sha256": "72d829a7eabecc206faedf520cb3bdbf5625bf79ec054555cfef066a0532f24c"
+      },
+      "BrokerLedger": {
+        "exported": true,
+        "sha256": "acb3c484addfc4b71c2381e2ff1f829b5efb0af006f9d703a731e018879cc072"
+      },
+      "BrokerMail": {
+        "exported": true,
+        "sha256": "0f5f0bb34d5dfbf326d54c0360de0932e4cf5790087622c29fbd069191244d9a"
+      },
+      "BrokerUnits": {
+        "exported": true,
+        "sha256": "b457e97b3c02b6e428d703c416dd1279a9a8ae52ea8c4ad064a5fc4cdb77e6ed"
+      },
+      "BrokerViews": {
+        "exported": true,
+        "sha256": "25d0f0e6d8aa3b2e925af35caaaf728c81f3683f83b5e9270f3235fbaf271a13"
+      },
+      "BrokerReconcile": {
+        "exported": true,
+        "sha256": "64824a2fd5bbb12b36679843e823cf128407697a0df152a2413445a01c42322b"
+      },
+      "BrokerStatusRefresh": {
+        "exported": true,
+        "sha256": "4f0e2cebbe42734ddac34971a031b4d86316684229fd225d43e00b351406b821"
+      },
+      "BrokerListener": {
+        "exported": true,
+        "sha256": "d58bc12c9e19161eaf5e87856bb509d527f8793487e7c6177f3257e733c6b25b"
+      },
+      "BrokerEffects": {
+        "exported": true,
+        "sha256": "7487c1cac408e469d8774d86c1d1ececfce027021468d378bc1e36ae4096a087"
+      },
+      "BrokerDependencies": {
+        "exported": true,
+        "sha256": "23afa4273782cf0bb46171d65c1ebd93810728ff423208623ef2015677f4f512"
+      }
+    },
+    "packages/contracts/src/runtime.ts": {
+      "AuthContext": {
+        "exported": true,
+        "sha256": "7b2ac62c85e9bae0e9e041d197d2c38337e1bc8b4732775979f7c77ff1205180"
+      },
+      "AgentStatus": {
+        "exported": true,
+        "sha256": "dc66e39a310c4b106bb4808bbf0562c26f493cd4520fdce90a9501c6080680e3"
+      },
+      "PreparedBatch": {
+        "exported": true,
+        "sha256": "b3627dfa363ddd0d0718e056cdd613509166352a80f8ae1b1e1434dfe822c4f9"
+      },
+      "BoundaryEvidence": {
+        "exported": true,
+        "sha256": "6e573b0640105f4b5f885fdbd3ac4f9e4ce131fa04eb10122071a6d0ff65cb22"
+      },
+      "RunLease": {
+        "exported": true,
+        "sha256": "66eb75f6ddd92db298eb464a64f05f242812aec8e5f51b490df6ca805f54d73c"
+      },
+      "ExecutionObservation": {
+        "exported": true,
+        "sha256": "1bf3c98f0ae32ec242e854802eaa6e0212180bbf083689b0f9245575da7d6577"
+      },
+      "ExecutionScopePin": {
+        "exported": true,
+        "sha256": "64f4f564c948e46b2a02b9f2c2ac3addbeb3636c242a2e9e0954541f8ac1aa68"
+      },
+      "ResidentLogEntry": {
+        "exported": true,
+        "sha256": "0b47042cca06091d0278054363e494913a3c3dc1f01f772dfda24e235a65ddd4"
+      },
+      "SandboxPlan": {
+        "exported": true,
+        "sha256": "c162ce778bc3788e423f36d4b68ec6245ede25ca1737ae9c102d7cbca21ba119"
+      },
+      "PathView": {
+        "exported": true,
+        "sha256": "f573d48cc434296fbc17c1cab2d7ba7cba01e14b79378335c61065318c5b731e"
+      },
+      "SandboxEndpoints": {
+        "exported": true,
+        "sha256": "c1a02229e506bacdcce857afa3eba2277b88625691cb262ad810e7f9d83c2b43"
+      },
+      "SandboxDirectories": {
+        "exported": true,
+        "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
+      },
+      "SandboxHost": {
+        "exported": true,
+        "sha256": "8c46403448366d1ce2b2e4e974103f22cf55fce3e6602cebf4d3a7df058bdf81"
+      },
+      "DeliveryBoundary": {
+        "exported": true,
+        "sha256": "d68d9cc7994e5caada1aba9774c867d595720051eddabd0271870185bd4f09de"
+      },
+      "DeliveryReceipt": {
+        "exported": true,
+        "sha256": "ebd1085e3987f4367b206424d430227caedd036782319dc6fccb3f7b79fd25b0"
+      },
+      "BatchViewDocuments": {
+        "exported": true,
+        "sha256": "4e8efb6a53a407725980a0cd216a71a91aef1b823d2395180683ffda7aed3ddb"
+      },
+      "RecoveryCounts": {
+        "exported": true,
+        "sha256": "ce49c2da570b663507e7fe1c15bc7aa44fca8d626aae9dbdd3c5e36a07427c1c"
+      },
+      "PreacceptCollection": {
+        "exported": true,
+        "sha256": "5fd7666638392680103da0a4dc8da1f9ed7351d7858856fa99e74c43ab979c1b"
+      },
+      "SettlementQuiescence": {
+        "exported": true,
+        "sha256": "a35d2cfdaaaacd352961e43f2876d20c3540b303e6c74ee367b20ce5636b4649"
+      },
+      "StatusSnapshot": {
+        "exported": true,
+        "sha256": "86e476f5900eab7a85ce82769e946b5594641e8f753a28f2ba3b5c7a33261eed"
+      },
+      "RunnerObservation": {
+        "exported": true,
+        "sha256": "b8709f45d3037cced0c4d9fcfaab80a2070b30df36d7a7bc01cc1b3000ecd7ac"
+      },
+      "UnitObserve": {
+        "exported": true,
+        "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d"
+      },
+      "FencedEngine": {
+        "exported": true,
+        "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
+      }
+    }
+  }
+}

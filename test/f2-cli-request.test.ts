@@ -50,7 +50,7 @@ function run(
   });
 }
 
-test("F2: explicit valid request keys freeze once and retry by authoritative lookup", async () => {
+test("001. Explicit valid request keys freeze once and retry by authoritative lookup", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-f2-request-"));
   const sockets = new Set<Socket>();
   const errors: unknown[] = [];
@@ -78,12 +78,12 @@ test("F2: explicit valid request keys freeze once and retry by authoritative loo
           id: string;
           method: string;
           request?: string;
-          params: { key?: string; topic?: string };
+          params: { key?: string; topic?: string; note?: string };
         };
         assert.equal(typeof request.id, "string");
         assert.ok(
           request.method === "route.follow" ||
-            request.method === "operation.get",
+            request.method === "operation.get" || request.method === "agent.continue",
         );
         const key =
           request.method === "operation.get"
@@ -91,13 +91,15 @@ test("F2: explicit valid request keys freeze once and retry by authoritative loo
             : request.request;
         assert.equal(typeof key, "string");
         assert.ok(key);
-        if (request.method === "route.follow") {
-          assert.equal(request.params.topic, "dev");
+        if (request.method !== "operation.get") {
+          if (request.method === "route.follow") assert.equal(request.params.topic, "dev");
+          else assert.equal(request.params.note, "first line\nsecond line\n");
           assert.equal(receipts.has(key), false);
           receipts.set(key, {
             operation: `op-00000000-0000-4000-8000-${String(receipts.size + 1).padStart(12, "0")}`,
             state: "succeeded",
-            result: { kind: "route.follow", topic: "dev", subscribed: true },
+            result: request.method === "route.follow" ? { kind: "route.follow", topic: "dev", subscribed: true }
+              : { kind: "agent.continue", message: "m-00000000-0000-4000-8000-0000000000e1-0", recipientCount: 1, archivePath: "/mail/archive/cur/continuation:2," },
           });
         }
         const receipt = receipts.get(key);
@@ -118,16 +120,21 @@ test("F2: explicit valid request keys freeze once and retry by authoritative loo
       server.once("error", reject);
       server.listen(join(home, "peer.sock"), resolve);
     });
-    for (const key of ["Retry._Key-1", "-leading", "x".repeat(96)]) {
+    for (const key of ["Retry._Key-1", "-leading", "x".repeat(96), "Continuation_CRLF"]) {
+      const continuation = key === "Continuation_CRLF";
+      const method = continuation ? "agent.continue" : "route.follow";
       const at: number = seen.length;
-      for (let n = 0; n < 2; n++) {
-        const result = await run(home, clientCall("subscribe", "follow", "dev", key));
+      for (let n = 0; n < (continuation ? 3 : 2); n++) {
+        const expression = continuation
+          ? clientCall("continueAgent", n < 2 ? "first line\r\nsecond line\r\n" : "first line\nsecond line\n", key)
+          : clientCall("subscribe", "follow", "dev", key);
+        const result = await run(home, expression);
         assert.equal(result.code, 0, result.stderr);
         assert.equal(result.signal, null);
       }
       assert.deepEqual(seen.slice(at), [
-        { method: "route.follow", key },
-        { method: "operation.get", key },
+        { method, key },
+        ...Array.from({ length: continuation ? 2 : 1 }, () => ({ method: "operation.get", key })),
       ]);
       const cached = new RequestCache(home).read(key);
       assert.equal(cached.kind, "present");

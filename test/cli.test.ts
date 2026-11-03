@@ -1,3 +1,4 @@
+import { seedAuditProject as seedProject } from "./fixtures/audit-git.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -8,19 +9,19 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
 // authenticate by actual descent and use production input effects.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync, spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { Store } from "@oma/storage";
-import { MailModule } from "@oma/mail";
+
 import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { ViewsModule } from "#oma-test/app/views";
-import { LifecycleModule } from "@oma/lifecycle";
-import { GitModule } from "@oma/git";
-import { ReconcileModule } from "@oma/reconcile";
-import { Broker } from "@oma/broker";
-import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+
+
+
+
+import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { encodeFrame } from "@oma/protocol/frame";
 import { sha256Hex } from "@oma/domain/canonical-json";
@@ -121,42 +122,7 @@ async function envOf(): Promise<Env> {
         },
     };
 }
-function seedProject(env: Env): string {
-    const seed = join(env.dir, "seed");
-    mkdirSync(seed, { recursive: true });
-    const sh = (args: string[], cwd?: string): string => {
-        const r = spawnSync("git", args, {
-            cwd: cwd ?? env.dir,
-            env: G,
-            encoding: "utf8",
-        });
-        if (r.status !== 0)
-            throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-        return (r.stdout ?? "").trim();
-    };
-    sh(["init", "-q", "-b", "main"], seed);
-    writeFileSync(join(seed, "base.txt"), "b".repeat(65536) + "\n", "utf8");
-    sh(["add", "-A"], seed);
-    sh([
-        "-c",
-        "user.name=O",
-        "-c",
-        "user.email=o@localhost",
-        "commit",
-        "-qm",
-        "base",
-    ], seed);
-    const base = sh(["rev-parse", "HEAD"], seed);
-    sh(["clone", "-q", "--bare", seed, join(env.state, "repos", "project.git")]);
-    sh([
-        "--git-dir",
-        join(env.state, "repos", "project.git"),
-        "symbolic-ref",
-        "HEAD",
-        "refs/heads/main",
-    ]);
-    return base;
-}
+
 /**
  * Trusted runner: acquire a real run lease, then execute actual typed Client
  * calls in child processes authenticated by descent from the owned namespace.
@@ -261,7 +227,7 @@ for (const s of scenarios) {
 writeFileSync(process.env.OMA_OUT, JSON.stringify(results));
 process.exit(0);
 `;
-test("Client acceptance: freeze cache, same-key semantics, recovery, streamed submit (real native scope, real sockets)", async (t) => {
+test("001. Typed client acceptance over native actor sockets", async (t) => {
     const env = await envOf();
     const society = env.society;
     try {
@@ -411,233 +377,255 @@ test("Client acceptance: freeze cache, same-key semantics, recovery, streamed su
             stdout: string;
             stderr: string;
         }>;
-        // 1) first send: accepted, receipt with an operation id
-        const r1 = results[0]!;
-        assert.equal(r1.code, 0, `send failed: ${r1.stderr}`);
-        const rec1 = JSON.parse(r1.stdout).receipt as {
-            operation: string;
-            state: string;
-        };
-        assert.equal(rec1.state, "succeeded");
-        // mail actually landed in b's inbox (new/)
-        const inboxDir = join(env.state, "mail", "inboxes", "b");
-        const newFiles = existsSync(inboxDir)
-            ? readdirSync(join(inboxDir, "new")).filter((f) => f.startsWith("m-"))
-            : [];
-        assert.ok(newFiles.length >= 1, `no mail reached b's inbox; ${inboxDir}`);
-        // 2) same key + same payload -> the SAME receipt (idempotent)
-        const r2 = results[1]!;
-        assert.equal(r2.code, 0, `re-send failed: ${r2.stderr}`);
-        assert.equal((JSON.parse(r2.stdout).receipt as {
-            operation: string;
-        }).operation, rec1.operation);
-        // 3) same key + DIFFERENT payload -> REQUEST_KEY_REUSED, exit 2
-        const r3 = results[2]!;
-        assert.equal(r3.code, 2, `expected exit 2, got ${r3.code}: ${r3.stdout}${r3.stderr}`);
-        assert.match(r3.stderr, /REQUEST_KEY_REUSED/);
-        // 4) Same-key re-invocation of the succeeded operation (IPC-008).
-        const r4 = results[3]!;
-        assert.equal(r4.code, 0, `same-key replay failed: ${r4.stderr}`);
-        assert.equal((JSON.parse(r4.stdout).receipt as {
-            operation: string;
-        }).operation, rec1.operation);
-        // 5) publishCandidate builds a real local bundle and streams it.
-        const r5 = results[4]!;
-        assert.equal(r5.code, 0, `submit failed (code ${r5.code}): stdout=${JSON.stringify(r5.stdout)} stderr=${JSON.stringify(r5.stderr)}`);
-        const subRec = JSON.parse(r5.stdout).receipt as {
-            result: {
-                publishedRef: string;
-                candidate: string;
+        await t.test("002. Mail delivery preserves same-key replay and rejects changed payloads", async () => {
+            // 1) first send: accepted, receipt with an operation id
+            const r1 = results[0]!;
+            assert.equal(r1.code, 0, `send failed: ${r1.stderr}`);
+            const rec1 = JSON.parse(r1.stdout).receipt as {
+                operation: string;
+                state: string;
             };
-        };
-        const refOid = sh([
-            "--git-dir",
-            join(env.state, "repos", "project.git"),
-            "rev-parse",
-            subRec.result.publishedRef,
-        ]);
-        assert.equal(refOid, subRec.result.candidate);
-        // 6) dead socket: unknown acceptance -> exit 3, freeze cache retained
-        const r6 = results[5]!;
-        assert.equal(r6.code, 3, `expected exit 3 for dead socket, got ${r6.code}: ${r6.stdout}${r6.stderr}`);
-        const cachePath = join(homeDir, ".local", "state", "oma", "requests", "ksub2.json");
-        assert.ok(existsSync(cachePath), "freeze cache must survive a dead-socket attempt");
-        // 7) Same-key recovery against the live broker: operation.get miss ->
-        //    replay of the frozen payload -> succeeded with ITS OWN receipt/ref
-        const r7 = results[6]!;
-        assert.equal(r7.code, 0, `recovery failed (code ${r7.code}): stdout=${JSON.stringify(r7.stdout)} stderr=${JSON.stringify(r7.stderr)}`);
-        const rec2 = JSON.parse(r7.stdout).receipt as {
-            result: {
-                publishedRef: string;
-                candidate: string;
+            assert.equal(rec1.state, "succeeded");
+            // mail actually landed in b's inbox (new/)
+            const inboxDir = join(env.state, "mail", "inboxes", "b");
+            const newFiles = existsSync(inboxDir)
+                ? readdirSync(join(inboxDir, "new")).filter((f) => f.startsWith("m-"))
+                : [];
+            assert.ok(newFiles.length >= 1, `no mail reached b's inbox; ${inboxDir}`);
+            // 2) same key + same payload -> the SAME receipt (idempotent)
+            const r2 = results[1]!;
+            assert.equal(r2.code, 0, `re-send failed: ${r2.stderr}`);
+            assert.equal((JSON.parse(r2.stdout).receipt as {
+                operation: string;
+            }).operation, rec1.operation);
+            // 3) same key + DIFFERENT payload -> REQUEST_KEY_REUSED, exit 2
+            const r3 = results[2]!;
+            assert.equal(r3.code, 2, `expected exit 2, got ${r3.code}: ${r3.stdout}${r3.stderr}`);
+            assert.match(r3.stderr, /REQUEST_KEY_REUSED/);
+            // 4) Same-key re-invocation of the succeeded operation (IPC-008).
+            const r4 = results[3]!;
+            assert.equal(r4.code, 0, `same-key replay failed: ${r4.stderr}`);
+            assert.equal((JSON.parse(r4.stdout).receipt as {
+                operation: string;
+            }).operation, rec1.operation);
+        });
+        await t.test("003. Candidate publication streams a real bundle to its returned ref", async () => {
+            // 5) publishCandidate builds a real local bundle and streams it.
+            const r5 = results[4]!;
+            assert.equal(r5.code, 0, `submit failed (code ${r5.code}): stdout=${JSON.stringify(r5.stdout)} stderr=${JSON.stringify(r5.stderr)}`);
+            const subRec = JSON.parse(r5.stdout).receipt as {
+                result: {
+                    publishedRef: string;
+                    candidate: string;
+                };
             };
-        };
-        const ref2Oid = sh([
-            "--git-dir",
-            join(env.state, "repos", "project.git"),
-            "rev-parse",
-            rec2.result.publishedRef,
-        ]);
-        assert.equal(ref2Oid, rec2.result.candidate, "recovered submit's ref must resolve to ITS candidate");
-        // ---- P1-6: submit --to parsing ----
-        const rTo1 = results[7]!;
-        assert.equal(rTo1.code, 0, `--to a submit failed: ${rTo1.stdout}${rTo1.stderr}`);
-        const rTo2 = results[8]!;
-        assert.equal(rTo2.code, 0, `--to a --to b submit failed: ${rTo2.stdout}${rTo2.stderr}`);
-        const rTo3 = results[9]!;
-        assert.equal(rTo3.code, 0, `no --to submit failed: ${rTo3.stdout}${rTo3.stderr}`);
-        // "--to" must never leak as a recipient: a's inbox got the kto1 result mail
-        const inboxA = join(env.state, "mail", "inboxes", "a", "new");
-        const inboxB = join(env.state, "mail", "inboxes", "b", "new");
-        const inboxCommons = join(env.state, "mail", "inboxes", "commons", "new");
-        const mA = existsSync(inboxA)
-            ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
-            : [];
-        assert.ok(mA.length >= 1, `kto1 result mail must reach a's inbox; ${JSON.stringify(mA)}`);
-        // kto2 targets a AND b (repeatable --to) -> both have new result mail from kto2
-        const a2 = existsSync(inboxA)
-            ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
-            : [];
-        const b2 = existsSync(inboxB)
-            ? readdirSync(inboxB).filter((f) => f.startsWith("m-"))
-            : [];
-        assert.ok(a2.length >= 2, `kto2 should add another mail to a (now ${a2.length})`);
-        assert.ok(b2.length >= 1, `kto2 must reach b via the repeatable --to; ${JSON.stringify(b2)}`);
-        // kto3 (no --to) defaults to commons
-        const broadcast = JSON.parse(env.store.getOperation("a", "kto3")!.planJson).intent.message;
-        assert.deepEqual([...broadcast.recipients].sort(), ["a", "b"]);
-        assert.equal(existsSync(inboxCommons), false, "commons is an address, not an actor mailbox");
-        // ---- P1-5: agent create --from HEAD ----
-        const rFrom1 = results[10]!;
-        assert.equal(rFrom1.code, 0, `agent create --from HEAD failed: ${rFrom1.stdout}${rFrom1.stderr}`);
-        const fromRec = JSON.parse(rFrom1.stdout).receipt as {
-            operation: string;
-            state: string;
-        };
-        assert.equal(fromRec.state, "succeeded");
-        assert.match(readFileSync(join(env.state, "world", "agents.tsv"), "utf8"), /checker\tresident\tenabled\tchild/);
-        const gitCode = results[11]!;
-        assert.equal(gitCode.code, 0, `git move-head: ${gitCode.stderr}`);
-        // recovery after HEAD moved: MUST use the originally frozen OID (exit 0,
-        // same receipt) — the old code would re-resolve HEAD and fail REQUEST_KEY_REUSED.
-        const rFrom2 = results[12]!;
-        assert.equal(rFrom2.code, 0, `createAgent frozen HEAD recovery failed: ${rFrom2.stdout}${rFrom2.stderr}`);
-        assert.equal((JSON.parse(rFrom2.stdout).receipt as {
-            operation: string;
-        }).operation, fromRec.operation, "recovery must reuse the frozen agent-create request");
-        // A fresh local-only HEAD is not in canonical project.git and must fail closed.
-        const rFrom3 = results[13]!;
-        assert.equal(rFrom3.code, 2);
-        assert.match(rFrom3.stderr, /PREREQUISITE_MISSING/);
-        // ---- P1-4: submit frozen-first after HEAD moves ----
-        const rSubf1 = results[14]!;
-        assert.equal(rSubf1.code, 0, `submit freeze failed: ${rSubf1.stdout}${rSubf1.stderr}`);
-        const subf1 = JSON.parse(rSubf1.stdout).receipt as {
-            operation: string;
-            result: {
-                candidate: string;
+            const refOid = sh([
+                "--git-dir",
+                join(env.state, "repos", "project.git"),
+                "rev-parse",
+                subRec.result.publishedRef,
+            ]);
+            assert.equal(refOid, subRec.result.candidate);
+        });
+        await t.test("004. A lost connection retains the frozen request for live recovery", async () => {
+            // 6) dead socket: unknown acceptance -> exit 3, freeze cache retained
+            const r6 = results[5]!;
+            assert.equal(r6.code, 3, `expected exit 3 for dead socket, got ${r6.code}: ${r6.stdout}${r6.stderr}`);
+            const cachePath = join(homeDir, ".local", "state", "oma", "requests", "ksub2.json");
+            assert.ok(existsSync(cachePath), "freeze cache must survive a dead-socket attempt");
+            // 7) Same-key recovery against the live broker: operation.get miss ->
+            //    replay of the frozen payload -> succeeded with ITS OWN receipt/ref
+            const r7 = results[6]!;
+            assert.equal(r7.code, 0, `recovery failed (code ${r7.code}): stdout=${JSON.stringify(r7.stdout)} stderr=${JSON.stringify(r7.stderr)}`);
+            const rec2 = JSON.parse(r7.stdout).receipt as {
+                result: {
+                    publishedRef: string;
+                    candidate: string;
+                };
             };
-        };
-        const git2 = results[15]!;
-        assert.equal(git2.code, 0, `git move2: ${git2.stderr}`);
-        const rSubf2 = results[16]!;
-        assert.equal(rSubf2.code, 0, `submit recovery after HEAD moved failed: ${rSubf2.stdout}${rSubf2.stderr}`);
-        const subf2 = JSON.parse(rSubf2.stdout).receipt as {
-            operation: string;
-            result: {
-                candidate: string;
+            const ref2Oid = sh([
+                "--git-dir",
+                join(env.state, "repos", "project.git"),
+                "rev-parse",
+                rec2.result.publishedRef,
+            ]);
+            assert.equal(ref2Oid, rec2.result.candidate, "recovered submit's ref must resolve to ITS candidate");
+        });
+        await t.test("005. Explicit and default recipients receive candidate notices", async () => {
+            // ---- P1-6: submit --to parsing ----
+            const rTo1 = results[7]!;
+            assert.equal(rTo1.code, 0, `--to a submit failed: ${rTo1.stdout}${rTo1.stderr}`);
+            const rTo2 = results[8]!;
+            assert.equal(rTo2.code, 0, `--to a --to b submit failed: ${rTo2.stdout}${rTo2.stderr}`);
+            const rTo3 = results[9]!;
+            assert.equal(rTo3.code, 0, `no --to submit failed: ${rTo3.stdout}${rTo3.stderr}`);
+            // "--to" must never leak as a recipient: a's inbox got the kto1 result mail
+            const inboxA = join(env.state, "mail", "inboxes", "a", "new");
+            const inboxB = join(env.state, "mail", "inboxes", "b", "new");
+            const inboxCommons = join(env.state, "mail", "inboxes", "commons", "new");
+            const mA = existsSync(inboxA)
+                ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
+                : [];
+            assert.ok(mA.length >= 1, `kto1 result mail must reach a's inbox; ${JSON.stringify(mA)}`);
+            // kto2 targets a AND b (repeatable --to) -> both have new result mail from kto2
+            const a2 = existsSync(inboxA)
+                ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
+                : [];
+            const b2 = existsSync(inboxB)
+                ? readdirSync(inboxB).filter((f) => f.startsWith("m-"))
+                : [];
+            assert.ok(a2.length >= 2, `kto2 should add another mail to a (now ${a2.length})`);
+            assert.ok(b2.length >= 1, `kto2 must reach b via the repeatable --to; ${JSON.stringify(b2)}`);
+            // kto3 (no --to) defaults to commons
+            const broadcast = JSON.parse(env.store.getOperation("a", "kto3")!.planJson).intent.message;
+            assert.deepEqual([...broadcast.recipients].sort(), ["a", "b"]);
+            assert.equal(existsSync(inboxCommons), false, "commons is an address, not an actor mailbox");
+        });
+        await t.test("006. Agent creation recovery retains the original HEAD", async () => {
+            // ---- P1-5: agent create --from HEAD ----
+            const rFrom1 = results[10]!;
+            assert.equal(rFrom1.code, 0, `agent create --from HEAD failed: ${rFrom1.stdout}${rFrom1.stderr}`);
+            const fromRec = JSON.parse(rFrom1.stdout).receipt as {
+                operation: string;
+                state: string;
             };
-        };
-        assert.equal(subf2.operation, subf1.operation, "submit recovery must not create a new operation");
-        assert.equal(subf2.result.candidate, subf1.result.candidate, "recovery must use the frozen candidate, not the moved HEAD");
-        const typed = results.slice(typedStart, typedStart + 6);
-        for (const [index, result] of results.slice(typedStart + 6, typedStart + 11).entries()) {
-            assert.equal(result.code, 2);
-            assert.equal(result.stderr, "INVALID_REQUEST");
-            assert.equal(env.store.getOperation("a", `raw-${index}`), null);
-        }
-        const wireResults = results.slice(typedStart + 11, contextStart);
-        assert.equal(wireResults.length, invalidFrames.length);
-        for (const [index, result] of wireResults.entries()) {
-            assert.equal(result.code, 2, JSON.stringify({ index, input: invalidFrames[index], result }));
-            assert.equal(result.stderr, invalidFrames[index]!.code);
-        }
-        assert.equal(env.store.getOperation("a", "invalid-wire"), null);
-        assert.deepEqual(typed.map((result) => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(typed));
-        assert.equal(JSON.parse(typed[0]!.stdout).receipt.operation, JSON.parse(typed[1]!.stdout).receipt.operation);
-        assert.match(typed[2]!.stderr, /REQUEST_KEY_REUSED/);
-        assert.match(typed[3]!.stderr, /CANDIDATE_NOT_PUBLISHED/);
-        for (const key of ["unpublished-approval", "missing-principal", "short-oid"])
-            assert.equal(env.store.getOperation("a", key), null, `${key} must remain preaccept`);
-        const approval = env.store.getOperation("a", "approval")!;
-        const message = JSON.parse(approval.planJson).intent.message;
-        assert.deepEqual(message.approvalFor, { repo: "project", targetRef: "refs/heads/main",
-            candidate, expectedBase: base, policyRevision });
-        assert.equal(env.store.getDelivery(message.id, "principal")!.materialized, 1);
-        const parsed = spawnSync("python3", ["-c",
-            "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k.lower():str(v) for k,v in m.items()}))",
-        ], { input: readFileSync(join(env.state, message.objectPath)), encoding: "utf8" });
-        assert.equal(parsed.status, 0, parsed.stderr);
-        const headers = JSON.parse(parsed.stdout);
-        assert.equal(headers.to, `principal@${society}.oma.invalid`);
-        assert.equal(headers["x-oma-approval-policy"], policyRevision);
-        assert.equal(headers["x-oma-approval-candidate"], candidate);
-        assert.equal(headers["x-oma-approval-base"], base);
-        const contexts = results.slice(contextStart);
-        assert.deepEqual(contexts.map(result => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(contexts));
-        const firstContext = JSON.parse(contexts[0]!.stdout).receipt;
-        assert.equal(firstContext.operation, JSON.parse(contexts[1]!.stdout).receipt.operation);
-        assert.equal(firstContext.state, "succeeded");
-        assert.equal(readFileSync(join(env.state, "world/context/current/GOAL.md"), "utf8"), "# authenticated context\n");
-        assert.equal(sh(["--git-dir", join(env.state, "repos/context.git"), "rev-parse", "refs/heads/main"]), firstContext.result.revision);
-        const tree = sh(["--git-dir", join(env.state, "repos/context.git"), "ls-tree", "-r", firstContext.result.revision]).split("\n");
-        assert.ok(tree.every(line => line.startsWith("100644 blob ")), JSON.stringify(tree));
-        assert.deepEqual(tree.map(line => line.split("\t")[1]), ["GOAL.md", "RATIONALE.md", "decisions/a..b.md"]);
-        for (const [index, result] of contexts.slice(2).entries()) {
-            assert.equal(result.stderr, "INVALID_REQUEST");
-            assert.equal(env.store.getOperation("a", `ctx-wire-${index}`), null);
-        }
-        // A new authenticated invocation replies to an accepted archive object.
-        const originalMessage = JSON.parse(env.store.getOperationById(rec1.operation)!.planJson).intent.message;
-        const invalidText = join(env.dir, "invalid-text.txt");
-        writeFileSync(invalidText, Buffer.from([0xff]));
-        writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify([{
-                ...invoke(clientCall("replyMail", { replyFile: join(env.state, "mail/archive/cur", `${originalMessage.id}:2,`), subject: "reply", body: "hello body\n" }, "real-reply")),
-            }, {
-                ...invoke(clientCall("replyMail", { replyFile: join(env.dir, "missing-reply.eml"), subject: "reply", body: "hello body\n" }, "real-reply")),
-            }, {
-                ...invoke(clientCall("replyMail", { replyFile: invalidText, subject: "reply", body: "hello body\n" }, "invalid-text")),
-            }, {
-                frame: { v: 1, id: "forged-from", request: "forged-from", method: "mail.send", params: { to: ["b"], subject: "forged", kind: "message", body: "body", from: "principal" } },
-            }, {
-                frame: { v: 1, id: "header-injection", request: "header-injection", method: "mail.send", params: { to: ["b"], subject: "subject\r\nBcc: principal", kind: "message", body: "body" } },
-            }, {
-                frame: { v: 1, id: "valid-mail-control", request: "valid-mail-control", method: "mail.send", params: { to: ["b"], subject: "valid", kind: "message", body: "body" } },
-            }]));
-        await env.units.runScript("a", wrapPath, runEnvironment);
-        const replyResults = JSON.parse(readFileSync(outPath, "utf8"));
-        assert.equal(replyResults[0].code, 0, JSON.stringify(replyResults));
-        assert.equal(replyResults[1].code, 0, JSON.stringify(replyResults));
-        assert.equal(JSON.parse(replyResults[0].stdout).receipt.operation, JSON.parse(replyResults[1].stdout).receipt.operation);
-        assert.equal(replyResults[2].code, 2, JSON.stringify(replyResults));
-        assert.equal(env.store.getOperation("a", "invalid-text"), null);
-        for (const [index, key] of ["forged-from", "header-injection"].entries()) {
-            assert.equal(replyResults[index + 3].code, 2, JSON.stringify(replyResults));
-            assert.equal(replyResults[index + 3].stderr, "INVALID_REQUEST");
-            assert.equal(env.store.getOperation("a", key), null);
-        }
-        assert.equal(replyResults[5].code, 0, JSON.stringify(replyResults));
-        assert.equal(env.store.getOperation("a", "valid-mail-control")?.state, "succeeded");
-        const replyMessage = JSON.parse(env.store.getOperation("a", "real-reply")!.planJson).intent.message;
-        assert.deepEqual(replyMessage.recipients, ["a"], "direct reply uses original sender, not original recipient");
-        assert.ok(env.store.getDelivery(replyMessage.id, "a"));
-        const replyDecoded = spawnSync("python3", ["-c",
-            "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k:str(m[k]).strip() for k in ['Reply-To','In-Reply-To']}))",
-        ], { input: readFileSync(join(env.state, replyMessage.objectPath)), encoding: "utf8" });
-        assert.equal(replyDecoded.status, 0, replyDecoded.stderr);
-        const replyHeaders = JSON.parse(replyDecoded.stdout);
-        assert.equal(replyHeaders["Reply-To"], `a@${society}.oma.invalid`);
-        assert.equal(replyHeaders["In-Reply-To"], `<${originalMessage.id}@${society}.oma.invalid>`);
+            assert.equal(fromRec.state, "succeeded");
+            assert.match(readFileSync(join(env.state, "world", "agents.tsv"), "utf8"), /checker\tresident\tenabled\tchild/);
+            const gitCode = results[11]!;
+            assert.equal(gitCode.code, 0, `git move-head: ${gitCode.stderr}`);
+            // recovery after HEAD moved: MUST use the originally frozen OID (exit 0,
+            // same receipt) — the old code would re-resolve HEAD and fail REQUEST_KEY_REUSED.
+            const rFrom2 = results[12]!;
+            assert.equal(rFrom2.code, 0, `createAgent frozen HEAD recovery failed: ${rFrom2.stdout}${rFrom2.stderr}`);
+            assert.equal((JSON.parse(rFrom2.stdout).receipt as {
+                operation: string;
+            }).operation, fromRec.operation, "recovery must reuse the frozen agent-create request");
+            // A fresh local-only HEAD is not in canonical project.git and must fail closed.
+            const rFrom3 = results[13]!;
+            assert.equal(rFrom3.code, 2);
+            assert.match(rFrom3.stderr, /PREREQUISITE_MISSING/);
+        });
+        await t.test("007. Candidate recovery retains the original HEAD", async () => {
+            // ---- P1-4: submit frozen-first after HEAD moves ----
+            const rSubf1 = results[14]!;
+            assert.equal(rSubf1.code, 0, `submit freeze failed: ${rSubf1.stdout}${rSubf1.stderr}`);
+            const subf1 = JSON.parse(rSubf1.stdout).receipt as {
+                operation: string;
+                result: {
+                    candidate: string;
+                };
+            };
+            const git2 = results[15]!;
+            assert.equal(git2.code, 0, `git move2: ${git2.stderr}`);
+            const rSubf2 = results[16]!;
+            assert.equal(rSubf2.code, 0, `submit recovery after HEAD moved failed: ${rSubf2.stdout}${rSubf2.stderr}`);
+            const subf2 = JSON.parse(rSubf2.stdout).receipt as {
+                operation: string;
+                result: {
+                    candidate: string;
+                };
+            };
+            assert.equal(subf2.operation, subf1.operation, "submit recovery must not create a new operation");
+            assert.equal(subf2.result.candidate, subf1.result.candidate, "recovery must use the frozen candidate, not the moved HEAD");
+        });
+        await t.test("008. Malformed approval requests remain preaccept", async () => {
+            for (const [index, result] of results.slice(typedStart + 6, typedStart + 11).entries()) {
+                assert.equal(result.code, 2);
+                assert.equal(result.stderr, "INVALID_REQUEST");
+                assert.equal(env.store.getOperation("a", `raw-${index}`), null);
+            }
+        });
+        await t.test("009. Malformed wire frames return their specific protocol errors", async () => {
+            const wireResults = results.slice(typedStart + 11, contextStart);
+            assert.equal(wireResults.length, invalidFrames.length);
+            for (const [index, result] of wireResults.entries()) {
+                assert.equal(result.code, 2, JSON.stringify({ index, input: invalidFrames[index], result }));
+                assert.equal(result.stderr, invalidFrames[index]!.code);
+            }
+            assert.equal(env.store.getOperation("a", "invalid-wire"), null);
+        });
+        await t.test("010. Approval notices preserve candidate, base and policy identity", async () => {
+            const typed = results.slice(typedStart, typedStart + 6);
+            assert.deepEqual(typed.map((result) => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(typed));
+            assert.equal(JSON.parse(typed[0]!.stdout).receipt.operation, JSON.parse(typed[1]!.stdout).receipt.operation);
+            assert.match(typed[2]!.stderr, /REQUEST_KEY_REUSED/);
+            assert.match(typed[3]!.stderr, /CANDIDATE_NOT_PUBLISHED/);
+            for (const key of ["unpublished-approval", "missing-principal", "short-oid"])
+                assert.equal(env.store.getOperation("a", key), null, `${key} must remain preaccept`);
+            const approval = env.store.getOperation("a", "approval")!;
+            const message = JSON.parse(approval.planJson).intent.message;
+            assert.deepEqual(message.approvalFor, { repo: "project", targetRef: "refs/heads/main",
+                candidate, expectedBase: base, policyRevision });
+            assert.equal(env.store.getDelivery(message.id, "principal")!.materialized, 1);
+            const parsed = spawnSync("python3", ["-c",
+                "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k.lower():str(v) for k,v in m.items()}))",
+            ], { input: readFileSync(join(env.state, message.objectPath)), encoding: "utf8" });
+            assert.equal(parsed.status, 0, parsed.stderr);
+            const headers = JSON.parse(parsed.stdout);
+            assert.equal(headers.to, `principal@${society}.oma.invalid`);
+            assert.equal(headers["x-oma-approval-policy"], policyRevision);
+            assert.equal(headers["x-oma-approval-candidate"], candidate);
+            assert.equal(headers["x-oma-approval-base"], base);
+        });
+        await t.test("011. Context publication replays once and rejects invalid archives", async () => {
+            const contexts = results.slice(contextStart);
+            assert.deepEqual(contexts.map(result => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(contexts));
+            const firstContext = JSON.parse(contexts[0]!.stdout).receipt;
+            assert.equal(firstContext.operation, JSON.parse(contexts[1]!.stdout).receipt.operation);
+            assert.equal(firstContext.state, "succeeded");
+            assert.equal(readFileSync(join(env.state, "world/context/current/GOAL.md"), "utf8"), "# authenticated context\n");
+            assert.equal(sh(["--git-dir", join(env.state, "repos/context.git"), "rev-parse", "refs/heads/main"]), firstContext.result.revision);
+            const tree = sh(["--git-dir", join(env.state, "repos/context.git"), "ls-tree", "-r", firstContext.result.revision]).split("\n");
+            assert.ok(tree.every(line => line.startsWith("100644 blob ")), JSON.stringify(tree));
+            assert.deepEqual(tree.map(line => line.split("\t")[1]), ["GOAL.md", "RATIONALE.md", "decisions/a..b.md"]);
+            for (const [index, result] of contexts.slice(2).entries()) {
+                assert.equal(result.stderr, "INVALID_REQUEST");
+                assert.equal(env.store.getOperation("a", `ctx-wire-${index}`), null);
+            }
+        });
+        await t.test("012. Replies preserve archive identity and reject forged headers", async () => {
+            // A new authenticated invocation replies to an accepted archive object.
+            const originalMessage = JSON.parse(env.store.getOperationById(JSON.parse(results[0]!.stdout).receipt.operation)!.planJson).intent.message;
+            const invalidText = join(env.dir, "invalid-text.txt");
+            writeFileSync(invalidText, Buffer.from([0xff]));
+            writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify([{
+                    ...invoke(clientCall("replyMail", { replyFile: join(env.state, "mail/archive/cur", `${originalMessage.id}:2,`), subject: "reply", body: "hello body\n" }, "real-reply")),
+                }, {
+                    ...invoke(clientCall("replyMail", { replyFile: join(env.dir, "missing-reply.eml"), subject: "reply", body: "hello body\n" }, "real-reply")),
+                }, {
+                    ...invoke(clientCall("replyMail", { replyFile: invalidText, subject: "reply", body: "hello body\n" }, "invalid-text")),
+                }, {
+                    frame: { v: 1, id: "forged-from", request: "forged-from", method: "mail.send", params: { to: ["b"], subject: "forged", kind: "message", body: "body", from: "principal" } },
+                }, {
+                    frame: { v: 1, id: "header-injection", request: "header-injection", method: "mail.send", params: { to: ["b"], subject: "subject\r\nBcc: principal", kind: "message", body: "body" } },
+                }, {
+                    frame: { v: 1, id: "valid-mail-control", request: "valid-mail-control", method: "mail.send", params: { to: ["b"], subject: "valid", kind: "message", body: "body" } },
+                }]));
+            await env.units.runScript("a", wrapPath, runEnvironment);
+            const replyResults = JSON.parse(readFileSync(outPath, "utf8"));
+            assert.equal(replyResults[0].code, 0, JSON.stringify(replyResults));
+            assert.equal(replyResults[1].code, 0, JSON.stringify(replyResults));
+            assert.equal(JSON.parse(replyResults[0].stdout).receipt.operation, JSON.parse(replyResults[1].stdout).receipt.operation);
+            assert.equal(replyResults[2].code, 2, JSON.stringify(replyResults));
+            assert.equal(env.store.getOperation("a", "invalid-text"), null);
+            for (const [index, key] of ["forged-from", "header-injection"].entries()) {
+                assert.equal(replyResults[index + 3].code, 2, JSON.stringify(replyResults));
+                assert.equal(replyResults[index + 3].stderr, "INVALID_REQUEST");
+                assert.equal(env.store.getOperation("a", key), null);
+            }
+            assert.equal(replyResults[5].code, 0, JSON.stringify(replyResults));
+            assert.equal(env.store.getOperation("a", "valid-mail-control")?.state, "succeeded");
+            const replyMessage = JSON.parse(env.store.getOperation("a", "real-reply")!.planJson).intent.message;
+            assert.deepEqual(replyMessage.recipients, ["a"], "direct reply uses original sender, not original recipient");
+            assert.ok(env.store.getDelivery(replyMessage.id, "a"));
+            const replyDecoded = spawnSync("python3", ["-c",
+                "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k:str(m[k]).strip() for k in ['Reply-To','In-Reply-To']}))",
+            ], { input: readFileSync(join(env.state, replyMessage.objectPath)), encoding: "utf8" });
+            assert.equal(replyDecoded.status, 0, replyDecoded.stderr);
+            const replyHeaders = JSON.parse(replyDecoded.stdout);
+            assert.equal(replyHeaders["Reply-To"], `a@${society}.oma.invalid`);
+            assert.equal(replyHeaders["In-Reply-To"], `<${originalMessage.id}@${society}.oma.invalid>`);
+        });
     }
     finally {
         await env.cleanup();

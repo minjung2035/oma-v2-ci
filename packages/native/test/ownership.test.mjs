@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/files";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 
-test("contained file access pins an ordinary file and refuses a link without reading its target", () => {
+test("001. Contained file access pins an ordinary file and refuses a link without reading its target", () => {
   if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch)) {
     assert.throws(() => openBeneath(0, "file", 0), { code: "UNSUPPORTED_PROFILE" });
     return;
@@ -26,7 +26,7 @@ test("contained file access pins an ordinary file and refuses a link without rea
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("an asynchronous owner waits for the effect and retains both effect and cleanup failures", async () => {
+test("002. An asynchronous owner waits for the effect and retains both effect and cleanup failures", async () => {
   const effect = new Error("effect outcome unknown"), cleanup = new Error("cleanup failed");
   let failEffect;
   const order = [];

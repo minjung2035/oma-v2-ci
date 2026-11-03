@@ -22,7 +22,7 @@ import { clientCall } from "./fixtures/client-process.js";
 const body = "\ufeff  first\r\nsecond\rthird\n \r\n";
 const normalized = "\ufeff  first\nsecond\rthird\n \n";
 
-test("Mail text: UTF-8 subject decoding preserves encoded whitespace and decodes only once", () => {
+test("001. Mail text: UTF-8 subject decoding preserves encoded whitespace and decodes only once", () => {
   assert.equal(decodeSubject("\nplain title"), "plain title");
   assert.equal(decodeSubject("=?UTF-8?Q?caf=C3=A9_=3F?="), "café ?");
   assert.equal(
@@ -52,7 +52,7 @@ for (const [subject, explicit] of [
   ["=?UTF-8?B?aGVsbG8=?= " + "a".repeat(1200), null],
   ["original title", "  explicit subject  "],
 ] as const) {
-  test(`Client text: reply uses ${explicit === null ? `original ${subject.length}-character subject` : "explicit subject"} and frozen LF body`, async () => {
+  test(`002. Client text: reply uses ${explicit === null ? `original ${subject.length}-character subject` : "explicit subject"} and frozen LF body`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-cli-text-"));
     const home = join(root, "home");
     mkdirSync(home);
@@ -79,6 +79,10 @@ for (const [subject, explicit] of [
       );
       const key = "reply";
       const expected = explicit ?? `Re: ${subject}`;
+      // This MIME round-trip fixture admits large original subjects explicitly.
+      // Default-bound derivation has its own real-mail regression.
+      const preload = join(home, "subject-bound.mjs");
+      writeFileSync(preload, `process.env.OMA_SUBJECT_BYTES=${JSON.stringify(String(Math.max(512, Buffer.byteLength(expected))))};\n`);
       const expression = clientCall("replyMail", { replyFile: replyPath, body,
         ...(explicit === null ? {} : { subject: explicit }) }, key);
       const run = await runClientWithPeer(home, root, expression, async (request) => {
@@ -89,7 +93,7 @@ for (const [subject, explicit] of [
         assert.equal(params.replyToMessage, original.plan.message.id);
         const result = await mail.send(gitAuth, key, params);
         return { v: 1, id: request.id, ok: true, result };
-      });
+      }, preload);
       assert.equal(run.signal, null);
       assert.equal(run.status, 0, run.stderr);
       const sent = store.getOperation("a", key)!;
@@ -121,7 +125,7 @@ for (const [subject, explicit] of [
   });
 }
 
-test("Client text: agent brief is normalized before freezing and a changed brief never replaces it on retry", async () => {
+test("003. Client text: agent brief is normalized before freezing and a changed brief never replaces it on retry", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-cli-brief-"));
   try {
     const key = "brief";

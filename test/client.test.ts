@@ -12,7 +12,7 @@ import { currentContext } from "@oma/client/context";
 import { installRuntime, type Reply } from "@oma/client/runtime";
 import { CLIENT_RUNTIME, installClientRuntime } from "#oma-test/app/runtime/client-runtime";
 import { RequestCache, CacheError } from "#oma-test/app/request-cache";
-import { registerOmaTools } from "@oma/extension/mail-tools";
+import { isValidRequestKey } from "@oma/domain/identifiers";
 import { PrincipalChannel } from "@oma/extension/principal-channel";
 import { encodeCredential } from "@oma/protocol/client-codecs";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
@@ -23,8 +23,23 @@ const operation = "op-00000000-0000-4000-8000-000000000001";
 const message = "m-00000000-0000-4000-8000-000000000001-0";
 const success = { operation, state: "succeeded", result: { kind: "mail.send", message, recipientCount: 1, archivePath: `/state/mail/archive/cur/${message}:2,` } };
 const scratch = () => mkdtempSync(join(process.cwd(), ".client-test-"));
+test("022. An unrelated caller request at the derived submit key cannot replace publication intent",async()=>{
+ const root=scratch(), candidate="a".repeat(40),base="b".repeat(40),key="collision";
+ const cache=new RequestCache(root).prepare();
+ cache.freeze({key:key+".submit",method:"git.submit",createdAtMs:Date.now(),params:{candidate,to:["alice"],
+  subject:`merge candidate ${candidate.slice(0,12)}`,body:"unrelated payload",paths:["other"],prerequisites:[],exportRef:"refs/oma/export/other"}});
+ const sent:string[]=[];
+ try{
+  installRuntime({...CLIENT_RUNTIME,resolveOid:v=>v,recordedBase:()=>base,workspaceDirty:()=>false,
+   channel:()=>({connect:async()=>{},close(){},call:async(method)=>{sent.push(method);return {ok:true,result:{hasCandidate:false,prerequisites:[]}};}})});
+  const client=new Client({cwd:root,env:{HOME:root,OMA_SOCKET:join(root,"socket"),OMA_ACTOR:"alice"}});
+  await assert.rejects(client.controlReview({kind:"review.revise",name:"merge-00000002-0000-4000-8000-000000000000",expectedRevision:0,base,candidate,reason:"r"},key),
+    (error:unknown)=>error instanceof ClientError && /different|conflict|reused/i.test(error.message));
+  assert.deepEqual(sent,["git.known"]);
+ }finally{installClientRuntime();rmSync(root,{recursive:true,force:true});}
+});
 
-test("E27/E29: tools need no CLI path, spawn no process, and attach with the current in-memory grant", async t => {
+test("001. The typed client needs no CLI path, spawns no process, and attaches with the current in-memory grant", async t => {
   installClientRuntime();
   const root = scratch();
   const path = join(root, "broker.sock");
@@ -47,17 +62,16 @@ test("E27/E29: tools need no CLI path, spawn no process, and attach with the cur
   Object.defineProperty(channel, "attached", { value: true });
   const grants = ["a", "b"].map(value => ({ credential: value.repeat(64), sessionHandle: "c".repeat(32) }));
   channel.push(encodeCredential(grants[0]!));
-  const tools = new Map<string, { execute(id: string, params: unknown): Promise<{ content: { text: string }[] }> }>();
-  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: path });
+  const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: path, OMA_MAIL_ARCHIVE: join(root, "archive") } },
+    () => channel.current(), signal => channel.waitForGrant(signal));
   try {
-    registerOmaTools({ registerTool: (tool: never) => tools.set((tool as { name: string }).name, tool) } as never, root, channel);
     const spawn = t.mock.method(childProcess, "spawn", () => { throw new Error("tool tried to spawn"); });
     const exit = t.mock.method(process, "exit", () => { throw new Error("tool tried to exit"); });
     syncBuiltinESMExports();
     for (let i = 0; i < grants.length; i++) {
       channel.push(encodeCredential(grants[i]!));
-      const answer = await tools.get("oma_mail_send")!.execute(`tool-${i}`, { to: ["principal"], subject: "s", body: "frozen\r\nbody", request: `tool-${i}` });
-      const envelope = JSON.parse(answer.content[0]!.text);
+      const answer = await client.sendMail({ to: ["principal"], subject: "s", body: "frozen\r\nbody", kind: "message" }, `tool-${i}`);
+      const envelope = JSON.parse(answer);
       assert.equal(envelope.request, `tool-${i}`);
       assert.equal(envelope.receipt.state, "succeeded");
       assert.equal(envelope.receipt.result.archivePath, join(root, "archive", `${message}:2,`));
@@ -85,7 +99,7 @@ const lookupCases: { name: string; lookup: Reply; resend: boolean; rejects?: Reg
   { name: "unavailable", lookup: { ok: false, error: { code: "DB_BUSY", message: "busy", retry: "same-key" } }, resend: false, rejects: /did not prove/ },
   { name: "malformed", lookup: { ok: true, result: { ...receiptNotFound, extra: 1 } }, resend: false, rejects: /invalid operation lookup/ },
 ];
-for (const scenario of lookupCases) test(`P0 replay after client restart: ${scenario.name}`, async () => {
+for (const scenario of lookupCases) test(`002. Replay after client restart: ${scenario.name}`, async () => {
   installClientRuntime();
   const root = scratch();
   try {
@@ -106,7 +120,7 @@ for (const scenario of lookupCases) test(`P0 replay after client restart: ${scen
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0 streamed replay preserves frozen bytes; missing body does not hide an accepted receipt", async () => {
+test("003. Streamed replay preserves frozen bytes; missing body does not hide an accepted receipt", async () => {
   installClientRuntime();
   const root = scratch();
   const body = Buffer.from("immutable bundle");
@@ -131,7 +145,7 @@ test("P0 streamed replay preserves frozen bytes; missing body does not hide an a
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0 lost reply performs only a lookup even when lookup reports absence", async () => {
+test("004. Lost reply performs only a lookup even when lookup reports absence", async () => {
   installClientRuntime();
   const root = scratch();
   try {
@@ -145,7 +159,7 @@ test("P0 lost reply performs only a lookup even when lookup reports absence", as
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0 same-key conflicts and corrupt cache do not run builders or send", async () => {
+test("005. Same-key conflicts and corrupt cache do not run builders or send", async () => {
   installClientRuntime();
   const root = scratch();
   try {
@@ -160,7 +174,7 @@ test("P0 same-key conflicts and corrupt cache do not run builders or send", asyn
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const code of ["CACHE_UNAVAILABLE", "CACHE_CORRUPT"] as const) test(`P0 broker receipt is preserved when recording reports ${code}`, async () => {
+for (const code of ["CACHE_UNAVAILABLE", "CACHE_CORRUPT"] as const) test(`006. Broker receipt is preserved when recording reports ${code}`, async () => {
   const root = scratch();
   installRuntime({ ...CLIENT_RUNTIME, cache: (home, budget) => {
     const cache = CLIENT_RUNTIME.cache(home, budget);
@@ -180,7 +194,7 @@ for (const code of ["CACHE_UNAVAILABLE", "CACHE_CORRUPT"] as const) test(`P0 bro
 });
 
 for (const state of ["pending", "succeeded", "failed", "unknown"] as const)
-  test(`typed client preserves the complete ${state} receipt and request identity`, async () => {
+  test(`007. Typed client preserves the complete ${state} receipt and request identity`, async () => {
     const root = scratch();
     const receipt = state === "succeeded" ? success : {
       operation, state, reason: "broker observation",
@@ -206,7 +220,7 @@ for (const state of ["pending", "succeeded", "failed", "unknown"] as const)
     } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
   });
 
-test("per-client environment and cwd remain isolated across asynchronous builders", async () => {
+test("008. Per-client environment and cwd remain isolated across asynchronous builders", async () => {
   const roots = [scratch(), scratch()];
   installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {}, call: async () => ({ ok: true, result: { operation, state: "pending" } }) }) });
   try {
@@ -221,7 +235,7 @@ test("per-client environment and cwd remain isolated across asynchronous builder
   } finally { installClientRuntime(); for (const root of roots) rmSync(root, { recursive: true, force: true }); }
 });
 
-test("body and answer bounds count UTF-8 bytes; pre-abort keeps the request key without a freeze", async () => {
+test("009. Body and answer bounds count UTF-8 bytes; pre-abort keeps the request key without a freeze", async () => {
   const root = scratch();
   let calls = 0;
   installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {}, call: async () => {
@@ -252,12 +266,14 @@ test("body and answer bounds count UTF-8 bytes; pre-abort keeps the request key 
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("IPC-006 / P0: every receipt chunk buys a fresh observation window -- a many-chunk receipt over a slow link completes", async () => {
+test("010. Every receipt chunk buys a fresh observation window -- a many-chunk receipt over a slow link completes", async t => {
   const root = scratch();
   const big = { operation, state: "succeeded", result: { kind: "mail.send", message, recipientCount: 1,
     archivePath: `/state/${"r".repeat(12_000)}` } };
-  let reads = 0;
-  // One 50 ms observation window, forty-millisecond reads: on a shared
+  let reads = 0, now = 0;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.method(performance, "now", () => now);
+  // Virtual 50 ms observation windows and 40 ms reads: on a shared
   // deadline the third read is dead before it is asked.
   installRuntime({ ...CLIENT_RUNTIME, observationSeconds: 0.05, channel: () => {
     let stopped: ((error: unknown) => void) | undefined;
@@ -273,6 +289,8 @@ test("IPC-006 / P0: every receipt chunk buys a fresh observation window -- a man
         return await new Promise<Reply>((resolve, reject) => {
           stopped = reject;
           setTimeout(() => resolve({ ok: true, result }), 40);
+          now += 40;
+          t.mock.timers.tick(40);
         });
       },
     };
@@ -285,7 +303,7 @@ test("IPC-006 / P0: every receipt chunk buys a fresh observation window -- a man
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0 an oversized answer still previews when it cannot be saved, and says why", async () => {
+test("011. An oversized answer still previews when it cannot be saved, and says why", async () => {
   const root = scratch();
   installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
     call: async () => ({ ok: true, result: { text: "x".repeat(1_100_000) } }) }) });
@@ -311,7 +329,7 @@ test("P0 an oversized answer still previews when it cannot be saved, and says wh
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0 the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten", async () => {
+test("012. The output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten", async () => {
   const root = scratch();
   try {
     const { spoolOutput } = await import("@oma/storage/output-spool");
@@ -330,7 +348,7 @@ test("P0 the output spool is content-named: the same answer is one file, and a s
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const state of ["pending", "unknown"] as const) test(`candidate publication ${state} stops review while preserving the frozen parent and child requests`, async () => {
+for (const state of ["pending", "unknown"] as const) test(`013. Candidate publication ${state} stops review while preserving the frozen parent and child requests`, async () => {
   const root = scratch(), sent: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [],
     candidate = "a".repeat(40), base = "b".repeat(40);
   installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
@@ -367,7 +385,7 @@ for (const state of ["pending", "unknown"] as const) test(`candidate publication
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a frozen submit is replayed under <key>.submit even though recovery text names the open key", async () => {
+test("014. A frozen submit is replayed under <key>.submit even though recovery text names the open key", async () => {
   const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40);
   const seen: { method: string; key: string | undefined; params: Record<string, unknown> }[] = [];
   installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
@@ -398,7 +416,7 @@ test("a frozen submit is replayed under <key>.submit even though recovery text n
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("mail-v1/E27: merge publication sends its candidate notice only to the engine's actor", async () => {
+test("015. Mail-v1: merge publication sends its candidate notice only to the engine's actor", async () => {
   const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40);
   const path = join(root, "broker.sock");
   const frames: Record<string, unknown>[] = [];
@@ -422,15 +440,10 @@ test("mail-v1/E27: merge publication sends its candidate notice only to the engi
   installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
     submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [] }) });
   const previous = { ...process.env };
-  const tools = new Map<string, { execute(id: string, params: unknown): Promise<{ content: { text: string }[] }> }>();
   try {
-    // The engine's environment, as the sandbox sets it for a Resident (or the
-    // host for the Principal): OMA_ACTOR is the ambient actor identity.
-    Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: path, OMA_ACTOR: "alice" });
-    registerOmaTools({ registerTool: (tool: never) => tools.set((tool as { name: string }).name, tool) } as never, root);
-    const answer = await tools.get("oma_merge_open")!.execute("call-1",
-      { tier: "LOW", title: "t", reason: "r", candidate, base, request: "open" });
-    assert.equal(JSON.parse(answer.content[0]!.text).receipt.state, "succeeded");
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: path, OMA_ACTOR: "alice" } });
+    const answer = await client.openMerge({ tier: "LOW", title: "t", reason: "r", candidate, base }, "open");
+    assert.equal(JSON.parse(answer).receipt.state, "succeeded");
     const submitted = frames.find(frame => frame.method === "git.submit");
     assert.deepEqual((submitted?.params as { to?: string[] } | undefined)?.to, ["alice"],
       "automatic merge publication must not announce an unreviewed candidate to commons");
@@ -443,7 +456,7 @@ test("mail-v1/E27: merge publication sends its candidate notice only to the engi
   }
 });
 
-test("a client whose environment has no HOME names it; no request cache is made under /tmp", async () => {
+test("016. A client whose environment has no HOME names it; no request cache is made under /tmp", async () => {
   // The cache root is the caller's own home -- the in-guest caller's agent
   // home. An environment that carries none has no root at all; the request
   // names that instead of silently placing receipts in shared space.
@@ -456,5 +469,160 @@ test("a client whose environment has no HOME names it; no request cache is made 
       async () => ({ method: "route.follow", params: { topic: "work" } }), () => ({ topic: "work" })),
       (error: unknown) => error instanceof ClientError && error.exitCode === 4 && /HOME is not set/.test(error.message));
     assert.equal(cached, 0, "the cache port was never asked for a root");
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("017. A maximum-length review.revise key publishes the candidate under a valid derived request", async () => {
+  const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40), key = "x".repeat(96);
+  const name = "merge-00000002-0000-4000-8000-000000000000";
+  const sent: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [];
+  installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+    submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [], content: Buffer.from("bundle") }),
+    channel: () => ({ connect: async () => {}, close() {},
+      call: async (method, params, options) => {
+        sent.push({ method, request: options?.request, params: params as Record<string, unknown> });
+        if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+        if (method === "git.submit") return { ok: true, result: { operation, state: "succeeded",
+          result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } } };
+        return { ok: true, result: { operation, state: "succeeded",
+          result: { kind: "attest.record", request: name, messages: [message], recipientCount: 1 } } };
+      } }) });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } });
+    const text = await client.controlReview({ kind: "review.revise", name, expectedRevision: 0, base, candidate, reason: "r" }, key);
+    assert.deepEqual(sent.map(row => row.method), ["git.known", "git.submit", "attest.record"]);
+    const publication = sent[1]!.request!;
+    assert.ok(isValidRequestKey(publication), `the derived publication request must fit the wire grammar: ${publication}`);
+    assert.notEqual(publication, key, "candidate publication is its own request, never the revise's own key");
+    assert.equal(sent[1]!.params.candidate, candidate);
+    assert.equal(sent[2]!.request, key, "the revise itself keeps the caller's request key");
+    const output = JSON.parse(text);
+    assert.equal(output.request, key);
+    assert.equal(output.receipt.state, "succeeded");
+    const frozen = new RequestCache(root).read(publication);
+    assert.equal(frozen.kind, "present", "the publication is frozen under its own derived request key");
+    if (frozen.kind === "present") {
+      assert.equal(frozen.value.method, "git.submit");
+      assert.ok(frozen.value.params !== null && typeof frozen.value.params === "object" && !Array.isArray(frozen.value.params));
+      assert.equal(frozen.value.params.candidate, candidate);
+    }
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("018. A same-key review.revise retry replays one derived publication request and never republishes", async () => {
+  const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40), key = "r".repeat(90);
+  const name = "merge-00000002-0000-4000-8000-000000000000";
+  const revise = { kind: "review.revise" as const, name, expectedRevision: 0, base, candidate, reason: "r" };
+  const first: { method: string; request: string | undefined }[] = [];
+  try {
+    installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+      submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [], content: Buffer.from("bundle") }),
+      channel: () => ({ connect: async () => {}, close() {},
+        call: async (method, _params, options) => {
+          first.push({ method, request: options?.request });
+          if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+          return { ok: true, result: { operation, state: "pending" } };
+        } }) });
+    const pending = JSON.parse(await new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } })
+      .controlReview(revise, key));
+    assert.equal(pending.request, key);
+    assert.equal(pending.phase, "candidate-publication");
+    assert.equal(pending.receipt.state, "pending");
+    const publication = pending.operationRequest as string;
+    assert.ok(isValidRequestKey(publication), `the derived publication request must fit the wire grammar: ${publication}`);
+    assert.notEqual(publication, key);
+    assert.deepEqual(first.map(row => row.method), ["git.known", "git.submit"]);
+    assert.equal(first[1]!.request, publication);
+    // A restarted client retrying the same key must look up the same derived
+    // publication request and reuse its receipt instead of publishing again.
+    const retry: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [];
+    installRuntime({ ...CLIENT_RUNTIME, resolveOid: () => { throw new Error("a replay resolves no revision"); }, recordedBase: () => base, workspaceDirty: () => false,
+      submit: () => { throw new Error("a replay rebuilds no bundle"); },
+      channel: () => ({ connect: async () => {}, close() {},
+        call: async (method, params, options) => {
+          retry.push({ method, request: options?.request, params: params as Record<string, unknown> });
+          const asked = typeof params.key === "string" ? params.key : null;
+          if (method === "operation.get") return { ok: true, result: asked === publication
+            ? { operation, state: "succeeded", result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } }
+            : receiptNotFound };
+          if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+          return { ok: true, result: { operation, state: "succeeded",
+            result: { kind: "attest.record", request: name, messages: [message], recipientCount: 1 } } };
+        } }) });
+    const done = JSON.parse(await new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } })
+      .controlReview(revise, key));
+    assert.equal(done.request, key);
+    assert.equal(done.receipt.state, "succeeded");
+    assert.deepEqual(retry.map(row => row.method), ["operation.get", "git.known", "operation.get", "attest.record"],
+      "the retry looks the publication up; it never submits the candidate a second time");
+    assert.equal(retry[0]!.params.key, key);
+    assert.equal(retry[2]!.params.key, publication, "the retry addressed the same derived publication request");
+    assert.equal(retry[3]!.request, key);
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("019. Distinct original requests sharing a 95-character prefix publish under distinct derived requests", async () => {
+  const root = scratch(), base = "b".repeat(40), name = "merge-00000002-0000-4000-8000-000000000000";
+  const first = "a".repeat(40), second = "c".repeat(40), prefix = "s".repeat(95);
+  const sent: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [];
+  const peer = (candidate: string): typeof CLIENT_RUNTIME.channel => () => ({ connect: async () => {}, close() {},
+    call: async (method, params, options) => {
+      sent.push({ method, request: options?.request, params: params as Record<string, unknown> });
+      if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+      if (method === "git.submit") return { ok: true, result: { operation, state: "succeeded",
+        result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } } };
+      return { ok: true, result: { operation, state: "succeeded",
+        result: { kind: "attest.record", request: name, messages: [message], recipientCount: 1 } } };
+    } });
+  const run = (candidate: string, key: string) => {
+    installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+      submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [], content: Buffer.from("bundle") }), channel: peer(candidate) });
+    return new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } })
+      .controlReview({ kind: "review.revise", name, expectedRevision: 0, base, candidate, reason: "r" }, key);
+  };
+  try {
+    await run(first, `${prefix}1`);
+    await run(second, `${prefix}2`);
+    const submits = sent.filter(row => row.method === "git.submit");
+    assert.equal(submits.length, 2, "the second original request must publish its own candidate");
+    const [publicationA, publicationB] = submits.map(row => row.request!);
+    assert.ok(isValidRequestKey(publicationA!) && isValidRequestKey(publicationB!));
+    assert.notEqual(publicationA, publicationB, "two original requests sharing a 95-character prefix must not share a publication request");
+    assert.deepEqual(submits.map(row => row.params.candidate), [first, second]);
+    const cache = new RequestCache(root);
+    const frozenA = cache.read(publicationA), frozenB = cache.read(publicationB);
+    assert.equal(frozenA.kind, "present");
+    assert.equal(frozenB.kind, "present");
+    if (frozenA.kind === "present" && frozenB.kind === "present") {
+      assert.ok(frozenA.value.params !== null && typeof frozenA.value.params === "object" && !Array.isArray(frozenA.value.params));
+      assert.ok(frozenB.value.params !== null && typeof frozenB.value.params === "object" && !Array.isArray(frozenB.value.params));
+      assert.equal(frozenA.value.params.candidate, first);
+      assert.equal(frozenB.value.params.candidate, second);
+    }
+  } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("020. A maximum-length merge.open key publishes through the same derived request instead of refusing", async () => {
+  const root = scratch(), candidate = "a".repeat(40), base = "b".repeat(40), key = "o".repeat(96);
+  const name = "merge-00000002-0000-4000-8000-000000000000";
+  const sent: { method: string; request: string | undefined; params: Record<string, unknown> }[] = [];
+  installRuntime({ ...CLIENT_RUNTIME, resolveOid: value => value, recordedBase: () => base, workspaceDirty: () => false,
+    submit: () => ({ exportRef: "refs/oma/export/local", prerequisites: [], content: Buffer.from("bundle") }),
+    channel: () => ({ connect: async () => {}, close() {},
+      call: async (method, params, options) => {
+        sent.push({ method, request: options?.request, params: params as Record<string, unknown> });
+        if (method === "git.known") return { ok: true, result: { hasCandidate: false, prerequisites: [] } };
+        if (method === "git.submit") return { ok: true, result: { operation, state: "succeeded",
+          result: { kind: "git.submit", candidate, publishedRef: `refs/oma/published/alice/${operation}`, message, recipientCount: 1 } } };
+        return { ok: true, result: { operation, state: "succeeded",
+          result: { kind: "attest.record", request: name, messages: [message], recipientCount: 1 } } };
+      } }) });
+  try {
+    const client = new Client({ cwd: root, env: { HOME: root, OMA_SOCKET: join(root, "socket"), OMA_ACTOR: "alice" } });
+    const text = await client.openMerge({ tier: "LOW", title: "t", reason: "r", candidate, base }, key);
+    assert.deepEqual(sent.map(row => row.method), ["git.known", "git.submit", "attest.record"]);
+    assert.ok(isValidRequestKey(sent[1]!.request!), `the derived publication request must fit the wire grammar: ${sent[1]!.request!}`);
+    assert.equal(sent[2]!.request, key, "the open itself keeps the caller's request key");
+    assert.equal(JSON.parse(text).request, key);
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });

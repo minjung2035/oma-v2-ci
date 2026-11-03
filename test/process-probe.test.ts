@@ -10,7 +10,7 @@ import {
   type ProcessObservation, type ProcessIdentity,
 } from "@oma/broker/process-ancestry";
 
-test("the Linux substrate answers from real /proc, unchanged", () => {
+test("001. The Linux substrate answers from real /proc, unchanged", () => {
   const probe = processProbeFor("linux");
   assert.equal(probe.substrate, "proc");
   const self = probe.identity(process.pid)!;
@@ -27,7 +27,7 @@ test("the Linux substrate answers from real /proc, unchanged", () => {
   assert.equal(probe.identity(-1), null);
 });
 
-test("INV02 / macOS NOT_RUN lane: a platform with no substrate observes nothing -- and never says a process ended", () => {
+test("002. MacOS NOT_RUN lane: a platform with no substrate observes nothing -- and never says a process ended", () => {
   for (const platform of ["darwin", "freebsd", "win32"]) {
     const probe = processProbeFor(platform);
     assert.equal(probe.substrate, "none", `${platform} ships no substrate`);
@@ -43,7 +43,7 @@ test("INV02 / macOS NOT_RUN lane: a platform with no substrate observes nothing 
   assert.equal(hostProcessProbe.substrate, "proc", "this run is Linux -- and this run is the only lane claimed");
 });
 
-test("the seam takes a substrate: an injected reader drives the same four answers", () => {
+test("003. The seam takes a substrate: an injected reader drives the same four answers", () => {
   // A process table: 100 -> 1, 200 -> 100, 300 -> 100, 400 (no parent).
   const table = new Map<number, ProcessObservation>([
     [1, { kind: "running", ppid: 0, startTime: "10" }],
@@ -68,7 +68,7 @@ test("the seam takes a substrate: an injected reader drives the same four answer
   assert.equal(probe.ended(engine), "unknown", "unreadable is unknown -- refuses, retires nothing");
 });
 
-test("descent walks the whole chain -- depth alone is not a refusal, and a cycle ends it closed", () => {
+test("004. Descent walks the whole chain -- depth alone is not a refusal, and a cycle ends it closed", () => {
   // A chain of 64 live processes, deeper than any bound the walk once carried:
   // pid N's parent is N-1 down to init.
   const deep = new Map<number, ProcessObservation>([[1, { kind: "running", ppid: 0, startTime: "1" }]]);
@@ -101,7 +101,7 @@ test("descent walks the whole chain -- depth alone is not a refusal, and a cycle
   assert.equal(dim.descendsFrom(900, { pid: 1, startTime: "1" }), false, "an unavailable link is not a proven chain");
 });
 
-test("descent refuses a child that detached while its former parent PID was followed", () => {
+test("005. Descent refuses a child that detached while its former parent PID was followed", () => {
   let detached = false;
   const probe = processProbeFor("policy-reader-only", pid => {
     if (pid === 300) return { kind: "running", ppid: detached ? 1 : 200, startTime: "child" };
@@ -115,7 +115,7 @@ test("descent refuses a child that detached while its former parent PID was foll
   assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
 });
 
-test("descent refuses an intermediate identity that changed after the first walk", () => {
+test("006. Descent refuses an intermediate identity that changed after the first walk", () => {
   let walked = false;
   const probe = processProbeFor("policy-reader-only", pid => {
     if (pid === 300) return { kind: "running", ppid: 200, startTime: "child" };
@@ -126,7 +126,7 @@ test("descent refuses an intermediate identity that changed after the first walk
   assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
 });
 
-test("descent refuses a replaced ancestor before publishing the chain", () => {
+test("007. Descent refuses a replaced ancestor before publishing the chain", () => {
   let rootReads = 0;
   const probe = processProbeFor("policy-reader-only", pid => {
     if (pid === 300) return { kind: "running", ppid: 100, startTime: "child" };
@@ -136,7 +136,7 @@ test("descent refuses a replaced ancestor before publishing the chain", () => {
   assert.equal(probe.descendsFrom(300, { pid: 100, startTime: "engine" }), false);
 });
 
-test("descent refuses a chain that became unobservable without reporting process death", () => {
+test("008. Descent refuses a chain that became unobservable without reporting process death", () => {
   let childReads = 0;
   const probe = processProbeFor("policy-reader-only", pid => {
     if (pid === 300) return ++childReads === 1 ? { kind: "running", ppid: 100, startTime: "child" } : { kind: "unavailable" };
@@ -147,7 +147,7 @@ test("descent refuses a chain that became unobservable without reporting process
   assert.equal(probe.ended({ pid: 300, startTime: "child" }), "unknown");
 });
 
-test("the exported entry points are the platform probe's, unchanged for callers", () => {
+test("009. The exported entry points are the platform probe's, unchanged for callers", () => {
   assert.equal(processIdentity(process.pid)?.pid, process.pid);
   assert.equal(parentOf(process.pid), process.ppid);
   assert.equal(processEnded(processIdentity(process.pid)!), "running");

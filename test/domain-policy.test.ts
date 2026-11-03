@@ -21,7 +21,7 @@ const LIMIT_UNITS = {
   logBytes: "bytes", batchMaxMessages: "count", idleStreamSeconds: "seconds", receiptWaitSeconds: "seconds",
 };
 
-test("R02: capability vocabulary is exactly the existing ordered eight values", () => {
+test("001. Capability vocabulary is exactly the existing ordered eight values", () => {
   assert.deepEqual(CAPABILITIES, EXPECTED_CAPABILITIES);
   assert.deepEqual(ALL_CAPS, EXPECTED_CAPABILITIES);
   for (const capability of EXPECTED_CAPABILITIES) assert.equal(isCapability(capability), true);
@@ -33,7 +33,7 @@ test("R02: capability vocabulary is exactly the existing ordered eight values", 
 for (const [title, fields, expectedUnits, check] of [
   ["protocol limits", PROTOCOL_LIMIT_FIELDS, LIMIT_UNITS, protocolLimitsCheck],
 ] as const) {
-  test(`R02: ${title} have closed required positive safe integers and unchanged units`, () => {
+  test(`002. Domain policy: ${title} have closed required positive safe integers and unchanged units`, () => {
     assert.deepEqual(Object.keys(fields), Object.keys(expectedUnits));
     const one = Object.fromEntries(Object.keys(expectedUnits).map((key) => [key, 1]));
     assert.equal(check(one), null, "minimum valid control");
@@ -61,7 +61,7 @@ for (const [title, fields, expectedUnits, check] of [
 // Independent schema-4 fixture bytes; the serializer under test does not compute this oracle.
 const SPEC_BYTES = '{"name":"alice","modelProfile":"md","from":"0000000000000000000000000000000000000000","brief":"test","profile":"p","capabilities":["mail.send","route.follow","agent.create","agent.manage.self","agent.manage.descendants","git.submit","code.integrate","context.publish"]}';
 
-test("DR46 spec bytes: current frozen identity does not grant capabilities by role", () => {
+test("003. Spec bytes: current frozen identity does not grant capabilities by role", () => {
   assert.equal(resolvedSpec(ALL_CAPS, "p", "alice"), SPEC_BYTES);
   const agent = { name: "alice", profile: "p", specJson: SPEC_BYTES, specHash: resolvedSpecDigest(JSON.parse(SPEC_BYTES)) };
   assert.deepEqual(resolvedSpecOf(agent), JSON.parse(SPEC_BYTES));

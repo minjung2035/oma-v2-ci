@@ -29,7 +29,22 @@ const RAW_SPAWNS = new Set(["spawn", "spawnSync"]);
  * argument. A caller that omits it is making the same decision as a raw spawn
  * without a fence, and answers here in the same way. */
 const FENCED_HELPERS = new Set(["spawnOwnedRpc", "spawnSupervisedService", "spawnSandboxed", "spawnWithPrivateInputs"]);
-const codeOnly = ts.createPrinter({ removeComments: true });
+/** An argument must reference the lease value, not merely spell 'fence' in
+ * an executable name, literal, comment, option key, or the helper's own name.
+ * This is a lexical gate, not a proof of descriptor lifetime. */
+export function spawnReferencesFence(call) {
+  let found = false;
+  const visit = node => {
+    if (ts.isPropertyAccessExpression(node) && node.name.text === "fence") found = true;
+    if (ts.isIdentifier(node) && node.text === "fence" &&
+      !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) &&
+      !(ts.isCallExpression(node.parent) && node.parent.expression === node)) found = true;
+    ts.forEachChild(node, visit);
+  };
+  for (const argument of call.arguments) visit(argument);
+  return found;
+}
 
 const calleeName = node => {
   const callee = strip(node.expression);
@@ -70,7 +85,7 @@ export function fenceRuleFindings(root) {
       const site = `${file}#${enclosingName(node)}`;
       // Comments cannot establish descriptor propagation (MODE-006's private
       // handoff pipe mentions the fence precisely because it carries no lease).
-      const passes = /fence/i.test(codeOnly.printNode(ts.EmitHint.Expression, node, source));
+      const passes = spawnReferencesFence(node);
       const exemption = fenceExemptSpawnOwners[site];
       if (exemption !== undefined) claimed.add(site);
       if (passes && exemption !== undefined)

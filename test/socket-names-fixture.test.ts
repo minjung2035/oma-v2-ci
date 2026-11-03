@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { holdSocketNames } from "./fixtures/socket-names.js";
 
-test("socket-name fixture: long transport paths work while metadata retains its canonical name", async t => {
+test("001. Socket-name fixture: long transport paths work while metadata retains its canonical name", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-socket-name-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const listen = Server.prototype.listen, connection = Socket.prototype.connect;
@@ -35,7 +35,7 @@ test("socket-name fixture: long transport paths work while metadata retains its 
   assert.equal(Socket.prototype.connect, connection);
 });
 
-for (const first of [0, 1]) test(`socket-name fixture: overlapping owners return out of order; first=${first}`, async t => {
+for (const first of [0, 1]) test(`002. Socket-name fixture: overlapping owners return out of order; first=${first}`, async t => {
   if (process.platform !== "linux") return;
   const root = mkdtempSync(join(tmpdir(), "oma-socket-overlap-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -62,7 +62,7 @@ for (const first of [0, 1]) test(`socket-name fixture: overlapping owners return
   assert.equal(Socket.prototype.connect, connection);
 });
 
-test("socket-name fixture: a refused directory acquires no transport hooks", t => {
+test("003. Socket-name fixture: a refused directory acquires no transport hooks", t => {
   if (process.platform !== "linux") return;
   const root = mkdtempSync(join(tmpdir(), "oma-socket-refused-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

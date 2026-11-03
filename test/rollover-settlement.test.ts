@@ -47,7 +47,7 @@ async function closeAll(broker: Broker | null, f: ReceiptFixture): Promise<void>
 const nextAuth = (incarnation: number): AuthContext => ({ actor: "alice", incarnation, role: "resident", channel: "actor",
   capabilities: new Set(["mail.send"]), peer: { pid: 1, uid: 1, gid: 1 } });
 
-test("V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery", async () => {
+test("001. A receipt made durable just before the runner died completes its batch before rollover, with no redelivery", async () => {
   const f = await preparedFixture(1);
   let broker: Broker | null = null;
   try {
@@ -69,7 +69,7 @@ test("V07A: a receipt made durable just before the runner died completes its bat
   } finally { await closeAll(broker, f); }
 });
 
-test("V07A, DR9: a batch whose receipt is proven absent is the next run's delivery attempt, and its row is not rewritten", async () => {
+test("002. A batch whose receipt is proven absent is the next run's delivery attempt, and its row is not rewritten", async () => {
   const f = await preparedFixture(1);
   let broker: Broker | null = null;
   try {
@@ -85,7 +85,7 @@ test("V07A, DR9: a batch whose receipt is proven absent is the next run's delive
   } finally { await closeAll(broker, f); }
 });
 
-test("DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch, with no redelivery", async () => {
+test("003. A receipt of an earlier attempt that appears after a later run opened still settles the batch, with no redelivery", async () => {
   const f = await preparedFixture(1);
   let broker: Broker | null = null;
   try {
@@ -107,7 +107,7 @@ test("DR9: a receipt of an earlier attempt that appears after a later run opened
   } finally { await closeAll(broker, f); }
 });
 
-test("V07B: unavailable or conflicting receipt evidence opens no run, keeps the evidence and changes no incarnation", async () => {
+test("004. Unavailable or conflicting receipt evidence opens no run, keeps the evidence and changes no incarnation", async () => {
   for (const fault of ["conflicting", "unavailable"] as const) {
     const f = await preparedFixture(1);
     let broker: Broker | null = null;
@@ -134,14 +134,16 @@ test("V07B: unavailable or conflicting receipt evidence opens no run, keeps the 
       if (fault === "unavailable") {
         chmodSync(path, 0o400);
         invocation = SECOND;
-        await assert.rejects(() => openRun(broker!, SECOND), { code: "RUN_TERMINATION_UNKNOWN" },
-          "the failed opening's own namespace is still populated and blocks a replacement");
+        await assert.rejects(() => openRun(broker!, SECOND), { code: "BROKER_UNAVAILABLE", details: { reason: "busy" } },
+          "the live original namespace owns the slot; contention is not a failed death observation");
+        assert.equal(f.store.getAgent("alice")!.incarnation, 1);
+        assert.equal(f.store.getBatch(f.batch.id)!.state, "prepared", "a refused replacement cannot settle the retained receipt or batch");
       }
     } finally { chmodSync(runnerReceiptPathAt(f.root, "alice", f.batch.id), 0o600); await closeAll(broker, f); }
   }
 });
 
-test("V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease", async () => {
+test("005. A failure at the incarnation commit leaves the settled batch settled and no live lease", async () => {
   const f = await preparedFixture(1);
   let broker: Broker | null = null;
   try {

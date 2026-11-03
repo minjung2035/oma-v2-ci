@@ -120,10 +120,11 @@ export class IntegrationCoordinator {
   private receipt(id: string): Receipt { return receiptOfOperation(this.operation(id)); }
   private async succeed(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.plan.merge !== undefined) {
+      const merge = this.currentMerge(operation);
       if (this.mail === null) throw new StoreError("BROKER_UNAVAILABLE", "integration publication owner is unavailable");
       const proof = new IntegrationPublicationObserver(this.effects,this.store).integration(operation);
       try {
-        if (operation.plan.merge.version !== 1 && operation.plan.merge.diff) this.effects.verifyDiff?.(operation.plan.merge.diff);
+        if (merge.diff) this.effects.verifyDiff?.(merge.diff);
         await this.mail.publishGated(operation.id, proof);
       }
       catch (error) {
@@ -175,10 +176,20 @@ export class IntegrationCoordinator {
         throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");
     }
   }
+  /** DR72: old accepted plans remain readable, never an alternate executor.
+   * Refuse before observations/publication/settlement and outside failure policy:
+   * release incompatibility is not a new fact about the original operation. */
+  private currentMerge(operation: OperationOf<"git.integrate">): Extract<NonNullable<PlanFor<"git.integrate">["merge"]>, { version: 2 | 3 }> {
+    const merge = operation.plan.merge;
+    if (merge === undefined) throw new StoreError("STORE_CORRUPT", "reviewed application requires a merge plan");
+    if (merge.version !== 3)
+      throw new StoreError("UNSUPPORTED_PROFILE", "original reviewed integration plan is unsupported for current execution; preserve its facts, bytes and unresolved work for the original release/owner to diagnose or drain; no legacy direct integration");
+    return merge;
+  }
   private requireMergeEligible(policy: IntegrationSnapshot, operation: OperationOf<"git.integrate">): void {
     const plan = operation.plan;
-    if (plan.merge?.version !== 3) return this.requireEligible(policy,plan.base,plan.candidate);
-    const preparation = plan.merge.preparation === undefined ? null : this.store.getOperationById(plan.merge.preparation);
+    const merge = this.currentMerge(operation);
+    const preparation = merge.preparation === undefined ? null : this.store.getOperationById(merge.preparation);
     const fact = preparation?.kind === "attest.record" ? preparation.plan.fact : null;
     if (!fact || fact.kind !== "review.integration") throw new StoreError("STORE_CORRUPT","accepted preparation is missing");
     if (!observed(this.effects.published(),"source publication").includes(fact.source.candidate))
@@ -240,7 +251,7 @@ export class IntegrationCoordinator {
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
     if (policy.tiered !== null)
-      throw new StoreError("UNSUPPORTED_PROFILE", "this society uses oma_merge_open/oma_challenge_open and oma_review_status/oma_review_diff/oma_review_respond");
+      throw new StoreError("UNSUPPORTED_PROFILE", "this society requires the current reviewed collaboration path and its declared records; direct integration is unavailable");
     if (policy.tiered === null && input.tier !== undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
     this.requireWriterSlot();
@@ -308,9 +319,7 @@ export class IntegrationCoordinator {
    * and the CAS boundary. */
   async applyMerge(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
-    const plan = operation.plan;
-    if (plan.merge === undefined)
-      throw new StoreError("STORE_CORRUPT", "reviewed application requires a merge plan");
+    const plan = operation.plan, merge = this.currentMerge(operation);
     let knowledge: EffectKnowledge = "possible";
     try {
       const main = this.effects.main();
@@ -332,36 +341,36 @@ export class IntegrationCoordinator {
       this.verifyCurrentPolicy(plan.policyRevision);
       this.requireMergeEligible(policy, operation);
       if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
-      this.reviewGate.assertApplicable(plan.merge.request);
+      this.reviewGate.assertApplicable(merge.request);
       const cancellation = new AbortController();
-      this.checking.set(plan.merge.request, cancellation);
-      this.phases.set(plan.merge.request, "checking");
+      this.checking.set(merge.request, cancellation);
+      this.phases.set(merge.request, "checking");
       try {
         for (const check of policy.checks) {
           await this.effects.runCheck(plan.candidate, check, cancellation.signal, () => {
             this.verifyCurrentPolicy(plan.policyRevision);
             this.verifyAcceptedPolicy(policy, operation);
-            this.requireMergeAuthority(operation, plan.merge!.request);
+            this.requireMergeAuthority(operation, merge.request);
           }, operation.id);
           if (cancellation.signal.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled during checks");
         }
-      } finally { this.checking.delete(plan.merge.request); }
+      } finally { this.checking.delete(merge.request); }
       const finalMain = this.effects.main();
-      if (finalMain.kind === "present" && finalMain.value !== plan.base && finalMain.value !== plan.candidate && plan.merge.version === 3)
+      if (finalMain.kind === "present" && finalMain.value !== plan.base && finalMain.value !== plan.candidate)
         throw new StoreError("STALE_BASE","main advanced before this attempt issued CAS");
       if (!this.stillAtBase(operation)) return;
       this.requireMergeEligible(policy, operation);
       this.verifyCurrentPolicy(plan.policyRevision);
-      this.requireMergeAuthority(operation, plan.merge.request);
-      if (plan.merge.version !== 1 && plan.merge.diff) this.effects.verifyDiff?.(plan.merge.diff);
-      this.phases.set(plan.merge.request, "applying");
+      this.requireMergeAuthority(operation, merge.request);
+      if (merge.diff) this.effects.verifyDiff?.(merge.diff);
+      this.phases.set(merge.request, "applying");
       knowledge = "possible";
       const after = this.effects.compareAndSwap(plan.base, plan.candidate);
       if (after.kind !== "candidate") { this.unknown(operation.id); return; }
       knowledge = "applied";
       await this.succeed(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }
-    finally { this.phases.delete(plan.merge.request); }
+    finally { this.phases.delete(merge.request); }
   }
 
   async reconcile(operation: OperationOf<"git.integrate">): Promise<void> {

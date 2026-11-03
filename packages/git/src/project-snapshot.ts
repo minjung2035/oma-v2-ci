@@ -4,6 +4,7 @@
 import { closeSync, constants, fstatSync, openSync, readFileSync, readSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { isUtf8 } from "node:buffer";
 import { StoreError } from "@oma/domain/errors";
 import { runProcessSync, decodeProcessText } from "@oma/process/run";
 import { GIT_ENV, requireTextExit } from "@oma/process/policies";
@@ -117,14 +118,26 @@ export function withProjectSnapshot<T>(options: {
       // requireTextExit already maps the non-exited kinds; spooled streams
       // report empty buffers there, so the streams are read from the files
       // the invocation named.
+      const stdout = result.stdoutSpooledTo === undefined ? result.stdout : readFileSync(result.stdoutSpooledTo);
+      const stderrBytes = result.stderrSpooledTo === undefined ? result.stderr : readHead(result.stderrSpooledTo, 8192);
+      for (const bytes of [stdout, stderrBytes]) if (!isUtf8(bytes)) {
+        // NUL-delimited Git paths are decoded only after validation. Show the
+        // offending record as bytes so the Human can identify/rename it.
+        let start = 0, invalid = bytes;
+        while (start < bytes.length) {
+          const end = bytes.indexOf(0, start), record = bytes.subarray(start, end < 0 ? bytes.length : end);
+          if (!isUtf8(record)) { invalid = record; break; }
+          start = end < 0 ? bytes.length : end + 1;
+        }
+        throw new StoreError("INVALID_REQUEST", `project snapshot requires UTF-8 paths and Git output; offending record (hex): ${invalid.subarray(0, 256).toString("hex")}`);
+      }
       const exited = requireTextExit(result, "project snapshot git");
       if (exited.status !== 0) {
         const stderr = result.stderrSpooledTo === undefined ? exited.stderr
           : decodeProcessText(readHead(result.stderrSpooledTo, 8192));
         throw new StoreError("STORE_CORRUPT", `project snapshot git failed: ${stderr.trim().slice(0, 200)}`);
       }
-      return result.stdoutSpooledTo === undefined ? exited.stdout
-        : decodeProcessText(readFileSync(result.stdoutSpooledTo));
+      return decodeProcessText(stdout);
     };
     const git: Git = (argv, input) => run(["--git-dir", repository, ...argv], input).trimEnd();
     // A parent commit describes the whole repository, not the invocation

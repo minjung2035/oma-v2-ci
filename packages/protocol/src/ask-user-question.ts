@@ -57,8 +57,7 @@ function isAskQuestionShape(value: unknown): value is AskQuestion {
     );
 }
 export function isAskRequest(value: unknown): value is AskRequest {
-  const questions = (value as { questions?: unknown }).questions;
-  return isIdPayload(value) && Array.isArray(questions) && questions.every(isAskQuestionShape);
+  return isIdPayload(value) && Array.isArray((value as AskRequest).questions) && (value as AskRequest).questions.every(isAskQuestionShape);
 }
 export function isAskClaim(value: unknown): value is AskClaim {
   return isIdPayload(value);

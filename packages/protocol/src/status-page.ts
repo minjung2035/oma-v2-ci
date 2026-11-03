@@ -12,6 +12,10 @@ export function statusPage(id: string, observedAtMs: number, rows: Iterable<Agen
   let encodedBytes = Buffer.byteLength(JSON.stringify(answer));
   if (encodedBytes > frameBytes) throw new StoreError("FRAME_TOO_LARGE", "status metadata exceeds the response frame budget");
   const continuationPrefixBytes = Buffer.byteLength(',"next":');
+  // VIEW-002/CFG-003: `next` is the last row emitted, so it is exactly a status
+  // row name -- the Principal row's included -- which is the grammar `after`
+  // takes; a guard narrower than the roster turns a page boundary on that row
+  // into a cursor the same API refuses.
   for (const row of rows) {
     if (after !== undefined && row.agent <= after) continue;
     const previous = result.agents.at(-1)?.agent;

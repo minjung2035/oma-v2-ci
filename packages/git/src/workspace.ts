@@ -14,12 +14,22 @@ import { runGitText, GIT_ENV } from "@oma/process/policies";
 import { PreparationExecutor } from "@oma/process/preparation";
 import { decodeProcessText } from "@oma/process/run";
 
+function assertWorkspaceDirectory(path: string): void {
+  try { assertDirectory(path); }
+  catch (error) {
+    if (error instanceof StoreError && error.code === "STORE_CORRUPT")
+      throw new StoreError("AGENT_CONFLICT", `workspace directory is damaged: ${path}`, { cause: error });
+    throw error;
+  }
+}
+
 /** Preparation and observations only. No registry mutation, activation or mail.
  * Published workspaces are observed, never reset, rebased or checked out again.
  */
 export class WorkspaceCoordinator {
   private readonly executor = new PreparationExecutor();
   private working: { readonly key: string; readonly task: Promise<void> } | null = null;
+  private preparedPath: string | null = null;
   constructor(private readonly paths: { readonly stateRoot: string; readonly projectGit: string; readonly residentProjectGit?: string }) {}
   private git(argv: readonly string[], cwd?: string) {
     return runGitText(argv, { ...(cwd === undefined ? {} : { cwd }), timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
@@ -52,7 +62,7 @@ export class WorkspaceCoordinator {
   }
   /** Physical observation for Lifecycle's provisioning-only readiness proof. */
   observeProvisioningHead(path: string): { readonly status: number | null; readonly stdout: string } {
-    assertDirectory(path); assertDirectory(join(path, ".git"));
+    assertWorkspaceDirectory(path); assertWorkspaceDirectory(join(path, ".git"));
     const head = this.git(["rev-parse", "HEAD"], path);
     return { status: head.status, stdout: head.stdout };
   }
@@ -73,8 +83,8 @@ export class WorkspaceCoordinator {
       // behind; its lease is the fresh observation of whether those children
       // are gone. Only that proof lets the next preparation proceed -- the
       // stale unknown clears on the observation, never on the attempt.
-      const stale = join(agentRootPathAt(this.paths.stateRoot, plan.spec.name), "workspace.tmp");
-      const observed = this.executor.reverifyStale(() => { try { return treeQuiescence(stale).kind; } catch { return "unknown"; } });
+      const stale = this.preparedPath;
+      const observed = this.executor.reverifyStale(() => { try { return stale === null ? "unknown" : treeQuiescence(stale).kind; } catch { return "unknown"; } });
       if (observed !== "quiescent") return Promise.reject(new StoreError("REF_STATE_UNKNOWN", `workspace executor outcome is ${observed}`));
     }
     const task = Promise.resolve().then(() => this.prepare(identity, readinessProven)).finally(() => { if (this.working?.task === task) this.working = null; });
@@ -94,20 +104,22 @@ export class WorkspaceCoordinator {
       fsyncDir(root); return;
     }
     const verify = (path: string): void => {
-      assertDirectory(path); assertDirectory(join(path, ".git"));
-      if (lstatSync(join(path, ".git", "objects", "info", "alternates"), { throwIfNoEntry: false })) throw new StoreError("STORE_CORRUPT", "workspace must not borrow another object store");
+      assertWorkspaceDirectory(path); assertWorkspaceDirectory(join(path, ".git"));
+      if (lstatSync(join(path, ".git", "objects", "info", "alternates"), { throwIfNoEntry: false })) throw new StoreError("AGENT_CONFLICT", "workspace must not borrow another object store");
       const head = this.git(["rev-parse", "HEAD"], path);
-      if (head.status !== 0 || head.stdout.trim() !== identity.from) throw new StoreError("STORE_CORRUPT", `workspace base mismatch for ${identity.name}`);
+      if (head.status !== 0) throw new StoreError("AGENT_CONFLICT", `workspace HEAD is unavailable for ${identity.name}`);
+      if (head.stdout.trim() !== identity.from) throw new StoreError("AGENT_CONFLICT", `workspace base mismatch for ${identity.name}`);
     };
     const existing = lstatSync(workspace, { throwIfNoEntry: false });
     if (existing) {
-      if (!existing.isDirectory()) throw new StoreError("STORE_CORRUPT", "workspace destination is not a directory");
+      if (!existing.isDirectory()) throw new StoreError("AGENT_CONFLICT", "workspace destination is not a directory");
       verify(workspace); fsyncDir(root); return;
     }
     // R6-04: every git that works in the clone holds its lease. A clone an
     // earlier broker left is resumed only when its lease proves those gits are
     // gone; one still held is not touched (REF_STATE_UNKNOWN).
     const lease = TreeLease.take(temporary);
+    this.preparedPath = temporary;
     try { await this.prepareLeased(lease, identity, temporary, workspace, verify); }
     finally { lease.release(); }
     // Published: only the lease is left, and nothing holds it.

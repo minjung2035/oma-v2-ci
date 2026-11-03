@@ -13,7 +13,7 @@ import { statAt } from "@oma/native/posix-files";
 import { PreacceptArtifact, type PublishedIdentity } from "./preaccept-artifact.js";
 import { type PreacceptOwner } from "@oma/contracts/files";
 import { ensureOwnedDurableDirectory, fsyncDir } from "./durable-fs.js";
-import { submitStagingPathAt, submitBundlePathAt } from "@oma/domain/paths";
+import { attachmentBundlePathAt, submitStagingPathAt, submitBundlePathAt } from "@oma/domain/paths";
 
 export interface FrozenBundle { readonly path: string; readonly bytes: number; readonly sha256: string }
 export type BundleObservation =
@@ -26,8 +26,8 @@ function code(error: unknown): string | null {
 }
 export class PreparedSubmitSpool implements PreacceptOwner {
   private readonly artifact: PreacceptArtifact | null;
-  constructor(readonly bundle: FrozenBundle | null, artifact: PreacceptArtifact | null = null) {
-    this.artifact = bundle === null ? null : artifact ?? new PreacceptArtifact(bundle.path, null);
+  constructor(readonly bundle: FrozenBundle | null, artifact: PreacceptArtifact | null = null, borrowed = false) {
+    this.artifact = borrowed || bundle === null ? null : artifact ?? new PreacceptArtifact(bundle.path, null);
   }
   /** Called on durable acceptance or uncertainty about whether T committed. */
   retainForOperation(): void { this.artifact?.retainForOperation(); }
@@ -35,10 +35,16 @@ export class PreparedSubmitSpool implements PreacceptOwner {
   discardUnaccepted(): void { this.artifact?.discardUnaccepted(); }
 }
 
-export async function prepareSubmitSpool(
-  stateRoot: string, operationId: string, descriptor: BlobDescriptor | undefined,
-  chunks: AsyncIterable<Uint8Array>,
-): Promise<PreparedSubmitSpool> {
+export function prepareSubmitSpool(stateRoot: string, operationId: string, descriptor: BlobDescriptor | undefined,
+  chunks: AsyncIterable<Uint8Array>): Promise<PreparedSubmitSpool> {
+  return prepareSpool(stateRoot, operationId, descriptor, chunks);
+}
+export function prepareAttachmentSpool(stateRoot: string, root: string, ordinal: number, descriptor: BlobDescriptor,
+  chunks: AsyncIterable<Uint8Array>): Promise<PreparedSubmitSpool> {
+  return prepareSpool(stateRoot, root, descriptor, chunks, ordinal);
+}
+async function prepareSpool(stateRoot: string, operationId: string, descriptor: BlobDescriptor | undefined,
+  chunks: AsyncIterable<Uint8Array>, ordinal?: number): Promise<PreparedSubmitSpool> {
   if (descriptor !== undefined && (!Number.isSafeInteger(descriptor.bytes) || descriptor.bytes <= 0 ||
       !/^[0-9a-f]{64}$/.test(descriptor.sha256) || descriptor.mediaType !== "application/x-git-bundle"))
     throw new StoreError("STREAM_INVALID", "invalid bundle descriptor");
@@ -52,14 +58,30 @@ export async function prepareSubmitSpool(
     }
     return new PreparedSubmitSpool(null);
   }
-  const path = submitBundlePathAt(stateRoot, operationId);
+  const path = ordinal === undefined ? submitBundlePathAt(stateRoot, operationId) : attachmentBundlePathAt(stateRoot, operationId, ordinal);
   // No name is owned if exclusive creation fails; never delete an existing file.
   const parent = openDirectory(staging);
   let fd: number;
   let identity: PublishedIdentity | null = null;
   let artifact: PreacceptArtifact;
   try { fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
-  catch (error) { closeSync(parent); throw error; }
+  catch (error) {
+    closeSync(parent);
+    if (ordinal === undefined || code(error) !== "EEXIST") throw error;
+    // An original, not-yet-accepted root can survive a crash beside its exact
+    // private spool. Verify the incoming source as well as the existing inode;
+    // a borrowed name grants no cleanup ownership to this competing attempt.
+    const bundle = Object.freeze({ path, ...frozenDescriptor }), hash = createHash("sha256"); let total = 0;
+    for await (const chunk of chunks) {
+      if (!(chunk instanceof Uint8Array) || chunk.byteLength > frozenDescriptor.bytes - total)
+        throw new StoreError("STREAM_INVALID", "replayed attachment exceeds its original descriptor");
+      hash.update(chunk); total += chunk.byteLength;
+    }
+    if (total !== frozenDescriptor.bytes || hash.digest("hex") !== frozenDescriptor.sha256)
+      throw new StoreError("STREAM_INVALID", "replayed attachment differs from its original bytes");
+    requireFrozenBundle(bundle);
+    return new PreparedSubmitSpool(bundle, null, true);
+  }
   try {
     const acquired = fstatSync(fd);
     if (!acquired.isFile()) throw new StoreError("STORE_CORRUPT", "prepared bundle is not a regular file");

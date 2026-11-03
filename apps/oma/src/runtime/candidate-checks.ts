@@ -22,6 +22,7 @@ import type { FrozenCheck } from "@oma/domain/integration-policy";
 import { createCanonicalObserver } from "@oma/git/canonical-command";
 import { observed, requireNoGitlinks } from "@oma/domain/git-facts";
 import { type GitObserver } from "@oma/git/observe";
+import { deadline as scheduleDeadline } from "@oma/process/deadline";
 
 
 export class CandidateChecks {
@@ -38,7 +39,7 @@ export class CandidateChecks {
     const recorder = check.pipeline === undefined ? null : new PipelineRecorder(this.paths.stateRoot, candidate, check.pipeline, attempt);
     let failureCode: string | null = null;
     const deadline = new AbortController(); let expired = false;
-    const timer = this.resources?.checkWallTimeMs === undefined ? undefined : setTimeout(() => { expired = true; deadline.abort(); }, this.resources.checkWallTimeMs);
+    const cancelTimer = scheduleDeadline(this.resources?.checkWallTimeMs ?? null, () => { expired = true; deadline.abort(); });
     const signal = AbortSignal.any([deadline.signal, ...(cancellationSignal === undefined ? [] : [cancellationSignal])]);
     try {
       if (process.platform === "darwin") {
@@ -53,7 +54,7 @@ export class CandidateChecks {
         throw new StoreError("CHECK_TIMEOUT", "check deadline expired; the complete scope is confirmed dead", { cause: error });
       }
       throw error;
-    } finally { clearTimeout(timer); recorder?.finish(this.confirmDead?.() === true, failureCode); }
+    } finally { cancelTimer(); recorder?.finish(this.confirmDead?.() === true, failureCode); }
   }
   private async runPrepared(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void,
     recorder: PipelineRecorder | null, stage?: ExecutionStage): Promise<void> {

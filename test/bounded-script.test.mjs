@@ -23,7 +23,7 @@ async function stopped(pids) {
   for (const pid of pids) assert.equal(executing(pid), false, `owned process ${pid} still executing`);
 }
 
-test("AV-31: bounded script propagates normal and failed exit codes and returns signal listeners", async t => {
+test("001. Bounded script propagates normal and failed exit codes and returns signal listeners", async t => {
   const f = fixture(t), before = [process.listenerCount("SIGTERM"), process.listenerCount("SIGINT")];
   for (const code of [0, 7]) {
     f.put(`process.exitCode = ${code};`);
@@ -33,7 +33,7 @@ test("AV-31: bounded script propagates normal and failed exit codes and returns 
   await assert.rejects(runBoundedScript(f.entry, [], { timeoutMs: 0 }), /positive bounded/);
 });
 
-test("AV-31: timeout kills an owned functional script and its engine process group", async t => {
+test("002. Timeout kills an owned functional script and its engine process group", async t => {
   const f = fixture(t), pidsFile = join(f.root, "pids");
   f.put(`import { spawn } from 'node:child_process'; import { writeFileSync } from 'node:fs';
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
@@ -43,7 +43,7 @@ test("AV-31: timeout kills an owned functional script and its engine process gro
   await stopped(JSON.parse(readFileSync(pidsFile, "utf8")));
 });
 
-test("AV-31: interrupting the script owner kills the owned worker rather than orphaning it", async t => {
+test("003. Interrupting the script owner kills the owned worker rather than orphaning it", async t => {
   const f = fixture(t), pidsFile = join(f.root, "pid");
   f.put(`import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(pidsFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
   const helper = pathToFileURL(join(import.meta.dirname, "../scripts/bounded-script.mjs")).href;

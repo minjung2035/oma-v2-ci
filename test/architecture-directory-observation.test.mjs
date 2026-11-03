@@ -21,7 +21,7 @@ function owner(code) {
   }});
   return {ensure:exports.ensureOwnedDirectory,calls:()=>calls};
 }
-for(const kind of ['present','missing','link','denied']) test(`IMP-F01: uncertain mkdir ${kind} requires positive held-directory evidence`,()=>{
+for(const kind of ['present','missing','link','denied']) test(`001. Uncertain mkdir ${kind} requires positive held-directory evidence`,()=>{
   const root=mkdtempSync('/tmp/oma-directory-evidence-'),target=join(root,'target');
   try {
     if(kind==='present'||kind==='denied'){mkdirSync(target);writeFileSync(join(target,'payload'),'preserved');}

@@ -9,7 +9,7 @@ import { MailModule, buildEml, parseEmlHeaders } from "@oma/mail";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
-test("MAIL-004/005: direct replies return to sender, list replies retain lists, and aliases are encoded", async () => {
+test("001. Direct replies return to sender, list replies retain lists, and aliases are encoded", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-reply-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -50,7 +50,7 @@ test("MAIL-004/005: direct replies return to sender, list replies retain lists, 
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("MAIL-003: every generated header input rejects CR/LF injection", async () => {
+test("002. Every generated header input rejects CR/LF injection", async () => {
   const valid = { from: "a@example.invalid", to: ["b@example.invalid"], replyTo: [], subject: "s", kind: "message" as const, contextRevision: null, inReplyTo: null, references: [], messageId: "id@example.invalid", body: "body" };
   for (const patch of [
     { from: "a@example.invalid\r\nBcc: injected@example.invalid" },

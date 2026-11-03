@@ -27,7 +27,7 @@ function auth(): AuthContext {
     peer: { pid: 1, uid: 1, gid: 1 },
   };
 }
-test("S-03: only the pinned durable Pi boundary receipt completes a prepared batch", async (t) => {
+test("001. Only the pinned durable Pi boundary receipt completes a prepared batch", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-receipt-"));
   mkdirSync(root, { recursive: true });
   const store = new Store(join(root, "runtime.sqlite"));

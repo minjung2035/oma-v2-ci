@@ -72,7 +72,7 @@ function fixture() {
   return { value, calls };
 }
 
-test("P3 recovery: physical owners retain every existing route and activation flag", async () => {
+test("001. Recovery: physical owners retain every existing route and activation flag", async () => {
   for (const kind of kinds) {
     const { value, calls } = fixture();
     if (["mail.ack", "route.follow", "route.unfollow"].includes(kind)) {
@@ -89,14 +89,14 @@ test("P3 recovery: physical owners retain every existing route and activation fl
   }
 });
 
-test("P3 recovery: missing Git owner remains gated without a fallback effect", async () => {
+test("002. Recovery: missing Git owner remains gated without a fallback effect", async () => {
   const { value, calls } = fixture();
   value.git = null;
   await assert.rejects(value.recover({ id: "x", kind: "git.submit", state: "pending" }, true), { code: "UNSUPPORTED_PROFILE" });
   assert.deepEqual(calls, []);
 });
 
-test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
+test("003. Recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
   const { value, calls } = fixture();
   value.store = {
     path: "/state/runtime.sqlite",
@@ -112,7 +112,7 @@ test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only h
   assert.equal(value.starting, false);
 });
 
-test("P3 recovery: Git routes its three kinds and explicitly ignores other existing kinds", async () => {
+test("004. Recovery: Git routes its three kinds and explicitly ignores other existing kinds", async () => {
   for (const kind of kinds) {
     const calls = [];
     const value = harness([gitReconcile], {});
@@ -129,7 +129,7 @@ test("P3 recovery: Git routes its three kinds and explicitly ignores other exist
   }
 });
 
-test("P3 recovery: bypassing the closed decoder never turns an unknown kind into success", async () => {
+test("005. Recovery: bypassing the closed decoder never turns an unknown kind into success", async () => {
   const { value, calls } = fixture();
   await assert.rejects(value.recover({ id: "bad", kind: "unregistered.kind", state: "pending" }, true), /unhandled closed variant/);
   assert.deepEqual(calls, []);
@@ -171,7 +171,7 @@ function diagnostics(entry, { extraKind = false, omitKind } = {}) {
     return ts.getPreEmitDiagnostics(program).filter(value => value.category === ts.DiagnosticCategory.Error);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
-test("P3 recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking", () => {
+test("006. Recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking", () => {
   for (const entry of [recover, gitReconcile]) {
     assert.deepEqual(diagnostics(entry).map(error => ts.flattenDiagnosticMessageText(error.messageText, "\n")), []);
     for (const mutation of [{ extraKind: true }, { omitKind: "git.submit" }]) {

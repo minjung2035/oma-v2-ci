@@ -1,3 +1,4 @@
+import { principalPaths, principalBounds } from "./fixtures/principal-paths.js";
 /** D25: authorization by provenance, never by name.
  *
  * The old Principal gate held a literal set of names: a tool answering to an
@@ -23,7 +24,7 @@ function tool(name: string, sourceInfo?: Partial<{ path: string; source: string;
 const builtin = (name: string): ToolInfo =>
   tool(name, { path: `<builtin:${name}>`, source: "builtin", scope: "user", origin: "top-level" });
 
-test("verifiedExtensionPaths: absent, empty and malformed env spellings", () => {
+test("001. VerifiedExtensionPaths: absent, empty and malformed env spellings", () => {
   assert.deepEqual(verifiedExtensionPaths(undefined), { paths: [], malformed: false });
   assert.deepEqual(verifiedExtensionPaths("   "), { paths: [], malformed: false });
   for (const raw of ["{", "\"not-a-list\"", "[1]", "[\"\"]", "[]bogus",
@@ -34,7 +35,7 @@ test("verifiedExtensionPaths: absent, empty and malformed env spellings", () => 
     { paths: ["/a", "/b"], malformed: false });
 });
 
-test("D25: builtins and verified extension paths are permitted; anything else is not", () => {
+test("002. Builtins and verified extension paths are permitted; anything else is not", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-prov-"));
   try {
     const ext = join(dir, "verified.js"); writeFileSync(ext, "export {};\n");
@@ -61,7 +62,7 @@ test("D25: builtins and verified extension paths are permitted; anything else is
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("D25: a name shadowed by an unverified registration is not permitted, and is not OMA's", () => {
+test("003. A name shadowed by an unverified registration is not permitted, and is not OMA's", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-prov-"));
   try {
     const own = join(dir, "oma.js"); writeFileSync(own, "export {};\n");
@@ -84,7 +85,7 @@ test("D25: a name shadowed by an unverified registration is not permitted, and i
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("D25: the same file spelled differently still matches -- the comparison is the real path", () => {
+test("004. The same file spelled differently still matches -- the comparison is the real path", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-prov-"));
   try {
     const real = join(dir, "ext.js"); writeFileSync(real, "export {};\n");
@@ -96,7 +97,7 @@ test("D25: the same file spelled differently still matches -- the comparison is 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("D25: missing or malformed provenance state fails closed, including a registry that cannot be read", () => {
+test("005. Missing or malformed provenance state fails closed, including a registry that cannot be read", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-prov-"));
   try {
     const own = join(dir, "oma.js"); writeFileSync(own, "export {};\n");
@@ -120,7 +121,7 @@ test("D25: missing or malformed provenance state fails closed, including a regis
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("D25: the spawn plans write the verified list the engine reads, in the same spelling", async () => {
+test("006. The spawn plans write the verified list the engine reads, in the same spelling", async () => {
   // The two sides must never disagree about the name: session.ts and
   // pi-spawn-plan.ts mirror the constant because the extension's files may not
   // be imported there (PI-001), so a test binds the mirror.
@@ -134,9 +135,9 @@ test("D25: the spawn plans write the verified list the engine reads, in the same
   try {
     const core = join(dir, "core.js"); writeFileSync(core, "export {};\n");
     const ext = join(dir, "ext.js"); writeFileSync(ext, "export {};\n");
-    const env = sessionEnv({ HOME: "/h" }, {
+    const env = sessionEnv({ ...principalBounds, HOME: "/h" }, {
       society: "demo", provider: "pi", model: "current", extensions: [{ path: ext, sha256: "0".repeat(64) }],
-    }, { coreExtension: core });
+    }, { ...principalPaths(), coreExtension: core });
     assert.deepEqual(verifiedExtensionPaths(env[VERIFIED_EXTENSIONS_ENV]),
       { paths: [core, ext], malformed: false }, "the env is the -e argv list, core first");
     // The trusted extension's own file is in that list: the loader spells it

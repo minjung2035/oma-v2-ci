@@ -20,7 +20,7 @@ function legacyAt(version: number): { root: string; path: string } {
 }
 
 for (const version of [1, 2, 3, 6, 99]) {
-  test(`DR46: a database at user_version ${version} fails closed and is never rewritten`, () => {
+  test(`001. A database at user_version ${version} fails closed and is never rewritten`, () => {
     const { root, path } = legacyAt(version);
     try {
       const bytes = readFileSync(path);
@@ -33,7 +33,7 @@ for (const version of [1, 2, 3, 6, 99]) {
   });
 }
 
-test("DR27: an unversioned nonempty database is not mistaken for a new one", () => {
+test("002. An unversioned nonempty database is not mistaken for a new one", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-society-schema-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -45,7 +45,7 @@ test("DR27: an unversioned nonempty database is not mistaken for a new one", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR46: a new database gets schema v5 and a v5 database reopens unchanged", () => {
+test("003. A new database gets schema v5 and a v5 database reopens unchanged", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-society-schema-"));
   const path = join(root, "runtime.sqlite");
   try {

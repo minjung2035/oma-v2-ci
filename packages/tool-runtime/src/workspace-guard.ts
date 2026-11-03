@@ -114,7 +114,7 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
     if (permitted && !permitted(event.toolName))
       return { block: true, reason: `this tool is outside ${role}` };
     if (readOnly && writes)
-      return { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL with oma_goal_publish" };
+      return { block: true, reason: "the Principal reviews code but does not write or edit files" };
     if (event.toolName === "bash" || event.toolName === "powershell")
       return sandboxed ? undefined : {
         block: true,

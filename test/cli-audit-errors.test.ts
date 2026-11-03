@@ -14,7 +14,7 @@ const git = (cwd: string, args: string[]) => execFileSync("/usr/bin/git", args, 
 
 
 for (const fault of ["bundle-size", "bundle-git", "invalid-prerequisite", "ancestry-unknown"] as const) {
-  test(`NB-16: submit ${fault} cleans up before classified exit without freezing`, async t => {
+  test(`001. Submit ${fault} cleans up before classified exit without freezing`, async t => {
     const home = mkdtempSync(join(tmpdir(), "oma-nb16-"));
     t.after(() => rmSync(home, { recursive: true, force: true }));
     git(home, ["init", "-q"]);
@@ -45,7 +45,7 @@ for (const fault of ["bundle-size", "bundle-git", "invalid-prerequisite", "ances
   });
 }
 
-test("NB-16: GOAL output bound and invalid context bound are input failures", async t => {
+test("002. GOAL output bound and invalid context bound are input failures", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-nb16-goal-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   git(home, ["init", "-q"]);

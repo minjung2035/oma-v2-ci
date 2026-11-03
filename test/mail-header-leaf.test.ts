@@ -10,7 +10,7 @@ import { renderFrozenMessage } from "@oma/mail/serialize";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const id = "m-11111111-1111-4111-8111-111111111111-0";
 
-test("pure header runtime closure excludes mail coordinator SQLite transport and effects", () => {
+test("001. Pure header runtime closure excludes mail coordinator SQLite transport and effects", () => {
   const seen = new Set<string>();
   const visit = (path: string): void => {
     if (seen.has(path)) return;
@@ -44,7 +44,7 @@ test("pure header runtime closure excludes mail coordinator SQLite transport and
   assert.ok(seen.size >= 3);
 });
 
-test("an accepted original always unfolds back to its frozen OMA metadata", async () => {
+test("002. An accepted original always unfolds back to its frozen OMA metadata", async () => {
   // Regression: buildEml folds long header values at RFC 5322 boundaries, so a
   // 64-hex context OID arrives as a continuation line. Every validated value
   // must be unfolded before the grammar check, or OMA cannot read its own mail.
@@ -60,7 +60,7 @@ test("an accepted original always unfolds back to its frozen OMA metadata", asyn
   assert.equal(plan.contextRevision, candidate);
 });
 
-test("facts freeze one clock value; emission and plan never select another date", async t => {
+test("003. Facts freeze one clock value; emission and plan never select another date", async t => {
   let reads = 0;
   t.mock.method(Date, "now", () => { reads++; return 946684800987; });
   const facts = freezeMessageFacts({ id, society: "demo", sender: "alice", to: ["bob"],

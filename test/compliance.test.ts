@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
-test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate records", { timeout: 120000 }, () => {
+test("001. Structural evidence rejects stale, incomplete and duplicate records", { timeout: 120000 }, () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-compliance-"));
   const script = resolve("scripts/compliance.mjs");
   const reportScript = resolve("scripts/adversarial-report.mjs");

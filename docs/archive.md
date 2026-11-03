@@ -1,8 +1,21 @@
 # 과거 기록과 미채택 계획
 
-현재 지침은 [문서 지도](README.md), 재개점은 [HANDOFF](HANDOFF.md), 실행 판정은 [validation](implementation/validation.md)이 소유한다. 이 문서에서 연결한 기록의 current·active·OPEN·PASS·브랜치·명령은 해당 시점의 내용이다. 현재 작업 지시나 새 입력의 검증으로 사용하지 않는다.
+현재 문서는 [문서 지도](README.md), 실행 판정은 [validation](implementation/validation.md)이 소유한다. 이 문서에서 연결한 기록의 current·active·OPEN·PASS·브랜치·명령은 해당 시점의 내용이다. 현재 작업 지시나 새 입력의 검증으로 사용하지 않는다.
+
+## 검토 중인 미채택 설계안
+
+| 문서 | 상태와 범위 |
+|---|---|
+| [의도 중심 협업 표면 전면 재설계안](archive/design-drafts/intent-first-collaboration-surface.md) | 세 번째 제안의 기록·미채택·미구현. 파일 읽기와 9개 OMA 행동, send의 commit 공유, 제안·판정의 연속성, host 복구, lifecycle 이행의 실제 비용 및 평가 계획을 정의한다. |
+| [파일 기반 읽기와 명시적 행동 재설계안](archive/design-drafts/filesystem-and-action-surface.md) | 두 번째 제안의 기록·미채택·미구현. 파일 읽기와 순수 파일 발송 비교 근거는 유지한다. 16개 OMA 도구 및 6개 독립 관리 도구 권고는 위 전면 재설계안에서 철회한다. |
+| [모델 협업 도구 표면 첫 초안](archive/design-drafts/model-collaboration-surface.md) | 첫 제안의 기록·미채택·미구현. 기존 24개 도구의 이행과 내부 복구 책임을 정리했다. 공통 조회·문맥 공개·도구 구성은 후속안에서 재검토했다. 세 안 모두 현재 DR64와 실행 계약을 대체하지 않는다. |
 
 ## 최근 정리에서 분리한 기록
+
+[2026-11-03 보관 색인](archive/cleanup-2026-11-03/README.md)에 이전 인계·검증 일지·협업 추적표·native 조사·모듈 감사 원문을 모았다. 현재 상세 spec은 [협업 표면 명세](model-collaboration-surface-spec.md)이며 미채택 초안 목록과 구분한다.
+
+과거 테스트 감사 자료는 [test-audits](archive/test-audits/)에 있다. 이 자료는 실행되는 테스트가 아니며, 원래 파일명과 바이트를 보존했다.
+
 
 [2026-10-25 보관 색인](archive/documentation-cleanup-2026-10-25/README.md)에 정리 전 원문과 원래 경로를 모았다.
 

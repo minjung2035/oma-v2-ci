@@ -21,7 +21,7 @@ const ctx = (over: Partial<CompactContext> = {}, state: object = {}): CompactCon
 });
 const result = (text: string): CompactResult => ({ content: [{ type: "text", text }] });
 
-test("B1: the display name drops only the society's prefix", () => {
+test("001. The display name drops only the society's prefix", () => {
   assert.equal(toolDisplayName("oma_mail_send"), "mail send");
   assert.equal(toolDisplayName("oma_mail_read"), "mail read");
   // Engine built-ins and other extensions keep their own names.
@@ -29,7 +29,7 @@ test("B1: the display name drops only the society's prefix", () => {
   assert.equal(toolDisplayName("some_other_tool"), "some_other_tool");
 });
 
-test("B1: the resolver returns the self-rendered compact row for any tool", () => {
+test("002. The resolver returns the self-rendered compact row for any tool", () => {
   const runtime = createCompactToolRuntime();
   for (const name of ["oma_mail_send", "read", "unregistered_elsewhere"]) {
     const renderers = runtime.resolver(name, () => undefined);
@@ -39,7 +39,7 @@ test("B1: the resolver returns the self-rendered compact row for any tool", () =
   }
 });
 
-test("B1: resolvers chain — the base the rest of the chain resolves is still seen", () => {
+test("003. Resolvers chain — the base the rest of the chain resolves is still seen", () => {
   const runtime = createCompactToolRuntime();
   const author: BaseToolRenderers = { renderResult: () => ({ render: () => ["author body"], invalidate() {} }) };
   // The runner asks resolvers in load order, each seeing the rest's answer.
@@ -52,7 +52,7 @@ test("B1: resolvers chain — the base the rest of the chain resolves is still s
   assert.ok(rendered.render(80).join("\n").includes("author body"));
 });
 
-test("B1: a call row is one line — dot, display name, one-line arguments", () => {
+test("004. A call row is one line — dot, display name, one-line arguments", () => {
   const runtime = createCompactToolRuntime();
   const renderers = runtime.resolver("oma_mail_send", () => undefined)!;
   const component = renderers.renderCall!({ to: ["worker-a"], subject: "Interactive ownership" }, theme,
@@ -66,7 +66,7 @@ test("B1: a call row is one line — dot, display name, one-line arguments", () 
   assert.match(lines[0]!, /Interactive ownership/);
 });
 
-test("B1: a running call's dot is painted a live tone; a pending row's is muted", () => {
+test("005. A running call's dot is painted a live tone; a pending row's is muted", () => {
   const runtime = createCompactToolRuntime();
   runtime.agentStarted();
   const renderers = runtime.resolver("read", () => undefined)!;
@@ -77,7 +77,7 @@ test("B1: a running call's dot is painted a live tone; a pending row's is muted"
   runtime.agentEnded();
 });
 
-test("B1: the control row carries duration and line count", () => {
+test("006. The control row carries duration and line count", () => {
   const runtime = createCompactToolRuntime(() => now);
   let now = 1_000;
   const renderers = runtime.resolver("oma_mail_read", () => undefined)!;
@@ -94,7 +94,7 @@ test("B1: the control row carries duration and line count", () => {
   assert.match(text, /└/);
 });
 
-test("B1: a failed row says Failed and carries its last output line", () => {
+test("007. A failed row says Failed and carries its last output line", () => {
   const runtime = createCompactToolRuntime();
   const renderers = runtime.resolver("oma_mail_send", () => undefined)!;
   const row = renderers.renderResult!(result("context\nno such address"), { expanded: false, isPartial: false },
@@ -105,14 +105,14 @@ test("B1: a failed row says Failed and carries its last output line", () => {
   assert.doesNotMatch(text, /lines\b/);
 });
 
-test("B1: a partial result is reported as still running, not done", () => {
+test("008. A partial result is reported as still running, not done", () => {
   const runtime = createCompactToolRuntime();
   const renderers = runtime.resolver("read", () => undefined)!;
   const row = renderers.renderResult!(result("partial"), { expanded: false, isPartial: true }, theme, ctx({ isPartial: true }));
   assert.match(plain(row.render(80)), /Running…/);
 });
 
-test("B1: expansion shows the arguments under the rail; the output opens under it", () => {
+test("009. Expansion shows the arguments under the rail; the output opens under it", () => {
   const runtime = createCompactToolRuntime();
   const renderers = runtime.resolver("oma_mail_send", () => undefined)!;
   const args = { to: ["worker-a"], subject: "s", body: "the whole body line" };
@@ -128,7 +128,7 @@ test("B1: expansion shows the arguments under the rail; the output opens under i
   assert.ok(resultLines.some(line => /Done/.test(line)), "the control row stays under an opened result");
 });
 
-test("B1: a row never writes its bookkeeping into the author's shared state", () => {
+test("010. A row never writes its bookkeeping into the author's shared state", () => {
   const runtime = createCompactToolRuntime();
   const renderers = runtime.resolver("oma_status", () => undefined)!;
   const shared: Record<string, unknown> = {};
@@ -140,7 +140,7 @@ test("B1: a row never writes its bookkeeping into the author's shared state", ()
   runtime.agentEnded();
 });
 
-test("B1: timings stay bounded — the oldest finished entry is dropped first", () => {
+test("011. Timings stay bounded — the oldest finished entry is dropped first", () => {
   const runtime = createCompactToolRuntime(() => 42);
   const bound = COMPACT_TOOL_BOUNDS.trackedCalls.value;
   // The first call finishes; the rest stay open so the finished one is evicted first.
@@ -156,7 +156,7 @@ test("B1: timings stay bounded — the oldest finished entry is dropped first", 
   assert.match(plain(kept.render(80)), /Done in 0\.000s/);
 });
 
-test("B1: formatDurationMs and resultText keep the engine's own shapes", () => {
+test("012. FormatDurationMs and resultText keep the engine's own shapes", () => {
   assert.equal(formatDurationMs(0), "0.000s");
   assert.equal(formatDurationMs(12_345), "12.345s");
   assert.equal(formatDurationMs(61_000), "1m 1s");
@@ -165,7 +165,7 @@ test("B1: formatDurationMs and resultText keep the engine's own shapes", () => {
   assert.equal(resultText({ content: [] }), "");
 });
 
-test("B1: callSummary prefers the argument that names the call", () => {
+test("013. CallSummary prefers the argument that names the call", () => {
   assert.equal(callSummary("oma_status", {}), undefined);
   assert.equal(callSummary("oma_status", { agent: "worker-a" }), "worker-a");
   assert.equal(callSummary("read", { path: "/tmp/x", offset: 3 }), "/tmp/x");
@@ -176,7 +176,7 @@ test("B1: callSummary prefers the argument that names the call", () => {
   assert.ok(long.endsWith("…") && long.length <= COMPACT_TOOL_BOUNDS.summaryCells.value);
 });
 
-test("B1: typed calls show their target and operation without exposing body text", () => {
+test("014. Typed calls show their target and operation without exposing body text", () => {
   const runtime = createCompactToolRuntime();
   const cases: [string, Record<string, unknown>, string[]][] = [
     ["oma_merge_open", { tier: "HIGH", title: "Fix ownership", reason: "private prose" }, ["HIGH", "Fix ownership"]],
@@ -200,7 +200,7 @@ test("B1: typed calls show their target and operation without exposing body text
   }
 });
 
-test("B1: the running dot paints at draw time through the pulse tones", () => {
+test("015. The running dot paints at draw time through the pulse tones", () => {
   for (const status of ["pending", "success", "error"] as const)
     assert.match(paintIndicator(theme, status, 0), new RegExp(`\\[(muted|success|error)\\]⦁`));
   const live = new Set([0, 1, 2, 3, 4, 5, 6].map(frame => paintIndicator(theme, "running", frame)));

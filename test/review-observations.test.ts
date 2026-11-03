@@ -10,7 +10,7 @@ import { defaultHostConfig } from "@oma/config/defaults";
 import { StoreError } from "@oma/domain/errors";
 import { lifecycleReplayFixture } from "./fixtures/lifecycle-replay.js";
 
-test("reviewer pages make progress without losing the latest ledger observation", async () => {
+test("001. Reviewer pages make progress without losing the latest ledger observation", async () => {
   const f = fixture();
   try {
     f.store.transaction(tx => {
@@ -47,7 +47,7 @@ test("reviewer pages make progress without losing the latest ledger observation"
   } finally { f.close(); }
 });
 
-test("creation observations share child resolution and distinguish unavailable policy from denied capabilities", () => {
+test("002. Creation observations share child resolution and distinguish unavailable policy from denied capabilities", () => {
   const f = lifecycleReplayFixture();
   try {
     const config = defaultHostConfig({ society: "replay", node: "/node", libdir: "/lib", deploymentDigest: "0".repeat(64) });

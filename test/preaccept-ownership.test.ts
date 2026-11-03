@@ -62,7 +62,7 @@ function inspect(root: string) {
   return inspectIntegrity(readDiagnosticSnapshot(root), { stateRoot: root, society: "fixture" }, { files: new NodeIntegrityFiles() });
 }
 
-test("PRE-1: concurrent same-key sends leave mail/objects holding exactly the accepted object", async () => {
+test("001. Concurrent same-key sends leave mail/objects holding exactly the accepted object", async () => {
   const f = mailFixture();
   try {
     const settled = await Promise.allSettled([
@@ -78,7 +78,7 @@ test("PRE-1: concurrent same-key sends leave mail/objects holding exactly the ac
   } finally { f.close(); }
 });
 
-test("PRE-2: a different method racing the same actor/key owns no object after its rejection", async () => {
+test("002. A different method racing the same actor/key owns no object after its rejection", async () => {
   const f = mailFixture();
   try {
     // Both callers pass the pre-transaction key check while no row exists, so
@@ -98,7 +98,7 @@ test("PRE-2: a different method racing the same actor/key owns no object after i
   } finally { f.close(); }
 });
 
-test("PRE-3: a transaction failure injected immediately after freeze removes exactly the frozen object", async (t) => {
+test("003. A transaction failure injected immediately after freeze removes exactly the frozen object", async (t) => {
   const f = mailFixture();
   try {
     await f.mail.send(f.auth, "kept", f.input);
@@ -119,7 +119,7 @@ test("PRE-3: a transaction failure injected immediately after freeze removes exa
   } finally { f.close(); }
 });
 
-test("PRE-4: after those failures the integrity inspection reports no UNKNOWN", async (t) => {
+test("004. After those failures the integrity inspection reports no UNKNOWN", async (t) => {
   const f = mailFixture();
   try {
     await f.mail.send(f.auth, "ok", f.input);
@@ -148,7 +148,7 @@ test("PRE-4: after those failures the integrity inspection reports no UNKNOWN", 
   } finally { f.close(); }
 });
 
-test("PRE-5: an accepted linked create names no initial brief, so it owns none on disk", async () => {
+test("005. An accepted linked create names no initial brief, so it owns none on disk", async () => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-create-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -199,7 +199,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
   } finally { store.close(); removeTree(root); }
 });
 
-test("PRE-6: discard removes only the inode it published, and never a replacement", async () => {
+test("006. Discard removes only the inode it published, and never a replacement", async () => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-inode-"));
   try {
     const directory = join(root, "objects");
@@ -226,7 +226,7 @@ test("PRE-6: discard removes only the inode it published, and never a replacemen
   } finally { removeTree(root); }
 });
 
-test("DR39: preaccept pins end on acceptance, discard and a replacement refusal", () => {
+test("007. Preaccept pins end on acceptance, discard and a replacement refusal", () => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-pin-"));
   const path = join(root, "artifact.eml");
   const pins = (): number => fs.readdirSync("/proc/self/fd").filter(name => {
@@ -257,7 +257,7 @@ test("DR39: preaccept pins end on acceptance, discard and a replacement refusal"
   } finally { removeTree(root); }
 });
 
-test("PRE-7: retained evidence cannot be discarded and unconfirmed cleanup is retryable", () => {
+test("008. Retained evidence cannot be discarded and unconfirmed cleanup is retryable", () => {
   const retained = new PreacceptArtifact("/nonexistent/retained.eml", null);
   retained.retainForOperation();
   retained.discardUnaccepted();
@@ -275,7 +275,7 @@ test("PRE-7: retained evidence cannot be discarded and unconfirmed cleanup is re
   } finally { removeTree(root); }
 });
 
-test("PRE-8: a losing git.submit and a conflicting context.publish leave the object directory exact", async (t) => {
+test("009. A losing git.submit and a conflicting context.publish leave the object directory exact", async (t) => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-git-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -363,7 +363,7 @@ function contextOperations(root: string): string[] {
 }
 const racingMail = { to: ["b"], kind: "message" as const, subject: "racing", body: "racing body" };
 
-test("V18A: preaccept order is stream, staged tree, candidate, mail object, acceptance, then canonical effect", async (t) => {
+test("010. Preaccept order is stream, staged tree, candidate, mail object, acceptance, then canonical effect", async (t) => {
   const f = contextOnlyFixture();
   try {
     const key = "context-order";
@@ -455,7 +455,7 @@ const unacceptedPoints: ReadonlyArray<{
     }) },
 ];
 for (const item of unacceptedPoints) {
-  test(`V18A: ${item.point} removes the unaccepted staged tree and mail object`, async (t) => {
+  test(`011. Preaccept ownership: ${item.point} removes the unaccepted staged tree and mail object`, async (t) => {
     const f = contextOnlyFixture();
     try {
       const key = "context-preaccept";
@@ -469,7 +469,7 @@ for (const item of unacceptedPoints) {
   });
 }
 
-test("V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them", async (t) => {
+test("012. A lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them", async (t) => {
   const f = contextOnlyFixture();
   try {
     let frozen = false;
@@ -499,7 +499,7 @@ test("V18A: a lost acceptance acknowledgement retains the accepted tree and obje
   } finally { f.close(); }
 });
 
-test("V18A: an unavailable acceptance observation after refusal retains the tree and object", async (t) => {
+test("013. An unavailable acceptance observation after refusal retains the tree and object", async (t) => {
   const f = contextOnlyFixture();
   try {
     const key = "context-unobserved";
@@ -526,7 +526,7 @@ test("V18A: an unavailable acceptance observation after refusal retains the tree
   } finally { f.close(); }
 });
 
-test("V18A: native preparation uncertainty retains only the tree that preparation may still use", async (t) => {
+test("014. Native preparation uncertainty retains only the tree that preparation may still use", async (t) => {
   const f = contextOnlyFixture();
   try {
     const executor: unknown = Reflect.get(f.repository(), "preparation");
@@ -628,7 +628,7 @@ const bootstrapFailures: ReadonlyArray<{ readonly point: string; readonly names:
     behaviour: (_recipient, original) => slow(original) },
 ];
 for (const item of bootstrapFailures) {
-  test(`V19A: when ${item.point}, bootstrap accepts nothing and leaves no brief behind`, async (t) => {
+  test(`015. When ${item.point}, bootstrap accepts nothing and leaves no brief behind`, async (t) => {
     const f = lifecycleOnly({ seeded: false });
     try {
       const freezes = trackFreezes(t, f.mail, item.behaviour);
@@ -642,7 +642,7 @@ for (const item of bootstrapFailures) {
   });
 }
 
-test("V19A: a registry that changes during preparation refuses the whole seed set and settles every brief", async (t) => {
+test("016. A registry that changes during preparation refuses the whole seed set and settles every brief", async (t) => {
   const f = lifecycleOnly({ seeded: false });
   try {
     trackFreezes(t, f.mail, (recipient, original) => {
@@ -656,7 +656,7 @@ test("V19A: a registry that changes during preparation refuses the whole seed se
   } finally { f.close(); }
 });
 
-test("V19A: an accepted seed set retains exactly the briefs its plans name", async (t) => {
+test("017. An accepted seed set retains exactly the briefs its plans name", async (t) => {
   const f = lifecycleOnly({ seeded: false });
   try {
     const freezes = trackFreezes(t, f.mail, (_recipient, original) => original());
@@ -668,7 +668,7 @@ test("V19A: an accepted seed set retains exactly the briefs its plans name", asy
   } finally { f.close(); }
 });
 
-test("V19B: a policy refresh that fails after the brief was frozen removes that brief", async (t) => {
+test("018. A policy refresh that fails after the brief was frozen removes that brief", async (t) => {
   const f = lifecycleOnly();
   try {
     trackFreezes(t, f.mail, async (_recipient, original) => { const frozen = await original(); f.failRefresh(); return frozen; });
@@ -680,7 +680,7 @@ test("V19B: a policy refresh that fails after the brief was frozen removes that 
   } finally { f.close(); }
 });
 
-test("V19B: a same-name, same-spec race has one physical winner and the linked loser owns no brief", async (t) => {
+test("019. A same-name, same-spec race has one physical winner and the linked loser owns no brief", async (t) => {
   const f = lifecycleOnly();
   try {
     t.mock.method(f.units, "ensureResident", () => undefined);

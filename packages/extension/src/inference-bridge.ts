@@ -1,5 +1,5 @@
 import { isAbsolute } from "node:path";
-import { connect, createServer } from "node:net";
+import { connect, createServer, type Socket } from "node:net";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { integerEnv } from "@oma/tool-runtime/shared";
 
@@ -24,8 +24,17 @@ export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
   const placeholder = process.env.OMA_INFERENCE_KEY;
   const port = integerEnv("OMA_INFERENCE_PORT");
   if (!socket || !provider || !placeholder || port === null || !isAbsolute(socket)) return;
+  let closing = false;
+  const sockets = new Set<Socket>();
   const server = createServer(client => {
+    if (closing) { client.destroy(); return; }
+    sockets.add(client);
+    client.once("close", () => sockets.delete(client));
     const upstream = connect(socket);
+    sockets.add(upstream);
+    upstream.once("close", () => sockets.delete(upstream));
+    client.once("close", () => upstream.destroy());
+    upstream.once("close", () => client.destroy());
     const drop = (): void => { client.destroy(); upstream.destroy(); };
     client.on("error", drop);
     upstream.on("error", drop);
@@ -36,13 +45,18 @@ export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
   // back on the way out, so nothing inside ever holds the credential.
   // What this load opened ends with it: an interactive engine loads its
   // extensions again for each new session and would otherwise keep listening.
-  pi.on("session_shutdown", () => { server.close(); });
+  pi.on("session_shutdown", () => {
+    closing = true;
+    server.close();
+    for (const socket of sockets) socket.destroy();
+  });
   const register = (baseUrl: string): void => { pi.registerProvider(provider, { baseUrl, apiKey: placeholder }); };
   register(UNREACHABLE);
   await new Promise<void>(resolve => {
     let planned = true;
     server.on("listening", () => {
       const address = server.address();
+      if (closing) { server.close(); resolve(); return; }
       // 'listening' is the same synchronous emit boundary as 'error' below:
       // a registerProvider refusal escaping it kills the engine. The
       // unreachable provider the pre-listen register already installed is
@@ -73,7 +87,7 @@ export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
       try { process.stderr.write(`oma inference bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`); }
       catch { /* nowhere left to say it */ }
       try { register(UNREACHABLE); } catch { /* already the provider the first bind left behind */ }
-      try { if (planned) { planned = false; server.listen(0, "127.0.0.1"); } else resolve(); }
+      try { if (!closing && planned) { planned = false; server.listen(0, "127.0.0.1"); } else resolve(); }
       catch { resolve(); }
     });
     server.listen(port, "127.0.0.1");

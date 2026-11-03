@@ -50,7 +50,7 @@ function scene() {
   return { root, sessionPath, counts, session, close: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-test("V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once", async () => {
+test("001. A completion that fails after the receipt is retried alone; the engine sees the batch once", async () => {
   const s = scene();
   try {
     const completions: BoundaryEvidence[] = [];
@@ -78,7 +78,7 @@ test("V08A: a completion that fails after the receipt is retried alone; the engi
   } finally { s.close(); }
 });
 
-test("V08A / WP08.04: a batch conflict at completion is a failure with back-off, not a lost session race", async () => {
+test("002. A batch conflict at completion is a failure with back-off, not a lost session race", async () => {
   const s = scene();
   try {
     let now = 0;
@@ -95,7 +95,7 @@ test("V08A / WP08.04: a batch conflict at completion is a failure with back-off,
   } finally { s.close(); }
 });
 
-test("V08A / WP08.04: losing the session claim is still deferred without back-off", async () => {
+test("003. Losing the session claim is still deferred without back-off", async () => {
   const s = scene();
   try {
     const session: DeliverySession = { ...s.session, running: true, busy: false,
@@ -107,7 +107,7 @@ test("V08A / WP08.04: losing the session claim is still deferred without back-of
   } finally { s.close(); }
 });
 
-test("MAC-650 / D-7: the retry spacing is elapsed time, not the wall clock's difference", async () => {
+test("004. The retry spacing is elapsed time, not the wall clock's difference", async () => {
   // A wall clock that leaps two hours at every reading -- a machine waking
   // from sleep -- must not end the back-off of a batch that just failed.
   const s = scene();
@@ -125,7 +125,7 @@ test("MAC-650 / D-7: the retry spacing is elapsed time, not the wall clock's dif
   } finally { Date.now = wall; s.close(); }
 });
 
-test("V08B: conflicting or unavailable receipt evidence presents nothing and is kept", async () => {
+test("005. Conflicting or unavailable receipt evidence presents nothing and is kept", async () => {
   for (const fault of ["conflicting", "unavailable"] as const) {
     const s = scene();
     try {
@@ -145,7 +145,7 @@ test("V08B: conflicting or unavailable receipt evidence presents nothing and is 
 });
 
 
-test("DR27/P0-4: each Principal delivery wake returns its observation timer", async t => {
+test("006. Each Principal delivery wake returns its observation timer", async t => {
   const s = scene();
   const pending = new Set<ReturnType<typeof setTimeout>>();
   const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;

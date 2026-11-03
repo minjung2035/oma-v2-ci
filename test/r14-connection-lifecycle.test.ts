@@ -62,7 +62,7 @@ function harness(t: TestContext, handle: RpcConnectionOptions["handle"], customi
 }
 
 for (const ending of ["success", "close", "revoke", "short EOF"] as const) {
-  test(`DR46/P0-1/4: raw stream ${ending} checks current authority before creating a spool`, async t => {
+  test(`001. Raw stream ${ending} checks current authority before creating a spool`, async t => {
     let allowed = true, created = 0, handled = 0;
     const body = Buffer.from("raw");
     const h = harness(t, async (_raw, input) => {
@@ -86,7 +86,7 @@ for (const ending of ["success", "close", "revoke", "short EOF"] as const) {
   });
 }
 
-test("R14: every two-way split and single-byte feed preserves an exact four-byte header", () => {
+test("002. Every two-way split and single-byte feed preserves an exact four-byte header", () => {
   const value = { id: "fragment", nested: { text: "한글 🧪" }, value: 1 };
   const bytes = encodeFrame(value);
   for (let split = 0; split <= bytes.length; split++) {
@@ -102,7 +102,7 @@ test("R14: every two-way split and single-byte feed preserves an exact four-byte
   assert.equal(events.length, 1); assert.equal(events[0]?.kind, "frame");
 });
 
-test("R14: fatal UTF-8/JSON/length/EOF never allows a later valid frame to resynchronize", () => {
+test("003. Fatal UTF-8/JSON/length/EOF never allows a later valid frame to resynchronize", () => {
   const invalidBodies = [Buffer.from('{"a":1,"a":2}'), Buffer.from([0xff]), Buffer.from("[]"), Buffer.from("{")];
   for (const body of invalidBodies) {
     const header = Buffer.alloc(4); header.writeUInt32BE(body.length);
@@ -120,7 +120,7 @@ test("R14: fatal UTF-8/JSON/length/EOF never allows a later valid frame to resyn
   }
 });
 
-test("R14: raw body plus 0–5 next-frame bytes keeps all four excess decisions distinct", () => {
+test("004. Raw body plus 0–5 next-frame bytes keeps all four excess decisions distinct", () => {
   const body = Buffer.from("raw bytes, not JSON"); const next = control();
   for (let count = 0; count <= 5; count++) {
     const received: Buffer[] = [];
@@ -141,7 +141,7 @@ test("R14: raw body plus 0–5 next-frame bytes keeps all four excess decisions 
   assert.equal(malformed.excessStatus(), "excess");
 });
 
-test("R14: short raw EOF and undecidable trailing prefixes are cleaned before any handler runs", t => {
+test("005. Short raw EOF and undecidable trailing prefixes are cleaned before any handler runs", t => {
   for (const trailing of [null, Buffer.from([0]), Buffer.from([0, 0, 0, 5, 123])]) {
     let calls = 0;
     const h = harness(t, async () => { calls++; return {}; });
@@ -156,7 +156,7 @@ test("R14: short raw EOF and undecidable trailing prefixes are cleaned before an
   }
 });
 
-test("R14: preflight rejection cannot allocate a spool; write failure cleans its allocated spool", t => {
+test("006. Preflight rejection cannot allocate a spool; write failure cleans its allocated spool", t => {
   let allocations = 0;
   const denied = harness(t, async () => ({}), {
     preflight: () => { throw new StoreError("CAPABILITY_DENIED", "revoked"); },
@@ -177,7 +177,7 @@ test("R14: preflight rejection cannot allocate a spool; write failure cleans its
   assert.ok(actual); assert.equal(existsSync(actual.path), false); assert.equal(broken.peerCloses(), 1);
 });
 
-test("R14: disconnect preserves dispatched ownership but cancels every queued request", async t => {
+test("007. Disconnect preserves dispatched ownership but cancels every queued request", async t => {
   const gate = deferred(); let calls = 0;
   const h = harness(t, async () => { calls++; return gate.promise; });
   const body = Buffer.from("hello");
@@ -196,7 +196,7 @@ test("R14: disconnect preserves dispatched ownership but cancels every queued re
   assert.equal(h.alarms.active, 0);
 });
 
-test("R14: backpressure runs no queued method until drain and closes at a finite receipt deadline", async t => {
+test("008. Backpressure runs no queued method until drain and closes at a finite receipt deadline", async t => {
   let calls = 0;
   const h = harness(t, async raw => { calls++; return { v: 1, id: raw.id, ok: true, result: {} }; });
   h.socket.writable = false;
@@ -213,7 +213,7 @@ test("R14: backpressure runs no queued method until drain and closes at a finite
   await Promise.all(flow.tasks); assert.equal(flow.tasks.length, 2); assert.equal(flow.socket.output.length, 2);
 });
 
-test("R14: slow headers, control floods and half-close have bounded, non-resynchronizing outcomes", async t => {
+test("009. Slow headers, control floods and half-close have bounded, non-resynchronizing outcomes", async t => {
   const slow = harness(t, async () => assert.fail("incomplete header"));
   slow.socket.emit("data", Buffer.from([0])); slow.alarms.advance(10);
   assert.equal(slow.socket.destroyed, true); assert.equal(slow.alarms.active, 0);

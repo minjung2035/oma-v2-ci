@@ -365,8 +365,8 @@ const simulate = (seed: number, index: number): string => {
   return log.join("\n");
 };
 
-test(`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} ` +
-     `(${SEQUENCES_PER_SEED} ledgers each), determinism by double evaluation`, () => {
+test(`001. Review evaluation fuzz: ${`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} ` +
+     `(${SEQUENCES_PER_SEED} ledgers each), determinism by double evaluation`}`, () => {
   for (const seed of SEEDS)
     for (let i = 0; i < SEQUENCES_PER_SEED; i++) {
       const first = simulate(seed, i);
@@ -375,7 +375,7 @@ test(`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} 
     }
 });
 
-test("evaluator fuzz coverage report", () => {
+test("002. Evaluator fuzz coverage report", () => {
   // Existence proof that the sweep exercised the interesting regions; a seed
   // change that collapses coverage (e.g. no approvals ever emitted) must fail.
   assert.ok(coverage.sequences >= SEEDS.length * SEQUENCES_PER_SEED, "all sequences ran");

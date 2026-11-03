@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // ---------------------------------------------------------------------------
 // F5: --check verifies the manifest's own metadata, not just file bytes.
-test("BL1/F5: the bundle check refuses a manifest whose metadata drifted from the declared pins", async () => {
+test("001. The bundle check refuses a manifest whose metadata drifted from the declared pins", async () => {
     // File bytes and the bundle digest were always compared; round 2 adds the
     // manifest's own words: generated.divergences against the script's
     // OMA_DIVERGENCES and package.* against the pinned upstream identity.

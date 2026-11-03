@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 
-test("DR27/V32A: isolated history never certifies unstaged, staged, new or ignored bytes", t => {
+test("001. Isolated history never certifies unstaged, staged, new or ignored bytes", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-review-history-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const put = (path, text) => {

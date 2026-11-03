@@ -30,7 +30,7 @@ export interface TlsProvider {
   close(): Promise<void>;
 }
 
-export async function tlsProvider(): Promise<TlsProvider> {
+export async function tlsProvider(host = "127.0.0.1"): Promise<TlsProvider> {
   const dir = mkdtempSync(join(tmpdir(), "oma-tls-provider-"));
   const keyPath = join(dir, "key.pem");
   const certPath = join(dir, "cert.pem");
@@ -76,11 +76,11 @@ export async function tlsProvider(): Promise<TlsProvider> {
     else socket.on("data", chunk => { socket.write(Buffer.concat([Buffer.from("echo:"), chunk])); });
     socket.on("error", () => {});
   });
-  await new Promise<void>(resolve => { server.listen(0, "127.0.0.1", () => { resolve(); }); });
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, host, () => { resolve(); }); });
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
   return {
-    origin: `https://localhost:${port}`,
+    origin: `https://${host.includes(":") ? `[${host}]` : "localhost"}:${port}`,
     seen,
     get reply() { return state.reply; },
     set reply(value) { state.reply = value; },

@@ -21,8 +21,9 @@ import type { ValidatedRunLease } from "@oma/protocol/run-lease";
 import { StoreError } from "@oma/domain/errors";
 import { storedMailBytes } from "@oma/domain/mail-values";
 import { assertModelScope } from "@oma/domain/paths";
-import { RESIDENT_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
+import { requireCollaborationSurface } from "@oma/domain/collaboration-surface";
 import { actorAddress } from "@oma/domain/actor-address";
+import { collaborationProfilePrompt } from "@oma/domain/collaboration-prompts";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Every Resident requires it; its absence is an unsupported profile. */
@@ -71,9 +72,8 @@ export interface PiAdapterProfile {
    * host paths inside the package store. The engine gets them by flag, so the
    * resources reach Pi's loader rather than only being mounted. */
   readonly packageResources?: PackageResourcePaths | undefined;
-  /** TSP-005: the validated surface plan the trusted runtime hands the engine,
-   * encoded; absent means the role's provenance filter alone decides. It is
-   * runtime plumbing, never authored configuration (D23). */
+  /** The explicit current role surface. Omission is unsupported, never a
+   * provenance-only fallback. Runtime plumbing, not authored configuration. */
   readonly toolSurface?: string | undefined;
 }
 export interface PiAdapterPaths {
@@ -111,7 +111,7 @@ export interface PiAdapterOptions {
     | "addresses"
     | "contextBytes"
     | "bundleBytes"
-  >;
+  > & Partial<Pick<ProtocolLimits, "subjectBytes">>;
   /** The engine always runs confined. `paths` stays host-side so the file
    * checks and digest verification below still read the real files; the argv
    * and environment handed to the engine are translated through the mount
@@ -138,6 +138,10 @@ export const VERIFIED_EXTENSIONS_ENV = "OMA_VERIFIED_EXTENSIONS";
 
 /** The entries the trusted core extension reads. Nothing else is OMA's to set. */
 function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<string, string> {
+  if (options.confinement.host.recordRoot !== undefined &&
+      (!Number.isSafeInteger(options.limits.subjectBytes) || options.limits.subjectBytes! < 1))
+    throw new StoreError("UNSUPPORTED_PROFILE", "selected collaboration records require the effective mail subject byte bound");
+  if (options.confinement.host.recordRoot !== undefined) collaborationProfilePrompt("resident", options.profile.prompt);
   return {
     OMA_ACTOR: options.actor,
     OMA_SOCIETY: options.society,
@@ -164,6 +168,14 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     // store the mount plan stopped carrying is refused by `inside`, not named.
     ...(options.confinement.host.packages === undefined ? {}
       : { OMA_PACKAGE_STORE: inside(options.confinement.host.packages) }),
+    ...(options.confinement.host.recordRoot === undefined ? {} : {
+      OMA_RECORD_ROOT: inside(options.confinement.host.recordRoot),
+      OMA_SUBJECT_BYTES: String(options.limits.subjectBytes),
+      OMA_BODY_BYTES: String(options.limits.mailBodyBytes),
+      OMA_WORLD_ROOT: inside(options.confinement.directories.world),
+      // Authored profile text is distinct from the nonreplaceable authority block.
+      OMA_COLLABORATION_ROLE_PROMPT: options.profile.prompt,
+    }),
     ...(options.profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
     // D25: the extension paths this engine's `-e` argv carries, in the same
     // spelling -- the trusted extension authorizes tools by this provenance,
@@ -243,7 +255,7 @@ function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
   // describes a lone coding agent, not a Resident. An authored-empty role runs
   // on the built-in rather than on that default.
   args.push("--system-prompt",
-    options.profile.prompt.length > 0 ? options.profile.prompt : RESIDENT_SYSTEM_PROMPT);
+    collaborationProfilePrompt("resident", options.profile.prompt));
   return args;
 }
 
@@ -252,6 +264,9 @@ function engineArgv(options: PiAdapterOptions, inside: PathView): string[] {
 export function planPiSpawn(sandbox: ResidentSandbox, options: PiAdapterOptions, preparedView?: ResidentPathView): PiSpawnPlan {
   if (options.confinement === undefined)
     throw new StoreError("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
+  requireCollaborationSurface(options.profile.toolSurface, "resident");
+  if (options.confinement.host.recordRoot === undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", "collaboration Worker execution requires its host-bound record scope");
   // PR-004/SB-006, the same rule as the Principal's: the model's workspace
   // holds none of the engine's session history, its home (the confined
   // engine's own settings live there), its batch views or its credentials.

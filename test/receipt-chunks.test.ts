@@ -36,7 +36,7 @@ const operation = "op-12345678-1234-4234-8234-123456789abc";
 const receipt: Receipt = { operation, state: "succeeded", result: { kind: "agent.stop", agent: "alice", desired: "stopped",
   remainingOperations: Array.from({ length: 1000 }, (_, n) => `op-12345678-1234-4234-8234-${n.toString().padStart(12, "0")}`) } };
 
-test("G03-broker-01: a large immutable receipt round trips in bounded, decoded frames", async () => {
+test("001. A large immutable receipt round trips in bounded, decoded frames", async () => {
   let calls = 0;
   const actual = await collectReceipt("stop-1", 100000, async params => {
     calls++;
@@ -51,7 +51,7 @@ test("G03-broker-01: a large immutable receipt round trips in bounded, decoded f
   assert.ok(calls > 1);
 });
 
-test("G03-broker-01: a changed receipt, missing version or discontinuous bytes never authorize resend", async () => {
+test("002. A changed receipt, missing version or discontinuous bytes never authorize resend", async () => {
   const first = receiptChunk("x", receipt, { key: "k", offset: 0 }, 512).result;
   assert.throws(() => receiptChunk("x", receipt, { key: "k", offset: first.next! }, 512), { code: "INVALID_REQUEST" });
   assert.throws(() => receiptChunk("x", { operation, state: "pending" }, { key: "k", offset: first.next!, sha256: first.sha256 }, 512), { code: "INVALID_REQUEST" });
@@ -72,7 +72,7 @@ test("G03-broker-01: a changed receipt, missing version or discontinuous bytes n
   }), /connection lost/);
 });
 
-test("G03-broker-01: Client recovers a handled oversized answer across connections without repeating its effect", async t => {
+test("003. Client recovers a handled oversized answer across connections without repeating its effect", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-wire-"));
   const sockets = new Set<Socket>(); let effects = 0; let reads = 0;
   const previous = process.env.OMA_FRAME_BYTES;
@@ -112,7 +112,7 @@ test("G03-broker-01: Client recovers a handled oversized answer across connectio
   assert.equal(effects, 1); assert.ok(reads > 1);
 });
 
-test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one observation window of silence", async t => {
+test("004. A stalled chunk connection is closed after one observation window of silence", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-deadline-"));
   const sockets = new Set<Socket>(); let calls = 0; let clock = 0;
   t.mock.method(performance, "now", () => clock);
@@ -155,7 +155,7 @@ test("G03-broker-01 / IPC-006: a stalled chunk connection is closed after one ob
   assert.ok(elapsed >= 800 && elapsed < 10000, `stall window was ${elapsed} ms, not the chunk's own observation window`);
 });
 
-test("G03-broker-01: durable stop receipt survives a lost chunk and broker restart without repeating the effect or crossing actors", { timeout: 15000 }, async t => {
+test("005. Durable stop receipt survives a lost chunk and broker restart without repeating the effect or crossing actors", { timeout: 15000 }, async t => {
   // Real ledger, lifecycle, dispatch, framing and Client. Only peer authentication
   // and the unit-manager boundary are fixtures; this is not kernel-auth evidence.
   const root = mkdtempSync(join(tmpdir(), "oma-chunk-ledger-"));
@@ -239,7 +239,7 @@ test("G03-broker-01: durable stop receipt survives a lost chunk and broker resta
   assert.equal(missing.error?.code, "REQUEST_NOT_FOUND");
 });
 
-test("G03-broker-01: a large observation cannot overwrite the bounded original freeze", t => {
+test("006. A large observation cannot overwrite the bounded original freeze", t => {
   const home = mkdtempSync(join(tmpdir(), "oma-chunk-cache-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const cache = new RequestCache(home, readCacheFile, 1024);

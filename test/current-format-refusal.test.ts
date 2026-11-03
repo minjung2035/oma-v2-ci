@@ -17,7 +17,7 @@ import { requestHash } from "@oma/domain/request-identity";
 import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
 const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
-for (const version of [1, 2, 3]) test(`DR46 schema4: refused schema ${version} stays byte-identical and diagnostics cannot approve it`, t => {
+for (const version of [1, 2, 3]) test(`001. Refused schema ${version} stays byte-identical and diagnostics cannot approve it`, t => {
   const root = mkdtempSync(join(tmpdir(), "oma-prior-db-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "runtime.sqlite"), raw = new DatabaseSync(path);
@@ -30,7 +30,7 @@ for (const version of [1, 2, 3]) test(`DR46 schema4: refused schema ${version} s
   assert.deepEqual(readdirSync(root).sort(), names, "refusal creates no replacement database or sidecar");
 });
 
-test("DR46 Host3: previous versions and inert resource fields refuse without modifying configuration bytes", t => {
+test("002. Previous versions and inert resource fields refuse without modifying configuration bytes", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-prior-config-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const current = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),  deploymentDigest: "a".repeat(64) });
@@ -49,7 +49,7 @@ test("DR46 Host3: previous versions and inert resource fields refuse without mod
   }
 });
 
-test("DR46 plan2: a prior bare plan in a current database is rejected and never receives an envelope on read", t => {
+test("003. A prior bare plan in a current database is rejected and never receives an envelope on read", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-prior-plan-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "runtime.sqlite"), id = "op-00000000-0000-4000-8000-000000000001";
@@ -70,7 +70,7 @@ test("DR46 plan2: a prior bare plan in a current database is rejected and never 
   finally { observed.close(); }
 });
 
-test("DR46 review grammar: old attestation kinds and short names cannot become current requests", () => {
+test("004. Review grammar: old attestation kinds and short names cannot become current requests", () => {
   for (const kind of ["peer", "decision", "revoke", "challenge", "finding", "scope"])
     assert.throws(() => decodeMutationPayload("attest.record", { kind }), TypeError);
   for (const name of ["merge-abcd1234", "challenge-abcd1234"]) assert.equal(isReviewRequestName(name), false);

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 for (const args of [["login"], ["pi", "list"]]) {
-  test(`U1: oma ${args.join(" ")} remains a host interactive engine, not a Resident`, { timeout: 30_000 }, () => {
+  test(`001. Oma ${args.join(" ")} remains a host interactive engine, not a Resident`, { timeout: 30_000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-interactive-profile-"));
     try {
       const engine = join(root, "engine");

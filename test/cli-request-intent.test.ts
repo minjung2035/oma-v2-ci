@@ -23,7 +23,7 @@ function invoke(home: string, expression: string) {
   });
 }
 
-test("method is compared before projecting current arguments", () => {
+test("001. Method is compared before projecting current arguments", () => {
   let called = false;
   const conflict = requestIntentConflict({
     expectedMethod: "route.unfollow",
@@ -33,7 +33,7 @@ test("method is compared before projecting current arguments", () => {
   assert.equal(called, false);
 });
 
-test("direct full OIDs compare while aliases contribute no invented provenance", () => {
+test("002. Direct full OIDs compare while aliases contribute no invented provenance", () => {
   assert.deepEqual(explicitFullOid("from", oid), { from: oid });
   assert.deepEqual(explicitFullOid("candidate", "c".repeat(64)), { candidate: "c".repeat(64) });
   for (const alias of ["HEAD", "main", "v1", "HEAD~1", "a".repeat(12)])
@@ -46,7 +46,7 @@ test("direct full OIDs compare while aliases contribute no invented provenance",
   }, { method: "git.submit", params: { to: ["bob", "alice", "bob"], paths: ["z", "a"], candidate: oid } }), null);
 });
 
-test("typed client refuses another method/full OID before network, files or Git effects", () => {
+test("003. Typed client refuses another method/full OID before network, files or Git effects", () => {
   const key = "r06-request";
   const cases: Array<{ method: MutationMethod; params: Json; expression: string }> = [
     { method: "route.follow", params: { topic: "work" }, expression: clientCall("subscribe", "unfollow", "work", key) },
@@ -77,7 +77,7 @@ test("typed client refuses another method/full OID before network, files or Git 
   }
 });
 
-test("cached create ignores changed brief and unresolvable HEAD while querying only its key", async t => {
+test("004. Cached create ignores changed brief and unresolvable HEAD while querying only its key", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-r06-replay-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const key = "r06-frozen";
@@ -122,7 +122,7 @@ test("cached create ignores changed brief and unresolvable HEAD while querying o
   assert.deepEqual(readFileSync(cachePath), before);
 });
 
-test("typed client stops on corrupt metadata before source reads and wire sends", () => {
+test("005. Typed client stops on corrupt metadata before source reads and wire sends", () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r07-stop-"));
   try {
     const cache = new RequestCache(home);
@@ -138,7 +138,7 @@ test("typed client stops on corrupt metadata before source reads and wire sends"
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("P0V-38 / N15: a missing frozen body does not stop the lookup, and without it nothing is resent or rebuilt from source", async t => {
+test("006. A missing frozen body does not stop the lookup, and without it nothing is resent or rebuilt from source", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-r07-body-"));
   t.after(() => { rmSync(home, { recursive: true, force: true }); });
   const cache = new RequestCache(home);
@@ -178,7 +178,7 @@ test("P0V-38 / N15: a missing frozen body does not stop the lookup, and without 
   assert.deepEqual(methods, ["operation.get"], "the request was sent again without its frozen body");
 });
 
-test("a client with no HOME names it; receipts are never cached in shared /tmp", () => {
+test("007. A client with no HOME names it; receipts are never cached in shared /tmp", () => {
   // A process-global guess of /tmp for the request cache wrote a caller's
   // receipts into shared space. With no HOME at all the request names that
   // instead of placing ~/.local/state/oma/requests under /tmp.

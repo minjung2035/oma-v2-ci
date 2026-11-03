@@ -140,6 +140,14 @@
       "types": "./dist/restic-verification.d.ts",
       "default": "./dist/restic-verification.js"
     },
+    "./execution-recovery": {
+      "types": "./dist/execution-recovery.d.ts",
+      "default": "./dist/execution-recovery.js"
+    },
+    "./package-replacement": {
+      "types": "./dist/package-replacement.d.ts",
+      "default": "./dist/package-replacement.js"
+    },
     "./package-staging": {
       "types": "./dist/package-staging.d.ts",
       "default": "./dist/package-staging.js"

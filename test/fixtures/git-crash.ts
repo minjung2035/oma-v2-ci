@@ -28,7 +28,7 @@ export function gitCommand(root: string, args: string[]): string {
 }
 /** Disposable feature fixture backend. All phase effects use production
  * scope/journal primitives; no host import or fabricated death observation. */
-export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: () => void } = {}): QuarantineExecution {
+export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: () => void; execution?: ExecutionRuntime } = {}): QuarantineExecution {
     const root = pathsInput.stateRoot;
     const paths = { ...pathsInput,
       checkNode: pathsInput.checkNode ?? process.execPath, checkAssetsDir: pathsInput.checkAssetsDir ?? process.cwd() };
@@ -39,22 +39,27 @@ export function nativeQuarantine(pathsInput: GitPaths, options: { afterImport?: 
     prepareResidentRootfs(residentRootfsPath(paths.stateRoot), hostSystemLayout(), process.getuid!(), process.getgid!());
     let active: ExecutionRuntime | null = null;
     const quarantine: QuarantineExecution = {
-      confirmDead: () => active === null && ExecutionJournal.inspect(root).length === 0,
+      slotState: () => options.execution?.slotState("quarantine") ?? (active !== null ? active.slotState("quarantine")
+        : ExecutionJournal.inspect(root).length === 0 ? "dead" : "unknown"),
       async execute(request, authorize) {
         if (active !== null) throw new Error("test execution owner is already active or unconfirmed");
-        const owner = new ExecutionRuntime(root); active = owner;
-        const result = await withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize),
-          async () => { await owner.close(); active = null; });
+        const owner = options.execution ?? new ExecutionRuntime(root); active = owner;
+        // Borrowing the original broker runtime never transfers journal/cleanup ownership.
+        const result = options.execution === undefined
+            ? await withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize),
+                async () => { await owner.close(); active = null; })
+            : await withAsyncCleanup(() => quarantineExecution(paths, owner).execute(request, authorize), () => { active = null; });
         if (request.phase === "import" && result.kind === "exited" && result.exitCode === 0) options.afterImport?.();
         return result;
       },
     };
     return quarantine;
 }
-export function gitFixture(root: string, store: Store, options: { afterImport?: () => void } = {}) {
+export function gitFixture(root: string, store: Store, options: { afterImport?: () => void; ownerSignal?: AbortSignal; execution?: ExecutionRuntime } = {}) {
     const paths: GitPaths = {
         stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), society: "crash",
          checkNode: process.execPath, checkAssetsDir: process.cwd(),
+        ...(options.ownerSignal === undefined ? {} : { ownerSignal: options.ownerSignal }),
     };
     const quarantine = nativeQuarantine(paths, options);
     const mail = createMailModule({ stateRoot: root, society: "crash" }, store, 64);

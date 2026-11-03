@@ -9,7 +9,7 @@ import { CLIENT_RUNTIME, installClientRuntime } from "#oma-test/app/runtime/clie
 
 const operation = "op-00000000-0000-4000-8000-000000000001";
 
-test("DR27: each in-process observation owns its budget, not the whole tool", async t => {
+test("001. Each in-process observation owns its budget, not the whole tool", async t => {
   const root = mkdtempSync(join(process.cwd(), ".client-lifetime-"));
   const timers: number[] = [];
   const original = globalThis.setTimeout;
@@ -28,7 +28,7 @@ test("DR27: each in-process observation owns its budget, not the whole tool", as
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR27/P0: abort releases the socket, preserves the freeze, and reports same-key unknown", async () => {
+test("002. Abort releases the socket, preserves the freeze, and reports same-key unknown", async () => {
   const root = mkdtempSync(join(process.cwd(), ".client-abort-"));
   const controller = new AbortController();
   let opened!: () => void;
@@ -49,7 +49,7 @@ test("DR27/P0: abort releases the socket, preserves the freeze, and reports same
   } finally { installClientRuntime(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR27: an already aborted call neither builds nor opens a socket", async () => {
+test("003. An already aborted call neither builds nor opens a socket", async () => {
   let calls = 0;
   installRuntime({ ...CLIENT_RUNTIME, channel: () => { calls++; throw new Error("unexpected dial"); } });
   try {
@@ -60,7 +60,7 @@ test("DR27: an already aborted call neither builds nor opens a socket", async ()
   } finally { installClientRuntime(); }
 });
 
-for (const state of ["pending", "unknown", "failed", "succeeded"] as const) test(`DR27: ${state} is not inferred from process exit`, async () => {
+for (const state of ["pending", "unknown", "failed", "succeeded"] as const) test(`004. Cli process lifetime: ${state} is not inferred from process exit`, async () => {
   const root = mkdtempSync(join(process.cwd(), ".client-outcome-"));
   const receipt = state === "failed" ? { operation, state, error: { code: "CHECK_FAILED" as const, message: "check", retry: "never" as const } }
     : state === "succeeded" ? { operation, state, result: { kind: "route.follow" as const, topic: "commons", subscribed: true } }

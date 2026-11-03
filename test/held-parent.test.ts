@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TransportSpool } from "@oma/storage/transport-spool";
 
-test("AV5 / FS-005: a spool whose staging path is replaced after sealing reads and removes only its own file", async () => {
+test("001. A spool whose staging path is replaced after sealing reads and removes only its own file", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av5-"));
   try {
     const staging = join(root, "staging");

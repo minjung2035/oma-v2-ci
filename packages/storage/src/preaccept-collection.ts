@@ -24,7 +24,7 @@ import { isValidFullOid, parseMessageId, parseOperationId } from "@oma/domain/id
 import { submitBundlePathAt, projectGitPathAt } from "@oma/domain/paths";
 import { removeOwnedFile, removeOwnedTree, repairOwnedEntryMode } from "./directory.js";
 import { collectLeasedTree } from "./tree-lease.js";
-import { ownedMessages } from "@oma/domain/durable";
+import { ownedMessages, publicationSources } from "@oma/domain/durable";
 import { StoreError, normalizeStorageFailure } from "@oma/domain/errors";
 import { openDirectory, openRegularBeneath } from "@oma/native/files";
 import { withAsyncCleanup } from "@oma/native/cleanup";
@@ -96,6 +96,16 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: { getOperat
     if (operation?.kind === "git.integrate" && operation.plan.merge !== undefined && operation.plan.merge.version !== 1 &&
         operation.plan.merge.diff?.reference.startsWith(`oma-result:${id.slice(3)}:`)) continue;
     if (operation?.kind === "attest.record" && operation.plan.fact.kind === "review.integration" && operation.plan.fact.diff.reference.startsWith(`oma-result:${id.slice(3)}:`)) continue;
+    // A result is an exclusively named regular file (tool-files RESULT
+    // integrity: no link, no follow). Anything else wearing the name -- a
+    // directory, a link -- is not the entry this broker derives: removing it
+    // would either fail (EISDIR aborts startup) or delete a tree the sweep
+    // cannot prove oma made, so it is reported and kept like every other
+    // underivable name. A name that vanished between the listing and its
+    // observation has nothing left to collect.
+    const observed = lstatSync(path, { throwIfNoEntry: false });
+    if (observed === undefined) continue;
+    if (!observed.isFile()) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
     remove(path);
   }
   // Frozen message objects: the plan that owns one names its id.
@@ -149,6 +159,7 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: { getOperat
     if (submit !== null && staged.isDirectory()) {
       const operation = accepted(submit);
       if (operation?.kind === "git.submit" && operation.plan.bundle?.path === submitBundlePathAt(stateRoot, submit)) continue;
+      if (operation !== null && publicationSources(operation.plan).some(source => source.local !== undefined)) continue;
       remove(path, true);
       continue;
     }

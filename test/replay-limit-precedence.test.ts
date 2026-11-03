@@ -1,4 +1,4 @@
-import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { replayFixture, REPLAY_LIMITS } from "./fixtures/replay.js";
 /** P0 durable-lookup precedence: the wire's params limit checks bound only new
  * work. A same-key request the ledger already accepted is classified by wire
  * grammar plus its durable record -- the recorded receipt for a true replay,
@@ -10,74 +10,18 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
  */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, Request } from "@oma/contracts";
-import { Store } from "@oma/storage";
-import { MailModule } from "@oma/mail";
-import { PublicDispatcher } from "@oma/broker/public-dispatcher";
-import { errorAnswer } from "@oma/broker/replies";
-import { publicFailure } from "@oma/domain/errors";
-import { receiptOfOperation } from "@oma/protocol/receipt-projector";
-import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
-import { removeTree } from "./fixtures/cleanup.js";
+import type { ProtocolLimits } from "@oma/contracts";
 
-const LOOSE: ProtocolLimits = {
-  frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
-  replyReferences: 64, contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456,
-  logBytes: 1048576, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30,
-};
-const TIGHT: ProtocolLimits = { ...LOOSE, mailBodyBytes: 8, subjectBytes: 8, addresses: 1, replyReferences: 1 };
-
-const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
-
-type Answer = { ok: true; result: { operation?: string; state?: string } } | { ok: false; code: string | undefined };
+const TIGHT: ProtocolLimits = { ...REPLAY_LIMITS, mailBodyBytes: 8, subjectBytes: 8, addresses: 1, replyReferences: 1 };
 function fixture(t: TestContext) {
-  const root = mkdtempSync(join(tmpdir(), "oma-replay-limits-"));
-  const store = new Store(join(root, "runtime.sqlite"));
-  t.after(() => { try { store.close(); } finally { removeTree(root); } });
-  store.transaction(tx => {
-    tx.insertAgent(makeValidAgent("principal"));
-    tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
-    tx.insertAgent(makeValidAgent("bob", { createdBy: "principal" }));
-  });
-  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
-  const profile = { current: LOOSE };
-  const dispatcher = new PublicDispatcher({
-    store: {
-      listAgents: () => store.listAgents(),
-      getAgent: actor => store.getAgent(actor),
-      getReceipt: (actor, key) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
-      hasOperation: (actor, key) => store.getOperation(actor, key) !== null,
-    },
-    mail,
-    units: { statusSnapshot: () => Promise.reject(new Error("status is not part of this fixture")) },
-    views: { status: () => { throw new Error("status is not part of this fixture"); } },
-    lifecycle: {} as never,
-    review: null,
-git: null,
-    get limits() { return profile.current; },
-    waitRun: () => { throw new Error("no live run in this fixture"); },
-    isDraining: () => false,
-    assertAdmission() {},
-
-    failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
-    refreshViews() {},
-    readLogs: async () => { throw new Error("logs are not part of this fixture"); },
-  });
-  const call = async (envelope: Record<string, unknown>): Promise<Answer> => {
-    const answer = await dispatcher.dispatch(auth, envelope as Request, null) as { ok: boolean; result?: { operation?: string; state?: string }; error?: { code?: string } };
-    return answer.ok ? { ok: true, result: answer.result! } : { ok: false, code: answer.error?.code };
-  };
-  return { root, store, call, tighten: () => { profile.current = TIGHT; } };
+  let limits = REPLAY_LIMITS;
+  return { ...replayFixture(t, { limits: () => limits }), tighten: () => { limits = TIGHT; } };
 }
 
 const INPUT = { to: ["bob"], subject: "a subject past the tightened bound", kind: "message", body: "a body past the tightened bound" };
 const envelope = (key: string, params: unknown) => ({ v: 1, id: key, method: "mail.send", request: key, params });
 
-test("P0 replay precedence: a same-key replay returns its durable receipt under tightened limits", async t => {
+test("001. Replay precedence: a same-key replay returns its durable receipt under tightened limits", async t => {
   const f = fixture(t);
   const accepted = await f.call(envelope("key-accepted", INPUT));
   assert.ok(accepted.ok, JSON.stringify(accepted));
@@ -90,7 +34,7 @@ test("P0 replay precedence: a same-key replay returns its durable receipt under 
   assert.equal(f.store.getOperation("alice", "key-accepted")?.id, accepted.result.operation, "no second operation was accepted");
 });
 
-test("P0 replay precedence: a fresh key under tightened limits is still refused", async t => {
+test("002. Replay precedence: a fresh key under tightened limits is still refused", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-accepted", INPUT))).ok);
   f.tighten();
@@ -99,7 +43,7 @@ test("P0 replay precedence: a fresh key under tightened limits is still refused"
   assert.equal(f.store.getOperation("alice", "key-fresh"), null, "a refused fresh request leaves no row");
 });
 
-test("P0 replay precedence: a different payload under the accepted key is REQUEST_KEY_REUSED, not a silent replay", async t => {
+test("003. Replay precedence: a different payload under the accepted key is REQUEST_KEY_REUSED, not a silent replay", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-accepted", INPUT))).ok);
   f.tighten();
@@ -108,7 +52,7 @@ test("P0 replay precedence: a different payload under the accepted key is REQUES
     "the ledger's own classification answers; the tightened bound cannot launder a reuse into INVALID_REQUEST");
 });
 
-test("P0 replay precedence: malformed wire shape is refused before the durable lookup", async t => {
+test("004. Replay precedence: malformed wire shape is refused before the durable lookup", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-accepted", INPUT))).ok);
   f.tighten();
@@ -124,7 +68,7 @@ test("P0 replay precedence: malformed wire shape is refused before the durable l
   }
 });
 
-test("P0 replay precedence: non-keyed methods under tightened limits keep their refusal, no lookup is offered", async t => {
+test("005. Replay precedence: non-keyed methods under tightened limits keep their refusal, no lookup is offered", async t => {
   const f = fixture(t);
   f.tighten();
   // Reads/ephemeral calls forbid a request key and have no durable record to

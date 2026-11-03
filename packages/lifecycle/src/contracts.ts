@@ -7,7 +7,7 @@ export interface LifecyclePaths {
   stateRoot: string; society: string; hasGoal(): boolean; activationAllowed(): boolean;
 }
 export interface SpecResolver {
-  (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: AgentCreateInput): ResolvedAgentSpec | null;
+  (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: Pick<AgentCreateInput, "name" | "from" | "brief">): ResolvedAgentSpec | null;
   maxWorkers(): number;
   refresh?: () => void;
   revision?: () => string;

@@ -64,7 +64,7 @@ async function fixture() {
     close: () => { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
 
-test("R20: an accepted submit plan alone cannot publish result mail", async () => {
+test("001. An accepted submit plan alone cannot publish result mail", async () => {
   const f = await fixture();
   try {
     const path = mailArchivePathAt(f.root, f.operation.plan.message.id);
@@ -76,7 +76,7 @@ test("R20: an accepted submit plan alone cannot publish result mail", async () =
   } finally { f.close(); }
 });
 
-test("R20: publication proof is issued for the exact observed canonical ref and is single-use", async () => {
+test("002. Publication proof is issued for the exact observed canonical ref and is single-use", async () => {
   const f = await fixture();
   try {
     const calls: string[][] = [];
@@ -105,7 +105,7 @@ test("R20: publication proof is issued for the exact observed canonical ref and 
   } finally { f.close(); }
 });
 
-test("R20: a token for another accepted operation does not authorize a matching-candidate result", async () => {
+test("003. A token for another accepted operation does not authorize a matching-candidate result", async () => {
   const f = await fixture();
   try {
     const second = await f.accept("second");
@@ -121,7 +121,7 @@ test("R20: a token for another accepted operation does not authorize a matching-
 });
 
 for (const kind of ["absent", "different", "unknown", "corrupt"] as const) {
-  test(`R20: ${kind} ref evidence cannot produce a publication token`, async () => {
+  test(`004. Publication evidence: ${kind} ref evidence cannot produce a publication token`, async () => {
     const f = await fixture();
     try {
       const valid = new GitPublicationObserver(new GitObserver(() => native()), "/trusted/project.git");

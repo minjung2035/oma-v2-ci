@@ -82,17 +82,22 @@ type RunnerExitPreserved = Assert<Equal<ReturnType<RunnerModule["run"]>, Promise
 type SandboxReturnsPlan = Assert<Equal<ReturnType<SandboxModule["resident"]>, SandboxPlan>>;
 
 // Independent wire inventories: adding/removing a wire method is not R40 alias repair.
-type PublicWireUnchanged = Assert<Equal<PublicMethod,
+type PublicWireUnchanged = Assert<Equal<Exclude<PublicMethod, "invocation.bind" | "invocation.prepare">,
   "society.set" | "attest.record" | "operation.read" | "review.status" |
   "mail.send" | "mail.ack" | "route.follow" | "route.unfollow" |
   "agent.create" | "agent.start" | "agent.stop" | "agent.continue" | "agent.wait" |
   "git.known" | "git.submit" | "git.integrate" | "context.publish" |
   "operation.get" | "status.get" | "logs.read"
 >>;
-type InternalNativeWire = Assert<Equal<keyof InternalMethods,
+// Explicit additions stay independently complete; excluding them above must not hide a missing member.
+type OriginalInvocationWire = Assert<Equal<Extract<PublicMethod, "invocation.bind" | "invocation.prepare">,
+  "invocation.bind" | "invocation.prepare">>;
+type HostControlNotPublic = Assert<Equal<Extract<PublicMethod, "host.control">, never>>;
+type InternalNativeWire = Assert<Equal<Exclude<keyof InternalMethods, "host.control">,
   "runner.open" | "runner.pending" | "batch.prepare" | "batch.read" | "batch.complete" |
   "runner.observe" | "principal.attach" | "principal.detach"
 >>;
+type SupervisingHostControlWire = Assert<Equal<Extract<keyof InternalMethods, "host.control">, "host.control">>;
 
 function rejectedChanges(store: Store, units: ResidentExecutionPort, views: DerivedViewsPort,
   reconcile: ReconcilePort, runner: BoundRunnerPort, sandbox: SandboxPort, lease: RunLease) {
@@ -122,6 +127,7 @@ export type {
   RowNotReceipt, EpochRequired, StopIsObserved, ObservationIsSynchronous,
   ViewProjectionIsAsync, MetricsPreserved, RunnerIsBound, RunnerExitPreserved,
   SandboxReturnsPlan, PublicWireUnchanged, InternalNativeWire,
+  OriginalInvocationWire, HostControlNotPublic, SupervisingHostControlWire,
 };
 
 function recoveryHasNoLedgerWriter(ledger: ReconcileLedger) {

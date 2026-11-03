@@ -42,7 +42,7 @@ function trapBetweenCheckAndUse(component: string, elsewhere: string): () => voi
   return () => { for (const name of names) (fs as unknown as Record<string, unknown>)[name] = originals[name]; syncBuiltinESMExports(); };
 }
 
-test("AV4 / FS-005, SB-006: a receipt's session is found beneath its directory in one resolution; a link at any component is never followed", async () => {
+test("001. A receipt's session is found beneath its directory in one resolution; a link at any component is never followed", async () => {
   const f = await preparedFixture();
   const outside = mkdtempSync(join(tmpdir(), "oma-av4-outside-"));
   try {
@@ -86,7 +86,7 @@ function project(root: string): { projectGit: string; oid: string } {
   return { projectGit, oid: git(source, "rev-parse", "HEAD") };
 }
 
-test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it", async () => {
+test("002. Once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av4-create-"));
   try {
     const { projectGit, oid } = project(root);
@@ -96,7 +96,7 @@ test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git
     await workspaces.ensure(plan, false);
     // The Resident has had its workspace: its HEAD is whatever it wrote.
     writeFileSync(join(workspace, ".git", "HEAD"), "not a ref\n");
-    await assert.rejects(() => workspaces.ensure(plan, false), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT",
+    await assert.rejects(() => workspaces.ensure(plan, false), (error: unknown) => (error as { code?: string }).code === "AGENT_CONFLICT",
       "a workspace whose readiness is not yet proven is still verified");
     await workspaces.ensure(plan, true);
     // Readiness is the same rule, keyed on the recorded fact, not on whether a
@@ -114,7 +114,7 @@ test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git
     assert.equal(ensured, 2);
     // While the agent is still provisioning it is the host's to verify, and it is wrong.
     agent.incarnation = 0; agent.desired = "provisioning";
-    assert.throws(() => observer.ready(operation), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT");
+    assert.throws(() => observer.ready(operation), (error: unknown) => (error as { code?: string }).code === "AGENT_CONFLICT");
     // A provisioning agent with an opened run contradicts the only way a run opens.
     agent.incarnation = 1;
     assert.throws(() => observer.ready(operation), /a provisioning agent has opened a run/);

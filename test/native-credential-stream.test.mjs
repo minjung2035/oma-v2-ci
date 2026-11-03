@@ -52,7 +52,7 @@ async function transferFixture(t) {
     receive(authorize) { stream = credentialStream(raw, authorize); return stream; },
   };
 }
-test('credential stream: actual sender is retained across fragmented and backpressured byte reads', { timeout: 10000 }, async t => {
+test("001. Credential stream: actual sender is retained across fragmented and backpressured byte reads", { timeout: 10000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), 'oma-credential-stream-')), path = join(root, 'peer.sock');
   const server = createServer({ pauseOnConnect: true, allowHalfOpen: true });
   let client, raw, stream, pin;
@@ -89,7 +89,7 @@ test('credential stream: actual sender is retained across fragmented and backpre
   assert.ok(reads > 1); assert.ok(stream.readableLength <= 65536);
   const answer = once(client, 'data'); stream.end(Buffer.from('ack')); assert.equal((await answer)[0].toString(), 'ack');
 });
-test('credential stream: refusal of a real kernel sender delivers no bytes to the frame owner', { timeout: 10000 }, async t => {
+test("002. Credential stream: refusal of a real kernel sender delivers no bytes to the frame owner", { timeout: 10000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), 'oma-credential-refusal-')), path = join(root, 'peer.sock');
   const server = createServer({ pauseOnConnect: true }); let client, raw, stream;
   t.after(async () => { stream?.destroy(); raw?.destroy(); client?.destroy(); await new Promise(resolve => server.close(resolve)); rmSync(root, { recursive: true }); });
@@ -101,7 +101,7 @@ test('credential stream: refusal of a real kernel sender delivers no bytes to th
   client.on('error', () => {}); client.write(Buffer.from('must not reach framing'));
   assert.equal((await refused)[0].code, 'AUTH_FAILED'); assert.equal(delivered, 0); assert.equal(observed.pid, process.pid);
 });
-for (const queued of [false, true]) test(`credential stream: live connector and pre-existing sibling transfer, queued prefix=${queued}`, { timeout: 15000 }, async t => {
+for (const queued of [false, true]) test(`003. Credential stream: live connector and pre-existing sibling transfer, queued prefix=${queued}`, { timeout: 15000 }, async t => {
   const f = await transferFixture(t), frame = encodeFrame({ v: 1, id: 'forged', method: 'status.get', params: {} });
   const prefix = queued ? frame.subarray(0, 13) : Buffer.alloc(0);
   if (prefix.length) await f.ask(f.connector, { op: 'write', hex: prefix.toString('hex') });

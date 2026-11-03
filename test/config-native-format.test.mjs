@@ -10,18 +10,18 @@ import {validateConfig,loadConfig} from '@oma/config';
 import {readSettingsForEditing,projectBundle} from '#oma-test/app/application/settings';
 import {HOST_CONFIGURATION_VERSION} from '@oma/domain/config-format';
 const fresh=()=>defaultHostConfig({society:'demo',node:process.execPath,libdir:process.cwd(),deploymentDigest:'a'.repeat(64)});
-test('native config version5 has no Linux rootfs, bind list or caller-selected backend',()=>{
+test("001. Native config version5 has no Linux rootfs, bind list or caller-selected backend",()=>{
   assert.equal(HOST_CONFIGURATION_VERSION,5);const current=fresh();assert.equal(current.schemaVersion,5);
   assert.deepEqual(Object.keys(current.installation).sort(),['deploymentDigest','libdir','node']);
   assert.equal(validateConfig(current).schemaVersion,5);
   for(const fields of [{rootfs:'/legacy/rootfs'},{systemBinds:['/usr']},{backend:'darwin'}])
     assert.throws(()=>validateConfig({...current,installation:{...current.installation,...fields}}));
 });
-test('native config refuses previous or unknown versions even after Linux fields are removed',()=>{
+test("002. Native config refuses previous or unknown versions even after Linux fields are removed",()=>{
   const current=fresh();for(const schemaVersion of [0,1,2,3,6,'5',null])
     assert.throws(()=>validateConfig({...current,schemaVersion}),{code:"INVALID_REQUEST",message:/unsupported development configuration schema; expected 5/});
 });
-test('native config refuses version3 and preserves actual file, history sidecars and primary bytes',()=>{
+test("003. Native config refuses version3 and preserves actual file, history sidecars and primary bytes",()=>{
   const root=mkdtempSync(join(tmpdir(),'oma-old-config-preserved-'));
   try{
     const path=join(root,'config.json'),history=join(root,'.oma-config');mkdirSync(history);

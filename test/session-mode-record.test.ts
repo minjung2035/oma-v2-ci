@@ -14,7 +14,7 @@ function fixture(t: { after(run: () => void): void }) {
   t.after(() => rmSync(data, { recursive: true, force: true }));
   return { data, personal: join(data, ".personal", id), society: join(data, "demo"), cwd: join(data, "project") };
 }
-for (const mode of ["personal", "society"] as const) test(`session mode: ${mode} publication is repeatable but immutable`, t => {
+for (const mode of ["personal", "society"] as const) test(`001. Session mode: ${mode} publication is repeatable but immutable`, t => {
   const w = fixture(t), root = w[mode], birth = newSessionBirth(root, mode, w.cwd);
   assert.equal(readSessionBirth(root), null);
   assert.deepEqual(publishSessionBirth(root, birth), birth);
@@ -27,7 +27,7 @@ for (const mode of ["personal", "society"] as const) test(`session mode: ${mode}
   requireSessionMode(birth, undefined); requireSessionMode(birth, mode);
   assert.throws(() => requireSessionMode(birth, mode === "personal" ? "society" : "personal"), { code: "INVALID_REQUEST" });
 });
-test("session mode: an existing conflicting fact is preserved byte-for-byte", t => {
+test("002. Session mode: an existing conflicting fact is preserved byte-for-byte", t => {
   const w = fixture(t), root = w.personal, birth = newSessionBirth(root, "personal", w.cwd);
   publishSessionBirth(root, birth);
   const first = readFileSync(join(root, SESSION_BIRTH));
@@ -41,7 +41,7 @@ for (const [name, change] of [
   ["NUL cwd", b => ({ ...b, cwd: "/tmp/\0" })], ["non-normal cwd", b => ({ ...b, cwd: "/tmp/../etc" })],
   ["foreign history", b => ({ ...b, history: "/other/history" })],
 ] as const satisfies readonly (readonly [string, (birth: ReturnType<typeof newSessionBirth>) => unknown])[]) {
-  test(`session mode: ${name} never defaults to a mode`, t => {
+  test(`003. Session mode: ${name} never defaults to a mode`, t => {
     const w = fixture(t), birth = newSessionBirth(w.personal, "personal", w.cwd);
     ensureUserDirectory(w.personal);
     const text = JSON.stringify(change(birth)); writeFileSync(join(w.personal, SESSION_BIRTH), text);
@@ -50,11 +50,11 @@ for (const [name, change] of [
     assert.equal(readFileSync(join(w.personal, SESSION_BIRTH), "utf8"), text);
   });
 }
-for (const bytes of ["", "{", " ".repeat(16385), Buffer.from([0xff])]) test("session mode: malformed/big bytes remain an error, not absence", t => {
+for (const bytes of ["", "{", " ".repeat(16385), Buffer.from([0xff])]) test("004. Session mode: malformed/big bytes remain an error, not absence", t => {
   const w = fixture(t); ensureUserDirectory(w.personal); writeFileSync(join(w.personal, SESSION_BIRTH), bytes);
   assert.throws(() => readSessionBirth(w.personal), { code: "STORE_CORRUPT" });
 });
-test("session mode: neither linked file nor linked parent imports outside metadata", t => {
+test("005. Session mode: neither linked file nor linked parent imports outside metadata", t => {
   const w = fixture(t), foreign = join(w.data, "foreign"); ensureUserDirectory(w.personal); ensureUserDirectory(foreign);
   const text = JSON.stringify(newSessionBirth(w.personal, "personal", w.cwd));
   writeFileSync(join(foreign, SESSION_BIRTH), text);
@@ -63,7 +63,7 @@ test("session mode: neither linked file nor linked parent imports outside metada
   assert.equal(readFileSync(join(foreign, SESSION_BIRTH), "utf8"), text);
   symlinkSync(foreign, w.society); assert.throws(() => readSessionBirth(w.society));
 });
-test("session mode: history lookup recognizes only exact owned layouts, not existence or authority", t => {
+test("006. Session mode: history lookup recognizes only exact owned layouts, not existence or authority", t => {
   const w = fixture(t);
   for (const mode of ["society", "personal"] as const) {
     const birth = newSessionBirth(w[mode], mode, w.cwd), file = join(birth.history, "example.jsonl");

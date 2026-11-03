@@ -13,6 +13,7 @@ import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
 import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
 import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
 import { createCanonicalObserver } from "@oma/git/canonical-command";
+import { GitRepository } from "@oma/git/repository";
 import { mailWorkersPathAt, mailArchivePathAt, mailInboxPathAt } from "@oma/domain/paths";
 import type { ReviewState as RS } from "@oma/domain/review-evaluation";
 import type { ReviewFact } from "@oma/contracts/attestation";
@@ -31,7 +32,7 @@ import type { IntegrationPolicy } from "@oma/domain/integration-policy";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 import { PreacceptScope } from "@oma/storage/preaccept-artifact";
 
-test("mail-v1: a LOW merge request applies itself and mails the completion notice", async () => {
+test("001. Mail-v1: a LOW merge request applies itself and mails the completion notice", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -106,7 +107,7 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
   } finally { f.close(); }
 });
 
-test("mail-v1: merge request opens observe live Git facts and refuse bad ones", async () => {
+test("002. Mail-v1: merge request opens observe live Git facts and refuse bad ones", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -134,7 +135,7 @@ test("mail-v1: merge request opens observe live Git facts and refuse bad ones", 
   } finally { f.close(); }
 });
 
-test("UX-09: merge.open refuses a candidate whose tree still carries gitlinks, naming every path", async () => {
+test("003. Merge.open refuses a candidate whose tree still carries gitlinks, naming every path", async () => {
   const f = fixture(); try {
     // Whole-tree gating: main already carries the gitlinks, so the diff names
     // only one.txt — the links this candidate inherited verbatim are still
@@ -160,7 +161,7 @@ test("UX-09: merge.open refuses a candidate whose tree still carries gitlinks, n
   } finally { f.close(); }
 });
 
-test("UX-09: a candidate that removes a gitlink from a gitlink-bearing main applies", async () => {
+test("004. A candidate that removes a gitlink from a gitlink-bearing main applies", async () => {
   const f = fixture(); try {
     // The removal path must work — a main carrying gitlinks refuses every
     // merge until a candidate's tree drops them, and this one does.
@@ -174,7 +175,7 @@ test("UX-09: a candidate that removes a gitlink from a gitlink-bearing main appl
   } finally { f.close(); }
 });
 
-test("UX-09: a caller-built challenge candidate carrying gitlinks refuses the same way", async () => {
+test("005. A caller-built challenge candidate carrying gitlinks refuses the same way", async () => {
   const f = fixture(); try {
     const merged = f.candidateWith({ "merged.txt": "m" });
     await f.submit("alice", merged);
@@ -195,7 +196,7 @@ test("UX-09: a caller-built challenge candidate carrying gitlinks refuses the sa
   } finally { f.close(); }
 });
 
-test("mail-v1: protected paths and the host tier floor refuse an under-tiered open", async () => {
+test("006. Mail-v1: protected paths and the host tier floor refuse an under-tiered open", async () => {
   const f = fixture({ protectedPaths: ["protected.txt"],
     rules: [{ path: "prod.flag", tier: "HIGH", statuses: ["A", "M"] }] });
   try {
@@ -210,7 +211,7 @@ test("mail-v1: protected paths and the host tier floor refuse an under-tiered op
   } finally { f.close(); }
 });
 
-test("mail-v1: MEDIUM review thread revisions stay in the worker archive and reach Workers only", async () => {
+test("007. Mail-v1: MEDIUM review thread revisions stay in the worker archive and reach Workers only", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -284,7 +285,7 @@ test("mail-v1: MEDIUM review thread revisions stay in the worker archive and rea
 const messages0Id = (f: ReturnType<typeof fixture>, key: string): string =>
   f.store.getOperation("alice", key)!.id;
 
-test("FJ-5: an approval request over the mail body bound is refused at emission, never frozen", async () => {
+test("008. An approval request over the mail body bound is refused at emission, never frozen", async () => {
   // 3439 is the audited floor for subjectBytes 512 (the thread revision and
   // the notice part alone): every thread revision fits it, but an approval
   // request carrying the reason and two maximal bound votes does not. The
@@ -309,7 +310,7 @@ test("FJ-5: an approval request over the mail body bound is refused at emission,
   } finally { f.close(); }
 });
 
-test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval", async () => {
+test("009. Mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -450,7 +451,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
 });
 
 
-test("mail-v1: an undelegated Principal cannot decide", async () => {
+test("010. Mail-v1: an undelegated Principal cannot decide", async () => {
   const f = fixture({ principalDelegated: false }); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -463,7 +464,7 @@ test("mail-v1: an undelegated Principal cannot decide", async () => {
   } finally { f.close(); }
 });
 
-test("DR46 current grammar: removed attestation inputs are invalid and direct tiered integration refuses", async () => {
+test("011. Current grammar: removed attestation inputs are invalid and direct tiered integration refuses", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -485,7 +486,7 @@ test("DR46 current grammar: removed attestation inputs are invalid and direct ti
   } finally { f.close(); }
 });
 
-test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
+test("012. Mail-v1: a LOW cancel owns no mail and closes the request", async () => {
   // The open's fact freezes revision p1; the policy read inside advance reports
   // p2, so the request is ready but unintegrated — a LOW cancel still works.
   let reads = 0;
@@ -513,7 +514,7 @@ test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
   } finally { f.close(); }
 });
 
-test("mail-v1: a frozen request names the host's current policy revision, not the broker's bound one", async () => {
+test("013. Mail-v1: a frozen request names the host's current policy revision, not the broker's bound one", async () => {
   const moved = fixture({ reader: policy => ({ ...policy, policyRevision: "p2" }) });
   try {
     const candidate = moved.candidateWith({ "one.txt": "a" });
@@ -542,7 +543,7 @@ test("mail-v1: a frozen request names the host's current policy revision, not th
 const unreadablereopen = (f: ReturnType<typeof fixture>, candidate: string) =>
   f.open("alice", { tier: "LOW", candidate }, "open");
 
-test("mail-v1: an over-bound thread revision anchors every omitted entry at the revision that added it", async () => {
+test("014. Mail-v1: an over-bound thread revision anchors every omitted entry at the revision that added it", async () => {
   // Head ~500 bytes; entries ~200 bytes each vs ~50-byte anchors. 2000 trims
   // from rev ~7 on while the newest entries stay in full.
   const f = fixture({ mailBodyBytes: 2000 });
@@ -581,7 +582,7 @@ test("mail-v1: an over-bound thread revision anchors every omitted entry at the 
 const CHECK: NonNullable<FixtureOptions["checks"]>[number] = {
   id: "verify", argv: ["/usr/bin/true"], env: {},  };
 
-test("mail-v1: a failed host check leaves the request blocked and unreapplied", async () => {
+test("015. Mail-v1: a failed host check leaves the request blocked and unreapplied", async () => {
   const f = fixture({ checks: [CHECK],
     runCheck: () => { throw new StoreError("CHECK_FAILED", "the host check failed"); } });
   try {
@@ -608,7 +609,7 @@ test("mail-v1: a failed host check leaves the request blocked and unreapplied", 
   } finally { f.close(); }
 });
 
-test("mail-v1: a requester stopped before the CAS cancels the application", async () => {
+test("016. Mail-v1: a requester stopped before the CAS cancels the application", async () => {
   let release!: () => void; let checking = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const f = fixture({ checks: [CHECK], runCheck: () => { checking = true; return gate; } });
@@ -631,7 +632,7 @@ test("mail-v1: a requester stopped before the CAS cancels the application", asyn
   } finally { f.close(); }
 });
 
-test("mail-v1: cancelling a request with a pending integration wins the pre-CAS check", async () => {
+test("017. Mail-v1: cancelling a request with a pending integration wins the pre-CAS check", async () => {
   let failCheck = true;
   const f = fixture({ checks: [CHECK], runCheck: () => {
     if (failCheck) throw new StoreError("BROKER_UNAVAILABLE", "check runner down");
@@ -658,7 +659,7 @@ test("mail-v1: cancelling a request with a pending integration wins the pre-CAS 
   } finally { f.close(); }
 });
 
-test("mail-v1: a running check permits context publication and is stopped by an accepted cancel", async () => {
+test("018. Mail-v1: a running check permits context publication and is stopped by an accepted cancel", async () => {
   let release!: () => void; let checking = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const f = fixture({ checks: [CHECK], runCheck: (_candidate, _check, cancellation) => {
@@ -687,7 +688,7 @@ test("mail-v1: a running check permits context publication and is stopped by an 
   } finally { release(); f.close(); }
 });
 
-test("DR45: review history is decoded once per waiting/terminal sweep and status list", async () => {
+test("019. Review history is decoded once per waiting/terminal sweep and status list", async () => {
   const f = fixture();
   try {
     const candidate = f.candidateWith({ "history.txt": "one" });
@@ -712,7 +713,7 @@ test("DR45: review history is decoded once per waiting/terminal sweep and status
   } finally { f.close(); }
 });
 
-test("DR45: accepted cancel interrupts checks even when its preparation cleanup fails", { timeout: 10_000 }, async () => {
+test("020. Accepted cancel interrupts checks even when its preparation cleanup fails", { timeout: 10_000 }, async () => {
   let release!: () => void, entered!: () => void, aborted = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const checking = new Promise<void>(resolve => { entered = resolve; });
@@ -742,7 +743,7 @@ test("DR45: accepted cancel interrupts checks even when its preparation cleanup 
   } finally { PreacceptScope.prototype.settle = settle; release(); await voting; f.close(); }
 });
 
-test("proposal v3: disjoint ready requests on one base both apply without rewriting old intent", async () => {
+test("021. Proposal v3: disjoint ready requests on one base both apply without rewriting old intent", async () => {
   const f = fixture(); try {
     const one = f.candidateWith({ "one.txt": "a" });
     const two = f.candidateWith({ "two.txt": "b" });
@@ -768,7 +769,7 @@ test("proposal v3: disjoint ready requests on one base both apply without rewrit
   } finally { f.close(); }
 });
 
-test("durable review: a bound reviewer's retirement preserves the existing approval", async () => {
+test("022. Durable review: a bound reviewer's retirement preserves the existing approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate); await f.open("alice", { tier: "HIGH", candidate }, "open");
@@ -785,7 +786,7 @@ test("durable review: a bound reviewer's retirement preserves the existing appro
   } finally { f.close(); }
 });
 
-test("mail-v1: a large completion notice is split into parts that reassemble exactly", async () => {
+test("023. Mail-v1: a large completion notice is split into parts that reassemble exactly", async () => {
   const f = fixture({ mailBodyBytes: 6 * 1024 });
   try {
     const big = Array.from({ length: 80 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
@@ -825,29 +826,94 @@ test("mail-v1: a large completion notice is split into parts that reassemble exa
   } finally { f.close(); }
 });
 
-test("mail-v1: an oversize completion notice is remembered and never recomputed", async () => {
-  // A real review module shares the fixture's store; its mergeDiff is counted.
+test("024. An accepted current preparation cannot fall back to direct diff execution when its owned primitive is unavailable", async () => {
+  const f = fixture();
+  try {
+    const candidate = f.candidateWith({ "current.txt": "real current preparation\n" });
+    await f.submit("alice", candidate);
+    const repository = new GitRepository({ stateRoot: f.root, projectGit: f.projectGit,
+      contextGit: join(f.root, "context.git"), worldDir: join(f.root, "world"), society: "demo" }, {
+      submissions: () => f.store.operations.submissions(), attachmentRoots: () => f.store.operations.attachmentRoots(),
+    });
+    const runtime = reviewRuntime(); let hold = true, directDiffs = 0;
+    const effects = {
+      ...repository.review, ...runtime,
+      policy: () => snapshotIntegrationPolicy(f.policy), currentPolicy: () => snapshotIntegrationPolicy(f.policy),
+      nextOperationId: () => {
+        if (hold && f.store.attestations.all().some(row => row.operation.plan.fact.kind === "review.integration"))
+          throw new StoreError("BROKER_UNAVAILABLE", "held after actual prepared-context acceptance, before integration allocation");
+        return runtime.nextOperationId();
+      },
+      // Hostile extra callback is test input, not a supported ReviewEffects port.
+      mergeDiff: (base: string, candidate: string, maxBytes: number) => {
+        directDiffs++;
+        const actual = runGitText(["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate], { gitDir: f.projectGit });
+        assert.equal(actual.status, 0, actual.stderr); assert.ok(Buffer.byteLength(actual.stdout) <= maxBytes);
+        return Buffer.from(actual.stdout);
+      },
+      applyMerge: (operation: OperationOf<"git.integrate">) => f.module.applyMerge(operation),
+      withWriter: <T>(work: () => Promise<T>) => f.module.withProjectWriter(work),
+    };
+    const bounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 };
+    const preparing = new ReviewModule(reviewLedger(f.store), f.mail, effects, bounds, "demo");
+    const receipt = await preparing.record(f.auth("alice"), "open-owned", {
+      kind: "merge.open", title: "current", reason: "owned diff required", tier: "LOW", candidate, base: f.base });
+    assert.equal(receipt.state, "succeeded");
+    const open = f.store.getOperation("alice", "open-owned")!;
+    assert.ok(open.kind === "attest.record" && open.payload.kind === "merge.open");
+    const context = f.store.attestations.all().find(row => row.operation.plan.fact.kind === "review.integration")?.operation;
+    assert.ok(context?.kind === "attest.record" && context.plan.fact.kind === "review.integration");
+    assert.equal(context.state, "succeeded", "the original real context is fully settled, not fabricated or pending");
+    assert.equal(f.stateOf(f.requestName("open-owned")).ready, true);
+    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open.id)), null);
+    hold = false;
+    const { prepareDiff: removed, ...withoutOwnedDiff } = effects; assert.equal(typeof removed, "function");
+    const unsupported = new ReviewModule(reviewLedger(f.store), f.mail, withoutOwnedDiff, bounds, "demo");
+    const before = f.store.acceptedOperationPage(), refs = f.git(["for-each-ref", "--format=%(refname) %(objectname)"]);
+    let failure: unknown;
+    try { await unsupported.advance(open.id); } catch (error) { failure = error; }
+    assert.equal(directDiffs, 0, "a current prepared scope cannot invoke the retired direct-diff execution path");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
+    assert.deepEqual(f.store.acceptedOperationPage(), before);
+    assert.ok(failure instanceof StoreError && failure.code === "UNSUPPORTED_PROFILE", String(failure));
+    await unsupported.advanceAll(); await unsupported.advanceAll();
+    assert.equal(directDiffs, 0); assert.deepEqual(f.store.acceptedOperationPage(), before);
+    assert.equal(f.git(["for-each-ref", "--format=%(refname) %(objectname)"]), refs);
+    f.reopen();
+    assert.deepEqual(f.store.getOperationById(context.id), context);
+    assert.equal((await f.reviews.record(f.auth("alice"), "open-owned", open.payload)).operation, receipt.operation);
+    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open.id)), null, "same-key observation cannot restart execution");
+    assert.deepEqual(f.store.acceptedOperationPage(), before);
+    await f.reviews.advance(open.id);
+    const applied = f.store.getOperation("alice", applyRequestKeyFor(open.id));
+    assert.ok(applied?.kind === "git.integrate" && applied.plan.merge?.version === 3);
+    assert.equal(applied.plan.merge.preparation, context.id);
+    assert.ok(applied.plan.merge.diff, "a complete current owner supplies the stored complete patch");
+    assert.equal(applied.state, "succeeded"); assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+    assert.deepEqual(f.store.getOperationById(context.id), context);
+    assert.equal("mergeDiff" in repository.review, false, "the obsolete repository execution port is not retained");
+    assert.equal("canonicalMergeDiff" in await import("@oma/git/canonical-command"), false, "the removed fallback is not kept as a callable export");
+  } finally { f.close(); }
+});
+
+test("025. Mail-v1: an oversize completion notice is remembered and never recomputed", async () => {
+  // Real current preparation/attachment owners, not the removed direct-diff path.
   const f = fixture({ bundleBytes: 128 });
   try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
     let diffs = 0;
+    const repository = new GitRepository({ stateRoot: f.root, projectGit: f.projectGit,
+      contextGit: join(f.root, "context.git"), worldDir: join(f.root, "world"), society: "demo" }, {
+      submissions: () => f.store.operations.submissions(), attachmentRoots: () => f.store.operations.attachmentRoots(),
+    });
     const counting = new ReviewModule(reviewLedger(f.store), f.mail, {
-      ...reviewRuntime(),
+      ...repository.review, ...reviewRuntime(),
       policy: () => snapshotIntegrationPolicy(f.policy),
       currentPolicy: () => snapshotIntegrationPolicy(f.policy),
-      verifyObjectFormat: () => {},
-      main: () => createCanonicalObserver().ref(f.projectGit, "refs/heads/main"),
-      published: () => createCanonicalObserver().published(f.projectGit),
-      ancestry: (b, c) => createCanonicalObserver().ancestry(f.projectGit, b, c),
-      changedPaths: (b, c) => createCanonicalObserver().changedPaths(f.projectGit, b, c),
-      gitlinks: c => createCanonicalObserver().gitlinks(f.projectGit, c),
-      submitters: () => [],
-      mergeDiff: (b, c, n) => { diffs++; return Buffer.from(`diff-${b}-${c}-${"x".repeat(200)}`, "utf8"); },
-      applyMerge: () => Promise.resolve(),
-      prepareRevert: () => { throw new StoreError("REF_STATE_UNKNOWN", "no revert in this fixture"); },
-      publishCandidateRef: () => {},
-      withWriter: work => work(),
+      prepareDiff: (...args) => { diffs++; return repository.review.prepareDiff!(...args); },
+      applyMerge: operation => f.module.applyMerge(operation),
+      withWriter: work => f.module.withProjectWriter(work),
     }, { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 128 }, "demo");
     const openReceipt = await counting.record(f.auth("alice"), "open", {
       kind: "merge.open", title: "t", reason: "r", tier: "LOW", candidate, base: f.base });
@@ -858,9 +924,11 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
     assert.equal(f.store.getOperation("alice", applyRequestKeyFor(openOp.id)), null);
     const before = diffs;
     assert.ok(before >= 1, "the diff ran once");
+    const rows = f.store.attestations.all();
     await counting.advanceAll();
     await counting.advanceAll();
     assert.equal(diffs, before, "an oversize notice is never recomputed");
+    assert.deepEqual(f.store.attestations.all(), rows, "sweeping cannot mint repeated failure or preparation facts");
     assert.equal(f.stateOf(f.requestName("open")).display, "blocked", "the preparation failure is durable");
     const oversized = counting.status(f.auth("bob"), { name: f.requestName("open") }, 64 * 1024, "s12");
     assert.ok("entries" in oversized);
@@ -869,7 +937,7 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
   } finally { f.close(); }
 });
 
-test("mail-v1: a skipped advance and a lost application are both recovered once", async () => {
+test("026. Mail-v1: a skipped advance and a lost application are both recovered once", async () => {
   // Seam 1: the host policy is unreadable during the vote's advance, so no
   // integration is created; reopen + advanceAll applies exactly once.
   let unreadable = true; let policyReads = 0;
@@ -947,7 +1015,7 @@ test("mail-v1: a skipped advance and a lost application are both recovered once"
   } finally { h.close(); }
 });
 
-test("mail-v1: review.status lists newest first and counts what the frame cannot carry", async () => {
+test("027. Mail-v1: review.status lists newest first and counts what the frame cannot carry", async () => {
   const f = fixture(); try {
     // Three open requests on three bases is impossible once one applies; keep
     // them all unapplied (MEDIUM with no votes).
@@ -994,7 +1062,7 @@ test("mail-v1: review.status lists newest first and counts what the frame cannot
   } finally { f.close(); }
 });
 
-test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside the frame and reports the rest", async () => {
+test("028. Mail-v1: a request detail keeps the newest entries inside the frame and reports the rest", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -1039,7 +1107,7 @@ test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside t
   } finally { f.close(); }
 });
 
-test("mail-v1: review.status reports an unobservable main as null", async () => {
+test("029. Mail-v1: review.status reports an unobservable main as null", async () => {
   const f = fixture(); try {
     rmSync(f.projectGit, { recursive: true, force: true });
     const status = f.reviews.status(f.auth("bob"), { kind: "merge" }, 64 * 1024, "m1");
@@ -1049,7 +1117,7 @@ test("mail-v1: review.status reports an unobservable main as null", async () => 
   } finally { f.close(); }
 });
 
-test("mail-v1: the review.status wire method filters the Principal and rejects bad params", async () => {
+test("030. Mail-v1: the review.status wire method filters the Principal and rejects bad params", async () => {
   const f = fixture(); try {
     const unused = (): never => { throw new Error("unexpected fixture effect"); };
     const dispatcher = new PublicDispatcher({
@@ -1129,7 +1197,7 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
   } finally { f.close(); }
 });
 
-test("mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes", async () => {
+test("031. Mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes", async () => {
   const f = fixture(); try {
     // The candidate's commit claims bob as its author, but alice is the
     // authenticated submitter: submitters come from git.submit records,

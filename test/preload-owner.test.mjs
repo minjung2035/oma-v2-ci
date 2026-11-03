@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
 import { residentOptions } from "../dist/test/fixtures/resident.js";
 
-test("DR46: a Resident preloads the actual installation client owner independently of the extension directory", t => {
+test("001. A Resident preloads the actual installation client owner independently of the extension directory", t => {
   const state = mkdtempSync(join(tmpdir(), "oma-preload-owner-"));
   t.after(() => rmSync(state, { recursive: true, force: true }));
   const libdir = process.cwd(), preload = "apps/oma/dist/runtime/client-preload.js";

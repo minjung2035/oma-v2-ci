@@ -51,7 +51,7 @@ function fixture(t: TestContext) {
         revision() { return gitCommand(root, ["--git-dir", contextGit, "rev-parse", "refs/heads/main"]); },
     };
 }
-test("DR27: GOAL mail and published document have the exact sender bytes", async (t) => {
+test("001. GOAL mail and published document have the exact sender bytes", async (t) => {
     const f = fixture(t);
     let base: string | null = null;
     for (const [index, body] of ["plain", "plain\n", "a\nb\n", "﻿goal", "Goal\r\nSecond\n", "한글\n"].entries()) {
@@ -66,7 +66,7 @@ test("DR27: GOAL mail and published document have the exact sender bytes", async
         assert.deepEqual(await f.publish(key, { "GOAL.md": body }, op.plan.base, "  Goal  "), receipt);
     }
 });
-test("DR27: GOAL intent preserves all other documents; direct callers cannot add, edit or remove them", async (t) => {
+test("002. GOAL intent preserves all other documents; direct callers cannot add, edit or remove them", async (t) => {
     const f = fixture(t);
     const files = { "GOAL.md": "first", "RATIONALE.md": "why\r\n", "decisions/one.md": "decision\n" };
     await f.publish("seed", files, null);
@@ -87,7 +87,7 @@ test("DR27: GOAL intent preserves all other documents; direct callers cannot add
     for (const path of ["RATIONALE.md", "decisions/one.md"] as const)
         assert.equal(readFileSync(join(f.root, "world/context/current", path), "utf8"), files[path]);
 });
-test("DR27: first GOAL cannot introduce other documents; a Resident or ordinary context mail has no GOAL authority", async (t) => {
+test("003. First GOAL cannot introduce other documents; a Resident or ordinary context mail has no GOAL authority", async (t) => {
     const f = fixture(t);
     await assert.rejects(f.publish("extra", { "GOAL.md": "first", "RATIONALE.md": "new" }, null, "Goal"), { code: "INVALID_REQUEST" });
     await assert.rejects(f.publish("resident", { "GOAL.md": "first" }, null, "Goal", { ...auth, actor: "alice", role: "resident", incarnation: 1 }), { code: "CAPABILITY_DENIED" });
@@ -96,7 +96,7 @@ test("DR27: first GOAL cannot introduce other documents; a Resident or ordinary 
     assert.equal(f.store.getOperation("principal", "extra"), null);
     assert.equal(f.store.getOperation("alice", "resident"), null);
 });
-test("DR27/P0: stale GOAL is not accepted; a restarted same-key query retains original bytes and recipients", async (t) => {
+test("004. Stale GOAL is not accepted; a restarted same-key query retains original bytes and recipients", async (t) => {
     const f = fixture(t);
     const files = { "GOAL.md": "first" };
     const receipt = await f.publish("first", files, null, "Goal");
@@ -112,7 +112,7 @@ test("DR27/P0: stale GOAL is not accepted; a restarted same-key query retains or
     assert.equal(f.store.getOperation("principal", "stale"), null);
     await assert.rejects(f.publish("first", { "GOAL.md": "changed source" }, null, "Goal"), { code: "REQUEST_KEY_REUSED" });
 });
-test("DR27/P0: post-CAS GOAL publication finishes after stop and restart without re-rendering mail", async (t) => {
+test("005. Post-CAS GOAL publication finishes after stop and restart without re-rendering mail", async (t) => {
     const f = fixture(t);
     t.mock.method(f.mail, "publishGated", async () => { throw new Error("injected lost publication"); });
     await assert.rejects(f.publish("goal", { "GOAL.md": "exact\n" }, null, "Goal"));
@@ -129,7 +129,7 @@ test("DR27/P0: post-CAS GOAL publication finishes after stop and restart without
     assert.equal(f.store.pendingDeliveries("bob").length, 0);
 });
 for (const wrong of ["body", "subject"] as const)
-    test(`DR27/P0: even hash-valid accepted mail cannot contradict its GOAL ${wrong}`, async (t) => {
+    test(`006. Even hash-valid accepted mail cannot contradict its GOAL ${wrong}`, async (t) => {
         const f = fixture(t);
         const prepare = f.mail.freezeNotification.bind(f.mail);
         // Inject a fully valid but unrelated immutable mail object at the producer seam.
@@ -150,7 +150,7 @@ for (const wrong of ["body", "subject"] as const)
         assert.equal(existsSync(f.mail.archivePath(op.plan.message.id)), false);
         assert.equal(f.revision(), op.plan.candidate);
     });
-test("CTX-003/P0: content-identical GOAL has a durable authorization witness and one notification", async (t) => {
+test("007. Content-identical GOAL has a durable authorization witness and one notification", async (t) => {
     const f = fixture(t);
     const files = { "GOAL.md": "same" };
     await f.publish("first", files, null, "First");
@@ -168,7 +168,7 @@ test("CTX-003/P0: content-identical GOAL has a durable authorization witness and
     assert.equal(f.store.deliveriesForOperation(op.id).length, 1);
 });
 for (const stopped of [false, true])
-    test(`CTX-003/P0: no-op without a witness ${stopped ? "cannot bypass a stop" : "can resume with current authority"}`, async (t) => {
+    test(`008. No-op without a witness ${stopped ? "cannot bypass a stop" : "can resume with current authority"}`, async (t) => {
         const f = fixture(t);
         const files = { "GOAL.md": "same" };
         await f.publish("first", files, null, "First");
@@ -197,7 +197,7 @@ for (const stopped of [false, true])
         assert.equal(f.operation("same").planJson, before.planJson);
         assert.equal(f.revision(), base);
     });
-test("CTX-003/P0: lost reply after the no-op witness settles after stop, never reauthorizes", async (t) => {
+test("009. Lost reply after the no-op witness settles after stop, never reauthorizes", async (t) => {
     const f = fixture(t);
     const files = { "GOAL.md": "same" };
     await f.publish("first", files, null, "First");
@@ -219,7 +219,7 @@ test("CTX-003/P0: lost reply after the no-op witness settles after stop, never r
     assert.equal(f.operation("same").planJson, before.planJson);
     assert.deepEqual(readFileSync(f.mail.archivePath(before.plan.message.id)), bytes);
 });
-test("CTX-003/P0: a no-op witness naming another revision is corruption, not authorization", async (t) => {
+test("010. A no-op witness naming another revision is corruption, not authorization", async (t) => {
     const f = fixture(t);
     await f.publish("first", { "GOAL.md": "first" }, null, "First");
     const old = f.revision();
@@ -235,7 +235,7 @@ test("CTX-003/P0: a no-op witness naming another revision is corruption, not aut
     assert.equal(f.operation("same").state, "unknown");
     assert.equal(existsSync(f.mail.archivePath(op.plan.message.id)), false);
 });
-test("DR27/CTX-001: a full GOAL stream may retain zero-byte documents at the exact context bound", async (t) => {
+test("011. A full GOAL stream may retain zero-byte documents at the exact context bound", async (t) => {
     const f = fixture(t);
     await f.publish("seed", { "GOAL.md": "first", "RATIONALE.md": "why", "decisions/empty.md": "" }, null);
     const script = `import { prepareGoalEffects } from ${JSON.stringify(new URL(import.meta.resolve("#oma-test/app/runtime/input-effects/goal")).href)};

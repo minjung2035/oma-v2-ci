@@ -23,6 +23,7 @@ export const RESIDENT_PATHS = Object.freeze({
   /** mail-v1: worker-only review mail; a Resident's tools read it here. */
   workerArchive: "/mail/workers",
   selfMail: "/mail/self", view: "/run/oma-view", world: "/world",
+  records: "/oma",
   projectGit: "/git/project.git", socket: "/run/oma/control.sock",
   /** DR18 (D-8): the human's committed project history, read-only. */
   projectMirror: "/git/project-mirror.git",
@@ -123,7 +124,7 @@ export function hostSessionPath(dirs: ResidentDirectories, insidePath: string, s
 }
 
 /** The installation a Resident's plan mounts: its files and (DR25) the installed packages. */
-export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages">;
+export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages" | "recordRoot">;
 
 /** One directory table supplies both OS recipes and PathView. Only this
  * actor's workspace/home/sessions are writable; the mirror stays optional. */
@@ -132,6 +133,7 @@ export function residentDirectoryPolicy(host: MountedInstallation, dirs: Residen
 }[] {
   return [
     ["libdir", host.libdir], ...(host.packages === undefined ? [] : [["packages", host.packages]]),
+    ...(host.recordRoot === undefined ? [] : [["records", host.recordRoot]]),
     ...["workspace", "home", "sessions", "archive", "workerArchive", "selfMail", "view", "world", "projectGit", "projectMirror"]
       .map(name => [name, dirs[name as keyof ResidentDirectories]]),
   ].map(([name, path]) => Object.freeze({ name: name!, path: path!, view: RESIDENT_PATHS[name as keyof typeof RESIDENT_PATHS],

@@ -7,7 +7,7 @@ const row = (agent: string): AgentStatus => ({ agent, desired: "enabled", active
   unitResult: null, execMainStatus: null, pending: 0, preparedBatches: 0, reason: null, runnerObservedAtMs: null });
 const creation = { capability: true, childProfile: "worker", childHasMailSend: true, observedAtMs: 1, maxWorkers: 6, workerCount: 4 };
 
-test("G02-ledger-r2: status pages are bounded and never present a prefix as the whole list", () => {
+test("001. Status pages are bounded and never present a prefix as the whole list", () => {
   const rows = [row("alice"), row("bob"), row("carol"), row("david")];
   const seen: string[] = []; let after: string | undefined;
   do {
@@ -23,7 +23,7 @@ test("G02-ledger-r2: status pages are bounded and never present a prefix as the 
   assert.throws(() => statusPage("x", 1, rows, 20, creation), { code: "FRAME_TOO_LARGE" });
 });
 
-test("status pages retain creation failures and refuse a frame without room for one row", () => {
+test("002. Status pages retain creation failures and refuse a frame without room for one row", () => {
   const unavailable = { capability: true, childProfile: null, childHasMailSend: null, observedAtMs: 1, maxWorkers: null, workerCount: 0,
     error: { code: "UNSUPPORTED_PROFILE" as const, message: "child policy unavailable" } };
   const empty = statusPage("x", 1, [], 1024, unavailable);

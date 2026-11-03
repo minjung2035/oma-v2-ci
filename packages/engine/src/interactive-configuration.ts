@@ -3,6 +3,7 @@ import { userInfo } from 'node:os';
 import { basename, isAbsolute, relative, sep } from 'node:path';
 import { UNSEEN } from '@oma/domain/unseen-text';
 import type { OpenTuiBrand } from '@oma/contracts/presentation';
+import { requireCollaborationSurface } from '@oma/domain/collaboration-surface';
 const numberEnv = (name: string): number => {
     const value = Number(process.env[name]);
     if (!Number.isSafeInteger(value) || value <= 0)
@@ -20,6 +21,7 @@ function projectDisplay(path: string): string {
 export function interactiveConfiguration(input: {
     readonly version: string;
 }) {
+    requireCollaborationSurface(process.env.OMA_TOOL_SURFACE, 'principal');
     const limits = {
         frameBytes: numberEnv("OMA_FRAME_BYTES"), idleStreamSeconds: numberEnv("OMA_UI_IDLE_SECONDS"),
         receiptWaitSeconds: numberEnv("OMA_UI_RECEIPT_SECONDS")
@@ -38,6 +40,9 @@ export function interactiveConfiguration(input: {
     const cwd = process.cwd();
     /** The Human's project, which the Principal's private workspace (this process's cwd) is not. */
     const projectDir = process.env.OMA_PROJECT_DISPLAY ?? cwd;
+    // Captured before authored extensions load. sessionEnv strips ambient surface
+    // values; this reserves navigation only, never authenticated Human effects.
+    const hostControlNavigation = true;
     const brand: OpenTuiBrand = {
         title: "oma",
         version: input.version,
@@ -47,7 +52,7 @@ export function interactiveConfiguration(input: {
         society: (process.env.OMA_SOCIETY ?? "").replace(UNSEEN, ""),
     };
     return {
-        limits, argv, flag, flags, agentDir, cwd, projectDir, brand
+        limits, argv, flag, flags, agentDir, cwd, projectDir, brand, hostControlNavigation
     };
 }
 export type InteractiveConfiguration = ReturnType<typeof interactiveConfiguration>;

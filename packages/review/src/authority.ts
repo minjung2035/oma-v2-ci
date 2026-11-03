@@ -14,6 +14,11 @@ export interface ReviewAuthorityLedger {
   getOperation(actor: Actor, key: RequestKey): DecodedOperation | null;
   listAgents(): readonly Pick<AgentRow, "name" | "role" | "desired" | "specJson">[];
 }
+export interface ReviewIntegrationRecord {
+  readonly attemptNumber: number;
+  readonly revision: number;
+  readonly integration: NonNullable<ReviewStateInput["integration"]>;
+}
 export class ReviewAuthorityReader {
   constructor(private readonly store: ReviewAuthorityLedger,
     private readonly highPeerFloor: number, private readonly maxWorkers: number,
@@ -85,6 +90,33 @@ export class ReviewAuthorityReader {
     });
   }
 
+  /** Exact historical apply keys belong to this request's original owner. No
+   * roster scan, new attempt, receipt settlement or execution is performed. */
+  integrationRecords(open: OpenRequest, input: ReviewStateInput): readonly ReviewIntegrationRecord[] {
+    const attempts = new Set([0]);
+    for (const entry of input.entries) if ((entry.fact.kind === "review.retry" || entry.fact.kind === "review.revise" ||
+        entry.fact.kind === "review.supersede" || entry.fact.kind === "review.adopt") && "attemptNumber" in entry.fact)
+      attempts.add(entry.fact.attemptNumber);
+    return [...attempts].sort((a, b) => a - b).flatMap(attempt => {
+      const record = this.integrationRecord(open, attempt);
+      return record === null ? [] : [record];
+    });
+  }
+  private integrationRecord(open: OpenRequest, attempt: number): ReviewIntegrationRecord | null {
+    const applied = this.store.getOperation(open.operation.actor, applyRequestKeyFor(open.operation.id, attempt));
+    if (applied === null) return null;
+    if (applied.kind !== "git.integrate" || applied.plan.merge?.request !== open.operation.id ||
+        (applied.plan.merge.version === 1 ? attempt !== 0 : applied.plan.merge.attemptNumber !== attempt))
+      throw new StoreError("STORE_CORRUPT", "review attempt differs from its exact original integration");
+    const merge = applied.plan.merge;
+    return { attemptNumber: attempt, revision: merge.version === 1 ? 0 : merge.revision,
+      integration: { operation: applied.id, state: applied.state,
+        identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: applied.plan.base,
+          candidate: applied.plan.candidate, policyRevision: applied.plan.policyRevision },
+        ...(merge.version !== 1 && merge.diff !== undefined ? { diff: merge.diff } : {}),
+        errorCode: applied.state === "failed" ? applied.errorCode : null } };
+  }
+
   private inputFrom(open: OpenRequest, facts: readonly OpenRequest[], eligible: ReadonlySet<string>): ReviewStateInput {
     const openPlan = open.operation.plan;
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
@@ -100,21 +132,28 @@ export class ReviewAuthorityReader {
           actor: candidate.operation.actor, fact: plan.fact, messages: plan.messages };
       });
     const attemptNumber = entries.reduce((n, entry) => ["review.retry", "review.revise", "review.supersede", "review.adopt"].includes(entry.fact.kind) && "attemptNumber" in entry.fact ? entry.fact.attemptNumber : n, 0);
-    const applied = this.store.getOperation(open.operation.actor, applyRequestKeyFor(open.operation.id, attemptNumber));
-    return { open: openEntry, entries,
-      integration: applied === null ? null
-        : { operation: applied.id, state: applied.state,
-            ...(applied.kind === "git.integrate" ? { identity: {repo:"project" as const,targetRef:"refs/heads/main" as const,expectedBase:applied.plan.base,candidate:applied.plan.candidate,policyRevision:applied.plan.policyRevision} } : {}),
-            ...(applied.kind === "git.integrate" && applied.plan.merge !== undefined && applied.plan.merge.version !== 1 && applied.plan.merge.diff !== undefined ? { diff: applied.plan.merge.diff } : {}),
-            errorCode: applied.state === "failed" ? applied.errorCode : null },
-      eligible,
+    const applied = this.integrationRecord(open, attemptNumber);
+    return { open: openEntry, entries, integration: applied?.integration ?? null, eligible,
       highPeerFloor: this.highPeerFloor, maxWorkers: this.maxWorkers };
   }
 
-  executionConditions(state: ReviewState): string[] {
+  executionConditions(open: OpenRequest, state: ReviewState): string[] {
+    try { this.assertExecutable(open, state.entries); }
+    catch (error) {
+      if (error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE") return [error.message];
+      throw error;
+    }
     const requester = this.store.listAgents().find(agent => agent.name === state.requester);
     if (!requester || requester.desired !== "enabled") return ["requester execution is stopped, retired or unavailable"];
     return capabilitiesOf(requester).has("git.submit") ? [] : ["requester lacks current git.submit authority"];
+  }
+
+  /** Historical scope remains data. No current plan, policy, revise, or adoption
+   * observation can make an old request executable by this release. */
+  assertExecutable(open: OpenRequest, entries?: readonly ReviewEntry[]): void {
+    const fact = open.operation.plan.fact;
+    if (!isOpenFact(fact) || fact.version !== 3 || (entries ?? this.inputFor(open).entries).some(entry => entry.fact.kind === "review.adopt"))
+      throw new StoreError("UNSUPPORTED_PROFILE", "original review scope is unsupported for current execution; preserve its facts, bytes and unresolved work for the original release/owner to diagnose or drain; no automatic adoption");
   }
 
   /** Last synchronous policy gate before CAS. The pending integration itself
@@ -123,6 +162,7 @@ export class ReviewAuthorityReader {
     const open = this.openRequests().find(candidate => candidate.operation.id === requestId);
     if (open === undefined) throw new StoreError("STORE_CORRUPT", "merge plan names a missing review request");
     const input = this.inputFor(open), fact = input.open.fact;
+    this.assertExecutable(open, input.entries);
     const state = reviewState({ ...input, integration: null });
     if (isOpenFact(fact) && !(fact.kind === "challenge.open" && fact.prepared) && this.provenance !== undefined) {
       const current = this.provenance(state.sourceIdentity.expectedBase, state.sourceIdentity.candidate);
@@ -156,9 +196,10 @@ export class ReviewAuthorityReader {
       // Mail freezing yields: an author may release or acquire an active slot.
       // Re-derive the opening decision before accepting its frozen approval.
       const fact = prepared.fact;
+      if (fact.version !== 3) throw new StoreError("UNSUPPORTED_PROFILE", "fresh review acceptance requires the current original scope; no legacy open factory");
       const authors = new Set([prepared.after0.requester, ...fact.submitters]);
-      const currentFact = fact.version !== 1 ? { ...fact, reviewPolicy: { ...fact.reviewPolicy,
-        authorSlots: [...this.eligible()].filter(actor => authors.has(actor)).length } } : fact;
+      const currentFact = { ...fact, reviewPolicy: { ...fact.reviewPolicy,
+        authorSlots: [...this.eligible()].filter(actor => authors.has(actor)).length } };
       const fresh = reviewState({
         open: { sequence: 0, operation: prepared.id, actor: prepared.after0.requester,
           fact: currentFact, messages: [] },
@@ -184,13 +225,14 @@ export class ReviewAuthorityReader {
     if (open === null) throw new StoreError("STORE_CORRUPT", "accepted review request is missing");
     if (prepared.before === null) throw new StoreError("STORE_CORRUPT", "review decision lost its before state");
     const fresh = this.inputFor(open);
+    this.assertExecutable(open, fresh.entries);
     const last = prepared.after0.entries.at(-1);
     if (last === undefined) throw new StoreError("STORE_CORRUPT", "review decision lost its new entry");
     const freshBefore = reviewState(fresh);
     // A concurrently-accepted entry makes the frozen sequence stale: that is a
     // changed review state, not corruption.
     let freshAfter: ReviewState;
-    try { freshAfter = reviewState({ ...fresh, ...(["review.retry", "review.revise", "review.supersede", "review.adopt"].includes(last.fact.kind) ? { integration: null } : {}), entries: [...fresh.entries, last] }); }
+    try { freshAfter = reviewState({ ...fresh, ...(["review.retry", "review.revise", "review.supersede"].includes(last.fact.kind) ? { integration: null } : {}), entries: [...fresh.entries, last] }); }
     catch (error) {
       if (error instanceof StoreError && error.code === "STORE_CORRUPT")
         throw new StoreError("BROKER_UNAVAILABLE", "review state changed; retry the same request key",
@@ -210,7 +252,7 @@ export class ReviewAuthorityReader {
         existing.identity.expectedBase !== fact.identity.expectedBase || existing.tier !== fact.tier ||
         existing.identity.policyRevision !== fact.identity.policyRevision) continue;
       const state = reviewState(input);
-      if (state.terminal === null && state.integration === null) return existing.name;
+      if (state.terminal === null && state.included === null && state.integration === null) return existing.name;
     }
     return null;
   }
@@ -224,7 +266,7 @@ export class ReviewAuthorityReader {
           existing.target.request !== fact.target.request) continue;
       const state = reviewState(input);
       if (state.integration?.state === "succeeded") return existing.name;
-      if (state.terminal === null && state.integration === null &&
+      if (state.terminal === null && state.included === null && state.integration === null &&
           existing.identity.expectedBase === fact.identity.expectedBase &&
           existing.identity.candidate === fact.identity.candidate &&
           existing.identity.policyRevision === fact.identity.policyRevision &&
@@ -244,7 +286,8 @@ export class ReviewAuthorityReader {
     if (targetFact === null || targetFact.kind !== "merge.open") throw drift();
     const targetState = reviewState(this.inputFor(target!));
     if (targetState.integration?.state !== "succeeded" ||
-        targetState.integration.operation !== fact.target.integration) throw drift();
+        targetState.integration.operation !== fact.target.integration || targetState.tier !== fact.target.tier ||
+        (targetState.tier === "HIGH" && fact.tier !== "HIGH")) throw drift();
     const duplicate = this.duplicateChallenge(fact);
     if (duplicate !== null)
       throw new StoreError("REQUEST_EXISTS", "an applied or identical challenge already covers this merge",

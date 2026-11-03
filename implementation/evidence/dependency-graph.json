@@ -1,5 +1,6 @@
 {
  "sourceFiles": [
+  "apps/oma/src/application/execution-recovery.ts",
   "apps/oma/src/application/exit.ts",
   "apps/oma/src/application/extensions.ts",
   "apps/oma/src/application/local-packages.ts",
@@ -19,6 +20,7 @@
   "apps/oma/src/broker/composition.ts",
   "apps/oma/src/broker/git-composition.ts",
   "apps/oma/src/broker/git-ledger.ts",
+  "apps/oma/src/broker/invocation-sources.ts",
   "apps/oma/src/broker/lifecycle-composition.ts",
   "apps/oma/src/broker/lifecycle-ledger.ts",
   "apps/oma/src/broker/mail-composition.ts",
@@ -61,13 +63,16 @@
   "apps/oma/src/runtime/candidate-checks.ts",
   "apps/oma/src/runtime/client-preload.ts",
   "apps/oma/src/runtime/client-runtime.ts",
+  "apps/oma/src/runtime/collaboration-sources.ts",
   "apps/oma/src/runtime/compile-cache.ts",
   "apps/oma/src/runtime/connect-proxy.ts",
   "apps/oma/src/runtime/deployment-manifest.ts",
   "apps/oma/src/runtime/execution-runtime.ts",
   "apps/oma/src/runtime/extension-integrity.ts",
   "apps/oma/src/runtime/host-arguments.ts",
+  "apps/oma/src/runtime/host-invocations.ts",
   "apps/oma/src/runtime/host-tenure.ts",
+  "apps/oma/src/runtime/human-controls.ts",
   "apps/oma/src/runtime/inference-relay.ts",
   "apps/oma/src/runtime/input-effects.ts",
   "apps/oma/src/runtime/input-effects/code.ts",
@@ -75,6 +80,7 @@
   "apps/oma/src/runtime/input-effects/goal.ts",
   "apps/oma/src/runtime/input-effects/mail.ts",
   "apps/oma/src/runtime/input-effects/submit.ts",
+  "apps/oma/src/runtime/invocation-codec.ts",
   "apps/oma/src/runtime/keychain-credentials.ts",
   "apps/oma/src/runtime/locked-files.ts",
   "apps/oma/src/runtime/native-residents.ts",
@@ -100,10 +106,16 @@
   "apps/oma/src/runtime/session-storage.ts",
   "apps/oma/src/runtime/society-lease.ts",
   "apps/oma/src/runtime/society-preparation.ts",
-  "apps/oma/src/runtime/society-slot.ts",
   "apps/oma/src/runtime/supervision-channel.ts",
   "apps/oma/src/runtime/user-files.ts",
   "apps/oma/src/views.ts",
+  "apps/oma/src/views/collaboration-history.ts",
+  "apps/oma/src/views/collaboration-logs.ts",
+  "apps/oma/src/views/collaboration-mail.ts",
+  "apps/oma/src/views/collaboration-receipts.ts",
+  "apps/oma/src/views/collaboration-review-materials.ts",
+  "apps/oma/src/views/collaboration-reviews.ts",
+  "apps/oma/src/views/collaboration-state.ts",
   "apps/oma/src/views/mail-notices.ts",
   "apps/oma/src/views/pending-work.ts",
   "packages/broker/src/connection.ts",
@@ -171,6 +183,11 @@
   "packages/domain/src/capabilities.ts",
   "packages/domain/src/check-pipeline.ts",
   "packages/domain/src/child-policy.ts",
+  "packages/domain/src/collaboration-inputs.ts",
+  "packages/domain/src/collaboration-prompts.ts",
+  "packages/domain/src/collaboration-review.ts",
+  "packages/domain/src/collaboration-surface.ts",
+  "packages/domain/src/collaboration-targets.ts",
   "packages/domain/src/config-format.ts",
   "packages/domain/src/context-policy.ts",
   "packages/domain/src/deployment.ts",
@@ -204,7 +221,6 @@
   "packages/domain/src/settings.ts",
   "packages/domain/src/spec-identity.ts",
   "packages/domain/src/surface-bounds.ts",
-  "packages/domain/src/tool-surface.ts",
   "packages/domain/src/turn-admission.ts",
   "packages/domain/src/unseen-text.ts",
   "packages/domain/src/utf8.ts",
@@ -262,17 +278,17 @@
   "packages/engine/src/principal-session.ts",
   "packages/engine/src/session-directories.ts",
   "packages/engine/src/session-metadata.ts",
-  "packages/extension/src/agent-tools.ts",
   "packages/extension/src/ask-user-question.ts",
+  "packages/extension/src/collaboration-help.ts",
+  "packages/extension/src/collaboration-invocations.ts",
+  "packages/extension/src/collaboration-tools.ts",
   "packages/extension/src/delivery.ts",
   "packages/extension/src/egress-bridge.ts",
   "packages/extension/src/index.ts",
   "packages/extension/src/inference-bridge.ts",
   "packages/extension/src/mail-tools.ts",
   "packages/extension/src/principal-channel.ts",
-  "packages/extension/src/principal-tools.ts",
   "packages/extension/src/prompt-boundary.ts",
-  "packages/extension/src/review-tools.ts",
   "packages/file-descriptors/src/index.ts",
   "packages/git/src/candidate-check.ts",
   "packages/git/src/canonical-command.ts",
@@ -286,6 +302,7 @@
   "packages/git/src/integration-preparation.ts",
   "packages/git/src/integration-publication.ts",
   "packages/git/src/integration.ts",
+  "packages/git/src/mail-attachments.ts",
   "packages/git/src/observe.ts",
   "packages/git/src/paths.ts",
   "packages/git/src/ports.ts",
@@ -300,6 +317,7 @@
   "packages/git/src/repository-port.ts",
   "packages/git/src/repository.ts",
   "packages/git/src/review-artifact.ts",
+  "packages/git/src/review-record.ts",
   "packages/git/src/submit.ts",
   "packages/git/src/workspace.ts",
   "packages/lifecycle/src/actions.ts",
@@ -323,6 +341,7 @@
   "packages/mail/src/observations.ts",
   "packages/mail/src/ports.ts",
   "packages/mail/src/reconcile.ts",
+  "packages/mail/src/records.ts",
   "packages/mail/src/review-documents.ts",
   "packages/mail/src/routing.ts",
   "packages/mail/src/serialize.ts",
@@ -400,9 +419,14 @@
   "packages/protocol/src/byte-queue.ts",
   "packages/protocol/src/client-codecs.ts",
   "packages/protocol/src/delivery-boundary.ts",
+  "packages/protocol/src/failure-codec.ts",
   "packages/protocol/src/frame.ts",
   "packages/protocol/src/git-execution-view.ts",
   "packages/protocol/src/host-channel.ts",
+  "packages/protocol/src/invocation-mail.ts",
+  "packages/protocol/src/invocation-rejection.ts",
+  "packages/protocol/src/invocation-resolution.ts",
+  "packages/protocol/src/invocation-submission.ts",
   "packages/protocol/src/jsonl.ts",
   "packages/protocol/src/log-limits.ts",
   "packages/protocol/src/log-response.ts",
@@ -449,6 +473,7 @@
   "packages/storage/src/directory.ts",
   "packages/storage/src/durable-fs.ts",
   "packages/storage/src/execution-journal.ts",
+  "packages/storage/src/execution-recovery.ts",
   "packages/storage/src/execution-staging.ts",
   "packages/storage/src/facets.ts",
   "packages/storage/src/file-digest.ts",
@@ -460,6 +485,7 @@
   "packages/storage/src/operation-journal.ts",
   "packages/storage/src/operation-transitions.ts",
   "packages/storage/src/output-spool.ts",
+  "packages/storage/src/package-replacement.ts",
   "packages/storage/src/package-staging.ts",
   "packages/storage/src/package-tar.ts",
   "packages/storage/src/preaccept-artifact.ts",
@@ -482,6 +508,7 @@
   "packages/tool-files/src/descriptor-files.ts",
   "packages/tool-files/src/errors.ts",
   "packages/tool-files/src/index.ts",
+  "packages/tool-files/src/private-state.ts",
   "packages/tool-files/src/results.ts",
   "packages/tool-hashline/src/index.ts",
   "packages/tool-lsp/src/index.ts",
@@ -490,8 +517,10 @@
   "packages/tool-mcp/src/mcp-sdk-env.ts",
   "packages/tool-runtime/src/batch-view.ts",
   "packages/tool-runtime/src/child-env.ts",
+  "packages/tool-runtime/src/collaboration-groups.ts",
   "packages/tool-runtime/src/contained-search.ts",
   "packages/tool-runtime/src/contained-tools.ts",
+  "packages/tool-runtime/src/private-state.ts",
   "packages/tool-runtime/src/provenance.ts",
   "packages/tool-runtime/src/result-read.ts",
   "packages/tool-runtime/src/shared.ts",
@@ -540,6 +569,8 @@
      "packages/domain/src/canonical-json.ts",
      "packages/domain/src/capabilities.ts",
      "packages/domain/src/child-policy.ts",
+     "packages/domain/src/collaboration-prompts.ts",
+     "packages/domain/src/collaboration-surface.ts",
      "packages/domain/src/config-format.ts",
      "packages/domain/src/context-policy.ts",
      "packages/domain/src/deployment.ts",
@@ -569,7 +600,6 @@
      "packages/domain/src/settings.ts",
      "packages/domain/src/spec-identity.ts",
      "packages/domain/src/surface-bounds.ts",
-     "packages/domain/src/tool-surface.ts",
      "packages/domain/src/turn-admission.ts",
      "packages/domain/src/unseen-text.ts",
      "packages/domain/src/utf8.ts",
@@ -583,11 +613,15 @@
    {
     "name": "K1-codecs",
     "files": [
+     "apps/oma/src/runtime/invocation-codec.ts",
      "apps/oma/src/runtime/request-cache-codec.ts",
      "packages/domain/src/agent-spec.ts",
      "packages/domain/src/ask-user-question/envelope.ts",
      "packages/domain/src/attestation.ts",
      "packages/domain/src/check-pipeline.ts",
+     "packages/domain/src/collaboration-inputs.ts",
+     "packages/domain/src/collaboration-review.ts",
+     "packages/domain/src/collaboration-targets.ts",
      "packages/domain/src/durable.ts",
      "packages/domain/src/git-facts.ts",
      "packages/domain/src/integration-policy.ts",
@@ -602,9 +636,14 @@
      "packages/protocol/src/batch-view.ts",
      "packages/protocol/src/byte-queue.ts",
      "packages/protocol/src/client-codecs.ts",
+     "packages/protocol/src/failure-codec.ts",
      "packages/protocol/src/frame.ts",
      "packages/protocol/src/git-execution-view.ts",
      "packages/protocol/src/host-channel.ts",
+     "packages/protocol/src/invocation-mail.ts",
+     "packages/protocol/src/invocation-rejection.ts",
+     "packages/protocol/src/invocation-resolution.ts",
+     "packages/protocol/src/invocation-submission.ts",
      "packages/protocol/src/jsonl.ts",
      "packages/protocol/src/log-response.ts",
      "packages/protocol/src/mac-developer-tools.ts",
@@ -695,6 +734,7 @@
      "packages/storage/src/directory.ts",
      "packages/storage/src/durable-fs.ts",
      "packages/storage/src/execution-journal.ts",
+     "packages/storage/src/execution-recovery.ts",
      "packages/storage/src/execution-staging.ts",
      "packages/storage/src/file-digest.ts",
      "packages/storage/src/immutable-file.ts",
@@ -702,6 +742,7 @@
      "packages/storage/src/mail-notices.ts",
      "packages/storage/src/mailbox.ts",
      "packages/storage/src/output-spool.ts",
+     "packages/storage/src/package-replacement.ts",
      "packages/storage/src/package-staging.ts",
      "packages/storage/src/package-tar.ts",
      "packages/storage/src/preaccept-artifact.ts",
@@ -718,6 +759,7 @@
      "packages/storage/src/tree-lease.ts",
      "packages/tool-files/src/descriptor-files.ts",
      "packages/tool-files/src/index.ts",
+     "packages/tool-files/src/private-state.ts",
      "packages/tool-files/src/results.ts"
     ]
    },
@@ -740,13 +782,13 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 33,
-   "K1-codecs -> K0-values": 68,
-   "K1-codecs -> K1-codecs": 30,
-   "K2-mechanisms -> K0-values": 135,
-   "K2-mechanisms -> K1-codecs": 18,
-   "K2-mechanisms -> K2-mechanisms": 187,
-   "K3-ledger -> K0-values": 22,
+   "K0-values -> K0-values": 36,
+   "K1-codecs -> K0-values": 92,
+   "K1-codecs -> K1-codecs": 58,
+   "K2-mechanisms -> K0-values": 144,
+   "K2-mechanisms -> K1-codecs": 24,
+   "K2-mechanisms -> K2-mechanisms": 207,
+   "K3-ledger -> K0-values": 23,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
    "K3-ledger -> K3-ledger": 13
@@ -754,17 +796,32 @@
   "typeOnlyEdgeMatrix": {
    "K0-values -> K0-values": 2,
    "K1-codecs -> K0-values": 3,
-   "K1-codecs -> K1-codecs": 1,
+   "K1-codecs -> K1-codecs": 4,
    "K1-codecs -> K3-ledger": 1,
    "K2-mechanisms -> K0-values": 4,
    "K2-mechanisms -> K1-codecs": 4,
    "K2-mechanisms -> K2-mechanisms": 7,
    "K2-mechanisms -> K3-ledger": 1,
    "K3-ledger -> K0-values": 2,
-   "K3-ledger -> K1-codecs": 1,
+   "K3-ledger -> K1-codecs": 2,
    "K3-ledger -> K3-ledger": 17
   },
   "crossZoneEdges": [
+   {
+    "from": "apps/oma/src/runtime/invocation-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "apps/oma/src/runtime/invocation-codec.ts",
+    "to": "packages/domain/src/collaboration-surface.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "apps/oma/src/runtime/invocation-codec.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
    {
     "from": "apps/oma/src/runtime/request-cache-codec.ts",
     "to": "packages/domain/src/canonical-json.ts",
@@ -823,6 +880,41 @@
    {
     "from": "packages/client/src/index.ts",
     "to": "packages/client/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/protocol/src/invocation-mail.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/protocol/src/invocation-rejection.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/protocol/src/invocation-resolution.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/protocol/src/invocation-submission.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/client/src/index.ts",
+    "to": "packages/protocol/src/request-codec.ts",
     "kind": "runtime"
    },
    {
@@ -897,12 +989,22 @@
    },
    {
     "from": "packages/config/src/index.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
     "to": "packages/domain/src/review-bounds.ts",
     "kind": "runtime"
    },
    {
     "from": "packages/config/src/index.ts",
     "to": "packages/domain/src/settings.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/index.ts",
+    "to": "packages/protocol/src/batch-view.ts",
     "kind": "runtime"
    },
    {
@@ -948,6 +1050,11 @@
    {
     "from": "packages/config/src/policy.ts",
     "to": "packages/domain/src/child-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/config/src/policy.ts",
+    "to": "packages/domain/src/collaboration-prompts.ts",
     "kind": "runtime"
    },
    {
@@ -1002,6 +1109,61 @@
    },
    {
     "from": "packages/domain/src/check-pipeline.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-inputs.ts",
+    "to": "packages/domain/src/display-address.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-inputs.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-inputs.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-inputs.ts",
+    "to": "packages/domain/src/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-review.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-review.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-review.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-review.ts",
+    "to": "packages/domain/src/review-evaluation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-targets.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-targets.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/collaboration-targets.ts",
     "to": "packages/domain/src/identifiers.ts",
     "kind": "runtime"
    },
@@ -1098,6 +1260,11 @@
    {
     "from": "packages/domain/src/validation.ts",
     "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/domain/src/validation.ts",
+    "to": "packages/domain/src/limits.ts",
     "kind": "runtime"
    },
    {
@@ -1446,6 +1613,16 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/protocol/src/failure-codec.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/failure-codec.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/protocol/src/frame.ts",
     "to": "packages/domain/src/canonical-json.ts",
     "kind": "runtime"
@@ -1458,6 +1635,41 @@
    {
     "from": "packages/protocol/src/git-execution-view.ts",
     "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-mail.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-mail.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-mail.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-resolution.ts",
+    "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-resolution.ts",
+    "to": "packages/domain/src/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-submission.ts",
+    "to": "packages/domain/src/derived.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/invocation-submission.ts",
+    "to": "packages/domain/src/identifiers.ts",
     "kind": "runtime"
    },
    {
@@ -1503,6 +1715,11 @@
    {
     "from": "packages/protocol/src/operation-codec.ts",
     "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/domain/src/derived.ts",
     "kind": "runtime"
    },
    {
@@ -1561,6 +1778,11 @@
     "kind": "type"
    },
    {
+    "from": "packages/protocol/src/operation-codec.ts",
+    "to": "packages/protocol/src/request-codec.ts",
+    "kind": "type"
+   },
+   {
     "from": "packages/protocol/src/operation-results.ts",
     "to": "packages/protocol/src/operation-codec.ts",
     "kind": "type"
@@ -1583,11 +1805,6 @@
    {
     "from": "packages/protocol/src/receipt-codec.ts",
     "to": "packages/domain/src/canonical-json.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "packages/protocol/src/receipt-codec.ts",
-    "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
    {
@@ -1657,6 +1874,11 @@
    },
    {
     "from": "packages/protocol/src/status-page.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/protocol/src/status-view.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
@@ -1806,6 +2028,16 @@
     "kind": "type"
    },
    {
+    "from": "packages/storage/src/execution-recovery.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/execution-recovery.ts",
+    "to": "packages/domain/src/utf8.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/storage/src/execution-staging.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
@@ -1893,6 +2125,16 @@
    {
     "from": "packages/storage/src/output-spool.ts",
     "to": "packages/domain/src/canonical-json.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-replacement.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/package-replacement.ts",
+    "to": "packages/domain/src/utf8.ts",
     "kind": "runtime"
    },
    {
@@ -2121,6 +2363,11 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/tool-files/src/private-state.ts",
+    "to": "packages/tool-files/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/tool-files/src/results.ts",
     "to": "packages/tool-files/src/errors.ts",
     "kind": "runtime"
@@ -2318,6 +2565,27 @@
      "coarseUpward": false
     },
     {
+     "from": "apps/oma/src/views.ts",
+     "to": "apps/oma/src/runtime/host-invocations.ts",
+     "classification": "implementation-knowledge-review",
+     "kernelUpward": false,
+     "coarseUpward": true
+    },
+    {
+     "from": "apps/oma/src/views/collaboration-receipts.ts",
+     "to": "apps/oma/src/runtime/host-invocations.ts",
+     "classification": "implementation-knowledge-review",
+     "kernelUpward": false,
+     "coarseUpward": true
+    },
+    {
+     "from": "apps/oma/src/views/collaboration-state.ts",
+     "to": "apps/oma/src/runtime/host-invocations.ts",
+     "classification": "implementation-knowledge-review",
+     "kernelUpward": false,
+     "coarseUpward": true
+    },
+    {
      "from": "packages/protocol/src/operation-results.ts",
      "to": "packages/protocol/src/operation-codec.ts",
      "classification": "representation-relation",
@@ -2366,6 +2634,7 @@
     "packages/protocol/src/",
     "packages/storage/src/",
     "apps/oma/src/runtime/request-cache-codec.ts",
+    "apps/oma/src/runtime/invocation-codec.ts",
     "apps/oma/src/runtime/request-intent.ts",
     "packages/client/src/",
     "packages/mail/src/addresses.ts",
@@ -2375,7 +2644,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 189
+   "files": 202
   },
   {
    "index": 2,
@@ -2385,7 +2654,7 @@
     "apps/oma/src/diagnostics/",
     "apps/oma/src/request-cache.ts"
    ],
-   "files": 15
+   "files": 17
   },
   {
    "index": 3,
@@ -2405,7 +2674,7 @@
     "packages/review/src/index.ts",
     "packages/review/src/"
    ],
-   "files": 66
+   "files": 76
   },
   {
    "index": 4,
@@ -2424,7 +2693,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 158
+   "files": 161
   },
   {
    "index": 5,
@@ -2442,90 +2711,102 @@
     "packages/tool-web/src/",
     "packages/tool-hashline/src/"
    ],
-   "files": 72
+   "files": 73
   }
  ],
- "files": 523,
- "runtimeEdges": 1897,
- "typeOnlyEdges": 832,
+ "files": 552,
+ "runtimeEdges": 2221,
+ "typeOnlyEdges": 966,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 495,
-  "L2-facts -> L1-kernel": 37,
-  "L2-facts -> L2-facts": 6,
-  "L3-workflow -> L1-kernel": 293,
-  "L3-workflow -> L3-workflow": 76,
-  "L4-orchestration -> L1-kernel": 416,
-  "L4-orchestration -> L2-facts": 1,
+  "L1-kernel -> L1-kernel": 586,
+  "L2-facts -> L1-kernel": 46,
+  "L2-facts -> L2-facts": 7,
+  "L3-workflow -> L1-kernel": 404,
+  "L3-workflow -> L3-workflow": 94,
+  "L4-orchestration -> L1-kernel": 480,
+  "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 200,
-  "L5-entry -> L1-kernel": 141,
+  "L4-orchestration -> L4-orchestration": 210,
+  "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,
-  "L5-entry -> L4-orchestration": 95,
-  "L5-entry -> L5-entry": 77
+  "L5-entry -> L4-orchestration": 100,
+  "L5-entry -> L5-entry": 78
  },
  "upwardTypeOnlyEdges": [
   {
    "from": "apps/oma/src/diagnostics/integrity.ts",
    "to": "packages/git/src/read-port.ts"
+  },
+  {
+   "from": "apps/oma/src/views.ts",
+   "to": "apps/oma/src/runtime/host-invocations.ts"
+  },
+  {
+   "from": "apps/oma/src/views/collaboration-receipts.ts",
+   "to": "apps/oma/src/runtime/host-invocations.ts"
+  },
+  {
+   "from": "apps/oma/src/views/collaboration-state.ts",
+   "to": "apps/oma/src/runtime/host-invocations.ts"
   }
  ],
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 256,
-  "packages/domain/src/identifiers.ts": 83,
-  "packages/native/src/cleanup.ts": 45,
-  "packages/storage/src/directory.ts": 43,
-  "packages/native/src/files.ts": 42,
-  "packages/storage/src/durable-fs.ts": 34,
-  "packages/domain/src/canonical-json.ts": 32,
-  "packages/domain/src/paths.ts": 32,
-  "packages/file-descriptors/src/index.ts": 25,
-  "packages/domain/src/request-identity.ts": 22,
-  "packages/domain/src/utf8.ts": 22,
-  "packages/domain/src/deployment.ts": 20,
-  "packages/domain/src/derived.ts": 20,
-  "packages/domain/src/surface-bounds.ts": 20,
-  "packages/process/src/async.ts": 19
+  "packages/domain/src/errors.ts": 282,
+  "packages/domain/src/identifiers.ts": 94,
+  "packages/storage/src/directory.ts": 54,
+  "packages/native/src/cleanup.ts": 50,
+  "packages/domain/src/canonical-json.ts": 49,
+  "packages/native/src/files.ts": 46,
+  "packages/storage/src/durable-fs.ts": 43,
+  "packages/domain/src/paths.ts": 41,
+  "packages/domain/src/utf8.ts": 30,
+  "packages/file-descriptors/src/index.ts": 28,
+  "packages/domain/src/derived.ts": 27,
+  "packages/domain/src/request-identity.ts": 23,
+  "packages/domain/src/authority.ts": 22,
+  "packages/domain/src/resident-paths.ts": 21,
+  "packages/domain/src/surface-bounds.ts": 21
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 40,
+  "apps/oma/src/entry/broker.ts": 41,
+  "packages/mail/src/index.ts": 24,
+  "apps/oma/src/entry/oma-society.ts": 23,
+  "apps/oma/src/runtime/host-invocations.ts": 23,
   "apps/oma/src/runtime/client-runtime.ts": 22,
-  "packages/mail/src/index.ts": 22,
-  "apps/oma/src/entry/oma-society.ts": 21,
+  "apps/oma/src/broker/invocation-sources.ts": 19,
   "packages/broker/src/index.ts": 19,
   "apps/oma/src/application/society-bootstrap.ts": 18,
+  "apps/oma/src/runner.ts": 18,
+  "apps/oma/src/views.ts": 18,
   "packages/git/src/context-repository.ts": 18,
-  "apps/oma/src/runner.ts": 17,
   "apps/oma/src/runtime/provision.ts": 17,
   "packages/engine/src/interactive.ts": 17,
   "packages/extension/src/index.ts": 17,
-  "packages/git/src/context.ts": 15,
-  "packages/storage/src/context-snapshot.ts": 15,
-  "apps/oma/src/broker/mail-effects.ts": 14,
-  "apps/oma/src/entry/runner.ts": 14
+  "apps/oma/src/runtime/native-residents.ts": 16
  },
  "external": {
   "@earendil-works/pi-ai": 2,
-  "@earendil-works/pi-coding-agent": 50,
+  "@earendil-works/pi-coding-agent": 51,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
   "koffi": 16,
   "node:async_hooks": 5,
-  "node:buffer": 2,
+  "node:buffer": 4,
   "node:child_process": 6,
-  "node:crypto": 49,
+  "node:crypto": 57,
   "node:dns": 1,
   "node:events": 3,
-  "node:fs": 126,
+  "node:fs": 130,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
   "node:module": 6,
   "node:net": 23,
-  "node:os": 12,
-  "node:path": 149,
+  "node:os": 13,
+  "node:path": 168,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
@@ -2539,7 +2820,7 @@
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
   "proper-lockfile": 1,
-  "typebox": 10,
+  "typebox": 7,
   "typebox/compile": 1
  },
  "unresolved": []

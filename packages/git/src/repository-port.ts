@@ -17,7 +17,6 @@ export interface GitReviewRepository {
   submitters(base: Oid, candidate: Oid): readonly string[];
   prepareIntegration?(operation: string, base: Oid, candidate: Oid, main: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ candidate: Oid; preparedRef: string | null; reusable: boolean }>;
   prepareDiff?(operation: string, base: Oid, candidate: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ diff: import("@oma/contracts/files").ReviewDiffArtifact; preview: Buffer }>;
-  mergeDiff(base: Oid, candidate: Oid, maxBytes: number): Buffer;
   prepareRevert(input: { readonly mergeBase: Oid; readonly main: Oid; readonly base: Oid; readonly message: string }): Oid;
   publishCandidateRef(ref: string, candidate: Oid): void;
 }
@@ -31,4 +30,10 @@ export interface GitRepositoryPort {
   readonly submissionPublication: SubmissionPublication;
   readonly contextPublication: ContextPublication;
   snapshotReady(plan: OperationOf<"context.publish">["plan"]): boolean;
+  /** Exact accepted patch bytes only; does not require current Git endpoints. */
+  readDiffPatch?(diff: import("@oma/contracts/files").ReviewDiffArtifact): Buffer;
+  /** Read the already frozen complete patch; never regenerate from current HEAD. */
+  readDiffRecord?(diff: import("@oma/contracts/files").ReviewDiffArtifact): { readonly patch: Buffer; readonly paths: readonly ChangedPath[] };
+  /** Synchronous, scoped observation from immutable recorded source OIDs. */
+  withReviewSourceRecord?(base: Oid, candidate: Oid, consume: (source: import("@oma/contracts/files").ReviewSourceRecord) => undefined): void;
 }

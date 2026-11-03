@@ -1,3 +1,4 @@
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 /** TUI-002: `oma` brings its own society up.
  *
  * The broker refuses to start against a state tree that is not there, and
@@ -25,7 +26,7 @@ const git = (gitDir: string, argv: readonly string[]): string =>
   execFileSync("/usr/bin/git", ["--git-dir", gitDir, ...argv],
     { encoding: "utf8", env: { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", PATH: "/usr/bin:/bin" } }).trim();
 
-test("T115 provisioning creates exactly what the broker demands at startup", () => {
+test("001. Provisioning creates exactly what the broker demands at startup", () => {
   const root = scratch();
   try {
     const report = provisionSociety(join(root, "state"));
@@ -47,7 +48,7 @@ test("T115 provisioning creates exactly what the broker demands at startup", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 provisioning runs on every start without disturbing what exists", () => {
+test("002. Provisioning runs on every start without disturbing what exists", () => {
   const root = scratch();
   try {
     const state = join(root, "state");
@@ -65,7 +66,7 @@ test("T115 provisioning runs on every start without disturbing what exists", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker already listening is left alone rather than started twice", async () => {
+test("003. A broker already listening is left alone rather than started twice", async () => {
   const root = scratch();
   try {
     // A listener standing in for a broker another `oma` owns.
@@ -87,7 +88,7 @@ test("T115 a broker already listening is left alone rather than started twice", 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 an absent broker is reported as absent, not assumed running", async () => {
+test("004. An absent broker is reported as absent, not assumed running", async () => {
   const root = scratch();
   try {
     assert.equal(await brokerListening(root), false);
@@ -107,7 +108,7 @@ test("T115 an absent broker is reported as absent, not assumed running", async (
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR27 the society starts from the project worktree snapshot, once", () => {
+test("005. The society starts from the project worktree snapshot, once", () => {
   const root = scratch();
   try {
     const project = join(root, "project");
@@ -144,7 +145,7 @@ test("DR27 the society starts from the project worktree snapshot, once", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("UX-09 a seeded history carrying gitlinks provisions anyway and reports the refusal it will face", () => {
+test("006. A seeded history carrying gitlinks provisions anyway and reports the refusal it will face", () => {
   const root = scratch();
   try {
     const work = join(root, "work");
@@ -174,7 +175,7 @@ test("UX-09 a seeded history carrying gitlinks provisions anyway and reports the
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a directory with no commit starts from an empty root and says why", () => {
+test("007. A directory with no commit starts from an empty root and says why", () => {
   const root = scratch();
   try {
     const plain = join(root, "plain");
@@ -187,7 +188,7 @@ test("T115 a directory with no commit starts from an empty root and says why", (
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 provisioning builds the trusted rootfs Residents are confined to", () => {
+test("008. Provisioning builds the trusted rootfs Residents are confined to", () => {
   const root = scratch();
   try {
     const state = join(root, "state");
@@ -211,7 +212,7 @@ test("T115 provisioning builds the trusted rootfs Residents are confined to", ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 REC-007: a second provisioning leaves the tree it finds byte for byte, inode for inode", () => {
+test("009. A second provisioning leaves the tree it finds byte for byte, inode for inode", () => {
   const root = scratch();
   try {
     const state = join(root, "state");
@@ -267,7 +268,7 @@ test("T115 REC-007: a second provisioning leaves the tree it finds byte for byte
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 REC-007: the owner's repair pass is what puts a wrong rootfs back", () => {
+test("010. The owner's repair pass is what puts a wrong rootfs back", () => {
   const root = scratch();
   try {
     const state = join(root, "state");
@@ -304,7 +305,7 @@ test("T115 REC-007: the owner's repair pass is what puts a wrong rootfs back", (
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 REC-007: two first starts racing on one state root both survive it", async () => {
+test("011. Two first starts racing on one state root both survive it", async () => {
   // The rule "the loser adopts what the winner made" was applied to the
   // canonical ref and not to the repository itself: both processes saw no
   // `project.git`, both ran `git init --bare` into that exact path, and the
@@ -404,7 +405,7 @@ function supervise(root: string, libdir: string, extra: Record<string, unknown> 
 const readyOnce = (handle: { onReady(listener: () => void): void }): Promise<number> =>
   new Promise(resolve => { const started = Date.now(); handle.onReady(() => resolve(Date.now() - started)); });
 
-test("T115 readiness is the broker saying its endpoints listen, not a pid appearing", async () => {
+test("012. Readiness is the broker saying its endpoints listen, not a pid appearing", async () => {
   const root = scratch();
   try {
     // The real broker recovers and bootstraps before it listens; a host that
@@ -422,7 +423,7 @@ test("T115 readiness is the broker saying its endpoints listen, not a pid appear
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a registration returns the credential the broker minted for that engine", async () => {
+test("013. A registration returns the credential the broker minted for that engine", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, `
@@ -440,7 +441,7 @@ test("T115 a registration returns the credential the broker minted for that engi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a refused registration is answered at once, not left to time out", async () => {
+test("014. A refused registration is answered at once, not left to time out", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, `
@@ -459,7 +460,7 @@ test("T115 a refused registration is answered at once, not left to time out", as
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 an answer that names another session does not settle the registration waiting", async () => {
+test("015. An answer that names another session does not settle the registration waiting", async () => {
   const root = scratch();
   try {
     // A broker that answers with a handle nobody asked about. This is what a
@@ -484,7 +485,7 @@ test("T115 an answer that names another session does not settle the registration
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a refusal that names another session does not refuse the registration waiting", async () => {
+test("016. A refusal that names another session does not refuse the registration waiting", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, `
@@ -507,7 +508,7 @@ test("T115 a refusal that names another session does not refuse the registration
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker that says the society already has an owner disowns the host, and is not restarted", async () => {
+test("017. A broker that says the society already has an owner disowns the host, and is not restarted", async () => {
   const root = scratch();
   try {
     // Exactly what `apps/oma/src/entry/broker.ts` does when it loses the race for the
@@ -536,7 +537,7 @@ test("T115 a broker that says the society already has an owner disowns the host,
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker that only fails to start is restarted, not disowned", async () => {
+test("018. A broker that only fails to start is restarted, not disowned", async () => {
   const root = scratch();
   try {
     // The negative control for the status above: any other ending is a broker
@@ -563,7 +564,7 @@ test("T115 a broker that only fails to start is restarted, not disowned", async 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 the broker the product starts is handed the society lease and told which descriptor it is on", async () => {
+test("019. The broker the product starts is handed the society lease and told which descriptor it is on", async () => {
   // Without the telling, the broker cannot know its host owns the society, so
   // it would ask for the lease itself -- and be refused by the very host that
   // started it. The descriptor and the declaration are one fact, and this is
@@ -614,7 +615,7 @@ test("T119/REC-007 the broker the product starts is handed the society lease and
   }
 });
 
-test("T119/REC-007 a broker started outside the product answers to the society lease, and one started by it does not take it twice", () => {
+test("020. A broker started outside the product answers to the society lease, and one started by it does not take it twice", () => {
   // The other half of the audit's third finding. The host now asks whether a
   // broker is already listening before it writes anything, but that question
   // and the writes that follow it are two steps: a broker started between them
@@ -626,6 +627,8 @@ test("T119/REC-007 a broker started outside the product answers to the society l
   const root = scratch();
   const society = `lease${Date.now().toString(36)}`;
   const stateRoot = join(root, "data", "oma", society);
+  mkdirSync(stateRoot, { recursive: true });
+  publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", root, "collaboration-v1"));
   const lease = tryHoldSociety(stateRoot);
   assert.ok(lease, "the test could not take the society lease it needs to hold");
   const run = (fenced: boolean): { status: number | null; stderr: string } => {
@@ -648,7 +651,7 @@ test("T119/REC-007 a broker started outside the product answers to the society l
     assert.match(outside.stderr, /already owns this society/);
     // It got no further than ownership: the society an `oma` owns is untouched.
     assert.equal(existsSync(join(stateRoot, "runtime.sqlite")), false);
-    assert.doesNotMatch(outside.stderr, /startup failed/);
+    assert.doesNotMatch(outside.stderr, /initialization failed|startup failed/);
 
     // The lease is still this test's -- refusing did not take it, and did not
     // release it either.
@@ -660,7 +663,7 @@ test("T119/REC-007 a broker started outside the product answers to the society l
     const ours = run(true);
     assert.notEqual(ours.status, SOCIETY_OWNED_EXIT,
       `a broker holding its host's lease reported the society as owned: ${ours.stderr}`);
-    assert.match(ours.stderr, /startup failed/);
+    assert.match(ours.stderr, /initialization failed|startup failed/);
 
     // The control: with no lease held at all, the unfenced entry gets past
     // ownership too. Without this, the refusal above would pass for a build
@@ -669,18 +672,20 @@ test("T119/REC-007 a broker started outside the product answers to the society l
     const free = run(false);
     assert.notEqual(free.status, SOCIETY_OWNED_EXIT,
       `a broker refused a society nobody owned: ${free.stderr}`);
-    assert.match(free.stderr, /startup failed/);
+    assert.match(free.stderr, /initialization failed|startup failed/);
   } finally {
     lease.release();
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("T115 the real broker entry refuses to be the second owner of a society, and says which it is", async () => {
+test("021. The real broker entry refuses to be the second owner of a society, and says which it is", async () => {
   // Not a stand-in: the production entry, on the production path. The lock is
   // taken here first, exactly as a broker another `oma` started would hold it.
   const root = scratch();
   const society = `own${Date.now().toString(36)}`;
+  const stateRoot = join(root, "data/oma", society); mkdirSync(stateRoot, { recursive: true });
+  publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", root, "collaboration-v1"));
   const runRoot = join(root, "run", "oma", society);
   mkdirSync(runRoot, { recursive: true });
   const held = ProcessLock.tryAcquire(join(runRoot, "broker.lock"));
@@ -710,14 +715,14 @@ test("T115 the real broker entry refuses to be the second owner of a society, an
     const alone = run();
     assert.notEqual(alone.status, SOCIETY_OWNED_EXIT,
       "a broker that could take the lock still reported the society as owned");
-    assert.match(alone.stderr, /startup failed/);
+    assert.match(alone.stderr, /initialization failed|startup failed/);
   } finally {
     held.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("T115 a broker that never answers a registration yields an absence within the bound", async () => {
+test("022. A broker that never answers a registration yields an absence within the bound", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, "send({ kind: 'ready' }); setInterval(() => {}, 1000);");
@@ -729,7 +734,7 @@ test("T115 a broker that never answers a registration yields an absence within t
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker this host did not start gives it no readiness and no credential", async () => {
+test("023. A broker this host did not start gives it no readiness and no credential", async () => {
   const root = scratch();
   try {
     const server = createServer(socket => { socket.destroy(); });
@@ -747,7 +752,7 @@ test("T115 a broker this host did not start gives it no readiness and no credent
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker that ends unexpectedly is restarted, and the engine is registered with the new one", async () => {
+test("024. A broker that ends unexpectedly is restarted, and the engine is registered with the new one", async () => {
   const root = scratch();
   try {
     // The first broker dies a moment after it is ready; the second one stays.
@@ -778,7 +783,7 @@ test("T115 a broker that ends unexpectedly is restarted, and the engine is regis
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker that cannot stay up is reported and not restarted forever", async () => {
+test("025. A broker that cannot stay up is reported and not restarted forever", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, "process.exit(1);");
@@ -798,7 +803,7 @@ test("T115 a broker that cannot stay up is reported and not restarted forever", 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 stopping the supervisor stops its broker and does not restart it", async () => {
+test("026. Stopping the supervisor stops its broker and does not restart it", async () => {
   const root = scratch();
   try {
     const libdir = standInBroker(root, "send({ kind: 'ready' }); process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000);");
@@ -812,7 +817,7 @@ test("T115 stopping the supervisor stops its broker and does not restart it", as
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 the audit's orphan -- a host killed outright takes its broker with it", async () => {
+test("027. The audit's orphan -- a host killed outright takes its broker with it", async () => {
   const root = scratch();
   // The broker side runs only the real supervision channel -- no other handle on
   // descriptor 3 that could end the process for a different reason and make

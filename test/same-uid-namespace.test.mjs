@@ -42,7 +42,7 @@ function arena() {
   };
 }
 
-test("S-06/FS-005: a derived file is created in the directory that was resolved, not the name that was checked", () => {
+test("001. A derived file is created in the directory that was resolved, not the name that was checked", () => {
   const a = arena();
   try {
     const target = join(a.real, "receipt.json");
@@ -60,7 +60,7 @@ test("S-06/FS-005: a derived file is created in the directory that was resolved,
   } finally { a.cleanup(); }
 });
 
-test("S-06/FS-005: the rename that publishes a derived file uses the held parent, not the target pathname", () => {
+test("002. The rename that publishes a derived file uses the held parent, not the target pathname", () => {
   const a = arena();
   try {
     const target = join(a.real, "view.json");
@@ -77,7 +77,7 @@ test("S-06/FS-005: the rename that publishes a derived file uses the held parent
   } finally { a.cleanup(); }
 });
 
-test("S-06/FS-005: no temporary is left behind in the directory the call was holding", () => {
+test("003. No temporary is left behind in the directory the call was holding", () => {
   const a = arena();
   try {
     replaceDerivedFile(join(a.real, "x.json"), "v", 0o600, fault => {
@@ -88,7 +88,7 @@ test("S-06/FS-005: no temporary is left behind in the directory the call was hol
   } finally { a.cleanup(); }
 });
 
-test("S-06/FS-005: a staged tree is refused rather than published into a destination parent that was replaced", () => {
+test("004. A staged tree is refused rather than published into a destination parent that was replaced", () => {
   const a = arena();
   try {
     const staging = join(a.base, "staging");
@@ -118,7 +118,7 @@ test("S-06/FS-005: a staged tree is refused rather than published into a destina
  * is held by the source gate below instead. Saying so here is the point --
  * a test named after a property it does not observe is how a suite comes to
  * report more than it knows. */
-test("S-06/FS-005: replacing a derived symlink is idempotent and leaves no temporary", () => {
+test("005. Replacing a derived symlink is idempotent and leaves no temporary", () => {
   const a = arena();
   try {
     const link = join(a.real, "current");

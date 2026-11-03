@@ -14,6 +14,7 @@ export function gitLedger(store: Store): GitLedger {
     findSucceededIntegration: candidate => store.findSucceededIntegration(candidate),
     findSucceededContext: revision => store.findSucceededContext(revision),
     submissions: () => store.operations.submissions(),
+    attachmentRoots: () => store.operations.attachmentRoots(),
     transaction: body => store.transaction(tx => {
       const captured: GitTransaction = Object.freeze({
         acceptOperation: tx.acceptOperation, insertDeliveries: tx.insertDeliveries,

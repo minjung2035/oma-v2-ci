@@ -5,6 +5,8 @@ import { snapshotJson } from "@oma/domain/canonical-json";
 import { PUBLIC_METHODS } from "@oma/protocol/methods";
 import { decodeMutationPayload } from "@oma/protocol/request-codec";
 import { decodeReceipt, isMutationMethod, type Decoded } from "@oma/protocol/receipt-codec";
+import { decodeFrozenInvocationResolution } from "@oma/protocol/invocation-resolution";
+import { decodeFrozenSubmission } from "@oma/protocol/invocation-submission";
 
 export interface StreamDigest { bytes: number; sha256: string }
 export interface CachedRequest {
@@ -35,8 +37,18 @@ export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): De
   if (!isValidRequestKey(row.key) || row.key !== expectedKey) return invalid("cache key differs from file key");
   if (!isMutationMethod(row.method)) return invalid("cache method is not a mutation");
   if (!record(row.params)) return invalid("cached params must be an object");
-  try { decodeMutationPayload(row.method, row.params); }
-  catch { return invalid(`invalid cached caller DTO for ${row.method}`); }
+  const existing = row.method === "attest.record" && row.params.kind === "collaboration.existing";
+  if (existing) {
+    const decoded = decodeFrozenInvocationResolution(row.params);
+    if (!decoded.ok || decoded.value.requestKey === row.key || row.lastReceipt !== null || Object.hasOwn(row, "digest"))
+      return invalid("invalid protected no-effect freeze");
+  } else if (row.method === "attest.record" && row.params.kind === "collaboration.submission") {
+    const decoded = decodeFrozenSubmission(row.params, row.key);
+    if (!decoded.ok) return invalid(decoded.reason);
+  } else {
+    try { decodeMutationPayload(row.method, row.params); }
+    catch { return invalid(`invalid cached caller DTO for ${row.method}`); }
+  }
   if (typeof row.createdAtMs !== "number" || !Number.isSafeInteger(row.createdAtMs) || row.createdAtMs < 0)
     return invalid("invalid cache timestamp");
   let lastReceipt: Receipt | null = null;
@@ -46,8 +58,11 @@ export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): De
     lastReceipt = decoded.value;
   }
   const streamPolicy = PUBLIC_METHODS[row.method].stream;
-  const descriptor = streamPolicy === "optional-bundle" ? row.params.bundle :
-    streamPolicy === "required-content" ? row.params.content : undefined;
+  const submission = row.method === "attest.record" && row.params.kind === "collaboration.submission"
+    ? decodeFrozenSubmission(row.params, row.key) : undefined;
+  const descriptor = submission?.ok ? submission.value.publication.params.bundle :
+    streamPolicy === "optional-bundle" ? row.params.bundle :
+    streamPolicy === "required-content" || streamPolicy === "optional-content" ? row.params.content : undefined;
   let digest: StreamDigest | undefined;
   if (descriptor === undefined) {
     if (Object.hasOwn(row, "digest")) return invalid("digest exists for a request without a stream descriptor");
@@ -56,7 +71,7 @@ export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): De
     if (!decoded.ok || !record(descriptor)) return invalid("stream descriptor requires a valid frozen digest");
     if (decoded.value.bytes !== descriptor.bytes || decoded.value.sha256 !== descriptor.sha256)
       return invalid("frozen digest differs from the caller descriptor");
-    const mediaType = streamPolicy === "optional-bundle" ? "application/x-git-bundle" : "application/vnd.oma.context-v1";
+    const mediaType = row.method === "agent.create" || submission?.ok || streamPolicy === "optional-bundle" ? "application/x-git-bundle" : row.method === "mail.send" ? "application/vnd.oma.attachments-v1" : "application/vnd.oma.context-v1";
     if (descriptor.mediaType !== mediaType) return invalid("stream media type differs from the method policy");
     digest = decoded.value;
   }

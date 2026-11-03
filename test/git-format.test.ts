@@ -10,7 +10,7 @@ import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 
 for (const format of ["sha1", "sha256"] as const) {
-  test(`ID-003: ${format} rejects mismatched full OIDs before acceptance or stream consumption`, async () => {
+  test(`001. Git format: ${format} rejects mismatched full OIDs before acceptance or stream consumption`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-oid-format-"));
     const store = new Store(join(root, "runtime.sqlite"));
     try {
@@ -63,7 +63,7 @@ for (const format of ["sha1", "sha256"] as const) {
 }
 
 for (const format of ["sha1", "sha256"] as const) {
-  test(`GIT-006: ${format} observation failure is not a missing commit and remains recoverable`, async () => {
+  test(`002. Git format: ${format} observation failure is not a missing commit and remains recoverable`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-git-observe-"));
     const store = new Store(join(root, "runtime.sqlite"));
     try {

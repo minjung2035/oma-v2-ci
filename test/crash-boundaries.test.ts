@@ -50,7 +50,7 @@ async function killAt(root: string, point: string): Promise<void> {
 
 // Real SIGKILL + SQLite/filesystem recovery, not a claim of broker IPC or VM power-cut coverage.
 for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox-b", "prepared", "cur"]) {
-  test(`T18–T22/T27 primitive SIGKILL at ${point}: stable recovery and immutable bytes`, async () => {
+  test(`001. Primitive SIGKILL at ${point}: stable recovery and immutable bytes`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -103,7 +103,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
   });
 }
 
-test("T23 real cross-filesystem immutable copy rejects corrupt and symlink destinations", () => {
+test("002. Real cross-filesystem immutable copy rejects corrupt and symlink destinations", () => {
   const sourceRoot = mkdtempSync(join(tmpdir(), "oma-copy-source-"));
   const destinationRoot = mkdtempSync("/dev/shm/oma-copy-destination-");
   try {
@@ -125,7 +125,7 @@ test("T23 real cross-filesystem immutable copy rejects corrupt and symlink desti
   } finally { removeTree(sourceRoot); removeTree(destinationRoot); }
 });
 
-test("T23 real SIGKILL during cross-filesystem copy never publishes a partial destination", async () => {
+test("003. Real SIGKILL during cross-filesystem copy never publishes a partial destination", async () => {
   const sourceRoot = mkdtempSync(join(tmpdir(), "oma-copy-kill-source-"));
   const root = mkdtempSync("/dev/shm/oma-copy-kill-");
   try {
@@ -142,7 +142,7 @@ test("T23 real SIGKILL during cross-filesystem copy never publishes a partial de
 });
 
 for (const format of ["sha1", "sha256"] as const) {
-  test(`R20 primitive SIGKILL at submit-stage (${format}): no accepted intent or published result`, async () => {
+  test(`004. Primitive SIGKILL at submit-stage (${format}): no accepted intent or published result`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-submit-stage-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -168,7 +168,7 @@ for (const format of ["sha1", "sha256"] as const) {
 
 for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-mail", "submit-done", "int-before", "int-cas", "int-done", "ctx-accepted", "ctx-accepted-missing", "ctx-cas", "ctx-snapshot", "ctx-link", "ctx-mail"]) {
   const format = ["submit-ref", "submit-done", "int-cas", "ctx-accepted", "ctx-cas"].includes(point) ? "sha256" : "sha1";
-  test(`T57/T58/T63/T66 primitive SIGKILL at ${point} (${format}): exact ref and fixed receipt recovery`, async () => {
+  test(`005. Primitive SIGKILL at ${point} (${format}): exact ref and fixed receipt recovery`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-git-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -236,7 +236,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
 }
 
 for (const point of ["error-stage-before", "error-stage-after", "error-archive-before", "error-archive-after"]) {
-  test(`T70 injected ENOSPC/EIO at ${point}: no false receipt, repeated recovery remains retryable`, async () => {
+  test(`006. Injected ENOSPC/EIO at ${point}: no false receipt, repeated recovery remains retryable`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-io-fault-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -275,7 +275,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
 
 for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace", "boot-execution", "boot-ready", "boot-mail"]) {
   const format = point === "boot-intent" ? "sha256" : "sha1";
-  test(`T39/LIFE-009/M-004 primitive SIGKILL at ${point} (${format}): frozen bootstrap converges without transaction I/O`, async () => {
+  test(`007. Primitive SIGKILL at ${point} (${format}): frozen bootstrap converges without transaction I/O`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-boot-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -325,7 +325,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
 }
 
 for (const point of ["create-stage", "create-intent", "create-object", "create-workspace", "create-execution", "create-ready", "create-mail"]) {
-  test(`T39/M-004 primitive SIGKILL at ${point}: one child and one initial mail`, async () => {
+  test(`008. Primitive SIGKILL at ${point}: one child and one initial mail`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-create-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
@@ -373,7 +373,7 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
 }
 
 for (const kind of ["symlink", "hardlink"]) {
-  test(`S-05 recovery rejects ${kind} staging even when bytes match the accepted bundle`, async () => {
+  test(`009. Recovery rejects ${kind} staging even when bytes match the accepted bundle`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-bundle-link-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;

@@ -86,7 +86,7 @@ function accept(store: Store, key: string): string {
   return id;
 }
 
-test("R19: execution writes a complete canonical plan without a redundant result and never repeats CAS on replay", async () => {
+test("001. Execution writes a complete canonical plan without a redundant result and never repeats CAS on replay", async () => {
   const f = fixture();
   try {
     const receipt = await f.coordinator.execute(f.auth, "execute", input);
@@ -108,7 +108,7 @@ test("R19: execution writes a complete canonical plan without a redundant result
 });
 
 for (const [condition, expected] of [["missing", "CANDIDATE_NOT_PUBLISHED"], ["ancestry", "NOT_DESCENDANT"], ["protected", "PROTECTED_PATH"]] as const) {
-  test(`R19: ${condition} rejects before main CAS`, async () => {
+  test(`002. Integration decisions: ${condition} rejects before main CAS`, async () => {
     const f = fixture({ ...basePolicy(), protectedPaths: ["secret/"] });
     try {
       if (condition === "missing") f.model.published = present([]);
@@ -122,7 +122,7 @@ for (const [condition, expected] of [["missing", "CANDIDATE_NOT_PUBLISHED"], ["a
   });
 }
 
-test("UX-09/INT-001: a candidate whose tree carries gitlinks is refused with their paths before a row exists", async () => {
+test("003. A candidate whose tree carries gitlinks is refused with their paths before a row exists", async () => {
   const f = fixture();
   try {
     f.model.links = present(["dep", "vendor/nested"]);
@@ -137,7 +137,7 @@ test("UX-09/INT-001: a candidate whose tree carries gitlinks is refused with the
 });
 
 for (const condition of ["unknown", "refused", "corrupt"] as const) {
-  test(`UX-09: a ${condition} gitlink observation refuses — uncertain is never "no gitlinks"`, async () => {
+  test(`004. A ${condition} gitlink observation refuses — uncertain is never "no gitlinks"`, async () => {
     const f = fixture();
     try {
       f.model.links = condition === "unknown" ? unavailable()
@@ -152,7 +152,7 @@ for (const condition of ["unknown", "refused", "corrupt"] as const) {
 }
 
 for (const change of ["revoke", "stop", "incarnation"] as const) {
-  test(`R19: live ${change} after intent prevents the physical commit`, async () => {
+  test(`005. Live ${change} after intent prevents the physical commit`, async () => {
     const f = fixture();
     try {
       let reads = 0;
@@ -169,7 +169,7 @@ for (const change of ["revoke", "stop", "incarnation"] as const) {
   });
 }
 
-test("R19: a same-revision full-policy change is rejected outside the acceptance transaction", async () => {
+test("006. A same-revision full-policy change is rejected outside the acceptance transaction", async () => {
   let reads = 0;
   const f = fixture(basePolicy(), () => { reads++; return { ...basePolicy(), protectedPaths: ["new/"] }; });
   try {
@@ -180,7 +180,7 @@ test("R19: a same-revision full-policy change is rejected outside the acceptance
   } finally { f.close(); }
 });
 
-test("R19: missing policy cannot enable a production legacyDirect path", async () => {
+test("007. Missing policy cannot enable a production legacyDirect path", async () => {
   const f = fixture(null);
   try {
     await assert.rejects(f.coordinator.execute(f.auth, "no-policy", input), code("UNSUPPORTED_PROFILE"));
@@ -189,7 +189,7 @@ test("R19: missing policy cannot enable a production legacyDirect path", async (
 });
 
 for (const scenario of ["success", "failure", "unknown", "stop", "policy", "main"] as const)
-  test(`INT-004: trusted check ${scenario} is reobserved before CAS and retry preserves intent`, async t => {
+  test(`008. Trusted check ${scenario} is reobserved before CAS and retry preserves intent`, async t => {
     let revision = "p1";
     const f = fixture(checkedPolicy(), () => ({ ...checkedPolicy(), policyRevision: revision })); t.after(() => f.close());
     f.effects.runCheck = async (candidate, check) => {
@@ -222,7 +222,7 @@ for (const scenario of ["success", "failure", "unknown", "stop", "policy", "main
   });
 
 for (const result of ["expected", "third", "unknown"] as const) {
-  test(`R19: post-CAS ${result} remains unknown and blocks another repository writer`, async () => {
+  test(`009. Post-CAS ${result} remains unknown and blocks another repository writer`, async () => {
     const f = fixture();
     try {
       f.model.cas = result === "unknown" ? { kind: "unknown", observation: unavailable() }
@@ -238,7 +238,7 @@ for (const result of ["expected", "third", "unknown"] as const) {
 }
 
 {
-  test("R19: recovery of canonical intent settles candidate without replaying execute", async () => {
+  test("010. Recovery of canonical intent settles candidate without replaying execute", async () => {
     const f = fixture(null);
     try {
       const id = accept(f.store, "recover"); const before = operation(f.store, "recover").planJson;
@@ -257,7 +257,7 @@ for (const result of ["expected", "third", "unknown"] as const) {
   });
 }
 
-test("R19: base recovery rechecks conditions twice and completes the same operation", async () => {
+test("011. Base recovery rechecks conditions twice and completes the same operation", async () => {
   const f = fixture();
   try {
     const id = accept(f.store, "base"); const before = operation(f.store, "base").planJson;
@@ -269,7 +269,7 @@ test("R19: base recovery rechecks conditions twice and completes the same operat
 });
 
 for (const state of ["third", "absent", "unknown"] as const) {
-  test(`R19: recovery main=${state} blocks without invoking execute`, async () => {
+  test(`012. Recovery main=${state} blocks without invoking execute`, async () => {
     const f = fixture();
     try {
       accept(f.store, "recover");
@@ -280,7 +280,7 @@ for (const state of ["third", "absent", "unknown"] as const) {
   });
 }
 
-test("R19: an unavailable pre-CAS observation is neither absence nor a failed physical effect", async () => {
+test("013. An unavailable pre-CAS observation is neither absence nor a failed physical effect", async () => {
   const f = fixture();
   try {
     f.model.ancestry = unavailable();
@@ -291,7 +291,7 @@ test("R19: an unavailable pre-CAS observation is neither absence nor a failed ph
   } finally { f.close(); }
 });
 
-test("P0V-64 / R09, P0-2: a refusal after acceptance that a cleanup failure was bundled with settles by its own code", async () => {
+test("014. A refusal after acceptance that a cleanup failure was bundled with settles by its own code", async () => {
   const f = fixture();
   try {
     let asked = 0;

@@ -16,7 +16,7 @@ function slot(initial) {
   };
   return { files, bytes: () => bytes, held: () => held, holds: () => holds };
 }
-test("Engine settings: both transforms keep the same locked slot and preserve explicit choices", () => {
+test("001. Engine settings: both transforms keep the same locked slot and preserve explicit choices", () => {
   const s = slot(JSON.stringify({ theme: "chosen", quietStartup: "header", enableSkillCommands: false,
     retry: { baseDelayMs: 50, maxAgentDelayMs: 200, provider: { timeoutMs: 321 } } }));
   preparePiRetry(s.files, "/owned"); prepareEngineInteractiveSettings(s.files, "/owned");
@@ -28,12 +28,12 @@ test("Engine settings: both transforms keep the same locked slot and preserve ex
     maxAgentDelayMs: 200, provider: { maxRetries: 0, timeoutMs: 321 } });
 });
 for (const [bytes, code] of [["{", "STORE_CORRUPT"], ["[]", "UNSUPPORTED_PROFILE"], ['{"retry":[]}', "UNSUPPORTED_PROFILE"]])
-  test(`Engine settings: ${bytes} refuses without replacing saved bytes`, () => {
+  test(`002. Engine settings: ${bytes} refuses without replacing saved bytes`, () => {
     const s = slot(bytes);
     assert.throws(() => preparePiRetry(s.files, "/owned"), { code });
     assert.equal(s.bytes(), bytes); assert.equal(s.held(), false);
   });
-test("Engine SDK storage: reads and setters use only the explicitly supplied file owner", async () => {
+test("003. Engine SDK storage: reads and setters use only the explicitly supplied file owner", async () => {
   const s = slot('{"defaultModel":"before"}');
   const manager = createEngineSettings(s.files, "/project", "/owned", { projectTrusted: false });
   assert.equal(manager.getDefaultModel(), "before");

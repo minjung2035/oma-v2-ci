@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { setImmediate as turn } from "node:timers/promises";
 import { BrokerListeners } from "@oma/broker/listeners";
 
-test("listener preparation failure after bind waits for actual close", async () => {
+test("001. Listener preparation failure after bind waits for actual close", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-listener-preparation-"));
   const server = createServer(), injected = new Error("injected preparation failure"), errors: unknown[] = [];
   const owner = new BrokerListeners(error => errors.push(error));
@@ -32,7 +32,7 @@ test("listener preparation failure after bind waits for actual close", async () 
   }
 });
 
-test("a failed bind also obtains a close observation", async () => {
+test("002. A failed bind also obtains a close observation", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-listener-bind-"));
   const server = createServer(), blocker = createServer(), errors: unknown[] = [];
   const owner = new BrokerListeners(error => errors.push(error));
@@ -53,7 +53,7 @@ test("a failed bind also obtains a close observation", async () => {
   }
 });
 
-test("a thrown close keeps a real listener pending instead of returning its owner", async () => {
+test("003. A thrown close keeps a real listener pending instead of returning its owner", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-listener-close-"));
   const server = createServer(), injected = new Error("injected unanswered close"), errors: unknown[] = [];
   const owner = new BrokerListeners(error => errors.push(error)), close = server.close;

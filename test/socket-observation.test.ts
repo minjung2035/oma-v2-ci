@@ -24,7 +24,7 @@ function refused(t: TestContext, code: string): Socket[] {
 const unavailable = (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE";
 
 for (const code of ["EACCES", "EMFILE", "EIO", "ETIMEDOUT", "ENOENT", "ECONNREFUSED"]) {
-  test(`DR27: endpoint observation distinguishes an answered absence from ${code}`, async t => {
+  test(`001. Endpoint observation distinguishes an answered absence from ${code}`, async t => {
     const sockets = refused(t, code);
     for (const observe of [() => endpointListening("/unused/socket"), () => brokerListening("/unused")]) {
       if (["ENOENT", "ECONNREFUSED"].includes(code)) assert.equal(await observe(), false);
@@ -34,14 +34,14 @@ for (const code of ["EACCES", "EMFILE", "EIO", "ETIMEDOUT", "ENOENT", "ECONNREFU
   });
 }
 
-test("DR27: an unobserved broker probe starts no replacement process", async t => {
+test("002. An unobserved broker probe starts no replacement process", async t => {
   refused(t, "EACCES");
   await assert.rejects(superviseBroker({ node: "/not-used", libdir: "/unused", society: "demo",
     stateRoot: "/unused", runRoot: "/unused", configPath: "/unused/config" }), unavailable);
 });
 
 for (const mode of ["silence", "abort", "closed", "throw"] as const) {
-  test(`DR27: the endpoint attempt releases its owner on ${mode}, without inventing absence`, async t => {
+  test(`003. The endpoint attempt releases its owner on ${mode}, without inventing absence`, async t => {
     let socket: Socket | undefined;
     t.mock.method(Socket.prototype, "connect", function(this: Socket) {
       socket = this;
@@ -61,13 +61,13 @@ for (const mode of ["silence", "abort", "closed", "throw"] as const) {
   });
 }
 
-test("DR27: an attempt already cancelled opens no socket", async t => {
+test("004. An attempt already cancelled opens no socket", async t => {
   const sockets = refused(t, "ENOENT");
   await assert.rejects(connectEndpoint("/unused", 30, AbortSignal.abort()), unavailable);
   assert.equal(sockets.length, 0);
 });
 
-test("DR27: cancellation owns late connect errors through close", async t => {
+test("005. Cancellation owns late connect errors through close", async t => {
   const abort = new AbortController();
   let socket: Socket | undefined;
   t.mock.method(Socket.prototype, "connect", function(this: Socket) { socket = this; return this; });

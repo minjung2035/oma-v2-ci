@@ -12,13 +12,13 @@ import { MAIL_HEADER_BYTES } from "@oma/domain/mail-values";
 import { rfc5322Date } from "@oma/mail/headers";
 import type { MailHeaderExpectation } from "#oma-test/app/diagnostics/mail";
 
-test("NB-28: receipt presentation cannot invent a failed outcome without a failure", () => {
+test("001. Receipt presentation cannot invent a failed outcome without a failure", () => {
   const invalid = { operation: generateOperationId(), state: "failed" as const };
   assert.throws(() => receiptExit(invalid), /failed receipt.*failure/);
 });
 
 
-test("NB-28: immutable mail over the production header bound is corrupt, observation budget stays unknown", t => {
+test("002. Immutable mail over the production header bound is corrupt, observation budget stays unknown", t => {
   const home = mkdtempSync(join(tmpdir(), "oma-nb28-header-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const message = generateMessageId(generateOperationId(), 0);

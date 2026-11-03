@@ -18,7 +18,7 @@ const succeeded = (result: unknown) => ({ operation: generateOperationId(), stat
 
 for (const kind of ["merge", "challenge"] as const) {
   for (const interruption of ["pending", "unknown", "failed", "lookup-failure", "submit-failure", "unrecorded"] as const) {
-    test(`NB-17: ${kind} ${interruption} guides the parent key and preserves intent across restart`, async t => {
+    test(`001. Cli audit recovery: ${kind} ${interruption} guides the parent key and preserves intent across restart`, async t => {
       const home = mkdtempSync(join(tmpdir(), "oma-nb17-"));
       t.after(() => rmSync(home, { recursive: true, force: true }));
       git(home, ["init", "-q"]);
@@ -92,7 +92,7 @@ for (const kind of ["merge", "challenge"] as const) {
 }
 
 
-test("NB-28 decision guard: changed or missing source paths never reinterpret a frozen mail", async t => {
+test("002. Decision guard: changed or missing source paths never reinterpret a frozen mail", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-nb28-frozen-mail-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const key = "frozen-mail", message = generateMessageId(generateOperationId(), 0);
@@ -112,7 +112,7 @@ test("NB-28 decision guard: changed or missing source paths never reinterpret a 
 });
 
 for (const kind of ["merge", "challenge"] as const) {
-  test(`NB-17: SIGKILL after ${kind} parent freeze resumes its exact intent`, async t => {
+  test(`003. SIGKILL after ${kind} parent freeze resumes its exact intent`, async t => {
     const home = mkdtempSync(join(tmpdir(), "oma-nb17-kill-"));
     t.after(() => rmSync(home, { recursive: true, force: true }));
     git(home, ["init", "-q"]);
@@ -161,7 +161,7 @@ for (const kind of ["merge", "challenge"] as const) {
   });
 }
 
-test("NB-17: concurrent same-key opens preserve one frozen parent identity", async t => {
+test("004. Concurrent same-key opens preserve one frozen parent identity", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-nb17-concurrent-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   git(home, ["init", "-q"]);

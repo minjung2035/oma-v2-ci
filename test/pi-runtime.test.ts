@@ -1,3 +1,4 @@
+import { principalPaths, principalBounds } from "./fixtures/principal-paths.js";
 import { engineSettingsFiles } from "#oma-test/app/engine/settings-files";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import test from "node:test";
@@ -22,7 +23,7 @@ import { readSettings } from "#oma-test/app/application/settings";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 
-test("INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries", t => {
+test("001. Engine retry settings preserve unrelated fields and allow exactly five outer retries", t => {
   const root = scratch("oma-retry-settings-"); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json");
   writeFileSync(path, JSON.stringify({ defaultProvider: "fake", theme: "dark", retry: {
@@ -39,7 +40,7 @@ test("INF-001: engine retry settings preserve unrelated fields and allow exactly
     baseDelayMs: 1000, maxAgentDelayMs: 8000, provider: { maxRetries: 0 } });
 });
 
-test("Open TUI: the preview's look is the default, the Human's own choices are kept, telemetry to Pi stays off", t => {
+test("002. Open TUI: the preview's look is the default, the Human's own choices are kept, telemetry to Pi stays off", t => {
   const fresh = scratch("oma-open-defaults-"); t.after(() => rmSync(fresh, { recursive: true, force: true }));
   preparePiInteractive(engineSettingsFiles, fresh);
   const defaults = JSON.parse(readFileSync(join(fresh, "settings.json"), "utf8"));
@@ -66,7 +67,7 @@ test("Open TUI: the preview's look is the default, the Human's own choices are k
   preparePiInteractive(engineSettingsFiles, root); assert.equal(readFileSync(join(root, "open-tui.json"), "utf8"), before);
 });
 
-test("INF-001: unreadable, malformed or linked settings cannot silently disable the retry policy", t => {
+test("003. Unreadable, malformed or linked settings cannot silently disable the retry policy", t => {
   const root = scratch("oma-retry-refuse-"); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "settings.json"), target = join(root, "original.json");
   // Every refusal is the taxonomy's, never a raw SyntaxError: bytes that do
@@ -94,7 +95,7 @@ test("INF-001: unreadable, malformed or linked settings cannot silently disable 
   }
 });
 
-test("P0-8/DR32: a mode-000 agent directory or themes tail is repaired inside its boundary, never wedged on", t => {
+test("004. A mode-000 agent directory or themes tail is repaired inside its boundary, never wedged on", t => {
   // The wedge this regression names: a same-UID stray left `.engine` (or its
   // `themes` tail) mode-000, and the plain ensure wedged on EACCES before any
   // settings file could be written -- the Resident never spawned.
@@ -112,7 +113,7 @@ test("P0-8/DR32: a mode-000 agent directory or themes tail is repaired inside it
   assert.equal(JSON.parse(readFileSync(join(root, "open-tui.json"), "utf8")).enabled, true);
 });
 
-test("P0-8/DR32: damage above the ownership boundary is refused, never repaired or read as absent", t => {
+test("005. Damage above the ownership boundary is refused, never repaired or read as absent", t => {
   // `preparePiInteractive`'s boundary is the agent directory itself: a stray
   // mode-000 on its parent is the caller's, and oma does not touch it -- the
   // walk refuses rather than silently claiming the directory absent.
@@ -123,10 +124,10 @@ test("P0-8/DR32: damage above the ownership boundary is refused, never repaired 
   assert.equal(statSync(parent).mode & 0o777, 0o000, "the ancestor above the boundary keeps its mode");
 });
 
-test("INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", RESIDENT_TEST_OPTIONS, async () => {
+test("006. The Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", RESIDENT_TEST_OPTIONS, async () => {
   const { withScenario } = await import("./fixtures/scenario.js");
-  await withScenario({ residents: ["alice"] }, async s => {
-    await s.residentSends("alice", { to: ["alice"], subject: "Retry", body: "Read this mail" }, "retry-task");
+  await withScenario({ residents: ["alice", "bob"] }, async s => {
+    await s.residentSends("bob", { to: ["alice"], subject: "Retry", body: "Read this mail" }, "retry-task");
     s.script(() => ({ kind: "cut" }));
     const failed = await s.activate("alice");
     assert.notEqual(failed.code, 0);
@@ -153,7 +154,7 @@ function installation(root: string, entry = "dist/bundle/cli.js"): string {
   return pkg;
 }
 
-test("OMA runs the engine it shipped with, not one found on PATH", () => {
+test("007. OMA runs the engine it shipped with, not one found on PATH", () => {
   const root = scratch("oma-pi-bundled-");
   try {
     installation(root);
@@ -166,7 +167,7 @@ test("OMA runs the engine it shipped with, not one found on PATH", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the engine entry comes from the package's own bin, not a guessed path", () => {
+test("008. The engine entry comes from the package's own bin, not a guessed path", () => {
   const root = scratch("oma-pi-bin-");
   try {
     const pkg = installation(root, "custom/entry.js");
@@ -177,7 +178,7 @@ test("the engine entry comes from the package's own bin, not a guessed path", ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a package that is not Pi is never accepted as the engine", () => {
+test("009. A package that is not Pi is never accepted as the engine", () => {
   const root = scratch("oma-pi-wrong-");
   try {
     const pkg = join(root, "node_modules", PI_PACKAGE);
@@ -191,7 +192,7 @@ test("a package that is not Pi is never accepted as the engine", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("an operator may pin an engine, and a missing or relative pin is refused", () => {
+test("010. An operator may pin an engine, and a missing or relative pin is refused", () => {
   const root = scratch("oma-pi-pin-");
   try {
     const pinned = join(root, "pi");
@@ -209,7 +210,7 @@ test("an operator may pin an engine, and a missing or relative pin is refused", 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("an installation without an engine fails closed instead of using a PATH Pi", () => {
+test("011. An installation without an engine fails closed instead of using a PATH Pi", () => {
   const root = scratch("oma-pi-none-");
   try {
     // libdir has no engine; resolution must reach neither for a Pi on PATH nor
@@ -219,7 +220,7 @@ test("an installation without an engine fails closed instead of using a PATH Pi"
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR24: the engine is pointed at the Human's one OMA engine home, beside every session and never the user's own Pi", () => {
+test("012. The engine is pointed at the Human's one OMA engine home, beside every session and never the user's own Pi", () => {
   const stateRoot = "/var/lib/oma/demo";
   const runtime = resolvePiRuntime({ libdir: process.cwd(), stateRoot });
   assert.equal(runtime.agentDir, piAgentDir(stateRoot));
@@ -233,19 +234,19 @@ test("DR24: the engine is pointed at the Human's one OMA engine home, beside eve
   assert.ok(runtime.agentDir.startsWith("/var/lib/oma/"));
 });
 
-test("the Principal session carries the isolation variable to the engine", () => {
-  const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
+test("013. The Principal session carries the isolation variable to the engine", () => {
+  const env = sessionEnv({ ...principalBounds, HOME: "/h", PATH: "/usr/bin" }, {
     society: "demo", provider: "pi", model: "current", extensions: [],
-  }, { piAgentDir: "/var/lib/oma/demo/pi" });
+  }, { ...principalPaths(), piAgentDir: "/var/lib/oma/demo/pi" });
   assert.equal(env[PI_AGENT_DIR_ENV], "/var/lib/oma/demo/pi");
-  assert.equal(env.HOME, "/h");
-  const without = sessionEnv({ HOME: "/h" }, {
+  assert.equal(env.HOME, principalPaths().workspace);
+  const without = sessionEnv({ ...principalBounds, HOME: "/h" }, {
     society: "demo", provider: "pi", model: "current", extensions: [],
-  });
+  }, principalPaths());
   assert.ok(!(PI_AGENT_DIR_ENV in without));
 });
 
-test("REC-007: the Principal session tells the engine which descriptor its society lease is on", () => {
+test("014. The Principal session tells the engine which descriptor its society lease is on", () => {
   // The engine inherits the lease whether or not it is told, but it starts the
   // model-facing CLI -- a writer of this society's private state that survives
   // signals sent to the engine -- and it can only pass the lease on to a
@@ -254,7 +255,7 @@ test("REC-007: the Principal session tells the engine which descriptor its socie
   // spawn flags. So the number is declared, and an fd number grants nothing to
   // anyone who was not handed the descriptor.
   const profile = { society: "demo", provider: "pi", model: "current", extensions: [] };
-  const fenced = sessionEnv({ HOME: "/h" }, profile, { piAgentDir: "/p", fence: 41 });
+  const fenced = sessionEnv({ ...principalBounds, HOME: "/h" }, profile, { ...principalPaths(), piAgentDir: "/p", fence: 41 });
   assert.equal(fenced[SOCIETY_FENCE_ENV], String(SOCIETY_FENCE_FD),
     "the engine was told a descriptor other than the one the host places the lease on");
   // Not the host's own number for it: what the engine has is the slot it was
@@ -262,16 +263,16 @@ test("REC-007: the Principal session tells the engine which descriptor its socie
   assert.notEqual(fenced[SOCIETY_FENCE_ENV], "41");
   // A session started with no fence declares none, so a Pi run by hand outside
   // a society is not told to pass on a lease it does not have.
-  const unfenced = sessionEnv({ HOME: "/h" }, profile, { piAgentDir: "/p" });
+  const unfenced = sessionEnv({ ...principalBounds, HOME: "/h" }, profile, { ...principalPaths(), piAgentDir: "/p" });
   assert.ok(!(SOCIETY_FENCE_ENV in unfenced), "a session with no lease claimed one");
-  assert.ok(!(SOCIETY_FENCE_ENV in sessionEnv({ HOME: "/h" }, profile)));
+  assert.ok(!(SOCIETY_FENCE_ENV in sessionEnv({ ...principalBounds, HOME: "/h" }, profile, principalPaths())));
 });
 
-test("the engine entry precedes Pi's own flags on the command line", () => {
+test("015. The engine entry precedes Pi's own flags on the command line", () => {
   const runtime = resolvePiRuntime({ libdir: process.cwd(), stateRoot: "/s" });
   const argv = [...runtime.args, ...sessionArgv(
     { piCommand: runtime.executable, piArgs: runtime.args, coreExtension: "/lib/core.js",
-      sessionDir: "/s", workspace: "/w", home: "/h" },
+      ...principalPaths(), home: "/h" },
     { society: "demo", provider: "pi", model: "current", extensions: [] },
   )];
   assert.equal(argv[0], runtime.bundle, "the bundle is argv[0] for Node");
@@ -279,7 +280,7 @@ test("the engine entry precedes Pi's own flags on the command line", () => {
   assert.equal(argv[2], "rpc");
 });
 
-test("T106/TUI-019: running in a bare project needs no setup command and no hand-written config", () => {
+test("016. Running in a bare project needs no setup command and no hand-written config", () => {
   const root = scratch("oma-zeroconf-");
   try {
     const config = defaultHostConfig({

@@ -32,7 +32,7 @@ import { writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 const good = Buffer.from("checked bytes\n");
 const hash = sha256Hex(good);
 
-test("FS containment: syscall ABI remains valid across fresh foreign stacks", () => {
+test("001. FS containment: syscall ABI remains valid across fresh foreign stacks", () => {
   const module = new URL(import.meta.resolve("@oma/native/files"), import.meta.url).href;
   const script = `import { openDirectory } from ${JSON.stringify(module)};
     import { closeSync, fstatSync } from 'node:fs';
@@ -50,7 +50,7 @@ test("FS containment: syscall ABI remains valid across fresh foreign stacks", ()
   }
 });
 
-test("FS containment: real same-UID rename/symlink racer cannot escape a pinned root", async () => {
+test("002. FS containment: real same-UID rename/symlink racer cannot escape a pinned root", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fs-race-"));
   const inside = join(root, "inside");
   const outside = join(root, "outside");
@@ -111,7 +111,7 @@ test("FS containment: real same-UID rename/symlink racer cannot escape a pinned 
   }
 });
 
-test("FS containment: immutable link handoff retains the checked source inode across replacement", () => {
+test("003. FS containment: immutable link handoff retains the checked source inode across replacement", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fs-link-"));
   try {
     const outside = join(root, "outside");
@@ -137,7 +137,7 @@ test("FS containment: immutable link handoff retains the checked source inode ac
   }
 });
 
-test("FS containment: context metadata handoff uses the checked fd, not a replaced leaf", () => {
+test("004. FS containment: context metadata handoff uses the checked fd, not a replaced leaf", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fs-context-"));
   try {
     const file = join(root, "GOAL.md");
@@ -167,7 +167,7 @@ test("FS containment: context metadata handoff uses the checked fd, not a replac
   }
 });
 
-test("FS containment: exclusive writer stays in its pinned parent during a parent swap", () => {
+test("005. FS containment: exclusive writer stays in its pinned parent during a parent swap", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fs-create-"));
   try {
     const parent = join(root, "stage");
@@ -189,7 +189,7 @@ test("FS containment: exclusive writer stays in its pinned parent during a paren
   }
 });
 
-test("FS containment: bundle handoff inherits the checked fd into a real child", async () => {
+test("006. FS containment: bundle handoff inherits the checked fd into a real child", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fs-bundle-"));
   const path = join(root, "upload.bundle");
   try {

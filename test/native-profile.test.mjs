@@ -14,12 +14,12 @@ function fixture(t) {
     env: { ...process.env, HOME: root, XDG_DATA_HOME: join(root, "data"), XDG_RUNTIME_DIR: join(root, "run") },
     encoding: "utf8", timeout: 15000 }) };
 }
-test("native entry: public help needs no VM, manager, configuration or state creation", t => {
+test("001. Native entry: public help needs no VM, manager, configuration or state creation", t => {
   const f = fixture(t), result = f.run(["--help"]);
   assert.equal(result.status, 0, result.stderr); assert.match(result.stderr, /usage: oma/);
   assert.deepEqual(readdirSync(f.root), ["project"]);
 });
-test("native entry: retired VM commands refuse before any filesystem effect", t => {
+test("002. Native entry: retired VM commands refuse before any filesystem effect", t => {
   const f = fixture(t);
   for (const argv of [["attach", "demo"], ["open", "demo", "--project", "old"], ["bind", "demo"], ["stop"], ["status"], ["list"]]) {
     const result = f.run(argv);
@@ -27,7 +27,7 @@ test("native entry: retired VM commands refuse before any filesystem effect", t 
     assert.deepEqual(readdirSync(f.root), ["project"]);
   }
 });
-if (process.platform === "darwin") test("native Darwin: Society refuses before provisioning and preserves old bytes", t => {
+if (process.platform === "darwin") test("003. Native Darwin: Society refuses before provisioning and preserves old bytes", t => {
   const f = fixture(t), old = join(f.root, "old-vm-state"); writeFileSync(old, "accepted bytes must remain\n");
   const result = f.run(["--mode", "society"]);
   assert.equal(result.status, 4, result.stderr);
@@ -35,7 +35,7 @@ if (process.platform === "darwin") test("native Darwin: Society refuses before p
   assert.deepEqual(readdirSync(f.root).sort(), ["old-vm-state", "project"]);
 });
 
-test("PTY readiness failure preserves the actual child exit instead of reporting a live placeholder", () => {
+test("004. PTY readiness failure preserves the actual child exit instead of reporting a live placeholder", () => {
   const result = spawnSync("python3", [resolve("test/fixtures/pty-harness.py"), JSON.stringify({
     argv: [process.execPath, "-e", "process.exit(7)"],
     ready: Buffer.from("never emitted").toString("hex"), steps: [],

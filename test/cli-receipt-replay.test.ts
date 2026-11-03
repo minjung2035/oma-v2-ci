@@ -35,9 +35,9 @@ const scenarios: Scenario[] = [
 ];
 
 // Execution specification only. Tests and build are NOT_RUN in the editing environment.
-test("actual typed client uses authoritative receipts without inventing resend permission", { timeout: 60_000 }, async t => {
+test("001. Actual typed client uses authoritative receipts without inventing resend permission", { timeout: 60_000 }, async t => {
   for (const scenario of scenarios) {
-    await t.test(scenario.name, { timeout: 10_000 }, async sub => {
+    await t.test(`002. Receipt recovery: ${scenario.name}`, { timeout: 10_000 }, async sub => {
       const home = mkdtempSync(join(tmpdir(), "oma-r08-"));
       const key = "r08-frozen";
       const frozen = { key, method: "route.follow" as const, params: { topic: "commons" }, createdAtMs: 1 };
@@ -143,7 +143,7 @@ function scene() {
 }
 const methods = (seen: Seen[]) => seen.map(request => request.method);
 
-test("V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time", async () => {
+test("003. An unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time", async () => {
   const s = scene();
   let accepted = false;
   const p = await peer(s.home, request => {
@@ -170,7 +170,7 @@ test("V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, 
   } finally { await p.close(); s.close(); }
 });
 
-test("V26B: a terminal receipt in the cache is not replaced by a later lesser observation", async () => {
+test("004. A terminal receipt in the cache is not replaced by a later lesser observation", async () => {
   const s = scene();
   let lookup: object = { ok: true, result: sent(1) };
   const p = await peer(s.home, request => request.method === "operation.get" ? lookup : { ok: true, result: sent(1) });
@@ -186,7 +186,7 @@ test("V26B: a terminal receipt in the cache is not replaced by a later lesser ob
   } finally { await p.close(); s.close(); }
 });
 
-test("WP26: a receipt the request cache cannot record is still shown, with the key to ask again", async () => {
+test("005. A receipt the request cache cannot record is still shown, with the key to ask again", async () => {
   const s = scene();
   // P0-8: a damaged directory *inside* oma's own tail (`.../oma/requests`)
   // is repaired, so the fault that still makes the cache unrecordable is one
@@ -222,12 +222,12 @@ test("WP26: a receipt the request cache cannot record is still shown, with the k
 
 /* ERR-001: an unknown acceptance names the original key so observation
  * cannot accidentally become a second physical effect under a fresh key. */
-test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the key", { timeout: 30_000 }, async t => {
+test("006. A failure to retry under the same key names the key", { timeout: 30_000 }, async t => {
   for (const [failure, exit, guided] of [
     [{ code: "BROKER_UNAVAILABLE", message: "BROKER_UNAVAILABLE", retry: "same-key" }, 3, true],
     [{ code: "CAPABILITY_DENIED", message: "CAPABILITY_DENIED", retry: "never" }, 2, false],
   ] as const) {
-    await t.test(failure.code, async () => {
+    await t.test(`007. Receipt failure: ${failure.code}`, async () => {
       const home = mkdtempSync(join(tmpdir(), "oma-av22-"));
       const broker = await peer(home, () => ({ ok: false, error: failure }));
       try {
@@ -249,13 +249,13 @@ test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the k
  * outcome is not known yet -- here a create that failed after acceptance with a
  * conflict-class code, retry same-key -- is 3 and names its key; the same code
  * with nothing to look up stays 2. */
-test("DR13 / CLI-003: a failure the broker says to look up again is exit 3 whatever its code", { timeout: 30_000 }, async t => {
+test("008. A failure the broker says to look up again is exit 3 whatever its code", { timeout: 30_000 }, async t => {
   for (const [failure, exit] of [
     [{ code: "POLICY_CHANGED", message: "POLICY_CHANGED", retry: "same-key" }, 3],
     [{ code: "POLICY_CHANGED", message: "POLICY_CHANGED", retry: "never" }, 2],
     [{ code: "UNSUPPORTED_PROFILE", message: "UNSUPPORTED_PROFILE", retry: "same-key" }, 4],
   ] as const) {
-    await t.test(`${failure.code} ${failure.retry}`, async () => {
+    await t.test(`009. Cli receipt replay: ${failure.code} ${failure.retry}`, async () => {
       const home = mkdtempSync(join(tmpdir(), "oma-dr13-exit-"));
       const broker = await peer(home, () => ({ ok: false, error: failure }));
       try {
@@ -268,7 +268,7 @@ test("DR13 / CLI-003: a failure the broker says to look up again is exit 3 whate
 });
 
 /* AV28 -- failure details retain the actual value found by a conflict. */
-test("AV28 / ERR-001: the client shows the actual value a conflict names", { timeout: 30_000 }, async () => {
+test("010. The client shows the actual value a conflict names", { timeout: 30_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-av28-"));
   const actual = "1".repeat(40);
   const broker = await peer(home, () => ({ ok: false, error: { code: "STALE_BASE", message: "STALE_BASE", retry: "never", details: { actual } } }));
@@ -284,7 +284,7 @@ test("AV28 / ERR-001: the client shows the actual value a conflict names", { tim
 
 /* DR1 -- SB-002-C: receipts use the caller's archive view without changing
  * the durable receipt's original archive path. */
-test("DR1 / SB-002-C: a sent message's archive path is shown in the caller's view", async () => {
+test("011. A sent message's archive path is shown in the caller's view", async () => {
   const s = scene();
   const p = await peer(s.home, request => request.method === "operation.get" ? { ok: true, result: receiptNotFound } : { ok: true, result: sent(7) });
   try {
@@ -300,7 +300,7 @@ test("DR1 / SB-002-C: a sent message's archive path is shown in the caller's vie
 
 for (const lost of ["drop", "deadline", "unavailable"] as const) {
   for (const state of ["succeeded", "pending", "unknown", "failed", "absent", "malformed", "unavailable"] as const) {
-    test(`DR27/P0: ${lost} mutation answer is looked up once (${state}), never sent twice`, async () => {
+    test(`012. Cli receipt replay: ${lost} mutation answer is looked up once (${state}), never sent twice`, async () => {
       const s = scene();
       const terminal = state === "succeeded" ? sent(1) : state === "failed"
         ? { operation: OP(1), state, error: { code: "CHECK_FAILED", message: "fixture", retry: "never" } }

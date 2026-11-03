@@ -52,7 +52,7 @@ syncBuiltinESMExports();
     env: { PATH: "/usr/bin:/bin", HOME: work, ...env } });
 }
 
-test("V31A: the installation alone resolves its entries, schema, templates and its own engine", { timeout: 120_000 }, async () => {
+test("001. The installation alone resolves its entries, schema, templates and its own engine", { timeout: 120_000 }, async () => {
   const work = mkdtempSync(join(tmpdir(), "oma-v31a-"));
   try {
     const prefix = join(work, "install");
@@ -99,7 +99,7 @@ console.log(JSON.stringify({ bundle: runtime.bundle, version: version.stdout.tri
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
-test("V31A: an installation without its engine is refused, not handed another installation's", { timeout: 120_000 }, () => {
+test("002. An installation without its engine is refused, not handed another installation's", { timeout: 120_000 }, () => {
   const work = mkdtempSync(join(tmpdir(), "oma-v31a-"));
   try {
     const prefix = join(work, "install");
@@ -122,7 +122,7 @@ catch (error) { console.log(JSON.stringify({ code: error.code, message: error.me
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
-test("V31B: the package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
+test("003. The package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
   const { checkPackage } = await import(CHECK) as { checkPackage(root: string): Promise<unknown> };
   for (const [name, damage, expected] of [
     ["missing credential primitive", (prefix: string) => rmSync(join(prefix, "packages/platform-mac/dist/keychain/main.swift")), /main\.swift|missing|asset/i],

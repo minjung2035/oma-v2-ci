@@ -32,11 +32,20 @@ export type OmaArguments =
   | { readonly kind: "help" }
   | { readonly kind: "login" }
   | { readonly kind: "archive"; readonly society: string; readonly config: string | undefined }
+  | { readonly kind: "recover-execution"; readonly society: string; readonly config: string | undefined; readonly phase: "prepare" | "apply" }
   | { readonly kind: "pi"; readonly args: readonly string[] }
-  | { readonly kind: "session"; readonly society: string | undefined; readonly config: string | undefined; readonly bindProject: boolean; readonly mode?: SessionMode; readonly resume?: string; readonly noProjectExtensions?: true };
+  | { readonly kind: "session"; readonly society: string | undefined; readonly config: string | undefined; readonly bindProject: boolean; readonly mode?: SessionMode; readonly resume?: string; readonly noProjectExtensions?: true; readonly surface?: "collaboration-v1" };
 export function parseOmaArguments(args: readonly string[]): OmaArguments {
   if (["attach", "open", "bind", "stop", "status", "list"].includes(args[0] ?? ""))
     refuse("The macOS VM commands have been retired. Start a native session with oma; existing VM data is preserved and is not migrated.");
+  if (args[0] === "recover-execution") {
+    const parsed = options(args.slice(1), { "--society": "value", "--config": "value", "--prepare": "flag", "--apply": "flag" }, 0);
+    if (parsed.help) return { kind: "help" };
+    const society = parsed.value("--society");
+    if (society === undefined || !isValidSocietyName(society)) refuse("recover-execution requires a valid --society");
+    if (parsed.flag("--prepare") === parsed.flag("--apply")) refuse("recover-execution requires exactly one of --prepare or --apply");
+    return { kind: "recover-execution", society, config: parsed.value("--config"), phase: parsed.flag("--prepare") ? "prepare" : "apply" };
+  }
   if (args[0] === "archive") {
     const parsed = options(args.slice(1), { "--society": "value", "--config": "value" }, 0);
     if (parsed.help) return { kind: "help" };
@@ -49,7 +58,7 @@ export function parseOmaArguments(args: readonly string[]): OmaArguments {
     const parsed = options(args.slice(1), {}, 0);
     return { kind: parsed.help ? "help" : "login" };
   }
-  const parsed = options(args, { "--society": "value", "--config": "value", "--bind-project": "flag", "--mode": "value", "--resume": "value", "--no-project-extensions": "flag" }, 0);
+  const parsed = options(args, { "--society": "value", "--config": "value", "--bind-project": "flag", "--mode": "value", "--resume": "value", "--no-project-extensions": "flag", "--surface": "value" }, 0);
   const society = parsed.value("--society");
   if (society !== undefined && !isValidSocietyName(society)) refuse("Invalid society name");
   const mode = parsed.value("--mode");
@@ -62,7 +71,10 @@ export function parseOmaArguments(args: readonly string[]): OmaArguments {
     refuse("--no-project-extensions requires a new --mode personal session");
   if (resume !== undefined && (society !== undefined || parsed.value("--config") !== undefined || parsed.flag("--bind-project")))
     refuse("--resume does not take --society, --config or --bind-project");
+  const surface = parsed.value("--surface");
+  if (surface !== undefined && surface !== "collaboration-v1") refuse("--surface must be collaboration-v1; retired Society execution cannot be selected");
+  if (surface !== undefined && mode === "personal") refuse("Personal mode has no Society collaboration surface");
   return parsed.help ? { kind: "help" } : { kind: "session", society, config: parsed.value("--config"),
     bindProject: parsed.flag("--bind-project"), ...(mode === undefined ? {} : { mode }), ...(resume === undefined ? {} : { resume }),
-    ...(noProjectExtensions ? { noProjectExtensions: true as const } : {}) };
+    ...(surface === undefined ? {} : { surface }), ...(noProjectExtensions ? { noProjectExtensions: true as const } : {}) };
 }

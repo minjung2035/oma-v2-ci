@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {runProcessSync} from '@oma/process/run';
 import {startProcess} from '@oma/process/async';
 
-for (const asynchronous of [false,true]) test(`${asynchronous?'async':'sync'} stdin borrows the pinned file at its current offset and leaves it owned by its caller`,async t=>{
+for (const asynchronous of [false,true]) test(`001. Stdin descriptor: ${asynchronous?'async':'sync'} stdin borrows the pinned file at its current offset and leaves it owned by its caller`,async t=>{
   const root=mkdtempSync(join(tmpdir(),'oma-input-fd-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const path=join(root,'input'),bytes=Buffer.from([80,82,69,0,255,10,65]);writeFileSync(path,bytes);
   const fd=openSync(path,'r'),identity=fstatSync(fd);t.after(()=>closeSync(fd));
@@ -20,7 +20,7 @@ for (const asynchronous of [false,true]) test(`${asynchronous?'async':'sync'} st
   assert.equal(fstatSync(fd).ino,identity.ino,'the runner must not close a borrowed descriptor');
 });
 
-test('a descriptor and byte input cannot describe the same stdin',()=>{
+test("002. A descriptor and byte input cannot describe the same stdin",()=>{
   const spec={executable:process.execPath,argv:[],env:{},stdinFd:0,input:'ambiguous',timeoutMs:5000,stdoutBytes:1024,stderrBytes:1024};
   for(const run of [runProcessSync,startProcess])assert.throws(()=>run(spec),/mutually exclusive/);
   for(const stdinFd of [-1,0.5,NaN,'3'])for(const run of [runProcessSync,startProcess])assert.throws(()=>run({...spec,input:undefined,stdinFd}),/stdin descriptor/);

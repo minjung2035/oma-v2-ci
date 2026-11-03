@@ -98,28 +98,6 @@ export const CANONICAL_SAFE_ARGS: readonly string[] = ["--no-pager", "-c", "core
   "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "diff.external=",
   "-c", "protocol.allow=never"];
 
-/** mail-v1 §6: the canonical merge diff for a completion notice. The returned
- * bytes are the single authoritative diff; consumers render them through
- * `mergeDiffText` and never substitute replacement characters. Output is
- * caller-bounded; exceeding maxBytes throws LIMIT_EXCEEDED and a non-zero or
- * unobserved exit is a REF_STATE_UNKNOWN observation failure, never a diff. */
-export function canonicalMergeDiff(repository: string, base: string, candidate: string, maxBytes: number): Buffer {
-  const result = runProcessSync({ executable: GIT_BIN,
-    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository,
-      "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate],
-    env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
-    timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: maxBytes, stderrBytes: 8192 });
-  if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its document bound");
-  if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
-  if (result.kind !== "exited" || result.exitCode !== 0)
-    throw new StoreError("REF_STATE_UNKNOWN", `canonical merge diff is ${result.kind}${result.exitCode !== null ? ` ${result.exitCode}` : ""}`);
-  return result.stdout;
-}
-
-/** AV-05: the one owner rendering authoritative diff bytes for a text
- * consumer. Valid UTF-8 renders as itself; anything else becomes an honest
- * marker plus a base64 transcription that decodes back to the exact bytes.
- * Replacement characters are never silently introduced. */
 /** mail-v1 §7: the broker prepares a revert of an applied merge on canonical
  * main. `git merge-tree --write-tree --merge-base=<applied candidate> <main>
  * <target base>` merges the pre-merge base into main relative to the merge's

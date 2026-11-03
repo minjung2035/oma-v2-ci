@@ -13,7 +13,7 @@ for (const [tool, tag, bundle, target, method] of [
   ["hashline", "BL3", "pi-hashline-edit-pro", "file-kind.js", "registerHashlineTools"],
   ["web", "BL4", "pi-web-access", "index.js", "registerWebTools"],
   ["mcp", "BL5", "pi-mcp-adapter", "index.js", "registerMcpTools"],
-]) test(`${tag}: a bundle that fails verification registers no tools and refuses the session (actual owner; attempted override)`, { timeout: 60000 }, t => {
+]) test(`001. Vendor owner binding: ${tag}: a bundle that fails verification registers no tools and refuses the session (actual owner; attempted override)`, { timeout: 60000 }, t => {
   const sourceEntry = fileURLToPath(import.meta.resolve(`@oma/tool-${tool}`));
   const packageRoot = dirname(dirname(sourceEntry));
   const scratch = mkdtempSync(join(tmpdir(), `oma-${tool}-owner-binding-`));

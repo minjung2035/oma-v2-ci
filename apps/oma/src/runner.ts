@@ -1,4 +1,5 @@
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
+import { parseSurfacePlan } from "@oma/tool-runtime/tool-surface";
 import { residentEngineEffects } from "./engine/resident-effects.js";
 import type { ResidentEngineEffects } from "@oma/engine/ports";
 // RUN-001/BATCH-001: runner policy is separate from transport mechanics.
@@ -22,7 +23,6 @@ import { packageResourcePaths } from "./runtime/packages/index.js";
 import { BrokerChannel, type ChannelLimits } from "@oma/client/channel";
 import { createBrokerChannel } from "./runtime/broker-channel.js";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
-import type { DeliveryReceipt } from "@oma/contracts/runtime";
 import { PI_ADAPTER_REVISION } from "@oma/protocol/delivery-boundary";
 import {
   decodeRunLease,
@@ -31,7 +31,7 @@ import {
 import { PiAdapter, type EngineObservation } from "@oma/engine/pi-adapter";
 import { ensureOwnedDurableDirectory } from "@oma/storage/durable-fs";
 import {
-  agentRootPathAt,
+  agentRootPathAt, collaborationRecordRootPathAt,
   runnerReceiptPathAt,
   runnerSessionDirPathAt,
   runnerViewPathAt,
@@ -301,10 +301,16 @@ export class RunnerModule {
         "UNSUPPORTED_PROFILE",
         "a confined Resident runs the shipped engine entry, and this profile declared none",
       );
+    if (!this.profile) throw new StoreError("UNSUPPORTED_PROFILE", "Worker launch has no resolved profile");
+    const selected = parseSurfacePlan(this.profile.toolSurface);
+    if (selected.state === "malformed") throw new StoreError("UNSUPPORTED_PROFILE", selected.reason);
+    const collaboration = selected.state === "plan" && selected.plan.version === 3;
+    if (collaboration && selected.plan.role !== "resident") throw new StoreError("AUTH_FAILED", "Worker launch cannot select a Principal catalog");
     const host = {
       libdir: declared.libdir,
       ...(declared.tmpfsMaxBytes === undefined ? {} : { tmpfsMaxBytes: declared.tmpfsMaxBytes }),
       ...(declared.packages === undefined ? {} : { packages: declared.packages }),
+      ...(collaboration ? { recordRoot: collaborationRecordRootPathAt(this.paths.stateRoot!, this.agent) } : {}),
       node: declared.node,
       hidden: productSurfaceMasks(declared.libdir),
       pi: entry,
@@ -383,10 +389,9 @@ export class RunnerModule {
       batch,
       this.limits.frameBytes,
     ));
-    let receipt: DeliveryReceipt;
     switch (decision.action) {
       case "hold": throw decision.error;
-      case "settle": receipt = decision.receipt; break;
+      case "settle": break;
       case "present": {
         const opened = await this.openRelay();
         // DR34/UX-08: the CONNECT proxy is the delivery's too -- it opens once
@@ -411,7 +416,7 @@ export class RunnerModule {
         // RUN-003: graceful yield leaves the prepared batch and mail untouched.
         // The "waiting" report is the last word the broker should keep.
         if (boundary === null) { await this.observationFlush; return; }
-        receipt = publishDeliveryReceipt(
+        publishDeliveryReceipt(
           stateRoot,
           batch,
           boundary,
@@ -426,9 +431,7 @@ export class RunnerModule {
     const response = await this.channel.call("batch.complete", {
       batchId: batch.id,
       incarnation: batch.incarnation,
-      sessionPath: receipt.sessionPath,
       adapterRevision: PI_ADAPTER_REVISION,
-      receiptPath: runnerReceiptPathAt(stateRoot, this.agent, batch.id),
     });
     if (!response.ok)
       throw new StoreError(response.error.code, response.error.message);

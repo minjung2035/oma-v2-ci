@@ -13,7 +13,8 @@ import { Store, readDiagnosticSnapshot } from "@oma/storage";
 import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
 import { StoreError } from "@oma/domain/errors";
 import { attestationParamsCheck, messagePlanCheck } from "@oma/domain/validation";
-import { reviewFactProblem } from "@oma/domain/attestation";
+import { reviewFactProblem, storedAttestationInputProblem } from "@oma/domain/attestation";
+import { decodeMutationPayload } from "@oma/protocol/request-codec";
 import { isDerivedRequestKey, isReviewRequestName, applyRequestKeyFor, refreshRequestKeyFor,
   reviewRequestNameFor, reviewRequestNameOwnedBy } from "@oma/domain/identifiers";
 import { requestHash } from "@oma/domain/request-identity";
@@ -33,7 +34,7 @@ const OP = "op-00000000-0000-4000-8000-000000000001";
 const NAME = "merge-00000000-0000-4000-8000-000000000001";
 const MSG = "m-00000000-0000-4000-8000-000000000001-0";
 
-test("identifiers: derived request keys and review request names", () => {
+test("001. Identifiers: derived request keys and review request names", () => {
   assert.equal(isDerivedRequestKey(`~apply.${OP}`), true);
   assert.equal(isDerivedRequestKey(`~refresh.${OP}.0`), true);
   assert.equal(isDerivedRequestKey(`~refresh.${OP}.37`), true);
@@ -67,7 +68,7 @@ test("identifiers: derived request keys and review request names", () => {
   assert.equal(reviewRequestNameOwnedBy("challenge", OP, "challenge-00000000-0000-4000-8000-000000000001"), true);
 });
 
-test("wire: every valid ReviewInput kind is accepted", () => {
+test("002. Wire: every valid ReviewInput kind is accepted", () => {
   ok({ kind: "merge.open", tier: "LOW", title: "Fix bug", reason: "needed", candidate: CANDIDATE, base: BASE });
   ok({ kind: "merge.open", tier: "HIGH", title: "Fix bug", reason: "needed", candidate: CANDIDATE, base: BASE });
   ok({ kind: "challenge.open", merge: NAME, tier: "LOW", title: "Revert", reason: "broke prod" });
@@ -81,7 +82,7 @@ test("wire: every valid ReviewInput kind is accepted", () => {
   ok({ kind: "cancel", name: "challenge-0000000a-0000-4000-8000-000000000000", reason: "superseded" });
 });
 
-test("wire: malformed review inputs are refused", () => {
+test("003. Wire: malformed review inputs are refused", () => {
   bad({ kind: "merge.open", tier: "LOW", title: "t", reason: "   ", candidate: CANDIDATE, base: BASE });
   bad({ kind: "merge.open", tier: "LOW", title: "t", reason: "r", candidate: CANDIDATE, base: BASE, extra: 1 });
   bad({ kind: "merge.open", tier: "NOPE", title: "t", reason: "r", candidate: CANDIDATE, base: BASE });
@@ -98,10 +99,13 @@ test("wire: malformed review inputs are refused", () => {
   bad({ kind: "unknown", body: "x" });
 });
 
-test("wire: the frozen refresh fact shape is admitted for stored payloads only", () => {
-  // Stored refresh rows carry their frozen fact as payload; decode re-validates
-  // the derived key, so a caller still cannot mint one from the wire.
-  ok({ kind: "refresh", version: 1, request: OP, main: CANDIDATE });
+test("004. Wire: the frozen refresh fact shape is admitted for stored payloads only", () => {
+  const original = { kind: "refresh", version: 1, request: OP, main: CANDIDATE };
+  // Same historical shape stays readable; it cannot enter live caller admission.
+  assert.equal(storedAttestationInputProblem(original, LIMITS), null);
+  assert.deepEqual(decodeMutationPayload("attest.record", original), original);
+  bad(original);
+  assert.notEqual(storedAttestationInputProblem({ ...original, authorize: true }, LIMITS), null);
 });
 
 const baseMessage = {
@@ -112,7 +116,7 @@ const baseMessage = {
 const messageOk = (value: unknown) => assert.equal(messagePlanCheck(value), null);
 const messageBad = (value: unknown) => assert.notEqual(messagePlanCheck(value), null);
 
-test("durable: review mail metadata per role", () => {
+test("005. Durable: review mail metadata per role", () => {
   const thread = { ...baseMessage, to: ["residents"], recipients: ["alice", "bob"], audience: "workers",
     review: { role: "thread", request: OP, name: NAME, revision: 0 } };
   messageOk(thread);
@@ -147,7 +151,7 @@ test("durable: review mail metadata per role", () => {
   messageBad({ ...baseMessage, review: { role: "thread", request: OP, name: "bad", revision: 0 } });
 });
 
-test("DR66: real zero-peer HIGH approval passes grammar and gates application on Principal", async () => {
+test("006. Real zero-peer HIGH approval passes grammar and gates application on Principal", async () => {
   const f = reviewFixture({ maxWorkers: 1, workers: ["alice"], principalDelegated: true });
   try {
     const candidate = f.candidateWith({ "capacity.txt": "one configured Worker\n" });
@@ -171,7 +175,7 @@ test("DR66: real zero-peer HIGH approval passes grammar and gates application on
   } finally { f.close(); }
 });
 
-test("durable: frozen review fact grammar", () => {
+test("007. Durable: frozen review fact grammar", () => {
   const open: ReviewFact = { kind: "merge.open", version: 1, name: NAME, title: "t", reason: "r",
     tier: "MEDIUM", identity, submitters: ["alice", "bob"] };
   assert.equal(reviewFactProblem(open), null);
@@ -259,7 +263,7 @@ function ledgerClean(root: string): void {
   assert.equal(report.status, "PASS", JSON.stringify(report.issues));
 }
 
-test("decode: merge.open review fact with no messages", () => {
+test("008. Decode: merge.open review fact with no messages", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -270,7 +274,7 @@ test("decode: merge.open review fact with no messages", () => {
   } finally { f.close(); }
 });
 
-test("decode: vote with thread + approval messages referencing the request", () => {
+test("009. Decode: vote with thread + approval messages referencing the request", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -296,7 +300,7 @@ test("decode: vote with thread + approval messages referencing the request", () 
   } finally { f.close(); }
 });
 
-test("decode: refresh fact under a derived request key", () => {
+test("010. Decode: refresh fact under a derived request key", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -309,7 +313,7 @@ test("decode: refresh fact under a derived request key", () => {
   } finally { f.close(); }
 });
 
-test("decode: merge integration under its derived apply key", () => {
+test("011. Decode: merge integration under its derived apply key", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -335,7 +339,7 @@ test("decode: merge integration under its derived apply key", () => {
   } finally { f.close(); }
 });
 
-test("decode: review payload naming a different request is corrupt", () => {
+test("012. Decode: review payload naming a different request is corrupt", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -355,7 +359,7 @@ test("decode: review payload naming a different request is corrupt", () => {
   } finally { f.close(); }
 });
 
-test("decode: a derived key on an ordinary mail.send is corrupt", () => {
+test("013. Decode: a derived key on an ordinary mail.send is corrupt", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);
@@ -372,7 +376,7 @@ test("decode: a derived key on an ordinary mail.send is corrupt", () => {
   } finally { f.close(); }
 });
 
-test("decode: apply key that names a different request is corrupt", () => {
+test("014. Decode: apply key that names a different request is corrupt", () => {
   const f = fixture();
   try {
     const open = openMerge(f.store);

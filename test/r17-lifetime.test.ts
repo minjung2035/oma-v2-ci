@@ -18,7 +18,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-test("R17: listener readiness precedes notification and permitted activation", async () => {
+test("001. Listener readiness precedes notification and permitted activation", async () => {
   const events: string[] = [];
   const listening = deferred();
   const lifetime = new BrokerLifetime({ close() { events.push("lock-close"); } }, () => 1);
@@ -40,7 +40,7 @@ test("R17: listener readiness precedes notification and permitted activation", a
 });
 
 for (const failed of ["recovery", "listen", "notify"] as const) {
-  test(`R17: ${failed} failure cannot produce activation or release a lock before Store close`, async () => {
+  test(`002. Lifetime: ${failed} failure cannot produce activation or release a lock before Store close`, async () => {
     const events: string[] = [];
     const lifetime = new BrokerLifetime({ close() { events.push("lock"); } }, () => 1);
     lifetime.attach({ closeAdmission() { events.push("admission"); }, async drainAndClose() { events.push("store"); } });
@@ -52,7 +52,7 @@ for (const failed of ["recovery", "listen", "notify"] as const) {
   });
 }
 
-test("R17: shutdown during recovery blocks every later startup phase", async () => {
+test("003. Shutdown during recovery blocks every later startup phase", async () => {
   const recover = deferred(); const events: string[] = [];
   const lifetime = new BrokerLifetime({ close() { events.push("lock"); } }, () => 1);
   lifetime.attach({ closeAdmission() { events.push("admission"); }, async drainAndClose() { events.push("store"); } });
@@ -64,13 +64,13 @@ test("R17: shutdown during recovery blocks every later startup phase", async () 
   assert.deepEqual(events, ["admission", "store", "lock"]);
 });
 
-test("R17: expired durable handoff is a failure, not permission to release a live writer", async () => {
+test("004. Expired durable handoff is a failure, not permission to release a live writer", async () => {
   const task = deferred();
   await assert.rejects(settleWithin([task.promise], 0.01), { code: "DEADLINE_EXCEEDED" });
   task.resolve(); await settleWithin([task.promise], 1);
 });
 
-test("R17: one process lock excludes a second token and rejects a different society path", () => {
+test("005. One process lock excludes a second token and rejects a different society path", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r17-lock-"));
   const path = join(root, "broker.lock"); const lock = ProcessLock.acquire(path);
   try {
@@ -80,7 +80,7 @@ test("R17: one process lock excludes a second token and rejects a different soci
   } finally { lock.close(); lock.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R17: draining rejects new intent inside T while preserving accepted settlement", () => {
+test("006. Draining rejects new intent inside T while preserving accepted settlement", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r17-store-"));
   const store = new Store(join(root, "runtime.sqlite"));
   const gate = new AdmissionGate(); bindAdmissionGate(store, gate);
@@ -97,7 +97,7 @@ test("R17: draining rejects new intent inside T while preserving accepted settle
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R17: only Store corruption latches the global gate; run and repository uncertainty keep their scope", () => {
+test("007. Only Store corruption latches the global gate; run and repository uncertainty keep their scope", () => {
   const gate = new AdmissionGate();
   for (const code of ["REF_STATE_UNKNOWN", "RUN_TERMINATION_UNKNOWN", "DB_BUSY"] as const) {
     gate.observe(new StoreError(code, "scoped fault")); gate.assertAdmission();
@@ -113,7 +113,7 @@ test("R17: only Store corruption latches the global gate; run and repository unc
  * process group, handling SIGTERM and SIGINT only -- died of SIGHUP in the
  * middle of its drain. The Residents ran on with no broker, and when their
  * turns ended their runners failed until systemd's start limit stopped them. */
-test("AV31 / D03, LIFE-006: a hung-up terminal ends the broker through its drain, like any other host loss", { timeout: 20_000 }, async () => {
+test("008. A hung-up terminal ends the broker through its drain, like any other host loss", { timeout: 20_000 }, async () => {
   const { spawn } = await import("node:child_process");
   const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");

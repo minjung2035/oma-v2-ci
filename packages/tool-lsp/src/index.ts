@@ -336,10 +336,13 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
   // Upstream's session seam, kept: one operation scope per session, reset
   // on session start (extension reload starts a new session), drained on
   // shutdown so a dying session takes its LSP children with it.
-  const sessions = new WeakMap<object, { scope: InstanceType<typeof LspSessionScope>; generation: number }>();
+  type SessionScope = { scope: InstanceType<typeof LspSessionScope>; generation: number };
+  const sessions = new WeakMap<object, SessionScope>();
+  let activeSession: SessionScope | undefined;
   const sessionFor = (key: object) => {
     let session = sessions.get(key);
     if (!session) { session = { scope: new LspSessionScope(), generation: 0 }; sessions.set(key, session); }
+    activeSession = session;
     return session;
   };
 
@@ -351,10 +354,14 @@ export async function registerLspTools(pi: ExtensionAPI, options: LspToolOptions
     session.scope = new LspSessionScope();
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
-    const session = sessionFor(ctx.sessionManager);
+  pi.on("session_shutdown", async () => {
+    // The SDK may already have revoked the old context during reload. Cleanup
+    // owns the acquired scope, not a new lookup through that stale context.
+    const session = activeSession;
+    if (!session) return;
     session.generation++;
     await session.scope.close();
+    if (activeSession === session) activeSession = undefined;
   });
 
   const statusCtx = (ctx: ExtensionContext) => ({ ui: ctx.ui });

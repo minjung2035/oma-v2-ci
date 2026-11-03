@@ -17,24 +17,22 @@ import { join } from "node:path";
 import { withScenario, SCENARIO_LIMITS } from "./fixtures/scenario.js";
 import { call, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
 import { principalWorkspace } from "@oma/engine/principal-session";
-import { workspacePathAt } from "@oma/domain/paths";
+import { workspacePathAt, collaborationRecordRootPathAt } from "@oma/domain/paths";
 import { sha256Hex } from "@oma/domain/canonical-json";
 
 const TIMEOUT = { timeout: 180_000 };
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const receiptIn = (result: string): { operation: string; state: string; result?: Record<string, unknown> } => {
   const envelope = JSON.parse(result);
-  assert.equal(typeof envelope.request, "string");
+  assert.equal(typeof envelope.invocation.key, "string");
   assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
   return envelope.receipt;
 };
-const noticed = (notice: string): string[] => [...notice.matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
+const noticed = (notice: string): string[] => [...new Set([...notice.matchAll(/\/mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/g)].map(match => match[1]!))];
 
-const goalMail = (body: string, expectedRevision: string | null, request: string) => tools(call("oma_goal_publish", {
-  subject: "Shared goal", body, expectedRevision, request,
-}));
+const goalMail = (body: string, expectedRevision: string | null, request: string) => tools(call("oma_goal", { content: { kind: "text", value: body }, expectedRevision }, request));
 
-test("SCN-B01: Principal GOAL mail preserves the exact other documents from its expected revision", TIMEOUT, async () => {
+test("001. Principal GOAL mail preserves the exact other documents from its expected revision", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // The trusted host seeds historical multi-document context, not the model.
     // The model may change only GOAL; the typed client carries other bytes forward.
@@ -67,7 +65,7 @@ test("SCN-B01: Principal GOAL mail preserves the exact other documents from its 
   });
 });
 
-test("SCN-B02: context runtime input refuses an oversized stream before transport or acceptance (P0V-78)", TIMEOUT, async () => {
+test("002. Context runtime input refuses an oversized stream before transport or acceptance", TIMEOUT, async () => {
   await withScenario({}, async s => {
     const directory = join(principalWorkspace(s.root), "context");
     mkdirSync(directory, { recursive: true });
@@ -86,7 +84,7 @@ test("SCN-B02: context runtime input refuses an oversized stream before transpor
   });
 });
 
-test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary write succeeds (P0V-74)", RESIDENT_TEST_OPTIONS, async () => {
+test("003. A Worker's write through a workspace link is refused; an ordinary write succeeds", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const workspace = workspacePathAt(s.root, "worker-a");
     const outside = join(s.root, "outside"); mkdirSync(outside);
@@ -110,7 +108,7 @@ test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary
 
 
 
-test("SCN-B05: mail accepted after the clock was set back reaches the Principal after the mail accepted before it (P0V-87)", TIMEOUT, async () => {
+test("004. Mail accepted after the clock was set back reaches the Principal after the mail accepted before it", TIMEOUT, async () => {
   const wall = Date.now;
   let offset = 0;
   // Held before the scenario builds its Store: it reads the clock it was built with.
@@ -124,16 +122,16 @@ test("SCN-B05: mail accepted after the clock was set back reaches the Principal 
         accepted.push(sent.result.result.message);
         offset -= 3600_000;
       }
-      s.script(() => text("받았습니다."));
+      s.script([tools(call("read", { path: join(collaborationRecordRootPathAt(s.root, "principal"), "mail/inbox.md") })), text("받았습니다.")]);
       const outcome = await s.deliver();
       assert.equal(outcome.kind, "delivered");
-      const notice = s.provider.seen[0]!.body.messages.map(textOf).join("\n");
+      const notice = lastResult(s.provider.seen[1]!.body);
       assert.deepEqual(noticed(notice), accepted, "the Principal was handed the mail in another order than it was accepted");
     });
   } finally { Date.now = wall; }
 });
 
-test("SCN-B06: a second publication on a stale base is refused with the actual base; on the actual base it moves the context", TIMEOUT, async () => {
+test("005. A second publication on a stale base is refused with the actual base; on the actual base it moves the context", TIMEOUT, async () => {
   await withScenario({}, async s => {
     s.script([goalMail("# 목표 1\n", null, "ctx-1"), text("게시했습니다.")]);
     await s.prompt("목표를 게시해");
@@ -157,17 +155,17 @@ test("SCN-B06: a second publication on a stale base is refused with the actual b
   });
 });
 
-test("SCN-B07: a Resident follows a topic, gets its mail, unfollows, and gets none after; a Resident that never followed gets none", TIMEOUT, async () => {
+test("006. A Resident follows a topic, gets its mail, unfollows, and gets none after; a Resident that never followed gets none", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const agent = s.store.getAgent("worker-b")!;
     const auth = { actor: "worker-b", incarnation: agent.incarnation, role: "resident", channel: "actor",
       capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
     const route = async (method: "route.follow" | "route.unfollow", request: string) => {
-      const answer = await s.broker.dispatch(auth as never, { v: 1, id: request, method, request, params: { topic: "release" } } as never, null) as { ok: boolean };
+      const answer = await s.residentCall("worker-b", method, { topic: "release" }, request) as { ok: boolean };
       assert.equal(answer.ok, true, JSON.stringify(answer));
     };
     const announce = async (subject: string, request: string): Promise<string> => {
-      s.script([tools(call("oma_mail_send", { to: ["topic/release"], subject, body: subject, request })), text("알렸습니다.")]);
+      s.script([tools(call("oma_send", { to: ["topic/release"], subject, content: { kind: "text", value: subject } }, request)), text("알렸습니다.")]);
       await s.prompt(`${subject} 알려`);
       return receiptIn(lastResult(s.provider.seen.at(-1)!.body)).result!.message as string;
     };
@@ -183,20 +181,25 @@ test("SCN-B07: a Resident follows a topic, gets its mail, unfollows, and gets no
   });
 });
 
-test("SCN-B08: a body that begins with U+FEFF is stored and read back with it (P0V-86)", TIMEOUT, async () => {
+test("007. A body that begins with U+FEFF is stored and read back with it", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const body = "﻿머리에 BOM이 있는 본문\n둘째 줄";
     const sent = await s.residentSends("worker-a", { to: ["principal"], subject: "BOM", body, kind: "result" }, "bom-1") as { result: { result: { message: string } } };
     const message = sent.result.result.message;
-    s.script((request, index) => (index === 0 ? tools(call("oma_mail_read", { messageId: message })) : text("읽었습니다.")));
+    const path = join(collaborationRecordRootPathAt(s.root, "principal"), "mail/messages", `${message}.md`);
+    s.script([tools(call("read", { path })), tools(call("oma_send", { to: ["worker-a"], content: { kind: "file", value: path } })), text("읽고 원본 파일로 보냈습니다.")]);
     const outcome = await s.deliver();
     assert.equal(outcome.kind, "delivered");
     const read = lastResult(s.provider.seen[1]!.body);
-    assert.ok(read.includes(body), `the body the model read lost its U+FEFF: ${JSON.stringify(read.slice(0, 200))}`);
+    assert.equal(readFileSync(path, "utf8"), body, "the immutable record retains every original byte");
+    const sentBack = s.operations("principal").find(row => row.kind === "mail.send")!;
+    const accepted = s.store.getOperationById(sentBack.id);
+    assert.ok(accepted?.kind === "mail.send"); assert.equal(accepted.payload.body, body);
+    assert.ok(read.includes(body.slice(1).split("\n")[0]!), `the body the model read lost its U+FEFF: ${JSON.stringify(read.slice(0, 200))}`);
   });
 });
 
-test("SCN-B09 / S-02: the Principal's model cannot read the engine's credential, by any spelling of its path, nor list the society's state", TIMEOUT, async () => {
+test("008. The Principal's model cannot read the engine's credential, by any spelling of its path, nor list the society's state", TIMEOUT, async () => {
   const { piAgentDir } = await import("@oma/engine/pi-runtime");
   await withScenario({}, async s => {
     const credential = join(piAgentDir(s.root), "auth.json");
@@ -219,16 +222,16 @@ test("SCN-B09 / S-02: the Principal's model cannot read the engine's credential,
   });
 });
 
-test("SCN-B10 / S-02: a hundred commons messages reach no Principal session; the one question to the Principal reaches it once", TIMEOUT, async () => {
+test("009. A hundred commons messages reach no Principal session; the one question to the Principal reaches it once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     for (let index = 0; index < 100; index++)
       await s.residentSends("worker-a", { to: ["commons"], subject: `공지 ${index}`, body: `공지 ${index}` }, `commons-${index}`);
     const question = await s.residentSends("worker-b", { to: ["principal"], subject: "질문", body: "결정이 필요합니다", kind: "question" }, "q-1") as { result: { result: { message: string } } };
-    s.script(() => text("질문을 받았습니다."));
+    s.script([tools(call("read", { path: join(collaborationRecordRootPathAt(s.root, "principal"), "mail/inbox.md") })), text("질문을 받았습니다.")]);
     const outcome = await s.deliver();
     assert.equal(outcome.kind, "delivered");
     assert.equal(outcome.kind === "delivered" ? outcome.messages : 0, 1, "the Principal was handed more than its question");
-    const notice = s.provider.seen[0]!.body.messages.map(textOf).join("\n");
+    const notice = lastResult(s.provider.seen[1]!.body);
     assert.deepEqual(noticed(notice), [question.result.result.message]);
     // Maildir names: a delivered message sits in cur with its info suffix.
     assert.deepEqual([...s.inbox("principal", "new"), ...s.inbox("principal", "cur")].map(name => name.replace(/:2,.*$/, "")), [question.result.result.message],

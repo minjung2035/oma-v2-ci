@@ -6,6 +6,8 @@
 
 현재 구현 기록: 기본 role prompt·생성 START·실행 caller·배포 자산을 typed tool·commit→merge-open·exact optional selection으로 전환했다. prompt-only wording 테스트는 삭제하고 행동·권한·request/session 경계 검증을 유지한다. [DR64](design-revisions.md)의 결정과 현재 운영/구현 계약을 함께 갱신한다. 관측 결과와 미실행 범위는 §9.3 및 [validation](implementation/validation.md)을 따른다.
 
+후속 사용자 최종 제거 방침은 [MCS-S13](model-collaboration-surface-spec.md#mcs-s13--최종-코드의-레거시-제거와-저장-사실의-명시적-비호환)/DR72가 소유한다. 아래 DR64 당시의 exact-selection/구형 action 계약은 역사적 뜻을 유지하지만, 최종 코드에 live decoder·selector·등록을 보존하라는 요구가 아니다. 후속 부분 제거와 미완료/미검증은 validation을 따른다. 이 주석은 collaboration-v1의 activation 승인이 아니다.
+
 ## 1. 문제와 목표
 
 전환 전 모델은 OMA의 한 업무를 수행하면서 structured tool, `bash` 안의 OMA CLI, brief/body 파일, 다중-action schema를 오갔다. review 도구는 `action`만 schema상 필수로 선언하지만 실행은 행동별 추가 필드를 요구했고 review status만으로는 정확한 작성자 제외와 reviewer 선택을 끝낼 수 없었다. 이 전환은 해당 불일치를 없앤다. 개별 모델 실패의 원인을 추정해서 broker 정책을 완화하지 않는다.
@@ -364,10 +366,10 @@ Worker `oma_status` 응답은 기존 roster 외에 caller 자신의 생성 관�
 
 | Owner / 현재 경로 | 변경 책임 |
 |---|---|
-| [extension](../packages/extension/src/review-tools.ts), [mail tools](../packages/extension/src/mail-tools.ts), [principal tools](../packages/extension/src/principal-tools.ts) | 계약별 등록·raw shape guard·역할별 schema·고정된 effect·결과 rendering |
+| [extension composition](../packages/extension/src/mail-tools.ts), [current action registration](../packages/extension/src/collaboration-tools.ts) | 계약별 등록·raw shape guard·역할별 schema·고정된 effect·결과 rendering. DR64 당시 `review-tools.ts`/`principal-tools.ts` 등록 모듈은 DR72 후속 제거 대상이었으며 원문은 Git history에 보존 |
 | [client](../packages/client/src/index.ts), [request service](../packages/client/src/request-service.ts), [shared tool helper](../packages/tool-runtime/src/shared.ts) | typed use case·inline 입력·안정적 key·receipt 조회·비-CLI 복구 안내 |
 | [runtime adapter](../apps/oma/src/runtime/client-runtime.ts), [input effects](../apps/oma/src/runtime/input-effects.ts) | 필요한 물리 준비 코드 이관; 셸 wrapper 삭제 |
-| [domain surface](../packages/domain/src/tool-surface.ts), [surface runtime](../packages/tool-runtime/src/tool-surface.ts), [prompt](../packages/domain/src/role-prompts.ts), [views](../apps/oma/src/views.ts) | core/optional inventory·toolset·provenance와 노출 분리·안전한 active-set 교체·START |
+| [current domain surface](../packages/domain/src/collaboration-surface.ts), [surface runtime](../packages/tool-runtime/src/tool-surface.ts), [prompt](../packages/domain/src/role-prompts.ts), [views](../apps/oma/src/views.ts) | DR72 이후 current role catalog·explicit admission·cumulative group·provenance가 이 위치에 있다. DR64의 `packages/domain/src/tool-surface.ts#planToolSurface`와 exact-set `toolset`은 제거됐고 역사적 뜻을 현재 동작으로 재분류하지 않는다 |
 | [review authority](../packages/review/src/authority.ts), [status](../packages/review/src/status.ts), [status projection](../packages/review/src/status-projection.ts) | 기존 authority를 사용한 reviewer 관측·list/detail pagination |
 | [public protocol](../packages/protocol/src/methods.ts), [public dispatcher](../packages/broker/src/public-dispatcher.ts), contracts/response codec | 읽기 계약 확장·role visibility·frame bound |
 | [child policy](../packages/domain/src/child-policy.ts), lifecycle/config | 생성 관측에 기존 delegation 계산 제공; 정책 변화 없음 |

@@ -19,7 +19,7 @@ async function runSurface(t, failure) {
   // installed SDK and trusted extension. Only the test observer is augmented.
   for (const name of ["functional-surface.mjs", "bounded-script.mjs"])
     copyFileSync(join(root, "scripts", name), join(runtime, "scripts", name));
-  for (const name of ["node_modules", "packages"])
+  for (const name of ["node_modules", "packages", "apps"])
     symlinkSync(join(root, name), join(runtime, name), "dir");
   writeFileSync(join(runtime, "package.json"), JSON.stringify({ type: "module" }));
   writeFileSync(observer, `export { default } from ${JSON.stringify(pathToFileURL(join(root,
@@ -68,7 +68,7 @@ function assertCleaned(result) {
   }
 }
 
-test("surface gate executes real tools, resumes committed selections and cleans up every opened session", async t => {
+test("001. Surface gate executes real tools, resumes committed selections and cleans up every opened session", async t => {
   const result = await runSurface(t);
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /functional surface PASS:/);
@@ -79,17 +79,17 @@ test("surface gate executes real tools, resumes committed selections and cleans 
     ["startup", "resume", "resume"]);
   assert.deepEqual(result.observations.filter(event => event.phase === "shutdown").map(event => event.sample),
     ["Alpha\nbeta\n", "Alpha\ninserted\nbeta\n", "Alpha\ninserted\nbeta\n"]);
-  for (const id of ["read-initial", "replace", "within-old-loadout", "insert-old-loadout"])
+  for (const id of ["read-initial", "replace", "within-core-loadout", "insert-core-loadout"])
     assert.equal(toolResult(result.observations, id).isError, false, `${id} must execute successfully`);
   const resetShutdown = result.observations.filter(event => event.phase === "shutdown")[1];
-  const refused = resetShutdown.toolResults.find(message => message.id === "insert-refused");
+  const refused = resetShutdown.toolResults.find(message => message.id === "retired-selector-refused");
   assert.ok(refused, "the refused call must have a real persisted tool result");
-  assert.deepEqual(refused, { id: "insert-refused", tool: "insert", isError: true },
-    "a tool removed by a committed reset must produce a persisted error, not execute");
+  assert.deepEqual(refused, { id: "retired-selector-refused", tool: "toolset", isError: true },
+    "a retired selector must produce a persisted error, not execute");
   assertCleaned(result);
 });
 
-test("surface gate reports an actual SDK extension error and shuts down before deleting its workspace", async t => {
+test("002. Surface gate reports an actual SDK extension error and shuts down before deleting its workspace", async t => {
   const result = await runSurface(t, "tool-result");
   assert.equal(result.code, 1, result.stderr);
   assert.doesNotMatch(result.stdout, /functional surface PASS:/);

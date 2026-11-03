@@ -9,7 +9,7 @@ function command(code: string): CommandSpec {
     timeoutMs: 2000, stdoutBytes: 1024, stderrBytes: 1024 };
 }
 
-test("R37: failure before configuration acquisition releases only the lock without requesting an unloaded grace policy", async () => {
+test("001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy", async () => {
   let lockCloses = 0;
   const lifetime = new BrokerLifetime({ close() { lockCloses++; } }, () => {
     throw new Error("configuration never supplied a shutdown budget");
@@ -21,10 +21,10 @@ test("R37: failure before configuration acquisition releases only the lock witho
 
 // A single sequential parent keeps the deliberately sticky uncertainty test
 // after the successful control. Production exposes no test-only reset/unblock.
-test("R37: native preparation owns the shutdown barrier independently of a request Promise", {
+test("002. Native preparation owns the shutdown barrier independently of a request Promise", {
   skip: process.platform !== "linux", timeout: 15000,
 }, async t => {
-  await t.test("known native completion precedes Store and writer-lock release", async () => {
+  await t.test("003. Known native completion precedes Store and writer-lock release", async () => {
     const executor = new PreparationExecutor();
     let storeCloses = 0; let lockCloses = 0;
     const lifetime = new BrokerLifetime({ close() { lockCloses++; } }, () => 5);
@@ -39,7 +39,7 @@ test("R37: native preparation owns the shutdown barrier independently of a reque
     assert.equal(lifetime.phase, "closed");
   });
 
-  await t.test("unknown preparation outcome cannot release Store or lock even after the request settles", async () => {
+  await t.test("004. Unknown preparation outcome cannot release Store or lock even after the request settles", async () => {
     const executor = new PreparationExecutor(); const controller = new AbortController();
     const work = executor.run(command("setInterval(()=>{},1000)"), controller.signal);
     controller.abort();

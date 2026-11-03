@@ -36,7 +36,7 @@ const openFact = (f: ReturnType<typeof fixture>, name: string): Extract<ReviewFa
 const publishedRefs = (f: ReturnType<typeof fixture>): string =>
   f.git(["for-each-ref", "--format=%(refname) %(objectname)", "refs/oma/published/"]);
 
-test("mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH", async () => {
+test("001. Mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH", async () => {
   const f = fixture(); try {
     // Unknown name.
     await assert.rejects(f.challenge("bob", { merge: "merge-00000000-0000-4000-8000-000000000000", tier: "LOW" }),
@@ -69,7 +69,7 @@ test("mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH",
   } finally { f.close(); }
 });
 
-test("mail-v1: a prepared challenge of an applied merge reverts it by vote", async () => {
+test("002. Mail-v1: a prepared challenge of an applied merge reverts it by vote", async () => {
   const f = fixture(); try {
     const { name, candidate } = await appliedMerge(f, "target");
     const appliedMain = f.git(["rev-parse", "refs/heads/main"]);
@@ -143,7 +143,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
   } finally { f.close(); }
 });
 
-test("mail-v1: a HIGH challenge asks the Principal before applying", async () => {
+test("003. Mail-v1: a HIGH challenge asks the Principal before applying", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "risky");
     await f.challenge("alice", { merge: name, tier: "HIGH" }, "ch-hi");
@@ -166,7 +166,7 @@ test("mail-v1: a HIGH challenge asks the Principal before applying", async () =>
 });
 
 for (const floor of ["MEDIUM", "HIGH"] as const) for (const delegated of [false, true]) test(
-  `replacement challenge honors ${floor} path floor and Principal delegation=${delegated}`,
+  `004. Replacement challenge honors ${floor} path floor and Principal delegation=${delegated}`,
   async () => {
     const f = fixture({ principalDelegated: delegated,
       rules: [{ path: "sensitive.txt", tier: floor, statuses: ["A", "M", "D", "T"] }] });
@@ -209,7 +209,7 @@ for (const floor of ["MEDIUM", "HIGH"] as const) for (const delegated of [false,
     } finally { f.close(); }
   });
 
-test("mail-v1: a conflicting revert refuses with the path and leaves no ref", async () => {
+test("005. Mail-v1: a conflicting revert refuses with the path and leaves no ref", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "first");
     // main changes file.txt differently: the revert can no longer be clean.
@@ -228,7 +228,7 @@ test("mail-v1: a conflicting revert refuses with the path and leaves no ref", as
   } finally { f.close(); }
 });
 
-test("mail-v1: a refused open never publishes; a crash before publication is repaired", async () => {
+test("006. Mail-v1: a refused open never publishes; a crash before publication is repaired", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "clean");
     const aliceRefs = () => publishedRefs(f).split("\n").filter(l => l.includes("alice/"));
@@ -273,7 +273,7 @@ test("mail-v1: a refused open never publishes; a crash before publication is rep
   } finally { f.close(); }
 });
 
-test("mail-v1: a prepared revert that touches a protected path refuses at open", async () => {
+test("007. Mail-v1: a prepared revert that touches a protected path refuses at open", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "guarded");
     // The path became protected after the merge applied (a rebound policy):
@@ -288,7 +288,7 @@ test("mail-v1: a prepared revert that touches a protected path refuses at open",
   } finally { f.close(); }
 });
 
-test("UX-09: a broker-prepared revert carrying a gitlink refuses at open, naming the path", async () => {
+test("008. A broker-prepared revert carrying a gitlink refuses at open, naming the path", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "revert-me");
     // A seeded or mirrored canonical main may carry a gitlink (DR33 keeps
@@ -317,7 +317,7 @@ test("UX-09: a broker-prepared revert carrying a gitlink refuses at open, naming
   } finally { f.close(); }
 });
 
-test("mail-v1: a caller-provided revert candidate excludes its submitters from approval", async () => {
+test("009. Mail-v1: a caller-provided revert candidate excludes its submitters from approval", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "supplied");
     const main = f.git(["rev-parse", "refs/heads/main"]);
@@ -338,7 +338,7 @@ test("mail-v1: a caller-provided revert candidate excludes its submitters from a
   } finally { f.close(); }
 });
 
-test("proposal v3: duplicate challenge identity is refused and other proposals remain reviewable", async () => {
+test("010. Proposal v3: duplicate challenge identity is refused and other proposals remain reviewable", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "dup");
     await f.challenge("alice", { merge: name, tier: "LOW", title: "first revert" }, "ch-a");
@@ -371,7 +371,7 @@ test("proposal v3: duplicate challenge identity is refused and other proposals r
   } finally { f.close(); }
 });
 
-test("mail-v1: a revert with nothing to revert refuses", async () => {
+test("011. Mail-v1: a revert with nothing to revert refuses", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "gone");
     await f.challenge("alice", { merge: name, tier: "LOW" }, "ch-first");

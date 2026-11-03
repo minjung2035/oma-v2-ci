@@ -102,7 +102,7 @@
     "@oma/contracts": "0.1.0",
     "@oma/domain": "0.1.0",
     "@oma/protocol": "0.1.0",
-    "@earendil-works/pi-tui": "1.0.1"
+    "@earendil-works/pi-tui": "1.2.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

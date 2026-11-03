@@ -7,7 +7,7 @@ import { publishMailNoticeView } from "#oma-test/app/views/mail-notices";
 import { mailNoticeViewPath } from "@oma/storage/mail-notices";
 import { readSocietyMail, principalMailbox, unreadCount } from "#oma-test/app/application/mail";
 
-test("Society mail includes sent GOAL, peer replies and board; notices use ledger provenance and real names", () => {
+test("001. Society mail includes sent GOAL, peer replies and board; notices use ledger provenance and real names", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-society-mail-"));
   try {
     const put = (n: number, from: string, to: string, subject: string, audience = "archive", reply = "") => {
@@ -63,7 +63,7 @@ test("Society mail includes sent GOAL, peer replies and board; notices use ledge
   }
 });
 
-test("Society mail bounds header reads and reports older mail; notice metadata fails explicitly", () => {
+test("002. Society mail bounds header reads and reports older mail; notice metadata fails explicitly", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-society-mail-bound-"));
   try {
     const dir = join(root, "mail", "archive", "cur");

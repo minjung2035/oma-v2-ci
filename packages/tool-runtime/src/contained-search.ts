@@ -147,7 +147,7 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
   const context = typeof params.context === "number" && params.context > 0 ? Math.floor(params.context) : 0;
   const limit = typeof params.limit === "number" && Number.isFinite(params.limit)
     ? name === "find" && params.limit === 0 ? null : Math.max(1, params.limit) : null;
-  const args = name === "grep" ? ["--line-number", "--with-filename", "--no-heading", "--color=never", "--hidden"]
+  const args = name === "grep" ? ["--line-number", "--null", "--with-filename", "--no-heading", "--no-context-separator", "--color=never", "--hidden"]
     : ["--glob", "--color=never", "--hidden"];
   if (name === "grep") {
     if (params.ignoreCase === true) args.push("--ignore-case");
@@ -166,13 +166,20 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
   let skip = false, tail = 0;
   const put = (bytes: Buffer): void => { if (bytes.length) { output(bytes); any = true; } };
   const emitHeader = (final: boolean): void => {
-    const text = prefix.toString("utf8"), match = /^(.*?)([:-])(\d+)\2/.exec(text);
+    // NUL terminates the pathname: '-' and ':' inside names or payloads are
+    // never row metadata. Keep the payload as bytes, including partial UTF-8.
+    const boundary = prefix.indexOf(0);
+    const match = boundary < 0 ? null : /^(\d+)([:-])/.exec(prefix.subarray(boundary + 1).toString("utf8"));
     if (name === "grep" && match) {
       if (match[2] === ":") {
         if (limit !== null && count >= limit) { limited = true; skip = true; walker.kill(); }
         else { count++; tail = context; }
       } else if (limit !== null && count >= limit && tail-- <= 0) { limited = true; skip = true; walker.kill(); }
-      if (!skip) { put(Buffer.from(`${displayPath(match[0])} `)); put(prefix.subarray(Buffer.byteLength(match[0]))); }
+      if (!skip) {
+        const path = displayPath(prefix.subarray(0, boundary).toString("utf8"));
+        put(Buffer.from(`${path}${match[2]}${match[1]}${match[2]} `));
+        put(prefix.subarray(boundary + 1 + match[0].length));
+      }
       header = false; prefix = Buffer.alloc(0);
     } else if (name === "find" || final || prefix.length >= 16384) {
       if (!skip) put(name === "find" ? Buffer.from(displayPath(prefix.toString("utf8"))) : prefix); prefix = Buffer.alloc(0); header = false;
@@ -184,7 +191,13 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
     if (failed !== undefined || skip) return;
     try {
       for (let start = 0; start < chunk.length;) {
-        const end = chunk.indexOf(10, start), next = end < 0 ? chunk.length : end;
+        // A pathname may itself contain LF. Until its NUL delimiter arrives,
+        // LF is pathname data, not a match-row boundary. Context has no separate
+        // unframed group marker (--no-context-separator above).
+        const waitingForPath = name === "grep" && header && prefix.indexOf(0) < 0;
+        const boundary = waitingForPath ? chunk.indexOf(0, start) : -1;
+        const lineStart = waitingForPath ? boundary < 0 ? chunk.length : boundary + 1 : start;
+        const end = chunk.indexOf(10, lineStart), next = end < 0 ? chunk.length : end;
         const part = chunk.subarray(start, next);
         if (header) { prefix = Buffer.concat([prefix, part]); emitHeader(end >= 0); }
         else put(part);

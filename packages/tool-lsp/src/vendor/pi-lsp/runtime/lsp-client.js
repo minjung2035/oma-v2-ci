@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { alarm as omaAlarm } from "@oma/protocol/alarm";
+const setTimeout = (callback, ms) => omaAlarm(Math.max(1, ms) / 1000, callback);
+const clearTimeout = timer => timer?.cancel();
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";

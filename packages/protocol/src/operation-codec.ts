@@ -4,9 +4,9 @@
 import type { ErrorCode } from "@oma/contracts/errors";
 import type { Json } from "@oma/contracts/identity";
 import type { MessagePlan, MutationMethod, OperationPlan } from "@oma/contracts/durable";
-import type { PublicMethods } from "@oma/contracts/public-wire";
+import type { StoredMutationPayload } from "./request-codec.js";
 import {
-  ownedMessages, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
+  publicationSources, ownedMessages, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "@oma/domain/durable";
 import {
@@ -23,8 +23,9 @@ import { resolvedSpecDigest } from "@oma/domain/spec-identity";
 import { requestHash } from "@oma/domain/request-identity";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "@oma/domain/errors";
 import { isMutationMethod } from "./receipt-codec.js";
-import { currentPlanIntent, PLAN_ENVELOPE_VERSION } from "./persisted-formats.js";
+import { currentPlanIntent, planEnvelopeVersion } from "./persisted-formats.js";
 import { PUBLIC_METHODS } from "./methods.js";
+import { createRootId, createSourceRequestKey, attachmentRequestKey, mailAttachmentRootId, exportRefForRequestKey } from "@oma/domain/derived";
 import { decodeMutationPayload } from "./request-codec.js";
 import { operationResultCheck } from "@oma/domain/validation";
 
@@ -32,7 +33,7 @@ import { operationResultCheck } from "@oma/domain/validation";
 export function encodeOperationPlan(plan: OperationPlan): string {
   if (plan.kind === "agent.create" && "unitNames" in plan)
     throw new StoreError("UNSUPPORTED_PROFILE", "retired unit installation intents are read-only historical plans");
-  return JSON.stringify({ version: PLAN_ENVELOPE_VERSION, intent: plan });
+  return JSON.stringify({ version: planEnvelopeVersion(plan), intent: plan });
 }
 
 /** SQLite representation. Untrusted values stay unknown until checked. */
@@ -94,7 +95,7 @@ type StateFields<K extends MutationMethod> =
   | { readonly state: "failed"; readonly result: null; readonly resultJson: null; readonly errorCode: ErrorCode };
 export type OperationOf<K extends MutationMethod> = IdentityFields & {
   readonly kind: K;
-  readonly payload: PublicMethods[K]["params"];
+  readonly payload: StoredMutationPayload<K>;
   readonly plan: ValidatedPlan<K>;
 } & StateFields<K>;
 export type DecodedOperation = { [K in MutationMethod]: OperationOf<K> }[MutationMethod];
@@ -102,6 +103,8 @@ export interface OperationRelations {
   /** These return raw observations from the same Store, never repaired values. */
   operation(id: string): unknown | null;
   agent(name: string): unknown | null;
+  /** Raw SELECT-only acceptance order; must not recursively decode an operation. */
+  sequence?(id: string): number | null;
   deliveries(operationId: string): readonly unknown[];
   /** Used for review facts; an unavailable acceptance index refuses decoding. */
   attestation?(operationId: string): unknown | null;
@@ -191,12 +194,28 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
         }
       }
     case "mail.send": {
+      if (plan.message.audience !== undefined && typeof payload.replyToMessage !== "string") corrupt("workers-only ordinary mail must reply to an accepted message");
       if (plan.message.kind !== payload.kind || !same(plan.message.approvalFor ?? null, payload.approvalFor ?? null)) corrupt("mail kind/approval identity differs from payload");
       const to = payload.to as string[];
       if (to.length > 0 && !sameSet(plan.message.to, to)) corrupt("mail logical recipients differ from payload");
       const refs = payload.refs as Array<{ repo: string; oid: string }> | undefined;
       if (plan.message.contextRevision !== (refs?.find(ref => ref.repo === "context")?.oid ?? null)) corrupt("mail context revision differs from payload");
       if (typeof payload.replyToMessage === "string" && plan.message.replyHeaders.inReplyTo?.split("@", 1)[0] !== payload.replyToMessage) corrupt("mail reply identity differs from payload");
+      const attachments = payload.collaboration;
+      if ((plan.attachments !== undefined) !== (attachments !== undefined) || attachments !== undefined &&
+          (!record(attachments) || !Array.isArray(attachments.attachments) || !same(plan.attachments?.sources.map(source => ({ commit: source.commit, objectFormat: source.objectFormat })),
+            attachments.attachments.map(source => record(source) ? { commit: source.commit, objectFormat: source.objectFormat } : source))))
+        corrupt("mail attachment manifest differs from its explicit original input");
+      if (plan.attachments !== undefined && record(attachments) && !same(plan.attachments.freeze ?? null, attachments.freeze ?? null))
+        corrupt("accepted attachment root freeze differs from its original input");
+      if (plan.attachments !== undefined && record(attachments) && Array.isArray(attachments.attachments)) for (const [ordinal, source] of plan.attachments.sources.entries()) {
+        if (source.local === undefined) continue;
+        const supplied = attachments.attachments[ordinal];
+        if (!record(supplied) || !record(supplied.stage) || !record(supplied.stage.bundle) ||
+            source.local.exportRef !== supplied.stage.exportRef || !same(source.local.prerequisites, supplied.stage.prerequisites) ||
+            source.local.bundle.bytes !== supplied.stage.bundle.bytes || source.local.bundle.sha256 !== supplied.stage.bundle.sha256)
+          corrupt("local attachment preparation differs from its exact frozen input");
+      }
       return;
     }
     case "agent.continue": return; // Rendered bytes are checked against the frozen object at the mail boundary.
@@ -205,6 +224,14 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
     case "agent.start": case "agent.stop": if (plan.agent !== payload.agent) corrupt("lifecycle agent differs from payload"); return;
     case "agent.create":
       if (plan.spec.name !== payload.name || plan.spec.from !== payload.from || plan.spec.brief !== payload.brief) corrupt("create frozen spec differs from caller identity");
+      if (plan.source === undefined ? payload.collaboration !== undefined || payload.content !== undefined :
+          !record(payload.collaboration) || !same(plan.source.freeze, payload.collaboration.freeze)) corrupt("create source freeze differs from its original payload");
+      if (plan.source?.publication?.local !== undefined) {
+        const local = plan.source.publication.local, stage = record(payload.collaboration) ? payload.collaboration.stage : undefined;
+        if (!record(stage) || !record(payload.content) || local.exportRef !== stage.exportRef || !same(local.prerequisites, stage.prerequisites) ||
+            local.bundle.bytes !== payload.content.bytes || local.bundle.sha256 !== payload.content.sha256)
+          corrupt("create publication differs from its original frozen bundle");
+      }
       return;
     case "git.integrate":
       if (plan.candidate !== payload.candidate || plan.base !== payload.expected) corrupt("integrate base/candidate differs from payload");
@@ -288,7 +315,7 @@ function validateDerivedKey(plan: PlanFor<MutationMethod>, requestKey: RequestKe
     corrupt("a derived request key belongs only to a merge plan or refresh fact");
   }
 }
-function validateAttestation(plan: PlanFor<"attest.record">, value: CheckedOperationRecord, payload: PublicMethods[MutationMethod]["params"], context: OperationDecodeContext, decode: (raw: unknown) => DecodedOperation): void {
+function validateAttestation(plan: PlanFor<"attest.record">, value: CheckedOperationRecord, payload: StoredMutationPayload<MutationMethod>, context: OperationDecodeContext, decode: (raw: unknown) => DecodedOperation): void {
   const index = context.relations.attestation?.(value.id);
   if (!record(index) || Object.keys(index).length !== 2 || index.operation_id !== value.id ||
       !safeInteger(index.sequence) || index.sequence < 1) corrupt("attestation acceptance index is missing or invalid");
@@ -449,7 +476,7 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       const payloadJson = value.payload_json;
       const planJson = value.plan_json;
       const payloadRaw = json(payloadJson, "operation payload");
-      let payload: PublicMethods[MutationMethod]["params"];
+      let payload: StoredMutationPayload<MutationMethod>;
       try { payload = decodeMutationPayload(kind, payloadRaw); }
       catch { return corrupt("operation payload has an invalid caller DTO"); }
       if (requestHash(kind, payloadRaw) !== value.request_hash) corrupt("operation payload/hash identity mismatch");
@@ -467,7 +494,40 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       validateDeliveries(value.id, ownedMessages(plan), context.relations.deliveries(value.id));
       validateDerivedKey(plan, value.request_key);
       if (plan.kind === "attest.record") validateAttestation(plan, value, payload, context, decode);
+      if (plan.kind === "mail.send") {
+        const input = decodeMutationPayload("mail.send", payload), original = input.collaboration?.freeze;
+        if (original !== undefined && (original.operation !== value.id || original.operation !== mailAttachmentRootId(value.actor, value.request_key) || plan.message.dateMs !== original.dateMs))
+          corrupt("accepted mail root or Date differs from its original frozen invocation");
+        if (plan.attachments?.sources.some(source => source.local !== undefined) && original === undefined)
+          corrupt("local attachment delegation has no original root freeze");
+      }
+      if (plan.kind === "mail.send" && plan.attachments?.sources.length) {
+        const rootSequence = context.relations.sequence?.(value.id);
+        if (!safeInteger(rootSequence) || rootSequence < 1) corrupt("attachment root acceptance order is unavailable");
+        for (const source of plan.attachments.sources) {
+          if (source.local !== undefined) {
+            if (source.local.exportRef !== exportRefForRequestKey(attachmentRequestKey(value.request_key, source.publicationOrdinal!)))
+              corrupt("attachment export identity differs from its original root request");
+            continue; // This versioned dependency is owned by this same atomic root.
+          }
+          if (source.publication === null) continue; // Frozen canonical reachability, never an accepted publication relationship.
+          const referenceCommit = source.reachableFrom ?? source.commit;
+          const related = context.relations.operation(source.publication), publication = related === null ? null : decode(related);
+          const sequence = context.relations.sequence?.(source.publication);
+          const prior = publication !== null && source.publicationOrdinal !== undefined ? publicationSources(publication.plan)[source.publicationOrdinal] : undefined;
+          const matches = publication?.kind === "git.submit" ? publication.state !== "failed" && source.publicationOrdinal === undefined &&
+            publication.plan.candidate === referenceCommit && publication.plan.publishedRef === source.publishedRef : prior?.local !== undefined &&
+            prior.commit === referenceCommit && prior.objectFormat === source.objectFormat && prior.publishedRef === source.publishedRef;
+          if (!matches || !safeInteger(sequence) || sequence < 1 || sequence >= rootSequence)
+            corrupt("attachment does not reference its earlier exact accepted publication");
+        }
+      }
       if (plan.kind === "git.integrate") validateIntegration(plan, value, context, decode);
+      if (plan.kind === "agent.create" && plan.source !== undefined) {
+        if (plan.source.freeze.operation !== createRootId(value.actor, value.request_key)) corrupt("create root differs from its original request");
+        if (plan.source.publication?.local !== undefined && plan.source.publication.local.exportRef !== exportRefForRequestKey(createSourceRequestKey(value.request_key)))
+          corrupt("create export identity differs from its original root");
+      }
       if (plan.kind === "agent.create") validateCreation(plan, context, decode);
       if (plan.kind === "agent.start" || plan.kind === "agent.stop") {
         const agent = context.relations.agent(plan.agent);

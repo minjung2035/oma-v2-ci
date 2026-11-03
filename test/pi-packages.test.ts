@@ -1,3 +1,5 @@
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { principalPaths } from "./fixtures/principal-paths.js";
 import { packageDirectories } from "#oma-test/app/platform/package-files";
 import { PACKAGE_INDEX_KIND, encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
@@ -43,7 +45,7 @@ function store(root: string, packages: Record<string, Record<string, string>>): 
 const hello = { "package.json": JSON.stringify({ name: "oma-hello-ext", version: "1.0.0", pi: { extensions: ["./extensions/hello.ts"] } }),
   "extensions/hello.ts": "export default function (pi) { pi.registerCommand('hello-ext', { handler: async () => {} }); }\n" };
 
-test("DR41: the package filesystem port cannot publish an empty index when an owned file cannot be repaired", async () => {
+test("001. The package filesystem port cannot publish an empty index when an owned file cannot be repaired", async () => {
   const f = createCompleteConfigurationFixture(), root = join(f.root, "packages"), local = join(root, "local", "hello");
   try {
     mkdirSync(local, { recursive: true });
@@ -62,7 +64,7 @@ test("DR41: the package filesystem port cannot publish an empty index when an ow
   } finally { f.close(); }
 });
 
-test("DR25: oma pi runs the engine's package commands over oma's store, and refuses what would reach past oma", () => {
+test("002. Oma pi runs the engine's package commands over oma's store, and refuses what would reach past oma", () => {
   for (const args of [["install", "npm:@foo/bar@1.0.0"], ["install", "git:github.com/foo/bar"], ["install", "https://github.com/foo/bar"],
     ["remove", "npm:@foo/bar"], ["update", "npm:@foo/bar"], ["update", "--extensions"],
     ["update", "--extension", "npm:@foo/bar"], ["list"], ["install", "--help"]]) {
@@ -93,7 +95,7 @@ test("DR25: oma pi runs the engine's package commands over oma's store, and refu
   }
 });
 
-test("DR25: a role's extension may name an installed package's file, pinned by digest, only inside the package store", () => {
+test("003. A role's extension may name an installed package's file, pinned by digest, only inside the package store", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -116,7 +118,7 @@ test("DR25: a role's extension may name an installed package's file, pinned by d
   } finally { f.close(); }
 });
 
-test("DR25: the engine names a package's extensions; the index keeps them by package, and roles follow a package through updates", async () => {
+test("004. The engine names a package's extensions; the index keeps them by package, and roles follow a package through updates", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -167,7 +169,7 @@ function tarball(files: Record<string, string>, dirs: readonly string[] = []): B
   return Buffer.concat(parts);
 }
 
-test("DR25/C20: `oma pi install` of a local path copies it into the store as `local/<name>`, indexed and synced like a remote package", async () => {
+test("005. `oma pi install` of a local path copies it into the store as `local/<name>`, indexed and synced like a remote package", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -296,7 +298,7 @@ test("DR25/C20: `oma pi install` of a local path copies it into the store as `lo
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it", async () => {
+test("006. A staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -334,7 +336,7 @@ test("DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry
   } finally { f.close(); }
 });
 
-test("DR25/C20: a configured `local/..foo` source survives the prune -- `..` decides by component, not prefix", () => {
+test("007. A configured `local/..foo` source survives the prune -- `..` decides by component, not prefix", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -360,7 +362,7 @@ test("DR25/C20: a configured `local/..foo` source survives the prune -- `..` dec
   } finally { f.close(); }
 });
 
-test("DR25/C20: a configured `local/@bare` source survives the prune -- the scope directory itself may be the package", async () => {
+test("008. A configured `local/@bare` source survives the prune -- the scope directory itself may be the package", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -394,7 +396,7 @@ test("DR25/C20: a configured `local/@bare` source survives the prune -- the scop
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staging-prefixed file or link is collected with dead areas -- it does not abort the prune", () => {
+test("009. A staging-prefixed file or link is collected with dead areas -- it does not abort the prune", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -417,7 +419,7 @@ test("DR25/C20: a staging-prefixed file or link is collected with dead areas -- 
   } finally { f.close(); }
 });
 
-test("DR25/C20: a dead copy holding a link is collected whole -- a non-regular entry does not wedge the prune", () => {
+test("010. A dead copy holding a link is collected whole -- a non-regular entry does not wedge the prune", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -445,7 +447,7 @@ test("DR25/C20: a dead copy holding a link is collected whole -- a non-regular e
   } finally { f.close(); }
 });
 
-test("DR25/C20: a `local` entry that is not a directory is collected, not wedged on", () => {
+test("011. A `local` entry that is not a directory is collected, not wedged on", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -478,7 +480,7 @@ test("DR25/C20: a `local` entry that is not a directory is collected, not wedged
   } finally { f.close(); }
 });
 
-test("DR25/C20: dead content that lost its owner bits is collected -- the removal walk repairs before it opens", () => {
+test("012. Dead content that lost its owner bits is collected -- the removal walk repairs before it opens", () => {
   const f = createCompleteConfigurationFixture();
   const locked = [join(f.root, "packages", "local", "dead-pkg"), join(f.root, "packages", "local", "dead-tree", "locked"),
     join(f.root, "packages", ".staging-local-zz"), join(f.root, "packages", "local", "kept-pkg")];
@@ -525,7 +527,7 @@ test("DR25/C20: dead content that lost its owner bits is collected -- the remova
   }
 });
 
-test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 copy cannot wedge re-install", async () => {
+test("013. Publish replaces a staged copy that lost its mode -- a mode-000 copy cannot wedge re-install", async () => {
   const f = createCompleteConfigurationFixture();
   const staged = join(f.root, "packages", "local", "wedge");
   try {
@@ -550,7 +552,7 @@ test("DR25/C20: publish replaces a staged copy that lost its mode -- a mode-000 
   }
 });
 
-test("DR25/C20: mode-000 ancestors on the open path are repaired before they are opened -- `local/`, its scopes, the store root", async () => {
+test("014. Ancestors on the open path are repaired before they are opened -- `local/`, its scopes, the store root", async () => {
   const f = createCompleteConfigurationFixture();
   const locked = [join(f.root, "packages"), join(f.root, "packages", "local"), join(f.root, "packages", "local", "@scope")];
   try {
@@ -598,7 +600,7 @@ test("DR25/C20: mode-000 ancestors on the open path are repaired before they are
   }
 });
 
-test("DR25/C20: a source spelling `local` itself keeps the whole stage -- the sweep never reads it as naming nothing", () => {
+test("015. A source spelling `local` itself keeps the whole stage -- the sweep never reads it as naming nothing", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -632,7 +634,7 @@ test("DR25/C20: a source spelling `local` itself keeps the whole stage -- the sw
   } finally { f.close(); }
 });
 
-test("DR25/C20: the index repairs `local/` before the engine lists it -- and refuses a write a degraded listing would make", async t => {
+test("016. The index repairs `local/` before the engine lists it -- and refuses a write a degraded listing would make", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -682,7 +684,7 @@ test("DR25/C20: the index repairs `local/` before the engine lists it -- and ref
   } finally { f.close(); }
 });
 
-test("DR25/C20: the index walk reaches a configured copy through a degraded stage -- repairs what oma owns, refuses what it cannot read", async () => {
+test("017. The index walk reaches a configured copy through a degraded stage -- repairs what oma owns, refuses what it cannot read", async () => {
   const f = createCompleteConfigurationFixture();
   const locked = [join(f.root, "packages", "local", "@scope"), join(f.root, "packages", "local", "sub")];
   try {
@@ -788,7 +790,7 @@ test("DR25/C20: the index walk reaches a configured copy through a degraded stag
   }
 });
 
-test("DR25/C20: a resource the index cannot observe is refused, never indexed as absent", async t => {
+test("018. A resource the index cannot observe is refused, never indexed as absent", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -821,7 +823,7 @@ test("DR25/C20: a resource the index cannot observe is refused, never indexed as
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staged name of three or more components flushes every directory that names it", async t => {
+test("019. A staged name of three or more components flushes every directory that names it", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -851,7 +853,7 @@ test("DR25/C20: a staged name of three or more components flushes every director
   } finally { f.close(); }
 });
 
-test("DR25/C20: a file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", async () => {
+test("020. A file or link in a strict-prefix slot is collected by the install itself -- the wedge never reaches the user", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -904,7 +906,7 @@ test("DR25/C20: a file or link in a strict-prefix slot is collected by the insta
   } finally { f.close(); }
 });
 
-test("DR25/C20: a configured `local/foo/sub` descends `local/foo` and keeps its child only -- the scope rule generalized", () => {
+test("021. A configured `local/foo/sub` descends `local/foo` and keeps its child only -- the scope rule generalized", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -933,7 +935,7 @@ test("DR25/C20: a configured `local/foo/sub` descends `local/foo` and keeps its 
   } finally { f.close(); }
 });
 
-test("DR25/C20: a `local/` entry or descended directory that lost its mode is repaired in place -- it never aborts the prune", () => {
+test("022. A `local/` entry or descended directory that lost its mode is repaired in place -- it never aborts the prune", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -977,7 +979,7 @@ test("DR25/C20: a `local/` entry or descended directory that lost its mode is re
   } finally { f.close(); }
 });
 
-test("DR25/C20: an entry the sweep cannot read or a name that vanished is skipped or kept whole -- never an abort", t => {
+test("023. An entry the sweep cannot read or a name that vanished is skipped or kept whole -- never an abort", t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1021,7 +1023,7 @@ test("DR25/C20: an entry the sweep cannot read or a name that vanished is skippe
   } finally { f.close(); }
 });
 
-test("DR25/C20: a configured source is descended to the depth it needs -- dead content is collected at every level", () => {
+test("024. A configured source is descended to the depth it needs -- dead content is collected at every level", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1049,7 +1051,7 @@ test("DR25/C20: a configured source is descended to the depth it needs -- dead c
   } finally { f.close(); }
 });
 
-test("DR25/C20: a stray at the package-store slot itself is collected -- never swept into or staged into", async () => {
+test("025. A stray at the package-store slot itself is collected -- never swept into or staged into", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1087,7 +1089,7 @@ test("DR25/C20: a stray at the package-store slot itself is collected -- never s
   } finally { f.close(); }
 });
 
-test("DR25/C20: a staged file whose stat fails -- or answers as another kind -- refuses the index write", async t => {
+test("026. A staged file whose stat fails -- or answers as another kind -- refuses the index write", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1129,7 +1131,7 @@ test("DR25/C20: a staged file whose stat fails -- or answers as another kind -- 
   } finally { f.close(); }
 });
 
-test("DR25/C20: a source spelled absolutely or denormalized still names its staged copy -- degraded, it is repaired or refused, never committed empty", async t => {
+test("027. A source spelled absolutely or denormalized still names its staged copy -- degraded, it is repaired or refused, never committed empty", async t => {
   const f = createCompleteConfigurationFixture();
   try {
     const store = join(f.root, "packages");
@@ -1185,7 +1187,7 @@ test("DR25/C20: a source spelled absolutely or denormalized still names its stag
   }
 });
 
-test("DR25: a project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
+test("028. A project's inline settings become a managed bundle that runs as it did, and every session is made from it, roles and all", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -1247,7 +1249,7 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
   } finally { f.close(); }
 });
 
-test("P0-8/DR25: settings hidden by a degraded oma-owned ancestor are repaired and read -- never seeded over", () => {
+test("029. Settings hidden by a degraded oma-owned ancestor are repaired and read -- never seeded over", () => {
   // A mode-000 `.projects` component makes existsSync answer false for the
   // settings file it hides; the create branch then seeded a new generation
   // over the committed bundle. The repair must restore observability, never
@@ -1281,7 +1283,7 @@ test("P0-8/DR25: settings hidden by a degraded oma-owned ancestor are repaired a
   } finally { f.close(); }
 });
 
-test("P0-8/DR25: a seed candidate that cannot be observed refuses, never reads as no earlier settings", () => {
+test("030. A seed candidate that cannot be observed refuses, never reads as no earlier settings", () => {
   // The society root is oma's own under the data root but is not the
   // settings ensure's to repair, so an unobservable seed is an unknown --
   // refused, not silently answered with the product's defaults.
@@ -1310,7 +1312,7 @@ test("P0-8/DR25: a seed candidate that cannot be observed refuses, never reads a
   } finally { f.close(); }
 });
 
-test("P0-8/DR25: a package change still reaches a project its degraded settings directory hid", () => {
+test("031. A package change still reaches a project its degraded settings directory hid", () => {
   // applyPackageChange's per-project probe had the same blind spot: a
   // mode-000 `.projects/<name>` read as absent settings and the project was
   // skipped whole -- the committed role kept an extension the removal had
@@ -1341,7 +1343,7 @@ test("P0-8/DR25: a package change still reaches a project its degraded settings 
   } finally { f.close(); }
 });
 
-test("DR25: a Resident's paths reach the package store, and only it -- never the engine home beside it", () => {
+test("032. A Resident's paths reach the package store, and only it -- never the engine home beside it", () => {
   const host = { libdir: "/opt/install/", packages: "/data/oma/.packages" };
   const dirs = { workspace: "/s/w", home: "/s/h", archive: "/s/a", workerArchive: "/s/wa", selfMail: "/s/m", view: "/s/v", world: "/s/world",
     projectGit: "/s/git", projectMirror: "/s/mirror", sessions: "/s/sessions" };
@@ -1352,7 +1354,7 @@ test("DR25: a Resident's paths reach the package store, and only it -- never the
 
 
 
-test("DR25: an inline configuration crashed at any point of becoming a bundle is the whole old one or the whole new one, and the next start finishes it", () => {
+test("033. An inline configuration crashed at any point of becoming a bundle is the whole old one or the whole new one, and the next start finishes it", () => {
   const points: DurabilityFault[] = [];
   const probe = createCompleteConfigurationFixture();
   try {
@@ -1380,7 +1382,7 @@ test("DR25: an inline configuration crashed at any point of becoming a bundle is
   }
 });
 
-test("DR25: a role set is committed only against the configuration it was read as, and one already there changes nothing", () => {
+test("034. A role set is committed only against the configuration it was read as, and one already there changes nothing", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const snapshot = loadConfigurationSnapshot(f.path);
@@ -1391,7 +1393,7 @@ test("DR25: a role set is committed only against the configuration it was read a
   } finally { f.close(); }
 });
 
-test("DR25: the engine oma runs for a package command sees oma's store as its directory, never the user's own Pi settings", async () => {
+test("035. The engine oma runs for a package command sees oma's store as its directory, never the user's own Pi settings", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     // A pinned engine that records what it was given.
@@ -1411,7 +1413,7 @@ test("DR25: the engine oma runs for a package command sees oma's store as its di
   } finally { f.close(); }
 });
 
-test("DR25: executable asset bytes are not document bytes, but remain in the commit and spawn integrity checks", () => {
+test("036. Executable asset bytes are not document bytes, but remain in the commit and spawn integrity checks", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -1433,7 +1435,7 @@ test("DR25: executable asset bytes are not document bytes, but remain in the com
   } finally { f.close(); }
 });
 
-test("DR25: a corrupt installed-package index is not an empty package store", () => {
+test("037. A corrupt installed-package index is not an empty package store", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -1446,7 +1448,7 @@ test("DR25: a corrupt installed-package index is not an empty package store", ()
   } finally { f.close(); }
 });
 
-test("UX-20: the package index bound is a named, stated limit -- a realistic multi-megabyte index reads, an over-bound one names the bound", () => {
+test("038. The package index bound is a named, stated limit -- a realistic multi-megabyte index reads, an over-bound one names the bound", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -1471,7 +1473,7 @@ test("UX-20: the package index bound is a named, stated limit -- a realistic mul
 });
 
 
-test("DR26 / P0V-51: extension install accepts a valid Principal-only project without inventing a Worker", () => {
+test("039. Extension install accepts a valid Principal-only project without inventing a Worker", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const source = store(f.root, { "oma-hello-ext": hello });
@@ -1507,7 +1509,7 @@ const rich = {
   "themes/dark.json": JSON.stringify({ name: "dark", colors: {} }),
 };
 
-test("C18: the package index keeps skills, prompts and themes, not only extensions", async () => {
+test("040. The package index keeps skills, prompts and themes, not only extensions", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-rich": rich });
@@ -1529,7 +1531,7 @@ test("C18: the package index keeps skills, prompts and themes, not only extensio
   } finally { f.close(); }
 });
 
-test("DR46: previous package-index shapes refuse without rewriting bytes, current malformed lists remain errors", () => {
+test("041. Previous package-index shapes refuse without rewriting bytes, current malformed lists remain errors", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-hello-ext": hello });
@@ -1550,7 +1552,7 @@ test("DR46: previous package-index shapes refuse without rewriting bytes, curren
   } finally { f.close(); }
 });
 
-test("C18: an engine's argv names the package resources -- host paths unconfined, mounted paths inside", async () => {
+test("042. An engine's argv names the package resources -- host paths unconfined, mounted paths inside", async () => {
   const f = createCompleteConfigurationFixture();
   try {
     const packages = store(f.root, { "oma-rich": rich });
@@ -1560,7 +1562,7 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
     const skill = join(root, "npm/node_modules/oma-rich/skills/roll/SKILL.md");
 
     // The Principal's argv.
-    const argv = sessionArgv({ piCommand: "/x/pi", coreExtension: "/x/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
+    const argv = sessionArgv({ piCommand: "/x/pi", coreExtension: "/x/core.js", ...principalPaths(), home: "/h" },
       { society: "s", provider: "p", model: "m", extensions: [], packageResources: resources });
     assert.deepEqual(argv.slice(argv.indexOf("--skill"), argv.indexOf("--skill") + 2), ["--skill", skill]);
     assert.ok(argv.includes("--prompt-template")); assert.ok(argv.includes("--theme"));
@@ -1574,17 +1576,17 @@ test("C18: an engine's argv names the package resources -- host paths unconfined
       archive: join(state, "mail", "archive"), workerArchive: join(state, "mail", "workers"),
       selfMail: join(state, "mail", "inboxes", "a"), view: runnerViewPathAt(state, "a"), world: join(state, "world"),
       projectGit: projectGitPathAt(state), projectMirror: projectMirrorPathAt(state), sessions: runnerSessionDirPathAt(state, "a") };
-    for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true });
+    for (const dir of [...Object.values(dirs), join(agentRootPathAt(state, "a"), "records")]) mkdirSync(dir, { recursive: true });
     const runRoot = join(f.root, "run"); mkdirSync(join(runRoot, "actors", "a", "1"), { recursive: true });
     const paths = { piCommand: "/usr/bin/node", coreExtension: join(f.installation, CORE_EXTENSION),
       workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home, mailArchive: dirs.archive,
       workerArchive: dirs.workerArchive, projectGit: dirs.projectGit, batchView: dirs.view,
       socket: actorSocketPathAt(runRoot, "a", 1) };
-    const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", extensions: [], packageResources: resources };
-    const limits = { frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 1, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")), packageResources: resources };
+    const limits = { subjectBytes: 512, frameBytes: 1, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 1, mailBodyBytes: 1, contextBytes: 1, bundleBytes: 1 };
 
     const confinement = {
-      host: {  libdir: f.installation, packages: root, node: "/usr/bin/node",
+      host: {  libdir: f.installation, recordRoot: join(agentRootPathAt(state, "a"), "records"), packages: root, node: "/usr/bin/node",
         pi: `${RESIDENT_PATHS.libdir}/engine/cli.js`, piModeArgs: [],
         stateRoot: state, runRoot: join(f.root, "run"),
         limits: { frameBytes: 1, batchMaxMessages: 1 } },

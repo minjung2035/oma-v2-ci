@@ -175,7 +175,7 @@ export class GitObserver implements GitReadPort {
   }
 
   commit(repository: string, oid: string): GitObservation<true> {
-    const expression = `${gitOidArgument(oid)}^{commit}`;
+    const expression = gitOidArgument(oid);
     const evidence = this.run(["--git-dir", repository, "cat-file", "--batch-check=%(objecttype)"], `${expression}\n`);
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "commit process unavailable");
     const output = line(text(evidence.stdout));

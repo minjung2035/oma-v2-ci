@@ -1,3 +1,4 @@
+import { removeTree as cleanOwnedFixture } from "./fixtures/cleanup.js";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { nativeQuarantine } from "./fixtures/git-crash.js";
@@ -6,7 +7,7 @@ import type { IntegrationPolicyReader } from "@oma/domain/integration-policy";
 // Updated tests are NOT_RUN in this editing session.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync, readlinkSync, lstatSync, readdirSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readlinkSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,17 +30,7 @@ interface Env {
     paths: GitPaths;
     seal: () => void;
 }
-function cleanOwnedFixture(root: string): void {
-    const walk = (path: string): void => {
-        if (!lstatSync(path).isDirectory())
-            return;
-        chmodSync(path, 0o700);
-        for (const name of readdirSync(path))
-            walk(join(path, name));
-    };
-    walk(root);
-    rmSync(root, { recursive: true, force: true });
-}
+
 function envOf(integration: IntegrationPolicy | null = null, policyRevisionReader: IntegrationPolicyReader | null = null): Env {
     const dir = mkdtempSync(join(tmpdir(), "oma-t7-"));
     const society = "demo";
@@ -123,7 +114,7 @@ function restorePendingCheckpointForTest(env: Env, id: string): void {
     assert.equal(after.planJson, before.planJson);
     assert.equal(after.payloadJson, before.payloadJson);
 }
-test("T53: independent clones — A's refs/state never leak into B or canonical", () => {
+test("001. Independent clones — A's refs/state never leak into B or canonical", () => {
     const env = envOf();
     try {
         const seed = join(env.dir, "seed");
@@ -150,7 +141,7 @@ test("T53: independent clones — A's refs/state never leak into B or canonical"
         env.seal();
     }
 });
-test("T54: submit with incremental bundle creates the published ref and the result mail; peer fetches exact C", async () => {
+test("002. Submit with incremental bundle creates the published ref and the result mail; peer fetches exact C", async () => {
     const env = envOf();
     try {
         const base = seedProject(env);
@@ -182,7 +173,7 @@ test("T54: submit with incremental bundle creates the published ref and the resu
         env.seal();
     }
 });
-test("GIT-006: bundle with an extra ref fails closed after durable intent", async () => {
+test("003. Bundle with an extra ref fails closed after durable intent", async () => {
     const env = envOf();
     try {
         const base = seedProject(env);
@@ -207,7 +198,7 @@ test("GIT-006: bundle with an extra ref fails closed after durable intent", asyn
         env.seal();
     }
 });
-test("T55/T59: same key resubmits the frozen candidate; a conflicting ref OID is refused", async () => {
+test("004. Same key resubmits the frozen candidate; a conflicting ref OID is refused", async () => {
     const env = envOf();
     try {
         const base = seedProject(env);
@@ -241,7 +232,7 @@ test("T55/T59: same key resubmits the frozen candidate; a conflicting ref OID is
         env.seal();
     }
 });
-test("T60/T61: integrate CAS — first wins, stale/undescendant/protected refused, main unchanged on refusal", async () => {
+test("005. Integrate CAS — first wins, stale/undescendant/protected refused, main unchanged on refusal", async () => {
     const env = envOf({maxWorkers: 6, policyRevision: "p1", protectedPaths: ["secret/"], checks: []});
     try {
         const base = seedProject(env);
@@ -288,7 +279,7 @@ test("T60/T61: integrate CAS — first wins, stale/undescendant/protected refuse
         env.seal();
     }
 });
-test("INT-003: accepted stop intent cancels before main CAS", async () => {
+test("006. Accepted stop intent cancels before main CAS", async () => {
     const env = envOf();
     try {
         const base = seedProject(env);
@@ -308,7 +299,7 @@ test("INT-003: accepted stop intent cancels before main CAS", async () => {
         env.seal();
     }
 });
-test("T62: policy revision is reread before CAS and a race fails closed", async () => {
+test("007. Policy revision is reread before CAS and a race fails closed", async () => {
     // Accepted under p1, changed to p2 before CAS: the re-check fails closed (D02).
     let reads = 0;
     const env = envOf(null, () => ({maxWorkers: 6, policyRevision: ++reads === 1 ? "p1" : "p2", protectedPaths: [], checks: []}));
@@ -323,7 +314,7 @@ test("T62: policy revision is reread before CAS and a race fails closed", async 
         env.seal();
     }
 });
-test("DR8 / CFG-005, TUI-007: an integration after a revision-only edit is judged by the host's current revision", async () => {
+test("008. An integration after a revision-only edit is judged by the host's current revision", async () => {
     // The broker started under p1; the Human's edit made it p2 and left the facts
     // alone. The thirteenth functional run found every later integrate refused.
     const env = envOf(null, () => ({maxWorkers: 6, policyRevision: "p2", protectedPaths: [], checks: []}));
@@ -340,7 +331,7 @@ test("DR8 / CFG-005, TUI-007: an integration after a revision-only edit is judge
         env.seal();
     }
 });
-test("T62-negative, DR13: a policy that cannot be read cannot integrate, and is not called a changed one", async () => {
+test("009. A policy that cannot be read cannot integrate, and is not called a changed one", async () => {
     const env = envOf(null, () => { throw new Error("malformed policy"); });
     try {
         const { base, candidate } = publishedFastForward(env);
@@ -353,7 +344,7 @@ test("T62-negative, DR13: a policy that cannot be read cannot integrate, and is 
         env.seal();
     }
 });
-test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending, and recovery integrates once it reads", async () => {
+test("010. A policy unreadable at CAS leaves the accepted integration pending, and recovery integrates once it reads", async () => {
     // Readable at acceptance (p1), unreadable just before CAS, readable again later.
     let reads = 0;
     let readable = true;
@@ -375,7 +366,7 @@ test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integ
         env.seal();
     }
 });
-test("T62-resource / DR18: a policy with integration checks is not supported and fails closed before candidate execution", async () => {
+test("011. A policy with integration checks is not supported and fails closed before candidate execution", async () => {
     const env = envOf({maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {},  }]});
 
     env.paths.checkAssetsDir = "/trusted/checks";
@@ -388,7 +379,7 @@ test("T62-resource / DR18: a policy with integration checks is not supported and
         env.seal();
     }
 });
-test("T65/T67: context publish — unsafe paths/missing GOAL rejected; concurrent same-expected one succeeds", async () => {
+test("012. Context publish — unsafe paths/missing GOAL rejected; concurrent same-expected one succeeds", async () => {
     const env = envOf();
     try {
         const goal = Buffer.from("# GOAL\n");
@@ -438,7 +429,7 @@ test("T65/T67: context publish — unsafe paths/missing GOAL rejected; concurren
         env.seal();
     }
 });
-test("CTX-004: pending context publication after CAS is completed by reconcile", async () => {
+test("013. Pending context publication after CAS is completed by reconcile", async () => {
     const env = envOf();
     try {
         const goal = Buffer.from("# GOAL recovery\n");

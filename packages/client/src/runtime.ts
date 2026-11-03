@@ -24,6 +24,12 @@ export interface PreparedContext {
   entries: { path: string; bytes: number; sha256: string }[];
   content: Uint8Array; digest: { bytes: number; sha256: string };
 }
+export interface CollaborationBuild {
+  readonly method: MutationMethod;
+  readonly params: Record<string, unknown>;
+  readonly digest?: { readonly bytes: number; readonly sha256: string };
+  readonly stream?: Uint8Array;
+}
 export interface RuntimePort {
   readonly observationSeconds: number;
   readonly maximumReceiptBytes: number;
@@ -39,16 +45,23 @@ export interface RuntimePort {
   decodeReceipt(value: unknown, options?: { expectedKind?: MutationMethod; allowNotFound?: boolean }): Decoded<Receipt>;
   decodeFailure(value: unknown): Decoded<Failure>;
   notFound(receipt: Receipt): boolean;
-  mutation(method: PublicMethod): boolean;
+  mutation(method: unknown): boolean;
   collectReceipt(key: string, maximum: number, read: (part: PublicMethods["operation.read"]["params"]) => Promise<PublicMethods["operation.read"]["result"]>): Promise<Receipt>;
   failure(error: unknown): Failure;
   failureText(failure: Failure): string;
   failureExit(failure: Failure): 2 | 3 | 4;
-  receiptText(receipt: Receipt, key: string, phase?: "candidate-publication"): string;
+  /** The caller's request key, plus the exact frozen request key a candidate
+   * publication ran under when this receipt belongs to one: recovery text
+   * names both instead of re-deriving the publication key. */
+  receiptText(receipt: Receipt, key: string, publication?: string): string;
   receiptExit(receipt: Receipt): 0 | 2 | 3 | 4;
+  /** Source preparation only, after protected host binding and before transport. */
+  collaboration?(tool: string, args: unknown, role: "resident" | "principal"): CollaborationBuild;
+  /** Bounded ordinary-file health observation; never a refresh or effect call. */
+  collaborationRecordNotice?(root: string): string | null;
   goal(body: string, expected: string | null): PreparedContext;
   context(directory: string): PreparedContext;
-  reply(file: string, inheritSubject: boolean): { replyToMessage: string; inheritedSubject?: string };
+  reply(file: string, inheritSubject: boolean, subjectBytes?: number): { replyToMessage: string; inheritedSubject?: string };
   fullOid(value: unknown): value is string;
   resolveOid(revision: string): string;
   recordedBase(): string | null;

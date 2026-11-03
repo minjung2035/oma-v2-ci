@@ -8,7 +8,7 @@ import { WorkspaceCoordinator } from "@oma/git/workspace";
 
 const defaults = () => defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(), deploymentDigest: "a".repeat(64) });
 
-test("Worker capacity config: defaults, closed numeric bounds, seeds and capacity-bounded approval mail", () => {
+test("001. Worker capacity config: defaults, closed numeric bounds, seeds and capacity-bounded approval mail", () => {
   const config = defaults();
   assert.equal(config.maxWorkers, 6);
   assert.deepEqual(config.initialResidents.map(worker => worker.name), ["worker-1", "worker-2", "worker-3"]);
@@ -22,7 +22,7 @@ test("Worker capacity config: defaults, closed numeric bounds, seeds and capacit
   assert.equal(small.integration.tiered!.highPeerFloor, 8);
 });
 
-test("MEDIUM capacity fallback: zero peers emits durable approval at opening, survives restart and applies only on the current Principal vote", async () => {
+test("002. MEDIUM capacity fallback: zero peers emits durable approval at opening, survives restart and applies only on the current Principal vote", async () => {
   const f = fixture({ maxWorkers: 1, workers: ["alice"] });
   try {
     const candidate = f.candidateWith({ "feature.txt": "reviewed by the Principal\n" });
@@ -59,7 +59,7 @@ test("MEDIUM capacity fallback: zero peers emits durable approval at opening, su
   } finally { f.close(); }
 });
 
-for (const tier of ["LOW", "HIGH"] as const) test(`${tier} challenge capacity fallback retains the peer that fits before Principal approval`, async () => {
+for (const tier of ["LOW", "HIGH"] as const) test(`003. Worker capacity: ${tier} challenge capacity fallback retains the peer that fits before Principal approval`, async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice", "bob"] });
   try {
     const candidate = f.candidateWith({ "defect.txt": "incorrect\n" });
@@ -84,7 +84,7 @@ for (const tier of ["LOW", "HIGH"] as const) test(`${tier} challenge capacity fa
   } finally { f.close(); }
 });
 
-test("Capacity fallback excludes every submitter and cannot override disabled Principal delegation", async () => {
+test("004. Capacity fallback excludes every submitter and cannot override disabled Principal delegation", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice", "bob"], principalDelegated: false });
   try {
     const candidate = f.candidateWith({ "joint.txt": "joint implementation\n" });
@@ -100,7 +100,7 @@ test("Capacity fallback excludes every submitter and cannot override disabled Pr
   } finally { f.close(); }
 });
 
-test("Temporary peer shortage and restart do not rewrite the accepted capacity snapshot", async () => {
+test("005. Temporary peer shortage and restart do not rewrite the accepted capacity snapshot", async () => {
   const f = fixture({ maxWorkers: 6, workers: ["alice"] });
   try {
     const candidate = f.candidateWith({ "change.txt": "await independent review\n" });
@@ -120,7 +120,7 @@ test("Temporary peer shortage and restart do not rewrite the accepted capacity s
   } finally { f.close(); }
 });
 
-test("HIGH merge capacity fallback preserves a stopped peer approval", async () => {
+test("006. HIGH merge capacity fallback preserves a stopped peer approval", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice", "bob"] });
   try {
     const candidate = f.candidateWith({ "critical.txt": "requires scrutiny\n" });
@@ -140,7 +140,7 @@ test("HIGH merge capacity fallback preserves a stopped peer approval", async () 
   } finally { f.close(); }
 });
 
-test("Active Worker capacity: stopped and retired history returns slots without limiting lifetime names", async t => {
+test("007. Active Worker capacity: stopped and retired history returns slots without limiting lifetime names", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   for (let index = 1; index <= 5; index++) {
     const name = `history-${index}`;
@@ -159,7 +159,7 @@ test("Active Worker capacity: stopped and retired history returns slots without 
   assert.equal(f.store.getOperation("worker-1", "full-cap-refused"), null);
 });
 
-test("Active Worker capacity: an accepted creation losing a slot to start stays pending and recovers after release and restart", async t => {
+test("008. Active Worker capacity: an accepted creation losing a slot to start stays pending and recovers after release and restart", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("occupant"); await f.stop("occupant");
   let competingStart: Promise<unknown> | undefined;
@@ -186,7 +186,7 @@ test("Active Worker capacity: an accepted creation losing a slot to start stays 
   assert.equal(f.store.getOperation("principal", "creation-won"), null);
 });
 
-test("Active Worker capacity: full-cap stopped start has no durable acceptance, enabled start and terminal same-key replay need no extra slot", async t => {
+test("009. Active Worker capacity: full-cap stopped start has no durable acceptance, enabled start and terminal same-key replay need no extra slot", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("stopped"); await f.stop("stopped");
   await f.create("enabled");
@@ -204,7 +204,7 @@ test("Active Worker capacity: full-cap stopped start has no durable acceptance, 
   assert.equal(f.store.getAgent("enabled")?.desired, "retired");
 });
 
-test("Active Worker capacity: concurrent creation publications share atomic last-slot admission", { timeout: 30000 }, async t => {
+test("010. Active Worker capacity: concurrent creation publications share atomic last-slot admission", { timeout: 30000 }, async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   const competing = f.competingLifecycle();
   const ensure = WorkspaceCoordinator.prototype.ensure;
@@ -233,7 +233,7 @@ test("Active Worker capacity: concurrent creation publications share atomic last
   assert.equal(f.lifecycle.creation(f.auth()).workerCount, 2);
 });
 
-test("Active Worker capacity: an unknown physical stop cannot fabricate a reusable slot", async t => {
+test("011. Active Worker capacity: an unknown physical stop cannot fabricate a reusable slot", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("unconfirmed");
   f.units.stubborn.add("unconfirmed");
@@ -251,7 +251,7 @@ test("Active Worker capacity: an unknown physical stop cannot fabricate a reusab
   assert.equal(f.store.getOperationById(waiting.operation)?.state, "succeeded");
 });
 
-test("Active Worker capacity: death proofs stay outside SQLite and are fenced to current released identity", async t => {
+test("012. Active Worker capacity: death proofs stay outside SQLite and are fenced to current released identity", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("released"); await f.stop("released");
   f.units.onDeathObservation = actor => {
@@ -268,7 +268,7 @@ test("Active Worker capacity: death proofs stay outside SQLite and are fenced to
   assert.equal(f.lifecycle.creation(f.auth()).workerCount, 2);
 });
 
-test("Active Worker capacity: reduced-cap enabled overflow fails closed without rewriting history while safety stops remain available", async t => {
+test("013. Active Worker capacity: reduced-cap enabled overflow fails closed without rewriting history while safety stops remain available", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("existing");
   const before = f.store.listAgents();
@@ -284,7 +284,7 @@ test("Active Worker capacity: reduced-cap enabled overflow fails closed without 
   assert.equal(f.lifecycle.creation(f.auth()).workerCount, 1);
 });
 
-test("Active Worker capacity: edited capacity refuses fresh starts before restart but preserves terminal replay and safety stop", async t => {
+test("014. Active Worker capacity: edited capacity refuses fresh starts before restart but preserves terminal replay and safety stop", async t => {
   const f = await activeCapacityFixture(); t.after(() => f.close());
   await f.create("existing");
   const accepted = await f.start("existing", "accepted-before-edit");

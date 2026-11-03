@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 const BUNDLE_SOURCE = fileURLToPath(new URL("../../packages/tool-hashline/dist/vendor/pi-hashline-edit-pro/", import.meta.url));
-test("BL3/F5: the bundle check refuses a manifest whose metadata drifted from the declared pins", async () => {
+test("001. The bundle check refuses a manifest whose metadata drifted from the declared pins", async () => {
     const specifier = "../../scripts/vendor-pi-hashline.mjs";
     const { manifestMetadataProblems } = await import(specifier) as {
         manifestMetadataProblems: (manifest: {

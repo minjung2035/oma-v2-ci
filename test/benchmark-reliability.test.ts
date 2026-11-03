@@ -21,7 +21,7 @@ import { testBroker } from "./helpers/broker-fixture.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 for (const arrival of ["after-exit", "before-exit", "before-wait", "before-prepare", "interrupted-before-open"] as const)
-  test(`wait scheduling: ${arrival} preserves fresh-work and redelivery ownership`, async () => {
+  test(`001. Wait scheduling: ${arrival} preserves fresh-work and redelivery ownership`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-wait-scheduling-"));
     const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
     store.transaction(tx => { tx.insertAgent(makeValidAgent("principal")); tx.insertAgent(makeValidAgent("alice")); });

@@ -18,7 +18,8 @@ import {
 } from "@oma/protocol/host-channel";
 import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_FD as HOST_PLACES } from "@oma/process/async";
 import { PrincipalChannel } from "@oma/extension/principal-channel";
-import { registerOmaTools } from "@oma/extension/mail-tools";
+import { readBoundedWithin } from "@oma/tool-files";
+import { once } from "node:events";
 
 import { runOwnedProcess } from "./fixtures/owned-process.js";
 import { clientProcessArgs } from "./fixtures/client-process.js";
@@ -26,7 +27,7 @@ import { clientProcessArgs } from "./fixtures/client-process.js";
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
 
-test("AV-07: an attached Principal waits for its first grant and releases waits on cancellation or channel damage", async t => {
+test("001. An attached Principal waits for its first grant and releases waits on cancellation or channel damage", async t => {
   const attached = () => {
     const channel = PrincipalChannel.detached();
     // Exercise the channel's waiting state independently of process fd 3.
@@ -72,7 +73,7 @@ const CORPUS: readonly string[] = [
   `refused ${HANDLE} ${HANDLE}`,
 ];
 
-test("T114: the extension's channel names are the protocol's", () => {
+test("002. The extension's channel names are the protocol's", () => {
   // The slot the spawn helpers lay out the channel on is the slot the protocol
   // says the channel is. They are separate constants because the spawn helper
   // may not import the protocol, and a drift between them would move the
@@ -82,7 +83,7 @@ test("T114: the extension's channel names are the protocol's", () => {
   assert.notEqual(HOST_PLACES, HOST_CHANNEL_FD);
 });
 
-test("T114: the extension accepts exactly the credential lines the protocol decodes", () => {
+test("003. The extension accepts exactly the credential lines the protocol decodes", () => {
   for (const line of CORPUS) {
     const decoded = decodeHostMessage(line);
     const channel = PrincipalChannel.detached();
@@ -95,7 +96,7 @@ test("T114: the extension accepts exactly the credential lines the protocol deco
   }
 });
 
-test("T114: the protocol round-trips what it encodes and refuses what it cannot", () => {
+test("004. The protocol round-trips what it encodes and refuses what it cannot", () => {
   const messages: HostChannelMessage[] = [
     { kind: "ready" }, { kind: "refused", sessionHandle: HANDLE },
     { kind: "session", sessionHandle: HANDLE, pid: 4242 },
@@ -114,7 +115,7 @@ test("T114: the protocol round-trips what it encodes and refuses what it cannot"
     assert.throws(() => encodeHostMessage(bad), TypeError);
 });
 
-test("T114: a reader splits, joins and stops at the first thing that is not a message", () => {
+test("005. A reader splits, joins and stops at the first thing that is not a message", () => {
   const seen: HostChannelMessage[] = [];
   let broken: string | null = null;
   const reader = new HostChannelReader(message => seen.push(message), reason => { broken = reason; });
@@ -134,7 +135,7 @@ test("T114: a reader splits, joins and stops at the first thing that is not a me
   assert.ok(longBroken, "an unbounded partial line was buffered");
 });
 
-test("T114: the extension keeps the latest credential and drops it if the channel lies", () => {
+test("006. The extension keeps the latest credential and drops it if the channel lies", () => {
   const channel = PrincipalChannel.detached();
   channel.push(`credential ${CREDENTIAL} ${HANDLE}\ncredential ${"e".repeat(64)} ${HANDLE}\n`);
   assert.equal(channel.current()?.credential, "e".repeat(64), "a replacement credential was not taken");
@@ -149,7 +150,7 @@ test("T114: the extension keeps the latest credential and drops it if the channe
   assert.equal(overlong.current(), null);
 });
 
-test("T114: an engine started without the product's channel holds nothing", () => {
+test("007. An engine started without the product's channel holds nothing", () => {
   // A Resident's engine: no marker, so descriptor 3 is not even looked at.
   assert.equal(PrincipalChannel.open({}).current(), null);
   // A marker naming another descriptor is not this product's channel.
@@ -180,7 +181,7 @@ function clientCalls(fd3: "socket" | "none", line: string | null): Promise<strin
   });
 }
 
-test("T114/E27: a credential descriptor named in the environment is not the Client's credential", async () => {
+test("008. A credential descriptor named in the environment is not the Client's credential", async () => {
   // The Principal's credential lives in the engine's PrincipalChannel.
   // A leftover descriptor declaration is ignored outright, well-formed line
   // or not, so the call fails only on connecting and never with AUTH_FAILED.
@@ -189,24 +190,12 @@ test("T114/E27: a credential descriptor named in the environment is not the Clie
   assert.match(await clientCalls("none", null), /BROKER_UNAVAILABLE|ENOENT|connect/);
 });
 
-test("T114: reading mail never returns more than its bound, even while the file grows", async () => {
+test("009. A file input snapshot never returns more than its bound, even while the file grows", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-grow-"));
   const maximum = 4096;
   const id = `m-${randomUUID()}-0`;
   const path = join(root, `${id}:2,`);
   writeFileSync(path, "x".repeat(1024));
-  const previous = { ...process.env };
-  const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
-  Object.assign(process.env, {
-    OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: root,
-    OMA_SOCKET: "/nonexistent/socket", OMA_MAIL_BYTES: String(maximum),
-  });
-  try {
-    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
-  } finally {
-    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
-    Object.assign(process.env, previous);
-  }
   // Another process of the same user appends while the tool reads: read-only
   // mode does not stop it, and a read that trusted its earlier size check
   // would hand back whatever the file had grown to.
@@ -233,20 +222,22 @@ test("T114: reading mail never returns more than its bound, even while the file 
       // Measured here rather than on a timer: this loop never yields to one.
       peak = Math.max(peak, statSync(path).size);
       try {
-        const result = await tools.get("oma_mail_read")!.execute("r", { messageId: id });
-        const bytes = Buffer.byteLength(result.content[0]!.text);
+        const result = readBoundedWithin(root, `${id}:2,`, maximum);
+        const bytes = result.length;
         assert.ok(bytes <= maximum, `a read returned ${bytes} bytes past its ${maximum}-byte bound`);
         largest = Math.max(largest, bytes);
         successes += 1;
       } catch (error) {
         const message = String((error as Error).message);
-        assert.match(message, /bounded regular file|grew|changed|truncated/);
+        assert.match(message, /bounded regular file|byte bound|grew|changed|truncated/);
         if (/grew|changed|truncated/.test(message)) raced += 1;
         refused += 1;
       }
     }
   } finally {
+    const closed = once(writer, "close");
     writer.kill("SIGKILL");
+    await closed;
     rmSync(root, { recursive: true, force: true });
   }
   // The file was read while it was growing (sizes above the starting one were
@@ -259,7 +250,7 @@ test("T114: reading mail never returns more than its bound, even while the file 
   process.stderr.write(`# bounded read: ${successes} within the bound, ${refused} refused, ${raced} caught mid-read\n`);
 });
 
-test("T114: the owned process output cap counts bytes, not decoded characters", async () => {
+test("010. The owned process output cap counts bytes, not decoded characters", async () => {
   // A UTF-8 character is up to four bytes, so a cap on decoded string length
   // would hold several times the bytes it claims. The child writes far more
   // than the cap in three-byte characters; the owner must stop it at the

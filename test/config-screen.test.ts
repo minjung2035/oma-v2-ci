@@ -13,7 +13,7 @@ const data = { config: fields, extensions: [], mail: [], mailUnreadable: null, m
     principalModel: { configured: "default", session: null },  } } as unknown as PanelData;
 const screen = (state: typeof INITIAL): string => render({ state, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 20 }).join("\n");
 
-test("Config: a choice being edited shows every option, not only the one in view", () => {
+test("001. Config: a choice being edited shows every option, not only the one in view", () => {
   let state = { ...INITIAL, open: true, category: 1 };
   state = step(state, { kind: "down" }, data, 262144).state;
   state = step(state, { kind: "down" }, data, 262144).state;
@@ -26,7 +26,7 @@ test("Config: a choice being edited shows every option, not only the one in view
   assert.deepEqual(committed.effects, [{ kind: "set-choice", field: "worker-profile", value: "large" }]);
 });
 
-test("DR24: each model is one row -- model and effort -- that opens the engine's own lists, and a long model is shown whole", () => {
+test("002. Each model is one row -- model and effort -- that opens the engine's own lists, and a long model is shown whole", () => {
   const state = { ...INITIAL, open: true, category: 1 };
   const shown = screen(state);
   // The model is shown whole, not cut to the column; the screen's edge cuts its note instead.

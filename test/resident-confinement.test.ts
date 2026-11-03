@@ -1,3 +1,4 @@
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 import { residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006: what a Resident's engine is actually started with.
@@ -13,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "@oma/engine/pi-adapter";
 import { RunnerModule } from "#oma-test/app/runner";
-import { RESIDENT_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
+import { COLLABORATION_WORKER_PROMPT as RESIDENT_SYSTEM_PROMPT } from "@oma/domain/collaboration-prompts";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "@oma/engine/pi-spawn-plan";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
@@ -29,7 +30,7 @@ const RESOURCES = Object.freeze({
   stagingBytes: 1 << 20, checkTimeoutSeconds: 30,
 });
 const LIMITS = Object.freeze({
-  frameBytes: 65536, idleStreamSeconds: 30, receiptWaitSeconds: 30,
+  subjectBytes: 512, frameBytes: 65536, idleStreamSeconds: 30, receiptWaitSeconds: 30,
   batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20,
 });
 const NUL = String.fromCharCode(0);
@@ -57,7 +58,7 @@ function fixture(): Fixture {
     projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
     sessions: runnerSessionDirPathAt(stateRoot, actor),
   };
-  for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });
+  for (const path of [...Object.values(dirs), join(agentRootPathAt(stateRoot, actor), "records")]) mkdirSync(path, { recursive: true });
   mkdirSync(join(dirs.archive, "cur"), { recursive: true });
   mkdirSync(join(libdir, "apps", "oma", "dist"), { recursive: true });
   mkdirSync(join(libdir, "packages/extension/dist"), { recursive: true });
@@ -76,7 +77,7 @@ function fixture(): Fixture {
   const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: paths.socket }, { actor, runRoot });
   const confinement: PiConfinement = {
     host: {
-       libdir, node: "/usr/bin/node",
+       libdir, recordRoot: join(agentRootPathAt(stateRoot, actor), "records"), node: "/usr/bin/node",
       pi: confinedPath({ libdir: libdir }, dirs, paths.piEntry), piModeArgs: [],
       stateRoot, runRoot, limits: { frameBytes: LIMITS.frameBytes, batchMaxMessages: LIMITS.batchMaxMessages },
     },
@@ -94,7 +95,7 @@ function fixture(): Fixture {
   };
   const profile = {
     provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
-    extensions: [],
+    extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")),
   };
   const adapter = new PiAdapter(residentEngineEffects, {
     actor, society: "s", limits: LIMITS, profile, paths: adapterPaths, confinement,
@@ -107,7 +108,7 @@ function missingConfinementAdapter(f: Fixture): PiAdapter {
     actor: "alice", society: "s", limits: LIMITS,
     profile: {
       provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
-      extensions: [],
+      extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")),
     },
     paths: {
       piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
@@ -118,7 +119,7 @@ function missingConfinementAdapter(f: Fixture): PiAdapter {
   } as never);
 }
 
-test("F34/F35: Resident environment is deterministic, confined, and never inherited", () => {
+test("001. Resident environment is deterministic, confined, and never inherited", () => {
   const f = fixture();
   const saved = { ...process.env };
   process.env.OMA_HOST_SENTINEL = "host-only";
@@ -143,7 +144,7 @@ test("F34/F35: Resident environment is deterministic, confined, and never inheri
   }
 });
 
-test("T113 a confined Resident is spawned through the mount plan, not directly", () => {
+test("002. A confined Resident is spawned through the mount plan, not directly", () => {
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
@@ -165,7 +166,7 @@ test("T113 a confined Resident is spawned through the mount plan, not directly",
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 every path the confined engine is told about is a path it can reach", () => {
+test("003. Every path the confined engine is told about is a path it can reach", () => {
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
@@ -195,7 +196,7 @@ test("T113 every path the confined engine is told about is a path it can reach",
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113: overlapping installation roots never shadow more-specific Resident mounts", () => {
+test("004. Overlapping installation roots never shadow more-specific Resident mounts", () => {
   const f = fixture();
   try {
     const installation = { libdir: `${f.stateRoot}/`, packages: `${f.stateRoot}/packages` };
@@ -209,7 +210,7 @@ test("T113: overlapping installation roots never shadow more-specific Resident m
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 the engine's system prompt is the role's, or the built-in Resident prompt", () => {
+test("005. The engine's system prompt is the role's, or the built-in Resident prompt", () => {
   const f = fixture();
   try {
     const engineArgs = (adapter: PiAdapter) =>
@@ -217,12 +218,12 @@ test("T113 the engine's system prompt is the role's, or the built-in Resident pr
     // An authored-empty role prompt runs on the built-in Resident prompt, and
     // the flag replaces Pi's generated base prompt rather than appending.
     const bare = engineArgs(f.adapter);
-    assert.equal(bare[bare.indexOf("--system-prompt") + 1], RESIDENT_SYSTEM_PROMPT);
+    assert.equal(bare[bare.indexOf("--system-prompt") + 1], RESIDENT_SYSTEM_PROMPT.trim());
     assert.equal(bare.includes("--append-system-prompt"), false);
     const authored = new PiAdapter(residentEngineEffects, {
       actor: "alice", society: "s", limits: LIMITS,
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "a role prompt",
-        extensions: [] },
+        extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
         coreExtension: f.paths.coreExtension!,
@@ -236,7 +237,7 @@ test("T113 the engine's system prompt is the role's, or the built-in Resident pr
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 the confined engine reaches a provider through the relay, not the network", () => {
+test("006. The confined engine reaches a provider through the relay, not the network", () => {
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
@@ -262,7 +263,7 @@ test("T113 the confined engine reaches a provider through the relay, not the net
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 the engine's credential directory is never mounted into a Resident", () => {
+test("007. The engine's credential directory is never mounted into a Resident", () => {
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
@@ -280,14 +281,14 @@ test("T113 the engine's credential directory is never mounted into a Resident", 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("DR25: a Resident's sandbox mounts the installed packages read-only, and its engine loads a package's extension from there", () => {
+test("008. A Resident's sandbox mounts the installed packages read-only, and its engine loads a package's extension from there", () => {
   const f = fixture();
   try {
     const packages = join(f.root, "packages");
     const file = join(packages, "npm", "node_modules", "oma-hello-ext", "extensions", "hello.ts");
     mkdirSync(join(file, ".."), { recursive: true });
     writeFileSync(file, "export default function () {}\n");
-    const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [{ path: file, sha256: "0".repeat(64) }] };
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", toolSurface: JSON.stringify(collaborationSurface("resident")), extensions: [{ path: file, sha256: "0".repeat(64) }] };
     const adapterPaths = { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
       coreExtension: f.paths.coreExtension!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
       agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket! };
@@ -304,13 +305,13 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("U1: an adapter without confinement is rejected rather than speaking host paths", () => {
+test("009. An adapter without confinement is rejected rather than speaking host paths", () => {
   const f = fixture();
   try { assert.throws(() => missingConfinementAdapter(f), { code: "UNSUPPORTED_PROFILE" }); }
   finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 a file outside every mount is refused rather than handed over", () => {
+test("010. A file outside every mount is refused rather than handed over", () => {
   const f = fixture();
   try {
     // A role extension the operator placed outside the installation would be
@@ -327,7 +328,7 @@ test("T113 a file outside every mount is refused rather than handed over", () =>
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("T113 a hostile environment entry cannot become extra bwrap arguments", () => {
+test("011. A hostile environment entry cannot become extra bwrap arguments", () => {
   const f = fixture();
   try {
     const { host, lease, directories } = f.confinement;
@@ -346,7 +347,7 @@ test("T113 a hostile environment entry cannot become extra bwrap arguments", () 
 // the "an engine outside a sandbox does not" arm is gone with the unconfined
 // profile, and missing confinement is now refused. The title keeps the
 // required prefix.
-test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's shell, never a host shell", () => {
+test("012. A confined Resident has its sandbox's shell, never a host shell", () => {
   const f = fixture();
   try {
     const confined = f.adapter.spawnPlan();
@@ -360,7 +361,7 @@ test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan; writes stay in the workspace", () => {
+test("013. Inside the sandbox the guard leaves the shell and reading to the mount plan; writes stay in the workspace", () => {
   const f = fixture();
   try {
     type Guard = (event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined;
@@ -383,7 +384,7 @@ test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("C18 / PR-004: a host engine's reads reach the package store its argv advertised -- read-only, and nothing else of the host's", () => {
+test("014. A host engine's reads reach the package store its argv advertised -- read-only, and nothing else of the host's", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-guard-store-"));
   try {
     const workspace = join(root, "workspace"); mkdirSync(workspace, { recursive: true });
@@ -415,7 +416,7 @@ test("C18 / PR-004: a host engine's reads reach the package store its argv adver
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the guard's role refusal names the engine it actually guards, not another engine's role", () => {
+test("015. The guard's role refusal names the engine it actually guards, not another engine's role", () => {
   for (const [readOnly, own, other] of [[false, "Resident", "Principal"], [true, "Principal", "Resident"]] as const) {
     let handler: ((event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined) | undefined;
     guardWorkspaceTools({ on: (_name: string, fn: typeof handler) => { handler = fn; } } as never,
@@ -427,7 +428,7 @@ test("the guard's role refusal names the engine it actually guards, not another 
   }
 });
 
-test("AV17 / D01, SB-006: a session path the confined engine reports translates back only from its session mount", () => {
+test("016. A session path the confined engine reports translates back only from its session mount", () => {
   const f = fixture();
   try {
     const name = "2026-09-25T10-46-44-816Z_x.jsonl";
@@ -439,7 +440,7 @@ test("AV17 / D01, SB-006: a session path the confined engine reports translates 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("PathView policy adapter keeps the issued spawn view for the returned session boundary", () => {
+test("017. PathView policy adapter keeps the issued spawn view for the returned session boundary", () => {
   const f = fixture();
   try {
     const original = f.dirs.sessions;
@@ -456,14 +457,14 @@ test("PathView policy adapter keeps the issued spawn view for the returned sessi
 // Required-name prefix restored (see AV13 above): w11 made confinement
 // unconditional, so "reaches at the host path when not [sealed]" became
 // "host-root profiles fail"; the mount arm is unchanged.
-test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at its mount when sealed; host-root profiles fail", () => {
+test("018. A Resident reaches the canonical repository at its mount when sealed; host-root profiles fail", () => {
   for (const rootfs of ["/", "relative", "/state/../rootfs", "/state\u0000/rootfs"])
     assert.throws(() => residentRootfsPath(rootfs), { code: "UNSUPPORTED_PROFILE" });
   assert.equal(residentRootfsPath("/state"), "/state/rootfs");
   assert.equal(residentProjectGit(), RESIDENT_PATHS.projectGit);
 });
 
-test("SB-002-E: the Linux state-root derivation and run-lease predicate give one verdict", async () => {
+test("019. The Linux state-root derivation and run-lease predicate give one verdict", async () => {
   const { trustedAbsolutePath } = await import("@oma/protocol/run-lease");
   const cases = [
     "/", "/a", "/state/rootfs", "/a/", "//a", "/a//b", "/a/./b", "/a/../b",
@@ -478,7 +479,7 @@ test("SB-002-E: the Linux state-root derivation and run-lease predicate give one
   }
 });
 
-test("mail-v1: the worker archive is a read-only Resident mount its environment names", () => {
+test("020. Mail-v1: the worker archive is a read-only Resident mount its environment names", () => {
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
@@ -498,7 +499,7 @@ test("mail-v1: the worker archive is a read-only Resident mount its environment 
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("mail-v1: the Principal's host engine is given no worker archive", async () => {
+test("021. Mail-v1: the Principal's host engine is given no worker archive", async () => {
   const { principalEnvironment } = await import("@oma/engine/principal-session");
   const env = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
     { society: "s", provider: "pi", model: "current", extensions: [] } as never,
@@ -513,14 +514,14 @@ test("mail-v1: the Principal's host engine is given no worker archive", async ()
 // OMA_TOOL_SURFACE the user's shell happened to hold is not a producer: with
 // the spawn under --clearenv it used to ride into the engine anyway, which
 // is what this test now refuses.
-test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient reaches the spawn plan", () => {
+test("022. The surface plan is the declared profile's -- nothing ambient reaches the spawn plan", () => {
   const f = fixture();
   const saved = process.env.OMA_TOOL_SURFACE;
   const runnerPaths = {
     runRoot: join(f.root, "run"), stateRoot: f.stateRoot, society: "s",
     piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
     coreExtension: f.paths.coreExtension!,
-    confinement: {  libdir: f.libdir, node: "/usr/bin/node",
+    confinement: {  libdir: f.libdir, recordRoot: join(agentRootPathAt(f.stateRoot, "alice"), "records"), node: "/usr/bin/node",
        },
   };
   const model = { provider: "pi", model: "current", inferenceTimeoutSeconds: 600 };
@@ -538,10 +539,12 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
   };
   try {
     process.env.OMA_TOOL_SURFACE = "ambient-plan";
-    assert.equal(setenv(adapterOf("declared-plan").spawnPlan(), "OMA_TOOL_SURFACE"), "declared-plan",
+    const declared = JSON.stringify(collaborationSurface("resident"));
+    assert.throws(() => adapterOf("declared-plan"), { code: "UNSUPPORTED_PROFILE" }, "malformed declared input cannot bypass the closed decoder");
+    assert.equal(setenv(adapterOf(declared).spawnPlan(), "OMA_TOOL_SURFACE"), declared,
       "the declared profile's plan, not the ambient variable's");
-    assert.equal(setenv(adapterOf().spawnPlan(), "OMA_TOOL_SURFACE"), undefined,
-      "an ambient OMA_TOOL_SURFACE is not a producer: the engine must not see it");
+    assert.throws(() => adapterOf(), { code: "UNSUPPORTED_PROFILE" },
+      "an ambient plan cannot supply missing explicit execution admission");
   } finally {
     if (saved === undefined) delete process.env.OMA_TOOL_SURFACE;
     else process.env.OMA_TOOL_SURFACE = saved;
@@ -556,7 +559,7 @@ test("TSP-005/D23: the surface plan is the declared profile's -- nothing ambient
  * ambient strip, and the one serialized writer refuses every write when it
  * does not know a quota -- an absent OMA_WORKSPACE_BYTES is a miswired
  * engine, never an unbounded one. */
-test("PR-004: every engine writes without an OMA workspace quota", async () => {
+test("023. Every engine writes without an OMA workspace quota", async () => {
   const f = fixture();
   try {
     assert.equal(f.adapter.spawnPlan().args.includes("OMA_WORKSPACE_BYTES"), false);

@@ -25,6 +25,49 @@ export function publishedRefFor(actor: string, operationId: string): string {
   return `refs/oma/published/${owner}/${operation}`;
 }
 
+/** Stable, domain-separated opaque IDs use the existing operation-ID format.
+ * These are hash-derived v4-shaped identifiers, not random UUID generation or
+ * authority tokens. The former v5-tagged spelling was rejected by this same
+ * parser before a helper could return it; do not widen the historical grammar. */
+function operationIdFromHash(hash: string, what: string): string {
+  const variant = ((Number.parseInt(hash[16]!, 16) & 3) | 8).toString(16);
+  return required(`op-${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-${variant}${hash.slice(17, 20)}-${hash.slice(20, 32)}`, parseOperationId, what);
+}
+
+/** The accepted root and all dependency names are fixed by the original request. */
+export function mailAttachmentRootId(actor: string, key: string): string {
+  required(actor, parseActor, "mail attachment actor"); required(key, parseRequestKey, "mail attachment key");
+  const hash = createHash("sha256").update(JSON.stringify(["mail-root-v1", actor, key]), "utf8").digest("hex");
+  return operationIdFromHash(hash, "mail attachment root identity");
+}
+/** Frozen attachment identities never depend on the current HEAD or wall clock. */
+export function attachmentRequestKey(parent: string, ordinal: number): string {
+  required(parent, parseRequestKey, "attachment parent key");
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) throw new TypeError("invalid attachment ordinal");
+  const direct = `${parent}.attachment.${ordinal}`;
+  return required(direct.length <= 96 ? direct : `a1-${createHash("sha256").update(JSON.stringify([parent, ordinal]), "utf8").digest("hex")}`, parseRequestKey, "attachment request key");
+}
+export function attachmentPublicationId(root: string, ordinal: number): string {
+  required(root, parseOperationId, "attachment root operation");
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) throw new TypeError("invalid attachment ordinal");
+  const hash = createHash("sha256").update(`mail-publication-v1\0${root}\0${ordinal}`, "utf8").digest("hex");
+  return operationIdFromHash(hash, "attachment publication identity");
+}
+export function createRootId(actor: string, key: string): string {
+  required(actor, parseActor, "create actor"); required(key, parseRequestKey, "create key");
+  const hash = createHash("sha256").update(JSON.stringify(["create-root-v1", actor, key]), "utf8").digest("hex");
+  return operationIdFromHash(hash, "create root identity");
+}
+export function createSourceRequestKey(parent: string): string {
+  required(parent, parseRequestKey, "create parent key");
+  const direct = `${parent}.source`;
+  return required(direct.length <= 96 ? direct : `c1-${createHash("sha256").update(parent, "utf8").digest("hex")}`, parseRequestKey, "create source key");
+}
+export function createSourcePublicationId(root: string): string {
+  required(root, parseOperationId, "create root");
+  const hash = createHash("sha256").update(`create-publication-v1\0${root}`, "utf8").digest("hex");
+  return operationIdFromHash(hash, "create publication identity");
+}
 /** D03: fresh CLI requests only. Never reconstruct an already frozen exportRef. */
 export function exportRefForRequestKey(key: string): string {
   const request = required(key, parseRequestKey, "request key");

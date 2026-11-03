@@ -72,7 +72,7 @@ function fixture() {
   };
 }
 
-test("P03: immutable observation distinguishes present, absent, unavailable and corrupt", async (t) => {
+test("001. Immutable observation distinguishes present, absent, unavailable and corrupt", async (t) => {
   const f = fixture();
   try {
     const operation = await f.pending();
@@ -110,7 +110,7 @@ test("P03: immutable observation distinguishes present, absent, unavailable and 
   }
 });
 
-test("P03: unavailable recovery retains reason and pending evidence, then converges", async (t) => {
+test("002. Unavailable recovery retains reason and pending evidence, then converges", async (t) => {
   const f = fixture();
   try {
     const operation = await f.pending();
@@ -165,7 +165,7 @@ test("P03: unavailable recovery retains reason and pending evidence, then conver
   }
 });
 
-test("P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery", async (t) => {
+test("003. First cur parent flush precedes removing new; a flush fault preserves prepared recovery", async (t) => {
   const f = fixture();
   try {
     const receipt = await f.mail.send(f.auth, "handoff", f.input);
@@ -227,7 +227,7 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
   }
 });
 
-test("P06: successful and concurrent sends leave no per-request directory or staging alias", async () => {
+test("004. Successful and concurrent sends leave no per-request directory or staging alias", async () => {
   const f = fixture();
   try {
     const results = await Promise.all(
@@ -261,7 +261,7 @@ test("P06: successful and concurrent sends leave no per-request directory or sta
   }
 });
 
-test("P01: native storage exhaustion has STORAGE_FULL vocabulary, never a terminal accepted failure", async (t) => {
+test("005. Native storage exhaustion has STORAGE_FULL vocabulary, never a terminal accepted failure", async (t) => {
   for (const error of [
     { code: "ENOSPC" },
     { code: "EDQUOT" },
@@ -320,7 +320,7 @@ test("P01: native storage exhaustion has STORAGE_FULL vocabulary, never a termin
   }
 });
 
-test("P01: staging exhaustion plus cleanup flush failure remains preaccept STORAGE_FULL", async (t) => {
+test("006. Staging exhaustion plus cleanup flush failure remains preaccept STORAGE_FULL", async (t) => {
   const f = fixture();
   try {
     const sync = fs.fsyncSync;

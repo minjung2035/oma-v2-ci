@@ -14,19 +14,19 @@ const fixture = () => ({
     "node_modules/unrelated": { version: "3.0.0" },
   } },
 });
-test("isolation retains the locked nested dependency and excludes unrelated root packages", () => {
+test("001. Isolation retains the locked nested dependency and excludes unrelated root packages", () => {
   const result = isolatedLock(fixture());
   assert.deepEqual(Object.keys(result.packages).sort(), ["", "node_modules/@oma/tool", "node_modules/engine", "node_modules/engine/node_modules/codec"]);
   assert.equal(result.packages["node_modules/engine/node_modules/codec"].version, "1.0.3");
   assert.equal(result.packages["node_modules/engine/node_modules/codec"].integrity, "sha512-nested");
 });
-test("a missing mandatory dependency is refused even below an optional dependency", () => {
+test("002. A missing mandatory dependency is refused even below an optional dependency", () => {
   const input = fixture();
   input.productLock.packages["node_modules/engine"].optionalDependencies = { optional: "1" };
   input.productLock.packages["node_modules/optional"] = { version: "1", dependencies: { missing: "1" } };
   assert.throws(() => isolatedLock(input), /missing.*absent from the product lock/);
 });
-test("an absent optional peer adds no root dependency", () => {
+test("003. An absent optional peer adds no root dependency", () => {
   const input = fixture();
   Object.assign(input.productLock.packages["node_modules/engine"], {
     peerDependencies: { absent: "1" }, peerDependenciesMeta: { absent: { optional: true } },

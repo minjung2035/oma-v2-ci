@@ -33,7 +33,7 @@ function fixture() {
   return { view, notices, next() { current = { config: { principalProfile: "two" }, workerProfile: "two" }; project = { snapshot: snapshot("two") }; },
     fail(value) { failed = value; } };
 }
-test("DR40: Settings read-back publishes the complete view only after extensions were observed", () => {
+test("001. Settings read-back publishes the complete view only after extensions were observed", () => {
   const f = fixture(), before = [f.view.settings, f.view.projectSettings, f.view.extensions, f.view.leftOut];
   f.next(); f.fail(true);
   assert.equal(f.view.readBack(), false);
@@ -46,7 +46,7 @@ test("DR40: Settings read-back publishes the complete view only after extensions
   assert.equal(f.view.extensions.source, "two");
   assert.equal(f.view.unread, null);
 });
-test("DR40: Failed derivation keeps the prior snapshot and reports the saved-next-start meaning once", () => {
+test("002. Failed derivation keeps the prior snapshot and reports the saved-next-start meaning once", () => {
   const f = fixture(), before = f.view.settings;
   f.next(); f.fail(true);
   assert.equal(f.view.rederive(), false); assert.equal(f.view.rederive(), false);

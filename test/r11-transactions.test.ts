@@ -32,7 +32,7 @@ function staticRejections(store: Store, reads: StoreReads): void {
 }
 void staticRejections;
 
-test("R11: root transactions issue distinct capabilities and reject escaped and foreign scope use", t => {
+test("001. Root transactions issue distinct capabilities and reject escaped and foreign scope use", t => {
   const { root, store } = fixture(t);
   let escaped: Transaction | undefined;
   store.transaction(tx => { escaped = tx; tx.insertAgent(makeValidAgent("bob")); });
@@ -54,7 +54,7 @@ test("R11: root transactions issue distinct capabilities and reject escaped and 
   for (const name of ["stale", "outside", "borrowed", "foreign", "wrong-store"]) assert.equal(store.getAgent(name), null);
 });
 
-test("R11: nested transactions remain rejected and roll back their outer writes", t => {
+test("002. Nested transactions remain rejected and roll back their outer writes", t => {
   const { store } = fixture(t);
   assert.throws(() => store.transaction(tx => {
     tx.insertAgent(makeValidAgent("nested"));
@@ -64,7 +64,7 @@ test("R11: nested transactions remain rejected and roll back their outer writes"
   assert.equal(store.inTransaction, false);
 });
 
-test("R11: runtime thenable guard rolls back untyped callers without executing arbitrary then", t => {
+test("003. Runtime thenable guard rolls back untyped callers without executing arbitrary then", t => {
   const { store } = fixture(t); let called = false;
   assert.throws(() => Reflect.apply(store.transaction, store, [() => {
     store.insertAgent(makeValidAgent("thenable"));
@@ -74,7 +74,7 @@ test("R11: runtime thenable guard rolls back untyped callers without executing a
   assert.equal(store.getAgent("thenable"), null);
 });
 
-test("R11: an already-started asynchronous continuation cannot reuse the expired capability", async t => {
+test("004. An already-started asynchronous continuation cannot reuse the expired capability", async t => {
   const { store } = fixture(t);
   let resume!: () => void;
   const pause = new Promise<void>(resolve => { resume = resolve; });
@@ -92,7 +92,7 @@ test("R11: an already-started asynchronous continuation cannot reuse the expired
   assert.equal(store.getAgent("ambient-escape"), null);
 });
 
-test("R11: only the original acceptance transaction may prepare its plan; incomplete acceptance rolls back", t => {
+test("005. Only the original acceptance transaction may prepare its plan; incomplete acceptance rolls back", t => {
   const { root, store } = fixture(t);
   const operation = makeValidOperation({ stateRoot: root, id: OP });
   store.transaction(tx => {
@@ -109,7 +109,7 @@ test("R11: only the original acceptance transaction may prepare its plan; incomp
   assert.equal(store.getOperationById(broken.id), null);
 });
 
-test("R11: identical terminal replay preserves original JSON bytes and forbids any plan/state replacement", t => {
+test("006. Identical terminal replay preserves original JSON bytes and forbids any plan/state replacement", t => {
   const { root, store } = fixture(t);
   const operation = makeValidOperation({ stateRoot: root, id: OP });
   const bytes = '{ "kind": "route.follow", "topic": "dev", "subscribed": true }';

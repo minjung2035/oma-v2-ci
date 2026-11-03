@@ -39,8 +39,8 @@ export class ReviewPreparation {
       case "review": case "vote": return this.prepareEntry(auth, input, policy, scope);
       case "review.revise": return this.prepareRevision(auth, input, policy, scope);
       case "review.retry": return this.prepareRetry(auth, input, policy, scope);
-      case "review.withdraw": case "review.invalidate": case "review.adopt":
-        return this.prepareControl(auth, input, policy, scope);
+      case "review.withdraw": case "review.invalidate":
+        return this.prepareControl(auth, input, scope);
       case "cancel": return this.prepareCancel(auth, input, scope);
       case "challenge.open": return this.prepareChallenge(auth, input, policy, scope);
     }
@@ -70,7 +70,7 @@ export class ReviewPreparation {
     if (targetState.integration === null || targetState.integration.state !== "succeeded")
       throw new StoreError("INVALID_REQUEST",
         "a challenge needs an applied merge; cancel a request that is not applied yet");
-    if (targetFact.tier === "HIGH" && input.tier !== "HIGH")
+    if (targetState.tier === "HIGH" && input.tier !== "HIGH")
       throw new StoreError("INTEGRATION_CONDITIONS", "a HIGH merge can only be challenged at HIGH");
     for (const open of this.ledger.openRequests()) {
       const existing = open.operation.plan.fact;
@@ -120,7 +120,7 @@ Challenge ${name}` });
       submitters, prepared,
       target: { name: targetFact.name, request: targetOpen.operation.id,
         integration: targetState.integration.operation, identity: { ...(targetState.integration.identity ?? targetFact.identity) },
-        tier: targetFact.tier } };
+        tier: targetState.tier } };
     const duplicate = this.ledger.duplicateChallenge(fact);
     if (duplicate !== null)
       throw new StoreError("REQUEST_EXISTS", "an applied or identical challenge already covers this merge",
@@ -193,7 +193,7 @@ Challenge ${name}` });
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
     const inputFor = this.ledger.inputFor(open);
     const before = reviewState(inputFor);
-    if (before.terminal !== null || before.integration !== null)
+    if (before.terminal !== null || before.included !== null || before.integration !== null)
       throw new StoreError("REQUEST_CLOSED", `request ${input.name} is ${before.display}`,
         { details: { name: input.name, state: before.display } });
     const agent = assertCurrentActor(this.store, auth, "mail.send");
@@ -236,34 +236,21 @@ Challenge ${name}` });
       authorSlots: this.store.listAgents().filter(agent => agent.role === "resident" && agent.desired === "enabled" && authors.has(agent.name)).length };
   }
   private async prepareControl(auth: AuthContext,
-      input: Extract<ReviewInput, { kind: "review.withdraw" | "review.invalidate" | "review.adopt" }>,
-      policy: IntegrationSnapshot, scope: PreacceptScope): Promise<PreparedReview> {
+      input: Extract<ReviewInput, { kind: "review.withdraw" | "review.invalidate" }>,
+      scope: PreacceptScope): Promise<PreparedReview> {
     const actor = assertCurrentActor(this.store, auth, "mail.send");
     const open = this.ledger.requestByName(input.name);
     if (!open || !isOpenFact(open.operation.plan.fact)) throw new StoreError("INVALID_REQUEST", "unknown review request");
     const fact = open.operation.plan.fact, inputFor = this.ledger.inputFor(open), before = reviewState(inputFor);
-    if (before.terminal !== null || (before.integration !== null && !(input.kind === "review.adopt" && before.integration.state === "failed") && !(["review.withdraw", "review.invalidate"].includes(input.kind) && before.integration.state === "pending")))
+    if (before.terminal !== null || before.included !== null || (before.integration !== null && before.integration.state !== "pending"))
       throw new StoreError("REQUEST_CLOSED", "settle the current integration before changing review authority");
-    let control: ReviewFact;
-    if (input.kind === "review.adopt") {
-      if (auth.actor !== before.requester && !(auth.channel === "host" && actor.role === "principal"))
-        throw new StoreError("CAPABILITY_DENIED", "only the requester or host adopts a legacy review");
-      const submitters = [...this.effects.submitters(before.sourceIdentity.expectedBase,before.sourceIdentity.candidate)].sort();
-      if (fact.version !== 1 && before.sourceIdentity.policyRevision === policy.policyRevision &&
-          JSON.stringify(submitters) === JSON.stringify(before.sourceSubmitters))
-        throw new StoreError("INVALID_REQUEST", "review already uses current policy and provenance");
-      control = {kind:input.kind,version:3,request:before.request,revision:before.revision,attemptNumber:before.attemptNumber+1,
-        identity:{...before.sourceIdentity,policyRevision:policy.policyRevision},submitters,
-        reviewPolicy:this.reviewPolicy(before.requester,submitters,policy),reason:input.reason};
-    } else {
-      const vote = inputFor.entries.find(entry => entry.operation === input.vote && entry.fact.kind === "vote");
-      if (!vote) throw new StoreError("INVALID_REQUEST", "vote does not belong to this request");
-      if (input.kind === "review.invalidate") {
-        if (auth.channel !== "host" || actor.role !== "principal")
-          throw new StoreError("CAPABILITY_DENIED", "only the authenticated host invalidates another actor's vote");
-      } else if (vote.actor !== auth.actor) throw new StoreError("CAPABILITY_DENIED", "only the reviewer withdraws their vote");
-      control = { kind: input.kind, version: 2, request: open.operation.id, vote: input.vote, reason: input.reason };
-    }
+    const vote = inputFor.entries.find(entry => entry.operation === input.vote && entry.fact.kind === "vote");
+    if (!vote) throw new StoreError("INVALID_REQUEST", "vote does not belong to this request");
+    if (input.kind === "review.invalidate") {
+      if (auth.channel !== "host" || actor.role !== "principal")
+        throw new StoreError("CAPABILITY_DENIED", "only the authenticated host invalidates another actor's vote");
+    } else if (vote.actor !== auth.actor) throw new StoreError("CAPABILITY_DENIED", "only the reviewer withdraws their vote");
+    const control: ReviewFact = { kind: input.kind, version: 2, request: open.operation.id, vote: input.vote, reason: input.reason };
     return this.finishEntry(auth, input, open, fact, inputFor, before, control, scope);
   }
 
@@ -297,15 +284,15 @@ Challenge ${name}` });
     const openFact = open.operation.plan.fact, inputFor = this.ledger.inputFor(open), before = reviewState(inputFor);
     if (auth.actor !== before.requester && !host) throw new StoreError("CAPABILITY_DENIED", "only the requester or host retries integration");
     if ((input.expectedRevision ?? 0) !== before.revision) throw new StoreError("INVALID_REQUEST", "expectedRevision is no longer current");
-    if (before.terminal !== null) throw new StoreError("REQUEST_CLOSED", "terminal review requests cannot be retried");
+    if (before.terminal !== null || before.included !== null) throw new StoreError("REQUEST_CLOSED", "terminal review requests cannot be retried");
+    if (before.preparationFailure?.code === "REVERT_CONFLICT")
+      throw new StoreError("REVERT_CONFLICT", "revise the proposal to resolve its integration conflict");
     if (before.integration?.state === "unknown" || before.integration?.state === "pending")
       throw new StoreError("REF_STATE_UNKNOWN", "observe the existing attempt; it is not safe to create another");
     if (before.integration?.state === "succeeded" || (before.integration === null && before.preparationFailure === null))
       throw new StoreError("INVALID_REQUEST", "retry requires a settled failure");
     if ((before.integration?.operation ?? null) !== input.expectedAttempt)
       throw new StoreError("INVALID_REQUEST", "expectedAttempt is no longer current");
-    if (openFact.version === 1 && !inputFor.entries.some(entry => entry.fact.kind === "review.adopt"))
-      throw new StoreError("INVALID_REQUEST", "explicitly adopt the legacy review before retry");
     if (policy.policyRevision !== before.identity.policyRevision)
       throw new StoreError("POLICY_CHANGED", "review and current integration policy differ");
     this.observeCandidate(before.sourceIdentity.expectedBase, before.sourceIdentity.candidate, policy);
@@ -327,7 +314,7 @@ Challenge ${name}` });
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
     const inputFor = this.ledger.inputFor(open);
     const before = reviewState(inputFor);
-    if (before.terminal !== null)
+    if (before.terminal !== null || before.included !== null)
       throw new StoreError("REQUEST_CLOSED", `request ${input.name} is ${before.display}`,
         { details: { name: input.name, state: before.display } });
     const agent = assertCurrentActor(this.store, auth, "mail.send");
@@ -357,7 +344,7 @@ Challenge ${name}` });
     const id = this.effects.nextOperationId();
     const lastSequence = inputFor.entries.at(-1)?.sequence ?? inputFor.open.sequence;
     const newEntry: ReviewEntry = { sequence: lastSequence + 1, operation: id, actor: auth.actor, fact, messages: [] };
-    const after0 = reviewState({ ...inputFor, ...((fact.kind === "review.retry" || fact.kind === "review.revise" || (fact.kind === "review.adopt" && fact.version === 3)) ? { integration: null } : {}), entries: [...inputFor.entries, newEntry] });
+    const after0 = reviewState({ ...inputFor, ...((fact.kind === "review.retry" || fact.kind === "review.revise") ? { integration: null } : {}), entries: [...inputFor.entries, newEntry] });
     const effects = planEffects(before, after0);
     const decision = fact.kind === "vote" && auth.actor === PRINCIPAL && input.kind === "vote"
       ? { approval: input.approval!, verdict: fact.verdict, body: fact.body } : null;

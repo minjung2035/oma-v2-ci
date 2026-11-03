@@ -4,6 +4,7 @@ import { getSystemErrorName } from "node:util";
 import { decode, errno, load } from "koffi";
 
 let native: ReturnType<typeof initialize> | undefined;
+let exclusiveRename: ((from: number, source: string, to: number, name: string, flags: number) => number) | undefined;
 function initialize() {
   if (process.platform !== "linux" && process.platform !== "darwin")
     throw new Error("descriptor operations require Linux or Darwin");
@@ -19,6 +20,15 @@ function initialize() {
 }
 function descriptor(fd: number): void {
   if (!Number.isSafeInteger(fd) || fd < 0) throw new TypeError("invalid directory descriptor");
+}
+/** Atomic publication of one complete entry; EEXIST preserves the winner. */
+export function renameExclusiveAt(from: number, source: string, to: number, name: string): void {
+  entry(from, source); entry(to, name);
+  if (process.platform !== "linux" && process.platform !== "darwin") throw new Error("exclusive rename requires Linux or Darwin");
+  exclusiveRename ??= load(null).func(process.platform === "linux"
+    ? "int renameat2(int from, const char *source, int to, const char *name, unsigned int flags)"
+    : "int renameatx_np(int from, const char *source, int to, const char *name, unsigned int flags)");
+  checked(exclusiveRename(from, source, to, name, process.platform === "linux" ? 1 : 4));
 }
 function entry(fd: number, name: string): void {
   descriptor(fd);

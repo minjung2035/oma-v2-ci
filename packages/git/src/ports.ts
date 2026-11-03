@@ -27,6 +27,7 @@ export interface GitLedger {
   findSucceededIntegration?(candidate: Oid): OperationOf<"git.integrate"> | null;
   findSucceededContext(revision: Oid): OperationOf<"context.publish"> | null;
   submissions(): readonly OperationOf<"git.submit">[];
+  attachmentRoots?(): readonly (OperationOf<"mail.send"> | OperationOf<"agent.create">)[];
   transaction<T>(body: (tx: GitTransaction) => SynchronousResult<T>): T;
 }
 export interface GitMessaging {

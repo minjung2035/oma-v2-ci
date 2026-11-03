@@ -22,7 +22,7 @@ import type { ExecutionObservation } from "@oma/contracts";
 
 const UUID = "0123abcd-0000-4000-8000-00000000beef";
 
-test("P0V-111 / G01-01: a publication collects every dead locked temporary in its directory, whatever name it was for", t => {
+test("001. A publication collects every dead locked temporary in its directory, whatever name it was for", t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-collect-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   // A receipt whose publication was killed and that is never published again.
@@ -39,7 +39,7 @@ test("P0V-111 / G01-01: a publication collects every dead locked temporary in it
   assert.deepEqual(readdirSync(dir).sort(), [live, `.config.json.${UUID}.tmp`, "other.json"].sort());
 });
 
-test("P0V-111 / G01r2-02: a derived link's publication removes what a killed one of the same link left", t => {
+test("002. A derived link's publication removes what a killed one of the same link left", t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-link-"));
   t.after(() => { rmSync(dir, { recursive: true, force: true }); });
   symlinkSync("revisions/a", join(dir, `.current.${UUID}.tmp`));
@@ -59,7 +59,7 @@ function session(entries: readonly { call: string; tool: string; args: Record<st
   return { sessionManager: { getSessionId: () => "session-1", getBranch: () => branch } };
 }
 
-test("P0V-110 / F-07: a call repeated after its result was lost has the key of the first; after a result the model saw, a new one", () => {
+test("003. A call repeated after its result was lost has the key of the first; after a result the model saw, a new one", () => {
   const args = { to: ["bob"], subject: "hi", body: "the same letter" };
   const send = (id: string, context: ReturnType<typeof session>) => requestKeyOf(undefined, { id, tool: "oma_mail_send", params: args, context });
   // The first call; the engine died before its result was recorded.
@@ -87,7 +87,7 @@ test("P0V-110 / F-07: a call repeated after its result was lost has the key of t
   assert.match(first, /^pi-[0-9a-f]{40}$/);
 });
 
-test("P0V-112 / G02-ledger-r2-02: request metadata larger than a request and its receipt can be is not read, and is not taken for absent", t => {
+test("004. Request metadata larger than a request and its receipt can be is not read, and is not taken for absent", t => {
   const home = mkdtempSync(join(tmpdir(), "oma-cache-bound-"));
   t.after(() => { rmSync(home, { recursive: true, force: true }); });
   const dir = join(home, ".local", "state", "oma", "requests");
@@ -102,7 +102,7 @@ test("P0V-112 / G02-ledger-r2-02: request metadata larger than a request and its
   assert.equal(new RequestCache(home).read("k1").kind, "corrupt", "under the reference bound it is read, and still not a request this cache wrote");
 });
 
-test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the incarnation where it was, and its endpoint closed", async t => {
+test("005. A run that could not be opened leaves the incarnation where it was, and its endpoint closed", async t => {
   const { Broker } = await import("@oma/broker");
   const { LifecycleModule } = await import("@oma/lifecycle");
   const { ViewsModule } = await import("#oma-test/app/views");
@@ -214,7 +214,7 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   assert.equal(servers(), 0);
 });
 
-test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before a server listens there; a name already gone is no failure, and a file that is not a socket is kept", async t => {
+test("006. One owner clears a socket's name before a server listens there; a name already gone is no failure, and a file that is not a socket is kept", async t => {
   const { spawnSync } = await import("node:child_process");
   const { existsSync, lstatSync, readFileSync } = await import("node:fs");
   const { clearSocketName } = await import("@oma/storage/socket-name");
@@ -233,7 +233,7 @@ test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before 
   assert.equal(readFileSync(path, "utf8"), "not a socket");
 });
 
-test("P0V-114 / G04-03: a server's close removes its own name, and not a name the next server bound meanwhile", async t => {
+test("007. A server's close removes its own name, and not a name the next server bound meanwhile", async t => {
   const { createServer } = await import("node:net");
   const { existsSync } = await import("node:fs");
   const { InferenceRelay } = await import("#oma-test/app/runtime/inference-relay");
@@ -251,7 +251,7 @@ test("P0V-114 / G04-03: a server's close removes its own name, and not a name th
   assert.equal(existsSync(path), true, "a closed forwarder removed the next server's name");
 });
 
-test("P0V-114 / G04-01: what a tenure holds ends with it, before the society is free; one handed over after the end is closed at once", async t => {
+test("008. What a tenure holds ends with it, before the society is free; one handed over after the end is closed at once", async t => {
   const { HostTenure } = await import("#oma-test/app/runtime/host-tenure");
   const { tryHoldSociety } = await import("#oma-test/app/runtime/society-lease");
   const root = mkdtempSync(join(tmpdir(), "oma-tenure-"));
@@ -275,7 +275,7 @@ test("P0V-114 / G04-01: what a tenure holds ends with it, before the society is 
 });
 
 
-test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches it, and is not observed as absent or as the expected value", async () => {
+test("009. A word git could read as an option never reaches it, and is not observed as absent or as the expected value", async () => {
   const { GitObserver } = await import("@oma/git/observe");
   const { compareAndSwapCanonicalRef, createCanonicalRef } = await import("@oma/git/canonical-command");
   const runs: string[][] = [];
@@ -297,7 +297,7 @@ test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches
   assert.equal(runs.length, 2);
 });
 
-test("P0V-117 / G07-01: a descriptor that is not a pidfd is no answer about a process, not an exited one", async () => {
+test("010. A descriptor that is not a pidfd is no answer about a process, not an exited one", async () => {
   const { pidfdLiveness } = await import("@oma/native/linux");
   // /dev/null polls readable, exactly as a pidfd of an exited process does.
   const fd = openSync("/dev/null", "r");
@@ -306,7 +306,7 @@ test("P0V-117 / G07-01: a descriptor that is not a pidfd is no answer about a pr
   assert.deepEqual(pidfdLiveness(fd), { kind: "failed", errno: 9 }, "a closed number is no answer either");
 });
 
-test("P0V-118 / G07-02, G07-03: a message's values are refused as the request they are; a header block is judged by one rule in either form", async () => {
+test("011. A message's values are refused as the request they are; a header block is judged by one rule in either form", async () => {
   const { buildEml } = await import("@oma/mail/serialize");
   const { parseEmlHeaders } = await import("@oma/mail/headers");
   const id = "m-00000000-0000-4000-8000-000000000118-0";
@@ -322,7 +322,7 @@ test("P0V-118 / G07-02, G07-03: a message's values are refused as the request th
   assert.throws(() => parseEmlHeaders("Subject: \ud800\r\n\r\n"), { code: "INVALID_REQUEST" });
 });
 
-test("P0V-119 / G08-01, G09-01, G09-02: JSON nested past one named bound is refused as a request, by the parser and by the codec, never as a stack overflow", async () => {
+test("012. JSON nested past one named bound is refused as a request, by the parser and by the codec, never as a stack overflow", async () => {
   const { JSON_NESTING_LIMIT, canonicalJson, snapshotJson } = await import("@oma/domain/canonical-json");
   const { parseJsonObject, FrameError } = await import("@oma/protocol/frame");
   const { decodeMutationPayload } = await import("@oma/protocol/request-codec");
@@ -344,7 +344,7 @@ test("P0V-119 / G08-01, G09-01, G09-02: JSON nested past one named bound is refu
   }
 });
 
-test("G08-03: the canonical spelling of numbers is Number::toString, held by golden vectors", async () => {
+test("013. The canonical spelling of numbers is Number::toString, held by golden vectors", async () => {
   const { canonicalJson, sha256Hex } = await import("@oma/domain/canonical-json");
   assert.equal(canonicalJson([0, -0, 1, -1, 1.5, 0.1 + 0.2, 1e21, 1e-7, 5e-324, 1.7976931348623157e308, 9007199254740991, 123e-20, 100, 2 ** 53]),
     "[0,0,1,-1,1.5,0.30000000000000004,1e+21,1e-7,5e-324,1.7976931348623157e+308,9007199254740991,1.23e-18,100,9007199254740992]");
@@ -354,7 +354,7 @@ test("G08-03: the canonical spelling of numbers is Number::toString, held by gol
   assert.equal(sha256Hex(document), "485a45b66e22b875f2cf59f3b982deae7045941126f6f58a95e83413933637d7");
 });
 
-test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no one's while it has none, then the one the kernel gave it", async t => {
+test("014. The provider names only a port the bridge holds -- no one's while it has none, then the one the kernel gave it", async t => {
   const { createServer, connect } = await import("node:net");
   const { startInferenceBridge } = await import("@oma/extension/inference-bridge");
   const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
@@ -386,7 +386,7 @@ test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no on
 });
 
 
-test("P0V-122 / G10-02: the pinned engine searches only copied single-link files, including context-zero grep", async t => {
+test("015. The pinned engine searches only copied single-link files, including context-zero grep", async t => {
   const { readFileSync, realpathSync } = await import("node:fs");
   const { containWorkspaceTools } = await import("@oma/tool-runtime/contained-tools");
   const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-grep-")));
@@ -422,7 +422,7 @@ test("P0V-122 / G10-02: the pinned engine searches only copied single-link files
   }
 });
 
-test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the request was handled is an unknown outcome, asked again under the same key", async t => {
+test("016. An answer too large to send after the request was handled is an unknown outcome, asked again under the same key", async t => {
   const { EventEmitter } = await import("node:events");
   const { RpcConnection } = await import("@oma/broker/connection");
   const { SharedPeerPin } = await import("@oma/broker/peer-pin");
@@ -451,7 +451,7 @@ test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the requ
 });
 
 
-test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its one clock, clamped where it steps back", async t => {
+test("017. Every row a store writes is stamped from its one clock, clamped where it steps back", async t => {
   const { Store } = await import("@oma/storage");
   const { makeValidAgent } = await import("./fixtures/spec.js");
   const root = mkdtempSync(join(tmpdir(), "oma-clock-"));

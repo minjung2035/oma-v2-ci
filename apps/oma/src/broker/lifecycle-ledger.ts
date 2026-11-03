@@ -5,6 +5,7 @@ import type { LifecycleLedger, LifecycleTransaction } from "@oma/lifecycle/ports
 export function lifecycleLedger(store: Store): LifecycleLedger {
   return Object.freeze({
     getAgent: actor => store.getAgent(actor), listAgents: () => store.listAgents(),
+    get inTransaction() { return store.inTransaction; }, observationStamp: () => store.observationStamp(),
     societyOpen: () => store.societyOpen(),
     claimKey: (actor, key, hash) => store.claimKey(actor, key, hash),
     retriedOperation: (actor, key) => store.retriedOperation(actor, key),

@@ -9,7 +9,7 @@ import { parseOmaArguments } from "#oma-test/app/runtime/host-arguments";
 import { packageCommand } from "#oma-test/app/runtime/packages/store";
 
 const project = "00000000-0000-4000-8000-000000000001";
-test("Personal project inheritance can be explicitly skipped only for a fresh Personal session", () => {
+test("001. Personal project inheritance can be explicitly skipped only for a fresh Personal session", () => {
   for (const parse of [parseOmaArguments]) {
     assert.deepEqual(parse(["--mode", "personal", "--no-project-extensions"]),
       { kind: "session", society: undefined, config: undefined, bindProject: false, mode: "personal", noProjectExtensions: true });
@@ -18,7 +18,7 @@ test("Personal project inheritance can be explicitly skipped only for a fresh Pe
       assert.throws(() => parse(args), { code: "INVALID_REQUEST" });
   }
 });
-test("DR27: Linux host values cannot become options; package tails retain their own grammar", () => {
+test("002. Linux host values cannot become options; package tails retain their own grammar", () => {
   assert.deepEqual(parseOmaArguments(["--config", "--help", "--society", "demo", "--bind-project"]),
     { kind: "session", config: "--help", society: "demo", bindProject: true });
   assert.deepEqual(parseOmaArguments(["pi", "install", "--help"]), { kind: "pi", args: ["install", "--help"] });
@@ -31,7 +31,7 @@ test("DR27: Linux host values cannot become options; package tails retain their 
     assert.throws(() => parseOmaArguments(args), { code: "INVALID_REQUEST" }, JSON.stringify(args));
 });
 
-test("session modes: only an explicit birth choice changes the default", () => {
+test("003. Session modes: only an explicit birth choice changes the default", () => {
   const ordinary = parseOmaArguments([]);
   assert.deepEqual(ordinary, { kind: "session", society: undefined, config: undefined, bindProject: false });
   for (const mode of ["society", "personal"])
@@ -43,7 +43,7 @@ test("session modes: only an explicit birth choice changes the default", () => {
     assert.throws(() => parseOmaArguments(args), { code: "INVALID_REQUEST" }, JSON.stringify(args));
 });
 
-test("Personal resume refuses a non-OMA history before preparing any state", () => {
+test("004. Personal resume refuses a non-OMA history before preparing any state", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-personal-invalid-resume-"));
   try {
     const data = join(root, "data"), home = join(root, "home"), run = join(root, "run");
@@ -56,9 +56,18 @@ test("Personal resume refuses a non-OMA history before preparing any state", () 
 });
 
 
-test("explicit archive is a host-only command with an exact existing Society selector",()=>{
+test("005. Explicit archive is a host-only command with an exact existing Society selector",()=>{
   assert.deepEqual(parseOmaArguments(["archive","--society","demo","--config","/tmp/config.json"]),
     {kind:"archive",society:"demo",config:"/tmp/config.json"});
   for(const args of [["archive"],["archive","--society","../demo"],["archive","--society","demo","--mode","personal"],
     ["archive","--society","demo","--resume","x"]])assert.throws(()=>parseOmaArguments(args),{code:"INVALID_REQUEST"});
+});
+
+test("006. Only explicit current surface syntax is admitted; omission is not activation and legacy cannot be selected", () => {
+  const ordinary = { kind: "session", society: undefined, config: undefined, bindProject: false };
+  assert.deepEqual(parseOmaArguments([]), ordinary);
+  assert.deepEqual(parseOmaArguments(["--surface", "collaboration-v1"]), { ...ordinary, surface: "collaboration-v1" });
+  for (const value of ["legacy", "version-2", "", "COLLABORATION-V1"])
+    assert.throws(() => parseOmaArguments(["--surface", value]), { code: "INVALID_REQUEST" });
+  assert.throws(() => parseOmaArguments(["--mode", "personal", "--surface", "collaboration-v1"]), { code: "INVALID_REQUEST" });
 });

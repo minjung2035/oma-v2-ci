@@ -54,7 +54,7 @@ function fixture() {
 }
 const selection = f => JSON.parse(readFileSync(join(f.stateRoot, "session-storage.json"), "utf8"));
 
-test("session storage restores Git index, local refs, dirty/ignored files, modes, links and runner history", async () => {
+test("001. Session storage restores Git index, local refs, dirty/ignored files, modes, links and runner history", async () => {
   const f = fixture();
   try {
     const a = f.society("first");
@@ -75,7 +75,7 @@ test("session storage restores Git index, local refs, dirty/ignored files, modes
   } finally { f.close(); }
 });
 
-test("session storage shares one repository across sessions and preserves independently restored changes", async t => {
+test("002. Session storage shares one repository across sessions and preserves independently restored changes", async t => {
   const f = fixture();
   try {
     const a = f.society("first"), b = f.society("second");
@@ -93,7 +93,7 @@ test("session storage shares one repository across sessions and preserves indepe
   } finally { f.close(); }
 });
 
-test("unknown native death retains original workspaces and prevents cold restoration", async () => {
+test("003. Unknown native death retains original workspaces and prevents cold restoration", async () => {
   const f = fixture();
   try {
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
@@ -104,7 +104,7 @@ test("unknown native death retains original workspaces and prevents cold restora
   } finally { f.close(); }
 });
 
-test("changed ledger or lost checkpoint fails closed without provisioning new repositories", async () => {
+test("004. Changed ledger or lost checkpoint fails closed without provisioning new repositories", async () => {
   const f = fixture();
   try {
     const a = f.society("first"); await a.storage.archive(a.residents);
@@ -123,7 +123,7 @@ test("changed ledger or lost checkpoint fails closed without provisioning new re
   } finally { f.close(); }
 });
 
-test("missing tool leaves a hot workspace intact and refuses an archived session", async () => {
+test("005. Missing tool leaves a hot workspace intact and refuses an archived session", async () => {
   const f = fixture();
   try {
     const a = f.society("first");
@@ -135,7 +135,7 @@ test("missing tool leaves a hot workspace intact and refuses an archived session
   } finally { f.close(); }
 });
 
-test("corrupted backup data never replaces a partial cold cache", async () => {
+test("006. Corrupted backup data never replaces a partial cold cache", async () => {
   const f = fixture();
   try {
     const a = f.society("first"); await a.storage.archive(a.residents);
@@ -150,7 +150,7 @@ test("corrupted backup data never replaces a partial cold cache", async () => {
   } finally { f.close(); }
 });
 
-test("failure after cold commit and partial reclamation recovers the exact checkpoint", async () => {
+test("007. Failure after cold commit and partial reclamation recovers the exact checkpoint", async () => {
   const f = fixture(), original = fs.fsyncSync;
   try {
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
@@ -173,7 +173,7 @@ test("failure after cold commit and partial reclamation recovers the exact check
   } finally { fs.fsyncSync = original; syncBuiltinESMExports(); f.close(); }
 });
 
-test("interrupted publication keeps cold selection and recovers without replaying partial cache", async () => {
+test("008. Interrupted publication keeps cold selection and recovers without replaying partial cache", async () => {
   const f = fixture(), original = fs.fsyncSync;
   try {
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
@@ -199,7 +199,7 @@ test("interrupted publication keeps cold selection and recovers without replayin
   } finally { fs.fsyncSync = original; syncBuiltinESMExports(); f.close(); }
 });
 
-test("unreadable files and extended attributes retain the complete original workspace", async () => {
+test("009. Unreadable files and extended attributes retain the complete original workspace", async () => {
   const f = fixture();
   try {
     const a = f.society("first"), file = join(a.workspace, "ignored/secret");
@@ -212,7 +212,7 @@ test("unreadable files and extended attributes retain the complete original work
   } finally { f.close(); }
 });
 
-test("repository initialization retries an interrupted credential publication using the same key", async () => {
+test("010. Repository initialization retries an interrupted credential publication using the same key", async () => {
   const f = fixture();
   try {
     const a = f.society("first"), key = "1".repeat(64) + "\n";
@@ -225,7 +225,7 @@ test("repository initialization retries an interrupted credential publication us
   } finally { f.close(); }
 });
 
-test("a lost cold repository credential is never replaced with a new key", async () => {
+test("011. A lost cold repository credential is never replaced with a new key", async () => {
   const f = fixture();
   try {
     const a = f.society("first"); await a.storage.archive(a.residents);
@@ -235,7 +235,7 @@ test("a lost cold repository credential is never replaced with a new key", async
   } finally { f.close(); }
 });
 
-test("read-only inspection of a cold SQLite DB may create an empty WAL without stranding its workspace", async () => {
+test("012. Read-only inspection of a cold SQLite DB may create an empty WAL without stranding its workspace", async () => {
   const f = fixture();
   try {
     const a = f.society("first"), database = join(a.stateRoot, "runtime.sqlite"); rmSync(database);
@@ -257,7 +257,7 @@ test("read-only inspection of a cold SQLite DB may create an empty WAL without s
 });
 
 
-test("IMP-C05: default hot close/resume reads no payload, hashes no trees and starts no restic", async () => {
+test("013. Default hot close/resume reads no payload, hashes no trees and starts no restic", async () => {
   const f=fixture(); const original=fs.readSync;
   try {
     const a=f.society("hot"); writeFileSync(join(a.workspace,"ignored/large"),Buffer.alloc(32*1024*1024,42));
@@ -275,7 +275,7 @@ test("IMP-C05: default hot close/resume reads no payload, hashes no trees and st
   } finally {fs.readSync=original;syncBuiltinESMExports();f.close();}
 });
 
-test("IMP-C06: same-session archive/resume and separate storage objects cannot overlap",async()=>{
+test("014. Same-session archive/resume and separate storage objects cannot overlap",async()=>{
   const f=fixture();
   try {
     const a=f.society("race");let release;const gate=new Promise(resolve=>release=resolve);let entered;
@@ -292,7 +292,7 @@ test("IMP-C06: same-session archive/resume and separate storage objects cannot o
   }finally{f.close();}
 });
 
-test("IMP-C07: legacy cold selection remains readable, checkpoint bytes unchanged",async()=>{
+test("015. Legacy cold selection remains readable, checkpoint bytes unchanged",async()=>{
   const f=fixture();try{
     const a=f.society("legacy");await a.storage.archive(a.residents);const checkpoint=selection(a).checkpoint;
     const immutable=readFileSync(join(a.stateRoot,"session-checkpoints",checkpoint.snapshot+".json"));

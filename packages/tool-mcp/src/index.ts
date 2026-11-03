@@ -7,10 +7,11 @@
  * hooks retain upstream connection and cleanup ownership. */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { buildChildEnv, egressProxyValue } from "@oma/tool-runtime/child-env";
+import { ensurePrivateStateDirectory, privateStateKey, removePrivateStateTree } from "@oma/tool-runtime/private-state";
 import { SDK_STDIO_ENV_UNDERLAY } from "./mcp-sdk-env.js";
 import { vendoredBundleDir, verifyVendorBundle } from "@oma/tool-runtime/vendor-bundle";
 // Type-only: erased at compile, so this never evaluates the vendored
@@ -85,6 +86,13 @@ function configError(detail: string): Error {
   return new Error(`[E_OMA_MCP_CONFIG] ${detail}`);
 }
 
+/** The pinned SDK passes this value directly to Node's timer. Reject an
+ * unserviceable budget instead of letting Node turn it into a 1ms deadline. */
+function validateRequestTimeout(value: unknown, field: string): void {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0x7fffffff)
+    throw configError(`${field} exceeds the MCP SDK timer limit (2147483647ms)`);
+}
+
 /** A `!value` string marks an upstream command-secret sink (a spawned
  * shell); `!!` is the upstream literal escape and stays harmless. */
 function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
@@ -95,6 +103,9 @@ function normalizeServer(name: string, raw: unknown): Record<string, unknown> {
   const entry = raw as Record<string, unknown>;
   for (const key of Object.keys(entry))
     if (!ALLOWED_SERVER_KEYS.has(key)) throw configError(`server ${JSON.stringify(name)}: key ${JSON.stringify(key)} is not permitted`);
+  validateRequestTimeout(entry.requestTimeoutMs, `server ${JSON.stringify(name)}: requestTimeoutMs`);
+  if (entry.exposeResources !== undefined && entry.exposeResources !== false)
+    throw configError(`server ${JSON.stringify(name)}: resource exposure is disabled`);
 
   const kinds = [entry.command, entry.url, entry.socket].filter(v => v !== undefined).length;
   if (kinds > 1) throw configError(`server ${JSON.stringify(name)}: command, url and socket are mutually exclusive`);
@@ -144,6 +155,7 @@ function normalizeSettings(raw: unknown, interactive: boolean, stateDir: string)
   const file = (raw ?? {}) as Record<string, unknown>;
   for (const key of Object.keys(file))
     if (!ALLOWED_SETTINGS.has(key)) throw configError(`settings.${key} is not permitted`);
+  validateRequestTimeout(file.requestTimeoutMs, "settings.requestTimeoutMs");
   if (!interactive && (file.sampling === true || file.elicitation === true))
     throw configError("settings.sampling/elicitation require an interactive role");
   // OMA pins -- some of these are upstream defaults already, but a file or
@@ -215,35 +227,6 @@ function withSdkEnvTombstones(env: Record<string, string>): Record<string, strin
   return out;
 }
 
-function ensurePrivateDir(path: string): void {
-  mkdirSync(path, { recursive: true, mode: 0o700 });
-  if (process.platform !== "win32") chmodSync(path, 0o700);
-}
-
-/** The encrypted-file store key: persisted under the OMA state dir when
- * one exists, else generated per process (matching the memory store the
- * ephemeral policy falls back to). Never an env read. */
-function oauthFileKey(stateDir: string): string {
-  const keyPath = join(stateDir, "oauth-file-key");
-  let raw: string | undefined;
-  try {
-    raw = readFileSync(keyPath, "utf8").trim();
-  } catch (error) {
-    // Absent means ENOENT only: an unreadable key file must refuse, never
-    // rotate a fresh key that silently orphans the sealed store.
-    if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") raw = undefined;
-    else throw error;
-  }
-  if (raw !== undefined) {
-    // Canonical base64 of exactly 32 bytes -- the same contract upstream's
-    // own encrypted-file store enforces.
-    if (/^[A-Za-z0-9+/]{43}=$/.test(raw)) return raw;
-    throw new Error(`[E_OMA_MCP_STATE] ${keyPath} is not a canonical 32-byte base64 key`);
-  }
-  const key = randomBytes(32).toString("base64");
-  writeFileSync(keyPath, `${key}\n`, { encoding: "utf8", mode: 0o600 });
-  return key;
-}
 
 /* ------------------------------------------------------------------ */
 /* The facade.                                                          */
@@ -357,16 +340,17 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   const stateDir = durable
     ? join(agentRoot as string, "mcp-adapter")
     : join(tmpdir(), `oma-mcp-${process.pid}-${randomBytes(4).toString("hex")}`);
-  ensurePrivateDir(stateDir);
-  const scratchDir = join(stateDir, "scratch");
+  ensurePrivateStateDirectory(stateDir);
+  ensurePrivateStateDirectory(join(stateDir, "oauth"));
+  const scratchDir = join(stateDir, `scratch-engine-${process.pid}-${randomBytes(8).toString("hex")}`);
   const resetScratch = () => {
-    rmSync(scratchDir, { recursive: true, force: true });
-    ensurePrivateDir(scratchDir);
-    ensurePrivateDir(join(scratchDir, "spill"));
+    removePrivateStateTree(scratchDir);
+    ensurePrivateStateDirectory(scratchDir);
+    ensurePrivateStateDirectory(join(scratchDir, "spill"));
   };
   resetScratch();
   // An ephemeral state dir is removed with the process.
-  if (!durable) process.on("exit", () => rmSync(stateDir, { recursive: true, force: true }));
+  if (!durable) process.on("exit", () => removePrivateStateTree(stateDir));
 
   // The OMA-owned config: the explicit option wins; else the OMA-owned
   // file <agentDir>/mcp-adapter.json, read by OMA itself -- upstream's config
@@ -404,11 +388,11 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   // the OMA state dir when the deployment is durable; memory-only when it
   // is not -- the OS keyring is unreachable either way.
   const authStore: "memory" | "encrypted-file" = durable ? "encrypted-file" : "memory";
-  const oauthKey = durable ? oauthFileKey(stateDir) : undefined;
+  const oauthKey = durable ? privateStateKey(stateDir, "oauth-file-key") : undefined;
 
   // The OMA contract inside the vendored runtime -- installed before the
-  // factory runs, deny-by-default: no permit is set, so `!command` secret
-  // sinks, browser opening and the OS keyring all refuse; the ambient-env
+  // factory runs. Explicit credential commands and browser opening are
+  // permitted below; host keyring discovery remains disabled. The ambient-env
   // view is empty, so operator-exported knobs (MCP_DIRECT_TOOLS,
   // MCP_OAUTH_*, NPM_CONFIG_CACHE, BROWSER, SYSTEMONE_*, the
   // PI_MCP_ADAPTER_* selectors) cannot reach vendored code.
@@ -426,17 +410,32 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   };
   utils.omaInstallMcpPolicy(policy);
 
-  // The lifecycle scratch: children inherit HOME/XDG/TMP pointing at it,
-  // so per-session respawn means a fresh HOME; the session's shutdown
-  // removes it after upstream's owner has killed the children.
+  // The lifecycle scratch: children inherit HOME/XDG/TMP pointing at it, so
+  // per-session respawn means a fresh HOME. The start hook registers before
+  // the vendored factory so the fresh scratch exists before any eager server
+  // can spawn into it.
   pi.on("session_start", () => resetScratch());
-  pi.on("session_shutdown", () => rmSync(scratchDir, { recursive: true, force: true }));
 
   const vendored = await import("./vendor/pi-mcp-adapter/runtime/index.js") as VendoredIndex;
   dropped.length = 0;
   const registered = new Set<string>();
   const factory = vendored.createMcpAdapter({ config, ...(durable ? { configPath: join(agentRoot as string, MCP_CONFIG_FILE_NAME) } : {}) });
   factory(mcpFacade(pi, registered));
+
+  // The shutdown removal registers after the factory so Pi's sequential,
+  // registration-ordered session_shutdown dispatch runs upstream's own hook
+  // first: that hook stops the runtime owner and awaits transport close
+  // (upstream StdioClientTransport.close waits for the child's `close` event
+  // after stdin EOF/SIGTERM), so on the normal path every stdio child has
+  // observably exited before this removal. Registered before the factory, the
+  // scratch was deleted while a live child still held it -- the child
+  // recreated HOME/TMP after removal, and the next session inherited that
+  // residue. Residual vendor seam, not an OMA ordering claim: close()'s
+  // SIGKILL fallback in the vendored
+  // @modelcontextprotocol/client dist/stdio.mjs:194-196 only delivers the
+  // signal without awaiting close/exit, so an unobserved termination can
+  // precede this removal.
+  pi.on("session_shutdown", () => removePrivateStateTree(scratchDir));
 
   // The surface contract, asserted after the factory ran: exactly `mcp`,
   // once -- a renamed, missing or extra registration is an adapter bug,

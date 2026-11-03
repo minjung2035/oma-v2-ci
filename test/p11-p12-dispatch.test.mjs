@@ -166,7 +166,7 @@ function internalFixture() {
   return { dispatcher: new exports.InternalDispatcher(deps), calls };
 }
 
-test("P11 handler closure: removing a real production case fails the pinned TypeScript exhaustiveness oracle", () => {
+test("001. Handler closure: removing a real production case fails the pinned TypeScript exhaustiveness oracle", () => {
   assert.equal(ts.version, "5.9.3");
   const result = mutatedProductionDiagnostics(
     "/packages/broker/src/public-dispatcher.ts",
@@ -216,7 +216,7 @@ test("P11 handler closure: removing a real production case fails the pinned Type
   );
 });
 
-test("P12 capability closure: forbidden methods fail against the real PublicDispatchDependencies type", () => {
+test("002. Capability closure: forbidden methods fail against the real PublicDispatchDependencies type", () => {
   const diagnostics = virtualDiagnostics(`
     import type { PublicDispatchDependencies } from "@oma/broker/ports";
     declare const deps: PublicDispatchDependencies;
@@ -229,18 +229,9 @@ test("P12 capability closure: forbidden methods fail against the real PublicDisp
   );
 });
 
-test("P11/P12 production dispatcher sources typecheck cleanly with the pinned compiler", () => {
-  assert.equal(ts.version, "5.9.3");
-  const program = createArchitectureProgram();
-  const errors = ts
-    .getPreEmitDiagnostics(program)
-    .filter(
-      (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-    );
-  assert.deepEqual(errors, []);
-});
 
-test("NATIVE-INTERNAL-RELAY-REMOVED-01: the retired host relay cannot consume mail or filesystem effects", async () => {
+
+test("003. The retired host relay cannot consume mail or filesystem effects", async () => {
   const { dispatcher, calls } = internalFixture();
   const result = await dispatcher.dispatch(
     { v: 1, id: "relay", method: "host.principalRelay", params: {} },

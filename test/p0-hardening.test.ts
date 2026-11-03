@@ -26,7 +26,7 @@ function git(cwd: string, args: string[]): string {
     assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
     return result.stdout.trim();
 }
-test("P0: protected-path observation failure cannot reach main CAS", async (t) => {
+test("001. Protected-path observation failure cannot reach main CAS", async (t) => {
     const root = mkdtempSync(join(tmpdir(), "oma-p0-diff-"));
     const state = join(root, "state");
     const repos = join(state, "repos");
@@ -154,7 +154,7 @@ const untilTrue = async (predicate: () => boolean, budgetMs: number): Promise<bo
     }
     return predicate();
 };
-test("P0: 20,000 malformed frames close one connection without recursive drain", async () => {
+test("002. 20,000 malformed frames close one connection without recursive drain", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-p0-frames-"));
     try {
         const broker = Object.create(Broker.prototype) as Broker;
@@ -196,7 +196,7 @@ test("P0: 20,000 malformed frames close one connection without recursive drain",
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("P0: decoder stream sink does not rebuild the body in memory", () => {
+test("003. Decoder stream sink does not rebuild the body in memory", () => {
     const source = Buffer.alloc(2 * 1024 * 1024, 0x61);
     const expected = createHash("sha256").update(source).digest("hex");
     const sinkHash = createHash("sha256");

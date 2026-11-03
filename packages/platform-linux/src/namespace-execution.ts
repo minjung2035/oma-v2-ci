@@ -68,10 +68,12 @@ export async function launchBlockedNamespace(command: CommandSpec, controls: Nam
       chunks.push(value);
     }
     if (!reader.closed) await once(reader, "close");
-    const infoValue: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    if (infoValue === null || typeof infoValue !== "object" || Array.isArray(infoValue)) throw new Error("invalid namespace launch identity");
+    let infoValue: unknown;
+    try { infoValue = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+    catch (cause) { throw new StoreError("RUN_TERMINATION_UNKNOWN", "namespace launch identity was not observed", { cause }); }
+    if (infoValue === null || typeof infoValue !== "object" || Array.isArray(infoValue)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "invalid namespace launch identity");
     const pid = (infoValue as Record<string, unknown>)["child-pid"];
-    if (typeof pid !== "number") throw new Error("namespace init was not observed");
+    if (typeof pid !== "number") throw new StoreError("RUN_TERMINATION_UNKNOWN", "namespace init was not observed");
     pin = pinNamespaceInit(pid);
     const scope = pin, ownedTask = task;
     let released = false, closed = false;
@@ -102,11 +104,15 @@ export async function launchBlockedNamespace(command: CommandSpec, controls: Nam
     if (task !== undefined) await task.closed;
     const observation = task === undefined ? undefined : await task.result;
     const notStarted = task === undefined || observation?.kind === "spawn-failed";
+    // A positive spawn failure is not malformed identity evidence. Preserve the
+    // native errno without claiming that ENOENT names the binary rather than cwd.
+    if (observation?.kind === "spawn-failed") error = new StoreError("BROKER_UNAVAILABLE",
+      `namespace launcher could not start (${observation.errorCode ?? "unknown error"})`, { cause: error });
     // Keep setup stderr available when init disappears before it can be pinned.
     // These diagnostics never promote child close to whole-scope death.
     if (observation !== undefined && error instanceof Error) {
       try { Object.defineProperty(error, "namespaceLaunch", { enumerable: true, value: Object.freeze({
-        kind: observation.kind, exitCode: observation.exitCode, signal: observation.signal,
+        kind: observation.kind, errorCode: observation.errorCode, exitCode: observation.exitCode, signal: observation.signal,
         stderr: observation.stderr.toString("utf8"), stderrTruncated: observation.stderrTruncated,
         stderrForwarded: observation.stderrForwarded === true,
       }) }); }

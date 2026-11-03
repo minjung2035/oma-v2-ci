@@ -14,7 +14,7 @@ import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { stopOwnedChild } from "@oma/process/async";
 const supported = process.platform === "linux" && spawnSync("/usr/bin/bwrap", ["--version"]).status === 0;
 
-test("DR46: the production sandbox hides host files and shares the host network; an unshared control cannot receive its marker", {
+test("001. The production sandbox hides host files and shares the host network; an unshared control cannot receive its marker", {
   skip: supported ? false : "NOT_RUN: requires Linux and pinned bubblewrap", timeout: 60000,
 }, async () => {
   const work = mkdtempSync(join(tmpdir(), "oma-current-namespace-"));

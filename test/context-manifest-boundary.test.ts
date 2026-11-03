@@ -11,7 +11,7 @@ function check(value: unknown): string | null {
   return contextEntriesCheck(value, { requireSorted: true });
 }
 
-test("a canonical manifest retains its frozen order and exact metadata", () => {
+test("001. A canonical manifest retains its frozen order and exact metadata", () => {
   const before = JSON.stringify(valid);
   assert.equal(check(valid), null);
   assert.equal(contextEntriesCheck(valid, { requireSorted: true, contentBytes: 20 }), null);
@@ -19,13 +19,13 @@ test("a canonical manifest retains its frozen order and exact metadata", () => {
 });
 
 // Physical effect spies are exercised by context-recovery-corruption-oracle.test.ts.
-test("unsafe paths are rejected by the canonical manifest policy", () => {
+test("002. Unsafe paths are rejected by the canonical manifest policy", () => {
   for (const path of ["../GOAL.md", "/GOAL.md", ".git/config", "decisions/../GOAL.md", "decisions/nested/one.md", "decisions\\one.md", "GOAL.md\0"]) {
     assert.notEqual(check([{ ...goal, path }]), null, path);
   }
 });
 
-test("duplicate unordered and incomplete manifests are rejected instead of repaired", () => {
+test("003. Duplicate unordered and incomplete manifests are rejected instead of repaired", () => {
   const cases: unknown[] = [
     [goal, goal], [decision, goal], [decision], [],
     [{ ...goal, injected: true }], [{ path: "GOAL.md", bytes: 12 }],
@@ -37,7 +37,7 @@ test("duplicate unordered and incomplete manifests are rejected instead of repai
   }
 });
 
-test("manifest byte and digest validation rejects coercion and aggregate overflow", () => {
+test("004. Manifest byte and digest validation rejects coercion and aggregate overflow", () => {
   for (const bytes of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY, "12", null]) {
     assert.notEqual(check([{ ...goal, bytes }]), null, String(bytes));
   }

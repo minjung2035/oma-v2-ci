@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 const hex = (value: string): string => Buffer.from(value).toString("hex");
 for (const [input, expected] of [["\r", "society"], ["\x1b[B\r", "personal"], ["\x1b", "cancel"], ["\x03", "cancel"]]) {
-  test(`session mode real PTY: ${JSON.stringify(input)} returns ${expected}`, { timeout: 20000 }, () => {
+  test(`001. Session mode real PTY: ${JSON.stringify(input)} returns ${expected}`, { timeout: 20000 }, () => {
     const run = spawnSync("python3", [join(process.cwd(), "test/fixtures/pty-harness.py"), JSON.stringify({
       argv: [process.execPath, join(process.cwd(), "test/fixtures/session-mode-pty.mjs")], ready: hex("Mode is fixed for this session."),
       steps: [{ write: hex(input!), wait: 0.5 }],

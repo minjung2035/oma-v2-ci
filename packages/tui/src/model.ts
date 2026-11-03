@@ -128,6 +128,8 @@ export interface MailBody {
 }
 
 export interface PanelData {
+  /** Presentation only: authenticated host-console controls were explicitly bound. */
+  readonly humanControls?: boolean;
   readonly dashboard: DashboardData;
   readonly config: readonly ConfigField[];
   readonly extensions: readonly ExtensionRow[];
@@ -153,6 +155,7 @@ export function mailIndex(data: PanelData, id: string): number {
 
 export type Detail =
   | { readonly kind: "none" }
+  | { readonly kind: "control"; readonly draft: PromptDraft }
   | { readonly kind: "extensions"; readonly row: number; readonly column: 0 | 1 }
   /** The message open, by identity, and how far its body is scrolled. */
   | { readonly kind: "mail"; readonly id: string; readonly scroll: number };
@@ -177,6 +180,7 @@ export type Effect =
   | { readonly kind: "set-number"; readonly field: string; readonly value: number }
   | { readonly kind: "set-extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "submit-prompt"; readonly text: string }
+  | { readonly kind: "submit-control"; readonly text: string }
   | { readonly kind: "engine-command"; readonly command: EngineCommand }
   | { readonly kind: "prompt-limit"; readonly active: true; readonly cause: PromptOverflow }
   | { readonly kind: "prompt-limit"; readonly active: false }
@@ -379,8 +383,8 @@ function stepPanelRoot(state: State, data: PanelData, key: Key): Step {
   }
 }
 
-function conversationTransition(state: State, result: PromptTransition): Step {
-  const next = { ...state, prompt: result.draft };
+function conversationTransition(state: State, result: PromptTransition, destination: "prompt" | "control" = "prompt"): Step {
+  const next: State = destination === "control" ? { ...state, detail: { kind: "control", draft: result.draft } } : { ...state, prompt: result.draft };
   switch (result.kind) {
     case "none":
       return { state: next, effects: [] };
@@ -389,7 +393,7 @@ function conversationTransition(state: State, result: PromptTransition): Step {
     case "clear-limit":
       return { state: next, effects: [{ kind: "prompt-limit", active: false }] };
     case "submit":
-      return { state: next, effects: [{ kind: "submit-prompt", text: result.text }] };
+      return { state: next, effects: [{ kind: destination === "control" ? "submit-control" : "submit-prompt", text: result.text }] };
     default:
       return assertNever(result);
   }
@@ -416,6 +420,17 @@ function stepConversation(state: State, key: Key, frameBytes: number): Step {
   }
 }
 
+function stepControl(state: State, key: Key, frameBytes: number, draft: PromptDraft): Step {
+  if (key.kind === "escape") return { state: { ...state, detail: NONE }, effects: [{ kind: "prompt-limit", active: false }] };
+  switch (key.kind) {
+    case "char": return conversationTransition(state, appendPrompt(draft, key.value, frameBytes), "control");
+    case "paste": return conversationTransition(state, pastePrompt(draft, key.value, key.truncated, frameBytes), "control");
+    case "backspace": return conversationTransition(state, erasePrompt(draft), "control");
+    case "enter": return conversationTransition(state, submitPrompt(draft), "control");
+    default: return { state, effects: [] };
+  }
+}
+
 export function step(state: State, key: Key, data: PanelData, frameBytes: number): Step {
   if (key.kind === "panel")
     return { state: state.open ? closed(state) : { ...state, open: true }, effects: [] };
@@ -427,6 +442,9 @@ export function step(state: State, key: Key, data: PanelData, frameBytes: number
   }
   if (!state.open) return stepConversation(state, key, frameBytes);
   if (state.edit.kind !== "none") return stepEdit(state, data, key);
+  if (state.detail.kind === "control") return data.humanControls === true ? stepControl(state, key, frameBytes, state.detail.draft) : { state, effects: [] };
+  if (data.humanControls === true && state.detail.kind === "none" && key.kind === "char" && key.value === ":")
+    return { state: { ...state, detail: { kind: "control", draft: EMPTY_PROMPT } }, effects: [] };
   // NB-10: a char or paste the panel has no key for is not dropped -- it goes
   // into the draft waiting behind the panel, which the Human sees again when
   // the panel closes. Input that vanishes reads like input that went somewhere.

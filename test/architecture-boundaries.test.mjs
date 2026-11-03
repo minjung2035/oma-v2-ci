@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PipelineRecorder } from "#oma-test/app/runtime/pipeline-recorder";
 
-test("pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success", () => {
+test("001. Pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success", () => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-pipeline-boundary-"));
   const pipeline = { version: 2, setupSteps: [], checkSteps: [], env: {}, toolchainDigest: "a".repeat(64), cachePolicy: { kind: "off" } };
   const original = fs.fsyncSync;

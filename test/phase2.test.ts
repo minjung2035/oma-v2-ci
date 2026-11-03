@@ -46,7 +46,7 @@ function rawFrame(text: string): Buffer {
 }
 function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
-test("DR67 schema5: fresh DDL applies; six entities; reapply rejected", () => {
+test("001. Fresh DDL applies; six entities; reapply rejected", () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -65,7 +65,7 @@ test("DR67 schema5: fresh DDL applies; six entities; reapply rejected", () => {
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("T03: invalid enum / negative units / FK / bad flags rejected by constraints", async () => {
+test("002. Invalid enum / negative units / FK / bad flags rejected by constraints", async () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -97,7 +97,7 @@ test("T03: invalid enum / negative units / FK / bad flags rejected by constraint
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("T04: frame reconstruction across arbitrary byte splits", () => {
+test("003. Frame reconstruction across arbitrary byte splits", () => {
   const a = frameOf({ v: 1, id: "1", method: "status.get", params: {} });
   const b = frameOf({ v: 1, id: "2", method: "operation.get", params: { key: "k" } });
   const all = Buffer.concat([a, b]);
@@ -117,7 +117,7 @@ test("T04: frame reconstruction across arbitrary byte splits", () => {
   }
 });
 
-test("T05: malicious frames are rejected pre-accept with bounded effect", () => {
+test("004. Malicious frames are rejected pre-accept with bounded effect", () => {
   assert.throws(() => new FrameParser(64).feed(Buffer.concat([Buffer.from([0, 0, 0, 100]), Buffer.alloc(100)])),
     (error: unknown) => error instanceof FrameError && error.code === "FRAME_TOO_LARGE");
   assert.throws(() => new FrameParser(64).feed(Buffer.from([0, 0, 0, 2, 0xff, 0xfe])),
@@ -135,7 +135,7 @@ test("T05: malicious frames are rejected pre-accept with bounded effect", () => 
     assert.throws(() => new FrameParser(256).feed(rawFrame(text)), /non-finite number or unsafe integer/);
 });
 
-test("P1-9: NaN/Infinity as string values are accepted; invalid numeric literals rejected", () => {
+test("005. NaN/Infinity as string values are accepted; invalid numeric literals rejected", () => {
   for (const body of ["Infinity is a concept and NaN is a number", "NaN"]) {
     const frames = new FrameParser(256).feed(frameOf({ body }));
     assert.equal(frames.length, 1);
@@ -145,7 +145,7 @@ test("P1-9: NaN/Infinity as string values are accepted; invalid numeric literals
     assert.throws(() => new FrameParser(64).feed(rawFrame(text)), /malformed JSON|non-finite/);
 });
 
-test("T07: same actor/key/payload converges to one operation with identical receipts (unique constraint)", async () => {
+test("006. Same actor/key/payload converges to one operation with identical receipts (unique constraint)", async () => {
   const { store, dir } = freshStore();
   try {
     insertAgentTx(store, "a");
@@ -160,7 +160,7 @@ test("T07: same actor/key/payload converges to one operation with identical rece
   } finally { seal(store, dir); }
 });
 
-test("T08: same key, different payload -> REQUEST_KEY_REUSED", async () => {
+test("007. Same key, different payload -> REQUEST_KEY_REUSED", async () => {
   const { store, dir } = freshStore();
   try {
     insertAgentTx(store, "a");
@@ -174,7 +174,7 @@ test("T08: same key, different payload -> REQUEST_KEY_REUSED", async () => {
   } finally { seal(store, dir); }
 });
 
-test("T10: different keys are distinct operations; no semantic dedup", async () => {
+test("008. Different keys are distinct operations; no semantic dedup", async () => {
   const { store, dir } = freshStore();
   try {
     insertAgentTx(store, "a");
@@ -189,7 +189,7 @@ test("T10: different keys are distinct operations; no semantic dedup", async () 
   } finally { seal(store, dir); }
 });
 
-test("hash: canonical key sorting, set dedupe, stability, descriptor identity", () => {
+test("009. Hash: canonical key sorting, set dedupe, stability, descriptor identity", () => {
   const h1 = requestHash("mail.send", { to: sortedUnique(["b", "a", "b"]), subject: "S", kind: "message", body: "x" });
   const h2 = requestHash("mail.send", { subject: "S", kind: "message", body: "x", to: sortedUnique(["a", "b"]) });
   assert.equal(h1, h2);
@@ -202,7 +202,7 @@ test("hash: canonical key sorting, set dedupe, stability, descriptor identity", 
   assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 });
 
-test("ids: grammar, reserved names, message ids, wire paths", () => {
+test("010. Ids: grammar, reserved names, message ids, wire paths", () => {
   assert.ok(isValidActorName("a"));
   assert.ok(isValidActorName("agent-2"));
   for (const name of ["Agent", "principal", "commons", "topic-x", "a".repeat(33)]) assert.ok(!isValidActorName(name));
@@ -227,7 +227,7 @@ test("ids: grammar, reserved names, message ids, wire paths", () => {
   assert.ok(isValidWirePath("a/\u00e9.txt"), "paired non-ASCII text is still a valid path");
 });
 
-test("store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {
+test("011. Store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {
   const { store, dir } = freshStore();
   try {
     insertAgentTx(store, "a"); insertAgentTx(store, "b");
@@ -261,7 +261,7 @@ test("store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {
   } finally { seal(store, dir); }
 });
 
-test("ids + hash demo: complete request hash for mail.send", () => {
+test("012. Ids + hash demo: complete request hash for mail.send", () => {
   const hash = requestHash("mail.send", { to: sortedUnique(["topic/auth", "b"]), subject: "S", kind: "message", body: "문의드립니다\n" });
   assert.match(hash, /^[0-9a-f]{64}$/);
 });

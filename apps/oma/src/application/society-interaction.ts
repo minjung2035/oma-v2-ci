@@ -7,7 +7,8 @@ import { PanelTerminal } from "@oma/tui/panel-terminal";
 import { engineName, engineModelChoiceOf, WORKER_MODEL, workerModelText, bootstrapStateOf, type FieldValue } from "./settings.js";
 import { societyPanelPorts } from "./society-panel.js";
 import { TuiTransport, type Observation } from "./status-observation.js";
-import { sessionHistoryDirectories } from "../runtime/session-catalog.js";
+import { STATUS_VIEW_BYTES } from "@oma/protocol/status-view";
+import { sessionDirectoryReplies, sessionHistoryDirectories } from "../runtime/session-catalog.js";
 import type { PiEvent } from "@oma/engine/pi-rpc";
 import type { ProjectSessionSettings } from "./project-session-settings.js";
 import type { SocietyBootstrap } from "./society-bootstrap.js";
@@ -27,8 +28,8 @@ export class SocietyInteraction implements SocietyConversationView {
   private readonly early: string[] = [];
   private saidLeftOut = "";
   constructor(private readonly bootstrap: SocietyBootstrap, private readonly configuration: ProjectSessionSettings, private readonly commands: ConversationCommands, acquired: (cleanup: () => void) => void) {
-    this.transport = new TuiTransport(bootstrap.stateRoot, bootstrap.society, configuration.settings.config.limits.frameBytes);
-    this.terminal = new PanelTerminal({ input: process.stdin, output: process.stdout }, () => this.app.snapshot.open);
+    this.transport = new TuiTransport(bootstrap.stateRoot, bootstrap.society, STATUS_VIEW_BYTES);
+    this.terminal = new PanelTerminal({ input: process.stdin, output: process.stdout }, () => this.app.snapshot.open, configuration.settings.config.limits.frameBytes);
     acquired(() => this.restore());
     const ports: AppPorts = {
       ...societyPanelPorts(configuration, bootstrap.stateRoot, () => ({
@@ -36,6 +37,12 @@ export class SocietyInteraction implements SocietyConversationView {
         screenReady: this.screenReady, sessionModel: this.sessionModel, engine: this.engineState,
       })),
       submitPrompt: text => commands.submit(text),
+      ...(commands.control === undefined ? {} : {
+        controlEditorClosed: () => commands.consoleReleased?.(),
+        controlAvailable: () => this.terminal.hostInput,
+        submitControl: (text: string) => this.terminal.hostInput ? commands.control!(text)
+          : { kind: "refused" as const, reason: "Human controls require the supervising host's local console." },
+      }),
       engineCommand: command => { commands.session()?.sendUi({ type: "engine_command", command }); },
       quit: () => { void commands.shutdown(0); },
     };
@@ -77,7 +84,7 @@ export class SocietyInteraction implements SocietyConversationView {
       this.terminal.open(event);
       this.app.refresh();
       if (!this.app.snapshot.open)
-        this.app.key({ kind: "panel" });
+        this.app.key({ kind: "panel" }, "engine");
       else
         this.app.draw();
     }
@@ -86,15 +93,19 @@ export class SocietyInteraction implements SocietyConversationView {
       this.app.draw();
     }
     else if (event.type === "panel_key" && typeof event.data === "string" && this.app.snapshot.open)
-      this.app.feed(Buffer.from(event.data));
+      this.app.feed(Buffer.from(event.data), "engine");
     else if (event.type === "sessions_request" && typeof event.id === "string") {
       const id = event.id;
       void (async () => {
-        if (!this.commands.finished() && this.commands.session() === live)
-          live.sendUi({ type: "session_dirs", id,
-            dirs: sessionHistoryDirectories(this.bootstrap.dataRoot, this.bootstrap.canonicalProjectPath).map(entry => entry.dir),
-            current: this.commands.sessionDirectory(),
-          });
+        if (this.commands.finished() || this.commands.session() !== live)
+          return;
+        const current = this.commands.sessionDirectory();
+        const dirs = sessionHistoryDirectories(this.bootstrap.dataRoot, this.bootstrap.canonicalProjectPath).map(entry => entry.dir);
+        for (const reply of sessionDirectoryReplies(id, dirs, current, this.configuration.settings.config.limits.frameBytes)) {
+          if (this.commands.finished() || this.commands.session() !== live)
+            return;
+          await live.sendUiAndWait(reply);
+        }
       })().catch(error => { if (!this.commands.finished() && this.commands.session() === live)
         live.sendUi({ type: "session_dirs", id, dirs: [], error: exceptionText(error) }); });
     }
@@ -170,9 +181,11 @@ export class SocietyInteraction implements SocietyConversationView {
     this.app.refresh();
     this.app.draw();
   }
+  mayHandOffConsole(): boolean { return !this.terminal.hostInput || this.app.snapshot.detail.kind !== "control"; }
   starting(model: string | null): void {
     this.sessionModel = model;
-    this.terminal.handoff(event => this.commands.session()?.sendUi(event));
+    this.app.resetInput();
+    this.terminal.handoff(event => this.commands.session()?.sendUiAndWait(event));
   }
   ending(): void { this.screenReady = false; }
   ended(reason: string, finished: boolean, disowned: boolean): void {
@@ -199,8 +212,10 @@ export class SocietyInteraction implements SocietyConversationView {
   refresh(): void { this.app.refresh(); }
   draw(): void { this.app.draw(); }
   line(text: string): void { this.app.line(text); }
+  openControlEditor(): boolean { return this.terminal.hostInput && this.app.openControlEditor(); }
+  controlLine(text: string): void { this.app.controlLine(text); }
   busy(value: boolean): void { this.app.setBusy(value); }
-  reclaim(): void { this.terminal.reclaim(); }
+  reclaim(): void { this.app.resetInput(); this.terminal.reclaim(); }
   restore(): void { this.terminal.restore(); }
   close(): void {
     if (this.poll !== undefined)

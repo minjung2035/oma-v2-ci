@@ -14,13 +14,13 @@ const blocked = (fields: ReturnType<typeof fieldsOf>, id: string): string | null
     assert.ok(field, `field ${id} is not offered at all`);
     return field.kind === "link" ? null : field.blocked;
 };
-test("V15A: bootstrap state is read from the observed registry, and unknown is never assumed", () => {
+test("001. Bootstrap state is read from the observed registry, and unknown is never assumed", () => {
     assert.equal(bootstrapStateOf({ kind: "unknown" }), "unknown");
     assert.equal(bootstrapStateOf({ kind: "observed", statuses: [] }), "pending");
     assert.equal(bootstrapStateOf({ kind: "observed", statuses: [{ agent: "principal" }] }), "done");
     assert.equal(bootstrapStateOf({ kind: "observed", statuses: [{ agent: "principal" }, { agent: "worker" }] }), "done");
 });
-test("V15A: seed fields are editable only while they can still take effect, and say why otherwise", () => {
+test("002. Seed fields are editable only while they can still take effect, and say why otherwise", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const settings = readSettings(f.path);
@@ -44,7 +44,7 @@ test("V15A: seed fields are editable only while they can still take effect, and 
         f.close();
     }
 });
-test("V15A: a new Society refuses zero seeds without changing authored configuration", () => {
+test("003. A new Society refuses zero seeds without changing authored configuration", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const before = readFileSync(f.path);
@@ -54,7 +54,7 @@ test("V15A: a new Society refuses zero seeds without changing authored configura
     } finally { f.close(); }
 });
 
-test("V15A: the bootstrap profile changes the seeds only, never a profile's childProfile", () => {
+test("004. The bootstrap profile changes the seeds only, never a profile's childProfile", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const settings = readSettings(f.path);
@@ -68,7 +68,7 @@ test("V15A: the bootstrap profile changes the seeds only, never a profile's chil
         f.close();
     }
 });
-test("V15A / WP15.03: confirming the value already configured writes nothing and says so", () => {
+test("005. Confirming the value already configured writes nothing and says so", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const settings = readSettings(f.path);
@@ -82,7 +82,7 @@ test("V15A / WP15.03: confirming the value already configured writes nothing and
         f.close();
     }
 });
-test("V15B: the dashboard shows the configured model as configured, and the running session's as what it started with", () => {
+test("006. The dashboard shows the configured model as configured, and the running session's as what it started with", () => {
     const rows = (configured: string, session: string | null) => dashboardRows({ ...unknownDashboard(), principalModel: { configured, session } }).find(row => row.label === "Model")!.value;
     assert.match(rows("review", null), /^review \(Configured; no running session\)$/);
     assert.match(rows("review", "review"), /^review \(Configured; current session started with this setting\)$/);
@@ -90,7 +90,7 @@ test("V15B: the dashboard shows the configured model as configured, and the runn
     for (const value of [rows("review", null), rows("review", "review"), rows("review", "standard")])
         assert.doesNotMatch(value, /현재 모델|running model|active model/, "a configured value was labelled as the observed model");
 });
-test("V15A / WP15.03: an inline configuration confirmed at its current value is not rewritten", () => {
+test("007. An inline configuration confirmed at its current value is not rewritten", () => {
     const f = createCompleteConfigurationFixture();
     try {
         // The fixture's legacy inline file is a complete, valid inline config.

@@ -2,14 +2,15 @@
 import { StoreError, exceptionText } from "@oma/domain/errors";
 import { engineLoginDirectory } from "../engine/start-effects.js";
 import { assertNativeRuntime } from "../runtime/native-support.js";
-import { withAsyncCleanup } from "@oma/native/cleanup";
+import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 /** Product composition: command selection, admitted session, and process signal wiring. */
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { piAgentDir } from "@oma/engine/pi-runtime";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
+import { preparePackageReplacement, recoverPackageReplacements, type PackageReplacement } from "@oma/storage/package-replacement";
 import { codeFor, exitFor, fail as exitFailure } from "../application/exit.js";
-import { PACKAGE_USAGE, packageActivation, packageCommand, packageListLines, packageStoreDir,
+import { PACKAGE_USAGE, PACKAGE_INDEX, packageActivation, packageCommand, packageListLines, packageStoreDir,
   readPackageIndex, writePackageIndex, type PackageCommand } from "../runtime/packages/index.js";
 import { packageDirectories } from "../platform/package-files.js";
 import { pruneLocalStage, stageLocalPackage } from "../application/local-packages.js";
@@ -25,7 +26,7 @@ import { SocietyInteraction } from "../application/society-interaction.js";
 import { SocietyTransition } from "../application/society-transition.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma login\n" +
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project] [--surface collaboration-v1]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma recover-execution --society <name> [--config <path>] (--prepare | --apply)\n       oma login\ncollaboration-v1 fresh admission remains closed pending required qualification and product decisions.\n" +
     `${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n`);
   process.exit(0);
 }
@@ -72,28 +73,35 @@ async function piPackages(dataRoot: string, project: string, decision: Extract<P
   catch (error) { fail(`Could not take the package store: ${exceptionText(error)}`, codeFor(error)); }
   if (lease === null) fail("Another oma pi command is running.", exitFor("BROKER_UNAVAILABLE"));
   const code = await withAsyncCleanup(async () => {
-    let code: number;
+    const controls = ["settings.json", PACKAGE_INDEX];
+    recoverPackageReplacements(store, controls);
     const before = readPackageIndex(store);
-    // C20: a local source is copied into the store first; the engine installs
-    // the staged `local/<name>`, never the path the Human gave.
-    let run = decision;
-    if (decision.local !== undefined)
-      run = Object.freeze({ ...decision, args: Object.freeze(["install", await stageLocalPackage(store, decision.local)]) });
-    code = await runEngineLogin(engineLoginDirectory, { stateRoot, libdir: `${libdir}/`, override: process.env.OMA_PI_COMMAND, fence: lease.fence,
-      env: process.env, packages: { store, args: run.args } });
-    if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
-      const after = await writePackageIndex(store, packageDirectories);
-      pruneLocalStage(store, packageDirectories);
-      const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
-      reconcilePersonalSettings({ dataRoot, libdir, packages: store });
-      if (said.length > 0) process.stderr.write(`${said.join("\n")}\n`);
-      code = ok ? 0 : 1;
-    }
-    if (code === 0 && decision.command === "list") {
-      const contents = packageListLines(store);
-      if (contents.length > 0) process.stdout.write(`Package contents:\n  ${contents.join("\n  ")}\n`);
-    }
-    return code;
+    let replacement: PackageReplacement | undefined;
+    return withAsyncCleanup(async () => {
+      let run = decision;
+      if (decision.local !== undefined)
+        run = Object.freeze({ ...decision, args: Object.freeze(["install", await stageLocalPackage(store, decision.local, source => {
+          replacement = preparePackageReplacement(store, source, controls);
+        })]) });
+      let code = await runEngineLogin(engineLoginDirectory, { stateRoot, libdir: `${libdir}/`, override: process.env.OMA_PI_COMMAND, fence: lease.fence,
+        env: process.env, packages: { store, args: run.args } });
+      if (code === 0 && decision.command !== "list" && !args.includes("--help") && !args.includes("-h")) {
+        const after = await writePackageIndex(store, packageDirectories);
+        // The engine settings, physical package and derived index now agree.
+        // Later project-preference failures do not undo that installed state.
+        replacement?.commit();
+        pruneLocalStage(store, packageDirectories);
+        const { ok, said } = applyPackageChange({ dataRoot, project, libdir, before, after, activate: packageActivation(run) });
+        reconcilePersonalSettings({ dataRoot, libdir, packages: store });
+        if (said.length > 0) process.stderr.write(`${said.join("\n")}\n`);
+        code = ok ? 0 : 1;
+      }
+      if (code === 0 && decision.command === "list") {
+        const contents = packageListLines(store);
+        if (contents.length > 0) process.stdout.write(`Package contents:\n  ${contents.join("\n  ")}\n`);
+      }
+      return code;
+    }, () => withCleanup(() => replacement?.rollback(), () => replacement?.close()));
   }, () => lease.release());
   process.exit(code);
 }
@@ -111,6 +119,11 @@ async function main(argv: readonly string[]): Promise<void> {
   const command = parseOmaArguments(argv);
   if (command.kind === "help") usage();
   assertNativeRuntime();
+  if (command.kind === "recover-execution") {
+    const { recoverSocietyExecutions } = await import("../application/execution-recovery.js");
+    recoverSocietyExecutions(command.society, command.config, command.phase, process.env, line => process.stderr.write(line + "\n"));
+    return;
+  }
   if (command.kind === "archive") {
     const { archiveSociety } = await import("../application/session-archive.js");
     await archiveSociety(command.society, command.config, process.env, line => process.stderr.write(line + "\n"));
@@ -127,6 +140,7 @@ async function main(argv: readonly string[]): Promise<void> {
     requestedSociety: command.kind === "session" ? command.society : undefined,
     externalConfigPath: command.kind === "session" ? command.config : undefined,
     bindRequested: command.kind === "session" && command.bindProject,
+    surface: command.kind === "session" ? command.surface : undefined,
     resume: command.kind === "session" ? command.resume : undefined,
     acquired: cleanup => { abandon = cleanup; }, fail });
   const libdir = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
@@ -150,6 +164,7 @@ async function main(argv: readonly string[]): Promise<void> {
     sessionDirectory: () => runtime!.sessionDirectory,
     finished: () => runtime?.finished ?? false,
     submit: text => runtime!.submit(text), deliver: () => runtime!.deliver(),
+    control: (text: string) => runtime!.control(text), consoleReleased: () => runtime!.consoleReleased(),
     shutdown: code => transition.shutdown(code), relaunch: (resume, mode) => transition.relaunch(resume, mode),
   }, cleanup => {
     abandon = () => {

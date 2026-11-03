@@ -1,16 +1,15 @@
+import { beforeDeadline } from "./fixtures/timeout.js";
 import { withWorkerCapacity } from "./fixtures/spec.js";
-import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Priority 0, fourth review (docs/priority-0-audit.md "4차 점검"):
  * the findings of the whole-codebase external review, each tested where its
  * decision takes effect, with the reading the fix removed as the control. */
 import test from "node:test";
-import { residentOptions } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { createServer, type Server } from "node:net";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResolvedAgentSpec } from "@oma/contracts";
@@ -18,8 +17,8 @@ import { runOwnedProcess } from "./fixtures/owned-process.js";
 import { clientProcessArgs } from "./fixtures/client-process.js";
 import { replaceDerivedFile } from "@oma/storage/durable-fs";
 import { StatusRefresh } from "@oma/broker/status-refresh";
-import { Broker } from "@oma/broker";
-import { LifecycleModule } from "@oma/lifecycle";
+
+
 import { ViewsModule } from "#oma-test/app/views";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "@oma/domain/errors";
@@ -32,13 +31,9 @@ import { dashboardData } from "@oma/tui/dashboard";
 import { dashboardRows } from "@oma/tui/view/dashboard";
 import { NO_UNIT_REASON } from "@oma/protocol/status-view";
 import { HOST_CHANNEL_ENV } from "@oma/protocol/host-channel";
-import { registerOmaTools } from "@oma/extension/mail-tools";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 import { mkdirSync } from "node:fs";
-import { storedMailBytes } from "@oma/domain/mail-values";
-import { buildEml } from "@oma/mail/serialize";
-import { principalEnvironment } from "@oma/engine/principal-session";
-import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
-import { agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
+
 import { INITIAL, step, type ConfigField, type MailRow, type PanelData, type State } from "@oma/tui/model";
 import { render } from "@oma/tui/view/index";
 import type { Key } from "@oma/tui/keys";
@@ -77,7 +72,7 @@ function clientCalls(line: string, calls: number): Promise<string[]> {
   });
 }
 
-test("P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a Client credential source", async () => {
+test("001. A credential descriptor named in the environment is not a Client credential source", async () => {
   // E27 removed the extension-spawned CLI and with it the only producer of
   // this contract; the Principal's credential lives in the engine's
   // PrincipalChannel now. A leftover declaration -- even a well-formed line
@@ -90,7 +85,7 @@ test("P0V-25 / N01, P0-4: a credential descriptor named in the environment is no
   for (const result of refused) assert.match(result, /BROKER_UNAVAILABLE|ENOENT|connect/, JSON.stringify(refused));
 });
 
-test("P0V-27 / N03, P0-4: a broker that could not be started is reported, and the host that tried keeps running", async () => {
+test("002. A broker that could not be started is reported, and the host that tried keeps running", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-spawn-failed-"));
   try {
     // Exists, but cannot be executed: spawn hands back a child with no pid and
@@ -117,7 +112,7 @@ test("P0V-27 / N03, P0-4: a broker that could not be started is reported, and th
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-35 / N12, P0-2: owned process output is decoded as the bytes it wrote, wherever the pipe cut them", async () => {
+test("003. Owned process output is decoded as the bytes it wrote, wherever the pipe cut them", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-cli-utf8-"));
   try {
     const text = "한글✅ 결과";
@@ -143,7 +138,7 @@ test("P0V-35 / N12, P0-2: owned process output is decoded as the bytes it wrote,
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-49 / F3, P0-4: a descriptor given back is never closed again when the sequence fails after it", () => {
+test("004. A descriptor given back is never closed again when the sequence fails after it", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-close-once-"));
   let borrowed: number | null = null;
   try {
@@ -162,7 +157,7 @@ test("P0V-49 / F3, P0-4: a descriptor given back is never closed again when the 
   }
 });
 
-test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progress", async () => {
+test("005. A broker keeps only the listener closes still in progress", async () => {
   const f = await preparedFixture(1);
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
@@ -188,7 +183,7 @@ test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progre
 });
 
 for (let gap = 0; gap < 8; gap += 1)
-  test(`P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap ${gap})`, async () => {
+  test(`006. One status observation at a time across the hand-over to its follow-up (microtask gap ${gap})`, async () => {
     const finishers: (() => void)[] = [];
     let active = 0; let most = 0;
     const observe = () => {
@@ -214,7 +209,7 @@ for (let gap = 0; gap < 8; gap += 1)
     assert.equal(most, 1, "a second observation ran beside the follow-up");
   });
 
-test("P0V-33 / N09, P0-1: a failure restated beside a cleanup failure keeps its code, its facts and that it was accepted", () => {
+test("007. A failure restated beside a cleanup failure keeps its code, its facts and that it was accepted", () => {
   const actual = "a".repeat(40);
   const cleanup = new Error("owned temporary could not be removed");
   const accepted = new AcceptedFailure("STALE_BASE", "main moved", "none", { details: { actual } });
@@ -230,7 +225,7 @@ test("P0V-33 / N09, P0-1: a failure restated beside a cleanup failure keeps its 
   assert.deepEqual(publicFailure(normalizeStorageFailure(new AggregateError([busy, cleanup]))), publicFailure(busy));
 });
 
-test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line started late is not cut off by the one before it", { timeout: 10_000 }, async t => {
+test("008. Each partial line has its own deadline, so a line started late is not cut off by the one before it", { timeout: 10_000 }, async t => {
   // Line a starts at 0 and ends at 0.6 s in the same chunk that starts line b;
   // b ends at 1.3 s. With a 1 s line deadline both lines are in time.
   const child = spawn(process.execPath, ["-e", `
@@ -244,12 +239,12 @@ test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line start
   t.after(() => { client.close(); child.kill("SIGKILL"); });
   const seen: string[] = [];
   client.onEvent((event: PiEvent) => { seen.push(event.type); });
-  const ended = await Promise.race([client.completion, new Promise<"running">(resolve => setTimeout(() => resolve("running"), 1800))]);
+  const ended = await beforeDeadline(client.completion, 1800, "running" as const);
   assert.equal(ended, "running", `the transport ended: ${JSON.stringify(ended)}`);
   assert.deepEqual(seen, ["a", "b"]);
 });
 
-test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is refused, never applied to the Principal", () => {
+test("009. With no Worker profile of its own, a Worker edit is refused, never applied to the Principal", () => {
   const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const principal = defaults.agentProfiles[defaults.principalProfile]!;
   // A valid configuration with a Principal only.
@@ -277,7 +272,7 @@ test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is ref
   assert.equal(settingsOf("/nonexistent/config.json", legacy).workerProfile, worker);
 });
 
-test("P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Active count unknown, never 0", () => {
+test("010. A Resident whose unit was not observed leaves the Active count unknown, never 0", () => {
   const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const row = (agent: string, activeState: string | null, reason: string | null = null): AgentStatus => ({
     agent, desired: "enabled", activeState, subState: activeState === null ? null : "running", unitResult: activeState === null ? null : "success",
@@ -300,9 +295,14 @@ test("P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Acti
   }
 });
 
-test("P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be established does not run on unsupervised", async () => {
+test("011. A broker started as supervised whose channel cannot be established does not run on unsupervised", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-unsupervised-"));
   try {
+    // Reach the supervision boundary in an explicitly isolated current Society;
+    // a missing birth must still refuse earlier, not bypass admission for this test.
+    const stateRoot = join(dir, "data", "oma", "unsupervised");
+    mkdirSync(stateRoot, { recursive: true });
+    publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", dir, "collaboration-v1"));
     // Descriptor 3 declared as the host channel but a regular file: the host
     // cannot be identified, which is not the same as there being none.
     const channel = join(dir, "not-a-socket"); writeFileSync(channel, "");
@@ -322,75 +322,11 @@ test("P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-37 / N14, P0-2: a message path the Principal was shown reads back through the same mail tool", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-shown-path-"));
-  const archive = join(root, "state", "mail", "archive", "cur");
-  mkdirSync(archive, { recursive: true });
-  const id = "m-00000000-0000-4000-8000-0000000000aa-0";
-  writeFileSync(join(archive, `${id}:2,`), "Subject: shown\r\n\r\nthe body\r\n");
-  const previous = { ...process.env };
-  const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
-  // The Principal's engine: its archive root is the host's own path (DR1).
-  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
-    OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo" });
-  try {
-    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
-    const read = tools.get("oma_mail_read")!;
-    for (const shown of [join(archive, `${id}:2,`), `/mail/archive/cur/${id}:2,`, `${id}:2,`, id])
-      assert.match((await read.execute("t", { messageId: shown })).content[0]!.text, /the body/, `could not read back ${shown}`);
-    // Only the root it was shown with: the same file name under another directory names nothing.
-    await assert.rejects(read.execute("t", { messageId: join(root, `${id}:2,`) }), /message id or canonical archive path|expected a message id/);
-  } finally {
-    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
-    Object.assign(process.env, previous);
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read back whole by the mail tool", async () => {
-  const bodyBytes = 16 * 1024;
-  // Both engines are told the bound of a stored message, not the body's.
-  const principal = principalEnvironment({ stateRoot: "/srv/oma-n13", runRoot: "/run/oma-n13", libdir: "/opt/oma" },
-    { society: "demo", provider: "pi", model: "current", extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 });
-  assert.equal(Number(principal.OMA_MAIL_BYTES), storedMailBytes(bodyBytes));
-  const state = "/srv/oma-n13";
-  const options = residentOptions(state);
-  const plan = planPiSpawn(residentEngineEffects.sandbox, { ...options, limits: { ...options.limits, mailBodyBytes: bodyBytes } });
-  const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];
-  assert.equal(Number(told), storedMailBytes(bodyBytes), "the Resident's engine was told the body limit");
-
-  // The widest bodies the writer can be given: every byte a quoted-printable
-  // escape, Korean and emoji text, and line breaks.
-  const bodies: Record<string, string> = {
-    equals: `a${"=".repeat(bodyBytes - 1)}`, korean: "가a".repeat(bodyBytes / 4), emoji: "😀abc".repeat(Math.floor(bodyBytes / 7)), lines: "a\n".repeat(bodyBytes / 2),
-  };
-  const root = mkdtempSync(join(tmpdir(), "oma-n13-"));
-  const archive = join(root, "archive"); mkdirSync(archive);
-  const previous = { ...process.env };
-  const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
-  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
-    OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo", OMA_MAIL_BYTES: principal.OMA_MAIL_BYTES });
-  try {
-    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
-    let index = 0;
-    for (const [name, body] of Object.entries(bodies)) {
-      assert.ok(Buffer.byteLength(body) <= bodyBytes, name);
-      const id = `m-00000000-0000-4000-8000-0000000001${String(index++).padStart(2, "0")}-0`;
-      const eml = await buildEml({ from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject: name, kind: "message",
-        contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, body });
-      assert.ok(eml.bytes <= storedMailBytes(bodyBytes), `${name}: ${eml.bytes} stored bytes exceed the bound`);
-      writeFileSync(join(archive, `${id}:2,`), eml.text);
-      const shown = (await tools.get("oma_mail_read")!.execute("t", { messageId: id })).content[0]!.text;
-      // The writer ends the stored body with a line break of its own.
-      const read = shown.split("\r\n\r\n").slice(1).join("\r\n\r\n").replace(/\r\n/g, "\n");
-      assert.ok(read === body || read === `${body}\n`, `${name} was not read back whole (${read.length} of ${body.length} characters)`);
-    }
-  } finally {
-    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
-    Object.assign(process.env, previous);
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+// DR72 retires the P0V-36/N13 and P0V-37/N14 mail-tool/alias positives.
+// Their original bodies and observed FAIL are preserved verbatim in
+// docs/archive/retired-mail-reader-oracles.md, not retagged as a PASS.
+// Separate current read/grep/result-page/bytes oracles:
+// test/collaboration-mail-read-bounds.test.ts
 
 const mailRow = (id: string, subject: string): MailRow => ({ id, from: "worker-a", kind: "message", subject, unread: true, path: `/mail/${id}` });
 const panel = (mail: MailRow[], config: ConfigField[] = []): PanelData => Object.freeze({
@@ -404,7 +340,7 @@ function drive(data: PanelData, keys: Key["kind"][]): State {
 const screen = (state: State, data: PanelData, rows: number, body: string | null = null, truncated = false) =>
   render({ state, data, transcript: [], body: body === null ? null : { text: body, truncated }, notice: null, busy: false, columns: 60, rows }).join("\n");
 
-test("P0V-41 / N18, P0-1: the message a Human opened stays open when a refresh reorders the list or moves it to cur", () => {
+test("012. The message a Human opened stays open when a refresh reorders the list or moves it to cur", () => {
   const before = panel([mailRow("m-a", "first"), mailRow("m-b", "second")]);
   const opened = drive(before, ["right", "right", "down", "enter"]);
   assert.match(screen(opened, before, 20), /Subject: second/);
@@ -413,7 +349,7 @@ test("P0V-41 / N18, P0-1: the message a Human opened stays open when a refresh r
   assert.match(screen(opened, after, 20), /Subject: second/, "the refresh opened a different message");
 });
 
-test("P0V-40 / N17: a list longer than the screen keeps its selection on screen, and a long body scrolls", () => {
+test("013. A list longer than the screen keeps its selection on screen, and a long body scrolls", () => {
   const rows = 12;
   const mail = Array.from({ length: 50 }, (_, index) => mailRow(`m-${index}`, `subject ${index}`));
   const list = panel(mail);
@@ -432,14 +368,14 @@ test("P0V-40 / N17: a list longer than the screen keeps its selection on screen,
   assert.equal(shown.split("\n").length, rows);
 });
 
-test("P0V-42 / N19, P0-5: a body read only in part is shown as partial, not as the whole message", () => {
+test("014. A body read only in part is shown as partial, not as the whole message", () => {
   const list = panel([mailRow("m-a", "large")]);
   const opened = drive(list, ["right", "right", "enter"]);
   assert.match(screen(opened, list, 20, "beginning", true), /showing the beginning only/i);
   assert.doesNotMatch(screen(opened, list, 20, "whole", false), /showing the beginning only/i);
 });
 
-test("P0V-43 / N20: one refresh reads the headers of a bounded number of messages, the most recent, and counts the rest", { skip: process.getuid?.() === 0 }, () => {
+test("015. One refresh reads the headers of a bounded number of messages, the most recent, and counts the rest", { skip: process.getuid?.() === 0 }, () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mailbox-budget-"));
   try {
     const box = { newDir: join(root, "new"), curDir: join(root, "cur") };
@@ -467,7 +403,7 @@ test("P0V-43 / N20: one refresh reads the headers of a bounded number of message
   }
 });
 
-test("P0V-46 / N23, P0-2: typed and pasted text are read by one rule -- a typed U+FFFD is kept, broken bytes are dropped", () => {
+test("016. Typed and pasted text are read by one rule -- a typed U+FFFD is kept, broken bytes are dropped", () => {
   const typed = (...reads: number[][]): string => {
     const decoder = new KeyDecoder(() => 0);
     const keys = [...reads.flatMap(read => decoder.push(Uint8Array.from(read))), ...decoder.finish()];

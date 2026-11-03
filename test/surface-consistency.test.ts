@@ -6,14 +6,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SURFACE_BOUNDS } from "@oma/domain/surface-bounds";
 import { LAYOUT_BOUNDS } from "@oma/tui/view/layout";
-import { SURFACE_LIMITS } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 
-test("every declared bound is positive, finite and explains itself", () => {
+test("001. Every declared bound is positive, finite and explains itself", () => {
   for (const [name, bound] of Object.entries({ ...SURFACE_BOUNDS, ...LAYOUT_BOUNDS })) {
     assert.ok(Number.isSafeInteger(bound.value) && bound.value > 0, `${name} must be a positive safe integer`);
     assert.ok(bound.why.length > 0, `${name} must say why`);
     assert.ok(["cells", "lines", "bytes", "count"].includes(bound.unit), `${name} needs a unit`);
   }
-  for (const [name, value] of Object.entries(SURFACE_LIMITS))
-    assert.ok(Number.isSafeInteger(value) && value > 0, `tool surface ${name} must be a positive safe integer`);
+  for (const role of ["resident", "principal"] as const) {
+    const plan = collaborationSurface(role);
+    for (const names of [plan.direct, ...Object.values(plan.groups)]) {
+      assert.ok(names.length > 0); assert.equal(new Set(names).size, names.length);
+    }
+  }
 });

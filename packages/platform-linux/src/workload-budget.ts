@@ -111,10 +111,23 @@ export class WorkloadBudget {
   command(command: CommandSpec): CommandSpec {
     if (this.profile.tmpfsMaxBytes === undefined || command.executable !== "/usr/bin/bwrap") return command;
     const parsed = parseBubblewrapArguments(command.argv), args: string[] = [];
+    let pendingSize = Infinity;
     for (const option of parsed.options) {
-      if (option.flag === "--tmpfs") args.push("--size", String(this.profile.tmpfsMaxBytes));
+      // --size applies to the next tmpfs. Keep an existing smaller per-mount
+      // bound; a workload ceiling may tighten it but must not create two flags.
+      if (option.flag === "--size") {
+        const value = Number(option.values[0]);
+        if (!Number.isSafeInteger(value) || value <= 0 || pendingSize !== Infinity)
+          throw new StoreError("UNSUPPORTED_PROFILE", "invalid sandbox tmpfs size");
+        pendingSize = value; continue;
+      }
+      if (option.flag === "--tmpfs") {
+        args.push("--size", String(Math.min(pendingSize, this.profile.tmpfsMaxBytes)));
+        pendingSize = Infinity;
+      }
       args.push(option.flag, ...option.values);
     }
+    if (pendingSize !== Infinity) throw new StoreError("UNSUPPORTED_PROFILE", "sandbox size has no tmpfs target");
     return { ...command, argv: [...args, ...command.argv.slice(parsed.boundary)] };
   }
   close(): void {

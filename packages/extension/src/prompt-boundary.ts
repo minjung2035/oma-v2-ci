@@ -20,6 +20,8 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI, NormalizedBuildSystemPromptOptions } from "@earendil-works/pi-coding-agent";
+import { collaborationAuthority, collaborationEnvironment, collaborationProfilePrompt } from "@oma/domain/collaboration-prompts";
+import type { CollaborationRole } from "@oma/domain/collaboration-surface";
 
 /** The section OMA's guidance is written under. It must match the engine's
  * section-name grammar (lowercase tag), or the prompt build refuses it. */
@@ -70,11 +72,30 @@ function toolGuidance(pi: ExtensionAPI, options: NormalizedBuildSystemPromptOpti
   return parts.join("\n\n");
 }
 
+/** Explicit host selection only. Omitting this scope preserves the legacy role,
+ * environment and prompt contract; record-root visibility is enforced elsewhere. */
+export interface CollaborationPromptScope {
+  readonly role: CollaborationRole;
+  readonly actor: string;
+  readonly recordRoot: string;
+  readonly persistentPaths: readonly string[];
+  readonly activationProcessesSurvive: boolean;
+  readonly rolePrompt?: string;
+}
 /** `narrow` asks for the workspace-only context policy -- the Principal's.
  * A Resident's ancestor chain is bounded by its sealed rootfs and is kept. */
-export function registerPromptBoundary(pi: ExtensionAPI, workspace: string, narrow: boolean): void {
+export function registerPromptBoundary(pi: ExtensionAPI, workspace: string, narrow: boolean, collaboration?: CollaborationPromptScope): void {
+  let toolOptions: NormalizedBuildSystemPromptOptions | undefined;
+  let owned: Readonly<Record<string, string>> = {};
+  const scope = collaboration && { ...collaboration, persistentPaths: [...collaboration.persistentPaths] };
+  if (scope) {
+    if (narrow !== (scope.role === "principal")) throw new TypeError("prompt role differs from host containment role");
+    collaborationEnvironment({ ...scope, workspace, platform: process.platform, observedAtMs: Date.now() });
+    collaborationProfilePrompt(scope.role, scope.rolePrompt);
+  }
   pi.on("before_agent_start", event => {
     const options = event.systemPromptOptions;
+    toolOptions = options;
     if (narrow) options.contextFiles = workspaceContext(workspace, options.contextFiles);
     // The append channel stays closed until an OMA policy opens it: Society's
     // system prompt is authored, not discovered.
@@ -82,7 +103,35 @@ export function registerPromptBoundary(pi: ExtensionAPI, workspace: string, narr
     const guidance = toolGuidance(pi, options);
     if (guidance.length > 0) options.sections[GUIDANCE_SECTION] = guidance;
     else delete options.sections[GUIDANCE_SECTION];
+    if (scope) {
+      options.customPrompt = collaborationProfilePrompt(scope.role, scope.rolePrompt);
+      owned = { oma_authority: collaborationAuthority(scope.role), oma_environment: collaborationEnvironment({ ...scope,
+        workspace, platform: process.platform, observedAtMs: Date.now() }) };
+      const remaining = { ...options.sections };
+      delete remaining.oma_authority; delete remaining.oma_environment; delete remaining[GUIDANCE_SECTION];
+      options.sections = { ...owned, ...(guidance ? { [GUIDANCE_SECTION]: guidance } : {}), ...remaining };
+    }
     // Returning nothing: a `systemPrompt` result would force-replace the whole
     // prompt, and the role prompt stays the owner.
   });
+  // A run can change its toolset between provider calls without another
+  // before_agent_start. Refresh owned sections only; retain other declarations
+  // and historical messages. New-surface host authority is not profile-owned.
+  pi.on("context_with_system", event => {
+    if (!toolOptions) return;
+    const guidance = toolGuidance(pi, toolOptions);
+    const desired: Record<string, string | null> = { [GUIDANCE_SECTION]: guidance || null, ...owned };
+    const changed: Record<string, string | null> = {};
+    for (const [name, value] of Object.entries(desired)) {
+      const expected = value === null ? null : `<${name}>\n${value}\n</${name}>`;
+      let current: string | null = null;
+      for (const message of event.messages) if (message.role === "system" && message.sections && Object.hasOwn(message.sections, name))
+        current = message.sections[name] ?? null;
+      if (current !== expected) changed[name] = expected;
+    }
+    if (Object.keys(changed).length === 0) return;
+    return { messages: [...event.messages, { role: "system" as const, content: "",
+      sections: changed, timestamp: Date.now() }] };
+  });
+  pi.on("session_shutdown", () => { toolOptions = undefined; owned = {}; });
 }

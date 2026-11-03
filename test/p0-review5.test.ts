@@ -26,7 +26,7 @@ import type { ResolvedAgentSpec } from "@oma/contracts";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", async () => {
+test("001. Where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", async () => {
   const { decodeText } = await import("@oma/tui/keys");
   const bom = [...Buffer.from("﻿", "utf8")];
   // The decode layer still never eats a U+FEFF as a stream BOM, wherever the
@@ -53,7 +53,7 @@ test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the
     assert.equal(typed(hanWhole.slice(0, cut), hanWhole.slice(cut)), "A한B", `cut after byte ${cut}`);
 });
 
-test("P0V-68 / R13, P0-2: the last line of a long message can be scrolled to while a notice or the busy line is shown", () => {
+test("002. The last line of a long message can be scrolled to while a notice or the busy line is shown", () => {
   const row: MailRow = { id: "m-a", from: "worker-a", kind: "message", subject: "long", unread: false, path: "/mail/m-a" };
   const data: PanelData = Object.freeze({ dashboard: unknownDashboard(), config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([row]), mailUnreadable: null, mailOmitted: 0 });
   let state = step(INITIAL, { kind: "panel" } as Key, data, 262144).state;
@@ -67,7 +67,7 @@ test("P0V-68 / R13, P0-2: the last line of a long message can be scrolled to whi
   }
 });
 
-test("P0V-64 / R09, P0-2: an accepted failure a cleanup failure was bundled with is public as that accepted failure", () => {
+test("003. An accepted failure a cleanup failure was bundled with is public as that accepted failure", () => {
   const actual = "a".repeat(40);
   const accepted = new AcceptedFailure("STALE_BASE", "main moved", "none", { details: { actual } });
   const bundled = new AggregateError([accepted, new Error("EIO while removing a temporary")]);
@@ -86,7 +86,7 @@ test("P0V-64 / R09, P0-2: an accepted failure a cleanup failure was bundled with
 /** A native SQLite error as node:sqlite raises it. */
 const sqliteError = (errcode: number): Error => Object.assign(new Error(`sqlite ${errcode}`), { code: "ERR_SQLITE_ERROR", errcode });
 
-test("P0V-69 / F2, P0-5: SQLite's result code is read once -- corruption is corruption, an observation that failed is not", () => {
+test("004. SQLite's result code is read once -- corruption is corruption, an observation that failed is not", () => {
   const cases: [number, string][] = [
     [11, "STORE_CORRUPT"], [267, "STORE_CORRUPT"], [779, "STORE_CORRUPT"], [26, "STORE_CORRUPT"],
     [5, "DB_BUSY"], [517, "DB_BUSY"], [6, "DB_BUSY"],
@@ -112,7 +112,7 @@ test("P0V-69 / F2, P0-5: SQLite's result code is read once -- corruption is corr
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-69 / F2, P0-5: a BEGIN that fails with an I/O or unnamed error does not declare the store corrupt", t => {
+test("005. A BEGIN that fails with an I/O or unnamed error does not declare the store corrupt", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-begin-io-"));
   const store = new Store(join(root, "runtime.sqlite"));
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
@@ -125,7 +125,7 @@ test("P0V-69 / F2, P0-5: a BEGIN that fails with an I/O or unnamed error does no
   db.exec = exec;
 });
 
-test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt closes admission; a view file that failed to write does not", async () => {
+test("006. A status publication that finds the ledger corrupt closes admission; a view file that failed to write does not", async () => {
   const f = await preparedFixture(1);
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
@@ -157,7 +157,7 @@ test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt clos
 // P0V-59/R04 and P0V-95 service-file ownership cases remain in the raw
 // archive. Real cross-owner isolation is NATIVE-RESIDENT-ISOLATION-01.
 
-test("P0V-58 / R03, P0-5: a drain that could not prove its Residents ended says so, and still gives back the Store", async () => {
+test("007. A drain that could not prove its Residents ended says so, and still gives back the Store", async () => {
   // Ledger-only cleanup/error propagation; PolicyExecution owns no processes.
   // The outer BrokerLifetime must first join its native owner; refusal retains
   // Store and lock, as tested in packages/broker/test/native-lifetime.test.mjs.

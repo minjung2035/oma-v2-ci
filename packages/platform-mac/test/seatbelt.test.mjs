@@ -12,7 +12,7 @@ const source = () => ({ executable: "/opt/oma/node", argv: ["an argument", '$(li
   env: { HOME: "/oma/private/home", TMPDIR: "/oma/private/tmp", PATH: "/usr/bin:/bin", LANG: "C" },
   cwd: "/oma/private/work", input: "stdin belongs to the command", timeoutMs: 20000, stdoutBytes: 1024, stderrBytes: 1024 });
 
-test("Seatbelt preparation keeps arguments and stdin separate from the profile transport", () => {
+test("001. Seatbelt preparation keeps arguments and stdin separate from the profile transport", () => {
   const command = source();
   const result = prepareSeatbelt(command, policy());
   assert.ok(result.command.executable.endsWith("/seatbelt/oma-seatbelt"));
@@ -28,7 +28,7 @@ test("Seatbelt preparation keeps arguments and stdin separate from the profile t
   assert.equal(result.command.argv.at(-2), "an argument");
   assert.equal(result.command.env.HOME, "/oma/private/home");
 });
-test("Seatbelt preparation refuses ambient loader credentials and roots outside the writable view", () => {
+test("002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view", () => {
   for (const key of ["DYLD_INSERT_LIBRARIES", "LD_PRELOAD", "BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "SSH_AUTH_SOCK", "__XPC_DYLD_FRAMEWORK_PATH"]) {
     const command = source(), allowed = policy(); command.env[key] = "/human/credential";
     allowed.environmentKeys.push(key);
@@ -42,7 +42,7 @@ test("Seatbelt preparation refuses ambient loader credentials and roots outside 
   const extra = source(); extra.env.PROVIDER_SECRET = "must not inherit";
   assert.throws(() => prepareSeatbelt(extra, policy()), { code: "UNSUPPORTED_PROFILE" });
 });
-test("Seatbelt policy refuses untrusted IPC names and noncanonical roots", () => {
+test("003. Seatbelt policy refuses untrusted IPC names and noncanonical roots", () => {
   for (const service of ["*", "com.oma.rpc.*", "com.apple.SecurityServer", "com.apple.securityd.xpc", "x\") (allow default) ("]) {
     assert.throws(() => seatbeltProfile({ ...policy(), machServices: [service] }), { code: "UNSUPPORTED_PROFILE" });
   }
@@ -50,7 +50,7 @@ test("Seatbelt policy refuses untrusted IPC names and noncanonical roots", () =>
     assert.throws(() => seatbeltProfile({ ...policy(), writable: [dir(path)] }), { code: "UNSUPPORTED_PROFILE" });
   }
 });
-test("Seatbelt trusted Node preload is exact, read-only and interpreted only by the sandboxed target", () => {
+test("004. Seatbelt trusted Node preload is exact, read-only and interpreted only by the sandboxed target", () => {
   const command = source(), selected = policy(), preload = '/oma/shared/한 글자 "preload.mjs';
   selected.environmentKeys.push('NODE_OPTIONS'); selected.nodePreload = preload;
   command.env.NODE_OPTIONS = `--import=${pathToFileURL(preload).href}`;
@@ -61,7 +61,7 @@ test("Seatbelt trusted Node preload is exact, read-only and interpreted only by 
   for (const nodePreload of ['/human/x.js', '/oma/private/x.js', '/oma/private/credential/x.js'])
     assert.throws(() => prepareSeatbelt(command, { ...selected, nodePreload }), { code: 'UNSUPPORTED_PROFILE' });
 });
-test("Seatbelt profile paths remain literals and aggregate profiles never enter argv", () => {
+test("005. Seatbelt profile paths remain literals and aggregate profiles never enter argv", () => {
   const selected = policy();
   selected.readable = Array.from({ length: 1500 }, (_, i) => dir(`/oma/shared/한 글자-${i}`));
   selected.denied.push(dir('/oma/private/a"\\b) (allow default)'));
@@ -70,7 +70,7 @@ test("Seatbelt profile paths remain literals and aggregate profiles never enter 
   assert.ok(prepared.command.argv.every(value => !value.includes("(version 1)")));
   assert.ok(prepared.profile.includes(JSON.stringify('/oma/private/a"\\b) (allow default)')));
 });
-test("Seatbelt retains only explicit sorted non-bootstrap descriptor slots", () => {
+test("006. Seatbelt retains only explicit sorted non-bootstrap descriptor slots", () => {
   const kept=[8,6], selected={...policy(),preserveFds:kept}, prepared=prepareSeatbelt(source(),selected);
   assert.deepEqual(kept,[8,6]); assert.equal(prepared.command.argv[0],'--keep-fds=6,8');
   assert.equal(prepared.command.argv[1],source().executable);
@@ -78,7 +78,7 @@ test("Seatbelt retains only explicit sorted non-bootstrap descriptor slots", () 
   for(const preserveFds of [null,'6',[3],[0],[-1],[6,6],[2147483647],[6.5],[,6]])
     assert.throws(()=>prepareSeatbelt(source(),{...policy(),preserveFds}),{code:'UNSUPPORTED_PROFILE'});
 });
-test("Seatbelt noninteractive setup uses ordinary input and refuses to overwrite target stdin", () => {
+test("007. Seatbelt noninteractive setup uses ordinary input and refuses to overwrite target stdin", () => {
   const {input, ...command} = source();
   const prepared = prepareSeatbelt(command, {...policy(),profileInput:'stdin',preserveFds:[8,6]});
   assert.deepEqual(prepared.privateInputs, []);
@@ -94,7 +94,7 @@ test("Seatbelt noninteractive setup uses ordinary input and refuses to overwrite
     assert.throws(()=>prepareSeatbelt(command,{...policy(),profileInput}),{code:'UNSUPPORTED_PROFILE'});
   assert.equal(prepareSeatbelt(source(),{...policy(),profileInput:'descriptor'}).command.input,input);
 });
-test('Seatbelt readonly mapping permits loading dylibs without widening process execution',()=>{
+test("008. Seatbelt readonly mapping permits loading dylibs without widening process execution",()=>{
   const selected={...policy(),mapped:[dir('/opt/toolchain/frameworks')]},profile=seatbeltProfile(selected);
   assert.ok(profile.includes('(allow file-read* (subpath "/opt/toolchain/frameworks"))'));
   assert.ok(profile.includes('(allow file-map-executable (subpath "/opt/toolchain/frameworks"))'));

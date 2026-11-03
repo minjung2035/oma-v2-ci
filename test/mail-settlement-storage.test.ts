@@ -81,7 +81,7 @@ async function lostMail(f: ReturnType<typeof society>, key = "lost", input: Mail
   return operation;
 }
 
-test("V22B: large existing state does not block recovery, new mail or activation", async t => {
+test("001. Large existing state does not block recovery, new mail or activation", async t => {
   const f = society(t);
   assert.equal((await f.mail.send(auth, "delivered", work)).state, "succeeded");
   const lost = await lostMail(f);
@@ -95,7 +95,7 @@ test("V22B: large existing state does not block recovery, new mail or activation
   assert.deepEqual(f.units.starts, ["carol"], "large existing state does not block activation");
 });
 
-test("V22B: recovery retains frozen bytes in a larger tree and never replays settled facts", async t => {
+test("002. Recovery retains frozen bytes in a larger tree and never replays settled facts", async t => {
   const f = society(t);
   const lost = await lostMail(f);
   const object = readFileSync(f.mail.objectPath(lost.plan.message.id));
@@ -108,7 +108,7 @@ test("V22B: recovery retains frozen bytes in a larger tree and never replays set
   assert.deepEqual((await f.recover()).result, { examined: 0, repaired: 0, remaining: 0 }, "settled evidence is not replayed");
 });
 
-test("V22B: ordinary settlement materializes the frozen mail for every recipient", async t => {
+test("003. Ordinary settlement materializes the frozen mail for every recipient", async t => {
   const residents = ["alice", ...Array.from({ length: 31 }, (_, index) => `r${index}`)];
   const f = society(t, residents);
   const everyone: MailInput = { to: ["residents"], subject: "everyone", kind: "message", body: "b".repeat(LIMITS.mailBodyBytes / 2) };
@@ -122,7 +122,7 @@ test("V22B: ordinary settlement materializes the frozen mail for every recipient
 
 });
 
-test("V22B: on a real full filesystem new work is STORAGE_FULL and accepted mail is never complete without its views", t => {
+test("004. On a real full filesystem new work is STORAGE_FULL and accepted mail is never complete without its views", t => {
   const mount = mkdtempSync(join(tmpdir(), "oma-full-fs-"));
   try {
     const harness = new URL("./fixtures/full-fs-harness.js", import.meta.url).pathname;

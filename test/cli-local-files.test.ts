@@ -1,41 +1,18 @@
+import { createServer, type Server } from "node:net";
 /** FS-005 / INV10: typed client input effects reject unsafe local files
  * before sending, and large answers remain available in full. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { createServer, type Server } from "node:net";
+import { refusingPeer as peer } from "./fixtures/refusing-peer.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clientCall, clientProcessArgs } from "./fixtures/client-process.js";
 import { buildEml } from "@oma/mail/serialize";
 
 
-interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
-/** Records every request frame and reports an unavailable fixture, never success. */
-async function peer(root: string): Promise<Peer> {
-  const frames: Record<string, unknown>[] = [];
-  const path = join(root, "control.sock");
-  const server: Server = createServer(socket => {
-    let pending = Buffer.alloc(0);
-    socket.on("data", (chunk: Buffer) => {
-      pending = Buffer.concat([pending, chunk]);
-      while (pending.length >= 4 && pending.length >= 4 + pending.readUInt32BE(0)) {
-        const length = pending.readUInt32BE(0);
-        const frame = JSON.parse(pending.subarray(4, 4 + length).toString("utf8")) as Record<string, unknown>;
-        pending = pending.subarray(4 + length);
-        frames.push(frame);
-        const reply = Buffer.from(JSON.stringify({ v: 1, id: frame.id, ok: false,
-          error: { code: "BROKER_UNAVAILABLE", message: "fixture", retry: "same-key" } }));
-        const head = Buffer.alloc(4); head.writeUInt32BE(reply.length, 0);
-        socket.write(Buffer.concat([head, reply]));
-      }
-    });
-    socket.on("error", () => {});
-  });
-  await new Promise<void>(resolve => { server.listen(path, resolve); });
-  return { path, frames, close: () => new Promise<void>(resolve => { server.close(() => resolve()); }) };
-}
+
 /** Asynchronous, because the socket peer answers from this same event loop. */
 function invoke(root: string, socket: string, expression: string): Promise<{ status: number | null; stderr: string }> {
   return new Promise(resolve => {
@@ -48,7 +25,7 @@ function invoke(root: string, socket: string, expression: string): Promise<{ sta
   });
 }
 
-test("AV8 / FS-005, INV10: reply files must be regular, no-follow, and header-bounded", async () => {
+test("001. Reply files must be regular, no-follow, and header-bounded", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av8-"));
   const fixture = await peer(root);
   try {
@@ -81,7 +58,7 @@ test("AV8 / FS-005, INV10: reply files must be regular, no-follow, and header-bo
   }
 });
 
-test("P0V-63 / R08: a reply to a stored message larger than a request reads its headers and is sent", async () => {
+test("002. A reply to a stored message larger than a request reads its headers and is sent", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-reply-large-"));
   const fixture = await peer(root);
   try {
@@ -101,7 +78,7 @@ test("P0V-63 / R08: a reply to a stored message larger than a request reads its 
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-62 / R07, P0-4: a large answer has a marked preview and a complete durable output", async () => {
+test("003. A large answer has a marked preview and a complete durable output", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-cli-output-"));
   const agents = Array.from({ length: 6000 }, (_, index) => ({ agent: `worker-${String(index).padStart(5, "0")}`, desired: "enabled",
     activeState: "active", subState: "running", unitResult: "success", execMainStatus: 0, pending: 0, preparedBatches: 0,

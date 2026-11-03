@@ -66,7 +66,7 @@ function submitFixture(root: string, id: string, bytes = Buffer.from("fixture bu
         publishedRef: publishedRefFor("alice", id), message };
     return { payload, plan, message };
 }
-test("DB-009: unknown durable plan fields fail closed before recovery use", t => {
+test("001. Unknown durable plan fields fail closed before recovery use", t => {
     const { root, path, store } = fixture(t);
     seedRoute(store, root);
     const plan = store.getOperationById(OP)!.plan;
@@ -80,7 +80,7 @@ test("DB-009: unknown durable plan fields fail closed before recovery use", t =>
         reopened.close();
     }
 });
-test("DB-009: message identity and object path are derived from the operation", t => {
+test("002. Message identity and object path are derived from the operation", t => {
     const { path, store } = fixture(t);
     const message = makeValidMessagePlan(MAIL_OP);
     const payload = { to: ["alice"], subject: "mail", kind: "message", body: "fixture" };
@@ -95,7 +95,7 @@ test("DB-009: message identity and object path are derived from the operation", 
         reopened.close();
     }
 });
-test("DB-009: git.submit published ref and bundle path are operation-derived", t => {
+test("003. Git.submit published ref and bundle path are operation-derived", t => {
     const { root, path, store } = fixture(t);
     const ref = submitFixture(root, SUBMIT_REF_OP);
     const bundle = submitFixture(root, SUBMIT_PATH_OP);
@@ -113,7 +113,7 @@ test("DB-009: git.submit published ref and bundle path are operation-derived", t
         reopened.close();
     }
 });
-test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal STREAM_INVALID", async (t) => {
+test("004. Accepted submit bundle corruption cannot become terminal STREAM_INVALID", async (t) => {
     const { root, store } = fixture(t);
     seedGit(root);
     const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
@@ -141,7 +141,7 @@ test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal 
         store.close();
     }
 });
-test("ERR-001: preaccept-only failures cannot terminalize an accepted operation", t => {
+test("005. Preaccept-only failures cannot terminalize an accepted operation", t => {
     const { root, store } = fixture(t);
     seedRoute(store, root);
     try {
@@ -154,7 +154,7 @@ test("ERR-001: preaccept-only failures cannot terminalize an accepted operation"
         store.close();
     }
 });
-test("ERR-001: persisted failed preaccept-only code is STORE_CORRUPT", t => {
+test("006. Persisted failed preaccept-only code is STORE_CORRUPT", t => {
     const { root, path, store } = fixture(t);
     seedRoute(store, root);
     store.transaction(() => store.setOperationFailed(OP, "INTERNAL_ERROR"));
@@ -169,7 +169,7 @@ test("ERR-001: persisted failed preaccept-only code is STORE_CORRUPT", t => {
         reopened.close();
     }
 });
-test("ERR-001: persisted operation error code is a closed runtime enum", t => {
+test("007. Persisted operation error code is a closed runtime enum", t => {
     const { root, path, store } = fixture(t);
     seedRoute(store, root);
     store.transaction(() => store.setOperationFailed(OP, "INTERNAL_ERROR"));
@@ -184,7 +184,7 @@ test("ERR-001: persisted operation error code is a closed runtime enum", t => {
         reopened.close();
     }
 });
-test("DB-009: scalar message ids are not treated as MessagePlan objects", t => {
+test("008. Scalar message ids are not treated as MessagePlan objects", t => {
     const { store } = fixture(t);
     try {
         const payload = { message: ACK_MESSAGE };
@@ -197,7 +197,7 @@ test("DB-009: scalar message ids are not treated as MessagePlan objects", t => {
         store.close();
     }
 });
-test("DB-009: parseable wrong result fails closed for every operation read", t => {
+test("009. Parseable wrong result fails closed for every operation read", t => {
     const { root, path, store } = fixture(t);
     seedRoute(store, root);
     store.transaction(() => store.setOperationSucceeded(OP, JSON.stringify({ kind: "route.follow", topic: "dev", subscribed: true })));
@@ -212,7 +212,7 @@ test("DB-009: parseable wrong result fails closed for every operation read", t =
         reopened.close();
     }
 });
-test("DB-009: create initial EML is an immutable object before acceptance", async (t) => {
+test("010. Create initial EML is an immutable object before acceptance", async (t) => {
     const { root, store } = fixture(t);
     const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
     const auth: AuthContext = { actor: "alice", incarnation: 0, role: "resident", channel: "actor", capabilities: new Set(["agent.create"]),

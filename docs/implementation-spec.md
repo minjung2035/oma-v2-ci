@@ -285,7 +285,7 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [MAIL-004]** 주소 header encoding은 actor=`<actor>@<society>.oma.invalid`, commons/residents/principal은 동명 local part, topic=`topic-<name>@<society>.oma.invalid`다. topic- prefix와 같은 Resident local-part 충돌을 방지하기 위해 `topic-`로 시작하는 Resident 이름도 금지한다. To에는 logical addresses를 표시하고 확장된 전체 identity를 노출할 필요는 없다. receipt에는 recipientCount를 반환한다.
 
-**MUST [MAIL-005]** reply client는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID, References는 기존 ancestry+직전 ID이며 최대치 초과 시 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.
+**MUST [MAIL-005]** reply client는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID이고 References는 기존 ancestry+직전 ID를 제한 안에 보존하되 직전 ID를 항상 포함한다. References가 한 개만 허용되면 직전 ID를 유지하고, 두 개 이상이면 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.
 
 **MUST [MAIL-006]** send 순서는 ① 인증/제한/중복 조회 ② immutable eml stage+fsync ③ broker-only object publish+dir fsync ④ T-send ⑤ accepted pending receipt ⑥ archive/recipient materialize ⑦ operation succeeded다. 수신자가 0명이어도 archive publish 후 succeeded다. 성공은 delivery 완료이고 presentation/답변을 기다리지 않는다.
 
@@ -297,9 +297,9 @@ A-008은 2026-09-28 사용자 결정으로 철회했다([DR20](design-revisions.
 
 **MUST [MAIL-009]** `mail.ack`는 자기 delivery.acknowledged만 1로 만든다. body를 실제 읽었는지 추적하지 않는다. ACK는 권한/승인/업무 완료 조건이 아니고 기본 mail마다 요구하지 않는다.
 
-**MUST [BATCH-001; arch §§7,18]** batch 선택 대상은 공개 가능한 parent effect의 materialized=1,presented=0인 자기 deliveries다. 이미 prepared batch에 묶인 ID를 새 batch로 복사하지 않는다. prepare transaction이 ID snapshot과 batch 연결을 먼저 commit하고 그 뒤 new→cur rename, directory fsync, inbox view atomic publish를 수행한다. snapshot을 진행 중 새 메일로 확장하지 않는다.
+**MUST [BATCH-001; arch §§7,18]** batch 선택 대상은 공개 가능한 parent effect의 materialized=1,presented=0인 자기 deliveries다. 이미 prepared batch에 묶인 ID를 새 batch로 복사하지 않는다. 새 manifest는 최초 안내와 재안내의 view가 모두 설정 frame 안에 드는 ordered prefix로 정하고, 남은 deliveries는 다음 batch 대상으로 보존한다. prepare transaction이 ID snapshot과 batch 연결을 먼저 commit하고 그 뒤 new→cur rename, directory fsync, inbox view atomic publish를 수행한다. snapshot을 진행 중 새 메일로 확장하지 않는다.
 
-**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공하고, 읽기 안내는 저장된 원문이 아니라 본문을 보낸 사람이 쓴 그대로 보여 주는 읽기 도구를 가리킨다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit은 원문 잘림을 뜻하지 않는다. 완료가 확인되지 않은 batch를 다시 전달할 때는 notice 첫 줄에 그 사실을 고정 문장 하나로 밝힌다(D01, [DR5·DR6](design-revisions.md)).
+**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. frame이 부족하면 metadata 표시값을 명시적인 생략 표시로 줄이고 표시하지 못한 항목 수를 알린다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공하고, 읽기 안내는 저장된 원문이 아니라 본문을 보낸 사람이 쓴 그대로 보여 주는 읽기 도구를 가리킨다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit과 notice 생략은 원문이나 manifest의 잘림을 뜻하지 않는다. 완료가 확인되지 않은 batch를 다시 전달할 때는 notice 첫 줄에 그 사실을 고정 문장 하나로 밝힌다(D01, [DR5·DR6](design-revisions.md)).
 
 **MUST [BATCH-003]** 일반 batch의 최대 message 수는 host resource 설정 `batchMaxMessages`로 고정하며 초기 reference 값은 24다. direct/question/result/context class와 public-list class 양쪽이 있으면 각각 최소 1개를 포함하고, 남은 자리는 두 class를 교대로 oldest `(created_at_ms,message_id)`부터 선택한다. notice 6개도 이 순서를 사용한다. kind만 바꿔 권한·Principal 강제 개입을 얻을 수 없다.
 

@@ -5,7 +5,7 @@ import { OperationJournal } from "@oma/storage/operation-journal";
 import { reused } from "@oma/domain/request-identity";
 import { ledgerFixture, routeOperation, routeResult } from "./helpers/ledger-fixture.mjs";
 
-test("P3 Journal integration: every compatibility transition delegates to its mechanism", t => {
+test("001. Journal integration: every compatibility transition delegates to its mechanism", t => {
   const names = ["get", "getById", "classifyKey", "recoverableIds", "accept", "insert",
     "prepare", "succeed", "fail", "markUnknown"];
   const seen = new Set();
@@ -38,7 +38,7 @@ test("P3 Journal integration: every compatibility transition delegates to its me
   }
 });
 
-test("DR46: request-key error has its domain owner and preserves the actual Store refusal", t => {
+test("002. Request-key error has its domain owner and preserves the actual Store refusal", t => {
   const error = reused("alice", "same-key");
   assert.equal(error.code, "REQUEST_KEY_REUSED");
   assert.equal(error.message, "request key same-key (actor alice) already used with a different payload");

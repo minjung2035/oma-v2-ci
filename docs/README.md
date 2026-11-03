@@ -1,89 +1,49 @@
 # 문서 지도
 
-현재 사용법·구현 계약·검증 결과의 위치를 안내한다. 과거 작업 지시와 미채택 계획은 [보관 기록](archive.md)에 둔다.
+구현 기준, 사용법, 현재 실행 결과를 구분한다. 과거 작업자의 지시나 부분 PASS는 현재 사용자 요청과 실제 코드 검증을 대신하지 않는다.
 
-## 읽는 순서
+## 시작점
 
-1. 제품을 사용하려면 [운영 안내](operations.md), 제품의 목적은 [PRODUCT](PRODUCT.md)를 읽는다.
-2. 코드를 수정하려면 [PRIORITY-0](PRIORITY-0.md), [HANDOFF](HANDOFF.md), [MAINTENANCE](MAINTENANCE.md)를 읽는다.
-3. 관련 코드는 [책임 경계](application-boundaries.md)에서 찾고, 실제 검증 범위는 [validation](implementation/validation.md)에서 확인한다.
-4. 변경할 주제의 계약과 연결된 결정 기록을 확인한다.
-
-## 현재 문서
-
-| 찾는 내용 | 기준 문서 | 범위 |
-|---|---|---|
-| 최상위 원칙 | [PRIORITY-0](PRIORITY-0.md) | 확정된 사실·현재 권한·관측·수명의 구분 |
-| 제품의 목적 | [PRODUCT](PRODUCT.md) | Principal/Worker 협업과 Society/Personal의 경계 |
-| 설치·사용·설정·세션 보관 | [operations](operations.md) | 현재 사용 방법과 실행 조건 |
-| 코드 구조·package·실행 연결 | [application-boundaries](application-boundaries.md) | 현재 workspace 경로와 각 기능의 책임 |
-| 수정·검증 절차 | [MAINTENANCE](MAINTENANCE.md) | 작업 규율과 오류·복구·증거 취급 |
-| 최신 작업과 제약 | [HANDOFF](HANDOFF.md) | 현재 재개점. 과거 작업 일지를 누적하지 않음 |
-| 실제 실행 결과와 한계 | [validation](implementation/validation.md) | 최신 검증 입력·원시 근거·미실행 범위 |
-| 숫자 제한을 확인하는 방법 | [limit-bounds](limit-bounds.md) | 제한의 분류와 실제 소유 코드. 과거 숫자 목록은 보관 |
-
-## 구현·검증 계약
-
-| 계약 | 소유 범위 |
+| 목적 | 문서 |
 |---|---|
-| [architecture improvement contracts](implementation/architecture-improvements.md) | 요청한 개선의 versioned cutover와 단계별 소유 경계 |
-| [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면·물리 순서·Store·unit renderer |
-| [integration-policy](implementation/integration-policy.md) | 기존 tiered integration 정책. 수용된 변경은 해당 DR과 함께 확인 |
-| [macos-platform](macos-platform.md) | DR49 native 전환·VM 폐기·선행 gate·모듈 경계 계약 |
-| [verification-spec](verification-spec.md) | 수용 번호·시험·증거·LOC·qualification 요구 |
+| 최상위 불변 원칙 | [PRIORITY-0](PRIORITY-0.md) |
+| 협업 표면 변경의 요구 | [model-collaboration-surface-spec](model-collaboration-surface-spec.md)과 연결된 하위 spec |
+| 설치·실행·설정 | [운영 안내](operations.md) |
+| 코드 위치 | [책임 경계](application-boundaries.md), [협업 표면 구현·검증 위치](implementation/collaboration-v1-trace.md) |
+| 테스트 명령·병렬 실행·실패 확인 | [유지보수 안내](MAINTENANCE.md) |
+| 전체 실행 수치·실패·미검증 범위 | [현재 검증 상태](implementation/validation.md) |
+| 과거 실행·감사·작업 일지 | [보관 색인](archive.md) |
 
-계약의 존재는 구현 완료나 시험 통과를 뜻하지 않는다. 사용자 구현 지시로 DR49 native 전환을 진행 중이며, 실제 범위와 차단 조건은 validation을 따른다.
+## 구현·검증 기준
 
-## 구현 중인 전환
-
-[macOS native 전환 명세](macos-native-spec.md)는 VM 없는 공통 TypeScript 제품의 목표·확정 결정·미결정 후보·검증 순서를 정한다. 다음 구현자의 판단 절차와 원본 근거를 포함하며, 후보의 존재·설계 채택·실제 native 지원 완료를 구분한다.
-
-## 모델 도구 표면 전환
-
-[모델 도구 표면 전환 명세](model-tool-surface-spec.md)는 승인된 모델용 OMA CLI 제거, 같은 입력 계약의 action 통합, 전체 core/선택 도구 목록과 exact-selection `toolset`, reviewer 상태 projection, request/session 보존 및 실제 모델 비교 기준을 정한다. 구현 cutover 진행 중이며 runtime·provider·Sol 검증은 별도 관측 증거가 기록되기 전까지 미확인이다. 사람용 제품 CLI와 고정 architecture·accepted history는 제거하거나 소급 수정하지 않는다.
-
-## 진행성과 통합 및 자원 관리 개선안
-
-[아키텍처 개선 명세](architecture-improvement-spec.md)는 진행·상태, 벤치마크 준비, 변경안과 통합 시도 분리, 누적 비용의 네 단계와 12개 개선 항목을 다룬다. 목표 동작·책임·호환성·검증 시나리오를 정한 구현 전 설계안이다. 현재 실행 계약이나 과거 검증 결과를 대체하지 않으며, 구현 cutover 때 주제별 owner 계약과 결정 기록을 함께 갱신한다.
-
-## 기준본과 결정 기록
-
-| 문서 | 읽는 방법 |
+| 문서 | 범위 |
 |---|---|
-| [architecture](architecture.md) | N-001이 hash로 결박한 고정 기준본. 원문을 수정하지 않음 |
-| [design-revisions](design-revisions.md) | 수용된 설계 변경의 이유. DR 번호의 뜻을 재사용하지 않음 |
-| [consistency-decisions](implementation/consistency-decisions.md) | D01–D06·계획 카드·적대적 검토 당시의 결정 |
-| [과거 기록](archive.md) | 감사·작업 일지·이전 인계/검증·구현 명세 기록·미채택 설계안 |
+| [architecture](architecture.md) | hash로 고정된 기준본. 원문 유지 |
+| [implementation-spec](implementation-spec.md) | 신원·권한·IPC·Mail·Git·수명·복구·물리 순서 |
+| [verification-spec](verification-spec.md) | 수용 번호·시험·증거·qualification 요구 |
+| [협업 표면 spec](model-collaboration-surface-spec.md) | 기록 파일·9개 행동·역할·호출 복구·이행·수용 시나리오 |
+| [기존 모델 도구 전환 spec](model-tool-surface-spec.md) | 이전 표면 전환의 계약. 후속 변경은 협업 표면 spec과 [설계 결정](design-revisions.md)에서 확인 |
+| [macOS 플랫폼](macos-platform.md), [native spec](macos-native-spec.md) | 플랫폼 요구·미완성 범위·완료 조건 |
+| [아키텍처 개선 spec](architecture-improvement-spec.md), [구현 계약](implementation/architecture-improvements.md) | 진행·통합·자원 관리 변경의 기준 |
+| [integration-policy](implementation/integration-policy.md) | 통합 정책 |
+| [consistency-decisions](implementation/consistency-decisions.md) | 기존 결정과 고정 계획의 근거 |
+| [design-revisions](design-revisions.md) | 수용된 변경의 이유와 요구 ID |
 
-PRIORITY-0가 최상위다. 사용자 결정으로 고정 기준본과 달라진 내용은 해당 DR과 현재 구현 계약을 함께 확인한다. 과거 문서의 OPEN·ACCEPTED·PASS·브랜치·경로는 작성 당시의 사실이며 현재 지시나 지원 판정으로 사용하지 않는다.
+spec의 존재는 구현이나 검증 완료를 뜻하지 않는다. 최신 실행 판정은 검증 상태 문서 한 곳에서 확인한다. 모델 도구 이름 변경과 backend method·저장 사실의 변경도 구분한다.
+
+## 제품과 보조 자료
+
+[제품 목적](PRODUCT.md), [프롬프트 교정 배경](prompt-calibration-context.md), [제한값의 정의 위치](limit-bounds.md), [Priority 0 감사 기록](priority-0-audit.md)을 제공한다. Native 조사와 모듈 감사의 원문은 보관 색인에 있다. [HANDOFF](HANDOFF.md)는 현재 문서로 연결하는 안내만 유지한다.
 
 ## 새 정보를 어디에 적는가
 
-| 정보 | 기록 위치 |
-|---|---|
-| Core 동작·물리 순서·Store·unit 계약 | implementation-spec |
-| 기존 tiered 정책 / macOS 플랫폼 계약 | integration-policy / macos-platform |
-| 시험·증거·qualification 요구 | verification-spec |
-| 설계 선택의 이유 | design-revisions |
-| 현재 실행 판정·입력·원시 로그·한계 | validation |
-| 최신 요청·제약·재개점 | HANDOFF |
-| 사용법 / 코드 구조 / 유지보수 규율 | operations / application-boundaries / MAINTENANCE |
-| 과거의 긴 기록·채택 전 계획 | archive |
-
-같은 동작의 규범과 현재 실행 수치는 한 문서가 소유하고 다른 문서는 링크한다. 문서를 옮길 때도 요구 ID·수용 번호·과거 검증 및 승인 사실의 의미는 유지한다.
+- 요구·동작 계약은 해당 spec, 설계 변경 이유는 design-revisions에 기록한다.
+- 현재 실행 결과·입력·한계는 validation에 기록한다. 이전 실행 상세는 archive에 보관한다.
+- 사용법은 operations, 코드 위치는 application-boundaries, 테스트 사용법은 MAINTENANCE에 기록한다.
+- 인계 문서에 규범·현재 수치·다음 작업 지시를 중복해서 쌓지 않는다.
 
 ## 기계 판독 입력
 
-실제 TypeScript 계약·SQL schema·unit template과 아래 map은 코드 입력이므로 `packages/`와 `implementation/`에서 관리한다.
+`implementation/source-owners.json`과 `traceability.json`은 요구와 코드·시험을 연결한다. `durable-boundaries.json`은 실제 fault/retry/restart 경계, `oracle-map.json`은 고정 계획의 요구와 읽기 쉬운 테스트 이름을 연결한다. `review-notes.json`과 `review-ledger.json`은 과거 입력에 결박된 검토 기록이다.
 
-| 파일 | 용도 |
-|---|---|
-| [source-owners.json](../implementation/source-owners.json) | requirement별 production owner·entrypoint·call path·negative test |
-| [mutation-owners.json](../implementation/mutation-owners.json) | durable mutation owner와 변경 범위 |
-| [durable-boundaries.json](../implementation/durable-boundaries.json) | kill·retry·restart 검증 경계 |
-| [traceability.json](../implementation/traceability.json) | 규범 fingerprint와 evidence inventory |
-| [oracle-map.json](../implementation/oracle-map.json) | 계획 oracle과 verification lane |
-| [review-notes.json](../implementation/review-notes.json), [review-ledger.json](../implementation/review-ledger.json) | byte에 결박된 검토 기록과 생성 ledger |
-| [broker-lifecycle-review.json](../implementation/broker-lifecycle-review.json) | broker lifecycle 경계 검토 |
-
-`npm run evidence:refresh`는 graph·source inventory/digest·review ledger·구조 입력 binding을 갱신한다. 생성 결과는 `runtimeProof: false`다. 과거 PASS나 review를 새 입력의 승인으로 바꾸지 않으며, stale authored review를 자동으로 다시 결박하지 않는다.
+`npm run evidence:refresh`는 구조 자료를 생성하며 `runtimeProof: false`다. 과거 PASS나 검토 사실을 새 입력의 승인으로 바꾸지 않는다.

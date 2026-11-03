@@ -18,7 +18,7 @@ import { join } from "node:path";
 
 export const PRIMITIVES = Object.freeze({
   transaction: "db-commit",
-  publishImmutableFile: "file-publication", replaceDerivedFile: "file-publication", writeAtomic: "file-publication",
+  publishImmutableFile: "file-publication", replaceDerivedFile: "file-publication", replaceDerivedEntry: "file-publication", writeAtomic: "file-publication",
   publishNoReplace: "file-publication", publishUserFile: "file-publication", replaceUserFile: "file-publication",
   writeExclusiveFsyncedFile: "file-publication", writeFsynced: "file-publication", writeExclusiveFsyncedEntry: "file-publication",
   publishStagedDirectory: "file-publication", replaceDerivedSymlink: "file-publication", publishBatchView: "file-publication",

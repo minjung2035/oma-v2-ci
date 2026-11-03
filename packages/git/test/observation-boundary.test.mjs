@@ -6,13 +6,15 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { GitObserver, parseNameStatusZ, parseGitlinksZ, classifyRefAfterCas } from "@oma/git/observe";
 import { protectedPathMatches } from "@oma/domain/git-facts";
-import { canonicalMergeDiff, createCanonicalObserver, CANONICAL_PROCESS_LIMITS } from "@oma/git/canonical-command";
+import { createCanonicalObserver, CANONICAL_PROCESS_LIMITS } from "@oma/git/canonical-command";
+import { ReviewArtifacts } from "../dist/review-artifact.js";
+import { readImmutableBytes } from "@oma/storage/immutable-file";
 import { mergeDiffText } from "@oma/domain/git-facts";
 const bytes = (text) => Buffer.from(text, "utf8");
 function evidence(patch = {}) {
     return { status: 0, signal: null, stdout: bytes(""), stderr: bytes(""), ...patch };
 }
-test("name-status pairs preserve filename bytes and never add status tokens as paths", () => {
+test("001. Name-status pairs preserve filename bytes and never add status tokens as paths", () => {
     const expected = [
         { status: "A", path: "A" }, { status: "M", path: "M secret.txt" },
         { status: "D", path: "tab\tname" }, { status: "T", path: "line\nname" },
@@ -35,7 +37,7 @@ test("name-status pairs preserve filename bytes and never add status tokens as p
 // defect of that candidate, classified "refused" (INVALID_REQUEST at `observed`)
 // -- neither "unknown" (the observation answered) nor "corrupt" (the store is
 // fine). An earlier title called this "unknown"; that predates the refused kind.
-test("AV-25: a name the wire grammar cannot carry is refused, not corruption", () => {
+test("002. A name the wire grammar cannot carry is refused, not corruption", () => {
     // Candidate scope: the candidate's content cannot be represented on the wire —
     // the changed-path set is unobservable, but the output grammar itself was intact.
     for (const input of [Buffer.from([77, 0, 255, 0]), bytes("M\0../outside\0"), bytes("A\0/abs\0"),
@@ -61,7 +63,7 @@ test("AV-25: a name the wire grammar cannot carry is refused, not corruption", (
     const result = clean.changedPaths("/repo", "a".repeat(40), "b".repeat(40));
     assert.deepEqual(result.kind === "present" ? result.value : null, [{ status: "A", path: "fine.txt" }]);
 });
-test("only the defined ref outcome proves absence; process evidence is retained", () => {
+test("003. Only the defined ref outcome proves absence; process evidence is retained", () => {
     const absent = evidence({ status: 1 });
     const result = new GitObserver(() => absent).ref("/repo", "refs/heads/main");
     assert.equal(result.kind, "absent");
@@ -80,7 +82,7 @@ test("only the defined ref outcome proves absence; process evidence is retained"
     assert.equal(new GitObserver(() => evidence({ stdout: bytes(" a".repeat(20)) })).ref("/repo", "refs/heads/main").kind, "corrupt");
     assert.equal(new GitObserver(() => evidence({ stdout: bytes(`${"a".repeat(40)}\n`) })).ref("/repo", "refs/heads/main").kind, "present");
 });
-test("AV-05: the merge diff is raw bytes; the one text rendering never substitutes replacement characters", () => {
+test("004. The merge diff is raw bytes; the one text rendering never substitutes replacement characters", () => {
     const utf8 = Buffer.from("diff --git a/x b/x\n+한글\n", "utf8");
     assert.equal(mergeDiffText(utf8), utf8.toString("utf8"));
     const binary = Buffer.from("diff --git a/b b/b\n+\xff\xfe\n", "latin1");
@@ -99,7 +101,7 @@ function decodeUtf8Throws(bytes) {
         return true;
     }
 }
-test("AV-05: canonicalMergeDiff returns the authoritative bytes -- non-UTF-8 content reaches the renderer intact", () => {
+test("005. CanonicalMergeDiff returns the authoritative bytes -- non-UTF-8 content reaches the renderer intact", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-diff-bytes-"));
     const env = { HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
         GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
@@ -122,7 +124,10 @@ test("AV-05: canonicalMergeDiff returns the authoritative bytes -- non-UTF-8 con
         run(["add", "--all"]);
         run(["commit", "-qm", "candidate"]);
         const candidate = run(["rev-parse", "HEAD"]);
-        const diff = canonicalMergeDiff(join(root, ".git"), base, candidate, 1 << 20);
+        const owners = [];
+        const prepared = await new ReviewArtifacts(join(root, ".git")).prepare("op-12345678-1234-4123-8123-123456789abc", base, candidate, owner => owners.push(owner));
+        assert.equal(owners.length, 1);
+        const diff = readImmutableBytes(join(root, ".git/oma-results", prepared.diff.reference.split(":")[1] + ".result"), prepared.diff.sha256, prepared.diff.bytes);
         assert.ok(Buffer.isBuffer(diff) && decodeUtf8Throws(diff), "the raw diff keeps its non-UTF-8 byte");
         assert.ok(diff.includes(0xff));
         const rendered = mergeDiffText(diff);
@@ -139,7 +144,7 @@ test("AV-05: canonicalMergeDiff returns the authoritative bytes -- non-UTF-8 con
 // strict grammar may decode it: malformed bytes are corrupt output, a leaf
 // name outside the wire grammar refuses that candidate, and neither is ever
 // "no gitlinks".
-test("UX-09: gitlink records parse only the strict ls-tree grammar; hostile bytes corrupt or refuse", () => {
+test("006. Gitlink records parse only the strict ls-tree grammar; hostile bytes corrupt or refuse", () => {
     const oid = "a".repeat(40);
     const record = (mode, type, path, oidText = oid) => bytes(`${mode} ${type} ${oidText}\t${path}\0`);
     // Well-formed leaf entries: only 160000 rows are collected; nested paths,
@@ -216,7 +221,7 @@ test("UX-09: gitlink records parse only the strict ls-tree grammar; hostile byte
 // buffer into unknown at every gate now answers whole. The fail-before
 // stands as the control: the 4 MiB run still answers unknown rather than a
 // truncated list.
-test("UX-09: a tree larger than the shared bound still observes gitlinks whole", () => {
+test("007. A tree larger than the shared bound still observes gitlinks whole", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-gitlinks-bound-"));
     const env = { HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
         GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
@@ -259,7 +264,7 @@ test("UX-09: a tree larger than the shared bound still observes gitlinks whole",
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("post-CAS observations distinguish expected candidate third and unknown without mutation", () => {
+test("008. Post-CAS observations distinguish expected candidate third and unknown without mutation", () => {
     const base = "a".repeat(40);
     const candidate = "b".repeat(40);
     const third = "c".repeat(40);
@@ -274,7 +279,7 @@ test("post-CAS observations distinguish expected candidate third and unknown wit
     assert.deepEqual(classifyRefAfterCas(unknown, base, candidate), { kind: "unknown", observation: unknown });
 });
 for (const format of ["sha1", "sha256"]) {
-    test(`real ${format} Git observations preserve A/M/D/T and hostile-looking filenames`, () => {
+    test(`009. Real ${format} Git observations preserve A/M/D/T and hostile-looking filenames`, () => {
         const root = mkdtempSync(join(tmpdir(), `oma-observe-${format}-`));
         const env = { HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
             GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
@@ -320,6 +325,9 @@ for (const format of ["sha1", "sha256"]) {
             assert.equal(objectFormat.kind === "present" ? objectFormat.value : null, format);
             assert.equal(observer.ref(repository, "refs/heads/not-present").kind, "absent");
             assert.equal(observer.commit(repository, candidate).kind, "present");
+            run(["tag", "-a", "candidate-tag", "-m", "not an exact commit", candidate]);
+            const tag = run(["rev-parse", "refs/tags/candidate-tag"]);
+            assert.notEqual(observer.commit(repository, tag).kind, "present", "a tag object is not its peeled commit");
             const ancestry = observer.ancestry(repository, base, candidate);
             assert.equal(ancestry.kind === "present" ? ancestry.value : null, true);
             run(["update-ref", "refs/oma/published/alice/frozen", candidate]);

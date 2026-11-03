@@ -97,17 +97,21 @@ function openEntryWithin(root: string, path: string, flags: number, mode = 0o644
   }
   const parent = openDirectoryWithin(root, components.slice(0, -1), false);
   try {
-    try { return openAt(parent, components.at(-1)!, flags | constants.O_NOFOLLOW, mode); }
+    // A FIFO must reach the inode/type guard without waiting for another
+    // endpoint. O_NONBLOCK has no effect on ordinary files or directories.
+    try { return openAt(parent, components.at(-1)!, flags | constants.O_NOFOLLOW | constants.O_NONBLOCK, mode); }
     catch (error) { refusedLink(error); }
   } finally { closeSync(parent); }
 }
 
 /** A regular file with no other name: a hard link would carry a write to
  * wherever else that file is named. */
-function ownedFile(fd: number): void {
+function ownedFile(fd: number) {
   const stat = fstatSync(fd);
   if (!stat.isFile()) throw new WorkspaceRefusal("tool path is not a regular file");
+  if (stat.nlink === 0) throw new WorkspaceRefusal("tool path is no longer a named file");
   if (stat.nlink > 1) throw new WorkspaceRefusal("tool path is a file with other names; it is not written through");
+  return stat;
 }
 
 /** Borrows the newly opened file description for the callback. On Darwin its
@@ -126,6 +130,26 @@ export function readWithin(root: string, path: string): Buffer {
     let filled = 0;
     while (filled < size) { const count = readSync(fd, buffer, filled, size - filled, filled); if (count === 0) break; filled += count; }
     return buffer.subarray(0, filled);
+  } finally { closeSync(fd); }
+}
+/** One bounded, stable input snapshot through the ordinary descriptor-relative
+ * file boundary. This does not alter the vendor read tool's existing behavior. */
+export function readBoundedWithin(root: string, path: string, maximum: number): Buffer {
+  if (!Number.isSafeInteger(maximum) || maximum < 1) throw new WorkspaceRefusal("invalid source byte bound");
+  const fd = openEntryWithin(root, path, constants.O_RDONLY);
+  try {
+    ownedFile(fd);
+    const before = sampleFile(fd);
+    if (before.size < 0n || before.size > BigInt(maximum)) throw new WorkspaceRefusal("SOURCE_UNREADABLE: source exceeds its effective byte bound");
+    const size = Number(before.size), bytes = Buffer.alloc(size + 1);
+    let used = 0;
+    while (used < bytes.length) {
+      const count = readSync(fd, bytes, used, bytes.length - used, used);
+      if (count === 0) break;
+      used += count;
+    }
+    if (used !== size || !sameSample(before, sampleFile(fd))) throw new WorkspaceRefusal("SOURCE_CHANGED: source changed during its snapshot");
+    return bytes.subarray(0, size);
   } finally { closeSync(fd); }
 }
 
@@ -157,26 +181,50 @@ export const FILE_CHANGED_REFUSAL = "tool path resolves to a different file than
 export type WriteExpectation = { dev: number; ino: number } | { text: string };
 export const FILE_CONTENT_CHANGED_REFUSAL = "tool file contents changed since the fix was computed; recompute the fix";
 
+/** Observable identity, ownership and content-change evidence on the held
+ * inode. Equal timestamps alone do not prove that no mutation happened. */
+type FileSample = { size: bigint; dev: bigint; ino: bigint; nlink: bigint; mtimeNs: bigint; ctimeNs: bigint };
+function sampleFile(fd: number): FileSample {
+  const stat = fstatSync(fd, { bigint: true });
+  return { size: stat.size, dev: stat.dev, ino: stat.ino, nlink: stat.nlink, mtimeNs: stat.mtimeNs, ctimeNs: stat.ctimeNs };
+}
+function sameSample(left: FileSample, right: FileSample): boolean {
+  // A new alias is observable even when timestamps share one filesystem tick.
+  return left.nlink === 1n && right.nlink === 1n && left.size === right.size && left.dev === right.dev && left.ino === right.ino &&
+    left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
+}
+
 /** Open without O_CREAT and check the caller's expectation on that descriptor
  * before truncation. Hashline retains its dev+ino identity semantics; computed
- * fixes compare exact UTF-8 input bytes to detect in-place concurrent writes.
+ * fixes compare exact UTF-8 input bytes to detect in-place concurrent writes,
+ * and then sample the same descriptor again -- a writer that landed an append
+ * (or any other mutation) after the comparison would be truncated away, so
+ * the refused span covers the whole validation-to-truncation window rather
+ * than only the read. A writer that mutates after that final sample is beyond
+ * a check-and-write without kernel locking, and this does not claim otherwise:
+ * concurrent writers outside the shared writer's serialization are detected
+ * up to the truncation, not excluded.
  * The shared tool writer calls this inside its serialization boundary. */
 export function writeWithinUnchanged(root: string, path: string, content: string, expected: WriteExpectation): void {
   const fd = openEntryWithin(root, path, "text" in expected ? constants.O_RDWR : constants.O_WRONLY);
   try {
     ownedFile(fd);
-    const stat = fstatSync(fd);
     if ("text" in expected) {
-      const bytes = Buffer.alloc(stat.size);
+      const opened = sampleFile(fd);
+      const bytes = Buffer.alloc(Number(opened.size));
       let filled = 0;
       while (filled < bytes.length) {
         const count = readSync(fd, bytes, filled, bytes.length - filled, filled);
         if (count === 0) break;
         filled += count;
       }
-      if (!bytes.subarray(0, filled).equals(Buffer.from(expected.text, "utf8")))
+      if (filled !== bytes.length || !bytes.equals(Buffer.from(expected.text, "utf8")))
         throw new WorkspaceRefusal(FILE_CONTENT_CHANGED_REFUSAL);
-    } else if (stat.dev !== expected.dev || stat.ino !== expected.ino) throw new WorkspaceRefusal(FILE_CHANGED_REFUSAL);
+      if (!sameSample(opened, sampleFile(fd))) throw new WorkspaceRefusal(FILE_CONTENT_CHANGED_REFUSAL);
+    } else {
+      const stat = ownedFile(fd);
+      if (stat.dev !== expected.dev || stat.ino !== expected.ino) throw new WorkspaceRefusal(FILE_CHANGED_REFUSAL);
+    }
     ftruncateSync(fd, 0);
     const bytes = Buffer.from(content, "utf8");
     for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at, bytes.length - at, at);

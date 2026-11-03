@@ -77,7 +77,9 @@ function relativeName(path: string): void {
       "filesystem name must be relative and canonical",
     );
 }
-/** Caller owns the result; symlinks/magic links and escapes are rejected in-kernel. */
+/** Caller owns the result; symlinks/magic links and escapes are rejected in-kernel.
+ * A RESOLVE_BENEATH race that the kernel cannot adjudicate is retried with the
+ * same held root and security flags, bounded; sustained races remain EAGAIN. */
 export function openBeneath(
   directory: number,
   path: string,
@@ -113,9 +115,21 @@ export function openBeneath(
   how.writeBigUInt64LE(BigInt(flags | 0o2000000 /* O_CLOEXEC */), 0);
   how.writeBigUInt64LE(BigInt(mode), 8);
   how.writeBigUInt64LE(0x0cn, 16); // RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS
-  // glibc reads all six syscall argument slots, including unused ones. Supply
-  // both trailing slots: Koffi's foreign stack may end immediately after our args.
-  const result = syscalls().open(437, "int", directory, "const char *", path, "const void *", how, "size_t", how.byteLength, "long", 0, "long", 0);
+  // openat2(2) answers EAGAIN when it cannot confirm that the walk stayed
+  // beneath the held root because a rename or mount raced it: the documented
+  // indeterminate outcome ("the caller may choose to retry"), not a containment
+  // verdict. Re-issue the same held descriptor, name and resolve flags a bounded
+  // number of times. A sustained race still surfaces EAGAIN and a real denial
+  // (EXDEV/ENOTDIR/ELOOP) still fails as STORE_CORRUPT; nothing else is retried
+  // and containment is never widened, so no openat/open fallback exists.
+  const open = syscalls().open;
+  let result = -1;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    // glibc reads all six syscall argument slots, including unused ones. Supply
+    // both trailing slots: Koffi's foreign stack may end immediately after our args.
+    result = open(437, "int", directory, "const char *", path, "const void *", how, "size_t", how.byteLength, "long", 0, "long", 0);
+    if (result >= 0 || errno() !== 11 /* EAGAIN: indeterminate containment race */) break;
+  }
   if (result < 0 && [18, 20, 40].includes(errno()))
     throw new StoreError(
       "STORE_CORRUPT",

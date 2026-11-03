@@ -1,16 +1,11 @@
-// A stand-in for the Principal's engine, faithful everywhere except the model.
-//
-// It loads the real compiled trusted extension, is started with the real
-// environment the product builds, holds the product's real private channel on
-// descriptor 3, and runs OMA's tools exactly as the engine would: the tools
-// start the real CLI as this process's child. Only the model is replaced -- a
-// test drives the extension line by line on stdin, and the turn a delivery
-// triggers is ended by the test, the way a model's reply would end it.
-//
-// Every line on stdout is one JSON event, shaped like the engine's RPC events
-// where the product reads them.
+// Component harness for Principal channel credentials and delivery boundaries.
+// It invokes the typed host Client directly, not a model tool or CLI. The real
+// bundled SDK and collaboration catalog are exercised by scenario tests.
 import "#oma-test/app/runtime/client-preload";
 import { appendFileSync, readFileSync } from "node:fs";
+import { Client } from "@oma/client";
+import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { registerDelivery } from "@oma/extension/delivery";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 
@@ -65,23 +60,21 @@ const fire = async (event, payload) => {
   for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
 };
 
-const extension = (await import(process.env.OMA_TEST_EXTENSION)).default;
-extension(pi);
+const channel = PrincipalChannel.open();
+const client = new Client({ cwd: process.cwd(), env: process.env }, () => channel.current(), signal => channel.waitForGrant(signal));
+registerDelivery(pi);
 emit({ type: "loaded", tools: [...tools.keys()] });
 
 for await (const line of createInterface({ input: process.stdin })) {
   const request = JSON.parse(line);
   try {
     switch (request.op) {
-      case "tool": {
-        const tool = tools.get(request.name);
-        if (!tool) throw new Error(`no tool ${request.name}`);
-        const call = `call-${request.id}`;
-        message({ role: "assistant", content: [{ type: "toolCall", id: call, name: request.name, arguments: request.params ?? {} }] });
-        let result;
-        try { result = await tool.execute(call, request.params ?? {}, undefined, undefined, ctx); }
-        finally { message({ role: "toolResult", toolCallId: call, toolName: request.name, content: result?.content ?? [], isError: result === undefined }); }
-        emit({ type: "tool", id: request.id, ok: true, text: result.content[0]?.text ?? "" });
+      case "client": {
+        const result = request.action === "send"
+          ? await client.sendMail(request.params, `fixture-${request.id}`)
+          : request.action === "status" ? await client.queryText("status.get", {})
+          : (() => { throw new Error("unknown fixture client action"); })();
+        emit({ type: "tool", id: request.id, ok: true, text: result });
         break;
       }
       case "prompt": {

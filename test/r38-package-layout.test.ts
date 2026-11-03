@@ -9,7 +9,7 @@ import { runtimeAssets, assertRuntimeAssets } from "#oma-test/app/runtime/assets
 import { SCHEMA_PATH } from "@oma/storage";
 
 const project = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
-test("R38: module-relative schema and native targets match the non-flattened build", () => {
+test("001. Module-relative schema and native targets match the non-flattened build", () => {
   const assets = runtimeAssets(project);
   assert.doesNotThrow(() => assertRuntimeAssets(assets, { schema: SCHEMA_PATH }));
   const config = JSON.parse(readFileSync(join(project, "tsconfig.build.json"), "utf8"));
@@ -20,7 +20,7 @@ test("R38: module-relative schema and native targets match the non-flattened bui
   assert.equal("systemd" in assets, false, "native runtime assets do not require a manager template directory");
 });
 
-test("R38: layout-only fixture detects missing raw SQL, native target, wrong root and symlink asset", () => {
+test("002. Layout-only fixture detects missing raw SQL, native target, wrong root and symlink asset", () => {
   // Empty regular files model path/type facts ONLY, never full packaging or execution proof.
   const root = mkdtempSync(join(tmpdir(), "oma-layout-only-"));
   const assets = runtimeAssets(root);

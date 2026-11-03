@@ -322,6 +322,14 @@ export class Store implements StoreQueries, StoreWrites {
     } finally { this.transitions.reset(); }
   }
   get inTransaction(): boolean { return this.transactions.active || (this.db.isOpen && this.db.isTransaction); }
+  /** Ephemeral invalidation hint only. It resets on connection reopen and may
+   * advance for rolled-back work. It is neither a durable change cursor, snapshot,
+   * proof of absence nor authority; consumers still read the actual facts. */
+  observationStamp(): string {
+    const local = safeInteger(fullRow(this.prepare("SELECT total_changes() AS changes").get(), ["changes"], "local observation invalidation").changes, "local observation invalidation");
+    const external = safeInteger(fullRow(this.prepare("PRAGMA data_version").get(), ["data_version"], "external observation invalidation").data_version, "external observation invalidation");
+    return `${local}/${external}`;
+  }
   private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
@@ -383,6 +391,11 @@ export class Store implements StoreQueries, StoreWrites {
     return operation;
   }
   getOperationById(id: OperationId): DecodedOperation | null { return this.journal.getById(id); }
+  operationSequence(id: OperationId): number | null { return this.reader.operationSequence(id); }
+  acceptedOperationPage(after = 0, through?: number, maximum = 128) {
+    this.assertAvailable();
+    return this.reader.acceptedOperationPage(after, through, maximum);
+  }
   /** Bounded presentation lookup: ordinary mail needs no full operation decode.
    * Only an integration's validated accepted plan can identify a notice. */
   integrationNoticeRequester(messageId: MessageId): Actor | null {
@@ -400,6 +413,7 @@ export class Store implements StoreQueries, StoreWrites {
   }
   latestAgentAction(agent: Actor, actor?: Actor) { return this.reader.latestAction(agent, actor); }
   submittedOperations() { return this.reader.submissions(); }
+  attachmentRoots() { return this.reader.attachmentRoots(); }
   attestationFacts() { return this.reader.attestations(); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }

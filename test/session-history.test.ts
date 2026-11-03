@@ -28,7 +28,7 @@ for (const [name, make] of [
   ["invalid timestamp", h => JSON.stringify({ ...h, timestamp: "bad" })], ["wrong type", h => JSON.stringify({ ...h, type: "message" })],
   ["invalid UTF-8", () => Buffer.from([255])], ["oversized header", () => " ".repeat(1048577)],
 ] as const satisfies readonly (readonly [string, (header: { type: string; id: string; version: number; timestamp: string; cwd: string }) => string | Buffer])[])
-  test(`Session history: ${name} cannot become a new identity or change preferences`, async t => {
+  test(`001. Session history: ${name} cannot become a new identity or change preferences`, async t => {
     const w = fixture(t), bytes = Buffer.from(make(w.header)); writeFileSync(w.file, bytes);
     const prefs = join(w.data, ".personal", "settings.json"), saved = '{"sentinel":"unchanged"}'; writeFileSync(prefs, saved);
     await assert.rejects(sessionBirthForHistory(w.data, w.file, w.cwd), { code: "STORE_CORRUPT" });
@@ -41,23 +41,23 @@ for (const [name, make] of [
     assert.equal(existsSync(join(w.data, ".engine")), false); assert.equal(existsSync(join(w.personal, "history.lock")), false);
     assert.equal(existsSync(join(w.root, "run")), false);
   });
-for (const version of [3]) test(`Session history: engine-owned version ${version} is observed without migration`, async t => {
+for (const version of [3]) test(`002. Session history: engine-owned version ${version} is observed without migration`, async t => {
   const w = fixture(t), bytes = JSON.stringify({ ...w.header, version }); writeFileSync(w.file, bytes);
   assert.deepEqual(await sessionBirthForHistory(w.data, w.file, "/another-window"), w.birth);
   assert.equal(readFileSync(w.file, "utf8"), bytes, "observation does not append a newline or migrate entries");
 });
-test("Session history: header bound does not limit the engine-owned conversation", async t => {
+test("003. Session history: header bound does not limit the engine-owned conversation", async t => {
   const w = fixture(t); writeFileSync(w.file, JSON.stringify(w.header) + "\n" + "x".repeat(2 * 1024 * 1024));
   await assertSessionHistory(w.file, w.birth);
   assert.equal(readFileSync(w.file).length > 2 * 1024 * 1024, true);
 });
-test("Session history: missing, directory and symlink are not repaired or imported", async t => {
+test("004. Session history: missing, directory and symlink are not repaired or imported", async t => {
   const w = fixture(t); await assert.rejects(assertSessionHistory(w.file, w.birth), { code: "INVALID_REQUEST" });
   mkdirSync(w.file); await assert.rejects(assertSessionHistory(w.file, w.birth)); rmSync(w.file, { recursive: true });
   const target = join(w.root, "outside.jsonl"), text = JSON.stringify(w.header); writeFileSync(target, text); symlinkSync(target, w.file);
   await assert.rejects(assertSessionHistory(w.file, w.birth)); assert.equal(readFileSync(target, "utf8"), text);
 });
-for (const recorded of [false, true]) test(`Session history: ${recorded ? "recorded" : "missing birth"} Society requires identity before resume`, async t => {
+for (const recorded of [false, true]) test(`005. Session history: ${recorded ? "recorded" : "missing birth"} Society requires identity before resume`, async t => {
   const w = fixture(t), society = join(w.data, "demo"), birth = newSessionBirth(society, "society", w.cwd);
   if (recorded) publishSessionBirth(society, birth); else mkdirSync(society);
   writeFileSync(join(society, "project-binding.json"), JSON.stringify({ kind: "oma-project-binding-v1", society: "demo", canonicalProjectPath: w.cwd }));
@@ -79,7 +79,7 @@ for (const recorded of [false, true]) test(`Session history: ${recorded ? "recor
   assert.equal(existsSync(join(society, "session-mode.json")), recorded, "legacy observation does not publish a new fact");
 });
 
-for (const version of [undefined, 1, 2]) test(`DR46 Session history: unsupported header version ${version} refuses without changing saved bytes`, async t => {
+for (const version of [undefined, 1, 2]) test(`006. Session history: unsupported header version ${version} refuses without changing saved bytes`, async t => {
   const w = fixture(t), bytes = JSON.stringify({ ...w.header, version }); writeFileSync(w.file, bytes);
   await assert.rejects(sessionBirthForHistory(w.data, w.file, "/another-window"), { code: "STORE_CORRUPT" });
   assert.equal(readFileSync(w.file, "utf8"), bytes);

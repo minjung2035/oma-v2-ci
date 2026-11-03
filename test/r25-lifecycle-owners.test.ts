@@ -31,7 +31,7 @@ function fixture() {
 }
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
-test("R25: subscription replay keeps one durable identity and unchanged terminal bytes", t => {
+test("001. Subscription replay keeps one durable identity and unchanged terminal bytes", t => {
   const f = fixture(); t.after(() => f.close());
   const key = randomUUID();
   const first = f.registry.follow(f.auth, "updates", true, key);
@@ -45,7 +45,7 @@ test("R25: subscription replay keeps one durable identity and unchanged terminal
   assert.throws(() => f.registry.follow(f.auth, "other", true, key), code("REQUEST_KEY_REUSED"));
 });
 
-test("R25: identity-only subscription replay does not authorize a fresh stopped-actor action", t => {
+test("002. Identity-only subscription replay does not authorize a fresh stopped-actor action", t => {
   const f = fixture(); t.after(() => f.close());
   const key = randomUUID();
   const first = f.registry.follow(f.auth, "updates", true, key);
@@ -57,7 +57,7 @@ test("R25: identity-only subscription replay does not authorize a fresh stopped-
   assert.throws(() => f.registry.follow({ ...f.auth, incarnation: 0 }, "updates", true, key), code("STALE_RUN"));
 });
 
-test("R25: management scope uses the same lineage and current live lease", t => {
+test("003. Management scope uses the same lineage and current live lease", t => {
   const f = fixture(); t.after(() => f.close());
   const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
   assert.doesNotThrow(() => policy.requireManage(f.auth, "alice"));
@@ -68,7 +68,7 @@ test("R25: management scope uses the same lineage and current live lease", t => 
   assert.throws(() => policy.requireManage(f.auth, "child"), code("STALE_RUN"));
 });
 
-test("R25: host refresh and transaction-time revision comparison are separate", t => {
+test("004. Host refresh and transaction-time revision comparison are separate", t => {
   const f = fixture(); t.after(() => f.close());
   let revision = "first"; let refreshes = 0;
   const resolver = Object.assign((_parent: unknown, input: { name: string; from: string; brief: string }) =>
@@ -87,7 +87,7 @@ test("R25: host refresh and transaction-time revision comparison are separate", 
 });
 
 
-test("DR27: ACK explains absent message versus another recipient without creating a fact", async t => {
+test("005. ACK explains absent message versus another recipient without creating a fact", async t => {
   const f = fixture(); t.after(() => f.close());
   const mail = createMailModule({ stateRoot: f.root, society: "r25test" }, f.store, 64);
   await mail.send(f.auth, "to-peer", { to: ["peer"], kind: "message", subject: "review", body: "body" });

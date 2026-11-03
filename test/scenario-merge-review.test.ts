@@ -13,9 +13,9 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { withScenario, type Scenario } from "./fixtures/scenario.js";
+import { withScenario, SCENARIO_LIMITS, type Scenario } from "./fixtures/scenario.js";
 import { call, lastUserText, text, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { projectGitPathAt } from "@oma/domain/paths";
+import { projectGitPathAt, collaborationRecordRootPathAt } from "@oma/domain/paths";
 import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
 import { readableBody } from "@oma/mail/display";
 import { readDiagnosticSnapshot } from "@oma/storage";
@@ -27,14 +27,37 @@ const LAST = "line.txt";
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const receiptIn = (result: string): { operation?: string; state?: string; result?: Record<string, unknown>; error?: { code?: string } } => {
   const envelope = JSON.parse(result);
-  assert.equal(typeof envelope.request, "string");
+  assert.equal(typeof envelope.invocation.key, "string");
   assert.ok(envelope.receipt, `no receipt in tool result: ${result.slice(0, 300)}`);
   return envelope.receipt;
 };
 /** A mail id's Maildir name ends in `:2,`; ids the model can name are without it. */
 const nameOf = (file: string) => file.replace(/:2,.*$/, "");
-/** The ids a delivered batch notice names (its `path=` entries). */
-const noticed = (text2: string): string[] => [...text2.matchAll(/\/mail\/archive\/cur\/(m-[0-9a-f-]+):2,/g)].map(match => match[1]!);
+const noticed = (value: string): string[] => [...new Set([...value.matchAll(/\/mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/g)].map(match => match[1]!))];
+const records = (s: Scenario) => collaborationRecordRootPathAt(s.root, "principal");
+const requestOf = (s: Scenario, name: string) => {
+  for (const row of s.operations()) {
+    const op = s.store.getOperationById(row.id);
+    if (op?.kind === "attest.record" && ["merge.open", "challenge.open"].includes(op.plan.fact.kind) && "name" in op.plan.fact && op.plan.fact.name === name) return op.id;
+  }
+  throw new Error(`No original request for ${name}`);
+};
+const mailRead = (s: Scenario, message: string) => tools(call("read", { path: `${records(s)}/mail/messages/${message}.md` }));
+async function decide(s: Scenario, name: string, decision: "approve" | "reject" = "approve") {
+  let index = "", status = "", result = "", target = "";
+  s.script((request, step) => {
+    if (step === 0) return tools(call("read", { path: `${records(s)}/mail/inbox.md` }));
+    if (step === 1) { index = lastResult(request); return tools(call("read", { path: `${records(s)}/reviews/${requestOf(s, name)}/status.md` })); }
+    if (step === 2) {
+      status = lastResult(request); target = /review target: (\S+)/.exec(status)?.[1] ?? "";
+      return tools(call("oma_review", { target, decision, reason: "Reviewed the exact permitted target and evidence." }));
+    }
+    result = lastResult(request); return text("Decision recorded.");
+  });
+  assert.equal((await s.deliver()).kind, "delivered");
+  assert.ok(target, status); assert.equal(receiptIn(result).state, "succeeded", result);
+  return { index, status, result, target };
+}
 /** The principal's pending approval mail for a request: other mail (notices,
  * human prompts) may ride in the same batch, so pick by content, not position. */
 const pendingApproval = (s: Scenario, name: string): string => {
@@ -69,366 +92,175 @@ const vote = (s: Scenario, from: string, name: string, verdict: string, key: str
   s.residentCall(from, "attest.record", { kind: "vote", name, verdict, body: `${from} ${verdict}d`, ...extra }, key);
 const change = (label: string) => (work: string) => writeFileSync(join(work, LAST), `content ${label}\n`);
 
-test("SCN-R01: HIGH merge end-to-end — approval mail, Principal diff and vote, application, completion notice", TIMEOUT, async () => {
+test("001. HIGH merge end-to-end: approval records, exact Principal decision, application and completion notice", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
     const { name, candidate } = await openMerge(s, "r01", "HIGH", change("r01"));
-    assert.equal((await vote(s, "bob", name, "approve", "r01-bob")).ok, true);
-    assert.equal((await vote(s, "carol", name, "approve", "r01-carol")).ok, true);
+    for (const actor of ["bob", "carol"]) assert.equal((await vote(s, actor, name, "approve", `r01-${actor}`)).ok, true);
     await s.idle();
-    // Exactly one approval_required reached the Principal's mailbox — the
-    // thread revisions went to Workers only.
-    const pending = s.inbox("principal").map(nameOf);
-    assert.equal(pending.length, 1);
-    const approval = pending[0]!;
-    const eml = s.archived(approval);
-    assert.match(eml, /X-Oma-Kind: approval_required/i);
-    // A merge-<uuid> subject runs past the header line width, so the stored
-    // bytes carry it folded -- unfold as the reader does before matching.
-    const unfolded = eml.replace(/\r\n[ \t]+/g, " ");
-    assert.match(unfolded, new RegExp(`^Subject: \\[${name}\\] HIGH approval requested`, "m"));
-
-    // Results are captured inside the provider callback and asserted after the
-    // run: a throw in there only reaches the test as "provider failed".
-    let seenIds: string[] = [];
-    let diffResult = "";
-    s.script((request, index) => {
-      if (index === 0) {
-        // The approval id is taken from the notice the model saw, not the
-        // ledger: the mail path the batch notice printed names the message.
-        seenIds = noticed(lastUserText(request));
-        return tools(call("oma_review_diff", { name }));
-      }
-      if (index === 1) {
-        diffResult = lastResult(request);
-        return tools(call("oma_review_respond", { name, action: "approve", body: "Reviewed; approve.", approval }));
-      }
-      return text("Approved.");
-    });
-    assert.equal((await s.deliver()).kind, "delivered");
-    assert.deepEqual(seenIds, [approval], "the batch notice names the approval mail and only it");
-    const diff = JSON.parse(diffResult) as { sha256: string; text: string };
-    assert.match(diff.text, /content r01/, "the tool read the real base→candidate patch");
-    assert.match(diff.sha256, /^[0-9a-f]{64}$/);
-    await s.idle();
-    assert.equal(canonicalMain(s), candidate, "main advanced to the candidate");
-    const voted = s.operations("principal").find(row => row.kind === "attest.record")!;
-    assert.equal(voted.state, "succeeded");
-
-    // The decision copy and the completion notice both reach the Principal.
+    const approval = pendingApproval(s, name);
+    const observed = await decide(s, name);
+    assert.deepEqual(noticed(observed.index), [approval], "the role-scoped inbox contains only its approval mail");
+    assert.doesNotMatch(observed.status, /diff --git|\/mail\/workers\//, "Principal records must not expose Worker patch paths");
+    await s.idle(); assert.equal(canonicalMain(s), candidate);
+    assert.equal(s.operations("principal").filter(row => row.kind === "attest.record").length, 1);
     const after = s.inbox("principal").map(nameOf);
-    assert.equal(after.length, 2, `decision copy + notice expected, got ${after}`);
-    s.script([text("Noted.")]);
-    assert.equal((await s.deliver()).kind, "delivered");
-    // Neither new mail is the approval; identify each by its own content, not
-    // by Maildir sort order.
-    const fresh = after.filter(id => id !== approval);
-    assert.equal(fresh.length, 2);
-    const bodies = fresh.map(id => [id, s.archived(id)] as const);
-    const describe = (id: string) => {
-      const eml = s.archived(id);
-      return `${id} [${eml.match(/X-Oma-Kind: [^\r\n]*/)?.[0] ?? "?"}] ${eml.match(/Subject: [^\r\n]*/)?.[0] ?? "?"}`;
-    };
-    const notice = bodies.find(([, eml]) => /Subject: .*applied:/i.test(eml))?.[0];
-    const decision = bodies.find(([, eml]) => /Subject: .*decision recorded/i.test(eml))?.[0];
-    assert.ok(notice && decision && notice !== decision,
-      `expected a result notice and a decision copy, got: ${fresh.map(describe).join(" ;; ")}`);
+    assert.equal(after.length, 2, "the decision copy and completion notice must both arrive");
+    assert.ok(after.some(id => /Subject: .*applied:/i.test(s.archived(id))));
+    assert.ok(after.some(id => /Subject: .*decision recorded/i.test(s.archived(id))));
+    s.script([text("Noted.")]); assert.equal((await s.deliver()).kind, "delivered");
     const report = inspectLedger(readDiagnosticSnapshot(s.root), { stateRoot: s.root, society: "demo" });
     assert.equal(report.report.status, "PASS", report.report.issues.map(issue => issue.code).join(","));
   });
 });
 
-test("SCN-R02: the Principal's own surface refuses Worker actions and worker-mail paths", TIMEOUT, async () => {
+test("002. The Principal's current surface refuses Worker actions and worker-mail paths before and after approval delivery", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
     const { name } = await openMerge(s, "r02", "HIGH", change("r02"));
-    assert.equal((await vote(s, "bob", name, "approve", "r02-bob")).ok, true);
-    await s.idle();
-    // A worker thread revision id — delivered only under the workers archive.
-    const workerDir = join(s.root, "mail", "workers", "cur");
-    assert.ok(existsSync(workerDir), "no worker thread mail was materialized");
-    const workerId = nameOf(readdirSync(workerDir).sort()[0]!);
-    const opsBefore = s.operations().length;
+    await vote(s, "bob", name, "approve", "r02-bob"); await s.idle();
+    const workerDir = join(s.root, "mail/workers/cur"), workerId = nameOf(readdirSync(workerDir).sort()[0]!);
+    const before = s.operations().length;
     s.script([
-      tools(call("oma_merge_open", { tier: "LOW", title: "x", reason: "x" })),
-      tools(call("oma_review_status", { name })),
-      tools(call("oma_review_respond", { name, action: "approve", body: "no approval" })),
-      tools(call("oma_review_respond", { action: "comment", name, body: "no", approval: "m-00000000-0000-4000-8000-000000000001-0" })),
-      tools(call("oma_mail_read", { messageId: workerId })),
-      tools(call("oma_mail_read", { messageId: `/mail/workers/cur/${workerId}:2,` })),
-      tools(call("read", { path: join(s.root, "mail", "workers", "cur"), offset: 1, limit: 100 })),
-      text("done"),
+      tools(call("oma_spawn", { name: "forbidden", from: "HEAD", brief: { kind: "text", value: "Forbidden Principal orchestration" } })),
+      tools(call("oma_review", { target: name, decision: "approve", reason: "A request name is not an exact target" })),
+      tools(call("read", { path: `${records(s)}/mail/messages/${workerId}.md` })),
+      tools(call("read", { path: join(workerDir, `${workerId}:2,`) })), text("Refused."),
     ]);
-    await s.prompt("Try the review actions.");
-    const after = s.operations();
-    assert.equal(after.length, opsBefore, `nothing was recorded: ${JSON.stringify(after.slice(opsBefore))}`);
-    // The result of the tool call in reply i is seen in request i+1. Each is
-    // the specific refusal of its path, so a call that succeeded or failed
-    // differently fails this test.
-    const resultAt = (index: number) => lastResult(s.provider.seen[index]!.body);
-    const offered = s.provider.seen[0]!.body.tools!.map(tool => tool.function?.name);
-    for (const unavailable of ["oma_merge_open", "oma_review_status"]) assert.ok(!offered.includes(unavailable));
-    assert.match(resultAt(1), /not found|not available|unknown tool/i);
-    assert.match(resultAt(2), /not found|not available|unknown tool/i);
-    assert.match(resultAt(3), /Invalid arguments|Validation failed/);
-    assert.match(resultAt(4), /Invalid arguments|Validation failed/);
-    // A workers-audience id does not exist under the public archive the tool resolves to.
-    assert.match(resultAt(5), new RegExp(`ENOENT: no such file or directory, open '.*/mail/archive/cur/${workerId}:2,'`),
-      `worker id read: ${resultAt(5).slice(0, 160)}`);
-    assert.match(resultAt(6), /expected a message id or canonical archive path/,
-      `worker path read: ${resultAt(6).slice(0, 160)}`);
-    assert.match(resultAt(7), /tool path is outside the agent workspace/, `read: ${resultAt(7).slice(0, 160)}`);
-    assert.equal(s.inbox("principal").length, 0, "the request still needs one more Worker vote");
-
-    // After the approval mail is delivered the Principal legitimately knows the
-    // request -- the same worker reads stay refused, while its own mail reads.
-    assert.equal((await vote(s, "carol", name, "approve", "r02-carol")).ok, true);
-    await s.idle();
+    await s.prompt("Check the authority boundary.");
+    assert.equal(s.operations().length, before);
+    const results = toolResults(s.provider.seen.at(-1)!.body);
+    assert.match(results[0]!.text, /not found|not available/i);
+    assert.match(results[1]!.text, /CAPABILITY_DENIED|INVALID_REQUEST|SOURCE_UNREADABLE|invalid.*target/i);
+    for (const result of results.slice(2)) assert.match(result.text, /ENOENT|outside|denied|not found|unavailable/i);
+    assert.equal(s.inbox("principal").length, 0);
+    await vote(s, "carol", name, "approve", "r02-carol"); await s.idle();
     const approval = pendingApproval(s, name);
-    let delivered: string[] = [];
-    const results: string[] = [];
-    s.script((request, index) => {
-      if (index > 0) results.push(lastResult(request));
-      if (index === 0) {
-        delivered = noticed(lastUserText(request));
-        return tools(call("oma_mail_read", { messageId: workerId }));
-      }
-      if (index === 1) return tools(call("oma_mail_read", { messageId: `/mail/workers/cur/${workerId}:2,` }));
-      if (index === 2) return tools(call("oma_mail_read", { messageId: approval }));
-      return text("Read my mail.");
-    });
-    const outcome = await s.deliver();
-    assert.equal(outcome.kind, "delivered", JSON.stringify(outcome));
-    assertNoticedForPrincipal(s, delivered, approval);
-    assert.equal(results.length, 3);
-    assert.match(results[0]!, new RegExp(`ENOENT.*mail/archive/cur/${workerId}`), `worker id read: ${results[0]!.slice(0, 160)}`);
-    assert.match(results[1]!, /expected a message id or canonical archive path/, `worker path read: ${results[1]!.slice(0, 160)}`);
-    assert.match(results[2]!, /merge/, `the Principal reads its own approval mail: ${results[2]!.slice(0, 160)}`);
-    assert.doesNotMatch(results[2]!, /ENOENT/);
-  });
-});
-
-test("SCN-R03: a stale approval id is refused; the fresh approval's id applies", TIMEOUT, async () => {
-  await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
-    const { name } = await openMerge(s, "r03", "HIGH", change("r03"));
-    await vote(s, "bob", name, "approve", "r03-bob1");
-    await vote(s, "carol", name, "approve", "r03-carol");
-    await s.idle();
-    const first = pendingApproval(s, name);
-    // The Principal is still holding the first approval; bob flips to reject.
-    assert.equal((await vote(s, "bob", name, "reject", "r03-bob2")).ok, true);
-    await s.idle();
-    assert.ok(s.inbox("principal").map(nameOf).some(id => id !== first), "a withdrawn mail arrived");
-    let staleResult = "";
-    s.script((request, index) => {
-      if (index === 0)
-        return tools(call("oma_review_respond", { name, action: "approve", body: "again", approval: first }));
-      if (index === 1) { staleResult = lastResult(request); return text("stale seen"); }
-      return text("done");
-    });
-    await s.deliver();
-    assert.equal(JSON.parse(staleResult).code, "APPROVAL_STALE", `the stale id must be refused: ${staleResult}`);
-    await s.idle();
-    assert.equal(s.operations().filter(row => row.kind === "attest.record" && row.actor === "principal").length, 0);
-    // bob re-approves -> a new approval mail with a fresh id.
-    assert.equal((await vote(s, "bob", name, "approve", "r03-bob3")).ok, true);
-    await s.idle();
-    const second = pendingApproval(s, name);
-    assert.notEqual(second, first, "the replacement approval mail has a fresh id");
-    let delivered: string[] = [];
-    s.script((request, index) => {
-      if (index === 0) {
-        // The id is taken from the notice the model saw, not the mailbox dir.
-        delivered = noticed(lastUserText(request));
-        return tools(call("oma_review_respond", { name, action: "approve", body: "approve now", approval: second }));
-      }
-      return text("voted");
-    });
+    s.script([tools(call("read", { path: join(workerDir, `${workerId}:2,`) })), mailRead(s, approval), text("Read my own approval.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    assert.deepEqual(delivered, [second], "only the new approval was pending");
-    await s.idle();
-    assert.equal(s.operations().some(row => row.actor === "principal" && row.state === "succeeded"), true);
+    const delivered = toolResults(s.provider.seen.at(-1)!.body).slice(-2);
+    assert.match(delivered[0]!.text, /outside|denied/i);
+    assert.match(delivered[1]!.text, /merge/); assert.doesNotMatch(delivered[1]!.text, /ENOENT/);
   });
 });
 
-test("SCN-R04: a Principal reject closes the request; later Worker votes are refused", TIMEOUT, async () => {
+test("003. A stale exact approval target is refused; the fresh approval target applies", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
-    const { name, candidate } = await openMerge(s, "r04", "HIGH", change("r04"));
-    const before = canonicalMain(s);
-    await vote(s, "bob", name, "approve", "r04-bob");
-    await vote(s, "carol", name, "approve", "r04-carol");
-    await s.idle();
-    const approval = pendingApproval(s, name);
-    s.script([
-      tools(call("oma_review_respond", { name, action: "reject", body: "No.", approval })),
-      text("Rejected."),
-    ]);
+    const { name, candidate } = await openMerge(s, "r03", "HIGH", change("r03"));
+    for (const actor of ["bob", "carol"]) await vote(s, actor, name, "approve", `r03-${actor}`);
+    await s.idle(); const first = pendingApproval(s, name);
+    s.script([tools(call("read", { path: `${records(s)}/reviews/${requestOf(s, name)}/status.md` })), text("Hold this exact target.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    await s.idle();
-    assert.equal(canonicalMain(s), before, "main did not move");
-    const status = await s.residentCall("alice", "review.status", { name }, null) as
-      { ok: boolean; result: { display: string; principal: { decision: string | null; decisionApproval: string | null } } };
-    assert.ok(status.ok, `review.status refused: ${JSON.stringify(status).slice(0, 300)}`);
-    assert.equal(status.result.display, "rejected");
-    assert.equal(status.result.principal.decision, "reject");
-    assert.equal(status.result.principal.decisionApproval, approval);
-    const late = await vote(s, "bob", name, "approve", "r04-late");
-    assert.equal(late.ok, false);
-    assert.match(JSON.stringify(late), /REQUEST_CLOSED/);
+    const target = /review target: (\S+)/.exec(lastResult(s.provider.seen.at(-1)!.body))![1]!;
+    await vote(s, "bob", name, "reject", "r03-reject"); await s.idle();
+    s.script([tools(call("oma_review", { target, decision: "approve", reason: "This old approval must be fenced" })), text("Stale observed.")]);
+    assert.equal((await s.deliver()).kind, "delivered");
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /STALE_TARGET|APPROVAL_STALE/);
+    assert.equal(s.operations("principal").filter(row => row.kind === "attest.record").length, 0);
+    await vote(s, "bob", name, "approve", "r03-approve-again"); await s.idle();
+    const second = pendingApproval(s, name); assert.notEqual(second, first);
+    const observed = await decide(s, name); assert.deepEqual(noticed(observed.index), [second]);
+    await s.idle(); assert.equal(canonicalMain(s), candidate);
   });
 });
 
-test("SCN-R05: MEDIUM applies on one Worker approval; the Principal sees only the completion notice", TIMEOUT, async () => {
+test("004. A Principal reject closes the request; later Worker votes are refused", TIMEOUT, async () => {
+  await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
+    const { name } = await openMerge(s, "r04", "HIGH", change("r04")), before = canonicalMain(s);
+    for (const actor of ["bob", "carol"]) await vote(s, actor, name, "approve", `r04-${actor}`);
+    await s.idle(); const approval = pendingApproval(s, name);
+    await decide(s, name, "reject"); await s.idle(); assert.equal(canonicalMain(s), before);
+    const status = await s.residentCall("alice", "review.status", { name }, null) as { ok: boolean; result: { display: string; principal: { decision: string; decisionApproval: string } } };
+    assert.equal(status.ok, true); assert.equal(status.result.display, "rejected");
+    assert.equal(status.result.principal.decision, "reject"); assert.equal(status.result.principal.decisionApproval, approval);
+    const late = await vote(s, "bob", name, "approve", "r04-late"); assert.equal(late.ok, false); assert.match(JSON.stringify(late), /REQUEST_CLOSED/);
+  });
+});
+
+test("005. MEDIUM applies on one Worker approval; only its completion becomes visible to the Principal", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob"] }, async s => {
     const { name, candidate } = await openMerge(s, "r05", "MEDIUM", change("r05"));
-    // Before the request has applied, the Principal's diff of it is refused:
-    // Worker review state is not its sightline.
-    s.script([tools(call("oma_review_diff", { name })), text("seen")]);
-    await s.prompt("Check the merge.");
-    assert.equal(JSON.parse(lastResult(s.provider.seen[1]!.body)).code, "CAPABILITY_DENIED");
-    assert.equal(s.inbox("principal").length, 0, "no request or review mail reached the Principal");
-    assert.equal((await vote(s, "bob", name, "approve", "r05-bob")).ok, true);
-    await s.idle();
-    assert.equal(canonicalMain(s), candidate);
-    const mail = s.inbox("principal").map(nameOf);
-    assert.equal(mail.length, 1, "only the completion notice arrived");
-    const notice = mail[0]!;
-    assert.match(s.archived(notice), /X-Oma-Kind: result/i);
-    let seenIds: string[] = [];
-    const results: string[] = [];
-    s.script((request, index) => {
-      if (index > 0) results.push(lastResult(request));
-      if (index === 0) {
-        seenIds = noticed(lastUserText(request));
-        return tools(call("oma_mail_read", { messageId: notice }));
-      }
-      if (index === 1) return tools(call("oma_review_diff", { name }));
-      return text("Read.");
-    });
+    s.script([tools(call("read", { path: `${records(s)}/reviews/${requestOf(s, name)}/status.md` })), text("Not visible yet.")]);
+    await s.prompt("Check permitted review records.");
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /ENOENT|not found|unavailable/i);
+    assert.equal(s.inbox("principal").length, 0);
+    await vote(s, "bob", name, "approve", "r05-bob"); await s.idle(); assert.equal(canonicalMain(s), candidate);
+    const [notice] = s.inbox("principal").map(nameOf); assert.ok(notice); assert.equal(s.inbox("principal").length, 1);
+    s.script([mailRead(s, notice), tools(call("read", { path: `${records(s)}/reviews/${requestOf(s, name)}/status.md` })), text("Completed.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    assert.deepEqual(seenIds, [notice]);
-    assert.equal(results.length, 2);
-    assert.match(results[0]!, /content r05/, "the notice body carries the applied diff");
-    const diff = JSON.parse(results[1]!) as { text: string };
-    assert.match(diff.text, /content r05/, "the Principal may diff a request whose notice reached it");
+    const results = toolResults(s.provider.seen.at(-1)!.body).slice(-2);
+    assert.match(results[0]!.text, /content r05/); assert.match(results[1]!.text, /applied/);
+    assert.doesNotMatch(results[1]!.text, /review target:|diff --git/);
     assert.equal((await s.deliver()).kind, "idle");
   });
 });
 
-test("SCN-R06: an approval accepted while the engine is down delivers exactly once after restarts", TIMEOUT, async () => {
+test("006. An approval accepted while the engine is down delivers exactly once after restarts", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
     const { name } = await openMerge(s, "r06", "HIGH", change("r06"));
-    await vote(s, "bob", name, "approve", "r06-bob");
-    // Engine down for the second vote and the approval mail it produces.
-    await s.restartEngine();
-    await vote(s, "carol", name, "approve", "r06-carol");
-    // A broker restart between the vote and the delivery: the prepared batch
-    // survives and is presented once.
-    await s.restartBroker();
-    const approval = pendingApproval(s, name);
-    s.script([tools(call("oma_review_respond", { name, action: "approve", body: "ok", approval })), text("voted")]);
-    assert.equal((await s.deliver()).kind, "delivered");
-    await s.idle();
-    assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 1);
-    const outcome = await s.deliver();
-    assert.ok(outcome.kind === "idle" || outcome.kind === "delivered");
-    // Delivered once: the first batch completed, nothing queued again.
+    await vote(s, "bob", name, "approve", "r06-bob"); await s.restartEngine();
+    await vote(s, "carol", name, "approve", "r06-carol"); await s.restartBroker();
+    const approval = pendingApproval(s, name); await decide(s, name); await s.idle();
+    assert.equal(s.operations("principal").filter(row => row.kind === "attest.record" && row.state === "succeeded").length, 1);
+    assert.equal(s.store.getDelivery(approval, "principal")?.presented, 1);
+    s.script([text("Completion observed.")]); await s.deliver();
     assert.deepEqual(s.store.preparedBatches("principal"), []);
+    assert.equal((await s.deliver()).kind, "idle");
   });
 });
 
-test("SCN-R07: a completion notice over the body bound arrives in ordered parts the model reads", TIMEOUT, async () => {
+test("007. A completion notice over the body bound arrives in ordered parts the model actually reads", TIMEOUT, async () => {
   await withScenario({ residents: ["alice"], reviewBodyBytes: 8192 }, async s => {
-    // A diff larger than ~3 × (bound − header) splits the notice document.
-    const { name } = await openMerge(s, "r07", "LOW", work => {
-      writeFileSync(join(work, "big.txt"), Array.from({ length: 900 }, (_, i) => `line ${i} ${"x".repeat(18)}`).join("\n"));
-    });
-    await s.idle();
-    const parts = s.inbox("principal").map(nameOf);
-    assert.ok(parts.length >= 3, `the notice should have split into parts, got ${parts.length}`);
-    const first = readableBody(s.archived(parts[0]!));
-    const sha = first.match(/sha256 ([0-9a-f]{64})/)![1]!;
-    const bytes = Number(first.match(/document (\d+) bytes/)![1]);
-    s.script((request, index) => {
-      if (index === 0) return tools(call("oma_mail_read", { messageId: parts[0]! }));
-      if (index < parts.length) return tools(call("oma_mail_read", { messageId: parts[index]! }));
-      return text("Read all parts.");
-    });
+    await openMerge(s, "r07", "LOW", work => writeFileSync(join(work, "big.txt"), Array.from({ length: 900 }, (_, i) => `line ${i} ${"x".repeat(18)}`).join("\n")));
+    await s.idle(); const parts = s.inbox("principal").map(nameOf); assert.ok(parts.length >= 3);
+    const bodies = parts.map(id => readableBody(s.archived(id))), first = bodies[0]!;
+    s.script((_request, index) => index < parts.length ? mailRead(s, parts[index]!) : text("Read every part."));
     assert.equal((await s.deliver()).kind, "delivered");
-    // The document itself: every part read, chunks concatenated, sha256 proven.
-    const bodies = parts.map(id => readableBody(s.archived(id)));
+    const reads = toolResults(s.provider.seen.at(-1)!.body); assert.equal(reads.length, parts.length);
+    for (const [index, read] of reads.entries()) {
+      assert.doesNotMatch(read.text, /Tool .*not found|ENOENT/);
+      assert.ok(read.text.includes(bodies[index]!.split("\n")[0]!), "the model did not receive the actual part");
+    }
     const document = bodies.map(body => body.slice(body.indexOf("in order.\n") + "in order.\n".length)).join("");
-    assert.equal(createHash("sha256").update(document, "utf8").digest("hex"), sha);
-    assert.equal(Buffer.byteLength(document, "utf8"), bytes);
-    assert.match(document, /diff --git a\/big\.txt/);
-    assert.match(document, /Integration operation: op-/);
+    assert.equal(createHash("sha256").update(document).digest("hex"), /sha256 ([0-9a-f]{64})/.exec(first)![1]);
+    assert.equal(Buffer.byteLength(document), Number(/document (\d+) bytes/.exec(first)![1]));
+    assert.match(document, /diff --git a\/big\.txt/); assert.match(document, /Integration operation: op-/);
   });
 });
 
-test("SCN-R08: a HIGH challenge prepares the revert; the Principal sees both patches and applies it", TIMEOUT, async () => {
+test("008. A HIGH challenge exposes permitted correction records and applies the exact revert on the Principal's decision", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
-    const { name } = await openMerge(s, "r08", "LOW", change("r08"));
-    await s.idle();
-    assert.equal(canonicalMain(s), await Promise.resolve().then(() => canonicalMain(s)));
-    const merged = canonicalMain(s);
-    const opened = await s.residentCall("alice", "attest.record",
-      { kind: "challenge.open", merge: name, tier: "HIGH", title: "revert it", reason: "regression" }, "r08.ch") as
-      { ok: boolean; result: { result: { request: string } } };
-    assert.equal(opened.ok, true, JSON.stringify(opened).slice(0, 300));
-    const challenge = opened.result.result.request;
-    await vote(s, "bob", challenge, "approve", "r08-bob");
-    await vote(s, "carol", challenge, "approve", "r08-carol");
-    await s.idle();
-    const approval = pendingApproval(s, challenge);
-    let delivered: string[] = [];
-    const results: string[] = [];
-    s.script((request, index) => {
-      if (index > 0) results.push(lastResult(request));
-      if (index === 0) {
-        // The completed merge's notice may ride in the same batch.
-        delivered = noticed(lastUserText(request));
-        return tools(call("oma_review_diff", { name: challenge, view: "proposal" }));
-      }
-      if (index === 1) return tools(call("oma_review_diff", { name: challenge, view: "original" }));
-      if (index === 2) return tools(call("oma_review_respond", { name: challenge, action: "approve", body: "revert", approval }));
-      return text("Reverted.");
-    });
-    assert.equal((await s.deliver()).kind, "delivered");
-    assertNoticedForPrincipal(s, delivered, approval);
-    assert.equal(results.length, 3);
-    const revert = JSON.parse(results[0]!) as { text: string };
-    assert.match(revert.text, /-content r08/, "the revert patch removes the change");
-    const original = JSON.parse(results[1]!) as { text: string };
-    assert.match(original.text, /\+content r08/, "the original patch adds the change");
-    await s.idle();
-    // The revert commit is on main; the original merge still reports applied.
-    const head = canonicalMain(s);
-    assert.notEqual(head, merged);
-    const treeShow = execFileSync("git", ["diff", merged, head, "--", "line.txt"], { cwd: projectGitPathAt(s.root), encoding: "utf8" });
-    assert.match(treeShow, /-content r08/);
+    const { name } = await openMerge(s, "r08", "LOW", change("r08")); await s.idle(); const merged = canonicalMain(s);
+    const opened = await s.residentCall("alice", "attest.record", { kind: "challenge.open", merge: name, tier: "HIGH", title: "revert it", reason: "regression" }, "r08.ch") as { ok: boolean; result: { result: { request: string } } };
+    assert.equal(opened.ok, true); const challenge = opened.result.result.request;
+    for (const actor of ["bob", "carol"]) await vote(s, actor, challenge, "approve", `r08-${actor}`);
+    await s.idle(); const approval = pendingApproval(s, challenge), observed = await decide(s, challenge);
+    assertNoticedForPrincipal(s, noticed(observed.index), approval);
+    assert.doesNotMatch(observed.status, /diff --git|\/mail\/workers\//);
+    await s.idle(); const head = canonicalMain(s); assert.notEqual(head, merged);
+    const patch = execFileSync("git", ["diff", merged, head, "--", LAST], { cwd: projectGitPathAt(s.root), encoding: "utf8" });
+    assert.match(patch, /-content r08/);
     const status = await s.residentCall("alice", "review.status", { name }, null) as { result: { display: string } };
-    assert.equal(status.result.display, "applied", "the original merge stays applied");
+    assert.equal(status.result.display, "applied", "a challenge never rewrites the original applied fact");
   });
 });
 
-test("SCN-R09: a same-key model vote retry returns the same receipt and records once", TIMEOUT, async () => {
+test("009. A distinct second model vote on a consumed exact target is refused and records no second decision", TIMEOUT, async () => {
   await withScenario({ residents: ["alice", "bob", "carol"] }, async s => {
     const { name, candidate } = await openMerge(s, "r09", "HIGH", change("r09"));
-    await vote(s, "bob", name, "approve", "r09-bob");
-    await vote(s, "carol", name, "approve", "r09-carol");
+    for (const actor of ["bob", "carol"]) await vote(s, actor, name, "approve", `r09-${actor}`);
     await s.idle();
-    const approval = pendingApproval(s, name);
-    const voteParams = { name, action: "approve", body: "yes", approval, request: "principal-vote-r09" };
-    s.script([
-      tools(call("oma_review_respond", voteParams), call("oma_review_respond", voteParams)),
-      text("Voted once."),
-    ]);
-    assert.equal((await s.deliver()).kind, "delivered");
-    await s.idle();
-    // Two calls, one frozen request key: one operation, one receipt id.
-    const results = toolResults(s.provider.seen[1]!.body);
-    assert.equal(results.length, 2);
-    const receipts = results.map(r => receiptIn(r.text));
-    assert.equal(receipts[0]!.state, "succeeded");
-    assert.equal(receipts[0]!.operation, receipts[1]!.operation);
+    s.script((request, index) => {
+      if (index === 0) return tools(call("read", { path: `${records(s)}/reviews/${requestOf(s, name)}/status.md` }));
+      if (index === 1) {
+        const target = /review target: (\S+)/.exec(lastResult(request))![1]!;
+        const input = { target, decision: "approve", reason: "Exact decision" };
+        return tools(call("oma_review", input, "first-decision"), call("oma_review", input, "distinct-second-decision"));
+      }
+      return text("The original decision remains authoritative.");
+    });
+    assert.equal((await s.deliver()).kind, "delivered"); await s.idle();
+    const results = toolResults(s.provider.seen.at(-1)!.body).slice(-2);
+    assert.equal(receiptIn(results[0]!.text).state, "succeeded");
+    assert.match(results[1]!.text, /STALE_TARGET|REQUEST_CLOSED|APPROVAL_STALE/);
     assert.equal(s.operations("principal").filter(row => row.kind === "attest.record").length, 1);
     assert.equal(canonicalMain(s), candidate);
   });

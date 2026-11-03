@@ -19,7 +19,7 @@ function diagnostics(text) {
     .map(item => ({ code: item.code, message: ts.flattenDiagnosticMessageText(item.messageText, "\n") }));
 }
 const prelude = "\nimport type { Actor, OperationId, MessageId, BatchId, RequestKey } from \"@oma/domain/identifiers\";\nimport { parseOperationId } from \"@oma/domain/identifiers\";\nimport { decodeOperation } from \"@oma/protocol/operation-codec\";\nimport { decodeDeliveryRow, decodeBatchRow, decodeAgentRow, decodeBatchManifest } from \"../packages/storage/dist/rows.js\";\nimport type { LedgerReader } from \"../packages/storage/dist/ledger-reader.js\";\nimport type { Actor as WireActor, OperationId as WireOperationId } from \"@oma/contracts/identity\";\ndeclare const operation: ReturnType<typeof decodeOperation>;\ndeclare const delivery: ReturnType<typeof decodeDeliveryRow>;\ndeclare const batch: ReturnType<typeof decodeBatchRow>;\ndeclare const agent: ReturnType<typeof decodeAgentRow>;\ndeclare const ids: ReturnType<LedgerReader[\"recoverableIds\"]>;\ndeclare function operationOnly(value: OperationId): void;\ndeclare function messageOnly(value: MessageId): void;\ndeclare function batchOnly(value: BatchId): void;\ndeclare function requestOnly(value: RequestKey): void;\ndeclare function actorOnly(value: Actor): void;\n";
-test("P2.5: validated ledger outputs preserve identity brands and wire stays string", () => {
+test("001. Validated ledger outputs preserve identity brands and wire stays string", () => {
   assert.deepEqual(diagnostics(prelude + `
 operationOnly(operation.id); operationOnly(delivery.operationId);
 messageOnly(delivery.messageId);
@@ -32,7 +32,7 @@ const wire: WireOperationId = "wire remains a string";
 const wireActor: WireActor = "wire remains a string";
 `), []);
 });
-test("P2.5: operation/message/batch/request/actor mixups are compile errors", () => {
+test("002. Operation/message/batch/request/actor mixups are compile errors", () => {
   const result = diagnostics(prelude + `
 messageOnly(operation.id);
 operationOnly(delivery.messageId);

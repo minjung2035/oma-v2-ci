@@ -63,21 +63,23 @@ function conversation(input: ViewInput, notice: string | null): string[] {
   // A pasted draft is many lines, so the prompt is not one row. It takes at
   // most half the screen, showing its end -- where the next character lands --
   // so one paste can never push the conversation off the screen entirely.
-  const draft = wrap(`> ${state.prompt.text.replace(/\n/g, "\n  ")}`, columns);
+  const control = state.open && state.detail.kind === "control" ? state.detail : null;
+  const draft = wrap(`${control === null ? ">" : "Human control>"} ${(control?.draft ?? state.prompt).text.replace(/\n/g, "\n  ")}`, columns);
   const promptRows = Math.min(Math.max(draft.length, 1), Math.max(1, Math.floor(rows / 2)));
   const prompt = draft.slice(Math.max(0, draft.length - promptRows));
-  const reserved = (notice === null ? 3 : 4) + promptRows - 1;
+  const reserved = (notice === null ? 3 : 4) + promptRows - 1 + (control === null ? 0 : 2);
   const height = Math.max(1, rows - reserved);
   const wrapped: string[] = [];
   for (const entry of transcript) for (const line of wrap(entry, columns)) wrapped.push(line);
   const visible = wrapped.slice(Math.max(0, wrapped.length - height));
-  const lines: string[] = [];
-  while (lines.length < height - visible.length) lines.push("");
+  const lines: string[] = control === null ? [] : [fit("Human controls — local host console; never a Principal prompt", columns), "─".repeat(Math.max(0, columns))];
+  const headRows = lines.length;
+  while (lines.length < headRows + height - visible.length) lines.push("");
   for (const line of visible) lines.push(line);
   lines.push("─".repeat(Math.max(0, columns)));
   if (notice !== null) lines.push(fit(notice, columns));
   for (const line of prompt) lines.push(fit(line, columns));
-  lines.push(fit("Ctrl+X Control Panel · Ctrl+C Quit", columns));
+  lines.push(fit(control === null ? "Ctrl+X Control Panel · Ctrl+C Quit" : "Enter Run /control command · Esc Back · Ctrl+X Close", columns));
   return frame(lines, rows, columns);
 }
 
@@ -208,7 +210,11 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
 /** The notice line this screen shows, if any. P0V-68: one reading for the
  * render and for the scroll limit, so the limit is taken from the layout that
  * is actually drawn -- a notice (or the busy line) takes a row from the body. */
-function screenNotice(input: ViewInput): string | null { return noticeText(input.notice, input.busy); }
+function screenNotice(input: ViewInput): string | null {
+  if (input.state.detail.kind === "control" && input.data.humanControls !== true)
+    return "Human control input is disabled: the supervising host does not own this console.";
+  return noticeText(input.notice, input.state.detail.kind === "control" ? false : input.busy);
+}
 
 /** How far the open message's body can scroll on this screen: the owner of
  * the state keeps the scroll within it. */
@@ -232,11 +238,16 @@ export function render(input: ViewInput): string[] {
   const notice = screenNotice(input);
   if (!state.open) return conversation(input, notice);
   const detail = state.detail;
+  if (detail.kind === "control") return input.data.humanControls === true ? conversation(input, notice) : frame([
+    "Human control input is disabled.",
+    "Only the supervising host's local console may display or submit these commands.",
+    "The private command draft and local observations are not relayed to the engine.",
+  ], rows, columns);
   if (detail.kind === "extensions") return frame(extensionsScreen(input, notice), rows, columns);
   if (detail.kind === "mail") return frame(mailDetail(input, notice), rows, columns);
   const lines = header(state, columns);
   const panel = rowsFor(input);
-  const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), fit("←/→ Category · ↑/↓ Item · Enter Select · Esc Back · Ctrl+X Close", columns)];
+  const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), fit("←/→ Category · ↑/↓ Item · Enter Select · Esc Back · Ctrl+X Close" + (input.data.humanControls === true ? " · : Human controls" : ""), columns)];
   // NB-13: fixed rows may not push the footer (and the notice it carries) off
   // a minimal screen -- their tail is cut, and one row is kept for the list.
   const room = Math.max(0, rows - lines.length - foot.length);

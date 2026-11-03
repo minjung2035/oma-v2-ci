@@ -29,7 +29,7 @@ function world({ spawnError, directoryError } = {}) {
 }
 for (const packages of [false, true]) {
   const label = packages ? 'package' : 'login';
-  for (const event of ['exit', 'error', 'disconnect']) test(`engine ${label}: ${event} alone does not finish or release the caller`, async () => {
+  for (const event of ['exit', 'error', 'disconnect']) test(`001. Engine ${label}: ${event} alone does not finish or release the caller`, async () => {
     const w = world(); let returned = false;
     const done = w.runEngineLogin(w.directory, { ...w.options, ...(packages ? { packages: { store: '/fixture/packages', args: ['update', 'npm:x'] } } : {}) })
       .then(value => { returned = true; return value; });
@@ -40,7 +40,7 @@ for (const packages of [false, true]) {
     w.child.emit('close', 0, null);
     assert.equal(await done, event === 'error' ? 1 : 0);
   });
-  test(`engine ${label}: the explicit store, arguments, environment and fence belong to this invocation`, async () => {
+  test(`002. Engine ${label}: the explicit store, arguments, environment and fence belong to this invocation`, async () => {
     const w = world(), done = w.runEngineLogin(w.directory, { ...w.options,
       ...(packages ? { packages: { store: '/fixture/packages', args: ['install', 'npm:x'] } } : {}) });
     const [executable, argv, cwd, env, fence] = w.launches[0];
@@ -54,11 +54,11 @@ for (const packages of [false, true]) {
   });
 }
 for (const [code, signal, expected] of [[7, null, 7], [null, 'SIGTERM', 1], [null, null, 1]])
-  test(`engine close: ${code}/${signal} is not a successful package change`, async () => {
+  test(`003. Engine close: ${code}/${signal} is not a successful package change`, async () => {
     const w = world(), done = w.runEngineLogin(w.directory, w.options);
     w.child.emit('close', code, signal); assert.equal(await done, expected);
   });
-for (const packages of [false, true]) test(`engine ${packages ? 'package' : 'login'}: metadata preparation failure cannot spawn a child`, async () => {
+for (const packages of [false, true]) test(`004. Engine ${packages ? 'package' : 'login'}: metadata preparation failure cannot spawn a child`, async () => {
   const problem = new Error('fixture directory refused'), w = world({ directoryError: problem });
   // NB-09: the failure is a rejection of the declared Promise<number>, never
   // a synchronous throw.
@@ -66,7 +66,7 @@ for (const packages of [false, true]) test(`engine ${packages ? 'package' : 'log
     ...(packages ? { packages: { store: '/fixture/packages', args: ['install', 'npm:x'] } } : {}) }), error => error === problem);
   assert.deepEqual(w.directories, [packages ? '/fixture/packages' : '/fixture/engine']); assert.equal(w.launches.length, 0);
 });
-test('engine spawn: refusal creates no child owner', async () => {
+test("005. Engine spawn: refusal creates no child owner", async () => {
   const problem = new Error('fixture spawn refusal'), w = world({ spawnError: problem });
   await assert.rejects(() => w.runEngineLogin(w.directory, w.options), error => error === problem); assert.equal(w.launches.length, 0);
 });

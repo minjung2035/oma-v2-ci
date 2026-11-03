@@ -12,7 +12,7 @@ import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 
 for (const method of ["mail.send", "git.submit", "git.integrate", "context.publish", "agent.create"]) {
-  test(`AUTH-003: ${method} rechecks authority after asynchronous preparation before acceptance`, async () => {
+  test(`001. Acceptance auth: ${method} rechecks authority after asynchronous preparation before acceptance`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-accept-auth-"));
     const store = new Store(join(root, "runtime.sqlite"));
     try {
@@ -66,7 +66,7 @@ for (const method of ["mail.send", "git.submit", "git.integrate", "context.publi
 }
 
 for (const method of ["mail.send", "git.submit"] as const) {
-  test(`MAIL-001: ${method} snapshots acceptance-time membership and preserves a concurrent winner`, async () => {
+  test(`002. Acceptance auth: ${method} snapshots acceptance-time membership and preserves a concurrent winner`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-route-accept-"));
     const store = new Store(join(root, "runtime.sqlite"));
     try {

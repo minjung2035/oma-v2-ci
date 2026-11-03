@@ -102,7 +102,7 @@ function auth(actor = "a"): AuthContext {
 // ---------------------------------------------------------------------------
 // AUD-1/AUD-2 retain their service-renderer meaning in the raw archive.
 // Current literal argv/backoff/containment are tested through actual native owners.
-test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
+test("001. Candidate sandbox argv does not inherit host environment", () => {
     const argv = candidateSandbox({ rootfs: "/rootfs", node: process.execPath, libdir: "/checks" }, "a".repeat(40), { id: "audit", argv: ["/checks/run"], env: { SAFE: "1" },
     }, []).argv;
     const clear = argv.indexOf("--clearenv");
@@ -111,11 +111,11 @@ test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
     assert.ok(argv.includes("1"));
     assert.ok(!argv.includes(process.env.HOME ?? "__none__"));
 });
-test("AUD-4: default reply-to keeps list traffic on-list and direct traffic direct", () => {
+test("002. Default reply-to keeps list traffic on-list and direct traffic direct", () => {
     assert.deepEqual(defaultReplyTo("a@demo.oma.invalid", ["commons@demo.oma.invalid"]), ["commons@demo.oma.invalid"]);
     assert.deepEqual(defaultReplyTo("a@demo.oma.invalid", ["b@demo.oma.invalid"]), ["a@demo.oma.invalid"]);
 });
-test("AUD-5: parsed EML ancestry never trusts body text as headers", () => {
+test("003. Parsed EML ancestry never trusts body text as headers", () => {
     const text = [
         "From: a@demo.oma.invalid",
         "Message-ID: <m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid>",
@@ -129,7 +129,7 @@ test("AUD-5: parsed EML ancestry never trusts body text as headers", () => {
     assert.equal(headers.omaKind, "message");
     assert.deepEqual(headers.references, []);
 });
-test("AUD-6: atomic writes do not follow a final-path symlink", () => {
+test("004. Atomic writes do not follow a final-path symlink", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-write-"));
     try {
         const victim = join(root, "victim");
@@ -144,7 +144,7 @@ test("AUD-6: atomic writes do not follow a final-path symlink", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-7: immutable publication rejects a conflicting existing file", () => {
+test("005. Immutable publication rejects a conflicting existing file", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-immutable-"));
     try {
         const src = join(root, "src");
@@ -157,7 +157,7 @@ test("AUD-7: immutable publication rejects a conflicting existing file", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-8: actor socket paths remain under Linux sun_path", () => {
+test("006. Actor socket paths remain under Linux sun_path", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-sock-"));
     try {
         const store = new Store(join(root, "runtime.sqlite"));
@@ -179,7 +179,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods", async () => {
+test("007. Public dispatch rejects top-level request on read/ephemeral methods", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-readkey-"));
     try {
         const spec = {

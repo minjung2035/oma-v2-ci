@@ -152,11 +152,11 @@ export class ExecutionCoordinator<Witness> {
     if (previous?.uncertain) await this.settle(request.slot, previous);
     if (this.stopping || this.failure !== null) throw new StoreError("BROKER_UNAVAILABLE", "execution owner changed during cleanup");
     if (request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled before launch");
-    if (this.active.has(request.slot)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution slot is still owned");
+    if (this.active.has(request.slot)) throw this.contention(request.slot, "execution slot is still owned");
     await this.recoverSlot(request.slot);
     if (this.stopping || this.failure !== null) throw new StoreError("BROKER_UNAVAILABLE", "execution owner ended during recovery");
     if (request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled during recovery");
-    if (this.active.has(request.slot)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution slot was acquired during recovery");
+    if (this.active.has(request.slot)) throw this.contention(request.slot, "execution slot was acquired during recovery");
     const reservation = this.journal.reserve(request.slot);
     let returned!: () => void, failed!: (error: unknown) => void;
     retainNativeExecution(new Promise<void>((resolve, reject) => { returned = resolve; failed = reject; }));
@@ -203,10 +203,26 @@ export class ExecutionCoordinator<Witness> {
       stop: () => this.active.get(request.slot) === owner ? this.settle(request.slot, owner) : Promise.resolve(),
     });
   }
-  confirmDead(slot: string): boolean {
-    if (this.failure !== null || this.active.has(slot)) return false;
-    if (this.fullyDrained) return true;
-    return !this.journal.entries().some(entry => entry.slot === slot);
+  /** Slot ownership callers must be able to read precisely: a live peer is
+   * contention the caller re-drives with the same request key, while an owner
+   * retained after a failed cleanup is unproven death. `confirmDead` keeps the
+   * two-valued reading every current consumer asks for. */
+  slotState(slot: string): "dead" | "busy" | "unknown" {
+    if (this.failure !== null) return "unknown";
+    const owner = this.active.get(slot);
+    if (owner !== undefined) return owner.uncertain ? "unknown" : "busy";
+    if (this.fullyDrained) return "dead";
+    return this.journal.entries().some(entry => entry.slot === slot) ? "unknown" : "dead";
+  }
+  confirmDead(slot: string): boolean { return this.slotState(slot) === "dead"; }
+  /** A live owner is contention, not a death question: the accepted intent
+   * outlives the refusal and the caller re-drives it with the same request key.
+   * A retained owner whose cleanup failed keeps the unproven reading. */
+  private contention(slot: string, unproven: string): StoreError {
+    const owner = this.active.get(slot);
+    return owner !== undefined && !owner.uncertain
+      ? new StoreError("BROKER_UNAVAILABLE", "execution slot is busy; retry the same request key", { details: { reason: "busy" } })
+      : new StoreError("RUN_TERMINATION_UNKNOWN", unproven);
   }
   async drain(): Promise<void> {
     this.stopping = true;

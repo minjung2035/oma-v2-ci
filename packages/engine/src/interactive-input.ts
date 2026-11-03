@@ -8,13 +8,16 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
     frameBytes: number;
 }, choices: {
     showResume(): void;
+    readonly hostControlNavigation?: boolean;
 }) {
     let inputSequence = 0;
     let pendingInput: {
         id: string;
         text: string;
+        epoch: number;
     } | undefined;
     const submit = (text: string): void => {
+        if (pendingInput && !view.current(pendingInput.epoch)) pendingInput = undefined;
         // The delivery command presents a broker-prepared batch; only OMA's
         // delivery, which owns the run it starts, sends it.
         if (isDeliveryCommand(text)) {
@@ -37,11 +40,18 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
         }
         const id = `ui-${++inputSequence}`;
         pendingInput = {
-            id, text
+            id, text, epoch: view.epoch
         };
         ui.send({
             type: "human_input", id, text
         });
+    };
+    /** UI navigation is intercepted before extension dispatch/history. Command
+     * arguments are sent only for host refusal, never as Human effect authority. */
+    const hostNavigation = (text: string): boolean => {
+        if (choices.hostControlNavigation !== true || !/^\/control(?:\s|$)/u.test(text.trim())) return false;
+        submit(text);
+        return true;
     };
     /** oma's own answers to the engine's session commands, and to the ones that mean nothing here. */
     const OMA_COMMANDS = new Set(["new", "resume", ...Object.keys(NOT_IN_OMA)]);
@@ -58,9 +68,7 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
         if (!trimmed.startsWith("/"))
             return false;
         if (name === "new") {
-            ui.send({
-                type: "switch"
-            });
+            void requestSessionSwitch(view, state, ui, {}).catch(error => view.notify(String(error), "error"));
             return true;
         }
         if (name === "resume") {
@@ -100,7 +108,9 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
     const suggest = (items: readonly Suggestion[]): Suggestion[] => items
         .filter(item => item.value !== DELIVERY_COMMAND && NOT_IN_OMA[item.value] === undefined)
         .map(item => {
-        const words = COMMAND_WORDS[item.value];
+        const words = choices.hostControlNavigation === true && item.value === 'control'
+            ? 'End this conversation and return stdin to the host; no Worker/Society command is executed'
+            : COMMAND_WORDS[item.value];
         const description = words ?? item.description?.replace(/^\[t\] ?/, "");
         return {
             ...item, ...(description === undefined ? {} : {
@@ -110,6 +120,7 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
     });
     const receive = (event: PiEvent): boolean => {
         if (event.type === 'input_result' && pendingInput && pendingInput.id === event.id) {
+            if (!view.current(pendingInput.epoch)) { pendingInput = undefined; return true; }
             const text = pendingInput.text;
             pendingInput = undefined;
             if (event.accepted !== true) {
@@ -131,9 +142,20 @@ export function createInteractiveInput(view: InteractiveView, state: Interactive
         return false;
     };
     return {
-        submit, isCommand, extensionCommand, thinkingVisibility, suggest, receive, get pendingInput() {
-            return pendingInput;
+        hostControlNavigation: choices.hostControlNavigation === true, hostNavigation, submit, isCommand, extensionCommand, thinkingVisibility, suggest, receive, get pendingInput() {
+            return pendingInput && view.current(pendingInput.epoch) ? pendingInput : undefined;
         }
     };
+}
+/** Host-relaunched histories must honor the same cancellable extension hook as
+ * in-engine new/resume, and a late hook answer belongs only to its old UI. */
+export async function requestSessionSwitch(view: InteractiveView, state: InteractiveState, ui: InteractiveOutput,
+  target: { session?: string; mode?: "personal" }): Promise<void> {
+  const epoch = view.epoch, runtime = state.runtime;
+  if (!runtime || !view.current(epoch)) return;
+  const result = await runtime.session.extensionRunner.emit({ type: "session_before_switch",
+    reason: target.session === undefined ? "new" : "resume",
+    ...(target.session === undefined ? {} : { targetSessionFile: target.session }) });
+  if (result?.cancel !== true && view.current(epoch) && state.runtime === runtime) ui.send({ type: "switch", ...target });
 }
 export type InteractiveInput = ReturnType<typeof createInteractiveInput>;

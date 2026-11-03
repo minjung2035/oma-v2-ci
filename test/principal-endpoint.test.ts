@@ -1,3 +1,4 @@
+import { readableBody } from "@oma/mail/display";
 import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -8,9 +9,8 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
  * The test process is the host. It starts a real broker in-process, and a
  * stand-in engine as its child that loads the real compiled trusted extension,
  * is given the real environment the product builds, and holds the host's real
- * private channel on descriptor 3. OMA's tools start the real CLI as the
- * engine's child. Only the model is replaced: the test ends the turns a model
- * would end.
+ * private channel on descriptor 3. The harness invokes the typed host Client
+ * directly and tests delivery hooks; actual SDK/model tools run in scenario tests.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -19,13 +19,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
-import type { Socket } from "node:net";
+import { connect, type Socket } from "node:net";
 import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "@oma/contracts";
-import { Broker, type PrincipalHostChannel } from "@oma/broker";
+import { ACTOR_CONNECTIONS, Broker, type PrincipalHostChannel } from "@oma/broker";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalEndpointPorts, type PrincipalHostEndpointPorts } from "@oma/broker/principal-endpoint";
 import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
 import { type BoundPeer } from "@oma/broker/ports";
 import { RunRegistry } from "@oma/broker/run-registry";
+import { createGitModule } from "#oma-test/app/broker/git-composition";
+import { PassThrough } from "node:stream";
+import { once as eventOnce } from "node:events";
 import { Store } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { PolicyExecution } from "./fixtures/execution.js";
@@ -45,7 +48,7 @@ import { processIdentity, type ProcessIdentity } from "@oma/broker/process-ances
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "#oma-test/app/runtime/principal-delivery";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-boundary";
 import { publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
-import { sessionDirPathAt } from "@oma/domain/paths";
+import { sessionDirPathAt, runnerReceiptPathAt } from "@oma/domain/paths";
 import { PiRpcClient, commandWasNotWritten, type PiEvent } from "@oma/engine/pi-rpc";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
@@ -104,12 +107,13 @@ class HostChannel implements PrincipalHostChannel {
 interface Society {
   readonly broker: Broker;
   readonly store: Store;
+  readonly mail: MailModule;
   readonly root: string;
   readonly runRoot: string;
   readonly host: HostChannel | null;
 }
 
-async function startSociety(prefix: string, supervised = true, host?: HostChannel): Promise<Society> {
+async function startSociety(prefix: string, supervised = true, host?: HostChannel, limits = LIMITS, selected = false): Promise<Society> {
   const root = mkdtempSync(join(tmpdir(), prefix));
   const runRoot = join(root, "run");
   // Provisioned exactly as the product provisions it before starting a broker.
@@ -122,21 +126,126 @@ async function startSociety(prefix: string, supervised = true, host?: HostChanne
       specJson: JSON.stringify(PRINCIPAL_SPEC),
     }),
   );
-  const units = new PolicyExecution();
-  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, LIMITS.batchMaxMessages, LIMITS);
-  const views = new ViewsModule(store, root, "demo", "p");
+  const units = Object.assign(new PolicyExecution(), {collaborationRecordsSelected:()=>selected});
+  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64, limits.batchMaxMessages, limits);
+  const views = new ViewsModule(store, root, "demo", "p", limits, selected ? "collaboration-v1" : "legacy");
   const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
+  const git = selected ? createGitModule({stateRoot:root,projectGit:join(root,"project.git"),contextGit:join(root,"context.git"),worldDir:join(root,"world"),society:"demo"},store,mail,null) : null;
+  if (git) views.bindCollaborationRecords({mail,git,lifecycle});
   const channel = supervised ? host ?? new HostChannel(runRoot) : null;
-  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, limits: LIMITS, principalHost: channel ?? undefined });
+  const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, limits, principalHost: channel ?? undefined });
   await broker.start();
-  return { broker, store, root, runRoot, host: channel };
+  return { broker, store, mail, root, runRoot, host: channel };
 }
 
 async function stopSociety(society: Society): Promise<void> {
   await society.broker.drainAndClose();
   rmSync(society.root, { recursive: true, force: true });
 }
+test("045. A queued old runner close cannot revoke a replacement invocation",async()=>{
+ const society=await startSociety("oma-stale-runner-close-");
+ // Scope population is controlled here; the real Broker callback, registry,
+ // run leases, RPC connections and asynchronous stream close are exercised.
+ const populations=new Map<string,"empty"|"populated">();
+ const registry=new RunRegistry(path=>({identity:path,population:()=>populations.get(path)??"empty",
+  matches:other=>other===path,close(){}}));
+ Reflect.set(society.broker,"runLeases",registry);
+ const peer=(invocationId:string):BoundPeer=>({pid:process.pid,uid:process.getuid!(),gid:process.getgid!(),
+  inheritedRunner:{actor:"alice",invocationId},alive:()=>true,sameSender:()=>true,
+  retainForExecution:()=>()=>{},releaseConnection(){}});
+ try{
+  populations.set("old","populated");const old=registry.begin("alice",1,"a".repeat(32),"old");old.publish({socketHostPath:"/old",done(){}});
+  const stale=new PassThrough();society.broker.attachRunner(stale,peer(old.invocationId));
+  const staleClosed=eventOnce(stale,"close");stale.destroy(); // Close is queued after the new run opens.
+  populations.set("old","empty");populations.set("new","populated");
+  const current=registry.begin("alice",2,"b".repeat(32),"new");current.publish({socketHostPath:"/new",done(){}});
+  await staleClosed;assert.equal(current.phase,"live");
+  const live=new PassThrough();society.broker.attachRunner(live,peer(current.invocationId));
+  const closed=eventOnce(live,"close");live.destroy();await closed;
+  assert.equal(current.phase,"revoked-awaiting-death","the matching control close still revokes its own run");
+ }finally{populations.set("new","empty");populations.set("old","empty");await stopSociety(society);}
+});
 
+for (const selected of [false,true]) test(`043. A real ${selected?"selected":"legacy"} batch.prepare reply and its repeated observation fit the complete Unix RPC frame`, { timeout: 15000 }, async () => {
+  const limits = { ...LIMITS, frameBytes: 768, receiptWaitSeconds: 2 };
+  const society = await startSociety("oma-batch-frame-", true, undefined, limits, selected);
+  const engine = await Engine.start(society);
+  try {
+    const grant = society.host!.register(newSessionHandle(), engine.pid); assert.ok(grant);
+    engine.grant(grant.credential, grant.sessionHandle);
+    for (let index = 0; index < 8; index++) {
+      const input = { to: ["principal"], subject: `message ${index} ${"x".repeat(200)}`, body: "frame-bound body", kind: "message" as const };
+      if(selected) assert.equal((await society.mail.send({actor:"principal",role:"principal",incarnation:0,channel:"host",capabilities:new Set(["mail.send"]),peer:{pid:process.pid,uid:process.getuid!(),gid:process.getgid!()}},`seed-${index}`,input)).state,"succeeded");
+      else assert.equal((await engine.client("send",input)).ok,true);
+    }
+    const host = principalHostBroker(society.runRoot, limits), first = await host.prepare();
+    assert.ok(first && first.messageIds.length > 0);
+    const again = await host.prepare(); assert.ok(again);
+    assert.equal(again.id, first.id); assert.deepEqual(again.messageIds, first.messageIds);
+    assert.match(again.notice, /Redelivery/u);
+    assert.equal(society.store.preparedBatches("principal").length, 1);
+    for (const result of [first, again]) assert.ok(Buffer.byteLength(JSON.stringify({ v: 1,
+      id: "rpc-00000000-0000-4000-8000-000000000000", ok: true, result })) <= 768);
+  } finally { await engine.stop(); await stopSociety(society); }
+});
+
+test("044. A small completion request validates the existing receipt without repeating long state paths", { timeout: 15000 }, async () => {
+  const limits = { ...LIMITS, frameBytes: 768, receiptWaitSeconds: 2 };
+  const society = await startSociety(`oma-completion-${"r".repeat(42)}-`, true, undefined, limits);
+  const engine = await Engine.start(society);
+  try {
+    const grant = society.host!.register(newSessionHandle(), engine.pid); assert.ok(grant);
+    engine.grant(grant.credential, grant.sessionHandle);
+    assert.equal((await engine.client("send", { to: ["principal"], subject: "complete", body: "bounded completion", kind: "message" })).ok, true);
+    const batch = await principalHostBroker(society.runRoot, limits).prepare(); assert.ok(batch);
+    const sessionPath = join(principalSessionDir(society.root), "session.jsonl");
+    const compact={batchId:batch.id,incarnation:batch.incarnation,adapterRevision:PI_ADAPTER_REVISION};
+    const noReceipt=channel();try{
+      await noReceipt.connect(join(society.runRoot,"principal-host.sock"));
+      assert.equal(await failureOf(noReceipt.call("batch.complete",compact)),"SESSION_BOUNDARY_UNCONFIRMED");
+    }finally{noReceipt.close();}
+    assert.equal(society.store.getBatch(batch.id)?.state,"prepared");
+    writeBoundarySession(sessionPath, batch, "0123abcd");
+    const boundary = { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation,
+      sessionPath, entryId: "0123abcd" };
+    publishDeliveryReceipt(society.root, batch, boundary, 488);
+    const receiptPath = runnerReceiptPathAt(society.root, "principal", batch.id);
+    const before = readFileSync(receiptPath);
+    const evidence = { batchId: batch.id, incarnation: batch.incarnation, sessionPath, receiptPath, adapterRevision: PI_ADAPTER_REVISION };
+    for (const wrong of [{receiptPath:receiptPath+"-wrong"},{sessionPath:sessionPath+"-wrong"}]) {
+      const raw=channel();try{
+        await raw.connect(join(society.runRoot,"principal-host.sock"));
+        assert.equal(await failureOf(raw.call("batch.complete",{...evidence,...wrong})),"SESSION_BOUNDARY_UNCONFIRMED");
+      }finally{raw.close();}
+    }
+    assert.ok(Buffer.byteLength(JSON.stringify({ v: 1, id: "rpc-00000000-0000-4000-8000-000000000000",
+      method: "batch.complete", params: evidence })) > 488);
+    await principalHostBroker(society.runRoot, { ...limits, frameBytes: 488 }).complete(evidence);
+    assert.equal(society.store.getBatch(batch.id)?.state, "completed");
+    assert.deepEqual(readFileSync(receiptPath), before, "compact transport does not rewrite receipt evidence");
+  } finally { await engine.stop(); await stopSociety(society); }
+});
+
+test("001. Idle preauthentication Principal sockets have an aggregate connection bound", { timeout: 10000 }, async () => {
+  const society = await startSociety("oma-principal-cap-");
+  const sockets: Socket[] = [];
+  const open = async (name: string): Promise<Socket> => {
+    const socket = connect(join(society.runRoot, name)); sockets.push(socket);
+    await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+    return socket;
+  };
+  try {
+    for (let index = 0; index < ACTOR_CONNECTIONS; index++) await open("principal-host.sock");
+    const overflow = await open("principal.sock");
+    await new Promise<void>(resolve => { if (overflow.destroyed) resolve(); else overflow.once("close", () => resolve()); });
+    assert.ok(sockets.slice(0, ACTOR_CONNECTIONS).every(socket => !socket.destroyed));
+    sockets[0]!.destroy();
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const replacement = await open("principal-host.sock");
+    await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(replacement.destroyed, false, "closed sockets release admission; no authentication success is implied");
+  } finally { for (const socket of sockets) socket.destroy(); await stopSociety(society); }
+});
 /** A running stand-in engine: the real extension in a child of this process. */
 class Engine {
   readonly events: Record<string, unknown>[] = [];
@@ -213,10 +322,10 @@ class Engine {
 
   send(request: Record<string, unknown>): void { this.child.stdin!.write(`${JSON.stringify(request)}\n`); }
 
-  async tool(name: string, params: Record<string, unknown> = {}): Promise<{ ok: boolean; text?: string; error?: string }> {
+  async client(action: "send" | "status", params: Record<string, unknown> = {}): Promise<{ ok: boolean; text?: string; error?: string }> {
     const id = `t${++this.sequence}`;
     const answer = this.next(event => event.type === "tool" && event.id === id);
-    this.send({ op: "tool", id, name, params });
+    this.send({ op: "client", id, action, params });
     return await answer as { ok: boolean; text?: string; error?: string };
   }
 
@@ -256,7 +365,7 @@ async function withEngine(prefix: string, run: (society: Society, engine: Engine
   }
 }
 
-test("T114: a broker no host started opens no Principal endpoint at all", async () => {
+test("002. A broker no host started opens no Principal endpoint at all", async () => {
   const society = await startSociety("oma-principal-unsupervised-", false);
   try {
     assert.equal(existsSync(join(society.runRoot, "principal.sock")), false);
@@ -264,14 +373,14 @@ test("T114: a broker no host started opens no Principal endpoint at all", async 
   } finally { await stopSociety(society); }
 });
 
-test("T114: the host is told the broker is ready only once both endpoints are listening", async () => {
+test("003. The host is told the broker is ready only once both endpoints are listening", async () => {
   const society = await startSociety("oma-principal-ready-");
   try {
     assert.deepEqual(society.host!.readyWith, [{ principal: true, host: true }]);
   } finally { await stopSociety(society); }
 });
 
-test("T114: the broker accepts only the host's own child as the Principal's engine", async () => {
+test("004. The broker accepts only the host's own child as the Principal's engine", async () => {
   const society = await startSociety("oma-principal-register-");
   try {
     // The test runner is this process's parent, not its child: naming it must
@@ -299,7 +408,7 @@ test("T114: the broker accepts only the host's own child as the Principal's engi
   } finally { await stopSociety(society); }
 });
 
-test("T114: the credential is in no file and no environment -- read from outside, as an attacker would", async () => {
+test("005. The credential is in no file and no environment -- read from outside, as an attacker would", async () => {
   await withEngine("oma-principal-secret-", async (society, engine, grant) => {
     assert.ok(isPrincipalCredential(grant.credential));
     // The engine's environment, read the way any process of this user can read
@@ -326,7 +435,7 @@ test("T114: the credential is in no file and no environment -- read from outside
   });
 });
 
-test("T114: the endpoint refuses every request until the session attaches", async () => {
+test("006. The endpoint refuses every request until the session attaches", async () => {
   await withEngine("oma-principal-unattached-", async society => {
     const client = channel();
     try {
@@ -338,7 +447,7 @@ test("T114: the endpoint refuses every request until the session attaches", asyn
   });
 });
 
-test("T114: the audit's attack -- the right credential and handle from a process the engine did not start", async () => {
+test("007. The audit's attack -- the right credential and handle from a process the engine did not start", async () => {
   await withEngine("oma-principal-stolen-", async (society, _engine, grant) => {
     // This process holds both halves of the secret, exactly as a process that
     // read them somewhere would. It is not a descendant of the engine, so it
@@ -353,7 +462,7 @@ test("T114: the audit's attack -- the right credential and handle from a process
   });
 });
 
-test("T114: another session's handle is a conflict, not a failed authentication", async () => {
+test("008. Another session's handle is a conflict, not a failed authentication", async () => {
   await withEngine("oma-principal-conflict-", async (society, _engine, grant) => {
     const other = channel();
     try {
@@ -365,31 +474,20 @@ test("T114: another session's handle is a conflict, not a failed authentication"
   });
 });
 
-test("T114: Principal mail tools work through the real CLI without orchestration tools", async () => {
+test("009. The Principal typed host Client sends through its private endpoint and archives the exact body", async () => {
   await withEngine("oma-principal-tools-", async (society, engine) => {
-    for (const name of ["oma_status", "oma_logs", "oma_mail_ack", "oma_agent_create", "oma_context_publish"]) {
-      const refused = await engine.tool(name);
-      assert.equal(refused.ok, false);
-      assert.equal(refused.error, `no tool ${name}`);
-    }
-
-    const sent = await engine.tool("oma_mail_send", { to: ["principal"], subject: "to myself", body: "evidence", kind: "message" });
-    assert.ok(sent.ok, `oma_mail_send failed: ${sent.error}`);
-
-    const names = readdirSync(join(society.root, "mail", "archive", "cur"));
+    const sent = await engine.client("send", { to: ["principal"], subject: "to myself", body: "evidence", kind: "message" });
+    assert.ok(sent.ok, `typed client send failed: ${sent.error}`);
+    assert.equal(JSON.parse(sent.text!).receipt.state, "succeeded");
+    const names = readdirSync(join(society.root, "mail/archive/cur"));
     assert.equal(names.length, 1);
-    const messageId = names[0]!.replace(/:2,$/, "");
-    const read = await engine.tool("oma_mail_read", { messageId });
-    assert.ok(read.ok, `oma_mail_read failed: ${read.error}`);
-    assert.match(read.text!, /evidence/);
-    const byPath = await engine.tool("oma_mail_read", { messageId: `/mail/archive/cur/${messageId}:2,` });
-    assert.equal(byPath.text, read.text);
+    assert.equal(readableBody(readFileSync(join(society.root, "mail/archive/cur", names[0]!), "utf8")), "evidence");
   });
 });
 
-test("T114/E27: the engine attaches in-process; credentials never enter its environment or a CLI child", async () => {
+test("010. The engine attaches in-process; credentials never enter its environment or a CLI child", async () => {
   await withEngine("oma-principal-probe-", async (society, engine, grant) => {
-    const answer = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
+    const answer = await engine.client("send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.ok(answer.ok, `in-process attach did not work: ${answer.error}`);
     assert.equal(JSON.parse(answer.text!).receipt.state, "succeeded", "the CLI probe was run instead of the real client");
     assert.equal(readdirSync(join(society.root, "mail/archive/cur")).length, 1);
@@ -402,21 +500,21 @@ test("T114/E27: the engine attaches in-process; credentials never enter its envi
   }, { OMA_CLI_PATH: PROBE });
 });
 
-test("T114/E27: a detached engine cannot invent a Principal grant from the environment", async () => {
+test("011. A detached engine cannot invent a Principal grant from the environment", async () => {
   await withEngine("oma-principal-resident-", async (_society, engine) => {
-    const answer = await engine.tool("oma_status");
+    const answer = await engine.client("status");
     assert.equal(answer.ok, false);
     assert.match(answer.error!, /AUTH_FAILED/);
   }, { OMA_CLI_PATH: PROBE, OMA_HOST_CHANNEL: "" });
 });
 
-test("T114: a re-registered engine gets a new credential and the old one stops working", async () => {
+test("012. A re-registered engine gets a new credential and the old one stops working", async () => {
   await withEngine("oma-principal-rotate-", async (society, engine, first) => {
     const second = society.host!.register(first.sessionHandle, engine.pid)!;
     assert.notEqual(second.credential, first.credential);
     engine.grant(second.credential, second.sessionHandle);
     // The engine picks up the replacement without restarting.
-    const status = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
+    const status = await engine.client("send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.ok(status.ok, `the engine did not take the new credential: ${status.error}`);
     // The old one is refused, even though it was valid a moment ago.
     const stale = channel();
@@ -429,18 +527,18 @@ test("T114: a re-registered engine gets a new credential and the old one stops w
   });
 });
 
-test("T114: a credential from an earlier broker authorises nothing in a later one", async () => {
+test("013. A credential from an earlier broker authorises nothing in a later one", async () => {
   let stale: { credential: string; sessionHandle: string } | null = null;
   await withEngine("oma-principal-restart-a-", async (_society, _engine, grant) => { stale = grant; });
   await withEngine("oma-principal-restart-b-", async (society, engine, grant) => {
     assert.notEqual(grant.credential, stale!.credential);
     // The engine is given the old broker's credential: nothing works.
     engine.grant(stale!.credential, stale!.sessionHandle);
-    const status = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
+    const status = await engine.client("send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.equal(status.ok, false, "a credential from a stopped broker was accepted");
     // Given this broker's, it works again.
     engine.grant(grant.credential, grant.sessionHandle);
-    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
+    assert.ok((await engine.client("send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
     void society;
   });
 });
@@ -474,10 +572,10 @@ function sessionOf(engine: Engine): DeliverySession {
   };
 }
 
-test("T114 / PR-002: mail to the Principal is delivered into its live session and completed", async () => {
+test("014. Mail to the Principal is delivered into its live session and completed", async () => {
   await withEngine("oma-principal-deliver-", async (society, engine) => {
     // Mail for the Principal, sent through its own tool.
-    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "for you", body: "delivered?", kind: "message" })).ok);
+    assert.ok((await engine.client("send", { to: ["principal"], subject: "for you", body: "delivered?", kind: "message" })).ok);
     assert.equal(wasPresented(society), false);
     const promptsBefore = engine.events.filter(event => event.type === "response" && event.command === "prompt").length;
 
@@ -507,14 +605,14 @@ test("T114 / PR-002: mail to the Principal is delivered into its live session an
     assert.equal((await delivery.tick()).kind, "idle");
     // V02C: observe actual stand-in engine responses, not the delivery planner.
     // A later tool reply fences this child's preceding stdin/events.
-    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
+    assert.ok((await engine.client("send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
     assert.equal(engine.events.filter(event => event.type === "response" && event.command === "prompt").length, promptsBefore + 1);
   });
 });
 
-test("T114 / PR-002: a turn that does not settle cleanly leaves the mail pending, and it is retried later", async () => {
+test("015. A turn that does not settle cleanly leaves the mail pending, and it is retried later", async () => {
   await withEngine("oma-principal-deliver-fail-", async (society, engine) => {
-    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "retry me", body: "x", kind: "message" })).ok);
+    assert.ok((await engine.client("send", { to: ["principal"], subject: "retry me", body: "x", kind: "message" })).ok);
     let now = 1_000_000;
     const delivery = new PrincipalDelivery(sessionOf(engine), principalHostBroker(society.runRoot, LIMITS), {
       stateRoot: society.root, frameBytes: LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 60_000, now: () => now,
@@ -542,7 +640,7 @@ test("T114 / PR-002: a turn that does not settle cleanly leaves the mail pending
   });
 });
 
-test("T114 / PR-002: nothing the model runs can mark its own mail delivered", async () => {
+test("016. Nothing the model runs can mark its own mail delivered", async () => {
   await withEngine("oma-principal-deliver-owner-", async society => {
     // The attached model-facing connection does not serve the runner's
     // delivery methods...
@@ -572,7 +670,7 @@ test("T114 / PR-002: nothing the model runs can mark its own mail delivered", as
   });
 });
 
-test("T114 / PR-002: delivery waits for an idle session rather than landing inside a Human's turn", async () => {
+test("017. Delivery waits for an idle session rather than landing inside a Human's turn", async () => {
   const root = preparedRoot("oma-principal-busy-");
   try {
     const calls: string[] = [];
@@ -588,7 +686,7 @@ test("T114 / PR-002: delivery waits for an idle session rather than landing insi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("V08B: a busy or replaced session still settles an already-produced boundary with its first receipt, starting no turn", async () => {
+test("018. A busy or replaced session still settles an already-produced boundary with its first receipt, starting no turn", async () => {
   const root = preparedRoot("oma-principal-settle-busy-");
   try {
     const sessions = sessionDirPathAt(root, "principal");
@@ -610,7 +708,7 @@ test("V08B: a busy or replaced session still settles an already-produced boundar
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T114: the credential comparison is fixed-shape and does not stop early", () => {
+test("019. The credential comparison is fixed-shape and does not stop early", () => {
   const value = "a".repeat(64);
   assert.equal(credentialMatches(value, value), true);
   assert.equal(credentialMatches(`b${value.slice(1)}`, value), false);
@@ -627,7 +725,7 @@ test("T114: the credential comparison is fixed-shape and does not stop early", (
   assert.equal(sessionHandleMatches(value, value), false);
 });
 
-test("T114: provisioning creates the directories the Principal's engine and its session use", () => {
+test("020. Provisioning creates the directories the Principal's engine and its session use", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-principal-provision-"));
   try {
     const report = provisionSociety(root);
@@ -702,7 +800,7 @@ function reservedSession(refuse?: (message: Record<string, unknown>) => Error | 
 const accept = (id: string): PiEvent => ({ type: "response", id, command: "prompt", success: true });
 const settled: PiEvent = { type: "agent_settled" };
 
-test("T114 / PR-002: a Human prompt claims the session before it is written, so delivery cannot slip in", async () => {
+test("021. A Human prompt claims the session before it is written, so delivery cannot slip in", async () => {
   const { session, sent } = reservedSession();
   assert.equal(session.busy, false);
   // The moment the Human's prompt is submitted the session is claimed --
@@ -718,7 +816,7 @@ test("T114 / PR-002: a Human prompt claims the session before it is written, so 
   assert.equal(sent.length, 1, "a delivery was written into a session the Human had claimed");
 });
 
-test("T114 / PR-002: a Human prompt typed during a delivery waits in the host and is not folded into the delivery's run", async () => {
+test("022. A Human prompt typed during a delivery waits in the host and is not folded into the delivery's run", async () => {
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   await emit(accept("b-00000000-0000-4000-8000-000000000000"));
@@ -751,7 +849,7 @@ test("T114 / PR-002: a Human prompt typed during a delivery waits in the host an
   assert.equal(sent.length, 3);
 });
 
-test("T114 / PR-002: every prompt typed while the session was spoken for runs, once each, in order", async () => {
+test("023. Every prompt typed while the session was spoken for runs, once each, in order", async () => {
   // The defect this pins: counting settles per queued prompt. Pi emits one
   // `agent_settled` per run however many messages that run drained, so a
   // session that expected one settle per queued prompt would keep a claim
@@ -776,7 +874,7 @@ test("T114 / PR-002: every prompt typed while the session was spoken for runs, o
   assert.deepEqual(sent.map(message => message.id), ["b-00000000-0000-4000-8000-000000000000", "oma-tui-1", "oma-tui-2", "oma-tui-3"]);
 });
 
-test("T114 / PR-002: a prompt the engine refuses gives the session back and is said on the screen", async () => {
+test("024. A prompt the engine refuses gives the session back and is said on the screen", async () => {
   // Pi answers `prompt` at preflight and refuses before acceptance -- no model,
   // no key, a compaction in progress. No run starts, so no run settles: without
   // reading that answer the session would stay claimed for the rest of its
@@ -797,7 +895,7 @@ test("T114 / PR-002: a prompt the engine refuses gives the session back and is s
   assert.equal(sent.length, 2);
 });
 
-test("T114 / PR-002: a refused delivery command gives the session back and lets the waiting Human through", async () => {
+test("025. A refused delivery command gives the session back and lets the waiting Human through", async () => {
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   session.submit("while that runs");
@@ -807,7 +905,7 @@ test("T114 / PR-002: a refused delivery command gives the session back and lets 
   assert.equal(session.busy, true);
 });
 
-test("T114 / PR-002: a response for a prompt the session has moved on from changes nothing", async () => {
+test("026. A response for a prompt the session has moved on from changes nothing", async () => {
   const { session, sent, lines, emit } = reservedSession();
   session.submit("hello");
   await emit(settled);
@@ -820,7 +918,7 @@ test("T114 / PR-002: a response for a prompt the session has moved on from chang
   assert.equal(lines.length, 0, lines.join(" | "));
 });
 
-test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying the session is busy", async () => {
+test("027. A prompt the transport cannot carry stops the screen saying the session is busy", async () => {
   // A prompt larger than the configured frame is rejected before a byte is
   // written -- no run starts, and nothing will ever settle to say the session
   // is free again. If the claim comes back but the report of it does not, the
@@ -840,7 +938,7 @@ test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying
     "the cause is carried bare, so the surface can say where the text went without being cut off");
 });
 
-test("V09B: a write that failed after it began is not handed back as unsent and does not free the session", async () => {
+test("028. A write that failed after it began is not handed back as unsent and does not free the session", async () => {
   // D06: once bytes may have reached the engine, the prompt's acceptance is
   // unknown. The transport ended with the failure; the session's end reports
   // it as unconfirmed, and never as a draft to retype and resend.
@@ -852,7 +950,7 @@ test("V09B: a write that failed after it began is not handed back as unsent and 
   assert.deepEqual(busy, [true]);
 });
 
-test("T114 / PR-002: the waiting prompt that could not be sent is named, and the rest still go", async () => {
+test("029. The waiting prompt that could not be sent is named, and the rest still go", async () => {
   // The defect this pins: three prompts typed while the engine was busy are
   // all echoed as taken, one of their writes later fails, and the screen says
   // only that "the input" could not be sent. Which one? What did it say? The
@@ -893,7 +991,7 @@ test("T114 / PR-002: the waiting prompt that could not be sent is named, and the
   assert.deepEqual(clean.sent.map(message => String(message.message)).slice(1), ["first", "second", "third"]);
 });
 
-test("T114 / PR-002: the busy report comes from the ownership itself, at every move of it", async () => {
+test("030. The busy report comes from the ownership itself, at every move of it", async () => {
   const { session, busy, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   assert.deepEqual(busy, [true]);
@@ -909,7 +1007,7 @@ test("T114 / PR-002: the busy report comes from the ownership itself, at every m
   assert.deepEqual(busy, [true, true, false]);
 });
 
-test("T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 frame admission", async () => {
+test("031. The host never retains a Human prompt beyond its UTF-8 frame admission", async () => {
   const { session, sent, busy } = reservedSession();
   const state = session as unknown as { frameBytes: number };
   state.frameBytes = 96;
@@ -921,7 +1019,7 @@ test("T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 fra
   assert.deepEqual(sent, [], "an oversized prompt reached the Pi transport");
 });
 
-test("T120 / TUI-023: only so many prompts wait, and the Human is told which one was not taken", async () => {
+test("032. Only so many prompts wait, and the Human is told which one was not taken", async () => {
   // The Human can keep typing through a run they cannot interrupt, so the
   // length of that run would otherwise decide how much this process holds.
   const { session, sent } = reservedSession();
@@ -970,7 +1068,7 @@ const ONE_BATCH = {
   messageIds: [], deliveryMode: "followUp" as const, notice: "", sessionPath: null, indexPath: "/inbox.md" as const,
 };
 
-test("V05B: Principal completion uses the first receipt returned by EEXIST publication", async () => {
+test("033. Principal completion uses the first receipt returned by EEXIST publication", async () => {
   const root = preparedRoot("oma-principal-first-receipt-");
   try {
     const sessions = sessionDirPathAt(root, "principal");
@@ -1014,7 +1112,7 @@ function failedMessage(stopReason: string): PiEvent {
   return { type: "message_end", message: { role: "assistant", stopReason, content: [] } };
 }
 
-test("T114 / PR-002: a failed assistant message does not end the delivery -- the run settling does", async () => {
+test("034. A failed assistant message does not end the delivery -- the run settling does", async () => {
   // `message_end` comes before `agent_settled`, and Pi retries a retryable
   // failure and compacts before continuing. Giving the session back at the
   // first failed message would release a claim on a run Pi is still
@@ -1045,7 +1143,7 @@ test("T114 / PR-002: a failed assistant message does not end the delivery -- the
   assert.deepEqual(claims, ["deliver"], "the delivery released a claim the settled run had already given back");
 });
 
-test("T114 / PR-002: a run that settles on a failed assistant message is reported as the provider failing", async () => {
+test("035. A run that settles on a failed assistant message is reported as the provider failing", async () => {
   const { session, emit } = stubSession();
   const delivery = new PrincipalDelivery(session,
     { prepare: async () => ONE_BATCH, complete: async () => {} },
@@ -1060,7 +1158,7 @@ test("T114 / PR-002: a run that settles on a failed assistant message is reporte
   assert.match((result as { reason: string }).reason, /provider failed/);
 });
 
-test("T114 / D06: a delivery the engine never answers keeps the session", async () => {
+test("036. A delivery the engine never answers keeps the session", async () => {
   // The engine answers nothing. The command was written, so a run may be
   // going; giving the session back on the owner's timeout would hand the
   // Human's next prompt into it. Only settlement, the engine's refusal or the
@@ -1088,14 +1186,14 @@ test("T114 / D06: a delivery the engine never answers keeps the session", async 
   assert.equal(session.busy, true);
 });
 
-test("T114 / PR-002: the extension is ready for the next batch however a turn ended", async () => {
+test("037. The extension is ready for the next batch however a turn ended", async () => {
   // The engine reports a session path that is not absolute, so the extension
   // cannot name a boundary however the turn ends. The batch stays prepared in
   // the broker; what is tested here is that this engine still accepts the next
   // delivery of it. A long-lived Principal session that held the batch after
   // an unreported boundary would refuse every later one.
   await withEngine("oma-principal-pending-release-", async (society, engine) => {
-    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "s", body: "b", kind: "message" })).ok);
+    assert.ok((await engine.client("send", { to: ["principal"], subject: "s", body: "b", kind: "message" })).ok);
     const delivery = new PrincipalDelivery(sessionOf(engine), principalHostBroker(society.runRoot, LIMITS), {
       stateRoot: society.root, frameBytes: LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 0,
     });
@@ -1111,7 +1209,7 @@ test("T114 / PR-002: the extension is ready for the next batch however a turn en
   }, { OMA_TEST_SESSION_FILE: "relative/session.jsonl" });
 });
 
-test("T114: the Principal's session stays in its own private space", () => {
+test("038. The Principal's session stays in its own private space", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-principal-private-"));
   try {
     provisionSociety(root);
@@ -1123,7 +1221,7 @@ test("T114: the Principal's session stays in its own private space", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T114: the host is answered on its identity, not on a number another process may hold", async () => {
+test("039. The host is answered on its identity, not on a number another process may hold", async () => {
   // The same pid, a different process: a pid is reused, and everything else in
   // this repo pins identity rather than trusting a number. A caller whose start
   // time is not the registered host's is refused delivery.
@@ -1138,7 +1236,7 @@ test("T114: the host is answered on its identity, not on a number another proces
   } finally { await stopSociety(society); }
 });
 
-test("T114 / IPC-012: a method the host endpoint does not serve is an unknown method, not a refused host", async () => {
+test("040. A method the host endpoint does not serve is an unknown method, not a refused host", async () => {
   // The host is already known by this point, so answering AUTH_FAILED would
   // tell a caller its identity was rejected when in fact its identity was
   // accepted and the method does not exist. Error class is what decides
@@ -1179,7 +1277,7 @@ async function withRegisteredEngine(society: Society, run: (enginePid: number) =
   } finally { engine.kill("SIGKILL"); }
 }
 
-test("T114 / PR-002: the host is served delivery only while this broker holds a registration for its engine", async () => {
+test("041. The host is served delivery only while this broker holds a registration for its engine", async () => {
   // The defect this closes: the host endpoint checked who was calling and
   // nothing else, so a host whose registration had been refused -- or had not
   // been answered yet -- was served `batch.prepare` exactly like a host with a
@@ -1218,7 +1316,7 @@ test("T114 / PR-002: the host is served delivery only while this broker holds a 
   } finally { await stopSociety(society); }
 });
 
-test("T114 / PR-002: a registration that ends closes delivery again, without anything telling the endpoint", async () => {
+test("042. A registration that ends closes delivery again, without anything telling the endpoint", async () => {
   // A registration is retired by events the delivery endpoint never sees: the
   // engine dies, or the host registers another one and the first is dropped.
   // The endpoint therefore asks on every request rather than remembering an
@@ -1246,7 +1344,7 @@ test("T114 / PR-002: a registration that ends closes delivery again, without any
   } finally { await stopSociety(society); }
 });
 
-test("T114: stopping the broker releases the supervision channel it was given", async () => {
+test("043. Stopping the broker releases the supervision channel it was given", async () => {
   const society = await startSociety("oma-principal-channel-close-");
   assert.equal(society.host!.closed, false);
   await society.broker.drainAndClose();
@@ -1395,7 +1493,7 @@ function malformed(method: string, params: Record<string, unknown>): Record<stri
   ];
 }
 
-test("P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope the way every internal channel does", async () => {
+test("044. The Principal's endpoint reads a request's envelope the way every internal channel does", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1408,6 +1506,7 @@ test("P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope th
     await attachAndUse(bench, held, handle);
     for (const frame of malformed("principal.detach", {}))
       assert.equal(await codeOf(held.raw(frame, null)), "INVALID_REQUEST", JSON.stringify(frame));
+    assert.equal(await codeOf(held.call("principal.detach", { unexpected: true })), "INVALID_REQUEST");
     // None of them detached it, and a well-formed detach answers as declared.
     const served = bench.dispatched.length;
     assert.equal((await held.call("status.get") as { ok: boolean }).ok, true);
@@ -1416,7 +1515,7 @@ test("P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope th
   });
 });
 
-test("P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before any delivery method runs", async () => {
+test("045. The host's delivery endpoint reads the envelope before any delivery method runs", async () => {
   const host = processIdentity(process.pid)!;
   const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => {}, releaseConnection: () => {} } as unknown as BoundPeer;
@@ -1444,7 +1543,7 @@ test("P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before
   assert.deepEqual(ran, ["prepare"]);
 });
 
-test("T114: re-registering the session revokes the connections the old one already had", async () => {
+test("046. Re-registering the session revokes the connections the old one already had", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1480,7 +1579,7 @@ test("T114: re-registering the session revokes the connections the old one alrea
   });
 });
 
-test("T114: a registration the broker refuses leaves no attached Principal behind", async () => {
+test("047. A registration the broker refuses leaves no attached Principal behind", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1507,7 +1606,7 @@ test("T114: a registration the broker refuses leaves no attached Principal behin
   });
 });
 
-test("T114: closing the endpoint revokes the connections that are already attached", async () => {
+test("048. Closing the endpoint revokes the connections that are already attached", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1526,7 +1625,7 @@ test("T114: closing the endpoint revokes the connections that are already attach
   });
 });
 
-test("T114: detaching gives up authority rather than parking it for later", async () => {
+test("049. Detaching gives up authority rather than parking it for later", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1587,7 +1686,7 @@ async function withEngineAndChild(
   }
 }
 
-test("T114 / AUTH-003: an engine that dies takes the authority of the processes it started with it", async () => {
+test("050. An engine that dies takes the authority of the processes it started with it", async () => {
   // Descent was checked once, at attach, and the answer was kept for the life
   // of the connection. So a process the engine started went on acting as the
   // Principal after the engine was gone: nothing re-registered, so the
@@ -1630,7 +1729,7 @@ test("T114 / AUTH-003: an engine that dies takes the authority of the processes 
   });
 });
 
-test("T114: revocation reaches every attached connection, and only attached ones", async () => {
+test("051. Revocation reaches every attached connection, and only attached ones", async () => {
   await withEngineProcess(async bench => {
     const handle = newSessionHandle();
     bench.register(handle);
@@ -1653,7 +1752,7 @@ test("T114: revocation reaches every attached connection, and only attached ones
   });
 });
 
-test("P0V-57 / R02, P0-2: after corruption is observed the host's delivery endpoint is fenced like the runner channel", async () => {
+test("052. After corruption is observed the host's delivery endpoint is fenced like the runner channel", async () => {
   const society = await startSociety("oma-host-fenced-");
   try {
     await withRegisteredEngine(society, async () => {
@@ -1677,7 +1776,7 @@ test("P0V-57 / R02, P0-2: after corruption is observed the host's delivery endpo
   } finally { await stopSociety(society); }
 });
 
-test("P0V-60 / R05, P0-2: the authority a request was handed stops standing when its registration is retired", async () => {
+test("053. The authority a request was handed stops standing when its registration is retired", async () => {
   await withEngineProcess(async bench => {
     const first = newSessionHandle();
     bench.register(first);
@@ -1692,7 +1791,7 @@ test("P0V-60 / R05, P0-2: the authority a request was handed stops standing when
   });
 });
 
-test("P0V-60 / R05, P0-2: the Principal's capabilities are read against what the caller was authorised under, at every read", t => {
+test("054. The Principal's capabilities are read against what the caller was authorised under, at every read", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-principal-live-"));
   const store = new Store(join(root, "runtime.sqlite"));
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });

@@ -75,7 +75,7 @@ function society(t: TestContext) {
 /** Lets the promise work an interval started run to the end. */
 const settle = () => new Promise<void>(resolve => { setImmediate(resolve); });
 
-test("AV20 / REC-002, D03: a foreground broker sweeps once per interval while it admits work, and not after", async t => {
+test("001. A foreground broker sweeps once per interval while it admits work, and not after", async t => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const f = society(t);
   await f.broker.start();
@@ -94,7 +94,7 @@ test("AV20 / REC-002, D03: a foreground broker sweeps once per interval while it
   assert.equal(f.recovery.sweeps, 2, "a draining broker kept sweeping");
 });
 
-test("AV20 / REC-002: the drain waits for a sweep the interval started, as for any dispatched task", async t => {
+test("002. The drain waits for a sweep the interval started, as for any dispatched task", async t => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const f = society(t);
   await f.broker.start();
@@ -111,7 +111,7 @@ test("AV20 / REC-002: the drain waits for a sweep the interval started, as for a
   assert.equal(closed, true);
 });
 
-test("native wake: a burst and in-flight hints retain one active sweep and one fresh pass", async t => {
+test("003. Native wake: a burst and in-flight hints retain one active sweep and one fresh pass", async t => {
   const f = society(t);
   await f.broker.start(); f.recovery.hold = true;
   for (let i = 0; i < 1000; i++) f.broker.hintWork();
@@ -124,13 +124,13 @@ test("native wake: a burst and in-flight hints retain one active sweep and one f
   assert.equal(f.recovery.sweeps, 2);
 });
 
-test("native wake: closing admission cancels a hint queued before dispatch", async t => {
+test("004. Native wake: closing admission cancels a hint queued before dispatch", async t => {
   const f = society(t); await f.broker.start();
   f.broker.hintWork(); f.broker.closeAdmission(); await settle();
   assert.equal(f.recovery.sweeps, 0);
 });
 
-test("native wake: committed Mail reaches the live Broker and a same-key receipt does not wake again", async t => {
+test("005. Native wake: committed Mail reaches the live Broker and a same-key receipt does not wake again", async t => {
   const f = society(t); await f.broker.start();
   const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "host",
     capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
@@ -145,7 +145,7 @@ test("native wake: committed Mail reaches the live Broker and a same-key receipt
   assert.equal(f.store.getOperation("principal", "committed-wake")!.planJson, plan);
 });
 
-test("AV20 / D03, INV04: no external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner", () => {
+test("006. No external reconcile or broker unit ships -- the in-process sweep and its five-second interval are the only owner", () => {
   for (const name of ["reconcile.service.in", "reconcile.timer.in", "broker.service.in"]) {
     assert.equal(existsSync(fileURLToPath(new URL(`../../packages/platform-linux/dist/systemd/${name}`, import.meta.url))), false,
       `${name} still ships`);

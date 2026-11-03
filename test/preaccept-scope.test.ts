@@ -34,7 +34,7 @@ function command(code: string): CommandSpec {
 }
 
 
-test("V17A: one cleanup failure does not skip another owned resource", () => {
+test("001. One cleanup failure does not skip another owned resource", () => {
   const failing = new ObservedOwner(1);
   const remaining = new ObservedOwner();
   const scope = new PreacceptScope();
@@ -45,7 +45,7 @@ test("V17A: one cleanup failure does not skip another owned resource", () => {
   assert.equal(remaining.discarded, 1, "later cleanup was skipped");
 });
 
-test("V17A: observation uncertainty retains every preaccept resource", () => {
+test("002. Observation uncertainty retains every preaccept resource", () => {
   const first = new ObservedOwner();
   const second = new ObservedOwner();
   const scope = new PreacceptScope();
@@ -56,7 +56,7 @@ test("V17A: observation uncertainty retains every preaccept resource", () => {
   assert.deepEqual([first.discarded, second.discarded], [0, 0]);
 });
 
-test("V17A: uncertain native preparation quiescence retains the resource", {
+test("003. Uncertain native preparation quiescence retains the resource", {
   skip: process.platform !== "linux",
   timeout: 10000,
 }, async () => {
@@ -81,7 +81,7 @@ test("V17A: uncertain native preparation quiescence retains the resource", {
   assert.equal(owner.discarded, 0);
 });
 
-test("V17A: scope preserves the primary cause, aggregates cleanup, and reports dispositions", async () => {
+test("004. Scope preserves the primary cause, aggregates cleanup, and reports dispositions", async () => {
   const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-scope-"));
@@ -110,7 +110,7 @@ test("V17A: scope preserves the primary cause, aggregates cleanup, and reports d
   }
 });
 
-test("V17A: cleanup-unconfirmed can retry once without creating new ownership", async () => {
+test("005. Cleanup-unconfirmed can retry once without creating new ownership", async () => {
   const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   const owner = new ObservedOwner(1);
   const scope = new module.PreacceptScope();
@@ -126,7 +126,7 @@ test("V17A: cleanup-unconfirmed can retry once without creating new ownership", 
   assert.equal(owner.discarded, 2);
 });
 
-test("V17A: identity loss is cleanup-unconfirmed and never deletes the replacement", async () => {
+test("006. Identity loss is cleanup-unconfirmed and never deletes the replacement", async () => {
   const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-identity-"));
@@ -153,7 +153,7 @@ test("V17A: identity loss is cleanup-unconfirmed and never deletes the replaceme
   }
 });
 
-test("V17B: an accepted row that does not reference the artifact discards it", async () => {
+test("007. An accepted row that does not reference the artifact discards it", async () => {
   const module = await import("@oma/storage/preaccept-artifact") as Record<string, any>;
   assert.equal(typeof module.PreacceptScope, "function", "PreacceptScope is not implemented");
   const root = mkdtempSync(join(tmpdir(), "oma-preaccept-linked-"));

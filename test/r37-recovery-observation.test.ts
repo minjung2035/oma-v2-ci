@@ -39,7 +39,7 @@ class ObservedUnits extends PolicyExecution {
 }
 
 for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "death-unknown"] as const) {
-  test(`R37: delayed recovery observation rechecks ${change}`, { timeout: 10000 }, async () => {
+  test(`001. Delayed recovery observation rechecks ${change}`, { timeout: 10000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-r37-recovery-"));
     const store = new Store(join(root, "runtime.sqlite"));
     const units = new ObservedUnits(root);

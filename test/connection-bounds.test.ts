@@ -14,7 +14,7 @@ import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { nativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
-test("V26A: a connection flood on an actor socket is bounded, and the Resident is answered once it ends", { timeout: 60_000 }, async t => {
+test("001. A connection flood on an actor socket is bounded, and the Resident is answered once it ends", { timeout: 60_000 }, async t => {
   const f = await preparedFixture(1), units = await nativeScriptResidents(f.store, f.root);
   let broker: Broker | undefined;
   t.after(async () => {

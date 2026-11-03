@@ -45,7 +45,7 @@ function fixture(t) {
   return root;
 }
 for (const [name, run] of [['sync', cleanup.withCleanup], ['async', cleanup.withAsyncCleanup]]) {
-  test(`Owned cleanup ${name}: success, primary, cleanup-only and both retain exact outcomes`, async () => {
+  test(`001. Owned cleanup ${name}: success, primary, cleanup-only and both retain exact outcomes`, async () => {
     for (const effectFailed of [false, true]) for (const cleanupFailed of [false, true]) {
       let returned = 0;
       const effect = () => { if (effectFailed) throw primary; return 17; };
@@ -57,11 +57,11 @@ for (const [name, run] of [['sync', cleanup.withCleanup], ['async', cleanup.with
       assert.equal(returned, 1);
     }
   });
-  test(`Owned cleanup ${name}: thrown null or undefined is still a primary failure`, async () => {
+  test(`002. Owned cleanup ${name}: thrown null or undefined is still a primary failure`, async () => {
     for (const value of [null, undefined]) await assert.rejects(Promise.resolve().then(() => run(() => { throw value; }, () => { throw secondary; })), error => both(error, value));
   });
 }
-test('Owned cleanup async: pending effect and cleanup are both awaited', async () => {
+test("003. Owned cleanup async: pending effect and cleanup are both awaited", async () => {
   let settle, dispose, returned = 0, done = false;
   const effect = new Promise(resolve => { settle = resolve; });
   const cleanupResult = new Promise(resolve => { dispose = resolve; });
@@ -70,7 +70,7 @@ test('Owned cleanup async: pending effect and cleanup are both awaited', async (
   settle(17); await new Promise(resolve => setImmediate(resolve)); assert.equal(returned, 1); assert.equal(done, false);
   dispose(); assert.equal(await result, 17); assert.equal(done, true);
 });
-test('Owned cleanup: nested secondary exhaustion cannot erase corruption or publication knowledge', () => {
+test("004. Owned cleanup: nested secondary exhaustion cannot erase corruption or publication knowledge", () => {
   const unconfirmed = new StoreError('BROKER_UNAVAILABLE', 'fixture publication', { details: { publication: 'unconfirmed' } });
   for (const first of [primary, unconfirmed]) {
     let caught;
@@ -82,7 +82,7 @@ test('Owned cleanup: nested secondary exhaustion cannot erase corruption or publ
   }
 });
 
-for (const failure of ['flock', 'stat', 'shape', 'contended-close']) test(`Owned cleanup ProcessLock: ${failure} returns the descriptor once without replacing the primary`, () => {
+for (const failure of ['flock', 'stat', 'shape', 'contended-close']) test(`005. Owned cleanup ProcessLock: ${failure} returns the descriptor once without replacing the primary`, () => {
   let returned = 0;
   const api = load('packages/native/src/process-lock.ts', {
     'node:fs': { ...fs, openSync: () => 17, closeSync(fd) { assert.equal(fd, 17); returned++; throw secondary; },
@@ -96,7 +96,7 @@ for (const failure of ['flock', 'stat', 'shape', 'contended-close']) test(`Owned
   });
   assert.equal(returned, 1);
 });
-test('Owned cleanup ProcessLock: a failed close is never retried and revokes descriptor access', () => {
+test("006. Owned cleanup ProcessLock: a failed close is never retried and revokes descriptor access", () => {
   let returned = 0;
   const api = load('packages/native/src/process-lock.ts', {
     'node:fs': { ...fs, openSync: () => 17, closeSync() { returned++; throw secondary; },
@@ -109,7 +109,7 @@ test('Owned cleanup ProcessLock: a failed close is never retried and revokes des
 });
 
 for (const operation of ['openDirectory', 'openRegularBeneath']) for (const succeeds of [false, true])
-  test(`Owned cleanup contained: ${operation} ${succeeds ? 'untransferred result is closed' : 'primary observation survives'} when its pin close fails`, () => {
+  test(`007. Owned cleanup contained: ${operation} ${succeeds ? 'untransferred result is closed' : 'primary observation survives'} when its pin close fails`, () => {
     const returned = [];
     const api = load("packages/native/src/files.ts", {
       'node:fs': { ...fs, openSync: path => path === '/' ? 11 : 19,
@@ -123,7 +123,7 @@ for (const operation of ['openDirectory', 'openRegularBeneath']) for (const succ
     assert.throws(run, error => succeeds ? error === secondary : both(error));
     assert.deepEqual(returned, succeeds ? [operation === 'openDirectory' ? 11 : 13, 19] : [operation === 'openDirectory' ? 11 : 13]);
   });
-test('Owned cleanup contained: directory body failure survives parent close failure', () => {
+test("008. Owned cleanup contained: directory body failure survives parent close failure", () => {
   const api = load("packages/native/src/files.ts", {
     'node:fs': { ...fs, openSync: () => 11, closeSync() { throw secondary; } },
     koffi: { errno: () => 0, load: () => ({ func: signature => signature.startsWith('long syscall') ? () => 19 : () => 0 }) },
@@ -132,7 +132,7 @@ test('Owned cleanup contained: directory body failure survives parent close fail
 });
 
 for (const operation of ['openDirectory', 'openRegularBeneath'])
-  test(`Owned cleanup contained: ${operation} retains both failed descriptor returns`, () => {
+  test(`009. Owned cleanup contained: ${operation} retains both failed descriptor returns`, () => {
     const returned = [], last = new Error('fixture result close failed');
     const api = load("packages/native/src/files.ts", {
       'node:fs': { ...fs, openSync: path => path === '/' ? 11 : 19,
@@ -145,7 +145,7 @@ for (const operation of ['openDirectory', 'openRegularBeneath'])
     assert.deepEqual(returned, [operation === 'openDirectory' ? 11 : 13, 19]);
   });
 for (const file of ['apps/oma/src/runtime/personal-settings.ts', 'apps/oma/src/engine/settings-files.ts'])
-  for (const failed of [false, true]) test(`Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
+  for (const failed of [false, true]) test(`010. Owned cleanup settings ${file}: ${failed ? 'read failure plus' : 'only'} writer close failure is not success`, t => {
     const root = fixture(t); let returned = 0, writes = 0;
     // fix/fp moved pi-runtime's lock+replace behind the shared lockedUserReplace
     // (src/runtime/locked-files.ts). The contract under test is unchanged, so
@@ -166,7 +166,7 @@ for (const file of ['apps/oma/src/runtime/personal-settings.ts', 'apps/oma/src/e
     error => failed ? both(error) : error === secondary);
     assert.equal(returned, 1); assert.equal(writes, failed ? 0 : 1);
   });
-for (const failed of [false, true]) test(`Owned cleanup Keychain: controlled ${failed ? 'store failure plus' : 'only'} lock close failure retains exact outcome`, async () => {
+for (const failed of [false, true]) test(`011. Owned cleanup Keychain: controlled ${failed ? 'store failure plus' : 'only'} lock close failure retains exact outcome`, async () => {
   let returned = 0, writes = 0;
   const writer = load('packages/process/src/writer.ts', {
     '@oma/native/process-lock': { ProcessLock: { tryAcquire: () => ({ descriptor: 17, assertHeld() {}, close() { returned++; throw secondary; } }) } },

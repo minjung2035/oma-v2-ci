@@ -113,8 +113,17 @@ const OMA_DIVERGENCES = Object.freeze({
       "keep a post-start error from crashing the engine or orphaning the " +
       "server, and didOpen reports stdin backpressure through the " +
       "write's own return value so the open loop awaits a bounded " +
-      "didDrain() instead of materializing the corpus in memory.",
+      "didDrain() instead of materializing the corpus in memory. All client " +
+      "timers use the shared monotonic deadline, so long request and silence " +
+      "windows never overflow into immediate timeouts.",
     edits: [
+      {
+        find: `import { spawn } from "node:child_process";`,
+        replace: `import { spawn } from "node:child_process";
+import { alarm as omaAlarm } from "@oma/protocol/alarm";
+const setTimeout = (callback, ms) => omaAlarm(Math.max(1, ms) / 1000, callback);
+const clearTimeout = timer => timer?.cancel();`,
+      },
       {
         find: "const PROCESS_EXIT_GRACE_MS = 500;",
         replace: `const PROCESS_EXIT_GRACE_MS = 500;

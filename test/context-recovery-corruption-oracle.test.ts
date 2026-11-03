@@ -22,7 +22,7 @@ function writableDirectories(directory: string): void {
             writableDirectories(join(directory, entry.name));
     }
 }
-test("corrupt accepted context rows fail before Git observation or snapshot/mail publication", async () => {
+test("001. Corrupt accepted context rows fail before Git observation or snapshot/mail publication", async t => {
     const root = mkdtempSync(join(tmpdir(), "oma-context-recovery-corruption-"));
     const stateRoot = join(root, "state");
     mkdirSync(stateRoot);
@@ -101,16 +101,24 @@ test("corrupt accepted context rows fail before Git observation or snapshot/mail
                     ["missing recipients", { ...plan, message: { ...plan.message, recipients: undefined } }],
                 ];
                 for (const [label, damaged] of damagedPlans) {
-                    const damagedJson = JSON.stringify(damaged);
-                    raw.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(damagedJson, accepted.id);
-                    const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
-                    assert.throws(() => store.getOperationById(accepted.id), isCorrupt, label);
-                    await assert.rejects(git.reconcile(accepted.id), isCorrupt, label);
-                    assert.deepEqual(calls, [], label);
-                    const retained: Record<string, unknown> | undefined = raw.prepare("SELECT plan_json FROM operations WHERE id=?").get(accepted.id);
-                    assert.equal(retained?.plan_json, damagedJson, "decoding must not silently repair corruption");
-                    raw.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(originalPlanJson, accepted.id);
-                    assert.equal(store.getOperationById(accepted.id)?.kind, "context.publish", "restored positive control");
+                    await t.test(`002. Corrupt context plan: ${label}`, async () => {
+                        calls.length = 0;
+                        try {
+                            const damagedJson = JSON.stringify({ ...JSON.parse(originalPlanJson), intent: damaged });
+                            raw.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(damagedJson, accepted.id);
+                            const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
+                            assert.equal(JSON.parse(damagedJson).version, JSON.parse(originalPlanJson).version,
+                                "the valid envelope must reach the intended semantic corruption check");
+                            assert.throws(() => store.getOperationById(accepted.id), isCorrupt, label);
+                            await assert.rejects(git.reconcile(accepted.id), isCorrupt, label);
+                            assert.deepEqual(calls, [], label);
+                            const retained: Record<string, unknown> | undefined = raw.prepare("SELECT plan_json FROM operations WHERE id=?").get(accepted.id);
+                            assert.equal(retained?.plan_json, damagedJson, "decoding must not silently repair corruption");
+                        } finally {
+                            raw.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(originalPlanJson, accepted.id);
+                        }
+                        assert.equal(store.getOperationById(accepted.id)?.kind, "context.publish", "restored positive control");
+                    });
                 }
             }
             finally {

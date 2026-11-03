@@ -97,7 +97,7 @@ async function acceptedMail(
   return { store, mail, messageId };
 }
 
-test("DB-005/006: missing delivery from the accepted recipient snapshot fails closed", async () => {
+test("001. Missing delivery from the accepted recipient snapshot fails closed", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-delivery-set-"));
   const { store, mail, messageId } = await acceptedMail(root, ["alice", "bob"]);
   // A complete accepted state is created through the Store; the missing row is
@@ -124,7 +124,7 @@ test("DB-005/006: missing delivery from the accepted recipient snapshot fails cl
   }
 });
 
-test("REC-006/T69: accepted mail object corruption aborts reconcile instead of becoming remaining", async () => {
+test("002. Accepted mail object corruption aborts reconcile instead of becoming remaining", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-reconcile-corrupt-"));
   const { store, mail, messageId } = await acceptedMail(root, ["alice", "bob"]);
   try {
@@ -144,7 +144,7 @@ test("REC-006/T69: accepted mail object corruption aborts reconcile instead of b
   }
 });
 
-test("FS-005: immutable publication is read-only and freezeObject removes its staging alias", () => {
+test("003. Immutable publication is read-only and freezeObject removes its staging alias", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-mode-"));
   const src = join(root, "src");
   const dst = join(root, "dst");

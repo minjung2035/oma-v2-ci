@@ -15,7 +15,7 @@ import { ensureOwnedDirectory, openOwnedDirectory } from "@oma/storage/directory
 import { createHash } from "node:crypto";
 import { publishImmutableFile } from "@oma/storage/immutable-file";
 
-test("snapshot reader returns final symlink bytes while refusing linked parents", () => {
+test("001. Snapshot reader returns final symlink bytes while refusing linked parents", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-snapshot-link-")));
   let reader;
   withCleanup(() => {
@@ -40,7 +40,7 @@ test("snapshot reader returns final symlink bytes while refusing linked parents"
   ]));
 });
 
-test("contained opens accept caller no-follow and reject intermediate and final symlinks", () => {
+test("002. Contained opens accept caller no-follow and reject intermediate and final symlinks", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-nofollow-")));
   let held;
   withCleanup(() => {
@@ -73,7 +73,7 @@ test("contained opens accept caller no-follow and reject intermediate and final 
   ]));
 });
 
-test("owned directory creation retains readable inode authority and repairs owner bits without following replacements", () => {
+test("003. Owned directory creation retains readable inode authority and repairs owner bits without following replacements", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-owned-readable-")));
   let parent, held;
   withCleanup(() => {
@@ -97,7 +97,7 @@ test("owned directory creation retains readable inode authority and repairs owne
   ]));
 });
 
-test("immutable publication keeps checked source bytes across source-name substitution and refuses a conflicting destination", () => {
+test("004. Immutable publication keeps checked source bytes across source-name substitution and refuses a conflicting destination", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-immutable-held-")));
   withCleanup(() => {
     const source = join(scratch, "source"), moved = join(scratch, "moved"), target = join(scratch, "published");
@@ -120,7 +120,7 @@ test("immutable publication keeps checked source bytes across source-name substi
   }, () => rmSync(scratch, { recursive: true, force: true }));
 });
 
-test("directory effects remain on the held inode after a pathname replacement", () => {
+test("005. Directory effects remain on the held inode after a pathname replacement", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-files-")));
   mkdirSync(join(scratch, "root")); const held = openDirectory(join(scratch, "root"));
   try {
@@ -147,7 +147,7 @@ test("directory effects remain on the held inode after a pathname replacement", 
   } finally { closeSync(held); rmSync(scratch, { recursive: true, force: true }); }
 });
 
-test("entry metadata preserves nanoseconds and link identity without content access", () => {
+test("006. Entry metadata preserves nanoseconds and link identity without content access", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-native-stat-")));
   const held = openDirectory(scratch);
   try {
@@ -165,7 +165,7 @@ test("entry metadata preserves nanoseconds and link identity without content acc
   } finally { closeSync(held); rmSync(scratch, { recursive: true, force: true }); }
 });
 
-test("the real kernel process substrate feeds the shared ancestry and reuse policy", () => {
+test("007. The real kernel process substrate feeds the shared ancestry and reuse policy", () => {
   const observe = process.platform === "darwin" ? observeDarwinProcess : observeLinuxProcess;
   const own = observe(process.pid);
   assert.equal(own.kind, "running"); assert.equal(own.ppid, process.ppid);
@@ -177,7 +177,7 @@ test("the real kernel process substrate feeds the shared ancestry and reuse poli
   assert.deepEqual(observe(-1), { kind: "unavailable" });
 });
 
-test("restart breaker counts only within its monotonic window and remains bounded", () => {
+test("008. Restart breaker counts only within its monotonic window and remains bounded", () => {
   let now = 0; const policy = new RestartPolicy(5, 60000, () => now);
   for (const expected of [250, 500, 1000, 2000, 4000]) assert.deepEqual(policy.next(), { kind: "restart", delayMs: expected });
   assert.deepEqual(policy.next(), { kind: "exhausted", count: 5 });

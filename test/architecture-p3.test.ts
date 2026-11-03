@@ -10,7 +10,13 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-test("IMP-R29: prepared-ref collection retains active, unknown and accepted ownership", async () => {
+
+function statusOf(f: ReturnType<typeof fixture>, actor: string, name: string) {
+  const status=f.reviews.status(f.auth(actor), {name}, 65536, "status");
+  assert.ok(!("requests" in status)); return status;
+}
+
+test("001. Prepared-ref collection retains active, unknown and accepted ownership", async () => {
   const f = fixture();
   try {
     const a = f.candidateWith({ a: "one" }), b = f.candidateWith({ b: "two" });
@@ -40,7 +46,7 @@ test("IMP-R29: prepared-ref collection retains active, unknown and accepted owne
   } finally { f.close(); }
 });
 
-test("IMP-R16: reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta", async () => {
+test("002. Reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta", async () => {
   const checked: string[] = [];
   const f = fixture({checks:[{id:"test",argv:["/bin/true"],env:{}}],runCheck:c => {checked.push(c);}});
   try {
@@ -64,7 +70,7 @@ test("IMP-R16: reviewed disjoint proposals from one base integrate in order with
   } finally {f.close();}
 });
 
-test("IMP-R17: individual changes pass but combined invariant fails on prepared I", async () => {
+test("003. Individual changes pass but combined invariant fails on prepared I", async () => {
   let f: ReturnType<typeof fixture>;
   f=fixture({checks:[{id:"invariant",argv:["/bin/true"],env:{}}],runCheck:c => {
     if (f.git(["ls-tree","--name-only",c]).split("\n").length > 1) throw new StoreError("CHECK_FAILED","a and b cannot coexist");
@@ -81,7 +87,7 @@ test("IMP-R17: individual changes pass but combined invariant fails on prepared 
   } finally {f.close();}
 });
 
-test("IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-context vote", async () => {
+test("004. Clean overlapping LOW changes require exact MEDIUM integration-context vote", async () => {
   const f=fixture();
   try {
     const lines=Array.from({length:30},(_,i)=>`line ${i}`);
@@ -100,7 +106,7 @@ test("IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-co
   } finally {f.close();}
 });
 
-test("IMP-R19: revision preserves old failure bytes, resets code approval and races expectedRevision", async () => {
+test("005. Revision preserves old failure bytes, resets code approval and races expectedRevision", async () => {
   let fail=true;
   const f=fixture({checks:[{id:"test",argv:["/bin/true"],env:{}}],runCheck:()=>{if(fail)throw new StoreError("CHECK_FAILED","first");}});
   try {
@@ -117,7 +123,7 @@ test("IMP-R19: revision preserves old failure bytes, resets code approval and ra
   } finally {f.close();}
 });
 
-test("IMP-R20: known main movement before CAS supersedes only the attempt and automatically prepares again", async () => {
+test("006. Known main movement before CAS supersedes only the attempt and automatically prepares again", async () => {
   let move=true;let f:ReturnType<typeof fixture>;let other="";
   f=fixture({checks:[{id:"test",argv:["/bin/true"],env:{}}],runCheck:()=>{if(move){move=false;f.git(["update-ref","refs/heads/main",other]);}}});
   try {
@@ -131,7 +137,7 @@ test("IMP-R20: known main movement before CAS supersedes only the attempt and au
   } finally {f.close();}
 });
 
-test("IMP-R21: already-included is a separate fact with no integration receipt",async()=>{
+test("007. Already-included is a separate fact with no integration receipt",async()=>{
   const f=fixture();try{
     const c=f.candidateWith({a:"one"});await f.submit("alice",c,"c");f.git(["update-ref","refs/heads/main",c]);
     await f.open("alice",{tier:"LOW",candidate:c},"open");const state=f.stateOf(f.requestName("open"));
@@ -140,29 +146,63 @@ test("IMP-R21: already-included is a separate fact with no integration receipt",
   }finally{f.close();}
 });
 
-test("IMP-R19: policy adoption preserves qualified code votes but creates current policy authority; host retry is explicit",async()=>{
-  let fail=true,revision="p1";
-  const f=fixture({reader:p=>({...p,policyRevision:revision}),checks:[{id:"test",argv:["/bin/true"],env:{}}],runCheck:()=>{if(fail)throw new StoreError("CHECK_FAILED","fail");}});
-  try{
-    const c=f.candidateWith({a:"one"});await f.submit("alice",c,"c");await f.open("alice",{tier:"MEDIUM",candidate:c},"open");
-    const name=f.requestName("open");await f.vote("bob",name,"approve","code checked","vote");
-    revision="p2";
-    await f.reviews.record(f.auth(),"adopt",{kind:"review.adopt",name,reason:"use p2"});
-    assert.equal(f.stateOf(name).sourceIdentity.policyRevision,"p2");assert.deepEqual(f.stateOf(name).approvers,["bob"]);
-    await f.reviews.advanceAll();let state=f.stateOf(name);assert.ok(state.integration);
-    await f.module.reconcile(state.integration.operation).catch(()=>{});state=f.stateOf(name);assert.equal(state.integration?.state,"failed");
-    fail=false;
-    await f.reviews.record({...f.auth("principal"),channel:"host"},"host-retry",{kind:"review.retry",name,expectedRevision:0,expectedAttempt:state.integration!.operation,reason:"retry repaired environment"});
-    assert.equal(f.stateOf(name).display,"applied");
-    await assert.rejects(f.reviews.record(f.auth("principal"),"actor-retry",{kind:"review.retry",name,expectedRevision:0,expectedAttempt:null,reason:"not host"}),/requester|authority|terminal|settled/);
-  }finally{f.close();}
+// The retired IMP-R19 adoption-positive contract is preserved, not reassigned,
+// in docs/archive/retired-review-adoption-oracles.md.
+test("008. Policy change: no adoption or vote transfer; a fresh failed scope still needs an explicit authenticated host retry", async () => {
+  let fail = true, revision = "p1";
+  const f = fixture({ reader: p => ({ ...p, policyRevision: revision }),
+    checks: [{ id: "test", argv: ["/bin/true"], env: {} }],
+    runCheck: () => { if (fail) throw new StoreError("CHECK_FAILED", "fail"); } });
+  try {
+    const candidate = f.candidateWith({ a: "one" });
+    await f.submit("alice", candidate, "c");
+    await f.open("alice", { tier: "MEDIUM", candidate }, "open");
+    const name = f.requestName("open");
+    await f.vote("bob", name, "approve", "code checked", "vote");
+    const original = f.store.getOperation("alice", "open"), vote = f.store.getOperation("bob", "vote");
+    const failed = f.store.getOperationById(f.stateOf(name).integration!.operation);
+    assert.equal(failed?.state, "failed");
+    revision = "p2";
+    await assert.rejects(() => Reflect.apply(f.reviews.record, f.reviews,
+      [f.auth(), "adopt", { kind: "review.adopt", name, reason: "use p2" }]), { code: "INVALID_REQUEST" });
+    assert.equal(f.store.getOperation("alice", "adopt"), null);
+    assert.equal(f.stateOf(name).sourceIdentity.policyRevision, "p1");
+    assert.deepEqual(f.stateOf(name).approvers, ["bob"]);
+    await f.cancel("alice", name, "cancel-old-scope");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
+    await f.open("alice", { tier: "MEDIUM", candidate }, "fresh-open");
+    const freshName = f.requestName("fresh-open");
+    assert.equal(f.stateOf(freshName).sourceIdentity.policyRevision, "p2");
+    assert.deepEqual(f.stateOf(freshName).approvers, []);
+    await f.vote("bob", freshName, "approve", "checked under p2", "fresh-vote");
+    const state = f.stateOf(freshName);
+    assert.equal(state.integration?.state, "failed");
+    await f.reviews.advanceAll();
+    assert.deepEqual(f.stateOf(freshName).integration, state.integration, "sweeping cannot implicitly retry a confirmed failure");
+    const retry = { kind: "review.retry" as const, name: freshName, expectedRevision: 0,
+      expectedAttempt: state.integration!.operation, reason: "retry repaired environment" };
+    await assert.rejects(f.reviews.record(f.auth("principal"), "actor-retry", retry), { code: "CAPABILITY_DENIED" });
+    assert.equal(f.store.getOperation("principal", "actor-retry"), null);
+    fail = false;
+    await f.reviews.record({ ...f.auth("principal"), channel: "host" }, "host-retry", retry);
+    assert.equal(f.stateOf(freshName).display, "applied");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+    assert.deepEqual(f.store.getOperation("alice", "open"), original);
+    assert.deepEqual(f.store.getOperation("bob", "vote"), vote);
+    assert.deepEqual(f.store.getOperationById(failed!.id), failed);
+  } finally { f.close(); }
 });
 
-test("IMP-R18: conflict stays blocked without repeated preparation and explicit revision resolves it",async()=>{
+test("009. Conflict stays blocked without repeated preparation and explicit revision resolves it",async()=>{
   const f=fixture();try{
     const a=f.candidateWith({same:"left"}),b=f.candidateWith({same:"right"});await f.submit("alice",a,"a");await f.submit("bob",b,"b");
     await f.open("alice",{tier:"LOW",candidate:a},"oa");await f.open("bob",{tier:"LOW",candidate:b},"ob");
     const name=f.requestName("ob","bob"), blocked=f.stateOf(name);assert.equal(blocked.display,"blocked");assert.match(blocked.preparationFailure!.reason,/conflict.*same/);
+    assert.equal(statusOf(f, "bob", name).retryable, false);
+    assert.equal(statusOf(f, "bob", name).nextAction, "requester-revise");
+    await assert.rejects(f.reviews.record(f.auth("bob"), "conflict-retry", {kind:"review.retry", name,
+      expectedRevision:0, expectedAttempt:null, reason:"same unresolved conflict"}), {code:"REVERT_CONFLICT"});
+    assert.equal(f.store.getOperation("bob", "conflict-retry"), null);
     const count=f.store.attestations.all().length;await f.reviews.advanceAll();await f.reviews.advanceAll();assert.equal(f.store.attestations.all().length,count);
     const fixed=f.candidateWith({same:"both"},a);await f.submit("bob",fixed,"fixed");
     await f.reviews.record(f.auth("bob"),"revise",{kind:"review.revise",name,expectedRevision:0,base:a,candidate:fixed,reason:"resolve conflict"});
@@ -171,7 +211,7 @@ test("IMP-R18: conflict stays blocked without repeated preparation and explicit 
 });
 
 
-test("IMP-R26: only completed approved CAS links prove a later main, arbitrary ancestry does not", async()=>{
+test("010. Only completed approved CAS links prove a later main, arbitrary ancestry does not", async()=>{
   const {IntegrationPublicationObserver}=await import("@oma/git/integration-publication");
   const f=fixture();try{
     const a=f.candidateWith({a:"one"});await f.submit("alice",a,"a");await f.open("alice",{tier:"LOW",candidate:a},"oa");
@@ -189,18 +229,25 @@ test("IMP-R26: only completed approved CAS links prove a later main, arbitrary a
   }finally{f.close();}
 });
 
-test("IMP-R27: an included proposal needs no additional peer vote and creates no success receipt",async()=>{
+test("011. An included proposal needs no additional peer vote and creates no success receipt",async()=>{
   const f=fixture();try{
     const candidate=f.candidateWith({included:"already"});await f.submit("alice",candidate,"candidate");
     await f.open("alice",{tier:"HIGH",candidate},"open");const name=f.requestName("open");
     f.git(["update-ref","refs/heads/main",candidate]);await f.reviews.advanceAll();
     assert.equal(f.stateOf(name).included?.candidate,candidate);assert.equal(f.stateOf(name).integration,null);
     assert.equal(f.stateOf(name).display,"already-included");
+    const count=f.store.attestations.all().length;
+    await assert.rejects(f.vote("carol",name,"approve","late vote","late-vote"), {code:"REQUEST_CLOSED"});
+    await assert.rejects(f.cancel("alice",name,"late-cancel"), {code:"REQUEST_CLOSED"});
+    await assert.rejects(f.reviews.record(f.auth("alice"),"late-retry",{kind:"review.retry",name,
+      expectedRevision:0,expectedAttempt:null,reason:"late retry"}),{code:"REQUEST_CLOSED"});
+    assert.equal(f.store.attestations.all().length,count);
+    assert.equal(statusOf(f, "alice", name).nextAction,"none");
   }finally{f.close();}
 });
 
 
-test("IMP-R28: HIGH context requires fresh peer and Principal decisions bound to actual M/I",async()=>{
+test("012. HIGH context requires fresh peer and Principal decisions bound to actual M/I",async()=>{
   const f=fixture();try{
     const lines=Array.from({length:30},(_,i)=>`line ${i}`),base=f.candidateWith({file:lines.join("\n")+"\n"});
     f.git(["update-ref","refs/heads/main",base]);const left=[...lines],right=[...lines];left[1]="left";right[28]="right";
@@ -220,7 +267,7 @@ test("IMP-R28: HIGH context requires fresh peer and Principal decisions bound to
 });
 
 for (const point of ["before", "after"] as const)
-  test(`IMP-R30: SIGKILL ${point} prepared-integration CAS preserves exact M/I and accepted bytes`, { timeout: 30_000 }, async () => {
+  test(`013. SIGKILL ${point} prepared-integration CAS preserves exact M/I and accepted bytes`, { timeout: 30_000 }, async () => {
     const f = fixture();
     try {
       const a = f.candidateWith({ a: "one" }), b = f.candidateWith({ b: "two" });
@@ -280,7 +327,7 @@ for (const point of ["before", "after"] as const)
   });
 
 
-test("IMP-R31: normal merge ancestry carries a binary edit across a rename and requires exact-context review", async () => {
+test("014. Normal merge ancestry carries a binary edit across a rename and requires exact-context review", async () => {
   const f = fixture();
   try {
     const original = "old\0" + "payload".repeat(100), changed = "new\0" + "payload".repeat(100);

@@ -48,7 +48,7 @@ function hostileAdapter(scenario) {
         defaultCommand: { command: process.execPath, args: [HOSTILE, scenario] },
     };
 }
-test("BL1: LspClient: one process per client -- initialize, answer, shutdown, exit", async (t) => {
+test("001. LspClient: one process per client -- initialize, answer, shutdown, exit", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const log = join(root, "spawns.log");
@@ -75,7 +75,20 @@ test("BL1: LspClient: one process per client -- initialize, answer, shutdown, ex
     const pids = new Set(readFileSync(log, "utf8").trim().split("\n").map(line => JSON.parse(line).pid));
     assert.equal(pids.size, 2, "two clients, two server processes -- the runtime never pools");
 });
-test("BL1: runDiagnostics reports the fixture's pull diagnostics with file details", async (t) => {
+
+test("026. A real healthy LSP server serves a request whose timeout exceeds the native timer range", { timeout: 10000 }, async t => {
+    const root = tmp(t), adapter = fixtureAdapter("pull-strict-optional-params");
+    writeFileSync(join(root, "note.tfix"), "hello\n");
+    const client = new LspClient(adapter, adapter.defaultCommand, root, 0x80000001);
+    try {
+        await client.start(); await client.initialize(root);
+        const uri = pathToFileURL(join(root, "note.tfix")).href;
+        client.didOpen(uri, "hello\n", "tfix");
+        const diagnostics = await client.diagnostics(uri);
+        assert.deepEqual(diagnostics.map(entry => entry.message), ["strict pull diagnostic"]);
+    } finally { await client.close(); }
+});
+test("002. RunDiagnostics reports the fixture's pull diagnostics with file details", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -90,7 +103,7 @@ test("BL1: runDiagnostics reports the fixture's pull diagnostics with file detai
 // OMA divergences (F1): the vendored runtime carries the declared bounds --
 // as honest degradation now, not refusals. The tests drive them through the
 // runtime itself, not through the adapter.
-test("BL1/F1: runDiagnostics truncates an over-bound pull diagnostic message with a visible marker", async (t) => {
+test("003. RunDiagnostics truncates an over-bound pull diagnostic message with a visible marker", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -104,7 +117,7 @@ test("BL1/F1: runDiagnostics truncates an over-bound pull diagnostic message wit
     const message = details.files[0].diagnostics[0].message;
     assert.ok(message.length <= 8_300, `the message is the bound plus the marker, not 60k: ${message.length}`);
 });
-test("BL1/F1: runDiagnostics truncates a pull diagnostics flood with a visible count", async (t) => {
+test("004. RunDiagnostics truncates a pull diagnostics flood with a visible count", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -116,7 +129,7 @@ test("BL1/F1: runDiagnostics truncates a pull diagnostics flood with a visible c
     assert.equal(marker.source, "oma");
     assert.match(marker.message, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
 });
-test("BL1/F1: a pushed-diagnostics flood resolves as a marked truncation, and the count is not re-flagged", async (t) => {
+test("005. A pushed-diagnostics flood resolves as a marked truncation, and the count is not re-flagged", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -128,7 +141,7 @@ test("BL1/F1: a pushed-diagnostics flood resolves as a marked truncation, and th
     assert.equal(diagnostics.length, 1025);
     assert.match(diagnostics.at(-1).message, /976 more diagnostic\(s\) for this file were dropped/);
 });
-test("BL1/F1: pushed publications past the tracked-document bound are dropped with a visible count", async (t) => {
+test("006. Pushed publications past the tracked-document bound are dropped with a visible count", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -145,7 +158,7 @@ test("BL1/F1: pushed publications past the tracked-document bound are dropped wi
     const marker = details.files[0].diagnostics.at(-1);
     assert.match(marker.message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
-test("BL1/F1: a declared oversized Content-Length refuses only its request -- the same client still answers", async (t) => {
+test("007. A declared oversized Content-Length refuses only its request -- the same client still answers", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     writeFileSync(join(root, "other.tfix"), "hi\n");
@@ -169,7 +182,7 @@ test("BL1/F1: a declared oversized Content-Length refuses only its request -- th
         client.close();
     }
 });
-test("BL1/F1: an oversized frame whose body never arrives degrades the one file -- the call still reports it", async (t) => {
+test("008. An oversized frame whose body never arrives degrades the one file -- the call still reports it", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -185,7 +198,7 @@ test("BL1/F1: an oversized frame whose body never arrives degrades the one file 
     assert.match(text, /timed out|did not return diagnostics/);
     assert.match(text, /1 oversized inbound frame\(s\) dropped/, "the drop count rides the failure tail");
 });
-test("BL1/F1: a stderr flood is a bounded sample, not an accumulator", async (t) => {
+test("009. A stderr flood is a bounded sample, not an accumulator", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -199,7 +212,7 @@ test("BL1/F1: a stderr flood is a bounded sample, not an accumulator", async (t)
     assert.match(text, /stderr truncated/, "the sample is marked truncated, not silently cut");
     assert.ok(text.length < 90_000, `bounded at 64KiB plus framing, not 200KiB: ${text.length}`);
 });
-test("BL1/F1: a code-action list resolves completely -- the count is not a bound", async (t) => {
+test("010. A code-action list resolves completely -- the count is not a bound", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     // 300 actions over the old 256 bound now resolve one by one -- each
@@ -221,13 +234,13 @@ test("BL1/F1: a code-action list resolves completely -- the count is not a bound
 // ---------------------------------------------------------------------------
 // OMA divergences round 2 (F1/F3/F4): accumulated edit bounds, the stderr
 // sample's exact-boundary edge, and the post-spawn error kill.
-test("BL1/F1 round 2: one action's documentChanges flood is refused inside collection", async (t) => {
+test("011. One action's documentChanges flood is refused inside collection", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
     await assert.rejects(runFix(hostileAdapter("edits-documentchanges-flood"), { root, path: "note.tfix" }, 10_000, new AbortController().signal, ctx, "lsp"), /2048|edits.*bound/i);
 });
-test("BL1/F1 round 2: the accumulated edit count across actions is bounded", async (t) => {
+test("012. The accumulated edit count across actions is bounded", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -235,7 +248,7 @@ test("BL1/F1 round 2: the accumulated edit count across actions is bounded", asy
     // over the accumulated bound the call fails instead of building the list.
     await assert.rejects(runFix(hostileAdapter("edits-flood"), { root, path: "note.tfix" }, 10_000, new AbortController().signal, ctx, "lsp"), /workspace edits.*2048|2048.*workspace edits|bound/i);
 });
-test("BL1/F1 round 2: the accumulated replacement bytes across actions are bounded", async (t) => {
+test("013. The accumulated replacement bytes across actions are bounded", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -243,7 +256,7 @@ test("BL1/F1 round 2: the accumulated replacement bytes across actions are bound
     // the accumulation -- two 3MiB newTexts in one call.
     await assert.rejects(runFix(hostileAdapter("edit-bytes-flood"), { root, path: "note.tfix" }, 10_000, new AbortController().signal, ctx, "lsp"), /bytes|bound/i);
 });
-test("BL1/F1 round 2: edits exactly at the bound still apply -- the bound is not the refusal of work", async (t) => {
+test("014. Edits exactly at the bound still apply -- the bound is not the refusal of work", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -253,7 +266,7 @@ test("BL1/F1 round 2: edits exactly at the bound still apply -- the bound is not
     assert.equal(details.edits?.length, 2048);
     assert.match(details.text ?? "", /^x{2048}hello\n$/);
 });
-test("BL1/F1 round 2: collectWorkspaceEdits refuses an over-bound list without building it", () => {
+test("015. CollectWorkspaceEdits refuses an over-bound list without building it", () => {
     const uri = "file:///tmp/a.tfix";
     const edit = (n) => ({ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "x".repeat(n) });
     // changes map: the over-bound list is refused.
@@ -269,7 +282,7 @@ test("BL1/F1 round 2: collectWorkspaceEdits refuses an over-bound list without b
     // At the bound the list collects normally.
     assert.equal(collectWorkspaceEdits({ changes: { [uri]: Array.from({ length: 2048 }, () => edit(1)) } }, uri).length, 2048);
 });
-test("BL1/F1 round 2: the overlap sweep reaches the same verdicts the pair scan did", () => {
+test("016. The overlap sweep reaches the same verdicts the pair scan did", () => {
     const text = "one\ntwo\nthree\nfour\n";
     const edit = (sl, sc, el, ec) => ({
         range: { start: { line: sl, character: sc }, end: { line: el, character: ec } },
@@ -293,7 +306,7 @@ test("BL1/F1 round 2: the overlap sweep reaches the same verdicts the pair scan 
     // ...but an insert one character earlier lands strictly inside it.
     assert.equal(hasOverlappingTextEdits(text, [insert(0, 4), edit(1, 0, 3, 0), edit(0, 0, 1, 1)]), true, "an interior insert still conflicts even when a later range starts at the same offset");
 });
-test("BL1/F1 round 2: single-pass apply produces the reverse-sorted application's output", () => {
+test("017. Single-pass apply produces the reverse-sorted application's output", () => {
     const text = "one\ntwo\nthree\n";
     const edit = (sl, sc, el, ec, newText) => ({
         range: { start: { line: sl, character: sc }, end: { line: el, character: ec } },
@@ -314,7 +327,7 @@ test("BL1/F1 round 2: single-pass apply produces the reverse-sorted application'
     // Adjacent replacements concatenate exactly like the old code's.
     assert.equal(applyTextEdits(text, [edit(0, 0, 0, 3, "ONE"), edit(1, 0, 1, 3, "TWO")]), "ONE\nTWO\nthree\n");
 });
-test("BL1/F3 round 2: a stderr sample that lands exactly on the bound still marks a later drop", async () => {
+test("018. A stderr sample that lands exactly on the bound still marks a later drop", async () => {
     // Exercise the current bundle's stderr truncation boundary directly.
     const { appendStderrSample } = await import("../dist/vendor/pi-lsp/runtime/lsp-client.js");
     const bound = 64 * 1024;
@@ -331,7 +344,7 @@ test("BL1/F3 round 2: a stderr sample that lands exactly on the bound still mark
     assert.equal(marked.dropped, true);
     assert.equal(appendStderrSample(marked, "extra"), marked, "a dropped sample keeps its marker");
 });
-test("BL1/F4 round 2: a post-spawn child 'error' event kills the process -- the client never orphans", async (t) => {
+test("019. A post-spawn child 'error' event kills the process -- the client never orphans", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     // The permanent 'error' listener is a private-field closure; the child
@@ -368,7 +381,7 @@ test("BL1/F4 round 2: a post-spawn child 'error' event kills the process -- the 
         client.close();
     }
 });
-test("BL1: selectDiagnosticRoutes marks an uninstalled default server skipped, never clean", async (t) => {
+test("020. SelectDiagnosticRoutes marks an uninstalled default server skipped, never clean", async (t) => {
     const root = tmp(t);
     mkdirSync(join(root, "sub"), { recursive: true });
     writeFileSync(join(root, "sub", "a.ghost"), "x\n");
@@ -395,7 +408,7 @@ test("BL1: selectDiagnosticRoutes marks an uninstalled default server skipped, n
 // didOpen loop, per-file settled results, correct tail-marker accounting,
 // URI-drop counts on every return path, and surgical oversized-frame
 // attribution.
-test("BL1/F-4: a backpressured didOpen reports it and didDrain settles the write", async (t) => {
+test("021. A backpressured didOpen reports it and didDrain settles the write", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     // slow-drain pauses stdin ~350ms after the first didOpen frame, so a
@@ -421,7 +434,7 @@ test("BL1/F-4: a backpressured didOpen reports it and didDrain settles the write
         client.close();
     }
 });
-test("BL1/F-4: the open loop waits for drain -- a corpus past the pipe completes against a slow reader", async (t) => {
+test("022. The open loop waits for drain -- a corpus past the pipe completes against a slow reader", async (t) => {
     const root = tmp(t);
     const files = ["a.tfix", "b.tfix", "c.tfix"].map(name => join(root, name));
     for (const file of files)
@@ -435,7 +448,7 @@ test("BL1/F-4: the open loop waits for drain -- a corpus past the pipe completes
     assert.equal(details.summary?.files, 3);
     assert.equal(details.summary?.diagnostics, 3, "every file answered once the drain resumed");
 });
-test("BL1/F-4: a server that never drains is a bounded failure, not a hang", async (t) => {
+test("023. A server that never drains is a bounded failure, not a hang", async (t) => {
     const root = tmp(t);
     // stdin-stall stops reading after the first didOpen: the second file's
     // 1MiB write backpressures and the drain wait hits the request budget.
@@ -446,7 +459,7 @@ test("BL1/F-4: a server that never drains is a bounded failure, not a hang", asy
     await assert.rejects(runDiagnostics(hostileAdapter("stdin-stall"), { root, files: [join(root, "note.tfix"), join(root, "big.tfix")] }, 900, new AbortController().signal, ctx, "lsp"), /did not drain|stdin closed|stdin failed|not reading/i);
     assert.ok(Date.now() - started < 20_000, "the drain budget bounded the wait");
 });
-test("BL1/F-4: an abort settles a stalled request before its request timeout", { timeout: 5000 }, async (t) => {
+test("024. An abort settles a stalled request before its request timeout", { timeout: 5000 }, async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     writeFileSync(join(root, "big.tfix"), "x".repeat(1024 * 1024));
@@ -457,7 +470,7 @@ test("BL1/F-4: an abort settles a stalled request before its request timeout", {
     await assert.rejects(call);
     assert.equal(controller.signal.aborted, true, "the rejection must follow cancellation, not an earlier startup failure");
 });
-test("BL1/F-5: one file's timeout degrades to a per-file marker -- the answered files keep their results", async (t) => {
+test("025. One file's timeout degrades to a per-file marker -- the answered files keep their results", async (t) => {
     const root = tmp(t);
     const files = ["a.tfix", "b.tfix", "c.tfix", "d.tfix"].map(name => join(root, name));
     for (const file of files)
@@ -478,7 +491,7 @@ test("BL1/F-5: one file's timeout degrades to a per-file marker -- the answered 
     assert.match(text, /answered 1/);
     assert.match(text, /diagnostics failed for this file/);
 });
-test("BL1/F-3: an oversized NOTIFICATION is dropped and counted -- the pending request is not blamed", async (t) => {
+test("026. An oversized NOTIFICATION is dropped and counted -- the pending request is not blamed", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     writeFileSync(join(root, "other.tfix"), "hi\n");
@@ -505,7 +518,7 @@ test("BL1/F-3: an oversized NOTIFICATION is dropped and counted -- the pending r
         client.close();
     }
 });
-test("BL1/F-1: a truncated list plus a URI-drop marker re-flag correctly -- both markers survive", async (t) => {
+test("027. A truncated list plus a URI-drop marker re-flag correctly -- both markers survive", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -530,7 +543,7 @@ test("BL1/F-1: a truncated list plus a URI-drop marker re-flag correctly -- both
     assert.match(diagnostics.at(-2).message, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
     assert.match(diagnostics.at(-1).message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
-test("BL1/F-2: a pull diagnostics answer still reports the URI-bound drops", async (t) => {
+test("028. A pull diagnostics answer still reports the URI-bound drops", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -543,7 +556,7 @@ test("BL1/F-2: a pull diagnostics answer still reports the URI-bound drops", asy
     assert.equal(diagnostics.at(0).message, "pull answer", "the pull answer itself is kept");
     assert.match(diagnostics.at(-1).message, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
-test("BL1/F-2: a waiter timeout reports the drops the wire already took", async (t) => {
+test("029. A waiter timeout reports the drops the wire already took", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };
@@ -555,7 +568,7 @@ test("BL1/F-2: a waiter timeout reports the drops the wire already took", async 
     assert.match(text, /did not return diagnostics for .*before timeout/s);
     assert.match(text, /4 pushed-diagnostic publication\(s\) dropped/, "the timeout tail reports the counted drops");
 });
-test("BL1/F-6: OMA's markers are never sent to the server inside the codeAction context", async (t) => {
+test("030. OMA's markers are never sent to the server inside the codeAction context", async (t) => {
     const root = tmp(t);
     writeFileSync(join(root, "note.tfix"), "hello\n");
     const ctx = { ui: { setStatus() { } } };

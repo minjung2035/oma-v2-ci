@@ -1,3 +1,5 @@
+import { decodePublicParams } from "@oma/protocol/methods";
+import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
 import { clientProcessSource } from "./fixtures/client-process.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -28,13 +30,7 @@ async function logs(sinceSeconds: number, truncated = false) {
   });
   try {
     await new Promise<void>(resolve => server.listen(path, resolve));
-    const source = `import { registerOmaTools } from ${JSON.stringify(import.meta.resolve("@oma/extension/mail-tools"))};
-${clientProcessSource(`(async () => {
-  const tools = new Map();
-  registerOmaTools({ registerTool: tool => tools.set(tool.name, tool) }, process.cwd());
-  const result = await tools.get("oma_logs").execute("logs-query", { agent: "alice", sinceSeconds: ${JSON.stringify(sinceSeconds)} });
-  return result.content[0].text;
-})()`)}`;
+    const source = clientProcessSource(`client.queryText("logs.read", { agent: "alice", sinceSeconds: ${JSON.stringify(sinceSeconds)} })`);
     const child = spawn(process.execPath, ["--input-type=module", "-e", source],
       { env: { PATH: "/usr/bin:/bin", HOME: root, OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: root, OMA_SOCKET: path }, stdio: ["ignore", "pipe", "pipe"] });
     let out = ""; let err = "";
@@ -48,7 +44,7 @@ ${clientProcessSource(`(async () => {
     rmSync(root, { recursive: true, force: true });
   }
 }
-test("DR27: typed log queries distinguish complete empty results from truncated ones", async () => {
+test("001. Typed log queries distinguish complete empty results from truncated ones", async () => {
   const empty = await logs(600);
   assert.equal(empty.code, 0); assert.equal(empty.calls, 1);
   assert.deepEqual(JSON.parse(empty.out), { text: "", truncated: false, observedAtMs: 1 });
@@ -56,8 +52,10 @@ test("DR27: typed log queries distinguish complete empty results from truncated 
   assert.equal(partial.code, 0); assert.equal(partial.calls, 1);
   assert.deepEqual(JSON.parse(partial.out), { text: "", truncated: true, observedAtMs: 1 });
 });
-test("DR27: a duration outside the safe integer range never reaches the broker", async () => {
-  const result = await logs(Number.MAX_SAFE_INTEGER + 1);
-  assert.notEqual(result.code, 0); assert.equal(result.calls, 0);
-  assert.match(result.err, /Invalid arguments for oma_logs/);
+// The retired oma_logs schema no longer owns caller validation. The retained
+// backend decoder still has to reject durations it cannot represent safely.
+test("002. Backend log durations reject unsafe values", () => {
+  for (const sinceSeconds of [Number.MAX_SAFE_INTEGER + 1, -1, Infinity, NaN])
+    assert.equal(decodePublicParams("logs.read", { agent: "alice", sinceSeconds },
+      { limits: TEST_PROTOCOL_LIMITS }), null);
 });

@@ -18,7 +18,7 @@ function fixture(accept) {
     return { wire, channel, events, endings };
 }
 const wait = () => new Promise(resolve => setTimeout(resolve, 60));
-test("Open TUI channel: fragmented UTF-8 frames and close during a read have one owner", async () => {
+test("001. Open TUI channel: fragmented UTF-8 frames and close during a read have one owner", async () => {
     const f = fixture();
     const bytes = Buffer.from(JSON.stringify({ type: "notice", text: "한글 ✅" }) + "\n");
     const at = bytes.indexOf(Buffer.from("한")) + 1;
@@ -34,7 +34,7 @@ test("Open TUI channel: fragmented UTF-8 frames and close during a read have one
     assert.equal(g.events.length, 1);
     assert.equal(g.endings.length, 1);
 });
-test("Open TUI channel: malformed, oversized and unterminated input fail closed once", () => {
+test("002. Open TUI channel: malformed, oversized and unterminated input fail closed once", () => {
     for (const input of ["{bad}\n", '{"type":3}\n', '{"type":"x","id":1}\n', "x".repeat(129), "{\n"]) {
         const f = fixture();
         f.wire.emit("data", Buffer.from(input));
@@ -50,7 +50,7 @@ test("Open TUI channel: malformed, oversized and unterminated input fail closed 
     assert.equal(f.endings.length, 1);
     assert.ok(f.endings[0]);
 });
-test("Open TUI channel: partial-frame and blocked-write deadlines terminate the channel", async () => {
+test("003. Open TUI channel: partial-frame and blocked-write deadlines terminate the channel", async () => {
     const partial = fixture();
     partial.wire.emit("data", Buffer.from("{"));
     const blocked = fixture();
@@ -66,7 +66,7 @@ test("Open TUI channel: partial-frame and blocked-write deadlines terminate the 
     assert.equal(drained.endings.length, 0);
     drained.channel.close();
 });
-test("Open TUI channel: outbound size and accumulated backpressure are bounded", () => {
+test("004. Open TUI channel: outbound size and accumulated backpressure are bounded", () => {
     for (const buffered of [false, true]) {
         const f = fixture();
         if (buffered)
@@ -78,7 +78,7 @@ test("Open TUI channel: outbound size and accumulated backpressure are bounded",
         assert.equal(f.wire.writes.length, 0, "a closed channel never starts another write");
     }
 });
-test("DR27/P0-4: a returned UI channel has no live input or timer listeners", () => {
+test("005. A returned UI channel has no live input or timer listeners", () => {
     const f = fixture();
     f.channel.close();
     for (const event of ["data", "end", "close", "drain"])
@@ -87,7 +87,7 @@ test("DR27/P0-4: a returned UI channel has no live input or timer listeners", ()
     assert.equal(f.endings.length, 1);
 });
 for (const stage of ["data", "end", "drain"]) {
-    test(`DR27/P0-4: UI ${stage} setup failure closes without calling an unconstructed owner`, t => {
+    test(`006. UI ${stage} setup failure closes without calling an unconstructed owner`, t => {
         const wire = new Wire();
         const original = wire.on;
         const problem = new Error(`injected ${stage} setup failure`);

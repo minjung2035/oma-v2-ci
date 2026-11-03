@@ -30,7 +30,7 @@ function mail(store) {
   });
   return { id, message };
 }
-test("P3 facets: route acceptance/retry preserves identity and fresh authority timing", t => {
+test("001. Facets: route acceptance/retry preserves identity and fresh authority timing", t => {
   const { store } = ledgerFixture(t), registry = new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId }), actor = auth();
   const receipt = registry.follow(actor, "design", true, "key");
   assert.equal(receipt.state, "succeeded"); assert.deepEqual(store.subscribers("design"), ["alice"]);
@@ -42,7 +42,7 @@ test("P3 facets: route acceptance/retry preserves identity and fresh authority t
   assert.throws(() => registry.follow(actor, "fresh", true, "fresh"), code("STALE_RUN"));
   assert.throws(() => registry.follow({ ...actor, incarnation: 1 }, "design", true, "key"), code("STALE_RUN"));
 });
-test("P3 facets: ACK and subscription mutations reuse the one transaction", t => {
+test("002. Facets: ACK and subscription mutations reuse the one transaction", t => {
   const { store } = ledgerFixture(t), registry = new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId }), actor = auth();
   const owned = mail(store);
   const receipt = registry.ack(actor, owned.message, "ack");
@@ -57,7 +57,7 @@ test("P3 facets: ACK and subscription mutations reuse the one transaction", t =>
   registry.follow(actor, "design", false, "unfollow");
   assert.deepEqual(store.subscribers("design"), []);
 });
-test("P3 facets: admission closure refuses fresh intent without breaking exact replay", t => {
+test("003. Facets: admission closure refuses fresh intent without breaking exact replay", t => {
   const { store } = ledgerFixture(t), registry = new RegistryOperations(lifecycleLedger(store), { nextOperationId: generateOperationId }), actor = auth();
   const gate = new AdmissionGate(); bindAdmissionGate(store, gate);
   const original = registry.follow(actor, "design", true, "existing"); gate.close();
@@ -65,7 +65,7 @@ test("P3 facets: admission closure refuses fresh intent without breaking exact r
   assert.throws(() => registry.follow(actor, "new", true, "new"), code("BROKER_UNAVAILABLE"));
   assert.equal(store.getOperation("alice", "new"), null);
 });
-test("P3 facets: mail recovery does not equate materialization completion with terminal success", async t => {
+test("004. Facets: mail recovery does not equate materialization completion with terminal success", async t => {
   const { store, root } = ledgerFixture(t), owned = mail(store);
   const source = join(root, "object"), archive = join(root, "archive"); writeFileSync(source, "x");
   const before = store.getOperationById(owned.id);

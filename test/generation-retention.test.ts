@@ -40,7 +40,7 @@ const loseLastRecord = (f: Fixture): void => { writeFileSync(journalOf(f), recor
 /** P0V-61: a record names the generation its commit replaced. */
 const record = (previous: string | undefined, id: string): string => `${previous ?? "-"} ${id}`;
 
-test("AV7 / INV03, P0V-61: each record names the generation its commit replaced, so a record lost before it changes nothing", () => {
+test("001. Each record names the generation its commit replaced, so a record lost before it changes nothing", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const [, second] = commitEach(f, [5, 6]);
@@ -52,7 +52,7 @@ test("AV7 / INV03, P0V-61: each record names the generation its commit replaced,
   } finally { f.close(); }
 });
 
-test("P0V-47 / F1, P0-3: a record an append left unfinished is closed off, so the next record and the previous generation survive", () => {
+test("002. A record an append left unfinished is closed off, so the next record and the previous generation survive", () => {
   // The append of the last record stopped part-way: after the whole record
   // but before its newline, or in the middle of it.
   const cuts: ((line: string) => string)[] = [line => line, line => line.slice(0, 40)];
@@ -69,7 +69,7 @@ test("P0V-47 / F1, P0-3: a record an append left unfinished is closed off, so th
   }
 });
 
-test("AV7 / INV02: a journal that cannot be read removes no generation, only what was never committed", () => {
+test("003. A journal that cannot be read removes no generation, only what was never committed", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const committed = commitEach(f, [5, 6, 7]);
@@ -83,7 +83,7 @@ test("AV7 / INV02: a journal that cannot be read removes no generation, only wha
   } finally { f.close(); }
 });
 
-test("AV7 / INV02, P0V-61: when no record says what the current generation's commit replaced, every generation is kept", () => {
+test("004. When no record says what the current generation's commit replaced, every generation is kept", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const committed = commitEach(f, [5, 6, 7]);
@@ -100,7 +100,7 @@ test("AV7 / INV02, P0V-61: when no record says what the current generation's com
   } finally { f.close(); }
 });
 
-test("DR46: retired journal names refuse load, edit and collection without changing existing bytes", () => {
+test("005. Retired journal names refuse load, edit and collection without changing existing bytes", () => {
   const f = createCompleteConfigurationFixture();
   try {
     commitEach(f, [5, 6, 7]);
@@ -123,7 +123,7 @@ test("DR46: retired journal names refuse load, edit and collection without chang
   } finally { f.close(); }
 });
 
-test("P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the generation its last commit replaced", () => {
+test("006. A configuration that returns (A, B, A) keeps B, the generation its last commit replaced", () => {
   // Needs a user a mode of 0400 refuses to append for, as every lane runs as.
   const f = createCompleteConfigurationFixture();
   try {
@@ -153,7 +153,7 @@ test("P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the ge
   } finally { f.close(); }
 });
 
-test("P0V-72 / F5, P0-5: a journal read that returns less than was asked is read on, and one that ends early keeps everything", async t => {
+test("007. A journal read that returns less than was asked is read on, and one that ends early keeps everything", async t => {
   const f = createCompleteConfigurationFixture();
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); f.close(); });
   // A, B, C and A again: the current generation is A, and C is what its last commit replaced.
@@ -191,7 +191,7 @@ test("P0V-72 / F5, P0-5: a journal read that returns less than was asked is read
   } finally { again.close(); }
 });
 
-test("AV7 / INV02: an existing generation that cannot be read is not reported as holding other bytes", () => {
+test("008. An existing generation that cannot be read is not reported as holding other bytes", () => {
   // Needs a user a mode of 000 refuses, as every verification lane runs as.
   const f = createCompleteConfigurationFixture();
   try {
@@ -206,7 +206,7 @@ test("AV7 / INV02: an existing generation that cannot be read is not reported as
   } finally { f.close(); }
 });
 
-test("DR46 / P0-5: a journal append that writes zero bytes refuses without replacing the manifest", t => {
+test("009. A journal append that writes zero bytes refuses without replacing the manifest", t => {
   const f = createCompleteConfigurationFixture();
   const real = fs.writeSync;
   try {

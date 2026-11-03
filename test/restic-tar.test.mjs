@@ -34,10 +34,10 @@ const source = { paths: new Set(records.keys()), metadata: records };
 const regular = entry("repos/file", "0", payload), directory = entry("repos/", "5"), symlink = entry("repos/link", "2", undefined, "file");
 const archive = Buffer.concat([directory, regular, symlink, eof]);
 
-test("dump verification consumes arbitrary chunk boundaries, bytes, links and complete EOF", () => {
+test("001. Dump verification consumes arbitrary chunk boundaries, bytes, links and complete EOF", () => {
   for (const size of [1, 511, 512, 513, 65536]) verify(archive, source, size);
 });
-test("dump truncation, duplicate entries, content mutation and invalid metadata refuse reclamation", () => {
+test("002. Dump truncation, duplicate entries, content mutation and invalid metadata refuse reclamation", () => {
   const corrupt = Buffer.from(archive); corrupt[1024] ^= 1;
   for (const bytes of [archive.subarray(0, -1), archive.subarray(0, -512), corrupt,
     Buffer.concat([directory, regular, regular, symlink, eof]), Buffer.concat([directory, symlink, eof]),
@@ -51,14 +51,14 @@ function paxRecord(key, value) {
   while (Buffer.byteLength(`${length} ${body}`) !== length) length = Buffer.byteLength(`${length} ${body}`);
   return Buffer.from(`${length} ${body}`);
 }
-test("PAX long Unicode paths are byte-counted and malformed/duplicate records are rejected", () => {
+test("003. PAX long Unicode paths are byte-counted and malformed/duplicate records are rejected", () => {
   const long = "repos/" + "한글".repeat(80), meta = metadata("file", { size: payload.length, contentHash: hash(payload) });
   const expected = { paths: new Set([long]), metadata: new Map([[long, meta]]) };
   verify(Buffer.concat([entry("PaxHeader", "x", paxRecord("path", long)), entry("short", "0", payload), eof]), expected);
   for (const pax of [Buffer.from("999 path=unfinished\n"), Buffer.concat([paxRecord("path", long), paxRecord("path", long)]), paxRecord("path", "../escape")])
     assert.throws(() => verify(Buffer.concat([entry("PaxHeader", "x", pax), entry("short", "0", payload), eof]), expected));
 });
-test("hardlinks require the source group and content identity", () => {
+test("004. Hardlinks require the source group and content identity", () => {
   const meta = metadata("file", { size: payload.length, contentHash: hash(payload), hardlinkGroup: "a" });
   const expected = { paths: new Set(["a", "b"]), metadata: new Map([["a", meta], ["b", meta]]) };
   verify(Buffer.concat([entry("a", "0", payload), entry("b", "1", undefined, "a"), eof]), expected);
@@ -68,7 +68,7 @@ function linkedSource(names, bytes = payload) {
   const meta = metadata("file", { size: bytes.length, contentHash: hash(bytes), hardlinkGroup: names[0] });
   return { paths: new Set(names), metadata: new Map(names.map(name => [name, meta])) };
 }
-test("dump hardlinks reject self, forward and cyclic references without verified file data", () => {
+test("005. Dump hardlinks reject self, forward and cyclic references without verified file data", () => {
   for (const [names, entries] of [
     [["a"], [entry("a", "1", undefined, "a")]],
     [["a", "b"], [entry("a", "1", undefined, "b"), entry("b", "0", payload)]],
@@ -80,16 +80,24 @@ test("dump hardlinks reject self, forward and cyclic references without verified
       assert.throws(() => verify(bytes, linkedSource(names), size), { code: "STORE_CORRUPT" });
   }
 });
-test("dump hardlink chains resolve to verified regular data, including empty files", () => {
+test("006. Dump hardlink chains resolve to verified regular data, including empty files", () => {
   for (const bytes of [payload, Buffer.alloc(0)]) {
     const archive = Buffer.concat([entry("a", "0", bytes), entry("b", "1", undefined, "a"), entry("c", "1", undefined, "b"), eof]);
     for (const size of [1, 511, 512, 513, 65536]) verify(archive, linkedSource(["a", "b", "c"], bytes), size);
   }
 });
-test("PAX hardlink targets require earlier verified data instead of trusting the raw header", () => {
+test("007. PAX hardlink targets require earlier verified data instead of trusting the raw header", () => {
   const expected = linkedSource(["a", "b"]);
   const link = target => Buffer.concat([entry("a", "0", payload), entry("PaxHeader", "x", paxRecord("linkpath", target)), entry("b", "1", undefined, "a"), eof]);
   verify(link("a"), expected, 1);
   for (const size of [1, 511, 512, 513, 65536])
     assert.throws(() => verify(link("b"), expected, size), { code: "STORE_CORRUPT" });
+});
+
+test("008. A pre-epoch fractional PAX timestamp agrees with the exact inventory nanoseconds",()=>{
+ for(const [stamp,nanos] of [['-0.5','-500000000'],['-1.000000001','-1000000001']]){
+  const expected={paths:new Set(['file']),metadata:new Map([['file',metadata('file',{size:payload.length,contentHash:hash(payload),mtimeNs:nanos})]])};
+  const bytes=Buffer.concat([entry('PaxHeader','x',paxRecord('mtime',stamp)),entry('file','0',payload),eof]);
+  verify(bytes,expected,1);verify(bytes,expected,513);
+ }
 });

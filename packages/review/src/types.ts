@@ -25,12 +25,10 @@ export interface ReviewEffects {
    * refusal now rather than a failed CAS receipt later. */
   gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   submitters(base: Oid, candidate: Oid): readonly string[];
-  /** §6: the canonical merge diff for the completion notice, as raw bytes;
-   * one owner renders them for text consumers (never U+FFFD substitution).
-   * Output bounded at maxBytes; LIMIT_EXCEEDED marks the request oversize. */
+  /** Owned preparation primitives for current execution. Read-only projections
+   * may omit them; execution refuses absence rather than using a direct diff. */
   prepareIntegration?(operation: string, base: Oid, candidate: Oid, main: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ candidate: Oid; preparedRef: string | null; reusable: boolean }>;
   prepareDiff?(operation: string, base: Oid, candidate: Oid, own: (owner: import("@oma/contracts/files").PreacceptArtifactOwner) => void): Promise<{ diff: import("@oma/contracts/files").ReviewDiffArtifact; preview: Buffer }>;
-  mergeDiff(base: Oid, candidate: Oid, maxBytes: number): Buffer;
   /** §7: the broker's revert commit on canonical main — merge-tree against the
    * applied merge's candidate, commit-tree with the OMA identity. Throws
    * REVERT_CONFLICT (details.paths), INVALID_REQUEST when the merged change is

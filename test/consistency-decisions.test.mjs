@@ -32,7 +32,7 @@ function rows(text) {
 const spec = readFileSync(new URL("docs/implementation-spec.md", root), "utf8");
 
 
-test('V01A: execution order names every WP once and preserves late observation dependencies', () => {
+test("001. Execution order names every WP once and preserves late observation dependencies", () => {
   const section = decisions().split('## WP01.05 — execution and compatibility gates')[1] ?? '';
   const order = section.split('\n').find(line => line.startsWith('WP00 →'))?.match(/WP\d{2}/g) ?? [];
   assert.deepEqual([...order].sort(), Array.from({ length: 33 }, (_, index) => `WP${String(index).padStart(2, '0')}`));
@@ -40,7 +40,7 @@ test('V01A: execution order names every WP once and preserves late observation d
   assert.ok(order.indexOf('WP13') > order.indexOf('WP03'));
 });
 
-test('V01B: change surfaces retain distinct registries and name real existing owners', () => {
+test("002. Change surfaces retain distinct registries and name real existing owners", () => {
   const surfaces = rows(decisions()).filter(row => row[0].startsWith('surface.'));
   assert.deepEqual(surfaces.map(row => row[0]).sort(), [
     'surface.authority', 'surface.durable', 'surface.editor', 'surface.evidence',
@@ -53,7 +53,7 @@ test('V01B: change surfaces retain distinct registries and name real existing ow
   }
 });
 
-test('V01B: WP01 profile review cannot imply unexecuted runtime qualification', () => {
+test("003. Profile review cannot imply unexecuted runtime qualification", () => {
   const profiles = rows(decisions()).filter(row => row[0].startsWith('profile.'));
   assert.deepEqual(profiles.map(row => row[0]).sort(), [
     'profile.confined', 'profile.engine-fixture', 'profile.foreground',
@@ -65,7 +65,7 @@ test('V01B: WP01 profile review cannot imply unexecuted runtime qualification', 
     assert.match(row[4], /^WP\d{2}(, WP\d{2})*$/);
   }
 });
-test("V01A: every domain names facts, relations, phase and current authority", () => {
+test("004. Every domain names facts, relations, phase and current authority", () => {
   const table = rows(decisions());
   for (const domain of [
     "delivery",
@@ -149,9 +149,9 @@ function checkCases(text) {
       assert.ok(spec.includes(`[${id}`), `actual requirement ${id}`);
   }
 }
-test("V01A: all proposed cases have existing rule, owner, oracle and compatibility", () =>
+test("005. All proposed cases have existing rule, owner, oracle and compatibility", () =>
   checkCases(decisions()));
-test("V01A negative controls: deleting uncertainty or legacy mismatch fails review", () => {
+test("006. Negative controls: deleting uncertainty or legacy mismatch fails review", () => {
   const text = decisions();
   checkCases(text);
   for (const id of [
@@ -168,7 +168,7 @@ test("V01A negative controls: deleting uncertainty or legacy mismatch fails revi
     assert.throws(() => checkCases(without), assert.AssertionError);
   }
 });
-test("V01A: existing normative requirements explicitly carry their reviewed decision", () => {
+test("007. Existing normative requirements explicitly carry their reviewed decision", () => {
   for (const [requirement, decision] of [
     ["BATCH-004", "D01"],
     ["CFG-005", "D02"],
@@ -187,14 +187,14 @@ test("V01A: existing normative requirements explicitly carry their reviewed deci
   }
 });
 
-test('V01A: N-001 identifies the reviewed architecture bytes', () => {
+test("008. Identifies the reviewed architecture bytes", () => {
   const architecture = readFileSync(new URL('docs/architecture.md', root));
   const digest = createHash('sha256').update(architecture).digest('hex');
   const rule = spec.split('\n').find(line => line.startsWith('**MUST [N-001]'));
   assert.ok(rule?.includes(digest), 'N-001 architecture hash is not the reviewed source');
 });
 
-test("DR46 schema4: the current DDL contains exactly the six ledger entities", () => {
+test("009. The current DDL contains exactly the six ledger entities", () => {
   const ddl = readFileSync(new URL("packages/storage/src/schema-v4.sql", root));
   const db = new DatabaseSync(":memory:");
   try {
@@ -221,7 +221,7 @@ test("DR46 schema4: the current DDL contains exactly the six ledger entities", (
   }
 });
 
-test("DR46 check grammar: valid commands stay configured and empty argv is unsupported", () => {
+test("010. Check grammar: valid commands stay configured and empty argv is unsupported", () => {
   const policy = {maxWorkers: 6, policyRevision: "wp01", protectedPaths: [], checks: []};
   assert.doesNotThrow(() =>
     assertSupportedIntegration(snapshotIntegrationPolicy(policy)),

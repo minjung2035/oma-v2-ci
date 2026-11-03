@@ -19,7 +19,7 @@
  * restart does, so no injected stub survives into the repaired world. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readDiagnosticSnapshot, Store } from "@oma/storage";
 import { StoreError } from "@oma/domain/errors";
@@ -27,7 +27,7 @@ import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
 import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
 import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
 import { createCanonicalObserver } from "@oma/git/canonical-command";
-import { mailArchivePathAt, mailInboxPathAt } from "@oma/domain/paths";
+import { mailArchivePathAt, mailInboxPathAt, mailAudiencePathAt } from "@oma/domain/paths";
 import { applyRequestKeyFor, parseMessageId } from "@oma/domain/identifiers";
 import { expandAddresses, type MailModule } from "@oma/mail";
 import { sha256Hex } from "@oma/domain/canonical-json";
@@ -35,6 +35,24 @@ import { fixture, messages, inboxCount, messageText, workerFile } from "./fixtur
 import type { MessagePlan } from "@oma/contracts";
 
 type F = ReturnType<typeof fixture>;
+test("018. A multi-message publication cut does not borrow another message's archive proof",async t=>{
+ const f=fixture();try{
+  const candidate=f.candidateWith({file:"work"});await f.submit("alice",candidate);await f.open("alice",{tier:"HIGH",candidate},"open");
+  const name=f.requestName("open");await f.vote("bob",name,"approve","checked","bob");
+  const effects=Reflect.get(f.mail,"effects") as {publishMailArchive(message:MessagePlan):void},publish=effects.publishMailArchive.bind(effects);let count=0;
+  const materializer=Reflect.get(f.mail,"materializer"), original=Reflect.get(materializer,"effects");
+  Reflect.set(materializer,"effects",{...original,publishMailArchive:(message:MessagePlan)=>{
+   if(++count===2)throw new StoreError("BROKER_UNAVAILABLE","cut between message archives");return publish(message);
+  }});
+  const receipt=await f.vote("carol",name,"approve","checked","cut");Reflect.set(materializer,"effects",original);
+  assert.equal(receipt.state,"pending");const owned=messages(f,"carol","cut");assert.ok(owned.length>=2);
+  const report=inspectIntegrity(readDiagnosticSnapshot(f.root),{stateRoot:f.root,society:"demo"},{files:new NodeIntegrityFiles(),git:createCanonicalObserver()});
+  assert.equal(report.status,"PASS",JSON.stringify(report.issues));assert.ok(report.pendingPublications>0);
+  rmSync(mailAudiencePathAt(f.root,owned[0]!));
+  const damaged=inspectIntegrity(readDiagnosticSnapshot(f.root),{stateRoot:f.root,society:"demo"},{files:new NodeIntegrityFiles(),git:createCanonicalObserver()});
+  assert.ok(damaged.issues.some(issue=>issue.code==="DELIVERY_WITHOUT_ARCHIVE"));
+ }finally{f.close();}
+});
 
 /** The next mail.materialize call on this module throws a transient failure:
  * the accepted operation's mail boundary dies after its T committed. */
@@ -51,8 +69,9 @@ function failNextMaterialize(f: F): void {
 }
 
 /** The nth markMaterialized flag write against an operation of `kind` dies:
- * the delivery's inbox link already exists, the flag transaction rolls back,
- * and the publish loop abandons every later delivery of the operation. */
+ * the delivery's inbox link already exists and its flag transaction rolls back.
+ * This is an in-process exception: independent fanout continues; it is not a
+ * process kill or a guarantee that later delivery work never ran. */
 function failNthDeliveryFlag(f: F, kind: "git.integrate" | "attest.record", nth: number): void {
   const real = f.store.markMaterialized.bind(f.store);
   let seen = 0;
@@ -110,7 +129,7 @@ const reassembledNotice = (f: F, notice: readonly MessagePlan[]): string => {
   return document;
 };
 
-test("mail-v1 faults: a quorum-forming vote committed without its approval mail is repaired to exactly one delivery", async () => {
+test("001. Mail-v1 faults: a quorum-forming vote committed without its approval mail is repaired to exactly one delivery", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -164,7 +183,7 @@ test("mail-v1 faults: a quorum-forming vote committed without its approval mail 
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a re-asked approval lost before materialization arrives exactly once after repair", async () => {
+test("002. Mail-v1 faults: a re-asked approval lost before materialization arrives exactly once after repair", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -209,16 +228,15 @@ test("mail-v1 faults: a re-asked approval lost before materialization arrives ex
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a crash midway through a multi-part completion notice leaves a half-state that repair completes once", async () => {
+test("003. Mail-v1 faults: one multi-part notice flag failure retains linked bytes, continues independent fanout and repairs once", async () => {
   const f = fixture({ mailBodyBytes: 6 * 1024 });
   try {
     const big = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
     const candidate = f.candidateWith({ "big.txt": big, "bin.dat": `hdr${String.fromCharCode(0)}${" ".repeat(4000)}` });
     await f.submit("alice", candidate);
     const recipients = expandAddresses(f.store, ["commons", "principal"], "demo").recipients;
-    // Kill the (R+2)th notice flag: part 1 fully delivered, part 2's first
-    // delivery done and its second linked but unflagged, everything later
-    // untouched — a mid-loop cut, not a clean boundary.
+    // Fail the (R+2)th flag, not the whole process. Every independent recipient
+    // still gets its exact part; only the failed flag remains uncommitted.
     failNthDeliveryFlag(f, "git.integrate", recipients.length + 2);
     const opened = await f.open("alice", { tier: "LOW", candidate, reason: "bulk import" }, "open");
     assert.equal(opened.state, "succeeded", "the open fact committed; only the notice died");
@@ -227,26 +245,17 @@ test("mail-v1 faults: a crash midway through a multi-part completion notice leav
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate, "the CAS already committed");
     const notice = (apply.plan as { merge: { notice: MessagePlan[] } }).merge.notice;
     assert.ok(notice.length > 1, `expected a multi-part notice, got ${notice.length}`);
-    // The crashed half-state is exactly the delivery prefix, plus one linked
-    // but unflagged row — the durable boundary itself is visible.
+    // An exception must not masquerade as process death. The one lost flag is
+    // pending while all independent publication/flag work has completed.
     const rows = f.store.deliveriesForOperation(apply.id);
     const cut = recipients.length + 2;
     rows.forEach((row, index) => {
-      if (index < cut - 1) {
-        assert.equal(row.materialized, 1, `delivery ${index} flagged`);
-        assert.equal(inboxLink(f, row.recipient, row.messageId), true);
-      } else if (index === cut - 1) {
-        assert.equal(row.materialized, 0, `delivery ${index} lost its flag`);
-        assert.equal(inboxLink(f, row.recipient, row.messageId), true, "its inbox link was already durable");
-      } else {
-        assert.equal(row.materialized, 0);
-        assert.equal(inboxLink(f, row.recipient, row.messageId), false);
-      }
+      assert.equal(row.materialized, index === cut - 1 ? 0 : 1, `delivery ${index}: only the injected flag remains pending`);
+      assert.equal(inboxLink(f, row.recipient, row.messageId), true, "independent fanout retains every durable inbox link");
     });
     for (const [index, part] of notice.entries()) {
-      const reached = rows.some(row => row.messageId === part.id && (row.materialized === 1 || inboxLink(f, row.recipient, row.messageId)));
-      assert.equal(existsSync(mailArchivePathAt(f.root, part.id)), reached,
-        `part ${index + 1} archive exists iff publication reached it`);
+      assert.equal(existsSync(mailArchivePathAt(f.root, part.id)), true,
+        `part ${index + 1} is archived despite an independent recipient flag failure`);
     }
     // Repair: reconcile sees main already at the candidate and republishes.
     f.reopen();
@@ -272,7 +281,7 @@ test("mail-v1 faults: a crash midway through a multi-part completion notice leav
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a crash between the main CAS and notice materialization repairs without a second CAS", async () => {
+test("004. Mail-v1 faults: a crash between the main CAS and notice materialization repairs without a second CAS", async () => {
   // Sub-case A: the gated publication dies before any delivery work — the
   // multi-part notice has no archive link and no inbox link at all.
   const g = fixture({ mailBodyBytes: 6 * 1024 });
@@ -329,8 +338,8 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
     ledgerPass(g);
   } finally { g.close(); }
 
-  // Sub-case B: the publication dies at the FIRST delivery's flag — the part's
-  // archive link and one inbox link exist, no delivery is flagged.
+  // Sub-case B: the FIRST flag write throws in-process. All independent inbox
+  // links and later flags complete; this is not a process-kill prefix.
   const h = fixture({ mailBodyBytes: 6 * 1024 });
   try {
     const big = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
@@ -347,9 +356,10 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
     assert.equal(existsSync(mailArchivePathAt(h.root, notice[0]!.id)), true, "part 1 archived before the cut");
     assert.equal(inboxLink(h, rows[0]!.recipient, rows[0]!.messageId), true, "the first inbox link exists");
     assert.equal(rows[0]!.materialized, 0, "its flag rolled back");
-    assert.equal(rows.slice(1).every(row => row.materialized === 0 && !inboxLink(h, row.recipient, row.messageId)), true);
+    assert.equal(rows.slice(1).every(row => row.materialized === 1 && inboxLink(h, row.recipient, row.messageId)), true,
+      "independent recipients are not suppressed by another delivery's flag failure");
     for (const part of notice.slice(1))
-      assert.equal(existsSync(mailArchivePathAt(h.root, part.id)), false, "later parts untouched");
+      assert.equal(existsSync(mailArchivePathAt(h.root, part.id)), true, "independent parts remain published");
     h.reopen();
     const unknownMarks: string[] = [];
     const realUnknown = h.store.setOperationUnknown.bind(h.store);
@@ -369,7 +379,7 @@ test("mail-v1 faults: a crash between the main CAS and notice materialization re
   } finally { h.close(); }
 });
 
-test("mail-v1 faults: an in-T claimKey failure discards the open; the same key retries as a fresh request", async () => {
+test("005. Mail-v1 faults: an in-T claimKey failure discards the open; the same key retries as a fresh request", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -406,7 +416,7 @@ test("mail-v1 faults: an in-T claimKey failure discards the open; the same key r
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a post-T crash makes a same-key replay return the same receipt, never a second request", async () => {
+test("006. Mail-v1 faults: a post-T crash makes a same-key replay return the same receipt, never a second request", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -436,7 +446,7 @@ test("mail-v1 faults: a post-T crash makes a same-key replay return the same rec
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a cancel committed without its withdrawn mail is delivered once on repair", async () => {
+test("007. Mail-v1 faults: a cancel committed without its withdrawn mail is delivered once on repair", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -481,7 +491,7 @@ test("mail-v1 faults: a cancel committed without its withdrawn mail is delivered
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: a vote accepted before its thread revision materializes repairs the worker archive once", async () => {
+test("008. Mail-v1 faults: a vote accepted before its thread revision materializes repairs the worker archive once", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -526,7 +536,7 @@ test("mail-v1 faults: a vote accepted before its thread revision materializes re
   } finally { f.close(); }
 });
 
-test("mail-v1 faults: repaired mid-boundary crashes leave a consistent ledger and no recoverable work", async () => {
+test("009. Mail-v1 faults: repaired mid-boundary crashes leave a consistent ledger and no recoverable work", async () => {
   const f = fixture({ mailBodyBytes: 6 * 1024 });
   try {
     // First crash: a review fact commits without its thread mail.

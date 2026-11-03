@@ -7,7 +7,7 @@ import { requestParamsEqual } from "@oma/domain/request-identity";
 import { decodeReceipt, decodeFailure } from "@oma/protocol/receipt-codec";
 import { isRequestNotFound, receiptExit } from "@oma/protocol/receipts";
 
-test("a lost answer only queries the original key; changed payload cannot be resent", async () => {
+test("001. A lost answer only queries the original key; changed payload cannot be resent", async () => {
   installRuntime({ snapshot: snapshotJson, paramsEqual: requestParamsEqual, decodeReceipt, decodeFailure,
     notFound: isRequestNotFound, receiptExit, cacheFailure: () => null });
   let frozen;

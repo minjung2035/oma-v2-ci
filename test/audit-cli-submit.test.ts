@@ -114,7 +114,7 @@ for (const format of ["sha1", "sha256"] as const)
     "self-contained",
     "already-known",
   ] as const) {
-    test(`Client submit: ${mode} ${format} uses broker evidence and freezes the original candidate`, async () => {
+    test(`001. Client submit: ${mode} ${format} uses broker evidence and freezes the original candidate`, async () => {
       const f = fixture(format);
       try {
         const key = `submit-${mode}`;
@@ -201,7 +201,7 @@ for (const format of ["sha1", "sha256"] as const)
   }
 
 for (const fault of ["git", "read"] as const) {
-  test(`Client submit: ${fault} failure cleans the private bundle before exiting`, async () => {
+  test(`002. Client submit: ${fault} failure cleans the private bundle before exiting`, async () => {
     const f = fixture();
     try {
       const key = `failed-${fault}`;

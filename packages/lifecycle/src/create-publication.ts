@@ -35,7 +35,7 @@ export class CreationPublicationObserver {
       if (agent.incarnation !== 0) throw new StoreError("STORE_CORRUPT", "a provisioning agent has opened a run");
       const head = this.workspace.observeProvisioningHead(plan.workspacePath);
       if (head.status !== 0 || head.stdout.trim() !== plan.spec.from)
-        throw new StoreError("STORE_CORRUPT", "creation workspace has no matching frozen base");
+        throw new StoreError("AGENT_CONFLICT", "creation workspace has no matching frozen base");
     }
     // The native execution owner verifies the frozen references and owns the actor slot.
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.modelProfile);

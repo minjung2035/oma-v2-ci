@@ -1,5 +1,6 @@
 import { createGitServices } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import type { QuarantineExecution } from "@oma/git/quarantine";
 /** mail-v1 review fixture: a real Store, MailModule and GitModule over a
  * throwaway society with a canonical project repo. Shared by merge-review and
  * challenge-review. */
@@ -22,10 +23,14 @@ import type { IntegrationPolicy } from "@oma/domain/integration-policy";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 export async function* empty(): AsyncIterable<Uint8Array> { }
 export interface FixtureOptions {
+    readonly stateRoot?: string;
+    readonly quarantine?: QuarantineExecution;
     readonly principalDelegated?: boolean;
     readonly maxWorkers?: number;
     readonly workers?: readonly string[];
     readonly protectedPaths?: readonly string[];
+    /** Optional accepted parent lineage; omitted fixtures retain their original roots. */
+    readonly parents?: Readonly<Record<string, string>>;
     readonly rules?: readonly {
         path: string;
         tier: "LOW" | "MEDIUM" | "HIGH";
@@ -39,7 +44,8 @@ export interface FixtureOptions {
     readonly runCheck?: (candidate: string, check: unknown, cancellation?: AbortSignal) => Promise<void> | void;
 }
 export function fixture(options: FixtureOptions = {}) {
-    const root = mkdtempSync(join(tmpdir(), "oma-merge-review-"));
+    const root = options.stateRoot ?? mkdtempSync(join(tmpdir(), "oma-merge-review-"));
+    if (options.stateRoot !== undefined) mkdirSync(root, { recursive: true });
     const projectGit = join(root, "repos", "project.git");
     const git = (args: readonly string[], input?: string): string => {
         const result = runGitText([...args], { gitDir: projectGit, ...(input === undefined ? {} : { input }),
@@ -62,7 +68,7 @@ export function fixture(options: FixtureOptions = {}) {
     const agents = () => {
         store.transaction(tx => {
             for (const actor of ["principal", ...(options.workers ?? ["alice", "bob", "carol", "dave", "ellen"])])
-                tx.insertAgent(makeValidAgent(actor, actor === "ellen" ? { desired: "stopped" } : {}));
+                tx.insertAgent(makeValidAgent(actor, { createdBy: options.parents?.[actor] ?? null, ...(actor === "ellen" ? { desired: "stopped" as const } : {}) }));
             if (options.workers === undefined) tx.insertAgent(makeValidAgent("frank", { desired: "retired" }));
         });
     };
@@ -75,7 +81,7 @@ export function fixture(options: FixtureOptions = {}) {
     const bounds = { mailBodyBytes: options.mailBodyBytes ?? 256 * 1024, subjectBytes: 512,
         bundleBytes: options.bundleBytes ?? 256 * 1024 };
     let services = createGitServices(paths, store, mail, policy, options.reader === undefined ? () => policy : () => options.reader!(policy), options.runCheck === undefined ? null
-        : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)), bounds);
+        : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)), bounds, options.quarantine ?? null);
     let { git: module, reviews } = services;
     const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
         incarnation: actor === "principal" ? 0 : 1, capabilities: new Set(ALL_CAPS), channel: "actor",
@@ -160,7 +166,7 @@ export function fixture(options: FixtureOptions = {}) {
             store = new Store(join(root, "runtime.sqlite"), 0, { society: "demo" });
             mail = createMailModule(paths, store, 64);
             ({ git: module, reviews } = createGitServices(paths, store, mail, policy, options.reader === undefined ? () => policy : () => options.reader!(policy), options.runCheck === undefined ? null
-                : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)), bounds));
+                : (candidate, check, cancellation) => Promise.resolve(options.runCheck!(candidate, check, cancellation)), bounds, options.quarantine ?? null));
         },
         close() { store.close(); removeTree(root); } };
 }

@@ -44,7 +44,7 @@ function society(t: TestContext) {
   return { broker };
 }
 
-test("V21A: a read preserves authentication, version and DTO checks", async t => {
+test("001. A read preserves authentication, version and DTO checks", async t => {
   const f = society(t);
   const status = (request: Record<string, unknown>, who: AuthContext = auth) => answer(f.broker.dispatch(who, request as never, null));
   assert.deepEqual(await status({ v: 1, id: "u", method: "no.such", params: {} }), { ok: false, code: "UNKNOWN_METHOD", retry: "never" });

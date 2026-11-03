@@ -91,7 +91,7 @@ for (const [name, change, code] of [
   ["capability revocation", state => { state.actor.capabilities.clear(); }, "CAPABILITY_DENIED"],
   ["parameter policy change", state => { state.rejectParams = true; }, "INVALID_REQUEST"],
   ["admission closure", state => { state.denyAdmission = true; }, "BROKER_UNAVAILABLE"],
-]) test(`P1 public validation: dispatch rechecks ${name} after preflight`, async () => {
+]) test(`001. Public validation: dispatch rechecks ${name} after preflight`, async () => {
   const { dispatcher, state, auth, calls } = fixture(); const raw = request();
   dispatcher.preflight(auth, raw);
   await Promise.resolve(); change(state);
@@ -100,7 +100,7 @@ for (const [name, change, code] of [
   assert.equal(calls.actors, 2); assert.equal(calls.effects.length, 0); assert.equal(calls.refresh, 0);
 });
 
-test("P1 public validation: changing one version rule changes both phases", async () => {
+test("002. Public validation: changing one version rule changes both phases", async () => {
   const { dispatcher, auth } = fixture(source => source.replace("envelope.v !== 1", "envelope.v !== 2"));
   const changed = request({ v: 2 }); dispatcher.preflight(auth, changed);
   assert.equal((await dispatcher.dispatch(auth, changed, body())).ok, true);
@@ -109,14 +109,14 @@ test("P1 public validation: changing one version rule changes both phases", asyn
   assert.equal((await dispatcher.dispatch(auth, previous, body())).error.code, "UNSUPPORTED_VERSION");
 });
 
-test("P1 public validation: a stream without its optional bundle descriptor is rejected before receiving bytes", async () => {
+test("003. Public validation: a stream without its optional bundle descriptor is rejected before receiving bytes", async () => {
   const { dispatcher, auth, calls } = fixture(); const raw = request({ params: {} });
   assert.throws(() => dispatcher.preflight(auth, raw), error => error.code === "INVALID_REQUEST");
   assert.equal((await dispatcher.dispatch(auth, raw, body())).error.code, "INVALID_REQUEST");
   assert.equal(calls.admission, 0); assert.equal(calls.effects.length, 0);
 });
 
-test("P1 public validation: envelope, key, capability and parameter rejection stay shared", async () => {
+test("004. Public validation: envelope, key, capability and parameter rejection stay shared", async () => {
   for (const [overrides, change, code] of [
     [{ id: 4 }, () => {}, "INVALID_REQUEST"], [{ extra: true }, () => {}, "INVALID_REQUEST"],
     [{ v: 3 }, () => {}, "UNSUPPORTED_VERSION"], [{ request: "" }, () => {}, "INVALID_REQUEST"],
@@ -133,7 +133,7 @@ test("P1 public validation: envelope, key, capability and parameter rejection st
   assert.equal((await dispatcher.dispatch(auth, request(), body())).error.code, "CAPABILITY_DENIED");
 });
 
-test("P1 public validation: phase-specific error precedence is preserved", async () => {
+test("005. Public validation: phase-specific error precedence is preserved", async () => {
   const { dispatcher, auth, state } = fixture(); state.actor.desired = "stopped";
   const raw = request({ v: 3 });
   assert.throws(() => dispatcher.preflight(auth, raw), error => error.code === "UNSUPPORTED_VERSION");
@@ -144,7 +144,7 @@ test("P1 public validation: phase-specific error precedence is preserved", async
   assert.equal((await dispatcher.dispatch(auth, unknown, body())).error.code, "UNKNOWN_METHOD");
 });
 
-test("P1 public validation: successful requests re-read and re-decode rather than caching preflight", async () => {
+test("006. Public validation: successful requests re-read and re-decode rather than caching preflight", async () => {
   for (const method of ["git.submit", "context.publish"]) {
     const { dispatcher, auth, calls } = fixture(); const raw = request({ method });
     dispatcher.preflight(auth, raw);
@@ -156,7 +156,7 @@ test("P1 public validation: successful requests re-read and re-decode rather tha
   }
 });
 
-test("P1 public validation: read/ephemeral keys and draining admission remain fail-closed", async () => {
+test("007. Public validation: read/ephemeral keys and draining admission remain fail-closed", async () => {
   for (const method of ["status.get", "agent.wait"]) {
     const { dispatcher, auth, state, calls } = fixture();
     assert.equal((await dispatcher.dispatch(auth, request({ method, params: {} }), null)).error.code, "INVALID_REQUEST");
@@ -168,7 +168,7 @@ test("P1 public validation: read/ephemeral keys and draining admission remain fa
   }
 });
 
-test("P1 public validation: failed current-state observation is never treated as authorization", async () => {
+test("008. Public validation: failed current-state observation is never treated as authorization", async () => {
   const { dispatcher, auth, state, calls, StoreError } = fixture();
   state.observationError = new StoreError("STORE_CORRUPT", "cannot observe actor");
   assert.throws(() => dispatcher.preflight(auth, request()), error => error === state.observationError);
@@ -177,14 +177,14 @@ test("P1 public validation: failed current-state observation is never treated as
 });
 
 
-test("P1 public validation: bundle-omitted submission without a stream remains valid", async () => {
+test("009. Public validation: bundle-omitted submission without a stream remains valid", async () => {
   const { dispatcher, auth, calls } = fixture();
   const result = await dispatcher.dispatch(auth, request({ params: {} }), null);
   assert.equal(result.ok, true); assert.equal(calls.effects.length, 1);
   assert.equal(calls.actors, 1); assert.equal(calls.admission, 1);
 });
 
-test("P11 public mail.send without approval does not inspect the operation ledger", async () => {
+test("010. Public mail.send without approval does not inspect the operation ledger", async () => {
   const { dispatcher, auth, state, calls } = fixture();
   state.throwOnOperationCheck = true;
   const raw = request({ method: "mail.send", params: { to: [], subject: "subject", kind: "message", body: "body" } });
@@ -193,7 +193,7 @@ test("P11 public mail.send without approval does not inspect the operation ledge
   assert.equal(calls.operationChecks, 0);
 });
 
-test("P11 public mail.send approval checks the ledger before Git publication", async () => {
+test("011. Public mail.send approval checks the ledger before Git publication", async () => {
   const { dispatcher, auth, calls } = fixture();
   const raw = request({ method: "mail.send", params: { to: [], subject: "subject", kind: "message", body: "body", approvalFor: { candidate: "candidate" } } });
   const result = await dispatcher.dispatch(auth, raw, null);
@@ -203,7 +203,7 @@ test("P11 public mail.send approval checks the ledger before Git publication", a
   assert.equal(calls.effects.length, 0);
 });
 
-test("P1 public validation: status cannot answer for an incarnation revoked while projection yielded", async () => {
+test("012. Public validation: status cannot answer for an incarnation revoked while projection yielded", async () => {
   const { dispatcher, state, auth, views } = fixture();
   const request = { v: 1, id: "status-current", method: "status.get", params: {} };
   assert.equal((await dispatcher.dispatch(auth, request, null)).ok, true);

@@ -54,6 +54,10 @@ export interface AgentProfile {
 export interface HostConfig {
   storage?: { closeMode: "keep-hot" | "on-close" };
   resources?: WorkloadResourceProfile;
+  /** Version-5 operator closure, applied at broker restart. Absence preserves
+   * existing admission checks; neither value approves a new model surface.
+   * Canonical replay/recovery and supervising-host controls remain available. */
+  collaborationFreshMutations?: "closed";
   schemaVersion: 4 | 5; society: string;
   /** Explicit host request; only a Society with no Resident history can accept it. */
   firstWorkerRecovery?: { version: 1; key: string; name: string; profile: string; brief: string };

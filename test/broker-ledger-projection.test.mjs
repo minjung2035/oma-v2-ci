@@ -11,7 +11,7 @@ import { brokerLedger } from "#oma-test/app/broker/broker-composition";
 import { testBroker } from '../dist/test/helpers/broker-fixture.js';
 import { ledgerFixture, agentRecord, routeOperation, routeResult } from './helpers/ledger-fixture.mjs';
 
-test('DR46 Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes',t=>{
+test("001. Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes",t=>{
  const {store}=ledgerFixture(t),ledger=brokerLedger(store);let saved;
  ledger.transaction(tx=>{saved=tx;assert.ok(Object.isFrozen(tx));assert.deepEqual(Object.keys(tx),['updateIncarnation']);});
  for(const field of ['path','db','close','acceptOperation','insertAgent','updateAgent'])assert.equal(field in ledger,false,field);
@@ -21,7 +21,7 @@ test('DR46 Broker: incarnation writes retain the original captured T and refuse 
  const original=ledger.getAgent('alice');ledger.transaction(tx=>tx.updateIncarnation('alice',1));
  const current=ledger.getAgent('alice');assert.equal(current.incarnation,1);assert.equal(current.desired,original.desired);assert.equal(current.specJson,original.specJson);
 });
-test('DR46 Broker: async and thenable T results roll back incarnation writes and queries remain live',t=>{
+test("002. Broker: async and thenable T results roll back incarnation writes and queries remain live",t=>{
  const {store}=ledgerFixture(t),ledger=brokerLedger(store);
  for(const late of [()=>Promise.resolve('late'),()=>({then(){}})])
   assert.throws(()=>ledger.transaction(tx=>{tx.updateIncarnation('alice',1);return late();}),{code:'INTERNAL_ERROR'});
@@ -29,13 +29,14 @@ test('DR46 Broker: async and thenable T results roll back incarnation writes and
  store.transaction(tx=>tx.updateAgent({name:'alice',incarnation:2,desired:'stopped'}));
  assert.equal(ledger.getAgent('alice').incarnation,2);assert.equal(ledger.getAgent('alice').desired,'stopped');
 });
-test('DR46 Broker: application admission binds the original Store rather than its projected ledger',async()=>{
+test("003. Broker: application admission binds the original Store rather than its projected ledger",async()=>{
  const root=mkdtempSync(join(tmpdir(),'oma-broker-admission-')),store=new Store(join(root,'runtime.sqlite'),0,{society:'fixture'});
- let broker;
+ let broker, invocationReader;
  try{
  store.transaction(tx=>{tx.insertAgent(agentRecord('principal'));tx.insertAgent(agentRecord('alice','principal'));});
- broker=testBroker({store,mail:{},units:{},views:{observeRunnerSource(){},refreshWorld(){throw Error('corrupt admission reached startup effects');},publishStatus(){}},
+ broker=testBroker({store,mail:{},units:{},views:{bindCollaborationInvocations(read){assert.equal(typeof read,'function');invocationReader=read;},observeRunnerSource(){},refreshWorld(){throw Error('corrupt admission reached startup effects');},publishStatus(){}},
   lifecycle:{},git:null,reviews:null,reconcile:null,paths:{stateRoot:root,runRoot:join(root,'run'),society:'fixture',hasGoal:()=>true}});
+  assert.equal(typeof invocationReader,'function','the real constructor binds its narrow observation callback without granting activation');
   observeStoreFailure(store,new StoreError('STORE_CORRUPT','injected durable corruption'));
   assert.throws(()=>broker.start(),{code:'STORE_CORRUPT'});
   assert.throws(()=>store.transaction(tx=>tx.acceptOperation(routeOperation())),{code:'STORE_CORRUPT'});
@@ -43,7 +44,7 @@ test('DR46 Broker: application admission binds the original Store rather than it
  }finally{try{if(broker)await broker.drainAndClose();else store.close();}finally{rmSync(root,{recursive:true,force:true});}}
 });
 for(const position of ['before-commit','after-commit'])
- test(`DR46 Broker ledger: SIGKILL ${position} retains the incarnation boundary and exact earlier receipt`,t=>{
+ test(`004. Broker ledger: SIGKILL ${position} retains the incarnation boundary and exact earlier receipt`,t=>{
   const {root,store,close}=ledgerFixture(t),operation=routeOperation({requestKey:'original'});
   store.transaction(tx=>{tx.acceptOperation(operation);tx.follow('design','alice');tx.setOperationSucceeded(operation.id,routeResult(operation));});
   const original=store.getOperationById(operation.id);close();

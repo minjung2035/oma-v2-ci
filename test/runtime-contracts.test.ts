@@ -5,7 +5,7 @@ import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { resolvedSpecDigest } from "@oma/domain/spec-identity";
 import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 
-test("LIFE-008: stored identity and frozen model references reject stale or mismatched records", () => {
+test("001. Stored identity and frozen model references reject stale or mismatched records", () => {
   const specJson = resolvedSpec(ALL_CAPS, "p", "a");
   const agent = { name: "a", profile: "p", specJson, specHash: resolvedSpecDigest(JSON.parse(specJson)) };
   const spec = resolvedSpecOf(agent);
@@ -20,7 +20,7 @@ test("LIFE-008: stored identity and frozen model references reject stale or mism
 // ordering is in process/resident-supervisor; actual death/unknown and pinned
 // scope replacement are in native-process-scope/native-resident-runtime.
 
-test("LOC-008: pinned cloc counts code, comments, strings and duplicate sources", () => {
+test("002. Pinned cloc counts code, comments, strings and duplicate sources", () => {
   assert.equal(execFileSync("cloc", ["--version"], { encoding: "utf8" }).trim(), "2.08");
   const out = execFileSync("cloc", ["--list-file=files.txt", "--by-file", "--skip-uniqueness",
     "--read-lang-def=../../cloc-systemd.lang", "--json", "--quiet"], {

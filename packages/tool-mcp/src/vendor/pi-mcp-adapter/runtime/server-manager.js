@@ -19,7 +19,7 @@ import { handleSamplingRequest, registerSamplingHandler } from "./sampling-handl
 import { handleElicitationRequest, handleUrlElicitation, registerElicitationHandler, } from "./elicitation-handler.js";
 import { attachTaskSession } from "./mcp-tasks.js";
 import { interpolateEnvVars, expandHomePath, providerAuthUrlError, resolveBearerToken, resolveCommandSecretsRecord, resolveConfigPath, resolveServerUrl, } from "./utils.js";
-import { omaCaFetch, omaChildEnv, omaChildEnvFinish, omaPinnedFetch } from "./utils.js";
+import { omaCaFetch, omaChildEnv, omaChildEnvFinish, omaPinnedFetch, omaPolicyActive } from "./utils.js";
 import { abortable, throwIfAborted } from "./abort.js";
 import { combineAbortSignals } from "./runtime-owner.js";
 import { createMcpTraceWriter, isMcpTraceEnabled, traceTransportKind, wrapTransportWithMcpTrace, } from "./mcp-trace.js";
@@ -1815,6 +1815,8 @@ function resolveEnv(env, serverName, literalEnv = false, inheritEnv = true) {
     return omaChildEnvFinish(merged);
 }
 function normalizeRequestTimeoutMs(timeoutMs) {
+    if (omaPolicyActive() && typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0x7fffffff)
+        throw new Error("[E_OMA_MCP_CONFIG] requestTimeoutMs exceeds the MCP SDK timer limit (2147483647ms)");
     return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0
         ? timeoutMs
         : undefined;

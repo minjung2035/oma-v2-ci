@@ -134,7 +134,7 @@ const toolExecute = async (
 // ---------- contract / validation ----------
 
 
-test("BL2/upstream: bounds are 1-4 questions of 2-4 options each", () => {
+test("001. Upstream: bounds are 1-4 questions of 2-4 options each", () => {
   assert.equal(MAX_QUESTIONS, 4);
   assert.equal(MAX_OPTIONS, 4);
   assert.equal(validateQuestionnaire(params([])).ok, false);
@@ -146,13 +146,13 @@ test("BL2/upstream: bounds are 1-4 questions of 2-4 options each", () => {
   assert.equal((validateQuestionnaire(params([fiveOptions])) as { error: string }).error, "too_many_options");
 });
 
-test("BL2/upstream: missing required fields refuse before identity checks", () => {
+test("002. Upstream: missing required fields refuse before identity checks", () => {
   assert.equal((validateQuestionnaire(params([{ header: "H", options: [option("a"), option("b")] }])) as { error: string }).error, "missing_fields");
   assert.equal((validateQuestionnaire(params([question({ options: undefined })])) as { error: string }).error, "missing_fields");
   assert.equal((validateQuestionnaire(params([question({ options: [{ description: "d" }, option("ok")] })])) as { error: string }).error, "missing_fields");
 });
 
-test("BL2/upstream: the validator restates the schema's length bounds too", () => {
+test("003. Upstream: the validator restates the schema's length bounds too", () => {
   // The comment over validateQuestionnaire claims every schema guard is
   // re-stated -- the header/label maxLength guards were missing, so a
   // schema-bypassing caller got a rendering bug instead of a refusal.
@@ -165,7 +165,7 @@ test("BL2/upstream: the validator restates the schema's length bounds too", () =
   assert.equal(validateQuestionnaire(params([question({ options: [option("y".repeat(60)), option("ok")] })])).ok, true);
 });
 
-test("BL2/upstream: duplicate questions, duplicate labels and reserved labels refuse", () => {
+test("004. Upstream: duplicate questions, duplicate labels and reserved labels refuse", () => {
   assert.equal((validateQuestionnaire(params([question(), question()])) as { error: string }).error, "duplicate_question");
   assert.equal(
     (validateQuestionnaire(params([question({ options: [option("a"), option("a")] })])) as { error: string }).error,
@@ -178,7 +178,7 @@ test("BL2/upstream: duplicate questions, duplicate labels and reserved labels re
   assert.deepEqual(RESERVED_LABELS, ["Other", "Type something.", "Next"]);
 });
 
-test("BL2: valid batches accept multiSelect and previews; CR is normalized before identity checks", () => {
+test("005. Valid batches accept multiSelect and previews; CR is normalized before identity checks", () => {
   assert.equal(validateQuestionnaire(params([question({ multiSelect: true })])).ok, true);
   assert.equal(validateQuestionnaire(params([question({ options: [option("a", { preview: "```\ncode\n```" }), option("b")] })])).ok, true);
   const normalized = normalizeQuestionParams({
@@ -191,7 +191,7 @@ test("BL2: valid batches accept multiSelect and previews; CR is normalized befor
   assert.equal((validateQuestionnaire(smuggled) as { error: string }).error, "reserved_label");
 });
 
-test("BL2: normalizeQuestionParams degrades malformed input for the validator, never crashes", () => {
+test("006. NormalizeQuestionParams degrades malformed input for the validator, never crashes", () => {
   assert.equal((validateQuestionnaire(normalizeQuestionParams(undefined)) as { error: string }).error, "no_questions");
   assert.equal((validateQuestionnaire(normalizeQuestionParams({ questions: "nope" })) as { error: string }).error, "no_questions");
   assert.equal((validateQuestionnaire(normalizeQuestionParams({ questions: [null] })) as { error: string }).error, "missing_fields");
@@ -199,7 +199,7 @@ test("BL2: normalizeQuestionParams degrades malformed input for the validator, n
 
 // ---------- envelope ----------
 
-test("BL2/upstream: the envelope pins its prefix, suffix and segment shape", () => {
+test("007. Upstream: the envelope pins its prefix, suffix and segment shape", () => {
   const result: QuestionnaireResult = {
     cancelled: false,
     answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "date-fns" }],
@@ -210,7 +210,7 @@ test("BL2/upstream: the envelope pins its prefix, suffix and segment shape", () 
   assert.equal(buildAnswerSegment({ questionIndex: 0, question: "Q?", kind: "option", answer: "a", preview: "img" }), '"Q?"="a". selected preview: img.');
 });
 
-test("BL2/upstream: decline is one canonical message; cancelled carries partial answers and the error code", () => {
+test("008. Upstream: decline is one canonical message; cancelled carries partial answers and the error code", () => {
   const declined = buildQuestionnaireResponse({ answers: [], cancelled: true }, 1);
   assert.equal(declined.content[0]!.text, DECLINE_MESSAGE);
   assert.deepEqual(declined.details, { answers: [], cancelled: true });
@@ -230,7 +230,7 @@ test("BL2/upstream: decline is one canonical message; cancelled carries partial 
 
 // ---------- model (headless) ----------
 
-test("BL2: the model appends the custom row always and Next only for multi-select", () => {
+test("009. The model appends the custom row always and Next only for multi-select", () => {
   const single = new QuestionnaireModel([question()]);
   assert.deepEqual(single.rowsOf(0).map(row => row.kind), ["option", "option", "custom"]);
   const multi = new QuestionnaireModel([question({ multiSelect: true })]);
@@ -238,7 +238,7 @@ test("BL2: the model appends the custom row always and Next only for multi-selec
   assert.deepEqual(single.rowsOf(single.submitTab).map(row => row.kind), ["submit", "cancel"]);
 });
 
-test("BL2: single-select answer advances through the batch and submit returns all answers", () => {
+test("010. Single-select answer advances through the batch and submit returns all answers", () => {
   const model = new QuestionnaireModel([question(), question({ question: "Which DB?", header: "DB" })]);
   let outcome = model.confirm();
   assert.equal(outcome.type, "continue");
@@ -261,7 +261,7 @@ test("BL2: single-select answer advances through the batch and submit returns al
   if (done.type === "done") assert.equal(done.result.answers.length, 2);
 });
 
-test("BL2: multi-select toggles checkboxes and Next commits the selected labels", () => {
+test("011. Multi-select toggles checkboxes and Next commits the selected labels", () => {
   const model = new QuestionnaireModel([question({ multiSelect: true, options: [option("a"), option("b"), option("c")] })]);
   model.toggle(); // a
   model.moveDown();
@@ -284,7 +284,7 @@ test("BL2: multi-select toggles checkboxes and Next commits the selected labels"
   assert.equal(typing.isChecked(0), true);
 });
 
-test("BL2: custom free text commits as a custom answer and Esc still declines", () => {
+test("012. Custom free text commits as a custom answer and Esc still declines", () => {
   const model = new QuestionnaireModel([question()]);
   model.moveDown();
   model.moveDown();
@@ -327,7 +327,7 @@ test("BL2: custom free text commits as a custom answer and Esc still declines", 
   }
 });
 
-test("BL2: cancel rows and Esc produce a cancelled result with partial answers kept", () => {
+test("013. Cancel rows and Esc produce a cancelled result with partial answers kept", () => {
   const model = new QuestionnaireModel([question(), question({ question: "Second?", header: "S" })]);
   model.confirm(); // answer q1
   model.previousTab();
@@ -347,7 +347,7 @@ test("BL2: cancel rows and Esc produce a cancelled result with partial answers k
 
 // ---------- component ----------
 
-test("BL2: the component renders tabs, rows and footer at any width and survives resize", () => {
+test("014. The component renders tabs, rows and footer at any width and survives resize", () => {
   const model = new QuestionnaireModel([question({ options: [option("a", { preview: "preview body" }), option("b")] })]);
   const seen: QuestionnaireResult[] = [];
   const component = createAskComponent(model, THEME, value => { seen.push(value); });
@@ -366,7 +366,7 @@ test("BL2: the component renders tabs, rows and footer at any width and survives
   assert.equal(seen[0]?.cancelled, true);
 });
 
-test("BL2: component keys drive the model — checkboxes, tabs, typing and commit", () => {
+test("015. Component keys drive the model — checkboxes, tabs, typing and commit", () => {
   const model = new QuestionnaireModel([question({ multiSelect: true })]);
   const component = createAskComponent(model, THEME, () => undefined);
   component.handleInput(" ");
@@ -397,7 +397,7 @@ test("BL2: component keys drive the model — checkboxes, tabs, typing and commi
 
 // ---------- extension ----------
 
-test("BL2: registration is idempotent and the name is the one the surface pins", () => {
+test("016. Registration is idempotent and the name is the one the surface pins", () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   registerAskUserQuestion(host.pi);
@@ -405,13 +405,13 @@ test("BL2: registration is idempotent and the name is the one the surface pins",
   assert.ok(host.tools.has("ask_user_question"));
 });
 
-test("BL2: the packaged entry point registers the same tool for Personal's -e", () => {
+test("017. The packaged entry point registers the same tool for Personal's -e", () => {
   const host = fakePi();
   (askExtension as (pi: unknown) => void)(host.pi);
   assert.ok(host.tools.has(ASK_USER_QUESTION_TOOL_NAME));
 });
 
-test("BL2: invalid input returns a structured refusal without ever reaching the bus", async () => {
+test("018. Invalid input returns a structured refusal without ever reaching the bus", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const result = await toolExecute(host, { questions: [] });
@@ -421,7 +421,7 @@ test("BL2: invalid input returns a structured refusal without ever reaching the 
   assert.equal(host.emitted.length, 0, "a refused call emits nothing");
 });
 
-test("BL2: no UI and no presenter are both structured refusals, not hangs", async () => {
+test("019. No UI and no presenter are both structured refusals, not hangs", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const noUi = await toolExecute(host, params([question()]), { hasUI: false });
@@ -435,7 +435,7 @@ test("BL2: no UI and no presenter are both structured refusals, not hangs", asyn
   assert.deepEqual(host.emitted.map(entry => entry.channel), [ASK_REQUEST_EVENT]);
 });
 
-test("BL2: an answered batch resolves as the tool result — text plus details — and never a prompt", async () => {
+test("020. An answered batch resolves as the tool result — text plus details — and never a prompt", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const ui = fakeUiContext();
@@ -459,7 +459,7 @@ test("BL2: an answered batch resolves as the tool result — text plus details �
   );
 });
 
-test("BL2: Esc returns the canonical decline as a normal structured result", async () => {
+test("021. Esc returns the canonical decline as a normal structured result", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const ui = fakeUiContext();
@@ -473,7 +473,7 @@ test("BL2: Esc returns the canonical decline as a normal structured result", asy
   assert.deepEqual(result.details, { answers: [], cancelled: true });
 });
 
-test("BL2: a custom answer typed in the dialog lands in the tool result", async () => {
+test("022. A custom answer typed in the dialog lands in the tool result", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const ui = fakeUiContext();
@@ -492,7 +492,7 @@ test("BL2: a custom answer typed in the dialog lands in the tool result", async 
   assert.match(result.content[0]!.text, /="roll my own"/);
 });
 
-test("BL2: dialog open + every engine boundary resolves the pending call as a structured cancel", async () => {
+test("023. Dialog open + every engine boundary resolves the pending call as a structured cancel", async () => {
   // The engine's real vocabulary: /new and /resume pass through
   // session_before_switch, reload and shutdown through session_shutdown, and
   // an aborted turn lifts the tool call's own signal. Whichever fires, an
@@ -527,7 +527,7 @@ test("BL2: dialog open + every engine boundary resolves the pending call as a st
   }
 });
 
-test("BL2: a cancel emit that cannot be delivered still settles the pending call", async () => {
+test("024. A cancel emit that cannot be delivered still settles the pending call", async () => {
   // cancelPending emitted the close signal BEFORE settling — on an
   // already-invalidated event bus emit throws (the real loader's
   // assertActive), which used to leave the tool promise pending forever.
@@ -552,7 +552,7 @@ test("BL2: a cancel emit that cannot be delivered still settles the pending call
   assert.equal(result.content[0]!.text, DECLINE_MESSAGE);
 });
 
-test("BL2: an already-aborted call declines before ever touching the bus", async () => {
+test("025. An already-aborted call declines before ever touching the bus", async () => {
   // The signal can arrive aborted — the listener attach would never see it.
   // The decline is returned before a request exists, so no dialog can open
   // for a call nobody is waiting on.
@@ -569,7 +569,7 @@ test("BL2: an already-aborted call declines before ever touching the bus", async
   assert.equal(ui.calls.length, 0);
 });
 
-test("BL2: a boundary destroys the dialog itself — the queue drains and no second dialog opens", async () => {
+test("026. A boundary destroys the dialog itself — the queue drains and no second dialog opens", async () => {
   // A question asked while the switch is already tearing down resolves
   // cancelled by the presenter's own drain, and a queued second request never
   // outlives the boundary either. The tool-side cancel and the presenter-side
@@ -591,7 +591,7 @@ test("BL2: a boundary destroys the dialog itself — the queue drains and no sec
   assert.equal(ui.calls.length, 1, "no dialog is opened for a dead context's queue");
 });
 
-test("BL2: a destroyed context cancels queued questions and ignores malformed requests", async () => {
+test("027. A destroyed context cancels queued questions and ignores malformed requests", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   let context = fakeUiContext() as ReturnType<typeof fakeUiContext> | undefined;
@@ -616,7 +616,7 @@ test("BL2: a destroyed context cancels queued questions and ignores malformed re
 
 // ---------- presenter ----------
 
-test("BL2: a request with no live context claims then resolves cancelled — never a silent drop", async () => {
+test("028. A request with no live context claims then resolves cancelled — never a silent drop", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   registerAskUserQuestionPresenter(host.pi, { context: () => undefined });
@@ -625,7 +625,7 @@ test("BL2: a request with no live context claims then resolves cancelled — nev
   assert.equal(host.emitted.some(entry => entry.channel === ASK_CLAIM_EVENT), true, "the claim still answers the tool");
 });
 
-test("BL2: presenter registration is idempotent — one claim, one dialog per request", async () => {
+test("029. Presenter registration is idempotent — one claim, one dialog per request", async () => {
   const host = fakePi();
   registerAskUserQuestion(host.pi);
   const ui = fakeUiContext();

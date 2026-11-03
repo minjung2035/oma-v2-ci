@@ -1,10 +1,11 @@
+import { removeTree as cleanup } from "./fixtures/cleanup.js";
 import { TransportSpool } from "@oma/storage/transport-spool";
 import { createGitModule } from "#oma-test/app/broker/git-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, lstatSync, rmSync, readdirSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, lstatSync, rmSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -14,11 +15,15 @@ import { encodeFrame } from "@oma/protocol/frame";
 import { RpcConnection, type RpcSocket, type SocketEvents } from "@oma/broker/connection";
 import { SharedPeerPin } from "@oma/broker/peer-pin";
 import { StoreError, publicFailure } from "@oma/domain/errors";
-import { MailModule } from "@oma/mail";
+
 import { GitModule } from "@oma/git";
 import type { AuthContext } from "@oma/contracts";
 import type { ContextInput } from "@oma/git/context";
-import { makeValidAgent } from "./fixtures/spec.js";
+import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
+import { SocietyControl } from "@oma/lifecycle/society";
+import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
+import { generateOperationId } from "@oma/native/identity";
+import { PolicyExecution } from "./fixtures/execution.js";
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(["context.publish"]),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
@@ -31,18 +36,7 @@ function input(text: string, expected: string | null): {
     return { bytes, request: { expected, entries: [{ path: "GOAL.md", bytes: bytes.length, sha256: digest(bytes) }],
             content: { bytes: bytes.length, sha256: digest(bytes), mediaType: "application/vnd.oma.context-v1" } } };
 }
-function cleanup(root: string): void {
-    const walk = (path: string): void => {
-        const stat = lstatSync(path);
-        if (!stat.isDirectory())
-            return;
-        chmodSync(path, 0o700);
-        for (const name of readdirSync(path))
-            walk(join(path, name));
-    };
-    walk(root);
-    rmSync(root, { recursive: true, force: true });
-}
+
 function fixture(format: "sha1" | "sha256") {
     const root = mkdtempSync(join(tmpdir(), "oma-r21-context-"));
     const contextGit = join(root, "repos/context.git");
@@ -64,7 +58,7 @@ function fixture(format: "sha1" | "sha256") {
     return { root, store, mail, git, command, contextGit, close() { store.close(); cleanup(root); } };
 }
 for (const format of ["sha1", "sha256"] as const) {
-    test(`R21 ${format}: acceptance precedes no activation and holds the exact canonical candidate`, async () => {
+    test(`001. Context workflow: ${format}: acceptance precedes no activation and holds the exact canonical candidate`, async () => {
         const f = fixture(format);
         try {
             assert.equal(f.git.hasCommittedContext(), false);
@@ -100,7 +94,7 @@ for (const format of ["sha1", "sha256"] as const) {
             f.close();
         }
     });
-    test(`R21 ${format}: lost notification blocks the next writer and recovers C without recreating a commit`, async () => {
+    test(`002. Context workflow: ${format}: lost notification blocks the next writer and recovers C without recreating a commit`, async () => {
         const f = fixture(format);
         try {
             const publish = f.mail.publishGated.bind(f.mail);
@@ -141,7 +135,7 @@ for (const format of ["sha1", "sha256"] as const) {
             f.close();
         }
     });
-    test(`R21 ${format}: candidate author, date, tree and parent retain the original porcelain identity`, async () => {
+    test(`003. Context workflow: ${format}: candidate author, date, tree and parent retain the original porcelain identity`, async () => {
         const f = fixture(format);
         try {
             const first = input("# same immutable identity\n", null);
@@ -201,7 +195,7 @@ function connect(f: ReturnType<typeof fixture>, observe: (receipt: Awaited<Retur
         onTask: task => { tasks.push(task); } });
     return { socket, rpc, tasks };
 }
-test("V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan", async (t) => {
+test("004. Accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan", async (t) => {
     const f = fixture("sha1");
     try {
         const key = "closed-after-acceptance";
@@ -270,7 +264,7 @@ test("V18B: accepted context evidence outlives its RPC connection; same-key retr
     }
 });
 /** AV28 -- CTX-003 ("CAS 실패는 CONTEXT_CONFLICT+actual revision이다"). */
-test("AV28 / CTX-003: a context publication on a stale revision names the revision it found", async () => {
+test("005. A context publication on a stale revision names the revision it found", async () => {
     const f = fixture("sha1");
     try {
         const first = input("# GOAL\n", null);
@@ -292,4 +286,28 @@ test("AV28 / CTX-003: a context publication on a stale revision names the revisi
     finally {
         f.close();
     }
+});
+
+
+test("007. Closed Society blocks a pending Worker context CAS while Principal GOAL publication remains available",async t=>{
+ const f=fixture("sha1");try{
+  f.store.transaction(tx=>tx.insertAgent(makeValidAgent("principal")));
+  const repository=Reflect.get(Reflect.get(f.git,"repository"),"contextRepository") as {ensureCandidate(operation:unknown):void};
+  const interrupted=t.mock.method(repository,"ensureCandidate",()=>{throw new StoreError("REF_STATE_UNKNOWN","pause before canonical effect");});
+  const source=input("# Worker pending\n",null);
+  await assert.rejects(f.git.publishContext(auth,"worker-pending",source.request,once(source.bytes)));
+  interrupted.mock.restore();const accepted=f.store.getOperation("alice","worker-pending");assert.ok(accepted?.kind==="context.publish");
+  const principal:AuthContext={...auth,actor:"principal",role:"principal",incarnation:0,capabilities:new Set(ALL_CAPS)};
+  const units=new PolicyExecution();units.bindIncarnationReader(actor=>f.store.getAgent(actor)?.incarnation??null);
+  const control=new SocietyControl(lifecycleLedger(f.store),units,{nextOperationId:generateOperationId});
+  await control.set(principal,"closed","close-context");
+  await assert.rejects(f.git.reconcile(accepted.id),{code:"AGENT_NOT_READY"});
+  assert.equal(f.store.getOperationById(accepted.id)?.state,"failed");
+  assert.equal(f.command(["--git-dir",f.contextGit,"for-each-ref","--format=%(refname)"]),"");
+  const goal=input("# Principal GOAL while closed\n",null);
+  const result=await f.git.publishContext(principal,"closed-goal",goal.request,once(goal.bytes));assert.equal(result.state,"succeeded");
+  await control.set(principal,"open","reopen-context");
+  const next=input("# Worker after reopen\n",f.command(["--git-dir",f.contextGit,"rev-parse","refs/heads/main"]));
+  assert.equal((await f.git.publishContext(auth,"worker-fresh",next.request,once(next.bytes))).state,"succeeded");
+ }finally{f.close();}
 });

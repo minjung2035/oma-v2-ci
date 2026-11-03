@@ -12,7 +12,7 @@ function fixture(t) {
   const store = new ResidentLogStore(root), directory = join(root, 'logs/resident/alice');
   return { root, store, directory, path: join(directory, `${String(atMs).padStart(16, '0')}-${invocation}.jsonl`) };
 }
-test('actual diagnostic spool preserves full binary bytes independently of its bounded public view', t => {
+test("001. Actual diagnostic spool preserves full binary bytes independently of its bounded public view", t => {
   const f = fixture(t), writer = f.store.open('alice', invocation, atMs); let incarnation = null;
   const sinks = residentLogSinks('alice', invocation, () => incarnation, entry => writer.append(entry), () => atMs);
   const bytes = Buffer.alloc(256 * 1024 + 37); for (let n = 0; n < bytes.length; n++) bytes[n] = n % 256;
@@ -28,7 +28,7 @@ test('actual diagnostic spool preserves full binary bytes independently of its b
   for (let n = 0; n < 32; n++) assert.throws(() => f.store.open('alice', invocation, atMs), { code: 'REF_STATE_UNKNOWN' });
   assert.deepEqual(readFileSync(f.path), before); assert.deepEqual(readdirSync('/proc/self/fd').sort(), fds);
 });
-test('actual diagnostic spool partial tail is incomplete; malformed committed frame is unknown', t => {
+test("002. Actual diagnostic spool partial tail is incomplete; malformed committed frame is unknown", t => {
   const f = fixture(t), writer = f.store.open('alice', invocation, atMs);
   writer.append({ actor: 'alice', invocationId: invocation, incarnation: 1, stream: 'stdout', atMs, bytes: Buffer.from('complete') }); writer.close();
   const original = readFileSync(f.path); appendFileSync(f.path, '{"version":');
@@ -37,20 +37,20 @@ test('actual diagnostic spool partial tail is incomplete; malformed committed fr
   writeFileSync(f.path, Buffer.concat([original, Buffer.from('{"version":9}\n')]));
   assert.throws(() => [...f.store.read('alice')], { code: 'REF_STATE_UNKNOWN' });
 });
-test('actual diagnostic writer keeps its inode across pathname replacement and refuses ambiguous readback', t => {
+test("003. Actual diagnostic writer keeps its inode across pathname replacement and refuses ambiguous readback", t => {
   const f = fixture(t), writer = f.store.open('alice', invocation, atMs);
   const original = join(f.directory, 'held-original'); renameSync(f.path, original); writeFileSync(f.path, 'replacement');
   writer.append({ actor: 'alice', invocationId: invocation, incarnation: 1, stream: 'stderr', atMs, bytes: Buffer.from('owned bytes') }); writer.close();
   assert.equal(readFileSync(f.path, 'utf8'), 'replacement'); assert.match(readFileSync(original, 'utf8'), /b3duZWQgYnl0ZXM=/);
   assert.throws(() => [...f.store.read('alice')], { code: 'REF_STATE_UNKNOWN' });
 });
-test('actual diagnostic reader refuses hard-linked files without changing their bytes', t => {
+test("004. Actual diagnostic reader refuses hard-linked files without changing their bytes", t => {
   const f = fixture(t), writer = f.store.open('alice', invocation, atMs);
   writer.append({ actor: 'alice', invocationId: invocation, incarnation: 1, stream: 'stdout', atMs, bytes: Buffer.from('original') }); writer.close();
   const before = readFileSync(f.path); linkSync(f.path, join(f.root, 'second-link'));
   assert.throws(() => [...f.store.read('alice')], { code: 'REF_STATE_UNKNOWN' }); assert.deepEqual(readFileSync(f.path), before);
 });
-test('actual diagnostic writer refuses a hard link introduced after open before appending any bytes', t => {
+test("005. Actual diagnostic writer refuses a hard link introduced after open before appending any bytes", t => {
   const f = fixture(t), writer = f.store.open('alice', invocation, atMs);
   linkSync(f.path, join(f.root, 'late-link'));
   assert.throws(() => writer.append({ actor: 'alice', invocationId: invocation, incarnation: 1, stream: 'stdout', atMs, bytes: Buffer.from('forbidden') }), { code: 'REF_STATE_UNKNOWN' });

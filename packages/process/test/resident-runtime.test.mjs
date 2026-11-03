@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ResidentRuntime } from '../dist/resident-runtime.js';
 
-test('Resident status policy distinguishes unobserved scope from positively recovered absence', async () => {
+test("001. Resident status policy distinguishes unobserved scope from positively recovered absence", async () => {
   let dead = false;
   const runtime = new ResidentRuntime({ references: () => ({ profile: 'p', modelProfile: 'm' }), incarnation: () => 1,
     confirmDead: () => dead, revoke() {}, hint() {}, failure() {},
@@ -19,7 +19,7 @@ test('Resident status policy distinguishes unobserved scope from positively reco
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const references = () => ({ profile: 'p', modelProfile: 'm' });
 
-test('Resident close policy attempts other owners when one incarnation is unobserved', async () => {
+test("002. Resident close policy attempts other owners when one incarnation is unobserved", async () => {
   const revoked = [];
   const runtime = new ResidentRuntime({ references, incarnation: actor => actor === 'alice' ? null : 1,
     confirmDead: () => true, revoke: actor => revoked.push(actor), hint() {}, failure() {},
@@ -32,7 +32,7 @@ test('Resident close policy attempts other owners when one incarnation is unobse
   await assert.rejects(runtime.start('bob', true), { code: 'BROKER_UNAVAILABLE' });
 });
 
-test('Resident close policy joins an already-starting owner and its completion before releasing it', async () => {
+test("003. Resident close policy joins an already-starting owner and its completion before releasing it", async () => {
   const launch = deferred(), stopped = deferred(), completion = deferred(); let empty = true, stops = 0;
   const runtime = new ResidentRuntime({ references, incarnation: () => 1, confirmDead: () => empty,
     revoke() {}, hint() {}, failure(error) { throw error; },

@@ -54,10 +54,10 @@ if (reload) writeFileSync(extension, source('before'));
 const s = await startScenario({ residents: ['worker-a'],
   ...(reload ? { extensions: [{ path: extension, sha256: createHash('sha256').update(readFileSync(extension)).digest('hex') }] } : {}),
   script: retry ? (_request, index) => {
-  if (index === 0) return tools(call('oma_mail_send', { to: ['worker-a'], subject: 'Retry ownership', body: 'Exactly once.' }));
+  if (index === 0) return tools(call('oma_send', { to: ['worker-a'], subject: 'Retry ownership', content: {kind: 'text', value: 'Exactly once.'} }));
   return ending === 'retry-recover' && index === 6 ? text('RETRY_RECOVERED') : { kind: 'disconnect' };
 } : [
-  tools(call('oma_mail_send', { to: ['worker-a'], subject: 'Interactive ownership', body: 'Exactly once.' })),
+  tools(call('oma_send', { to: ['worker-a'], subject: 'Interactive ownership', content: {kind: 'text', value: 'Exactly once.'} })),
   delayed(600, { kind: 'text', text: 'FIRST_RESPONSE_COMPLETE', thinking: 'PRIVATE_THINKING_SENTINEL' }),
   text('SECOND_RESPONSE_COMPLETE'),
 ], interactive: { onUi(event, live) {
@@ -103,8 +103,8 @@ try {
   if (delivered) {
     assert.equal((await delivered).kind, 'delivered');
     assert.equal(s.store.getDelivery(mailId, 'principal')?.presented, 1);
-    assert.match(lastUserText(s.provider.seen[0].body), /path=\/mail\/archive\/cur\//);
-    assert.equal(lastUserText(s.provider.seen[2].body), 'Second 한글 ✅');
+    assert.match(lastUserText(s.provider.seen[0].body), /OMA delivered a message batch/);
+    assert.ok(s.provider.seen[2].body.messages.some(message => message.role === 'user' && (typeof message.content === 'string' ? message.content : message.content?.map(part => part.text ?? '').join('')).includes('Second 한글 ✅')));
     assert.equal(settled, 2);
   }
   if (retry) {
@@ -115,7 +115,7 @@ try {
   }
   if (ending === 'normal') {
     assert.equal(s.provider.seen.length, 3);
-    assert.equal(lastUserText(s.provider.seen[2].body), 'Second 한글 ✅');
+    assert.ok(s.provider.seen[2].body.messages.some(message => message.role === 'user' && (typeof message.content === 'string' ? message.content : message.content?.map(part => part.text ?? '').join('')).includes('Second 한글 ✅')));
     assert.equal(panels, 1);
   }
   if (reload) {

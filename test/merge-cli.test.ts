@@ -72,7 +72,7 @@ const principalStatus = (name: string, base: string, candidate: string) => ({
   integrationPhase: "review-needed", notice: "none", retryable: false, nextAction: "review", attemptNumber: 0,
 });
 
-test("Review client: merge open resolves HEAD + origin/main, submits once, then opens", async t => {
+test("001. Review client: merge open resolves HEAD + origin/main, submits once, then opens", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-cli-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd, base, candidate } = workspace(home);
   process.env.OMA_ACTOR = "alice"; t.after(() => { delete process.env.OMA_ACTOR; });
@@ -105,7 +105,7 @@ test("Review client: merge open resolves HEAD + origin/main, submits once, then 
   assert.deepEqual(calls, ["git.known", "git.submit", "attest.record"]);
 });
 
-test("Review client: same-key replay after HEAD moved returns the frozen request", async t => {
+test("002. Review client: same-key replay after HEAD moved returns the frozen request", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-replay-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   const result = openReceipt("merge-22222222-0000-4000-8000-000000000000");
@@ -131,7 +131,7 @@ test("Review client: same-key replay after HEAD moved returns the frozen request
     "replay answers the frozen request; it never re-resolves HEAD or the base ref");
 });
 
-test("Review client: merge open with no recorded base refuses before any request", async t => {
+test("003. Review client: merge open with no recorded base refuses before any request", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-nobase-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   git(cwd, ["update-ref", "-d", "refs/remotes/origin/main"]);
@@ -142,7 +142,7 @@ test("Review client: merge open with no recorded base refuses before any request
   assert.deepEqual(run.requests, []);
 });
 
-test("Review client: dirty workspace warns; known candidate skips the submit; pending submit stops the open", async t => {
+test("004. Review client: dirty workspace warns; known candidate skips the submit; pending submit stops the open", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-warn-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd, candidate } = workspace(home);
   writeFileSync(join(cwd, "a.txt"), "uncommitted\n");   // not staged/committed
@@ -172,7 +172,7 @@ test("Review client: dirty workspace warns; known candidate skips the submit; pe
   void candidate;
 });
 
-test("Review client: a refused `git status` is not reported as a clean workspace", async t => {
+test("005. Review client: a refused `git status` is not reported as a clean workspace", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-refused-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   // A corrupt index makes `git status` exit 128 with an empty listing while
@@ -185,7 +185,7 @@ test("Review client: a refused `git status` is not reported as a clean workspace
   assert.deepEqual(run.requests, [], "the open did not proceed on an unobserved workspace");
 });
 
-test("Review client: a `.git` that is present but damaged is not an absent workspace", async t => {
+test("006. Review client: a `.git` that is present but damaged is not an absent workspace", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-damaged-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   // A corrupt .git/HEAD makes `git status` answer "not a git repository" —
@@ -202,7 +202,7 @@ test("Review client: a `.git` that is present but damaged is not an absent works
   assert.deepEqual(run.requests, [], "the open did not proceed on a workspace it could not observe");
 });
 
-test("Review client: a bare repository has no work tree that could be dirty", async t => {
+test("007. Review client: a bare repository has no work tree that could be dirty", async t => {
   const home = mkdtempSync(join("/var/tmp", "oma-merge-bare-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const bare = join(home, "bare.git");
   git(home, ["init", "-q", "--bare", bare]);
@@ -222,7 +222,7 @@ test("Review client: a bare repository has no work tree that could be dirty", as
   assert.deepEqual(run.requests.map(r => r.method), ["git.known", "attest.record"]);
 });
 
-test("Review client: open outside a repository has no workspace to observe", async t => {
+test("008. Review client: open outside a repository has no workspace to observe", async t => {
   const home = mkdtempSync(join("/var/tmp", "oma-merge-norepo-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const dir = join(home, "nowhere");
   mkdirSync(dir);
@@ -242,7 +242,7 @@ test("Review client: open outside a repository has no workspace to observe", asy
 });
 
 
-test("Review client: exact diff pagination and challenge original view use frozen identities", async t => {
+test("009. Review client: exact diff pagination and challenge original view use frozen identities", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-merge-diff-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd } = workspace(home);
   const { repo, base, candidate } = canonical(home);
@@ -310,7 +310,7 @@ test("Review client: exact diff pagination and challenge original view use froze
   assert.equal(revert.view, "proposal"); assert.equal(revert.base, candidate); assert.equal(revert.candidate, base);
 });
 
-test("Review client: prepared challenges skip publication and replacement challenges publish first", async t => {
+test("010. Review client: prepared challenges skip publication and replacement challenges publish first", async t => {
   const home = mkdtempSync(join(tmpdir(), "oma-challenge-cli-")); t.after(() => rmSync(home, { recursive: true, force: true }));
   const { cwd, base, candidate } = workspace(home);
   const requests: Request[] = [];
@@ -336,7 +336,7 @@ test("Review client: prepared challenges skip publication and replacement challe
     title: "t", reason: "revert it\n", candidate, base });
 });
 
-test("DR46 current review: exact candidate identity uses the shared non-coercing grammar; missing conditions survive public sanitization", () => {
+test("011. Current review: exact candidate identity uses the shared non-coercing grammar; missing conditions survive public sanitization", () => {
   const identity = { repo: "project", targetRef: "refs/heads/main", candidate: "2".repeat(40),
     expectedBase: "1".repeat(40), policyRevision: "p1" };
   assert.equal(exactCandidateCheck(identity), null);

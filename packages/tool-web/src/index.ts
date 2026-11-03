@@ -128,6 +128,17 @@ function webFacade(pi: ExtensionAPI, registered: Set<string>): ExtensionAPI {
   return facade as unknown as ExtensionAPI;
 }
 
+/** The refusal diagnostic, on the engine's stderr. Returns whether the stream
+ * took it: the session_start refusal below repeats the reason only when this
+ * first, un-preemptable report never landed, so the operator sees it once. */
+function reportIntegrityRefusal(error: unknown): boolean {
+  try {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`bundled pi-web-access payload failed integrity verification; refusing session: ${message}\n`);
+    return true;
+  } catch { return false; }
+}
+
 export async function registerWebTools(pi: ExtensionAPI): Promise<void> {
   // The vendored payload is verified before any of it becomes a tool --
   // and before any vendored module evaluates: every runtime import happens
@@ -137,11 +148,16 @@ export async function registerWebTools(pi: ExtensionAPI): Promise<void> {
   try {
     verifyVendorBundle(bundleDir);
   } catch (error) {
+    // The reason is stated here, at registration, and the refusal it belongs
+    // to is enforced at session_start. Stating it only at session_start is
+    // not enough: the four web tools are plan names, so a surface plan
+    // refuses this load for the tools the rejected bundle left unregistered
+    // -- and a handler registered earlier in the same load exits the process
+    // before this one runs, leaving the surface's own consequence as the only
+    // thing the operator ever reads. No vendored byte is loaded either way.
+    const reported = reportIntegrityRefusal(error);
     pi.on("session_start", () => {
-      try {
-        const message = error instanceof Error ? error.message : String(error);
-        process.stderr.write(`bundled pi-web-access payload failed integrity verification; refusing session: ${message}\n`);
-      } catch { /* best effort */ }
+      if (!reported) reportIntegrityRefusal(error);
       process.exit(1);
     });
     return;

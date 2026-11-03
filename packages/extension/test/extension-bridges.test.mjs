@@ -48,7 +48,7 @@ async function withDeadStderr(t, attempt) {
     }
     return escaped;
 }
-test("post-listen: a dead stderr cannot make the egress bridge's error emit escape", async (t) => {
+test("001. Post-listen: a dead stderr cannot make the egress bridge's error emit escape", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     env(t, "OMA_EGRESS_PROXY_SOCKET", join(dir, "egress.sock"));
@@ -57,7 +57,7 @@ test("post-listen: a dead stderr cannot make the egress bridge's error emit esca
     const escaped = await withDeadStderr(t, () => startEgressBridge(pi));
     assert.deepEqual(escaped, [], "the journal's throw escaped the emit");
 });
-test("post-listen: a dead stderr cannot make the inference bridge's error emit escape either", async (t) => {
+test("002. Post-listen: a dead stderr cannot make the inference bridge's error emit escape either", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     env(t, "OMA_INFERENCE_SOCKET", join(dir, "inference.sock"));
@@ -74,7 +74,7 @@ test("post-listen: a dead stderr cannot make the inference bridge's error emit e
     assert.match(last, /^http:\/\/127\.0\.0\.1:\d+$/, "the fallback listener supplies its real address");
     assert.notEqual(new URL(last).port, "0");
 });
-test("post-listen: a refused re-register inside the 'listening' emit keeps the unreachable provider and still resolves", async (t) => {
+test("003. Post-listen: a refused re-register inside the 'listening' emit keeps the unreachable provider and still resolves", async (t) => {
     // 'listening' is the same synchronous emit boundary as 'error': a
     // registerProvider refusal escaping it kills the engine. The refused
     // registration leaves the unreachable provider the pre-listen register

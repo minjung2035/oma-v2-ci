@@ -27,13 +27,13 @@ function fixture(t, caller) {
   put('apps/oma/src/caller.ts', caller);
   return { root, put };
 }
-test('P0-8: an owned path retains provenance through a public workspace API with declarations installed', t => {
+test("001. An owned path retains provenance through a public workspace API with declarations installed", t => {
   const f = fixture(t, 'import { observe } from "@oma/native/probe"; export function run(stateRoot: string) { return observe(stateRoot); }');
   assert.ok(ownedStateFindings(f.root).some(row => row.file === 'packages/native/src/probe.ts' && row.rule === 'owned-state-raw-observation'));
   f.put('apps/oma/src/caller.ts', 'import { observe } from "@oma/native/probe"; export function run(input: string) { return observe(input); }');
   assert.deepEqual(ownedStateFindings(f.root), [], 'a user input does not acquire owned-state provenance');
 });
-test('M-004: workspace transaction bodies cannot hide asynchronous or filesystem effects', t => {
+test("002. Workspace transaction bodies cannot hide asynchronous or filesystem effects", t => {
   const f = fixture(t, 'export {};');
   f.put('packages/native/src/transaction.ts', `import { fsyncSync } from 'node:fs';
     declare const ledger: { transaction(work: () => unknown): unknown };

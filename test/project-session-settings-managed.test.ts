@@ -9,7 +9,7 @@ import { ensureProjectSettings } from "#oma-test/app/application/project-setting
 import { projectSettingsPath, readSettings, commitManagedEdit } from "#oma-test/app/application/settings";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
 
-test("L2: a managed project committed during session derivation remains pending and is followed", () => {
+test("001. A managed project committed during session derivation remains pending and is followed", () => {
   const dataRoot = mkdtempSync(join(tmpdir(), "oma-settings-follow-"));
   const libdir = process.cwd(), project = "fixture-project", society = "fixture-session";
   const configPath = join(dataRoot, society, "config.json");

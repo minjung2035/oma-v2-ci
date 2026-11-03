@@ -56,7 +56,7 @@ function released(w) {
   for (const name of signals) assert.equal(w.host.listenerCount(name), 0, name);
 }
 
-test('Personal child: a mode handoff has one valid target and waits for actual writer exit', async () => {
+test("001. Personal child: a mode handoff has one valid target and waits for actual writer exit", async () => {
   const w = world(), run = watch(w.runPersonalSession(options));
   for (const message of [{ type: 'switch', mode: 'invalid' }, { type: 'switch', mode: null },
     { type: 'switch', mode: 'society', session: '/fixture/history.jsonl' },
@@ -66,7 +66,7 @@ test('Personal child: a mode handoff has one valid target and waits for actual w
   w.child.finish(); const ended = await run.done;
   assert.equal(ended.next.mode, 'society'); released(w);
 });
-test('Personal child: common process owner receives saved cwd, history descriptor and clean environment', async () => {
+test("002. Personal child: common process owner receives saved cwd, history descriptor and clean environment", async () => {
   const w = world(), run = w.runPersonalSession({ ...options, resume: '/fixture/history/saved.jsonl' });
   const [executable, argv, cwd, env, descriptor] = w.launches[0];
   assert.equal(executable, '/fixture/node'); assert.equal(cwd, '/fixture/cwd'); assert.equal(descriptor, 73);
@@ -76,7 +76,7 @@ test('Personal child: common process owner receives saved cwd, history descripto
   assert.equal(env.PI_CODING_AGENT_DIR, '/fixture/engine'); assert.equal(env.OMA_ACTOR, undefined); assert.equal(env.PI_SESSION, undefined);
   assert.equal(w.operations[0][0], 'held'); w.child.finish(); assert.equal((await run).code, 0); released(w);
 });
-for (const event of ['exit', 'disconnect', 'error']) test(`Personal child: ${event} does not release history or admit the next engine`, async () => {
+for (const event of ['exit', 'disconnect', 'error']) test(`003. Personal child: ${event} does not release history or admit the next engine`, async () => {
   const w = world(), observed = watch(w.runPersonalSession(options));
   const refused = event === 'error' ? assert.rejects(observed.done, /injected child error/) : undefined;
   w.child.emit('message', { type: 'switch', session: '/fixture/next.jsonl' });
@@ -89,12 +89,12 @@ for (const event of ['exit', 'disconnect', 'error']) test(`Personal child: ${eve
   released(w);
 });
 for (const [code, signal, status] of [[7, null, 7], [null, 'SIGTERM', 143], [null, null, 1]])
-  test(`Personal child: close ${code}/${signal} cannot authorize a queued switch`, async () => {
+  test(`004. Personal child: close ${code}/${signal} cannot authorize a queued switch`, async () => {
     const w = world(), run = w.runPersonalSession(options);
     w.child.emit('message', { type: 'switch' }); w.child.finish(code, signal);
     const ended = await run; assert.equal(ended.code, status); assert.equal(ended.next, undefined); released(w);
   });
-test('Personal child: only the first valid switch is accepted', async () => {
+test("005. Personal child: only the first valid switch is accepted", async () => {
   const w = world(), run = w.runPersonalSession(options);
   for (const message of [null, [], { type: 'other' }, { type: 'switch', session: 42 }, { type: 'switch', extra: true }])
     w.child.emit('message', message);
@@ -102,42 +102,37 @@ test('Personal child: only the first valid switch is accepted', async () => {
   w.child.emit('message', { type: 'switch', session: '/fixture/second.jsonl' });
   w.child.finish(); assert.equal((await run).next.session, '/fixture/first.jsonl'); released(w);
 });
-test('Personal child: a society switch is one target and never both', async () => {
+test("006. Personal child: a retired society field is no target and never both", async () => {
   const w = world(), run = w.runPersonalSession(options);
-  for (const message of [{ type: 'switch', session: '/fixture/x.jsonl', society: 'two-targets' }, { type: 'switch', society: 42 },
-    { type: 'switch', society: 'named', extra: true }])
+  for (const message of [{ type: 'switch', society: 'fixture-society' }, { type: 'switch', session: '/fixture/x.jsonl', society: 'two-targets' },
+    { type: 'switch', society: 42 }, { type: 'switch', society: 'named', extra: true }])
     w.child.emit('message', message);
-  w.child.emit('message', { type: 'switch', society: 'fixture-society' });
+  await flush();
+  w.child.emit('message', { type: 'switch', mode: 'personal' });
   w.child.finish();
   const ended = await run;
-  assert.equal(ended.next.society, 'fixture-society'); assert.equal(ended.next.session, undefined); released(w);
+  assert.equal(ended.next.mode, 'personal'); assert.equal(ended.next.session, undefined); released(w);
 });
-test('Personal child: a society switch on a failed exit is not a handoff', async () => {
-  const w = world(), run = w.runPersonalSession(options);
-  w.child.emit('message', { type: 'switch', society: 'fixture-society' });
-  w.child.finish(1);
-  assert.equal((await run).next, undefined); released(w);
-});
-test('Personal child: all host-loss signals forward while the history writer is alive', async () => {
+test("007. Personal child: all host-loss signals forward while the history writer is alive", async () => {
   const w = world(), run = w.runPersonalSession(options);
   for (const name of signals) w.host.emit(name);
   assert.deepEqual(w.child.signals, signals); assert.equal(w.lease.closed, 0);
   w.child.finish(); await run; released(w);
 });
-for (const kind of ['throw', 'false']) test(`Personal child: signal ${kind} remains a failure until actual close`, async () => {
+for (const kind of ['throw', 'false']) test(`008. Personal child: signal ${kind} remains a failure until actual close`, async () => {
   const w = world({ fault({ child }) { child.kill = () => { if (kind === 'throw') throw new Error('injected signal'); return false; }; } });
   const observed = watch(w.runPersonalSession(options)), refused = assert.rejects(observed.done,
     kind === 'throw' ? /injected signal/ : { code: 'BROKER_UNAVAILABLE' });
   w.host.emit('SIGTERM'); await flush(); assert.equal(observed.returned, false); assert.equal(w.lease.closed, 0);
   w.child.finish(); await refused; released(w);
 });
-test('Personal child: a signal never targets a child whose exit is already observed', async () => {
+test("009. Personal child: a signal never targets a child whose exit is already observed", async () => {
   const w = world(), run = w.runPersonalSession(options);
   w.child.exitCode = 0; w.child.emit('exit', 0, null); w.host.emit('SIGTERM');
   assert.deepEqual(w.child.signals, []); assert.equal(w.lease.closed, 0);
   w.child.finish(); await run; released(w);
 });
-for (const kind of ['message', 'signal']) test(`Personal child: partial ${kind} listener acquisition requests cleanup but keeps the lease until close`, async () => {
+for (const kind of ['message', 'signal']) test(`010. Personal child: partial ${kind} listener acquisition requests cleanup but keeps the lease until close`, async () => {
   const problem = new Error('injected listener acquisition');
   const w = world({ fault({ child, host }) {
     const target = kind === 'message' ? child : host, on = target.on;
@@ -147,30 +142,30 @@ for (const kind of ['message', 'signal']) test(`Personal child: partial ${kind} 
   await flush(); assert.deepEqual(w.child.signals, ['SIGKILL']); assert.equal(observed.returned, false); assert.equal(w.lease.closed, 0);
   w.child.finish(); await refused; released(w);
 });
-for (const kind of ['spawn', 'lock']) test(`Personal child: ${kind} failure before handoff releases its one lease`, async () => {
+for (const kind of ['spawn', 'lock']) test(`011. Personal child: ${kind} failure before handoff releases its one lease`, async () => {
   const problem = new Error(`injected ${kind}`), w = world({ spawnError: kind === 'spawn' ? problem : undefined, lockError: kind === 'lock' ? problem : undefined });
   const run = w.runPersonalSession(options);
   if (w.launches.length > 0 && kind === 'lock') w.child.finish();
   await assert.rejects(run, error => error === problem); released(w);
   if (kind === 'lock') assert.equal(w.launches.length, 0);
 });
-test('Personal child: contention refuses before any child exists', async () => {
+test("012. Personal child: contention refuses before any child exists", async () => {
   const w = world({ contended: true });
   await assert.rejects(w.runPersonalSession(options), { code: 'BROKER_UNAVAILABLE' });
   assert.equal(w.launches.length, 0); assert.equal(w.lease.closed, 0);
 });
-test('Personal child: failed signal-listener return still attempts every listener and the lease', async () => {
+test("013. Personal child: failed signal-listener return still attempts every listener and the lease", async () => {
   const problem = new Error('injected listener return');
   const w = world({ fault({ host }) { const off = host.off; host.off = function (name, listener) { off.call(this, name, listener); if (name === 'SIGTERM') throw problem; return this; }; } });
   const run = w.runPersonalSession(options), refused = assert.rejects(run, error => error === problem);
   w.child.finish(); await refused; released(w);
 });
-test('Personal child: primary spawn and lease cleanup failures are both retained', async () => {
+test("014. Personal child: primary spawn and lease cleanup failures are both retained", async () => {
   const primary = new Error('injected spawn'), cleanup = new Error('injected lease return'), w = world({ spawnError: primary, closeError: cleanup });
   await assert.rejects(w.runPersonalSession(options), error => error.name === 'AggregateError' && error.errors[0] === primary && error.errors[1] === cleanup);
   released(w);
 });
-test('Personal child: Mac credential marker is owned by this launch, not inherited', async () => {
+test("015. Personal child: Mac credential marker is owned by this launch, not inherited", async () => {
   const w = world({ platform: 'darwin' }), run = w.runPersonalSession(options);
   assert.equal(w.launches[0][3].OMA_PERSONAL_KEYCHAIN, '1'); w.child.finish(); await run; released(w);
 });

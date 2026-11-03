@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { residentEnvironment } from '@oma/domain/resident-paths';
 
-test('resident environment retains the issued physical view without a model CLI', () => {
+test("001. Resident environment retains the issued physical view without a model CLI", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'oma-model-view-')));
   try {
     const work = join(root, '한 글자 " $(literal); space'); mkdirSync(work);

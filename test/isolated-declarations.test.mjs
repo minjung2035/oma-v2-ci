@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { isolatedDeclarationDiagnostics } from "../scripts/isolated-declarations.mjs";
 
-test("foreign declaration errors never exempt broken authored declarations or missing imports", t => {
+test("001. Foreign declaration errors never exempt broken authored declarations or missing imports", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-declarations-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const owned = join(root, "owned"), entry = join(root, "types.mts"), api = join(owned, "api.d.ts");

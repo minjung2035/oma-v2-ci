@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { EXPLORATION_PARAMETERS, extractExplorationParameters } from "../scripts/exploration-parameters.mjs";
 import { lanes, evaluateExecution } from "../scripts/verification-lanes.mjs";
 
-test("R36 exploration parameters are finite, explicit, reproducible and separate from production configuration", () => {
+test("001. Exploration parameters are finite, explicit, reproducible and separate from production configuration", () => {
   assert.deepEqual(extractExplorationParameters(["--out", "result", "--seed", "0", "--actions", "64", "--baseline", "prior.json"]), {
     remaining: ["--out", "result", "--baseline", "prior.json"], env: { OMA_TEST_SEED: "0", OMA_TEST_ACTIONS: "64" }, parameters: { "--seed": 0, "--actions": 64 },
   });
@@ -20,7 +20,7 @@ test("R36 exploration parameters are finite, explicit, reproducible and separate
   }
 });
 
-test("R36 all registered exploration entries exist and old kernel/crash/property/stress gates remain", () => {
+test("002. All registered exploration entries exist and old kernel/crash/property/stress gates remain", () => {
   const required = {
     property: ["verification-property.test.js", "r36-model.test.js", "r36-model-mutations.test.js", "r36-parser-fuzz.test.js"],
     stress: ["verification-stress.test.js", "r36-resource-stress.test.js"],
@@ -33,11 +33,11 @@ test("R36 all registered exploration entries exist and old kernel/crash/property
   }
   for (const lane of Object.values(lanes)) for (const file of lane.sourceFiles)
     assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `source-only verification entry missing: ${file}`);
-  assert.ok(lanes.crash.requiredNames.includes("R33 existing SIGKILL"));
-  assert.ok(lanes.kernel.requiredNames.includes("AUTH-003 native"));
+  assert.ok(["001. Existing SIGKILL ", "002. Existing SIGKILL "].every(name => lanes.crash.requiredNames.includes(name)));
+  assert.ok(["001. Native: peer pidfd detects connector death while an inherited socket stays open", "002. Native binding seam: closing sockets releases pidfds and cannot revive old bindings"].every(name => lanes.kernel.requiredNames.includes(name)));
 });
 
-test("R36 zero failures or a recorded seed cannot replace actual oracle execution", () => {
+test("003. Zero failures or a recorded seed cannot replace actual oracle execution", () => {
   const tap = "TAP version 13\nok 1 - unrelated\n1..1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n";
   const result = evaluateExecution({ exitCode: 0, tap, requiredNames: ["R36 model seed=", "R36 parser corpus"] });
   assert.equal(result.status, "FAIL");

@@ -40,7 +40,7 @@ async function killAt(workerRoot: string, point: string): Promise<void> {
 }
 
 for (const point of ["before-write", "after-write"] as const) {
-  test(`T111 real SIGKILL at ${point} leaves a configuration a next start can load`, async () => {
+  test(`001. Real SIGKILL at ${point} leaves a configuration a next start can load`, async () => {
     const workerRoot = scratch(`oma-proc-${point}-`);
     try {
       mkdirSync(dirname(join(workerRoot, DEPLOYMENT_LAYOUT.extension)), { recursive: true });
@@ -61,13 +61,14 @@ for (const point of ["before-write", "after-write"] as const) {
       assert.equal(loaded.initialResidents.length, point === "before-write" ? 1 : 12,
         "the named boundary must retain the complete old or new seed list");
 
-      assert.deepEqual(entries(workerRoot).filter(name => name !== "config.json"), before,
+      assert.deepEqual(entries(workerRoot).filter(name => name !== "config.json"),
+        [...before, ...(point === "after-write" ? [".oma-config"] : [])].sort(),
         "restart must preserve the installation tree and leave no temporary artefact at any depth");
     } finally { rmSync(workerRoot, { recursive: true, force: true }); }
   });
 }
 
-test("T112 the terminal owner takes and restores raw mode on a real TTY", () => {
+test("002. The terminal owner takes and restores raw mode on a real TTY", () => {
   // A pseudo-terminal, not a pipe: this is the branch a pipe never reaches.
   const probe = resolve(root, "dist/test/fixtures/tty-probe.js");
   const run = spawnSync("script", ["-qec", `${process.execPath} ${probe}`, "/dev/null"], {
@@ -95,7 +96,7 @@ test("T112 the terminal owner takes and restores raw mode on a real TTY", () => 
   assert.equal(observed.pasteOff, true, "bracketed paste mode was left on after restore");
 });
 
-test("T112 a non-TTY stream never attempts raw mode", () => {
+test("003. A non-TTY stream never attempts raw mode", () => {
   let rawCalls = 0;
   const input = { isTTY: false, resume() {}, pause() {}, on() {},
     setRawMode() { rawCalls += 1; } } as unknown as NodeJS.ReadStream;

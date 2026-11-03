@@ -36,25 +36,25 @@
     }
   },
   "requiredMutationDimensions": [
-    "workflow",
-    "persistence",
-    "recovery",
-    "client",
-    "tests"
+      "workflow",
+      "persistence",
+      "recovery",
+      "client",
+      "tests"
   ],
   "recoveryStrategies": {
     "physical-replay": "accepted work may require idempotent physical replay after commit/crash",
     "transaction-complete": "the mutation is completed inside its acceptance transaction; no physical recovery handler is expected"
   },
   "fanoutStages": [
-    "wire",
-    "validation",
-    "method",
-    "durableContract",
-    "durable",
-    "codec",
-    "dispatch",
-    "tests"
+      "wire",
+      "validation",
+      "method",
+      "durableContract",
+      "durable",
+      "codec",
+      "dispatch",
+      "tests"
   ],
   "mutations": {
     "society.set": {

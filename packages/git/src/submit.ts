@@ -30,6 +30,8 @@ export interface SubmitEffects {
   verifyObjectFormat(oids: readonly string[]): void;
   canonicalHas(candidate: Oid): boolean;
   quarantineImport(fd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[], authorize: () => void): void | Promise<void>;
+  quarantineVerify?(fd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[], authorize: () => void): void | Promise<void>;
+  assertOwner?(): undefined;
   publishRef(ref: string, candidate: Oid): void;
   observeRef(ref: string): GitObservation<string>;
 }

@@ -28,7 +28,7 @@ const productHosts = [
  * one rule may legitimately lack what another rule requires of the real tree. */
 const clean = (findings, ...under) => assert.deepEqual(findings.filter(value => under.includes(value.rule)), []);
 
-test("extension-closure: the extension imports only built-ins, the engine API, typebox and itself", () => {
+test("001. Extension-closure: the extension imports only built-ins, the engine API, typebox and itself", () => {
   withTree({
     "packages/extension/src/index.ts": 'import { readFileSync } from "node:fs"; import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"; import { a } from "./a.js";',
     "packages/extension/src/a.ts": 'import { Type } from "typebox"; export const a = Type;',
@@ -47,7 +47,7 @@ test("extension-closure: the extension imports only built-ins, the engine API, t
   }, findings => assert.ok(has(findings, "extension-closure")));
 });
 
-test("NATIVE-025: the descriptor leaf closure is traversed, not exempted by its public import", () => {
+test("002. The descriptor leaf closure is traversed, not exempted by its public import", () => {
   const adapter = { "packages/tool-files/src/descriptor-files.ts": 'export { openAt } from "@oma/file-descriptors";' };
   const leaf = "packages/file-descriptors/src/index.ts", helper = "packages/file-descriptors/src/helper.ts";
   withTree({ ...adapter, [leaf]: 'export { openAt } from "./helper.js";',
@@ -62,7 +62,7 @@ test("NATIVE-025: the descriptor leaf closure is traversed, not exempted by its 
     findings => assert.ok(has(findings, "extension-closure")));
 });
 
-test("the standalone directory-name decoder retains the shared strict/BOM contract", () => {
+test("003. The standalone directory-name decoder retains the shared strict/BOM contract", () => {
   const leaf = "packages/file-descriptors/src/index.ts";
   withTree({ [leaf]: 'const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });' },
     findings => clean(findings, "utf8-decoder-owner"));
@@ -71,7 +71,7 @@ test("the standalone directory-name decoder retains the shared strict/BOM contra
       findings => assert.ok(has(findings, "utf8-decoder-owner")));
 });
 
-test("extension-dynamic-load and extension-execute: no run-time loading, no invoking a tool handler", () => {
+test("004. Extension-dynamic-load and extension-execute: no run-time loading, no invoking a tool handler", () => {
   // Near miss: defining an execute handler is not invoking one.
   withTree({
     "packages/extension/src/tools.ts": "export const tool = { async execute() { return 1; } };",
@@ -116,7 +116,7 @@ test("extension-dynamic-load and extension-execute: no run-time loading, no invo
   }, findings => assert.ok(has(findings, "extension-execute")));
 });
 
-test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed layout", () => {
+test("005. Engine-primitive-owner: one owner per borrowed primitive, and no borrowed layout", () => {
   withTree({
     "packages/tui/src/cells.ts": 'import { visibleWidth } from "@earendil-works/pi-tui"; export const w = visibleWidth;',
     "packages/tui/src/keys.ts": 'import { parseKey } from "@earendil-works/pi-tui"; export const k = parseKey;',
@@ -129,7 +129,7 @@ test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed 
     findings => assert.ok(has(findings, "engine-primitive-owner")));
 });
 
-test("tui-view-boundary: the view sees only data, and only terminal owners draw through the seam", () => {
+test("006. Tui-view-boundary: the view sees only data, and only terminal owners draw through the seam", () => {
   withTree({
     "packages/tui/src/view/index.ts": 'export { render } from "./screens.js";',
     "packages/tui/src/view/screens.ts": 'import type { State } from "../model.js"; export const render = (s: State) => s;',
@@ -151,7 +151,7 @@ test("tui-view-boundary: the view sees only data, and only terminal owners draw 
     findings => assert.ok(has(findings, "tui-view-boundary")));
 });
 
-test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", () => {
+test("007. Tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", () => {
   withTree({
     "apps/oma/src/application/settings.ts": "import { replaceDerivedFile } from \"../../../../storage/durable-fs.js\"; replaceDerivedFile(\"a\", \"b\");",
     "apps/oma/src/application/status-observation.ts": "import type { ChannelLimits } from \"../../../../packages/client/src/channel.js\";",
@@ -176,7 +176,7 @@ test("tui-write-owner, tui-ledger, tui-transport-owner, tui-internal-method", ()
   }, findings => clean(findings, "tui-write-owner", "tui-ledger", "tui-transport-owner", "tui-internal-method"));
 });
 
-test("product-tool-separation and resident-product-surface: closures do not cross", () => {
+test("008. Product-tool-separation and resident-product-surface: closures do not cross", () => {
   withTree({
     "apps/oma/src/entry/oma.ts": "import { a } from \"../../../../packages/tui/src/app.js\";", "packages/tui/src/app.ts": "export const a = 1;",
     "packages/client/src/index.ts": 'import { b } from "./runtime.js";', "packages/client/src/runtime.ts": "export const b = 1;",
@@ -196,7 +196,7 @@ test("product-tool-separation and resident-product-surface: closures do not cros
     findings => clean(findings, "product-tool-separation", "resident-product-surface"));
 });
 
-test("product closures: dynamic import, require and re-export carry the same runtime boundaries", () => {
+test("009. Product closures: dynamic import, require and re-export carry the same runtime boundaries", () => {
   for (const load of ['() => import("./oma-society.js")', '() => require("./oma-society.js")']) {
     withTree({
       "apps/oma/src/entry/oma.ts": `export const start = ${load};`,
@@ -214,7 +214,7 @@ test("product closures: dynamic import, require and re-export carry the same run
     "packages/client/src/index.ts": "export interface State {}" }, findings => clean(findings, "product-tool-separation"));
 });
 
-test("product entries: every independently launched host entry is covered and hidden from Residents", () => {
+test("010. Product entries: every independently launched host entry is covered and hidden from Residents", () => {
   for (const { file, compiled } of productHosts) {
     const client = relative(dirname(file), "packages/client/src/index.js");
     withTree({ [file]: `import { Client } from "${client}";`, "packages/client/src/index.ts": "export class Client {}" },
@@ -229,7 +229,7 @@ test("product entries: every independently launched host entry is covered and hi
   }
 });
 
-test("product-pi-command and model-surface-product-words", () => {
+test("011. Product-pi-command and model-surface-product-words", () => {
   withTree({ "packages/tui/src/app.ts": 'export const hint = "run pi install";' },
     findings => assert.ok(has(findings, "product-pi-command")));
   // DR25: oma's own command is not the engine's.
@@ -247,7 +247,7 @@ test("product-pi-command and model-surface-product-words", () => {
     findings => assert.deepEqual(findings, []));
 });
 
-test("product-bare-error and product-undeclared-bound", () => {
+test("012. Product-bare-error and product-undeclared-bound", () => {
   withTree({ "packages/tui/src/app.ts": 'throw new Error("x");' }, findings => assert.ok(has(findings, "product-bare-error")));
   withTree({ "packages/tui/src/app.ts": "export const width = 80;" }, findings => assert.ok(has(findings, "product-undeclared-bound")));
   // Code inside a template expression is still code.
@@ -261,7 +261,7 @@ test("product-bare-error and product-undeclared-bound", () => {
   }, findings => clean(findings, "product-bare-error", "product-undeclared-bound"));
 });
 
-test("user-pi-state: the user's home and Pi state are never named", () => {
+test("013. User-pi-state: the user's home and Pi state are never named", () => {
   withTree({ "packages/engine/src/pi-runtime.ts": 'import { homedir } from "node:os"; export const h = homedir();' },
     findings => assert.ok(has(findings, "user-pi-state")));
   withTree({ "apps/oma/src/entry/oma.ts": 'export const dir = "/home/u/.pi/agent";' },
@@ -271,7 +271,7 @@ test("user-pi-state: the user's home and Pi state are never named", () => {
     findings => assert.deepEqual(findings, []));
 });
 
-test("settings-placement-owner, closed-switch and module-port-import", () => {
+test("014. Settings-placement-owner, closed-switch and module-port-import", () => {
   withTree({
     "packages/domain/src/settings-policy.ts": "const PLACEMENT = {}; export function f(field: string) { switch (field) { default: return PLACEMENT; } }",
     "packages/tui/src/app.ts": "import { assertNever } from \"../../domain/src/exhaustive.js\"; export function run(effect: { kind: \"a\" }) { switch (effect.kind) { case \"a\": return; default: return assertNever(effect); } }",
@@ -290,7 +290,7 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
       findings => assert.ok(has(findings, "module-port-import"), file));
 });
 
-test("principal-turn-owner: the host never asks the engine to fold a prompt into a run already going", () => {
+test("015. Principal-turn-owner: the host never asks the engine to fold a prompt into a run already going", () => {
   // Accept: a prompt written with nothing else in the message.
   withTree({
     "packages/engine/src/principal-session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text });',
@@ -314,7 +314,7 @@ test("principal-turn-owner: the host never asks the engine to fold a prompt into
   }, findings => assert.ok(has(findings, "principal-turn-owner")));
 });
 
-test("principal-session-env and principal-secret-env: the environment survives every hop, and the secret has none", () => {
+test("016. Principal-session-env and principal-secret-env: the environment survives every hop, and the secret has none", () => {
   const producer = (extra = "") => `
 export function principalEnvironment(paths, profile, limits) {
   return {
@@ -355,6 +355,17 @@ export function clientEnvironment(home, socket) {
   // forwarder, and everything copied from the engine is set by the host.
   withTree(tree(), findings => clean(findings, "principal-session-env", "principal-secret-env"));
 
+  // The selected surface root is supplied by the actual final session hop,
+  // not by widening every legacy Principal environment.
+  const selected = { ...tree({ copied: 'FRAME_BYTES, "OMA_RECORD_ROOT"' }) };
+  selected["packages/engine/src/principal-launch.ts"] += '\nexport function sessionEnv(base, profile, paths) { return { ...base, ...(paths.selected ? { OMA_RECORD_ROOT: paths.recordRoot } : {}) }; }';
+  withTree(selected, findings => clean(findings, "principal-session-env", "principal-secret-env"));
+  withTree({ ...selected, "packages/engine/src/principal-launch.ts": producer() }, findings =>
+    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_RECORD_ROOT"))));
+  const workerOnly = tree({ copied: 'FRAME_BYTES, "OMA_WORLD_ROOT", "OMA_WORKER_ARCHIVE"' });
+  withTree(workerOnly, findings => clean(findings, "principal-session-env", "principal-secret-env"));
+  for (const name of ["OMA_WORLD_ROOT", "OMA_WORKER_ARCHIVE"]) withTree(tree({ producerExtra: `${name}: "/worker",` }), findings =>
+    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes(name) && value.reason.includes("only to a Worker"))));
   // Reject: the tools stop copying the frame bound the Client reads.
   withTree(tree({ copied: "" }), findings => {
     assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_FRAME_BYTES")));
@@ -388,7 +399,7 @@ export function clientEnvironment(home, socket) {
     findings => clean(findings, "principal-session-env", "principal-secret-env"));
 });
 
-test("host-loss-signals (AV31, P0V-81): a process with a drain takes it on every termination signal, from the one list", () => {
+test("017. Host-loss-signals (AV31, P0V-81): a process with a drain takes it on every termination signal, from the one list", () => {
   const owner = list => ({ "packages/domain/src/host-signals.ts": `export const HOST_LOSS_SIGNALS = Object.freeze([${list}] as const);
 export function stopOnHostLoss(stop, target = process) { for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop); }` });
   const full = '"SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"';
@@ -427,7 +438,7 @@ export function stopOnHostLoss(stop, target = process) { for (const signal of HO
     findings => clean(findings, "host-loss-signals"));
 });
 
-test("utf8-decoder-owner (P0V-86): UTF-8 is read through one owner, which keeps a U+FEFF and refuses malformed bytes", () => {
+test("018. (P0V-86): UTF-8 is read through one owner, which keeps a U+FEFF and refuses malformed bytes", () => {
   const owner = options => ({ "packages/domain/src/utf8.ts": `export function utf8Decoder() { return new TextDecoder("utf-8", ${options}); }` });
   withTree({ ...owner("{ fatal: true, ignoreBOM: true }"), "packages/extension/src/not-the-owner.ts": 'import { decodeUtf8 } from "@oma/domain/utf8";' },
     findings => clean(findings, "utf8-decoder-owner"));
@@ -445,7 +456,7 @@ test("utf8-decoder-owner (P0V-86): UTF-8 is read through one owner, which keeps 
     findings => clean(findings, "utf8-decoder-owner"));
 });
 
-test("error-words-owner (DR18, D-1): an error's words on the product surface come from one reading", () => {
+test("019. Error-words-owner (DR18, D-1): an error's words on the product surface come from one reading", () => {
   const words = { "packages/domain/src/errors.ts": "export function exceptionText(error) { return error instanceof Error ? error.message : String(error); }" };
   withTree({ ...words, "apps/oma/src/entry/oma.ts": "try { f(); } catch (error) { fail(exceptionText(error)); }",
     "packages/engine/src/principal-session.ts": "const message = event.message;" }, findings => clean(findings, "error-words-owner"));
@@ -466,7 +477,7 @@ test("error-words-owner (DR18, D-1): an error's words on the product surface com
     findings => clean(findings, "error-words-owner"));
 });
 
-test("no-open-spike (DR18): nothing in v1 throws SPIKE_UNRESOLVED; a known unsupported setting is UNSUPPORTED_PROFILE", () => {
+test("020. No-open-spike (DR18): nothing in v1 throws SPIKE_UNRESOLVED; a known unsupported setting is UNSUPPORTED_PROFILE", () => {
   withTree({ "apps/oma/src/git/a.ts": 'throw new StoreError("UNSUPPORTED_PROFILE", "x"); const gated = reason === "SPIKE_UNRESOLVED"; // OMA_ERROR=SPIKE_UNRESOLVED' },
     findings => clean(findings, "no-open-spike"));
   for (const text of ['throw new StoreError("SPIKE_UNRESOLVED", "x");', 'const s = "fail() { echo OMA_ERROR=SPIKE_UNRESOLVED >&2; }";'])
@@ -475,7 +486,7 @@ test("no-open-spike (DR18): nothing in v1 throws SPIKE_UNRESOLVED; a known unsup
     });
 });
 
-test("socket-callback-effects (P0V-104): a data callback makes no synchronous file effect outside a try", () => {
+test("021. Socket-callback-effects: a data callback makes no synchronous file effect outside a try", () => {
   withTree({ "apps/oma/src/platform/receive.ts": `const take = chunk => { try { writeSync(fd, chunk); } catch (error) { fail(error); } };
 socket.on("data", take);
 socket.on("data", chunk => { try { fsyncSync(fd); } catch (e) { reject(e); } });
@@ -495,7 +506,7 @@ socket.on("data", chunk => reader.push(chunk));` }, findings => clean(findings, 
     findings => clean(findings, "socket-callback-effects"));
 });
 
-test("DR46: moved LSP sources keep the verified deferred-load and extension closure rules", () => {
+test("022. Moved LSP sources keep the verified deferred-load and extension closure rules", () => {
   const file = "packages/tool-lsp/src/index.ts";
   for (const text of [
     'import { LspClient } from "./vendor/pi-lsp/runtime/lsp-client.js";',

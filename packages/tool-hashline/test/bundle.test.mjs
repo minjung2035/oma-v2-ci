@@ -16,7 +16,7 @@ import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, writeWithinUnchanged } from "@o
 import { registerHashlineTools, HASHLINE_EDIT_TOOL_NAMES, HASHLINE_READ_TOOL_NAME } from "@oma/tool-hashline";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "@oma/tool-runtime/vendor-bundle";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
-import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 function tmp(t, prefix = "oma-hashline-") {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -78,7 +78,26 @@ async function serveAnchors(world, path) {
     const read = await world.run(HASHLINE_READ_TOOL_NAME, { path });
     return anchorsOf(textOf(read));
 }
-test("native logical inbox uses the existing anchored read and preserves offset/limit without a root mount", async t => {
+
+for (const spelling of ["alias", "absolute"]) test(`image reads retain admitted bytes for @ path spelling: ${spelling}`, async t => {
+    const outside = join(tmp(t, "oma-hashline-outside-"), "secret.txt");
+    const marker = "outside-image-read-must-never-return-this-text";
+    writeFileSync(outside, marker);
+    const world = await hashlineWorld(t);
+    const path = spelling === "alias" ? "@pic.png" : `@${outside}`;
+    if (spelling === "alias") symlinkSync(outside, join(world.workspace, "pic.png"));
+    const target = join(world.workspace, path);
+    mkdirSync(target.slice(0, target.lastIndexOf("/")), { recursive: true });
+    const image = Buffer.alloc(58);
+    image.write("BM"); image.writeUInt32LE(58, 2); image.writeUInt32LE(54, 10); image.writeUInt32LE(40, 14);
+    image.writeInt32LE(1, 18); image.writeInt32LE(1, 22); image.writeUInt16LE(1, 26); image.writeUInt16LE(24, 28);
+    writeFileSync(target, image);
+    const result = await world.run(HASHLINE_READ_TOOL_NAME, { path });
+    assert.ok(!textOf(result).includes(marker), "SDK path reinterpretation read an unadmitted host file");
+    assert.match(textOf(result), /image/i);
+    if (spelling === "alias") await assert.rejects(world.run(HASHLINE_READ_TOOL_NAME, { path: "pic.png" }), /link|outside|refus/i);
+});
+test("001. Native logical inbox uses the existing anchored read and preserves offset/limit without a root mount", async t => {
     const view = tmp(t, "oma-inbox-view-한글-");
     writeFileSync(join(view, "inbox.md"), "first delivery\nsecond delivery\nthird delivery\n");
     const w = await hashlineWorld(t, { sandboxed: true, readPath: logicalReadPathView(true, view) });
@@ -98,7 +117,7 @@ test("native logical inbox uses the existing anchored read and preserves offset/
 });
 // ---------------------------------------------------------------------------
 // Bundle integrity
-test("BL3: the vendored pi-hashline-edit-pro bundle verifies: source tree and the dist copy the adapter loads", () => {
+test("002. The vendored pi-hashline-edit-pro bundle verifies: source tree and the dist copy the adapter loads", () => {
     const source = verifyVendorBundle(BUNDLE_SOURCE);
     assert.equal(source.package, "pi-hashline-edit-pro");
     assert.equal(source.version, "5.1.0");
@@ -107,7 +126,7 @@ test("BL3: the vendored pi-hashline-edit-pro bundle verifies: source tree and th
     const deployed = verifyVendorBundle(vendoredBundleDir("pi-hashline-edit-pro", new URL("../dist/", import.meta.url)));
     assert.deepEqual(deployed, source, "the dist copy is the same bundle");
 });
-test("BL3: bundle verification fails closed on a changed, missing, extra, malformed or linked member", t => {
+test("003. Bundle verification fails closed on a changed, missing, extra, malformed or linked member", t => {
     const copy = (label) => {
         const dir = join(tmp(t), label);
         cpSync(BUNDLE_SOURCE, dir, { recursive: true });
@@ -145,7 +164,7 @@ test("BL3: bundle verification fails closed on a changed, missing, extra, malfor
     writeFileSync(join(rekindled, "manifest.json"), JSON.stringify(manifest));
     fails(rekindled, /kind/);
 });
-test("BL3: the vendored dependency closure and upstream test tree are inside the bundle", () => {
+test("004. The vendored dependency closure and upstream test tree are inside the bundle", () => {
     const manifest = JSON.parse(readFileSync(join(BUNDLE_SOURCE, "manifest.json"), "utf8"));
     const paths = new Set(manifest.files.map(entry => entry.path));
     // The pinned runtime dependency closure — every package's manifest is a
@@ -161,7 +180,7 @@ test("BL3: the vendored dependency closure and upstream test tree are inside the
 });
 // ---------------------------------------------------------------------------
 // Registration, surface and role boundaries
-test("BL3: a read-only role cannot reach anchored mutations", async (t) => {
+test("005. A read-only role cannot reach anchored mutations", async (t) => {
     const { pi } = await hashlineWorld(t, { readOnly: true });
     assert.deepEqual([...pi.tools.keys()], [HASHLINE_READ_TOOL_NAME]);
     for (const name of HASHLINE_EDIT_TOOL_NAMES)
@@ -169,26 +188,24 @@ test("BL3: a read-only role cannot reach anchored mutations", async (t) => {
 });
 // Integrity refusal runs against an actual copied owner in test/vendor-owner-binding.test.mjs.
 
-test("BL3: a surface plan naming an optional editor the registry lacks refuses startup", () => {
-    const plan = planToolSurface({
-        defaultMode: "DISABLED", direct: [], disabled: [],
-        optional: ["replace", "hashline_missing"],
-    });
+test("006. A complete current plan refuses startup if a required anchored editor is missing", () => {
+    const plan = collaborationSurface("resident");
+    const names = [...plan.direct, ...Object.values(plan.groups).flat()].filter(name => name !== "replace");
     const handlers = new Map();
     const pi = {
         on(event, handler) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
         registerTool() { },
-        getAllTools() { return [{ name: "replace", sourceInfo: { source: "extension", path: "/x" } }]; },
+        getAllTools() { return names.map(name => ({ name, parameters: {}, sourceInfo: { source: "extension", path: "/x" } })); },
         getActiveTools() { return []; },
         setActiveTools() { },
     };
     let fatal = null;
     const saved = process.env.OMA_TOOL_SURFACE;
-    process.env.OMA_TOOL_SURFACE = encodeToolSurfacePlan(plan);
+    process.env.OMA_TOOL_SURFACE = JSON.stringify(plan);
     try {
-        registerToolSurface(pi, [], { fatal: message => { fatal = message; throw new Error(message); } });
-        assert.throws(() => handlers.get("session_start")?.[0]?.({}, { sessionManager: { getBranch: () => [] } }), /hashline_missing/);
-        assert.match(fatal ?? "", /cannot admit hashline_missing/);
+        registerToolSurface(pi, [], { role: "resident", own: () => true, fatal: message => { fatal = message; throw new Error(message); } });
+        assert.throws(() => handlers.get("session_start")?.[0]?.({}, { sessionManager: { getBranch: () => [] } }), /replace/);
+        assert.match(fatal ?? "", /cannot admit replace/);
     }
     finally {
         if (saved === undefined)
@@ -199,7 +216,7 @@ test("BL3: a surface plan naming an optional editor the registry lacks refuses s
 });
 // ---------------------------------------------------------------------------
 // Live behavior: anchored read, contained commits, refusals
-test("BL3: read serves hashline anchors and replace commits through the contained writer", async (t) => {
+test("007. Read serves hashline anchors and replace commits through the contained writer", async (t) => {
     const world = await hashlineWorld(t);
     writeFileSync(join(world.workspace, "a.ts"), "const one = 1;\nconst two = 2;\nconst three = 3;\n");
     const anchors = await serveAnchors(world, "a.ts");
@@ -208,7 +225,7 @@ test("BL3: read serves hashline anchors and replace commits through the containe
     assert.match(textOf(result), /replaced/i);
     assert.equal(readFileSync(join(world.workspace, "a.ts"), "utf8"), "const one = 10;\nconst two = 2;\nconst three = 3;\n");
 });
-test("BL3: a stale anchor refuses before a byte is written", async (t) => {
+test("008. A stale anchor refuses before a byte is written", async (t) => {
     const world = await hashlineWorld(t);
     const file = join(world.workspace, "a.ts");
     writeFileSync(file, "one\ntwo\nthree\n");
@@ -219,7 +236,7 @@ test("BL3: a stale anchor refuses before a byte is written", async (t) => {
     await assert.rejects(world.run("replace", { remove_from: anchors[0], remove_to: anchors[0], replacement_lines: "hacked" }), /E_STALE_ANCHOR|not owned|stale/i);
     assert.equal(readFileSync(file, "utf8"), "uno\ntwo\nthree\n", "the refused edit wrote nothing");
 });
-test("BL3: the commit channel's identity refusal surfaces as upstream's [E_PATH_CHANGED]", async (t) => {
+test("009. The commit channel's identity refusal surfaces as upstream's [E_PATH_CHANGED]", async (t) => {
     // The contained writer refusing on inode identity (the file was swapped
     // between the pipeline's read and its commit) must reach the vendored
     // machinery with upstream's own wording, not as a generic failure.
@@ -245,7 +262,7 @@ test("BL3: the commit channel's identity refusal surfaces as upstream's [E_PATH_
     });
     assert.equal(readFileSync(file, "utf8"), "one\ntwo\nthree\n", "the refused commit wrote nothing");
 });
-test("BL3: the commit seam is fail-closed — no silent fallback, and writeAtomic serves only the state dir", async (t) => {
+test("010. The commit seam is fail-closed — no silent fallback, and writeAtomic serves only the state dir", async (t) => {
     // The seam is module state the adapter shares; uninstalling exercises
     // the same code path a missing install would hit, and the state-dir
     // confinement is what a never-installed channel leaves for direct
@@ -289,7 +306,7 @@ test("BL3: the commit seam is fail-closed — no silent fallback, and writeAtomi
             process.env.PI_HASHLINE_DIR = savedEnv;
     }
 });
-test("BL3: writeWithinUnchanged opens without O_CREAT and refuses a different inode", async (t) => {
+test("011. WriteWithinUnchanged opens without O_CREAT and refuses a different inode", async (t) => {
     const workspace = tmp(t, "oma-hashline-ws-");
     const file = join(workspace, "a.ts");
     writeFileSync(file, "original\n");
@@ -309,7 +326,7 @@ test("BL3: writeWithinUnchanged opens without O_CREAT and refuses a different in
     assert.throws(() => writeWithinUnchanged(workspace, "a.ts", "x\n", { dev: stat.dev, ino: stat.ino }), /ENOENT|no such file/i);
     assert.ok(!existsSync(file), "the write did not recreate the file");
 });
-test("BL3: insert and replace_within commit through the same contained writer", async (t) => {
+test("012. Insert and replace_within commit through the same contained writer", async (t) => {
     const world = await hashlineWorld(t);
     const file = join(world.workspace, "a.ts");
     writeFileSync(file, "alpha\nbeta\nomega\n");
@@ -325,7 +342,7 @@ test("BL3: insert and replace_within commit through the same contained writer", 
     });
     assert.equal(readFileSync(file, "utf8"), "alpha\nbeta\nG\nomega\n");
 });
-test("BL3: hashline commits grow beyond a legacy workspace quota", async (t) => {
+test("013. Hashline commits grow beyond a legacy workspace quota", async (t) => {
     const world = await hashlineWorld(t, {});
     const file = join(world.workspace, "a.ts");
     writeFileSync(file, "one\ntwo\nthree\n");
@@ -333,7 +350,7 @@ test("BL3: hashline commits grow beyond a legacy workspace quota", async (t) => 
     await world.run("replace", { remove_from: anchors[2], remove_to: anchors[2], replacement_lines: "a much longer line that exceeds the old quota" });
     assert.match(readFileSync(file, "utf8"), /a much longer line/);
 });
-test("BL3: a symlink is never followed — read and edit refuse through the contained opener", async (t) => {
+test("014. A symlink is never followed — read and edit refuse through the contained opener", async (t) => {
     const world = await hashlineWorld(t);
     const outside = join(tmp(t), "outside.ts");
     writeFileSync(outside, "secret\n");
@@ -344,14 +361,14 @@ test("BL3: a symlink is never followed — read and edit refuse through the cont
     await assert.rejects(world.run(HASHLINE_READ_TOOL_NAME, { path: "inner.ts" }), /link|outside|refus/i, "even an in-workspace link is not followed");
     assert.equal(readFileSync(outside, "utf8"), "secret\n", "nothing outside was touched");
 });
-test("BL3: a path outside the workspace and readable roots is refused", async (t) => {
+test("015. A path outside the workspace and readable roots is refused", async (t) => {
     const world = await hashlineWorld(t);
     const outside = join(tmp(t), "outside.ts");
     writeFileSync(outside, "secret\n");
     await assert.rejects(world.run(HASHLINE_READ_TOOL_NAME, { path: outside }), /outside the agent workspace/);
     await assert.rejects(world.run(HASHLINE_READ_TOOL_NAME, { path: "../escape" }), /outside|E_NOT_FOUND|link/i);
 });
-test("BL3: a readable root admits reads but writes stay rooted at the workspace", async (t) => {
+test("016. A readable root admits reads but writes stay rooted at the workspace", async (t) => {
     const store = tmp(t, "oma-hashline-store-");
     writeFileSync(join(store, "pkg.txt"), "package bytes\n");
     const world = await hashlineWorld(t, { readableRoots: [store] });
@@ -363,7 +380,7 @@ test("BL3: a readable root admits reads but writes stay rooted at the workspace"
     await assert.rejects(world.run("replace", { remove_from: anchors[0], remove_to: anchors[0], replacement_lines: "hacked" }), /outside the agent workspace|quota|refus/i);
     assert.equal(readFileSync(join(store, "pkg.txt"), "utf8"), "package bytes\n");
 });
-test("BL3: a hard link is never touched — a second name would carry any effect elsewhere", async (t) => {
+test("017. A hard link is never touched — a second name would carry any effect elsewhere", async (t) => {
     const world = await hashlineWorld(t);
     const file = join(world.workspace, "a.ts");
     writeFileSync(file, "one\ntwo\n");
@@ -373,7 +390,7 @@ test("BL3: a hard link is never touched — a second name would carry any effect
     await assert.rejects(world.run(HASHLINE_READ_TOOL_NAME, { path: "a.ts" }), /other names|link|refus/i);
     assert.equal(readFileSync(file, "utf8"), "one\ntwo\n");
 });
-test("BL3: BOM and CRLF survive an anchored edit", async (t) => {
+test("018. BOM and CRLF survive an anchored edit", async (t) => {
     const world = await hashlineWorld(t);
     const file = join(world.workspace, "bom.ts");
     writeFileSync(file, "\uFEFFone\r\ntwo\r\nthree\r\n");
@@ -384,7 +401,7 @@ test("BL3: BOM and CRLF survive an anchored edit", async (t) => {
     assert.ok(after.startsWith("\uFEFF"), "the BOM is preserved");
     assert.equal(after, "\uFEFFone\r\nTWO\r\nthree\r\n", "CRLF endings are preserved");
 });
-test("BL3: a write whose content echoes a served anchor is blocked by the write hook", async (t) => {
+test("019. A write whose content echoes a served anchor is blocked by the write hook", async (t) => {
     const world = await hashlineWorld(t);
     writeFileSync(join(world.workspace, "a.ts"), "one\ntwo\n");
     const anchors = await serveAnchors(world, "a.ts");
@@ -404,7 +421,7 @@ test("BL3: a write whose content echoes a served anchor is blocked by the write 
         clean.push(await handler({ toolName: "write", input: { path: "a.ts", content: "plain\n" } }, world.ctx));
     assert.ok(!clean.some(result => result?.block === true));
 });
-test("BL3: a successful write tool_result frees old anchors and re-serves the file", async (t) => {
+test("020. A successful write tool_result frees old anchors and re-serves the file", async (t) => {
     const world = await hashlineWorld(t);
     const file = join(world.workspace, "a.ts");
     writeFileSync(file, "one\ntwo\nthree\n");
@@ -422,7 +439,7 @@ test("BL3: a successful write tool_result frees old anchors and re-serves the fi
 });
 // ---------------------------------------------------------------------------
 // Session state: OMA-owned, restart-shaped, corruption-tolerant
-test("BL3: upstream state lands under the adapter's OMA-owned directory, never $HOME", async (t) => {
+test("021. Upstream state lands under the adapter's OMA-owned directory, never $HOME", async (t) => {
     const stateRoot = tmp(t, "oma-hashline-state-");
     const sessionDir = join(stateRoot, "session");
     mkdirSync(sessionDir, { recursive: true });
@@ -442,7 +459,7 @@ test("BL3: upstream state lands under the adapter's OMA-owned directory, never $
             process.env.PI_HASHLINE_DIR = saved;
     }
 });
-test("BL3: served anchors persist through the session sidecar — a restarted session still owns them", async (t) => {
+test("022. Served anchors persist through the session sidecar — a restarted session still owns them", async (t) => {
     const stateDir = join(tmp(t, "oma-hashline-state-"), "state");
     const sessionFile = join(stateDir, "session.jsonl");
     const world = await hashlineWorld(t, { session: { dir: stateDir, file: sessionFile } });
@@ -481,7 +498,7 @@ test("BL3: served anchors persist through the session sidecar — a restarted se
             process.env.PI_HASHLINE_DIR = saved;
     }
 });
-test("BL3: a corrupt owned-state file degrades to a logged failure, not a crash — tools still work", async (t) => {
+test("023. A corrupt owned-state file degrades to a logged failure, not a crash — tools still work", async (t) => {
     const stateDir = join(tmp(t, "oma-hashline-state-"), "state");
     mkdirSync(join(stateDir, "sessions"), { recursive: true });
     writeFileSync(join(stateDir, "hash-store.sqlite"), "not a sqlite database");
@@ -502,9 +519,25 @@ test("BL3: a corrupt owned-state file degrades to a logged failure, not a crash 
 });
 // ---------------------------------------------------------------------------
 // F3/F5: evaluation order and manifest self-description
-test("BL3/F3: the compiled adapter holds no static vendored import — every vendored load sits behind verification", () => {
+test("024. The compiled adapter holds no static vendored import — every vendored load sits behind verification", () => {
     const adapter = readFileSync(fileURLToPath(new URL("../dist/index.js", import.meta.url)), "utf8");
     assert.doesNotMatch(adapter, /^import\s[^;]*["'][^"']*vendor\//m, "a static vendored import would evaluate before verification");
     assert.doesNotMatch(adapter, /^export\s[^;]*from\s*["'][^"']*vendor\//m, "a vendored re-export would evaluate before verification");
     assert.match(adapter, /import\(["'][^"']*vendor\/pi-hashline-edit-pro\/runtime\//, "the dynamic imports are still present — the runtime loads, just late");
+});
+
+test("026. Reload cleanup releases the acquired anchor session without accessing a revoked SDK context", async t => {
+    const state = tmp(t, "oma-hashline-release-");
+    const world = await hashlineWorld(t, { session: { dir: state, file: join(state, "session.jsonl") } });
+    writeFileSync(join(world.workspace, "note.txt"), "one\ntwo\n");
+    await world.fire("session_start");
+    await serveAnchors(world, "note.txt");
+    const original = console.error, errors = [];
+    console.error = (...args) => errors.push(args);
+    try {
+        const stale = { get sessionManager() { throw new Error("SDK context revoked during reload"); } };
+        for (const close of world.pi.handlers.get("session_shutdown") ?? []) await close({}, stale);
+        for (const close of world.pi.handlers.get("session_shutdown") ?? []) await close({}, stale);
+        assert.deepEqual(errors, []);
+    } finally { console.error = original; }
 });

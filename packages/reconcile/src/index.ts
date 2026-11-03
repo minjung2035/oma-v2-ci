@@ -89,8 +89,12 @@ export class ReconcileModule {
     this.closed = true;
     // Physical owners receive cancellation through the broker lifetime before
     // this drain. A cancellation request is never treated as death proof.
-    await Promise.all([this.inFlight, this.reviewLane.close(), ...[...this.unitLanes.values()].map(lane => lane.close())]);
-    await this.quiesceResidents();
+    const joined = await Promise.allSettled([this.inFlight, this.reviewLane.close(), ...[...this.unitLanes.values()].map(lane => lane.close())]);
+    const failures: unknown[] = [];
+    for (const outcome of joined) if (outcome.status === "rejected") failures.push(outcome.reason);
+    try { await this.quiesceResidents(); } catch (error) { failures.push(error); }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, "recovery shutdown failed");
   }
   /** Fast triggers reach each resource owner even while recovery is blocked. */
   pulse(): void {

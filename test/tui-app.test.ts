@@ -96,7 +96,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   };
 }
 
-test("Ctrl-L repaints the whole screen and changes nothing else", () => {
+test("001. Ctrl-L repaints the whole screen and changes nothing else", () => {
   const h = harness();
   h.app.feed(Buffer.from("draft"));
   const before = h.last();
@@ -108,7 +108,7 @@ test("Ctrl-L repaints the whole screen and changes nothing else", () => {
   assert.deepEqual(h.prompts, []);
 });
 
-test("TUI-007: confirming a choice writes through the port and reports when it applies", () => {
+test("002. Confirming a choice writes through the port and reports when it applies", () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
   assert.deepEqual(h.writes, [{ field: "worker-model", value: "cheap" }]);
@@ -117,7 +117,7 @@ test("TUI-007: confirming a choice writes through the port and reports when it a
   assert.match(frame, /Next worker activation/);
 });
 
-test("TUI-007: a rejected write says nothing was saved and keeps the previous value visible", () => {
+test("003. A rejected write says nothing was saved and keeps the previous value visible", () => {
   const h = harness({
     setField: () => { throw new StoreError("UNSUPPORTED_PROFILE", "unknown model profile"); },
   });
@@ -127,7 +127,7 @@ test("TUI-007: a rejected write says nothing was saved and keeps the previous va
   assert.doesNotMatch(frame, /· Saved/);
 });
 
-test("DR13 / P0-5, CONFIG-CONTRACT: a committed edit whose flush failed says it was saved, not that nothing was saved", () => {
+test("004. CONFIG-CONTRACT: a committed edit whose flush failed says it was saved, not that nothing was saved", () => {
   const unconfirmed = () => { throw new StoreError("INTERNAL_ERROR", "configuration was published but its durability is unconfirmed", { details: { publication: "unconfirmed" } }); };
   const h = harness({ setField: unconfirmed });
   for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
@@ -138,7 +138,7 @@ test("DR13 / P0-5, CONFIG-CONTRACT: a committed edit whose flush failed says it 
   assert.match(toggled.last(), /Saved; durability/);
 });
 
-test("TUI-010: toggling an extension routes the role and the new state to the port, and the notice says when it applies", () => {
+test("005. Toggling an extension routes the role and the new state to the port, and the notice says when it applies", () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) h.app.feed(chunk);
   assert.deepEqual(h.toggles, [{ id: "extensions/review.js", role: "principal", enabled: true }]);
@@ -150,7 +150,7 @@ test("TUI-010: toggling an extension routes the role and the new state to the po
   assert.match(h.last(), /extensions\/review\.js · Workers enabled · Saved · Next worker activation/);
 });
 
-test("arch 23.3: a submitted prompt reaches the session once and is echoed in the transcript", () => {
+test("006. A submitted prompt reaches the session once and is echoed in the transcript", () => {
   const h = harness();
   h.app.feed(Buffer.from("안녕"));
   h.app.feed(ENTER);
@@ -160,7 +160,7 @@ test("arch 23.3: a submitted prompt reaches the session once and is echoed in th
   assert.deepEqual(h.prompts, ["안녕"], "an empty prompt must not be submitted");
 });
 
-test("arch 23.4: the Control Panel overlays the conversation and Ctrl+X returns to it", () => {
+test("007. The Control Panel overlays the conversation and Ctrl+X returns to it", () => {
   const h = harness();
   h.app.feed(Buffer.from("작업 중"));
   const conversation = h.last();
@@ -174,7 +174,7 @@ test("arch 23.4: the Control Panel overlays the conversation and Ctrl+X returns 
   assert.match(h.last(), /작업 중/);
 });
 
-test("TUI-011: the Mail detail shows the message body and Esc returns to the list", async () => {
+test("008. The Mail detail shows the message body and Esc returns to the list", async () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, RIGHT, ENTER]) h.app.feed(chunk);
   const detail = h.last();
@@ -185,7 +185,7 @@ test("TUI-011: the Mail detail shows the message body and Esc returns to the lis
   assert.match(h.last(), /API 선택 필요/);
 });
 
-test("TUI-012: the busy indicator reflects session state without inventing a result", () => {
+test("009. The busy indicator reflects session state without inventing a result", () => {
   const h = harness();
   h.app.setBusy(true);
   assert.match(h.last(), /Generating response/);
@@ -193,7 +193,7 @@ test("TUI-012: the busy indicator reflects session state without inventing a res
   assert.doesNotMatch(h.last(), /Generating response/);
 });
 
-test("the transcript is bounded so a long session cannot grow without limit", () => {
+test("010. The transcript is bounded so a long session cannot grow without limit", () => {
   const h = harness();
   for (let index = 0; index < 700; index += 1) h.app.line(`line ${index}`);
   const frame = h.last();
@@ -202,7 +202,7 @@ test("the transcript is bounded so a long session cannot grow without limit", ()
   assert.match(frame, /line 699/);
 });
 
-test("the declared transcript bound holds for the Human's own prompts too", () => {
+test("011. The declared transcript bound holds for the Human's own prompts too", () => {
   // The Human's prompt is echoed by a different code path from every other
   // line. A path that pushed its own line would be a second owner of how far
   // the transcript grows, and while a long run is going -- exactly when the
@@ -218,7 +218,7 @@ test("the declared transcript bound holds for the Human's own prompts too", () =
   assert.equal(h.app.lines.at(-1), `> p${keep + 199}`);
 });
 
-test("T120 / TUI-023: an oversized paste is rejected as a whole instead of submitting its prefix", () => {
+test("012. An oversized paste is rejected as a whole instead of submitting its prefix", () => {
   const h = harness();
   const cap = CONVERSATION_BOUNDS.promptBytes.value;
   const input = "가".repeat(Math.ceil(cap / 3) + 500);
@@ -239,7 +239,7 @@ test("T120 / TUI-023: an oversized paste is rejected as a whole instead of submi
   assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3) - 1)]);
 });
 
-test("T120 / TUI-023: JSON escaping overflow rejects the whole prompt", () => {
+test("013. JSON escaping overflow rejects the whole prompt", () => {
   const frameBytes = 96;
   const h = harness({}, frameBytes);
   h.app.feed(Buffer.from("\\".repeat(100)));
@@ -254,7 +254,7 @@ test("T120 / TUI-023: JSON escaping overflow rejects the whole prompt", () => {
   assert.deepEqual(h.prompts, []);
 });
 
-test("Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {
+test("014. Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {
   const h = harness();
   const CTRL_C = Buffer.from([0x03]);
   for (const chunk of [CTRL_X, RIGHT, ENTER]) h.app.feed(chunk);
@@ -268,7 +268,7 @@ test("Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {
   assert.deepEqual(h.quits, [1]);
 });
 
-test("TUI-002: UTF-8 and CSI tokens survive every terminal read boundary", () => {
+test("015. And CSI tokens survive every terminal read boundary", () => {
   const korean = Buffer.from("가");
   for (let split = 1; split < korean.length; split += 1) {
     const decoder = new KeyDecoder();
@@ -294,7 +294,7 @@ test("TUI-002: UTF-8 and CSI tokens survive every terminal read boundary", () =>
   assert.equal(h.app.snapshot.prompt.text, "", "the CSI final byte leaked into the prompt");
 });
 
-test("TUI-002: malformed and overlong terminal reports stay bounded and never become prompt text", () => {
+test("016. Malformed and overlong terminal reports stay bounded and never become prompt text", () => {
   const decoder = new KeyDecoder();
   const prefix = Buffer.from(`${ESC}[`);
   assert.deepEqual(decoder.push(prefix), []);
@@ -311,7 +311,7 @@ test("TUI-002: malformed and overlong terminal reports stay bounded and never be
   assert.deepEqual(unknown.push(Buffer.from("~x")), [{ kind: "char", value: "x" }]);
 });
 
-test("TUI-002/023: a pasted block is one prompt boundary, not one prompt per line", async () => {
+test("017. A pasted block is one prompt boundary, not one prompt per line", async () => {
   // The failure this holds down: a paste whose second line the Human has not
   // read yet is submitted because its first newline looked like Enter.
   const h = harness();
@@ -332,7 +332,7 @@ test("TUI-002/023: a pasted block is one prompt boundary, not one prompt per lin
     "the control did not reproduce the defect this test exists for");
 });
 
-test("TUI-002: a paste survives every terminal read boundary it can be split at", () => {
+test("018. A paste survives every terminal read boundary it can be split at", () => {
   const bytes = paste("한 줄\n두 번째 줄\tvalue");
   for (let split = 1; split < bytes.length; split += 1) {
     const decoder = new KeyDecoder();
@@ -342,7 +342,7 @@ test("TUI-002: a paste survives every terminal read boundary it can be split at"
   }
 });
 
-test("TUI-002: pasted text carries line breaks and tabs, and no terminal instructions", () => {
+test("019. Pasted text carries line breaks and tabs, and no terminal instructions", () => {
   const decoder = new KeyDecoder();
   const keys = decoder.push(Buffer.from(
     `${ESC}[200~a\r\nb\rc\td${ESC}[Ae${ESC}[201~`));
@@ -359,7 +359,7 @@ test("TUI-002: pasted text carries line breaks and tabs, and no terminal instruc
     [{ kind: "paste", value: "x[201y", truncated: false }]);
 });
 
-test("T120 / TUI-023: a paste over the decoder's bound is refused whole, never as its prefix", () => {
+test("020. A paste over the decoder's bound is refused whole, never as its prefix", () => {
   const oversized = new KeyDecoder();
   const big = "a".repeat(TERMINAL_BOUNDS.pasteBytes.value + 1);
   assert.deepEqual(oversized.push(paste(big)), [{ kind: "paste", value: "", truncated: true }],
@@ -377,7 +377,7 @@ test("T120 / TUI-023: a paste over the decoder's bound is refused whole, never a
   assert.deepEqual(h.prompts, []);
 });
 
-test("TUI-002: a paste the terminal never ended is rejected whole, and the keyboard lives on", async () => {
+test("021. A paste the terminal never ended is rejected whole, and the keyboard lives on", async () => {
   const decoder = new KeyDecoder();
   decoder.push(Buffer.from(`${ESC}[200~hello`));
   assert.equal(decoder.pendingDelayMs, TERMINAL_BOUNDS.pasteIdleMs.value,
@@ -402,7 +402,7 @@ test("TUI-002: a paste the terminal never ended is rejected whole, and the keybo
   assert.equal(h.app.snapshot.prompt.text, "x", "the keyboard died with an unfinished paste");
 });
 
-test("TUI-002: an unfinished terminal report gives up instead of eating the next key", async () => {
+test("022. An unfinished terminal report gives up instead of eating the next key", async () => {
   const h = harness();
   h.app.feed(Buffer.from(`${ESC}[`));
   assert.equal(h.app.snapshot.prompt.text, "");
@@ -425,7 +425,7 @@ test("TUI-002: an unfinished terminal report gives up instead of eating the next
   assert.deepEqual(overlong.push(Buffer.from("C")), [{ kind: "char", value: "C" }]);
 });
 
-test("arch 23.3: a prompt the session refused is not echoed as sent and comes back to the draft", () => {
+test("023. A prompt the session refused is not echoed as sent and comes back to the draft", () => {
   const h = harness();
   h.refuse("대기열이 가득 찼습니다.");
   h.app.feed(Buffer.from("안녕"));
@@ -444,7 +444,7 @@ test("arch 23.3: a prompt the session refused is not echoed as sent and comes ba
   assert.doesNotMatch(h.last(), /Could not send/);
 });
 
-test("TUI-013: produced control bytes are drawn as text, never as terminal instructions", () => {
+test("024. Produced control bytes are drawn as text, never as terminal instructions", () => {
   const h = harness();
   h.app.line(`before${ESC}[2Jafter\u0007\ttab`);
   assert.ok(h.app.lines[0]?.includes(ESC), "the transcript keeps what was produced");
@@ -455,7 +455,7 @@ test("TUI-013: produced control bytes are drawn as text, never as terminal instr
   assert.match(frame, /before\[2Jafter/);
 });
 
-test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hint off screen", async () => {
+test("025. A pasted multi-line draft is drawn whole and never pushes the hint off screen", async () => {
   const h = harness();
   h.app.feed(paste("one\ntwo\nthree"));
   const lines = h.terminal.frames.at(-1)!;
@@ -481,7 +481,7 @@ test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hin
   assert.equal(long.prompts[0]!.split("\n").length, 40);
 });
 
-test("T120 / TUI-023: recovery from a refused paste never spends a character the Human typed", async () => {
+test("026. Recovery from a refused paste never spends a character the Human typed", async () => {
   // The failure this holds down: the paste added nothing, the screen said
   // "press Backspace", and Backspace deleted the Human's own last character --
   // so recovering from a rejected paste silently edited text it never touched.
@@ -521,7 +521,7 @@ test("T120 / TUI-023: recovery from a refused paste never spends a character the
     "the control did not reproduce the behaviour this test distinguishes");
 });
 
-test("TUI-002: an Enter arriving in the burst after a paste is that paste's newline, not a submission", () => {
+test("027. An Enter arriving in the burst after a paste is that paste's newline, not a submission", () => {
   // Defence in depth for a clipboard carrying `ESC[201~`: when the terminal
   // delivers the injected newline in the read after the paste, it is taken as
   // text rather than as an Enter no Human pressed.
@@ -544,7 +544,7 @@ test("TUI-002: an Enter arriving in the burst after a paste is that paste's newl
   assert.deepEqual(fresh.push(Buffer.from("\n")), [{ kind: "enter" }]);
 });
 
-test("TUI-002: a clipboard carrying its own end marker cannot submit the text in front of it", async () => {
+test("028. A clipboard carrying its own end marker cannot submit the text in front of it", async () => {
   // One read: `ESC[201~` from inside the clipboard, then a newline, then the
   // terminal's real end marker. Nothing after the first marker may act.
   const h = harness();
@@ -576,7 +576,7 @@ test("TUI-002: a clipboard carrying its own end marker cannot submit the text in
     "bytes part way through a second end marker vanished at the read boundary");
 });
 
-test("TUI-002: a code point the terminal split across reads has a deadline, and never becomes U+FFFD", async () => {
+test("029. A code point the terminal split across reads has a deadline, and never becomes U+FFFD", async () => {
   // "한" is ED 95 9C. Held after two bytes, the decoder must say how long it
   // waits -- the spec promised a deadline for every unfinished token.
   const decoder = new KeyDecoder();
@@ -612,7 +612,7 @@ test("TUI-002: a code point the terminal split across reads has a deadline, and 
   assert.equal(h.app.snapshot.prompt.text, "a", "the keyboard died with a split code point");
 });
 
-test("T114 / TUI-023: a prompt that was never delivered is named, and given back when it can be", () => {
+test("030. A prompt that was never delivered is named, and given back when it can be", () => {
   // The failure this holds down: three prompts waiting behind a busy engine,
   // one of them fails to send, and the Human is told only that "the input"
   // could not be sent -- neither which one nor what it said.
@@ -645,7 +645,7 @@ test("T114 / TUI-023: a prompt that was never delivered is named, and given back
     "the notice grew past the screen instead of being cut to it");
 });
 
-test("T114 / TUI-023: a failed prompt never overwrites what the Human is typing", () => {
+test("031. A failed prompt never overwrites what the Human is typing", () => {
   const h = harness();
   h.app.feed(Buffer.from("지금 쓰는 중"));
   h.app.returnPrompt("보내지 못한 것", "socket closed");
@@ -675,7 +675,7 @@ function closeApp(app: TuiApp): void {
   assert.equal(typeof owner.close, "function", "the app must return its input owner");
   owner.close!();
 }
-test("DR27/P0-4: app close returns partial input and a late callback cannot redraw", t => {
+test("032. App close returns partial input and a late callback cannot redraw", t => {
   const timers = manualInputTimers(t), h = harness();
   h.app.feed(Buffer.from(ESC)); const old = [...timers][0]!;
   assert.equal(timers.size, 1); closeApp(h.app); closeApp(h.app);
@@ -686,7 +686,7 @@ test("DR27/P0-4: app close returns partial input and a late callback cannot redr
   assert.equal(h.terminal.frames.length, frames); assert.equal(h.terminal.repaints, 0);
   assert.equal(h.app.snapshot, state); assert.equal(h.prompts.length, 0); assert.equal(timers.size, 0);
 });
-test("DR27/P0-4: a replaced partial-input callback cannot consume the current token", t => {
+test("033. A replaced partial-input callback cannot consume the current token", t => {
   const timers = manualInputTimers(t), h = harness();
   h.app.feed(Buffer.from(ESC)); const old = [...timers][0]!;
   h.app.feed(Buffer.from("[")); const current = [...timers][0]!;
@@ -695,7 +695,7 @@ test("DR27/P0-4: a replaced partial-input callback cannot consume the current to
   assert.ok(timers.has(current)); h.app.feed(Buffer.from("C")); assert.equal(timers.size, 0);
   assert.equal(h.app.snapshot.prompt.text, ""); closeApp(h.app);
 });
-test("DR27/P0-4: quit ends input before later keys in the same terminal read", t => {
+test("034. Quit ends input before later keys in the same terminal read", t => {
   const timers = manualInputTimers(t), h = harness();
   h.app.feed(Buffer.from("\x03late\n\x1b"));
   assert.equal(h.quits.length, 1); assert.equal(h.prompts.length, 0);

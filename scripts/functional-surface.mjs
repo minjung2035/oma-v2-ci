@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /** Deterministic, no-inference smoke of the installed Pi SDK and trusted extension.
  * Scripted assistant messages enter Pi's ordinary tool pipeline; no tool is
- * mocked or forwarded. Checks core -> selected -> replaced -> resumed -> reset,
- * persisted safe-boundary commits, and contained anchored edits. This is not
+ * mocked or forwarded. Checks core -> web -> union -> resumed -> repeated union,
+ * persisted safe-boundary exposure, retired-selector refusal and contained edits. This is not
  * provider, broker, sandbox, pricing, crash-ordering or release qualification.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { encodeToolSurfacePlan, planToolSurface, residentToolSurfaceConfig } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { pathToFileURL } from "node:url";
 import { enterBoundedScript } from "./bounded-script.mjs";
 
 if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
@@ -26,13 +28,18 @@ if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
     const home = join(workdir, "home"), archive = join(workdir, "archive");
     for (const path of [agentDir, sessionDir, home, archive]) mkdirSync(path, { recursive: true });
     const probeOut = join(workdir, "probe.jsonl");
-    const config = residentToolSurfaceConfig();
+    const config = collaborationSurface("resident");
+    const recordRoot = join(workdir, "records"); mkdirSync(recordRoot);
     Object.assign(process.env, {
       HOME: home, PI_CODING_AGENT_DIR: agentDir,
-      OMA_TOOL_SURFACE: encodeToolSurfacePlan(planToolSurface(config)),
+      OMA_TOOL_SURFACE: JSON.stringify(config), OMA_ACTOR: "smokeworker",
+      OMA_RECORD_ROOT: recordRoot, OMA_MAIL_ADDRESSES: "64",
       OMA_AGENT_HOME: home, OMA_MAIL_ARCHIVE: archive,
       OMA_SOCKET: join(workdir, "unused-control.sock"), OMA_PROBE_OUT: probeOut,
     });
+    // The real extension's read-only invocation observations require the App's
+    // installed runtime composition, just as both product engine entries do.
+    await import(pathToFileURL(join(root, DEPLOYMENT_LAYOUT.clientPreload)).href);
     process.chdir(workdir);
     const { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } =
       await import("@earendil-works/pi-coding-agent");
@@ -117,61 +124,63 @@ if (await enterBoundedScript(import.meta.url, { timeoutMs: 60000 })) {
       const executed = reports.find(report => report.phase === "tool_result" && report.id === id);
       const committed = reports.find(report => report.phase === "turn_end" && report.ids.includes(id));
       assert.ok(executed && committed, `real tool/result boundary for ${id}`);
-      assert.deepEqual([...executed.active].sort(), before, "selection must stay frozen through tool_result");
-      assert.deepEqual([...committed.active].sort(), after, "selection changes only at turn_end");
+      assert.deepEqual([...executed.active].sort(), before, "exposure must stay frozen through tool_result");
+      assert.deepEqual([...committed.active].sort(), after, "exposure changes only at turn_end");
       assert.equal(committed.persisted.length, committed.ids.length, "all boundary results must be persisted");
     };
 
     writeFileSync(join(workdir, "sample.txt"), "alpha\nbeta\n");
     await open(SessionManager.create(workdir, sessionDir), "startup");
     exact(core, "initial core");
-    const selected = active(["insert", "replace_within"]);
-    const replaced = active(["insert"]);
+    const web = active(config.groups.web_tools);
+    const expanded = active(Object.values(config.groups).flat());
     await run([
       { active: core, calls: [call("read-initial", "read", { path: "sample.txt", offset: 1, limit: 100 }),
-        call("select", "toolset", { select: ["insert", "replace_within"] })] },
-      { active: selected, calls: () => {
+        call("expose-web", "web_tools", {}), call("same-batch-refused", "lsp_status", {})] },
+      { active: web, calls: () => {
         const served = anchor("read-initial");
         return [call("replace", "replace", { remove_from: served, remove_to: served, replacement_lines: "ALPHA" })];
       } },
-      { active: selected, calls: [call("read-after-replace", "read", { path: "sample.txt", offset: 1, limit: 100 })] },
-      { active: selected, calls: () => [call("replace-selection", "toolset", { select: ["insert"] }),
-        call("within-old-loadout", "replace_within", { replace_from: anchor("read-after-replace"),
+      { active: web, calls: [call("read-after-replace", "read", { path: "sample.txt", offset: 1, limit: 100 })] },
+      { active: web, calls: () => [call("expose-lsp", "lsp_tools", {}),
+        call("within-core-loadout", "replace_within", { replace_from: anchor("read-after-replace"),
           replace_to: anchor("read-after-replace"), replace_old: "ALPHA", replace_new: "Alpha" })] },
-      { active: replaced },
+      { active: expanded },
     ]);
-    success("replace"); success("within-old-loadout");
+    success("replace"); success("within-core-loadout");
+    assert.equal(result("same-batch-refused").isError, true, "a not-yet-exposed member must not execute");
     assert.equal(readFileSync(join(workdir, "sample.txt"), "utf8"), "Alpha\nbeta\n");
-    boundary("select", core, selected);
-    boundary("replace-selection", selected, replaced);
-    const selection = JSON.parse(text(success("replace-selection")));
-    assert.deepEqual(selection.removed, ["replace_within"]);
-    assert.equal(selection.nextActiveCount, replaced.length);
+    boundary("expose-web", core, web); boundary("expose-lsp", web, expanded);
+    const exposure = JSON.parse(text(success("expose-lsp")));
+    assert.deepEqual(exposure.permitted, config.groups.lsp_tools);
+    assert.equal(exposure.resultingCount, expanded.length);
     const file = session.sessionFile;
     assert.ok(file, "the smoke must persist a real session file");
-    assert.deepEqual(session.sessionManager.getBranch().filter(entry => entry.type === "custom" &&
-      entry.customType === "oma-toolset").at(-1)?.data.select, ["insert"]);
+    const committed = session.sessionManager.getBranch().filter(entry => entry.type === "custom" && entry.customType === "oma-collaboration-exposure");
+    assert.equal(committed.length, 2);
+    assert.deepEqual([...committed.at(-1).data.active].sort(), Object.values(config.groups).flat().sort());
     await close();
 
     await open(SessionManager.open(file, sessionDir), "resume");
-    exact(replaced, "restored committed selection");
+    exact(expanded, "restored committed cumulative exposure");
     await run([
-      { active: replaced, calls: [call("read-resumed", "read", { path: "sample.txt", offset: 1, limit: 100 })] },
-      { active: replaced, calls: () => [call("reset", "toolset", { select: [] }),
-        call("insert-old-loadout", "insert", { anchor: anchor("read-resumed"), direction: "after", lines: "inserted" })] },
-      { active: core, calls: [call("insert-refused", "insert", { anchor: "unused", direction: "after", lines: "forbidden" })] },
-      { active: core },
+      { active: expanded, calls: [call("read-resumed", "read", { path: "sample.txt" })] },
+      { active: expanded, calls: () => [call("repeat-web", "web_tools", {}),
+        call("insert-core-loadout", "insert", { anchor: anchor("read-resumed"), direction: "after", lines: "inserted" })] },
+      { active: expanded, calls: [call("retired-selector-refused", "toolset", { select: [] })] },
+      { active: expanded },
     ]);
-    success("insert-old-loadout");
-    assert.equal(result("insert-refused").isError, true, "a removed optional tool must not execute");
+    success("insert-core-loadout");
+    assert.equal(result("retired-selector-refused").isError, true, "a retired selector is not callable and cannot reset exposure");
     assert.equal(readFileSync(join(workdir, "sample.txt"), "utf8"), "Alpha\ninserted\nbeta\n");
-    boundary("reset", replaced, core);
+    boundary("repeat-web", expanded, expanded);
+    assert.deepEqual(JSON.parse(text(success("repeat-web"))).added, []);
     await close();
     await open(SessionManager.open(file, sessionDir), "resume");
-    exact(core, "restored reset");
+    exact(expanded, "restored repeated union; no legacy reset");
     await close();
     assert.deepEqual(extensionErrors, []);
-    console.log(`functional surface PASS: core ${core.length} -> selected ${selected.length} -> replaced ${replaced.length} -> resumed ${replaced.length} -> reset ${core.length}; anchored replace/replace_within/insert and removed-tool refusal`);
+    console.log(`functional surface PASS: core ${core.length} -> web ${web.length} -> union ${expanded.length} -> resumed/repeated ${expanded.length}; anchored replace/replace_within/insert, unexposed-member and retired-selector refusal`);
     console.log("Limits: deterministic assistant stream, no inference/provider transport, broker calls, sandbox activation, crash injection, pricing or release qualification.");
   } catch (error) {
     console.error("functional surface FAIL:", error);

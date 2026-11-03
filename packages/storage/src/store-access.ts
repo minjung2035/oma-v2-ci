@@ -15,6 +15,8 @@ import type { LedgerTransitions } from "./transitions.js";
 export interface StoreQueries {
   getOperation: LedgerReader["operation"];
   getOperationById: LedgerReader["operationById"];
+  operationSequence: LedgerReader["operationSequence"];
+  acceptedOperationPage: LedgerReader["acceptedOperationPage"];
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent";
   retriedOperation(actor: Actor, key: RequestKey): DecodedOperation;
   recoverableOperations(): OperationId[];
@@ -24,6 +26,7 @@ export interface StoreQueries {
   latestSocietyAction: LedgerReader["latestSocietyAction"];
   societyOpen(): boolean;
   submittedOperations: LedgerReader["submissions"];
+  attachmentRoots: LedgerReader["attachmentRoots"];
   attestationFacts: LedgerReader["attestations"];
   getAgent: LedgerReader["agent"];
   listAgents: LedgerReader["agents"];

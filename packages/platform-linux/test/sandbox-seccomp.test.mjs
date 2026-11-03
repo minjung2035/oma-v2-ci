@@ -36,7 +36,7 @@ function decide(filter, data) {
     }
     throw new Error("the program fell off its end");
 }
-test("SB-001, P0V-102: the filter refuses every listed call on each architecture, and lets a program's ordinary calls pass", () => {
+test("001. The filter refuses every listed call on each architecture, and lets a program's ordinary calls pass", () => {
     // Named here, not read from the table, so an entry dropped from it is caught.
     const refused = {
         x64: { io_uring_setup: 425, io_uring_enter: 426, io_uring_register: 427, add_key: 248, request_key: 249, keyctl: 250,
@@ -115,7 +115,7 @@ function inSandbox(filter) {
         rmSync(dir, { recursive: true, force: true });
     }
 }
-test("MAC-205/MV-20, P0V-102: in the sandbox each listed effect is refused where the kernel would have made it, and other sockets are made", { skip: usable ? false : "bubblewrap or a vsock-capable python is not available" }, () => {
+test("002. In the sandbox each listed effect is refused where the kernel would have made it, and other sockets are made", { skip: usable ? false : "bubblewrap or a vsock-capable python is not available" }, () => {
     const without = inSandbox(null);
     const within = inSandbox(sandboxSeccompFilter());
     // Without the filter the kernel makes a vsock socket (it has no vsock socketpair).

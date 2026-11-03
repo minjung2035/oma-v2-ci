@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { localTestFiles, serialTestFiles, nativeExecutionTestFiles, unrunDirectives, unrunTests } from "./verification-lanes.mjs";
+import { localTestFiles, serialTestFiles, nativeExecutionTestFiles } from "./verification-lanes.mjs";
+import { readLocalTestSummary } from "./local-test-summary.mjs";
 import { workspaceTestFiles } from "./check-modules.mjs";
+import { orderTests, readTimings, saveTimings } from "./local-test-timing.mjs";
 // This runner has no selection surface: any argument is a mistake (or `npm
 // test -- foo`), and silently running the whole suite is the exact behavior
 // the mistake would not expect.
@@ -56,6 +58,11 @@ const SERIAL = new Set([
   // (observed === 0). The ordering margin is what is being proved, so it runs
   // alone rather than weakened.
   "dist/test/scenario-agent-wait.test.js",
+  // The search progress oracle uses a 300 ms stall window and real child
+  // payloads 400 ms apart across its heartbeat-only ceiling. Sibling CPU can
+  // consume the startup/progress margin before those payloads are observed.
+  // Preserve the real deadlines and assertions by measuring this file alone.
+  "dist/test/contained-tools.test.js",
   // The PTY files (mac-new-handoff-pty, open-tui-pty, personal-pty) used to
   // live here because their writes raced fixed wall-clock windows against the
   // engine's draw and birth times. Every timing-sensitive step now waits on a
@@ -75,10 +82,15 @@ const concurrency = Number.isInteger(requested) && requested > 0
   : DEFAULT_CONCURRENCY;
 
 const serialFiles = serialTestFiles(files, SERIAL);
-const parallelFiles = files.filter((file) => !SERIAL.has(file));
+const timingPath = join(".scratch", "local-test-durations.tsv");
+const timings = readTimings(timingPath);
+const parallelFiles = orderTests(files.filter((file) => !SERIAL.has(file)), timings);
 const guard = new URL("./local-test-guard.mjs", import.meta.url).href;
 const childEnv = {
   ...process.env,
+  // Node validates bytecode against module contents; this caches compilation,
+  // never test results. Isolated test processes can reuse unchanged imports.
+  NODE_COMPILE_CACHE: process.env.NODE_COMPILE_CACHE ?? join(process.cwd(), ".scratch", "test-node-compile-cache"),
   NODE_OPTIONS: `--import=${guard}`,
   DBUS_SESSION_BUS_ADDRESS:
     "unix:path=/nonexistent/oma-local-tests-no-user-bus",
@@ -111,30 +123,37 @@ let phaseCode = 0;
 let signaled = false;
 const unrun = [];
 const directives = [];
+let completed = false;
 try {
   for (const phase of phases) {
     const summaryPath = join(summaryDir, `summary-${phase.name}.tap`);
+    const phaseTimingPath = join(summaryDir, `durations-${phase.name}.tsv`);
     const child = spawn(
       process.execPath,
-      ["--test", `--test-concurrency=${phase.concurrency}`,
-        "--test-reporter=spec", "--test-reporter-destination=stdout",
-        "--test-reporter=tap", `--test-reporter-destination=${summaryPath}`,
+      [new URL("./test-local-phase.mjs", import.meta.url).pathname,
+        String(phase.concurrency), summaryPath, phaseTimingPath,
         ...phase.files],
-      { stdio: "inherit", env: childEnv },
+      { stdio: "inherit", env: { ...childEnv, OMA_TEST_ARTIFACT_DIR: process.env.OMA_TEST_ARTIFACT_DIR ?? process.env.OMA_NATIVE_EVIDENCE_DIR ?? join(summaryDir, "artifacts") } },
     );
     const [code, signal] = await once(child, "close");
+    for (const [file, duration] of readTimings(phaseTimingPath)) timings.set(file, duration);
+    saveTimings(timingPath, files, timings);
     if (signal) signaled = true;
     else if ((code ?? 1) !== 0 && phaseCode === 0) phaseCode = code ?? 1;
     try {
-      const summary = readFileSync(summaryPath, "utf8");
-      for (const entry of unrunTests(summary)) unrun.push(`${phase.name}: ${entry}`);
-      for (const directive of unrunDirectives(summary)) directives.push(`${phase.name}: ${directive}`);
+      const summary = await readLocalTestSummary(summaryPath);
+      for (const entry of summary.unrun) unrun.push(`${phase.name}: ${entry}`);
+      for (const directive of summary.directives) directives.push(`${phase.name}: ${directive}`);
+      if (summary.omittedDirectives > 0) directives.push(`${phase.name}: ${summary.omittedDirectives} additional directives; see raw TAP`);
     } catch (error) {
       unrun.push(`${phase.name}: summary unreadable: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  completed = true;
 } finally {
-  rmSync(summaryDir, { recursive: true, force: true });
+  if (completed && !signaled && phaseCode === 0 && unrun.length === 0)
+    rmSync(summaryDir, { recursive: true, force: true });
+  else console.error(`Raw TAP retained for the failed or incomplete run: ${summaryDir}`);
 }
 if (unrun.length > 0) {
   console.error(`NOT A PASS: the suite left tests unrun (${unrun.join(", ")}).`);

@@ -27,15 +27,33 @@ export class InteractiveChannel {
     }
   }
   send(event: PiEvent): void {
-    if (this.closed) return;
+    this.write(event);
+  }
+  /** Local write completion only; not a peer receipt or processing acknowledgement. */
+  sendAndWait(event: PiEvent): Promise<void> {
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    try {
+      this.write(event, error => {
+        if (this.socket.writableLength === 0) this.onDrain();
+        if (error === undefined || error === null) resolve();
+        else reject(error);
+      });
+    } catch (error) { reject(error); }
+    return promise;
+  }
+  private write(event: PiEvent, flushed?: (error?: Error | null) => void): void {
+    if (this.closed) { flushed?.(new Error("interactive channel closed")); return; }
     try {
       const line = JSON.stringify(event) + "\n";
       const bytes = Buffer.byteLength(line);
       if (bytes > this.limits.frameBytes + 1 || this.socket.writableLength + bytes > 4 * (this.limits.frameBytes + 1))
         throw new Error("interactive control buffer limit exceeded");
-      if (!this.socket.write(line) && this.writing === null)
+      if ((!this.socket.write(line, flushed) || (flushed !== undefined && this.socket.writableLength > 0)) && this.writing === null)
         this.writing = alarm(this.limits.receiptWaitSeconds, () => this.close(new Error("interactive write deadline exceeded")));
-    } catch (error) { this.close(error); }
+    } catch (error) {
+      this.close(error);
+      flushed?.(error instanceof Error ? error : new Error(String(error), { cause: error }));
+    }
   }
   private readonly read = (data: Buffer): void => {
     try {

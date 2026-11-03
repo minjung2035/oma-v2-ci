@@ -22,7 +22,7 @@ const BASE = "1".repeat(40);
 const CANDIDATE = "2".repeat(40);
 const OP = "op-00000000-0000-4000-8000-000000000018";
 for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
-    test(`normal and recovery protect the exact Git path ${JSON.stringify(path)} before CAS`, async () => {
+    test(`001. Normal and recovery protect the exact Git path ${JSON.stringify(path)} before CAS`, async () => {
         const stateRoot = mkdtempSync(join(tmpdir(), "oma-git-observation-wiring-"));
         const store = new Store(join(stateRoot, "runtime.sqlite"), 5, { society: "demo" });
         try {

@@ -1,9 +1,13 @@
 import { ProvenanceIndex } from "./provenance-index.js";
 import { canonicalPublishedRefs, canonicalCommitGraph, canonicalCommitRange } from "./canonical-command.js";
+import { withReviewSourceRecord } from "./review-record.js";
 import { IntegrationPreparation } from "./integration-preparation.js";
 import { readResult } from "@oma/tool-files/results";
 import { join } from "node:path";
 import { ReviewArtifacts } from "./review-artifact.js";
+import { readImmutableBytes } from "@oma/storage/immutable-file";
+import { isResultReference } from "@oma/tool-files/results";
+import type { ReviewDiffArtifact } from "@oma/contracts/files";
 import type { GitRepositoryPort } from "./repository-port.js";
 /** Fixed canonical Git adapter. Importing workflow/index never evaluates commands. */
 import type { Oid } from "@oma/contracts";
@@ -14,7 +18,7 @@ import { StoreError } from "@oma/domain/errors";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import type { GitPaths } from "./paths.js";
 import type { RefAfterCas } from "./observe.js";
-import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalMergeDiff, canonicalRevertCommit } from "./canonical-command.js";
+import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalRevertCommit } from "./canonical-command.js";
 import { GitPublicationObserver } from "./publication.js";
 import { ContextPublicationObserver } from "./context-publication.js";
 import { ContextRepository } from "./context-repository.js";
@@ -35,6 +39,7 @@ export class GitRepository implements GitRepositoryPort {
   readonly contextPublication: GitRepositoryPort["contextPublication"];
   constructor(private readonly paths: GitPaths, private readonly ledger: {
     submissions(): readonly OperationOf<"git.submit">[];
+    attachmentRoots?(): readonly (OperationOf<"mail.send"> | OperationOf<"agent.create">)[];
   }, quarantine: QuarantineExecution | null = null) {
     this.provenance = new ProvenanceIndex({refs:()=>canonicalPublishedRefs(paths.projectGit),graph:tips=>canonicalCommitGraph(paths.projectGit,tips),range:(base,candidate)=>canonicalCommitRange(paths.projectGit,base,candidate)});
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate), quarantine);
@@ -65,6 +70,12 @@ export class GitRepository implements GitRepositoryPort {
       verifyObjectFormat: facts.verifyObjectFormat,
       canonicalHas: candidate => this.canonicalHas(candidate),
       quarantineImport: (fd, candidate, exportRef, prerequisites, authorize) => this.quarantineImport(fd, candidate, exportRef, prerequisites, authorize),
+      quarantineVerify: (fd, candidate, exportRef, prerequisites, authorize) => this.quarantine.verifyBundle(fd, candidate, exportRef, prerequisites, authorize),
+      assertOwner: () => {
+        if (!paths.ownerSignal) throw new StoreError("UNSUPPORTED_PROFILE", "broker publication ownership was not bound");
+        if (paths.ownerSignal?.aborted) throw new StoreError("BROKER_UNAVAILABLE", "broker publication owner is stopping");
+        return undefined;
+      },
       publishRef: (ref, candidate) => this.publishRef(ref, candidate),
       observeRef: ref => this.observations.ref(paths.projectGit, ref),
     } satisfies GitRepositoryPort["submission"];
@@ -83,10 +94,28 @@ export class GitRepository implements GitRepositoryPort {
     this.review = { ...facts,
       prepareIntegration: (id, base, candidate, main, own) => preparation.prepare(id,base,candidate,main,own),
       prepareDiff: (operation, base, candidate, own) => artifacts.prepare(operation, base, candidate, own),
-      mergeDiff: (base, candidate, maxBytes) => canonicalMergeDiff(paths.projectGit, base, candidate, maxBytes),
       prepareRevert: input => canonicalRevertCommit(paths.projectGit, { ...input, society: paths.society }),
       publishCandidateRef: (ref, candidate) => this.publishRef(ref, candidate),
     } satisfies GitRepositoryPort["review"];
+  }
+  readDiffPatch(diff: ReviewDiffArtifact): Buffer {
+    if (diff.version !== 1 || !isResultReference(diff.reference) || !isValidFullOid(diff.base) || !isValidFullOid(diff.candidate) ||
+        diff.base.length !== diff.candidate.length || !Number.isSafeInteger(diff.bytes) || diff.bytes < 0)
+      throw new StoreError("STORE_CORRUPT", "invalid frozen review diff descriptor");
+    const [, id, digest] = diff.reference.split(":");
+    if (digest !== diff.sha256) throw new StoreError("STORE_CORRUPT", "review diff reference and manifest have different digests");
+    return readImmutableBytes(join(this.paths.projectGit, "oma-results", `${id}.result`), diff.sha256, diff.bytes);
+  }
+  readDiffRecord(diff: ReviewDiffArtifact) {
+    const patch = this.readDiffPatch(diff);
+    const paths = observed(this.review.changedPaths(diff.base, diff.candidate), "frozen review changed paths");
+    return { patch, paths };
+  }
+  withReviewSourceRecord(base: Oid, candidate: Oid, consume: (source: import("@oma/contracts/files").ReviewSourceRecord) => undefined): void {
+    const format = this.objectFormat(this.paths.projectGit, [base, candidate]);
+    observed(this.observations.commit(this.paths.projectGit, base), "recorded review base");
+    observed(this.observations.commit(this.paths.projectGit, candidate), "recorded review candidate");
+    withReviewSourceRecord(this.paths.projectGit, base, candidate, format, consume);
   }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
     const format = observed(this.observations.objectFormat(repo), "repository object format");
@@ -102,7 +131,7 @@ export class GitRepository implements GitRepositoryPort {
     return compareAndSwapCanonicalRef(this.observations, repository, ref, candidate, expected);
   }
   private submitters(base: Oid, candidate: Oid): readonly string[] {
-    return this.provenance.authors(base,candidate,this.ledger.submissions());
+    return this.provenance.authors(base,candidate,this.ledger.submissions(), this.ledger.attachmentRoots?.() ?? []);
   }
   private canonicalHas(oid: string): boolean {
     const value = this.observations.commit(this.paths.projectGit, oid);

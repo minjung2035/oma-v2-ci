@@ -86,7 +86,7 @@ const READ_LAG_BUDGET_MS = 50;
 const MIXED_LAG_BUDGET_MS = 100;
 const ANSWER_BUDGET_MS = 1_000;
 
-test("V23A: concurrent status reads and mutations keep the broker responsive with bounded observation", { timeout: 60_000 }, async t => {
+test("001. Concurrent status reads and mutations keep the broker responsive with bounded observation", { timeout: 60_000 }, async t => {
   const s = society(t);
   for (let round = 0; round < Number(process.env.V23A_ROUNDS ?? 0); round++) {
     const probe = await loopLag(() => Promise.all(Array.from({ length: 16 }, (_, i) => s.call({ v: 1, id: `w${i}`, method: "status.get", params: {} }))));
@@ -121,7 +121,7 @@ test("V23A: concurrent status reads and mutations keep the broker responsive wit
   assert.ok(readCommands <= 2, `${readCommands} observation calls for 16 concurrent reads`);
 });
 
-test("V23A / WP23.03: status of a society with hundreds of pending messages is one bounded read", { timeout: 120_000 }, async t => {
+test("002. Status of a society with hundreds of pending messages is one bounded read", { timeout: 120_000 }, async t => {
   const s = society(t);
   const to = Array.from({ length: 31 }, (_, i) => `w${i + 2}`);
   for (let i = 0; i < 20; i++) assert.equal((await s.call({ v: 1, id: `b${i}`, method: "mail.send", request: `bulk${i}`,
@@ -133,7 +133,7 @@ test("V23A / WP23.03: status of a society with hundreds of pending messages is o
   assert.ok(maxLagMs < READ_LAG_BUDGET_MS, `status with ${pending} pending messages held the event loop ${Math.round(maxLagMs)} ms`);
 });
 
-test("V23A: an observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands", { timeout: 30_000 }, async t => {
+test("003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands", { timeout: 30_000 }, async t => {
   let hang = true;
   const s = society(t, { hang: () => hang });
   const asked = Date.now();
@@ -154,7 +154,7 @@ test("V23A: an observer that stops answering costs a bounded wait and an honest 
   assert.equal(after.answer.result.agents[0].activeState, "inactive", "observation did not recover once the observer answered");
 });
 
-test("V23A / WP23.05: a failed observation is published as unknown with its time, not as an empty or idle society", { timeout: 30_000 }, async t => {
+test("004. A failed observation is published as unknown with its time, not as an empty or idle society", { timeout: 30_000 }, async t => {
   const s = society(t, { fail: () => true });
   const read = await s.call({ v: 1, id: "f", method: "status.get", params: {} });
   assert.equal(read.answer.ok, true);
@@ -172,7 +172,7 @@ test("V23A / WP23.05: a failed observation is published as unknown with its time
 });
 
 
-test("NATIVE-STATUS-PUBLICATION-01: mutation hints share one active publication and one fresh follow-up", async t => {
+test("005. Mutation hints share one active publication and one fresh follow-up", async t => {
   const s = society(t);
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -198,7 +198,7 @@ test("NATIVE-STATUS-PUBLICATION-01: mutation hints share one active publication 
 });
 
 
-test("NATIVE-STATUS-PUBLICATION-02: shutdown joins a held publication before Store close", async t => {
+test("006. Shutdown joins a held publication before Store close", async t => {
   const s = society(t);
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -221,7 +221,7 @@ test("NATIVE-STATUS-PUBLICATION-02: shutdown joins a held publication before Sto
   } finally { release(); }
 });
 
-test("NATIVE-DISPATCH-YIELD-01: a completed mutation gives the event loop a turn before its reply", async t => {
+test("007. A completed mutation gives the event loop a turn before its reply", async t => {
   const s = society(t);
   const refresh = s.views.refreshWorld.bind(s.views);
   let observed = false, turn = Promise.resolve();
@@ -239,7 +239,7 @@ test("NATIVE-DISPATCH-YIELD-01: a completed mutation gives the event loop a turn
   assert.equal(s.store.pendingDeliveries("w2").length, 1);
 });
 
-test("NATIVE-DISPATCH-YIELD-02: admission closing during the turn cannot reinterpret the accepted result", async t => {
+test("008. Admission closing during the turn cannot reinterpret the accepted result", async t => {
   const s = society(t);
   const refresh = s.views.refreshWorld.bind(s.views);
   let closed = false, turn = Promise.resolve(), accepted: { id: string; planJson: string; result: string } | null = null;
@@ -266,7 +266,7 @@ test("NATIVE-DISPATCH-YIELD-02: admission closing during the turn cannot reinter
   assert.equal(s.store.pendingDeliveries("w2").length, 1);
 });
 
-test("NATIVE-STATUS-PUBLICATION-03: shutdown joins projection and cannot republish its removed view", { timeout: 30_000 }, async t => {
+test("009. Shutdown joins projection and cannot republish its removed view", { timeout: 30_000 }, async t => {
   const s = society(t);
   const started = Promise.withResolvers<void>(), gate = Promise.withResolvers<void>();
   const read = s.store.pendingWorkRows.bind(s.store), close = s.store.close.bind(s.store);

@@ -1,7 +1,7 @@
 /** The only native boundary of the SDK-free file policy (NATIVE-025). */
-import { constants, openSync } from "node:fs";
+import { chmodSync, constants, openSync } from "node:fs";
 import { WorkspaceRefusal } from "./errors.js";
-export { utf8Decoder, directoryNames, mkdirAt, openAt, reopenDirectory, unlinkAt } from "@oma/file-descriptors";
+export { utf8Decoder, directoryNames, mkdirAt, openAt, reopenDirectory, unlinkAt, renameExclusiveAt } from "@oma/file-descriptors";
 
 function assertProfile(): void {
   if (process.platform !== "linux" && process.platform !== "darwin")
@@ -13,6 +13,12 @@ export function descriptorPath(fd: number): string {
   if (!Number.isSafeInteger(fd) || fd < 0) throw new TypeError("invalid file descriptor");
   assertProfile();
   return `${process.platform === "linux" ? "/proc/self" : "/dev"}/fd/${fd}`;
+}
+
+/** Linux O_PATH cannot be fchmod'd; its proc alias still names the held inode. */
+export function chmodPathHandle(fd: number, mode: number): void {
+  if (process.platform !== "linux") throw new WorkspaceRefusal("path-handle mode repair requires Linux");
+  chmodSync(descriptorPath(fd), mode);
 }
 
 export function openRoot(root: string): number {

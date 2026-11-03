@@ -70,7 +70,6 @@ export function reviewInputProblem(value: unknown, limits: ReviewInputLimits): s
     case "review.retry":
       return (object(row, ["kind", "name", "expectedAttempt", "reason"]) || object(row, ["kind", "name", "expectedAttempt", "expectedRevision", "reason"])) && (row.expectedRevision === undefined || natural(row.expectedRevision)) && isReviewRequestName(row.name) &&
         (row.expectedAttempt === null || isValidOperationId(row.expectedAttempt)) && boundedText(row.reason, text) ? null : "invalid retry";
-    case "review.adopt":
     case "cancel":
       return object(row, ["kind", "name", "reason"]) && isReviewRequestName(row.name) && boundedText(row.reason, text)
         ? null : "invalid cancel";
@@ -160,9 +159,14 @@ export function reviewFactProblem(value: unknown): string | null {
 }
 
 
-/** Current caller grammar plus the persisted payload of broker-derived refresh.
- * Derived keys remain forbidden on the public wire; fresh refresh is refused. */
-export function attestationInputProblem(value: unknown, limits: ReviewInputLimits): string | null {
+/** Read-only stored payload grammar, including retired adoption and derived facts.
+ * Fresh wire/action admission must use reviewInputProblem, never this reader. */
+export function storedAttestationInputProblem(value: unknown, limits: ReviewInputLimits): string | null {
+  if (value !== null && typeof value === "object" && !Array.isArray(value) && (value as { kind?: unknown }).kind === "review.adopt") {
+    const row = value as Record<string, unknown>;
+    return object(row, ["kind", "name", "reason"]) && isReviewRequestName(row.name) && boundedText(row.reason, Math.floor(limits.mailBodyBytes / 4))
+      ? null : "invalid stored adoption payload";
+  }
   if (value !== null && typeof value === "object" && !Array.isArray(value) &&
       ["refresh", "review.preparation-failed", "review.integration", "review.supersede", "review.included"].includes(String((value as { kind?: unknown }).kind)))
     return reviewFactProblem(value) === null ? null : "refresh facts are broker-derived";

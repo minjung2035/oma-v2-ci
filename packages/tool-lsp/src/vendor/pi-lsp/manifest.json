@@ -22,8 +22,8 @@
         "edits": 1
       },
       "lsp-client.js": {
-        "reason": "OMA bounds inside the wire path, all honest degradation now: stderr accumulation cap (truncation-only, with the marker tracked by an explicit dropped flag); the inbound frame bound -- a declared oversized body refuses only the request its sniffed id actually names (an unidentifiable frame is dropped and counted, never blamed on the sole pending request) and is discarded in bounded memory so the wire realigns and the server survives; accumulation with no frame boundary at all is stream garbage that refuses the pending requests and clears the buffer, again without killing the server. Pushed diagnostics are truncated with visible markers and counts (per-file count, per-message length, a tracked-document bound whose drops are flagged into resolved lists on every return path, waiter timeouts included) -- never a #fail. Every inbound frame chunk is reported to registered sinks so the caller's stall window resets on progress instead of a fixed deadline, permanent 'error' listeners on the child and its stdio keep a post-start error from crashing the engine or orphaning the server, and didOpen reports stdin backpressure through the write's own return value so the open loop awaits a bounded didDrain() instead of materializing the corpus in memory.",
-        "edits": 16
+        "reason": "OMA bounds inside the wire path, all honest degradation now: stderr accumulation cap (truncation-only, with the marker tracked by an explicit dropped flag); the inbound frame bound -- a declared oversized body refuses only the request its sniffed id actually names (an unidentifiable frame is dropped and counted, never blamed on the sole pending request) and is discarded in bounded memory so the wire realigns and the server survives; accumulation with no frame boundary at all is stream garbage that refuses the pending requests and clears the buffer, again without killing the server. Pushed diagnostics are truncated with visible markers and counts (per-file count, per-message length, a tracked-document bound whose drops are flagged into resolved lists on every return path, waiter timeouts included) -- never a #fail. Every inbound frame chunk is reported to registered sinks so the caller's stall window resets on progress instead of a fixed deadline, permanent 'error' listeners on the child and its stdio keep a post-start error from crashing the engine or orphaning the server, and didOpen reports stdin backpressure through the write's own return value so the open loop awaits a bounded didDrain() instead of materializing the corpus in memory. All client timers use the shared monotonic deadline, so long request and silence windows never overflow into immediate timeouts.",
+        "edits": 17
       },
       "lsp-client.d.ts": {
         "reason": "OMA divergence: the emitted declaration mirrors the spliced runtime surface -- didOpen returns stdin's backpressure signal, didDrain settles a backpressured write, and the marker helpers are declared.",
@@ -91,8 +91,8 @@
     },
     {
       "path": "runtime/lsp-client.js",
-      "bytes": 35796,
-      "sha256": "6268597985185691f76a3d1b3f320692e9dba27b6eb703aae4df9a3c66889499"
+      "bytes": 35981,
+      "sha256": "7e8b83fb89023aee7e4591f48750c6b06a1d660f6e07e2d6f55788404721a4ae"
     },
     {
       "path": "runtime/routes.d.ts",
@@ -285,5 +285,5 @@
       "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
     }
   ],
-  "bundleSha256": "3039a1d6ca1f2f662a4acc0a120fcdcc42cffcc06d5aa013101b54386874ced7"
+  "bundleSha256": "37ad8b2affe284634cf80938564fef8117b89f3d8d60784665c1d47430573795"
 }

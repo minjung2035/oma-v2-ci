@@ -16,7 +16,7 @@ import {
 
 const installation = { society: "demo", node: "/usr/bin/node", libdir: "/opt/oma/",  deploymentDigest: "a".repeat(64) };
 
-test("DR46-F01: Worker edits keep the accepted reference and save model and effort contents", t => {
+test("001. Worker edits keep the accepted reference and save model and effort contents", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-worker-model-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "config.json");
   writeSettings(path, defaultHostConfig(installation));
@@ -55,7 +55,7 @@ test("DR46-F01: Worker edits keep the accepted reference and save model and effo
   assert.throws(() => commitField(readSettings(path), WORKER_MODEL, { provider: "fake", model: "scripted-2" }), /share this model profile/);
 });
 
-test("DR24: an effort is one of the engine's levels, in the configuration and from the engine's screen", () => {
+test("002. An effort is one of the engine's levels, in the configuration and from the engine's screen", () => {
   const config = defaultHostConfig(installation);
   const profile = config.modelProfiles[config.agentProfiles[config.principalProfile]!.modelProfile]!;
   assert.throws(() => validateConfig({ ...config, modelProfiles: { ...config.modelProfiles, x: { ...profile, thinking: "turbo" as never } } }),
@@ -67,7 +67,7 @@ test("DR24: an effort is one of the engine's levels, in the configuration and fr
   assert.equal(engineModelChoiceOf({ provider: "fake", model: "m".repeat(201) }), null);
 });
 
-test("DR24: a Resident's engine runs the effort its profile or the engine's default names", () => {
+test("003. A Resident's engine runs the effort its profile or the engine's default names", () => {
   const options = residentOptions("/state");
   const plan = (thinking?: string) => planPiSpawn(residentEngineEffects.sandbox, { ...options,
     profile: { ...options.profile, ...(thinking ? { thinking } : {}) } }).args;
@@ -76,7 +76,7 @@ test("DR24: a Resident's engine runs the effort its profile or the engine's defa
   assert.equal(plan().includes("--thinking"), false, "no effort named: the engine's own");
 });
 
-test("DR24: the effort levels offered for a Worker's model are the engine's own for that model", async () => {
+test("004. The effort levels offered for a Worker's model are the engine's own for that model", async () => {
   const { effortLevelsOf } = await import("@oma/engine/interactive");
   // Resolve pi-ai the way the engine does -- parented at the engine package so a
   // hoisted or nested install layout finds the same copy the engine loads.
@@ -90,7 +90,7 @@ test("DR24: the effort levels offered for a Worker's model are the engine's own 
       contextWindow: 4096, maxTokens: 512, ...model }), getSupportedThinkingLevels(model), JSON.stringify(model));
 });
 
-test("DR24: the Dashboard names the engine's model once, and what a Worker runs", () => {
+test("005. The Dashboard names the engine's model once, and what a Worker runs", () => {
   const base = { status: { kind: "unknown", observedAtMs: 0, reason: "n/a" }, configuredWorkers: 0, unread: 0, rootfs: null } as const;
   const rows = (data: Partial<DashboardData>) => dashboardRows({ ...base, principalModel: { configured: "default", session: "default" }, ...data } as DashboardData);
   const engine = rows({ principalModel: { configured: "default", session: "default", engine: "fake/scripted-2 · high", engineManaged: true },

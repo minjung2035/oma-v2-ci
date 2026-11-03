@@ -54,7 +54,7 @@ export async function runInteractive(input: {
     };
     let choices: ReturnType<typeof createInteractiveSelections>;
     const human = createInteractiveInput(view, state, outputs.ui, limits, {
-        showResume: () => choices.showResume()
+        hostControlNavigation: config.hostControlNavigation, showResume: () => choices.showResume()
     });
     choices = createInteractiveSelections(view, state, outputs.ui, human, sessionDirs, ownSessions, brand);
     const events = createInteractiveEvents(outputs.rpc);

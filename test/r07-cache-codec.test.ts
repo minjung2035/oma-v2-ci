@@ -10,7 +10,7 @@ const good = {
   createdAtMs: 1, lastReceipt: null,
 };
 
-test("closed caller DTOs have a valid control and reject one changed condition", () => {
+test("001. Closed caller DTOs have a valid control and reject one changed condition", () => {
   const control = decodeCachedRequest(good, good.key);
   assert.equal(control.ok, true);
   if (control.ok) assert.deepEqual(control.value, good);
@@ -26,7 +26,7 @@ test("closed caller DTOs have a valid control and reject one changed condition",
   ]) assert.equal(decodeCachedRequest(changed, good.key).ok, false);
 });
 
-test("null remains only a cache sentinel and cannot satisfy the receipt predicate", () => {
+test("002. Null remains only a cache sentinel and cannot satisfy the receipt predicate", () => {
   assert.equal(decodeReceipt(null).ok, false);
   for (const receipt of [
     { operation, state: "pending" },

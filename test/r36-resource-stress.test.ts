@@ -37,7 +37,7 @@ async function waitFor(observed: () => boolean, deadline: number): Promise<void>
   while (!observed()) { assert.ok(performance.now() < deadline, "STRESS_OBSERVATION_DEADLINE"); await delay(1); }
 }
 
-test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSeconds=${seconds}`, { timeout: (seconds + 60) * 1000 }, async t => {
+test(`001. Stress native transport seed=${seed} cycles=${cycles} durationBudgetSeconds=${seconds}`, { timeout: (seconds + 60) * 1000 }, async t => {
   assert.equal(process.platform, "linux", "native stress requires Linux, not a silent skip");
   assert.ok(cycles > 0 && seconds > 0 && rssBudget > 0, "stress requires explicit nonzero test budgets");
   const root = mkdtempSync(join(tmpdir(), "oma-r36-sockets-")), staging = join(root, "staging");
@@ -127,7 +127,7 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
   }
 });
 
-test("R36 stress bounded executor timeout drains owned pipes without asserting descendant death", { timeout: 90000 }, async () => {
+test("002. Stress bounded executor timeout drains owned pipes without asserting descendant death", { timeout: 90000 }, async () => {
   assert.equal(process.platform, "linux");
   const timeoutMs = integerParameter("OMA_TEST_COMMAND_TIMEOUT_MS", 100, 10000);
   assert.ok(timeoutMs > 0);
@@ -142,7 +142,7 @@ test("R36 stress bounded executor timeout drains owned pipes without asserting d
   }
 });
 
-test("R36 stress no-progress recovery coalesces callers and respects the existing receipt backoff", async () => {
+test("003. Stress no-progress recovery coalesces callers and respects the existing receipt backoff", async () => {
   let now = 0, attempts = 0;
   const row: RecoveryRow = { id: parseOperationId("op-00000000-0000-4000-8000-000000000001")!,
     kind: "mail.send", state: "unknown" };

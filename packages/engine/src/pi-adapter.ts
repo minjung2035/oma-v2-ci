@@ -15,6 +15,7 @@ import type { ResidentEngineEffects } from "./ports.js";
 import { PiRpcClient, alarm, assertPiRpcLimits, type PiEvent, type Timer } from "./pi-rpc.js";
 import { planPiSpawn, type PiAdapterOptions, type PiSpawnPlan } from "./pi-spawn-plan.js";
 import { preparePiRetry } from "./pi-runtime.js";
+import { requireCollaborationSurface } from "@oma/domain/collaboration-surface";
 
 function failure(
   code: "SESSION_BOUNDARY_UNCONFIRMED" | "PROVIDER_FAILED" | "UNSUPPORTED_PROFILE" | "DEADLINE_EXCEEDED",
@@ -158,6 +159,7 @@ export interface DeliveryHooks {
 export class PiAdapter {
   private issuedView: PathView | undefined;
   constructor(private readonly effects: ResidentEngineEffects, private readonly options: PiAdapterOptions) {
+    requireCollaborationSurface(options.profile.toolSurface, "resident");
     if (options.confinement === undefined)
       throw failure("UNSUPPORTED_PROFILE", "Resident execution requires confinement");
     if (!Number.isSafeInteger(options.profile.inferenceSeconds) || options.profile.inferenceSeconds <= 0)
@@ -220,8 +222,8 @@ export class PiAdapter {
     // operations/README + TUI-010: the recorded digests are checked again here,
     // at the last moment before the file is handed to Pi.
     this.effects.assertExtensions(this.options.profile.extensions);
-    preparePiRetry(this.effects.settings, join(this.options.paths.agentHome, "engine"));
     const spawn = this.spawnPlan();
+    preparePiRetry(this.effects.settings, join(this.options.paths.agentHome, "engine"));
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
     const child = this.effects.sandbox.spawn(spawn);

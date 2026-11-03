@@ -19,7 +19,7 @@ function runner(scripts, responses = []) {
   return { run, calls };
 }
 
-test('AV-31: verification package scripts use direct argv from the manifest and share one bounded budget', async () => {
+test("001. Verification package scripts use direct argv from the manifest and share one bounded budget", async () => {
   const r = runner({ architecture: 'npm run inventory && node scripts/check.mjs', inventory: 'node scripts/inventory.mjs', typecheck: 'tsc -p tsconfig.json --noEmit' });
   await r.run('architecture', 'architecture', 10);
   await r.run('typecheck', 'typecheck', 10);
@@ -30,7 +30,7 @@ test('AV-31: verification package scripts use direct argv from the manifest and 
   ]);
 });
 
-test('AV-31: shell syntax, unsupported commands, missing scripts and cycles never reach a child', async () => {
+test("002. Shell syntax, unsupported commands, missing scripts and cycles never reach a child", async () => {
   for (const scripts of [{ test: 'node script.mjs; systemctl' }, { test: 'sh -c echo' }, { test: 'node "quoted.mjs"' },
     { test: 'npm run test' }, { test: 'npm run absent' }, { test: 'node script.mjs | cat' }, { test: 'node $(echo)' }]) {
     const r = runner(scripts);
@@ -39,7 +39,7 @@ test('AV-31: shell syntax, unsupported commands, missing scripts and cycles neve
   }
 });
 
-test('AV-31: a failed command or exhausted script budget cannot launch later checks', async () => {
+test("003. A failed command or exhausted script budget cannot launch later checks", async () => {
   const scripts = { test: 'node first.mjs && node second.mjs' };
   const r = runner(scripts, [{ code: 7, signal: null }]);
   assert.equal((await r.run('test', 'test', 10)).code, 7);

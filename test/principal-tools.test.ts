@@ -1,4 +1,5 @@
-/** Principal and Worker boundary refusals happen before broker or local effects. */
+/** Current tool input refusals, plus typed host GOAL uncertainty semantics.
+ * The transport fixture supplies authentication; this is not provider evidence. */
 import "#oma-test/app/runtime/client-preload";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -7,9 +8,20 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registerOmaTools } from "@oma/extension/mail-tools";
-import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { Client } from "@oma/client";
+const { registerCollaborationTools } = await import(new URL("collaboration-tools.js", import.meta.resolve("@oma/extension/mail-tools")).href);
+import { collaborationClient } from "./fixtures/collaboration-client.js";
+import { displayAddress } from "@oma/mail/addresses";
+import { logicalFromDisplay } from "@oma/domain/display-address";
 
+function invalidTools(role: "principal" | "resident") {
+  let effects = 0;
+  const client = new Proxy({}, { get() { effects++; throw new Error("invalid input reached the client"); } });
+  const tools = new Map<string, { execute(id: string, input: unknown): Promise<unknown> }>();
+  registerCollaborationTools({ on() {}, registerTool: (tool: { name: string; execute(id: string, input: unknown): Promise<unknown> }) => tools.set(tool.name, tool) } as never,
+    client as Client, role, { addresses: 64 });
+  return { tools, effects: () => effects };
+}
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
 async function peer(root: string, answer?: (frame: Record<string, unknown>) => Record<string, unknown> | null): Promise<Peer> {
   const frames: Record<string, unknown>[] = [];
@@ -38,30 +50,6 @@ async function peer(root: string, answer?: (frame: Record<string, unknown>) => R
   await new Promise<void>(resolve => { server.listen(path, resolve); });
   return { path, frames, close: () => new Promise<void>(resolve => { server.close(() => resolve()); }) };
 }
-const sent = (frames: readonly Record<string, unknown>[], method: string) =>
-  frames.filter(frame => frame.method === method).map(frame => frame.params as Record<string, unknown>);
-
-type Tool = { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> };
-function register(root: string, socket: string, principal: boolean, projectGit?: string, contextGit?: string): Map<string, Tool> {
-  const tools = new Map<string, Tool>();
-  const previous = { ...process.env };
-  Object.assign(process.env, { OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: socket,
-    ...(projectGit === undefined ? {} : { OMA_PROJECT_GIT: projectGit }), OMA_CONTEXT_GIT: contextGit ?? "" });
-  const channel = PrincipalChannel.detached();
-  // The Principal's engine is the one the product starts with its channel attached.
-  if (principal) {
-    Object.defineProperty(channel, "attached", { value: true });
-    // The peer is scripted, but a registered Principal still needs a grant.
-    channel.push(`credential ${"c".repeat(64)} ${"d".repeat(32)}\n`);
-  }
-  try {
-    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, channel);
-  } finally {
-    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
-    Object.assign(process.env, previous);
-  }
-  return tools;
-}
 /** A bare canonical repository whose main is one commit. */
 function canonical(root: string, format = "sha1", filename = "README.md"): { gitDir: string; main: string } {
   const git = (cwd: string, ...args: string[]) => {
@@ -80,127 +68,77 @@ function canonical(root: string, format = "sha1", filename = "README.md"): { git
   return { gitDir, main: git(gitDir, "rev-parse", "refs/heads/main") };
 }
 
-test("Principal review authority and unavailable actions fail before effects", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-principal-boundary-"));
-  const fixture = await peer(root);
-  try {
-    const tools = register(root, fixture.path, true);
-    const name = "merge-01234567-0000-4000-8000-000000000000";
-    const approval = "m-00000000-0000-4000-8000-000000000001-0";
-    // Worker-only authority is absent, not an action hidden inside a shared tool.
-    for (const unavailable of ["oma_merge_open", "oma_challenge_open", "oma_review_status", "oma_review_list",
-      "oma_review_cancel", "oma_agent_create", "oma_agent_start", "oma_agent_stop"])
-      assert.equal(tools.has(unavailable), false, unavailable);
-    for (const [tool, params] of [
-      ["oma_review_respond", { name, action: "approve", body: "ok" }],
-      ["oma_review_respond", { name, action: "approve", body: "ok", approval: "not-a-message" }],
-      ["oma_review_respond", { name, action: "comment", body: "discussion", approval }],
-      ["oma_review_respond", { name, action: "approve", body: " ", approval }],
-      ["oma_review_respond", { name, action: "approve", body: "ok", approval, tier: "LOW" }],
-      ["oma_review_diff", { name: "topic/dev" }],
-      ["oma_review_diff", { name, cursor: "0" }],
-      ["oma_society", { action: "restart" }],
-      ["oma_mail_send", { to: ["residents"], subject: "Goal", body: "b", intent: "goal", expectedRevision: "HEAD" }],
-    ] as const) await assert.rejects(() => tools.get(tool)!.execute("invalid", params), /not valid|Invalid arguments/);
-    assert.equal(fixture.frames.length, 0, "invalid calls never attach or reach the broker");
-  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+test("001. Principal review authority and unavailable actions fail before effects", async () => {
+  const h = invalidTools("principal");
+  assert.deepEqual([...h.tools.keys()].sort(), ["oma_goal", "oma_review", "oma_send", "oma_society"]);
+  for (const input of [
+    { target: "", decision: "approve", reason: "ok" },
+    { target: "target", decision: "comment", reason: "discussion" },
+    { target: "target", decision: "approve", reason: " " },
+    { target: "target", decision: "approve", reason: "ok", approval: "mail-id" },
+  ]) await assert.rejects(h.tools.get("oma_review")!.execute("invalid", input), /INVALID_ARGUMENT/);
+  await assert.rejects(h.tools.get("oma_society")!.execute("invalid", { action: "restart" }), /INVALID_ARGUMENT/);
+  assert.equal(h.effects(), 0);
 });
 
-test("Worker invalid review inputs and Principal approval fields are refused before effects", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-worker-boundary-"));
-  const fixture = await peer(root);
-  try {
-    const tools = register(root, fixture.path, false);
-    const name = "merge-01234567-0000-4000-8000-000000000000";
-    for (const unavailable of ["oma_society", "oma_goal_publish"])
-      assert.equal(tools.has(unavailable), false, unavailable);
-    for (const [tool, params] of [
-      ["oma_review_respond", { name, action: "approve", body: "ok", approval: "m-00000000-0000-4000-8000-000000000001-0" }],
-      ["oma_review_respond", { name, action: "comment", body: "ok", title: "leaked" }],
-      ["oma_review_respond", { name, action: "approve", body: " " }],
-      ["oma_merge_open", { tier: "LOW", title: "t", reason: "r", verdict: "approve" }],
-      ["oma_merge_open", { tier: "LOW", title: "t", reason: "r", merge: name }],
-      ["oma_merge_open", { tier: "LOW", title: "t", reason: "r", path: "x" }],
-      ["oma_challenge_open", { merge: name.replace("merge-", "challenge-"), tier: "LOW", title: "t", reason: "r" }],
-      ["oma_challenge_open", { merge: name, tier: "MEDIUM", title: "t", reason: "r" }],
-      ["oma_challenge_open", { merge: name, tier: "LOW", title: "t", reason: "r", replacement: { candidate: "HEAD" } }],
-      ["oma_review_diff", { name, cursor: -1 }],
-      ["oma_review_diff", { name, cursor: 0.5 }],
-      ["oma_review_diff", { name, cursor: "0" }],
-      ["oma_review_list", { kind: "merge", after: name.replace("merge-", "challenge-") }],
-    ] as const) await assert.rejects(() => tools.get(tool)!.execute("invalid", params), /not valid|Invalid arguments/);
-    await assert.rejects(() => tools.get("oma_mail_read")!.execute("read", { messageId: "/inbox.md" }), /no delivery index/);
-    assert.equal(fixture.frames.length, 0, "invalid inputs produce neither publication nor broker calls");
-  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+test("002. Worker invalid review inputs and Principal approval fields are refused before effects", async () => {
+  const h = invalidTools("resident");
+  assert.deepEqual([...h.tools.keys()].sort(), ["oma_challenge", "oma_follow", "oma_merge", "oma_review", "oma_send", "oma_spawn", "oma_wait"]);
+  for (const [name, input] of [
+    ["oma_review", { target: "target", decision: "approve", reason: "ok", approval: "mail" }],
+    ["oma_review", { target: "target", decision: "approve", reason: " " }],
+    ["oma_merge", { tier: "LOW", reason: "r", verdict: "approve" }],
+    ["oma_merge", { tier: "LOW", reason: "r", change: { candidate: "HEAD", path: "/etc/shadow" } }],
+    ["oma_challenge", { merge: "request-name", tier: "MEDIUM", reason: "r" }],
+    ["oma_follow", { topic: "release", enabled: "true" }],
+    ["oma_spawn", { name: "peer", from: "HEAD", brief: "legacy body" }],
+  ] as const) await assert.rejects(h.tools.get(name)!.execute("invalid", input), /INVALID_ARGUMENT/);
+  assert.equal(h.effects(), 0);
 });
 
-
-test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society's RFC address, a message's file name -- as what they display", async () => {
-  const { displayAddress } = await import("@oma/mail/addresses");
-  const { logicalFromDisplay } = await import("@oma/domain/display-address");
-  // The mirror inverts the one owner of the display form, and nothing else.
-  for (const logical of ["principal", "commons", "residents", "alice", "a-b-9", "topic/dev", "topic/a"])
-    assert.equal(logicalFromDisplay(displayAddress(logical as never, "demo"), "demo"), logical, logical);
-  for (const other of ["alice@other.oma.invalid", "alice@demo.oma.invalid.evil", "Alice@demo.oma.invalid", "topic-@demo.oma.invalid",
-    "broker@demo.oma.invalid", "--file@demo.oma.invalid", "alice", "", "@demo.oma.invalid"])
-    assert.equal(logicalFromDisplay(other, "demo"), null, other);
-  const root = mkdtempSync(join(tmpdir(), "oma-av15-"));
-  const fixture = await peer(root);
-  try {
-    const previous = process.env.OMA_SOCIETY;
-    process.env.OMA_SOCIETY = "demo";
-    let tools: Map<string, Tool>;
-    try { tools = register(root, fixture.path, false); }
-    finally { if (previous === undefined) delete process.env.OMA_SOCIETY; else process.env.OMA_SOCIETY = previous; }
-    const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
-    await assert.rejects(() => call("oma_mail_send", { to: ["principal@demo.oma.invalid", "topic-dev@demo.oma.invalid"], subject: "s", body: "b" }));
-    assert.deepEqual(sent(fixture.frames, "mail.send")[0]!.to, ["principal", "topic/dev"], "the displayed address was not taken as the logical one");
-    await assert.rejects(() => call("oma_mail_send", { to: ["principal@other.oma.invalid"], subject: "s", body: "b" }), /is not valid/);
-    const id = "m-00000000-0000-4000-8000-000000000001-0";
-    await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}:2,` }));
-    assert.deepEqual(sent(fixture.frames, "mail.ack").at(-1), { message: id }, "the Maildir file name was not taken as the message");
-    await assert.rejects(() => call("oma_mail_ack", { messageId: `x${id}:2,` }), /is not valid/);
-    // The RFC Message-ID its headers show (In-Reply-To, References), this society's only.
-    await assert.rejects(() => call("oma_mail_ack", { messageId: `<${id}@demo.oma.invalid>` }));
-    assert.deepEqual(sent(fixture.frames, "mail.ack").at(-1), { message: id }, "the RFC Message-ID was not taken as the message");
-    await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}@other.oma.invalid` }), /is not valid/);
-  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+test("003. Current send tools preserve displayed project addresses and reject foreign display authority", async t => {
+  for (const logical of ["principal", "commons", "residents", "alice", "a-b-9", "topic/dev"])
+    assert.equal(logicalFromDisplay(displayAddress(logical as never, "demo"), "demo"), logical);
+  for (const foreign of ["alice@other.oma.invalid", "alice@demo.oma.invalid.evil", "Alice@demo.oma.invalid", "--file@demo.oma.invalid"])
+    assert.equal(logicalFromDisplay(foreign, "demo"), null);
+  const h = await collaborationClient(t);
+  const result = await h.call("alice", "oma_send", { to: ["principal@demo.oma.invalid", "topic-dev@demo.oma.invalid"], content: { kind: "text", value: "Exact body\r\n" } }).invokeTool();
+  const envelope = JSON.parse(result.content[0]!.text!);
+  assert.equal(envelope.receipt.state, "succeeded");
+  const op = h.f.store.getOperationById(envelope.receipt.operation);
+  assert.ok(op?.kind === "mail.send");
+  assert.deepEqual(op.plan.message.to, ["principal", "topic/dev"]);
+  const before = h.f.store.acceptedOperationPage().items;
+  const refused = await h.call("alice", "oma_send", { to: ["principal@other.oma.invalid"], content: { kind: "text", value: "Do not route this" } }).invokeTool();
+  assert.match(refused.content[0]!.text!, /INVALID_REQUEST|invalid.*recipient/i);
+  assert.deepEqual(h.f.store.acceptedOperationPage().items, before);
 });
 
-
-test("GOAL publication is explicit, validates revisions before effects, and never automatically resends unknown acceptance", { timeout: 60_000 }, async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-av29-")); const fixture = await peer(root);
+test("004. GOAL publication is explicit, validates revisions before effects, and never automatically resends unknown acceptance", { timeout: 60_000 }, async t => {
+  const invalid = invalidTools("principal");
+  await assert.rejects(invalid.tools.get("oma_goal")!.execute("invalid", { content: { kind: "text", value: "explicit body" }, expectedRevision: 40 }), /INVALID_ARGUMENT/);
+  assert.equal(invalid.effects(), 0);
+  const h = await collaborationClient(t), accepted = h.f.store.acceptedOperationPage().items;
+  for (const expectedRevision of ["none", "HEAD", "a".repeat(39), "a".repeat(41), "a".repeat(63), "a".repeat(65), "A".repeat(40)]) {
+    const result = await h.call("principal", "oma_goal", { content: { kind: "text", value: "explicit body" }, expectedRevision }).invokeTool();
+    assert.match(result.content[0]!.text!, /INVALID_REQUEST|exact full context OID/);
+  }
+  assert.deepEqual(h.f.store.acceptedOperationPage().items, accepted);
+  const root = mkdtempSync(join(tmpdir(), "oma-goal-uncertain-")), transport = await peer(root);
   try {
-    const previous = process.env.OMA_SOCIETY; process.env.OMA_SOCIETY = "demo";
-    let tools: Map<string, Tool>;
-    try { tools = register(root, fixture.path, true); }
-    finally { if (previous === undefined) delete process.env.OMA_SOCIETY; else process.env.OMA_SOCIETY = previous; }
-    const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
-    writeFileSync(join(root, "GOAL.md"), "workspace file must not be used\n");
-    for (const extra of [{ expectedRevision: "none" }, { intent: "goal" },
-      { intent: "goal", expectedRevision: "none", replyTo: "m-00000000-0000-4000-8000-000000000001-0" }])
-      await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "explicit body", ...extra }), /not valid|Invalid arguments/);
-    assert.equal(fixture.frames.length, 0);
-    await assert.rejects(() => call("oma_goal_publish", { subject: "Plan", body: "explicit body",
-      expectedRevision: null }), /Acceptance status unknown/);
-    assert.equal(sent(fixture.frames, "context.publish").length, 1);
+    writeFileSync(join(root, "GOAL.md"), "workspace bytes must not be substituted\n");
+    const publish = (home: string, expected: string | null, contextGit?: string) => new Client({ cwd: home, env: {
+      HOME: home, OMA_SOCKET: transport.path, OMA_SOCIETY: "demo", OMA_MAIL_ARCHIVE: join(home, "archive"),
+      OMA_CONTEXT_BYTES: "8388608", ...(contextGit ? { OMA_CONTEXT_GIT: contextGit } : {}),
+    } }).publishGoal("explicit body", expected, "Plan", `goal-${expected ?? "initial"}`);
+    await assert.rejects(publish(root, null), /Acceptance status unknown/);
     for (const format of ["sha1", "sha256"]) {
-      const contextRoot = join(root, format); mkdirSync(contextRoot);
-      const { gitDir, main: expectedRevision } = canonical(contextRoot, format, "GOAL.md");
-      const publisher = register(contextRoot, fixture.path, true, undefined, gitDir).get("oma_goal_publish")!;
-      await assert.rejects(() => publisher.execute(`goal-${format}`, { subject: "Plan", body: "explicit body",
-        expectedRevision }), /Acceptance status unknown/);
-      assert.equal(sent(fixture.frames, "context.publish").at(-1)!.expected, expectedRevision);
+      const directory = join(root, format); mkdirSync(directory);
+      const { gitDir, main } = canonical(directory, format, "GOAL.md");
+      await assert.rejects(publish(directory, main, gitDir), /Acceptance status unknown/);
     }
-    const before = fixture.frames.length;
-    for (const expectedRevision of [40, "none", "HEAD", "a".repeat(39), "a".repeat(41), "a".repeat(63), "a".repeat(65), "A".repeat(40)])
-      await assert.rejects(() => call("oma_goal_publish", { subject: "Plan", body: "explicit body",
-        expectedRevision }), /not valid|Invalid arguments/);
-    assert.equal(fixture.frames.length, before, "invalid revisions never reach the broker");
-    const publications = fixture.frames.filter(frame => frame.method === "context.publish");
-    const lookups = sent(fixture.frames, "operation.get");
-    assert.equal(publications.length, 3, "unknown acceptance never resends automatically");
-    assert.deepEqual(lookups, publications.map(frame => ({ key: frame.request })), "one same-key lookup per unobserved publication");
-  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+    const publications = transport.frames.filter(frame => frame.method === "context.publish");
+    assert.equal(publications.length, 3, "uncertain acceptance must not cause automatic replacement sends");
+    assert.deepEqual(transport.frames.filter(frame => frame.method === "operation.get").map(frame => frame.params), publications.map(frame => ({ key: frame.request })));
+  } finally { await transport.close(); rmSync(root, { recursive: true, force: true }); }
 });
-

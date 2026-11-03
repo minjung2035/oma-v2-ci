@@ -20,7 +20,7 @@ import { messageIdForOperation } from "@oma/domain/derived";
 import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
-test("RUN-001: broker EOF, malformed reply and local stop settle all pending calls", { timeout: 5000 }, async () => {
+test("001. Broker EOF, malformed reply and local stop settle all pending calls", { timeout: 5000 }, async () => {
   for (const mode of ["eof", "malformed", "oversize", "stop", "timeout", "success"]) {
     const dir = mkdtempSync(join(tmpdir(), "oma-channel-"));
     const socket = join(dir, "broker.sock");
@@ -98,7 +98,7 @@ async function privateTransport(t: import("node:test").TestContext,
   }
 }
 
-test("RUN-001: a prepared handoff requires an explicitly configured Pi adapter", async t => {
+test("002. A prepared handoff requires an explicitly configured Pi adapter", async t => {
   for (const prepared of [false, true]) {
     const dir = mkdtempSync(join(tmpdir(), "oma-run-gate-"));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -120,7 +120,7 @@ test("RUN-001: a prepared handoff requires an explicitly configured Pi adapter",
   }
 });
 
-test("Native runner rejects missing or malformed explicit execution identity", () => {
+test("003. Native runner rejects missing or malformed explicit execution identity", () => {
   for (const identity of [undefined, "", "legacy-unit", "a".repeat(31), "A".repeat(32)])
     assert.throws(() => new RunnerModule({ runRoot: "/unused" }, "alice", identity as string), /explicit execution identity/);
 });
@@ -159,5 +159,5 @@ async function idleDelivery(t: import("node:test").TestContext, broken: boolean)
   } finally { await runner.stop(); }
 
 }
-test("NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint", { timeout: 10000 }, t => idleDelivery(t, false));
-test("NATIVE-RUNNER-CONTROL-01: idle delivery refuses a lost endpoint", { timeout: 10000 }, t => idleDelivery(t, true));
+test("004. Idle delivery retains its owned endpoint", { timeout: 10000 }, t => idleDelivery(t, false));
+test("005. Idle delivery refuses a lost endpoint", { timeout: 10000 }, t => idleDelivery(t, true));

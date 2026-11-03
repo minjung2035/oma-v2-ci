@@ -20,6 +20,7 @@
 | 주제 | 실제 소유 코드 |
 |---|---|
 | 프로토콜 설정과 frame | [domain/protocol-limits.ts](../packages/domain/src/protocol-limits.ts), [domain/limits.ts](../packages/domain/src/limits.ts), [protocol/frame.ts](../packages/protocol/src/frame.ts) |
+| batch view·최초/재안내 notice의 최소 frame | [protocol/batch-view.ts](../packages/protocol/src/batch-view.ts), [mail/batches.ts](../packages/mail/src/batches.ts), [config/index.ts](../packages/config/src/index.ts) |
 | Broker supervision channel | [protocol/host-channel.ts](../packages/protocol/src/host-channel.ts) |
 | 설정 문서·소스 closure·extension 목록 | [config/operations.ts](../packages/config/src/operations.ts) |
 | 설정 generation 보존 | [config/generations.ts](../packages/config/src/generations.ts) |

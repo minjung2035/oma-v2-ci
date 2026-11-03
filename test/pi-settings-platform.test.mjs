@@ -53,11 +53,11 @@ const released = root => {
   assert.ok(lock, 'settings writer lock returned'); lock.close();
 };
 for (const platform of ['linux', 'darwin']) {
-  test(`engine settings ${platform}: the engine directory belongs to the existing host layout`, t => {
+  test(`001. Engine settings ${platform}: the engine directory belongs to the existing host layout`, t => {
     const { api, root } = fixture(t, platform);
     assert.equal(api.piAgentDir(join(root, 'personal')), join(root, platform === 'darwin' ? 'engine' : '.engine'));
   });
-  test(`engine settings ${platform}: defaults, choices, one retry owner and repeatable preparation`, t => {
+  test(`002. Engine settings ${platform}: defaults, choices, one retry owner and repeatable preparation`, t => {
     const w = fixture(t, platform), { api, root, path } = w;
     fs.writeFileSync(path, JSON.stringify({ theme: 'dark', hideThinkingBlock: false, defaultModel: 'fixture',
       retry: { maxRetries: 99, baseDelayMs: 50, maxAgentDelayMs: 200, provider: { maxRetries: 9, timeoutMs: 321 } } }));
@@ -73,7 +73,7 @@ for (const platform of ['linux', 'darwin']) {
     assert.deepEqual(json(path).retry, { enabled: true, maxRetries: 5, baseDelayMs: 1000, maxAgentDelayMs: 8000,
       provider: { maxRetries: 0 } });
   });
-  test(`engine settings ${platform}: invalid bytes are preserved and the writer is returned`, t => {
+  test(`003. Engine settings ${platform}: invalid bytes are preserved and the writer is returned`, t => {
     const { api, root, path } = fixture(t, platform);
     for (const bytes of ['{', 'null', '[]', '{"retry":[]}', '{"retry":{"provider":null}}', Buffer.from([255]), ' '.repeat(1048577)]) {
       fs.writeFileSync(path, bytes);
@@ -82,14 +82,14 @@ for (const platform of ['linux', 'darwin']) {
     }
   });
   for (const [kind, link] of [['symlink', fs.symlinkSync], ['hardlink', fs.linkSync]]) {
-    test(`engine settings ${platform}: ${kind} is refused without changing the other name`, t => {
+    test(`004. Engine settings ${platform}: ${kind} is refused without changing the other name`, t => {
       const { api, root, path } = fixture(t, platform), target = join(root, 'other.json');
       fs.writeFileSync(target, '{}'); link(target, path);
       assert.throws(() => api.preparePiRetry(root));
       assert.equal(fs.readFileSync(path, 'utf8'), '{}'); assert.equal(fs.readFileSync(target, 'utf8'), '{}'); released(root);
     });
   }
-  test(`engine settings ${platform}: every interactive settings file enforces its own single name`, t => {
+  test(`005. Engine settings ${platform}: every interactive settings file enforces its own single name`, t => {
     const { api, root } = fixture(t, platform);
     for (const name of ['themes/oma.json', 'settings.json', 'keybindings.json', 'open-tui.json']) {
       const dir = join(root, name.replaceAll('/', '-')), target = join(dir, 'other.json'), settings = join(dir, name);
@@ -99,7 +99,7 @@ for (const platform of ['linux', 'darwin']) {
       released(dirname(settings));
     }
   });
-  test(`engine settings ${platform}: lock contention preserves settings until its owner returns`, t => {
+  test(`006. Engine settings ${platform}: lock contention preserves settings until its owner returns`, t => {
     const { api, root, path } = fixture(t, platform); fs.writeFileSync(path, '{"theme":"light"}');
     const lock = ProcessLock.acquire(join(root, 'oma-settings.lock'));
     try {
@@ -109,7 +109,7 @@ for (const platform of ['linux', 'darwin']) {
     api.preparePiRetry(root); assert.equal(json(path).theme, 'light'); released(root);
   });
 }
-for (const platform of ['linux', 'darwin']) test(`engine settings ${platform}: read IO is not defaults and releases the lock`, t => {
+for (const platform of ['linux', 'darwin']) test(`007. Engine settings ${platform}: read IO is not defaults and releases the lock`, t => {
   const problem = Object.assign(new Error('injected read'), { code: 'EIO' }); let armed = true;
   const { api, root, path } = fixture(t, platform, metadata => ({ ...metadata, readUserFile(...args) {
     if (armed) { armed = false; throw problem; } return metadata.readUserFile(...args);
@@ -120,7 +120,7 @@ for (const platform of ['linux', 'darwin']) test(`engine settings ${platform}: r
   api.preparePiRetry(root); assert.equal(json(path).theme, 'light');
 });
 for (const platform of ['linux', 'darwin']) for (const after of [false, true])
-  test(`engine settings ${platform}: ${after ? 'visible' : 'pre-replace'} failure is retried from saved bytes`, t => {
+  test(`008. Engine settings ${platform}: ${after ? 'visible' : 'pre-replace'} failure is retried from saved bytes`, t => {
     const problem = Object.assign(new Error('injected replacement'), { code: 'EIO' }); let armed = true, writes = 0;
     const { api, root, path } = fixture(t, platform, metadata => ({ ...metadata, replaceUserFile(...args) {
       writes++;

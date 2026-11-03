@@ -6,7 +6,7 @@ import {tmpdir} from "node:os";
 import {searchWorkspace} from "@oma/tool-runtime/contained-search";
 import {withSearchSnapshot,readResult} from "@oma/tool-files";
 
-test("IMP-R24: ignored 32MiB payload is never copied; nested rules, hidden, negation, glob and explicit file retain rg semantics",async t=>{
+test("001. Ignored 32MiB payload is never copied; nested rules, hidden, negation, glob and explicit file retain rg semantics",async t=>{
   const root=mkdtempSync(join(tmpdir(),"oma-select-")),workspace=join(root,"workspace"),results=join(root,"results");
   t.after(()=>rmSync(root,{recursive:true,force:true}));mkdirSync(workspace);mkdirSync(results);mkdirSync(join(workspace,"nested"));
   const ignored=Buffer.alloc(32*1024*1024,120);writeFileSync(join(workspace,"large.bin"),ignored);
@@ -26,7 +26,7 @@ test("IMP-R24: ignored 32MiB payload is never copied; nested rules, hidden, nega
   assert.match(readResult(results,find.details.result.reference).text,/keep.txt/);assert.doesNotMatch(readResult(results,find.details.result.reference).text,/drop.txt/);
 });
 
-for(const mutation of ["rename","symlink","ignore"])test(`IMP-R25: ${mutation} between selection and payload copy refuses`,async t=>{
+for(const mutation of ["rename","symlink","ignore"])test(`002. Copy mutation: ${mutation} between selection and payload copy refuses`,async t=>{
   const root=mkdtempSync(join(tmpdir(),"oma-select-race-"));t.after(()=>rmSync(root,{recursive:true,force:true}));
   writeFileSync(join(root,"file"),"allowed\n");writeFileSync(join(root,".ignore"),"other\n");
   const outside=join(tmpdir(),`oma-outside-${process.pid}-${mutation}`);writeFileSync(outside,"outside secret\n");t.after(()=>rmSync(outside,{force:true}));

@@ -12,11 +12,13 @@ export function integrationStatus(state: ReviewState, main: { oid: Oid | null },
     ((state.integration?.state === "pending" || state.integration?.state === "unknown") && main.oid === (state.integration.diff?.candidate ?? state.identity.candidate));
   const integrationPhase = state.included !== null && state.integration === null ? "already-included" : applied ? "applied" : main.oid === null ? "unknown" : blocked ? "blocked" : live ??
     (["peer-needed", "principal-pending"].includes(state.display) ? "review-needed" : state.display);
-  const retryable = main.oid !== null && !applied && state.terminal === null && !blocked && (state.preparationFailure !== null || state.integration?.state === "failed");
+  const requiresRevision = state.preparationFailure?.code === "REVERT_CONFLICT";
+  const closed = state.included !== null || state.terminal !== null;
+  const retryable = main.oid !== null && !applied && !closed && !blocked && !requiresRevision && (state.preparationFailure !== null || state.integration?.state === "failed");
   return { revision: state.revision, scope: state.scope, proposal: state.sourceIdentity,
     ...(state.preparation ? {contextDiff:state.preparation.fact.diff} : {}), attemptNumber: state.attemptNumber, ...(state.integration?.diff === undefined ? {} : { diff: state.integration.diff }),
     integrationPhase, notice: applied ? state.integration?.state === "succeeded" ? "delivered" as const : "pending" as const : "none" as const,
-    retryable, nextAction: applied ? "none" : main.oid === null ? "observe-main" : state.integration?.state === "unknown" || state.integration?.state === "pending" ? "observe-existing-attempt"
+    retryable, nextAction: applied || closed ? "none" : requiresRevision ? "requester-revise" : main.oid === null ? "observe-main" : state.integration?.state === "unknown" || state.integration?.state === "pending" ? "observe-existing-attempt"
       : blocked ? "resolve-current-conditions" : retryable ? "requester-retry" : state.ready ? "await-integration" : "review" };
 }
 export function reviewDisplay(state: ReviewState, main: { oid: Oid | null }, blocked = false, live?: string): string {
@@ -39,7 +41,7 @@ export function workerReviewStatus(state: ReviewState,
     capacityFallback: state.capacityFallback, principalRequired: state.principalRequired,
     approvers: [...state.approvers], rejectors: [...state.rejectors],
     observedAtMs: main.observedAtMs, remainingApprovals: Math.max(0, state.required - state.approvers.length),
-    acceptingWorkerVotes: !(state.kind === "merge" && state.tier === "LOW") && state.terminal === null && state.integration === null,
+    acceptingWorkerVotes: !(state.kind === "merge" && state.tier === "LOW") && state.terminal === null && state.included === null && state.integration === null,
     principal: { approval: state.approval?.id ?? null, sent,
       // The latest Principal vote on this request — still shown after its
       // approval lapsed (a reject's own op withdraws it).

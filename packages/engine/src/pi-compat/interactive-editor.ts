@@ -23,6 +23,8 @@ export interface EditorRoutingPorts {
   /** Runs `text` if it names an extension's command, and says whether it did.
    * Pi's editor would leave such a command for a prompt loop oma does not run. */
   extensionCommand?(text: string): boolean;
+  /** Product-owned navigation only, before command expansion or editor history. */
+  hostNavigation?(text: string): boolean;
   panel(): void;
   refuse(): void;
   /** A pasted image was offered; the text-only prompt cannot carry it, so the
@@ -60,6 +62,7 @@ export function ownedEditor(editor: EditorComponent, ports: EditorRoutingPorts):
   const route = (text: string): void => {
     if (overflow) { target.setText(text); ports.refuse(); return; }
     if (!text.trim()) return;
+    if (ports.hostNavigation?.(text)) return;
     if (ports.thinkingVisibility?.(text)) { target.addToHistory?.(text); return; }
     if (ports.isCommand(text)) { upstream?.(text); return; }
     target.addToHistory?.(text);

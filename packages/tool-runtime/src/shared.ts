@@ -6,7 +6,7 @@ import { Type, type TSchema, type Static } from "typebox";
 import { Compile } from "typebox/compile";
 import { createHash } from "node:crypto";
 import { logicalFromDisplay } from "@oma/domain/display-address";
-import { isValidActorName as validActorName, isValidRequestKey as validRequestKey } from "@oma/domain/identifiers";
+import { isValidActor as validStatusName, isValidActorName as validActorName, isValidRequestKey as validRequestKey } from "@oma/domain/identifiers";
 
 export function integerEnv(name: string): number | null {
   const value = Number(process.env[name]);
@@ -25,6 +25,15 @@ export function refused(what: string, value: unknown): never {
 export function actorNameOf(value: unknown, society: string | undefined, what: string): string {
   const logical: unknown = logicalFromDisplay(value, society) ?? value;
   return typeof logical === "string" && validActorName(logical) ? logical : refused(what, value);
+}
+/** The names a status roster carries are the Principal row's and managed
+ * Residents' (the registry admits no other), and `status.get`'s `next` cursor
+ * is exactly one of them. The roster tool's `agent` and `after` slots take that
+ * same grammar; this is not the worker-identity guard -- `actorNameOf` still
+ * refuses the Principal in every slot that names a controllable agent. */
+export function statusNameOf(value: unknown, society: string | undefined, what: string): string {
+  const logical: unknown = logicalFromDisplay(value, society) ?? value;
+  return typeof logical === "string" && validStatusName(logical) ? logical : refused(what, value);
 }
 /** What a tool knows of the call it serves: the engine's call id and, when
  * the engine gives it, the session the call is in. */

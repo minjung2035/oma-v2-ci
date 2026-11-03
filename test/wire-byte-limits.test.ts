@@ -44,7 +44,7 @@ async function exchange(frameBytes: number, params: Record<string, unknown>, ans
   }
 }
 
-test("V26C: a request is measured in encoded bytes, not characters, before anything is written", async () => {
+test("001. A request is measured in encoded bytes, not characters, before anything is written", async () => {
   const params = { agent: "한".repeat(300) };                        // 300 characters, 900 bytes
   const exact = encodedBody({ v: 1, id: ID, method: "status.get", params });
   assert.ok(JSON.stringify(params).length < exact - 600, "the fixture does not separate characters from bytes");
@@ -56,7 +56,7 @@ test("V26C: a request is measured in encoded bytes, not characters, before anyth
   assert.equal(over.received.length, 0, "an oversized request reached the peer");
 });
 
-test("V26C: a response past the budget in encoded bytes is a failure, never a result", async () => {
+test("002. A response past the budget in encoded bytes is a failure, never a result", async () => {
   const reason = "😀".repeat(200);                                   // 400 UTF-16 units, 800 bytes
   const exact = encodedBody({ v: 1, id: ID, ok: true, result: status(reason) });
   const fits = await exchange(exact, {}, id => ({ v: 1, id, ok: true, result: status(reason) }));
@@ -67,7 +67,7 @@ test("V26C: a response past the budget in encoded bytes is a failure, never a re
   assert.equal(over.error?.code, "FRAME_TOO_LARGE");
 });
 
-test("V26C: a response for another request id or with an unknown field is not this call's result", async () => {
+test("003. A response for another request id or with an unknown field is not this call's result", async () => {
   for (const [name, answer] of [
     ["another id", (id: string) => ({ v: 1, id: `${id}x`, ok: true, result: status("") })],
     ["unknown envelope field", (id: string) => ({ v: 1, id, ok: true, result: status(""), extra: true })],

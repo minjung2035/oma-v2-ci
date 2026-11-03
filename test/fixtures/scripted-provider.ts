@@ -90,11 +90,15 @@ export function toolResults(request: ChatRequest): { readonly id: string; readon
 }
 /** The text of the newest message a user (the Human, or a delivery notice) sent. */
 export function lastUserText(request: ChatRequest): string {
-  return textOf([...request.messages].reverse().find(message => message.role === "user"));
+  return textOf([...request.messages].reverse().find(message => message.role === "user" &&
+    !/^(?:OMA record coverage is partial\.|OMA could not observe current record health\.|OMA could not refresh your permitted records\.)/.test(textOf(message))));
 }
 /** Whether the engine's newest message is a tool result, i.e. this request continues a turn. */
 export function continuesTurn(request: ChatRequest): boolean {
-  return request.messages.at(-1)?.role === "tool";
+  let lastAssistant = request.messages.length - 1;
+  while (lastAssistant >= 0 && request.messages[lastAssistant]?.role !== "assistant") lastAssistant--;
+  return lastAssistant >= 0 && !!request.messages[lastAssistant]?.tool_calls?.length &&
+    request.messages.slice(lastAssistant + 1).some(message => message.role === "tool");
 }
 
 const scriptOf = (source: Script | readonly Reply[]): Script => {

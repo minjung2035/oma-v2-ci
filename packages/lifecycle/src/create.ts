@@ -1,4 +1,4 @@
-import type { LifecycleWorkspace, LifecycleEffects } from "./ports.js";
+import type { CreateAcceptance, LifecycleSourcePublication, LifecycleWorkspace, LifecycleEffects } from "./ports.js";
 import { encodeOperationPlan } from "@oma/protocol/operation-codec";
 import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "@oma/contracts";
 import type { CreationPublicationEvidence } from "@oma/contracts/publication";
@@ -19,6 +19,10 @@ import type { LifecycleUnits } from "./ports.js";
 import type { LifecyclePaths, PhysicalCreatePlan, LinkedCreatePlan, SeedConfig } from "./contracts.js";
 import { LifecyclePolicy, lifecycleReceipt } from "./policy.js";
 import { CreationPublicationObserver } from "./create-publication.js";
+import { createRootId } from "@oma/domain/derived";
+import { decodeMutationPayload } from "@oma/protocol/request-codec";
+import { FIRST_WORKER_RECOVERY_PREFIX } from "@oma/domain/config-format";
+import type { CreateSourcePlan } from "@oma/contracts/values";
 
 /** A linked request owns no new workspace, unit or initial message.
  * Create preparation may await. Acceptance alone owns the atomic winner decision.
@@ -28,7 +32,7 @@ export class CreateCoordinator {
   private completing: { readonly id: string; readonly task: Promise<Receipt> } | null = null;
   constructor(private readonly store: LifecycleLedger, private readonly units: Pick<LifecycleUnits, "assertResidentNamesFree" | "ensureResident" | "start" | "confirmDead">,
     private readonly paths: LifecyclePaths, private readonly policy: LifecyclePolicy,
-    private readonly workspace: LifecycleWorkspace, private readonly mail: LifecycleMail | null, private readonly effects: LifecycleEffects) {
+    private readonly workspace: LifecycleWorkspace, private readonly mail: LifecycleMail | null, private readonly effects: LifecycleEffects, private readonly source: LifecycleSourcePublication | null = null) {
     this.publication = new CreationPublicationObserver(store, units, paths.stateRoot, workspace, policy);
   }
 
@@ -102,7 +106,7 @@ export class CreateCoordinator {
    * cannot add a Worker to a Society which has ever had one. */
   private async recoverFirst(config: SeedConfig): Promise<void> {
     const request = config.firstWorkerRecovery!;
-    const key = `recover-first-${request.key}`;
+    const key = `${FIRST_WORKER_RECOVERY_PREFIX}${request.key}`;
     const previous = this.store.getOperation("principal", key);
     if (previous !== null) {
       if (previous.kind !== "agent.create" || previous.plan.spec.name !== request.name ||
@@ -154,29 +158,46 @@ export class CreateCoordinator {
     // The ordinary operation recovery owner provisions, publishes and starts it.
   }
 
-  async create(auth: AuthContext, source: AgentCreateInput, key: string): Promise<Receipt> {
-    const input = Object.freeze({ ...source });
+  async create(auth: AuthContext, source: AgentCreateInput, key: string, stream?: AsyncIterable<Uint8Array>, beforeAccept?: CreateAcceptance): Promise<Receipt> {
+    const input = Object.freeze(decodeMutationPayload("agent.create", source));
     assertActorIdentity(this.store, auth);
-    const hash = requestHash("agent.create", { name: input.name, from: input.from, brief: input.brief });
+    const hash = requestHash("agent.create", input);
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
+    const frozen = input.collaboration?.freeze;
+    if (frozen !== undefined && (auth.role !== "resident" || frozen.operation !== createRootId(auth.actor, key)))
+      throw new StoreError("INVALID_REQUEST", "creation belongs to another original Worker invocation");
+    if (frozen !== undefined) {
+      const occupied = this.store.getOperationById(frozen.operation);
+      if (occupied !== null && (occupied.actor !== auth.actor || occupied.requestKey !== key || occupied.kind !== "agent.create"))
+        throw new StoreError("REQUEST_KEY_REUSED", "original create root is already owned by another accepted operation");
+    }
+    const selectedSource = (): CreateSourcePlan => {
+      if (frozen === undefined) throw new StoreError("INTERNAL_ERROR", "legacy creation has no selected source freeze");
+      return { version: "collaboration-v1", freeze: { ...frozen }, observedAtMs: Date.now() };
+    };
     let revision = this.policy.refresh();
     let { spec, specHash } = this.policy.resolve(auth, input);
-    const existing = this.store.getAgent(input.name);
+    const existing = this.policy.existingCreation(input.name, specHash, frozen !== undefined);
+    const verifyResolution = () => {
+      if (beforeAccept !== undefined && beforeAccept(spec, revision) !== undefined)
+        throw new StoreError("INTERNAL_ERROR", "creation acceptance guard must be synchronous");
+    };
+    verifyResolution();
     if (existing) {
-      if (existing.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${input.name} already exists with a different resolved spec`);
       const original = this.store.findPhysicalCreate(input.name, specHash);
       if (!original) throw new StoreError("STORE_CORRUPT", `agent ${input.name} has no physical create operation`);
-      const id = this.effects.nextOperationId();
+      const id = frozen?.operation ?? this.effects.nextOperationId();
       const accepted = this.store.transaction(tx => {
         this.policy.assertRevision(revision);
         ({ spec, specHash } = this.policy.resolve(auth, input));
-        if (this.store.getAgent(input.name)?.specHash !== specHash)
-          throw new StoreError("AGENT_CONFLICT", "existing child spec changed before acceptance");
+        verifyResolution();
+        if (this.policy.existingCreation(input.name, specHash, frozen !== undefined) === null)
+          throw new StoreError("AGENT_CONFLICT", "existing child disappeared before acceptance");
         const plan: LinkedCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
           workspacePath: workspacePathAt(this.paths.stateRoot, input.name), execution: "native",
-          initialMessage: null, existingCreation: original.id };
+          ...(frozen === undefined ? {} : { source: selectedSource() }), initialMessage: null, existingCreation: original.id };
         return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
       });
@@ -184,35 +205,42 @@ export class CreateCoordinator {
       return this.settleLinked(id, original.id, input.name);
     }
     this.policy.assertCreationCapacity();
-    this.workspace.assertCanonicalBase(input.from);
+    if (frozen === undefined) this.workspace.assertCanonicalBase(input.from);
     // P0V-26: refused before acceptance, rather than accepted and then unable
     // to install its units.
     this.units.assertResidentNamesFree(input.name);
-    const id = this.effects.nextOperationId();
+    const id = frozen?.operation ?? this.effects.nextOperationId();
     // From the frozen brief to acceptance, one settlement decides the brief:
     // a physical winner's plan names it, a linked plan or a loser does not.
     const scope: PreacceptScope = this.effects.newPreacceptScope();
     let accepted: { outcome: "inserted" | "retry"; linked: string | null };
     try {
-      const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, input.name, input.brief);
+      let sourcePlan: CreateSourcePlan | undefined;
+      if (frozen !== undefined) {
+        if (!this.source) throw new StoreError("UNSUPPORTED_PROFILE", "accepted create source publication owner is unavailable");
+        sourcePlan = await this.source.prepare(auth, id, key, input, stream, scope);
+      }
+      const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, input.name, input.brief, frozen?.dateMs);
       scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => frozenMessageDisposition(this.store, id, initialMessage) });
+      if (sourcePlan !== undefined) sourcePlan = this.source!.finalize(sourcePlan);
       revision = this.policy.refresh();
       accepted = this.store.transaction(tx => {
         this.policy.assertRevision(revision);
         ({ spec, specHash } = this.policy.resolve(auth, input));
+        verifyResolution();
         const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
-          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), execution: "native", initialMessage, existingCreation: null };
-        const raced = this.store.getAgent(input.name);
+          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), execution: "native", ...(sourcePlan === undefined ? {} : { source: sourcePlan }), initialMessage, existingCreation: null };
+        const raced = this.policy.existingCreation(input.name, specHash, frozen !== undefined);
         if (raced) {
-          if (raced.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${input.name} already exists with a different resolved spec`);
           const original = this.store.findPhysicalCreate(input.name, specHash);
           if (!original) throw new StoreError("STORE_CORRUPT", `agent ${input.name} has no physical create operation`);
-          const linked: LinkedCreatePlan = { ...plan, initialMessage: null, existingCreation: original.id };
+          const linked: LinkedCreatePlan = { ...plan, ...(frozen === undefined ? {} : { source: selectedSource() }), initialMessage: null, existingCreation: original.id };
           const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
             payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(linked) });
           return { outcome, linked: original.id };
         }
         this.policy.assertCreationCapacity();
+        if (sourcePlan?.publication?.local) assertCurrentActor(this.store, auth, "git.submit");
         const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: encodeOperationPlan(plan) });
         if (outcome === "inserted") {
@@ -289,10 +317,20 @@ export class CreateCoordinator {
       const current = this.store.getAgent(plan.spec.name);
       if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during preparation");
       if (current.incarnation !== agent.incarnation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "create incarnation changed during preparation");
-      if (auth) assertCurrentActor(this.store, auth, "agent.create");
+      if (plan.source !== undefined) {
+        if (!this.effects.assertOwner || this.effects.assertOwner() !== undefined)
+          throw new StoreError("UNSUPPORTED_PROFILE", "current broker creation owner is unavailable");
+      } else if (auth) assertCurrentActor(this.store, auth, "agent.create");
       return current;
     };
+    if (plan.source !== undefined) {
+      if (!this.source) throw new StoreError("UNSUPPORTED_PROFILE", "accepted create source publication owner is unavailable");
+      assertCurrent();
+      await this.source.complete(id);
+      assertCurrent();
+    }
     mail.publishCreateInitial(plan.initialMessage);
+    assertCurrent();
     await this.workspace.ensure(plan, agent.desired !== "provisioning");
     const fresh = this.store.getOperationById(id);
     if (!fresh || fresh.kind !== "agent.create" || fresh.planJson !== operation.planJson)

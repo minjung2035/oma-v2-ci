@@ -16,7 +16,7 @@ function fixture(){
   options.confinement.egress={socketHostPath:'/private/var/egress.sock'};
   return {libdir,options};
 }
-test('Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI',()=>{
+test("001. Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI",()=>{
   const {options}=fixture(),sandbox=macResidentSandbox(tools),plan=planPiSpawn(sandbox,options),dirs=options.confinement.directories;
   assert.equal(plan.args[1],options.confinement.host.pi);
   assert.equal(plan.args[plan.args.indexOf('--session-dir')+1],dirs.sessions);
@@ -39,22 +39,22 @@ test('Mac Worker shared Pi plan retains physical session, package, relay and egr
   assert.equal(sandbox.pathView(options.confinement.host,options.confinement.lease,dirs)
     .sessionPathToHost(join(dirs.sessions,'session.jsonl')),join(dirs.sessions,'session.jsonl'));
 });
-test('Mac Worker App port refuses missing tools and snapshots the observed installation',()=>{
+test("002. Mac Worker App port refuses missing tools and snapshots the observed installation",()=>{
   const {options}=fixture();
   assert.throws(()=>planPiSpawn(macResidentSandbox(undefined),options),{code:'UNSUPPORTED_PROFILE'});
   const changing={...tools},sandbox=macResidentSandbox(changing);changing.git='/human/git';changing.execPath='/human/helpers';
   const plan=planPiSpawn(sandbox,options);assert.equal(plan.env.GIT_EXEC_PATH,tools.execPath);
   assert.ok(!Buffer.from(plan.privateInputs[0].bytes).subarray(16).toString().includes('/human/'));
 });
-test('Mac Worker App port refuses selected developer roots overlapping writable actor state',()=>{
+test("003. Mac Worker App port refuses selected developer roots overlapping writable actor state",()=>{
   const {options}=fixture(),dev=join(options.confinement.directories.workspace,'Xcode.app/Contents/Developer');
   const overlapping=describeMacDeveloperTools(dev,`${dev}/usr/bin/git`,`${dev}/usr/libexec/git-core`);
   assert.throws(()=>planPiSpawn(macResidentSandbox(overlapping),options),{code:'UNSUPPORTED_PROFILE'});
 });
-if(process.platform==='linux')test('Linux Worker composition refuses a Mac installation launch',()=>{
+if(process.platform==='linux')test("004. Linux Worker composition refuses a Mac installation launch",()=>{
   assert.throws(()=>createResidentEngineEffects(tools),{code:'UNSUPPORTED_PROFILE'});
 });
-if(process.platform==='darwin')test('Mac Worker product composition refuses spawn while native gates remain open',()=>{
+if(process.platform==='darwin')test("005. Mac Worker product composition refuses spawn while native gates remain open",()=>{
   assert.throws(()=>residentEngineEffects.sandbox.spawn({command:'/must-not-execute',args:[],cwd:'/tmp',env:{},
     privateInputs:[{fd:3,bytes:Buffer.from('not an approved live scope')}]}),{code:'UNSUPPORTED_PROFILE'});
 });

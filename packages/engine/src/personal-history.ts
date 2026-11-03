@@ -14,17 +14,17 @@ export function createPersonalHistory(input: PersonalEngineInput, ports: Persona
       ...(file === undefined ? {} : { targetSessionFile: file }) });
     return result?.cancel !== true;
   };
-  const transition = async (epoch: number, file?: string, society?: string, targetMode?: SessionMode): Promise<void> => {
+  const transition = async (epoch: number, file?: string, targetMode?: SessionMode): Promise<void> => {
     if (!current(epoch)) return;
-    if ([file, society, targetMode].filter(value => value !== undefined).length > 1) throw new StoreError("INVALID_REQUEST", "A switch carries one target");
+    if ([file, targetMode].filter(value => value !== undefined).length > 1) throw new StoreError("INVALID_REQUEST", "A switch carries one target");
     if (file !== undefined && !lstatSync(file).isFile()) throw new StoreError("INVALID_REQUEST", "Session history is not a regular file");
     if (process.send === undefined || state.mode === undefined) throw new StoreError("BROKER_UNAVAILABLE", "Personal host channel is unavailable");
     state.switching = true;
     try {
       // The host owns the meaning of these fields: `session` reopens a saved
-      // history, `society` re-enters as `oma --society <name>` — a new birth.
+      // history, `mode` re-enters the product under that mode -- a new birth.
       await new Promise<void>((resolve, reject) => process.send!({ type: "switch",
-        ...(file === undefined ? {} : { session: file }), ...(society === undefined ? {} : { society }),
+        ...(file === undefined ? {} : { session: file }),
         ...(targetMode === undefined ? {} : { mode: targetMode }) },
         error => { if (error) reject(error); else resolve(); }));
     } catch (error) { state.switching = false; throw error; }
@@ -40,7 +40,7 @@ export function createPersonalHistory(input: PersonalEngineInput, ports: Persona
       const picked = args.trim() || await ctx.ui.select("Session mode — Personal", ["Personal", "Society"]);
       if (!current(epoch) || !unused() || picked === undefined || picked.toLowerCase() === "personal") return;
       if (picked.toLowerCase() !== "society") { ctx.ui.notify("Use /society personal or /society society.", "warning"); return; }
-      if (await beforeSwitch("new") && current(epoch) && unused()) await transition(epoch, undefined, undefined, "society");
+      if (await beforeSwitch("new") && current(epoch) && unused()) await transition(epoch, undefined, "society");
     }
     finally { state.replacing = false; }
   };

@@ -1,6 +1,7 @@
 /** Derived, process-local author index. Authenticated submission rows plus
  * freshly observed immutable refs are the only authority. */
 import { StoreError } from "@oma/domain/errors";
+import { publicationSources } from "@oma/domain/durable";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 export interface ProvenanceObservations {
   refs(): ReadonlyMap<string,string>;
@@ -12,7 +13,7 @@ export class ProvenanceIndex {
   private contributors = new Map<string,Set<string>>();
   readonly metrics = { queries:0, rebuilds:0, refRecords:0, graphCommits:0, actorCommitPairs:0, gitCalls:0 };
   constructor(private readonly observations: ProvenanceObservations) {}
-  authors(base: string,candidate: string, rows: readonly OperationOf<"git.submit">[]): readonly string[] {
+  authors(base: string,candidate: string, rows: readonly OperationOf<"git.submit">[], roots: readonly (OperationOf<"mail.send"> | OperationOf<"agent.create">)[] = []): readonly string[] {
     this.metrics.queries++;this.metrics.gitCalls++;
     // Never skip actual ref observation because the DB generation was unchanged.
     const refs=this.observations.refs();this.metrics.refRecords=refs.size;
@@ -23,6 +24,15 @@ export class ProvenanceIndex {
       if(oid === undefined && row.state !== "succeeded") continue;
       if(oid !== row.plan.candidate) throw new StoreError("STORE_CORRUPT","authenticated published submission changed identity");
       active.push({id:row.id,state:row.state,actor:row.actor,candidate:row.plan.candidate,ref:row.plan.publishedRef});
+    }
+    for (const root of roots) for (const [ordinal, source] of publicationSources(root.plan).entries()) {
+      if (source.local === undefined) continue; // Forwarded/shared trees never create a new author.
+      const oid = refs.get(source.publishedRef);
+      if (oid === undefined && root.state !== "succeeded") continue;
+      if (oid !== source.commit) throw new StoreError("STORE_CORRUPT", "accepted root publication changed identity");
+      // A failed Mail/create root may have published its original source. That
+      // provenance survives delivery/provisioning failure and actor retirement.
+      active.push({ id: `${root.id}#${ordinal}`, state: root.state, actor: root.actor, candidate: source.commit, ref: source.publishedRef });
     }
     const generation=JSON.stringify(active);
     if(generation !== this.generation) {

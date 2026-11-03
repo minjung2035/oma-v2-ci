@@ -7,6 +7,9 @@ import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObserv
 import { StoreError } from "@oma/domain/errors";
 import { fencedStdio, SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV } from "./fence.js";
 export { SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV };
+/** Owned-child clients use the same cleanup policy without importing native
+ * primitives. This does not request termination or establish child death. */
+export { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 
 const PROCESS_GROUP_PLATFORMS = new Set<NodeJS.Platform>(["linux", "darwin"]);
 
@@ -93,7 +96,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const spill = (output: boolean, head: readonly Buffer[]): Spool | null => {
     const path = output ? spec.stdoutSpool! : spec.stderrSpool!;
     try {
-      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
       try { for (const chunk of head) writeAll(fd, chunk); }
       catch (error) { try { closeSync(fd); } catch { /* the open file is the failure's to keep */ } throw error; }
       return { fd, path };

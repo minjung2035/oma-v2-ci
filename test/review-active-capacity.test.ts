@@ -87,7 +87,7 @@ function openInput(kind: "merge" | "challenge", prepared: CapacityCandidate) {
 
 for (const kind of ["merge", "challenge"] as const)
   for (const desired of ["stopped", "retired"] as const) test(
-    `active-capacity production smoke: ${kind} excludes ${desired} historical author without consuming its slot`, async () => {
+    `001. Active-capacity production smoke: ${kind} excludes ${desired} historical author without consuming its slot`, async () => {
       const f = fixture({ maxWorkers: 2, workers: ["alice"] });
       try {
         addHistoricalAuthorAndPeer(f);
@@ -125,7 +125,7 @@ for (const kind of ["merge", "challenge"] as const)
 
 for (const kind of ["merge", "challenge"] as const)
   for (const action of ["stop", "start"] as const) test(
-  `active-capacity production smoke: ${kind} opening refuses author ${action} during frozen mail`,
+  `002. Active-capacity production smoke: ${kind} opening refuses author ${action} during frozen mail`,
   { timeout: 10_000 }, async () => {
     const f = fixture({ maxWorkers: 2, workers: ["alice"] });
     const frozen = Promise.withResolvers<void>();
@@ -170,7 +170,7 @@ for (const kind of ["merge", "challenge"] as const)
     }
   });
 
-test("active-capacity production smoke: author stop/start preserves frozen HIGH approval bundles", async () => {
+test("003. Active-capacity production smoke: author stop/start preserves frozen HIGH approval bundles", async () => {
   const f = fixture({ maxWorkers: 2, workers: ["alice"] });
   try {
     addHistoricalAuthorAndPeer(f);
@@ -196,7 +196,7 @@ test("active-capacity production smoke: author stop/start preserves frozen HIGH 
   } finally { f.close(); }
 });
 
-test("active-capacity production smoke: cap1 active requester preserves valid zero-peer Principal escalation", async () => {
+test("004. Active-capacity production smoke: cap1 active requester preserves valid zero-peer Principal escalation", async () => {
   const f = fixture({ maxWorkers: 1, workers: ["alice"] });
   try {
     const candidate = f.candidateWith({ "single.txt": "Principal decision required\n" });
@@ -215,7 +215,7 @@ test("active-capacity production smoke: cap1 active requester preserves valid ze
   } finally { f.close(); }
 });
 
-test("active-capacity production smoke: absent or stopped non-author reviewers never create fallback", async () => {
+test("005. Active-capacity production smoke: absent or stopped non-author reviewers never create fallback", async () => {
   const f = fixture({ maxWorkers: 3, workers: ["alice", "bob"] });
   try {
     const { lifecycle } = lifecycleFor(f);
@@ -236,7 +236,7 @@ test("active-capacity production smoke: absent or stopped non-author reviewers n
   } finally { f.close(); }
 });
 
-test("active-capacity production smoke: Principal decision remains valid across historical author departure",
+test("006. Active-capacity production smoke: Principal decision remains valid across historical author departure",
   { timeout: 10_000 }, async () => {
     const f = fixture({ maxWorkers: 2, workers: ["alice"] });
     const frozen = Promise.withResolvers<void>();

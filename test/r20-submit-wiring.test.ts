@@ -30,7 +30,7 @@ function fixture(format: "sha1" | "sha256") {
 }
 
 for (const format of ["sha1", "sha256"] as const) {
-  test(`R20 ${format}: public submit facade supplies actual publication evidence and preserves main`, async () => {
+  test(`001. Submit wiring: ${format}: public submit facade supplies actual publication evidence and preserves main`, async () => {
     const f = fixture(format);
     try {
       let publications = 0;
@@ -60,7 +60,7 @@ for (const format of ["sha1", "sha256"] as const) {
     } finally { f.close(); }
   });
 
-  test(`R20 ${format}: a mail boundary failure recovers the original publication without rebuilding a request`, async () => {
+  test(`002. Submit wiring: ${format}: a mail boundary failure recovers the original publication without rebuilding a request`, async () => {
     const f = fixture(format);
     try {
       const publish = f.mail.publishGated.bind(f.mail);
@@ -90,7 +90,7 @@ for (const format of ["sha1", "sha256"] as const) {
   });
 }
 
-test("R20: bad export ownership is rejected before staging and a foreign ref never authorizes recovery mail", async () => {
+test("003. Bad export ownership is rejected before staging and a foreign ref never authorizes recovery mail", async () => {
   const f = fixture("sha1");
   try {
     await assert.rejects(f.git.submit(gitAuth, "invalid", { ...f.input, exportRef: "refs/heads/main" }, empty()), { code: "INVALID_REQUEST" });

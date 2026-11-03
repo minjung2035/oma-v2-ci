@@ -11,7 +11,7 @@ function readJson(path: string): Record<string, any> {
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, any>;
 }
 
-test("V12A: one snapshot uses one manifest even when the pointer is replaced after its read", () => {
+test("001. One snapshot uses one manifest even when the pointer is replaced after its read", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const layout = configurationLayout(fixture.path);
@@ -53,7 +53,7 @@ test("V12A: one snapshot uses one manifest even when the pointer is replaced aft
   } finally { fixture.close(); }
 });
 
-test("V12B: prompt references remain index-root relative and enter the bounded source closure", () => {
+test("002. Prompt references remain index-root relative and enter the bounded source closure", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const snapshot = loadConfigurationSnapshot(fixture.path);
@@ -66,7 +66,7 @@ test("V12B: prompt references remain index-root relative and enter the bounded s
   } finally { fixture.close(); }
 });
 
-test("V12B: aggregate source bytes are bounded even when each referenced file is individually valid", () => {
+test("003. Aggregate source bytes are bounded even when each referenced file is individually valid", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const layout = configurationLayout(fixture.path);
@@ -95,7 +95,7 @@ test("V12B: aggregate source bytes are bounded even when each referenced file is
   } finally { fixture.close(); }
 });
 
-test("V12B: one configuration file over the document bound is refused even though the whole source would fit", () => {
+test("004. One configuration file over the document bound is refused even though the whole source would fit", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const layout = configurationLayout(fixture.path);
@@ -112,7 +112,7 @@ test("V12B: one configuration file over the document bound is refused even thoug
   } finally { fixture.close(); }
 });
 
-test("V12A: a file changed after the snapshot read it, before the snapshot completes, fails the snapshot", () => {
+test("005. A file changed after the snapshot read it, before the snapshot completes, fails the snapshot", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const layout = configurationLayout(fixture.path);

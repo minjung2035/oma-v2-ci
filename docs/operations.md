@@ -179,19 +179,26 @@ DR37/DR46에서 저장량·실행 자원·agent count quota를 제거했고, DR6
 
 Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
-모델용 OMA CLI는 제거한다. 사람용 `oma` 실행·설정·로그인은 그대로이며 Worker의 우회 broker 명령이 아니다. 모델은 typed OMA 도구를 사용하고, Git·빌드·테스트에는 `bash`를 사용한다. 기본 부분 편집은 anchor 기반 `read` → `replace`다. Principal에게 실행 불가능한 LSP 진단·수정 도구를 노출하지 않는다.
+## 모델 도구와 협업 기록
 
-선택 도구는 `toolset`의 exact-name 목록으로 찾는다. 선택은 누적 group 활성화가 아니라 전체 optional 집합 교체이며 현재 batch 결과 저장 후 다음 turn에 적용한다. core는 남고 빈 선택은 core만 남긴다. 전체 이름·역할별 계약은 [모델 도구 표면 명세](model-tool-surface-spec.md)가 소유한다.
+현재 source의 `collaboration-v1` 등록 목록은 [collaboration-surface.ts](../packages/domain/src/collaboration-surface.ts)가 소유한다. 운영 지원·이행 완료 여부는 [검증 상태](implementation/validation.md)와 별도로 확인한다.
 
-Worker는 commit 후 `oma_merge_open`을 호출하며 필요한 candidate publication은 client가 처리한다. 별도 publication은 공유용이고 미커밋 변경은 포함하지 않는다. `oma_review_respond`의 comment는 토론, approve/reject만 투표다. LOW merge는 사전 comment/vote 없이 기존 policy·integration 검사를 받으며, 모든 적용 변경은 diff와 함께 자동 공유된다. 사후 결함은 challenge로 처리하고 LOW challenge도 원래 peer quorum을 요구한다. 다만 아래 Worker 상한 때문에 정족수 자체를 구성할 수 없으면 가능한 peer 승인 뒤 Principal 승인을 추가한다. reviewer 페이지·생성 조건은 관측일 뿐 권한 grant가 아니다. 기존 peer 재사용과 새 생성은 맥락 재사용·독립 작업 가치·준비 비용을 비교한다. provisioning·enabled·실제 실행과 승인 정족수·적용 완료를 구분한다.
+| 역할 | OMA 행동 |
+|---|---|
+| Worker | `oma_send`, `oma_spawn`, `oma_merge`, `oma_challenge`, `oma_review`, `oma_wait`, `oma_follow` |
+| Principal | `oma_send`, `oma_review`, `oma_goal`, `oma_society` |
 
-기본 모델 prompt와 도구 안내는 영어다. Principal은 설계·계획·중요 판단, Worker는 자율 실행·조사·테스트·동료 검토에 집중한다. Worker는 작업 시작/담당 범위를 알리고, 대기 중 독립 작업을 진행하며, 증거를 공유하고 통합 결과까지 책임지는 기본 습관을 갖는다. 고정 절차보다 검증된 결과까지의 총 시간·비용을 우선한다. foreground shell은 해당 Worker의 model turn을 점유할 뿐 다른 Worker를 멈추지 않는다. 명시적 background job은 로그·최종 exit 결과를 회수해야 하며 activation 종료를 넘겨 살아 있지 않는다.
+상태·메일·Review·receipt·로그는 허용된 기록 루트의 index에서 찾아 일반 `read`·검색 도구로 읽는다. 과거 전용 reader·모델 ACK·caller가 지정하는 request key를 새 호출 방법으로 안내하지 않는다. 원래 저장 사실과 과거 receipt는 별개로 보존한다.
 
-사용 중인 custom prompt는 자동 덮어쓰지 않는다. 운영자는 진단에 표시된 prompt 위치에서 과거 model CLI·누적 group·폐기된 도구 안내를 수정해야 한다. 이번 전환의 실제 Pi session·provider 직렬화·설치·sandbox 검증과 한계는 [validation](implementation/validation.md)을 따른다. 실제 Sol medium 행동 비교는 인증·정확한 모델 설정 부재로 NOT_RUN이며, 과거 PASS나 scripted 실행으로 대체하지 않는다.
+`lsp_tools`와 `web_tools`는 선택한 그룹을 누적하고 결과 저장 뒤 다음 경계에 적용한다. 구형 `toolset`의 전체 optional 집합 교체 방식은 현재 사용법이 아니다. Principal의 LSP 그룹에는 `lsp_status`만 있으며 MCP 기능을 이 역할 구분만으로 추가 차단하지 않는다.
+
+Worker는 commit과 exact target에 기반해 `oma_merge`·`oma_challenge`·`oma_review`를 사용한다. 입력 필드·재시도·withdraw·own submission 의미는 [도구 계약](model-collaboration-surface/tools.md)에 있다. 접수·현재 실행·완료는 서로 다른 관측이다. 알 수 없는 결과에 새 호출을 만들어 같은 효과를 반복하지 않는다.
+
+기본 역할 안내는 [프롬프트 계약](model-collaboration-surface/prompts.md)을 따른다. custom prompt는 자동으로 덮어쓰지 않으며, 구형 도구 이름이나 `toolset` 안내가 남았다면 현재 계약과 대조한다. 과거 session과 accepted history를 새 실행 계약으로 자동 변환하지 않는다.
 
 DR66 limits active Workers, not lifetime registrations. HostConfig 4's `maxWorkers` is a positive safe integer, defaulting to 6; the default initial Worker count is 3 and must fit the cap. Active means a resident with `desired=enabled`, including an enabled Worker waiting for mail. Principal, provisioning, stopped and retired rows are not counted. Stopping or retiring a Worker allows another identity to use its slot; an unconfirmed physical stop still blocks unsafe reuse. Fresh create at a full cap is refused before a new operation or Worker is accepted. Creation publication and stopped-to-enabled start also check admission atomically. An accepted creation that loses a slot race remains pending/provisioning and is completed by normal reconciliation after release; it does not publish successful readiness or its initial delivery prematurely. Replay and already-enabled start do not reserve another slot.
 
-The Config field **Active Worker capacity** applies after restart. After the authored cap changes, the old broker refuses fresh create and fresh start with `POLICY_CHANGED`; terminal replay and safe stop remain available. A restarted broker refuses activation when its enabled registry already exceeds the new cap. Stop enough Workers before lowering the cap; historical registrations are never automatically deleted or retired. `oma_status.creation.workerCount` reports the current enabled-resident count, and `maxWorkers` reports its configured ceiling, not the total historical registry size.
+The Config field **Active Worker capacity** applies after restart. After the authored cap changes, the old broker refuses fresh create and fresh start with `POLICY_CHANGED`; terminal replay and safe stop remain available. A restarted broker refuses activation when its enabled registry already exceeds the new cap. Stop enough Workers before lowering the cap; historical registrations are never automatically deleted or retired. The host status field `creation.workerCount` reports the current enabled-resident count, and `maxWorkers` reports its configured ceiling, not the total historical registry size.
 
 Normal peer requirements are one for MEDIUM merge and `highPeerFloor` for HIGH merge and every challenge. Let `A` be the number of currently enabled resident identities in the requester's and submitters' union. The required peer count is `min(normalRequired, max(0, maxWorkers - A))`. All historical authors remain excluded from voting even when inactive. If the required count is reduced, all peers that fit must approve before explicit Principal approval; zero-peer fallback issues approval mail with the open request. HIGH still requires Principal approval, and LOW merge's fast path is unchanged. Temporary reviewer absence, stop, provisioning failure or rejection never lowers quorum. Active-author changes are re-evaluated during acceptance and final application; a changed requirement invalidates an old approval bundle. Current approval identity, author exclusion, Principal delegation, stale-base and final CAS checks remain enforced.
 
@@ -199,10 +206,10 @@ storage, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한은 여전�
 
 ### Resident의 현재 run 양보
 
-Resident의 `oma_agent_wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
+Resident의 `oma_wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
 다음 모델 호출 없이 현재 run을 끝낸다. engine 내부 observe 조회는 같은 run의
 요청 여부만 읽는다. blocking receive나 작업 완료·ACK·Worker 강제 중지가 아니다.
-이미 명시적으로 수행한 ACK는 그대로이고, 나머지 메일과 prepared batch는 다음 활성화에
+역사적으로 기록된 ACK 사실은 그대로이고, 나머지 메일과 prepared batch는 다음 활성화에
 남는다. 새 incarnation과 broker 재시작에는 wait flag가 넘어가지 않는다.
 조회 실패는 unconfirmed로 남기며, Principal은 이 개별 Worker 양보 명령을 사용하지 않는다.
 
@@ -210,8 +217,7 @@ Resident의 `oma_agent_wait`는 실행 중인 도구의 결과가 기록된 안�
 
 자동으로 도착한 메일 배치는 분홍색 custom-message 박스 대신 `mail send`와 같은
 컴팩트한 `mail receive` 행으로 표시한다. 기본 상태는 메시지 수와 수신 표시만 보이며,
-기존 도구 펼침 단축키(`Ctrl+O`)로 원래 전달 안내를 열 수 있다. 메일 본문을 읽는
-`oma_mail_read`와 Mail 목록 화면은 변경하지 않는다. `Received`는 대화에 도착했다는
+기존 도구 펼침 단축키(`Ctrl+O`)로 원래 전달 안내를 열 수 있다. 모델은 안내된 기록 경로를 일반 `read`로 읽고, 사람은 Mail 목록 화면을 사용한다. `Received`는 대화에 도착했다는
 표시이지 ACK·작업 완료·broker 배달 완료 receipt가 아니다. 모델 입력과 저장된 메일
 내용, batch 식별자·message id 및 기존 완료 판정은 그대로다.
 
@@ -270,13 +276,9 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 ## Tool 표면 (OMA 내부 정책)
 
-Tool 표면 투영은 role 설정이 아니라 OMA 내부 정책이다(D23). 신뢰된 core extension만 `OMA_TOOL_SURFACE`의 version 2 계획을 적용한다. role 파일은 표면을 선언할 수 없다. native Resident launch owner는 `OMA_TOOL_SURFACE_HEX`로 고정한 계획을 전달하고 runner가 decode한다. Principal은 host launch owner가 자기 역할의 계획을 고정한다. production launch는 계획 누락이나 malformed 입력을 거절한다.
+등록 목록과 그룹 사용법은 [모델 도구와 협업 기록](#모델-도구와-협업-기록)을 따른다. 현재 계획은 `version: 3`, `surface: collaboration-v1`와 역할별 `direct`·`groups`를 가진다. 구형 version 2 계획이나 누락·malformed 입력을 현재 계획으로 자동 해석하지 않는다.
 
-계획은 `defaultMode`, `direct`, `optional`, `disabled`로 core와 선택 카탈로그를 구분한다. Worker 기본 core는 `toolset`을 포함해 19개, Principal은 13개다. `toolset({select:[...]})`는 optional 선택을 **교체**하며 core를 제거하지 않는다. `select:[]`는 core만 남긴다. 선택 도구는 다음 turn부터 직접 호출하고 selector가 대신 실행하지 않는다. 같은 batch에서는 기존 집합을 유지하고 모든 결과가 저장된 `turn_end`에서 확정한다. 확정 snapshot은 session branch에서 복원한다.
-
-시작·안전 경계·provider 요청 직전에 registry를 검사한다. 계획의 도구가 없거나, OMA 소유 이름이 shadow되거나, 역할·출처가 허용하지 않거나, 활성 집합이 예상과 다르면 명시적으로 거절한다. 침묵하는 축소 적용은 없다. builtin 또는 launch가 고정하고 SHA-256을 검증한 확장만 허용한다(D25). 허용된 추가 확장은 optional 카탈로그로 들어가며 자동 활성화되지 않는다.
-
-표면 표현은 권한이 아니다. 실제 권한은 sandbox mount/FD/network와 capability가 정한다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다. Society Principal은 [DR29](design-revisions.md#dr29--complete-candidate-checks-and-apply-principal-roles-at-execution-boundaries)의 role 제한을 먼저 적용하고 실행 시에도 검사한다.
+시작과 안전 경계의 registry 검사, 역할·출처·실제 capability 검사는 별개다. 이름 노출은 권한을 부여하지 않으며, 다른 역할의 이름이나 뒤늦은 shadow를 허용하지 않는다. 정확한 admission과 복구 의미는 [실행 계약](model-collaboration-surface/runtime.md)에 있다.
 
 ## 지원과 업그레이드
 

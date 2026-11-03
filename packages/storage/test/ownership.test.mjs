@@ -16,7 +16,7 @@ function seed(store) {
 
 // Run using only this workspace and its declared dependencies. These probes
 // exercise real SQLite rollback and the lifetime of its write capability.
-test('the installed schema creates the sole ledger and rollback preserves committed state', () => {
+test("001. The installed schema creates the sole ledger and rollback preserves committed state", () => {
   assert.match(readFileSync(SCHEMA_PATH, 'utf8'), /PRAGMA user_version/);
   const root = mkdtempSync(join(tmpdir(), 'oma-storage-package-'));
   const store = new Store(join(root, 'runtime.sqlite'));
@@ -29,7 +29,7 @@ test('the installed schema creates the sole ledger and rollback preserves commit
     assert.equal(store.getAgent('alice').desired, 'stopped');
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
-test('a returned transaction capability cannot write in a later transaction', () => {
+test("002. A returned transaction capability cannot write in a later transaction", () => {
   const store = new Store(':memory:');
   try {
     seed(store);
@@ -39,7 +39,7 @@ test('a returned transaction capability cannot write in a later transaction', ()
     assert.equal(store.getAgent('alice').desired, 'enabled');
   } finally { store.close(); }
 });
-test('a thenable callback is rejected and its writes are rolled back', () => {
+test("003. A thenable callback is rejected and its writes are rolled back", () => {
   const store = new Store(':memory:');
   try {
     seed(store);

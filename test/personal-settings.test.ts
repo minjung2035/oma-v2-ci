@@ -27,7 +27,7 @@ function fixture(t: { after(run: () => void): void }) {
   return { ...location, root, packageEntry, index };
 }
 
-test("DR29/P0-4: an async first-choice observation keeps the settings writer and commits once", async t => {
+test("001. An async first-choice observation keeps the settings writer and commits once", async t => {
   const location = fixture(t);
   let finish!: (entries: readonly string[]) => void;
   const pending = updatePersonalSettingsAsync(location, () => new Promise(resolve => { finish = resolve; }));
@@ -40,14 +40,14 @@ test("DR29/P0-4: an async first-choice observation keeps the settings writer and
   assert.deepEqual(next.extensions, ["extensions/a.js"]);
 });
 
-test("DR29/P0-5: a failed async project observation consumes no first choice and returns its writer", async t => {
+test("002. A failed async project observation consumes no first choice and returns its writer", async t => {
   const location = fixture(t);
   const problem = new Error("project unobserved");
   await assert.rejects(updatePersonalSettingsAsync(location, async () => { throw problem; }), value => value === problem);
   assert.equal(readPersonalSettings(location.dataRoot), null);
   assert.deepEqual((await updatePersonalSettingsAsync(location, async () => ["extensions/a.js"])).extensions, ["extensions/a.js"]);
 });
-test("Personal settings: explicit user extensions seed once and the Society core never follows", t => {
+test("003. Personal settings: explicit user extensions seed once and the Society core never follows", t => {
   const w = fixture(t);
   const path = join(w.dataRoot, ".projects", "demo"); mkdirSync(path, { recursive: true });
   const roles = join(path, "role.json"); writeFileSync(roles, "unaltered Principal and Worker settings\n");
@@ -60,7 +60,7 @@ test("Personal settings: explicit user extensions seed once and the Society core
   assert.equal(off.revision, first.revision + 1); assert.deepEqual(off.extensions, ["extensions/user.js"]);
   assert.equal(readFileSync(roles, "utf8"), "unaltered Principal and Worker settings\n");
 });
-test("Personal settings: a package command preserves the first-project seed and reconciles only existing choices", t => {
+test("004. Personal settings: a package command preserves the first-project seed and reconciles only existing choices", t => {
   const w = fixture(t);
   assert.equal(reconcilePersonalSettings(w), null);
   assert.equal(readPersonalSettings(w.dataRoot), null);
@@ -73,7 +73,7 @@ test("Personal settings: a package command preserves the first-project seed and 
   assert.deepEqual(reconcilePersonalSettings(w)?.extensions, []);
   assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
 });
-test("Personal settings: first project choice is observed inside the one writer lock", t => {
+test("005. Personal settings: first project choice is observed inside the one writer lock", t => {
   const w = fixture(t); let observations = 0;
   const first = updatePersonalSettings(w, () => {
     observations++;
@@ -89,14 +89,14 @@ test("Personal settings: first project choice is observed inside the one writer 
   assert.equal(laterObservations, 0, "the old project must not be read");
   assert.deepEqual(next, first);
 });
-test("Personal settings: failed first project observation consumes no choice and returns the writer", t => {
+test("006. Personal settings: failed first project observation consumes no choice and returns the writer", t => {
   const w = fixture(t), problem = new Error("project selection is unobserved");
   assert.throws(() => updatePersonalSettings(w, () => { throw problem; }), error => error === problem);
   assert.equal(readPersonalSettings(w.dataRoot), null);
   const retry = updatePersonalSettings(w, () => [w.packageEntry]);
   assert.equal(retry.revision, 1); assert.deepEqual(retry.extensions, [w.packageEntry]);
 });
-test("Personal settings: contention and malformed saved choices do not observe a first seed", t => {
+test("007. Personal settings: contention and malformed saved choices do not observe a first seed", t => {
   const w = fixture(t); updatePersonalSettings(w);
   const lock = ProcessLock.tryAcquire(join(w.dataRoot, ".personal/settings.lock")); assert.ok(lock);
   let observations = 0;
@@ -107,14 +107,14 @@ test("Personal settings: contention and malformed saved choices do not observe a
   assert.throws(() => updatePersonalSettings(w, seed), { code: "STORE_CORRUPT" });
   assert.equal(observations, 0); assert.equal(readFileSync(file, "utf8"), "broken");
 });
-test("Personal settings: separate edits read current choices instead of overwriting a stale screen", t => {
+test("008. Personal settings: separate edits read current choices instead of overwriting a stale screen", t => {
   const w = fixture(t); updatePersonalSettings(w);
   const a = updatePersonalSettings(w, [], { entry: w.packageEntry, enabled: true });
   const b = updatePersonalSettings(w, [], { entry: "extensions/user.js", enabled: true });
   assert.equal(b.revision, a.revision + 1); assert.deepEqual(b.extensions, [w.packageEntry, "extensions/user.js"]);
   assert.deepEqual(updatePersonalSettings(w, [], { entry: "extensions/user.js", enabled: true }), b);
 });
-test("Personal settings: update preserves disabled entries and removal cannot resurrect them on restart", t => {
+test("009. Personal settings: update preserves disabled entries and removal cannot resurrect them on restart", t => {
   const w = fixture(t); updatePersonalSettings(w, [w.packageEntry]);
   writeFileSync(join(w.packages, "next.js"), "export default () => {};\n");
   w.index(["packages:next.js"]);
@@ -126,7 +126,7 @@ test("Personal settings: update preserves disabled entries and removal cannot re
   assert.deepEqual(updatePersonalSettings(w).extensions, []);
   assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
 });
-test("Personal settings: missing assets are reported; changed pinned code is refused before loading", t => {
+test("010. Personal settings: missing assets are reported; changed pinned code is refused before loading", t => {
   const w = fixture(t), settings = updatePersonalSettings(w, ["extensions/user.js", "extensions/missing.js"]);
   const selected = personalExtensions(w, settings);
   assert.deepEqual(selected.missing, ["extensions/missing.js"]); assert.equal(selected.extensions.length, 1);
@@ -136,27 +136,27 @@ test("Personal settings: missing assets are reported; changed pinned code is ref
   assert.throws(() => updatePersonalSettings(w, [], { entry: "extensions/missing.js", enabled: true }), { code: "UNSUPPORTED_PROFILE" });
   assert.ok(readPersonalSettings(w.dataRoot)?.extensions.includes("extensions/missing.js"));
 });
-test("Personal settings: linked, escaping and Society assets are not alternative selections", t => {
+test("011. Personal settings: linked, escaping and Society assets are not alternative selections", t => {
   const w = fixture(t); updatePersonalSettings(w);
   symlinkSync(join(w.libdir, "extensions/user.js"), join(w.libdir, "extensions/linked.js"));
   for (const entry of ["../user.js", "extensions/linked.js", DEPLOYMENT_LAYOUT.extension])
     assert.throws(() => updatePersonalSettings(w, [], { entry, enabled: true }));
   assert.deepEqual(readPersonalSettings(w.dataRoot)?.extensions, []);
 });
-test("Personal settings: an unreadable index does not mean every package was removed", t => {
+test("012. Personal settings: an unreadable index does not mean every package was removed", t => {
   const w = fixture(t), before = updatePersonalSettings(w, [w.packageEntry]);
   writeFileSync(join(w.packages, PACKAGE_INDEX), "broken");
   assert.throws(() => updatePersonalSettings(w), { code: "STORE_CORRUPT" });
   assert.deepEqual(readPersonalSettings(w.dataRoot), before);
 });
-test("Personal settings: corrupt preference bytes are retained, never reset to defaults", t => {
+test("013. Personal settings: corrupt preference bytes are retained, never reset to defaults", t => {
   const w = fixture(t); updatePersonalSettings(w); const path = join(w.dataRoot, ".personal/settings.json");
   for (const value of [null, [], {}, { kind: "oma-personal-settings-v2", revision: 1, extensions: [DEPLOYMENT_LAYOUT.extension], packages: [] }]) {
     const bytes = JSON.stringify(value); writeFileSync(path, bytes);
     assert.throws(() => updatePersonalSettings(w), { code: "STORE_CORRUPT" }); assert.equal(readFileSync(path, "utf8"), bytes);
   }
 });
-test("Personal settings: a contended writer changes nothing and releases after an exception", t => {
+test("014. Personal settings: a contended writer changes nothing and releases after an exception", t => {
   const w = fixture(t), before = updatePersonalSettings(w), lock = ProcessLock.tryAcquire(join(w.dataRoot, ".personal/settings.lock"));
   assert.ok(lock);
   try { assert.throws(() => updatePersonalSettings(w, [], { entry: w.packageEntry, enabled: true }), { code: "BROKER_UNAVAILABLE" }); }
@@ -166,7 +166,7 @@ test("Personal settings: a contended writer changes nothing and releases after a
   assert.deepEqual(updatePersonalSettings(w, [], { entry: w.packageEntry, enabled: true }).extensions, [w.packageEntry]);
 });
 
-test("C20: a Personal extension may be an absolute local file, digest-pinned like every other entry", t => {
+test("015. A Personal extension may be an absolute local file, digest-pinned like every other entry", t => {
   const w = fixture(t); updatePersonalSettings(w);
   const local = join(w.root, "elsewhere", "my-ext.ts");
   mkdirSync(join(w.root, "elsewhere")); writeFileSync(local, "export default () => {};\n");
@@ -192,7 +192,7 @@ test("C20: a Personal extension may be an absolute local file, digest-pinned lik
   assert.deepEqual(updatePersonalSettings(w, [], { entry, enabled: false }).extensions, []);
 });
 
-test("C20: a local entry is judged on file-ness and spelling, and the Society core cannot sneak in through it", t => {
+test("016. A local entry is judged on file-ness and spelling, and the Society core cannot sneak in through it", t => {
   const w = fixture(t); updatePersonalSettings(w);
   // A directory spelled like a JS file reaches the regular-file check.
   const dir = join(w.root, "adir.js"); mkdirSync(dir);
@@ -220,7 +220,7 @@ test("C20: a local entry is judged on file-ness and spelling, and the Society co
   assert.throws(() => readPersonalSettings(w.dataRoot), { code: "STORE_CORRUPT" });
 });
 
-test("C18/C20: the package resource lists survive a Personal settings round-trip and a no-change write", t => {
+test("017. The package resource lists survive a Personal settings round-trip and a no-change write", t => {
   const w = fixture(t); updatePersonalSettings(w, [w.packageEntry]);
   // An index that carries the C18 resource lists.
   const indexed = [{ source: "npm:fixture", entries: [w.packageEntry],
@@ -237,7 +237,7 @@ test("C18/C20: the package resource lists survive a Personal settings round-trip
   assert.equal(again.revision, reread.revision, "a rewrite against the same index must not churn revisions");
 });
 
-test("UX-20: Personal settings embed the whole index, so their bound tracks it -- a heavy index carries, and the refusal states the bound", t => {
+test("018. Personal settings embed the whole index, so their bound tracks it -- a heavy index carries, and the refusal states the bound", t => {
   const w = fixture(t);
   // An index the old 1 MiB bound refused: the settings embed it whole, so the
   // document itself is multi-megabyte for a heavy but realistic install.

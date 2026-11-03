@@ -18,9 +18,24 @@ export interface QuarantineRequest {
     readonly exportRef: string; readonly prerequisites: readonly string[]; readonly bundleFd: number;
     readonly rootFd: number; readonly projectFd: number; readonly leaseFd: number; readonly stderrFd: number;
 }
+/** The native quarantine slot's ownership, as the process execution owner
+ * reports it. `busy` is a live concurrent import: ordinary transient
+ * contention whose intent is retained for the same request key. `unknown` is a
+ * failed owner or an unretired scope reservation: previous death is unproven
+ * and the strict termination fence holds. */
+export type QuarantineSlotState = "dead" | "busy" | "unknown";
 export interface QuarantineExecution {
     execute(request: QuarantineRequest, authorize: () => void): Promise<ProcessObservation>;
-    confirmDead(): boolean;
+    slotState(): QuarantineSlotState;
+}
+/** P0-5: a known live peer is not an unconfirmed death. Busy refuses as the
+ * transient, same-key retry the codebase names for a preparation in flight;
+ * only an unproven scope keeps RUN_TERMINATION_UNKNOWN. */
+function assertSlotReusable(execution: QuarantineExecution, unknownMessage: string): void {
+    const state = execution.slotState();
+    if (state === "busy")
+        throw new StoreError("BROKER_UNAVAILABLE", "another accepted quarantine import owns the native scope; retry the same request key", { details: { reason: "busy" } });
+    if (state !== "dead") throw new StoreError("RUN_TERMINATION_UNKNOWN", unknownMessage);
 }
 /** The bytes the classifier reads for `OMA_ERROR=`: the stderr spool's tail
  * (the failure word is always the command's last word) or the retained head
@@ -41,12 +56,19 @@ export class QuarantineImporter {
     private staleRoot: string | null = null;
     constructor(private readonly paths: GitPaths, private readonly canonicalHas: (candidate: string) => boolean,
         private readonly execution: QuarantineExecution | null) { }
-    async importBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[], authorize: () => void): Promise<void> {
+    importBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[], authorize: () => void): Promise<void> {
+        return this.runBundle(bundleFd, candidate, exportRef, prerequisites, authorize, ["verify", "import"]);
+    }
+    verifyBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[], authorize: () => void): Promise<void> {
+        return this.runBundle(bundleFd, candidate, exportRef, prerequisites, authorize, ["verify"]);
+    }
+    private async runBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[], authorize: () => void,
+        phases: readonly ("verify" | "import")[]): Promise<void> {
         const execution = this.execution;
         if (execution === null) throw new StoreError("UNSUPPORTED_PROFILE", "native quarantine execution owner is unavailable");
         if (this.paths.ownerSignal?.aborted)
             throw new StoreError("REF_STATE_UNKNOWN", "quarantine owner is stopping");
-        if (!execution.confirmDead()) throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous quarantine scope is not confirmed dead");
+        assertSlotReusable(execution, "previous quarantine scope is not confirmed dead");
         if (this.staleRoot !== null) {
             if (collectLeasedTree(this.staleRoot).kind !== "quiescent")
                 throw new StoreError("REF_STATE_UNKNOWN", "previous quarantine staging remains owned or unobserved");
@@ -76,9 +98,8 @@ export class QuarantineImporter {
             if (!fstatSync(inputFd).isFile()) throw new StoreError("BUNDLE_INVALID", "bundle capability is not a regular file");
             rootFd = openOwnedDirectoryPath(root);
             projectFd = openOwnedDirectoryPath(this.paths.projectGit);
-            for (const phase of ["verify", "import"] as const) {
-            if (!execution.confirmDead())
-                throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous quarantine phase is not confirmed dead");
+            for (const phase of phases) {
+            assertSlotReusable(execution, "previous quarantine phase is not confirmed dead");
             stderrFd = openOwnedAppendFile(rootFd, `stderr-${phase}`);
             const stderrStat = fstatSync(stderrFd);
             if (stderrStat.nlink !== 1 || stderrStat.size !== 0) throw new StoreError("REF_STATE_UNKNOWN", "quarantine diagnostics are not exclusively owned");
@@ -121,7 +142,7 @@ export class QuarantineImporter {
             this.staleRoot = root;
             cleanupAll([() => { if (stderrFd !== undefined) closeSync(stderrFd); }, () => { if (inputFd !== undefined) closeSync(inputFd); }, () => { if (rootFd !== undefined) closeSync(rootFd); }, () => { if (projectFd !== undefined) closeSync(projectFd); },
                 () => lease.release(), () => {
-                    if (execution.confirmDead() && collectLeasedTree(root).kind === "quiescent") this.staleRoot = null;
+                    if (execution.slotState() === "dead" && collectLeasedTree(root).kind === "quiescent") this.staleRoot = null;
                 }]);
         });
     }

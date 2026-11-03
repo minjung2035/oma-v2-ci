@@ -6,30 +6,31 @@ import { tmpdir } from "node:os";
 import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { readConfigurationSource } from "@oma/config/operations";
-import { SURFACE_LIMITS, encodeToolSurfacePlan, planToolSurface, type ToolSurfaceConfig } from "@oma/domain/tool-surface";
+import { collaborationSurface, decodeCollaborationSurface, type CollaborationSurfacePlan } from "@oma/domain/collaboration-surface";
 import { parseSurfacePlan, registerToolSurface, type SurfaceFence } from "@oma/tool-runtime/tool-surface";
 
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
 
-function config(overrides: Partial<ToolSurfaceConfig> = {}): ToolSurfaceConfig {
-  return { defaultMode: "DISABLED", direct: ["read", "oma_mail_read"], optional: ["fetch", "diagnostics"], disabled: [], ...overrides };
-}
-
-test("surface plans reject ambiguous admission before touching the registry", () => {
+test("001. Current surface plans reject ambiguous or arbitrary catalogs before touching the registry", () => {
+  const plan = collaborationSurface("resident");
   for (const candidate of [
-    config({ optional: ["read"] }), config({ direct: ["read", "read"] }),
-    config({ disabled: ["fetch"] }), config({ optional: ["toolset"] }),
-    config({ optional: ["Not A Name"] }),
-    config({ optional: Array.from({ length: SURFACE_LIMITS.names + 1 }, (_, index) => `tool${index}`) }),
-  ]) assert.throws(() => planToolSurface(candidate), invalid);
-  for (const raw of [" ", "{", "null", "[]", '{"version":1}', JSON.stringify({ ...config(), version: 2, groups: [] }),
-    JSON.stringify({ ...config(), version: 2, defaultMode: "DIRECT" })])
-    assert.equal(parseSurfacePlan(raw).state, "malformed");
+    { ...plan, direct: ["UPPER"] },
+    { ...plan, direct: [...plan.direct, plan.direct[0]] }, { ...plan, direct: [...plan.direct, "missing"] },
+    { ...plan, groups: { ...plan.groups, web_tools: ["web_search"] } }, { ...plan, optional: ["ls"] },
+  ]) assert.throws(() => decodeCollaborationSurface(candidate), invalid);
+  // The adversarial name vectors belong to this decoder contract as well.
+  for (const name of ["a".repeat(200), "UPPER", "9leading", "has space", "has/slash", "toolset", "oma_mail_send"])
+    for (const candidate of [{ ...plan, direct: [...plan.direct, name] },
+      { ...plan, groups: { ...plan.groups, web_tools: [...plan.groups.web_tools, name] } }])
+      assert.throws(() => decodeCollaborationSurface(candidate), invalid);
+  assert.deepEqual(decodeCollaborationSurface(JSON.parse(JSON.stringify(plan))), plan);
+  for (const raw of [" ", "{", "null", "[]", '{"version":1}', '{"version":2}',
+    JSON.stringify({ ...plan, direct: ["9leading"] })]) assert.equal(parseSurfacePlan(raw).state, "malformed");
   assert.equal(parseSurfacePlan(undefined).state, "absent");
 });
 
 
-test("D23: a role file cannot declare a projection -- the field fails the load, whatever it holds", () => {
+test("002. A role file cannot declare a projection -- the field fails the load, whatever it holds", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-surface-cfg-"));
   try {
     const libdir = join(dir, "lib");
@@ -82,16 +83,17 @@ interface TestTool {
   sourceInfo?: { source: string; path?: string };
   execute?: (id: string, args: unknown) => Promise<{ details: Record<string, unknown> }>;
 }
-/** Model-facing declarations and persisted boundary entries are separate, just
- * as in Pi: tool results alone cannot restore an uncommitted selection. */
-function projectionHost(plan: ToolSurfaceConfig | string = config(), fence?: SurfaceFence) {
-  const registry = new Map<string, TestTool>(["read", "fetch", "diagnostics", "danger", "oma_mail_read"].map(name =>
-    [name, { name, description: `${name} performs work. More guidance.`, parameters: {},
-      sourceInfo: { source: "builtin" } }]));
+/** Pi persists tool results separately from exposure entries. This fixture
+ * exercises that protocol, not SDK/provider/kernel qualification. */
+function projectionHost(plan: CollaborationSurfacePlan | string = collaborationSurface("resident"), fence?: SurfaceFence) {
+  const current = collaborationSurface("resident");
+  const names = [...current.direct, ...Object.values(current.groups).flat()];
+  const registry = new Map<string, TestTool>(names.map(name => [name, { name, description: `${name} performs work.`, parameters: {},
+    sourceInfo: { source: "builtin" } }]));
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   let active = [...registry.keys()], branch: unknown[] = [], refuseApply = false;
   const previous = process.env.OMA_TOOL_SURFACE;
-  process.env.OMA_TOOL_SURFACE = typeof plan === "string" ? plan : encodeToolSurfacePlan(planToolSurface(plan));
+  process.env.OMA_TOOL_SURFACE = typeof plan === "string" ? plan : JSON.stringify(plan);
   try {
     registerToolSurface({
       on(event: string, handler: (...args: unknown[]) => unknown) { handlers.set(event, handler); },
@@ -101,7 +103,7 @@ function projectionHost(plan: ToolSurfaceConfig | string = config(), fence?: Sur
         if (refuseApply) throw new Error("injected apply failure");
         active = names.filter(name => registry.has(name));
       },
-    } as never, ["oma_mail_read"], { fatal: message => { throw new Error(message); }, ...fence });
+    } as never, current.direct.filter(name => name.startsWith("oma_")), { role: "resident", fatal: message => { throw new Error(message); }, ...fence });
   } finally {
     if (previous === undefined) delete process.env.OMA_TOOL_SURFACE; else process.env.OMA_TOOL_SURFACE = previous;
   }
@@ -113,126 +115,98 @@ function projectionHost(plan: ToolSurfaceConfig | string = config(), fence?: Sur
     start(entries: unknown[] = branch) { branch = [...entries]; emit("session_start"); },
     block: (name: string) => emit("tool_call", { toolName: name }),
     refuseApply() { refuseApply = true; },
-    async select(select: unknown, id = "select") {
-      return registry.get("toolset")!.execute!(id, { select });
+    async expose(group: "web_tools" | "lsp_tools", id: string = group, args: unknown = {}) {
+      return registry.get(group)!.execute!(id, args);
     },
-    finish(results: { id: string; isError?: boolean }[]) {
-      const toolResults = results.map(result => ({ role: "toolResult", toolName: "toolset",
+    finish(results: { id: string; group: "web_tools" | "lsp_tools"; isError?: boolean }[]) {
+      const toolResults = results.map(result => ({ role: "toolResult", toolName: result.group,
         toolCallId: result.id, isError: result.isError ?? false }));
-      branch.push(...toolResults.map(message => ({ type: "message", message })));
-      const result = emit("turn_end", { entries: [], toolResults, toolResultEntryIds: results.map(result => result.id) });
+      branch.push(...toolResults.map(message => ({ id: `result-${message.toolCallId}`, type: "message", message })));
+      const result = emit("turn_end", { entries: [], toolResults, toolResultEntryIds: results.map(result => `result-${result.id}`) });
       branch.push(...(result?.entries ?? []));
     },
   };
 }
 
-test("selection replaces optional tools at persisted turn end and never changes its own batch", async () => {
-  const host = projectionHost(); host.start();
-  const core = host.active();
-  assert.equal(host.block("danger")?.block, true);
-  assert.equal(host.block("fetch")?.block, true);
-  const result = await host.select(["fetch"]);
-  assert.deepEqual(host.active(), core);
-  assert.equal(result.details.nextActiveCount, core.length + 1);
-  host.finish([{ id: "select" }]);
-  assert.ok(host.active().includes("fetch"));
-  await host.select(["diagnostics"], "next");
-  assert.equal(host.block("fetch"), undefined, "the previous batch loadout remains callable");
-  host.finish([{ id: "next" }]);
-  assert.deepEqual(host.active(), [...core, "diagnostics"].sort());
-  await host.select([], "clear"); host.finish([{ id: "clear" }]);
-  assert.deepEqual(host.active(), core);
+test("003. Complete groups accumulate only after persisted turn end and never change their own batch", async () => {
+  const host = projectionHost(); host.start(); const core = host.active();
+  assert.equal(host.block("toolset")?.block, true); assert.equal(host.registry.has("toolset"), false);
+  assert.equal(host.block("web_search")?.block, true);
+  const result = await host.expose("web_tools"); assert.deepEqual(host.active(), core);
+  assert.equal(result.details.effective, "next-model-call-after-result-persistence");
+  host.finish([{ id: "web_tools", group: "web_tools" }]);
+  assert.equal(host.block("web_search"), undefined);
+  await host.expose("lsp_tools"); assert.equal(host.block("lsp_status")?.block, true);
+  host.finish([{ id: "lsp_tools", group: "lsp_tools" }]);
+  assert.equal(host.block("lsp_status"), undefined); assert.equal(host.block("web_search"), undefined);
+  const both = host.active(); await host.expose("web_tools", "repeat"); host.finish([{ id: "repeat", group: "web_tools" }]);
+  assert.deepEqual(host.active(), both, "repeat is idempotent; no exact-set reset survives");
 });
 
-test("bad shapes and names cannot replace a valid pending selection", async () => {
-  const host = projectionHost(); host.start();
-  await host.select(["fetch"], "good");
-  for (const select of [null, "fetch", [1], ["fetch", "fetch"], ["read"], ["missing"], ["oma_society"]])
-    await assert.rejects(host.select(select, "bad"));
-  await assert.rejects(host.registry.get("toolset")!.execute!("bad", { select: [], request: "not-a-mutation" }));
-  host.finish([{ id: "good" }]);
-  assert.ok(host.active().includes("fetch"));
+test("004. Bad shapes cannot replace a valid pending group exposure", async () => {
+  const host = projectionHost(); host.start(); await host.expose("web_tools", "good");
+  for (const args of [null, "web_tools", [], { select: [] }, { request: "not-a-mutation" }, { group: "unknown" }])
+    await assert.rejects(host.expose("lsp_tools", "bad", args));
+  host.finish([{ id: "good", group: "web_tools" }]); assert.equal(host.block("web_search"), undefined);
+  assert.equal(host.block("lsp_status")?.block, true);
 });
 
-test("the last successful persisted selection wins, while pending and failed calls do not restore", async () => {
-  const host = projectionHost(); host.start();
-  await host.select(["fetch"], "first");
-  await host.select(["diagnostics"], "second");
-  host.finish([{ id: "first" }, { id: "second" }]);
-  const committed = host.branch();
-  await host.select([], "interrupted");
-  host.start([...committed, { type: "message", message: { role: "toolResult", toolName: "toolset",
-    isError: false, details: { select: [] } } }]);
-  assert.ok(host.active().includes("diagnostics"));
-  await host.select(["fetch"], "failed"); host.finish([{ id: "failed", isError: true }]);
-  host.start();
-  assert.ok(host.active().includes("diagnostics"));
-  host.start([]);
-  assert.equal(host.active().includes("diagnostics"), false, "a different branch has its own committed loadout");
-  host.start(committed);
-  assert.ok(host.active().includes("diagnostics"), "fork/resume restores the committed branch");
+test("005. Only successful persisted group results restore; interrupted/failed calls and different branches remain separate", async () => {
+  const host = projectionHost(); host.start(); await host.expose("web_tools", "first");
+  host.finish([{ id: "first", group: "web_tools" }]); const committed = host.branch();
+  await host.expose("lsp_tools", "interrupted"); host.start(committed);
+  assert.equal(host.block("lsp_status")?.block, true); assert.equal(host.block("web_search"), undefined);
+  await host.expose("lsp_tools", "failed"); host.finish([{ id: "failed", group: "lsp_tools", isError: true }]); host.start();
+  assert.equal(host.block("lsp_status")?.block, true);
+  host.start([]); assert.equal(host.block("web_search")?.block, true);
+  host.start(committed); assert.equal(host.block("web_search"), undefined);
 });
 
-test("unpersisted results cannot become a committed snapshot", async () => {
-  const host = projectionHost(); host.start(); await host.select(["fetch"]);
-  assert.throws(() => host.emit("turn_end", { entries: [], toolResults: [{ toolCallId: "select",
-    toolName: "toolset", isError: false }], toolResultEntryIds: [] }), /persisted/);
+test("006. Unpersisted group results cannot become a committed snapshot", async () => {
+  const host = projectionHost(); host.start(); await host.expose("web_tools", "pending");
+  assert.throws(() => host.emit("turn_end", { entries: [], toolResults: [{ toolCallId: "pending", toolName: "web_tools", isError: false }], toolResultEntryIds: [] }), /persisted/);
   assert.equal(host.block("read")?.block, true);
 });
 
-test("malformed, impossible and shadowed surfaces fail closed for all calls", () => {
-  for (const plan of ["{", " ", config({ direct: ["missing"] }), config({ optional: ["missing"] })]) {
-    const host = projectionHost(plan);
-    assert.throws(() => host.start());
-    assert.deepEqual(host.active(), []);
-    assert.equal(host.block("oma_mail_read")?.block, true);
+test("007. Malformed, impossible and shadowed current surfaces fail closed", () => {
+  for (const plan of ["{", " ", JSON.stringify({ version: 2 }), JSON.stringify({ ...collaborationSurface("resident"), direct: ["missing"] })]) {
+    const host = projectionHost(plan); assert.throws(() => host.start()); assert.deepEqual(host.active(), []);
+    assert.equal(host.block("oma_send")?.block, true);
   }
-  const host = projectionHost();
-  host.registry.set("toolset", { name: "toolset", parameters: {} });
-  assert.throws(() => host.start(), /conflicts/);
-  const failedApply = projectionHost(); failedApply.refuseApply();
-  assert.throws(() => failedApply.start(), /apply failure/);
-  assert.equal(failedApply.block("oma_mail_read")?.block, true);
+  const host = projectionHost(undefined, { own: name => name !== "web_tools" });
+  assert.throws(() => host.start(), /shadowed/);
+  const failedApply = projectionHost(); failedApply.refuseApply(); assert.throws(() => failedApply.start(), /apply failure/);
+  assert.equal(failedApply.block("oma_send")?.block, true);
 });
 
-test("late admitted registrations enter the catalog only at a safe boundary; shadows close the surface", async () => {
+test("008. Late non-catalog registrations stay unavailable; provenance revocation closes the role surface", () => {
   let shadowed = false;
-  const host = projectionHost(config(), {
-    permitted: name => name !== "unverified",
-    own: name => name === "toolset" || (name === "oma_mail_read" && !shadowed),
-  });
+  const host = projectionHost(undefined, { permitted: name => name !== "unverified", own: name => name !== "oma_send" || !shadowed });
   host.start();
-  host.registry.set("late", { name: "late", description: "A verified extra tool.", parameters: {},
-    sourceInfo: { source: "extension", path: "/verified.js" } });
-  host.registry.set("unverified", { name: "unverified", description: "Not admitted.", parameters: {},
-    sourceInfo: { source: "extension", path: "/unknown.js" } });
-  assert.equal(host.block("late")?.block, true);
-  await assert.rejects(host.select(["late"]));
-  host.finish([]);
-  await host.select(["late"]); host.finish([{ id: "select" }]);
-  assert.equal(host.block("late"), undefined);
-  await assert.rejects(host.select(["unverified"]));
-  shadowed = true;
-  assert.equal(host.block("oma_mail_read")?.block, true);
+  host.registry.set("late", { name: "late", description: "Not in the current role contract", parameters: {}, sourceInfo: { source: "extension", path: "/verified.js" } });
+  host.registry.set("unverified", { name: "unverified", parameters: {}, sourceInfo: { source: "extension", path: "/unknown.js" } });
+  host.finish([]); assert.equal(host.block("late")?.block, true); assert.equal(host.block("unverified")?.block, true);
+  shadowed = true; assert.equal(host.block("oma_send")?.block, true);
   assert.throws(() => host.emit("before_provider_request"), /shadowed/);
 });
 
-test("a selected definition cannot disappear or change after the safe boundary", async () => {
+test("009. An exposed definition cannot disappear or change after a safe boundary", async () => {
   for (const change of ["remove", "replace"] as const) {
-    const host = projectionHost(); host.start();
-    await host.select(["fetch"]); host.finish([{ id: "select" }]);
-    if (change === "remove") host.registry.delete("fetch");
-    else host.registry.set("fetch", { name: "fetch", description: "Changed implementation metadata.", parameters: {} });
-    assert.throws(() => host.emit("before_provider_request"), /changed outside/);
-    assert.equal(host.block("read")?.block, true);
+    const host = projectionHost(); host.start(); await host.expose("web_tools"); host.finish([{ id: "web_tools", group: "web_tools" }]);
+    if (change === "remove") host.registry.delete("web_search");
+    else host.registry.set("web_search", { name: "web_search", description: "Changed metadata", parameters: {} });
+    assert.throws(() => host.emit("before_provider_request"), /changed outside/); assert.equal(host.block("read")?.block, true);
   }
 });
 
-test("a corrupt or no-longer-admitted committed selection stops restoration", () => {
-  for (const data of [{ version: 1, select: ["missing"] }, { version: 1, select: ["fetch", "fetch"] },
-    { version: 1, select: null }, { version: 2, select: [] }]) {
-    const host = projectionHost();
-    assert.throws(() => host.start([{ type: "custom", customType: "oma-toolset", data }]));
+test("010. Corrupt, partial or foreign committed exposure cannot be restored", () => {
+  for (const data of [
+    { version: 1, surface: "collaboration-v1", role: "resident", active: ["missing"] },
+    { version: 1, surface: "collaboration-v1", role: "resident", active: ["web_search"] },
+    { version: 1, surface: "collaboration-v1", role: "resident", active: null },
+    { version: 1, surface: "collaboration-v1", role: "principal", active: [] },
+  ]) {
+    const host = projectionHost(); assert.throws(() => host.start([{ type: "custom", customType: "oma-collaboration-exposure", data }]));
     assert.deepEqual(host.active(), []);
   }
 });

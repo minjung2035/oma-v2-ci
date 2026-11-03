@@ -15,7 +15,7 @@ function findings(files) {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
-test("PI-001 admits the shared client and erased contract shapes, not host runtime", () => {
+test("001. Admits the shared client and erased contract shapes, not host runtime", () => {
   assert.deepEqual(findings({
     "packages/extension/src/index.ts": "import { client } from \"../../client/src/index.js\";",
     "packages/client/src/index.ts": "import type { Receipt } from \"../../contracts/src/index.js\"; import { connect } from \"node:net\"; export const client = connect;",
@@ -32,7 +32,7 @@ test("PI-001 admits the shared client and erased contract shapes, not host runti
 });
 
 
-test("credential and wait codecs are shared, closed, and reject malformed input", async () => {
+test("002. Credential and wait codecs are shared, closed, and reject malformed input", async () => {
   const { encodeCredential, decodeCredential, encodeWaitObservation, decodeWaitObservation } = await import("@oma/protocol/client-codecs");
   const grant = { credential: "a".repeat(64), sessionHandle: "b".repeat(32) };
   assert.deepEqual(decodeCredential(encodeCredential(grant).slice(0, -1)), grant);

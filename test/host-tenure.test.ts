@@ -45,7 +45,7 @@ const engineThat = (dies: boolean): FencedEngine & { closed: number; die: () => 
   };
 };
 
-test("DR35 private engine preparation holds one lease without opening broker authority", async () => {
+test("001. Private engine preparation holds one lease without opening broker authority", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root)!;
@@ -69,7 +69,7 @@ test("DR35 private engine preparation holds one lease without opening broker aut
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 a society has one tenure at a time, and it is takeable again only when that one ends", async () => {
+test("002. A society has one tenure at a time, and it is takeable again only when that one ends", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -81,7 +81,7 @@ test("T119 a society has one tenure at a time, and it is takeable again only whe
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 the fence is a live descriptor while the tenure holds, and unreadable once it does not", async () => {
+test("003. The fence is a live descriptor while the tenure holds, and unreadable once it does not", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -100,7 +100,7 @@ test("T119 the fence is a live descriptor while the tenure holds, and unreadable
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("PR-002 delivery needs a tenure, a live broker, a registration and an engine -- all four, all current", async () => {
+test("004. Delivery needs a tenure, a live broker, a registration and an engine -- all four, all current", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -129,7 +129,7 @@ test("PR-002 delivery needs a tenure, a live broker, a registration and an engin
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("PR-002 a refused registration never opens delivery, however ready the broker is", async () => {
+test("005. A refused registration never opens delivery, however ready the broker is", async () => {
   // The defect verbatim: `register()` resolved on refusal and the caller went
   // on to deliver, because the only gate it consulted was the broker's
   // readiness. Readiness is now not sufficient for anything.
@@ -145,7 +145,7 @@ test("PR-002 a refused registration never opens delivery, however ready the brok
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("PR-002 a restarted broker does not inherit the registration the previous one granted", async () => {
+test("006. A restarted broker does not inherit the registration the previous one granted", async () => {
   // A credential is minted by one broker process for one engine. A supervisor
   // that replaces the broker has replaced the authority behind every
   // credential it issued, so readiness must close delivery, not reopen it.
@@ -166,7 +166,7 @@ test("PR-002 a restarted broker does not inherit the registration the previous o
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("PR-002 a registration cannot be claimed without a live broker or a live engine", async () => {
+test("007. A registration cannot be claimed without a live broker or a live engine", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -180,7 +180,7 @@ test("PR-002 a registration cannot be claimed without a live broker or a live en
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("TUI-004 writes are refused once the society has been given back", async () => {
+test("008. Writes are refused once the society has been given back", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -192,7 +192,7 @@ test("TUI-004 writes are refused once the society has been given back", async ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 a tenure runs one engine at a time", async () => {
+test("009. A tenure runs one engine at a time", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -203,7 +203,7 @@ test("T119 a tenure runs one engine at a time", async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("REC-007 the lease is given up after the engine is gone, not after it was asked to go", async () => {
+test("010. The lease is given up after the engine is gone, not after it was asked to go", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -224,7 +224,7 @@ test("REC-007 the lease is given up after the engine is gone, not after it was a
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("REC-007 negative control: releasing on `close()` rather than on death hands the society straight on", async () => {
+test("011. Negative control: releasing on `close()` rather than on death hands the society straight on", async () => {
   // The same shape with the wait removed -- which is what the code did before
   // this change. If this control ever stops reproducing, the test above has
   // stopped being evidence: it would be passing because the engine died
@@ -243,7 +243,7 @@ test("REC-007 negative control: releasing on `close()` rather than on death hand
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("REC-007 quitting finishes even when the engine will not die, and hands the society to nobody", async () => {
+test("012. Quitting finishes even when the engine will not die, and hands the society to nobody", async () => {
   // Bounding the wait is safe only because the fence outlives the release: the
   // lease is given up here, and the society still cannot be taken, because in
   // production the engine holds an inherited descriptor onto the same open
@@ -260,7 +260,7 @@ test("REC-007 quitting finishes even when the engine will not die, and hands the
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("REC-007 a crash path gives the society up without waiting, and asks the engine to stop first", () => {
+test("013. A crash path gives the society up without waiting, and asks the engine to stop first", () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root, 60_000);
@@ -277,7 +277,7 @@ test("REC-007 a crash path gives the society up without waiting, and asks the en
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 ending twice is the same as ending once", async () => {
+test("014. Ending twice is the same as ending once", async () => {
   const root = scratch();
   try {
     const held = HostTenure.take(root);
@@ -293,7 +293,7 @@ test("T119 ending twice is the same as ending once", async () => {
 });
 
 
-test("DR27: a successor requires actual death and a current broker, not close or broker restart", async () => {
+test("015. A successor requires actual death and a current broker, not close or broker restart", async () => {
   const root = scratch(); const held = HostTenure.take(root)!;
   try {
     assert.equal(held.canStartEngine, false);
@@ -304,6 +304,7 @@ test("DR27: a successor requires actual death and a current broker, not close or
     engine.die(); await engine.exited;
     assert.equal(held.canStartEngine, true);
     held.brokerLost(); assert.equal(held.canStartEngine, false);
+    assert.equal(held.canPrepareEngine, false, "initial private preparation cannot reopen an engine after broker loss");
     held.brokerReady(); const next = engineThat(true); held.adopt(next);
     assert.equal(held.canStartEngine, false);
     await held.end(); assert.equal(held.canStartEngine, false);
@@ -311,7 +312,7 @@ test("DR27: a successor requires actual death and a current broker, not close or
 });
 
 
-test("DR27/P0-4: engine exit returns the unused tenure grace timer", async t => {
+test("016. Engine exit returns the unused tenure grace timer", async t => {
   const root = scratch(); const held = HostTenure.take(root)!;
   const pending = new Set<ReturnType<typeof setTimeout>>();
   const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;

@@ -34,7 +34,7 @@ function historyFixture(t: import("node:test").TestContext) {
     return { root, project, state, git };
 }
 
-test("startup: a strict transfer observation belongs only to the newly created mirror", async t => {
+test("001. Startup: a strict transfer observation belongs only to the newly created mirror", async t => {
     const f = historyFixture(t), observations: (string | undefined)[] = [];
     const verifyHistory = async (repository: string, transfer?: { kind: string; repository: string }) => {
         observations.push(transfer?.kind);
@@ -52,7 +52,7 @@ test("startup: a strict transfer observation belongs only to the newly created m
     assert.equal(existsSync(join(f.state, "repos/project.git")), false);
 });
 
-for (const invalid of ["missing-link", "duplicate-tree-entry"]) test(`startup: a transfer containing ${invalid} cannot grant a verification observation`, async t => {
+for (const invalid of ["missing-link", "duplicate-tree-entry"]) test(`002. Startup: a transfer containing ${invalid} cannot grant a verification observation`, async t => {
     const f = historyFixture(t);
     const blob = invalid === "missing-link" ? "f".repeat(40) : f.git(["hash-object", "-w", "--stdin"], "blob");
     const entry = Buffer.concat([Buffer.from("100644 file\0"), Buffer.from(blob, "hex")]);
@@ -68,7 +68,7 @@ for (const invalid of ["missing-link", "duplicate-tree-entry"]) test(`startup: a
     assert.equal(granted, false); assert.equal(existsSync(join(f.state, "repos/project.git")), false);
 });
 for (const healthy of [true, false]) {
-    test(`AV-07/P0: canonical publication waits for concurrent history validation (${healthy})`, async (t) => {
+    test(`003. Canonical publication waits for concurrent history validation (${healthy})`, async (t) => {
         const root = mkdtempSync(join(tmpdir(), "oma-prepare-verify-"));
         t.after(() => rmSync(root, { recursive: true, force: true }));
         const state = join(root, "society"), project = join(root, "project");
@@ -102,7 +102,7 @@ for (const healthy of [true, false]) {
         assert.equal(readdirSync(join(state, "repos")).some(name => name.startsWith(".snapshot.staging.")), false);
     });
 }
-test("AV-07/P0: a consumed provisioning proof cannot hide later repository corruption", async (t) => {
+test("004. A consumed provisioning proof cannot hide later repository corruption", async (t) => {
     const root = mkdtempSync(join(tmpdir(), "oma-prepare-health-"));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const projectGit = join(root, "repos/project.git");
@@ -131,7 +131,7 @@ test("AV-07/P0: a consumed provisioning proof cannot hide later repository corru
     writeFileSync(join(projectGit, "objects/aa", "b".repeat(38)), "damaged object");
     await assert.rejects(reconcile.startup(false), { code: "STORE_CORRUPT" });
 });
-test("DR35 preparation produces the bound project's snapshot before completing", async () => {
+test("005. Preparation produces the bound project's snapshot before completing", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-prepare-"));
     const stateRoot = join(root, "society"), projectDir = join(root, "project");
     mkdirSync(projectDir);
@@ -152,7 +152,7 @@ test("DR35 preparation produces the bound project's snapshot before completing",
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("DR35 cancellation preserves the inherited fence until the native writer actually closes", async () => {
+test("006. Cancellation preserves the inherited fence until the native writer actually closes", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-prepare-cancel-"));
     const stateRoot = join(root, "society"), libdir = join(root, "install"), marker = join(root, "held.json");
     mkdirSync(join(libdir, "apps/oma/dist/entry"), { recursive: true });

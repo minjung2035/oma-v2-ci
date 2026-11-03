@@ -31,7 +31,7 @@ const header = [
 const brand = { title: "oma", version: "0.1.0", engineVersion: "1.0.1", project: "~/work/demo", tip: "Ctrl+X oma settings",
     society: "demo-9017360114-2" };
 const plainOf = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
-test("Open TUI brand: oma's title, logo, society, project and Ctrl+X tip, every line at upstream's width", () => {
+test("001. Open TUI brand: oma's title, logo, society, project and Ctrl+X tip, every line at upstream's width", () => {
     const branded = brandHeader(header, brand, accent);
     assert.deepEqual(branded.map(cellWidth), header.map(cellWidth));
     const plain = branded.map(plainOf);
@@ -63,7 +63,7 @@ test("Open TUI brand: oma's title, logo, society, project and Ctrl+X tip, every 
     assert.ok(narrow.map(plainOf).some(line => line.split("│")[1]?.trim() === "oma"));
     assert.deepEqual(brandHeader([], brand), []);
 });
-test("Open TUI brand: a crowded tips cell truncates on grapheme boundaries, never mid-emoji", () => {
+test("002. Open TUI brand: a crowded tips cell truncates on grapheme boundaries, never mid-emoji", () => {
     // NB-11's swapText fix held for the last tip cell too: a UTF-16 code-unit
     // cut stops inside a surrogate pair (visibleWidth reads a lone surrogate as
     // 0, so the old loop halted with half a cluster written).
@@ -99,7 +99,7 @@ test("Open TUI brand: a crowded tips cell truncates on grapheme boundaries, neve
     // And a tip that fits is left alone.
     assert.equal(tipsCell(brandHeader(header, brand)), "Ctrl+X oma settings");
 });
-test("Open TUI brand: the footer names the project from its own gap, or leaves the line alone", () => {
+test("003. Open TUI brand: the footer names the project from its own gap, or leaves the line alone", () => {
     const footer = [`${accent("")} ${accent("~")}${" ".repeat(40)}${accent("[░░░] 0.0%")}`, "second"];
     const branded = brandFooter(footer, brand);
     assert.equal(cellWidth(branded[0]), cellWidth(footer[0]));

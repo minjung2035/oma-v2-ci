@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionRuntime } from "./execution-runtime.js";
 export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntime): QuarantineExecution {
-  return Object.freeze<QuarantineExecution>({ confirmDead: () => executions.confirmDead("quarantine"),
+  return Object.freeze<QuarantineExecution>({ slotState: () => executions.slotState("quarantine"),
     execute: async (request, authorize) => {
       if (!paths.checkNode || !paths.checkAssetsDir)
         throw new StoreError("UNSUPPORTED_PROFILE", "quarantine installation is incomplete");

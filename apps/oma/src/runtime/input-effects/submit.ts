@@ -79,6 +79,13 @@ export function prepareSubmitEffects(
 ): SubmitEffects {
   const cwd = currentContext().cwd;
   const exportRef = exportRefForRequestKey(key);
+  if (!known.hasCandidate) {
+    const local = runGitText(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], { cwd });
+    if (local.status === 1)
+      throw new StoreError("INVALID_REQUEST", "SOURCE_UNREADABLE: the candidate is not an available local commit");
+    if (local.status !== 0 || local.stdout.trim() !== candidate)
+      throw new StoreError("REF_STATE_UNKNOWN", "cannot observe the local candidate commit");
+  }
   const prerequisites = known.hasCandidate
     ? []
     : submitPrerequisites(cwd, candidate, known.prerequisites);

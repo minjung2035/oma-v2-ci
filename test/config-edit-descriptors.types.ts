@@ -10,6 +10,7 @@ const complete = {
   "worker-model": descriptor,
   "initial-workers": descriptor,
   "max-workers": descriptor,
+  "collaboration-admission": descriptor,
   "worker-profile": descriptor,
   "worker-integrate": descriptor,
 } satisfies Readonly<Record<EditableField, EditableFieldDescriptor>>;

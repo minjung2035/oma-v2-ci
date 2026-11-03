@@ -5,7 +5,7 @@ import { ProvenanceIndex } from "@oma/git/provenance-index";
 import { canonicalPublishedRefs, canonicalCommitGraph, canonicalCommitRange } from "@oma/git/canonical-command";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 
-test("IMP-R22/R23: native batch index matches historical oracle at 1/8/32/128 submissions; warm calls stay two",async()=>{
+test("001. Native batch index matches historical oracle at 1/8/32/128 submissions; warm calls stay two",async()=>{
   const f=fixture();try{
     let calls=0;const observations={refs:()=>{calls++;return canonicalPublishedRefs(f.projectGit);},graph:(tips:readonly string[])=>{calls++;return canonicalCommitGraph(f.projectGit,tips);},range:(b:string,c:string)=>{calls++;return canonicalCommitRange(f.projectGit,b,c);}};
     const index=new ProvenanceIndex(observations);let tip=f.base,target="";

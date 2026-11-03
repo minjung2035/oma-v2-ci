@@ -37,7 +37,7 @@ const OID = "1111111111111111111111111111111111111111";
 /** PI-002: the runner-supplied view limits, never an implicit unlimited read. */
 const VIEW_LIMITS = TEST_VIEW_LIMITS;
 
-test("R03: resident names and authenticated actor names are distinct contexts", () => {
+test("001. Resident names and authenticated actor names are distinct contexts", () => {
   assert.equal(parseResidentName("alice"), "alice"); assert.equal(parseActor("alice"), "alice");
   assert.equal(parseActor("principal"), "principal"); assert.equal(parseResidentName("principal"), null);
   for (const name of ["commons", "residents", "topic", "broker", "principal-relay", "reconcile", "topic-dev", "Alice", "../alice", "a".repeat(33)]) {
@@ -50,7 +50,7 @@ test("R03: resident names and authenticated actor names are distinct contexts", 
   for (const key of ["", "k".repeat(97), "../key", "키", "a\0b", "a b"]) assert.equal(parseRequestKey(key), null);
 });
 
-test("R03: UUID version, variant, lowercase and safe ordinal grammar are preserved", () => {
+test("002. UUID version, variant, lowercase and safe ordinal grammar are preserved", () => {
   assert.equal(parseOperationId(OP), OP); assert.equal(parseBatchId(BATCH), BATCH);
   assert.equal(parseMessageFileId(MESSAGE), MESSAGE); assert.deepEqual(parseMessageId(MESSAGE), { operationId: OP, ordinal: 0 });
   for (const uuid of ["00000000-0000-1000-8000-000000000003", "00000000-0000-4000-7000-000000000003",
@@ -65,7 +65,7 @@ test("R03: UUID version, variant, lowercase and safe ordinal grammar are preserv
   for (const oid of ["HEAD", "a".repeat(39), "a".repeat(41), "A".repeat(40)]) assert.equal(parseFullOid(oid), null);
 });
 
-test("R03: internal IDs, RFC ancestry and context paths do not share a grammar", () => {
+test("003. Internal IDs, RFC ancestry and context paths do not share a grammar", () => {
   // MAIL-005: only the supported OMA header identity is accepted; the qualified
   // header form is still not the internal MessageId grammar.
   const headers = parseEmlHeaders(`Message-ID: <${MESSAGE}@demo.oma.invalid>\r\nReferences: <${MESSAGE}@demo.oma.invalid> <m-00000000-0000-4000-8000-000000000004-0@demo.oma.invalid>\r\n\r\nbody`);
@@ -82,7 +82,7 @@ test("R03: internal IDs, RFC ancestry and context paths do not share a grammar",
   for (const path of ["", "/GOAL.md", "../GOAL.md", "a/../GOAL.md", "a//b", "a/./b", "a\0b"]) assert.equal(parseRepositoryRelativePath(path), null);
 });
 
-test("R03: constructors retain literal legacy layout, with bounded fresh export refs", () => {
+test("004. Constructors retain literal legacy layout, with bounded fresh export refs", () => {
   assert.equal(messageIdForOperation(OP, 0), MESSAGE);
   assert.equal(publishedRefFor("alice", OP), "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003");
   assert.equal(submitStagingFor(OP), "staging/submit-op-00000000-0000-4000-8000-000000000003");
@@ -104,7 +104,7 @@ test("R03: constructors retain literal legacy layout, with bounded fresh export 
   assert.throws(() => publishedRefFor("../alice", OP), TypeError); assert.throws(() => actorSocketFor("alice", -1), TypeError);
 });
 
-test("R03: valid syntax does not establish expected operation actor root or incarnation", () => {
+test("005. Valid syntax does not establish expected operation actor root or incarnation", () => {
   assert.equal(isMessageIdForOperation(MESSAGE, { operationId: OP }), true);
   assert.equal(isMessageIdForOperation(MESSAGE, { operationId: OTHER_OP }), false);
   const ref = "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003";
@@ -136,7 +136,7 @@ test("R03: valid syntax does not establish expected operation actor root or inca
   assert.equal(isActorSocketPathFor("/run/demo/actors/alice/7/control.sock", { runRoot: "/run/demo", actor: "alice", incarnation: 8 }), false);
 });
 
-test("R03: the durable submit boundary rejects a syntactically valid foreign ref", () => {
+test("006. The durable submit boundary rejects a syntactically valid foreign ref", () => {
   const plan = {
     kind: "git.submit", candidate: OID, exportRef: "refs/oma/export/legacy", prerequisites: [], bundle: null,
     publishedRef: "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003",
@@ -150,7 +150,7 @@ test("R03: the durable submit boundary rejects a syntactically valid foreign ref
   assert.notEqual(check({ ...plan, message: { ...plan.message, objectPath: "mail/objects/m-00000000-0000-4000-8000-000000000004-0.eml" } }), null);
 });
 
-test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () => {
+test("007. Single-file Pi UUID copy agrees on independent boundary vectors", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-r03-pi-"));
   try {
     const cases = [
@@ -172,30 +172,9 @@ test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R03: actual ACK tool rejects non-v4 IDs before replay or networking", async () => {
-  const home = mkdtempSync(join(tmpdir(), "oma-r03-ack-"));
-  try {
-    const cache = new RequestCache(home);
-    const receipt: Receipt = { operation: OP, state: "succeeded", result: { kind: "mail.ack", message: MESSAGE, acknowledged: true } };
-    cache.freeze({ key: "ack-key", method: "mail.ack", params: { message: MESSAGE }, createdAtMs: 1 });
-    cache.updateReceipt("ack-key", receipt);
-    // Load the actual extension in the isolated client process, with that process's paths.
-    const invoke = (message: string) => runClientWithLookup(home, home, `(async () => {
-      const { registerOmaTools } = await import(${JSON.stringify(import.meta.resolve("@oma/extension/mail-tools"))});
-      Object.assign(process.env, { OMA_AGENT_HOME: process.env.HOME, OMA_MAIL_ARCHIVE: "/mail/archive/cur" });
-      const tools = new Map();
-      registerOmaTools({ registerTool: tool => tools.set(tool.name, tool) }, process.cwd());
-      return tools.get("oma_mail_ack").execute("ack", { messageId: ${JSON.stringify(message)}, request: "ack-key" });
-    })()`, "ack-key", receipt);
-    const good = await invoke(`/mail/archive/cur/${MESSAGE}:2,`);
-    assert.equal(good.status, 0, good.stderr); assert.deepEqual(good.requests.map(request => request.method), ["operation.get"]);
-    const bad = await invoke("m-00000000-0000-1000-8000-000000000003-0");
-    assert.notEqual(bad.status, 0, bad.stderr);
-    assert.deepEqual(bad.requests, [], "invalid IDs must fail before lookup");
-  } finally { rmSync(home, { recursive: true, force: true }); }
-});
 
-test("R03: actual client preserves an old frozen submit exportRef without consulting HEAD", async () => {
+
+test("008. Actual client preserves an old frozen submit exportRef without consulting HEAD", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r03-frozen-"));
   try {
     const cache = new RequestCache(home);

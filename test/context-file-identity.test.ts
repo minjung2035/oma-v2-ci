@@ -13,7 +13,7 @@ import { prepareContextEffects } from "#oma-test/app/runtime/input-effects/conte
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
-test("context input preparation keeps the held source after its pathname is replaced", () => {
+test("001. Context input preparation keeps the held source after its pathname is replaced", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-held-source-"));
   const source = join(root, "source"), moved = join(root, "moved"), original = fs.fstatSync;
   const expected = Buffer.from("# held source\n");
@@ -38,7 +38,7 @@ test("context input preparation keeps the held source after its pathname is repl
   } finally { fs.fstatSync = original; syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("context effects read and verify the same supported regular file", () => {
+test("002. Context effects read and verify the same supported regular file", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-file-identity-"));
   try {
     const bytes = Buffer.from("# GOAL\nPreserve these exact bytes.\n");
@@ -54,7 +54,7 @@ test("context effects read and verify the same supported regular file", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("context effects reject leaf hardlinks symlinks directories and linked parents", () => {
+test("003. Context effects reject leaf hardlinks symlinks directories and linked parents", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-file-links-"));
   try {
     const source = join(root, "source");

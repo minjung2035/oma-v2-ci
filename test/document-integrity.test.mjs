@@ -8,11 +8,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ACCEPTANCE_OWNER, acceptanceFindings, brokenLinks, documentIntegrity, duplicateRequirements, documentLayoutFindings, projectDocuments } from "../scripts/document-integrity.mjs";
 
-test("PRIORITY-0 / P0-7: in this tree every requirement ID has one clause, acceptance rows live in the matrix, and every link resolves", () => {
+test("001. In this tree every requirement ID has one clause, acceptance rows live in the matrix, and every link resolves", () => {
   assert.deepEqual(documentIntegrity("."), []);
 });
 
-test("PRIORITY-0 / P0-1: a requirement ID given to two clauses, or an acceptance number used outside its matrix, is a finding", () => {
+test("002. A requirement ID given to two clauses, or an acceptance number used outside its matrix, is a finding", () => {
   const spec = { source: "docs/implementation-spec.md", text: "**MUST [INF-005]** relay.\n\n**MUST [INF-005]** cost cap.\n\n**MUST [INF-006]** once.\n" };
   assert.deepEqual(duplicateRequirements([spec]), ["INF-005 is defined 2 times (docs/implementation-spec.md, docs/implementation-spec.md)"]);
   const rows = (ids, suffix = "") => ids.map(id => `| T${id} / X${suffix} | oracle |`).join("\n");
@@ -27,7 +27,7 @@ test("PRIORITY-0 / P0-1: a requirement ID given to two clauses, or an acceptance
     [`docs/implementation/validation.md:1 looks like an acceptance row; acceptance numbers belong to ${ACCEPTANCE_OWNER}`]);
 });
 
-test("PRIORITY-0 / P0-3: a link to a file or a heading that does not exist is a finding", () => {
+test("003. A link to a file or a heading that does not exist is a finding", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-doc-links-"));
   try {
     mkdirSync(join(root, "docs"));
@@ -42,16 +42,16 @@ test("PRIORITY-0 / P0-3: a link to a file or a heading that does not exist is a 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("Documentation layout: new files are checked before Git staging and scattered guidance is rejected", () => {
+test("004. Documentation layout: new files are checked before Git staging and scattered guidance is rejected", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-doc-layout-"));
   try {
-    for (const directory of ["docs/archive", "implementation", "node_modules/vendor", "dist", "data"])
+    for (const directory of ["docs/archive", "implementation", "node_modules/vendor", "dist", "data", ".pi/goals"])
       mkdirSync(join(root, directory), { recursive: true });
     writeFileSync(join(root, "README.md"), "[docs](docs/README.md)\n");
     writeFileSync(join(root, "docs/README.md"), "[new](new-spec.md)\n");
     writeFileSync(join(root, "docs/new-spec.md"), "# New untracked specification\n");
     writeFileSync(join(root, "docs/archive/old.md"), "Historical input, not current guidance.\n");
-    for (const file of ["node_modules/vendor/README.md", "dist/generated.md", "data/session.md"])
+    for (const file of ["node_modules/vendor/README.md", "dist/generated.md", "data/session.md", ".pi/goals/active-goal.md"])
       writeFileSync(join(root, file), "Runtime or dependency artifact.\n");
     const files = projectDocuments(root);
     assert.deepEqual(files, ["README.md", "docs/README.md", "docs/archive/old.md", "docs/new-spec.md"]);
@@ -60,6 +60,12 @@ test("Documentation layout: new files are checked before Git staging and scatter
     writeFileSync(join(root, "implementation/stray.md"), "# Scattered owner\n");
     assert.deepEqual(documentLayoutFindings(projectDocuments(root)), [
       "implementation/stray.md: project documentation belongs under docs/",
+    ]);
+    mkdirSync(join(root, "notes/.pi"), { recursive: true });
+    writeFileSync(join(root, "notes/.pi/stray.md"), "# Authored nested guidance\n");
+    assert.deepEqual(documentLayoutFindings(projectDocuments(root)), [
+      "implementation/stray.md: project documentation belongs under docs/",
+      "notes/.pi/stray.md: project documentation belongs under docs/",
     ]);
     writeFileSync(join(root, "docs/new-spec.md"), "[broken](missing.md)\n");
     assert.deepEqual(brokenLinks(root, projectDocuments(root).filter(file => !file.startsWith("docs/archive/"))), [

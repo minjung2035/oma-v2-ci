@@ -11,10 +11,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "@oma/storage";
 import { ViewsModule } from "#oma-test/app/views";
-import { decodeStatusView, encodeStatusView, statusViewPath } from "@oma/protocol/status-view";
+import { decodeStatusView, encodeStatusView, statusViewPath, STATUS_VIEW_BYTES } from "@oma/protocol/status-view";
 import { TuiTransport } from "#oma-test/app/application/status-observation";
+import { makeValidAgent } from "./fixtures/spec.js";
 
-test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", async () => {
+test("004. Aggregate status remains readable when it exceeds one small RPC frame",async()=>{
+ const root=mkdtempSync(join(tmpdir(),"oma-status-aggregate-")),store=new Store(join(root,"runtime.sqlite"),undefined,{society:"demo"});
+ try{
+  store.transaction(tx=>{for(const name of ["alice","bob","carol","dave"])tx.insertAgent(makeValidAgent(name));});
+  const views=new ViewsModule(store,root,"demo","principal"),snapshot={observedAtMs:Date.now(),units:new Map(),failure:"unavailable" as const};
+  views.publishStatus(snapshot,await views.statusOf(snapshot));
+  assert.ok(statSync(statusViewPath(root)).size>768);
+  const result=await new TuiTransport(root,"demo",STATUS_VIEW_BYTES).status();
+  assert.equal(result.kind,"observed");if(result.kind==="observed")assert.equal(result.statuses.length,4);
+ }finally{store.close();rmSync(root,{recursive:true,force:true});}
+});
+
+test("001. What the broker publishes is what the Dashboard accepts, and only its owner can read it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-view-"));
   const store = new Store(join(root, "runtime.sqlite"), undefined, { society: "demo" });
   try {
@@ -41,7 +54,7 @@ test("T118 what the broker publishes is what the Dashboard accepts, and only its
   }
 });
 
-test("T118: an oversized or linked status view is refused, not read into memory", async () => {
+test("002. An oversized or linked status view is refused, not read into memory", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-bounds-"));
   try {
     const path = statusViewPath(root);
@@ -61,7 +74,7 @@ test("T118: an oversized or linked status view is refused, not read into memory"
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T118: a view dated ahead of the reader's clock is unknown, not current", async () => {
+test("003. A view dated ahead of the reader's clock is unknown, not current", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-future-"));
   try {
     const now = 1_800_000_000_000;

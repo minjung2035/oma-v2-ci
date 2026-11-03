@@ -18,7 +18,7 @@ import { ReviewAuthorityReader } from "./authority.js";
 import { isOpenFact, PRINCIPAL, type OpenRequest, type PreparedReview, type ReviewEffects } from "./types.js";
 export class ReviewAcceptance {
   constructor(private readonly store: ReviewLedger, private readonly mail: Pick<ReviewMail, "materialize">,
-    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "publishCandidateRef" | "main" | "submitters" | "cancelMerge">,
+    private readonly ledger: ReviewAuthorityReader, private readonly effects: Pick<ReviewEffects, "currentPolicy" | "publishCandidateRef" | "main" | "submitters" | "cancelMerge">,
     private readonly society: string) {}
   /** The shared acceptance tail: T re-derivation, recipients, operation +
    * deliveries, settle, materialize, succeeded. `auth` is null for
@@ -26,13 +26,13 @@ export class ReviewAcceptance {
    * The scope already owns `prepared.frozen`; its caller created it before the
    * first artifact existed. */
   async acceptPrepared(prepared: PreparedReview, auth: AuthContext | null, actor: Actor,
-      key: string, hash: string, scope: PreacceptScope): Promise<Receipt> {
+      key: string, hash: string, scope: PreacceptScope, beforeAccept?: () => undefined): Promise<Receipt> {
     let txClaim: "inserted" | "retry";
     try {
       // Freezing mail yields to other submissions. Re-observe provenance now,
       // outside T, with no await before acceptance; stale authors require fresh
       // messages, never an in-place rewrite of the frozen authority.
-      if ((isOpenFact(prepared.fact) || prepared.fact.kind === "review.revise" || (prepared.fact.kind === "review.adopt" && prepared.fact.version === 3)) &&
+      if ((isOpenFact(prepared.fact) || prepared.fact.kind === "review.revise") &&
           !(prepared.fact.kind === "challenge.open" && prepared.fact.prepared) &&
           this.store.claimKey(actor, key, hash) === "absent") {
         const { identity: { expectedBase, candidate }, submitters: frozenSubmitters } = prepared.fact;
@@ -46,6 +46,16 @@ export class ReviewAcceptance {
         const current = this.effects.submitters(prepared.fact.source.expectedBase,prepared.fact.source.candidate);
         if (current.length !== prepared.before.sourceSubmitters.length || current.some(a => !prepared.before!.sourceSubmitters.includes(a)))
           throw new StoreError("INTEGRATION_CONDITIONS","source provenance changed during integration preparation");
+      }
+      if (beforeAccept !== undefined && this.store.claimKey(actor, key, hash) === "absent") {
+        const fact = prepared.fact;
+        // New review authority/source facts use current policy. Cancellation and
+        // exact own-vote withdrawal remain possible after policy replacement.
+        const expectedPolicy = isOpenFact(fact) || fact.kind === "review.revise" ? fact.identity.policyRevision :
+          fact.kind === "vote" ? prepared.before?.identity.policyRevision :
+          fact.kind === "review.retry" ? prepared.before?.sourceIdentity.policyRevision : undefined;
+        if (expectedPolicy !== undefined && this.effects.currentPolicy().policyRevision !== expectedPolicy)
+          throw new StoreError("POLICY_CHANGED", "exact review policy changed before acceptance");
       }
       // There is no await between this observation and acceptance. A CAS may
       // already have happened while its notices are still materializing (or
@@ -77,6 +87,10 @@ export class ReviewAcceptance {
         if (current === "retry") return "retry" as const;
         if (current === "reused")
           throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
+        // Exact model-call expectations are re-derived from ledger facts inside
+        // this same synchronous T; callbacks must perform no I/O or async work.
+        if (beforeAccept !== undefined && beforeAccept() !== undefined)
+          throw new StoreError("INTERNAL_ERROR", "review acceptance guard must be synchronous");
         this.ledger.assertUnchanged(prepared);
         if (prepared.frozen.length !== prepared.emissions.length)
           throw new StoreError("STORE_CORRUPT", "review message plans differ from their emissions");
@@ -147,6 +161,8 @@ export class ReviewAcceptance {
   acceptIntegration(open: OpenRequest, current: ReviewState, policy: IntegrationSnapshot,
     id: OperationId, hash: string, payload: { candidate: Oid; expected: Oid; tier: RiskTier },
     frozen: PreparedReview["frozen"], diff?: import("@oma/contracts/files").ReviewDiffArtifact): "created" | "skipped" | "drifted" {
+    const preparation = current.preparation;
+    if (preparation === null) throw new StoreError("UNSUPPORTED_PROFILE", "current review integration requires an accepted prepared context; no legacy direct plan");
     const applyKey = applyRequestKeyFor(open.operation.id, current.attemptNumber);
     // The last asynchronous freeze may have admitted a new authenticated
     // submitter. Recheck outside T immediately before its synchronous gate.
@@ -165,11 +181,11 @@ export class ReviewAcceptance {
       const recipients = [...expandAddresses(this.store, ["commons", PRINCIPAL], this.society).recipients].sort();
       const plans = frozen.map(part => ({ ...part.message, recipients }));
       const plan = { kind: "git.integrate" as const, repo: "project" as const, target: "refs/heads/main" as const,
-        base: current.preparation?.fact.identity.expectedBase ?? current.identity.expectedBase, candidate: current.preparation?.fact.identity.candidate ?? current.identity.candidate,
+        base: preparation.fact.identity.expectedBase, candidate: preparation.fact.identity.candidate,
         policyRevision: current.identity.policyRevision, checkProfileDigest: policy.checkProfileDigest,
         policyIdentity: policy.policyIdentity, noopRef: null,
-        merge: { version: current.preparation === null ? 2 as const : 3 as const, revision: current.revision,
-          ...(current.preparation === null ? {} : { preparation: current.preparation.operation }), attemptNumber: current.attemptNumber, request: current.request, name: current.name, tier: current.tier,
+        merge: { version: 3 as const, revision: current.revision,
+          preparation: preparation.operation, attemptNumber: current.attemptNumber, request: current.request, name: current.name, tier: current.tier,
           notice: plans, ...(diff === undefined ? {} : { diff }) } };
       const accepted = tx.acceptOperation({ id, actor: current.requester, requestKey: applyKey,
         requestHash: hash, kind: "git.integrate", payloadJson: JSON.stringify(payload),

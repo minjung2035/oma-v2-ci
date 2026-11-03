@@ -8,7 +8,7 @@ const batch = "b-00000000-0000-4000-8000-000000000015";
 const message = "m-00000000-0000-4000-8000-000000000015-0";
 const envelope = (result: unknown) => ({ v: 1, id, ok: true, result });
 
-test("R15: complete public and internal responses are decoded by the requested method", () => {
+test("001. Complete public and internal responses are decoded by the requested method", () => {
   assert.deepEqual(decodeRpcReply("runner.open", envelope({ actor: "alice", incarnation: 3, socketHostPath: "/run/test" }), id, { agent: "alice" }),
     { ok: true, result: { actor: "alice", incarnation: 3, socketHostPath: "/run/test" } });
   assert.deepEqual(decodeRpcReply("batch.prepare", envelope(null), id, {}), { ok: true, result: null });
@@ -22,7 +22,7 @@ test("R15: complete public and internal responses are decoded by the requested m
   assert.deepEqual(decodeRpcReply("operation.get", failed, id, { key: "key" }), { ok: false, error: failed.error });
 });
 
-test("R15: envelope version ID discriminator and field mismatches never produce a normal result", () => {
+test("002. Envelope version ID discriminator and field mismatches never produce a normal result", () => {
   const valid = envelope(null);
   assert.doesNotThrow(() => decodeRpcReply("batch.prepare", valid, id, {}));
   for (const raw of [null, [], {}, { id, ok: true, result: null }, { ...valid, v: 2 }, { ...valid, id: "other" },
@@ -32,7 +32,7 @@ test("R15: envelope version ID discriminator and field mismatches never produce 
   ]) assert.throws(() => decodeRpcReply("batch.prepare", raw, id, {}), { code: "BROKER_UNAVAILABLE" });
 });
 
-test("R15: valid-looking foreign method results and unsafe facts are rejected", () => {
+test("003. Valid-looking foreign method results and unsafe facts are rejected", () => {
   const prepared = { id: batch, agent: "alice", incarnation: 3, messageIds: [message], sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" };
   assert.throws(() => decodeRpcReply("batch.read", envelope(prepared), id, { batchId: "b-00000000-0000-4000-8000-000000000016" }), { code: "BROKER_UNAVAILABLE" });
   assert.throws(() => decodeRpcReply("batch.prepare", envelope({ ...prepared, messageIds: [message, message] }), id, {}), { code: "BROKER_UNAVAILABLE" });
@@ -43,7 +43,7 @@ test("R15: valid-looking foreign method results and unsafe facts are rejected", 
   assert.throws(() => decodeRpcReply("mail.send", envelope({ operation, state: "succeeded", result: { kind: "route.follow", topic: "work", subscribed: true } }), id, {}), { code: "BROKER_UNAVAILABLE" });
 });
 
-test("R15: lookup absence remains distinct from an accepted failed receipt", () => {
+test("004. Lookup absence remains distinct from an accepted failed receipt", () => {
   const absent = { operation: "", state: "failed", error: { code: "REQUEST_NOT_FOUND", message: "absent", retry: "same-key" } };
   const reply = decodeRpcReply("operation.get", envelope(absent), id, { key: "key" });
   assert.ok(reply.ok); assert.equal(reply.result.operation, "");

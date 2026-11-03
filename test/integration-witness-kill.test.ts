@@ -15,7 +15,7 @@ import { gitAuth, gitCommand, seedGit, gitFixture, submitFixture } from "./fixtu
 import { removeTree } from "./fixtures/cleanup.js";
 
 for (const format of ["sha1", "sha256"] as const) for (const effect of ["compareAndSwap", "authorizeNoop"] as const)
-  test(`DR46 witness kill: ${format} ${effect} survives restart, stop and policy change without repeating the effect`, { timeout: 30_000 }, async t => {
+  test(`001. Witness kill: ${format} ${effect} survives restart, stop and policy change without repeating the effect`, { timeout: 30_000 }, async t => {
     const root = mkdtempSync(join(tmpdir(), "oma-witness-kill-"));
     t.after(() => removeTree(root));
     const path = join(root, "runtime.sqlite");
@@ -92,7 +92,7 @@ for (const format of ["sha1", "sha256"] as const) for (const effect of ["compare
   });
 
 for (const format of ["sha1", "sha256"] as const)
-  test(`DR46 context witness kill: ${format} authorization settles after restart and stop with frozen mail`, { timeout: 30_000 }, async t => {
+  test(`002. Context witness kill: ${format} authorization settles after restart and stop with frozen mail`, { timeout: 30_000 }, async t => {
     const root = mkdtempSync(join(tmpdir(), "oma-context-witness-kill-"));
     t.after(() => removeTree(root));
     const path = join(root, "runtime.sqlite"), initial = new Store(path);

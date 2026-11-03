@@ -26,7 +26,6 @@ import { ViewsModule } from "#oma-test/app/views";
 import { generateOperationId } from "@oma/native/identity";
 import { requestHash } from "@oma/domain/request-identity";
 
-import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
 import { runnerReceiptPathAt } from "@oma/domain/paths";
 import { StatusRefresh } from "@oma/broker/status-refresh";
 import { withWorkerCapacity, makeValidAgent } from "./fixtures/spec.js"
@@ -125,7 +124,7 @@ function seedGov(env: Env): void {
 
 
 
-test("T37: stop saves new mail, empties the actual scope, leaves execution inactive", async () => {
+test("001. Stop saves new mail, empties the actual scope, leaves execution inactive", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -145,7 +144,7 @@ test("T37: stop saves new mail, empties the actual scope, leaves execution inact
   } finally { await cleanup(); }
 });
 
-test("T38: stopped actor with an unconfirmed stale scope cannot start; incarnation unchanged", async () => {
+test("002. Stopped actor with an unconfirmed stale scope cannot start; incarnation unchanged", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -160,7 +159,7 @@ test("T38: stopped actor with an unconfirmed stale scope cannot start; incarnati
   } finally { await cleanup(); }
 });
 
-test("REC-001: pending start and stop effects settle from actual native scope state", async () => {
+test("003. Pending start and stop effects settle from actual native scope state", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -190,7 +189,7 @@ test("REC-001: pending start and stop effects settle from actual native scope st
   } finally { await cleanup(); }
 });
 
-test("T13: capability escape — sibling stop denied; created child uses a real frozen base", async () => {
+test("004. Capability escape — sibling stop denied; created child uses a real frozen base", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -206,7 +205,7 @@ test("T13: capability escape — sibling stop denied; created child uses a real 
   } finally { await cleanup(); }
 });
 
-test("SEQ-002: unknown old-run death stops startup before mail reconciliation", async () => {
+test("005. Unknown old-run death stops startup before mail reconciliation", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -230,7 +229,7 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
   } finally { await cleanup(); }
 });
 
-test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a ready registry", async () => {
+test("006. Bootstrap freezes all seeds before effects and never reseeds a ready registry", async () => {
   const { env, cleanup } = await envOf();
   try {
     const from = seedProjectGit(env);
@@ -271,7 +270,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
   } finally { await cleanup(); }
 });
 
-test("T39/LIFE-007: same name + same resolved spec converges without a second physical create", async () => {
+test("007. Same name + same resolved spec converges without a second physical create", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -289,7 +288,7 @@ test("T39/LIFE-007: same name + same resolved spec converges without a second ph
   } finally { await cleanup(); }
 });
 
-test("LIFE-007 race: concurrent stable-name creates publish only one mail object", async () => {
+test("008. Race: concurrent stable-name creates publish only one mail object", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -310,7 +309,7 @@ test("LIFE-007 race: concurrent stable-name creates publish only one mail object
   } finally { await cleanup(); }
 });
 
-test("T40/LIFE-001: same stable name with a different resolved spec conflicts", async () => {
+test("009. Same stable name with a different resolved spec conflicts", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -322,7 +321,7 @@ test("T40/LIFE-001: same stable name with a different resolved spec conflicts", 
   } finally { await cleanup(); }
 });
 
-test("CREATE-003: resolved child policy is rechecked at T-create-intent", async () => {
+test("010. Resolved child policy is rechecked at T-create-intent", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -344,7 +343,7 @@ test("CREATE-003: resolved child policy is rechecked at T-create-intent", async 
 });
 
 
-test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate until GOAL exists", async () => {
+test("011. Pre-GOAL create stays logically enabled but cannot activate until GOAL exists", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -365,7 +364,7 @@ test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate u
   } finally { await cleanup(); }
 });
 
-test("REC-007: broker singleton lock — second broker refuses the society", async () => {
+test("012. Broker singleton lock — second broker refuses the society", async () => {
   const { env, cleanup } = await envOf();
   let b1: Broker | null = null;
   try {
@@ -386,7 +385,7 @@ test("REC-007: broker singleton lock — second broker refuses the society", asy
 });
 
 
-test("V25A: start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can", async () => {
+test("013. Start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -432,7 +431,7 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
 
 
 
-test("V23B: a status snapshot is display only; start, stop and death proof observe the scope again", async () => {
+test("014. A status snapshot is display only; start, stop and death proof observe the scope again", async () => {
   const { env, cleanup } = await envOf();
   try {
     seedPrincipalAndA(env.store);

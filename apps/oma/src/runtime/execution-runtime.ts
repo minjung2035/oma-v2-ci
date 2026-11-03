@@ -94,5 +94,9 @@ export class ExecutionRuntime {
     }, authorize, prepared, signal });
   }
   confirmDead(slot: string): boolean { return this.owner.confirmDead(slot); }
+  /** AUD-19: the tri-state death observation the Git importer needs: an
+   * accepted concurrent import owns the slot (busy), or nothing is proven
+   * (unknown); only "dead" frees the slot for a new pick-up. */
+  slotState(slot: string): "dead" | "busy" | "unknown" { return this.owner.slotState(slot); }
   async close(): Promise<void> { await this.owner.drain(); await preparationShutdownBarrier(); this.releasePlacement?.(); this.workload?.close(); this.journal.close(); }
 }

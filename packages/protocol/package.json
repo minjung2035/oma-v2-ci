@@ -28,6 +28,22 @@
       "types": "./dist/client-codecs.d.ts",
       "default": "./dist/client-codecs.js"
     },
+    "./invocation-mail": {
+      "types": "./dist/invocation-mail.d.ts",
+      "default": "./dist/invocation-mail.js"
+    },
+    "./invocation-submission": {
+      "types": "./dist/invocation-submission.d.ts",
+      "default": "./dist/invocation-submission.js"
+    },
+    "./invocation-rejection": {
+      "types": "./dist/invocation-rejection.d.ts",
+      "default": "./dist/invocation-rejection.js"
+    },
+    "./invocation-resolution": {
+      "types": "./dist/invocation-resolution.d.ts",
+      "default": "./dist/invocation-resolution.js"
+    },
     "./frame": {
       "types": "./dist/frame.d.ts",
       "default": "./dist/frame.js"

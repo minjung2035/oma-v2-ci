@@ -19,7 +19,7 @@ function tmp(t: import("node:test").TestContext, prefix = "oma-mcp-"): string {
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     return dir;
 }
-test("BL5: every SDK stdio underlay name has an OMA disposition -- a vendored SDK bump cannot silently re-open the ambient leak", async (t) => {
+test("001. Every SDK stdio underlay name has an OMA disposition -- a vendored SDK bump cannot silently re-open the ambient leak", async (t) => {
     // SDK_STDIO_ENV_UNDERLAY is generated from the pinned bundle. This test
     // independently checks the generated names against both builds of the
     // vendored SDK's DEFAULT_INHERITED_ENV_VARS. The SDK export is a

@@ -30,6 +30,9 @@ try {
   run(["init", "--bare", "--initial-branch=main", projectGit]);
   const repository = new GitRepository({ stateRoot: root, projectGit, society: "demo",
     contextGit: join(root, "context.git"), worldDir: join(root, "world") }, { submissions: () => [] });
+  assert.equal("mergeDiff" in repository.review, false, "the retired direct-diff execution port is absent from the packed repository");
+  assert.equal("canonicalMergeDiff" in await import("@oma/git/canonical-command"), false,
+    "the removed fallback is not retained as a callable packed export");
   assert.equal(repository.integration.main().kind, "absent");
   assert.equal(repository.context.current(), null);
   assert.equal(existsSync(join(root, "runtime.sqlite")), false);

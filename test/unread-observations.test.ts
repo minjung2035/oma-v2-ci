@@ -41,7 +41,7 @@ function withSealedDirectory(run: (root: string, sealed: string) => void): void 
   }
 }
 
-test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty one, on the Dashboard or the Mail screen", () => {
+test("001. A mailbox that cannot be listed is not an empty one, on the Dashboard or the Mail screen", () => {
   withSealedDirectory((root, sealed) => {
     const cur = join(root, "cur");
     mkdirSync(cur);
@@ -75,7 +75,7 @@ test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty 
   });
 });
 
-test("DR13 / INV02: a message file that cannot be read now is not 'no message'; it is still counted as waiting and the rest is still shown", { skip: process.getuid?.() === 0 }, () => {
+test("002. A message file that cannot be read now is not 'no message'; it is still counted as waiting and the rest is still shown", { skip: process.getuid?.() === 0 }, () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av7-entry-"));
   try {
     const pending = join(root, "new"), cur = join(root, "cur");

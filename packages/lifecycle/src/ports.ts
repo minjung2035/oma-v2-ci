@@ -23,6 +23,10 @@ export interface LifecycleTransaction {
 export interface LifecycleLedger {
   getAgent(actor: Actor): AgentRow | null;
   listAgents(): AgentRow[];
+  /** Optional original-Store hints, for diagnostic reuse only. Fresh admission
+   * always reads rows. Missing hints or a transaction require an uncached read. */
+  readonly inTransaction?: boolean;
+  observationStamp?(): string;
   societyOpen(): boolean;
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent";
   retriedOperation(actor: Actor, key: RequestKey): DecodedOperation;
@@ -51,12 +55,21 @@ export interface LifecycleWorkspace {
   observeProvisioningHead(path: string): { readonly status: number | null; readonly stdout: string };
 }
 export interface LifecycleMail {
-  freezeCreateInitial(auth: AuthContext, id: OperationId, recipient: Actor, brief: string):
+  freezeCreateInitial(auth: AuthContext, id: OperationId, recipient: Actor, brief: string, dateMs?: number):
     Promise<{ message: MessagePlan; artifact: PreacceptArtifactOwner }>;
   publishCreateInitial(message: MessagePlan): void;
   publishGated(id: OperationId, evidence: PublicationEvidence): Promise<void>;
 }
+export type CreateAcceptance = (spec: import("@oma/contracts").ResolvedAgentSpec, policyRevision: string | null) => undefined;
+/** Exact source effects delegated by an accepted create, never a second create owner. */
+export interface LifecycleSourcePublication {
+  prepare(auth: AuthContext, root: string, key: string, input: import("@oma/contracts").AgentCreateInput,
+    stream: AsyncIterable<Uint8Array> | undefined, scope: MailPreacceptScope): Promise<import("@oma/contracts/values").CreateSourcePlan>;
+  finalize(plan: import("@oma/contracts/values").CreateSourcePlan): import("@oma/contracts/values").CreateSourcePlan;
+  complete(root: string): Promise<void>;
+}
 export interface LifecycleEffects {
+  assertOwner?(): undefined;
   nextOperationId(): OperationId;
   newPreacceptScope(): MailPreacceptScope;
   bootstrapPeer(): AuthContext["peer"];

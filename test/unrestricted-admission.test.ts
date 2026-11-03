@@ -80,7 +80,7 @@ function society(t: TestContext) {
   return { root, store, mail, units, broker, peers: Reflect.get(broker, "peers") as PeerAuthenticator, reconcile, internal, populateLargeTree };
 }
 
-test("V21B: over the storage limit reads and accepted same-key lookups answer, new work and safety stops proceed", async t => {
+test("001. Over the storage limit reads and accepted same-key lookups answer, new work and safety stops proceed", async t => {
   const f = society(t);
   const input: MailInput = { to: ["bob"], subject: "accepted before the limit", kind: "message", body: "frozen" };
   const accepted = await f.mail.send(auth, "accepted", input);
@@ -113,7 +113,7 @@ test("V21B: over the storage limit reads and accepted same-key lookups answer, n
   assert.equal(f.store.getAgent("bob")?.desired, "stopped");
 });
 
-test("V21B: over the storage limit runner reads answer and settlement uses its normal validation", async t => {
+test("002. Over the storage limit runner reads answer and settlement uses its normal validation", async t => {
   const f = society(t);
   f.populateLargeTree();
   t.mock.method(f.peers, "runnerActor", () => "alice");
@@ -127,7 +127,7 @@ test("V21B: over the storage limit runner reads answer and settlement uses its n
   if (!complete.ok) assert.notEqual(complete.code, "TREE_BYTES_EXCEEDED");
 });
 
-test("V21B: over the storage limit recovery settles safety stages and settles new effects and settlement", async t => {
+test("003. Over the storage limit recovery settles safety stages and settles new effects and settlement", async t => {
   const f = society(t);
   // Accepted mail whose publication was lost: settling it writes derived views.
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
@@ -148,7 +148,7 @@ test("V21B: over the storage limit recovery settles safety stages and settles ne
   assert.notEqual(carol?.reason, "TREE_BYTES_EXCEEDED");
 });
 
-test("V21B: within the limit the same recovery settles the mail and activates the waiting unit", async t => {
+test("004. Within the limit the same recovery settles the mail and activates the waiting unit", async t => {
   const f = society(t);
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
   const report = await answer(f.reconcile.sweep().then(result => ({ ok: true as const, result })));
@@ -156,7 +156,7 @@ test("V21B: within the limit the same recovery settles the mail and activates th
   assert.deepEqual(f.units.starts, ["carol"]);
 });
 
-test("V21B: a mail failure after its acceptance is reported as accepted, never as a refusal", async t => {
+test("005. A mail failure after its acceptance is reported as accepted, never as a refusal", async t => {
   const f = society(t);
   const transaction = f.store.transaction.bind(f.store);
   let calls = 0;
@@ -172,7 +172,7 @@ test("V21B: a mail failure after its acceptance is reported as accepted, never a
   assert.equal(f.store.getOperation("alice", "full")?.state, "pending");
 });
 
-test("V21B: a submit effect failure recorded as unknown is reported for same-key lookup", async t => {
+test("006. A submit effect failure recorded as unknown is reported for same-key lookup", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-admission-git-"));
   const store = new Store(join(root, "runtime.sqlite"));
   t.after(() => { try { store.close(); } finally { removeTree(root); } });
@@ -188,7 +188,7 @@ test("V21B: a submit effect failure recorded as unknown is reported for same-key
   assert.deepEqual(publicFailure(error), { code: "PUBLISHED_REF_CONFLICT", message: "PUBLISHED_REF_CONFLICT", retry: "same-key" });
 });
 
-test("V21B: a startup stop that cannot be confirmed still leaves every other resident stopped", async t => {
+test("007. A startup stop that cannot be confirmed still leaves every other resident stopped", async t => {
   const f = society(t);
   for (const agent of ["alice", "bob"]) f.units.state.set(agent, running);
   f.units.stubborn.add("alice");

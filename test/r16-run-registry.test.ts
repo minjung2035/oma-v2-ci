@@ -20,7 +20,7 @@ function observedPin(fd: number) {
 const first = "1".repeat(32);
 const second = "2".repeat(32);
 
-test("R16: revoked endpoint retains its scope pin and cannot reissue the same invocation", () => {
+test("001. Revoked endpoint retains its scope pin and cannot reissue the same invocation", () => {
   const observation = observedPin(10);
   const registry = new RunRegistry(() => observation.pin);
   const record = registry.begin("alice", 1, first, "/society/alice");
@@ -42,7 +42,7 @@ test("R16: revoked endpoint retains its scope pin and cannot reissue the same in
 });
 
 for (const population of ["populated", "unknown"] as const) {
-  test(`R16: old ${population} scope blocks a new incarnation before a new FD is acquired`, () => {
+  test(`002. Old ${population} scope blocks a new incarnation before a new FD is acquired`, () => {
     const old = observedPin(10); const next = observedPin(11);
     let acquisitions = 0;
     const registry = new RunRegistry(() => acquisitions++ === 0 ? old.pin : next.pin);
@@ -58,7 +58,7 @@ for (const population of ["populated", "unknown"] as const) {
 }
 
 for (const population of ["empty"] as const) {
-  test(`R16: observed ${population} permits one ownership transfer and closes only the old pin`, () => {
+  test(`003. Observed ${population} permits one ownership transfer and closes only the old pin`, () => {
     const old = observedPin(10); const next = observedPin(11);
     let acquisitions = 0;
     const registry = new RunRegistry(() => acquisitions++ === 0 ? old.pin : next.pin);
@@ -78,7 +78,7 @@ for (const population of ["empty"] as const) {
   });
 }
 
-test("R16: matching pathname cannot substitute a replacement scope inode", () => {
+test("004. Matching pathname cannot substitute a replacement scope inode", () => {
   const observation = observedPin(10);
   const registry = new RunRegistry(() => observation.pin);
   const record = registry.begin("alice", 1, first, "/same-path");
@@ -90,7 +90,7 @@ test("R16: matching pathname cannot substitute a replacement scope inode", () =>
   registry.close();
 });
 
-test("R16: shutdown attempts every native close even if an endpoint cleanup throws", () => {
+test("005. Shutdown attempts every native close even if an endpoint cleanup throws", () => {
   const alice = observedPin(10); const bob = observedPin(11);
   const registry = new RunRegistry(path => path === "/alice" ? alice.pin : bob.pin);
   registry.begin("alice", 1, first, "/alice").publish({ socketHostPath: "/a", done() { throw new Error("endpoint fault"); } });
@@ -102,7 +102,7 @@ test("R16: shutdown attempts every native close even if an endpoint cleanup thro
   assert.equal(alice.closes(), 1);
 });
 
-test("DR27/RUN-003: wait belongs only to a live incarnation and never survives replacement", () => {
+test("006. Wait belongs only to a live incarnation and never survives replacement", () => {
   const old = observedPin(10); const next = observedPin(11); const sibling = observedPin(12);
   let acquisitions = 0;
   const registry = new RunRegistry(path => path === "/bob" ? sibling.pin : acquisitions++ === 0 ? old.pin : next.pin);
@@ -129,7 +129,7 @@ test("DR27/RUN-003: wait belongs only to a live incarnation and never survives r
   assert.throws(() => replacement.wait(2, false), { code: "STALE_RUN" });
 });
 
-test("wait can defer only the immutable batch handed to the same live run", () => {
+test("007. Wait can defer only the immutable batch handed to the same live run", () => {
   const old = observedPin(10), next = observedPin(11);
   let acquisitions = 0;
   const registry = new RunRegistry(() => acquisitions++ === 0 ? old.pin : next.pin);

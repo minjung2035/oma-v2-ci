@@ -8,6 +8,7 @@ import type { ReviewLedger, ReviewTransaction } from "@oma/review/ports";
 export function reviewLedger(store: Store): ReviewLedger {
   return Object.freeze({
     getAgent: actor => store.getAgent(actor),
+    getDelivery: (id, actor) => store.getDelivery(id, actor),
     societyOpen: () => store.societyOpen(),
     listAgents: () => store.listAgents(), subscribers: topic => store.subscribers(topic),
     attestationFacts: () => store.attestationFacts(),

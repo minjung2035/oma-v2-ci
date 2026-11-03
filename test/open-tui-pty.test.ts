@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -9,7 +10,7 @@ const fixtures = join(process.cwd(), "test/fixtures");
 const python = spawnSync("python3", ["-c", "import pty, termios"]).status === 0;
 const hex = (text: string): string => Buffer.from(text).toString("hex");
 for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retry-exhaust", "reload-update", "reload-failure"]) {
-  test(`Open TUI: actual Principal tools, queued input, panel and ${ending} terminal restoration`, {
+  test(`001. Open TUI: actual Principal tools, queued input, panel and ${ending} terminal restoration`, {
     skip: python ? false : "python3 pty unavailable", timeout: 60_000,
   }, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-open-tui-"));
@@ -67,7 +68,8 @@ for (const ending of ["normal", "resume", "kill", "mail", "retry-recover", "retr
     // B1: the compact row — the tool's display name and its control row; the
     // wire name `oma_mail_send` never reaches the screen (a renderer throw
     // would surface it through Pi's call fallback, so this covers both).
-    assert.match(output, /mail send/);
+    assert.match(stripVTControlCharacters(output), /\bsend\b/);
+    assert.doesNotMatch(output, /ctx is stale/);
     assert.match(output, /Done in [0-9.]+(m )?s/);
     assert.doesNotMatch(output, /oma_mail_send/);
     // B2: the intercepted command answered on the real screen.

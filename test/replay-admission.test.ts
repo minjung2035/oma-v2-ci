@@ -1,4 +1,4 @@
-import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { replayFixture } from "./fixtures/replay.js";
 import { serializePlanIntent } from "./fixtures/plan.js";
 /** P0 replay-before-admission: a replay of an already-minted terminal receipt
  * is a read, not a new claim. The dispatcher looks up a key-required request's
@@ -12,79 +12,24 @@ import { serializePlanIntent } from "./fixtures/plan.js";
  */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, Request } from "@oma/contracts";
-import { Store } from "@oma/storage";
-import { MailModule } from "@oma/mail";
-import { PublicDispatcher } from "@oma/broker/public-dispatcher";
-import { errorAnswer } from "@oma/broker/replies";
-import { publicFailure, StoreError } from "@oma/domain/errors";
+
+import { StoreError } from "@oma/domain/errors";
 import { AdmissionGate } from "@oma/domain/admission";
-import { receiptOfOperation } from "@oma/protocol/receipt-projector";
 import { requestHash } from "@oma/domain/request-identity";
-import { makeValidAgent, ALL_CAPS } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
-import { removeTree } from "./fixtures/cleanup.js";
 
-const LIMITS: ProtocolLimits = {
-  frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
-  replyReferences: 64, contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456,
-  logBytes: 1048576, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30,
-};
-
-const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
-  capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
-
-type Answer = { ok: true; result: { operation?: string; state?: string } } | { ok: false; code: string | undefined };
 function fixture(t: TestContext) {
-  const root = mkdtempSync(join(tmpdir(), "oma-replay-admission-"));
-  const store = new Store(join(root, "runtime.sqlite"));
-  t.after(() => { try { store.close(); } finally { removeTree(root); } });
-  store.transaction(tx => {
-    tx.insertAgent(makeValidAgent("principal"));
-    tx.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
-    tx.insertAgent(makeValidAgent("bob", { createdBy: "principal" }));
-  });
-  const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const admission = new AdmissionGate();
-  const flags = { draining: false };
-  const dispatcher = new PublicDispatcher({
-    store: {
-      listAgents: () => store.listAgents(),
-      getAgent: actor => store.getAgent(actor),
-      getReceipt: (actor, key) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
-      hasOperation: (actor, key) => store.getOperation(actor, key) !== null,
-    },
-    mail,
-    units: { statusSnapshot: () => Promise.reject(new Error("status is not part of this fixture")) },
-    views: { status: () => { throw new Error("status is not part of this fixture"); } },
-    lifecycle: {} as never,
-    review: null,
-git: null,
-    limits: LIMITS,
-    waitRun: () => { throw new Error("no live run in this fixture"); },
-    isDraining: () => flags.draining,
-    assertAdmission: () => admission.assertAdmission(),
-
-    failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
-    refreshViews() {},
-    readLogs: async () => { throw new Error("logs are not part of this fixture"); },
-  });
-  const call = async (envelope: Record<string, unknown>): Promise<Answer> => {
-    const answer = await dispatcher.dispatch(auth, envelope as Request, null) as { ok: boolean; result?: { operation?: string; state?: string }; error?: { code?: string } };
-    return answer.ok ? { ok: true, result: answer.result! } : { ok: false, code: answer.error?.code };
-  };
-  const corrupt = () => admission.observe(new StoreError("STORE_CORRUPT", "fixture corruption"));
-  const drain = () => { flags.draining = true; admission.close(); };
-  return { store, call, corrupt, drain };
+  let draining = false;
+  return { ...replayFixture(t, { isDraining: () => draining, assertAdmission: () => admission.assertAdmission() }),
+    corrupt: () => admission.observe(new StoreError("STORE_CORRUPT", "fixture corruption")),
+    drain: () => { draining = true; admission.close(); } };
 }
 
 const INPUT = { to: ["bob"], subject: "replay fence", kind: "message", body: "a body" };
 const envelope = (key: string, params: unknown = INPUT) => ({ v: 1, id: key, method: "mail.send", request: key, params });
 
-test("replay-before-admission: a terminal same-key replay answers the durable receipt under corrupt admission", async t => {
+test("001. Replay-before-admission: a terminal same-key replay answers the durable receipt under corrupt admission", async t => {
   const f = fixture(t);
   const accepted = await f.call(envelope("key-terminal"));
   assert.equal(accepted.ok && accepted.result.state, "succeeded");
@@ -95,7 +40,7 @@ test("replay-before-admission: a terminal same-key replay answers the durable re
     "no second operation was accepted");
 });
 
-test("replay-before-admission: a terminal same-key replay answers while admission is draining", async t => {
+test("002. Replay-before-admission: a terminal same-key replay answers while admission is draining", async t => {
   const f = fixture(t);
   const accepted = await f.call(envelope("key-terminal"));
   assert.equal(accepted.ok && accepted.result.state, "succeeded");
@@ -103,7 +48,7 @@ test("replay-before-admission: a terminal same-key replay answers while admissio
   assert.deepEqual(await f.call(envelope("key-terminal")), accepted);
 });
 
-test("replay-before-admission: a different payload under a terminal key is REQUEST_KEY_REUSED, not a claim", async t => {
+test("003. Replay-before-admission: a different payload under a terminal key is REQUEST_KEY_REUSED, not a claim", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-terminal"))).ok);
   f.corrupt();
@@ -112,7 +57,7 @@ test("replay-before-admission: a different payload under a terminal key is REQUE
     "the ledger's own classification answers the refusal; no acceptance was minted");
 });
 
-test("replay-before-admission: pending and unknown rows are not minted receipts -- the fence still applies", async t => {
+test("004. Replay-before-admission: pending and unknown rows are not minted receipts -- the fence still applies", async t => {
   const f = fixture(t);
   const pendingId = "op-00000000-0000-4000-8000-00000000a001";
   const unknownId = "op-00000000-0000-4000-8000-00000000a002";
@@ -132,7 +77,7 @@ test("replay-before-admission: pending and unknown rows are not minted receipts 
     "an unknown claim is unfinished work, not a read");
 });
 
-test("replay-before-admission: fresh keys keep the admission fence under corruption and drain", async t => {
+test("005. Replay-before-admission: fresh keys keep the admission fence under corruption and drain", async t => {
   const f = fixture(t);
   f.corrupt();
   assert.deepEqual(await f.call(envelope("key-fresh")), { ok: false, code: "STORE_CORRUPT" });
@@ -144,7 +89,7 @@ test("replay-before-admission: fresh keys keep the admission fence under corrupt
   assert.equal(g.store.getOperation("alice", "key-fresh"), null);
 });
 
-test("replay-before-admission: malformed params are refused before the receipt lookup, under corruption", async t => {
+test("006. Replay-before-admission: malformed params are refused before the receipt lookup, under corruption", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-terminal"))).ok);
   f.corrupt();
@@ -153,7 +98,7 @@ test("replay-before-admission: malformed params are refused before the receipt l
       `grammar failure precedes both admission and the durable lookup: ${JSON.stringify(params)}`);
 });
 
-test("replay-before-admission: reads are unchanged -- a receipt read answers under corruption but not drain", async t => {
+test("007. Replay-before-admission: reads are unchanged -- a receipt read answers under corruption but not drain", async t => {
   const f = fixture(t);
   assert.ok((await f.call(envelope("key-terminal"))).ok);
   const read = { v: 1, id: "r1", method: "operation.get", params: { key: "key-terminal" } };

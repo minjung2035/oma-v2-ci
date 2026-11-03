@@ -31,7 +31,7 @@ const waitNotice = (incarnation = 1, batchId = "batch-1") => ({
   message: `OMA_PI_WAIT_V1 ${JSON.stringify({ adapterRevision: PI_ADAPTER_REVISION, batchId, incarnation })}`,
 });
 
-test("runnerObservationOf: an event reports only the engine activity it names", () => {
+test("001. RunnerObservationOf: an event reports only the engine activity it names", () => {
   assert.deepEqual(runnerObservationOf({ type: "tool_execution_start", toolCallId: "c1", toolName: "ls" }, batch),
     { reason: "tool", toolName: "ls" });
   assert.deepEqual(runnerObservationOf({ type: "tool_execution_start", toolCallId: "c1" }, batch), { reason: "tool" });
@@ -64,7 +64,7 @@ function dispatcherWith(incarnation: number) {
   return { dispatcher, peer };
 }
 
-test("runner.observe: the dispatcher keeps the latest report tagged with the run it came from", async () => {
+test("002. Runner.observe: the dispatcher keeps the latest report tagged with the run it came from", async () => {
   const { dispatcher, peer } = dispatcherWith(7);
   const answer = await dispatcher.dispatch(
     { v: 1, id: "o1", method: "runner.observe", params: { reason: "tool", toolName: "ls", observedAtMs: 1234 } },
@@ -80,7 +80,7 @@ test("runner.observe: the dispatcher keeps the latest report tagged with the run
   assert.equal(dispatcher.runnerObservation("bob"), null);
 });
 
-test("runner.observe: status shows the report's timestamp for its own run, and nothing for a superseded one", async t => {
+test("003. Runner.observe: status shows the report's timestamp for its own run, and nothing for a superseded one", async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-observe-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(join(dir, "runtime.sqlite"));
@@ -125,7 +125,7 @@ function runnerWithChannel(call: (method: string, params: Record<string, unknown
   return { note, flush, reconnects: () => reconnects };
 }
 
-test("runner.observe producer: the runner sends the engine's report, stamped at send time", async () => {
+test("004. Runner.observe producer: the runner sends the engine's report, stamped at send time", async () => {
   const calls: Record<string, unknown>[] = [];
   const { note, flush } = runnerWithChannel(async (_method, params) => { calls.push(params); return { ok: true, result: { accepted: true } }; });
   note({ reason: "tool", toolName: "ls" });
@@ -136,7 +136,7 @@ test("runner.observe producer: the runner sends the engine's report, stamped at 
   assert.ok(Number.isSafeInteger(calls[0]!.observedAtMs) && (calls[0]!.observedAtMs as number) > 0);
 });
 
-test("runner.observe producer: reports coalesce to the newest while one is in flight", async () => {
+test("005. Runner.observe producer: reports coalesce to the newest while one is in flight", async () => {
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const calls: Record<string, unknown>[] = [];
@@ -151,7 +151,7 @@ test("runner.observe producer: reports coalesce to the newest while one is in fl
   assert.equal(calls[1]!.toolName, "b", "the newest queued report won");
 });
 
-test("runner.observe producer: a dropped channel reconnects once; a refusal is dropped, never fatal", async () => {
+test("006. Runner.observe producer: a dropped channel reconnects once; a refusal is dropped, never fatal", async () => {
   const calls: Record<string, unknown>[] = [];
   let unavailable = true;
   const { note, flush, reconnects } = runnerWithChannel(async (_method, params) => {

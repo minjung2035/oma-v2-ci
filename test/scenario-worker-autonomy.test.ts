@@ -9,11 +9,17 @@ import { readSettings, writeSettings } from "#oma-test/app/application/settings"
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { readableBody } from "@oma/mail/display";
 
+function creation(s: Scenario) {
+  const row = s.operations("worker-a").find(row => row.kind === "agent.create");
+  const op = row ? s.store.getOperationById(row.id) : null;
+  if (op !== null) assert.equal(op.kind, "agent.create");
+  return op?.kind === "agent.create" ? op : null;
+}
 const brief = "Review the implementation independently.\n";
-const create = tools(call("oma_agent_create", { name: "peer", from: "HEAD", brief, request: "delegate-peer" }));
+const create = tools(call("oma_spawn", { name: "peer", from: "HEAD", brief: { kind: "text", value: brief } }, "delegate-peer"));
 const receiptIn = (result: string) => {
   const envelope = JSON.parse(result);
-  assert.equal(typeof envelope.request, "string");
+  assert.equal(typeof envelope.invocation.key, "string");
   assert.ok(envelope.receipt, `no receipt in tool result: ${result}`);
   return envelope.receipt as { operation: string; state: string };
 };
@@ -24,23 +30,23 @@ function delegationScript(s: Scenario, parent: readonly Reply[]): ChatRequest[] 
   const parentRequests: ChatRequest[] = [];
   let next = 0, peer = 0;
   s.script(request => {
-    const accepted = s.store.getOperation("worker-a", "delegate-peer");
+    const accepted = creation(s);
     const initial = accepted?.kind === "agent.create" ? accepted.plan.initialMessage : null;
     if (initial && lastUserText(request).includes(initial.id))
-      return peer++ === 0 ? tools(call("oma_mail_read", { messageId: initial.id })) : text("Initial brief received.");
+      return peer++ === 0 ? tools(call("read", { path: `/oma/mail/messages/${initial.id}.md` })) : text("Initial brief received.");
     parentRequests.push(request);
     return parent[next++] ?? text("Parent turn complete.");
   });
   return parentRequests;
 }
 
-test("DR27: a Worker creates a peer without Principal orchestration, resumes its receipt and receives a reply", RESIDENT_TEST_OPTIONS, async () => {
+test("001. A Worker creates a peer without Principal orchestration, resumes its receipt and receives a reply", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Goal", body: "Collaborate on the implementation." })), text("Assigned.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "Goal", content: { kind: "text", value: "Collaborate on the implementation." } })), text("Assigned.")]);
     await s.prompt("Ask the Worker to collaborate.");
     const parentRequests = delegationScript(s, [create, text("Delegated.")]);
     const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    const accepted = s.store.getOperation("worker-a", "delegate-peer");
+    const accepted = creation(s);
     const receipt = receiptIn(toolResults(parentRequests.at(-1)!).at(-1)!.text);
     assert.ok(accepted);
     assert.deepEqual([receipt.operation, receipt.state], [accepted.id, "succeeded"]);
@@ -60,25 +66,21 @@ test("DR27: a Worker creates a peer without Principal orchestration, resumes its
     writeSettings(s.configPath, { ...config, agentProfiles: { ...config.agentProfiles,
       resident: { ...config.agentProfiles.resident!, delegable: [] } } });
     await s.restartBroker();
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Confirm", body: "Query the original request." })), text("Requested.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "Confirm", content: { kind: "text", value: "Query the original request." } })), text("Requested.")]);
     await s.prompt("Ask for the original delegation receipt.");
-    s.script([create,
-      tools(call("oma_mail_send", { to: ["peer"], subject: "Review", body: "Send the review result.", request: "review-follow-up" })),
+    s.script([tools(call("read", { path: "/oma/receipts/index.md" })),
+      tools(call("oma_send", { to: ["peer"], subject: "Review", content: { kind: "text", value: "Send the review result." } }, "review-follow-up")),
       text("Original receipt recovered.")]);
     const again = await s.activate("worker-a"); assert.equal(again.code, 0, again.stderr);
-    const replay = toolResults(s.provider.seen.at(-1)!.body).find(result => {
-      const envelope = JSON.parse(result.text);
-      return envelope.request === "delegate-peer";
-    });
-    assert.ok(replay, "the replayed creation receipt did not reach the creator");
-    assert.deepEqual(receiptIn(replay.text), receipt);
-    assert.equal(s.store.getOperation("worker-a", "delegate-peer")!.id, accepted.id);
+    const replay = toolResults(s.provider.seen.at(-1)!.body).find(result => result.text.includes(accepted.id));
+    assert.ok(replay, "the original creation receipt was not discoverable after restart");
+    assert.equal(creation(s)!.id, accepted.id);
     assert.deepEqual(s.store.getDelivery(initialId, "peer"), mail);
-    assert.equal(s.store.getOperation("worker-a", "delegate-peer")!.planJson, planJson);
+    assert.equal(creation(s)!.planJson, planJson);
     assert.equal(s.archived(initialId), archived);
     assert.deepEqual(resolvedSpecOf(s.store.getAgent("peer")!), observed);
-    s.script([tools(call("oma_mail_read", { messageId: "/inbox.md" })),
-      tools(call("oma_mail_send", { to: ["worker-a"], subject: "Review", body: "Review completed.", kind: "result" })), text("Replied.")]);
+    s.script([tools(call("read", { path: "/oma/mail/inbox.md" })),
+      tools(call("oma_send", { to: ["worker-a"], subject: "Review", content: { kind: "text", value: "Review completed." } })), text("Replied.")]);
     const peer = await s.activate("peer"); assert.equal(peer.code, 0, peer.stderr);
     assert.equal(s.store.pendingDeliveries("peer").length, 0);
     assert.equal(s.store.pendingDeliveries("worker-a").length, 1);
@@ -86,20 +88,20 @@ test("DR27: a Worker creates a peer without Principal orchestration, resumes its
   });
 });
 
-test("DR27: legacy quotas do not block a Worker creating a peer", RESIDENT_TEST_OPTIONS, async () => {
+test("002. Legacy quotas do not block a Worker creating a peer", RESIDENT_TEST_OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const config = readSettings(s.configPath).config;
     writeSettings(s.configPath, { ...config, limits: { ...config.limits, logBytes: 1 } });
     await s.restartBroker();
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "Work", body: "Try collaborating." })), text("Assigned.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "Work", content: { kind: "text", value: "Try collaborating." } })), text("Assigned.")]);
     await s.prompt("Ask for work.");
     const parentRequests = delegationScript(s, [create, text("Peer created.")]);
     const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
     assert.equal(receiptIn(toolResults(parentRequests.at(-1)!).at(-1)!.text).state, "succeeded");
-    assert.equal(s.store.getOperation("worker-a", "delegate-peer")?.state, "succeeded");
+    assert.equal(creation(s)?.state, "succeeded");
     assert.ok(s.store.getAgent("peer"));
     const finished = await s.residentFinished("peer"); assert.equal(finished.execMainStatus, 0, JSON.stringify(finished));
-    const accepted = s.store.getOperation("worker-a", "delegate-peer");
+    const accepted = creation(s);
     assert.ok(accepted?.kind === "agent.create" && accepted.plan.initialMessage);
     assert.equal(readableBody(s.archived(accepted.plan.initialMessage.id)), brief);
     assert.equal(s.store.getDelivery(accepted.plan.initialMessage.id, "peer")?.materialized, 1);

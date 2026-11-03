@@ -26,7 +26,7 @@ function requestId(bytes: Buffer): string {
 }
 
 for (const fault of ["wrong-id", "duplicate", "missing-version", "wrong-result", "trailing-header", "partial-eof", "duplicate-json-key"] as const) {
-  test(`R15: ${fault} poisons this generation without a replay or a second dispatch`, async () => {
+  test(`001. Channel generations: ${fault} poisons this generation without a replay or a second dispatch`, async () => {
     let requests = 0;
     const f = await peerFixture(socket => socket.once("data", bytes => {
       assert.ok(Buffer.isBuffer(bytes)); const id = requestId(bytes); requests++;
@@ -52,7 +52,7 @@ for (const fault of ["wrong-id", "duplicate", "missing-version", "wrong-result",
   });
 }
 
-test("R15: reconnect after a partial header rejects the old request and ignores old-socket events", async () => {
+test("002. Reconnect after a partial header rejects the old request and ignores old-socket events", async () => {
   const clients: Duplex[] = [];
   const f = await peerFixture((socket, index) => socket.once("data", bytes => {
     assert.ok(Buffer.isBuffer(bytes)); const id = requestId(bytes);
@@ -77,7 +77,7 @@ test("R15: reconnect after a partial header rejects the old request and ignores 
   } finally { channel.close(); await f.close(); }
 });
 
-test("R15: raw upload waits for drain and sends metadata before exact declared body bytes", async () => {
+test("003. Raw upload waits for drain and sends metadata before exact declared body bytes", async () => {
   const body = Buffer.alloc(160 * 1024, 120);
   const digest = createHash("sha256").update(body).digest("hex");
   let writes = 0; let received: Buffer | null = null;

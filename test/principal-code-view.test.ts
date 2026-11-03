@@ -26,7 +26,7 @@ function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256") 
   git("--git-dir", repo, "fetch", "-q", "--no-write-fetch-head", work, hidden);
   return { root, repo, base, candidate, hidden, git };
 }
-for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} code reads main, published candidate and diff without a checkout or writes`, t => {
+for (const format of ["sha1", "sha256"] as const) test(`001. Principal code view: ${format} code reads main, published candidate and diff without a checkout or writes`, t => {
   const f = fixture(t, format);
   const refs = f.git("--git-dir", f.repo, "show-ref"); const config = readFileSync(join(f.repo, "config"));
   assert.deepEqual(readCode(f.repo, { action: "show", revision: "main", path: "README.md" }), { revision: f.base, text: "old text\n" });
@@ -46,7 +46,7 @@ for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} code rea
     assert.throws(() => readCode(f.repo, { action: "show", revision: "main", path }), /repository-relative/);
   assert.throws(() => readCode(f.repo, { action: "checkout" as never, revision: "main" }), /unsupported/);
 });
-test("DR27/INV09: code inspection does not run external diff, textconv or a source hook", t => {
+test("002. Code inspection does not run external diff, textconv or a source hook", t => {
   const f = fixture(t, "sha1"); const marker = join(f.root, "ran"), script = join(f.root, "program");
   writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\n`); chmodSync(script, 0o755);
   f.git("--git-dir", f.repo, "config", "diff.external", script);

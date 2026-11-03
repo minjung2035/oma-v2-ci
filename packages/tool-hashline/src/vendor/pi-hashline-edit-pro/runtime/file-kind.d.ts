@@ -4,6 +4,7 @@ export type LFile = {
 } | {
     kind: "image";
     mimeType: string;
+    bytes: Buffer;
 } | {
     kind: "text";
     text: string;

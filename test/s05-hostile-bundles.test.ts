@@ -54,7 +54,7 @@ async function refused(w: ReturnType<typeof world>, key: string, candidate: stri
     } })();
     assert.deepEqual(staging.filter(name => name.startsWith("quarantine-")), [], `${key}: a quarantine tree was left`);
 }
-test("S-05: a bundle whose pack bytes are corrupted is refused, and nothing of it is kept", async (t) => {
+test("001. A bundle whose pack bytes are corrupted is refused, and nothing of it is kept", async (t) => {
     const w = world(t);
     const bundle = readFileSync(join(w.root, "candidate.bundle"));
     const pack = bundle.indexOf(Buffer.from("PACK"));
@@ -63,7 +63,7 @@ test("S-05: a bundle whose pack bytes are corrupted is refused, and nothing of i
     corrupted[pack + 40] = corrupted[pack + 40]! ^ 0xff;
     await refused(w, "s05-corrupt", w.info.candidate, corrupted);
 });
-test("S-05: a bundle carrying an object fsck --strict refuses is refused", async (t) => {
+test("002. A bundle carrying an object fsck --strict refuses is refused", async (t) => {
     const w = world(t);
     const tree = gitCommand(w.seed, ["rev-parse", `${w.info.candidate}^{tree}`]);
     // A commit whose author line has no date: well-formed enough to hash, not to pass --strict.
@@ -73,7 +73,7 @@ test("S-05: a bundle carrying an object fsck --strict refuses is refused", async
     gitCommand(w.seed, ["bundle", "create", join(w.root, "bad.bundle"), w.info.exportRef, `^${w.info.base}`]);
     await refused(w, "s05-fsck", bad, readFileSync(join(w.root, "bad.bundle")));
 });
-test("S-05: a pack of a highly compressible blob is kept compressed -- the quarantine and canonical grow by the pack, not the blob", async (t) => {
+test("003. A pack of a highly compressible blob is kept compressed -- the quarantine and canonical grow by the pack, not the blob", async (t) => {
     const { execFileSync } = await import("node:child_process");
     const w = world(t, 1024 * 1024);
     const size = (path: string) => Number(execFileSync("du", ["-sb", path], { encoding: "utf8" }).split("\t")[0]);

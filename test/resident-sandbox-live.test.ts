@@ -1,3 +1,5 @@
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { beforeDeadline } from "./fixtures/timeout.js";
 import { productSurfaceMasks } from "@oma/storage/installation-surface";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 /** SB-001..006 + INF-005..008, live: a Resident's engine under real bubblewrap.
@@ -20,7 +22,7 @@ import { provisionSociety } from "#oma-test/app/runtime/provision";
 import { InferenceRelay } from "#oma-test/app/runtime/inference-relay";
 import { placeholderFor } from "@oma/engine/engine-auth";
 import { PiAdapter } from "@oma/engine/pi-adapter";
-import { hostSystemLayout } from "@oma/platform-linux/resident-rootfs";
+
 import { resolvePiRuntime } from "@oma/engine/pi-runtime";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { PiRpcClient } from "@oma/engine/pi-rpc";
@@ -48,7 +50,7 @@ function withFilter<T>(plan: { readonly input?: Uint8Array }, run: (stdio: ["pip
   finally { closeSync(fd); rmSync(dir, { recursive: true, force: true }); }
 }
 
-test("T117 a confined Resident reaches its provider only through the relay, with the real key", {
+test("001. A confined Resident reaches its provider only through the relay, with the real key", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 90000,
 }, async () => {
@@ -96,11 +98,12 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       { origin: provider.origin, headers: {}, substitute: { placeholder, secret } },
       { concurrent: 4, timeoutMs: 30000 });
 
+    mkdirSync(join(stateRoot, "agents", actor, "records"), { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
-      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
+      limits: { subjectBytes: 512, frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "packages/extension/dist/index.js"),
@@ -109,7 +112,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       },
       confinement: {
         host: {
-           libdir: root,
+           libdir: root, recordRoot: join(stateRoot, "agents", actor, "records"),
           node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
@@ -162,7 +165,7 @@ function anthropicTurn(text: string): string[] {
   ];
 }
 
-test("V27A: the bundled engine, on the production plan, delivers a batch to a settled boundary it recorded in its session", {
+test("002. The bundled engine, on the production plan, delivers a batch to a settled boundary it recorded in its session", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 120000,
 }, async () => {
@@ -207,11 +210,12 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     const relaySocket = join(dirname(leaseSocket), "inference.sock");
     relay = await InferenceRelay.open(relaySocket, { origin: provider.origin, headers: {}, substitute: { placeholder, secret } },
       { concurrent: 4, timeoutMs: 30000 });
+    mkdirSync(join(stateRoot, "agents", actor, "records"), { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
-      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", extensions: [] },
+      limits: { subjectBytes: 512, frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "packages/extension/dist/index.js"),
@@ -220,7 +224,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       },
       confinement: {
         host: {
-           libdir: root,
+           libdir: root, recordRoot: join(stateRoot, "agents", actor, "records"),
           node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
@@ -276,7 +280,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
 });
 
 
-test("T117 a confined Resident loads the trusted extension and receives mail as a custom message", {
+test("003. A confined Resident loads the trusted extension and receives mail as a custom message", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 90000,
 }, async () => {
@@ -316,11 +320,12 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     control = createServer(socket => { socket.destroy(); });
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    mkdirSync(join(stateRoot, "agents", actor, "records"), { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
+      limits: { subjectBytes: 512, frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "packages/extension/dist/index.js"),
@@ -329,7 +334,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       },
       confinement: {
         host: {
-           libdir: root,
+           libdir: root, recordRoot: join(stateRoot, "agents", actor, "records"),
           node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
@@ -352,7 +357,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       child!.once("close", () => { resolve(); });
     });
     await rpc.send({ id: "d1", type: "prompt", message: `/oma-deliver ${manifest.id}` });
-    await Promise.race([settled, new Promise(resolve => setTimeout(resolve, 30000))]);
+    await beforeDeadline(settled, 30000, undefined);
 
     const custom = events.find(e => e.type === "message_start" && e.message?.role === "custom");
     assert.ok(custom, `no custom message inside the sandbox; exit=${child.exitCode} stderr=${stderr.slice(-2000)}`);
@@ -368,7 +373,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
   }
 });
 
-test("T117 the host product's code cannot be read inside a Resident (TUI-003)", {
+test("004. The host product's code cannot be read inside a Resident", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 60000,
 }, async () => {
@@ -398,6 +403,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     control = createServer(socket => { socket.destroy(); });
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    mkdirSync(join(stateRoot, "agents", actor, "records"), { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const masks = productSurfaceMasks(root);
     assert.ok(masks.some(mask => mask.path === "packages/tui/dist"), "the built product surface should exist to hide");
@@ -405,8 +411,8 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       assert.ok(masks.some(mask => mask.path === path), `the moved host product must stay hidden: ${path}`);
     const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
+      limits: { subjectBytes: 512, frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "packages/extension/dist/index.js"),
@@ -415,7 +421,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       },
       confinement: {
         host: {
-           libdir: root,
+           libdir: root, recordRoot: join(stateRoot, "agents", actor, "records"),
           node: realpathSync(process.execPath),  hidden: masks,
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
@@ -462,7 +468,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
   }
 });
 
-test("AV16: the production sandbox keeps the development shell and typed Client, not a model CLI", {
+test("005. The production sandbox keeps the development shell and typed Client, not a model CLI", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
   timeout: 60000,
 }, async () => {
@@ -504,11 +510,12 @@ test("AV16: the production sandbox keeps the development shell and typed Client,
     });
     await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
     const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    mkdirSync(join(stateRoot, "agents", actor, "records"), { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot, libdir: root });
     const adapter = new PiAdapter(residentEngineEffects, {
       actor, society: "live",
-      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
+      limits: { subjectBytes: 512, frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "packages/extension/dist/index.js"),
@@ -517,7 +524,7 @@ test("AV16: the production sandbox keeps the development shell and typed Client,
       },
       confinement: {
         host: {
-           libdir: root,
+           libdir: root, recordRoot: join(stateRoot, "agents", actor, "records"),
           node: realpathSync(process.execPath),  hidden: productSurfaceMasks(root),
           pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },

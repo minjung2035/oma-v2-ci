@@ -33,13 +33,21 @@ export async function executePipeline(pipeline: CheckPipeline, workspace: string
   }
   let passed = true, timedOut = false;
   for (const [index, step] of steps.entries()) {
-    const cwd = realpathSync(join(root, step.cwd)), local = relative(root, cwd);
-    if (local === ".." || local.startsWith("../") || isAbsolute(local)) throw new StoreError("UNSUPPORTED_PROFILE", "pipeline step cwd escapes its workspace");
     status({ kind: "step-start", index, id: step.id, phase: index < pipeline.setupSteps.length ? "setup" : "check", startedAt: new Date().toISOString() });
     const emit = (stream: "stdout" | "stderr") => (bytes: Uint8Array): void => {
       for (let at = 0; at < bytes.byteLength; at += 16384)
         status({ kind: "step-output", index, stream, data: Buffer.from(bytes.subarray(at, at + 16384)).toString("base64") });
     };
+    let cwd: string;
+    try { cwd = realpathSync(join(root, step.cwd)); }
+    catch (error) {
+      if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+      emit("stderr")(Buffer.from(`pipeline step ${step.id}: cwd ${JSON.stringify(step.cwd)} is not a directory\n`));
+      status({ kind: "step-end", index, outcome: "exited", exitCode: 1, signal: null, elapsedMs: 0 });
+      passed = false; break;
+    }
+    const local = relative(root, cwd);
+    if (local === ".." || local.startsWith("../") || isAbsolute(local)) throw new StoreError("UNSUPPORTED_PROFILE", "pipeline step cwd escapes its workspace");
     const result = await runProcess({ executable: step.argv[0]!, argv: step.argv.slice(1), cwd,
       env: { ...process.env, ...(downloads === undefined ? {} : { npm_config_cache: privateCache }), ...pipeline.env, ...step.env, HOME: process.env.HOME, TMPDIR: "/tmp" }, timeoutMs: step.deadlineMs ?? null,
       stdoutBytes: 0, stdoutOverflow: "discard", stderrBytes: 0, stderrOverflow: "discard" },

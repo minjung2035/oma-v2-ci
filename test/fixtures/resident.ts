@@ -8,6 +8,8 @@ import { type SandboxDirectories as ResidentDirectories } from "@oma/contracts/r
 import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import type { PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "@oma/domain/paths";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { collaborationRecordRootPathAt } from "@oma/domain/paths";
 
 export const RESIDENT_TEST_OPTIONS = Object.freeze({
   timeout: 180_000,
@@ -24,17 +26,17 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
     projectMirror: join(stateRoot, "repos", "project-mirror.git"), sessions: runnerSessionDirPathAt(stateRoot, actor),
   };
   const socket = actorSocketPathAt(runRoot, actor, 1);
-  const limits = { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24,
+  const limits = { subjectBytes: 512, frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24,
     mailBodyBytes: 1 << 20, addresses: 64, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
   return {
     actor, society: "demo", limits,
-    profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [] },
+    profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], toolSurface: JSON.stringify(collaborationSurface("resident")) },
     paths: { piCommand: process.execPath, piArgs: [entry], piAgentDir: join(stateRoot, "engine"),
       coreExtension: join(libdir, "packages/extension/dist/index.js"),
       workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home, mailArchive: join(directories.archive, "cur"),
       workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket },
     confinement: { host: {  libdir, node: process.execPath, pi: confinedPath({ libdir }, directories, entry),
-      piModeArgs: [], stateRoot, runRoot, limits },
+      recordRoot: collaborationRecordRootPathAt(stateRoot, actor), piModeArgs: [], stateRoot, runRoot, limits },
       directories, lease: decodeRunLease({ actor, incarnation: 1, socketHostPath: socket }, { actor, runRoot }) },
   };
 }
@@ -42,7 +44,7 @@ export function residentOptions(stateRoot: string, libdir = "/opt/oma", entry = 
 export function prepareResident(options: PiAdapterOptions): void {
   const { host, directories } = options.confinement;
   const layout = hostSystemLayout();
-  for (const path of [...Object.values(directories), options.paths.mailArchive, options.paths.workerArchive,
+  for (const path of [...Object.values(directories), ...(host.recordRoot === undefined ? [] : [host.recordRoot]), options.paths.mailArchive, options.paths.workerArchive,
     join(options.paths.socket, ".."), join(directories.home, ".local/share"), join(directories.home, ".run")]) mkdirSync(path, { recursive: true, mode: 0o700 });
   writeFileSync(options.paths.socket, "");
   Object.assign(host, {  node: realpathSync(process.execPath) });

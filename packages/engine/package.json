@@ -147,9 +147,9 @@
     "@oma/domain": "0.1.0",
     "@oma/protocol": "0.1.0",
     "@oma/process": "0.1.0",
-    "@earendil-works/pi-ai": "1.0.3",
-    "@earendil-works/pi-coding-agent": "1.0.1",
-    "@earendil-works/pi-tui": "1.0.1",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0",
     "pi-open-tui": "0.3.11"
   },
   "devDependencies": {

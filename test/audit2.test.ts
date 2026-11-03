@@ -1,3 +1,4 @@
+import { auditGit, seedAuditProject as seedProject } from "./fixtures/audit-git.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -15,24 +16,20 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync, spawn } from "node:child_process";
+
 import { createHash } from "node:crypto";
 import { Store } from "@oma/storage";
-import { MailModule } from "@oma/mail";
+
 import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { ViewsModule } from "#oma-test/app/views";
-import { LifecycleModule } from "@oma/lifecycle";
-import { GitModule } from "@oma/git";
-import { ReconcileModule } from "@oma/reconcile";
-import { Broker } from "@oma/broker";
+
+
+
+
 import type { ResolvedAgentSpec } from "@oma/contracts";
-import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { requireBoundedRejection } from "./fixtures/verification-oracles.js";
-const G = {
-    ...process.env,
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: "/dev/null",
-};
+
 const ROOT = join(import.meta.dirname ?? process.cwd(), "..", "..");
 const SHA = (b: Uint8Array): string => createHash("sha256").update(b).digest("hex");
 interface Env {
@@ -138,57 +135,13 @@ async function envOf(): Promise<Env> {
         },
     };
 }
-function seedProject(env: Env): string {
-    const seed = join(env.dir, "seed");
-    mkdirSync(seed, { recursive: true });
-    const sh = (args: string[], cwd?: string): string => {
-        const r = spawnSync("git", args, {
-            cwd: cwd ?? env.dir,
-            env: G,
-            encoding: "utf8",
-        });
-        if (r.status !== 0)
-            throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-        return (r.stdout ?? "").trim();
-    };
-    sh(["init", "-q", "-b", "main"], seed);
-    writeFileSync(join(seed, "base.txt"), "b".repeat(65536) + "\n", "utf8");
-    sh(["add", "-A"], seed);
-    sh([
-        "-c",
-        "user.name=O",
-        "-c",
-        "user.email=o@localhost",
-        "commit",
-        "-qm",
-        "base",
-    ], seed);
-    const base = sh(["rev-parse", "HEAD"], seed);
-    sh(["clone", "-q", "--bare", seed, join(env.state, "repos", "project.git")]);
-    sh([
-        "--git-dir",
-        join(env.state, "repos", "project.git"),
-        "symbolic-ref",
-        "HEAD",
-        "refs/heads/main",
-    ]);
-    return base;
-}
+
 function makeCandidate(env: Env, base: string, tag: string): {
     candidate: string;
     bundle: Buffer;
 } {
     const clone = join(env.dir, `clone-${tag}`);
-    const sh = (args: string[], cwd?: string): string => {
-        const r = spawnSync("git", args, {
-            cwd: cwd ?? env.dir,
-            env: G,
-            encoding: "utf8",
-        });
-        if (r.status !== 0)
-            throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-        return (r.stdout ?? "").trim();
-    };
+    const sh = auditGit(env);
     sh([
         "clone",
         "-q",
@@ -311,9 +264,8 @@ async function main() {
 
 main().then(() => process.exit(0)).catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
 `;
-test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema, status filter", async (t) => {
+test("001. Actor socket protocol acceptance", async (t) => {
     const env = await envOf();
-    const society = env.society;
     try {
         const base = seedProject(env);
         const cand = makeCandidate(env, base, "x");
@@ -775,101 +727,137 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         if (process.env.DUMP_A2) {
             writeFileSync("/tmp/a2-results.json", JSON.stringify(results, null, 2));
         }
-        // P0-1: status (s1) strictly after context (c1); context is slow so if
-        // they ran concurrently the fast status could respond first.
-        assert.deepEqual(ids("serialize"), ["c1", "s1"], "pipelined requests must serialize on one socket");
-        // P0-2 exact: submit succeeded
-        assert.equal(byName("exact")?.replies?.[0]?.ok, true, `exact submit: ${JSON.stringify(byName("exact")?.replies)}`);
-        // Half-close keeps the client's read side open: silence is not rejection.
-        requireBoundedRejection(byName("short"), "STREAM_INVALID", "short");
-        assert.equal(env.store.getOperation("a", "short"), null, "short must remain preaccept");
-        for (const name of ["excess-1", "excess-2", "excess-3"] as const) {
-            const result = byName(name);
-            requireBoundedRejection(result, "STREAM_INVALID", name);
-            assert.equal(env.store.getOperation("a", name), null, `${name} must remain preaccept`);
-        }
-        const mismatch = byName("hash-mismatch");
-        requireBoundedRejection(mismatch, "STREAM_INVALID", "hash-mismatch");
-        assert.equal(env.store.getOperation("a", "hash-mismatch"), null);
-        const timeout = byName("stream-timeout");
-        requireBoundedRejection(timeout, "STREAM_INVALID", "stream-timeout");
-        assert.equal(env.store.getOperation("a", "stream-timeout"), null);
-        // P0-2 excess garbage: STREAM_INVALID, mutation must NOT succeed
-        const eg = byName("excess-garbage");
-        requireBoundedRejection(eg, "STREAM_INVALID", "eg");
-        const egOp = env.store.transaction((_t) => env.store.getOperation("a", "excess-garbage"));
-        assert.equal(egOp, null, "excess garbage must not create an operation (mutation must not succeed)");
-        // P0-2 coalesced: success
-        assert.equal(byName("coalesced")?.replies?.[0]?.ok, true, `coalesced: ${JSON.stringify(byName("coalesced")?.replies)}`);
-        // P0-3: stream submit then next control request: submit first, status second
-        assert.deepEqual(ids("stream-then-next"), ["stn", "s2"], "next request must wait for the stream submit");
-        // P0-C: broker-side request-key semantics on the real actor socket.
-        const same = byName("mail-idempotent")?.replies ?? [];
-        assert.equal(same[0]?.ok, true);
-        assert.equal(same[1]?.ok, true);
-        assert.equal((same[0]?.result as {
-            operation: string;
-        }).operation, (same[1]?.result as {
-            operation: string;
-        }).operation);
-        assert.equal(env.store.getOperation("a", "mail-same")?.state, "succeeded");
-        const bodyReuse = byName("mail-reused-body")?.replies ?? [];
-        assert.equal(bodyReuse[0]?.ok, true);
-        assert.equal(bodyReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
-        const bodyOp = env.store.getOperation("a", "mail-body");
-        assert.ok(bodyOp);
-        assert.equal(env.store.deliveriesForOperation(bodyOp.id).length, 1);
-        const recipientReuse = byName("mail-reused-recipient")?.replies ?? [];
-        assert.equal(recipientReuse[0]?.ok, true);
-        assert.equal(recipientReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
-        const recipientOp = env.store.getOperation("a", "mail-to");
-        assert.ok(recipientOp);
-        assert.equal(env.store.deliveriesForOperation(recipientOp.id).length, 1);
-        const gitSame = byName("git-idempotent")?.replies ?? [];
-        assert.equal(gitSame[0]?.ok, true, `first git-idempotent response: ${JSON.stringify(gitSame[0])}`);
-        assert.equal(gitSame[1]?.ok, true, `second git-idempotent response: ${JSON.stringify(gitSame[1])}`);
-        assert.equal((gitSame[0]?.result as {
-            operation: string;
-        }).operation, (gitSame[1]?.result as {
-            operation: string;
-        }).operation);
-        const badRetry = byName("git-retry-bad-stream")?.replies ?? [];
-        assert.equal(badRetry[0]?.error?.code, "STREAM_INVALID");
-        assert.equal(env.store.getOperation("a", "git-same")?.state, "succeeded");
-        const gitReuse = byName("git-reused-candidate")?.replies ?? [];
-        assert.equal(gitReuse[0]?.ok, true);
-        assert.equal(gitReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
-        const gitOp = env.store.getOperation("a", "git-different");
-        assert.ok(gitOp);
-        assert.equal(env.store.deliveriesForOperation(gitOp.id).length, 1);
-        const protectedIntegrate = byName("integrate-protected")?.replies ?? [];
-        assert.equal(protectedIntegrate[0]?.error?.code, "PROTECTED_PATH");
-        assert.equal(env.store.getOperation("a", "integrate-protected")?.state, "failed");
-        assert.equal(env.store.getOperation("a", "integrate-protected")?.errorCode, "PROTECTED_PATH");
-        // P1-7: status filter — a and b return only their own agent
-        // The closed status.get result carries the observation time and the agents.
-        const statusOf = (name: string) => byName(name)?.replies?.[0]?.result as {
-            observedAtMs?: number;
-            agents?: Array<{
-                agent: string;
-            }>;
-        } | undefined;
-        const sa = statusOf("status-a");
-        const sb = statusOf("status-b");
-        assert.ok(Number.isSafeInteger(sa?.observedAtMs) && sa?.agents?.length === 1 && sa.agents[0]!.agent === "a", `status a: ${JSON.stringify(sa)}`);
-        assert.ok(Number.isSafeInteger(sb?.observedAtMs) && sb?.agents?.length === 1 && sb.agents[0]!.agent === "b", `status b: ${JSON.stringify(sb)}`);
-        // P1-8 closed-schema negatives
-        assert.equal(byName("neg-oid")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "git.known bad oid");
-        assert.equal(byName("neg-unknown-param")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "status.get unknown param");
-        assert.equal(byName("neg-bad-prereq")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "git.submit bad prereq");
-        assert.equal(byName("neg-version")?.replies?.[0]?.error?.code, "UNSUPPORTED_VERSION", "v=2 must be rejected");
-        assert.equal(byName("neg-read-request")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "read method with top-level request");
+        await t.test("002. Pipelined requests respond in submission order", async () => {
+            // P0-1: status (s1) strictly after context (c1); context is slow so if
+            // they ran concurrently the fast status could respond first.
+            assert.deepEqual(ids("serialize"), ["c1", "s1"], "pipelined requests must serialize on one socket");
+        });
+        await t.test("003. An exact bundle stream succeeds", async () => {
+            // P0-2 exact: submit succeeded
+            assert.equal(byName("exact")?.replies?.[0]?.ok, true, `exact submit: ${JSON.stringify(byName("exact")?.replies)}`);
+        });
+        await t.test("004. A short bundle is rejected before acceptance", async () => {
+            // Half-close keeps the client's read side open: silence is not rejection.
+            requireBoundedRejection(byName("short"), "STREAM_INVALID", "short");
+            assert.equal(env.store.getOperation("a", "short"), null, "short must remain preaccept");
+        });
+        await t.test("005. One to three excess stream bytes remain preaccept", async () => {
+            for (const name of ["excess-1", "excess-2", "excess-3"] as const) {
+                const result = byName(name);
+                requireBoundedRejection(result, "STREAM_INVALID", name);
+                assert.equal(env.store.getOperation("a", name), null, `${name} must remain preaccept`);
+            }
+        });
+        await t.test("006. A mismatched bundle hash remains preaccept", async () => {
+            const mismatch = byName("hash-mismatch");
+            requireBoundedRejection(mismatch, "STREAM_INVALID", "hash-mismatch");
+            assert.equal(env.store.getOperation("a", "hash-mismatch"), null);
+        });
+        await t.test("007. A missing bundle times out before acceptance", async () => {
+            const timeout = byName("stream-timeout");
+            requireBoundedRejection(timeout, "STREAM_INVALID", "stream-timeout");
+            assert.equal(env.store.getOperation("a", "stream-timeout"), null);
+        });
+        await t.test("008. Trailing garbage cannot create an operation", async () => {
+            // P0-2 excess garbage: STREAM_INVALID, mutation must NOT succeed
+            const eg = byName("excess-garbage");
+            requireBoundedRejection(eg, "STREAM_INVALID", "eg");
+            const egOp = env.store.transaction((_t) => env.store.getOperation("a", "excess-garbage"));
+            assert.equal(egOp, null, "excess garbage must not create an operation (mutation must not succeed)");
+        });
+        await t.test("009. Coalesced metadata and bundle bytes succeed", async () => {
+            // P0-2 coalesced: success
+            assert.equal(byName("coalesced")?.replies?.[0]?.ok, true, `coalesced: ${JSON.stringify(byName("coalesced")?.replies)}`);
+        });
+        await t.test("010. Coalesced control requests wait for the bundle", async () => {
+            // P0-3: stream submit then next control request: submit first, status second
+            assert.deepEqual(ids("stream-then-next"), ["stn", "s2"], "next request must wait for the stream submit");
+        });
+        await t.test("011. Repeated mail returns the original operation", async () => {
+            // P0-C: broker-side request-key semantics on the real actor socket.
+            const same = byName("mail-idempotent")?.replies ?? [];
+            assert.equal(same[0]?.ok, true);
+            assert.equal(same[1]?.ok, true);
+            assert.equal((same[0]?.result as {
+                operation: string;
+            }).operation, (same[1]?.result as {
+                operation: string;
+            }).operation);
+            assert.equal(env.store.getOperation("a", "mail-same")?.state, "succeeded");
+        });
+        await t.test("012. Reusing a mail key with a different body is rejected", async () => {
+            const bodyReuse = byName("mail-reused-body")?.replies ?? [];
+            assert.equal(bodyReuse[0]?.ok, true);
+            assert.equal(bodyReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+            const bodyOp = env.store.getOperation("a", "mail-body");
+            assert.ok(bodyOp);
+            assert.equal(env.store.deliveriesForOperation(bodyOp.id).length, 1);
+        });
+        await t.test("013. Reusing a mail key with different recipients is rejected", async () => {
+            const recipientReuse = byName("mail-reused-recipient")?.replies ?? [];
+            assert.equal(recipientReuse[0]?.ok, true);
+            assert.equal(recipientReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+            const recipientOp = env.store.getOperation("a", "mail-to");
+            assert.ok(recipientOp);
+            assert.equal(env.store.deliveriesForOperation(recipientOp.id).length, 1);
+        });
+        await t.test("014. Repeated Git submission returns the original operation", async () => {
+            const gitSame = byName("git-idempotent")?.replies ?? [];
+            assert.equal(gitSame[0]?.ok, true, `first git-idempotent response: ${JSON.stringify(gitSame[0])}`);
+            assert.equal(gitSame[1]?.ok, true, `second git-idempotent response: ${JSON.stringify(gitSame[1])}`);
+            assert.equal((gitSame[0]?.result as {
+                operation: string;
+            }).operation, (gitSame[1]?.result as {
+                operation: string;
+            }).operation);
+        });
+        await t.test("015. A corrupt retry cannot replace a successful submission", async () => {
+            const badRetry = byName("git-retry-bad-stream")?.replies ?? [];
+            assert.equal(badRetry[0]?.error?.code, "STREAM_INVALID");
+            assert.equal(env.store.getOperation("a", "git-same")?.state, "succeeded");
+        });
+        await t.test("016. Reusing a Git key with a different candidate is rejected", async () => {
+            const gitReuse = byName("git-reused-candidate")?.replies ?? [];
+            assert.equal(gitReuse[0]?.ok, true);
+            assert.equal(gitReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+            const gitOp = env.store.getOperation("a", "git-different");
+            assert.ok(gitOp);
+            assert.equal(env.store.deliveriesForOperation(gitOp.id).length, 1);
+        });
+        await t.test("017. Integration cannot modify protected paths", async () => {
+            const protectedIntegrate = byName("integrate-protected")?.replies ?? [];
+            assert.equal(protectedIntegrate[0]?.error?.code, "PROTECTED_PATH");
+            assert.equal(env.store.getOperation("a", "integrate-protected")?.state, "failed");
+            assert.equal(env.store.getOperation("a", "integrate-protected")?.errorCode, "PROTECTED_PATH");
+        });
+        await t.test("018. Status filtering returns only the requested agent", async () => {
+            // P1-7: status filter — a and b return only their own agent
+            // The closed status.get result carries the observation time and the agents.
+            const statusOf = (name: string) => byName(name)?.replies?.[0]?.result as {
+                observedAtMs?: number;
+                agents?: Array<{
+                    agent: string;
+                }>;
+            } | undefined;
+            const sa = statusOf("status-a");
+            const sb = statusOf("status-b");
+            assert.ok(Number.isSafeInteger(sa?.observedAtMs) && sa?.agents?.length === 1 && sa.agents[0]!.agent === "a", `status a: ${JSON.stringify(sa)}`);
+            assert.ok(Number.isSafeInteger(sb?.observedAtMs) && sb?.agents?.length === 1 && sb.agents[0]!.agent === "b", `status b: ${JSON.stringify(sb)}`);
+        });
+        await t.test("019. Closed request schemas reject malformed wire inputs", async () => {
+            // P1-8 closed-schema negatives
+            assert.equal(byName("neg-oid")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "git.known bad oid");
+            assert.equal(byName("neg-unknown-param")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "status.get unknown param");
+            assert.equal(byName("neg-bad-prereq")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "git.submit bad prereq");
+            assert.equal(byName("neg-version")?.replies?.[0]?.error?.code, "UNSUPPORTED_VERSION", "v=2 must be rejected");
+            assert.equal(byName("neg-read-request")?.replies?.[0]?.error?.code, "INVALID_REQUEST", "read method with top-level request");
+        });
     }
     finally {
         await env.cleanup();
     }
 });
-test("P0-C: concurrent request-key races converge on one actor-socket effect", async (t) => {
+test("020. Concurrent request-key races converge on one actor-socket effect", async (t) => {
     const env = await envOf();
     try {
         const mail = (id: string, key: string, body: string) => ({

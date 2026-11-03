@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {ExecutionCoordinator} from '@oma/process/owned-execution';
 import {setTimeout} from 'node:timers/promises';
-test('P1a execution owner: a held recovery fences its slot without delaying a different slot',async()=>{
+test("001. Execution owner: a held recovery fences its slot without delaying a different slot",async()=>{
  const entries=new Map([['held',{slot:'held',execution:'old',witness:{id:'old'}}]]);let released=false,started=false;
  const journal={entries:()=>[...entries.values()],reserve:slot=>{assert.equal(entries.has(slot),false);const execution='new-'+slot;entries.set(slot,{slot,execution,witness:null});return {execution,publish:witness=>entries.set(slot,{slot,execution,witness}),retire:()=>entries.delete(slot)}},retire:slot=>entries.delete(slot)};
  const owner=new ExecutionCoordinator(journal,identity=>({kind:'running',identity}),identity=>({identity,terminate(){},population:()=>released?'empty':'populated',close(){}}));

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { withAsyncCleanup } from "@oma/native/cleanup";
+import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 
 function world({ command = 'update', args = [command, 'npm:fixture'], code = 0, failure, cleanupFailure, synced = true, hostOnly = false, lockFailure, contended = false } = {}) {
   const file = 'apps/oma/src/entry/oma-society.ts';
@@ -31,7 +31,7 @@ function world({ command = 'update', args = [command, 'npm:fixture'], code = 0, 
   const packageDirectories = Object.freeze({}); // Directory effects belong to the controlled index boundary.
   const run = new Script(compiled, { filename: file }).runInNewContext({
     ...path, fileURLToPath(url) { if (failure === 'location') throw primary; return fileURLToPath(url); },
-    URL, withAsyncCleanup, packageDirectories, engineLoginDirectory: {}, home: '/fixture/home', exports: {},
+    URL, withAsyncCleanup, withCleanup, PACKAGE_INDEX: 'oma-extensions.json', packageDirectories, engineLoginDirectory: {}, home: '/fixture/home', exports: {},
     process: { env: {}, stdout: { write(line) { output.push(line); } }, exit(value) { throw { exit: value }; } },
     ensureDirectory() { calls.push('directory'); },
     ensureOwnedDirectory(directory, ownedFrom, mode) {
@@ -51,6 +51,7 @@ function world({ command = 'update', args = [command, 'npm:fixture'], code = 0, 
     ProcessLock: { tryAcquire() { calls.push('take'); if (lockFailure) throw lockFailure; if (contended) return null; held = true; return lock; } },
     tryHoldSociety() { calls.push('take'); if (lockFailure) throw lockFailure; if (contended) return null; held = true; return lock; },
     packageStoreDir: () => '/fixture/packages',
+    recoverPackageReplacements(store, names) { assert.equal(held, true); assert.equal(store, '/fixture/packages'); assert.deepEqual(Array.from(names), ['settings.json', 'oma-extensions.json']); calls.push('recover'); if (failure === 'recover') throw primary; },
     readPackageIndex() { assert.equal(held, true); calls.push('before'); if (failure === 'before') throw primary; return []; },
     async runEngineLogin(_directoryOwner, options) { assert.equal(options.fence, 17); await step('engine'); return code; },
     async writePackageIndex(_store, directories) { assert.equal(directories, packageDirectories); await step('index'); return []; },
@@ -70,40 +71,40 @@ function world({ command = 'update', args = [command, 'npm:fixture'], code = 0, 
   return { calls, output, primary, get held() { return held; }, get returns() { return returns; }, resolve() { pending(); },
     run: () => run('/fixture/home', 'project', decision) };
 }
-test('Shared package owner: successful change publishes index and reconciles project and Personal selection before release', async () => {
+test("001. Shared package owner: successful change publishes index and reconciles project and Personal selection before release", async () => {
   const w = world(); await assert.rejects(w.run(), error => error.exit === 0);
-  assert.deepEqual(w.calls, ['directory', 'take', 'before', 'engine', 'index', 'prune', 'roles', 'personal', 'return']);
+  assert.deepEqual(w.calls, ['directory', 'take', 'recover', 'before', 'engine', 'index', 'prune', 'roles', 'personal', 'return']);
   assert.equal(w.returns, 1); assert.equal(w.held, false);
 });
-for (const failure of ['before', 'engine', 'index', 'prune', 'roles', 'personal'])
-  test(`Shared package owner: ${failure} failure returns its lock and retains the primary`, async () => {
+for (const failure of ['recover', 'before', 'engine', 'index', 'prune', 'roles', 'personal'])
+  test(`002. Shared package owner: ${failure} failure returns its lock and retains the primary`, async () => {
     const w = world({ failure }); await assert.rejects(w.run(), error => error === w.primary);
     assert.equal(w.returns, 1); assert.equal(w.held, false); assert.equal(w.calls.at(-1), 'return');
   });
 for (const target of ['engine', 'index'])
-  test(`Shared package owner: pending ${target} retains ownership until the effect answers`, async () => {
+  test(`003. Shared package owner: pending ${target} retains ownership until the effect answers`, async () => {
     const w = world({ failure: `pending-${target}` }), done = assert.rejects(w.run(), error => error.exit === 0);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(w.held, true); assert.equal(w.returns, 0); assert.equal(w.calls.at(-1), target);
     w.resolve(); await done; assert.equal(w.returns, 1);
   });
 for (const options of [{ code: 7 }, { command: 'list', args: ['list'] }, { args: ['install', '--help'] }, { args: ['install', '-h'] }])
-  test(`Shared package owner: non-change ${JSON.stringify(options)} does not activate extensions`, async () => {
+  test(`004. Shared package owner: non-change ${JSON.stringify(options)} does not activate extensions`, async () => {
     const w = world(options); await assert.rejects(w.run(), error => error.exit === (options.code ?? 0));
     for (const effect of ['index', 'prune', 'personal', 'roles']) assert.equal(w.calls.includes(effect), false, effect);
     assert.equal(w.returns, 1);
   });
-test('Shared package owner: failed project application remains nonzero after Personal preferences are reconciled', async () => {
+test("005. Shared package owner: failed project application remains nonzero after Personal preferences are reconciled", async () => {
   const w = world({ synced: false }); await assert.rejects(w.run(), error => error.exit === 1);
   assert.ok(w.calls.includes('personal')); assert.equal(w.returns, 1);
 });
-for (const contended of [false, true]) test(`Shared package owner: lock ${contended ? 'contention' : 'failure'} starts no engine`, async () => {
+for (const contended of [false, true]) test(`006. Shared package owner: lock ${contended ? 'contention' : 'failure'} starts no engine`, async () => {
   const problem = new Error('fixture lock failure'), w = world({ contended, ...(contended ? {} : { lockFailure: problem }) });
   await assert.rejects(w.run(), error => error.exit === 1);
   assert.equal(w.returns, 0); assert.equal(w.calls.includes('engine'), false);
 });
-for (const failure of [undefined, 'before', 'engine', 'index', 'prune', 'roles', 'personal'])
-  test(`Shared package owner: ${failure ?? 'success'} beside failed release retains exact outcomes`, async () => {
+for (const failure of [undefined, 'recover', 'before', 'engine', 'index', 'prune', 'roles', 'personal'])
+  test(`007. Shared package owner: ${failure ?? 'success'} beside failed release retains exact outcomes`, async () => {
     const cleanupFailure = new Error('fixture close failed'), w = world({ failure, cleanupFailure });
     await assert.rejects(w.run(), error => {
       if (failure === undefined) return error === cleanupFailure;

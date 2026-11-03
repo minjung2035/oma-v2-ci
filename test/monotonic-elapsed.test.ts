@@ -18,7 +18,7 @@ const modules: readonly [string, string][] = [
   ["tui/keys.js", import.meta.resolve("@oma/tui/keys")],
 ];
 for (const [module, location] of modules) {
-  test(`MAC-650: ${module} reads no wall clock to measure time`, () => {
+  test(`001. Monotonic elapsed: ${module} reads no wall clock to measure time`, () => {
     const source = readFileSync(new URL(location), "utf8");
     assert.doesNotMatch(source, /Date\.now\b/);
     assert.match(source, /performance\.now/);

@@ -4,7 +4,7 @@ import { fixture } from "./fixtures/review-fixture.js";
 import { StoreError } from "@oma/domain/errors";
 import { applyRequestKeyFor } from "@oma/domain/identifiers";
 
-test("IMP-R05/R06: explicit same-request retry preserves votes and the first failure; concurrent replay has one successor", async () => {
+test("001. Explicit same-request retry preserves votes and the first failure; concurrent replay has one successor", async () => {
   let fail = true, checks = 0;
   const f = fixture({ checks: [{ id: "verify", argv: ["/usr/bin/true"], env: {} }], runCheck: async () => {
     checks++; if (fail) throw new StoreError("CHECK_FAILED", "controlled first failure");
@@ -30,7 +30,7 @@ test("IMP-R05/R06: explicit same-request retry preserves votes and the first fai
   } finally { f.close(); }
 });
 
-test("IMP-R10: notice preparation failure survives restart as blocked and explicit retry succeeds", async () => {
+test("002. Notice preparation failure survives restart as blocked and explicit retry succeeds", async () => {
   const f = fixture();
   try {
     const candidate = f.candidateWith({ "one.txt": "a\n" }); await f.submit("alice", candidate);
@@ -46,7 +46,7 @@ test("IMP-R10: notice preparation failure survives restart as blocked and explic
   } finally { f.close(); }
 });
 
-test("IMP-R06: an unknown check scope cannot be retried into a second attempt", async () => {
+test("003. An unknown check scope cannot be retried into a second attempt", async () => {
   const f = fixture({ checks: [{ id: "verify", argv: ["/usr/bin/true"], env: {} }], runCheck: async () => {
     throw new StoreError("RUN_TERMINATION_UNKNOWN", "controlled unconfirmed death");
   } });
@@ -60,7 +60,7 @@ test("IMP-R06: an unknown check scope cannot be retried into a second attempt", 
   } finally { f.close(); }
 });
 
-test("IMP-R03: withdrawing an accepted peer vote while checks run wins the final CAS gate", async () => {
+test("004. Withdrawing an accepted peer vote while checks run wins the final CAS gate", async () => {
   let entered!: () => void, finish!: () => void;
   const running = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { finish = resolve; });
   const f = fixture({ checks: [{ id: "held", argv: ["/usr/bin/true"], env: {} }], runCheck: async (_candidate, _check, signal) => {
@@ -79,7 +79,7 @@ test("IMP-R03: withdrawing an accepted peer vote while checks run wins the final
   } finally { finish(); await voting; f.close(); }
 });
 
-test("IMP-R10: a held notice preparation is preparing, not an executing check", async () => {
+test("005. A held notice preparation is preparing, not an executing check", async () => {
   const f = fixture(); let entered!: () => void, finish!: () => void;
   const running = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { finish = resolve; });
   let opening: Promise<unknown> | undefined;

@@ -25,7 +25,7 @@ function placed() {
   return f;
 }
 
-test("V14A: the editor offers exactly the files the loader accepts, and an enabled one loads", () => {
+test("001. The editor offers exactly the files the loader accepts, and an enabled one loads", () => {
   const f = placed();
   try {
     const context = readExtensions(f.path, "principal", "resident");
@@ -59,7 +59,7 @@ test("V14A: the editor offers exactly the files the loader accepts, and an enabl
   } finally { f.close(); }
 });
 
-test("V14A: the scan is bounded, follows no symlink and reports a partial list", () => {
+test("002. The scan is bounded, follows no symlink and reports a partial list", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const dir = join(f.installation, "extensions");
@@ -76,7 +76,7 @@ test("V14A: the scan is bounded, follows no symlink and reports a partial list",
   } finally { f.close(); }
 });
 
-test("V14B: a declared optional extension whose file is gone can be removed, and only that declaration", () => {
+test("003. A declared optional extension whose file is gone can be removed, and only that declaration", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const dir = join(f.installation, "extensions");
@@ -106,7 +106,7 @@ test("V14B: a declared optional extension whose file is gone can be removed, and
   } finally { f.close(); }
 });
 
-test("V14B: the repair does not loosen the loader: another invalid field keeps the configuration uneditable", () => {
+test("004. The repair does not loosen the loader: another invalid field keeps the configuration uneditable", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const dir = join(f.installation, "extensions");
@@ -129,7 +129,7 @@ test("V14B: the repair does not loosen the loader: another invalid field keeps t
   } finally { f.close(); }
 });
 
-test("V14A: a symlink loop under the extension directory is not walked, so a small scan stays complete", () => {
+test("005. A symlink loop under the extension directory is not walked, so a small scan stays complete", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const dir = join(f.installation, "extensions");
@@ -142,7 +142,7 @@ test("V14A: a symlink loop under the extension directory is not walked, so a sma
   } finally { f.close(); }
 });
 
-test("P0-5: a directory the scan cannot list makes the list partial, and what it can see is still offered", { skip: process.getuid?.() === 0 }, () => {
+test("006. A directory the scan cannot list makes the list partial, and what it can see is still offered", { skip: process.getuid?.() === 0 }, () => {
   const f = placed();
   const closed = join(f.installation, "extensions", "aaa-closed");
   mkdirSync(closed);

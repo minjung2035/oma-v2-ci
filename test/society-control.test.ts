@@ -61,7 +61,7 @@ function fixture(t: TestContext) {
 }
 const code = (value: string) => (error: unknown) => error instanceof StoreError && error.code === value;
 
-test("DR27: close disables every path, persists across restart, and open preserves individual stops", async t => {
+test("001. Close disables every path, persists across restart, and open preserves individual stops", async t => {
   const f = fixture(t); const before = f.store.listAgents(); assert.equal(f.store.societyOpen(), true);
   f.units.onStop = () => assert.equal(f.store.societyOpen(), false, "activation must be fenced before stopping units");
   const closed = (await f.control.set(f.auth(), "closed", "close")); assert.equal(closed.state, "succeeded");
@@ -78,7 +78,7 @@ test("DR27: close disables every path, persists across restart, and open preserv
   assert.equal(report.status, "PASS", JSON.stringify(report));
 });
 
-test("DR27: failed stop still attempts all Residents; neither new-key open nor timeout means death", async t => {
+test("002. Failed stop still attempts all Residents; neither new-key open nor timeout means death", async t => {
   const f = fixture(t); f.units.failures.set("alice", new StoreError("RUN_TERMINATION_UNKNOWN", "injected timeout"));
   assert.equal((await f.control.set(f.auth(), "closed", "close")).state, "unknown");
   assert.deepEqual(f.units.stops.map(x => x.agent), ["alice", "bob"]);
@@ -96,7 +96,7 @@ test("DR27: failed stop still attempts all Residents; neither new-key open nor t
   assert.equal(f.store.societyOpen(), true);
 });
 
-test("DR27: accepted order survives clock rollback; same-key history never changes current execution", async t => {
+test("003. Accepted order survives clock rollback; same-key history never changes current execution", async t => {
   const f = fixture(t);
   const open = (await f.control.set(f.auth(), "open", "open"));
   f.time(50); const close = (await f.control.set(f.auth(), "closed", "close"));
@@ -108,7 +108,7 @@ test("DR27: accepted order survives clock rollback; same-key history never chang
   assert.deepEqual((await f.control.set(f.auth(), "closed", "close")), close); assert.equal(f.store.societyOpen(), true);
 });
 
-test("DR27: only the current Principal can accept control; closed gate refuses Resident effects, not Principal control", async t => {
+test("004. Only the current Principal can accept control; closed gate refuses Resident effects, not Principal control", async t => {
   const f = fixture(t);
   (await assert.rejects(async () => (await f.control.set(f.auth("alice"), "closed", "resident")), code("CAPABILITY_DENIED")));
   (await assert.rejects(async () => (await f.control.set({ ...f.auth(), capabilities: new Set() }, "closed", "no-cap")), code("CAPABILITY_DENIED")));
@@ -119,7 +119,7 @@ test("DR27: only the current Principal can accept control; closed gate refuses R
   assert.doesNotThrow(() => assertCurrentActor(f.store, f.auth(), "mail.send"));
 });
 
-test("DR27: recovered opening requires current authority, whereas accepted closing finishes its safety fence", async t => {
+test("005. Recovered opening requires current authority, whereas accepted closing finishes its safety fence", async t => {
   const f = fixture(t); f.units.alive.add("alice");
   (await f.control.set(f.auth(), "open", "noop-open")); // Already open: no stop needed.
   const close = (await f.control.set(f.auth(), "closed", "close"));
@@ -137,7 +137,7 @@ test("DR27: recovered opening requires current authority, whereas accepted closi
   (await f.control.reconcileById(open.operation)); assert.equal(f.store.societyOpen(), true);
 });
 
-test("DR27: live opening rechecks its lease before releasing execution", async t => {
+test("006. Live opening rechecks its lease before releasing execution", async t => {
   const f = fixture(t); (await f.control.set(f.auth(), "closed", "close"));
   const capabilities = new Set(ALL_CAPS); const auth = { ...f.auth(), capabilities };
   f.units.onStop = () => capabilities.clear();
@@ -145,14 +145,14 @@ test("DR27: live opening rechecks its lease before releasing execution", async t
   assert.equal(f.store.societyOpen(), false);
 });
 
-test("DR27/P0: corruption after acceptance remains an accepted failure and does not skip other stops", async t => {
+test("007. Corruption after acceptance remains an accepted failure and does not skip other stops", async t => {
   const f = fixture(t); f.units.failures.set("alice", new StoreError("STORE_CORRUPT", "injected broken unit identity"));
   (await assert.rejects(async () => (await f.control.set(f.auth(), "closed", "close")), error => error instanceof AcceptedFailure && error.code === "STORE_CORRUPT"));
   assert.equal(f.store.societyOpen(), false);
   assert.deepEqual(f.units.stops.map(x => x.agent), ["alice", "bob"]);
 });
 
-test("DR27: closed society keeps queued and prepared mail without an automatic Principal or Resident turn", async t => {
+test("008. Closed society keeps queued and prepared mail without an automatic Principal or Resident turn", async t => {
   const f = fixture(t); const mail = createMailModule({ stateRoot: f.root, society: "demo" }, f.store, 64, 24, { frameBytes: 1024 * 1024, batchMaxMessages: 24 });
   await mail.send(f.auth("alice"), "mail", { to: ["principal"], subject: "Keep this task", body: "unfinished", kind: "message" });
   const prepared = await mail.prepare(f.auth()); assert.ok(prepared);
@@ -164,7 +164,7 @@ test("DR27: closed society keeps queued and prepared mail without an automatic P
   assert.equal(resumed!.id, prepared.id); assert.deepEqual(resumed!.messageIds, prepared.messageIds);
 });
 
-test("DR27: reopen resumes enabled pending-mail Workers through reconciliation, never force-stopped Workers", async t => {
+test("009. Reopen resumes enabled pending-mail Workers through reconciliation, never force-stopped Workers", async t => {
   const f = fixture(t); const mail = createMailModule({ stateRoot: f.root, society: "demo" }, f.store, 64);
   const paths = { stateRoot: f.root, projectGit: join(f.root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true };
   const lifecycle = createLifecycleModule(f.store, f.units, paths, withWorkerCapacity(() => null), mail);

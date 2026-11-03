@@ -11,7 +11,7 @@ import type { Receipt, MessagePlan } from "@oma/contracts";
 import { fixture, messages, inboxCount } from "./fixtures/review-fixture.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 
-test("DR44: Integration's pre-CAS authority never calls the public Review workflow", async () => {
+test("001. Integration's pre-CAS authority never calls the public Review workflow", async () => {
   const f = fixture();
   try {
     f.reviews.assertApplicable = () => { throw new Error("workflow callback reached CAS"); };
@@ -23,7 +23,7 @@ test("DR44: Integration's pre-CAS authority never calls the public Review workfl
   } finally { f.close(); }
 });
 
-test("cancel cannot claim success after CAS while the integration notice is still pending", { timeout: 10_000 }, async () => {
+test("002. Cancel cannot claim success after CAS while the integration notice is still pending", { timeout: 10_000 }, async () => {
   const f = fixture();
   let release!: () => void, entered!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -48,7 +48,7 @@ test("cancel cannot claim success after CAS while the integration notice is stil
   } finally { release(); await opening; f.close(); }
 });
 
-test("DR44: review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
+test("003. Review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
   const f = fixture();
   try {
     const prepared: MessagePlan[] = [];
@@ -95,7 +95,7 @@ const mailOfRole = (f: ReturnType<typeof fixture>, role: "approval" | "withdrawn
   attestationMessages(f).filter(m => m.review?.role === role);
 
 for (const kind of ["merge", "challenge"] as const) test(
-  `submitter provenance changing after ${kind} mail freeze refuses stale authority and permits fresh independent review`,
+  `004. Submitter provenance changing after ${kind} mail freeze refuses stale authority and permits fresh independent review`,
   { timeout: 10_000 }, async () => {
     const f = fixture();
     const frozen = Promise.withResolvers<void>();
@@ -163,7 +163,7 @@ for (const kind of ["merge", "challenge"] as const) test(
     }
   });
 
-test("8 concurrent Worker votes on one HIGH request: serialized acceptance, one op per key, one approval", async () => {
+test("005. 8 concurrent Worker votes on one HIGH request: serialized acceptance, one op per key, one approval", async () => {
   const f = fixture(); try {
     addAgents(f, ["erin", "fred", "gail", "henry", "iris"]);
     const candidate = f.candidateWith({ "one.txt": "a" });
@@ -220,7 +220,7 @@ test("8 concurrent Worker votes on one HIGH request: serialized acceptance, one 
 });
 
 for (const order of ["cancel-first", "vote-first"] as const) test(
-  `cancel vs approve race (${order}): loser refuses or the request cancels before apply`, async () => {
+  `006. Cancel vs approve race (${order}): loser refuses or the request cancels before apply`, async () => {
     const f = fixture(); try {
       const candidate = f.candidateWith({ "one.txt": "a" });
       await f.submit("alice", candidate);
@@ -260,7 +260,7 @@ for (const order of ["cancel-first", "vote-first"] as const) test(
     } finally { f.close(); }
   });
 
-test("concurrent opens: same key shares one operation, different keys refuse REQUEST_EXISTS", async () => {
+test("007. Concurrent opens: same key shares one operation, different keys refuse REQUEST_EXISTS", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     const other = f.candidateWith({ "two.txt": "b" });
@@ -303,7 +303,7 @@ test("concurrent opens: same key shares one operation, different keys refuse REQ
   } finally { f.close(); }
 });
 
-test("concurrent Principal votes on one approval: exactly one decision is recorded", async () => {
+test("008. Concurrent Principal votes on one approval: exactly one decision is recorded", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -345,7 +345,7 @@ test("concurrent Principal votes on one approval: exactly one decision is record
   } finally { f.close(); }
 });
 
-test("concurrent same-key facts never double-record; a same-actor re-vote serializes", async () => {
+test("009. Concurrent same-key facts never double-record; a same-actor re-vote serializes", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -384,7 +384,7 @@ test("concurrent same-key facts never double-record; a same-actor re-vote serial
   } finally { f.close(); }
 });
 
-test("concurrent review + vote + cancel on one request: facts serialize, terminal wins", async () => {
+test("010. Concurrent review + vote + cancel on one request: facts serialize, terminal wins", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);

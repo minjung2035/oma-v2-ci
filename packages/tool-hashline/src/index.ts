@@ -68,10 +68,8 @@ import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, mkdirWithin, readWithin, withFi
 import { admittedRoot } from "@oma/tool-runtime/workspace-guard";
 import { vendoredBundleDir, verifyVendorBundle } from "@oma/tool-runtime/vendor-bundle";
 
-/** The file_edit group's members — the hashline mutation tools. Mirrors
- * `FILE_EDIT_TOOLS` in packages/domain/src/tool-surface.ts; PI-001 keeps this file
- * from importing the domain module, so the surface test binds the two
- * lists. */
+/** The ordinary anchored mutation tools. The collaboration Worker's direct
+ * catalog includes all three; exposure grants no write or containment authority. */
 export const HASHLINE_EDIT_TOOL_NAMES = Object.freeze(["replace", "replace_within", "insert"] as const);
 /** The anchored read replaces the contained `read` registration under the
  * same name, so the surface's `read` entry is unchanged. */
@@ -80,12 +78,13 @@ export const HASHLINE_READ_TOOL_NAME = "read";
 /** OMA exposes only this subset; upstream cross-tool guidance is not applicable. */
 function hashlineGuidance(name: string, readOnly: boolean) {
   const anchors = "Use bare, case-sensitive four-letter anchors from served rows, not line numbers or row content. Added and context rows in a post-edit diff carry live anchors; removed rows do not. Read again when anchors are missing, stale or reclaimed.";
+  const largeRead = "If an admitted line is too long for anchored display, use grep on that exact file path to obtain the complete immutable oma-result, then read its returned reference and next byte offsets. This needs no shell; an oversized-line marker is not the body.";
   const batch = "Same-file edits in one assistant message may batch: a queued result is not a committed edit. The final call reports the combined result. Use disjoint ranges and inspect the final diff.";
   switch (name) {
     case "read": return {
-      description: "Read a file as anchor│content rows, or attach a supported image. offset is a 1-based starting line and limit bounds returned lines; follow the continuation hint when output is truncated. Directories, binary files and UTF-16/UTF-32 text are rejected. An empty text file returns one empty row.",
+      description: "Read a file as anchor│content rows, or attach a supported image. offset is a 1-based starting line and limit bounds returned lines; follow the continuation hint when output is truncated. Directories, binary files and UTF-16/UTF-32 text are rejected. An empty text file returns one empty row." + (readOnly ? ` ${largeRead}` : ""),
       promptSnippet: "Read file contents or images; page text with offset and limit.",
-      promptGuidelines: readOnly ? [] : [anchors],
+      promptGuidelines: readOnly ? [largeRead] : [anchors],
     };
     case "replace": return {
       description: "Replace an inclusive range of anchored lines with replacement_lines; an empty string deletes the range. Use the same anchor for both ends of a single line. Returns a post-edit diff with fresh anchors, or a queued result until the same-file batch closes. Pure deletion verifies the endpoints and removes the current interior.",
@@ -315,7 +314,7 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
       if (root === null) throw new WorkspaceRefusal("tool path is outside the agent workspace");
       return withFileWithin(root, path, async held => await open(held, "r"));
     });
-  }
+  } else vendored.omaInstallFileReader(undefined);
 
   // The commit channel: upstream's writeAtomic/readFile pair rerouted to
   // OMA's shared contained writer. The inode identity check travels with
@@ -348,6 +347,7 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
   // contained read under the same name (last registration wins); the three
   // file_edit members exist only where the role may write.
   const registration = Object.create(pi) as ExtensionAPI;
+  let registrySessionKey: string | undefined;
   registration.registerTool = tool => {
     const guidance = hashlineGuidance(tool.name, options.readOnly);
     const parameters = { ...tool.parameters, properties: Object.fromEntries(
@@ -392,6 +392,7 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
     // withAnchorSession: it ensures the anchor registry — which resolves
     // configDir() — before the callback runs.
     redirectHashlineState(options, ctx);
+    registrySessionKey = vendored.sessionKeyFor(ctx);
     return vendored.withAnchorSession(ctx, async () => {
     // Upstream state files now resolve through configDir() ->
     // PI_HASHLINE_DIR, pointed at the OMA-owned directory: hash-store.sqlite,
@@ -412,10 +413,11 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
     });
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
+  pi.on("session_shutdown", async () => {
+    const key = registrySessionKey;
     try {
-      const key = vendored.sessionKeyFor(ctx);
       if (key !== undefined) vendored.releaseRegistrySession(key);
+      if (registrySessionKey === key) registrySessionKey = undefined;
     } catch (error) {
       console.error("Failed to release anchor registry session:", error);
     }

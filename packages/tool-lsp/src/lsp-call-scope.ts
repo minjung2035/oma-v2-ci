@@ -1,13 +1,15 @@
 /** Per-call resources around the vendored LSP session scope. Session and
  * child ownership remain upstream; scratch and silence observation end here. */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { alarm } from "@oma/protocol/alarm";
+import { removePrivateStateTree } from "@oma/tool-runtime/private-state";
 
 export async function withLspScratch<T>(fn: (scratch: string) => Promise<T>): Promise<T> {
   const scratch = mkdtempSync(join(tmpdir(), "oma-lsp-"));
   try { return await fn(scratch); }
-  finally { rmSync(scratch, { recursive: true, force: true }); }
+  finally { removePrivateStateTree(scratch); }
 }
 
 /** Only frames belonging to this call restart the silence window. A
@@ -20,21 +22,21 @@ export function observeLspCall<A>(tool: string, ownedSignal: AbortSignal,
   const message = `${tool} saw no LSP server activity for ${ms}ms -- the server is stalled or dead`;
   const fire = () => controller.abort(new Error(message));
   let stopped = false;
-  let timer = setTimeout(fire, ms);
+  let cancelTimer = alarm(ms / 1000, fire);
   let unsubscribe: () => void;
   try {
     unsubscribe = subscribe(adapter => {
       if (!stopped && !controller.signal.aborted && adapters.has(adapter)) {
-        clearTimeout(timer);
-        timer = setTimeout(fire, ms);
+        cancelTimer.cancel();
+        cancelTimer = alarm(ms / 1000, fire);
       }
     });
-  } catch (error) { clearTimeout(timer); throw error; }
+  } catch (error) { cancelTimer.cancel(); throw error; }
   return {
     signal: AbortSignal.any([ownedSignal, controller.signal]),
     message,
     fired: () => controller.signal.aborted && !ownedSignal.aborted,
-    stop() { if (stopped) return; stopped = true; clearTimeout(timer); unsubscribe(); },
+    stop() { if (stopped) return; stopped = true; cancelTimer.cancel(); unsubscribe(); },
     rethrow(error: unknown): never {
       if (controller.signal.aborted && !ownedSignal.aborted) throw new Error(message);
       throw error;

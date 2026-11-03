@@ -1,15 +1,26 @@
-// MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
-// This is neither a durable effect ledger nor broker/session authority.
+// MUST [FS-003]/[IPC-006/008]: ordinary caller homes hold model-mutable
+// preaccept caches, not effect ledgers or authority. Host invocation APIs require
+// a separately selected home outside every model-writable mount.
 import { readFileSync, openSync, closeSync, fstatSync, lstatSync, constants } from "node:fs";
 
 import { join } from "node:path";
 import type { Receipt, RequestKey } from "@oma/contracts";
 import { isValidRequestKey } from "@oma/domain/identifiers";
 import { requestParamsEqual } from "@oma/domain/request-identity";
-import { sha256Hex } from "@oma/domain/canonical-json";
+import { sha256Hex, snapshotJson } from "@oma/domain/canonical-json";
 import { parseJsonObject } from "@oma/protocol/frame";
-import { decodeReceipt, receiptSupersession } from "@oma/protocol/receipt-codec";
+import { decodeReceipt, receiptSupersession, receiptFactConflict } from "@oma/protocol/receipt-codec";
+import { decodeInvocationRejection } from "@oma/protocol/invocation-rejection";
+import type { InvocationRejection } from "@oma/contracts/public-wire";
+import { decodeFrozenInvocationResolution } from "@oma/protocol/invocation-resolution";
+import { decodeFrozenSubmission } from "@oma/protocol/invocation-submission";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./runtime/request-cache-codec.js";
+import { canonicalCollaborationJson } from "@oma/domain/collaboration-targets";
+import { listOwnedDirectory } from "@oma/storage/directory";
+import { decodeInvocationBinding, invocationFreezeSha256, invocationFreezeMatches, newInvocationBinding,
+  type InvocationBinding, type InvocationIdentity } from "./runtime/invocation-codec.js";
+import type { MutationMethod } from "@oma/contracts";
+import type { FreshBuild, RequestOptions } from "@oma/client/request-service";
 import { ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "@oma/storage/durable-fs";
 import { openBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
@@ -105,6 +116,13 @@ export class RequestCache {
   constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile,
     private readonly metadataBytes: number = REFERENCE_METADATA_BYTES) {}
 
+  /** Called by mutation composition before its first cache observation. Read-only
+   * diagnostics still use read() directly and never repair filesystem state. */
+  prepare(): this {
+    try { this.ensureDir(); }
+    catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `request cache preparation failed: ${messageOf(error)}`); }
+    return this;
+  }
   private dir(): string { return join(this.homeDir, ".local", "state", "oma", "requests"); }
   /** P0-8: `.local/state/oma` is the first component oma itself made inside
    * the caller's home -- `.local` and `.local/state` are the user's shared
@@ -159,14 +177,22 @@ export class RequestCache {
     if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
     // Fence a competing link even when its original publisher has not fsynced
     // yet -- and, P0V-71, the path to it, which that publisher may not have.
+    this.replayBarrier();
+    return { kind: "existing", value: frozen };
+  }
+
+  /** Flush after observing an existing publication, not merely before reading:
+   * a competing writer may have linked it since prepare(). No acceptance fact. */
+  private replayBarrier(): void {
     try { this.ensureDir(); }
     catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `replay durability barrier failed: ${messageOf(error)}`); }
-    return { kind: "existing", value: frozen };
   }
 
   /** Never creates metadata: disappearance during a replay is not a fresh key. */
   prepareReplay(input: FreezeInput): CachedRequest {
-    return this.existing(freezeInput(input), this.read(input.key)).value;
+    const request = freezeInput(input);
+    this.prepare();
+    return this.existing(request, this.read(input.key)).value;
   }
 
   /**
@@ -176,6 +202,7 @@ export class RequestCache {
    */
   freeze(input: FreezeInput, body?: Uint8Array): FreezeResult {
     const request = freezeInput(input);
+    this.prepare();
     const initial = this.read(request.key);
     if (initial.kind === "present") return this.existing(request, initial);
     if (initial.kind !== "absent") requirePresent(initial, "initial freeze");
@@ -209,6 +236,250 @@ export class RequestCache {
     }
   }
 
+  /** Transport-only handoff after the host has checked the exact canonical
+   * publication child. Copies already protected metadata, never a new source
+   * freeze or proof of acceptance. The obsolete bundle is neither rebuilt nor
+   * published; ordinary freeze()/prepareReplay() keep requiring their body. */
+  restorePublishedSubmissionMetadata(input: FreezeInput): FreezeResult {
+    const request = freezeInput(input);
+    if (request.method !== "attest.record" || !decodeFrozenSubmission(request.params, request.key).ok)
+      throw new CacheError("INVALID_REQUEST", "metadata-only handoff requires an original compound submission");
+    const encoded = JSON.stringify(request);
+    if (Buffer.byteLength(encoded) > this.metadataBytes)
+      throw new CacheError("CACHE_UNAVAILABLE", "original metadata exceeds the transport cache budget");
+    const existing = (observed: CacheRead): FreezeResult => {
+      const value = requirePresent(observed, "original transport metadata");
+      if (value.createdAtMs !== request.createdAtMs || invocationFreezeSha256(value) !== invocationFreezeSha256(request))
+        throw new CacheError("REQUEST_KEY_REUSED", "existing transport metadata differs from the protected original");
+      this.replayBarrier();
+      return { kind: "existing", value };
+    };
+    this.prepare();
+    const current = this.read(request.key);
+    if (current.kind === "present") return existing(current);
+    if (current.kind !== "absent") requirePresent(current, "original transport cache handoff");
+    try {
+      const published = publishNoReplace(this.path(request.key), encoded);
+      return published === "created" ? { kind: "created", value: request } : existing(this.read(request.key));
+    } catch (error) {
+      if (error instanceof CacheError) throw error;
+      throw new CacheError("CACHE_UNAVAILABLE", `original transport metadata handoff failed: ${messageOf(error)}`);
+    }
+  }
+
+  /** Protected first publication shares the original-key hold with preaccept
+   * closure. Ordinary caller caches still use freeze(), without effect authority. */
+  freezeInvocation(input: FreezeInput, body?: Uint8Array): FreezeResult {
+    return this.withReceiptLock(input.key, () => {
+      const binding = requirePresent(this.readInvocation(input.key), "original source publication binding");
+      if (binding.phase !== "bound" || binding.frozen !== null || binding.receipt !== null ||
+          binding.resolution !== undefined || binding.rejection !== undefined)
+        throw new CacheError("CACHE_CORRUPT", "a prepared or completed original cannot acquire a fresh source freeze");
+      if (input.method !== binding.method || input.createdAtMs !== binding.createdAtMs)
+        throw new CacheError("REQUEST_KEY_REUSED", "protected source publication differs from its original binding");
+      const result = this.freeze(input, body);
+      if (!invocationFreezeMatches(binding, result.value))
+        throw new CacheError("CACHE_CORRUPT", "original invocation freeze identity changed");
+      return result;
+    });
+  }
+
+  invocationOptions(key: RequestKey): RequestOptions {
+    requirePresent(this.readInvocation(key), "original invocation options");
+    return Object.freeze({
+      beforePrepare: () => {
+        const binding = requirePresent(this.readInvocation(key), "original preparation binding");
+        if (binding.phase !== "bound" || binding.frozen !== null || binding.receipt !== null)
+          throw new CacheError("CACHE_CORRUPT", "original frozen metadata disappeared; no source reconstruction permitted");
+      },
+      beforeFreeze: async (fresh: FreshBuild) => {
+        const binding = requirePresent(this.readInvocation(key), "original source publication binding");
+        this.freezeInvocation({ key, method: fresh.method, params: snapshotJson(fresh.params), createdAtMs: binding.createdAtMs,
+          ...(fresh.digest === undefined ? {} : { digest: fresh.digest }) }, fresh.stream);
+      },
+      beforeSend: async (request: CachedRequest) => {
+        if (request.key !== key) throw new CacheError("REQUEST_KEY_REUSED", "invocation hook belongs to a different request key");
+        this.markInvocationSending(key);
+      },
+      onReceipt: (receipt: Receipt) => { this.recordInvocationReceipt(key, receipt); },
+    });
+  }
+
+  /** Host-only linkage: the host must supply a protected home outside every
+   * writable Worker mount. This cache grants no authority and runs no executor. */
+  readInvocation(key: RequestKey): FileObservation<InvocationBinding> {
+    if (!/^inv1-[a-f0-9]{64}$/.test(key)) return { kind: "corrupt", reason: "invalid invocation key" };
+    const bytes = this.reader(this.invocationPath(key), undefined, this.metadataBytes);
+    if (bytes.kind !== "present") return bytes;
+    try {
+      const decoded = decodeInvocationBinding(parseJsonObject(bytes.value).raw, key);
+      if (!decoded.ok) return { kind: "corrupt", reason: decoded.reason };
+      if (!Buffer.from(bytes.value).equals(Buffer.from(canonicalCollaborationJson(decoded.value))))
+        return { kind: "corrupt", reason: "invocation bytes are not canonical" };
+      return { kind: "present", value: decoded.value };
+    } catch (error) { return { kind: "corrupt", reason: messageOf(error) }; }
+  }
+  bindInvocation(identity: InvocationIdentity, tool: string, method: MutationMethod, args: unknown): InvocationBinding {
+    const created = newInvocationBinding(identity, tool, method, args);
+    return this.withReceiptLock(created.key, () => {
+      const previous = this.readInvocation(created.key);
+      if (previous.kind === "present") {
+        if (previous.value.argsSha256 !== created.argsSha256 || previous.value.tool !== tool || previous.value.method !== method)
+          throw new CacheError("REQUEST_KEY_REUSED", "original tool-call binding already has different tool or arguments");
+        return previous.value;
+      }
+      if (previous.kind !== "absent") return requirePresent(previous, "original invocation binding");
+      const text = canonicalCollaborationJson(created);
+      if (Buffer.byteLength(text) > this.metadataBytes) throw new CacheError("CACHE_UNAVAILABLE", "invocation linkage exceeds the request metadata budget");
+      if (publishNoReplace(this.invocationPath(created.key), text) === "existing")
+        return requirePresent(this.readInvocation(created.key), "competing invocation publication");
+      return created;
+    });
+  }
+  private invocationPath(key: RequestKey): string { return this.path(key).replace(/\.json$/, ".invocation.json"); }
+  private writeInvocation(record: InvocationBinding): InvocationBinding {
+    const decoded = decodeInvocationBinding(record, record.key);
+    if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", decoded.reason);
+    const text = canonicalCollaborationJson(decoded.value);
+    if (Buffer.byteLength(text) > this.metadataBytes) throw new CacheError("CACHE_UNAVAILABLE", "original invocation observation exceeds the metadata budget");
+    replaceReceiptFile(this.invocationPath(record.key), text);
+    return decoded.value;
+  }
+  /** Read-only enumeration of protected linkage, not a work queue. Each binding
+   * is decoded transiently; callers need not retain raw source arguments. */
+  *invocationRecords(): IterableIterator<InvocationBinding> {
+    const entries = listOwnedDirectory(this.dir(), { required: true });
+    const names = new Set(entries.map(entry => entry.name));
+    for (const entry of entries) {
+      const ownedFreeze = /^(inv1-[a-f0-9]{64})\.(?:json|body)$/.exec(entry.name);
+      if (ownedFreeze !== null && !names.has(`${ownedFreeze[1]}.invocation.json`))
+        throw new CacheError("CACHE_CORRUPT", "original invocation binding disappeared beside a frozen request; admission remains fenced");
+    }
+    for (const entry of entries) {
+      if (!entry.name.endsWith(".invocation.json")) continue;
+      const match = /^(inv1-[a-f0-9]{64})\.invocation\.json$/.exec(entry.name);
+      if (match === null || !entry.isFile()) throw new CacheError("CACHE_CORRUPT", "unverifiable invocation entry; admission remains fenced");
+      yield requirePresent(this.readInvocation(match[1]!), "protected invocation observation");
+    }
+  }
+  /** Enumerates observations for admission fences, not a durable work queue. */
+  pendingInvocations(): readonly InvocationBinding[] {
+    const pending: InvocationBinding[] = [];
+    for (const record of this.invocationRecords()) if (record.phase === "sending" && record.receipt === null) pending.push(record);
+    return pending;
+  }
+  private checkedInvocationFreeze(binding: InvocationBinding): CachedRequest {
+    const request = requirePresent(this.read(binding.key), "original invocation freeze");
+    if (!invocationFreezeMatches(binding, request))
+      throw new CacheError("CACHE_CORRUPT", "original invocation freeze identity changed");
+    if (request.digest) requirePresent(this.readBody(binding.key, request.digest), "original invocation frozen body");
+    return request;
+  }
+  /** Complete a no-effect invocation from its already protected exact evidence.
+   * This never observes current sources or creates an accepted operation. */
+  resolveInvocation(key: RequestKey): InvocationBinding {
+    return this.withReceiptLock(key, () => {
+      const binding = requirePresent(this.readInvocation(key), "original no-effect binding");
+      if (binding.rejection !== undefined) throw new CacheError("CACHE_CORRUPT", "a closed-before-send invocation cannot acquire another no-effect completion");
+      const request = this.checkedInvocationFreeze(binding), decoded = decodeFrozenInvocationResolution(request.params);
+      if (request.method !== "attest.record" || !decoded.ok || binding.receipt !== null ||
+          request.lastReceipt !== null || binding.phase === "sending")
+        throw new CacheError("CACHE_CORRUPT", "original invocation cannot become a no-effect resolution");
+      if (binding.resolution !== undefined) {
+        if (canonicalCollaborationJson(binding.resolution) !== canonicalCollaborationJson(decoded.value))
+          throw new CacheError("CACHE_CORRUPT", "original no-effect resolution changed");
+        return binding;
+      }
+      return this.writeInvocation({ ...binding, phase: "resolved", frozen: { requestSha256: invocationFreezeSha256(request) }, resolution: decoded.value });
+    });
+  }
+  /** Close only an unprepared original. The host's synchronous callback proves
+   * canonical absence under this same protected-key hold; no queue/effect exists. */
+  rejectInvocation(key: RequestKey, rejection: InvocationRejection, beforeReject: () => undefined): InvocationBinding {
+    return this.withReceiptLock(key, () => {
+      const binding = requirePresent(this.readInvocation(key), "original preaccept completion binding");
+      if (binding.rejection !== undefined) return binding;
+      const decoded = decodeInvocationRejection(rejection);
+      if (!decoded.ok || binding.phase !== "bound" || binding.frozen !== null || binding.receipt !== null || binding.resolution !== undefined)
+        throw new CacheError("CACHE_CORRUPT", "an original invocation that may have prepared or sent cannot become a preaccept rejection");
+      const frozen = this.read(key);
+      if (frozen.kind !== "absent") throw new CacheError(frozen.kind === "unavailable" ? "CACHE_UNAVAILABLE" : "CACHE_CORRUPT",
+        "original protected freeze is not proven absent; no preaccept rejection is permitted");
+      if (beforeReject() !== undefined) throw new CacheError("CACHE_CORRUPT", "original preaccept completion guard must be synchronous");
+      return this.writeInvocation({ ...binding, phase: "rejected", rejection: decoded.value });
+    });
+  }
+  pinInvocationCreation(key: RequestKey, creation: import("@oma/contracts/values").CreateResolution): InvocationBinding {
+    return this.withReceiptLock(key, () => {
+      const binding = requirePresent(this.readInvocation(key), "original creation binding");
+      if (binding.method !== "agent.create") throw new CacheError("CACHE_CORRUPT", "creation resolution belongs to another action");
+      if (binding.creation !== undefined) {
+        if (canonicalCollaborationJson(binding.creation) !== canonicalCollaborationJson(creation))
+          throw new CacheError("REQUEST_KEY_REUSED", "original creation resolution cannot change");
+        return binding;
+      }
+      if (binding.phase !== "bound" || binding.frozen !== null || binding.receipt !== null)
+        throw new CacheError("CACHE_CORRUPT", "completed original creation lost its frozen resolution");
+      return this.writeInvocation({ ...binding, creation });
+    });
+  }
+  sealInvocation(key: RequestKey): InvocationBinding {
+    return this.withReceiptLock(key, () => {
+      const binding = requirePresent(this.readInvocation(key), "original invocation binding");
+      if (binding.rejection !== undefined) return binding;
+      const request = this.checkedInvocationFreeze(binding);
+      if (binding.frozen !== null || binding.phase === "observed") return binding;
+      return this.writeInvocation({ ...binding, phase: "frozen", frozen: { requestSha256: invocationFreezeSha256(request) } });
+    });
+  }
+  /** Called only from RequestService's beforeSend hook: its original-key lookup
+   * owns resend admission. Persisting this marker is not proof of network send. */
+  markInvocationSending(key: RequestKey): InvocationBinding {
+    this.sealInvocation(key);
+    return this.withReceiptLock("invocation-admission", () => {
+      const current = requirePresent(this.readInvocation(key), "original invocation binding");
+      if (current.phase === "resolved" || current.phase === "rejected") throw new CacheError("CACHE_CORRUPT", "a completed no-effect invocation cannot send");
+      for (const other of this.pendingInvocations()) {
+        if (other.key === key) continue;
+        if (other.societyBirth !== current.societyBirth || other.actor !== current.actor)
+          throw new CacheError("CACHE_CORRUPT", "host invocation cache mixes authenticated scopes");
+        const local = this.read(other.key);
+        if (local.kind === "present" && local.value.lastReceipt !== null) continue;
+        if ((other.tool === current.tool && other.argsSha256 === current.argsSha256) ||
+            (["oma_send", "oma_spawn"].includes(current.tool) && other.tool === current.tool))
+          throw new CacheError("CACHE_UNAVAILABLE", `Original invocation ${other.key} is unresolved; no new execution`);
+      }
+      return this.withReceiptLock(key, () => {
+        const binding = requirePresent(this.readInvocation(key), "original invocation send marker");
+        if (binding.phase === "resolved" || binding.phase === "rejected")
+          throw new CacheError("CACHE_CORRUPT", "a completed no-effect invocation cannot send");
+        const request = this.checkedInvocationFreeze(binding);
+        if (binding.receipt !== null || request.lastReceipt !== null)
+          throw new CacheError("CACHE_CORRUPT", "broker absence contradicts an already observed original receipt");
+        return binding.phase === "sending" ? binding : this.writeInvocation({ ...binding, phase: "sending" });
+      });
+    });
+  }
+  recordInvocationReceipt(key: RequestKey, receipt: Receipt): InvocationBinding {
+    return this.withReceiptLock(key, () => {
+      const binding = requirePresent(this.readInvocation(key), "original invocation receipt linkage");
+      if (binding.phase === "resolved" || binding.phase === "rejected") throw new CacheError("CACHE_CORRUPT", "a no-effect invocation cannot acquire an accepted receipt");
+      const decoded = decodeReceipt(receipt, { expectedKind: binding.method });
+      if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", decoded.reason);
+      if (receiptFactConflict(binding.receipt, decoded.value))
+        throw new CacheError("CACHE_CORRUPT", "original receipt contradicts the protected acceptance fact");
+      const cached = this.read(key);
+      if (cached.kind === "present" && cached.value.lastReceipt !== null) {
+        if (receiptFactConflict(cached.value.lastReceipt, decoded.value))
+          throw new CacheError("CACHE_CORRUPT", "original receipt contradicts the frozen cache observation");
+      }
+      const order = receiptSupersession(binding.receipt, decoded.value);
+      if (order === "contradiction") throw new CacheError("CACHE_CORRUPT", "original operation has contradictory receipts");
+      if (order === "stale") return binding;
+      if (binding.receipt !== null && canonicalCollaborationJson(binding.receipt) === canonicalCollaborationJson(decoded.value)) return binding;
+      return this.writeInvocation({ ...binding, phase: "observed", receipt: decoded.value });
+    });
+  }
   /** Serialises one request key's read-modify-write against other processes.
    *
    * The metadata file is replaced by rename, so a lock taken on it would be a

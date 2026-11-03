@@ -43,6 +43,7 @@ import { projectGitPathAt } from "@oma/domain/paths";
 import { residentProjectGit } from "@oma/domain/resident-paths";
 import { SessionStorage } from "../runtime/session-storage.js";
 import type { StorageResident } from "../runtime/session-storage-state.js";
+import { collaborationSocietyBirth, readSessionBirth, requireCollaborationSociety } from "../runtime/session-mode.js";
 function usage(): never {
     console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]");
     process.exit(4);
@@ -69,6 +70,9 @@ catch (error) {
 }
 const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
+    // DR72: standalone startup must refuse before run-root/lock creation,
+    // Store open, workspace restore, execution recovery or provisioning.
+    requireCollaborationSociety(readSessionBirth(stateRoot), society);
     assertNativeRuntime();
     assertHostDirectoryLayout(runRoot, true);
     // P0-8: the run root's parent (`…/oma` under the runtime dir) is oma's own;
@@ -253,7 +257,7 @@ async function main(): Promise<void> {
             (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation),
             { ...(developerTools === undefined ? {} : { developerTools }) });
         residents = units;
-        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
+        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
@@ -270,8 +274,11 @@ async function main(): Promise<void> {
             return lifetime.permitsActivation;
         };
         const lifecycle = createLifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
-            hasGoal, activationAllowed,
-            residentProjectGit: residentProjectGit() }, resolveSpec, mail);
+            ownerSignal: preparationAbort.signal, hasGoal, activationAllowed,
+            residentProjectGit: residentProjectGit() }, resolveSpec, mail, git);
+        views.bindCollaborationRecords({ mail, git, lifecycle,
+            reviews: auth => reviews.observeRecords(auth, collaborationSocietyBirth(stateRoot, society, store.getAgent("principal"))),
+            logs: actor => units.logFiles(actor) });
         const reconcile = createReconcileModule(store, mail, git, reviews, units, lifecycle, {
             projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed,
             ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
@@ -280,7 +287,7 @@ async function main(): Promise<void> {
         // PR-001: only the host that started this process gets a Principal
         // endpoint, and credentials leave only on the channel that host holds --
         // never through a file, an environment or this process's own output.
-        const broker = createBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
+        const broker = createBroker({ ...(cfg.collaborationFreshMutations === undefined ? {} : { collaborationFreshMutations: cfg.collaborationFreshMutations }), store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reviewTargets: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
             quiesceOnDrain: async () => {
                 await reconcile.quiesceForShutdown();
                 storageResidents = store.listAgents().filter(agent => agent.role === "resident")
@@ -320,6 +327,8 @@ async function main(): Promise<void> {
             notify: () => {
                 broker.notifyReady();
                 console.error("broker ready");
+                if (cfg.collaborationFreshMutations === "closed")
+                    console.error("Selected collaboration-v1 fresh model mutations are closed for this broker lifetime. Original accepted recovery, observations, legacy sessions and supervising-host controls remain available. This is not Worker termination or completed drain evidence.");
             },
             activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
         });

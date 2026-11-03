@@ -37,6 +37,21 @@ import { removeOwnedFile, removeOwnedTree } from "@oma/storage/directory";
 import { assertManagedJournalFormat, MANAGED_JOURNAL } from "./state-format.js";
 import { openBeneath, openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
+import { lockFileDescriptor } from "@oma/native/linux";
+
+/** The configuration-owned directory inode is stable across manifest replacement.
+ * It is deliberately NOT the bundle parent: a live Society already locks that
+ * inode for tenure. Configuration writers and collectors share this inner lock. */
+function withConfigurationWriter<T>(manifest: string, work: () => T): T {
+  const base = join(dirname(manifest), MANAGED_DIRECTORY);
+  ensureOwnedDurableDirectory(base, base, 0o700);
+  return withinDirectory(join(base, MANAGED_JOURNAL), directory => {
+    const lock = lockFileDescriptor(directory);
+    if (lock.kind !== "held") throw new StoreError("BROKER_UNAVAILABLE",
+      lock.kind === "contended" ? "configuration writer is busy; reload before retrying" : `configuration writer lock is unavailable (errno ${lock.errno})`);
+    return work();
+  });
+}
 
 export const MANAGED_DIRECTORY = ".oma-config";
 /** D02 editing budget, not a reading rule: a valid bundle of any shape stays
@@ -332,6 +347,21 @@ function assertReproduces(manifest: string, config: HostConfig, roles: Readonly<
     throw new StoreError("INTERNAL_ERROR", "managed generation does not reproduce the role set");
 }
 
+/** D02/P0V-90: a generation's identity names its whole tree, so the manifest
+ * may name one only while it still holds exactly the bytes this commit
+ * published. Publication happens before the commit point, and a writer that
+ * does not take `withConfigurationWriter` (the P0-8 stray the reuse path's
+ * `sameBytes` is for) can add to or re-alias a generation in between: the
+ * commit point re-proves the bytes the manifest is about to name, the way
+ * `sameBytes` does for a generation it reuses, rather than blessing a tree
+ * whose name is no longer its identity. */
+function assertPublishedGeneration(generations: string, id: string, published: ReadonlyMap<string, Buffer>): void {
+  withinDirectory(join(generations, id), (parent, name) => {
+    if (!sameBytes(parent, name, published))
+      throw new StoreError("STORE_CORRUPT", `managed generation ${id} holds other bytes than the commit published`);
+  });
+}
+
 /** D02 writer. Refuses a stale snapshot, an exhausted budget or an unflushed
  * earlier publication; otherwise publishes one generation and replaces the
  * manifest last. Success is returned only after the manifest's parent flush;
@@ -376,6 +406,7 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
   // reachable, so a degraded owned ancestor of `root` refuses here, never
   // silently observed as absent by the reads that follow.
   ensureOwnedDurableDirectory(base, ownedFrom ?? base, 0o700, faults);
+  return withConfigurationWriter(manifest, () => {
   assertManagedJournalFormat(manifest);
   ensureOwnedDurableDirectory(generations, base, 0o700, faults);
   if (unconfirmed.has(root)) {
@@ -422,6 +453,11 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
       assertReproduces(temporary, edit.config, roles);
       assertCurrent(snapshot);
       faultAt(faults, "derived-rename", "before", manifest);
+      // The last statement before the commit point, so a generation mutated at
+      // any time between its publication and here is what the manifest's bytes
+      // are bound against (production has no fault seam; a stray can only be
+      // observed, not excluded).
+      assertPublishedGeneration(generations, id, published);
       renameAt(bundle, temporaryName, bundle, manifestName);
       renamed = true;
       faultAt(faults, "derived-rename", "after-visible", manifest);
@@ -441,6 +477,7 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
     }
   });
   return Object.freeze({ kind: "committed", generation: id });
+  });
 }
 
 /** DR12, P0-3: the inline `config.json` is a one-file generation with the
@@ -458,6 +495,7 @@ export function commitInlineConfiguration(snapshot: Pick<ConfigurationSnapshot, 
   if (layout.kind !== "inline") throw new StoreError("UNSUPPORTED_PROFILE", "only an inline configuration is committed as one file");
   const path = layout.path;
   const root = dirname(path);
+  return withConfigurationWriter(path, () => {
   if (unconfirmed.has(root)) {
     try { fsyncDir(root); unconfirmed.delete(root); }
     catch (error) { throw storeFailure(error); }
@@ -466,12 +504,13 @@ export function commitInlineConfiguration(snapshot: Pick<ConfigurationSnapshot, 
   const bytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
   publishInline(path, bytes, candidate, faults, () => assertCurrent(snapshot), "replace");
   return Object.freeze({ kind: "committed", generation: `inline-${createHash("sha256").update(bytes).digest("hex")}` });
+  });
 }
 /** First run: the configuration is created only where none exists. A start
  * that loses the race reads the winner's, never overwrites it. */
 export function createInlineConfiguration(path: string, candidate: ValidatedConfigCandidate, faults?: DurabilityObserver): "created" | "existing" {
   const bytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
-  return publishInline(path, bytes, candidate, faults, () => undefined, "create");
+  return withConfigurationWriter(path, () => publishInline(path, bytes, candidate, faults, () => undefined, "create"));
 }
 function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCandidate, faults: DurabilityObserver | undefined,
   recheck: () => void, mode: "replace" | "create"): "created" | "existing" {
@@ -614,15 +653,23 @@ function generationsToKeep(current: string, records: readonly CommitRecord[] | n
  * directory. Age alone never selects a generation, and neither does a journal
  * that could not be read (`generationsToKeep`). */
 export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, "layout">): readonly string[] {
-  if (snapshot.layout.kind === "inline") return collectTemporaries(snapshot.layout.path);
-  if (snapshot.layout.kind !== "operations") return [];
-  assertManagedJournalFormat(snapshot.layout.index);
+  if (snapshot.layout.kind !== "inline" && snapshot.layout.kind !== "operations") return [];
+  const manifest = snapshot.layout.kind === "inline" ? snapshot.layout.path : snapshot.layout.index;
+  return withConfigurationWriter(manifest, () => {
+    // Another Society can have committed since this caller loaded its snapshot.
+    const current = readConfigurationSource(manifest);
+    return collectManagedGenerationsLocked(current);
+  });
+}
+function collectManagedGenerationsLocked(snapshot: Pick<ConfigurationSnapshot, "layout">): readonly string[] {
+  if (snapshot.layout.kind !== "operations" && snapshot.layout.kind !== "inline") return [];
+  const manifest = snapshot.layout.kind === "inline" ? snapshot.layout.path : snapshot.layout.index;
+  assertManagedJournalFormat(manifest);
   const current = managedGenerationOf(snapshot);
   // P0V-97: a first commit killed before its commit point leaves the bundle
   // manual -- no generation is current yet -- and its manifest temporary is
   // still this writer's to collect.
-  if (current === null) return collectTemporaries(snapshot.layout.index);
-  const base = join(dirname(snapshot.layout.index), MANAGED_DIRECTORY);
+  const base = join(dirname(manifest), MANAGED_DIRECTORY);
   const generations = join(base, "generations");
   let records: readonly CommitRecord[] | null;
   try {
@@ -631,8 +678,12 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
       try { return journalTail(fd)?.records ?? null; } finally { closeSync(fd); }
     });
   } catch { records = null; }
-  const entries = readdirSync(generations);
-  const keep = generationsToKeep(current, records);
+  let entries: string[];
+  try { entries = readdirSync(generations); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return collectTemporaries(manifest); throw error; }
+  // A quiescent inline/manual manifest names no managed generation. Trees
+  // published before the first manifest switch have never become active.
+  const keep = current === null ? new Set<string>() : generationsToKeep(current, records);
   const removed: string[] = [];
   for (const entry of entries) {
     // A staging directory was never committed, so no journal is needed to remove it.
@@ -643,7 +694,7 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
     removed.push(entry);
   }
   if (removed.length > 0) fsyncDir(generations);
-  return Object.freeze([...removed, ...collectTemporaries(snapshot.layout.index)]);
+  return Object.freeze([...removed, ...collectTemporaries(manifest)]);
 }
 /** Commit-point temporaries a crashed commit left beside the file it would
  * have replaced: only the exact names this writer creates, never other files. */

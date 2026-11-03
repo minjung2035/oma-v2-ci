@@ -6,6 +6,53 @@ alter fixed architecture text or retroactively approve earlier implementation
 reviews. [DR67](../design-revisions.md)
 records the decision; [validation](validation.md) owns execution evidence.
 
+## Numbered backlog follow-up
+
+The authorized follow-up against `2514385f` preserves accepted identities and
+keeps runtime defects, contract/defense improvements, verification defects and
+reproduction candidates separate. The remaining #14, #17 and #27 now have owned
+implementations and regressions; this is not full/native qualification.
+[Validation](validation.md) distinguishes the prior reds, bounded runs and NOT_RUN evidence.
+
+MCP private-state mechanics belong to the SDK-free `tool-files/private-state`
+capability, borrowed through `tool-runtime/private-state`. Component opens and
+cleanup are descriptor-relative/no-follow; only an opened owned leaf is chmodded.
+Keys use exclusive creation, canonical 256-bit validation, regular-file/single-link
+checks and file/parent durability barriers. Existing invalid keys are not replaced.
+Disposable scratch links are unlinked without entering their targets. MCP receives
+no storage-ledger or native execution dependency, and the workspace/extension
+closure rules are unchanged. The new file is explicitly classified as a K2
+mechanism. Engine-private UI tests stay in the engine's own test workspace rather
+than adding a public export or an integration-test import exception.
+
+Configuration publication and collection share a configuration-owned inode lock,
+not the Society tenure directory. Project/state overlap is refused before writes,
+including repository top-level inputs reached through a subdirectory. Workers-only
+reply audience, durable validation, recovery and archive/result paths agree;
+Principal approval visibility depends on physical Principal materialization, not
+mere acceptance. None of these projections invent receipt, approval or integration
+authority. Verification failures and native NOT_RUN results remain separate.
+
+Local package replacement keeps a durable preimage under the existing package-store
+lease. Uncommitted work rolls back before the next engine/index read; ordinary
+runtime readers refuse pending replacement state. A committed install is not undone
+because a later project-preference update fails. Restoration itself is idempotent
+across process death and never reconstructs settings/index from guessed values.
+
+Corrupt or missing execution observations have an explicit Human-only Linux recovery
+path: prepare a root/host-bound checkpoint and exact archive, reboot the same host,
+then apply only after a different kernel boot is observed. Ticket presence closes
+normal journal open/initialize; an interrupted reset resumes only its exact initial
+frame. Accepted operations, receipts and completion authority are untouched.
+The [runbook](execution-recovery.md) states host-affinity, refusal and qualification limits.
+
+A successful SDK command response does not imply an agent run. Trusted delivery
+preflight may report never-started only before sending a message, without pending
+mail and while the engine is idle. Session ownership and delivery failure consume
+only the matching observation before agent_start. Late/wrong-batch observations,
+unknown sends and legitimate active runs retain their existing lifetime fences;
+there is no arbitrary accepted-turn deadline and no synthesized receipt.
+
 ## P1: independent progress and durable decisions
 
 Reconcile has one coalescing operation recovery owner, one review advancement
@@ -16,6 +63,16 @@ journal also recovers a requested slot independently of unrelated slots.
 Corruption closes the shared mutation gate. Startup still establishes rootfs,
 Store and repository integrity before admission; shutdown joins native death
 proofs and does not equate cancellation or direct-child exit with scope death.
+
+Review advancement yields with the existing busy refusal before taking the
+project writer while an accepted `git.submit` or `git.integrate` is pending or
+unknown. Recovery gets the writer instead of losing each sweep to derived
+review work, including empty projections. The gate is derived from current
+ledger rows, not a retained waiter/queue; terminal rows release it. Context
+publication uses its separate writer, and review reads/acceptance and unrelated
+Worker wake lanes remain independent. `reconcile-writer-progress` exercises real
+Git/Store/Mail recovery before application and after CAS; `review-writer-priority`
+covers pending/unknown, terminal and unrelated-resource admission.
 
 New review opens and votes carry version 2 policy/qualification evidence.
 Quorum capacity is frozen; reviewer wait, stop, restart and retirement do not
@@ -248,3 +305,49 @@ authored approval, live provider qualification, benchmark results or a 3+3 host
 capacity verdict. The original requested specification and historical authored
 review bytes are preserved. No push, merge, benchmark or live model request was
 performed by this implementation task.
+
+## Module audit repair boundaries
+
+[DR70](../design-revisions.md#dr70--모듈-감사의-경쟁경계-결함을-기존-권한-안에서-수정한다)
+records the follow-up. The historical findings and corrected classifications
+remain in the [module audit](../module-audit-2026-10-31.md); executed evidence
+belongs to [validation](validation.md).
+
+Review advancement derives acceptance and read-back keys from the same attempt.
+An adopted/revised scope without its prepared context is left to the existing
+v3 preparation path, never encoded as an incompatible v2 integration. Ordinary
+Principal actors still cannot invalidate another reviewer's vote: that remains
+authenticated host-Principal authority, not a new model action.
+
+Reply reference truncation always retains the immediate parent; one slot cannot
+also retain the root. Batch fitting accounts for the complete escaped view and
+its redelivery notice before acceptance. Metadata elision is explicit; immutable
+mail bytes, the index and selected manifest stay complete. Unselected deliveries
+remain available for later batches, with direct/public-list fairness unchanged.
+The batch codec owns the configured frame floor.
+
+Status paging uses roster-row names, including the Principal, without broadening
+Worker-only control or log identities. Large resume catalogs use bounded frames
+correlated to one request and settle only at their final frame or explicit error.
+Each catalog frame awaits its local socket write completion before queuing the
+next; an event-loop yield alone does not bound a slow reader's queued bytes.
+This is flow control, not a peer processing acknowledgement or durable receipt.
+MODE-005 fresh-mode switching supersedes the unused fixed society-slot path.
+
+Private scratch cleanup repairs only owned held directory capabilities and
+never follows links. Package rollback restores the recorded mode independently
+of umask. Result pages are captured from the same reads that validate the hash.
+Conditional writes detect changes through their final descriptor sample, not
+an atomic CAS against an unrelated writer after that sample.
+
+Live native-slot contention is busy/same-key; retained or unobserved execution
+ownership keeps the termination fence. Failed flock evaluation does not assert
+a live owner. Linux openat2 retries only EAGAIN, finitely, with identical held
+root/name/containment flags; persistent uncertainty and hard denials still refuse.
+Configuration acceptance checks the installation root before project seeding,
+and the exact published generation tree is rechecked before manifest rename.
+
+MCP scratch removal follows the adapter's shutdown hook. Normal stdio close
+observes child exit; the upstream SIGKILL fallback does not await that evidence
+and remains an explicitly unqualified vendor seam. Bundle integrity failures
+retain their causal diagnostic without allowing a rejected payload to load.

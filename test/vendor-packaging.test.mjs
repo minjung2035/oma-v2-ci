@@ -10,7 +10,7 @@ function fixture(t) {
   mkdirSync(join(root, "node_modules/isexe"), { recursive: true });
   return root;
 }
-test("DR46: npm-omitted metadata keeps its original bytes and declared provenance", t => {
+test("001. Npm-omitted metadata keeps its original bytes and declared provenance", t => {
   const root = fixture(t), entry = NPM_METADATA_PACKAGING[0];
   const bytes = Buffer.from(".nyc_output/\ncoverage/\n");
   // Exact original tarball metadata bytes, independent of the rename helper.
@@ -26,7 +26,7 @@ test("DR46: npm-omitted metadata keeps its original bytes and declared provenanc
   writeFileSync(join(root, entry.storedPath), "changed");
   assert.notDeepEqual(vendorPackagingProblems(manifest, root), []);
 });
-test("DR46: metadata preservation refuses unexpected bytes and occupied destinations without overwriting either", t => {
+test("002. Metadata preservation refuses unexpected bytes and occupied destinations without overwriting either", t => {
   const root = fixture(t), entry = NPM_METADATA_PACKAGING[0];
   writeFileSync(join(root, entry.upstreamPath), "unexpected");
   writeFileSync(join(root, entry.storedPath), "occupied");

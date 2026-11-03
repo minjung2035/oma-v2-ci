@@ -128,7 +128,8 @@ const OMA_DIVERGENCES = Object.freeze({
       "descriptor-relative no-follow walk), so a hashline read cannot reach " +
       "a path the workspace guard would refuse. Uninstalled, upstream's " +
       "plain fs open is the behavior — the seam adds authority routing, " +
-      "never weakens it.",
+      "never weakens it. Image bytes are captured with a bounded read from " +
+      "that same descriptor, so the SDK cannot reopen or reinterpret the path.",
     edits: [
       {
         find: `import { open as fsOpen, stat as fsStat } from "node:fs/promises";`,
@@ -154,6 +155,21 @@ function openForRead(path) {
         find: `    const fileHandle = await fsOpen(filePath, "r");`,
         replace: `    const fileHandle = await openForRead(filePath);`,
       },
+      {
+        find: `                return { kind: "image", mimeType: detectedMimeType };`,
+        replace: `                if (!openedStats.isFile() || openedStats.size > MAX_BYTES)
+                    throw new Error("[E_PATH_CHANGED] Image changed before its admitted read.");
+                const bytes = Buffer.alloc(openedStats.size + 1);
+                let used = 0;
+                while (used < bytes.length) {
+                    const chunk = await fileHandle.read(bytes, used, bytes.length - used, used);
+                    if (chunk.bytesRead === 0) break;
+                    used += chunk.bytesRead;
+                }
+                if (used > openedStats.size)
+                    throw new Error("[E_PATH_CHANGED] Image grew during its admitted read.");
+                return { kind: "image", mimeType: detectedMimeType, bytes: bytes.subarray(0, used) };`,
+      },
     ],
   },
   "file-kind.d.ts": {
@@ -163,10 +179,31 @@ function openForRead(path) {
       "NodeNext.",
     edits: [
       {
+        find: `    kind: "image";\n    mimeType: string;`,
+        replace: `    kind: "image";\n    mimeType: string;\n    bytes: Buffer;`,
+      },
+      {
         find: `export declare function loadFileKindAndText(`,
         replace: `/** OMA divergence: installs the contained file opener (see file-kind.js). */
 export declare function omaInstallFileReader(opener: ((path: string) => Promise<import("node:fs/promises").FileHandle>) | undefined): void;
 export declare function loadFileKindAndText(`,
+      },
+    ],
+  },
+  "read.js": {
+    reason: "Image rendering uses the admitted snapshot bytes and MIME type with SDK read operations; it never reopens a model-supplied path or follows its @ shorthand.",
+    edits: [
+      {
+        find: `                    const builtinRead = createReadTool(ctx.cwd);`,
+        replace: `                    const builtinRead = createReadTool(ctx.cwd, { operations: {
+                        access: async () => {},
+                        detectImageMimeType: async () => file.mimeType,
+                        readFile: async () => file.bytes,
+                    } });`,
+      },
+      {
+        find: `                    return executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);`,
+        replace: `                    return executeBuiltinRead(_toolCallId, { ...params, path: absolutePath }, signal, _onUpdate, ctx);`,
       },
     ],
   },

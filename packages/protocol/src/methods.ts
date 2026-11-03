@@ -11,14 +11,16 @@ import type {
 import type { InternalMethods } from "@oma/contracts/internal-wire";
 import type { MutationMethod } from "@oma/contracts/durable";
 import type { ProtocolLimits } from "@oma/contracts/host";
-import { parseBatchId } from "@oma/domain/identifiers";
+import { parseBatchId, parseOperationId, isValidRequestKey } from "@oma/domain/identifiers";
+import { decodeFailure } from "./failure-codec.js";
 import {
   type Check,
+  checkBlobDescriptor,
   attestationParamsCheck,
   agentActionParamsCheck,
   societySetParamsCheck,
   agentContinueParamsCheck,
-  agentCreateParamsCheck,
+  agentCreateParamsCheckFor,
   agentWaitParamsCheck,
   checkActor,
   checkEnum,
@@ -55,7 +57,7 @@ export type AuthorityCheck =
   | "own-operation"
   | "published-candidate"
   | "integration-commit";
-export type StreamPolicy = "none" | "optional-bundle" | "required-content";
+export type StreamPolicy = "none" | "optional-bundle" | "optional-content" | "required-content";
 type PublicDescriptor<M extends PublicMethod> = {
   readonly mode: M extends MutationMethod
     ? "mutation"
@@ -67,7 +69,7 @@ type PublicDescriptor<M extends PublicMethod> = {
     ? "optional-bundle"
     : M extends "context.publish"
       ? "required-content"
-      : "none";
+      : M extends "invocation.prepare" | "mail.send" | "agent.create" ? "optional-content" : "none";
   readonly channel: "actor";
   readonly result: M extends MutationMethod ? "receipt" : M;
   readonly capability: Capability | null;
@@ -86,6 +88,12 @@ const fixed =
  * broad grants cannot restore routine orchestration through raw actor RPC. */
 export function principalRequestAllowed(method: PublicMethod, params: object): boolean {
   switch (method) {
+    case "invocation.bind": return true;
+    case "invocation.prepare": {
+      if (!("content" in params)) return true;
+      const content = params.content;
+      return content !== null && typeof content === "object" && "mediaType" in content && content.mediaType === "application/vnd.oma.context-v1";
+    }
     case "society.set": case "attest.record": case "mail.send":
     case "agent.start": case "agent.stop": case "git.known":
     case "operation.get": case "operation.read": case "review.status": return true;
@@ -97,6 +105,34 @@ export function principalRequestAllowed(method: PublicMethod, params: object): b
 }
 
 export const PUBLIC_METHODS = {
+  "invocation.bind": {
+    mode: "ephemeral", key: "forbidden", stream: "none", channel: "actor", result: "invocation.bind",
+    capability: null, authority: ["current-actor", "own-operation"],
+    paramsCheck: fixed(checkObject({ contract: checkEnum(["collaboration-v1"]),
+      origin: checkObject({ file: checkString({ min: 1, re: /^[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl$/ }),
+        session: checkString({ min: 1 }), branch: checkString({ min: 1 }), toolCall: checkString({ min: 1 }) }),
+      tool: checkString({ min: 1 }), arguments: value => value !== null && typeof value === "object" && !Array.isArray(value) ? null : "expected action arguments" })),
+  },
+  "invocation.prepare": {
+    mode: "ephemeral", key: "forbidden", stream: "optional-content", channel: "actor", result: "invocation.prepare",
+    capability: null, authority: ["current-actor", "own-operation"],
+    paramsCheck: context => value => {
+      if (value !== null && typeof value === "object" && Object.hasOwn(value, "reject"))
+        return checkObject({ contract: checkEnum(["collaboration-v1"]), key: checkString({ re: /^inv1-[a-f0-9]{64}$/ }),
+          reject: raw => { const decoded = decodeFailure(raw); return decoded.ok ? null : decoded.reason; } })(value);
+      return checkObject({ contract: checkEnum(["collaboration-v1"]), key: checkString({ re: /^inv1-[a-f0-9]{64}$/ }),
+      params: value => value !== null && typeof value === "object" && !Array.isArray(value) ? null : "expected frozen parameters",
+      content: checkOptional(value => {
+        const problem = checkBlobDescriptor(Math.max(context.limits.contextBytes, context.limits.bundleBytes))(value);
+        if (problem !== null) return problem;
+        // SAFETY: the closed BlobDescriptor checker above validated both fields.
+        const descriptor = value as { bytes: number; mediaType: string };
+        const bound = (descriptor.mediaType === "application/x-git-bundle" || descriptor.mediaType === "application/vnd.oma.attachments-v1") ? context.limits.bundleBytes :
+          descriptor.mediaType === "application/vnd.oma.context-v1" ? context.limits.contextBytes : 0;
+        return descriptor.bytes <= bound && bound > 0 ? null : "unsupported original source stream or effective bound exceeded";
+      }) })(value);
+    },
+  },
   "society.set": {
     mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt",
     capability: "agent.manage.descendants",  authority: ["current-actor", "current-capability"],
@@ -110,7 +146,7 @@ export const PUBLIC_METHODS = {
   "mail.send": {
     mode: "mutation",
     key: "required",
-    stream: "none",
+    stream: "optional-content",
     channel: "actor",
     result: "receipt",
     capability: "mail.send",
@@ -151,12 +187,12 @@ export const PUBLIC_METHODS = {
   "agent.create": {
     mode: "mutation",
     key: "required",
-    stream: "none",
+    stream: "optional-content",
     channel: "actor",
     result: "receipt",
     capability: "agent.create",
     authority: ["current-actor", "current-capability", "child-delegation"],
-    paramsCheck: fixed(agentCreateParamsCheck),
+    paramsCheck: ({ limits }) => agentCreateParamsCheckFor(limits),
   },
   "agent.start": {
     mode: "mutation",
@@ -206,7 +242,7 @@ export const PUBLIC_METHODS = {
     result: "git.known",
     capability: null,
     authority: ["current-actor"],
-    paramsCheck: fixed(checkObject({ candidate: checkOid })),
+    paramsCheck: fixed(checkObject({ candidate: checkOid, reachable: checkOptional(value => value === true ? null : "reachable must be true when present") })),
   },
   "git.submit": {
     mode: "mutation",
@@ -336,7 +372,22 @@ interface InternalDescriptor {
 const noParams = checkObject({});
 const batchIdCheck: Check = (value) =>
   parseBatchId(value) === null ? "invalid batch id" : null;
+const hostRequestKey: Check = value => isValidRequestKey(value) ? null : "invalid original Human request key";
+const hostMutationKey: Check = value => typeof value === "string" && value.startsWith("human-") && value.length > 6 && isValidRequestKey(value)
+  ? null : "fresh Human control keys must use the human- namespace; receipt reads retain legacy keys";
+const hostControlParams: Check = value => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected Human control parameters";
+  const action = Object.getOwnPropertyDescriptor(value, "action")?.value;
+  if (action === "inspect") return checkObject({ action: checkEnum(["inspect"]), agent: checkActor })(value);
+  if (action === "receipt") return checkObject({ action: checkEnum(["receipt"]), key: hostRequestKey })(value);
+  if (action === "society") return checkObject({ action: checkEnum(["society"]), state: checkEnum(["open", "closed"]), key: hostMutationKey })(value);
+  if (action === "stop" || action === "release") return checkObject({ action: checkEnum(["stop", "release"]), agent: checkActor, key: hostMutationKey,
+    expected: checkObject({ incarnation: checkInt({ min: 0 }), desired: checkEnum(["provisioning", "enabled", "stopped", "retired"]),
+      control: v => v === null || parseOperationId(v) !== null ? null : "invalid original control identity" }) })(value);
+  return "unknown Human control action";
+};
 export const INTERNAL_METHODS = {
+  "host.control": { channel: "host", key: "forbidden", stream: "none", lease: "host-unit", evidence: "none", paramsCheck: hostControlParams },
   "runner.open": {
     channel: "runner",
     key: "forbidden",
@@ -381,9 +432,9 @@ export const INTERNAL_METHODS = {
     paramsCheck: checkObject({
       batchId: batchIdCheck,
       incarnation: checkInt(),
-      sessionPath: checkString(),
+      sessionPath: checkOptional(checkString()),
       adapterRevision: checkString(),
-      receiptPath: checkString(),
+      receiptPath: checkOptional(checkString()),
     }),
   },
   "runner.observe": {

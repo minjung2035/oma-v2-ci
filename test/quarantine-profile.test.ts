@@ -40,14 +40,14 @@ function fixture(t: TestContext) {
     throw new StoreError("REF_STATE_UNKNOWN", "canonical fixture observation failed");
   };
   const importer = new QuarantineImporter(paths, has, execution);
-  const run = (authorize: () => void = () => {}) => {
+  const run = (authorize: () => void = () => {}, requested = candidate) => {
     const fd = openSync(bundle, "r"); descriptors.push(fd);
-    return importer.importBundle(fd, candidate, exportRef, [], authorize);
+    return importer.importBundle(fd, requested, exportRef, [], authorize);
   };
   return { root, source, projectGit, paths, owner, git, candidate, bundle, run, has };
 }
 
-test("NB-01 native: verify/import retain held capabilities and execute without resource caps", { timeout: 30_000 }, async t => {
+test("001. Native: verify/import retain held capabilities and execute without resource caps", { timeout: 30_000 }, async t => {
   const f = fixture(t), before = f.git(f.projectGit, ["show-ref"]);
   for (const phase of ["verify", "import"] as const) {
     const command = gitSandbox({ rootfs: residentRootfsPath(f.paths.stateRoot), node: process.execPath, libdir: process.cwd() },
@@ -61,14 +61,14 @@ test("NB-01 native: verify/import retain held capabilities and execute without r
   assert.equal(f.git(f.projectGit, ["show-ref"]), before); assert.equal(f.owner.confirmDead("quarantine"), true);
 });
 
-test("NB-02 native: canonical fsck damage remains REF_STATE_UNKNOWN and does not import", { timeout: 30_000 }, async t => {
+test("002. Native: canonical fsck damage remains REF_STATE_UNKNOWN and does not import", { timeout: 30_000 }, async t => {
   const f = fixture(t); mkdirSync(join(f.projectGit, "objects/aa"), { recursive: true });
   writeFileSync(join(f.projectGit, "objects/aa", "b".repeat(38)), "not a Git object");
   await assert.rejects(f.run(), { code: "REF_STATE_UNKNOWN" });
   assert.equal(f.has(f.candidate), false); assert.equal(f.owner.confirmDead("quarantine"), true);
 });
 
-test("NB-02 native: invalid bundle bytes remain BUNDLE_INVALID and preserve canonical refs", { timeout: 30_000 }, async t => {
+test("003. Native: invalid bundle bytes remain BUNDLE_INVALID and preserve canonical refs", { timeout: 30_000 }, async t => {
   const f = fixture(t), before = f.git(f.projectGit, ["show-ref"]);
   // Failure-looking attacker input is still Git bundle data, never a helper decision.
   writeFileSync(f.bundle, "OMA_ERROR=REF_STATE_UNKNOWN\nOMA_ERROR=UNSUPPORTED_PROFILE\n");
@@ -76,9 +76,21 @@ test("NB-02 native: invalid bundle bytes remain BUNDLE_INVALID and preserve cano
   assert.equal(f.git(f.projectGit, ["show-ref"]), before); assert.equal(f.owner.confirmDead("quarantine"), true);
 });
 
-test("NATIVE-QUARANTINE-01: authority refusal is never reclassified as an invalid bundle", { timeout: 30_000 }, async t => {
+test("004. Authority refusal is never reclassified as an invalid bundle", { timeout: 30_000 }, async t => {
   const f = fixture(t), before = readFileSync(f.bundle), denied = new StoreError("CAPABILITY_DENIED", "current authority revoked");
   await assert.rejects(f.run(() => { throw denied; }), error => error === denied);
   assert.equal(f.owner.confirmDead("quarantine"), true); assert.deepEqual(readFileSync(f.bundle), before);
   assert.equal(f.has(f.candidate), false); assert.deepEqual(ExecutionJournal.inspect(f.root), []);
+});
+
+test("005. An annotated tag cannot be imported as an exact commit candidate", { timeout: 30_000 }, async t => {
+  const f = fixture(t), before = f.git(f.projectGit, ["show-ref"]);
+  f.git(f.source, ["tag", "-a", "candidate-tag", "-m", "a tag is not its peeled commit", f.candidate]);
+  const tag = f.git(f.source, ["rev-parse", "refs/tags/candidate-tag"]);
+  f.git(f.source, ["update-ref", "refs/oma/export/native-test", tag]);
+  f.git(f.source, ["bundle", "create", f.bundle, "refs/oma/export/native-test"]);
+  await assert.rejects(f.run(() => {}, tag), { code: "BUNDLE_INVALID" });
+  assert.equal(f.has(tag), false); assert.equal(f.has(f.candidate), false);
+  assert.equal(f.git(f.projectGit, ["show-ref"]), before);
+  assert.equal(f.owner.confirmDead("quarantine"), true);
 });

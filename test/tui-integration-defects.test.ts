@@ -9,15 +9,16 @@ import type { HostConfig } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { configurationLayout as layoutOf, readConfigurationSource } from "@oma/config/operations";
-import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { collaborationProfilePrompt } from "@oma/domain/collaboration-prompts";
+import { collaborationRecordRootPathAt } from "@oma/domain/paths";
 import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 import { PRINCIPAL_MODEL, WORKER_MODEL, commitField, readSettings, } from "#oma-test/app/application/settings";
 import { PACKAGE_STORE_ENV, principalEnvironment, projectEvent, sessionArgv, sessionEnv } from "@oma/engine/principal-session";
 import { principalSessionProfile } from "#oma-test/app/engine/principal-profile";
 import { PACKAGE_STORE_ENV as GUARD_PACKAGE_STORE_ENV } from "@oma/tool-runtime/workspace-guard";
-import { PRINCIPAL_SYSTEM_PROMPT } from "@oma/domain/role-prompts";
 import { loadConfiguration } from "@oma/config";
-import { PrincipalSession } from "@oma/engine/principal-session";
+import { PrincipalSession, principalWorkspace, principalSessionDir } from "@oma/engine/principal-session";
 import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
 import { assertExtensionIntegrity } from "#oma-test/app/runtime/extension-integrity";
@@ -26,6 +27,9 @@ const CORE = DEPLOYMENT_LAYOUT.extension;
 const digest = (text: string): string => createHash("sha256").update(text).digest("hex");
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 const readJson = (path: string): Record<string, unknown> => JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+const launchScope = (stateRoot = "/state") => ({ collaborationStateRoot: stateRoot,
+    toolSurface: JSON.stringify(collaborationSurface("principal")), workspace: principalWorkspace(stateRoot), sessionDir: principalSessionDir(stateRoot) });
+const sourceBounds = { OMA_SUBJECT_BYTES: "512", OMA_BODY_BYTES: "262144", OMA_FRAME_BYTES: "262144", OMA_CONTEXT_BYTES: "8388608" };
 /** A split operations bundle. D23: role files carry no toolSurface -- the
  * field is closed now, so writing one would make the fixture itself unloadable. */
 function bundle(root: string): string {
@@ -84,7 +88,7 @@ const removeTree = (root: string): void => {
     walk(root);
     rmSync(root, { recursive: true, force: true });
 };
-test("toggling an extension preserves every other field of the role file", () => {
+test("001. Toggling an extension preserves every other field of the role file", () => {
     const root = scratch("oma-defect-ext-");
     try {
         const index = bundle(root);
@@ -104,7 +108,7 @@ test("toggling an extension preserves every other field of the role file", () =>
         removeTree(root);
     }
 });
-test("a Config edit publishes the split bundle as a generation instead of flattening it", () => {
+test("002. A Config edit publishes the split bundle as a generation instead of flattening it", () => {
     const root = scratch("oma-defect-cfg-");
     try {
         const index = bundle(root);
@@ -134,7 +138,7 @@ test("a Config edit publishes the split bundle as a generation instead of flatte
         removeTree(root);
     }
 });
-test("a removed quota edit is refused without modifying the split bundle", () => {
+test("003. A removed quota edit is refused without modifying the split bundle", () => {
     const root = scratch("oma-defect-quota-");
     try {
         const index = bundle(root);
@@ -149,7 +153,7 @@ test("a removed quota edit is refused without modifying the split bundle", () =>
         removeTree(root);
     }
 });
-test("DR46: a Worker model edit changes its existing reference contents without changing Principal", () => {
+test("004. A Worker model edit changes its existing reference contents without changing Principal", () => {
     const root = scratch("oma-defect-worker-");
     try {
         const index = bundle(root);
@@ -172,7 +176,7 @@ test("DR46: a Worker model edit changes its existing reference contents without 
         removeTree(root);
     }
 });
-test("D23: the Principal session carries no authored projection -- the surface is OMA's own", () => {
+test("005. The Principal session carries no authored projection -- the surface is OMA's own", () => {
     // A role file's fields are closed, and a session profile has no field for a
     // plan: there is no authored way for OMA_TOOL_SURFACE to reach the engine.
     const root = scratch("oma-defect-env-");
@@ -184,42 +188,47 @@ test("D23: the Principal session carries no authored projection -- the surface i
     finally {
         removeTree(root);
     }
-    const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
-        society: "demo", provider: "pi", model: "current", extensions: [],
-    });
-    assert.ok(!("OMA_TOOL_SURFACE" in env), "no profile field carries a projection");
-    assert.equal(env.HOME, "/h");
+    const profile = { society: "demo", provider: "pi", model: "current", extensions: [] };
+    assert.throws(() => sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, profile), { code: "UNSUPPORTED_PROFILE" });
+    const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", ...sourceBounds }, profile, launchScope());
+    assert.equal(env.OMA_TOOL_SURFACE, launchScope().toolSurface, "only the explicit host plan reaches the engine");
+    assert.equal(env.HOME, principalWorkspace("/state"));
 });
-test("D23/TSP-005: a stray ambient OMA_TOOL_SURFACE never reaches the Principal's engine", () => {
-    // The plan channel is runner→Resident plumbing only. A malformed plan would
-    // exit(1) the host engine at session_start; a crafted-valid one would narrow
-    // its tools -- the inherited environment must carry neither.
-    const crafted = encodeToolSurfacePlan(planToolSurface({
-        defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"], optional: ["fetch"],
-    }));
+test("006. A stray ambient OMA_TOOL_SURFACE never reaches the Principal's engine", () => {
+    // Valid for another role is still ambient, never an explicit Principal grant.
+    const crafted = JSON.stringify(collaborationSurface("resident"));
     for (const ambient of ["{not json", crafted]) {
-        const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", OMA_TOOL_SURFACE: ambient }, {
+        const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", ...sourceBounds, OMA_TOOL_SURFACE: ambient }, {
             society: "demo", provider: "pi", model: "current", extensions: [],
-        });
-        assert.ok(!("OMA_TOOL_SURFACE" in env), "the runner's own plumbing channel leaked into the host engine");
-        assert.equal(env.HOME, "/h");
+        }, launchScope());
+        assert.equal(env.OMA_TOOL_SURFACE, launchScope().toolSurface, "ambient bytes cannot replace the host's explicit Principal plan");
+        assert.equal(env.HOME, principalWorkspace("/state"));
     }
 });
-test("C18: the Principal's environment names the package store root its guard may read, and the mirror spellings agree", () => {
+test("007. Principal session roots cannot be widened by ambient Worker or record paths", () => {
+    const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin", ...sourceBounds, OMA_RECORD_ROOT: "/forged-records",
+        OMA_WORLD_ROOT: "/workers/world", OMA_WORKER_ARCHIVE: "/workers/archive" }, {
+        society: "demo", provider: "pi", model: "current", extensions: [],
+    }, launchScope());
+    for (const name of ["OMA_WORLD_ROOT", "OMA_WORKER_ARCHIVE"]) assert.ok(!(name in env), name);
+    assert.equal(env.OMA_RECORD_ROOT, collaborationRecordRootPathAt("/state", "principal"));
+    assert.equal(env.HOME, principalWorkspace("/state")); assert.equal(env.PATH, "/usr/bin");
+});
+test("008. The Principal's environment names the package store root its guard may read, and the mirror spellings agree", () => {
     const env = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" }, { society: "demo", provider: "p", model: "m", extensions: [], packageStore: "/data/.packages" }, { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
     assert.equal(env[PACKAGE_STORE_ENV], "/data/.packages", "the store root the guard permits reads under");
     assert.equal(GUARD_PACKAGE_STORE_ENV, PACKAGE_STORE_ENV, "the extension's mirror is not the writer's spelling");
     const without = principalEnvironment({ stateRoot: "/state", runRoot: "/run", libdir: "/lib" }, { society: "demo", provider: "p", model: "m", extensions: [] }, { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 4096, bundleBytes: 8192 });
     assert.ok(!(PACKAGE_STORE_ENV in without), "no store means no read permission");
 });
-test("an engine extension_error projects as an OMA notice; extension-provided text is stripped of what a screen cannot show", () => {
+test("009. An engine extension_error projects as an OMA notice; extension-provided text is stripped of what a screen cannot show", () => {
     assert.equal(projectEvent({ type: "extension_error", extensionPath: "/x/role-ext.ts", event: "tool_call", error: "boom" } as never).line, "⚠ Extension role-ext.ts failed on tool_call: boom.");
     // The event's text is the extension's: terminal control and format
     // characters are removed before it reaches the transcript.
     assert.equal(projectEvent({ type: "extension_error", extensionPath: "/x/e.ts", event: "s", error: "a\x1b[2Jb\u200e" } as never).line, "⚠ Extension e.ts failed on s: a[2Jb.");
     assert.equal(projectEvent({ type: "extension_error" } as never).line, "⚠ Extension extension failed.");
 });
-test("the Principal session is built from its role, not from defaults", () => {
+test("010. The Principal session is built from its role, not from defaults", () => {
     // Behaviour, not text: a regex over the entrypoint used to stand in for this.
     const root = scratch("oma-principal-profile-");
     try {
@@ -237,7 +246,7 @@ test("the Principal session is built from its role, not from defaults", () => {
     }
 });
 
-test("explicit Principal thinking survives configuration and the actual child launch", async () => {
+test("011. Explicit Principal thinking survives configuration and the actual child launch", async () => {
     const root = scratch("oma-principal-thinking-");
     try {
         const configPath = bundle(root);
@@ -251,14 +260,14 @@ test("explicit Principal thinking survives configuration and the actual child la
             }));
             const profile = principalSessionProfile(configPath, "demo");
             assert.equal(profile.thinking, thinking);
-            const capture = join(root, "argv.json"), workspace = join(root, "work"), sessions = join(root, "sessions");
-            mkdirSync(workspace, { recursive: true }); mkdirSync(sessions, { recursive: true });
+            const capture = join(root, "argv.json"), scope = launchScope(root);
+            mkdirSync(scope.workspace, { recursive: true }); mkdirSync(scope.sessionDir, { recursive: true });
             const session = PrincipalSession.start(engineStartEffects, {
                 piCommand: process.execPath, piArgs: ["--input-type=module", "-e",
                     'import {writeFileSync} from "node:fs";writeFileSync(process.env.CAPTURE,JSON.stringify(process.argv.slice(1)));', "--"],
-                coreExtension: join(root, "lib", CORE), sessionDir: sessions, workspace, home: root,
+                coreExtension: join(root, "lib", CORE), ...scope, home: root,
             }, profile, { frameBytes: 262144, idleStreamSeconds: 5, receiptWaitSeconds: 5 },
-            { HOME: root, PATH: "/usr/bin:/bin", CAPTURE: capture }, {
+            { HOME: root, ...sourceBounds, PATH: "/usr/bin:/bin", CAPTURE: capture }, {
                 onLine() {}, onBusy() {}, onEnd() {}, onPromptFailed() {},
             });
             try { await session.exited; }
@@ -274,8 +283,9 @@ function fakeSurfaceHost(overrides: {
     setActiveTools?: (names: string[]) => void;
     getAllTools?: () => unknown[];
 } = {}) {
-    let active = ["read", "fetch", "danger"];
-    const tools = new Map<string, unknown>(["read", "fetch", "danger"].map(name =>
+    const plan = collaborationSurface("resident");
+    let active = [...plan.direct, ...Object.values(plan.groups).flat()];
+    const tools = new Map<string, unknown>(active.map(name =>
         [name, { name, description: name, parameters: {} }]));
     const handlers = new Map<string, (event: unknown, context: unknown) => unknown>();
     return {
@@ -292,17 +302,15 @@ function fakeSurfaceHost(overrides: {
         ...overrides,
     };
 }
-test("the tool surface fails closed when the host refuses to apply it", () => {
-    const plan = encodeToolSurfacePlan(planToolSurface({
-        defaultMode: "DISABLED", direct: ["read"], disabled: ["danger"], optional: ["fetch"],
-    }));
+test("012. The tool surface fails closed when the host refuses to apply it", () => {
+    const plan = JSON.stringify(collaborationSurface("resident"));
     // The real fatal ends the engine; throwing lets us also inspect its effect fence.
     const fatal = (message: string): never => { throw new Error(message); };
     const previous = process.env.OMA_TOOL_SURFACE;
     try {
         process.env.OMA_TOOL_SURFACE = plan;
         const refusing = fakeSurfaceHost({ setActiveTools() { throw new Error("host refused"); } });
-        assert.doesNotThrow(() => registerToolSurface(refusing as never, [], { fatal }));
+        assert.doesNotThrow(() => registerToolSurface(refusing as never, [], { role: "resident", own: () => true, fatal }));
         assert.throws(() => refusing.start(), /host refused/);
         assert.equal(refusing.blocked("read"), true,
             "a host that refuses deactivation must still be fenced at the effect boundary");
@@ -318,7 +326,7 @@ test("the tool surface fails closed when the host refuses to apply it", () => {
 
         process.env.OMA_TOOL_SURFACE = plan;
         const blind = fakeSurfaceHost({ getAllTools() { throw new Error("no registry"); } });
-        registerToolSurface(blind as never, [], { fatal });
+        registerToolSurface(blind as never, [], { role: "resident", own: () => true, fatal });
         assert.throws(() => blind.start(), /no registry/);
         assert.deepEqual(blind.getActiveTools(), []);
         assert.equal(blind.blocked("read"), true);
@@ -330,7 +338,7 @@ test("the tool surface fails closed when the host refuses to apply it", () => {
             process.env.OMA_TOOL_SURFACE = previous;
     }
 });
-test("an unknown settings field is refused before anything is written", () => {
+test("013. An unknown settings field is refused before anything is written", () => {
     const root = scratch("oma-defect-unknown-");
     try {
         const index = bundle(root);
@@ -342,7 +350,7 @@ test("an unknown settings field is refused before anything is written", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("a recorded extension digest is re-checked and a changed file refuses the start", () => {
+test("014. A recorded extension digest is re-checked and a changed file refuses the start", () => {
     const root = scratch("oma-integrity-");
     try {
         const file = join(root, "review.js");
@@ -366,7 +374,7 @@ test("a recorded extension digest is re-checked and a changed file refuses the s
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("the digest recorded at configuration load survives to the spawn boundary", () => {
+test("015. The digest recorded at configuration load survives to the spawn boundary", () => {
     const root = scratch("oma-integrity-flow-");
     try {
         const index = bundle(root);
@@ -387,15 +395,15 @@ test("the digest recorded at configuration load survives to the spawn boundary",
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("the spawn paths never pass the core extension twice", () => {
-    const paths = { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" };
+test("016. The spawn paths never pass the core extension twice", () => {
+    const paths = { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", ...launchScope(), home: "/h" };
     const argv = sessionArgv(paths, {
         society: "demo", provider: "pi", model: "current", extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }],
     });
     assert.equal(argv.filter(entry => entry === "/lib/core.js").length, 1);
     assert.ok(argv.includes("/lib/review.js"));
 });
-test("the Principal and Resident spawn seams carry the same role contract", () => {
+test("017. The Principal and Resident spawn seams carry the same role contract", () => {
     const root = scratch("oma-seam-");
     try {
         const index = bundle(root);
@@ -403,20 +411,18 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
         // Whatever the Resident path forwards, the Principal path must forward too:
         // extensions with digests and the role prompt.
         const argv = sessionArgv({ piCommand: "/usr/bin/node", piArgs: ["/lib/cli.js"], coreExtension: "/lib/core.js",
-            sessionDir: "/s", workspace: "/w", home: "/h", piAgentDir: "/state/pi" }, {
+            ...launchScope(), home: "/h", piAgentDir: "/state/pi" }, {
             society: "demo", provider: "pi", model: "current", extensions: role.extensions.map(e => ({ path: e.path, sha256: e.sha256 })),
             prompt: "role prompt",
         });
-        assert.equal(argv[argv.indexOf("--system-prompt") + 1], "role prompt", "the Principal's role prompt replaces Pi's generated system prompt");
-        const env = sessionEnv({ HOME: "/h" }, {
+        assert.equal(argv[argv.indexOf("--system-prompt") + 1], collaborationProfilePrompt("principal", "role prompt"), "the authored role prompt is preserved; the prompt boundary owns host guidance");
+        const env = sessionEnv({ HOME: "/h", ...sourceBounds }, {
             society: "demo", provider: "pi", model: "current", extensions: [],
-        }, { piAgentDir: "/state/pi" });
-        assert.ok(!("OMA_TOOL_SURFACE" in env), "D23: no authored projection reaches the engine");
+        }, { ...launchScope(), piAgentDir: "/state/pi" });
+        assert.equal(env.OMA_TOOL_SURFACE, launchScope().toolSurface, "only the host's explicit plan reaches the engine");
         assert.equal(env.PI_CODING_AGENT_DIR, "/state/pi", "the engine stays in OMA's directory");
-        // A role without an authored prompt runs on the built-in Principal prompt,
-        // not on Pi's generic coding-agent default.
-        const bare = sessionArgv({ piCommand: "/usr/bin/node", piArgs: [], coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" }, { society: "demo", provider: "pi", model: "current", extensions: [] });
-        assert.equal(bare[bare.indexOf("--system-prompt") + 1], PRINCIPAL_SYSTEM_PROMPT);
+        const bare = sessionArgv({ piCommand: "/usr/bin/node", piArgs: [], coreExtension: "/lib/core.js", ...launchScope(), home: "/h" }, { society: "demo", provider: "pi", model: "current", extensions: [] });
+        assert.equal(bare[bare.indexOf("--system-prompt") + 1], collaborationProfilePrompt("principal"));
     }
     finally {
         rmSync(root, { recursive: true, force: true });

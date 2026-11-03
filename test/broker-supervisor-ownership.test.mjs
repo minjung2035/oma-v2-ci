@@ -65,19 +65,19 @@ async function completed(promise) {
   return outcome.value;
 }
 
-test('broker owner: a crashed child can restart and report readiness normally', async () => {
+test("001. Broker owner: a crashed child can restart and report readiness normally", async () => {
   const w = await world(); let ready = 0; w.handle.onReady(() => ready++);
   w.readers[0].accept({ kind: 'ready' }); assert.equal(ready, 1);
   w.exit(); assert.equal(w.timers.size, 1); w.tick(); assert.equal(w.children.length, 2);
   w.readers[1].accept({ kind: 'ready' }); assert.equal(ready, 2);
   const stopping = w.handle.stop(); w.exit(1); await completed(stopping);
 });
-test('broker owner: stop returns the pending restart timer and fences its callback', async () => {
+test("002. Broker owner: stop returns the pending restart timer and fences its callback", async () => {
   const w = await world(); w.exit(); const old = [...w.timers][0];
   await completed(w.handle.stop()); assert.equal(w.timers.size, 0, 'ended supervisor retained its restart timer');
   old.run(); assert.equal(w.children.length, 1);
 });
-test('broker owner: every concurrent stop waits for the same actual child exit', async () => {
+test("003. Broker owner: every concurrent stop waits for the same actual child exit", async () => {
   const w = await world(); let firstDone = false, secondDone = false;
   const first = w.handle.stop().then(() => { firstDone = true; });
   const second = w.handle.stop().then(() => { secondDone = true; });
@@ -85,7 +85,7 @@ test('broker owner: every concurrent stop waits for the same actual child exit',
   assert.deepEqual(w.children[0].kills, ['SIGTERM']);
   w.exit(); await completed(Promise.all([first, second])); assert.equal(firstDone, true); assert.equal(secondDone, true);
 });
-test('broker owner: stop settles registration and returns its timer before actual exit', async () => {
+test("004. Broker owner: stop settles registration and returns its timer before actual exit", async () => {
   const w = await world(); w.readers[0].accept({ kind: 'ready' }); let value;
   const registered = w.handle.register('session-a', 200).then(result => { value = result; });
   const stopping = w.handle.stop(); await flush();
@@ -93,7 +93,7 @@ test('broker owner: stop settles registration and returns its timer before actua
   w.readers[0].accept({ kind: 'credential', sessionHandle: 'session-a', credential: 'fake' });
   w.exit(); await completed(Promise.all([registered, stopping])); assert.equal(value, null);
 });
-test('broker owner: superseding and answered registration return their timers', async () => {
+test("005. Broker owner: superseding and answered registration return their timers", async () => {
   const w = await world(); w.readers[0].accept({ kind: 'ready' });
   const first = w.handle.register('first', 200), second = w.handle.register('second', 201);
   assert.equal(await completed(first), null); assert.equal(w.timers.size, 1);
@@ -103,13 +103,13 @@ test('broker owner: superseding and answered registration return their timers', 
   const stopping = w.handle.stop(); w.exit(); await completed(stopping);
 });
 
-test('broker owner: an already-consumed restart callback cannot start another generation', async () => {
+test("006. Broker owner: an already-consumed restart callback cannot start another generation", async () => {
   const w = await world(); w.exit(); const old = [...w.timers][0]; w.tick();
   assert.equal(w.children.length, 2);
   old.run(); assert.equal(w.children.length, 2, 'old restart callback acquired a second child');
   const stopping = w.handle.stop(); w.exit(1); await completed(stopping);
 });
-test('broker owner: a failed registration write returns its timer and permits a later request', async () => {
+test("007. Broker owner: a failed registration write returns its timer and permits a later request", async () => {
   const w = await world(); w.readers[0].accept({ kind: 'ready' });
   const channel = w.children[0].stdio[3], write = channel.write;
   channel.write = () => { throw new Error('injected channel write failure'); };
@@ -122,7 +122,7 @@ test('broker owner: a failed registration write returns its timer and permits a 
   assert.equal(await completed(next), 'new'); assert.equal(w.timers.size, 0);
   const stopping = w.handle.stop(); w.exit(); await completed(stopping);
 });
-test('broker owner: death returns a registration and old readiness cannot authorize its successor', async () => {
+test("008. Broker owner: death returns a registration and old readiness cannot authorize its successor", async () => {
   const w = await world(); let ready = 0; w.handle.onReady(() => ready++);
   w.readers[0].accept({ kind: 'ready' }); assert.equal(ready, 1);
   const registered = w.handle.register('old', 200); w.exit();

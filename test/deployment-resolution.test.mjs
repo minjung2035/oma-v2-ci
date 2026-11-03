@@ -20,7 +20,7 @@ function fixture(t) {
   }
   return root;
 }
-test('a new nested copy is refused even after the same installation was already verified', t => {
+test("001. A new nested copy is refused even after the same installation was already verified", t => {
   const root = fixture(t);
   assertWorkspaceResolution(root);
   const foreign = join(root, 'packages/native/node_modules/@oma/domain');
@@ -31,14 +31,14 @@ test('a new nested copy is refused even after the same installation was already 
   assert.equal(resolver.resolve('@oma/domain'), join(foreign, 'index.js'), 'Node really chooses the second owner');
   assert.throws(() => assertWorkspaceResolution(root), { code: 'UNSUPPORTED_PROFILE' });
 });
-test('a nested link to the exact installation owner is accepted', t => {
+test("002. A nested link to the exact installation owner is accepted", t => {
   const root = fixture(t);
   const namespace = join(root, 'packages/native/node_modules/@oma');
   mkdirSync(namespace, { recursive: true });
   symlinkSync(join(root, 'packages/domain'), join(namespace, 'domain'));
   assert.doesNotThrow(() => assertWorkspaceResolution(root));
 });
-test('an unreadable module namespace is unknown and never certified as absent', t => {
+test("003. An unreadable module namespace is unknown and never certified as absent", t => {
   const root = fixture(t), modules = join(root, 'packages/native/node_modules');
   mkdirSync(modules, { recursive: true });
   chmodSync(modules, 0);

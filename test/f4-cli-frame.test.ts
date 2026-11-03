@@ -94,7 +94,7 @@ async function withServer(
   }
 }
 
-test("F4: fragmented larger frames work in both directions without retrying", {
+test("001. Fragmented larger frames work in both directions without retrying", {
   timeout: 5000,
 }, async () => {
   await withFrame(String(512 * 1024), () =>
@@ -111,7 +111,7 @@ test("F4: fragmented larger frames work in both directions without retrying", {
   );
 });
 
-test("F4: a lower configured limit is enforced in both directions", {
+test("002. A lower configured limit is enforced in both directions", {
   timeout: 5000,
 }, async () => {
   await withFrame("512", () =>
@@ -131,7 +131,7 @@ test("F4: a lower configured limit is enforced in both directions", {
   );
 });
 
-test("F4: malformed or unsupported limits fail before socket connection, never fall back", {
+test("003. Malformed or unsupported limits fail before socket connection, never fall back", {
   timeout: 5000,
 }, async () => {
   await withServer(1, async (_client, seen, connections, path) => {

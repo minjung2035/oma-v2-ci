@@ -30,6 +30,7 @@ export class ReviewAdvancement {
   /** Advance one request toward application. Runs under the Git writer; a busy
    * writer surfaces BROKER_UNAVAILABLE to the caller, which skips it. */
   async advance(requestId: OperationId): Promise<void> {
+    this.assertProjectRecoverySettled();
     await this.effects.withWriter(async () => {
       const open = this.ledger.openRequests().find(candidate => candidate.operation.id === requestId);
       if (open !== undefined) await this.advanceRequest(open);
@@ -39,11 +40,13 @@ export class ReviewAdvancement {
   /** Every open request, in attestation sequence order. A single request's
    * refusal must not starve the others; corruption always propagates. */
   async advanceAll(): Promise<void> {
+    this.assertProjectRecoverySettled();
     await this.effects.withWriter(async () => {
       let main: ReturnType<ReviewEffects["main"]> | undefined;
       for (const { open, input } of this.ledger.projection()) {
         try {
           const state = reviewState(input);
+          this.ledger.assertExecutable(open, input.entries);
           this.repairChallenge(open);
           if (state.terminal !== null || state.included !== null || (state.integration !== null &&
               !(state.integration.state === "failed"))) continue;
@@ -51,9 +54,7 @@ export class ReviewAdvancement {
           if (!state.proposalReady && !refresh && state.preparation === null) {
             main ??= this.effects.main();
             if (main.kind !== "present" || main.value === state.sourceIdentity.expectedBase) continue;
-            const fact = open.operation.plan.fact;
-            const modern = fact.version === 3 || state.revision > 0 || state.entries.some(e => e.fact.kind === "review.adopt");
-            if (modern && !observed(this.effects.ancestry(state.sourceIdentity.candidate,main.value),"proposal inclusion")) continue;
+            if (!observed(this.effects.ancestry(state.sourceIdentity.candidate,main.value),"proposal inclusion")) continue;
           }
           if (state.preparationFailure !== null && state.preparation === null) {
             main ??= this.effects.main();
@@ -74,6 +75,19 @@ export class ReviewAdvancement {
     });
   }
 
+  /** Accepted project effects own the next writer turn. Even an empty review
+   * sweep must not repeatedly take the writer ahead of their recovery. Context
+   * publication has a separate writer; read/record authority is unchanged. */
+  private assertProjectRecoverySettled(): void {
+    for (const id of this.store.recoverableOperations()) {
+      const operation = this.store.getOperationById(id);
+      if (operation === null) throw new StoreError("STORE_CORRUPT", "recoverable project operation disappeared");
+      if ((operation.kind === "git.integrate" || operation.kind === "git.submit") &&
+          (operation.state === "pending" || operation.state === "unknown"))
+        throw new StoreError("BROKER_UNAVAILABLE", "accepted project operation must recover before review advancement", { details: { reason: "busy" } });
+    }
+  }
+
   private repairChallenge(open: OpenRequest): void {
     const fact = open.operation.plan.fact;
     if (fact.kind === "challenge.open" && fact.prepared)
@@ -85,45 +99,13 @@ export class ReviewAdvancement {
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
     const openFact = openPlan.fact;
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
+    const input = this.ledger.inputFor(open);
+    this.ledger.assertExecutable(open, input.entries);
     // §7: a prepared challenge's published ref is an effect of the accepted
     // fact; a crash after T is repaired here, at every sweep.
     this.repairChallenge(open);
-    let state = reviewState(this.ledger.inputFor(open));
-    const modern = openFact.version === 3 || state.revision > 0 || state.entries.some(e => e.fact.kind === "review.adopt");
-    if (modern) { await this.advanceModern(open, state, execute); return; }
-    // 1. A broker-derived refresh fact: main moved (request goes stale), or a
-    // sent approval drifted invalid through reviewer/active-author state. A
-    // refresh is a new durable intent + mail, accepted by the ledger owner.
-    if (state.terminal === null && state.integration === null) {
-      const main = this.effects.main();
-      if (main.kind === "corrupt")
-        throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-      if (main.kind === "present" && main.value !== state.identity.expectedBase) {
-        await this.acceptRefresh(open, state, main.value);
-        state = reviewState(this.ledger.inputFor(open));
-      } else if ((state.approval !== null && !state.approvalValid) || planEffects(state, state).approve !== null) {
-        await this.acceptRefresh(open, state, null);
-        state = reviewState(this.ledger.inputFor(open));
-      }
-    }
-    // 2. A ready request whose base is still main gets its one integration.
-    if (!state.ready) return;
-    const main = this.effects.main();
-    if (main.kind === "corrupt")
-      throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-    if (main.kind !== "present" || main.value !== state.identity.expectedBase) return;
-    if (this.store.recoverableOperations()
-        .some(id => this.store.getOperationById(id)?.kind === "git.integrate")) return;
-    let policy: IntegrationSnapshot;
-    try { policy = this.effects.currentPolicy(); }
-    catch (error) {
-      if (error instanceof StoreError && error.code === "BROKER_UNAVAILABLE") return;
-      throw error;
-    }
-    if (policy.policyRevision !== state.identity.policyRevision) return;
-    this.preparing.add(open.operation.id);
-    try { await this.createIntegration(open, policy, execute); }
-    finally { this.preparing.delete(open.operation.id); }
+    const state = reviewState(input);
+    await this.advanceModern(open, state, execute);
   }
 
   /** The refresh fact is accepted through the same machinery as caller facts:
@@ -169,34 +151,39 @@ export class ReviewAdvancement {
     if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
     const openFact = openPlan.fact;
     if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
-    const applyKey = applyRequestKeyFor(open.operation.id, reviewState(this.ledger.inputFor(open)).attemptNumber);
     for (let attempt = 0; ; attempt++) {
       const current = reviewState(this.ledger.inputFor(open));
       if (current.integration !== null || !current.ready) return;
-      const identity = current.preparation?.fact.identity ?? current.identity;
+      if (current.preparation === null)
+        throw new StoreError("UNSUPPORTED_PROFILE", "current review execution requires its original accepted prepared integration context; no legacy direct integration");
+      const prepareDiff = this.effects.prepareDiff;
+      if (prepareDiff === undefined)
+        throw new StoreError("UNSUPPORTED_PROFILE", "current review execution requires its owned diff preparation primitive; no direct-diff fallback");
+      const recordsGuide = `Read reviews/${current.request}/status.md under your declared record_root for permitted status and exact material paths. Files are observations, not execution authority.\n`;
+      // The retry re-derives attempt number and key from one state: an
+      // accepted row is always read back under the key it was accepted with.
+      const applyKey = applyRequestKeyFor(open.operation.id, current.attemptNumber);
+      const identity = current.preparation.fact.identity;
       const id = this.effects.nextOperationId();
       const scope: PreacceptScope = this.effects.newPreacceptScope();
       let attachment: import("@oma/contracts/files").ReviewDiffArtifact | undefined;
       let document: string;
       try {
-        let diff: string;
-        if (this.effects.prepareDiff !== undefined) {
-          const prepared = await this.effects.prepareDiff(id, identity.expectedBase, identity.candidate, owner => {
-            scope.register({ operationId: id, resource: owner.path, owner, observe: () => {
-              const accepted = this.store.getOperationById(id);
-              if (accepted === null) return "unaccepted-known";
-              return accepted.kind === "git.integrate" && accepted.plan.merge !== undefined && accepted.plan.merge.version !== 1 &&
-                accepted.plan.merge.diff?.reference === attachment?.reference ? "accepted-referenced" : "accepted-unreferenced";
-            } });
-          });
-          attachment = prepared.diff;
-          diff = mergeDiffText(prepared.preview) + (attachment.bytes > prepared.preview.length ? "\n[preview only]" : "") +
-            `\nExact diff attachment: ${JSON.stringify({ request: current.request, revision: current.revision, attempt: id, ...attachment })}\n` +
-            `Read the stored full patch: oma_review_diff({"name":"${current.name}","view":"applied"}); continue using next as cursor.\n`;
-        } else diff = mergeDiffText(this.effects.mergeDiff(identity.expectedBase, identity.candidate, this.bounds.bundleBytes + 1));
+        const prepared = await prepareDiff.call(this.effects, id, identity.expectedBase, identity.candidate, owner => {
+          scope.register({ operationId: id, resource: owner.path, owner, observe: () => {
+            const accepted = this.store.getOperationById(id);
+            if (accepted === null) return "unaccepted-known";
+            return accepted.kind === "git.integrate" && accepted.plan.merge !== undefined && accepted.plan.merge.version !== 1 &&
+              accepted.plan.merge.diff?.reference === attachment?.reference ? "accepted-referenced" : "accepted-unreferenced";
+          } });
+        });
+        attachment = prepared.diff;
+        const diff = mergeDiffText(prepared.preview) + (attachment.bytes > prepared.preview.length ? "\n[preview only]" : "") +
+          `\nExact diff attachment: ${JSON.stringify({ request: current.request, revision: current.revision, attempt: id, ...attachment })}\n` +
+          recordsGuide;
         document = reviewNoticeDocument(id, { ...current, identity }, openFact, diff);
-        if (Buffer.byteLength(document) > this.bounds.bundleBytes && attachment !== undefined)
-          document = `${current.name} applied, revision ${current.revision}, attempt ${id}, number ${current.attemptNumber}.\nExact diff attachment: ${JSON.stringify(attachment)}\nRead oma_review_diff({"name":"${current.name}","view":"applied"}), then cursor=next.\n`;
+        if (Buffer.byteLength(document) > this.bounds.bundleBytes)
+          document = `${current.name} applied, revision ${current.revision}, attempt ${id}, number ${current.attemptNumber}.\nExact diff attachment: ${JSON.stringify(attachment)}\n${recordsGuide}`;
         if (Buffer.byteLength(document) > this.bounds.bundleBytes) throw new StoreError("LIMIT_EXCEEDED", "completion notice metadata exceeds document bound");
       } catch (error) {
         try { scope.settleFailure(error); } catch (failure) {
@@ -320,10 +307,10 @@ export class ReviewAdvancement {
           const tier = context ? maximumTier("MEDIUM",maximumTier(state.tier,minimum)) : state.tier;
           const {diff} = await this.effects.prepareDiff(id,main,prepared.candidate,own);
           const original = this.ledger.inputFor(open).open.fact;
-          const revision = [...state.entries].reverse().find(e => e.fact.kind === "review.revise" || e.fact.kind === "review.adopt");
-          const reviewPolicy = revision && (revision.fact.kind === "review.revise" || revision.fact.kind === "review.adopt") ? revision.fact.reviewPolicy
-            : isOpenFact(original) && original.version !== 1 ? original.reviewPolicy
-            : {maxWorkers:policy.maxWorkers,highPeerFloor:policy.tiered!.highPeerFloor,authorSlots:state.authors.length};
+          const revision = [...state.entries].reverse().find(e => e.fact.kind === "review.revise");
+          if (!isOpenFact(original) || original.version !== 3)
+            throw new StoreError("UNSUPPORTED_PROFILE", "current review preparation requires its original current scope");
+          const reviewPolicy = revision?.fact.kind === "review.revise" ? revision.fact.reviewPolicy : original.reviewPolicy;
           await this.brokerFact(open,state,{kind:"review.integration",version:3,request:state.request,revision:state.revision,
             identity:{repo:"project",targetRef:"refs/heads/main",expectedBase:main,candidate:prepared.candidate,policyRevision:policy.policyRevision},
             source:state.sourceIdentity,sourceOperation:state.revisionSource,preparedRef:prepared.preparedRef,context,tier,checkProfileDigest:policy.checkProfileDigest,

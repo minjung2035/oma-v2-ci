@@ -15,11 +15,13 @@ export type ReviewInput =
   | { kind: "cancel"; name: string; reason: string }
   | { kind: "review.withdraw"; name: string; vote: OperationId; reason: string }
   | { kind: "review.invalidate"; name: string; vote: OperationId; reason: string }
-  | { kind: "review.adopt"; name: string; reason: string }
   | { kind: "review.retry"; name: string; expectedAttempt: OperationId | null; expectedRevision?: number; reason: string }
   | { kind: "review.revise"; name: string; expectedRevision: number; base: Oid; candidate: Oid; reason: string };
 
 export type AttestationInput = ReviewInput;
+/** Read-only original payloads, never a fresh public/action admission type. */
+export type StoredAttestationInput = ReviewInput | { kind: "review.adopt"; name: string; reason: string } |
+  Extract<ReviewFact, { kind: "refresh" | "review.preparation-failed" | "review.integration" | "review.supersede" | "review.included" }>;
 
 /** Frozen by the broker at acceptance (plan.fact); never caller-supplied as-is. */
 export type ReviewFact =

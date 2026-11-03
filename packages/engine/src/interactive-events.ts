@@ -18,7 +18,11 @@ export function createInteractiveEvents(rpc: InteractiveOutput) {
                         role: "assistant", stopReason: event.message.stopReason
                     }
                 });
-            else if (event.type === "agent_settled" || event.type === "auto_retry_start" || event.type === "auto_retry_end")
+            // AUD-03: the beginning of a run is the host's corroboration that
+            // a delivery claim actually entered one -- a claim released on a
+            // never-started refusal is only distinguishable from a started run
+            // by this event. The boundary stays the delivery evidence itself.
+            else if (event.type === "agent_start" || event.type === "agent_settled" || event.type === "auto_retry_start" || event.type === "auto_retry_end")
                 rpc.send(event as unknown as PiEvent);
         });
     };

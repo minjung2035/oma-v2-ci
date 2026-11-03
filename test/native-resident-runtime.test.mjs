@@ -45,7 +45,7 @@ function fixture(t, program = 'setInterval(()=>{},1000)', completionError = null
   return { runtime, owner, journal, tickets, begins: () => begins, revocations: () => revocations, hints: () => hints,
     advance: milliseconds => { clock += milliseconds; }, epoch: value => { incarnation = value; } };
 }
-test('Resident stop joins diagnostic resources after actual kernel death', { timeout: 15000 }, async t => {
+test("001. Resident stop joins diagnostic resources after actual kernel death", { timeout: 15000 }, async t => {
   const entered = deferred(), flush = deferred(); let finished = false;
   const f = fixture(t, undefined, null, async () => { entered.resolve(); await flush.promise; finished = true; });
   t.after(() => flush.resolve());
@@ -59,7 +59,7 @@ test('Resident stop joins diagnostic resources after actual kernel death', { tim
   flush.resolve(); await stopping;
   assert.equal(finished, true); assert.deepEqual(f.journal.entries(), []);
 });
-test('Resident close coalesces, joins every actual scope and permanently closes start admission', { timeout: 15000 }, async t => {
+test("002. Resident close coalesces, joins every actual scope and permanently closes start admission", { timeout: 15000 }, async t => {
   const entered = deferred(), flush = deferred(); const finalized = [];
   const f = fixture(t, undefined, null, async actor => {
     finalized.push(actor); if (finalized.length === 2) entered.resolve(); await flush.promise;
@@ -76,7 +76,7 @@ test('Resident close coalesces, joins every actual scope and permanently closes 
   assert.deepEqual(finalized.sort(), ['alice', 'bob']); assert.deepEqual(f.journal.entries(), []);
   await assert.rejects(f.runtime.start('bob', true), { code: 'BROKER_UNAVAILABLE' });
 });
-test('Resident actual scope: concurrent starts share one launch and old stops cannot kill a later incarnation', { timeout: 15000 }, async t => {
+test("003. Resident actual scope: concurrent starts share one launch and old stops cannot kill a later incarnation", { timeout: 15000 }, async t => {
   const f = fixture(t); f.runtime.ensureResident('alice', 'p', 'm');
   await Promise.all([f.runtime.start('alice', false), f.runtime.start('alice', false)]);
   assert.equal(f.begins(), 1); const first = f.runtime.observe('alice');
@@ -96,7 +96,7 @@ test('Resident actual scope: concurrent starts share one launch and old stops ca
   borrowed.close();
   assert.deepEqual(f.journal.entries().length, 1);
 });
-test('NATIVE-RESIDENT-STATUS-01: an empty recovered slot never reports exit zero as an observed execution', { timeout: 15000 }, async t => {
+test("004. An empty recovered slot never reports exit zero as an observed execution", { timeout: 15000 }, async t => {
   const f = fixture(t);
   assert.equal((await f.runtime.observeStatus(['alice'])).get('alice'), 'no-unit');
   f.runtime.ensureResident('alice', 'p', 'm');
@@ -108,7 +108,7 @@ test('NATIVE-RESIDENT-STATUS-01: an empty recovered slot never reports exit zero
   const stopped = (await f.runtime.observeStatus(['alice'])).get('alice');
   assert.equal(stopped.activeState, 'inactive'); assert.equal(stopped.invocationId, running.invocationId);
 });
-test('Resident actual failures respect geometric backoff and five starts per monotonic minute', { timeout: 15000 }, async t => {
+test("005. Resident actual failures respect geometric backoff and five starts per monotonic minute", { timeout: 15000 }, async t => {
   const f = fixture(t, 'process.exitCode=1');
   for (let attempt = 0; attempt < 5; attempt++) {
     await f.runtime.start('alice', false); await f.tickets[attempt].completion; await setTimeout(0);
@@ -123,7 +123,7 @@ test('Resident actual failures respect geometric backoff and five starts per mon
   await f.runtime.start('alice', true); assert.equal(f.begins(), 6);
   await f.tickets[5].completion;
 });
-test('NATIVE-RESIDENT-ISOLATION-01: equal actor names in independent owners cannot reach each other’s actual scope', { timeout: 15000 }, async t => {
+test("006. Equal actor names in independent owners cannot reach each other’s actual scope", { timeout: 15000 }, async t => {
   const a = fixture(t), b = fixture(t);
   await Promise.all([a.runtime.start('alice', false), b.runtime.start('alice', false)]);
   const own = a.runtime.observe('alice'), foreign = b.runtime.observe('alice');
@@ -144,14 +144,14 @@ test('NATIVE-RESIDENT-ISOLATION-01: equal actor names in independent owners cann
   await b.runtime.stop('alice', 1);
   assert.equal(bPin.population(), 'empty'); assert.deepEqual(b.journal.entries(), []);
 });
-test('Resident accepted references refuse replacement and current authority refusal creates no running scope', { timeout: 15000 }, async t => {
+test("007. Resident accepted references refuse replacement and current authority refusal creates no running scope", { timeout: 15000 }, async t => {
   const f = fixture(t);
   assert.throws(() => f.runtime.ensureResident('alice', 'p', 'replacement'), { code: 'STORE_CORRUPT' });
   const denied = new Error('current authority revoked');
   await assert.rejects(f.runtime.start('alice', false, () => { throw denied; }), error => error === denied);
   assert.equal(f.owner.confirmDead('resident:alice'), true); assert.deepEqual(f.journal.entries(), []);
 });
-test('Resident diagnostic failure remains an unknown outcome after independently confirmed stop', { timeout: 15000 }, async t => {
+test("008. Resident diagnostic failure remains an unknown outcome after independently confirmed stop", { timeout: 15000 }, async t => {
   const diagnostic = new Error('diagnostic completion was not observed'), f = fixture(t, 'process.exitCode=0', diagnostic);
   await f.runtime.start('alice', false); await assert.rejects(f.tickets[0].completion, error => error === diagnostic);
   assert.equal(f.runtime.observe('alice').activeState, 'unknown');

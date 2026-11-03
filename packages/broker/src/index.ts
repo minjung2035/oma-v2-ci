@@ -54,6 +54,8 @@ export class Broker {
   private readonly views: BrokerViews;
   private readonly reconcile: BrokerReconcile | null;
 
+  /** Aggregate bound across both Principal endpoints, including partial/idle unauthenticated streams. */
+  private readonly hostSockets = new Set<Duplex>();
   private readonly connections = new Map<Duplex, RpcConnection>();
   private readonly executingTasks = new Set<Promise<void>>();
   private readonly listeners = new BrokerListeners(error => {
@@ -116,11 +118,11 @@ export class Broker {
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
     const internalPorts = { ...dependencies.internal, peers: projectInternalPeers(this.peers),
       mail: { ...dependencies.internal.mail,
-        prepare: async (auth: AuthContext) => {
+        prepare: async (auth: AuthContext, _deferred?: ReadonlySet<string>, responseId?: string) => {
           const run = this.runLeases.get(auth.actor);
           if (!run) throw new StoreError("STALE_RUN", "batch handoff requires a live run");
           run.wait(auth.incarnation, true); // Validate without requesting wait.
-          const batch = await dependencies.internal.mail.prepare(auth, this.reconcile?.deferredWork(auth.actor, auth.incarnation));
+          const batch = await dependencies.internal.mail.prepare(auth, this.reconcile?.deferredWork(auth.actor, auth.incarnation), responseId);
           if (this.runLeases.get(auth.actor) !== run)
             throw new StoreError("STALE_RUN", "run changed during batch preparation");
           run.wait(auth.incarnation, true);
@@ -202,10 +204,12 @@ export class Broker {
       preflight: (auth, raw) => this.preflightPublicStream(auth, raw),
     });
     const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
+      ...(this.dependencies.hostControl === undefined ? {} : { control: this.dependencies.hostControl }),
+      prepareBeforeRegistration: () => this.dependencies.principalPreparationBeforeRegistration?.() === true,
       // P0V-57: the same admission the runner channel gives these methods.
-      prepare: async auth => {
+      prepare: async (auth, responseId) => {
         assertInternalAdmission("batch.prepare", this.internalAdmission);
-        return this.mail.prepare(auth);
+        return this.mail.prepare(auth, responseId);
       },
       complete: async (auth, evidence) => {
         assertInternalAdmission("batch.complete", this.internalAdmission);
@@ -221,8 +225,11 @@ export class Broker {
   }
   private listenOn(path: string, serve: (socket: Duplex) => void): BrokerListener {
     this.dependencies.effects.prepareEndpoint(path);
+    // Includes unauthenticated idle/partial handshakes, before frame parsing.
+    const sockets = this.hostSockets;
     const { listener: server, prepare } = this.dependencies.effects.openListener(socket => {
-      if (this.draining) { socket.destroy(); return; }
+      if (this.draining || sockets.size >= ACTOR_CONNECTIONS) { socket.destroy(); return; }
+      sockets.add(socket); socket.once("close", () => sockets.delete(socket));
       serve(socket);
     });
     this.listeners.listen(server, path, prepare);
@@ -362,7 +369,11 @@ export class Broker {
       throw new StoreError("BROKER_UNAVAILABLE", "runner control owner is not ready");
     }
     socket.once("close", () => {
-      try { this.runLeases.get(peer.inheritedRunner!.actor)?.revoke(); }
+      try {
+        const grant = peer.inheritedRunner!;
+        const run = this.runLeases.get(grant.actor);
+        if (run?.invocationId === grant.invocationId) run.revoke();
+      }
       catch (error) { this.cleanupError(error); }
     });
     this.serveFrames(socket, peer, (raw, stream) => this.dispatchInternal(raw, peer, stream, "runner"), () => {

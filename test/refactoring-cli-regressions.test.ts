@@ -106,7 +106,7 @@ async function withPeer(home: string, expression: string, receipt: Receipt): Pro
   }
 }
 
-test("R01 CFG-005: valid config succeeds; one duplicate initialResident is rejected", () => {
+test("001. Valid config succeeds; one duplicate initialResident is rejected", () => {
   const home = temp();
   try {
     const path = join(home, "config.json"); const config = validConfig();
@@ -116,7 +116,7 @@ test("R01 CFG-005: valid config succeeds; one duplicate initialResident is rejec
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("R01 ID-002: valid lineage finishes; a disconnected created_by cycle fails closed", () => {
+test("002. Valid lineage finishes; a disconnected created_by cycle fails closed", () => {
   for (const mode of ["valid", "cycle"]) {
     const home = temp();
     try {
@@ -133,7 +133,7 @@ for (const [first, second, method, params, result] of [
   [clientCall("controlAgent", "start", "alice", "same-key"), clientCall("controlAgent", "stop", "alice", "same-key"), "agent.start", { agent: "alice" },
     { kind: "agent.start", agent: "alice", desired: "enabled", remainingOperations: [] }],
 ] as const) {
-  test(`R01 IPC-006: typed client ${method} cannot replay as another method`, async () => {
+  test(`003. Typed client ${method} cannot replay as another method`, async () => {
     const home = temp();
     try {
       const receipt: Receipt = { operation: OP, state: "succeeded", result: result.kind === "agent.start"
@@ -147,7 +147,7 @@ for (const [first, second, method, params, result] of [
   });
 }
 
-test("R01 IPC-005: recipient order and duplicates do not change request identity", async () => {
+test("004. Recipient order and duplicates do not change request identity", async () => {
   const home = temp();
   try {
     const receipt: Receipt = { operation: OP, state: "succeeded", result: {
@@ -164,7 +164,7 @@ test("R01 IPC-005: recipient order and duplicates do not change request identity
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("R01 IPC-008: missing frozen body is not an empty body or successful cached request", async () => {
+test("005. Missing frozen body is not an empty body or successful cached request", async () => {
   const home = temp();
   try {
     const bytes = Buffer.from("# GOAL\nhello\n"); const cache = new RequestCache(home); const hash = digest(bytes);
@@ -190,7 +190,7 @@ for (const [state, expectedExit, extra] of [
   ["pending", 0, {}], ["unknown", 3, {}],
   ["failed", 2, { error: { code: "CHECK_FAILED", message: "check failed", retry: "never" } }],
 ] as const) {
-  test(`R01 CLI-003: accepted ${state} receipt has exit ${expectedExit} and is never resent`, async () => {
+  test(`006. Accepted ${state} receipt has exit ${expectedExit} and is never resent`, async () => {
     const home = temp();
     try {
       const cache = new RequestCache(home);
@@ -204,7 +204,7 @@ for (const [state, expectedExit, extra] of [
   });
 }
 
-test("R01 CLI-002: maximum 96-character request key derives a valid export ref", async () => {
+test("007. Maximum 96-character request key derives a valid export ref", async () => {
   const home = temp(); const key = "k".repeat(96);
   try {
     const git = (args: string[]): string => {
@@ -223,7 +223,7 @@ test("R01 CLI-002: maximum 96-character request key derives a valid export ref",
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("R01 IPC-008: corrupt cached JSON is never indistinguishable from absence", () => {
+test("008. Corrupt cached JSON is never indistinguishable from absence", () => {
   const home = temp();
   try {
     const cache = new RequestCache(home); assert.equal(cache.read("missing").kind, "absent");

@@ -8,7 +8,7 @@ const pending = [
     { value: "direct-new", publicList: false },
     { value: "public-last", publicList: true },
 ];
-test("R24: the existing two-class policy preserves oldest order and direct/public alternation", () => {
+test("001. The existing two-class policy preserves oldest order and direct/public alternation", () => {
     assert.deepEqual(selectBatch(pending, 4), ["direct-old", "public-old", "direct-new", "public-new"]);
     assert.deepEqual(selectBatch(pending, 5), ["direct-old", "public-old", "direct-new", "public-new", "public-last"]);
     assert.deepEqual(selectBatch(pending.filter(value => value.publicList), 2), ["public-old", "public-new"]);
@@ -16,7 +16,7 @@ test("R24: the existing two-class policy preserves oldest order and direct/publi
     assert.throws(() => selectBatch(pending, 1), { code: "UNSUPPORTED_PROFILE" });
     assert.deepEqual(pending.map(value => value.value), ["public-old", "direct-old", "public-new", "direct-new", "public-last"]);
 });
-test("G02-ledger-r2: bounded selection preserves both classes across a long leading backlog", () => {
+test("002. Bounded selection preserves both classes across a long leading backlog", () => {
     for (const leadingPublic of [true, false]) {
         let visited = 0;
         let closed = false;
@@ -45,7 +45,7 @@ test("G02-ledger-r2: bounded selection preserves both classes across a long lead
     for (const maximum of [0, -1, NaN, Infinity, 1.5])
         assert.throws(() => selectBatch([], maximum), { code: "UNSUPPORTED_PROFILE" });
 });
-test("R24: the extension projection has six fields and never publishes host session or index paths", () => {
+test("003. The extension projection has six fields and never publishes host session or index paths", () => {
     const batch = {
         id: "12345678-1234-4234-8234-123456789abc", agent: "alice", incarnation: 1,
         messageIds: ["m-12345678-1234-4234-8234-123456789abc-0"],

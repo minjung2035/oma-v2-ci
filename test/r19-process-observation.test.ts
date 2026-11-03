@@ -20,7 +20,7 @@ const matches = (code: string) => (error: unknown) => error instanceof StoreErro
 
 // These tests exercise the process boundary, not Git or cgroup safety proofs.
 // They are authored here but have not been executed in the refactoring session.
-test("R19: argv, environment, cwd and finite native limits are explicit and copied", () => {
+test("001. Argv, environment, cwd and finite native limits are explicit and copied", () => {
   const invoke: SyncInvoker = (command, argv, options) => {
     assert.equal(command, spec.executable);
     assert.deepEqual(argv, ["--version"]);
@@ -41,14 +41,14 @@ test("R19: argv, environment, cwd and finite native limits are explicit and copi
   assert.equal(result.stdout.toString("utf8"), "ok\n");
 });
 
-test("R19: known nonzero exits remain facts instead of invented successful empty reads", () => {
+test("002. Known nonzero exits remain facts instead of invented successful empty reads", () => {
   const result = runProcessSync(spec, () => native({ status: 1, stdout: Buffer.alloc(0), stderr: Buffer.from("not found") }));
   assert.equal(result.kind, "exited");
   assert.equal(result.exitCode, 1);
   assert.deepEqual(requireTextExit(result, "fixture"), { status: 1, stdout: "", stderr: "not found" });
 });
 
-test("R19: timeout, output overflow, signals and missing exit observations are distinct", () => {
+test("003. Timeout, output overflow, signals and missing exit observations are distinct", () => {
   const cases: Array<{ result: NativeSyncResult; kind: string; error: string }> = [
     { result: native({ status: null, signal: "SIGKILL", error: errorWithCode("ETIMEDOUT") }), kind: "timed-out", error: "DEADLINE_EXCEEDED" },
     { result: native({ status: null, signal: "SIGKILL", error: errorWithCode("ENOBUFS") }), kind: "output-limited", error: "LIMIT_EXCEEDED" },
@@ -67,7 +67,7 @@ test("R19: timeout, output overflow, signals and missing exit observations are d
   assert.equal(thrown.errorCode, "EACCES");
 });
 
-test("R19: returned prefixes are bounded and cannot become decision output after truncation", () => {
+test("004. Returned prefixes are bounded and cannot become decision output after truncation", () => {
   const result = runProcessSync(spec, () => native({ stdout: Buffer.alloc(33, 65), stderr: Buffer.alloc(17, 66) }));
   assert.equal(result.kind, "output-limited");
   assert.equal(result.stdout.length, 32);
@@ -77,7 +77,7 @@ test("R19: returned prefixes are bounded and cannot become decision output after
   assert.throws(() => requireTextExit(result, "fixture"), matches("LIMIT_EXCEEDED"));
 });
 
-test("R19: diagnostic discard is explicit and cannot exempt overflowing decision stdout", () => {
+test("005. Diagnostic discard is explicit and cannot exempt overflowing decision stdout", () => {
   const diagnostic = runProcessSync({ ...spec, stderrOverflow: "discard" }, () => native({ stderr: Buffer.alloc(17) }));
   assert.equal(diagnostic.kind, "exited");
   assert.equal(diagnostic.stderr.length, 16);
@@ -88,7 +88,7 @@ test("R19: diagnostic discard is explicit and cannot exempt overflowing decision
   assert.equal(nativeOverflow.kind, "output-limited");
 });
 
-test("R19: invalid UTF-8 and invalid numeric limits never reach text decision parsers", () => {
+test("006. Invalid UTF-8 and invalid numeric limits never reach text decision parsers", () => {
   assert.throws(() => decodeProcessText(Buffer.from([0xff])));
   const observation = runProcessSync(spec, () => native({ stdout: Buffer.from([0xff]) }));
   assert.throws(() => requireTextExit(observation, "fixture"), matches("INTERNAL_ERROR"));
@@ -103,7 +103,7 @@ const childSpec = (script: string, overrides: Partial<CommandSpec> = {}): Comman
   timeoutMs: 5000, stdoutBytes: 1024, stderrBytes: 1024, ...overrides,
 });
 
-test("R19: asynchronous execution settles a known child exit with both output channels", async () => {
+test("007. Asynchronous execution settles a known child exit with both output channels", async () => {
   const result = await runProcess(childSpec("process.stdout.write('out'); process.stderr.write('err'); process.exitCode = 7;"));
   assert.equal(result.kind, "exited");
   assert.equal(result.exitCode, 7);
@@ -111,7 +111,7 @@ test("R19: asynchronous execution settles a known child exit with both output ch
   assert.equal(result.stderr.toString("utf8"), "err");
 });
 
-test("R19: stdout and stderr floods are bounded and cannot return an exited success", async () => {
+test("008. Stdout and stderr floods are bounded and cannot return an exited success", async () => {
   for (const channel of ["stdout", "stderr"] as const) {
     const result = await runProcess(childSpec(`process.${channel}.write(Buffer.alloc(65536)); setInterval(() => {}, 1000);`));
     assert.equal(result.kind, "output-limited");
@@ -122,7 +122,7 @@ test("R19: stdout and stderr floods are bounded and cannot return an exited succ
   }
 });
 
-test("R19: a timeout records termination without claiming that an external cgroup is empty", async () => {
+test("009. A timeout records termination without claiming that an external cgroup is empty", async () => {
   const result = await runProcess(childSpec("process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);", { timeoutMs: 100 }));
   assert.equal(result.kind, "timed-out");
   assert.notEqual(result.kind, "exited");

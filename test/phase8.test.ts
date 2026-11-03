@@ -146,7 +146,7 @@ async function* iter(b: Buffer): AsyncIterable<Uint8Array> {
     yield b;
 }
 // ---------------------------------------------------------------------------
-test("T68a: reconcile startup completes a pending accepted mail (accepted-before-materialize fixture)", async () => {
+test("001. Reconcile startup completes a pending accepted mail (accepted-before-materialize fixture)", async () => {
     const env = envOf(false);
     try {
         const receipt = await env.mail.send(auth, "k1", {
@@ -171,7 +171,7 @@ test("T68a: reconcile startup completes a pending accepted mail (accepted-before
         env.seal();
     }
 });
-test("T68b: reconcile never overwrites a moved published ref; ref==candidate recovers", async () => {
+test("002. Reconcile never overwrites a moved published ref; ref==candidate recovers", async () => {
     const env = envOf(true);
     try {
         const base = seedBare(env);
@@ -280,7 +280,7 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
         env.seal();
     }
 });
-test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", async () => {
+test("003. Canonical repo integrity is asserted; start-limit surface reported without reset", async () => {
     const env = envOf(true);
     try {
         seedBare(env);
@@ -291,7 +291,7 @@ test("T68c: canonical repo integrity is asserted; start-limit surface reported w
         env.seal();
     }
 });
-test("T68d: a dead run's fsck diagnostic spool is collected -- residue neither blocks nor survives the health observation", async () => {
+test("004. A dead run's fsck diagnostic spool is collected -- residue neither blocks nor survives the health observation", async () => {
     const env = envOf(true);
     try {
         seedBare(env);

@@ -24,7 +24,7 @@ import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 
 const code = (error: unknown): string | undefined => (error as { code?: string }).code;
 
-test("AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither the Human's session history nor the engine's credentials", async () => {
+test("001. The Principal's model scope holds neither the Human's session history nor the engine's credentials", async () => {
   const state = mkdtempSync(join(tmpdir(), "oma-av3-"));
   try {
     const workspace = modelWorkspacePathAt(state, "principal");
@@ -54,7 +54,7 @@ test("AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither th
   } finally { rmSync(state, { recursive: true, force: true }); }
 });
 
-test("AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps what the product keeps is refused before it starts", () => {
+test("002. An engine whose workspace overlaps what the product keeps is refused before it starts", () => {
   const state = "/srv/oma-av3";
   const privateSpace = join(state, "principal", "private");
   // The former Principal layout: the workspace was the private space itself.

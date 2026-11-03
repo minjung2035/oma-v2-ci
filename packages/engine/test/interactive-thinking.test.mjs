@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sourceWorld } from './source-world.mjs';
 
-for (const thinking of [undefined, 'off', 'high']) test(`interactive session receives explicit effort ${thinking ?? '(engine default)'}`, async () => {
+for (const thinking of [undefined, 'off', 'high']) test(`001. Interactive session receives explicit effort ${thinking ?? '(engine default)'}`, async () => {
   const argv = thinking === undefined ? [] : ['--thinking', thinking];
   const calls = [];
   const session = { reload: async () => {} };

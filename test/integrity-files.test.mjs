@@ -12,60 +12,60 @@ import { publishImmutableFile } from "@oma/storage/immutable-file";
 import { writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 const inspect = (f, overrides = {}) => inspectIntegrity(f.snapshot(), f.context, { files: new NodeIntegrityFiles(), ...overrides });
 const has = (report, code) => report.issues.some(issue => issue.code === code);
-test("P6 files: accepted pending intent with immutable source is consistent but not complete", t => {
+test("001. Files: accepted pending intent with immutable source is consistent but not complete", t => {
   const f = physicalLedger(t), before = f.store.getOperationById(f.id), report = inspect(f);
   assert.equal(report.status, "PASS", JSON.stringify(report)); assert.equal(report.pendingPublications, 1);
   assert.equal(report.pendingOperations, 1); assert.deepEqual(f.store.getOperationById(f.id), before);
   assert.equal(existsSync(f.archive), false);
 });
-test("P6 files: post-publication/pre-SQL crash window is not a fabricated failure or success", t => {
+test("002. Files: post-publication/pre-SQL crash window is not a fabricated failure or success", t => {
   const f = physicalLedger(t); f.publish(false); f.reopen();
   const report = inspect(f); assert.equal(report.status, "PASS", JSON.stringify(report));
   assert.equal(f.store.getOperationById(f.id).state, "pending");
   assert.equal(f.store.getDelivery(f.message.id, "alice").materialized, 0);
   assert.ok(readFileSync(f.object).equals(f.bytes));
 });
-test("P6 files: source hash corruption and source loss are reported without repair", t => {
+test("003. Files: source hash corruption and source loss are reported without repair", t => {
   const f = physicalLedger(t); chmodSync(f.object, 0o600);
   const changed = Buffer.from(f.bytes); changed[changed.length - 1] ^= 1; writeFileSync(f.object, changed);
   assert.equal(inspect(f).status, "FAIL"); assert.ok(readFileSync(f.object).equals(changed));
   unlinkSync(f.object); assert.ok(has(inspect(f), "MAIL_OBJECT_MISSING"));
   assert.equal(existsSync(f.object), false);
 });
-test("P6 files: missing materialized name and publication before archive violate physical relations", t => {
+test("004. Files: missing materialized name and publication before archive violate physical relations", t => {
   const f = physicalLedger(t); f.publish();
   unlinkSync(f.inbox()); assert.ok(has(inspect(f), "MATERIALIZED_FILE_MISSING"));
   linkSync(f.object, f.inbox()); unlinkSync(f.archive);
   assert.ok(has(inspect(f), "DELIVERY_WITHOUT_ARCHIVE"));
 });
-test("P6 files: duplicate new/cur names and orphan archive names are not silently removed", t => {
+test("005. Files: duplicate new/cur names and orphan archive names are not silently removed", t => {
   const f = physicalLedger(t); f.publish(); mkdirSync(join(f.root, "mail/inboxes/alice/cur")); linkSync(f.object, f.inbox("cur"));
   assert.ok(has(inspect(f), "DUPLICATE_MAILBOX_NAMES"));
   const orphan = join(f.root, "mail/archive/cur/orphan"); writeFileSync(orphan, "x");
   assert.ok(has(inspect(f), "ARCHIVE_DIRECTORY_UNOWNED")); assert.equal(existsSync(orphan), true);
 });
-test("P6 files: unaccepted object orphan is unknown, not repaired or mislabelled accepted", t => {
+test("006. Files: unaccepted object orphan is unknown, not repaired or mislabelled accepted", t => {
   const f = physicalLedger(t), orphan = join(f.root, "mail/objects/orphan.eml"); writeFileSync(orphan, "x");
   const report = inspect(f); assert.equal(report.status, "UNKNOWN"); assert.ok(has(report, "OBJECT_DIRECTORY_UNOWNED"));
   assert.equal(existsSync(orphan), true); assert.equal(f.store.getOperationById(f.id).state, "pending");
 });
-test("P6 files: symlink targets are not treated as immutable source files", t => {
+test("007. Files: symlink targets are not treated as immutable source files", t => {
   const f = physicalLedger(t), target = join(f.root, "external"); writeFileSync(target, f.bytes);
   unlinkSync(f.object); symlinkSync(target, f.object);
   assert.equal(inspect(f).status, "FAIL"); assert.ok(readFileSync(target).equals(f.bytes));
 });
-test("P6 files: observation budgets and unobserved live units remain UNKNOWN", t => {
+test("008. Files: observation budgets and unobserved live units remain UNKNOWN", t => {
   const f = physicalLedger(t);
   assert.equal(inspect(f, { files: new NodeIntegrityFiles({ ...FILE_INSPECTION_LIMITS, maxFileBytes: 1 }) }).status, "UNKNOWN");
   assert.equal(inspect(f, { mode: "live" }).status, "UNKNOWN");
 });
-test("P6 files: malformed persisted plans never reach physical observers", t => {
+test("009. Files: malformed persisted plans never reach physical observers", t => {
   const f = physicalLedger(t), snapshot = structuredClone(f.snapshot()); snapshot.tables.operations[0].plan_json = '{"path":"/should-not-be-read"}';
   let calls = 0;
   const report = inspectIntegrity(snapshot, f.context, { files: { file() { calls++; throw new Error(); }, names() { calls++; throw new Error(); }, contextTree() { calls++; throw new Error(); }, symlink() { calls++; throw new Error(); } } });
   assert.equal(report.status, "FAIL"); assert.equal(calls, 0);
 });
-test("P6 files: context trees retain exact names, bytes, modes and no-link policy", t => {
+test("010. Files: context trees retain exact names, bytes, modes and no-link policy", t => {
   const f = physicalLedger(t), root = join(f.root, "revision"), bytes = Buffer.from("goal\n"); mkdirSync(root);
   const file = join(root, "GOAL.md"); writeFileSync(file, bytes, { mode: 0o644 }); chmodSync(root, 0o555);
   const entries = [{ path: "GOAL.md", bytes: bytes.length, sha256: sha256Hex(bytes) }];
@@ -77,7 +77,7 @@ test("P6 files: context trees retain exact names, bytes, modes and no-link polic
   assert.equal(new NodeIntegrityFiles().contextTree(root, [] ).kind, "corrupt");
 });
 
-test("P6 files: a matching file hash does not hide contradictory frozen headers", t => {
+test("011. Files: a matching file hash does not hide contradictory frozen headers", t => {
   const f = physicalLedger(t, { editHeaders: text => text.replace("X-OMA-Kind: message", "X-OMA-Kind: alert") });
   const report = inspectIntegrity(f.snapshot(), f.context, { files: new NodeIntegrityFiles() });
   assert.equal(report.status, "FAIL", JSON.stringify(report));
@@ -85,7 +85,7 @@ test("P6 files: a matching file hash does not hide contradictory frozen headers"
   assert.equal(f.store.getOperationById(f.id).state, "pending");
 });
 
-test("P6 files: worker-audience mail is expected under mail/workers, never the public archive", async t => {
+test("012. Files: worker-audience mail is expected under mail/workers, never the public archive", async t => {
   const f = physicalLedger(t); f.publish();
   const { generateOperationId } = await import("@oma/native/identity");
     const { messageIdForOperation: generateMessageId } = await import("@oma/domain/derived");

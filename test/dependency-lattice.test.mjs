@@ -29,7 +29,7 @@ function analyze(files) {
 }
 const typeRef = to => `import type { Value } from "${to}";\nexport type Held = Value;\n`;
 
-test("P5 lattice: the measured layer order is kernel < facts < workflow < orchestration < entry", () => {
+test("001. Lattice: the measured layer order is kernel < facts < workflow < orchestration < entry", () => {
   assert.deepEqual(["packages/domain/src/identifiers.ts", "packages/tool-runtime/src/contained-search.ts", "packages/mail/src/index.ts", "packages/broker/src/index.ts", "apps/oma/src/entry/broker.ts", "packages/contracts/src/index.ts"]
     .map(file => [file, layerOf(file)?.name]), [
     ["packages/domain/src/identifiers.ts", "L1-kernel"],
@@ -43,7 +43,7 @@ test("P5 lattice: the measured layer order is kernel < facts < workflow < orches
   assert.equal(layerOf("packages/review/src/index.ts")?.name, "L3-workflow", "current mail review coordinates acceptance and publication");
 });
 
-test("P5 lattice: a reverse runtime edge fails and the forward edge does not", () => {
+test("002. Lattice: a reverse runtime edge fails and the forward edge does not", () => {
   const upward = analyze({
     "packages/domain/src/low.ts": "import { high } from \"../../../apps/oma/src/broker/high.js\"; export const low = high;",
     "apps/oma/src/broker/high.ts": `export const high = 1;`,
@@ -66,13 +66,13 @@ test("P5 lattice: a reverse runtime edge fails and the forward edge does not", (
   assert.deepEqual(sameLayer, []);
 });
 
-test("P5 lattice: a file outside the measured layers fails instead of escaping the gate", () => {
+test("003. Lattice: a file outside the measured layers fails instead of escaping the gate", () => {
   const findings = analyze({ "apps/oma/src/unmeasured/thing.ts": `export const thing = 1;` });
   assert.equal(findings.length, 1, JSON.stringify(findings));
   assert.equal(findings[0].rule, "dependency-lattice-unclassified");
 });
 
-test("P5 lattice: a type-only reference may not form a cycle across two layers", () => {
+test("004. Lattice: a type-only reference may not form a cycle across two layers", () => {
   const findings = analyze({
     "packages/domain/src/a.ts": typeRef("../../../apps/oma/src/broker/b.js"),
     "apps/oma/src/broker/b.ts": typeRef("../../../../packages/domain/src/a.js"),
@@ -81,7 +81,7 @@ test("P5 lattice: a type-only reference may not form a cycle across two layers",
   assert.match(findings[0].reason, /L1-kernel, L4-orchestration/);
 });
 
-test("DR44: Store capabilities cannot form a type cycle with their composition even within one layer", () => {
+test("005. Store capabilities cannot form a type cycle with their composition even within one layer", () => {
   const findings = analyze({
     "packages/storage/src/facets.ts": typeRef("./store.js"),
     "packages/storage/src/store.ts": typeRef("./facets.js"),
@@ -89,7 +89,7 @@ test("DR44: Store capabilities cannot form a type cycle with their composition e
   assert.deepEqual(findings.map(finding => finding.rule), ["type-import-cycle"]);
 });
 
-test("P5 lattice: the current production graph satisfies the enforced lattice", () => {
+test("006. Lattice: the current production graph satisfies the enforced lattice", () => {
   const program = createArchitectureProgram(process.cwd());
   // The lattice, kernel and type-cycle findings are all evaluated from the
   // import graph before the contract-exhaustiveness section runs, so disabling

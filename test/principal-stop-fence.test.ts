@@ -14,7 +14,7 @@ import { PUBLIC_METHODS } from "@oma/protocol/methods";
 function principal(auth: AuthContext): AuthContext {
   return { ...auth, actor: "principal", incarnation: 0, role: "principal", channel: "host" };
 }
-test("DR27: a Principal stop survives Worker stop, restart and same-key replay; only an explicit resume releases it", async t => {
+test("001. A Principal stop survives Worker stop, restart and same-key replay; only an explicit resume releases it", async t => {
   const f = lifecycleReplayFixture(); let closed = false;
   t.after(() => { if (!closed) f.store.close(); rmSync(f.root, { recursive: true, force: true }); });
   const p = principal(f.auth);
@@ -41,7 +41,7 @@ test("DR27: a Principal stop survives Worker stop, restart and same-key replay; 
   } finally { reopened.close(); }
 });
 
-for (const action of ["agent.start", "agent.stop"] as const) test(`DR27/P0-0: ${action} replay never gains authority from a later equal desired state`, async t => {
+for (const action of ["agent.start", "agent.stop"] as const) test(`002. Principal stop fence: ${action} replay never gains authority from a later equal desired state`, async t => {
   const f = lifecycleReplayFixture(); t.after(() => f.close()); const p = principal(f.auth);
   const old = f.seedPending(action, "old-intent");
   // Both changes happen before a runner increments incarnation: desired
@@ -58,7 +58,7 @@ for (const action of ["agent.start", "agent.stop"] as const) test(`DR27/P0-0: ${
   assert.equal(f.store.operations.getById(old.id)?.planJson, old.planJson);
 });
 
-test("DR27: an unconfirmed physical stop is still an accepted stop fence", async t => {
+test("003. An unconfirmed physical stop is still an accepted stop fence", async t => {
   const f = lifecycleReplayFixture(); t.after(() => f.close()); f.units.failEffect = true;
   const stopped = (await f.lifecycle.stop(principal(f.auth), "a", "unconfirmed-stop"));
   assert.equal(stopped.state, "unknown"); f.units.failEffect = false;
@@ -66,7 +66,7 @@ test("DR27: an unconfirmed physical stop is still an accepted stop fence", async
   assert.equal(f.store.operations.get("manager", "restart"), null);
 });
 
-test("DR27: the Principal actor releases its safety stop but cannot orchestrate routine starts", async t => {
+test("004. The Principal actor releases its safety stop but cannot orchestrate routine starts", async t => {
   const f = lifecycleReplayFixture(); t.after(() => f.close());
   const p: AuthContext = { ...principal(f.auth), channel: "actor", incarnation: 0 };
   const start = (key: string) => f.dispatcher.dispatch(p,
@@ -84,7 +84,7 @@ test("DR27: the Principal actor releases its safety stop but cannot orchestrate 
   assert.match(JSON.stringify(await start("another-routine")), /CAPABILITY_DENIED/);
 });
 
-test("DR27: broad legacy grants cannot expose Principal routine RPCs; own receipts remain readable", async t => {
+test("005. Broad legacy grants cannot expose Principal routine RPCs; own receipts remain readable", async t => {
   const f = lifecycleReplayFixture(); t.after(() => f.close());
   const p: AuthContext = { ...principal(f.auth), channel: "actor" };
   const calls = {

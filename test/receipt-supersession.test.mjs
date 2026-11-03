@@ -45,7 +45,7 @@ const request = (key) => ({ key, method: "route.follow", params: { topic: "commo
 /** How many processes compete with the one that settles. */
 const REGRESSORS = ["b", "c", "d"];
 
-test("REC-007: the ordering admits progress, refuses regression, and names contradiction as neither", () => {
+test("001. The ordering admits progress, refuses regression, and names contradiction as neither", () => {
   // Read as a table, because the failure this prevents is a missing row rather
   // than a wrong line: every pair of states has to have an answer, and the two
   // non-terminal states must not be treated as settled just because something
@@ -71,7 +71,7 @@ test("REC-007: the ordering admits progress, refuses regression, and names contr
       `${previous === null ? "absent" : previous.state} -> ${observed.state}: ${why}`);
 });
 
-test("REC-007: a settled receipt is not rewritten by a later observation of less", () => {
+test("002. A settled receipt is not rewritten by a later observation of less", () => {
   const h = home();
   try {
     const cache = new RequestCache(h.path);
@@ -88,7 +88,7 @@ test("REC-007: a settled receipt is not rewritten by a later observation of less
   } finally { h.cleanup(); }
 });
 
-test("REC-007: two settled states for one operation is a corruption, not an update", () => {
+test("003. Two settled states for one operation is a corruption, not an update", () => {
   const h = home();
   try {
     const cache = new RequestCache(h.path);
@@ -103,7 +103,7 @@ test("REC-007: two settled states for one operation is a corruption, not an upda
   } finally { h.cleanup(); }
 });
 
-test("REC-007: a receipt for another operation is refused rather than ordered against this one", () => {
+test("004. A receipt for another operation is refused rather than ordered against this one", () => {
   const h = home();
   try {
     const cache = new RequestCache(h.path);
@@ -180,7 +180,7 @@ function walker(home, keys, receiptLiteral, ready, { untilDone = false } = {}) {
   `], { stdio: ["ignore", "inherit", "inherit"] });
 }
 
-test("REC-007: a settled receipt survives a process observing the same request as pending", async () => {
+test("005. A settled receipt survives a process observing the same request as pending", async () => {
   // The unit table above cannot see this defect. Each process applies the
   // ordering correctly to the value it read; the regression happens because
   // the value it read stopped being current before it wrote. Only a hold that
@@ -232,7 +232,7 @@ test("REC-007: a settled receipt survives a process observing the same request a
   } finally { h.cleanup(); }
 });
 
-test("REC-007: a receipt lock another process holds is reported as unavailable, never taken", async () => {
+test("006. A receipt lock another process holds is reported as unavailable, never taken", async () => {
   // The bounded wait exists so a stuck holder cannot hang the Human's terminal
   // indefinitely. What must never happen is the other reading of a wait that
   // ran out: proceeding as though the lock had been acquired, which would put

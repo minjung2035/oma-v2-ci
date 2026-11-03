@@ -98,7 +98,7 @@ function society(t: TestContext) {
   return { root, store, git, paths, broker, bundle, serve, submitFrame, mailSend, wires };
 }
 
-test("V22A: a streamed submission owns its body until execution settles while ordinary mail proceeds", async t => {
+test("001. A streamed submission owns its body until execution settles while ordinary mail proceeds", async t => {
   const entered = deferred(); const release = deferred();
   t.after(() => release.resolve());
   const f = society(t);
@@ -131,7 +131,7 @@ test("V22A: a streamed submission owns its body until execution settles while or
   assert.equal((await f.mailSend("after-settle")).ok, true, "settled transport does not gate new mail");
 });
 
-test("P0V-50 / F4, P0-4: a caller that goes away does not remove the body its accepted execution owns", async t => {
+test("002. A caller that goes away does not remove the body its accepted execution owns", async t => {
   const entered = deferred(); const release = deferred();
   t.after(() => release.resolve());
   const f = society(t);
@@ -157,7 +157,7 @@ test("P0V-50 / F4, P0-4: a caller that goes away does not remove the body its ac
   await until(() => f.wires().length === 0, "the execution-owned body to close");
 });
 
-test("V22A: partial transport bodies close once and large-tree streams remain unrestricted", async t => {
+test("003. Partial transport bodies close once and large-tree streams remain unrestricted", async t => {
   const f = society(t);
   // Closed mid-stream: the unaccepted partial transport copy is removed.
   const cut = f.serve();

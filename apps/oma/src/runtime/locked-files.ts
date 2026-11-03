@@ -6,6 +6,7 @@
 import { join } from "node:path";
 import { withCleanup } from "@oma/native/cleanup";
 import { ProcessLock } from "@oma/native/process-lock";
+import { StoreError } from "@oma/domain/errors";
 import { ensureOwnedUserDirectory, ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
 
 function lockedReplace(ensure: (directory: string) => void, directory: string, name: string, bound: number,
@@ -14,6 +15,8 @@ function lockedReplace(ensure: (directory: string) => void, directory: string, n
     const path = join(directory, name);
     const current = readUserFile(path, bound, { singleName: true });
     const next = update(current ?? undefined);
+    if (next !== undefined && Buffer.byteLength(next, "utf8") > bound)
+      throw new StoreError("LIMIT_EXCEEDED", "engine settings rewrite exceeds its reader's byte bound");
     if (next !== undefined && next !== current) replaceUserFile(path, next);
   });
 }

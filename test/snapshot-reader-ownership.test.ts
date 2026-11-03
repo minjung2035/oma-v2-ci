@@ -33,7 +33,7 @@ function failResourceClose(t: import("node:test").TestContext, identity: Stats, 
   return { failure, get triggered() { return triggered; } };
 }
 
-test("DR27/P0-4: a constructor close failure releases its newly acquired directory exactly once", t => {
+test("001. A constructor close failure releases its newly acquired directory exactly once", t => {
   const root = fixture(t); const before = count(); const fault = failClose(t, 1);
   assert.throws(() => new SnapshotReader(root), error => error === fault.failure);
   assert.equal(count(), before);
@@ -41,7 +41,7 @@ test("DR27/P0-4: a constructor close failure releases its newly acquired directo
 });
 
 for (const phase of ["readable handoff", "parent return"] as const) {
-  test(`DR27/P0-4: ${phase} failure closes every still-owned descriptor`, t => {
+  test(`002. Snapshot reader ownership: ${phase} failure closes every still-owned descriptor`, t => {
     const root = fixture(t); const reader = new SnapshotReader(root); t.after(() => reader.close());
     const before = count(), resource = join(root, "a", "b", ...(phase === "readable handoff" ? ["file"] : []));
     const fault = failResourceClose(t, fs.statSync(resource));
@@ -57,7 +57,7 @@ for (const phase of ["readable handoff", "parent return"] as const) {
   });
 }
 
-for (const linked of [false, true]) test(`DR27/P0-4: ${linked ? "linked" : "missing"} parent resolution leaves no descriptors behind`, t => {
+for (const linked of [false, true]) test(`003. Snapshot reader ownership: ${linked ? "linked" : "missing"} parent resolution leaves no descriptors behind`, t => {
   const root = fixture(t), reader = new SnapshotReader(root); t.after(() => reader.close());
   if (linked) symlinkSync(join(root, "a", "b"), join(root, "a", "other"));
   const before = count();
@@ -66,7 +66,7 @@ for (const linked of [false, true]) test(`DR27/P0-4: ${linked ? "linked" : "miss
   assert.equal(count(), before);
 });
 
-test("DR27/P0-4: a failed reader close is not retried on a recycled descriptor number", t => {
+test("004. A failed reader close is not retried on a recycled descriptor number", t => {
   const root = fixture(t); const reader = new SnapshotReader(root);
   const before = count(); const fault = failClose(t, 1);
   assert.throws(() => reader.close(), error => error === fault.failure);
@@ -74,7 +74,7 @@ test("DR27/P0-4: a failed reader close is not retried on a recycled descriptor n
   assert.equal(fault.calls.length, 1); assert.equal(count(), before - 1);
 });
 
-test("DR27/P0-5: a failed entry read and failed cleanup retain both errors, and close the parent", t => {
+test("005. A failed entry read and failed cleanup retain both errors, and close the parent", t => {
   const root = fixture(t); const reader = new SnapshotReader(root); t.after(() => reader.close());
   const before = count(), realStat = fs.fstatSync, readFailure = new Error("entry stat failed");
   const fault = failResourceClose(t, fs.statSync(join(root, "a", "b", "file")), realStat);

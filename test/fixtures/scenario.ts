@@ -1,3 +1,6 @@
+import { isMailKind } from "@oma/domain/mail-values";
+import { StoreError } from "@oma/domain/errors";
+import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 import { testBroker } from "../helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -37,7 +40,8 @@ import { defaultHostConfig } from "@oma/config/defaults";
 import { GitModule } from "@oma/git";
 import { CandidateChecks } from "#oma-test/app/runtime/candidate-checks";
 import { integrationPolicyFromConfig } from "@oma/domain/integration-policy";
-import { encodedPrincipalToolSurface } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
+import { newSessionBirth, publishSessionBirth, collaborationSocietyBirth } from "#oma-test/app/runtime/session-mode";
 import { readCurrentHostPolicy } from "@oma/config";
 import { createChildSpecResolver } from "@oma/config/policy";
 import { residentProjectGit } from "@oma/domain/resident-paths";
@@ -133,7 +137,7 @@ export interface Scenario {
     }[];
     /** Waits until the engine is idle (no run going). */
     idle(timeoutMs?: number): Promise<void>;
-    /** A Resident writing to the society, through the broker's own dispatch. */
+    /** Seed mail through the original Mail owner with fixture authentication. */
     residentSends(from: string, input: {
         to: string[];
         subject: string;
@@ -141,8 +145,8 @@ export interface Scenario {
         kind?: string;
         replyTo?: string;
     }, key: string): Promise<Record<string, unknown>>;
-    /** Any public method as a Resident, through the broker's own dispatch with
-     * the resident profile's capabilities (mail.send, git.submit, ...). A null
+    /** Trusted fixture setup through the broker with explicit host authority and
+     * the recorded actor profile's capabilities (mail.send, git.submit, ...). A null
      * `key` sends a read-style envelope: no top-level request key. */
     residentCall(from: string, method: string, params: Record<string, unknown>, key: string | null, stream?: AsyncIterable<Uint8Array> | null): Promise<Record<string, unknown>>;
     /** The trusted candidate path for a Resident: commits `change` on a clone
@@ -210,7 +214,7 @@ export interface ScenarioOptions {
  * integration policy). It owns the Store it is given: its drain closes it, as
  * the product's broker process does on its way out. */
 async function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, config: HostConfig, configPath: string,
-    options: ScenarioOptions, trust: Readonly<Record<string, string>>): Promise<{ broker: Broker; units: NativeResidents; executions: ExecutionRuntime }> {
+    options: ScenarioOptions, trust: Readonly<Record<string, string>>): Promise<{ broker: Broker; units: NativeResidents; executions: ExecutionRuntime; mail: MailModule }> {
     const executions = new ExecutionRuntime(root);
     await executions.recover();
     let broker: Broker;
@@ -220,8 +224,9 @@ async function composeBroker(root: string, runRoot: string, store: Store, host: 
         { environment: { ...process.env, ...trust, ...options.engineEnv },
           ...(options.engineEnv?.OMA_TOOL_SURFACE === undefined ? {} : { toolSurface: options.engineEnv.OMA_TOOL_SURFACE }) });
     const mail = createMailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
-    const views = new ViewsModule(store, root, SOCIETY, "p");
-    const gitPaths = { stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
+    const views = new ViewsModule(store, root, SOCIETY, "p", SCENARIO_LIMITS, "collaboration-v1");
+    const publicationOwner = new AbortController();
+    const gitPaths = { ownerSignal: publicationOwner.signal, stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
         worldDir: join(root, "world"), society: SOCIETY,
          checkNode: config.installation.node, checkAssetsDir: config.installation.libdir, };
     const checks = new CandidateChecks(gitPaths, (command, signal, authorize, fds, prepared) => executions.run("candidate", command, signal, authorize, fds, undefined, prepared));
@@ -230,13 +235,18 @@ async function composeBroker(root: string, runRoot: string, store: Store, host: 
         { mailBodyBytes: options.reviewBodyBytes ?? SCENARIO_LIMITS.mailBodyBytes, subjectBytes: SCENARIO_LIMITS.subjectBytes, bundleBytes: SCENARIO_LIMITS.bundleBytes },
         quarantineExecution(gitPaths, executions));
     const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
-    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
-        residentProjectGit: residentProjectGit() }, resolveSpec, mail);
-    broker = testBroker({ store, mail, units, views, lifecycle, git, reviews, reconcile: null, paths: { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true,
+    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY,
+        ownerSignal: publicationOwner.signal, hasGoal: () => true, activationAllowed: () => true,
+        residentProjectGit: residentProjectGit() }, resolveSpec, mail, git);
+    views.bindCollaborationRecords({ mail, git, lifecycle,
+        reviews: auth => reviews.observeRecords(auth, collaborationSocietyBirth(root, SOCIETY, store.getAgent("principal"))),
+        logs: actor => units.logFiles(actor) });
+    broker = testBroker({ store, mail, units, views, lifecycle, git, reviews, reviewTargets: reviews, reconcile: null, paths: { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true,
         quiesceOnDrain: async () => {
+            publicationOwner.abort();
             await withAsyncCleanup(() => units.close(), () => executions.close());
         } }, limits: SCENARIO_LIMITS, principalHost: host });
-    return { broker, units, executions };
+    return { broker, units, executions, mail };
 }
 export async function startScenario(options: ScenarioOptions = {}): Promise<Scenario> {
     // D03: a launched runner checks that its roots name this society under `oma`.
@@ -245,6 +255,8 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     const runDirectory = join(base, "run"), physicalRunRoot = join(runDirectory, "oma", SOCIETY);
     mkdirSync(root, { recursive: true });
     mkdirSync(physicalRunRoot, { recursive: true });
+    // Explicit isolated fixture birth; never product fresh-admission selection.
+    publishSessionBirth(root, newSessionBirth(root, "society", REPO, "collaboration-v1"));
     // Linux Unix-socket names must fit sun_path; use a bounded test TMPDIR.
     // All bytes stay under base; parent /proc/fd links cannot cross bwrap's user namespace.
     const runRoot = physicalRunRoot;
@@ -260,7 +272,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             "scripted-2": { ...CONFINED_MODEL_2, inferenceTimeoutSeconds: 120 } },
         agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted",
                 capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities
-                        .filter(capability => options.submit !== false || capability !== "git.submit")] } } });
+                        .filter(capability => capability !== "context.publish" && (options.submit !== false || capability !== "git.submit"))] } } });
     const configPath = join(root, "config.json");
     writeFileSync(configPath, JSON.stringify(config, null, 2));
     const provider = await scriptedProvider(options.script ?? [], { tls: true });
@@ -286,8 +298,11 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             tx.insertAgent(agentRow(name));
     });
     const host = new HostSide();
-    let { broker, units, executions } = await composeBroker(root, runRoot, store, host, config, configPath, options, trust);
+    let { broker, units, executions, mail } = await composeBroker(root, runRoot, store, host, config, configPath, options, trust);
     await broker.start();
+    // The current product prepares permitted Principal records before SDK entry
+    // and credential grant. Missing source binding must fail, never be mocked empty.
+    await principalHostBroker(runRoot, SCENARIO_LIMITS).prepare();
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
     provider.configure(runtime.agentDir);
     const lines: string[] = [];
@@ -304,7 +319,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
             workspace: principalWorkspace(root), home: principalWorkspace(root),
             // The deliberate plan travels the plumbing field, not the inherited
             // env -- the runner's own hop, applied to the host engine.
-            toolSurface: options.engineEnv?.OMA_TOOL_SURFACE ?? encodedPrincipalToolSurface() }, profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds }, { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv }, { onLine: line => { lines.push(line); }, onBusy: () => { }, onEnd: reason => { lines.push(`[end] ${reason}`); },
+            toolSurface: options.engineEnv?.OMA_TOOL_SURFACE ?? JSON.stringify(collaborationSurface("principal")), collaborationStateRoot: root }, profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds }, { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust, ...options.engineEnv }, { onLine: line => { lines.push(line); }, onBusy: () => { }, onEnd: reason => { lines.push(`[end] ${reason}`); },
             onUi: event => options.interactive?.onUi(event, started),
             onPromptFailed: (_text, reason) => { lines.push(`[prompt failed] ${reason}`); },
             onPromptUnconfirmed: (_text, reason) => { lines.push(`[prompt unconfirmed] ${reason}`); } });
@@ -393,16 +408,29 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         },
         idle,
         async residentSends(from, input, key) {
-            return await scenario.residentCall(from, "mail.send", {
-                to: input.to, subject: input.subject, kind: input.kind ?? "message", body: input.body,
-                ...(input.replyTo === undefined ? {} : { replyToMessage: input.replyTo })
-            }, key);
+            // Fixture seeding uses the original Mail owner. It is not an
+            // authenticated Worker socket or a model invocation qualification.
+            const agent = store.getAgent(from); assert.ok(agent);
+            const auth: AuthContext = { actor: from, incarnation: agent.incarnation, role: agent.role, channel: "actor",
+                capabilities: new Set(resolvedSpecOf(agent).capabilities),
+                peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
+            try {
+                const kind = input.kind ?? "message"; assert.ok(isMailKind(kind));
+                const receipt = await mail.send(auth, key, { to: input.to, subject: input.subject, kind, body: input.body,
+                    ...(input.replyTo === undefined ? {} : { replyToMessage: input.replyTo }) });
+                return { v: 1, id: key, ok: true, result: receipt };
+            } catch (error) {
+                if (!(error instanceof StoreError)) throw error;
+                return { v: 1, id: key, ok: false, error: { code: error.code, message: error.message } };
+            }
         },
         async residentCall(from, method, params, key, stream = null) {
             const agent = store.getAgent(from);
             assert.ok(agent, `no resident ${from}`);
-            const auth: AuthContext = { actor: from, incarnation: agent.incarnation, role: "resident", channel: "actor",
-                capabilities: new Set(["mail.send", "route.follow", "git.submit", "agent.manage.self"]),
+            // Trusted fixture setup, not a selected model-session request. Actual
+            // model traffic in these scenarios uses the SDK and native actor socket.
+            const auth: AuthContext = { actor: from, incarnation: agent.incarnation, role: agent.role, channel: "host",
+                capabilities: new Set(resolvedSpecOf(agent).capabilities),
                 peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } };
             const request = { v: 1, id: key ?? method, method, ...(key === null ? {} : { request: key }), params };
             return await broker.dispatch(auth, request as unknown as Request, stream) as Record<string, unknown>;
@@ -443,7 +471,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         async restartBroker() {
             await scenario.stopBroker();
             store = new Store(join(root, "runtime.sqlite"));
-            ({ broker, units, executions } = await composeBroker(root, runRoot, store, host, readCurrentHostPolicy(configPath, SOCIETY), configPath, options, trust));
+            ({ broker, units, executions, mail } = await composeBroker(root, runRoot, store, host, readCurrentHostPolicy(configPath, SOCIETY), configPath, options, trust));
             await broker.start();
             register();
         },

@@ -11,7 +11,7 @@ function rows() {
 }
 function fatalOnly(error: unknown): void { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; }
 
-test("R29: concurrent sweeps join one Promise, examine distinct initial IDs and count terminal failures", async () => {
+test("001. Concurrent sweeps join one Promise, examine distinct initial IDs and count terminal failures", async () => {
   const table = rows(); const initial = [...table.keys()]; let calls = 0;
   let release!: () => void; const wait = new Promise<void>(resolve => { release = resolve; });
   const engine = new OperationRecovery({ snapshot: () => [...table.keys(), initial[0]!], read: id => table.get(id) ?? null,
@@ -27,7 +27,7 @@ test("R29: concurrent sweeps join one Promise, examine distinct initial IDs and 
   assert.deepEqual(engine.lastOutcomes.map(value => value.state), ["succeeded", "failed-terminal"]);
 });
 
-test("R29: already-terminal snapshot entries are excluded, not counted twice", async () => {
+test("002. Already-terminal snapshot entries are excluded, not counted twice", async () => {
   const table = rows(); const ids = [...table.keys()];
   const engine = new OperationRecovery({ snapshot: () => ids, read: id => table.get(id) ?? null,
     recover: async row => { for (const [id, value] of table) table.set(id, { ...value, state: "succeeded" }); }, failure: fatalOnly });
@@ -36,7 +36,7 @@ test("R29: already-terminal snapshot entries are excluded, not counted twice", a
   assert.deepEqual(await engine.sweep(), { examined: 0, repaired: 0, remaining: 0 });
 });
 
-test("R29: pending/unknown reasons survive no-progress backoff and later retry", async () => {
+test("003. Pending/unknown reasons survive no-progress backoff and later retry", async () => {
   const table = rows(); let now = 0; let calls = 0;
   const engine = new OperationRecovery({ snapshot: () => [...table.keys()], read: id => table.get(id) ?? null,
     recover: async row => { calls++; if (row.kind === "git.submit") throw new StoreError("REF_STATE_UNKNOWN", "private raw output"); },
@@ -51,7 +51,7 @@ test("R29: pending/unknown reasons survive no-progress backoff and later retry",
   assert.deepEqual(await engine.sweep(), { examined: 2, repaired: 0, remaining: 2 }); assert.equal(calls, 4);
 });
 
-test("R29: a wall-budget boundary resumes from authoritative IDs, with no durable cursor", async () => {
+test("004. A wall-budget boundary resumes from authoritative IDs, with no durable cursor", async () => {
   const table = rows(); let now = 0; const visited: string[] = [];
   const engine = new OperationRecovery({ snapshot: () => [...table.keys()], read: id => table.get(id) ?? null,
     recover: async row => { visited.push(row.id); table.set(row.id, { ...row, state: "succeeded" }); now += 1000; },
@@ -62,7 +62,7 @@ test("R29: a wall-budget boundary resumes from authoritative IDs, with no durabl
   assert.equal(new Set(visited).size, 2);
 });
 
-test("R29: recursive self-await fails immediately; corruption never returns partial healthy counts", async () => {
+test("005. Recursive self-await fails immediately; corruption never returns partial healthy counts", async () => {
   const table = rows(); const first = [...table.keys()][0]!;
   let engine: OperationRecovery;
   engine = new OperationRecovery({ snapshot: () => [first], read: id => table.get(id) ?? null,

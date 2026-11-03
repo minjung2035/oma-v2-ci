@@ -436,7 +436,7 @@ function ownerShapeRules(root, findings) {
 // The Principal host, tool context and Client must agree on session environment
 // requirements. A missing forwarded name must fail here, not at authentication.
 const ENV_PRODUCER = "packages/engine/src/principal-launch.ts";
-const ENV_PRODUCER_FUNCTION = "principalEnvironment";
+const ENV_PRODUCER_FUNCTIONS = ["principalEnvironment", "sessionEnv"];
 // The tool context copies engine environment and adds the caller's local roots.
 const ENV_FORWARDERS = Object.freeze([
   { file: "packages/extension/src/mail-tools.ts", fn: "clientEnvironment" },
@@ -485,10 +485,9 @@ function functionBody(source, name) {
 }
 
 const OMA_NAME = /^OMA_[A-Z0-9_]+$/;
-/** Engine-only names: the worker archive exists only inside a Resident's
- * sandbox; the Principal's session must never set it, and its absence is how
- * the Principal's engine is told it has no worker archive. */
-const ENGINE_ONLY_ENV = new Set(["OMA_WORKER_ARCHIVE"]);
+/** The Worker archive and shared-world mount exist only in a Resident sandbox.
+ * The Principal must not acquire either through its host environment. */
+const ENGINE_ONLY_ENV = new Set(["OMA_WORKER_ARCHIVE", "OMA_WORLD_ROOT"]);
 const isProcessEnv = value =>
   ts.isPropertyAccessExpression(value) && value.name.text === "env" &&
   ((ts.isIdentifier(value.expression) && value.expression.text === "process") ||
@@ -578,11 +577,12 @@ function consumedNames(root) {
 /** Names the producer puts in the session environment it hands the engine. */
 function producedNames(root) {
   if (!exists(root, ENV_PRODUCER)) return null;
-  const body = functionBody(sourceOf(root, ENV_PRODUCER), ENV_PRODUCER_FUNCTION);
-  if (!body) return null;
+  const source = sourceOf(root, ENV_PRODUCER);
+  const bodies = ENV_PRODUCER_FUNCTIONS.map(name => functionBody(source, name)).filter(Boolean);
+  if (!bodies.length) return null;
   const constants = stringConstants(root, ENV_PRODUCER);
   const names = new Set();
-  eachNode(body, node => {
+  for (const body of bodies) eachNode(body, node => {
     if (!ts.isObjectLiteralExpression(node)) return;
     for (const property of node.properties) {
       if (!ts.isPropertyAssignment(property)) continue;
@@ -622,6 +622,8 @@ function principalSessionEnvRules(root, findings) {
   const forwarder = forwardedNames(root);
   const consumed = consumedNames(root);
   const produced = producedNames(root);
+  if (produced !== null) for (const name of ENGINE_ONLY_ENV) if (produced.has(name))
+    findings.push(finding("principal-session-env", ENV_PRODUCER, `${name} belongs only to a Worker sandbox, not the Principal session`));
   if (forwarder === null || consumed === null || produced === null) return;
   for (const name of consumed)
     if (!forwarder.forwarded.has(name))

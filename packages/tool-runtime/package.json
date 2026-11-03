@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./private-state": {
+      "types": "./dist/private-state.d.ts",
+      "default": "./dist/private-state.js"
+    },
     "./batch-view": {
       "types": "./dist/batch-view.d.ts",
       "default": "./dist/batch-view.js"
@@ -56,7 +60,7 @@
   },
   "dependencies": {
     "@oma/domain": "0.1.0",
-    "@earendil-works/pi-coding-agent": "1.0.1",
+    "@earendil-works/pi-coding-agent": "1.2.0",
     "typebox": "1.3.27",
     "@oma/contracts": "0.1.0",
     "@oma/protocol": "0.1.0",

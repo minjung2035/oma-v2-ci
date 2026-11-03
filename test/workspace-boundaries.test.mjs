@@ -13,7 +13,7 @@ function inspect(t, files = {}, manifests = {}) {
     writeFileSync(file, typeof value === "string" ? value : JSON.stringify(value));
   };
   write("package.json", { version: "0.1.0" });
-  for (const name of ["contracts", "domain", "protocol", "client", "tui", "native", "file-descriptors", "process", "storage", "config", "mail", "git", "review", "tool-files", "tool-runtime", "tool-lsp", "platform-linux", "platform-mac"]) {
+  for (const name of ["contracts", "domain", "protocol", "client", "tui", "native", "file-descriptors", "process", "storage", "config", "mail", "git", "review", "tool-files", "tool-runtime", "tool-lsp", "tool-mcp", "platform-linux", "platform-mac"]) {
     write(`packages/${name}/package.json`, { name: `@oma/${name}`, version: "0.1.0", type: "module",
       exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }, ...manifests[name] });
     write(`packages/${name}/src/index.ts`, "export type Value = string;");
@@ -21,7 +21,7 @@ function inspect(t, files = {}, manifests = {}) {
   for (const [path, value] of Object.entries(files)) write(path, value);
   return moduleFindings(root);
 }
-test("workspace guard accepts declared public imports and rejects transitive and private imports", t => {
+test("001. Workspace guard accepts declared public imports and rejects transitive and private imports", t => {
   const file = "packages/domain/src/index.ts";
   assert.deepEqual(inspect(t, { [file]: 'import type { Value } from "@oma/contracts"; export type Own = Value;' },
     { domain: { dependencies: { "@oma/contracts": "0.1.0" } } }), []);
@@ -31,7 +31,7 @@ test("workspace guard accepts declared public imports and rejects transitive and
     'import type { Value } from "../../contracts/src/index.js";'])
     assert.match(inspect(t, { [file]: statement }, { domain: { dependencies: { "@oma/contracts": "0.1.0" } } }).join("\n"), /private or missing export|relative import leaves workspace/);
 });
-test("DR46: Git and config can use declared file APIs but cannot import ledger implementations or types", t => {
+test("002. Git and config can use declared file APIs but cannot import ledger implementations or types", t => {
   const storage = { exports: {
     ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
     "./preaccept-artifact": { types: "./dist/preaccept-artifact.d.ts", default: "./dist/preaccept-artifact.js" },
@@ -51,7 +51,7 @@ test("DR46: Git and config can use declared file APIs but cannot import ledger i
   assert.match(inspect(t, { "packages/git/src/index.ts": 'import type { Value } from "@oma/review";' },
     { git: { dependencies: { "@oma/review": "0.1.0" } } }).join("\n"), /forbidden dependency/);
 });
-test("workspace guard includes type-only cycles and createRequire aliases", t => {
+test("003. Workspace guard includes type-only cycles and createRequire aliases", t => {
   assert.match(inspect(t, {
     "packages/domain/src/index.ts": "import type { Value } from \"../../contracts/src/index.js\";",
     "packages/contracts/src/index.ts": "import type { Value } from \"../../domain/src/index.js\";",
@@ -59,13 +59,13 @@ test("workspace guard includes type-only cycles and createRequire aliases", t =>
   assert.match(inspect(t, { "packages/client/src/index.ts":
     'import { createRequire as loader } from "node:module"; const load = loader(import.meta.url); load("hidden");' }).join("\n"), /undeclared runtime dependency hidden/);
 });
-test("workspace guard refuses effectful UI imports and unowned runtime assets", t => {
+test("004. Workspace guard refuses effectful UI imports and unowned runtime assets", t => {
   assert.match(inspect(t, { "packages/tui/src/index.ts": 'import "node:sqlite";' }).join("\n"), /effectful builtin forbidden/);
   assert.match(inspect(t, { "packages/protocol/src/index.ts": 'import "node:net";' }).join("\n"), /effectful builtin forbidden/);
   assert.match(inspect(t, { "packages/domain/src/index.ts": 'new URL("./missing.sql", import.meta.url);' }).join("\n"), /unowned or missing package asset/);
 });
 
-test("package tests may use their own implementation but cannot borrow undeclared or private dependencies", t => {
+test("005. Package tests may use their own implementation but cannot borrow undeclared or private dependencies", t => {
   const file = "packages/tui/test/unit.test.mjs";
   assert.deepEqual(inspect(t, { [file]: 'import "../dist/index.js"; import "@oma/tui";' }), []);
   assert.match(inspect(t, { [file]: 'import "../../client/src/index.js";' }).join("\n"), /relative import leaves workspace/);
@@ -75,7 +75,7 @@ test("package tests may use their own implementation but cannot borrow undeclare
     { native: { devDependencies: { "@oma/client": "0.1.0" } } }).join("\n"), /forbidden dependency @oma\/client/);
 });
 
-test("DR46: tool packages use their declared runtime API and cannot borrow state owners", t => {
+test("006. Tool packages use their declared runtime API and cannot borrow state owners", t => {
   const file = "packages/tool-lsp/src/index.ts";
   assert.deepEqual(inspect(t, { [file]: 'import type { Value } from "@oma/tool-runtime";' },
     { "tool-lsp": { dependencies: { "@oma/tool-runtime": "0.1.0" } } }), []);
@@ -84,7 +84,18 @@ test("DR46: tool packages use their declared runtime API and cannot borrow state
   assert.match(inspect(t, { [file]: 'import "../../../src/mail.js";' }).join("\n"), /relative import leaves workspace/);
 });
 
-test("NATIVE-008: tool-files is independent of the SDK and application owners; consumers use its public API", t => {
+test("007. MCP tool state retains the tool-runtime boundary and cannot borrow native or ledger file owners", t => {
+  const file = "packages/tool-mcp/src/index.ts";
+  assert.deepEqual(inspect(t, {
+    [file]: 'import "@oma/tool-runtime/private-state";',
+    "packages/tool-runtime/src/private-state.ts": "export const owned = true;",
+  }, { "tool-mcp": { dependencies: { "@oma/tool-runtime": "0.1.0" } },
+    "tool-runtime": { exports: { "./private-state": { types: "./dist/private-state.d.ts", default: "./dist/private-state.js" } } } }), []);
+  for (const [name, specifier] of [["native", "@oma/native/files"], ["storage", "@oma/storage/directory"]])
+    for (const text of [`import "${specifier}";`, `export type { Value } from "${specifier}";`, `type Held = import("${specifier}").Value;`])
+      assert.match(inspect(t, { [file]: text }, { "tool-mcp": { dependencies: { [`@oma/${name}`]: "0.1.0" } } }).join("\n"), /forbidden dependency/);
+});
+test("008. Tool-files is independent of the SDK and application owners; consumers use its public API", t => {
   const file = "packages/tool-files/src/index.ts";
   assert.deepEqual(inspect(t, { [file]: 'import "node:fs"; export type Value = string;' }), []);
   for (const name of ["@oma/storage", "@oma/tool-runtime", "@oma/client", "@earendil-works/pi-coding-agent"])
@@ -98,7 +109,7 @@ test("NATIVE-008: tool-files is independent of the SDK and application owners; c
     { "tool-runtime": { dependencies: { "@oma/tool-files": "0.1.0" } } }).join("\n"), /private or missing export/);
 });
 
-test("NATIVE-025: only the descriptor adapter reaches the standalone leaf; the leaf cannot borrow runtime owners", t => {
+test("009. Only the descriptor adapter reaches the standalone leaf; the leaf cannot borrow runtime owners", t => {
   const adapter = "packages/tool-files/src/descriptor-files.ts";
   const manifests = { "tool-files": { dependencies: { "@oma/file-descriptors": "0.1.0" } } };
   assert.deepEqual(inspect(t, { [adapter]: 'export { Value } from "@oma/file-descriptors";' }, manifests), []);
@@ -112,7 +123,7 @@ test("NATIVE-025: only the descriptor adapter reaches the standalone leaf; the l
       { "file-descriptors": { dependencies: { [name]: "0.1.0" } } }).join("\n"), /file-descriptors may import only/);
 });
 
-test("DR46: a local compiled module URL resolves only to an authored executable module in that workspace", t => {
+test("010. A local compiled module URL resolves only to an authored executable module in that workspace", t => {
   assert.deepEqual(inspect(t, { "packages/domain/src/index.ts": 'new URL("./owned.js", import.meta.url);',
     "packages/domain/src/owned.ts": 'export const owned = true;' }), []);
   for (const target of ["./missing.js", "../dist/unowned.js", "../../contracts/src/index.js", "./payload.sql", "./ambient.js"])
@@ -120,7 +131,7 @@ test("DR46: a local compiled module URL resolves only to an authored executable 
       "packages/domain/src/ambient.d.ts": 'export type Ambient = string;' }).join("\n"), /unowned or missing package asset/);
 });
 
-test("native generated asset ownership accepts only reviewed owner, output and declared source", t => {
+test("011. Native generated asset ownership accepts only reviewed owner, output and declared source", t => {
   for (const [owner, directory, output, extension] of [["platform-mac", "seatbelt", "oma-seatbelt", "c"], ["native", "metadata", "oma-file-metadata", "c"], ["platform-mac", "keychain", "oma-keychain", "swift"]]) {
     const manifest = { oma: { assets: [`${directory}/main.${extension}`], darwinExecutables: [`${directory}/${output}`] } };
     const source = `new URL("./${directory}/${output}", import.meta.url);`;
@@ -134,7 +145,7 @@ test("native generated asset ownership accepts only reviewed owner, output and d
   }
 });
 
-test("DR46 Linux: OS adapters use file APIs and named observations without borrowing configuration or application services", t => {
+test("012. Linux: OS adapters use file APIs and named observations without borrowing configuration or application services", t => {
   const file = "packages/platform-linux/src/index.ts";
   for (const dependency of ["@oma/config", "@oma/client", "@oma/mail"])
     assert.match(inspect(t, { [file]: `import type { Value } from "${dependency}";` },
@@ -148,7 +159,7 @@ test("DR46 Linux: OS adapters use file APIs and named observations without borro
       "platform-linux": { dependencies: { "@oma/storage": "0.1.0" } } }), []);
 });
 
-test("DR46 Mac: native adapters cannot borrow SDK, application, ledger or Git workflow ownership", t => {
+test("013. Mac: native adapters cannot borrow SDK, application, ledger or Git workflow ownership", t => {
   const file = "packages/platform-mac/src/index.ts";
   for (const name of ["@oma/config", "@oma/client", "@oma/storage", "@oma/review", "@oma/git"])
     assert.match(inspect(t, {[file]: `import type { Value } from "${name}";`},
@@ -172,7 +183,7 @@ function appFiles() {
   files["apps/oma/src/internal.ts"] = "export const value = true;";
   return files;
 }
-test("DR47: only root integration tests can name authored App internals", t => {
+test("014. Only root integration tests can name authored App internals", t => {
   for (const file of ["test/probe.test.ts", "implementation/tests/probe.type-test.ts"])
     assert.deepEqual(inspect(t, { ...appFiles(), [file]: 'import "#oma-test/app/internal";' }), []);
   for (const file of ["scripts/probe.mjs", "src/probe.ts", "apps/oma/src/probe.ts", "apps/oma/test/probe.test.mjs", "packages/client/src/probe.ts", "packages/client/test/probe.test.mjs"])
@@ -182,7 +193,7 @@ test("DR47: only root integration tests can name authored App internals", t => {
     assert.match(inspect(t, { ...appFiles(), "test/probe.test.ts": `import "#oma-test/app/${name}";` }).join("\n"), /invalid private App test import/);
   assert.match(inspect(t, { ...appFiles(), "test/probe.test.ts": 'import "@oma/app/internal";' }).join("\n"), /private workspace import/);
 });
-test("DR47: tampered or widened private maps and resurrected public App APIs are refused", t => {
+test("015. Tampered or widened private maps and resurrected public App APIs are refused", t => {
   for (const imports of [{}, { "#oma-test/app/*": "./apps/oma/dist/*.js" },
     { "#oma-test/app/*": { types: "./packages/client/dist/*.d.ts", default: "./packages/client/dist/*.js" } },
     { ...privateAppMap, "#any/*": "./packages/*/dist/index.js" }])

@@ -14,7 +14,7 @@ import { overwritePublished, removeTree } from "./fixtures/cleanup.js";
 import { corruptOperationForTest, readRawDeliveryFlag } from "./fixtures/corruption.js";
 
 for (const gated of [false, true]) {
-  test(`MAIL-007/008: ${gated ? "gated" : "ordinary"} publication verifies source, existing destinations and frozen metadata`, async () => {
+  test(`001. Mail integrity: ${gated ? "gated" : "ordinary"} publication verifies source, existing destinations and frozen metadata`, async () => {
     for (const fault of ["source", "new", "cur", "symlink", "dangling", "plan"]) {
       const root = mkdtempSync(join(tmpdir(), "oma-mail-integrity-"));
       const store = new Store(join(root, "runtime.sqlite"));
@@ -69,7 +69,7 @@ for (const gated of [false, true]) {
   });
 }
 
-test("MAIL-005/008: replies and batch preparation reject corrupt originals; duplicate hardlinks drain", async () => {
+test("002. Replies and batch preparation reject corrupt originals; duplicate hardlinks drain", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-original-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -98,7 +98,7 @@ test("MAIL-005/008: replies and batch preparation reject corrupt originals; dupl
   } finally { store.close(); removeTree(root); }
 });
 
-test("mail-v1: a worker-audience message publishes only under mail/workers and reaches each recipient inbox", async () => {
+test("003. Mail-v1: a worker-audience message publishes only under mail/workers and reaches each recipient inbox", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-workers-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
