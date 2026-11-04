@@ -295,6 +295,15 @@ export function reacquireChangedDarwinProcess(pin: DarwinProcessPin): DarwinProc
   if (expected === undefined || pin.state() !== "changed") unknown("Darwin process has no replaceable changed-watch acquisition");
   return acquireDarwinProcess(pin.pid, false, expected);
 }
+/** Independently owns exactly a genuine pin's current kernel generation.
+ * A retained observation grants no selected-image, role or death authority. */
+export function retainDarwinProcessPin(pin: DarwinProcessPin): DarwinProcessPin {
+  const expected = darwinAcquisitions.get(pin);
+  if (expected === undefined) unknown("Darwin process has no genuine acquisition to retain");
+  const state = pin.state();
+  if (state !== "live" && state !== "stopped") unknown("Darwin process generation is no longer retainable");
+  return acquireDarwinProcess(pin.pid, true, expected);
+}
 function acquireDarwinProcess(pid: number, retry: boolean, expected?: DarwinAcquisition): DarwinProcessPin {
   validPid(pid);
   const api = native(), bootId = currentDarwinBootId(), before = Buffer.alloc(56);

@@ -4,13 +4,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pinInheritedDarwinPeer, reacquireChangedDarwinProcess, darwinProcessStopHint } from "@oma/native/audit-session";
+import { pinInheritedDarwinPeer, reacquireChangedDarwinProcess, retainDarwinProcessPin, darwinProcessStopHint } from "@oma/native/audit-session";
 import { inheritedMachPeerEndpoint } from "@oma/native/mach-message";
 
 test("000. Caller-shaped process facts cannot request a changed-watch replacement", () => {
   let called = false;
   assert.throws(() => reacquireChangedDarwinProcess({ pid: process.pid, token: [], identity: {},
     state() { called = true; return "changed"; }, close() {} }), { code: "RUN_TERMINATION_UNKNOWN" });
+  assert.equal(called, false);
+  assert.throws(() => retainDarwinProcessPin({ pid: process.pid, token: [], identity: {},
+    state() { called = true; return "live"; }, close() {} }), { code: "RUN_TERMINATION_UNKNOWN" });
   assert.equal(called, false);
 });
 test("000. Readiness observes the actual caller without providing process authority", () => {
@@ -19,7 +22,7 @@ test("000. Readiness observes the actual caller without providing process author
   assert.throws(() => darwinProcessStopHint(0), TypeError);
 });
 
-for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer"])
+for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer", "mach-stream-descendant"])
   test(`001. Actual inherited peer channel: ${name}`, { timeout: 90000 }, t => {
     if (process.platform !== "darwin") {
       assert.throws(pinInheritedDarwinPeer, { code: "UNSUPPORTED_PROFILE" });
@@ -29,9 +32,14 @@ for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer"])
       { encoding: "utf8", timeout: 80000, maxBuffer: 65536 });
     assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
     const value = JSON.parse(result.stdout); assert.equal(value.case, name);
-    if (name === "mach-stream-roundtrip") {
+    if (name !== "mach-stream-wrong-peer") {
       assert.equal(value.machStream.inheritedPeer, true); assert.equal(value.machStream.noSourceRefused, true);
       assert.equal(value.machStream.authenticatedEof, true); assert.equal(value.machStream.resourcesReturned, true);
+      if (name === "mach-stream-descendant") {
+        assert.equal(value.machStream.descendant.sameCoalition, true); assert.equal(value.machStream.descendant.originalPeer, true);
+        assert.equal(value.machStream.descendant.workerPid, value.machStream.sender);
+        assert.notEqual(value.machStream.descendant.runnerPid, value.machStream.sender);
+      }
       assert.equal(value.machStream.sentBytes, 393217); assert.equal(value.machStream.receivedBytes, 393217);
     } else assert.equal(value.expectedPeer.clientRefused, true);
     t.diagnostic(JSON.stringify(value));

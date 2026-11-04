@@ -7,10 +7,10 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { snapshotCommand, type CommandSpec } from "@oma/process/command";
 import { runProcessSync } from "@oma/process/run";
-import { ExecutionNotStarted } from "@oma/process/owned-execution";
+import { ExecutionNotStarted, type ExecutionProcessPin } from "@oma/process/owned-execution";
 import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { currentDarwinAuditToken, darwinProcessStopHint, pinDarwinProcess, reacquireChangedDarwinProcess, observeDarwinCoalitionPopulation,
+import { currentDarwinAuditToken, darwinProcessStopHint, pinDarwinProcess, retainDarwinProcessPin, reacquireChangedDarwinProcess, observeDarwinCoalitionPopulation,
   darwinCoalitionMemberHints, signalDarwinCoalitionMember, type DarwinCoalitionIdentity, type DarwinProcessPin } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { controlPipe } from "@oma/native/control-socket";
@@ -27,6 +27,7 @@ export interface DarwinJobFile { readonly target: number; readonly fd: number }
 type DarwinJobTerminal = { readonly kind: "waited"; readonly pid: number; readonly waitStatus: number } |
   { readonly kind: "stopped" };
 export interface DarwinJobControl {
+  pinChild(): ExecutionProcessPin;
   readonly identity: DarwinCoalitionIdentity;
   /** Lazy: trusted setup starts only when the shared owner has persisted identity. */
   readonly prepared: Promise<void>;
@@ -94,17 +95,20 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       command: { executable: helper, argv: [serviceName, ...token.map(String)], env: {}, cwd: "/",
         timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 } }, 10000);
     startLaunchdJob(registration, 10000);
-    const deadline = performance.now() + 10000;
+    const deadline = performance.now() + 10000; let lastReadiness = "no PID";
     for (;;) {
-      if (signal?.aborted || performance.now() >= deadline) throw unknown("initial job image was not observed in time");
+      if (signal?.aborted || performance.now() >= deadline) throw unknown(`initial job image was not observed in time: ${lastReadiness}`);
       const observation = runProcessSync({ executable: "/bin/launchctl", argv: ["print", registration.target],
         env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "C", LC_ALL: "C" }, timeoutMs: 1000, stdoutBytes: 65536, stderrBytes: 65536 });
       if (observation.kind !== "exited" || observation.exitCode !== 0) throw unknown("job PID hint is unavailable", observation);
       const matches = [...observation.stdout.toString().matchAll(/^\s*pid = ([1-9][0-9]*)\s*$/gm)];
       if (matches.length === 1) {
         const pid = Number(matches[0]?.[1]), readiness = darwinProcessStopHint(pid);
+        lastReadiness = readiness;
         if (readiness === "stopped") { root = pinDarwinProcess(pid); pins.push(root); break; }
-        if (readiness !== "running") throw unknown("initial job image readiness is unobserved");
+        // A hint taken while launchd publishes its PID may be unavailable or
+        // already stale. It grants no authority: require a positive stopped
+        // observation within the original deadline before acquiring any pin.
       }
       await delay(5);
     }
@@ -223,6 +227,16 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       ready = true;
     };
     return Object.freeze({ identity, terminal, closed,
+      pinChild() {
+        if (!ready || stopping || returned || problem || !target)
+          throw problem ?? unknown("selected job child is not available");
+        const pin = retainDarwinProcessPin(target);
+        return Object.freeze({ pid: pin.pid, uid: pin.token[1]!, gid: pin.token[2]!,
+          alive: () => {
+            const state = pin.state();
+            return (state === "live" || state === "stopped") && observeDarwinCoalitionPopulation(identity) === "populated";
+          }, close: () => pin.close() });
+      },
       get prepared() {
         prepared ??= (rootDone || returned ? Promise.reject(unknown("job helper already ended")) : prepare()).catch(error => { failed(error); throw error; });
         void prepared.catch(() => {}); return prepared;

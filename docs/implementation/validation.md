@@ -1973,10 +1973,91 @@ source `b29dea0f6b10b7980c72f3251e52955818ac9cab`, before/after15871/
 all4817/4817·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
 이 기록은 SOURCE48 runtime qualification이나 이전 V23 간헐 lag 원인의 설명이 아니다.
 
+### 선택한 실제 자식의 관측 소유권과 direct Worker 채널 시험 (SOURCE49)
+
+SOURCE48 `a9baabe42323474ea7a41833991b6f73ff04b889`는 Native
+[41910174291](https://github.com/minjung2035/oma-v2-ci/actions/runs/41910174291), Architecture
+[41910174358](https://github.com/minjung2035/oma-v2-ci/actions/runs/41910174358)에 발행했다.
+발행 전 build·focused16/16·directory11/11·architecture/문서/spec gate가 통과했다.
+canonical15874/`92c8d4fb535051f12d09cb9f388be121c0fc22f078c842dfc16d46a00dfa742a`다.
+이 단락 작성 시 실제 Mac 결과는 아직 회수 전이며 앞선 SOURCE47의 runtime PASS와 구분한다.
+
+SOURCE49는 selected-image 검사를 마친 실제 job target에서 독립 pin을 취득하는 surface를 추가한다.
+Native factory의 private WeakMap 근거와 원래 unique ID·PID version·full8 token·boot·CID를 모두
+대조한다. caller-shaped pin, unknown/dead/changed/closed 원본은 취득하지 않는다.
+외부에는 pid/uid/gid·alive·close만 내보내며 resume/kill이나 Actor/role을 부여하지 않는다.
+common ticket은 scope가 여전히 owned/populated일 때만 pin 취득을 허용하고, 취득 중 소유권이
+변하면 새 pin을 닫고 거절한다. retired ticket은 backend를 다시 호출하지 않는다.
+private generation과 application capture wrapper도 이 transient capability를 전달한다.
+기존 witness·persisted format·authority/release/retire 순서는 변경하지 않는다.
+
+실제 Mac 시험은 준비 전/회수 뒤 취득 거절, 독립 pin 반납, 실제 Node pid/euid/egid 일치,
+complete scope 반환 뒤 alive=false를 요구한다. 같은 PID·CID의 exec 뒤에도 원래 pin과
+다음 ticket 취득이 거절되는 별도 대조를 추가했다. 전체 installed generation 시험도 같은
+physical pin과 실제 private Node PID의 일치·최종 revoke를 검사한다.
+
+별도 transport 시험은 한 outer launchd scope의 trusted Runner에서 production의
+spawnWithPrivateInputs로 Seatbelt Worker를 직접 시작한다. 두 번째 launchd scope나 public service
+lookup으로 peer를 다시 얻지 않는다. Worker의 CID·원래 Broker full8 token, 실제 stream sender PID,
+393217-byte 양방향 내용·authenticated EOF·공통 owner의 complete death/FD drain/retire를 검사한다.
+이 입력의 실제 Mac 실행은 NOT_RUN이며 current Actor/Run admission을 대신하지 않는다.
+제품 Runner/Worker 조립과 startup orphan collector·Society lease·Git preparation은 여전히 미완료다.
+
+새 source build는 PASS다. 초기 일반 shell 실행은 /usr/bin namespace launcher ENOENT로
+43개 중26 PASS/17 FAIL이었고 원시 log를 보존했다. 기존 delegated cgroup와 고정 bwrap layout으로
+실제 namespace/Resident 회귀를 다시 실행해43/43·fail/cancel/skip/todo0를 확인했다.
+Mac-specific 가지는 이 Linux 실행에서 refusal만 확인한 것이다. generation local refusal1/1도 PASS다.
+세 product gate와 native-support/launchBlockedDarwin guard는 유지한다.
+
+SOURCE48 양 Mac 결과도 회수했다. ARM shared ZIP13360779847 SHA-256
+`cd574fc25675408b0097d30ccff5aae65e98899a63231d4a7023b3f5a7882a61`,
+Intel shared ZIP13362492774 SHA-256
+`07db125b4228824a62faae8eda7d55a23f681c2d1cdfa74ce38a984ef401602d`를 대조했다.
+canonical15874/`92c8d4fb535051f12d09cb9f388be121c0fc22f078c842dfc16d46a00dfa742a`는
+양쪽 전후 같다. runtime15502/27 전후도 ARM
+`9658897c2f299ab989ac8c91b982491b79362ac17c365d5d3ec926e4e106a602`, Intel
+`94b980e5f16e848e6a929cba4d6cbc43078c6261aabfe600943b2f9142480e21`로 각각 같다.
+ARM364개 중362 PASS/2 FAIL, Intel364/364 PASS·fail/cancel/skip/todo0다.
+전체 generation은 양쪽 PASS다. ARM183143ms는 construction112658·execution708·collection17003ms,
+Intel262377ms는 construction182884·execution2733·collection33429ms를 포함한다.
+constructor/collection의 동기 작업 때문에 전체 wall time은 원래240초 timer보다 길 수 있다.
+시험 timeout을 늘리지 않았으며 별도 latency 상한 qualification으로 계산하지 않는다.
+
+ARM 실패 두 개는 capture/spool와 witness-Host-crash 시험의 initial readiness hint 거절이다.
+SOURCE49는 stopped 양성이 나올 때까지 다른 모든 hint 상태를 기존10초 제한 안에서 재관측한다.
+unavailable/exited hint를 live/dead나 성공으로 바꾸지 않는다. deadline에서는 마지막 hint를 보존하고
+unknown으로 거절한다. stopped 뒤의 full kernel generation·selected image 검사는 그대로다.
+이 후속 수정 뒤 build와 delegated Linux 선택44/44·fail/cancel/skip/todo0가 PASS다.
+SOURCE49의 실제 Mac·새 physical pin/exec/Worker 시험은 아직 NOT_RUN이다.
+
+ARM gate ZIP13362302776 SHA-256
+`f74207d4dbfe5707c86f2bfbe8196e035b70415d7129b0264c3e244fdb490f87`는
+120 executed/114 OBSERVED/6 SETUP_FAILED다. 남은6개는 기존 Worker product guard다.
+gate의 canonical/runtime 전후는 위 SOURCE48 ARM과 같다. 세 product gate는 OPEN/BLOCKED다.
+
+SOURCE47 full Linux Architecture
+[41905018864](https://github.com/minjung2035/oma-v2-ci/actions/runs/41905018864)의
+artifact13362236353 SHA-256
+`c212e14ea158943146d80bc8e9121211816d73af497effa879d5f72acfc98861`를 대조했다.
+source `eccc2228ac304eb2e95b96fdb811e199e20b6773`, before/after15874/
+`6ad85f25ac53c498c60d3278b982eee1f512f57fd9db3aea424f7e7af587fd85`가 같다.
+all4819/4819·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
+이 Linux 결과를 SOURCE49 또는 전체 Mac 제품 완료로 옮겨 쓰지 않는다.
+
+SOURCE48 Mac15 gate ZIP13361594587 SHA-256
+`782274c43b9ce749e1700d1accee4e34a6cc57ba82a4d090bb22df5c6871692a`도 대조했다.
+Darwin24.6 arm64/SDK15.5에서120 executed/114 OBSERVED/6 Worker SETUP_FAILED다.
+canonical 전후는 위 SOURCE48과 같고 runtime15502/27 전후는
+`06a7c640a43198ad495a26c3f8f159b3771e6ab0f96e3e1f64876ff3ae5be54a`로 같다.
+이 호환성 관측을 첫 목표 Mac26 arm64의 실제 결과와 섞지 않는다.
+ARM runtime ZIP13363930529 SHA-256
+`81d29e426efff7f43d8c08e507d0b9c83dd10b9304de05f6d4023863b1021c49`도 회수했다.
+독립 packed 설치의 @oma/git은 기존 PreparationExecutor Linux guard로 실패하며 미완료로 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `92c8d4fb535051f12d09cb9f388be121c0fc22f078c842dfc16d46a00dfa742a` (15874 files).
+verification input digest `8d4ae9f663e403fb88e6a46d688921bbc9d772c9c0793ac09e524eebf44b7f02` (15874 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

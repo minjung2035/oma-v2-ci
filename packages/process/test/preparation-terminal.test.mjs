@@ -123,3 +123,24 @@ test("008. Setup completion after terminal cannot authorize while resource retur
   assert.equal((await answer)?.code, "CANCELLED_BEFORE_COMMIT");
   assert.equal(authorized, false); assert.equal(released, false); assert.deepEqual(f.rows, []);
 });
+
+test("009. Child observations can be retained only while the admitted execution still owns its scope", async () => {
+  const f = fixture({ closeOnTerminate: true }); let acquisitions = 0, returns = 0;
+  const pin = Object.freeze({ pid: 123, uid: 456, gid: 789, alive: () => true, close: () => { returns++; } });
+  f.scope.pinChild = () => { acquisitions++; return pin; };
+  const ticket = await f.owner.begin({ slot: "child", launch: async () => f.scope, authorize() {} });
+  assert.equal(ticket.pinChild(), pin); assert.equal(acquisitions, 1);
+  f.result.resolve(observation); await ticket.completion;
+  assert.throws(() => ticket.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" });
+  assert.equal(acquisitions, 1, "a retired ticket must not invoke a backend acquisition");
+  pin.close(); assert.equal(returns, 1); assert.deepEqual(f.rows, []);
+});
+
+test("010. Losing scope ownership during child acquisition returns the new pin and refuses it", async () => {
+  const f = fixture({ closeOnTerminate: true }); let returned = 0;
+  f.scope.pinChild = () => { f.scope.terminate(); return { pid: 123, uid: 456, gid: 789,
+    alive: () => true, close: () => { returned++; } }; };
+  const ticket = await f.owner.begin({ slot: "child", launch: async () => f.scope, authorize() {} });
+  assert.throws(() => ticket.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" }); assert.equal(returned, 1);
+  f.result.resolve(observation); await ticket.completion; assert.deepEqual(f.rows, []);
+});

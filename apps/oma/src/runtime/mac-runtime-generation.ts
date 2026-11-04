@@ -153,6 +153,7 @@ export function createMacRuntimeGeneration(sourceInstallation: {
           let retired = false;
           return Object.freeze({ witness: scope.witness, get prepared() { return scope.prepared ?? Promise.resolve(); },
             ...(scope.terminal === undefined ? {} : { terminal: scope.terminal }),
+            ...(scope.pinChild === undefined ? {} : { pinChild: () => scope.pinChild!() }),
             result: scope.result, closed: scope.closed, population: () => scope.population(), release: () => scope.release(), terminate: () => scope.terminate(),
             close() { if (retired) return; scope.close(); retired = true; active--; } });
         } catch (error) { if (error instanceof ExecutionNotStarted) active--; else uncertain = true; throw error; }

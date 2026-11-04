@@ -117,6 +117,7 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     let prepared: Promise<void> | undefined;
     const terminal = job.terminal.then(() => {}); void terminal.catch(() => {});
     return Object.freeze({ witness: job.identity, result: capture.result, closed,
+      pinChild: () => job.pinChild(),
       get prepared() {
         prepared ??= (stopRequested ? Promise.reject(new StoreError("CANCELLED_BEFORE_COMMIT", "job setup was cancelled")) :
           Promise.all([job.prepared, ...privateDrains])).then(() => {});

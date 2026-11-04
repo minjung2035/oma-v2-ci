@@ -103,3 +103,45 @@ test("006. Actual Darwin cancellation after witness publication joins unopened s
   assert.equal(existsSync(join(f.root, "entered")), false);
   assert.deepEqual(f.trace, ["publish", "retire"]); assert.equal(f.rows.length, 0);
 });
+
+test("005. A selected stopped child yields an independent generation pin that expires after actual scope return", { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return linuxRefusal();
+  const f = owner(t); let scope, pin;
+  t.after(() => pin?.close());
+  const command = { ...f.command(["-e", "process.stdout.write(JSON.stringify({pid:process.pid,uid:process.geteuid(),gid:process.getegid()}))"]), stdoutBytes: 256 };
+  const result = await f.runtime.run({ slot: "physical-child", launch: async () => {
+    scope = await launchDarwinJobScope(command);
+    assert.throws(() => scope.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" });
+    return scope;
+  }, authorize() {
+    pin = scope.pinChild(); assert.equal(pin.alive(), true);
+    const independent = scope.pinChild(); independent.close(); assert.equal(pin.alive(), true);
+  } });
+  assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
+  assert.deepEqual(JSON.parse(result.stdout), { pid: pin.pid, uid: pin.uid, gid: pin.gid });
+  assert.equal(pin.alive(), false); assert.deepEqual(f.rows, []);
+  assert.throws(() => scope.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" }); pin.close(); pin.close();
+});
+
+test("006. Exec at the same PID and coalition revokes the retained selected child", { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return linuxRefusal();
+  const f = owner(t); let scope, pin, ticket;
+  t.after(async () => { try { await ticket?.stop(); } finally { pin?.close(); } });
+  const replacement = "require('node:fs').writeFileSync('replaced',String(process.pid));setInterval(()=>{},1000)";
+  const script = `const fs=require('node:fs');fs.writeFileSync('started',String(process.pid));setInterval(()=>{if(fs.existsSync('replace'))process.execve(process.execPath,[process.execPath,'-e',${JSON.stringify(replacement)}],{})},5)`;
+  const waitFile = async name => {
+    const deadline = performance.now() + 5000;
+    while (!existsSync(join(f.root, name))) {
+      assert.ok(performance.now() < deadline, `missing ${name}`);
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  };
+  ticket = await f.runtime.begin({ slot: "exec-child", launch: async () => scope = await launchDarwinJobScope(f.command(["-e", script])),
+    authorize() { pin = scope.pinChild(); assert.equal(pin.alive(), true); } });
+  await waitFile("started"); assert.equal(Number(readFileSync(join(f.root, "started"))), pin.pid);
+  assert.equal(pin.alive(), true); writeFileSync(join(f.root, "replace"), "go"); await waitFile("replaced");
+  assert.equal(Number(readFileSync(join(f.root, "replaced"))), pin.pid, "exec retains the same numeric PID");
+  assert.equal(ticket.population(), "populated"); assert.equal(pin.alive(), false);
+  assert.throws(() => ticket.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" });
+  await ticket.stop(); await ticket.completion; assert.deepEqual(f.rows, []);
+});

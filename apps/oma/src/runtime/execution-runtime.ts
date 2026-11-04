@@ -60,6 +60,7 @@ export class ExecutionRuntime {
       // Preserve lazy setup: spreading scope would invoke its getter before
       // the common owner has published the acquired kernel witness.
       const wrapped: BlockedExecution<ExecutionWitness> = { witness: scope.witness, closed: scope.closed,
+        ...(scope.pinChild === undefined ? {} : { pinChild: () => scope.pinChild!() }),
         population: () => scope.population(), release: () => scope.release(), terminate: () => scope.terminate(),
         result: scope.result.then(result => ({ ...result, ...(lease === undefined ? {} : { resources: { ...lease.events(), scope: lease.path } }) })),
         close: () => { scope.close(); lease?.close(); } };

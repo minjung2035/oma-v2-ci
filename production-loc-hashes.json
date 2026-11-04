@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "9592d9f00abe222a4dd57cf7dd07e5b095901006a28b54743ac6a405b17f1be0"
+      "sha256": "e225e06f977f2d35b01c5ead542d908268923385e3d0c3c7e438a5c411e5cbfd"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -340,7 +340,7 @@
     },
     {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "3ce188ed3f17ae26bb53c4547b369f6ec1e33b3a9ba4e80761d1215ce3d0a303"
+      "sha256": "3ff5e9b1122fa99babe8e8103610a0c9d245ffd5eb33ba7bbbc128249964d642"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -1452,7 +1452,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "e11b93e6497fb8cc23491550720923b96ac67b7ab7c29f0465cd45a254710be2"
+      "sha256": "6c576d498a85fa84ef46f63e427d3e35db8e750cd46d1b106de274381ceef9ed"
     },
     {
       "path": "packages/native/src/audit-token.ts",
@@ -1612,7 +1612,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "90b72505a6c0fc077590b116621415238aaad1e3148348d87cc2e562534aec50"
+      "sha256": "7e53a06ed179767b4087632a332ec24777bba88784636e8a30938d80e670cff8"
     },
     {
       "path": "packages/platform-mac/src/job-helper/config.h",
@@ -1632,7 +1632,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-scope.ts",
-      "sha256": "a722dc41468bfcb3dea7c455af8a32b906aef155c87c217a0abe0f3af1f6f4df"
+      "sha256": "281f179ec53c3cf8d244863c188b427aece336797a36ced09d47f1fa46a3b2a3"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1740,7 +1740,7 @@
     },
     {
       "path": "packages/process/src/owned-execution.ts",
-      "sha256": "5484aa58eaeb1be50e79c06fbcaaed71e1445ce9e761dac3e140baf3dd9c74ce"
+      "sha256": "928ce354e7f24dc79d67d6049b0498781ed684a17ca0f91e17dc03df66d146cd"
     },
     {
       "path": "packages/process/src/packet-stream.ts",

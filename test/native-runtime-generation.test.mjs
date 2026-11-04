@@ -20,8 +20,8 @@ test("001. Actual installed generation seals dependencies and private Node until
   let previous = performance.now();
   const phase = name => { const now = performance.now(); t.diagnostic(JSON.stringify({ phase: name, elapsedMs: now - previous })); previous = now; };
   mkdirSync(work, { mode: 0o700 });
-  let generation, owner; const rows = [];
-  t.after(async () => { await owner?.drain(); generation?.close(); rmSync(root, { recursive: true }); });
+  let generation, owner, pin; const rows = [];
+  t.after(async () => { await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
   copyInstalledProduct(realpathSync(fileURLToPath(new URL("../", import.meta.url))), source);
   phase("fixture-installation");
   const entry = join(source, "apps/oma/dist/generation-probe.mjs");
@@ -44,7 +44,7 @@ assert.throws(()=>require('oma-generation-escape'),{code:'MODULE_NOT_FOUND'});
 const child=spawnSync('node',['--no-global-search-paths','--version'],{encoding:'utf8'});
 assert.equal(child.error,undefined);assert.equal(child.status,0,child.stderr);assert.equal(child.stdout.trim(),process.version);
 writeFileSync(process.env.HOME+'/control','ordinary write');
-console.log(JSON.stringify({sealedEntries:paths.length,globalFallbackRefused:true,privateDependency:true,privateNodeCommand:true,control:true}));
+console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFallbackRefused:true,privateDependency:true,privateNodeCommand:true,control:true}));
 `);
   const fallback = join(work, ".node_modules/oma-generation-escape"); mkdirSync(fallback, { recursive: true });
   writeFileSync(join(fallback, "index.js"), 'module.exports="forbidden"');
@@ -69,16 +69,17 @@ console.log(JSON.stringify({sealedEntries:paths.length,globalFallbackRefused:tru
     await refuse(invalid, policy);
   await refuse(command, { ...policy, writable: [{ path: root, kind: "directory" }] });
   await refuse(command, { ...policy, readable: [{ path: source, kind: "directory" }], nodePreload: entry });
-  let prematureReturn;
+  let prematureReturn, selectedScope;
   const result = await owner.run({ slot: "generation", async launch() {
-    const scope = await generation.launchNode(command, {}, policy);
+    const scope = selectedScope = await generation.launchNode(command, {}, policy);
     try { generation.close(); } catch (error) { prematureReturn = error; }
     return scope;
-  }, authorize() {} });
+  }, authorize() { pin = selectedScope.pinChild(); assert.equal(pin.alive(), true); } });
   phase("scope-execution-and-return");
   assert.equal(prematureReturn?.code, "RUN_TERMINATION_UNKNOWN");
   assert.equal(result.kind, "exited", result.stderr.toString()); assert.equal(result.exitCode, 0, result.stderr.toString());
-  assert.deepEqual(JSON.parse(result.stdout), { sealedEntries: 4, globalFallbackRefused: true, privateDependency: true, privateNodeCommand: true, control: true });
+  assert.deepEqual(JSON.parse(result.stdout), { pid: pin.pid, sealedEntries: 4, globalFallbackRefused: true, privateDependency: true, privateNodeCommand: true, control: true });
+  assert.equal(pin.alive(), false); pin.close();
   assert.equal(existsSync(join(work, "control")), true); assert.equal(existsSync(join(work, "code-alias")), false);
   assert.deepEqual(rows, []); assert.equal(deploymentDigest(source), installation.deploymentDigest);
   generation.close(); assert.equal(existsSync(generation.root), false);

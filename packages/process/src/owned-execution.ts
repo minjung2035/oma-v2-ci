@@ -8,7 +8,15 @@ import { setTimeout } from "node:timers/promises";
 import { retainNativeExecution } from "./preparation.js";
 import { withCleanup, withAsyncCleanup } from "@oma/native/cleanup";
 
+/** A transient physical child observation, independently owned by its caller.
+ * This contains no Actor identity, role, accepted plan or durable receipt. */
+export interface ExecutionProcessPin {
+  readonly pid: number; readonly uid: number; readonly gid: number;
+  alive(): boolean;
+  close(): void;
+}
 export interface BlockedExecution<Witness> {
+  readonly pinChild?: () => ExecutionProcessPin;
   readonly witness: Witness;
   /** Trusted setup may continue after the kernel witness is published. No
    * arbitrary workload is released until this and a fresh authority check. */
@@ -45,6 +53,7 @@ export interface ExecutionRequest<Witness> {
   readonly signal?: AbortSignal;
 }
 export interface ExecutionTicket<Witness> {
+  readonly pinChild?: () => ExecutionProcessPin;
   readonly execution: string;
   readonly witness: Witness;
   /** Includes descendant death, child close and journal retirement. */
@@ -229,9 +238,22 @@ export class ExecutionCoordinator<Witness> {
     void completion.catch(() => {});
     try { await admitted; } catch { await completion; throw new Error("unreachable execution completion"); }
     return Object.freeze({ execution: reservation.execution, witness: owner.scope!.witness, completion,
+      ...(owner.scope!.pinChild === undefined ? {} : { pinChild: () => this.pinChild(request.slot, owner) }),
       population: () => owner.empty ? "empty" : owner.scope?.population() ?? "unknown",
       stop: () => this.active.get(request.slot) === owner ? this.settle(request.slot, owner) : Promise.resolve(),
     });
+  }
+  private pinChild(slot: string, owner: Owned<Witness>): ExecutionProcessPin {
+    const scope = owner.scope;
+    const owned = (): boolean => !this.stopping && this.active.get(slot) === owner && !owner.empty &&
+      !owner.uncertain && owner.settling === null && scope?.population() === "populated";
+    if (!owned() || scope?.pinChild === undefined)
+      throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution no longer owns an observable child");
+    const pin = scope.pinChild();
+    try {
+      if (!pin.alive() || !owned()) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution changed during child acquisition");
+      return pin;
+    } catch (error) { return withCleanup(() => { throw error; }, () => pin.close()); }
   }
   /** Slot ownership callers must be able to read precisely: a live peer is
    * contention the caller re-drives with the same request key, while an owner
