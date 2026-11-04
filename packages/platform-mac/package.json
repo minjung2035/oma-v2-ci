@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./job-recovery": {
+      "types": "./dist/job-recovery.d.ts",
+      "default": "./dist/job-recovery.js"
+    },
     "./developer-tools": {
       "types": "./dist/developer-tools.d.ts",
       "default": "./dist/developer-tools.js"

@@ -136,7 +136,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
       const identity = runtime.witness(actor);
       if (identity === null) return null;
       if (identity.kind === "darwin-audit-session") return { pid: identity.pid, startTime: String(identity.pidVersion) };
-      return { pid: identity.pid, startTime: identity.startTime };
+      return identity.kind === "linux-namespace" ? { pid: identity.pid, startTime: identity.startTime } : null;
     },
     runnerAlive: (actor: string) => channels.get(actor)?.peer.alive() ?? false,
     readLogs: async (actor: string, sinceSeconds: number, limit: number) => residentLogView(logs.read(actor), sinceSeconds, limit),

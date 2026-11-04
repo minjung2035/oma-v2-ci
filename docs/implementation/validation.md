@@ -1349,10 +1349,62 @@ CI는 공통 runtime 테스트 직후 source/runtime 전후 digest와 raw TAP을
 
 수정본의 독립 packed 설치27/27와 전체 구조 검사도 통과했다. 외부 선언 diagnostics44와 ledger 미검토는 유지한다.
 
+### journal 접근·stop 수정의 실제 양 Mac 성공과 lease 후보 배제
+
+`bb3d4fa43dc`의 push에 실행이 생성되지 않아 같은 tree의 CI 요청 commit `c87459f24b1`을 발행했다.
+Native [41844076058](https://github.com/minjung2035/oma-v2-ci/actions/runs/41844076058)의 eager Mac15 ZIP
+`13330661170` SHA-256 `72a2bba3bc1c1a7cbee09a5deae068518925dd067055d7bbb7b35cd5d571ff02`, Mac26
+`13330312502` SHA-256 `7b61dc159e7937a529738058a6976ae4027dc8c0675d845143fe069b7aaec4c7`를 대조했다.
+양 OS **322/322·fail/cancel/skip/todo0**, source/runtime 전후 동일이며 입력은15847개
+`330a23b1445e79c320470c18915a3926f0c6672ea13bb41486494c4114efd9aa`다.
+실제 read/write append·read-only 쓰기 거절·link/FIFO 거절과 queued data 미소비, journal v2 append/reopen/
+SIGKILL 보존·잘린 tail 거절, shared owner의 authority 철회·실행 중 abort·witness 직후 취소가 통과했다.
+세 product gate OPEN과 app legacy launch guard는 유지한다.
+
+lease probe도 양 Mac에서 실제 kernel sender를 keeper crash 뒤 보존했으나, 같은 UID의 bootout 뒤
+서로 다른 두 살아 있는 owner가 같은 service name의 claim을 만들었다. 따라서 이 managed-Mach 후보는 **REJECTED**다.
+returned trailer52 bytes와 stored minimum header8도 실제 관측과 고정 kernel source가 일치했다.
+원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/journal-access/`에 있다.
+전체 common ZIP Mac15 `13330332933` SHA-256 `b4935efe5c791baec1203d73ca692b2776bf930a21d7038fda5eb11e67bc1f5f`,
+Mac26 `13329819738` SHA-256 `9bfc288c5034be1334785fb8210e03cf2956940dd0a86d3ffec7281db9f84061`도 대조했다.
+common322/322·packed26/27과 기존 Git preparation 거절, 입력/runtime 전후 동일을 확인했다.
+gate ZIP Mac15 `13329709901` SHA-256 `0b6dca690a6fbf746ee182cd5ee0c2ce6da33e26a0213a0ef64fb0eae98e2c70`,
+Mac26 `13331091517` SHA-256 `b4a063ee39055e69b3fee7173975f42717ab3acbfd537a9f32383e94aff3afe3`를 대조했다.
+각120건 중111/114 OBSERVED이며 product는 BLOCKED다. 전체 gate 성공으로 읽지 않는다.
+
+이전 `cc2207da880` Architecture [41837425337](https://github.com/minjung2035/oma-v2-ci/actions/runs/41837425337)의
+native-all ZIP `13328714458` SHA-256 `4adca9269aed9e9075ac3b926e2cd7c484c2e3dda50d485eee96682a3464f7d1`도 대조했다.
+그 입력의 실제 Linux all은 **4773/4773·fail/cancel/skip/todo0·errors[]·sourceChanges=[]**, 13 command code0이다.
+`job-scope/linux-all-art-13328714458/all/result.json`이 원시이며 새 v3 코드의 전체 회귀로 승격하지 않는다.
+
+### 명시적 Darwin v3 writer와 새 controller 복구 — 실제 Mac 실행 전
+
+기존 v2 grammar를 넓히거나 저장 bytes를 다시 쓰는 대신 별도 v3 writer를 선택했다.
+기본 writer·초기 frame은2를 유지한다. reader는 각 frame의 version과 해당 version의 닫힌 witness grammar로
+원래 hash chain을 검증한다. v3은 `{kind:"darwin-resource-coalition",bootId,coalitionId}`만 새 관측으로 기록한다.
+PID·label·token·command·accepted 업무/credential은 기록하지 않는다. Linux/legacy Darwin v2 witness를 v3에
+쓰거나 v3 witness를2로 쓰면 append 전 거절한다. legacy Darwin bytes는 읽되 recovery는 계속 unavailable이다.
+새 형식의 append는 기존 business bytes나 journal의 migration이 아니다.
+
+`job-recovery`는 현재 boot/CID lookup과 fresh kernel-token member control만 공급한다. 자신의 CID는 거절하고,
+scan을 death로 바꾸지 않으며 unknown과 signal/자원 실패는 공유 coordinator가 ownership을 유지하게 한다.
+공유 owner가 전체 CID empty를 본 뒤에만 journal을 retire한다. app의 legacy launch/recovery guard는 아직 연결하지 않았다.
+Linux PID extractor는 새 PID 없는 witness를 PID로 해석하지 않도록 종류를 명시하고 나머지는 거절한다.
+
+실제 Mac용 검사는 Host SIGKILL 뒤 stopped helper witness, 실행 후 detached 후손, Seatbelt 후손을
+새 journal owner/controller가 회수하는 세 경우다. opening-only는 bytes를 보존하고 unknown을 유지한다.
+opening probe는 launch 전 경계이며 creation→witness 사이의 crash를 안전하다고 주장하지 않는다.
+새 controller의 Host 자신 scope 거절과 기존 v2 prefix 보존도 검사한다. Mac은 아직 **NOT_RUN**이다.
+현재 build·local63/63·별도 실제 Linux66/66(변경된 topology/candidate 경로 포함)은 통과했다.
+local의 Mac recovery scenario는 platform refusal이며 kernel recovery PASS가 아니다.
+원시는 `/tmp/oma-macos-coalition-recovery-{final-build.log,local.tap,linux-native.tap}`다.
+
+새 v3 writer/recovery의 독립 packed27/27와 전체 구조 검사도 통과했다. Mac adapter는18 public entries이며 외부 선언 diagnostics44·ledger 미검토를 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `330a23b1445e79c320470c18915a3926f0c6672ea13bb41486494c4114efd9aa` (15847 files).
+verification input digest `4733b4562ca1414ceaf39a2fd61ce5e536ec38e577d84790f6933f077c60cadd` (15850 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

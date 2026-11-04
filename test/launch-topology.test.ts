@@ -98,6 +98,7 @@ async function topology(t: TestContext) {
     try { entries = ExecutionJournal.inspect(stateRoot); } catch { return undefined; } // a concurrent append is not a positive observation
     const entry = entries.find(entry => entry.slot === "resident:child"), witness = entry?.witness;
     if (!entry || !witness) return undefined;
+    if (witness.kind !== "linux-namespace") throw new Error("Linux topology requires a namespace witness");
     const pin = pinNamespaceInit(witness.pid); assert.deepEqual(pin.identity, witness); pins.push(pin); return { pin, witness, execution: entry.execution };
   }
   async function goal(): Promise<void> {

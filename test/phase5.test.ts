@@ -490,7 +490,9 @@ test("009. Real checks use network, outlive legacy caps and stop descendants on 
     const execute: ConstructorParameters<typeof CandidateChecks>[1] = (command, signal, authorize, fds, prepared) =>
         executions.run("candidate", command, signal, authorize, fds, undefined, () => {
             const entry = ExecutionJournal.inspect(dir).find(entry => entry.slot === "candidate");
-            assert.ok(entry?.witness); const pin = pinNamespaceInit(entry.witness.pid);
+            assert.ok(entry?.witness);
+            if (entry.witness.kind !== "linux-namespace") throw new Error("Linux candidate requires a namespace witness");
+            const pin = pinNamespaceInit(entry.witness.pid);
             assert.deepEqual(pin.identity, entry.witness); pins.push(pin); prepared();
         });
     const make = (code: string) => ({ id: "unrestricted", argv: [RESIDENT_PATHS.node, "--input-type=module", "-e", code], env: {} });

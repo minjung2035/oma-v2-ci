@@ -2,11 +2,13 @@
  * witness below is format data; it grants no live process/recovery authority. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
+import { canonicalJson, sha256Hex } from "@oma/domain/canonical-json";
 
 function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-journal-files-")));
@@ -52,4 +54,47 @@ test("003. Actual incomplete frame remains corrupt and unmodified", t => {
   for (const read of [ExecutionJournal.open, ExecutionJournal.inspect])
     assert.throws(() => read(f.root), error => error.code === "STORE_CORRUPT");
   assert.deepEqual(readFileSync(f.file), before);
+});
+
+const coalition = { kind: "darwin-resource-coalition", bootId: "00000000-0000-4000-8000-000000000001", coalitionId: "18446744073709551615" };
+test("004. Explicit Darwin writer appends v3 while preserving every original v2 byte and hash", t => {
+  const f = fixture(t), original = ExecutionJournal.open(f.root);
+  try { const old = original.reserve("candidate"); old.publish(witness); old.retire(); } finally { original.close(); }
+  const before = readFileSync(f.file), journal = ExecutionJournal.open(f.root, DARWIN_EXECUTION_JOURNAL_VERSION);
+  let execution;
+  try {
+    const row = journal.reserve("candidate"); execution = row.execution; row.publish(coalition);
+    assert.throws(() => row.publish({ ...coalition, pid: process.pid }), TypeError);
+    assert.deepEqual(readFileSync(f.file).subarray(0, before.length), before);
+  } finally { journal.close(); }
+  const rows = ExecutionJournal.inspect(f.root); assert.deepEqual(rows, [{ slot: "candidate", execution, witness: coalition }]);
+  const reopened = ExecutionJournal.open(f.root, DARWIN_EXECUTION_JOURNAL_VERSION);
+  try { reopened.retire("candidate", execution); } finally { reopened.close(); }
+  const frames = readFileSync(f.file, "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(frames.map(frame => frame.version), [2, 2, 2, 2, 3, 3, 3]);
+  assert.deepEqual(ExecutionJournal.inspect(f.root), []);
+});
+test("005. Writer versions refuse another version's witness without appending bytes", t => {
+  for (const version of [2, DARWIN_EXECUTION_JOURNAL_VERSION]) {
+    const f = fixture(t), journal = ExecutionJournal.open(f.root, version);
+    try {
+      const row = journal.reserve("candidate"), before = readFileSync(f.file);
+      const invalid = version === 2 ? [coalition] : [witness, ...["0", "-1", "01", "18446744073709551616"].map(coalitionId => ({ ...coalition, coalitionId })),
+        { ...coalition, bootId: "not-a-boot" }, { ...coalition, token: [1, 2, 3] }];
+      for (const value of invalid) assert.throws(() => row.publish(value), TypeError);
+      assert.deepEqual(readFileSync(f.file), before);
+    } finally { journal.close(); }
+  }
+});
+test("006. A valid hash cannot admit a v3 coalition in a v2 frame or an unknown version", t => {
+  for (const version of [2, 4]) {
+    const f = fixture(t), journal = ExecutionJournal.open(f.root, DARWIN_EXECUTION_JOURNAL_VERSION);
+    try { journal.reserve("candidate").publish(coalition); } finally { journal.close(); }
+    const frames = readFileSync(f.file, "utf8").trim().split("\n").map(JSON.parse), last = frames.at(-1);
+    const { hash, ...body } = { ...last, version };
+    frames[frames.length - 1] = { ...body, hash: sha256Hex(canonicalJson(body)) };
+    writeFileSync(f.file, frames.map(canonicalJson).join("\n") + "\n"); const before = readFileSync(f.file);
+    assert.throws(() => ExecutionJournal.open(f.root), error => error.code === "STORE_CORRUPT");
+    assert.deepEqual(readFileSync(f.file), before);
+  }
 });

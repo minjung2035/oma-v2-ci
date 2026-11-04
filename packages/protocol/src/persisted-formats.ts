@@ -16,6 +16,8 @@ export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([4,
 export const WIRE_PROTOCOL_VERSION = 1;
 /** DR51: process-crash recovery observations, not accepted intent or a task queue. */
 export const EXECUTION_JOURNAL_VERSION = 2 as const;
+/** Explicit Darwin coalition writer only. Existing v2 frames are never rewritten. */
+export const DARWIN_EXECUTION_JOURNAL_VERSION = 3 as const;
 /** Legacy producers retain their original development envelope on new legacy work. */
 export const PLAN_ENVELOPE_VERSION = 3 as const;
 /** Only collaboration mail uses v4. Legacy producers continue to write v3. */

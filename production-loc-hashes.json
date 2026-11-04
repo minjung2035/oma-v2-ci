@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "f02527346f23f3a0b87c03e3d6efbd6d4bff20165e8c1f16ab7ed1a8d9e7cada",
+  "manifest": "a48188b8497bfb1948dc3eb9d07dcb1abe9658dffd7c5c3b46a58823596afb54",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -340,7 +340,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "5033fa34e903e2882a0211e8bbe1ddce6127d9abc335938210d30c85b929952f"
+      "sha256": "c87ffdbae070b762608aa7974ebed8dd397861789d6fa42863d289cb3082610d"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -1580,7 +1580,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "d26c6f3ceeed0849a3b18cfd0ceacb8be3a8f6f3fd0459e41c6cb097b1bca63b"
+      "sha256": "48632a71ffb84ee3e51eb5e1ce11c20408ffd068f4a1d969a852054798e552e7"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1613,6 +1613,10 @@
     {
       "path": "packages/platform-mac/src/job-launch.ts",
       "sha256": "51342d05547851ee491703f1d4da495eeb8dedb612d408e870f223b3644651db"
+    },
+    {
+      "path": "packages/platform-mac/src/job-recovery.ts",
+      "sha256": "7374ddc986d1ad725195392de121507b37ff6dbe463324446081c1067861c91a"
     },
     {
       "path": "packages/platform-mac/src/job-scope.ts",
@@ -1704,7 +1708,7 @@
     },
     {
       "path": "packages/process/src/execution-witness.ts",
-      "sha256": "fbb45a943306cb6c8750278d9094847ea1f2c2684a235d2ceb4671faa33e1419"
+      "sha256": "8b721a1fd1dfeccda1c5f1073bf5e342ab4defd79a1cc159784f0b404d6888c9"
     },
     {
       "path": "packages/process/src/fence.ts",
@@ -1856,7 +1860,7 @@
     },
     {
       "path": "packages/protocol/src/persisted-formats.ts",
-      "sha256": "bf58b37b935aa3944a7d40141ac7fd066f7f56e7269934defd6638f75fbce6b7"
+      "sha256": "fd14cdddd11a991600e49b0d445a48568617e6891a7198841e5f0a0c67e39b5b"
     },
     {
       "path": "packages/protocol/src/principal-credential.ts",
@@ -2020,7 +2024,7 @@
     },
     {
       "path": "packages/storage/src/execution-journal.ts",
-      "sha256": "1e0f5560688e4a0bf0a306de172b889ce0493107f622eed9b0261daeba9609ca"
+      "sha256": "341861601ce211e725ed016b8d6e5981e4f05df832b1bf25247c9b89729ed806"
     },
     {
       "path": "packages/storage/src/execution-recovery.ts",
