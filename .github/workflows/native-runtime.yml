@@ -15,6 +15,10 @@ jobs:
   common-runtime:
     strategy:
       fail-fast: false
+      # Hosted arm64 capacity cancelled eligible jobs before acquisition.
+      # Queue OS variants here so they retain every oracle without competing
+      # for four Darwin runners at once with the separate gate matrix.
+      max-parallel: 1
       matrix:
         # This work branch qualifies on Darwin; other manual runs default to Linux.
         os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
@@ -130,6 +134,7 @@ jobs:
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         os: [macos-26, macos-15]
     runs-on: ${{ matrix.os }}

@@ -11,7 +11,7 @@ import { Socket } from "node:net";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { controlPipe } from "@oma/native/control-socket";
-import { currentDarwinAuditToken, identifyDarwinCoalition } from "@oma/native/audit-session";
+import { currentDarwinAuditToken, identifyDarwinCoalition, pinInheritedDarwinPeer } from "@oma/native/audit-session";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
@@ -21,7 +21,7 @@ import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/
 import { watchDarwinProcess } from "@oma/native/process-event";
 
 test("001. Actual inherited task-name source survives Seatbelt and Node; user ports and own-task names remain distinct", { timeout: 45000 }, async t => {
-  if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
+  if (process.platform !== "darwin") return assert.throws(pinInheritedDarwinPeer, { code: "UNSUPPORTED_PROFILE" });
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-task-name-source-"))), executable = join(root, "source");
   const unrelated = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: "ignore" });
   const unrelatedClosed = once(unrelated, "close"); void unrelatedClosed.catch(() => {});
@@ -39,12 +39,13 @@ test("001. Actual inherited task-name source survives Seatbelt and Node; user po
   const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror", fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
   assert.equal(compile.status, 0, compile.stderr);
   const token = currentDarwinAuditToken(), host = identifyDarwinCoalition(process.pid);
-  const node = realpathSync(process.execPath), nodeScript = `const {spawnSync}=require('node:child_process');
-    for(const mode of ['--query','--self','--forged']){const r=spawnSync(process.argv[1],[mode,process.argv[2]],{encoding:'utf8'});
-      if(r.status!==0)throw new Error(JSON.stringify(r));process.stdout.write(r.stdout);}`;
+  const node = realpathSync(process.execPath), libdir = realpathSync(fileURLToPath(new URL("../", import.meta.url)));
+  const fixture = new URL("./fixtures/darwin-task-name-node.mjs", import.meta.url).href;
+  const nodeScript = `import(${JSON.stringify(fixture)}).catch(e=>{console.error(e);process.exitCode=1;});`;
   const target = { executable, argv: ["--after-sandbox", String(unrelated.pid), node, executable, nodeScript],
     env: { HOME: root, TMPDIR: root }, cwd: root, timeoutMs: 15000, stdoutBytes: 16384, stderrBytes: 8192 };
-  const recipe = prepareSeatbelt(target, { readable: [], writable: [{ path: root, kind: "directory" }], denied: [],
+  const recipe = prepareSeatbelt(target, { readable: [{ path: libdir, kind: "directory" }], mapped: [{ path: libdir, kind: "directory" }],
+    writable: [{ path: root, kind: "directory" }], denied: [],
     executable: [executable, node].map(path => ({ path, kind: "file" })), unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"] });
   const pipe = controlPipe(); read = pipe.read; writer = new Socket({ fd: pipe.write, readable: false, writable: true });
   const returned = once(writer, "close"), drained = new Promise((yes, no) => { writer.once("error", no); writer.once("close", yes); });
@@ -58,8 +59,12 @@ test("001. Actual inherited task-name source survives Seatbelt and Node; user po
   }, authorize() {} });
   await drained; await returned;
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
-  const rows = result.stdout.toString().trim().split("\n").map(JSON.parse); t.diagnostic(JSON.stringify(rows));
-  assert.equal(rows.length, 4);
+  const allRows = result.stdout.toString().trim().split("\n").map(JSON.parse); t.diagnostic(JSON.stringify(allRows));
+  assert.equal(allRows.length, 7);
+  const rows = allRows.filter(row => row.kind !== undefined); assert.equal(rows.length, 4);
+  assert.deepEqual(allRows.find(row => row.nativeSource)?.nativeSource,
+    { token, coalitionId: host.coalitionId, alive: true, frozen: true, afterClose: false });
+  assert.deepEqual(allRows.filter(row => row.nativeRefusal).map(row => row.nativeRefusal), ["self", "fake"]);
   for (const row of rows.slice(0, 2)) {
     assert.equal(row.kind, "name"); assert.equal(row.kobjectType, 20); assert.equal(row.auditStatus, 0); assert.equal(row.auditWords, 8);
     assert.deepEqual(row.token, token); assert.notEqual(row.bootstrapStatus, 0); assert.notEqual(row.registeredPortsStatus, 0);

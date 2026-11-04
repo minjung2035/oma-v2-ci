@@ -30,6 +30,9 @@ interface ProcCalls {
   hostUuid(output: Buffer, timeout: Buffer): number;
   taskName(task: number, pid: number, output: Buffer): number;
   taskInfo(task: number, flavor: number, output: Buffer, count: Buffer): number;
+  registered(task: number, output: Buffer, count: Buffer): number;
+  kobject(task: number, port: number, type: Buffer, address: Buffer): number;
+  freePorts(task: number, address: bigint, bytes: bigint): number;
   deallocate(task: number, port: number): number;
   signal(token: Buffer, signal: number): number;
 }
@@ -47,6 +50,9 @@ function native(): ProcCalls {
       hostUuid: library.func("int gethostuuid(void *output, const void *timeout)"),
       taskName: library.func("int task_name_for_pid(unsigned int task, int pid, void *output)"),
       taskInfo: library.func("int task_info(unsigned int task, int flavor, void *output, void *count)"),
+      registered: library.func("int mach_ports_lookup(unsigned int task, void *output, void *count)"),
+      kobject: library.func("int mach_port_kobject(unsigned int task, unsigned int port, void *type, void *address)"),
+      freePorts: library.func("int vm_deallocate(unsigned int task, uint64_t address, uint64_t bytes)"),
       deallocate: library.func("int mach_port_deallocate(unsigned int task, unsigned int port)"),
       signal: proc.func("int proc_signal_with_audittoken(void *token, int signal)") };
   })();
@@ -88,6 +94,87 @@ export function currentDarwinAuditToken(): readonly number[] {
       token.readUInt32LE(20) !== process.pid || token.readUInt32LE(4) !== process.geteuid?.() || token.readUInt32LE(28) === 0)
     unknown("Darwin controller kernel token is unavailable");
   return Object.freeze(Array.from({ length: 8 }, (_, index) => token.readUInt32LE(index * 4)));
+}
+/** Transient OS source only. Shared protocol code must still demand genuine
+ * received sender provenance and current role/run authority. */
+export interface DarwinPeerSourcePin {
+  readonly pid: number;
+  readonly token: readonly number[];
+  readonly coalitionId: string;
+  alive(): boolean;
+  close(): void;
+}
+/** Fixed inherited slot 1; no PID, pathname, environment claim or arbitrary
+ * caller-supplied port can substitute for it. A source in our own coalition
+ * is refused. The trusted launch owner must supply this read-only task name;
+ * production launch currently supplies only the discard seed and thus refuses.
+ * This ephemeral pin cannot survive reboot and publishes no durable identity. */
+export function pinInheritedDarwinPeer(): DarwinPeerSourcePin {
+  const api = native(), address = Buffer.alloc(8), count = Buffer.alloc(4);
+  function unavailable(reason: string): never {
+    throw new StoreError("AUTH_FAILED", "inherited Darwin peer source could not be bound to a distinct live generation", { details: { reason } });
+  }
+  if (api.registered(api.task, address, count) !== 0) unavailable("registered-ports");
+  const length = count.readUInt32LE(), pointer = address.readBigUInt64LE();
+  let names: number[] = [], watch: ReturnType<typeof watchDarwinProcess> | undefined;
+  let closed = false, revoked = false, closeFailure: unknown;
+  const close = (): void => {
+    if (closeFailure !== undefined) throw closeFailure;
+    if (closed) return;
+    closed = true;
+    try {
+      cleanupAll([() => watch?.close(), ...names.map(name => () => {
+        if (name !== 0 && name !== 0xffffffff && api.deallocate(api.task, name) !== 0)
+          unknown("Darwin peer-source send reference was not returned");
+      }), () => {
+        if (length !== 0 && api.freePorts(api.task, pointer, BigInt(length) * 4n) !== 0)
+          unknown("Darwin peer-source port array was not returned");
+      }]);
+    } catch (error) { closeFailure = error; throw error; }
+  };
+  try {
+    // TASK_PORT_REGISTER_MAX is 3 in the public SDK. All references and the
+    // kernel-allocated VM array remain owned together until this pin closes.
+    if (length > 3 || length !== 0 && pointer === 0n) unavailable("registered-array");
+    if (length !== 0) {
+      const decoded: unknown = decode(decode(address, "void *"), "uint32_t", length);
+      if (!(decoded instanceof Uint32Array) || decoded.length !== length) unavailable("registered-layout");
+      names = Array.from(decoded);
+    }
+    if (length < 2 || names[1] === 0 || names[1] === 0xffffffff) unavailable("source-missing");
+    const source = names[1]!, type = Buffer.alloc(4), ignored = Buffer.alloc(8);
+    // Query only genuine TASK_NAME=20. A user receive port could forge MIG
+    // replies or block forever if task_info were sent before this check.
+    if (api.kobject(api.task, source, type, ignored) !== 0 || type.readUInt32LE() !== 20) unavailable("source-type");
+    const token = Buffer.alloc(32), words = Buffer.alloc(4); words.writeUInt32LE(8);
+    if (api.taskInfo(source, 15, token, words) !== 0 || words.readUInt32LE() !== 8 ||
+        token.readUInt32LE(4) !== process.geteuid?.() || token.readUInt32LE(28) === 0) unavailable("source-token");
+    const pid = token.readUInt32LE(20); validPid(pid);
+    const observedWatch = watchDarwinProcess(pid); watch = observedWatch;
+    const before = Buffer.alloc(56);
+    if (api.info(pid, 17, 0n, before, before.length) !== before.length || before.readBigUInt64LE(16) === 0n ||
+        before.readUInt32LE(32) !== token.readUInt32LE(28)) unavailable("source-generation");
+    const coalitionId = coalition(pid), own = coalition(process.pid);
+    if (coalitionId === null || own === null || coalitionId === own) unavailable("source-coalition");
+    const alive = (): boolean => {
+      if (closed || revoked) return false;
+      try {
+        if (observedWatch.state() !== "live") { revoked = true; return false; }
+        const unique = Buffer.alloc(56), after = Buffer.alloc(56), fresh = Buffer.alloc(32); words.writeUInt32LE(8);
+        if (api.info(pid, 17, 0n, unique, unique.length) !== unique.length ||
+            unique.readBigUInt64LE(16) !== before.readBigUInt64LE(16) || unique.readUInt32LE(32) !== before.readUInt32LE(32) ||
+            coalition(pid) !== coalitionId || coalition(process.pid) !== own ||
+            api.taskInfo(source, 15, fresh, words) !== 0 || words.readUInt32LE() !== 8 || !fresh.equals(token) ||
+            api.info(pid, 17, 0n, after, after.length) !== after.length ||
+            after.readBigUInt64LE(16) !== before.readBigUInt64LE(16) || after.readUInt32LE(32) !== before.readUInt32LE(32) ||
+            observedWatch.state() !== "live") { revoked = true; return false; }
+        return true;
+      } catch { revoked = true; return false; }
+    };
+    if (!alive()) unavailable("source-live");
+    return Object.freeze({ pid, coalitionId,
+      token: Object.freeze(Array.from({ length: 8 }, (_, index) => token.readUInt32LE(index * 4))), alive, close });
+  } catch (error) { return withCleanup(() => { throw error; }, close); }
 }
 function coalition(pid: number): string | null {
   errno(0);

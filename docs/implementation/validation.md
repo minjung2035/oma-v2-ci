@@ -1481,10 +1481,34 @@ mixed event-loop lag323ms가 기존100ms 기준을 넘은 것이다. read lag6ms
 이것을 원래 CI 실패 수리나 전체 회귀 PASS로 바꾸지 않는다. 원시는 `coalition-recovery/linux-all-art-13335119096/`와
 `/tmp/oma-macos-linux-status-isolated.tap`다. 최신 전체 PASS 근거는 별도 source의 결과로 유지한다.
 
+### inherited expected-peer native adapter 후보 — 실제 Mac 미실행
+
+`pinInheritedDarwinPeer`는 caller 인자 없이 kernel registered slot1만 취득한다. kernel kobject20을
+먼저 확인한 뒤 audit8 words·same UID·fresh unique ID/pidVersion·원래 token·서로 다른 현재 CID를 대조한다.
+exec/exit watch는 fresh generation 조회 전에 등록한다. 모든 alive 호출은 다시 token/generation/CID/watch를
+확인하고, 거절·오류는 sticky revoke다. durable identity·signal/control·role grant는 이 API에 없다.
+복제된 registered send references와 VM array, watch를 한 owner가 반환하며 close 실패도 유지한다.
+Koffi의 primitive-array decode가 Uint32Array임을 로컬에서 확인하고 일반 배열로 복사해 cleanup callback을 만든다.
+
+새 Node fixture는 실제 production Seatbelt 아래에서 이 API의 Host token/CID·alive·close를 확인한 뒤,
+자기 task-name을 새로 등록해 source-coalition 거절, 살아 있는 user port를 등록해 source-type 거절을 요구한다.
+정상 API가 실패하거나 source 조회가 거절되면 성공으로 치환하지 않는다. test recipe의 신뢰된 코드 설치 경로만
+read/map 입력으로 추가했고 production policy·job helper의 seed-only 등록과 실행 guard는 그대로다.
+build·관련 local56/56·C SDK object compile은 PASS다. 새 Mac scenario의 Linux 실행은 platform refusal이며
+실제 Native adapter·counterexample·Broker 채널 연결은 NOT_RUN이다.
+
+### hosted arm64 runner 미취득 취소와 CI 실행 순서
+
+source `d7c8bd14e572`의 Mac15 common check annotation은 `The job was not acquired by Runner of type hosted even after multiple attempts`와
+macOS arm64 capacity constraints를 명시했다. 제품 실행 실패나 billing 원인으로 추정하지 않는다.
+후속 workflow는 common OS matrix와 gate OS matrix를 각각 max-parallel1로 실행해 동시에4개의 Darwin runner를
+요청하지 않는다. Mac26·15/Ubuntu와 모든 oracle·기존 timeout·실패 기준·eager/final artifact는 유지한다.
+이 순서 변경의 runner 취득 효과는 아직 NOT_RUN이며 결과 없는 job을 PASS로 채우지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `23be85b77dddf45a7ea72d03064f66ecd7be8f9b2e6da76361c8a9aaee4293c9` (15853 files).
+verification input digest `82ff7b08096394d45270253d5d7cde030d6a355e071cbbb6d5815916bf337014` (15854 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
