@@ -171,6 +171,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/process/src/writer.ts",
       "packages/native/src/files.ts",
       "packages/native/src/posix-files.ts",
+      "packages/native/src/darwin-file-flags.ts",
       "packages/native/src/darwin-metadata.ts",
       "packages/native/src/process-observation.ts",
       "packages/native/src/pid-namespace.ts",

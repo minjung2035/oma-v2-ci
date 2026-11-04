@@ -1763,10 +1763,86 @@ REUSEADDR/REUSEPORT/REUSESHAREUID 및 SETOPTSHUT escape의 거절과 경쟁 bind
 실제 Mac은 NOT_RUN이며 full Society identity·위조/충돌·fork/owner SIGKILL·inherited Actor/recovery는 여전히 미검증이다.
 제품 lease·startup guard에는 연결하지 않았다.
 
+### SOURCE45 actual 결과와 FD flags 후속 입력 (SOURCE46)
+
+SOURCE45 `941dd9006885bfaa7693e5e10feadb8cfe5387d1` Native
+[41891828298](https://github.com/minjung2035/oma-v2-ci/actions/runs/41891828298)의
+ARM common은354/359·fail5, Intel common은357/359·fail2·cancel/skip/todo0이다.
+ARM ZIP13353842514 SHA-256
+`7fade709ebd149c97d9823cf84a735a61506904c1716074c0305c7f4cda83cbd`,
+Intel ZIP13354027069 SHA-256
+`b8a82f3b062fc1b593333a8aabc4c0caa8b0c9119911d01971414104fd1c9650`과 공식 digest를 대조했다.
+각 before/after canonical15868
+`a4f4fc41fdc4d10c6702ac4371ad7290fd9222b4e63278750728aae293014418`가 같다.
+각 runtime15498 files/27 workspaces도 전후 동일하며 ARM은
+`61d627bcd870e49c02b8673c02aa59088329442423c695e86c5fcee6c523c8ce`, Intel은
+`8fba5556737cc6c872f7367f01f82f19b91679ee781d0c753b6ac723055dcb52`다.
+
+양 Mac의 immutable 후보는 PASS다. UID501 Actor의 readonly inherited FD read23 bytes,
+file/directory flags2 유지, writable open·file unseal·directory unseal·hardlink 모두-1/EPERM1,
+ordinary child control14 bytes 및 complete scope retirement를 관측했다.
+이는 fixture generation의 제한된 보장이며 complete installed code generation과 loader/lifecycle/recovery는 아니다.
+실제 deployment v2 inventory도 양 Mac에서 PASS다: ARM30726 files/2896 directories/29 links/285213921 bytes,
+Intel30726/2896/29/285496341 bytes다.
+
+shutdown UDP 후보는 **양 Mac에서 배제**한다. 옵션 변경 거절을 요구하는 단계에서 경쟁 bind가 성공했다.
+양방향 종료가 socket option 변경을 막는다는 source 관측만으로 port exclusivity를 보장할 수 없다.
+최초 connected 단계의 반례이며 다음 disconnect/reconnect/duplicate 단계 완료를 주장하지 않는다.
+재현 입력을 [manual fixture](../../test/fixtures/darwin-shutdown-socket.mjs)로 보존하고 자동 lane에서 제거한다.
+동일 입력의 알려진 실패를 반복하지 않는 spec§3에 따른 미채택 실험의 종료이며 제품 lease 검증의 PASS가 아니다.
+
+양 Mac 공통 실패 하나는 새 deployment-resolution 시험의 /var 대 /private/var 경로 표기 차이다.
+fixture root를 실제 canonical path로 잡도록 수리한다. 다른 workspace copy 거절은 유지한다.
+ARM의 추가3개는 witness 직후 cancellation과 positive/wrong-peer 통신이다.
+후자 둘은20s 뒤 execution cleanup unconfirmed이며 nested cause가 기본 출력에서 생략됐다.
+Intel의 같은 세 검사는 PASS다. fixture error/cancellation diagnostic의 nested cause를 펼치며
+deadline·성공 조건·권한·cleanup 정책을 바꾸지 않는다. 원인 수리는 아직 미완료다.
+
+SOURCE46은 owned single-link regular inode 또는 owned directory의 held FD에만 작동하는
+Darwin flags primitive를 추가한다. public fstat 64-bit inode layout을 같은 FD의 Node native stat과
+대조하고 fchflags로 UF_IMMUTABLE만 변경한 뒤 효과를 다시 읽는다. 다른 flags는 보존한다.
+fixture의 trusted owner가 seal/unseal에 이를 사용하고 Actor 쪽 독립 C fstat/denial 관측은 유지한다.
+완전한 Actor death가 불명확하면 unseal/회수하지 않는다. 새 FD API의 실제 Mac 실행은 NOT_RUN이다.
+
+SOURCE45 local installed-only deployment3/3은 실제 Linux wrapper에서 PASS다.
+10/10 targeted 중 immutable Mac 분기는 Linux refusal이며 object compile·실제 Mac 실행과 구분한다.
+G-PROCESS/G-FILES/G-AUTH OPEN 및 product guard는 유지한다.
+
+SOURCE46의 새 socket 질문은 mutable raw socket/종료만 한 socket과 다른 조합이다.
+connected UDP에 먼저 DENY_OUT을 추가하고 양방향 shutdown한 뒤 public disconnectx로
+unconnected binding을 남긴다. 고정 XNU의 soconnectlock/soconnectxlocked는 DENY_OUT에서 EPERM이고,
+sodisconnectxlocked는 UDP disconnect handler를 호출한다. 새 fixture는 두 reconnect API의 거절,
+16 reuse/extension 변경 거절과16 competing bind 실패, 마지막 FD 반납 뒤 bind 성공을 함께 요구한다.
+SO_RESTRICTIONS=0x1081/DENY_OUT=2는
+[private header](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/socket_private.h#L100)의 selector다.
+public/stable SDK API라고 하지 않으며 제품에 추가하지 않는다. restricted entitlement도 요청하지 않는다.
+arm64/x64 object compile만 PASS이며 실제 Mac은 NOT_RUN이다. 전체 lease identity·fork/crash·recovery 및
+private ABI의 배포 적합성은 별도 미결정이다. 동일 shutdown-only 실패를 재실행하는 입력이 아니다.
+
+SOURCE45 ARM gate ZIP13353278733 SHA-256
+`5beab428cefd3ffe559df359385896cc599b842f941f5399cc45b814002c98b7`도 대조했다.
+120 executed/113 OBSERVED/7 SETUP_FAILED이며 Worker guard6개 외 roundtrip iteration0 하나가 실패했다.
+해당 source/runtime before/after는 위 SOURCE45 ARM 값과 동일하다. 나머지 roundtrip2회는 OBSERVED다.
+간헐 실패를 정상 왕복의 완전한 qualification으로 확대하지 않는다.
+SOURCE46 build와 focused13/13 local은 PASS다. Mac flags API·process 분기는 Linux refusal과 구분한다.
+
+SOURCE44의 전체 Linux 결과가 뒤이어 도착했다. Architecture
+[41887889048](https://github.com/minjung2035/oma-v2-ci/actions/runs/41887889048)의
+native-all artifact13353838530 SHA-256
+`f41b2d4f743913ebcca5c1a3c17a38c658c71e7bf9b07f2ef27aa5d53cb3908c`를 검증했다.
+source-head는 `f1a0b1cd188fc9402e8cf93a8ac660aad0b8c707`, input 전후15864/
+`0cf2e1e15982ff62efc5461c2c92ba39f6f8079b69307ef7bafa70ea65cd1ae2`로 같다.
+all4813/4813·fail/cancel/skip/todo0, sourceChanges[]이며13 command의 code0/signal-null/timedOut-false다.
+verification artifact13355047508 SHA-256
+`95302b532a1239bfcd3be7563cdf6dd43a2974e47644e6e6c7e9628b0d140cf3`도 대조했고
+fast1189/1189, durable937/937, property42/42, stress16/16, platform79/79·모두 skip0을 확인했다.
+이는 SOURCE44 회귀 결과다. SOURCE45의 v2 runtime inventory나 SOURCE46 FD API의 전체 Linux PASS로 옮겨 쓰지 않는다.
+이전 V23 간헐 lag 실패의 원인 수리·threshold 완화를 뜻하지도 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a4f4fc41fdc4d10c6702ac4371ad7290fd9222b4e63278750728aae293014418` (15868 files).
+verification input digest `7e987e0ecc3d22babb34dac83d4146fb106de4dfc9c410a577832d7af2b27937` (15871 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

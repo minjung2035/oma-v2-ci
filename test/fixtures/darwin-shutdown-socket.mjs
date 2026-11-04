@@ -1,5 +1,6 @@
-/** Actual kernel freeze experiment. No lease identity, inherited Actor fence,
- * owner-crash recovery or product startup guarantee is inferred. */
+/** REJECTED experiment: SOURCE45 ARM/Intel permit the contender bind.
+ * Retained as a manual failure reproduction outside automatic test discovery.
+ * No Society lease or product startup guarantee is inferred. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -15,7 +16,7 @@ test("001. Actual shutdown socket freezes reuse options across disconnect, recon
     const r = spawnSync(command, args, { encoding: "utf8", timeout: 30000 });
     assert.equal(r.error, undefined); assert.equal(r.signal, null); assert.equal(r.status, 0, r.stderr); return r;
   };
-  run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", fileURLToPath(new URL("./fixtures/darwin-shutdown-socket.c", import.meta.url)), "-o", executable]);
+  run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", fileURLToPath(new URL("./darwin-shutdown-socket.c", import.meta.url)), "-o", executable]);
   run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
   const result = JSON.parse(run(executable, []).stdout);
   assert.deepEqual(result, { uid: process.getuid(), phases: 4, frozenMutations: 16, contendersExcluded: 16, lastCloseReleased: true });

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "c6ac0163335ba3695a0189016087e1fc38addf93db2b9c33f8a3d5a8dcd90752",
+  "manifest": "bb56325da43300167e9d864f56a1506a50733b5648371fa796925e3070e35e5e",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1440,7 +1440,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "3a729c5de726cb8a8317338cd98dc9408e6ad6239d57cfa6b9ffbbdfc2068354"
+      "sha256": "53ef524e86f0faa5be38ac27bac5233013fa20cca3519d1e9c1d948b67f82c42"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1461,6 +1461,10 @@
     {
       "path": "packages/native/src/control-socket.ts",
       "sha256": "0c0f2e208046cd1584ac4733879a122c12fc2b7304844be090537eec2009a79a"
+    },
+    {
+      "path": "packages/native/src/darwin-file-flags.ts",
+      "sha256": "466dc48588c823f81b9e515756dfb025396ec47fc63f8ed136920d25049d1939"
     },
     {
       "path": "packages/native/src/darwin-metadata.ts",

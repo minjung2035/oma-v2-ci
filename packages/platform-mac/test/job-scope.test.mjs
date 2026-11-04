@@ -1,6 +1,7 @@
 /** Physical Mac producer + shared coordinator. The journal is in memory:
  * this does not qualify durable recovery, expected Broker or installed JS. */
 import test from "node:test";
+import { inspect } from "node:util";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -95,7 +96,10 @@ test("006. Actual Darwin cancellation after witness publication joins unopened s
   const command = { ...f.command(["-e", "require('node:fs').writeFileSync('entered','forbidden')"]), input: Buffer.alloc(1048601, 98) };
   await assert.rejects(f.runtime.run({ slot: "cancel-setup", signal: controller.signal,
     launch: () => launchDarwinJobScope(command, { signal: controller.signal }),
-    authorize() { throw new Error("cancelled setup reached authority"); } }), error => error.code === "CANCELLED_BEFORE_COMMIT");
+    authorize() { throw new Error("cancelled setup reached authority"); } }), error => {
+      if (error.code !== "CANCELLED_BEFORE_COMMIT") t.diagnostic(inspect(error, { depth: 12, maxArrayLength: 24 }));
+      return error.code === "CANCELLED_BEFORE_COMMIT";
+    });
   assert.equal(existsSync(join(f.root, "entered")), false);
   assert.deepEqual(f.trace, ["publish", "retire"]); assert.equal(f.rows.length, 0);
 });

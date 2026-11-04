@@ -363,6 +363,7 @@ packages/native/src/audit-session.ts
 packages/native/src/audit-token.ts
 packages/native/src/cleanup.ts
 packages/native/src/control-socket.ts
+packages/native/src/darwin-file-flags.ts
 packages/native/src/darwin-metadata.ts
 packages/native/src/descriptor-path.ts
 packages/native/src/directory-layout.ts

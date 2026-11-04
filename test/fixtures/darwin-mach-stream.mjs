@@ -325,5 +325,5 @@ try {
     throw new Error(`unknown Darwin transport case ${mode}`);
   }, cleanup);
   if (observation !== null) console.log(JSON.stringify({ case: mode, ...observation }));
-} catch (error) { console.error(error); process.exitCode = 1; }
+} catch (error) { console.error((await import("node:util")).inspect(error, { depth: 12, maxArrayLength: 24 })); process.exitCode = 1; }
 finally { if (process.connected) process.disconnect(); }

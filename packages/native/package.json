@@ -40,6 +40,10 @@
       "types": "./dist/directory-layout.d.ts",
       "default": "./dist/directory-layout.js"
     },
+    "./darwin-file-flags": {
+      "types": "./dist/darwin-file-flags.d.ts",
+      "default": "./dist/darwin-file-flags.js"
+    },
     "./posix-files": {
       "types": "./dist/posix-files.d.ts",
       "default": "./dist/posix-files.js"

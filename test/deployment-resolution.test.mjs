@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,7 +8,7 @@ import { DEPLOYMENT_LAYOUT } from '@oma/domain/deployment';
 import { assertWorkspaceResolution } from "#oma-test/app/runtime/assets";
 
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'oma-resolution-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'oma-resolution-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'node_modules/@oma'), { recursive: true });
   for (const workspace of DEPLOYMENT_LAYOUT.workspaces) {
