@@ -42,10 +42,10 @@ test("001. Actual immutable candidate blocks writable acquisition, actor unseal 
     return { execution: row.execution, publish(witness) { row.witness = witness; }, retire() { rows.splice(rows.indexOf(row), 1); } };
   }, retire() { throw new Error("unexpected recovery"); } }, () => ({ kind: "unavailable" }));
   const result = await owner.run({ slot: "candidate", launch: () => launchSeatbeltJobScope({ executable,
-    argv: [source, join(work, "actor-alias"), join(work, "control"), generation], env: {}, cwd: work,
+    argv: [source, join(work, "actor-alias"), join(work, "control"), generation], env: { HOME: work, TMPDIR: work }, cwd: work,
     timeoutMs: 10000, stdoutBytes: 4096, stderrBytes: 4096 }, {
     readable: [{ path: generation, kind: "directory" }], writable: [{ path: work, kind: "directory" }], denied: [],
-    executable: [{ path: executable, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [], preserveFds: [7],
+    executable: [{ path: executable, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"], preserveFds: [7],
   }, { files: [{ target: 7, fd }] }), authorize() {} });
   assert.equal(result.kind, "exited", result.stderr.toString()); assert.equal(result.exitCode, 0, result.stderr.toString());
   const value = JSON.parse(result.stdout.toString()); assert.equal(value.uid, process.getuid()); assert.equal(value.readBytes, 23);

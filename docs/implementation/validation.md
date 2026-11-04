@@ -1709,10 +1709,64 @@ Actor 완전 종료가 불명확하면 seal/evidence를 보존한다. 이 검사
 관련 local26/26·skip0은 PASS지만 Mac 전용 분기는 Linux refusal이다. build PASS, 구조·문서·명세 입력은 별도로 재결박한다.
 G-PROCESS/G-FILES/G-AUTH OPEN과 product execution guard는 유지한다.
 
+### Expected peer와 runtime closure 후속 입력 (SOURCE44 → 45)
+
+SOURCE44 `f1a0b1cd188fc9402e8cf93a8ac660aad0b8c707`의 Native
+[41887888910](https://github.com/minjung2035/oma-v2-ci/actions/runs/41887888910)에서
+커널 source에 결박한 positive Mach 왕복과 wrong-peer 거절이 ARM26·Intel26 모두 통과했다.
+ARM common350/352·fail2, Intel common351/352·fail1이며 cancel/skip/todo0이다.
+ARM gate는120 executed /114 OBSERVED /6 SETUP_FAILED, product BLOCKED이다.
+남은 setup6은 Worker bootstrap/tools의 기존 native-support guard다. Actor admission 전체의 완료는 아니다.
+
+검증 ZIP은 ARM common13352692879
+`e794c71872de5d91ac5610e49b0e01caca354112899ee3ba5dde12510533e82b`,
+Intel common13353325280
+`a407fe4d8d15090797207fa77db4938b7e41e9ac9060ef6d95820115fe84ebd3`,
+ARM gate13351059422
+`96077420b49580d855a066115fff8e2194a5c6bdf72f2d601e3c12f07f57e29b`다.
+위 artifact별 공식 SHA-256과 내려받은 ZIP을 대조했다.
+세 입력의 before/after canonical15864 /`0cf2e1e15982ff62efc5461c2c92ba39f6f8079b69307ef7bafa70ea65cd1ae2`가 같다.
+ARM common/gate runtime15496 files/27 workspaces
+`a648f470809cb134d88f49a9b7006bb6c1535bbc0a784e7e51ebb19aa18b2bba`,
+Intel runtime15496/27
+`c1dfa4899e53974289d27312b3321be115fe92b48174d47db74ce83a4a1a184d`도 각 before/after가 같다.
+
+immutable fixture는 양 Mac에서 HOME/TMPDIR 누락으로 Seatbelt 준비 중 거절됐다.
+kernel actor unseal 판정은 아직 NOT_RUN이며 새 입력은 명시한 writable work에 두 환경값을 둔다.
+ARM witness Host-crash 시험 하나는 최초 process pin acquisition에서 실패했다.
+실행 실패를 죽음/정상 복구로 바꾸지 않으며 새 입력은 initial state를 구분하는 진단만 추가한다.
+ARM runtime artifact13352678806
+`d059e8aeb75fec5a724e24e7bf8e442fd631917895c494c759f417917b0990d6`의 packed isolation은
+26/27 뒤 @oma/git preparation의 기존 Linux guard에서 실패했다. source/runtime before/after는 위 ARM 값과 같다.
+
+SOURCE45 후보는 deployment manifest v2에 외부 non-dev npm 파일·contained direct link·디렉터리를 포함한다.
+lockfile v3의 optional 부재와 관측 실패를 구분하고, 실제 workspace/group lookup namespace도 읽는다.
+링크 체인·installation 탈출·special entry·다른 @oma workspace owner는 거절한다.
+기존 configured digest와 accepted state를 자동 변환하거나 다시 쓰지 않는다.
+새 배포의 trusted installer가 새 digest를 제공해야 하며 기존 digest 불일치는 거절한다.
+기존 설정의 자동 전환이나 데이터 migration을 구현한 것은 아니다.
+실제 local tree는30723 regular files/2897 directories/29 links/286093145 bytes였다.
+외부 closure를 포함하므로 shared budget은65536 entries/512MiB다.
+이는 startup byte inventory이며 immutable private generation·load-time 보호·Node global lookup 차단은 미완료다.
+G-PROCESS/G-FILES/G-AUTH OPEN과 제품 실행 guard를 유지한다.
+
+SOURCE45의 별도 Society 후보 질문은 UDP socket의 양방향 shutdown 뒤 옵션 변경도 거절되는지다.
+고정 XNU `f6217f891ac0bb64f3d375211650a4c1ff8ca1ea`의
+[uipc_socket.c](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_socket.c#L4749)는
+양쪽 종료와 SETOPTSHUT 미설정이면 옵션 처리 전에 EINVAL을 반환한다.
+[udp_disconnect](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/netinet/udp_usrreq.c#L2539)와
+[soisconnected](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_socket2.c#L192)는 이 두 종료 bit를 지우지 않는다.
+이는 아직 source inference다. raw mutable socket·SO_RESTRICTIONS 후보와 구분한다.
+새 private fixture는 UDP bind/connect/shutdown, disconnect/reconnect, duplicate만 남긴 네 단계에서
+REUSEADDR/REUSEPORT/REUSESHAREUID 및 SETOPTSHUT escape의 거절과 경쟁 bind 실패를 함께 요구하고,
+마지막 reference 반납 뒤 경쟁 bind 성공을 요구한다. arm64/x64 SDK object compilation은 PASS다.
+실제 Mac은 NOT_RUN이며 full Society identity·위조/충돌·fork/owner SIGKILL·inherited Actor/recovery는 여전히 미검증이다.
+제품 lease·startup guard에는 연결하지 않았다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0cf2e1e15982ff62efc5461c2c92ba39f6f8079b69307ef7bafa70ea65cd1ae2` (15864 files).
+verification input digest `a4f4fc41fdc4d10c6702ac4371ad7290fd9222b4e63278750728aae293014418` (15868 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

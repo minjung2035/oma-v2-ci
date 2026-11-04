@@ -2,18 +2,10 @@
 import { cpSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { productionModuleRoots } from "#oma-test/app/runtime/module-inventory";
 
 export function productionModulePaths(source: string): string[] {
-  const lock = JSON.parse(readFileSync(join(source, "package-lock.json"), "utf8")) as {
-    packages: Record<string, { dev?: boolean; optional?: boolean }>;
-  };
-  const modules = new Set<string>();
-  for (const [key, entry] of Object.entries(lock.packages)) {
-    if (!key.startsWith("node_modules/") || entry.dev === true || entry.optional === true && !existsSync(join(source, key))) continue;
-    const parts = key.split("/");
-    modules.add(parts[1]!.startsWith("@") ? parts.slice(0, 3).join("/") : parts.slice(0, 2).join("/"));
-  }
-  return [...modules].sort();
+  return [...productionModuleRoots(JSON.parse(readFileSync(join(source, "package-lock.json"), "utf8")), path => existsSync(join(source, path)))];
 }
 
 export function copyInstalledProduct(source: string, prefix: string, options: { engine?: boolean } = {}): void {

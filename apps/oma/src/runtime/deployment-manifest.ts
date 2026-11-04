@@ -10,26 +10,32 @@ import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/file
 import { directoryNames } from "@oma/file-descriptors";
 import { statAt } from "@oma/native/posix-files";
 import { assertWorkspaceResolution } from "./assets.js";
+import { decodeUtf8 } from "@oma/domain/utf8";
+import { inventoryRuntimeModules, type DeploymentLink } from "./module-inventory.js";
 
 // The entry bound is sized for the compiled tree plus the vendored
 // extension payloads it ships: a vendored bundle is a full dependency
-// closure (pi-web-access alone is ~11k pinned files), each of which this
-// walk must hash -- the bound refuses absurd inventories, not honest ones.
-const MAX_ENTRIES = 32768;
-const MAX_BYTES = 256 * 1024 * 1024;
+// closure (pi-web-access alone is ~11k pinned files), plus the installed npm
+// runtime. Both closures are hashed, including their native payloads.
+const MAX_ENTRIES = 65536;
+const MAX_BYTES = 512 * 1024 * 1024;
 export interface DeploymentFile {
   readonly path: string;
   readonly bytes: number;
   readonly sha256: string;
 }
 export interface DeploymentManifest {
-  readonly version: 1;
+  readonly version: 2;
   readonly files: readonly DeploymentFile[];
+  readonly directories: readonly string[];
+  readonly links: readonly DeploymentLink[];
 }
 
 export function deploymentManifest(root: string): DeploymentManifest {
   const files: DeploymentFile[] = [];
   const moduleDirectories: string[] = [];
+  const directories = new Set<string>();
+  let lock: unknown;
   let entries = 0;
   let total = 0;
   // One scratch buffer and one held directory per traversal level. Reopening
@@ -37,6 +43,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
   // expensive even though its bytes must still all be hashed.
   const buffer = Buffer.alloc(64 * 1024);
   const file = (parent: number, name: string, path: string): void => {
+    const captured: Buffer[] | undefined = path === "package-lock.json" ? [] : undefined;
     if (++entries > MAX_ENTRIES)
       throw new StoreError(
         "UNSUPPORTED_PROFILE",
@@ -67,6 +74,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
             "deployment asset was truncated",
           );
         digest.update(buffer.subarray(0, count));
+        captured?.push(Buffer.from(buffer.subarray(0, count)));
         offset += count;
       }
       const after = fstatSync(fd);
@@ -86,11 +94,13 @@ export function deploymentManifest(root: string): DeploymentManifest {
           sha256: digest.digest("hex"),
         }),
       );
+      if (captured !== undefined) lock = JSON.parse(decodeUtf8(Buffer.concat(captured)));
     } finally {
       closeSync(fd);
     }
   };
   const tree = (parent: number, name: string, path: string, depth = 0): void => {
+    directories.add(path);
     if (name === "node_modules") moduleDirectories.push(join(root, path));
     if (++entries > MAX_ENTRIES || depth > 32)
       throw new StoreError(
@@ -125,9 +135,16 @@ export function deploymentManifest(root: string): DeploymentManifest {
       ...DEPLOYMENT_LAYOUT.workspaces.map(workspace => `${workspace.root}/package.json`),
     ])
       if (!files.some(entry => entry.path === path)) file(rootFd, path, path);
+    const modules = inventoryRuntimeModules(root, rootFd, lock, {
+      entry() { if (++entries > MAX_ENTRIES) throw new StoreError("UNSUPPORTED_PROFILE", "deployment inventory exceeds bound"); },
+      file, directory: path => moduleDirectories.push(join(root, path)),
+      bound: (path, directory) => directory ? DEPLOYMENT_LAYOUT.workspaces.some(workspace => workspace.root === path) ||
+        directories.has(path) : files.some(entry => entry.path === path),
+    });
+    for (const directory of modules.directories) directories.add(directory);
     assertWorkspaceResolution(root, moduleDirectories);
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    return Object.freeze({ version: 1, files: Object.freeze(files) });
+    return Object.freeze({ version: 2, files: Object.freeze(files), directories: Object.freeze([...directories].sort()), links: modules.links });
   } catch (cause) {
     throw unobserved(cause, "the deployment inventory") ?? new StoreError(
       "UNSUPPORTED_PROFILE",
@@ -137,7 +154,8 @@ export function deploymentManifest(root: string): DeploymentManifest {
   } finally { if (rootFd !== undefined) closeSync(rootFd); }
 }
 
-/** JSON key order and sorted relative POSIX paths are part of this v1 byte codec. */
+/** v2 pins runtime dependency bytes, loader links and directory presence too.
+ * Existing configured digests are never rewritten or silently interpreted as v2. */
 export function deploymentDigest(root: string): string {
   return createHash("sha256")
     .update(JSON.stringify(deploymentManifest(root)))

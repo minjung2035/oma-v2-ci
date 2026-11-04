@@ -333,7 +333,9 @@ export function pinDarwinProcess(pid: number): DarwinProcessPin {
           processState >= 1 && processState <= 3 ? "live" : "unknown";
       } catch { return status = "unknown"; }
     };
-    if (!["live", "stopped"].includes(state())) unknown("Darwin process changed while acquiring its pin");
+    const initialState = state();
+    if (initialState !== "live" && initialState !== "stopped")
+      unknown(`Darwin process pin acquisition is ${initialState}`);
     const signal = (number: 9 | 19): boolean => {
       const observed = state();
       if (observed === "changed" || observed === "exited") return false;

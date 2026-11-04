@@ -82,6 +82,7 @@ apps/oma/src/runtime/input-effects/submit.ts
 apps/oma/src/runtime/invocation-codec.ts
 apps/oma/src/runtime/keychain-credentials.ts
 apps/oma/src/runtime/locked-files.ts
+apps/oma/src/runtime/module-inventory.ts
 apps/oma/src/runtime/native-residents.ts
 apps/oma/src/runtime/native-support.ts
 apps/oma/src/runtime/packages/index.ts

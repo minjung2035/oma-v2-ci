@@ -82,7 +82,7 @@ test("001. Canonical deployment manifest pins every selected byte independent of
     // AV16: the sandbox's `oma` command is pinned with the rest.
     "apps/oma/dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
-    "package-lock.json": "{}",
+    "package-lock.json": JSON.stringify({ lockfileVersion: 3, packages: {} }),
   };
   const workspaces = DEPLOYMENT_LAYOUT.workspaces;
   for (const {name, root} of workspaces) {
@@ -97,7 +97,7 @@ test("001. Canonical deployment manifest pins every selected byte independent of
     mkdirSync(join(root, "node_modules/@oma"), { recursive: true });
     for (const workspace of workspaces) symlinkSync(`../../${workspace.root}`, join(root, "node_modules", workspace.name));
     const expected = {
-      version: 1,
+      version: 2,
       files: Object.keys(contents)
         .sort()
         .map((path) => ({
@@ -105,6 +105,12 @@ test("001. Canonical deployment manifest pins every selected byte independent of
           bytes: Buffer.byteLength(contents[path]!),
           sha256: createHash("sha256").update(contents[path]!).digest("hex"),
         })),
+      directories: [...new Set(Object.keys(contents).flatMap(path => {
+        const parts = path.split("/");
+        return parts.slice(1).map((_, i) => parts.slice(0, i + 1).join("/")).filter(parent =>
+          workspaces.some(workspace => parent === workspace.root + "/dist" || parent.startsWith(workspace.root + "/dist/")));
+      }))].sort(),
+      links: [],
     };
     assert.deepEqual(deploymentManifest(root), expected);
     assert.deepEqual(deploymentManifest(`${root}/`), expected);
@@ -187,14 +193,12 @@ test("002. Installed broker refuses deployment mismatch BEFORE SQLite or unit ef
       lock.close();
       return result.stderr;
     };
-    const asset = join(root, "packages/mail/dist/facts.js");
-    const bytes = readFileSync(asset);
-    writeFileSync(
-      asset,
-      Buffer.concat([bytes, Buffer.from("\n// changed deployment byte\n")]),
-    );
-    assert.match(run(), /UNSUPPORTED_PROFILE.*deploymentDigest/);
-    writeFileSync(asset, bytes);
+    for (const path of ["packages/mail/dist/facts.js", "node_modules/koffi/index.js"]) {
+      const asset = join(root, path), bytes = readFileSync(asset);
+      writeFileSync(asset, Buffer.concat([bytes, Buffer.from("\n// changed deployment byte\n")]));
+      assert.match(run(), /UNSUPPORTED_PROFILE.*deploymentDigest/);
+      writeFileSync(asset, bytes);
+    }
     for (const invalid of ["", "fixture", "A".repeat(64), "a".repeat(63)]) {
       cfg.installation.deploymentDigest = invalid;
       writeFileSync(configPath, JSON.stringify(cfg));

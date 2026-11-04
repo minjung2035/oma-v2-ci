@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "c1443968daa0be7903dd0c6e0f78fb79f249820381526e97d1924414e8072b61",
+  "manifest": "c6ac0163335ba3695a0189016087e1fc38addf93db2b9c33f8a3d5a8dcd90752",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -272,7 +272,7 @@
     },
     {
       "path": "apps/oma/src/runtime/deployment-manifest.ts",
-      "sha256": "378b02b18efe850205ba8bab82e572bfb0ba762f8a13368b17d9eae358c1d8b0"
+      "sha256": "13263deba34df83b6d0983c00b95c0e219cc881ca141af19e373864f815ef094"
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
@@ -337,6 +337,10 @@
     {
       "path": "apps/oma/src/runtime/locked-files.ts",
       "sha256": "fe264f9978524f9525e2601c86603223ade9aa317f665fc52054c84a086ac2a1"
+    },
+    {
+      "path": "apps/oma/src/runtime/module-inventory.ts",
+      "sha256": "a7ba4b30aab7a9bbc8f20adccb668b05c0236f6d66854de1c1688d634758ddee"
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
@@ -1444,7 +1448,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "51343502c98f2c376c4f0fd7eaa271e7e4da0f3b9370fd0e8717cd8d82b26b9a"
+      "sha256": "4348db4bac5911fb789c2c5253413e192e038b825d477b56c4de7169843f2339"
     },
     {
       "path": "packages/native/src/audit-token.ts",

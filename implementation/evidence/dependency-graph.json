@@ -83,6 +83,7 @@
   "apps/oma/src/runtime/invocation-codec.ts",
   "apps/oma/src/runtime/keychain-credentials.ts",
   "apps/oma/src/runtime/locked-files.ts",
+  "apps/oma/src/runtime/module-inventory.ts",
   "apps/oma/src/runtime/native-residents.ts",
   "apps/oma/src/runtime/native-support.ts",
   "apps/oma/src/runtime/packages/index.ts",
@@ -2699,7 +2700,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 167
+   "files": 168
   },
   {
    "index": 5,
@@ -2720,8 +2721,8 @@
    "files": 73
   }
  ],
- "files": 558,
- "runtimeEdges": 2269,
+ "files": 559,
+ "runtimeEdges": 2278,
  "typeOnlyEdges": 968,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 589,
@@ -2729,10 +2730,10 @@
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 406,
   "L3-workflow -> L3-workflow": 94,
-  "L4-orchestration -> L1-kernel": 514,
+  "L4-orchestration -> L1-kernel": 522,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 219,
+  "L4-orchestration -> L4-orchestration": 220,
   "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,
@@ -2760,21 +2761,21 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 288,
+  "packages/domain/src/errors.ts": 289,
   "packages/domain/src/identifiers.ts": 94,
-  "packages/native/src/cleanup.ts": 55,
+  "packages/native/src/cleanup.ts": 56,
   "packages/storage/src/directory.ts": 54,
-  "packages/native/src/files.ts": 51,
+  "packages/native/src/files.ts": 52,
   "packages/domain/src/canonical-json.ts": 49,
   "packages/storage/src/durable-fs.ts": 43,
   "packages/domain/src/paths.ts": 41,
-  "packages/domain/src/utf8.ts": 30,
-  "packages/file-descriptors/src/index.ts": 29,
+  "packages/domain/src/utf8.ts": 32,
+  "packages/file-descriptors/src/index.ts": 30,
   "packages/domain/src/derived.ts": 27,
   "packages/domain/src/request-identity.ts": 23,
   "packages/domain/src/authority.ts": 22,
-  "packages/domain/src/resident-paths.ts": 21,
-  "packages/domain/src/surface-bounds.ts": 21
+  "packages/domain/src/deployment.ts": 21,
+  "packages/domain/src/resident-paths.ts": 21
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 41,
@@ -2805,14 +2806,14 @@
   "node:crypto": 60,
   "node:dns": 1,
   "node:events": 3,
-  "node:fs": 133,
+  "node:fs": 134,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
   "node:module": 6,
   "node:net": 25,
   "node:os": 15,
-  "node:path": 169,
+  "node:path": 170,
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
