@@ -538,6 +538,16 @@ export function validateDarwinObservation(name, observations) {
                 gate.initialImage.continued !== 0 || gate.initialImage.taskNameReturned !== true ||
                 gate.initialImage.origin?.kind !== "matched" || gate.initialImage.otherOrigin?.kind !== "unavailable" ||
                 !Number.isInteger(gate.initialImage.otherOrigin.osStatus) || gate.initialImage.otherOrigin.osStatus === 0) ||
+              gate.initialImage?.pinState !== undefined && (gate.initialImage.pinState !== "stopped" ||
+                gate.initialImage.resumed !== true || gate.initialImage.closedPinState !== "unknown" ||
+                gate.targetImage?.pinState !== "stopped" || gate.targetImage.stateAfterExec !== "changed" ||
+                gate.targetImage.staleResume !== false || gate.targetImage.staleTerminate !== false ||
+                gate.finalImage?.pinState !== "stopped" || gate.finalImage.stateAfterFinish !== "exited" ||
+                gate.finalImage.deadTerminate !== false || gate.processPinsReturned !== true || gate.processPinReturnError !== undefined ||
+                gate.cancelledBeforeStartup?.image?.kind !== "matched" || gate.cancelledBeforeStartup.terminated !== true ||
+                gate.cancelledBeforeStartup.state !== "exited" || gate.cancelledBeforeStartup.deadEffect !== false ||
+                gate.cancelledBeforeStartup.traceCreated !== false || gate.cancelledBeforeStartup.population !== "empty" ||
+                gate.cancelledBeforeStartup.registrationExit !== 113) ||
               gate.expectedCdHashes !== undefined &&
                 (!Array.isArray(gate.expectedCdHashes) || !gate.expectedCdHashes.length ||
                   gate.expectedCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash)) ||

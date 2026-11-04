@@ -1133,10 +1133,37 @@ scope/crash/native53/53이 통과했다. 이는 위 Darwin producer와의 제품
 같은 수정의 독립 packed 설치27/27도 통과했다. 외부 선언 diagnostics44의 기존 범위는 그대로이며,
 소유한 stream의 complete EOF와 물리 close·producer close를 함께 관측해야 정상 결과가 된다.
 
+### Darwin의 fresh process pin — 실제 Mac 실행 전
+
+`pinDarwinProcess`는 process event queue를 먼저 등록하고 kernel task-name reference의 전체 audit token을
+전후 generation·boot/CID·BSD 상태와 대조한다. 같은 generation의 stopped 상태에서만 resume하며,
+종료는 내부 kernel token의 SDK 제어만 사용한다. exec/exit/관측 오류와 close는 재사용을 거절한다.
+이는 sender/role/current authority나 scope death 증명이 아니다. 기존 member 제어도 libproc의 반환값
+`0 또는 errno`를 직접 읽도록 고쳤다. ambient errno는 이 API의 반환 계약이 아니다.
+
+기존 실제 Mach gate에 production pin을 연결했다. 별도 one-shot helper의 첫 명령 전 취소·CID 소멸,
+helper resume, Seatbelt→Node 같은 PID의 이전 pin 제어 거절, 새 Node pin과 실제 종료·task/queue 반환을
+검사한다. 로컬 native/platform/parser120/120과 추가 parser 반례37/37은 통과했지만 이 입력의
+**실제 Mac 동작은 NOT_RUN**이다. process I/O5개와 execution preparation/terminal8개도 common
+runtime CI에 추가해 두 OS의 실제 kernel에서 실행한다. parser 합성 입력을 kernel 근거로 쓰지 않는다.
+같은 로컬 수정의 공유 owner/pipe13/13·독립 packed 설치27/27·전체 구조 검사도 통과했다.
+외부 선언 diagnostics44와 review ledger의 미검토 상태를 성공으로 재분류하지 않았다.
+
+직전 `5923a679c58`의 Mac runtime artifact도 회수·API SHA-256 대조했다. Mac15·26 공통 각293/293·skip0,
+packed 각26/27이며 실패는 기존 Git preparation `UNSUPPORTED_PROFILE`다. 원시는 `held-profile/art-13314678054/`·
+`art-13315576051/`이며 SHA-256은 각각 `516e55a0324d0eb0e379ea49f52488fe1b4dfa8cccaa49b0a3660bbcb33258c8`·
+`c00ed59530a244845e1a3f7a8db7f39636ced1bce3d772c63e6556819f76630a`다. 두 artifact의 canonical/runtime
+입력은 전후 같다. 이 결과를 새 process pin이나 Darwin 제품 PASS로 확대하지 않는다.
+같은 source Architecture [41816225769](https://github.com/minjung2035/oma-v2-ci/actions/runs/41816225769)의
+Linux native-all은 **4762/4762 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges=[]**다. 13 command
+모두 code0이며 artifact `13315353900`의 API SHA-256
+`48fe128087b6a256dfaf374c826265cc609eec8fb7677e2535ecb0a16d66e2b1`를 대조했다.
+이는 새 pin 변경 전 입력이며 `held-profile/art-13315353900/all/result.json`에 보존한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4b6b1374808a4bf76ad936cd60b698755994bc3117267da0fd66b0c508fb580d` (15835 files).
+verification input digest `e684025c62f3e57fc7210823512169cbaed4fb7dfa812a2368290ddcc81f2ba1` (15835 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

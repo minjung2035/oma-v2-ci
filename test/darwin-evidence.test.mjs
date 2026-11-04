@@ -565,6 +565,25 @@ test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal",
   gate.profileChannel = profile; gate.profileHandlesReturned = false; assert.throws(validate);
   gate.profileHandlesReturned = true; gate.fileports.slots = [0, 1, 2, 7]; assert.throws(validate);
   gate.fileports.slots = slots; validate();
+  Object.assign(gate.initialImage, { pinState: "stopped", resumed: true, closedPinState: "unknown" });
+  Object.assign(gate.targetImage, { pinState: "stopped", stateAfterExec: "changed", staleResume: false, staleTerminate: false });
+  Object.assign(gate.finalImage, { pinState: "stopped", stateAfterFinish: "exited", deadTerminate: false });
+  gate.processPinsReturned = true;
+  gate.cancelledBeforeStartup = { image: { kind: "matched" }, terminated: true, state: "exited", deadEffect: false,
+    traceCreated: false, population: "empty", registrationExit: 113 };
+  validate();
+  const pinned = structuredClone(gate);
+  for (const corrupt of [value => { value.initialImage.pinState = "live"; },
+    value => { value.initialImage.resumed = false; }, value => { value.initialImage.closedPinState = "live"; },
+    value => { value.targetImage.stateAfterExec = "live"; }, value => { value.targetImage.staleResume = true; },
+    value => { value.targetImage.staleTerminate = true; }, value => { value.finalImage.stateAfterFinish = "unknown"; },
+    value => { value.finalImage.deadTerminate = true; }, value => { value.processPinsReturned = false; },
+    value => { value.processPinReturnError = "close failed"; }, value => { value.cancelledBeforeStartup.terminated = false; },
+    value => { value.cancelledBeforeStartup.traceCreated = true; }, value => { value.cancelledBeforeStartup.population = "unknown"; },
+    value => { value.cancelledBeforeStartup.registrationExit = 0; }]) {
+    proxy.machGate = structuredClone(pinned); corrupt(proxy.machGate); assert.throws(validate);
+  }
+  proxy.machGate = pinned; validate();
 });
 
 test("013. Native darwin: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {

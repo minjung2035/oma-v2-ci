@@ -4,7 +4,8 @@
  */
 import { decode, errno, load } from "koffi";
 import { StoreError } from "@oma/domain/errors";
-import { withCleanup } from "./cleanup.js";
+import { cleanupAll, withCleanup } from "./cleanup.js";
+import { watchDarwinProcess } from "./process-event.js";
 
 /** Legacy persisted shape. It lacks boot identity and cannot authorize recovery. */
 export type DarwinSessionWitness = {
@@ -133,11 +134,110 @@ export function signalDarwinCoalitionMember(identity: DarwinCoalitionIdentity, p
         before.readUInt32LE(32) === 0 || before.readUInt32LE(32) !== after.readUInt32LE(32) ||
         token.readUInt32LE(20) !== pid || token.readUInt32LE(4) !== process.geteuid?.() ||
         token.readUInt32LE(28) !== before.readUInt32LE(32) || currentDarwinBootId() !== identity.bootId) return false;
-    errno(0);
-    if (api.signal(token, 9) === 0) return true;
-    if (errno() === 3 /* ESRCH: exact generation already gone */) return false;
+    // libproc returns the errno value itself, not -1 plus ambient errno.
+    const status = api.signal(token, 9);
+    if (status === 0) return true;
+    if (status === 3 /* ESRCH: exact generation already gone */) return false;
     unknown("Darwin exact-token member termination was refused");
   }, () => {
     if (api.deallocate(api.task, port.readUInt32LE()) !== 0) unknown("Darwin member task-name capability was not returned");
   });
+}
+
+export type DarwinProcessState = "live" | "stopped" | "changed" | "exited" | "unknown";
+/** A freshly acquired kernel generation, not a received sender or role grant.
+ * Its controls use only its private kernel token. Neither PID nor the public
+ * token copy can reacquire it, and a pin never proves complete scope death. */
+export interface DarwinProcessPin {
+  readonly pid: number;
+  readonly token: readonly number[];
+  readonly identity: DarwinCoalitionIdentity;
+  state(): DarwinProcessState;
+  resume(): boolean;
+  terminate(): boolean;
+  close(): void;
+}
+export function pinDarwinProcess(pid: number): DarwinProcessPin {
+  validPid(pid);
+  const api = native(), bootId = currentDarwinBootId(), before = Buffer.alloc(56);
+  if (api.info(pid, 17, 0n, before, before.length) !== before.length ||
+      before.readBigUInt64LE(16) === 0n || before.readUInt32LE(32) === 0)
+    unknown("Darwin process generation is unavailable");
+  // Register before acquiring the task token. An exec between the first
+  // generation read and registration is rejected by the second read below.
+  const watch = watchDarwinProcess(pid), port = Buffer.alloc(4);
+  let ownsPort = false, closed = false, closeFailure: unknown;
+  const close = (): void => {
+    if (closeFailure !== undefined) throw closeFailure;
+    if (closed) return;
+    closed = true;
+    try {
+      cleanupAll([() => watch.close(), () => {
+        if (ownsPort && api.deallocate(api.task, port.readUInt32LE()) !== 0)
+          unknown("Darwin process task-name capability was not returned");
+      }]);
+    } catch (error) { closeFailure = error; throw error; }
+  };
+  try {
+    if (api.taskName(api.task, pid, port) !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff)
+      unknown("Darwin process task-name capability is unavailable");
+    ownsPort = true;
+    const token = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
+    if (api.taskInfo(port.readUInt32LE(), 15, token, count) !== 0 || count.readUInt32LE() !== 8 ||
+        token.readUInt32LE(20) !== pid || token.readUInt32LE(4) !== process.geteuid?.() ||
+        token.readUInt32LE(28) !== before.readUInt32LE(32))
+      unknown("Darwin process kernel token could not be bound");
+    const coalitionId = coalition(pid);
+    if (coalitionId === null || coalition(process.pid) === coalitionId)
+      unknown("Darwin process must belong to a distinct resource coalition");
+    const identity: DarwinCoalitionIdentity = Object.freeze({ kind: "darwin-resource-coalition", bootId, coalitionId });
+    let status: DarwinProcessState = "live";
+    const state = (): DarwinProcessState => {
+      if (closed) return "unknown";
+      if (status !== "live" && status !== "stopped") return status;
+      try {
+        const event = watch.state();
+        if (event !== "live") return status = event;
+        if (currentDarwinBootId() !== bootId) return status = "changed";
+        const unique = Buffer.alloc(56), bsd = Buffer.alloc(136), fresh = Buffer.alloc(32);
+        errno(0);
+        const bytes = api.info(pid, 17, 0n, unique, unique.length), saved = errno();
+        if (bytes === 0 && saved === 3) return status = "exited";
+        if (bytes !== unique.length) return status = "unknown";
+        if (unique.readBigUInt64LE(16) !== before.readBigUInt64LE(16) ||
+            unique.readUInt32LE(32) !== before.readUInt32LE(32)) return status = "changed";
+        if (coalition(pid) !== coalitionId) return status = "changed";
+        if (api.info(pid, 3 /* PROC_PIDTBSDINFO */, 0n, bsd, bsd.length) !== bsd.length ||
+            bsd.readUInt32LE(12) !== pid) return status = "unknown";
+        if (bsd.readUInt32LE(4) === 5 /* SZOMB */) return status = "exited";
+        count.writeUInt32LE(8);
+        if (api.taskInfo(port.readUInt32LE(), 15, fresh, count) !== 0 || count.readUInt32LE() !== 8)
+          return status = "unknown";
+        if (!fresh.equals(token)) return status = "changed";
+        const after = Buffer.alloc(56);
+        if (api.info(pid, 17, 0n, after, after.length) !== after.length) return status = "unknown";
+        if (after.readBigUInt64LE(16) !== before.readBigUInt64LE(16) ||
+            after.readUInt32LE(32) !== before.readUInt32LE(32)) return status = "changed";
+        const finalEvent = watch.state();
+        if (finalEvent !== "live") return status = finalEvent;
+        const processState = bsd.readUInt32LE(4);
+        return status = processState === 4 /* SSTOP */ ? "stopped" :
+          processState >= 1 && processState <= 3 ? "live" : "unknown";
+      } catch { return status = "unknown"; }
+    };
+    if (!["live", "stopped"].includes(state())) unknown("Darwin process changed while acquiring its pin");
+    const signal = (number: 9 | 19): boolean => {
+      const observed = state();
+      if (observed === "changed" || observed === "exited") return false;
+      if (observed === "unknown") unknown("Darwin pinned process is unobserved");
+      if (number === 19 && observed !== "stopped") return false;
+      const result = api.signal(token, number);
+      if (result === 0) return true;
+      if (result === 3) { status = "changed"; return false; }
+      unknown("Darwin pinned process control was refused");
+    };
+    return Object.freeze({ pid, identity,
+      token: Object.freeze(Array.from({ length: 8 }, (_, index) => token.readUInt32LE(index * 4))),
+      state, resume: () => signal(19), terminate: () => signal(9), close });
+  } catch (error) { return withCleanup(() => { throw error; }, close); }
 }

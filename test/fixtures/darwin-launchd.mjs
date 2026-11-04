@@ -18,7 +18,7 @@ import { machoImageCdHashes } from "@oma/platform-mac/macho-image";
 import { runProcessSync, runProcess } from "@oma/process/run";
 import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
-  signalDarwinCoalitionMember } from "@oma/native/audit-session";
+  signalDarwinCoalitionMember, pinDarwinProcess } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { GIT_ENV } from "@oma/process/policies";
 import { controlPipe } from "@oma/native/control-socket";
@@ -690,7 +690,7 @@ value.complete = true; save();
             domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
           proxy[pipeTransfer ? "machPipeGate" : "machGate"] = gate;
           let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl, gateJob, gatePaths, gateTracePath;
-          let profileWriter, profileClosed;
+          let profileWriter, profileClosed, helperPin, profilePin, finalPin, cancelledPin;
           const gateFiles = [];
           const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0], pipeHeads = [Buffer.alloc(0), Buffer.alloc(0)];
           const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
@@ -730,6 +730,36 @@ value.complete = true; save();
             assert.equal(count.readUInt32LE(), 8);
             gate.expectedHostToken = Array.from({ length: 8 }, (_, index) => ownToken.readUInt32LE(index * 4));
             assert.equal(gate.expectedHostToken[5], process.pid);
+            // A separate one-shot generation proves cancellation before the
+            // first helper instruction, without using its saved PID to kill.
+            const cancelledTrace = join(root, `${gateTag}-cancelled.jsonl`);
+            const cancelled = loadJob(`${gateTag}-cancelled`, executable, "unused", undefined,
+              { domain: gate.domain, background: true, sessionCreate: true, launchOnlyOnce: true,
+                nativeRegistration: true, startSuspended: true, machServices: [`${prefix}.${gateTag}-cancelled`],
+                argv: [executable, `${prefix}.${gateTag}-cancelled`, cancelledTrace,
+                  ...gate.expectedHostToken.map(String), process.execPath, "-e", "process.exit(99)"] });
+            startLaunchdJob(cancelled.nativeRegistration, 10000);
+            let cancelledPid;
+            await waitFor(() => {
+              const state = run("/bin/launchctl", ["print", cancelled.target]);
+              const pids = [...state.stdout.matchAll(/^\s*pid = ([1-9][0-9]*)\s*$/gm)];
+              if (pids.length !== 1) return false;
+              cancelledPid = Number(pids[0][1]); return inspect(cancelledPid).status === 4;
+            }, 5000);
+            cancelledPin = pinDarwinProcess(cancelledPid);
+            const cancelledOrigin = observeDarwinAuditOrigin(cancelledPin.token, gate.expectedCdHashes);
+            const cancelledImage = await cancelledOrigin.result; await cancelledOrigin.returned;
+            assert.equal(cancelledImage.kind, "matched"); assert.equal(cancelledPin.state(), "stopped");
+            const terminated = cancelledPin.terminate(); assert.equal(terminated, true);
+            await waitFor(() => observeDarwinCoalitionPopulation(cancelledPin.identity) === "empty");
+            const deadEffect = cancelledPin.terminate(); assert.equal(deadEffect, false);
+            const cancelledRegistration = run("/bin/launchctl", ["print", cancelled.target], false);
+            assert.equal(cancelledRegistration.exitCode, 113); cancelled.active = false;
+            gate.cancelledBeforeStartup = { identity: cancelledPin.identity, token: cancelledPin.token,
+              image: cancelledImage, terminated, state: cancelledPin.state(), deadEffect,
+              traceCreated: existsSync(cancelledTrace), population: observeDarwinCoalitionPopulation(cancelledPin.identity),
+              registrationExit: cancelledRegistration.exitCode };
+            assert.equal(gate.cancelledBeforeStartup.traceCreated, false);
             const serviceName = `${prefix}.${gateTag}`, sinkName = `${prefix}.${gateTag}-discard`;
             gateSink = listenMachDiscardService(sinkName); gateSinkSend = lookupMachService(sinkName);
             gate.discarded = 0;
@@ -820,35 +850,31 @@ value.complete = true; save();
               const value = inspect(initial.pid);
               return value.bsdBytes === 136 && value.status === 4;
             }, 5000);
-            const before = inspect(initial.pid), port = Buffer.alloc(4), self = hostDecode.uint(system.symbol("mach_task_self_"));
+            const before = inspect(initial.pid);
             assert.equal(before.uniqueBytes, 56); assert.equal(before.bsdBytes, 136); assert.equal(before.status, 4);
-            assert.equal(system.func("int task_name_for_pid(unsigned int, int, void *)")(self, initial.pid, port), 0);
-            assert.notEqual(port.readUInt32LE(), 0);
+            helperPin = pinDarwinProcess(initial.pid);
             try {
-              const bytes = Buffer.alloc(32), tokenCount = Buffer.alloc(4); tokenCount.writeUInt32LE(8);
-              const info = system.func("int task_info(unsigned int, int, void *, void *)");
-              assert.equal(info(port.readUInt32LE(), 15, bytes, tokenCount), 0); assert.equal(tokenCount.readUInt32LE(), 8);
-              initial.token = Array.from({ length: 8 }, (_, index) => bytes.readUInt32LE(index * 4));
+              initial.token = [...helperPin.token];
               assert.equal(initial.token[5], initial.pid); assert.equal(initial.token[1], process.getuid());
               assert.equal(initial.token[7], before.version);
-              initial.identity = identifyDarwinCoalition(initial.pid); assert.ok(initial.identity);
+              initial.identity = helperPin.identity;
+              assert.deepEqual(initial.identity, identifyDarwinCoalition(initial.pid));
               assert.notEqual(initial.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId);
+              initial.pinState = helperPin.state(); assert.equal(initial.pinState, "stopped");
               const expected = observeDarwinAuditOrigin(initial.token, gate.expectedCdHashes);
               initial.origin = await expected.result; await expected.returned; assert.equal(initial.origin.kind, "matched");
               const other = observeDarwinAuditOrigin(initial.token, gate.otherCdHashes);
               initial.otherOrigin = await other.result; await other.returned; assert.equal(initial.otherOrigin.kind, "unavailable");
               const after = inspect(initial.pid); assert.equal(after.uniqueBytes, 56); assert.equal(after.unique, before.unique);
               assert.equal(after.version, before.version); assert.equal(after.status, 4); initial.stoppedStatus = after.status;
-              tokenCount.writeUInt32LE(8); const fresh = Buffer.alloc(32);
-              assert.equal(info(port.readUInt32LE(), 15, fresh, tokenCount), 0); assert.equal(tokenCount.readUInt32LE(), 8);
-              assert.deepEqual(fresh, bytes);
+              assert.equal(helperPin.state(), "stopped");
               initial.traceBeforeRelease = existsSync(tracePath); assert.equal(initial.traceBeforeRelease, false);
               gate.identity = initial.identity;
-              const proc = hostLoad("/usr/lib/libproc.dylib");
-              initial.continued = proc.func("int proc_signal_with_audittoken(void *, int)")(fresh, 19 /* SIGCONT */);
-              assert.equal(initial.continued, 0); initial.status = "OBSERVED";
+              initial.resumed = helperPin.resume(); assert.equal(initial.resumed, true);
+              initial.continued = initial.resumed ? 0 : null; initial.status = "OBSERVED";
             } finally {
-              assert.equal(system.func("int mach_port_deallocate(unsigned int, unsigned int)")(self, port.readUInt32LE()), 0);
+              helperPin.close(); initial.closedPinState = helperPin.state();
+              assert.equal(initial.closedPinState, "unknown");
               initial.taskNameReturned = true;
             }
             gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
@@ -887,6 +913,9 @@ value.complete = true; save();
             assert.equal(gate.targetImage.stopStatus & 0xff, 0x7f);
             gate.targetImage.identity = identifyDarwinCoalition(gate.targetImage.pid);
             assert.deepEqual(gate.targetImage.identity, gate.identity);
+            profilePin = pinDarwinProcess(gate.targetImage.pid);
+            assert.deepEqual(profilePin.identity, gate.identity); assert.deepEqual(profilePin.token, gate.targetImage.token);
+            gate.targetImage.pinState = profilePin.state(); assert.equal(gate.targetImage.pinState, "stopped");
             const targetOrigin = observeDarwinAuditOrigin(gate.targetImage.token, gate.targetImage.expectedCdHashes);
             gate.targetImage.origin = await targetOrigin.result; await targetOrigin.returned;
             assert.equal(gate.targetImage.origin.kind, "matched");
@@ -912,6 +941,12 @@ value.complete = true; save();
             assert.equal(gate.finalImage.stopStatus & 0xff, 0x7f);
             gate.finalImage.identity = identifyDarwinCoalition(gate.finalImage.pid);
             assert.deepEqual(gate.finalImage.identity, gate.identity);
+            gate.targetImage.stateAfterExec = profilePin.state(); assert.equal(gate.targetImage.stateAfterExec, "changed");
+            gate.targetImage.staleResume = profilePin.resume(); assert.equal(gate.targetImage.staleResume, false);
+            gate.targetImage.staleTerminate = profilePin.terminate(); assert.equal(gate.targetImage.staleTerminate, false);
+            finalPin = pinDarwinProcess(gate.finalImage.pid);
+            assert.deepEqual(finalPin.identity, gate.identity); assert.deepEqual(finalPin.token, gate.finalImage.token);
+            gate.finalImage.pinState = finalPin.state(); assert.equal(gate.finalImage.pinState, "stopped");
             const finalOrigin = observeDarwinAuditOrigin(gate.finalImage.token, gate.finalImage.expectedCdHashes);
             gate.finalImage.origin = await finalOrigin.result; await finalOrigin.returned;
             assert.equal(gate.finalImage.origin.kind, "matched");
@@ -926,6 +961,8 @@ value.complete = true; save();
             assert.equal(gateService.send(0x4f4d4129, one), "sent");
             const fin = await receiveGate(0x4f4d4125);
             gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
+            gate.finalImage.stateAfterFinish = finalPin.state(); assert.equal(gate.finalImage.stateAfterFinish, "exited");
+            gate.finalImage.deadTerminate = finalPin.terminate(); assert.equal(gate.finalImage.deadTerminate, false);
             assert.equal(gate.targetImage.pid, gate.childPid);
             assert.equal(gate.finalImage.pid, gate.childPid); assert.ok(gate.rejectedAtFinish >= 3);
             assert.equal(gateService.send(0x4f4d4126, one), "sent");
@@ -964,6 +1001,15 @@ value.complete = true; save();
           }
           finally {
             clearInterval(gateSinkTimer);
+            try {
+              // Return every independent queue and task-name reference, even
+              // when an earlier return is uncertain.
+              const results = [helperPin, profilePin, finalPin, cancelledPin].filter(Boolean).map(pin => {
+                try { pin.close(); return null; } catch (error) { return String(error); }
+              });
+              assert.ok(results.every(error => error === null), JSON.stringify(results));
+              gate.processPinsReturned = true;
+            } catch (error) { gate.processPinReturnError = String(error); }
             gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
             for (const file of gateFiles) file.close();
             for (const fd of pipeDescriptors) closePipe(fd);
