@@ -1,6 +1,9 @@
 /** Physical Mac producer + shared coordinator. The journal is in memory:
  * this does not qualify durable recovery, expected Broker or installed JS. */
 import test from "node:test";
+import { createHash } from "node:crypto";
+import { bundledJobHelper } from "../dist/job-launch.js";
+import { bundledSeatbeltHelper } from "../dist/seatbelt.js";
 import { inspect } from "node:util";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -144,4 +147,20 @@ test("006. Exec at the same PID and coalition revokes the retained selected chil
   assert.equal(ticket.population(), "populated"); assert.equal(pin.alive(), false);
   assert.throws(() => ticket.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" });
   await ticket.stop(); await ticket.completion; assert.deepEqual(f.rows, []);
+});
+
+test("007. Trusted main-image digests reject helper, target and preparation mismatches before child creation", { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return linuxRefusal();
+  const f = owner(t), node = realpathSync(process.execPath), sha = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+  const helper = sha(bundledJobHelper()), target = sha(node), preparation = sha(bundledSeatbeltHelper()), wrong = '0'.repeat(64);
+  const command = { ...f.command(['-e', "require('node:fs').writeFileSync('must-not-enter','bad')"]), env: { HOME: f.root, TMPDIR: f.root } };
+  const policy = { readable: [], writable: [], denied: [], executable: [{ path: node, kind: 'file' }], unixSockets: [], machServices: [], environmentKeys: ['HOME','TMPDIR'] };
+  for (const [where, imageDigests] of [['helper',{helper:wrong,images:[target]}],['target',{helper,images:[wrong]}],['preparation',{helper,images:[wrong,target]}]]) {
+    await assert.rejects(f.runtime.run({slot:'digest-'+where,launch:()=>where==='preparation'?launchSeatbeltJobScope(command,policy,{imageDigests}):launchDarwinJobScope(command,{imageDigests}),
+      authorize(){assert.fail('digest mismatch reached final authority');}}),{code:'UNSUPPORTED_PROFILE'});
+    assert.deepEqual(f.rows,[]);assert.equal(existsSync(join(f.root,'must-not-enter')),false);
+  }
+  const result = await f.runtime.run({slot:'matched-digests',launch:()=>launchSeatbeltJobScope({...command,argv:['-e',"process.stdout.write('matched')"]},policy,
+    {imageDigests:{helper,images:[preparation,target]}}),authorize(){}});
+  assert.equal(result.kind,'exited');assert.equal(result.exitCode,0,result.stderr.toString());assert.equal(result.stdout.toString(),'matched');assert.deepEqual(f.rows,[]);
 });

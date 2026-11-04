@@ -93,14 +93,15 @@ export function createMacRuntimeGeneration(sourceInstallation: {
       const fd = dirname(path) === "." ? held : heldEntry(dirname(path), true);
       withCleanup(() => mkdirAt(fd!, basename(path), 0o700), () => { if (fd !== held) closeSync(fd!); }); record(path, true);
     }
-    const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }): void => {
+    const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }): { readonly bytes: number; readonly sha256: string } => {
       const parent = dirname(path) === "." ? held! : heldEntry(dirname(path), true);
-      withCleanup(() => {
+      return withCleanup(() => {
         const result = copyDescriptorToEntry(source, parent, basename(path), { flushParent: false }); record(path, false);
         if (expected !== undefined && (result.bytes !== expected.bytes || result.sha256 !== expected.sha256))
           refused("copied runtime byte differs from its trusted inventory");
         const fd = openRegularBeneath(parent, basename(path));
         withCleanup(() => fchmodSync(fd, 0o400 | (fstatSync(source).mode & 0o111 ? 0o100 : 0)), () => closeSync(fd));
+        return result;
       }, () => { if (parent !== held) closeSync(parent); });
     };
     for (const file of manifest.files) {
@@ -115,14 +116,21 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     mkdirAt(held, ".oma-node-bin", 0o700); record(".oma-node-bin", true);
     const node = join(root, ".oma-node-bin/node"), nodeParent = openDirectory(dirname(installation.node));
     // Node source ownership is independent of the disposable output ownership.
-    withCleanup(() => {
+    const nodeDigest = withCleanup(() => {
       const nodeSource = openRegularBeneath(nodeParent, basename(installation.node));
-      withCleanup(() => {
+      return withCleanup(() => {
         const stat = fstatSync(nodeSource);
         if (stat.size < 1 || stat.size > 268435456 || !(stat.mode & 0o111)) refused("selected Node is not a bounded executable");
-        copy(nodeSource, ".oma-node-bin/node");
+        return copy(nodeSource, ".oma-node-bin/node").sha256;
       }, () => closeSync(nodeSource));
     }, () => closeSync(nodeParent));
+    const trustedAsset = (path: string): string => {
+      const entry = manifest.files.find(file => file.path === path);
+      if (entry === undefined) refused("runtime generation has no trusted native helper");
+      return entry.sha256;
+    };
+    const helperDigest = trustedAsset("packages/native/dist/job-helper/oma-job-helper"),
+      seatbeltDigest = trustedAsset("packages/native/dist/seatbelt/oma-seatbelt");
     if (digest(deploymentManifest(root)) !== installation.deploymentDigest) refused("private runtime inventory differs after copy");
     for (const entry of [...entries].reverse()) {
       const fd = heldEntry(entry.path, entry.directory);
@@ -149,7 +157,9 @@ export function createMacRuntimeGeneration(sourceInstallation: {
             readable: [...policy.readable, { path: root, kind: "directory" as const }],
             mapped: [...(policy.mapped ?? []), { path: root, kind: "directory" as const }],
             executable: [...policy.executable, { path: node, kind: "file" as const }] };
-          const scope = physicalPolicy === undefined ? await launchDarwinJobScope(command, options) : await launchSeatbeltJobScope(command, physicalPolicy, options);
+          const launchOptions = { ...options, imageDigests: Object.freeze({ helper: helperDigest,
+            images: Object.freeze(physicalPolicy === undefined ? [nodeDigest] : [seatbeltDigest, nodeDigest]) }) };
+          const scope = physicalPolicy === undefined ? await launchDarwinJobScope(command, launchOptions) : await launchSeatbeltJobScope(command, physicalPolicy, launchOptions);
           let retired = false;
           return Object.freeze({ witness: scope.witness, get prepared() { return scope.prepared ?? Promise.resolve(); },
             ...(scope.terminal === undefined ? {} : { terminal: scope.terminal }),

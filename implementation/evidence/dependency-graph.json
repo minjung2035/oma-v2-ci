@@ -2940,7 +2940,7 @@
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,
-  "node:crypto": 63,
+  "node:crypto": 64,
   "node:dns": 1,
   "node:events": 3,
   "node:fs": 137,

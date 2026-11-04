@@ -2,12 +2,15 @@
  * independent of product Actor admission and startup/orphan recovery. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMacRuntimeGeneration } from "#oma-test/app/runtime/mac-runtime-generation";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
+import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
+import { bundledJobHelper } from "@oma/platform-mac/job-launch";
+import { bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { copyInstalledProduct } from "../dist/test/fixtures/installation.js";
 
@@ -71,7 +74,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   await refuse(command, { ...policy, readable: [{ path: source, kind: "directory" }], nodePreload: entry });
   let prematureReturn, selectedScope;
   const result = await owner.run({ slot: "generation", async launch() {
-    const scope = selectedScope = await generation.launchNode(command, {}, policy);
+    const scope = selectedScope = await generation.launchNode(command, { imageDigests: { helper: "0".repeat(64), images: [] } }, policy);
     try { generation.close(); } catch (error) { prematureReturn = error; }
     return scope;
   }, authorize() { pin = selectedScope.pinChild(); assert.equal(pin.alive(), true); } });
@@ -86,4 +89,35 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   phase("generation-collection");
   generation.close(); assert.equal(existsSync(generation.root), false);
   assert.equal(deploymentDigest(source), installation.deploymentDigest);
+});
+
+for (const mismatch of ['helper','seatbelt']) test(`002. Generation refuses the Host ${mismatch} image when its bytes differ from the trusted installation`, {timeout:60000}, async t=>{
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'oma-generation-helper-binding-'))),source=join(root,'source'),rows=[];
+ let generation,owner;t.after(async()=>{await owner?.drain();generation?.close();rmSync(root,{recursive:true});});
+ mkdirSync(join(source,'node_modules/@oma'),{recursive:true});const packages={'':{name:'binding-fixture'}};
+ for(const workspace of DEPLOYMENT_LAYOUT.workspaces){
+  mkdirSync(join(source,workspace.root,'dist'),{recursive:true});
+  writeFileSync(join(source,workspace.root,'package.json'),JSON.stringify({name:workspace.name,version:'0.1.0',type:'module',exports:{'.':'./dist/index.js'}}));
+  writeFileSync(join(source,workspace.root,'dist/index.js'),'export {};\n');
+  symlinkSync(join(source,workspace.root),join(source,'node_modules',workspace.name));
+  packages['node_modules/'+workspace.name]={resolved:workspace.root,link:true};
+ }
+ writeFileSync(join(source,'package.json'),JSON.stringify({name:'binding-fixture',type:'module'}));
+ writeFileSync(join(source,'package-lock.json'),JSON.stringify({lockfileVersion:3,packages}));
+ writeFileSync(join(source,DEPLOYMENT_LAYOUT.schema),'fixture bytes');
+ for(const [kind,path,actual] of [['helper','job-helper/oma-job-helper',bundledJobHelper()],['seatbelt','seatbelt/oma-seatbelt',bundledSeatbeltHelper()]]){
+  const file=join(source,'packages/native/dist',path);mkdirSync(dirname(file),{recursive:true});
+  writeFileSync(file,kind===mismatch||process.platform!=='darwin'?Buffer.from('different trusted fixture bytes'):readFileSync(actual),{mode:0o500});
+ }
+ const entry=join(source,'apps/oma/dist/binding-probe.mjs');writeFileSync(entry,"throw Error('must not execute')");
+ const installation={libdir:source,node:realpathSync(process.execPath),deploymentDigest:deploymentDigest(source)};
+ if(process.platform!=='darwin')return assert.throws(()=>createMacRuntimeGeneration(installation,root),{code:'UNSUPPORTED_PROFILE'});
+ generation=createMacRuntimeGeneration(installation,root);
+ owner=new ExecutionCoordinator({entries:()=>rows.map(row=>({...row})),reserve(slot){const row={slot,execution:'binding',witness:null};rows.push(row);
+  return {execution:row.execution,publish(witness){row.witness=witness;},retire(){rows.splice(rows.indexOf(row),1);}};},retire(){throw Error('unexpected recovery');}},()=>({kind:'unavailable'}));
+ const command={executable:installation.node,argv:[entry],env:{HOME:root,TMPDIR:root},cwd:root,timeoutMs:10000,stdoutBytes:64,stderrBytes:1024};
+ const policy=mismatch==='helper'?undefined:{readable:[],writable:[],denied:[],executable:[{path:installation.node,kind:'file'}],unixSockets:[],machServices:[],environmentKeys:['HOME','TMPDIR']};
+ await assert.rejects(owner.run({slot:'helper-binding',launch:()=>generation.launchNode(command,{},policy),authorize(){assert.fail('unbound helper reached authority');}}),{code:'UNSUPPORTED_PROFILE'});
+ assert.deepEqual(rows,[]);generation.close();assert.equal(existsSync(generation.root),false);
+ assert.equal(deploymentDigest(source),installation.deploymentDigest);
 });

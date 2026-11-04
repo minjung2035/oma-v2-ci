@@ -11,13 +11,15 @@ import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import type { DarwinCoalitionIdentity } from "@oma/native/audit-session";
 import { controlPipe } from "@oma/native/control-socket";
-import { startDarwinJobControl, type DarwinJobControl, type DarwinJobFile } from "@oma/native/darwin-job-control";
+import { startDarwinJobControl, type DarwinJobControl, type DarwinJobFile, type DarwinJobImageDigests } from "@oma/native/darwin-job-control";
 import { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
 import type { DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export { inheritedDarwinJobPeer, peerFromMachReceiver, type DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export interface DarwinJobScopeOptions extends ProcessIOOptions {
   /** Borrowed exact directory; no pathname reopen or /dev/fd traversal. */
   readonly directoryFd?: number;
+  /** Trusted producer selection, checked against held main-image bytes before creation. */
+  readonly imageDigests?: DarwinJobImageDigests;
   readonly files?: readonly DarwinJobFile[];
   readonly stderrFd?: number;
   readonly peer?: DarwinJobPeer;
@@ -61,9 +63,13 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
   const captureOptions: ProcessIOOptions = { ...(signal === undefined ? {} : { signal }),
     ...(options.stdoutSink === undefined ? {} : { stdoutSink: options.stdoutSink }),
     ...(options.stderrSink === undefined ? {} : { stderrSink: options.stderrSink }) };
+  let imageDigests: DarwinJobImageDigests | undefined;
   let command: CommandSpec, images: readonly string[], extra: readonly DarwinJobFile[], inputs: readonly { fd: number; bytes: Buffer }[];
   try {
-    command = snapshotCommand(source); images = [...options.images]; extra = (options.files ?? []).map(file => ({ ...file }));
+    command = snapshotCommand(source);
+    imageDigests = options.imageDigests === undefined ? undefined : Object.freeze({ helper: options.imageDigests.helper,
+      images: Object.freeze([...options.imageDigests.images]) });
+    images = [...options.images]; extra = (options.files ?? []).map(file => ({ ...file }));
     inputs = (options.privateInputs ?? []).map(input => ({ fd: input.fd, bytes: Buffer.from(input.bytes) }));
     const targets = [...extra.map(file => file.target), ...inputs.map(input => input.fd)];
     if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0 || images.length !== 1 && images.length !== 2 || images[0] !== command.executable ||
@@ -107,7 +113,7 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     }
     // After child creation is attempted, first acquire its blocked kernel
     // identity. A late cancellation stops that identity before any setup gate.
-    attempted = true; control = await startDarwinJobControl(command, files, images, darwinSetupProcess, undefined, options.peer, directoryFd);
+    attempted = true; control = await startDarwinJobControl(command, files, images, darwinSetupProcess, undefined, options.peer, directoryFd, imageDigests);
     const job = control, capture = task;
     void job.terminal.then(ended => {
       if (ended.kind === "waited") { status = terminalStatus(ended.waitStatus); onExit(status.code, status.signal); }

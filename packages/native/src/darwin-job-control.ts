@@ -2,6 +2,7 @@
  * identity before reading prepared and recheck authority before release.
  * Image checks cover mapped main images, not scripts, role or installation. */
 import { closeSync, fstatSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -27,6 +28,10 @@ export interface DarwinJobProcessPin {
   alive(): boolean;
   close(): void;
 }
+export interface DarwinJobImageDigests {
+  readonly helper: string;
+  readonly images: readonly string[];
+}
 export interface DarwinJobFile { readonly target: number; readonly fd: number }
 type DarwinJobTerminal = { readonly kind: "waited"; readonly pid: number; readonly waitStatus: number } |
   { readonly kind: "stopped" };
@@ -48,7 +53,7 @@ type Data = Extract<MachMessage, { kind: "data" }>;
 function unknown(message: string, cause?: unknown): StoreError {
   return new StoreError("RUN_TERMINATION_UNKNOWN", message, { cause });
 }
-function selected(path: string): readonly string[] {
+function selected(path: string, expected?: string): readonly string[] {
   const fd = withinDirectory(path, (parent, name) => openRegularBeneath(parent, name));
   return withCleanup(() => {
     const before = fstatSync(fd, { bigint: true });
@@ -56,6 +61,8 @@ function selected(path: string): readonly string[] {
     const bytes = readFileSync(fd), after = fstatSync(fd, { bigint: true });
     if (BigInt(bytes.length) !== before.size || ["dev", "ino", "size", "mtimeNs", "ctimeNs"].some(key =>
       before[key as "dev"] !== after[key as "dev"])) throw unknown("job image changed during selection");
+    if (expected !== undefined && createHash("sha256").update(bytes).digest("hex") !== expected)
+      throw new StoreError("UNSUPPORTED_PROFILE", "selected native image differs from its trusted installation digest");
     return machoImageCdHashes(bytes, process.arch === "arm64" ? "arm64" : "x64");
   }, () => closeSync(fd));
 }
@@ -75,7 +82,7 @@ async function image(pin: DarwinProcessPin, hashes: readonly string[], retry = t
  * READY. No channel or pathname grants workload/actor authority. The returned
  * identity is transient until a qualified journal producer accepts it. */
 export async function startDarwinJobControl(source: CommandSpec, files: readonly DarwinJobFile[],
-  images: readonly string[], invoke: DarwinSetupProcess, signal?: AbortSignal, peerSource?: DarwinJobPeer, directoryFd?: number): Promise<DarwinJobControl> {
+  images: readonly string[], invoke: DarwinSetupProcess, signal?: AbortSignal, peerSource?: DarwinJobPeer, directoryFd?: number, imageDigests?: DarwinJobImageDigests): Promise<DarwinJobControl> {
   let attempted = false;
   const owners: (() => void)[] = [], pins: DarwinProcessPin[] = [];
   let root: DarwinProcessPin | undefined, rootAccepted = false;
@@ -86,9 +93,12 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       throw new StoreError("UNSUPPORTED_PROFILE", "job setup requires explicit Darwin main image stages");
     if (directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || command.cwd !== undefined || !fstatSync(directoryFd).isDirectory()))
       throw new StoreError("UNSUPPORTED_PROFILE", "job requires one held directory and no pathname cwd");
+    if (imageDigests !== undefined && (typeof imageDigests.helper !== "string" || !/^[0-9a-f]{64}$/.test(imageDigests.helper) ||
+        !Array.isArray(imageDigests.images) || imageDigests.images.length !== images.length || imageDigests.images.some(value => typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value))))
+      throw new StoreError("UNSUPPORTED_PROFILE", "native image digests do not match the explicit stages");
     const peer = peerSource === undefined ? undefined : captureDarwinJobPeer(peerSource);
     if (peer !== undefined) owners.push(() => peer.endpoint.close());
-    const frame = encodeDarwinJob(command, targets, stages, false, peer?.token), hashes = images.map(selected), helper = bundledJobHelper(), helperHashes = selected(helper);
+    const frame = encodeDarwinJob(command, targets, stages, false, peer?.token), hashes = images.map((path, index) => selected(path, imageDigests?.images[index])), helper = bundledJobHelper(), helperHashes = selected(helper, imageDigests?.helper);
     const capabilities = files.map(file => { const port = createMachFilePort(file.fd); owners.push(() => port.close()); return port; });
     const directory = directoryFd === undefined ? (() => {
       const cwd = openDirectory(command.cwd ?? process.cwd());

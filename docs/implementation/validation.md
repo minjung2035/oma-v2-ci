@@ -2214,10 +2214,54 @@ SOURCE51 최종 고정 production의 build·선택75/75·Linux 독립 packed27/2
 구조 자료는 NOT_REVIEWED14361·CHANGED_WITHOUT_ORACLE30·REMOVED220을 유지하며 승인을 생성하지 않았다.
 이후 변경은 이 결과와 input binding이며, SOURCE51 실제 Mac 재검증은 아직 회수 전이다.
 
+### Trusted generation의 Host helper 선택 결박 (SOURCE52)
+
+SOURCE51 `5f899d7f961675f44855c53f6b1266bc39aabe3f`는 Native
+[41923440218](https://github.com/minjung2035/oma-v2-ci/actions/runs/41923440218), Architecture
+[41923440173](https://github.com/minjung2035/oma-v2-ci/actions/runs/41923440173)에 발행했다.
+canonical15889/`d85e277c069b01e1e39bb82d8fed4d7ea36f62677e70a7e02f5bf24a521514a8`다.
+이 단락 작성 시 실제 Mac 결과는 회수 전이다.
+
+SOURCE52는 generation launch에서 사용하는 Host의 job helper·Seatbelt image와 private Node를
+trusted selection에 결박한다. helper2개는 configured digest로 검증한 manifest의 개별 SHA-256,
+Node는 held descriptor에서 검증해 복사한 실제 bytes의 SHA-256을 사용한다.
+Native는 held image의 전체 file hash와 stat 전후 동일을 대조하고, 이후 기존 mapped-image CDHash/멈춤 검사를 유지한다.
+불일치와 malformed stage digest는 실제 job 생성 시도 전 거절한다.
+지정된 helper 외의 임의 pathname/stage 실행 권한을 새로 부여하지 않는다.
+
+generation은 caller의 image-digest 옵션을 자신의 고정 selection으로 덮어쓴다.
+전체 설치 시험은 고의의 잘못된 caller 값을 주어도 같은 trusted generation selection만 쓰도록 요구한다.
+별도의 작은 실제-FD fixture는 다른 helper bytes가 들어 있는 trusted manifest와 현재 Host helper의
+불일치를 검사한다. 27 workspace의 최소 inventory와 실제 Node 복사를 사용하며 helper/Seatbelt 두 경우를 분리한다.
+불일치가 authority에 도달하지 않고 opening을 반납하며 private generation을 회수하는지 확인한다.
+이는 startup orphan collection이나 current Actor/Run authority를 증명하지 않는다.
+
+primitive 시험도 job helper·target Node·Seatbelt stage의 각 hash 불일치와 모든 digest가 맞는 실제 실행을 대조한다.
+로컬 build와 관련12/12는 PASS다. Linux에서는 최소 inventory의 실제 I/O와 explicit Darwin refusal만 확인했다.
+SOURCE52의 실제 Mac positive/negative 실행은 NOT_RUN이며 기존 전체 generation timeout240초는 늘리지 않았다.
+제품의 Native support/default launch guard와 G-PROCESS/G-FILES/G-AUTH OPEN은 유지한다.
+
+SOURCE51의 실제 ARM shared ZIP13369520190 SHA-256
+`c3c8b2cf5d442146ba74769235285ee90bb1676abe8426d9e9071d6b13f051d5`를 대조했다.
+380/380 PASS·fail/cancel/skip/todo0다. held directory rename·실제 Context candidate,
+application preparation의 journal 기록/취소 뒤 complete CID 소멸, 독립 동시 preparation2개,
+preparation Host SIGKILL 뒤 새 controller recovery와 기존 whole generation이 모두 PASS다.
+canonical15889/`d85e277c069b01e1e39bb82d8fed4d7ea36f62677e70a7e02f5bf24a521514a8`와
+runtime15526/27/`a96d32d5e02890f9f6ceca6766ffd92b184e85dfdf0810bc29bbb7c928fefd66`는 각각 전후 동일하다.
+ARM gate ZIP13369505460 SHA-256
+`93638af934d5a4e9fea1797d99575f781f2bf314106dbbd31ec98d37baa27ca6`는
+120 executed/114 OBSERVED/6 Worker SETUP_FAILED다. canonical/runtime 전후도 위 ARM 값과 같다.
+이 실제 component 결과를 Society lease·startup orphan generation·실제 product Actor admission의 완료로 확대하지 않는다.
+SOURCE52 helper digest selection의 실제 실행은 이 이전 source의 PASS를 승계하지 않는다.
+
+SOURCE52 최종 고정 production의 build·관련12/12·Linux 독립 packed27/27과 전체 architecture/module/durable boundary/문서/spec 검사가 PASS다.
+구조 review 상태는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14359·REMOVED220이며 새 승인을 생성하지 않았다.
+실제 Mac SOURCE52 검증은 별도 CI 결과로 기록한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `d85e277c069b01e1e39bb82d8fed4d7ea36f62677e70a7e02f5bf24a521514a8` (15889 files).
+verification input digest `7f8a7eb0d56ba20dfea350e93da9dfba7e89c9efb767750e0af2bcaff2023579` (15889 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

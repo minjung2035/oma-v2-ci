@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 30,
-  "NOT_REVIEWED": 14361,
+  "CHANGED_WITHOUT_ORACLE": 32,
+  "NOT_REVIEWED": 14359,
   "REMOVED": 220
  },
  "lanes": {
@@ -509,10 +509,12 @@
   {
    "path": "apps/oma/src/runtime/execution-runtime.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "03bb98a8097dc73ceb1c5b6f2084300bac87c45c7e480e945acfe405b0e56eb5"
   },
   {
    "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -624,7 +626,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -2299,8 +2302,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/git/src/context.ts",
@@ -3221,8 +3223,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/deadline.ts",
@@ -3299,8 +3300,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/replace.ts",
@@ -3817,10 +3817,13 @@
   {
    "path": "packages/storage/src/execution-journal.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR49",
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "c49c999fa2f0e258800bee3e77ba847c967263ff91513797dfea92084e1949d3"
   },
   {
    "path": "packages/storage/src/execution-recovery.ts",

@@ -340,7 +340,7 @@
     },
     {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "3ff5e9b1122fa99babe8e8103610a0c9d245ffd5eb33ba7bbbc128249964d642"
+      "sha256": "0e51d8271c3cda758f131910289c603ef22d65aba1fa61c454fb13dbbb472e57"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -1480,7 +1480,7 @@
     },
     {
       "path": "packages/native/src/darwin-job-control.ts",
-      "sha256": "1395ce15af77018155770f964831b2c3bbfda5b58a9113e25adf0306ed8b201a"
+      "sha256": "f6f14306aadf1ad2b59297f6706f3fc7b624ad158380f29d5063bf6d007310a2"
     },
     {
       "path": "packages/native/src/darwin-job-launch.ts",
@@ -1752,7 +1752,7 @@
     },
     {
       "path": "packages/process/src/darwin-execution.ts",
-      "sha256": "a860d73402626f145f5f2bc5d512adebb227bdee3548989944c49ffc71dd9b2d"
+      "sha256": "b978288c11e253ce675d6d8db7df905d3f18a6a0d5d2fcc8af592306da3c69c1"
     },
     {
       "path": "packages/process/src/darwin-preparation.ts",
