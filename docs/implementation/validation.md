@@ -385,6 +385,37 @@ receive·명시적 error reply로 거절하고 다른 ID는 기록한 뒤 기존
 제품 backend·policy renderer·실행 guard·Linux 경로는 그대로다. raw local compile은
 `/tmp/oma-macos-proxy-mig-sdk.log`다.
 
+### Mach peek의 실제 결과 — source `c719bd4a6ac`
+
+Native [41784130833](https://github.com/minjung2035/oma-v2-ci/actions/runs/41784130833)의 두 OS 각3회에서
+첫 queued message는 모두 **ID0x400000cf·236 bytes·실제 child PID의 audit trailer**였다.
+queue에 메시지가 있는데도 private decoder는5를 반환했다. historical400대 MIG 분기는 실행되지 않았다.
+모두30초 뒤 SIGKILL·실제 join이며 child pre-exec/Node/tools 미도달이다. 오류5를 단순한 empty queue나
+400대 legacy message 때문이라고 확정할 수 없다. 기능·서비스 차단 성공으로 채택하지 않는다.
+
+입력15828개 `fa88d6edfb8b7710f0373f44e3058a547ba074fe3107e923e0c2d19adef1491b`·runtime 산출물은 양 Mac
+전후 동일하다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED, product BLOCKED다.
+API SHA-256 대조 원시는 `lookup-proxy/mach-peek/`다. Mac26 gate ZIP
+`386346faf81e07f97fa74761beb77e230b31cbe5490c84ba7f155e8207a8aac1`, Mac15 gate ZIP
+`0ce2dcf2d8ca3aafbe1f69a1c4b2e37caea7646487bd1721241ae375f187ed69`와
+`observed-mach-peek-summary.json`에6회 header·별도 decode 실패·join을 보존했다.
+
+### 다음 입력 — 관측한 interface ID에 대한 제한된 port reply
+
+opaque libxpc 객체 decoder를 빼고 public Mach receive/send와 SDK의 제안된 port/MIG error reply를
+직접 대조한다. `0x400000cf` 요청 body에 고정 세 서비스의 정확한 NUL-terminated 이름이 하나 있다면
+원래 bootstrap에서 그 서비스만 새로 lookup한다. 다른 body field는 사용하거나 전달하지 않는다.
+임의 body도 허용된 고정 port 이외의 lookup·bootstrap port·host 제어를 얻지 못하며 원래 bootstrap과
+proxy port는 반환하지 않는다. reply는 해당 ID·send-once 채널에만 생성하고 다른 요청은 폐기한다.
+
+이름 scan은 현재 wire layout 전체를 검증하는 parser가 아니다. 권한은 고정 세 endpoint로 제한하지만
+client가 제안된 reply를 정상 수용하는지는 **NOT_RUN**이다. `privateAbi=true`는 미공개 wire ABI의
+한계이며 private libxpc function을 사용했다는 주장이 아니다. parent/child·namespace·같은 profile·
+일반 도구/DNS·fresh service·실제 요청/반환 길이·join을 기록한다. 전체 backend·role·headless·reference
+handoff 증명으로 승격하지 않는다. 새 로컬 SDK compile·Node 문법·parser/Seatbelt41/41·skip0와
+전체 architecture 검사는 PASS다. 원시는 `/tmp/oma-macos-proxy-raw-{sdk,focused,architecture}.log` 또는
+`.tap`이며 제품 guard와 기존 Linux 경로는 그대로다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -577,6 +608,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `fa88d6edfb8b7710f0373f44e3058a547ba074fe3107e923e0c2d19adef1491b` (15828 files).
+verification input digest `b8ba93b9ecffb2141e1cc90e5320b6e6a50b4f2c7980bbff2c42624c514fbdeb` (15828 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

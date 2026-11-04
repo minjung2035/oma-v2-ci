@@ -247,15 +247,15 @@ const bootstrapRecord = () => {
   proxyTools.bootstrapGlobal.pid=proxyPid;proxyTools.bootstrapGlobal.service.argv[1]=proxyGlobal;
   const proxyArgs=['/owned/proxy-trace','/owned/bootstrap-exec',...baseline.command.argv];
   proxyArgs[8]=proxyTarget;proxyArgs[17]=proxyGlobal;
-  const lookupProxy={status:'OBSERVED',fixtureOnly:true,privateApi:true,signatureSource:'Chromium 45.0.2454.85 xpc_private_stubs.sig',
+  const lookupProxy={status:'OBSERVED',fixtureOnly:true,privateAbi:true,signatureSource:'observed bootstrap Mach interface 0x400000cf; SDK MIG reply',
     sourceSha256:'a'.repeat(64),executableSha256:'b'.repeat(64),profileSha256:variants[0].profileSha256,
     compilation:command('/usr/bin/xcrun',['clang','/owned/proxy.c','-o','/owned/proxy'],962),
     command:command('/owned/proxy',proxyArgs,proxyParent),
     target:proxyTarget,globalTarget:proxyGlobal,effectDirectory:'/owned/work/proxy-service',globalEffectDirectory:'/owned/work/proxy-global',
     ports:{...structuredClone(baseline.ports),pid:proxyPid},tools:proxyTools,guestEffect:null,globalGuestEffect:null,canaryPreserved:true,
-    trace:[{phase:'ready',pid:proxyParent,uid:501,original:100,proxy:200,privateApi:true},
+    trace:[{phase:'ready',pid:proxyParent,uid:501,original:100,proxy:200,privateAbi:true},
       {phase:'spawn',status:0,childPid:proxyPid,restored:0,registered:0},
-      {phase:'request',senderPid:proxyPid,subsystem:5,routine:207,type:7,handle:0,name:'com.apple.logd',selected:true,lookup:0,replyCreated:true,replyStatus:0},
+      {phase:'mach-request',senderPid:proxyPid,id:0x400000cf,size:236,name:'com.apple.logd',selected:true,lookup:0,replyStatus:0,replyBytes:52},
       {phase:'terminal',childPid:proxyPid,waitStatus:0,timedOut:false,joined:true}]};
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
@@ -500,7 +500,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { delete value.bootstrap.appSandbox; },
     value => { delete value.bootstrap.denyBootstrap; },
     value => { delete value.bootstrap.lookupProxy; },
-    value => { value.bootstrap.lookupProxy.privateApi = false; },
+    value => { value.bootstrap.lookupProxy.privateAbi = false; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
     value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },
     value => { value.bootstrap.lookupProxy.trace[1].childPid += 1; },
@@ -597,7 +597,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
   unknown.bootstrap.messageFilter={fixtureOnly:true,sourceRevision:'adc20e859dbd1652b5542788d3d641960dce85e5',
     messageNumbers:[204,207,301,711,800,804],status:'SETUP_FAILED',error:'actual filter compilation or child execution failed'};
   unknown.bootstrap.denyBootstrap={fixtureOnly:true,sourceRevision:null,messageNumbers:[],status:'SETUP_FAILED',error:'plain denial did not reach ordinary tools'};
-  unknown.bootstrap.lookupProxy={fixtureOnly:true,privateApi:true,signatureSource:'Chromium 45.0.2454.85 xpc_private_stubs.sig',
+  unknown.bootstrap.lookupProxy={fixtureOnly:true,privateAbi:true,signatureSource:'observed bootstrap Mach interface 0x400000cf; SDK MIG reply',
     status:'SETUP_FAILED',error:'current private ABI or ordinary child did not complete'};
   unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
   unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed',

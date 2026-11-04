@@ -416,8 +416,8 @@ export function validateDarwinObservation(name, observations) {
       }
       const session = bootstrap.session, baseline = bootstrap.variants[0].node;
       const proxy = bootstrap.lookupProxy;
-      if (proxy?.fixtureOnly !== true || proxy.privateApi !== true ||
-          proxy.signatureSource !== "Chromium 45.0.2454.85 xpc_private_stubs.sig" ||
+      if (proxy?.fixtureOnly !== true || proxy.privateAbi !== true ||
+          proxy.signatureSource !== "observed bootstrap Mach interface 0x400000cf; SDK MIG reply" ||
           !["OBSERVED", "SETUP_FAILED"].includes(proxy.status) ||
           proxy.status === "SETUP_FAILED" && typeof proxy.error !== "string")
         throw new Error("semantic lookup proxy loses its private ABI limitation or actual outcome");
@@ -433,7 +433,7 @@ export function validateDarwinObservation(name, observations) {
             proxy.compilation.executable !== "/usr/bin/xcrun" || proxy.compilation.exitCode !== 0 ||
             !outcome(command) || command.argv[1] !== launcher || command.argv[2] !== "inherited" ||
             command.argv[6] !== baseline.command.argv[4] || command.argv[8] !== proxy.target || command.argv[17] !== proxy.globalTarget ||
-            ready?.pid !== command.pid || ready.uid !== baseline.ports.uid || ready.privateApi !== true ||
+            ready?.pid !== command.pid || ready.uid !== baseline.ports.uid || ready.privateAbi !== true ||
             !portNumber(ready.original) || !portNumber(ready.proxy) || ready.original === ready.proxy ||
             spawned?.status !== 0 || spawned.restored !== 0 || spawned.registered !== 0 ||
             !Number.isSafeInteger(spawned.childPid) || spawned.childPid < 2 || spawned.childPid === command.pid ||
@@ -448,10 +448,10 @@ export function validateDarwinObservation(name, observations) {
             !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
             !nodeGlobal(tools.bootstrapGlobal, ports.pid, ports.uid, proxy.globalTarget) || typeof proxy.canaryPreserved !== "boolean" ||
             ![proxy.guestEffect, proxy.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1) ||
-            trace.some(entry => entry.phase === "request" &&
+            trace.some(entry => entry.phase === "mach-request" &&
               (!Number.isSafeInteger(entry.senderPid) || entry.senderPid < 2 || typeof entry.selected !== "boolean" ||
-                !signed32(entry.lookup) || !signed32(entry.replyStatus) || typeof entry.replyCreated !== "boolean" ||
-                entry.selected && (entry.subsystem !== 5 || entry.routine !== 207 || entry.type !== 7 || entry.handle !== 0 || !services.includes(entry.name)))))
+                !signed32(entry.lookup) || !signed32(entry.replyStatus) || !Number.isSafeInteger(entry.replyBytes) || entry.replyBytes < 0 ||
+                entry.selected && (entry.id !== 0x400000cf || !services.includes(entry.name)))))
           throw new Error("semantic lookup proxy lacks a joined actual child, exact policy, request decisions or normal tools");
         for (const selected of [proxy.target, proxy.globalTarget]) {
           if (!target(selected) || targets.has(selected)) throw new Error("semantic lookup proxy reuses a service target");

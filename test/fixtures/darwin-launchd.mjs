@@ -413,9 +413,9 @@ value.complete = true; save();
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
       if (name === "inherited") {
         // A separate semantic-lookup experiment, without transparent message
-        // forwarding or an Apple entitlement. Its private libxpc ABI is WIP.
-        const proxy = { status: "SETUP_FAILED", fixtureOnly: true, privateApi: true,
-          signatureSource: "Chromium 45.0.2454.85 xpc_private_stubs.sig" };
+        // forwarding or an Apple entitlement. Its private wire ABI is WIP.
+        const proxy = { status: "SETUP_FAILED", fixtureOnly: true, privateAbi: true,
+          signatureSource: "observed bootstrap Mach interface 0x400000cf; SDK MIG reply" };
         observation.bootstrap.lookupProxy = proxy;
         try {
           const source = fileURLToPath(new URL("./darwin-bootstrap-proxy.c", import.meta.url));
