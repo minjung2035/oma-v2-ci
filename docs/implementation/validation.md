@@ -104,6 +104,50 @@ pinned bwrap0.12.0 private `/usr/bin` overlay·위임 user scope에서 같은65�
 `/tmp/oma-macos-third-focused{,-pinned}.tap`, `/tmp/oma-macos-final-linux-20261104/preflight.log`다.
 이 입력의 전체 Linux 실행과 실제 Mac은 발행 전 NOT_RUN이다.
 
+### 세 번째 입력의 실제 결과 — source `a81a41c7cdf`
+
+Linux 전체는 **4736/4736 PASS·fail/skip/cancel/todo0**다. Node26.0.0·UID1000·pinned bwrap0.12.0
+private overlay·delegated scope에서 수정 없는 `scripts/test-local.mjs`를 실행했다. serial44와 parallel4692,
+기본 동시성4이며 1168.933초가 걸렸다. 입력15825개 digest
+`60311b6744c4fd82dfd425bc32c3dbe924d04a2472bc21a6c67a1717d4863573`는 전후 같고 changed=[]다.
+원시는 `/tmp/oma-macos-final-linux-20261104/`의 full-run.json·TAP·per-file manifests에 보존한다.
+
+Native [41770457977](https://github.com/minjung2035/oma-v2-ci/actions/runs/41770457977)의 양 Mac 공통
+**283/283 PASS·skip0**, 독립 설치26/27 PASS다. 각 gate는108 OBSERVED·12 SETUP_FAILED/120 executed이며
+제품은 BLOCKED다. `SessionCreate=true`는 실제 kernel ASID를 바꿨으나 양 OS 각3회 모두 fresh service
+호출 exit0, PID1 아래 다른 coalition의 unsandboxed actor를 실행했다. **별도 audit session도 현 정책의
+scope closure를 제공하지 못한다.** candidate/quarantine의 새 stderr는 일반 `ensureDirectory`가
+`/private`를 열려다 EPERM을 받는 것을 확인했다. Worker는 production native guard에서 거절됐다.
+Ubuntu 공통275·native leaf3·execution46·Restic8·선택 integration472는 PASS다.
+
+API SHA-256 대조한 원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/session/`다.
+Mac26 gate ZIP `b925a99edfb8d63fe0309086a525d6a32eefe0d309ab8f54f7b3bc91a60e297c`,
+Mac15 gate ZIP `c045db71eeb5248a90940d869cfccff7375d92f922969768b5b8647d2cc55a8c`다.
+
+### 네 번째 입력 — 검색 전용 ancestor·CI 위임·표준 App Sandbox 후보
+
+일반 `ensureDirectory`도 전체 existing prefix를 kernel beneath/no-link open으로 취득한 뒤 missing tail만
+held FD에서 만든다. ENOENT만 prefix를 줄일 수 있고 EAGAIN·EPERM·EACCES·containment 거절은 우회하지 않는다.
+실제 search-only ancestor의 existing/new-tail은 수정 전2 FAIL, 수정 후 기존 owned/링크/관측 회귀와 함께
+통과했다. 권한 완화·pathname chmod·symlink fallback을 추가하지 않았다.
+
+Architecture [41768300320](https://github.com/minjung2035/oma-v2-ci/actions/runs/41768300320)의 native-all은
+4734 PASS·0 FAIL·1 SKIP, sourceChanges=[]였지만 qualification은 FAIL이다. delegated cpu/memory/pids 부재와
+이미 현재 이름으로도 요구하던 Restic 다섯 검증의 폐기된 중복 접두사가 원인이다. 현재 여덟 검증은 모두
+실행됐다. CI installer에 disposable runner의 user manager 위임·쓰기 preflight를 추가하고 실제 runtime
+명령은 동기 scope wrapper로 실행한다. 폐기 접두사만 제거하고 여덟 실제 oracle과 skip 거절을 유지한다.
+새 wrapper의 실제 cgroup CPU·memory·tasks/tmpfs3개는 로컬에서 통과했다. hosted CI 결과는 아직 NOT_RUN이다.
+
+표준 `com.apple.security.app-sandbox`는 **미채택 후보**다. 동일 C 복사본의 ad-hoc 서명·실제 entitlement와
+custom policy 적용 전 owned canary 접근을 unsigned 양성과 비교한다. inherited bootstrap·production
+Seatbelt·동일 Node/Git/compiler/libc DNS·별도 fresh GUI service를 유지한다. 일반 network와 필요한 owned
+경로의 파일 예외만 요청하며 root service·restricted entitlement는 사용하지 않는다. 준비 실패와 실제 관측을
+구분하고 서명 성공을 enforcement나 scope proof로 계산하지 않는다. 실제 Mac 실행은 발행 전 NOT_RUN이다.
+네 번째 입력의 전체 build·filesystem/durable/Git/실제 native 실행 선택112개와 parser/관측/정책 선택74개는
+모두 PASS·skip0다. arm64 SDK object compile도 성공했으나 Apple compiler·kernel proof와 구분한다.
+원시는 `/tmp/oma-macos-fourth-{build,focused,early,architecture}.log` 또는 `.tap`,
+`/tmp/oma-macos-directory-search-{red,green}.tap`과 `/tmp/oma-native-ci-wrapper-resource.tap`이다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -296,6 +340,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `60311b6744c4fd82dfd425bc32c3dbe924d04a2472bc21a6c67a1717d4863573` (15825 files).
+verification input digest `fd8801f61104b8159abe5efd073af6b0a6022627ddea42621672c4856274af1d` (15826 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

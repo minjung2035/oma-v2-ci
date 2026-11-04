@@ -448,6 +448,40 @@ export function validateDarwinObservation(name, observations) {
             ![session.guestEffect, session.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1))
           throw new Error("SessionCreate comparison lacks a distinct kernel audit session, actual policy or service/DNS results");
       }
+      const app = bootstrap.appSandbox;
+      if (app?.fixtureOnly !== true || app.mechanism !== "standard-app-sandbox" ||
+          !["OBSERVED", "SETUP_FAILED"].includes(app.status) ||
+          app.status === "SETUP_FAILED" && typeof app.error !== "string")
+        throw new Error("standard App Sandbox comparison has no actual outcome");
+      if (app.status === "OBSERVED") {
+        const initial = app.initial, tools = app.tools;
+        if (![app.unsignedSha256, app.signedSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
+            app.unsignedSha256 === app.signedSha256 ||
+            ![app.signing, app.signatureVerification, app.signature].every(command =>
+              outcome(command) && command.executable === "/usr/bin/codesign" && command.exitCode === 0 && command.signal === null) ||
+            app.entitlements?.["com.apple.security.app-sandbox"] !== true ||
+            !Array.isArray(initial) || initial.length !== 2 ||
+            initial.some((entry, index) => !outcome(entry.command) || entry.command.exitCode !== 0 || entry.command.signal !== null ||
+              entry.command.executable !== [launcher, app.signed][index] ||
+              entry.command.argv[0] !== "observe-initial-sandbox" || entry.command.argv[2] !== app.canary ||
+              entry.observation?.phase !== "before-custom-profile" || entry.observation.pid !== entry.command.pid ||
+              entry.observation.uid !== baseline.ports.uid || typeof entry.observation.canaryOpened !== "boolean" ||
+              !Number.isInteger(entry.observation.canaryErrno)) || initial[0].observation.canaryOpened !== true ||
+            !outcome(app.command) || app.command.executable !== app.signed ||
+            tools?.complete !== true || tools.pid !== app.command.pid || app.ports?.pid !== tools.pid ||
+            app.ports.sandboxApplied !== true || app.ports.mode !== "inherited" || !dns(tools.dns) ||
+            !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], baseline.ports.uid) ||
+            !outcome(tools.service) || tools.service.executable !== "/bin/launchctl" ||
+            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", app.target]) ||
+            !nodeGlobal(tools.bootstrapGlobal, tools.pid, baseline.ports.uid, app.globalTarget) ||
+            app.canaryPreserved !== true)
+          throw new Error("standard App Sandbox comparison lacks signing, pre-profile enforcement controls or actual child results");
+        for (const selected of [app.target, app.globalTarget]) {
+          if (!target(selected) || targets.has(selected)) throw new Error("standard App Sandbox comparison reuses a service target");
+          targets.add(selected);
+        }
+      }
     }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||

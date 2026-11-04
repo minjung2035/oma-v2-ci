@@ -185,6 +185,23 @@ const bootstrapRecord = () => {
     kickstart: command('/bin/launchctl',['kickstart','gui/501/org.oma.probe.test.session-controller'],899),
     ports: {...structuredClone(baseline.ports),pid:sessionPid,auditPid:sessionPid,auditSession:2002}, tools:sessionTools,
     guestEffect:null,globalGuestEffect:null,canaryPreserved:true };
+  const appPid = 901, signed = '/owned/SandboxProbe.app/Contents/MacOS/bootstrap-exec';
+  const appTools = structuredClone(sessionTools), appTarget = 'gui/501/org.oma.probe.test.app-service';
+  const appGlobal = 'gui/501/org.oma.probe.test.app-global';
+  appTools.pid = appPid; appTools.service.argv[1] = appTarget;
+  appTools.bootstrapGlobal.pid = appPid; appTools.bootstrapGlobal.service.argv[1] = appGlobal;
+  const appSandbox = { fixtureOnly:true, mechanism:'standard-app-sandbox', status:'OBSERVED',
+    signed, canary:'/outside/owned-canary', unsignedSha256:'a'.repeat(64), signedSha256:'b'.repeat(64),
+    entitlements:{'com.apple.security.app-sandbox':true},
+    signing:command('/usr/bin/codesign',['--sign','-',signed],902),
+    signatureVerification:command('/usr/bin/codesign',['--verify',signed],903),
+    signature:command('/usr/bin/codesign',['--display',signed],904),
+    initial:['/owned/bootstrap-exec',signed].map((executable,index)=>({
+      command:command(executable,['observe-initial-sandbox',`/owned/initial-${index}.json`,'/outside/owned-canary'],905+index),
+      observation:{phase:'before-custom-profile',pid:905+index,uid:501,canaryOpened:index===0,canaryErrno:index===0?0:1}})),
+    command:{...structuredClone(baseline.command),executable:signed,pid:appPid},
+    ports:{...structuredClone(baseline.ports),pid:appPid},tools:appTools,
+    target:appTarget,globalTarget:appGlobal,canaryPreserved:true };
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
@@ -205,7 +222,7 @@ const bootstrapRecord = () => {
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
-      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session } };
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
@@ -425,6 +442,13 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].childResolvers[0].command.argv[4] = "/foreign/image"; },
     value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
     value => { delete value.bootstrap.session; },
+    value => { delete value.bootstrap.appSandbox; },
+    value => { value.bootstrap.appSandbox.signedSha256 = value.bootstrap.appSandbox.unsignedSha256; },
+    value => { value.bootstrap.appSandbox.initial[0].observation.canaryOpened = false; },
+    value => { value.bootstrap.appSandbox.initial[1].observation.pid += 1; },
+    value => { value.bootstrap.appSandbox.entitlements['com.apple.security.app-sandbox'] = false; },
+    value => { value.bootstrap.appSandbox.signatureVerification.exitCode = 1; },
+    value => { value.bootstrap.appSandbox.target = value.bootstrap.variants[0].node.target; },
     value => { value.bootstrap.session.ports.auditSession = 1001; },
     value => { value.bootstrap.session.ports.auditTokenStatus = 5; },
     value => { value.bootstrap.session.ports.auditPid += 1; },
@@ -489,6 +513,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
   }
   const unknown = structuredClone(good);
   unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
+  unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed'};
   const spawnFailure = unknown.bootstrap.variants[1].childResolvers[0];
   Object.assign(spawnFailure.parent, { spawnStatus: 1, childPid: 0, joined: false, waitStatus: 0 });
   spawnFailure.observation = null;

@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
@@ -26,7 +27,7 @@ const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()
 const commands = [], jobs = [], targets = [];
 const socketServers = [];
 const observation = { domain, commands, fixtureOnly: true };
-let cleaning = false, failure, socketDirectory;
+let cleaning = false, failure, socketDirectory, appSandboxCanary;
 function observe(executable, argv, maximum = 10000, environment = process.env) {
   const remaining = (cleaning ? 110000 : 80000) - (performance.now() - started);
   assert.ok(remaining > 0, "launchd fixture deadline");
@@ -431,6 +432,59 @@ value.complete = true; save();
           Object.assign(session, { guestEffect: effect(service), globalGuestEffect: effect(global),
             canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n", status: "OBSERVED" });
         } catch (error) { session.error = String(error); }
+        // Standard App Sandbox is a separate candidate. Retain the inherited
+        // bootstrap and the same custom policy and ordinary tools. No private
+        // entitlement, root helper or replacement resolver is introduced.
+        const app = { status: "SETUP_FAILED", fixtureOnly: true, mechanism: "standard-app-sandbox" };
+        observation.bootstrap.appSandbox = app;
+        try {
+          const identifier = `${prefix}.sandbox`, bundle = join(root, "SandboxProbe.app");
+          const macos = join(bundle, "Contents", "MacOS"), signed = join(macos, "bootstrap-exec");
+          mkdirSync(macos, { recursive: true, mode: 0o700 }); copyFileSync(launcher, signed);
+          const plist = data => `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(data)}</plist>`;
+          writeFileSync(join(bundle, "Contents", "Info.plist"), plist({ CFBundleIdentifier: identifier,
+            CFBundleExecutable: "bootstrap-exec", CFBundlePackageType: "APPL", LSBackgroundOnly: true }));
+          const entitlements = { "com.apple.security.app-sandbox": true,
+            "com.apple.security.network.client": true, "com.apple.security.network.server": true,
+            "com.apple.security.temporary-exception.files.absolute-path.read-only": [...new Set([
+              root, dirname(process.execPath), dirname(libcEntry), koffiRoot, nativeRoot,
+              developerTools.contents, dirname(dirname(compiler)), sdk, unixSocketCanary.directory])].map(path => `${path}/`),
+            "com.apple.security.temporary-exception.files.absolute-path.read-write": [`${directory}/`] };
+          const entitlementsPath = join(root, "app-sandbox-entitlements.plist");
+          writeFileSync(entitlementsPath, plist(entitlements), { mode: 0o600 });
+          Object.assign(app, { identifier, bundle, signed, entitlements, entitlementsPath,
+            unsignedSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
+            signing: run("/usr/bin/codesign", ["--force", "--sign", "-", "--identifier", identifier,
+              "--entitlements", entitlementsPath, signed]),
+            signatureVerification: run("/usr/bin/codesign", ["--verify", "--strict", "--verbose=2", signed]),
+            signature: run("/usr/bin/codesign", ["--display", "--entitlements", ":-", signed]),
+            signedSha256: createHash("sha256").update(readFileSync(signed)).digest("hex") });
+          appSandboxCanary = join(realpathSync(homedir()), `${identifier}.canary`);
+          writeFileSync(appSandboxCanary, "OWNED_APP_SANDBOX_CANARY\n", { flag: "wx", mode: 0o600 });
+          app.canary = appSandboxCanary;
+          app.initial = [launcher, signed].map((executable, index) => {
+            const path = join(directory, `app-initial-${index}.json`);
+            const command = observe(executable, ["observe-initial-sandbox", path, appSandboxCanary], 5000);
+            return { command, observation: optionalJson(path) };
+          });
+          assert.equal(app.initial[0].observation?.canaryOpened, true, JSON.stringify(app.initial));
+          const service = loadJob("app-service", actor, "once"), global = loadJob("app-global", actor, "once");
+          const portsPath = join(directory, "app-ports.json"), report = join(directory, "app-tools.json");
+          const command = observe(signed, [name, profilePath, portsPath, directory, process.execPath, script,
+            service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
+          Object.assign(app, { target: service.target, globalTarget: global.target, command,
+            ports: optionalJson(portsPath), tools: optionalJson(report) });
+          for (const [target, result] of [[service, app.tools?.service], [global, app.tools?.bootstrapGlobal?.service]])
+            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+              await waitFor(() => existsSync(join(target.directory, "once.json")));
+          Object.assign(app, { guestEffect: effect(service), globalGuestEffect: effect(global),
+            canaryPreserved: readFileSync(appSandboxCanary, "utf8") === "OWNED_APP_SANDBOX_CANARY\n" });
+          assert.equal(app.initial[1].command.exitCode, 0, JSON.stringify(app.initial));
+          assert.equal(app.tools?.complete, true, JSON.stringify({ command, tools: app.tools }));
+          app.status = "OBSERVED";
+        } catch (error) { app.error = String(error); }
       }
     }
     const pids = observation.bootstrap.variants.flatMap(variant => [
@@ -565,6 +619,9 @@ finally {
   if (socketDirectory !== undefined) {
     try { rmSync(socketDirectory, { recursive: true, force: true }); }
     catch (error) { faults.push(String(error)); }
+  }
+  if (appSandboxCanary !== undefined) {
+    try { rmSync(appSandboxCanary); } catch (error) { faults.push(String(error)); }
   }
   observation.jobOutputs = [];
   for (const job of jobs) {

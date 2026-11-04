@@ -127,14 +127,14 @@ jobs:
           # Doc↔inventory pairing: check:architecture runs it in its chain too;
           # this separate evidence line names the drifted clause directly.
           run_check spec-inventory 900 npm run check:spec-inventory
-          run_check test 1800 env OMA_TEST_ARTIFACT_DIR="$EVIDENCE/local-exploration" npm test
+          run_check test 1800 bash scripts/run-native-linux-ci.sh env OMA_TEST_ARTIFACT_DIR="$EVIDENCE/local-exploration" npm test
           # Full native/kernel/crash coverage also runs in native-all below.
           # These standalone wrappers retain their own scoped result records.
-          run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"
-          run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
-          run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
-          run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
-          run_check verify-platform 1000 npm run verify:platform -- --out "$EVIDENCE/platform"
+          run_check verify-fast 900 bash scripts/run-native-linux-ci.sh npm run verify:fast -- --out "$EVIDENCE/fast"
+          run_check verify-durable 1500 bash scripts/run-native-linux-ci.sh npm run verify:durable -- --out "$EVIDENCE/durable"
+          run_check verify-property 900 bash scripts/run-native-linux-ci.sh npm run verify:property -- --out "$EVIDENCE/property"
+          run_check verify-stress 900 bash scripts/run-native-linux-ci.sh npm run verify:stress -- --out "$EVIDENCE/stress"
+          run_check verify-platform 1000 bash scripts/run-native-linux-ci.sh npm run verify:platform -- --out "$EVIDENCE/platform"
           for lane in kernel crash; do
             printf '%s\tNOT_RUN standalone; covered by native-all actual files and required names\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
           done
@@ -210,7 +210,7 @@ jobs:
             local label="$1"; local seconds="$2"; shift 2
             timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
           }
-          run_check verify-all 9900 npm run verify:all -- --out "$EVIDENCE/all"
+          run_check verify-all 9900 bash scripts/run-native-linux-ci.sh npm run verify:all -- --out "$EVIDENCE/all"
       - name: Confirm native all input preservation
         if: always()
         run: |

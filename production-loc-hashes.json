@@ -1988,7 +1988,7 @@
     },
     {
       "path": "packages/storage/src/directory.ts",
-      "sha256": "4becfe4375b4ca15a306d53b8330caf34aa98b8537984b7f6afe109548407bfe"
+      "sha256": "1d7c6fcdab509c4cbaa9600f4a7cd724819d6d205925a4d9e96ec769b50fc2e6"
     },
     {
       "path": "packages/storage/src/durable-fs.ts",

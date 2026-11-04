@@ -76,3 +76,38 @@ echo "0a551a86c7785880bcaa0fdfe6107c064abfbebc7cc26b7eaeac423fe2c0d49e  $oma_nat
 sudo install -m 0755 "$oma_native_evidence/cloc-2.08.pl" /usr/local/bin/cloc
 test "$(cloc --version)" = 2.08
 cloc --version > "$oma_native_evidence/cloc-version.txt"
+
+# Disposable CI only: make CPU/memory/pids available to the ordinary test
+# user. A passing skip cannot qualify the real cgroup enforcement oracle.
+# https://www.freedesktop.org/software/systemd/man/255/systemd.resource-control.html#Delegate=
+: "${GITHUB_ENV:?Actions environment handoff is required}"
+oma_native_uid=$(id -u)
+sudo loginctl enable-linger "$(id -un)"
+sudo systemctl set-property --runtime "user@${oma_native_uid}.service" Delegate=yes CPUAccounting=yes MemoryAccounting=yes TasksAccounting=yes
+sudo systemctl start "user@${oma_native_uid}.service"
+export XDG_RUNTIME_DIR="/run/user/$oma_native_uid"
+echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+systemctl --user is-active default.target > "$oma_native_evidence/user-manager-status.txt"
+bash scripts/run-native-linux-ci.sh python3 - "$oma_native_evidence" <<'PYTHON'
+from pathlib import Path
+import json, os, sys, tempfile
+entry = next(row[3:] for row in Path('/proc/self/cgroup').read_text().splitlines() if row.startswith('0::'))
+current = Path('/sys/fs/cgroup', entry.lstrip('/')).resolve()
+required = {'cpu', 'memory', 'pids'}
+delegation = None
+for parent in [current, *current.parents]:
+    if parent == Path('/sys/fs/cgroup'): break
+    if not os.access(parent, os.W_OK | os.X_OK): continue
+    if not required <= set((parent / 'cgroup.subtree_control').read_text().split()): continue
+    child = Path(tempfile.mkdtemp(prefix='oma-ci-preflight-', dir=parent))
+    try:
+        for file, value in [('cpu.max', '250000 1000000'), ('memory.max', '134217728'), ('pids.max', '24')]:
+            (child / file).write_text(value)
+            assert (child / file).read_text().strip() == value
+        delegation = {'membership': entry, 'delegatedParent': str(parent), 'controllers': sorted(required), 'writableLimitsVerified': True}
+    finally: child.rmdir()
+    break
+if delegation is None:
+    raise RuntimeError('no writable cgroup v2 delegation with cpu, memory and pids')
+Path(sys.argv[1], 'cgroup-preflight.json').write_text(json.dumps(delegation))
+PYTHON

@@ -11,7 +11,7 @@ import { hostProcessProbe } from "@oma/broker/process-ancestry";
 import { RestartPolicy } from "@oma/process/restart-policy";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import { SnapshotReader } from "@oma/native/snapshot-reader";
-import { ensureOwnedDirectory, openOwnedDirectory } from "@oma/storage/directory";
+import { ensureDirectory, ensureOwnedDirectory, openOwnedDirectory } from "@oma/storage/directory";
 import { createHash } from "node:crypto";
 import { publishImmutableFile } from "@oma/storage/immutable-file";
 
@@ -200,4 +200,35 @@ test("008. Restart breaker counts only within its monotonic window and remains b
   now = 60000; assert.equal(policy.next().kind, "exhausted");
   now = 60001; assert.deepEqual(policy.next(), { kind: "restart", delayMs: 250 });
   assert.throws(() => new RestartPolicy(-1), TypeError);
+});
+
+for (const missing of [false, true]) test(`010. Directory creation traverses search-only ancestors: ${missing ? "new tail" : "existing target"}`, t => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-directory-search-")));
+  const ancestor = join(scratch, "search-only"), existing = join(ancestor, "existing");
+  const child = join(existing, "new"), nested = join(child, "nested");
+  mkdirSync(ancestor); mkdirSync(existing);
+  writeFileSync(join(ancestor, "keep"), "ancestor bytes");
+  chmodSync(ancestor, 0o111);
+  t.after(() => { chmodSync(ancestor, 0o700); rmSync(scratch, { recursive: true, force: true }); });
+  let unexpected;
+  try { assert.throws(() => { unexpected = openDirectory(ancestor); }, { code: "EACCES" }); }
+  finally { if (unexpected !== undefined) closeSync(unexpected); }
+  assert.deepEqual(ensureDirectory(missing ? nested : existing, 0o700), missing ? [child, nested] : []);
+  assert.equal(statSync(ancestor).mode & 0o777, 0o111);
+  assert.equal(readFileSync(join(ancestor, "keep"), "utf8"), "ancestor bytes");
+  if (missing) assert.equal(statSync(nested).mode & 0o777, 0o700);
+});
+
+test("011. Directory prefix acquisition refuses links before creating a tail", t => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-directory-prefix-link-")));
+  const outside = join(scratch, "outside"), alias = join(scratch, "alias");
+  mkdirSync(outside); writeFileSync(join(outside, "keep"), "outside bytes");
+  const held = openDirectory(scratch);
+  try { symlinkAt("outside", held, "alias"); } finally { closeSync(held); }
+  t.after(() => rmSync(scratch, { recursive: true, force: true }));
+  for (const path of [alias, join(alias, "missing", "nested")])
+    assert.throws(() => ensureDirectory(path, 0o700), { code: "STORE_CORRUPT" });
+  assert.equal(readFileSync(join(outside, "keep"), "utf8"), "outside bytes");
+  const parent = openDirectory(outside);
+  try { assert.deepEqual(directoryNames(parent), ["keep"]); } finally { closeSync(parent); }
 });

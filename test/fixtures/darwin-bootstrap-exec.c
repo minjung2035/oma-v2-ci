@@ -351,8 +351,23 @@ static int restore_registered(char **argv) {
   fprintf(stderr, "restored direct exec refused: errno %d\n", errno);
   return 126;
 }
+/* Before any custom profile: pair an unsigned positive control with the
+ * standard App Sandbox signed image. The owned canary is outside every file
+ * exception; signing metadata alone is not an enforcement observation. */
+static int observe_initial_sandbox(const char *report_path, const char *canary) {
+  errno = 0;
+  FILE *input = fopen(canary, "rb");
+  int opened = input != NULL, saved = input == NULL ? errno : 0, byte = -1;
+  if (input != NULL) { byte = fgetc(input); require(fclose(input) == 0, "close initial canary"); }
+  FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive initial sandbox report");
+  fprintf(output, "{\"phase\":\"before-custom-profile\",\"pid\":%d,\"uid\":%u,\"canaryOpened\":%s,\"canaryErrno\":%d,\"firstByte\":%d}\n",
+    getpid(), (unsigned)getuid(), opened ? "true" : "false", saved, byte);
+  require(fclose(output) == 0, "complete initial sandbox report");
+  return 0;
+}
 int main(int argc, char **argv) {
   require(getuid() != 0, "ordinary user required");
+  if (argc == 4 && strcmp(argv[1], "observe-initial-sandbox") == 0) return observe_initial_sandbox(argv[2], argv[3]);
   if (argc == 3 && strcmp(argv[1], "observe-subset") == 0) return observe_subset(argv[2]);
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);

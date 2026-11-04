@@ -42,7 +42,25 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
   let current = root;
   let parent = openDirectory(root);
   try {
-    for (const component of components) {
+    // Resolve the deepest existing prefix in one kernel no-link walk. Search
+    // permission on ancestors is sufficient; acquiring each ancestor for
+    // listing would require authority this shape operation does not need.
+    let existing = components.length;
+    for (; existing > 0; --existing) {
+      let child: number;
+      try { child = openBeneath(parent, components.slice(0, existing).join("/"), constants.O_RDONLY | constants.O_DIRECTORY); }
+      catch (error) {
+        // Only actual absence permits trying a shorter prefix. Containment,
+        // access and unsettled observations retain their original refusal.
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        if (error instanceof StoreError) throw error;
+        throw unobserved(error, `the directory ${path}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${path}`);
+      }
+      const previous = parent; parent = child; closeSync(previous);
+      current = join(root, ...components.slice(0, existing));
+      break;
+    }
+    for (const component of components.slice(existing)) {
       current = join(current, component);
       try { mkdirAt(parent, component, mode); created.push(current); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
