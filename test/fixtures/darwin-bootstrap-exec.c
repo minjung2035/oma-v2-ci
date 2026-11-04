@@ -13,6 +13,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <spawn.h>
+#include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <errno.h>
@@ -213,6 +216,53 @@ static int observe_resolver(const char *report_path, const char *context, const 
   release_snapshot(&ports, NULL, 0);
   return 0;
 }
+static volatile sig_atomic_t resolver_child, resolver_timeout;
+static void resolver_alarm(int signal_number) {
+  (void)signal_number;
+  resolver_timeout = 1;
+  /* Only this fresh, unreaped direct child is addressed. */
+  if (resolver_child > 0) kill((pid_t)resolver_child, SIGKILL);
+}
+/* Separate ordinary C child creation from Node's child_process path. The
+ * parent and child both run the same image, label, cwd and resolver inputs. */
+static int observe_child_resolver(char **argv) {
+  require(strcmp(argv[4], "fork") == 0 || strcmp(argv[4], "posix-spawn") == 0, "closed child mechanism");
+  struct snapshot before = snapshot();
+  char *arguments[] = { argv[0], "observe-resolver", argv[3], argv[5], argv[6], NULL };
+  pid_t child = 0;
+  int spawn_status = 0;
+  struct sigaction handler = {0};
+  handler.sa_handler = resolver_alarm;
+  require(sigemptyset(&handler.sa_mask) == 0 && sigaction(SIGALRM, &handler, NULL) == 0, "child deadline handler");
+  if (strcmp(argv[4], "fork") == 0) {
+    child = fork();
+    if (child < 0) { spawn_status = errno; child = 0; }
+    else if (child == 0) {
+      execve(argv[0], arguments, environ);
+      _exit(127);
+    }
+  } else spawn_status = posix_spawn(&child, argv[0], NULL, NULL, arguments, environ);
+  int status = 0, joined = 0;
+  if (spawn_status == 0) {
+    resolver_child = child;
+    alarm(3);
+    pid_t waited;
+    do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
+    require(waited == child, "owned resolver child join");
+    alarm(0); resolver_child = 0; joined = 1;
+  } else child = 0;
+  struct snapshot after = snapshot();
+  FILE *output = fopen(argv[2], "wx"); require(output != NULL, "exclusive child resolver report");
+  fprintf(output, "{\"phase\":\"native-child-resolver\",\"pid\":%d,\"uid\":%u,\"mechanism\":\"%s\","
+    "\"spawnStatus\":%d,\"childPid\":%d,\"joined\":%s,\"waitStatus\":%d,\"timedOut\":%s,\"before\":",
+    getpid(), (unsigned)getuid(), argv[4], spawn_status, child, joined ? "true" : "false", status,
+    resolver_timeout ? "true" : "false");
+  print_snapshot(output, &before); fputs(",\"after\":", output); print_snapshot(output, &after);
+  fputs("}\n", output);
+  require(fclose(output) == 0, "complete child resolver report");
+  release_snapshot(&before, NULL, 0); release_snapshot(&after, NULL, 0);
+  return 0;
+}
 /* Availability/parent preflight only. Never install the candidate namespace,
  * mutate the inherited task ports, or call failure a compatible backend. */
 struct subset_observation {
@@ -296,6 +346,7 @@ int main(int argc, char **argv) {
   if (argc == 3 && strcmp(argv[1], "observe-subset") == 0) return observe_subset(argv[2]);
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);
+  if (argc == 7 && strcmp(argv[1], "observe-child-resolver") == 0) return observe_child_resolver(argv);
   require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];

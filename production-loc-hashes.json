@@ -1648,7 +1648,7 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "7f3dcd431a83f75cbb9a0ef7c1dbfa26890a53fd2f0876ea7435aefa9958db04"
+      "sha256": "e13ee31d1bbd24c56da26605992b1c06f1abadbed6f2256d2611bef1b255520d"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
@@ -4096,7 +4096,7 @@
     },
     {
       "path": "packages/tool-lsp/src/lsp-call-scope.ts",
-      "sha256": "6b504d88ed96fe91310e5b50d339b65228325b3c65f260e09faddecdb7587dc3"
+      "sha256": "c00f3c472bdf85c83fee80ad52a980b8a2de2766e67aeb8041e77bc8c54ddd97"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/LICENSE",

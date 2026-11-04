@@ -96,7 +96,10 @@ export function seatbeltProfile(policy: SeatbeltPolicy): string {
     '(allow network-bind (local ip "*:*"))', '(allow network-inbound (local ip "*:*"))',
     '(allow network-outbound (remote ip "*:*"))');
   if (!Array.isArray(policy.unixSockets) || !Array.isArray(policy.machServices)) refused("Seatbelt IPC endpoints must be explicit arrays");
-  if (policy.unixSockets.length) rules.push("(allow system-socket (socket-domain AF_UNIX))");
+  // libuv uses anonymous AF_UNIX socket pairs for child stdio, including
+  // recipes with no named IPC endpoints. Creating the socket grants no
+  // pathname connect: network-outbound below still names each endpoint.
+  rules.push("(allow system-socket (socket-domain AF_UNIX))");
   for (const socket of policy.unixSockets) {
     const name = JSON.stringify(path(socket));
     rules.push(`(allow network-outbound (literal ${name}))`);

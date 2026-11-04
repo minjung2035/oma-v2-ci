@@ -1,13 +1,13 @@
 /** Per-call resources around the vendored LSP session scope. Session and
  * child ownership remain upstream; scratch and silence observation end here. */
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { alarm } from "@oma/protocol/alarm";
 import { removePrivateStateTree } from "@oma/tool-runtime/private-state";
 
 export async function withLspScratch<T>(fn: (scratch: string) => Promise<T>): Promise<T> {
-  const scratch = mkdtempSync(join(tmpdir(), "oma-lsp-"));
+  const scratch = mkdtempSync(join(realpathSync(tmpdir()), "oma-lsp-"));
   try { return await fn(scratch); }
   finally { removePrivateStateTree(scratch); }
 }

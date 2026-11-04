@@ -12,6 +12,52 @@ main/service 없음, thread/service443과 비교한다. Seatbelt policy·cwd·�
 durable boundary·문서·명세 inventory 검사가 통과했다. 이 변경의 실제 Darwin 실행은 CI 발행 전 **NOT_RUN**이다.
 로컬 원시는 `/tmp/oma-macos-direct-{build,architecture}.log`와 `/tmp/oma-macos-direct-focused.tap`이다.
 
+### 실제 Mac 관측 — source `a54b625fbf7`
+
+Native [41766307991](https://github.com/minjung2035/oma-v2-ci/actions/runs/41766307991)의 Mac26 arm64/SDK26.5와
+Mac15 arm64/SDK15.5에서 각3회 실행했다. 각 OS의120개 시도는108 OBSERVED·12 SETUP_FAILED이며
+productQualification은 BLOCKED다. 입력15825개 digest `3daac099ecd18fea2e7fa46f0290d33d41829926c7f21e2f20eb8921d01b2f58`와
+runtime 산출물은 전후 동일했다. 양 Mac의 gate ZIP을 API의 SHA-256과 대조했다.
+
+| 동일 C image의 libc 호출 | inherited | bootstrap-only / bootstrap-and-xpc |
+|---|---|---|
+| pruning task 직접 exec |18회 성공 |36회 성공·global bootstrap0 |
+| 기존 Node-child |18회 성공 |36회 EAI_NONAME8 |
+
+수치는 양 OS·각3회·3 resolver context의 합이다. 같은 image에서도 실행 경로에 따른 차이가 재현됐다.
+Node만의 원인인지 일반 child 생성의 성질인지는 아직 미분리다. 이 결과는 모든 launchd 권한의 제거,
+일반 도구의 DNS 호환성, 전체 실행 범위의 closure를 증명하지 않는다. 후속 C fork/posix_spawn 비교는 별도 입력이다.
+
+공통 runtime은 각 **272 PASS / 10 FAIL / 0 SKIP**다. 실패10개는 파일 경쟁 시험의 descriptor 식별이
+Darwin `/dev/fd`를 readlink하려 하여 경합을 주입하지 못한 사례였다. 독립 패키지는 각25/27 PASS이며
+기존 `@oma/git` preparation guard와 `@oma/tool-lsp` cleanup의 임시 root alias 실패를 보존한다.
+gate의12개 준비 실패는 새 integration policy의 maxWorkers 누락3개, quarantine REF_STATE_UNKNOWN3개,
+새 collaboration plan 누락의 Worker6개다. 정상 제품 실행이나 지원 완료로 계산하지 않는다.
+
+Ubuntu 공통274·native leaf3·execution46·Restic setup8은 PASS다. 선택 integration은471/472 PASS이며
+기존 status-responsiveness의 mixed event-loop lag218ms가 원래 예산을 넘었다. 단언·시간 제한을 바꾸지 않았다.
+별도 전체 Architecture [41766308010](https://github.com/minjung2035/oma-v2-ci/actions/runs/41766308010)의 결과는 별도로 판독한다.
+
+원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/direct-exec/`다.
+Mac26 gate ZIP `fdc158cc3681af7b99ac91958423f8be41cf6e8006b809c8ae8ddc747a99b536`,
+Mac15 gate ZIP `0dfa1d1f5898832c9eddbbcde09a8d77911f68fe295d82db7a9aed342ce3ed3c`다.
+
+### 후속 수정 — 실제 Mac 재검증 전
+
+LSP scratch 생성은 canonical temporary root를 사용하도록 고쳤다. 실제 symlink TMPDIR의 성공·실패
+양쪽 cleanup 회귀는 이전 build에서2 FAIL, 수정 build에서6/6 PASS다. 외부 sentinel과 원래 오류를 보존한다.
+파일 경쟁 시험은 실제 FD와 named inode의 dev/ino를 비교하여 양 OS에서 경합을 주입한다.
+Worker·candidate fixture의 누락 입력과 폐기된 mail-read 호출을 현재 명시적 surface·ordinary record read로 옮겼다.
+
+Seatbelt는 endpoint가 없는 recipe에도 child stdio용 AF_UNIX 생성을 허용한다. pathname 접속은 기존
+network-outbound의 exact allowlist를 유지한다. async child의 실제 stdin/stdout·close 회귀와 기존
+listed/unlisted Unix 접속 대조로 확인할 입력이며 이 변경의 실제 Darwin 실행은 아직 NOT_RUN이다.
+quarantine의 첫 read-only Git subprocess 결과와 C fork/posix_spawn의 실제 child PID·wait·deadline도 추가로 보존한다.
+로컬 SDK snapshot/zig의 arm64 object compile은 성공했으며 실제 Apple compiler·kernel 실행을 대체하지 않는다.
+후속 build와 parser·Mac recipe·파일 경합·LSP·Worker plan의 선택 실행은136/136 PASS·skip0다.
+구조 자료 생성 뒤 전체 architecture·transaction·durable boundary·문서·명세 inventory도 통과했다.
+기존 review ledger의 두 변경 파일은 NOT_REVIEWED 상태를 유지하며 과거 검토를 재승인하지 않았다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -204,6 +250,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `3daac099ecd18fea2e7fa46f0290d33d41829926c7f21e2f20eb8921d01b2f58` (15825 files).
+verification input digest `1c992a7942fe82bb023f2c5613ed87ef6e1815c4eadb053d371c1506c28498a0` (15825 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

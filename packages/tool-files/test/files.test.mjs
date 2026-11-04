@@ -236,13 +236,15 @@ test("007. Scoped snapshot refusals and aborts remove declared copies without ex
   assert.equal(readFileSync(join(outside, "secret.txt"), "utf8"), "outside bytes");
 });
 
-/** Which path the descriptor names, so an interleaving hook can tell the
- * tool's own reads apart from anything else in the process. */
+// Capture the real observer before per-test fstat interleavings are installed.
+const observeDescriptor = fs.fstatSync;
+/** Identify the held inode on both OSes. Darwin /dev/fd is not a readlink
+ * directory; pathname spellings cannot identify the descriptor there. */
 function descriptorTargets(fd, file) {
-  for (const base of ["/proc/self/fd", "/dev/fd"]) {
-    try { if (fs.readlinkSync(`${base}/${fd}`) === file) return true; } catch { /* not this one */ }
-  }
-  return false;
+  try {
+    const held = observeDescriptor(fd, { bigint: true }), named = fs.statSync(file, { bigint: true });
+    return held.dev === named.dev && held.ino === named.ino;
+  } catch { return false; }
 }
 /** A same-uid writer outside the shared writer's serialization, landing inside
  * the conditional write's own validation window: the tool's descriptor is

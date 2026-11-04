@@ -57,7 +57,7 @@ const channels=[identity(status.write),identity(release.read),identity(checkLeas
 let statusWrite=status.write,releaseWrite=release.write,releaseRead=release.read,task,reader;
 let gateReleases=0;
 await withAsyncCleanup(async()=>{
-  const check=snapshotIntegrationPolicy({policyRevision:'fixture',protectedPaths:[],checks:[{id:'exact',argv:[host.node,'--input-type=module','-e',
+  const check=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'fixture',protectedPaths:[],checks:[{id:'exact',argv:[host.node,'--input-type=module','-e',
     `import assert from 'node:assert/strict';import {readFileSync,writeFileSync,fstatSync} from 'node:fs';import {spawnSync} from 'node:child_process';
      assert.equal(readFileSync('exact.txt','utf8'),'committed\\r\\n$literal\\n');assert.equal(readFileSync(0,'utf8'),'');
      const expected=${JSON.stringify(channels)};
@@ -113,6 +113,16 @@ await withAsyncCleanup(async()=>{
     const temporary=join(quarantine,phase+'-tmp');mkdirSync(temporary);
     const recipe=quarantineSeatbelt(host,{phase,candidate,exportRef,prerequisites:[base]},
       {git:tools.git,project,root:quarantine,bundle:join(quarantine,'input.bundle'),temporary});
+    // Observe the first read-only Git subprocess under the same actual recipe
+    // before the production entry. The entry deliberately exposes a closed
+    // error code; preserve the child observation separately for diagnosis.
+    const diagnostic=`import {runProcess} from ${JSON.stringify(import.meta.resolve('@oma/process/async'))};
+      const result=await runProcess(${JSON.stringify({executable:tools.git,argv:['--git-dir',project,'rev-parse','--show-object-format'],
+        env:{...GIT_ENV,TMPDIR:temporary},timeoutMs:5000,stdoutBytes:65536,stderrBytes:65536})},{stderrFd:2});
+      console.log(JSON.stringify(result));`;
+    const nodeIndex=recipe.command.argv.indexOf(host.node);assert.ok(nodeIndex>=0);
+    const diagnosed=await execute({...recipe.command,argv:[...recipe.command.argv.slice(0,nodeIndex+1),'--input-type=module','-e',diagnostic]},[empty,empty,empty,input,lease.descriptor,rootFd,projectFd]);
+    console.error(JSON.stringify({gitProcessDiagnostic:{phase,result:JSON.parse(diagnosed.stdout.toString())}}));
     assert.deepEqual(recipe.privateInputs,[]);const result=await execute(recipe.command,[empty,empty,empty,input,lease.descriptor,rootFd,projectFd]);
     assert.equal(result.stdout.toString(),candidate+'\n');
     assert.equal(git(root,['--git-dir',project,'show-ref']),refs);

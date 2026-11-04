@@ -380,6 +380,13 @@ value.complete = true; save();
           "observe-resolver", path, context, service], 5000);
         return { command, ports: optionalJson(portsPath), observation: optionalJson(path) };
       });
+      const childResolvers = ["fork", "posix-spawn"].map(mechanism => {
+        const path = join(directory, `${mechanism}.resolver.json`), parentPath = `${path}.parent.json`;
+        const portsPath = `${path}.ports.json`;
+        const command = observe(launcher, [name, profilePath, portsPath, directory, launcher,
+          "observe-child-resolver", parentPath, path, mechanism, "main", "443"], 5000);
+        return { mechanism, command, ports: optionalJson(portsPath), parent: optionalJson(parentPath), observation: optionalJson(path) };
+      });
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
         nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
         unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target,
@@ -394,7 +401,7 @@ value.complete = true; save();
           await waitFor(() => existsSync(join(job.directory, "once.json")));
       const effect = job => existsSync(join(job.directory, "once.json")) ? remember(marker(job.directory, "once")) : null;
       observation.bootstrap.variants.push({ name, profileSha256: createHash("sha256").update(profile).digest("hex"),
-        directResolvers,
+        directResolvers, childResolvers,
         direct: { target: directTarget.target, command: direct, ports: optionalJson(directPorts), guestEffect: effect(directTarget) },
         node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget),
           globalTarget: globalTarget.target, globalGuestEffect: effect(globalTarget) },
@@ -402,7 +409,10 @@ value.complete = true; save();
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
     }
-    const pids = observation.bootstrap.variants.flatMap(variant => [variant.node.tools?.nativeDnsCommand?.pid,
+    const pids = observation.bootstrap.variants.flatMap(variant => [
+      ...variant.directResolvers.map(record => record.command?.pid),
+      ...variant.childResolvers.flatMap(record => [record.command?.pid, record.parent?.childPid]),
+      variant.node.tools?.nativeDnsCommand?.pid,
       ...(variant.node.tools?.resolvers ?? []).map(record => record.command?.pid)])
       .filter(pid => Number.isSafeInteger(pid) && pid > 0);
     const diagnostics = { purpose: "read-only violations for owned DNS observers; not authority or death proof", pids };

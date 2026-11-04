@@ -177,17 +177,18 @@ export function validateDarwinObservation(name, observations) {
           [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
           gai(record.getaddrinfo) && signed32(record.dnssd?.createResult));
       const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
-      const nativeResolver = (command, record, path, context, service, uid, positive = false) => {
-          return outcome(command) && command.executable === launcher && Array.isArray(command.argv) &&
-            JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", path, context, service]) &&
-            (record === null && !positive && (command.exitCode !== 0 || command.signal !== null) ||
-              record?.phase === "native-resolver" && record.pid === command.pid && record.pid > 0 &&
-              Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid &&
-              record.hostname === "example.com" && record.context === context && record.service === (service === "none" ? null : service) &&
-              portNumber(record.globalBootstrap) && snapshot(record.ports) && gai(record.getaddrinfo) &&
-              (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
-                record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
-      };
+      const resolverObservation = (record, pid, context, service, uid) =>
+        record?.phase === "native-resolver" && Number.isSafeInteger(pid) && record.pid === pid && pid > 0 &&
+        Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid &&
+        record.hostname === "example.com" && record.context === context && record.service === (service === "none" ? null : service) &&
+        portNumber(record.globalBootstrap) && snapshot(record.ports) && gai(record.getaddrinfo);
+      const nativeResolver = (command, record, path, context, service, uid, positive = false) =>
+        outcome(command) && command.executable === launcher && Array.isArray(command.argv) &&
+        JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", path, context, service]) &&
+        (record === null && !positive && (command.exitCode !== 0 || command.signal !== null) ||
+          resolverObservation(record, command.pid, context, service, uid) &&
+          (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
+            record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
       const nativeResolvers = (records, base, uid, positive = false) => Array.isArray(records) &&
         records.length === resolverCases.length && records.every((entry, index) => {
           const [context, service] = resolverCases[index];
@@ -328,6 +329,29 @@ export function validateDarwinObservation(name, observations) {
                 nativeResolver({ ...command, argv: command.argv.slice(5) }, entry.observation,
                   path, context, service, ports.uid);
             })) throw new Error("direct C resolver comparison lacks the same image, sandbox, process or resolver inputs");
+        if (!Array.isArray(variant.childResolvers) || variant.childResolvers.length !== 2 ||
+            !variant.childResolvers.every((entry, childIndex) => {
+              const mechanism = ["fork", "posix-spawn"][childIndex], command = entry?.command, ports = entry?.ports, parent = entry?.parent;
+              const directory = nodeCommand?.argv?.[3], path = `${directory}/${mechanism}.resolver.json`;
+              if (entry.mechanism !== mechanism || !outcome(command) || command.executable !== launcher ||
+                  JSON.stringify(command.argv) !== JSON.stringify([variant.name, nodeCommand?.argv?.[1],
+                    `${path}.ports.json`, directory, launcher, "observe-child-resolver", `${path}.parent.json`, path,
+                    mechanism, "main", "443"])) return false;
+              if (parent === null) return entry.observation === null && (command.exitCode !== 0 || command.signal !== null);
+              if (ports?.mode !== variant.name || ports.sandboxApplied !== true || ports.preExecObservation !== true ||
+                  ports.pid !== command.pid || ports.uid !== bootstrap.nativeDnsHost.uid ||
+                  !snapshot(ports.before) || !snapshot(ports.after) || !Array.isArray(ports.droppedSendRights) ||
+                  !ports.droppedSendRights.every(portNumber) || parent.phase !== "native-child-resolver" ||
+                  parent.pid !== command.pid || parent.uid !== ports.uid || parent.mechanism !== mechanism ||
+                  !snapshot(parent.before) || !snapshot(parent.after) || !Number.isSafeInteger(parent.spawnStatus) ||
+                  parent.spawnStatus < 0 || !Number.isSafeInteger(parent.waitStatus) || parent.waitStatus < 0 ||
+                  parent.waitStatus > 0xffff || typeof parent.timedOut !== "boolean") return false;
+              if (parent.spawnStatus !== 0) return parent.childPid === 0 && parent.joined === false &&
+                parent.waitStatus === 0 && parent.timedOut === false && entry.observation === null;
+              return parent.childPid > 0 && parent.childPid !== parent.pid && parent.joined === true &&
+                (entry.observation === null ? parent.waitStatus !== 0 :
+                  resolverObservation(entry.observation, parent.childPid, "main", "443", parent.uid));
+            })) throw new Error("C child resolver comparison lacks the actual mechanism, owned child or join outcome");
         for (const key of ["direct", "node", "restored"]) {
           const attempt = variant[key], ports = attempt?.ports;
           if (!target(attempt?.target) || targets.has(attempt.target) || !outcome(attempt.command) ||

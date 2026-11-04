@@ -29,7 +29,7 @@ if (mode === "seatbelt-files") {
   program = `import assert from 'node:assert/strict';
     import {readFileSync,writeFileSync,linkSync,renameSync,unlinkSync,lstatSync} from 'node:fs';
     import {createHash} from 'node:crypto';
-    import {spawnSync} from 'node:child_process';
+    import {spawn,spawnSync} from 'node:child_process';
     const [work,publicFile,secretFile,hiddenFile,protectedParent]=process.argv.slice(1);
     const denied = fn => assert.throws(fn, error => ['EACCES','EPERM'].includes(error.code));
     assert.equal(readFileSync(0,'utf8'),${JSON.stringify(input)});
@@ -49,9 +49,16 @@ if (mode === "seatbelt-files") {
       "import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs'; assert.throws(()=>readFileSync(process.argv[1]),e=>['EACCES','EPERM'].includes(e.code));",secretFile],
       {env:process.env,encoding:'utf8',timeout:20000});
     assert.equal(inherited.status,0,inherited.stderr); assert.equal(inherited.signal,null);
-    console.log(JSON.stringify({writable:true,readonly:true,denied:true,symlinkDenied:true,hardlinkDenied:true,inherited:true,ordinaryRenameUnlink:true,protectedParentPinned:true}));`;
+    const asynchronous=spawn(process.execPath,['-e','process.stdout.write("anonymous stdio")'],{env:process.env});
+    const output=[],errors=[];asynchronous.stdout.on('data',bytes=>output.push(bytes));
+    asynchronous.stderr.on('data',bytes=>errors.push(bytes));asynchronous.stdin.end();
+    const closed=await new Promise((resolve,reject)=>{asynchronous.once('error',reject);
+      asynchronous.once('close',(code,signal)=>resolve({code,signal}));});
+    assert.deepEqual(closed,{code:0,signal:null},Buffer.concat(errors).toString());
+    assert.equal(Buffer.concat(output).toString(),'anonymous stdio');
+    console.log(JSON.stringify({writable:true,readonly:true,denied:true,symlinkDenied:true,hardlinkDenied:true,inherited:true,asyncChild:true,ordinaryRenameUnlink:true,protectedParentPinned:true}));`;
   expected = { writable: true, readonly: true, denied: true, symlinkDenied: true, hardlinkDenied: true, inherited: true,
-    ordinaryRenameUnlink: true, protectedParentPinned: true };
+    asyncChild: true, ordinaryRenameUnlink: true, protectedParentPinned: true };
 } else if (mode === "seatbelt-profile-stream") {
   // Framing failures have independent cases in darwin-seatbelt-faults.mjs.
   policy.readable.push(...Array.from({ length: 5000 }, (_, n) => directory(join(readonly, `profile-entry-${n}-longer-than-the-exec-argument-budget`))));

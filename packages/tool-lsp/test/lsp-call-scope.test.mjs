@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { observeLspCall, withLspScratch } from "../dist/lsp-call-scope.js";
 import { performance } from "node:perf_hooks";
-import { mkdirSync, writeFileSync, chmodSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, chmodSync, existsSync, mkdtempSync, realpathSync, symlinkSync, rmSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removePrivateStateTree } from "@oma/tool-runtime/private-state";
 function fixture(t) {
@@ -63,4 +64,24 @@ test("004. Read-only scratch descendants cannot replace a successful LSP result 
         return "verified result";
     });
     assert.equal(result, "verified result"); assert.equal(existsSync(directory), false);
+});
+
+for (const rejects of [false, true]) test(`005. Aliased temporary roots return LSP scratch after ${rejects ? "failure" : "success"}`, async t => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-lsp-alias-")));
+    const target = join(root, "target"), alias = join(root, "alias");
+    mkdirSync(target); symlinkSync(target, alias); writeFileSync(join(target, "keep"), "outside scratch");
+    const prior = process.env.TMPDIR;
+    t.after(() => { if (prior === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = prior; rmSync(root, { recursive: true, force: true }); });
+    process.env.TMPDIR = alias;
+    const failure = new Error("original LSP failure");
+    let directory;
+    const running = withLspScratch(async scratch => {
+        directory = scratch; writeFileSync(join(scratch, "result"), "owned scratch");
+        if (rejects) throw failure;
+        return "verified result";
+    });
+    if (rejects) await assert.rejects(running, error => error === failure);
+    else assert.equal(await running, "verified result");
+    assert.equal(existsSync(directory), false);
+    assert.equal(readFileSync(join(target, "keep"), "utf8"), "outside scratch");
 });

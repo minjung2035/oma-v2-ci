@@ -156,7 +156,16 @@ const bootstrapRecord = () => {
         ...entry, command: { ...entry.command, argv: [name, "/owned/profile", `${entry.command.argv[1]}.ports.json`,
           "/owned/work", "/owned/bootstrap-exec", ...entry.command.argv] },
         ports: { ...attempt("node").ports, pid: entry.command.pid } }));
-    return { name, profileSha256: "e".repeat(64), canaryPreserved: true, directResolvers,
+    const childResolvers = ["fork", "posix-spawn"].map((mechanism, childIndex) => {
+      const entry = nativeResolvers(`/owned/work/${mechanism}`, 400 + index * 4 + childIndex)[0];
+      const path = `/owned/work/${mechanism}.resolver.json`, pid = entry.command.pid - 50;
+      return { mechanism, command: command("/owned/bootstrap-exec", [name, "/owned/profile", `${path}.ports.json`,
+        "/owned/work", "/owned/bootstrap-exec", "observe-child-resolver", `${path}.parent.json`, path, mechanism, "main", "443"], pid),
+        ports: { ...attempt("node").ports, pid }, observation: entry.observation,
+        parent: { phase: "native-child-resolver", pid, uid: 501, mechanism, spawnStatus: 0, childPid: entry.command.pid,
+          joined: true, waitStatus: 0, timedOut: false, before: attempt("node").ports.after, after: attempt("node").ports.after } };
+    });
+    return { name, profileSha256: "e".repeat(64), canaryPreserved: true, directResolvers, childResolvers,
       direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
   });
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
@@ -391,6 +400,13 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].directResolvers[0].ports.uid += 1; },
     value => { value.bootstrap.variants[1].directResolvers[0].observation.context = "thread"; },
     value => { value.bootstrap.variants[1].directResolvers[0].observation = null; },
+    value => { delete value.bootstrap.variants[1].childResolvers; },
+    value => { value.bootstrap.variants[1].childResolvers[0].mechanism = "posix-spawn"; },
+    value => { value.bootstrap.variants[1].childResolvers[0].parent.joined = false; },
+    value => { value.bootstrap.variants[1].childResolvers[0].parent.childPid += 1; },
+    value => { value.bootstrap.variants[1].childResolvers[0].parent.pid += 1; },
+    value => { value.bootstrap.variants[1].childResolvers[0].command.argv[4] = "/foreign/image"; },
+    value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
     value => { value.bootstrap.variants[1].node.globalTarget = value.bootstrap.variants[1].node.target; },
     value => { value.bootstrap.variants[1].node.command.argv[15] = "gui/501/foreign"; },
     value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.pid += 1; },
@@ -446,6 +462,11 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     assert.throws(() => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: bad }));
   }
   const unknown = structuredClone(good);
+  const spawnFailure = unknown.bootstrap.variants[1].childResolvers[0];
+  Object.assign(spawnFailure.parent, { spawnStatus: 1, childPid: 0, joined: false, waitStatus: 0 });
+  spawnFailure.observation = null;
+  const childTimeout = unknown.bootstrap.variants[1].childResolvers[1];
+  Object.assign(childTimeout.parent, { waitStatus: 9, timedOut: true }); childTimeout.observation = null;
   unknown.bootstrap.variants[2].direct.command = { ...unknown.bootstrap.variants[2].direct.command,
     exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
   unknown.bootstrap.variants[2].node.command = { ...unknown.bootstrap.variants[2].node.command, exitCode: 126 };

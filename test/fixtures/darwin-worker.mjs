@@ -18,6 +18,8 @@ import {GIT_ENV} from '@oma/process/policies';
 import {DEPLOYMENT_LAYOUT} from '@oma/domain/deployment';
 import {actorSocketPathAt,agentRootPathAt,workspacePathAt,runnerSessionDirPathAt,runnerViewPathAt} from '@oma/domain/paths';
 import {decodeRunLease} from '@oma/protocol/run-lease';
+import {collaborationSurface} from '@oma/domain/collaboration-surface';
+import {collaborationRecordRootPathAt} from '@oma/domain/paths';
 import {withAsyncCleanup} from '@oma/native/cleanup';
 assert.equal(process.platform,'darwin','Worker observations require the actual Darwin kernel');
 const mode=process.argv[2];assert.ok(['worker-bootstrap','worker-tools'].includes(mode));
@@ -36,14 +38,15 @@ const lease=decodeRunLease({actor,incarnation:1,socketHostPath:socket},{actor,ru
 const secret=join(root,'human-secret'),other=join(stateRoot,'agents/bob/home');mkdirSync(other,{recursive:true});
 for(const path of [dirs.projectGit,dirs.world,dirs.archive])writeFileSync(join(path,'readonly-canary'),'shared readable bytes');
 writeFileSync(secret,'host-only canary');writeFileSync(join(other,'secret'),'other-actor canary');symlinkSync(other,join(dirs.workspace,'other-alias'));
+const recordRoot=collaborationRecordRootPathAt(stateRoot,actor);mkdirSync(recordRoot,{recursive:true,mode:0o700});
 const runtime=resolvePiRuntime({stateRoot,libdir,node});
-const limits={frameBytes:1<<20,idleStreamSeconds:60,receiptWaitSeconds:30,batchMaxMessages:24,
+const limits={subjectBytes:512,frameBytes:1<<20,idleStreamSeconds:60,receiptWaitSeconds:30,batchMaxMessages:24,
   mailBodyBytes:1<<20,addresses:64,contextBytes:1<<20,bundleBytes:1<<20};
-const options={actor,society,limits,profile:{provider:'pi',model:'current',inferenceSeconds:600,prompt:'',extensions:[]},
+const options={actor,society,limits,profile:{provider:'pi',model:'current',inferenceSeconds:600,prompt:'',extensions:[],toolSurface:JSON.stringify(collaborationSurface('resident'))},
   paths:{piCommand:runtime.executable,piArgs:runtime.args,piAgentDir:runtime.agentDir,coreExtension:join(libdir,DEPLOYMENT_LAYOUT.extension),
     workspace:dirs.workspace,sessionDir:dirs.sessions,agentHome:dirs.home,
     mailArchive:join(dirs.archive,'cur'),workerArchive:join(dirs.workerArchive,'cur'),projectGit:dirs.projectGit,batchView:dirs.view,socket},
-  confinement:{host:{libdir,node,pi:runtime.bundle,piModeArgs:[],stateRoot,runRoot,limits,
+  confinement:{host:{libdir,node,pi:runtime.bundle,piModeArgs:[],stateRoot,runRoot,limits,recordRoot,
     hidden:DEPLOYMENT_LAYOUT.productSurface.map(path=>({path,kind:/\.[jt]s$/.test(path)?'file':'dir'}))},lease,directories:dirs}};
 const prior=join(dirs.sessions,'2026-01-01T00-00-00-000Z_prior.jsonl'),sessionId='0190f000-0000-7000-8000-000000000001';
 writeFileSync(prior,JSON.stringify({type:'session',version:3,id:sessionId,timestamp:'2026-01-01T00:00:00.000Z',cwd:dirs.workspace})+'\n');
@@ -53,9 +56,10 @@ assert.equal(plan.env.OMA_CLI,undefined);assert.ok(plan.env.NODE_OPTIONS.include
 assert.equal(plan.privateInputs.length,1);assert.equal(plan.privateInputs[0].fd,3);
 const profileDigest=createHash('sha256').update(plan.privateInputs[0].bytes).digest('hex');
 writeFileSync(join(dirs.view,'inbox.md'),'# Delivery index\nTyped tool archive view\n');
+writeFileSync(join(recordRoot,'fixture.txt'),'Controlled collaboration record read\n');
 const probe=join(dirs.workspace,'worker-tools.mjs');
 writeFileSync(probe,`import assert from 'node:assert/strict';import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';import {spawnSync} from 'node:child_process';
-const {dirs,secret,other,tools,libdir}=JSON.parse(process.argv[2]);
+const {dirs,secret,other,tools,libdir,recordRoot}=JSON.parse(process.argv[2]);
 assert.equal(process.platform,'darwin');assert.equal(process.cwd(),dirs.workspace);assert.equal(process.env.HOME,dirs.home);
 const denied=fn=>assert.throws(fn,e=>['EACCES','EPERM'].includes(e.code));
 denied(()=>readFileSync(secret));denied(()=>readFileSync(other+'/secret'));denied(()=>readFileSync('other-alias/secret'));
@@ -71,13 +75,20 @@ const absent=spawnSync('oma',['status'],{env:process.env,encoding:'utf8',timeout
 assert.equal(process.env.OMA_CLI,undefined);
 const {registerOmaTools}=await import(libdir+'/packages/extension/dist/mail-tools.js');
 const registered=new Map();registerOmaTools({registerTool:tool=>registered.set(tool.name,tool)},process.cwd());
-const mail=await registered.get('oma_mail_read').execute('native-mail-read',{messageId:'/inbox.md'});
-assert.equal(mail.content[0].text,'# Delivery index\\nTyped tool archive view\\n');
+assert.equal(registered.has('oma_mail_read'),false);assert.equal(registered.has('oma_send'),true);
+const {registerHashlineTools}=await import(libdir+'/packages/tool-hashline/dist/index.js');
+const {createContainedWriter}=await import(libdir+'/packages/tool-runtime/dist/contained-tools.js');
+await registerHashlineTools({registerTool:tool=>registered.set(tool.name,tool),on(){}},
+  {workspace:process.cwd(),readableRoots:[recordRoot],sandboxed:true,readOnly:false,write:createContainedWriter(process.cwd()),stateDir:dirs.sessions+'/probe-hashline'});
+const readTool=registered.get('read'),params={path:recordRoot+'/fixture.txt'};
+const mail=await readTool.execute('native-record-read',readTool.prepareArguments?.(params)??params,undefined,undefined,
+  {cwd:process.cwd(),sessionManager:{getSessionFile:()=>undefined,getSessionId:()=>undefined}});
+assert.match(mail.content.map(part=>part.text??'').join(''),/Controlled collaboration record read/);
 writeFileSync('own-script.sh','#!/bin/sh\\nprintf "own-script\\\\n"\\n',{mode:0o755});assert.equal(run('./own-script.sh',[]).stdout,'own-script\\n');
 writeFileSync('own-native.c','int main(void){return 0;}');run('cc',['own-native.c','-o','own-native']);run('./own-native',[]);
-console.log(JSON.stringify({git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true}));`);
+console.log(JSON.stringify({git:true,npm:true,modelCommandUnavailable:true,recordRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true}));`);
 const quote=value=>"'"+value.replaceAll("'","'\"'\"'")+"'";
-const command=[quote(node),quote(probe),quote(JSON.stringify({dirs,secret,other,tools,libdir}))].join(' ');
+const command=[quote(node),quote(probe),quote(JSON.stringify({dirs,secret,other,tools,libdir,recordRoot}))].join(' ');
 const child=spawnWithPrivateInputs(plan.command,plan.args,plan.cwd,plan.env,plan.privateInputs);
 let stderr='',spawnError;const closed=new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
 child.on('error',error=>{spawnError=error;});child.stderr.on('data',bytes=>{stderr+=bytes.toString();if(Buffer.byteLength(stderr)>65536)child.kill('SIGKILL');});
@@ -98,10 +109,10 @@ await withAsyncCleanup(async()=>{
   if(mode==='worker-tools'){
     const executed=await request({id:'actual-tools',type:'bash',command,excludeFromContext:true});
     assert.equal(executed.exitCode,0,executed.output+'\n'+stderr);assert.equal(executed.cancelled,false);assert.equal(executed.truncated,false);
-    assert.deepEqual(JSON.parse(executed.output.trim()),{git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true});
+    assert.deepEqual(JSON.parse(executed.output.trim()),{git:true,npm:true,modelCommandUnavailable:true,recordRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true});
     for(const path of [dirs.workspace,dirs.home,dirs.sessions])assert.equal(readFileSync(join(path,'own-canary'),'utf8'),'own bytes');
     assert.ok(existsSync(join(dirs.workspace,'own-native')));assert.ok(readFileSync(prior,'utf8').includes('bashExecution'));
-    result={...result,git:true,npm:true,modelCommandUnavailable:true,typedMailRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true};
+    result={...result,git:true,npm:true,modelCommandUnavailable:true,recordRead:true,ownScript:true,ownNativeBuild:true,privateReadsDenied:true,sharedWritesDenied:true};
   }
 },async()=>{
   clearTimeout(deadline);rpc.close();if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');
