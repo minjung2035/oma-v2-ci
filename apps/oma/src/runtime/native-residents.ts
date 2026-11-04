@@ -138,6 +138,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
       if (identity.kind === "darwin-audit-session") return { pid: identity.pid, startTime: String(identity.pidVersion) };
       return identity.kind === "linux-namespace" ? { pid: identity.pid, startTime: identity.startTime } : null;
     },
+    scopeIdentity: (actor: string) => runtime.witness(actor),
     runnerAlive: (actor: string) => channels.get(actor)?.peer.alive() ?? false,
     readLogs: async (actor: string, sinceSeconds: number, limit: number) => residentLogView(logs.read(actor), sinceSeconds, limit),
     // Host projection composition only: no model path-to-RPC or live-tail adapter.

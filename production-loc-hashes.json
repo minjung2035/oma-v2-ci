@@ -72,7 +72,7 @@
     },
     {
       "path": "apps/oma/src/broker/broker-composition.ts",
-      "sha256": "f8712a7a0c275bb572acb367c755e19644aac14a4f5146d0637d909e481b586b"
+      "sha256": "1c4ef4a8e9e03f93117143633a8cbc5c2b29fdfc2b61c95d9e69028044f3c6c4"
     },
     {
       "path": "apps/oma/src/broker/composition.ts",
@@ -340,7 +340,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "c87ffdbae070b762608aa7974ebed8dd397861789d6fa42863d289cb3082610d"
+      "sha256": "9413cd76e2917fa9be4f21ea85c819861d909adfb11e3b2ac6d554b5d71c3f0d"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -508,7 +508,7 @@
     },
     {
       "path": "packages/broker/src/peer-authenticator.ts",
-      "sha256": "6adb23bbf249919a53ce9e8bb8f278007178d911b8cda84181695b3b1e580413"
+      "sha256": "d2eb30ed693bf0da9167c2293d8c8d8fb3cb3f99c72f51eda478c6fa6a36cc8c"
     },
     {
       "path": "packages/broker/src/peer-pin.ts",
@@ -516,7 +516,7 @@
     },
     {
       "path": "packages/broker/src/ports.ts",
-      "sha256": "4cda56de04b1d3aa4b63071de8d52ea8877532d1d2099808e4805f9cf806cbf7"
+      "sha256": "0eb8f6e822ddfd10203cd1c0de60f8755b8de97a6437dd4ced2b72c98afb3f7e"
     },
     {
       "path": "packages/broker/src/principal-endpoint.ts",
@@ -1584,7 +1584,7 @@
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
-      "sha256": "6cb3d00f17029b21df7846388646471f7729c390558d4faca4cde7e0ee67fd7c"
+      "sha256": "a1b1695c0589e5ad648750889c8c8aedfdb9ed1c19138548e8a6a1e6559dd54e"
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",

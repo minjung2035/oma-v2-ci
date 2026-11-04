@@ -19,11 +19,14 @@ export interface PinnedPeerIdentity extends PeerIdentity {
   sameSender(sender: unknown): boolean;
   alive(): boolean;
   close(): void;
+  /** Optional OS observation over a trusted execution identity, not a grant. */
+  inScope?(identity: unknown): boolean;
 }
 export type BoundPeer = PeerIdentity & ConnectionPeerPin & {
-  /** Present only on Darwin; compared with the current run's kernel witness. */
+  /** Darwin kernel correlation only; never role or current-run membership. */
   readonly auditSession?: number;
   sameSender(sender: unknown): boolean;
+  inScope?(identity: unknown): boolean;
   /** Issued by the direct spawn owner, never decoded from a request. */
   readonly inheritedRunner?: { readonly actor: Actor; readonly invocationId: string };
 };
@@ -157,6 +160,8 @@ export interface BrokerMail {
 export interface BrokerUnits {
   observe(actor: Actor): ExecutionObservation;
   scopeRoot(actor: Actor): { readonly pid: number; readonly startTime: string } | null;
+  /** Physical identity from the trusted spawn owner, including before runner.open. */
+  scopeIdentity?(actor: Actor): unknown;
   runnerAlive(actor: Actor): boolean;
   readLogs(actor: Actor, sinceSeconds: number, limit: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
   bindRunRevoker(revoke: (actor: Actor) => void): void;

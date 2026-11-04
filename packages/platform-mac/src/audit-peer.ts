@@ -1,5 +1,5 @@
 /** One Mach sender's OS identity binding. This adapter grants no actor, role,
- * scope membership or capability. Common broker policy owns those decisions.
+ * or capability. It observes physical membership; common broker policy owns authority.
  * The queue precedes asynchronous audit validation, avoiding a PID-only binding to
  * a replacement process. Actual Darwin qualification remains NOT_RUN.
  */
@@ -8,6 +8,7 @@ import { StoreError } from "@oma/domain/errors";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { watchDarwinProcess } from "@oma/native/process-event";
 import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
+import { identifyDarwinCoalition } from "@oma/native/audit-session";
 
 export interface MachPeerPin {
   readonly pid: number; readonly uid: number; readonly gid: number;
@@ -15,6 +16,7 @@ export interface MachPeerPin {
   readonly auditSession: number;
   alive(): boolean;
   sameSender(sender: unknown): boolean;
+  inScope(identity: unknown): boolean;
   close(): void;
 }
 export interface MachPeerBinding {
@@ -54,6 +56,16 @@ export function bindMachSender(sender: MachAuditSender): MachPeerBinding {
         sameSender(next: unknown): boolean {
           return !closed && isMachAuditSender(next) &&
             next.token.every((word, index) => word === sender.token[index]) && watch.state() === "live";
+        },
+        inScope(identity: unknown): boolean {
+          if (closed || watch.state() !== "live" || identity === null || typeof identity !== "object" || Array.isArray(identity)) return false;
+          try {
+            if (Object.keys(identity).sort().join() !== "bootId,coalitionId,kind") return false;
+            const observed = identifyDarwinCoalition(sender.pid);
+            return observed !== null && "kind" in identity && "bootId" in identity && "coalitionId" in identity &&
+              identity.kind === observed.kind && identity.bootId === observed.bootId && identity.coalitionId === observed.coalitionId &&
+              watch.state() === "live";
+          } catch { return false; } // An unanswered membership observation never grants authority or proves death.
         },
         close() {
           if (closeFailure !== undefined) throw closeFailure;

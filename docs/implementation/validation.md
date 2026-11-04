@@ -1539,10 +1539,31 @@ allow_setlease는 private `com.apple.private.vfs.file-leases`를 요구하고, t
 supersede한다. 이미 시작한 group 없는 과거 run을 이 변경이 취소했다고 쓰지 않는다. 실제 실행된 실패와 cancelled를
 구분하고 eager artifact를 보존하며, 최신 입력의 전체 검증을 마치기 전 제품 완료로 선언하지 않는다.
 
+### Broker current-scope 접점 — Mac 실행·제품 admission 미검증
+
+공통 peer port에 optional `inScope` 관측을 두고, Mach pin은 genuine sender의 watch 전후에 fresh
+boot/CID를 조회해 정확한 physical identity와 비교한다. legacy ASID·body PID·다른 boot/CID·extra field는
+멤버십을 주지 않는다. auditSession은 kernel correlation으로만 남겼다. 모르는 관측은 인증 거절이며 scope death가 아니다.
+
+`runner.open`은 RunRegistry 생성보다 먼저 오므로 trusted spawn owner의 현재 witness와 inherited actor/invocation
+grant를 확인한다. 등록된 Actor는 같은 관측과 **현재 owned run pin**의 identity를 모두 확인한다.
+현재 row/incarnation/role/specHash/desired/capability와 run/lease 재검사는 기존 공통 owner에 유지하며 매 요청·acceptance 시점에 적용한다.
+Linux는 기존 scopeRoot/ancestry·pidfd 경로를 유지한다. 없는 Darwin membership/identity를 Linux PID로 대체하지 않는다.
+
+build·관련 local62/62·실제 Linux peer pidfd/RunRegistry/authority/acceptance/Runner/topology28/28·evidence parser37/37은 PASS다.
+현재 Mac 검사는 kernel message를 실제 자기 endpoint로 송수신하고 pin의 boot/CID·genuine sender·close를 대조하는
+mechanics 질문이다. Actor를 실제 run에 admit하는 검사가 아니며 Linux에서는 platform refusal만 실행했다.
+새 callback/runner 연결의 Mac 실행은 NOT_RUN이다. private Mac Runner launch·expected Broker·installed code·Society lease와
+G-AUTH/G-PROCESS/G-FILES OPEN, execution guard는 유지한다.
+
+hosted arm64 미취득 중 관측을 계속하기 위해 [공식 Intel26 label](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)을
+common matrix에 보조로 추가했다. Intel26과 기존 arm64가 첫 두 slot을 사용하며 모든 Ubuntu/Mac15/gate를 유지한다.
+Intel의 결과를 arm64 target qualification으로 승격하지 않는다. 새 architecture/실행 순서의 효과도 아직 NOT_RUN이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `fa1baf8845d26d6514076c9117d34d063ad1b9eccd3212f9d9f95c7af47689ea` (15857 files).
+verification input digest `994efb0e3638d77d38188525447aef34ce43874989d206ecdd2714ac81e0ae2e` (15858 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

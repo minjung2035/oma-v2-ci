@@ -106,7 +106,7 @@ export function createBroker(input: BrokerComposition): Broker {
     ledger: brokerLedger(store),
     mail: Object.freeze<BrokerMail>({ prepare: (auth, responseId) => prepare(auth, undefined, responseId), complete: (auth, evidence) => mail.complete(auth, evidence),
       settleFromReceipt: (quiescence, batch) => mail.settleFromReceipt(quiescence, batch) }),
-    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), runnerAlive: actor => units.runnerAlive(actor),
+    units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), scopeIdentity: actor => units.scopeIdentity?.(actor), runnerAlive: actor => units.runnerAlive(actor),
       readLogs: (actor, since, limit) => units.readLogs(actor, since, limit),
       bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
     views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => {

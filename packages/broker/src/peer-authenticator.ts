@@ -14,7 +14,7 @@ export function matchesPinnedSender(peer: Pick<BoundPeer, "sameSender" | "alive"
   return peer.sameSender(sender) && peer.alive();
 }
 export class PeerAuthenticator {
-  constructor(private readonly store: Pick<BrokerLedger, "getAgent" | "listAgents" | "societyOpen">, private readonly units: Pick<BrokerUnits, "observe" | "scopeRoot" | "runnerAlive">, private readonly runs: RunRegistry,
+  constructor(private readonly store: Pick<BrokerLedger, "getAgent" | "listAgents" | "societyOpen">, private readonly units: Pick<BrokerUnits, "observe" | "scopeRoot" | "scopeIdentity" | "runnerAlive">, private readonly runs: RunRegistry,
     private readonly society: string, private readonly cleanupError: (error: unknown) => void,
     private readonly pinPeer: BrokerEffects["pinPeer"]) {}
   bind(socket: Duplex): BoundPeer | null {
@@ -24,11 +24,13 @@ export class PeerAuthenticator {
     // and "failed" both refuse, and neither is used as proof of death (INV02).
     const owner = new SharedPeerPin(() => pinned.alive(), () => pinned.close());
     if (!owner.alive()) { owner.releaseConnection(); return null; }
+    const membership = pinned.inScope?.bind(pinned);
     socket.once("close", () => { try { owner.releaseConnection(); } catch (error) { this.cleanupError(error); } });
     return { pid: pinned.pid, uid: pinned.uid, gid: pinned.gid,
       ...(process.platform === "darwin" && "auditSession" in pinned && typeof pinned.auditSession === "number"
         ? { auditSession: pinned.auditSession } : {}),
       sameSender: sender => pinned.sameSender(sender),
+      ...(membership === undefined ? {} : { inScope: (identity: unknown) => owner.alive() && membership(identity) && owner.alive() }),
       alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };
   }
   context(actor: Actor, credentials: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
@@ -40,24 +42,31 @@ export class PeerAuthenticator {
       if (!this.store.societyOpen() || !credentials.alive() || this.runs.get(actor) !== run || run.lease !== lease) return new Set<Capability>();
       const current = this.store.getAgent(actor);
       if (!current || current.desired !== "enabled" || current.incarnation !== lease.incarnation || current.role !== agent.role || current.specHash !== agent.specHash) return new Set<Capability>();
-      if (!this.matchesScope(actor, credentials, run.invocationId) || !run.matches(this.units.observe(actor).scope)) return new Set<Capability>();
+      if (!this.matchesScope(actor, credentials, run.invocationId, run.identity) || !run.matches(this.units.observe(actor).scope)) return new Set<Capability>();
       return capabilitiesOf(current);
     };
     const observed = this.units.observe(actor);
-    const scope = run.identity.scopeIdentity;
-    if (process.platform === "darwin" && (scope === null || typeof scope !== "object" ||
-        !("kind" in scope) || scope.kind !== "darwin-audit-session" || !("auditSession" in scope) ||
-        credentials.auditSession !== scope.auditSession)) return null;
-    if (!this.store.societyOpen() || agent.desired !== "enabled" || !this.matchesScope(actor, credentials, run.invocationId) || !run.matches(observed.scope)) return null;
+    if (!this.store.societyOpen() || agent.desired !== "enabled" || !this.matchesScope(actor, credentials, run.invocationId, run.identity) || !run.matches(observed.scope)) return null;
     if (channel === "trusted-runner" && (credentials.inheritedRunner?.actor !== actor || credentials.inheritedRunner.invocationId !== run.invocationId)) return null;
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid } };
   }
-  private matchesScope(actor: Actor, peer: BoundPeer, invocationId: string): boolean {
-    const observed = this.units.observe(actor), root = this.units.scopeRoot(actor);
-    return peer.alive() && this.units.runnerAlive(actor) && observed.activeState !== "unknown" &&
-      observed.invocationId === invocationId && !!observed.scope && root !== null && descendsFrom(peer.pid, root) && peer.alive();
+  private matchesScope(actor: Actor, peer: BoundPeer, invocationId: string, currentRun?: { readonly scopeIdentity: unknown }): boolean {
+    const observed = this.units.observe(actor);
+    if (!peer.alive() || !this.units.runnerAlive(actor) || observed.activeState === "unknown" ||
+        observed.invocationId !== invocationId || !observed.scope) return false;
+    if (process.platform === "darwin") {
+      // runner.open precedes RunRegistry publication. Its inherited grant must
+      // already match the trusted spawn's physical witness. Published actor
+      // requests additionally match the held current-run pin on every read.
+      const identity = this.units.scopeIdentity?.(actor);
+      if (identity === null || identity === undefined || peer.inScope === undefined) return false;
+      try { return peer.inScope(identity) && (currentRun === undefined || peer.inScope(currentRun.scopeIdentity)) && peer.alive(); }
+      catch { return false; }
+    }
+    const root = this.units.scopeRoot(actor);
+    return root !== null && descendsFrom(peer.pid, root) && peer.alive();
   }
   /** AUTH-003 / architecture §23.5: the Principal's live authority.
    *
