@@ -5,15 +5,21 @@ import { join } from "node:path";
 import { MAC_HELPER_SOURCES } from "@oma/platform-mac/native-assets";
 import { bundledKeychainHelper, nativeKeychainStore } from "@oma/platform-mac/keychain-client";
 import { machoImageCdHashes } from "@oma/platform-mac/macho-image";
+import { bundledJobHelper, encodeDarwinJob } from "@oma/platform-mac/job-launch";
 assert.ok(readFileSync(join(MAC_HELPER_SOURCES, "main.swift"), "utf8").includes("SecItemCopyMatching"));
 assert.equal(bundledKeychainHelper("/install"), "/install/packages/platform-mac/dist/keychain/oma-keychain");
 if (process.platform === "darwin") {
   const helper = lstatSync(join(MAC_HELPER_SOURCES, "oma-keychain"));
   assert.ok(helper.isFile() && (helper.mode & 0o111) !== 0, "installed Mac package requires its compiled Keychain helper");
   assert.ok(machoImageCdHashes(readFileSync(process.execPath), process.arch).length > 0);
+  const job = lstatSync(bundledJobHelper());
+  assert.ok(job.isFile() && (job.mode & 0o111) !== 0, "installed Mac package requires its compiled job helper");
+  assert.ok(machoImageCdHashes(readFileSync(bundledJobHelper()), process.arch).length > 0);
 } else {
   assert.throws(() => machoImageCdHashes(readFileSync(process.execPath), "arm64"), { code: "UNSUPPORTED_PROFILE" });
 }
+assert.equal(Buffer.from(encodeDarwinJob({ executable: "/trusted/node", argv: ["literal"], env: {},
+  timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }, [0, 1, 2], 1)).subarray(0, 8).toString(), "OMAJOB1\0");
 const calls = [];
 const store = nativeKeychainStore(async (op, fields) => { calls.push([op, fields.account]); return op === "keychain.get" ? { value: "fixture-only" } : {}; });
 assert.equal(await store.get("engine-managed"), "fixture-only");

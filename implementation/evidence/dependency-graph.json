@@ -382,6 +382,7 @@
   "packages/platform-mac/src/developer-tools.ts",
   "packages/platform-mac/src/execution-launch.ts",
   "packages/platform-mac/src/git-sandbox.ts",
+  "packages/platform-mac/src/job-launch.ts",
   "packages/platform-mac/src/keychain-client.ts",
   "packages/platform-mac/src/launchd-job.ts",
   "packages/platform-mac/src/mach-address.ts",
@@ -2694,7 +2695,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 162
+   "files": 163
   },
   {
    "index": 5,
@@ -2715,8 +2716,8 @@
    "files": 73
   }
  ],
- "files": 553,
- "runtimeEdges": 2228,
+ "files": 554,
+ "runtimeEdges": 2230,
  "typeOnlyEdges": 965,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 588,
@@ -2724,7 +2725,7 @@
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 406,
   "L3-workflow -> L3-workflow": 94,
-  "L4-orchestration -> L1-kernel": 484,
+  "L4-orchestration -> L1-kernel": 486,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 209,
@@ -2755,7 +2756,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 283,
+  "packages/domain/src/errors.ts": 284,
   "packages/domain/src/identifiers.ts": 94,
   "packages/storage/src/directory.ts": 54,
   "packages/native/src/cleanup.ts": 51,
@@ -2815,7 +2816,7 @@
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 8,
-  "node:url": 14,
+  "node:url": 15,
   "node:util": 9,
   "node:zlib": 1,
   "nodemailer": 1,

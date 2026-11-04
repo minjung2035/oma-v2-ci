@@ -1,4 +1,5 @@
-/* Controlled Mach gate/bootstrap handoff; no production execution backend. */
+/* Private authenticated job launch mechanics. Policy, authority, journal
+ * ownership and complete-scope observation stay with the shared TS owners. */
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
@@ -9,6 +10,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/fileport.h>
+#include <sys/stat.h>
+#include "config.h"
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
@@ -22,7 +25,6 @@ static FILE *trace;
 static uint32_t expected[8], rejected;
 static volatile sig_atomic_t child_pid, expired;
 static audit_token_t target_token;
-extern char **environ;
 struct unique_process { uint8_t uuid[16]; uint64_t unique, parent; int32_t version, parent_version; uint64_t reserved[2]; };
 _Static_assert(sizeof(struct unique_process) == 56, "pinned read-only generation ABI");
 static void failed_child(void) {
@@ -69,7 +71,7 @@ static mach_port_t receive(mach_port_t receiver, int id, int wants_right) {
     require(!expired && host_live(), "original Host generation is not live");
     if (memcmp(trailer->msgh_audit.val, expected, sizeof expected)) {
       ++rejected;
-      fprintf(trace, "{\"phase\":\"rejected\",\"id\":%d,\"senderPid\":%u,\"senderVersion\":%u}\n",
+      if (trace != NULL) fprintf(trace, "{\"phase\":\"rejected\",\"id\":%d,\"senderPid\":%u,\"senderVersion\":%u}\n",
         message->msgh_id, trailer->msgh_audit.val[5], trailer->msgh_audit.val[7]);
       mach_msg_destroy(message); continue;
     }
@@ -96,7 +98,7 @@ static int stopped_target(pid_t child, const char *stage) {
     require(result == 0, "observe unreaped target event");
     if (event.si_pid == 0) { usleep(1000); continue; }
     if (event.si_pid != child || event.si_code != CLD_STOPPED) {
-      fprintf(trace, "{\"phase\":\"terminal-before-stop\",\"stage\":\"%s\",\"pid\":%d,\"code\":%d,\"status\":%d}\n",
+      if (trace != NULL) fprintf(trace, "{\"phase\":\"terminal-before-stop\",\"stage\":\"%s\",\"pid\":%d,\"code\":%d,\"status\":%d}\n",
         stage, event.si_pid, event.si_code, event.si_status);
       require(0, "target ended before a suspended observation");
     }
@@ -112,7 +114,7 @@ static int stopped_target(pid_t child, const char *stage) {
     // next mapped image from an old, not-yet-resumed stop. No event is death.
     if (audit_token_to_pidversion(observed) == previous) { usleep(1000); continue; }
     target_token = observed;
-    fprintf(trace, "{\"phase\":\"suspended\",\"stage\":\"%s\",\"childPid\":%d,\"stopSignal\":%d,\"pidVersion\":%d}\n",
+    if (trace != NULL) fprintf(trace, "{\"phase\":\"suspended\",\"stage\":\"%s\",\"childPid\":%d,\"stopSignal\":%d,\"pidVersion\":%d}\n",
       stage, child, event.si_status, audit_token_to_pidversion(observed));
     return W_STOPCODE(event.si_status);
   }
@@ -130,71 +132,102 @@ static void send_control(mach_port_t destination, int id, pid_t child, int statu
     "job control send");
 }
 int main(int argc, char **argv) {
-  require(getuid() > 0 && argc >= 12, "service trace eight Host token words executable [args]");
-  trace = fopen(argv[2], "wx"); require(trace != NULL && setvbuf(trace, NULL, _IOLBF, 0) == 0, "private job trace");
-  require(fcntl(fileno(trace), F_SETFD, FD_CLOEXEC) == 0, "private job trace close on exec");
+  require(getuid() > 0 && argc == 10, "service eight Host token words");
+  struct sigaction action = {0}; action.sa_handler = deadline;
+  require(sigemptyset(&action.sa_mask) == 0 && sigaction(SIGALRM, &action, NULL) == 0, "job setup alarm handler");
+  alarm(30);
   for (int index = 0; index < 8; ++index) {
-    char *end; errno = 0; unsigned long long word = strtoull(argv[3 + index], &end, 10);
-    require(!errno && argv[3 + index][0] >= '0' && argv[3 + index][0] <= '9' && !*end && word <= UINT32_MAX, "Host token word");
+    char *end; errno = 0; unsigned long long word = strtoull(argv[2 + index], &end, 10);
+    require(!errno && argv[2 + index][0] >= '0' && argv[2 + index][0] <= '9' && !*end && word <= UINT32_MAX, "Host token word");
     expected[index] = (uint32_t)word;
   }
   require(expected[5] > 1 && expected[5] <= INT32_MAX && expected[7] != 0 && expected[1] == getuid(), "expected ordinary Host identity");
   mach_port_t receiver = MACH_PORT_NULL;
   mach_ok(bootstrap_check_in(bootstrap_port, argv[1], &receiver), "check in declared job service");
   mach_port_t host = receive(receiver, INIT, 1); send_control(host, ACK, 0, 0);
-  const int slots[] = { 0, 1, 2, 7, 3 }; int descriptors[5];
+  mach_port_t file = receive(receiver, 0x4f4d412a /* CONFIG */, 1);
+  int configuration = fileport_makefd(file); require(configuration >= 0, "import configuration fileport");
+  mach_ok(mach_port_deallocate(mach_task_self(), file), "return configuration SEND reference");
+  struct oma_job_config config = oma_job_read(configuration);
+  file = receive(receiver, 0x4f4d412b /* CWD */, 1);
+  int directory = fileport_makefd(file); struct stat status_directory;
+  require(directory >= 0, "import working directory fileport");
+  mach_ok(mach_port_deallocate(mach_task_self(), file), "return working directory SEND reference");
+  require(fstat(directory, &status_directory) == 0 && S_ISDIR(status_directory.st_mode) &&
+    fchdir(directory) == 0 && close(directory) == 0, "enter held working directory");
+  if (config.trace) {
+    file = receive(receiver, 0x4f4d412c /* TRACE */, 1);
+    int descriptor = fileport_makefd(file); require(descriptor >= 0, "import trace fileport");
+    mach_ok(mach_port_deallocate(mach_task_self(), file), "return trace SEND reference");
+    trace = fdopen(descriptor, "w");
+    require(trace != NULL && setvbuf(trace, NULL, _IOLBF, 0) == 0 &&
+      fcntl(fileno(trace), F_SETFD, FD_CLOEXEC) == 0, "owned helper diagnostic channel");
+  }
+  int descriptors[128], minimum = 64;
+  for (uint32_t i = 0; i < config.fd_count; ++i)
+    if ((int)config.slots[i] >= minimum) minimum = (int)config.slots[i] + 1;
   posix_spawn_file_actions_t files;
   require(posix_spawn_file_actions_init(&files) == 0, "target file actions");
-  for (int index = 0; index < 5; ++index) {
-    mach_port_t file = receive(receiver, 0x4f4d4130 + index, 1);
+  for (uint32_t index = 0; index < config.fd_count; ++index) {
+    file = receive(receiver, 0x4f4d4130 + (int)index, 1);
     int received = fileport_makefd(file); require(received >= 0, "import Host fileport");
     mach_ok(mach_port_deallocate(mach_task_self(), file), "return imported fileport SEND reference");
     int flags = fcntl(received, F_GETFD);
     require(flags >= 0 && (flags & FD_CLOEXEC) != 0, "import is close on exec");
-    descriptors[index] = fcntl(received, F_DUPFD_CLOEXEC, 64);
-    require(descriptors[index] >= 64 && close(received) == 0, "retain non-overlapping file action source");
-    require(posix_spawn_file_actions_adddup2(&files, descriptors[index], slots[index]) == 0, "exact target FD slot");
-    fprintf(trace, "{\"phase\":\"fileport\",\"slot\":%d,\"closeOnExec\":true}\n", slots[index]);
+    descriptors[index] = fcntl(received, F_DUPFD_CLOEXEC, minimum);
+    require(descriptors[index] >= minimum && close(received) == 0, "retain non-overlapping file action source");
+    require(posix_spawn_file_actions_adddup2(&files, descriptors[index], (int)config.slots[index]) == 0, "exact target FD slot");
+    if (trace != NULL) fprintf(trace, "{\"phase\":\"fileport\",\"slot\":%u,\"closeOnExec\":true}\n", config.slots[index]);
   }
   mach_port_t sink = receive(receiver, SEED, 1);
   require(sink != receiver && sink != host && sink != bootstrap_port, "distinct bootstrap sink");
   mach_ok(task_set_bootstrap_port(mach_task_self(), sink), "job child bootstrap seed");
   mach_ok(mach_ports_register(mach_task_self(), &sink, 1), "job child registered seed");
-  struct sigaction action = {0}; action.sa_handler = deadline;
-  require(sigemptyset(&action.sa_mask) == 0 && sigaction(SIGALRM, &action, NULL) == 0, "job deadline handler");
   pid_t child = 0;
   posix_spawnattr_t attributes;
   require(posix_spawnattr_init(&attributes) == 0 &&
     posix_spawnattr_setflags(&attributes, POSIX_SPAWN_START_SUSPENDED | POSIX_SPAWN_CLOEXEC_DEFAULT) == 0, "suspended target attributes");
-  int spawned = posix_spawn(&child, argv[11], &files, &attributes, &argv[11], environ);
+  int spawned = posix_spawn(&child, config.argv[0], &files, &attributes, config.argv, config.env);
   if (spawned == 0 && child > 0) child_pid = child;
   require(posix_spawnattr_destroy(&attributes) == 0, "return target attributes");
   require(posix_spawn_file_actions_destroy(&files) == 0, "return file actions");
-  for (int index = 0; index < 5; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
-  require(spawned == 0 && child > 0, "controlled job child spawn"); alarm(30);
+  for (uint32_t index = 0; index < config.fd_count; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
+  require(spawned == 0 && child > 0, "private job child spawn");
+  int stages = config.stages; oma_job_free(config);
   int stop_status = stopped_target(child, "launcher");
   send_control(host, READY, child, stop_status);
   (void)receive(receiver, GO, 0);
   require(proc_signal_with_audittoken(&target_token, SIGCONT) == 0, "release exact target generation");
-  fprintf(trace, "{\"phase\":\"released\",\"stage\":\"launcher\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
-  stop_status = stopped_target(child, "target");
-  send_control(host, TARGET, child, stop_status);
-  (void)receive(receiver, TARGET_GO, 0);
-  require(proc_signal_with_audittoken(&target_token, SIGCONT) == 0, "release exact final target generation");
-  fprintf(trace, "{\"phase\":\"released\",\"stage\":\"target\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
+  if (trace != NULL) fprintf(trace, "{\"phase\":\"released\",\"stage\":\"launcher\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
+  if (stages == 2) {
+    stop_status = stopped_target(child, "target");
+    send_control(host, TARGET, child, stop_status);
+    (void)receive(receiver, TARGET_GO, 0);
+    require(proc_signal_with_audittoken(&target_token, SIGCONT) == 0, "release exact final target generation");
+    if (trace != NULL) fprintf(trace, "{\"phase\":\"released\",\"stage\":\"target\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
+  }
+  // TS owns workload deadlines. The setup alarm cannot become a second
+  // runtime timeout policy. Host generation loss still closes our child.
+  alarm(0);
   siginfo_t terminal = {0}; int waited;
-  do { waited = waitid(P_PID, (id_t)child, &terminal, WEXITED | WNOWAIT); } while (waited < 0 && errno == EINTR);
+  for (;;) {
+    require(!expired && host_live(), "original Host ended during workload");
+    waited = waitid(P_PID, (id_t)child, &terminal, WEXITED | WNOWAIT | WNOHANG);
+    if (waited < 0 && errno == EINTR) continue;
+    if (waited != 0 || terminal.si_pid != 0) break;
+    usleep(10000);
+  }
   require(waited == 0 && terminal.si_pid == child, "job unreaped child terminal");
   sigset_t alarms; require(sigemptyset(&alarms) == 0 && sigaddset(&alarms, SIGALRM) == 0 &&
     sigprocmask(SIG_BLOCK, &alarms, NULL) == 0, "job alarm barrier"); alarm(0); child_pid = 0;
   int status; do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
   require(waited == child, "job child join");
-  fprintf(trace, "{\"phase\":\"terminal\",\"childPid\":%d,\"waitStatus\":%d,\"timedOut\":%s,\"joined\":true}\n",
+  if (trace != NULL) fprintf(trace, "{\"phase\":\"terminal\",\"childPid\":%d,\"waitStatus\":%d,\"timedOut\":%s,\"joined\":true}\n",
     child, status, expired ? "true" : "false");
   send_control(host, FIN, child, status); (void)receive(receiver, CLOSED, 0);
   mach_ok(mach_port_mod_refs(mach_task_self(), receiver, MACH_PORT_RIGHT_RECEIVE, -1), "job receiver close");
   mach_ok(mach_port_deallocate(mach_task_self(), host), "job Host reference return");
   mach_ok(mach_port_deallocate(mach_task_self(), sink), "job sink reference return");
-  require(fclose(trace) == 0, "job trace close");
+  if (trace != NULL) require(fclose(trace) == 0, "job trace close");
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }

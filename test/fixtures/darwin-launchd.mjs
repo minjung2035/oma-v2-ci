@@ -15,6 +15,7 @@ import { bundledSeatbeltHelper, prepareSeatbelt, seatbeltProfile } from "@oma/pl
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { submitLaunchdJob, startLaunchdJob } from "@oma/platform-mac/launchd-job";
 import { machoImageCdHashes } from "@oma/platform-mac/macho-image";
+import { bundledJobHelper, encodeDarwinJob } from "@oma/platform-mac/job-launch";
 import { runProcessSync, runProcess } from "@oma/process/run";
 import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
@@ -283,13 +284,16 @@ try {
     const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
     writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
     writeFileSync(script, `
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
 const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout, resolverSymbols] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
 if (["mach-fileports-v1", "mach-fileports-pipe-v1"].includes(process.argv.at(-1))) {
+  const cwd = statSync(".", { bigint: true });
+  value.cwd = { path: process.cwd(), dev: cwd.dev.toString(), ino: cwd.ino.toString() };
+  writeFileSync("cwd-proof", "HELD_CWD\\n");
   value.fileports = { input: readFileSync(0, "utf8"), private: readFileSync(7, "utf8") };
   writeFileSync(1, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048593, 97) : "MACH_STDOUT\\n");
   writeFileSync(2, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048605, 98) : "MACH_STDERR\\n");
@@ -690,15 +694,14 @@ value.complete = true; save();
             domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
           proxy[pipeTransfer ? "machPipeGate" : "machGate"] = gate;
           let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl, gateJob, gatePaths, gateTracePath;
-          let profileWriter, profileClosed, helperPin, profilePin, finalPin, cancelledPin;
-          const gateFiles = [];
+          let profileWriter, profileClosed, configurationWriter, configurationClosed, helperPin, profilePin, finalPin, cancelledPin;
+          const gateFiles = [], setupFiles = [];
           const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0], pipeHeads = [Buffer.alloc(0), Buffer.alloc(0)];
           const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
           try {
-            const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, `${gateTag}-helper`);
+            const executable = bundledJobHelper(), source = new URL("./job-helper/main.c", import.meta.resolve("@oma/platform-mac/job-launch"));
             gate.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
-            gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-lbsm", "-o", executable]);
-            run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
+            gate.helperSource = "production-bundled-job-helper";
             gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
             gate.imageSelections = [];
             const cdhashes = path => {
@@ -736,8 +739,7 @@ value.complete = true; save();
             const cancelled = loadJob(`${gateTag}-cancelled`, executable, "unused", undefined,
               { domain: gate.domain, background: true, sessionCreate: true, launchOnlyOnce: true,
                 nativeRegistration: true, startSuspended: true, machServices: [`${prefix}.${gateTag}-cancelled`],
-                argv: [executable, `${prefix}.${gateTag}-cancelled`, cancelledTrace,
-                  ...gate.expectedHostToken.map(String), process.execPath, "-e", "process.exit(99)"] });
+                argv: [executable, `${prefix}.${gateTag}-cancelled`, ...gate.expectedHostToken.map(String)] });
             startLaunchdJob(cancelled.nativeRegistration, 10000);
             let cancelledPid;
             await waitFor(() => {
@@ -805,12 +807,14 @@ value.complete = true; save();
                 try { gateFiles.push(createMachFilePort(borrowed)); } finally { closeSync(borrowed); }
               }
             }
+            const cwdPath = join(directory, `${gateTag}-cwd`), movedCwdPath = `${cwdPath}-moved`;
+            mkdirSync(cwdPath, { mode: 0o700 });
             const recipe = prepareSeatbelt({ executable: process.execPath,
               argv: [script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
                 unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
                 JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), portsPath,
                 pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"],
-              env: { HOME: directory, TMPDIR: directory }, cwd: directory, timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 },
+              env: { HOME: directory, TMPDIR: directory }, cwd: cwdPath, timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 },
               { ...policy, preserveFds: [7], suspendExec: true, environmentKeys: ["HOME", "TMPDIR"] });
             assert.equal(recipe.profile, profile); assert.equal(recipe.privateInputs.length, 1); assert.equal(recipe.privateInputs[0].fd, 3);
             const frame = Buffer.from(recipe.privateInputs[0].bytes), profilePipe = controlPipe();
@@ -822,8 +826,8 @@ value.complete = true; save();
               sha256: createHash("sha256").update(frame).digest("hex"), payloadSha256: createHash("sha256").update(profile).digest("hex") };
             const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
               sessionCreate: true, launchOnlyOnce: true, nativeRegistration: true, startSuspended: true, machServices: [serviceName],
-              environment: recipe.command.env, workingDirectory: recipe.command.cwd,
-              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), recipe.command.executable, ...recipe.command.argv] });
+              environment: {}, workingDirectory: "/",
+              argv: [executable, serviceName, ...gate.expectedHostToken.map(String)] });
             gateJob = job;
             gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
             const jobModule = fileURLToPath(import.meta.resolve("@oma/platform-mac/launchd-job"));
@@ -831,7 +835,7 @@ value.complete = true; save();
             gate.jobSubmission = job.nativeRegistration.submission;
             const nativeModule = import.meta.resolve("@oma/native/mach-message");
             const attempt = code => run(process.execPath, ["--input-type=module", "-e", `
-  import {createMachEndpoint,listenMachService,lookupMachService} from ${JSON.stringify(nativeModule)};
+  import {createMachEndpoint,createMachFilePort,listenMachService,lookupMachService} from ${JSON.stringify(nativeModule)};
   const name=${JSON.stringify(serviceName)};
   ${code}`]);
             gate.preemption = JSON.parse(attempt(`let taken=false,code=null;try{const r=listenMachService(name);taken=true;r.close();}catch(error){code=error.machCode??String(error);}console.log(JSON.stringify({pid:process.pid,taken,code}));`).stdout);
@@ -904,9 +908,45 @@ value.complete = true; save();
             gate.origin = await origin.result; await origin.returned; assert.equal(gate.origin.kind, "matched");
             const other = observeDarwinAuditOrigin(ack.sender.token, gate.otherCdHashes);
             gate.otherOrigin = await other.result; await other.returned; assert.equal(gate.otherOrigin.kind, "unavailable");
+            gate.beforeConfigAttack = JSON.parse(attempt(`const {openSync,closeSync}=await import('node:fs');
+              const fd=openSync('/dev/null','r'),f=createMachFilePort(fd),s=lookupMachService(name),b=Buffer.alloc(4);closeSync(fd);
+              b.writeUInt32LE(1);s.send(0x4f4d412a,b,f);f.close();s.close();console.log(JSON.stringify({pid:process.pid}));`).stdout);
+            const slots = [0, 1, 2, 7, 3], configuration = Buffer.from(encodeDarwinJob(recipe.command, slots, 2, true));
+            const configurationPipe = controlPipe();
+            pipeDescriptors.add(configurationPipe.read); pipeDescriptors.add(configurationPipe.write);
+            setupFiles.push(createMachFilePort(configurationPipe.read)); closePipe(configurationPipe.read);
+            configurationWriter = createWriteStream("", { fd: configurationPipe.write, autoClose: true });
+            pipeDescriptors.delete(configurationPipe.write); configurationClosed = once(configurationWriter, "close");
+            void configurationClosed.catch(() => {}); configurationWriter.end(configuration);
+            for (const [path, mode] of [[recipe.command.cwd, "r"], [tracePath, "wx"]]) {
+              const descriptor = openSync(path, mode, 0o600);
+              try {
+                if (path === cwdPath) {
+                  const before = fstatSync(descriptor, { bigint: true });
+                  renameSync(cwdPath, movedCwdPath); mkdirSync(cwdPath, { mode: 0o700 });
+                  const replacement = statSync(cwdPath, { bigint: true }); assert.notEqual(replacement.ino, before.ino);
+                  gate.heldCwd = { selected: { path: movedCwdPath, dev: before.dev.toString(), ino: before.ino.toString() },
+                    replacement: { path: cwdPath, dev: replacement.dev.toString(), ino: replacement.ino.toString() }, hostCwd: process.cwd() };
+                }
+                setupFiles.push(createMachFilePort(descriptor));
+              } finally { closeSync(descriptor); }
+            }
+            for (const [index, file] of setupFiles.entries()) {
+              assert.equal(gateService.send(0x4f4d412a + index, one, file), "sent");
+              file.close();
+              // The decoder requires real EOF before it imports later
+              // capabilities. Do not fill its finite Mach queue while the
+              // Host's write/close callbacks still need this event loop.
+              if (index === 0) { await configurationClosed; assert.equal(configurationWriter.closed, true); }
+            }
+            setupFiles.length = 0;
+            gate.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB1", bytes: configuration.length,
+              sha256: createHash("sha256").update(configuration).digest("hex"), slots, imageStages: 2, heldCwd: true, privateTrace: true };
             for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
             assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
             const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
+            assert.ok(gate.rejectedBeforeReady >= 2);
+            await configurationClosed; assert.equal(configurationWriter.closed, true); gate.configurationHandlesReturned = true;
             Object.assign(gate.targetImage, { pid: ready.bytes.readUInt32LE(8), stopStatus: ready.bytes.readUInt32LE(12),
               token: Array.from({ length: 8 }, (_, index) => ready.bytes.readUInt32LE(16 + index * 4)) });
             assert.equal(gate.targetImage.token[5], gate.targetImage.pid);
@@ -976,6 +1016,11 @@ value.complete = true; save();
               trace: readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)),
               ports: optionalJson(portsPath), tools: optionalJson(report), guestEffect: effect(service), globalGuestEffect: effect(global) });
             assert.equal(gate.tools?.complete, true); assert.equal(gate.ports?.pid, gate.childPid);
+            assert.deepEqual(gate.tools.cwd, gate.heldCwd.selected);
+            gate.heldCwd.hostCwdAfter = process.cwd(); assert.equal(gate.heldCwd.hostCwdAfter, gate.heldCwd.hostCwd);
+            assert.equal(readFileSync(join(movedCwdPath, "cwd-proof"), "utf8"), "HELD_CWD\n");
+            gate.heldCwd.replacementEffect = existsSync(join(cwdPath, "cwd-proof"));
+            assert.equal(gate.heldCwd.replacementEffect, false);
             if (pipeTransfer) await waitFor(() => pipeReaders.every(reader => reader.closed));
             const output = pipeTransfer ? await Promise.all(drains) :
               [readFileSync(filePaths.stdout, "utf8"), readFileSync(filePaths.stderr, "utf8")];
@@ -1011,10 +1056,11 @@ value.complete = true; save();
               gate.processPinsReturned = true;
             } catch (error) { gate.processPinReturnError = String(error); }
             gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
-            for (const file of gateFiles) file.close();
+            for (const file of [...gateFiles, ...setupFiles]) file.close();
             for (const fd of pipeDescriptors) closePipe(fd);
             for (const reader of pipeReaders) reader.destroy();
             profileWriter?.destroy();
+            configurationWriter?.destroy();
             if (gate.identity) {
               gate.cleanupRounds = [];
               const end = performance.now() + 8000;
@@ -1035,6 +1081,12 @@ value.complete = true; save();
                 await waitFor(() => profileWriter.closed); await profileClosed;
                 gate.profileHandlesReturned = true;
               } catch (error) { gate.profileReturnError = String(error); }
+            }
+            if (configurationWriter) {
+              try {
+                await waitFor(() => configurationWriter.closed); await configurationClosed;
+                gate.configurationHandlesReturned = true;
+              } catch (error) { gate.configurationReturnError = String(error); }
             }
             if (pipeTransfer) {
               try { await waitFor(() => pipeReaders.every(reader => reader.closed)); gate.pipeHandlesReturned = true; }

@@ -64,6 +64,10 @@
       "types": "./dist/macho-image.d.ts",
       "default": "./dist/macho-image.js"
     },
+    "./job-launch": {
+      "types": "./dist/job-launch.d.ts",
+      "default": "./dist/job-launch.js"
+    },
     "./resident-sandbox": {
       "types": "./dist/resident-sandbox.d.ts",
       "default": "./dist/resident-sandbox.js"
@@ -91,12 +95,15 @@
     "assets": [
       "seatbelt/main.c",
       "seatbelt/launch-fds.h",
+      "job-helper/main.c",
+      "job-helper/config.h",
       "keychain/main.swift",
       "keychain/oma-keychain.entitlements"
     ],
     "isolationSmoke": "test/installed-runtime.mjs",
     "darwinExecutables": [
       "seatbelt/oma-seatbelt",
+      "job-helper/oma-job-helper",
       "keychain/oma-keychain"
     ]
   }

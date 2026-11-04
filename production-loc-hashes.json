@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "5347b496e4767a72b18507306e347375ed21544be4abaa91d384249a4ee29c6c",
+  "manifest": "46f81d25b87685d7b294812232898050c174d63c9e46b1f4cfbb893ca20c98cb",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1580,7 +1580,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "b15d73b10287ffd9efcf9f99f0e2ffae3e62ef750a5aa50df72aa844eeb73e08"
+      "sha256": "1de24489333cbbe89aae5187c3b884ca95e3adecb69e317bf2dffbdfdd4fe585"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1597,6 +1597,18 @@
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
       "sha256": "8053c4e7cb6bf1fc5d9939cba42258a8990de86a247f0ae0da35a7aefc91293c"
+    },
+    {
+      "path": "packages/platform-mac/src/job-helper/config.h",
+      "sha256": "7587cb3d4d922d642d4ce8bd9865f829b0928b1a9addb85e5bc607ba6c58073b"
+    },
+    {
+      "path": "packages/platform-mac/src/job-helper/main.c",
+      "sha256": "43bff55fec7ad01733de54fb76bcde37f1c4508904e49c4f4e8df7a31e37cf4d"
+    },
+    {
+      "path": "packages/platform-mac/src/job-launch.ts",
+      "sha256": "51342d05547851ee491703f1d4da495eeb8dedb612d408e870f223b3644651db"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",

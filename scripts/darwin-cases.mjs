@@ -548,6 +548,23 @@ export function validateDarwinObservation(name, observations) {
                 gate.cancelledBeforeStartup.state !== "exited" || gate.cancelledBeforeStartup.deadEffect !== false ||
                 gate.cancelledBeforeStartup.traceCreated !== false || gate.cancelledBeforeStartup.population !== "empty" ||
                 gate.cancelledBeforeStartup.registrationExit !== 113) ||
+              gate.configurationChannel !== undefined && (gate.helperSource !== "production-bundled-job-helper" ||
+                gate.configurationChannel.source !== "production-encodeDarwinJob" || gate.configurationChannel.framing !== "OMAJOB1" ||
+                !Number.isSafeInteger(gate.configurationChannel.bytes) || gate.configurationChannel.bytes < 32 ||
+                gate.configurationChannel.bytes > 262144 || !/^[0-9a-f]{64}$/.test(gate.configurationChannel.sha256) ||
+                JSON.stringify(gate.configurationChannel.slots) !== JSON.stringify([0, 1, 2, 7, 3]) ||
+                gate.configurationChannel.imageStages !== 2 || gate.configurationChannel.heldCwd !== true ||
+                gate.configurationChannel.privateTrace !== true || gate.configurationHandlesReturned !== true ||
+                gate.configurationReturnError !== undefined || !Number.isSafeInteger(gate.beforeConfigAttack?.pid) ||
+                gate.beforeConfigAttack.pid <= 1 || gate.beforeConfigAttack.pid === gate.expectedHostToken[5] ||
+                !Number.isInteger(gate.rejectedBeforeReady) || gate.rejectedBeforeReady < 2 ||
+                typeof gate.heldCwd?.selected?.path !== "string" || !gate.heldCwd.selected.path.startsWith("/") ||
+                typeof gate.heldCwd.replacement?.path !== "string" || !gate.heldCwd.replacement.path.startsWith("/") ||
+                gate.heldCwd.selected.path === gate.heldCwd.replacement.path ||
+                !/^[1-9][0-9]*$/.test(gate.heldCwd.selected.ino) || !/^[1-9][0-9]*$/.test(gate.heldCwd.replacement.ino) ||
+                gate.heldCwd.selected.ino === gate.heldCwd.replacement.ino || gate.heldCwd.replacementEffect !== false ||
+                JSON.stringify(gate.tools?.cwd) !== JSON.stringify(gate.heldCwd.selected) ||
+                typeof gate.heldCwd.hostCwd !== "string" || gate.heldCwd.hostCwd !== gate.heldCwd.hostCwdAfter) ||
               gate.expectedCdHashes !== undefined &&
                 (!Array.isArray(gate.expectedCdHashes) || !gate.expectedCdHashes.length ||
                   gate.expectedCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash)) ||

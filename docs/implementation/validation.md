@@ -1160,10 +1160,47 @@ Linux native-all은 **4762/4762 PASS·fail/cancel/skip/todo0·errors[]·sourceCh
 `48fe128087b6a256dfaf374c826265cc609eec8fb7677e2535ecb0a16d66e2b1`를 대조했다.
 이는 새 pin 변경 전 입력이며 `held-profile/art-13315353900/all/result.json`에 보존한다.
 
+### Fresh process pin의 실제 Mac 관측
+
+Native [41822856093](https://github.com/minjung2035/oma-v2-ci/actions/runs/41822856093), `7effb8103ca`의
+Mac15·26 각 regular/pipe3회, 합계12 gate가 OBSERVED다. production pin의 stopped helper resume,
+별도 one-shot의 첫 명령 전 exact-token SIGKILL·trace 없음·CID empty·registration113, 같은 PID의
+Seatbelt→Node exec 뒤 old pin `changed`/resume=false/terminate=false, 새 Node pin stopped→exited와
+dead terminate=false, 모든 task-name/queue 반환을 확인했다. 이는 실제 PID 번호 재사용이나 제품 전체 복구 증명은 아니다.
+
+양 Mac common은 각306/306·skip0으로 새 실제 pipe5개와 공유 owner 상태8개도 실행했다. packed는
+기존 Git preparation 차단으로 각26/27이다. 입력15835개 `e684025c62f3e57fc7210823512169cbaed4fb7dfa812a2368290ddcc81f2ba1`와
+runtime은 gate/common 모두 전후 같다. root `process-pin/`의 gate artifact Mac15 `13318266538`·Mac26
+`13317194451`는 API SHA-256 `e51ad7fa2c3110773199ce3c81cb5688f613531ba015d4ecfd3d6ebdf1f5a58e`·
+`de2f1ae87e04a6c46f8383e5a5dedcd37a1d4416277b8d713c62208ecee5e752`와 대조했다. common `13317014116`·
+`13318415913`의 SHA-256은 `2edf17aa9816d194dffbb1ac8f0caabb9707b5ce048a42cc0f4afa986007939c`·
+`917fd6b9b0a375d7dd3394d8026733f1622d35bd64ffa43710eb2c4abdf9ee7c`다. 모든 product gate는 OPEN이다.
+
+### Production job helper의 private 설정·held cwd — 실제 Mac 실행 전
+
+기존 controlled Mach helper를 `@oma/platform-mac`의 compiled asset으로 이관했다. workload argv/env는
+public launchd definition에서 제거하고 authenticated Host의 별도 fileport에 `OMAJOB1` frame으로 전달한다.
+C decoder는 완전한 frame/EOF·총량·개수·stdio/중복/범위·문자열·환경을 검사한다. cwd도 별도 held-directory
+fileport의 `fchdir`이며 Node Host의 cwd는 바꾸지 않는다. 진단은 전달된 private FD에만 기록하고,
+child에는 명시한 descriptor만 `CLOEXEC_DEFAULT` file actions로 준다. 단일/두 image stage를 지원한다.
+setup alarm과 workload deadline을 분리하고 workload 중 original Host generation 손실을 관측한다.
+
+실제 portable C decoder에서 빈 인자·개행·한글·환경·literal shell metacharacter의 bytes와 snapshot,
+잘린/초과/불법/중복/trailing frame 거절을 실행했다. 관련 platform/parser108/108·skip0과 실제 SDK26.5
+arm64 object compile도 통과했다. 최초 golden 문자열 길이의 1-byte 오기는 시험 작성 오류로 정정했으며
+제품의 수정 전 실패 근거로 쓰지 않는다. 이 입력의 **실제 Mac helper 실행은 NOT_RUN**이다.
+같은 production helper를 기존 실제 Mach gate에 연결해 foreign CONFIG fileport 거절과 FD 반환을
+검사하도록 했다. 기존 C fixture 복사본은 제거했다. 아직 제품 scope/journal producer 연결·전체 gate 완료가 아니다.
+cwd의 원래 경로를 다른 inode로 바꾼 뒤에도 held directory에서 상대 쓰기를 하고 replacement에는 효과가
+없는지, Host cwd가 보존되는지도 실제 Mac oracle에 추가했다. 위 portable C decoder와 추가 parser38/38,
+독립 packed 설치27/27·구조 검사·생성된 controlled Node syntax도 통과했다. XNU의
+[fileport 전송 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_descrip.c#L390)는
+`DTYPE_VNODE`의 전송 가능성을 설명하지만 실제 directory handoff의 대체 근거로 쓰지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `e684025c62f3e57fc7210823512169cbaed4fb7dfa812a2368290ddcc81f2ba1` (15835 files).
+verification input digest `3189100e6e802b4bb4557588a8a5a87dcd609efddf9741913a41fb3f11840ded` (15839 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
