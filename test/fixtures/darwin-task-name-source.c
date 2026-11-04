@@ -14,6 +14,11 @@
 #include "../../packages/platform-mac/src/seatbelt/main.c"
 #undef main
 
+/* The kobject RPC uses natural_t on both SDKs. SDK 15 does not publish SDK
+ * 26's ipc_info_object_type_t enum; these wire values are pinned to the XNU
+ * source used by the native adapter, not inferred from a successful RPC. */
+enum { OMA_TASK_NAME = 20 };
+
 static void checked(int condition, const char *message) {
   if (!condition) { perror(message); exit(70); }
 }
@@ -23,10 +28,10 @@ static void return_ports(mach_port_array_t ports, mach_msg_type_number_t count) 
   if (count) checked(vm_deallocate(mach_task_self(), (vm_address_t)ports, count * sizeof(*ports)) == KERN_SUCCESS, "return port array");
 }
 static void record_name(mach_port_t source, pid_t pid) {
-  ipc_info_object_type_t type = IPC_OTYPE_UNKNOWN; mach_vm_address_t ignored = 0;
+  natural_t type = UINT32_MAX; mach_vm_address_t ignored = 0;
   kern_return_t kind = mach_port_kobject(mach_task_self(), source, &type, &ignored);
   audit_token_t token = {{0}}; mach_msg_type_number_t words = TASK_AUDIT_TOKEN_COUNT;
-  kern_return_t audit = kind == KERN_SUCCESS && type == IPC_OTYPE_TASK_NAME ?
+  kern_return_t audit = kind == KERN_SUCCESS && type == OMA_TASK_NAME ?
     task_info(source, TASK_AUDIT_TOKEN, (task_info_t)&token, &words) : KERN_INVALID_RIGHT;
   unsigned char generation[56] = {0}; errno = 0;
   int bytes = proc_pidinfo(pid, 17, 0, generation, sizeof generation), saved = errno;
@@ -47,9 +52,9 @@ static void probe(pid_t unrelated, int forged) {
       mach_port_insert_right(mach_task_self(), fake, fake, MACH_MSG_TYPE_MAKE_SEND) == KERN_SUCCESS, "fake user-space port");
     source = fake;
   }
-  ipc_info_object_type_t type = 0; mach_vm_address_t ignored = 0;
+  natural_t type = 0; mach_vm_address_t ignored = 0;
   kern_return_t kind = mach_port_kobject(mach_task_self(), source, &type, &ignored);
-  if (kind != KERN_SUCCESS || type != IPC_OTYPE_TASK_NAME) {
+  if (kind != KERN_SUCCESS || type != OMA_TASK_NAME) {
     printf("{\"kind\":\"rejected\",\"kobjectStatus\":%d,\"kobjectType\":%u,\"queryAttempted\":false}\n", kind, type);
   } else {
     audit_token_t token = {{0}}; mach_msg_type_number_t words = TASK_AUDIT_TOKEN_COUNT;

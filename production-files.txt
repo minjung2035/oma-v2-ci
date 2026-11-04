@@ -408,6 +408,7 @@ packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements
 packages/platform-mac/src/launchd-job.ts
 packages/platform-mac/src/mach-address.ts
+packages/platform-mac/src/mach-peer-source.ts
 packages/platform-mac/src/mach-poll.ts
 packages/platform-mac/src/mach-stream.ts
 packages/platform-mac/src/mach-transport.ts

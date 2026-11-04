@@ -958,7 +958,7 @@ value.complete = true; save();
               if (index === 0) { await configurationClosed; assert.equal(configurationWriter.closed, true); }
             }
             setupFiles.length = 0;
-            gate.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB1", bytes: configuration.length,
+            gate.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB2", bytes: configuration.length,
               sha256: createHash("sha256").update(configuration).digest("hex"), slots, imageStages: 2, heldCwd: true, privateTrace: true };
             for (const [index, file] of gateFiles.entries()) await sendGate(0x4f4d4130 + index, file);
             await sendGate(0x4f4d4122, gateSinkSend);

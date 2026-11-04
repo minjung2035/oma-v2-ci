@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { fork, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { closeSync, fstatSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, fstatSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,6 +16,8 @@ import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { bindMachSender } from "@oma/platform-mac/audit-peer";
 import { createMachBrokerTransport, dialMachChannel } from "@oma/platform-mac/mach-transport";
+import { launchSeatbeltJobScope, peerFromMachReceiver } from "@oma/platform-mac/job-scope";
+import { ExecutionCoordinator } from "@oma/process/owned-execution";
 
 assert.equal(process.platform, "darwin", "this probe requires an actual Darwin kernel");
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104, DATA = 0x4f4d4102, HANDOFF = 0x4f4d4110;
@@ -93,7 +96,8 @@ async function listener(path, accept) {
   listener.on("error", error => faults.push(error));
   returns.push(async () => { await bounded(new Promise((resolve, reject) => { try { listener.close(resolve); } catch (error) { reject(error); } }), "listener close"); assert.deepEqual(faults, []); });
   const ready = once(listener, "listening"); listener.listen(path); await bounded(ready, "listener readiness");
-  return transport;
+  const peer = listener.peerSource(); returns.push(() => peer.close());
+  return { transport, peer };
 }
 function claim(socket, transport) {
   const pin = transport.pinPeer(socket); assert.ok(pin);
@@ -108,7 +112,7 @@ function claim(socket, transport) {
 }
 async function roundtrip() {
   const path = address(), expected = payload(), done = deferred(); let sender, observed;
-  await listener(path, (socket, transport) => {
+  const { peer } = await listener(path, (socket, transport) => {
     const pin = claim(socket, transport); sender = pin.pid;
     const bytes = [];
     socket.on("data", chunk => bytes.push(chunk)); socket.on("error", done.reject);
@@ -118,10 +122,47 @@ async function roundtrip() {
     });
     socket.on("close", () => { try { assert.equal(socket.resourcesReturned, true); done.resolve(); } catch (error) { done.reject(error); } });
   });
-  const client = child("child-roundtrip", path);
-  await bounded(done.promise, "server byte stream close"); await joined(client);
-  assert.equal(sender, client.process.pid);
-  return { machStream: { sentBytes: expected.length, receivedBytes: observed.length, sha256: sha256(observed), sender, childJoined: true, authenticatedEof: true, resourcesReturned: true } };
+  await joined(child("child-no-source", path));
+  const client = runConfined("child-roundtrip", path, peer);
+  await bounded(done.promise, "server byte stream close"); await client;
+  return { machStream: { sentBytes: expected.length, receivedBytes: observed.length, sha256: sha256(observed), sender,
+    childJoined: true, authenticatedEof: true, resourcesReturned: true, inheritedPeer: true, noSourceRefused: true } };
+}
+async function runConfined(role, path, peer) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-mach-client-"))), rows = [];
+  const owner = new ExecutionCoordinator({ entries: () => rows.map(row => ({ ...row })), reserve(slot) {
+    const row = { slot, execution: "probe", witness: null }; rows.push(row);
+    return { execution: row.execution, publish(witness) { row.witness = witness; }, retire() { rows.splice(rows.indexOf(row), 1); } };
+  }, retire() { throw new Error("unexpected recovery"); } }, () => ({ kind: "unavailable" }));
+  let returned = false;
+  returns.push(async () => { await owner.drain(); if (returned) rmSync(root, { recursive: true }); });
+  const node = realpathSync(process.execPath), library = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
+  const result = await owner.run({ slot: "client", launch: () => launchSeatbeltJobScope({ executable: node,
+    argv: [self, role, path], env: { HOME: root, TMPDIR: root }, cwd: root,
+    timeoutMs: 20000, stdoutBytes: 8192, stderrBytes: 16384 }, {
+    readable: [{ path: library, kind: "directory" }], mapped: [{ path: library, kind: "directory" }],
+    writable: [{ path: root, kind: "directory" }], denied: [], executable: [{ path: node, kind: "file" }],
+    unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"],
+  }, { peer }), authorize() {} });
+  returned = true;
+  assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
+  assert.deepEqual(rows, []); return result;
+}
+async function wrongPeer() {
+  const path = address(), receiver = listenMachService(serviceFor(path)); returns.push(() => receiver.close());
+  const peer = peerFromMachReceiver(receiver); returns.push(() => peer.close());
+  const impostor = child("child-impostor", unique()); const ready = await impostor.message("ready");
+  const client = runConfined("child-refuse-peer", path, peer);
+  const request = await receive(receiver); assert.equal(request.id, OPEN); assert.equal(request.bytes.length, 48);
+  assert.ok(request.reply); returns.push(() => request.reply.close());
+  const remote = lookupMachService(ready.name); returns.push(() => remote.close());
+  await send(remote, HANDOFF, request.bytes, request.reply);
+  const sent = await impostor.message("sent");
+  assert.equal(sent.pid, impostor.process.pid); assert.notEqual(sent.pid, process.pid);
+  const result = await client;
+  assert.match(result.stdout.toString(), /expected-peer-refused/);
+  impostor.process.send({ kind: "finish" }); await joined(impostor);
+  return { expectedPeer: { originalAlive: true, impostorPid: sent.pid, clientRefused: true, resourcesReturned: true } };
 }
 async function stale() {
   const name = unique(), receiver = listenMachService(name); returns.push(() => receiver.close());
@@ -217,6 +258,23 @@ async function handoff() {
 }
 async function runChild() {
   const commands = mailbox(process);
+  if (mode === "child-no-source") {
+    assert.throws(() => dialMachChannel(process.argv[3], 15), { code: "AUTH_FAILED" }); return;
+  }
+  if (mode === "child-refuse-peer") {
+    const { socket, ready } = dialMachChannel(process.argv[3], 15), closed = deferred();
+    returns.push(() => socket.destroy()); socket.on("error", () => {}); socket.once("close", closed.resolve);
+    await assert.rejects(ready, { code: "AUTH_FAILED" }); await bounded(closed.promise, "refused client close");
+    assert.equal(socket.resourcesReturned, true); console.log("expected-peer-refused"); return;
+  }
+  if (mode === "child-impostor") {
+    const name = process.argv[3], receiver = listenMachService(name), endpoint = createMachEndpoint();
+    returns.push(() => cleanupAll([() => receiver.close(), () => endpoint.receive.close(), () => endpoint.send.close()]));
+    process.send({ kind: "ready", name }); const message = await receive(receiver);
+    assert.equal(message.id, HANDOFF); assert.ok(message.reply); returns.push(() => message.reply.close());
+    await send(message.reply, OPENED, message.bytes, endpoint.send);
+    process.send({ kind: "sent", pid: process.pid }); await commands("finish"); return;
+  }
   if (mode === "child-roundtrip") {
     const { socket, ready } = dialMachChannel(process.argv[3], 15), received = [], ended = deferred(), closed = deferred();
     returns.push(() => socket.destroy()); socket.on("error", ended.reject); socket.on("data", bytes => received.push(bytes));
@@ -238,7 +296,8 @@ async function runChild() {
     await send(message.reply, DATA, packet); process.send({ kind: "sent" }); await commands("finish"); return;
   }
   if (mode === "child-connector") {
-    const remote = lookupMachService(serviceFor(process.argv[3])), local = createMachEndpoint(), nonce = randomBytes(16);
+    const remote = lookupMachService(serviceFor(process.argv[3])), local = createMachEndpoint();
+    const nonce = Buffer.concat([randomBytes(16), createHash("sha256").update(serviceFor(process.argv[3])).digest()]);
     returns.push(() => cleanupAll([() => remote.close(), () => local.send.close(), () => local.receive.close()]));
     await send(remote, OPEN, nonce, local.send); const ack = await receive(local.receive);
     assert.equal(ack.id, OPENED); assert.deepEqual(ack.bytes, nonce); assert.ok(ack.reply); returns.push(() => ack.reply.close());
@@ -253,6 +312,7 @@ try {
   const observation = await withAsyncCleanup(async () => {
     if (mode?.startsWith("child-")) { await runChild(); return null; }
     if (mode === "mach-stream-roundtrip") return roundtrip();
+    if (mode === "mach-stream-wrong-peer") return wrongPeer();
     if (mode === "mach-stream-stale") return stale();
     if (mode === "mach-stream-handoff") return handoff();
     if (mode === "mach-audit-async") return asyncAudit();

@@ -19,7 +19,7 @@ if (process.platform === "darwin") {
   assert.throws(() => machoImageCdHashes(readFileSync(process.execPath), "arm64"), { code: "UNSUPPORTED_PROFILE" });
 }
 assert.equal(Buffer.from(encodeDarwinJob({ executable: "/trusted/node", argv: ["literal"], env: {},
-  timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }, [0, 1, 2], 1)).subarray(0, 8).toString(), "OMAJOB1\0");
+  timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }, [0, 1, 2], 1)).subarray(0, 8).toString(), "OMAJOB2\0");
 const calls = [];
 const store = nativeKeychainStore(async (op, fields) => { calls.push([op, fields.account]); return op === "keychain.get" ? { value: "fixture-only" } : {}; });
 assert.equal(await store.get("engine-managed"), "fixture-only");

@@ -549,7 +549,7 @@ export function validateDarwinObservation(name, observations) {
                 gate.cancelledBeforeStartup.traceCreated !== false || gate.cancelledBeforeStartup.population !== "empty" ||
                 gate.cancelledBeforeStartup.registrationExit !== 113) ||
               gate.configurationChannel !== undefined && (gate.helperSource !== "production-bundled-job-helper" ||
-                gate.configurationChannel.source !== "production-encodeDarwinJob" || gate.configurationChannel.framing !== "OMAJOB1" ||
+                gate.configurationChannel.source !== "production-encodeDarwinJob" || gate.configurationChannel.framing !== "OMAJOB2" ||
                 !Number.isSafeInteger(gate.configurationChannel.bytes) || gate.configurationChannel.bytes < 32 ||
                 gate.configurationChannel.bytes > 262144 || !/^[0-9a-f]{64}$/.test(gate.configurationChannel.sha256) ||
                 JSON.stringify(gate.configurationChannel.slots) !== JSON.stringify([0, 1, 2, 7, 3]) ||

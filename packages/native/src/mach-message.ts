@@ -18,6 +18,9 @@ interface MachCalls {
   refs(task: number, name: number, right: number, delta: number): number;
   deallocate(task: number, name: number): number;
   type(task: number, name: number, result: Buffer): number;
+  registered(task: number, result: Buffer, count: Buffer): number;
+  kobject(task: number, name: number, type: Buffer, address: Buffer): number;
+  freePorts(task: number, address: bigint, bytes: bigint): number;
   checkIn(bootstrap: number, name: string, result: Buffer): number;
   lookup(bootstrap: number, name: string, result: Buffer): number;
   fileport(fd: number, result: Buffer): number;
@@ -40,6 +43,9 @@ function mach(): MachCalls {
     refs: library.func("int mach_port_mod_refs(unsigned int task, unsigned int name, unsigned int right, int delta)"),
     deallocate: library.func("int mach_port_deallocate(unsigned int task, unsigned int name)"),
     type: library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)"),
+    registered: library.func("int mach_ports_lookup(unsigned int task, void *result, void *count)"),
+    kobject: library.func("int mach_port_kobject(unsigned int task, unsigned int name, void *type, void *address)"),
+    freePorts: library.func("int vm_deallocate(unsigned int task, uint64_t address, uint64_t bytes)"),
     checkIn: library.func("int bootstrap_check_in(unsigned int bootstrap, const char *name, void *result)"),
     lookup: library.func("int bootstrap_look_up(unsigned int bootstrap, const char *name, void *result)"),
     fileport: library.func("int fileport_makeport(int fd, void *result)"),
@@ -88,6 +94,7 @@ export interface MachReceiveRight {
   close(): void;
 }
 const sendNames = new WeakMap<MachSendRight, () => number>();
+const receiveNames = new WeakMap<MachReceiveRight, () => number>();
 function ownSend(name: number): MachSendRight {
   const native = mach(); port(name); let closed = false, closeFailure: unknown;
   const openName = (): number => { if (closed) throw new Error("Mach send owner is closed"); return name; };
@@ -153,7 +160,7 @@ function ownReceive(name: number): MachReceiveRight {
     try { success(native.refs(native.task, name, 1 /* RECEIVE */, -1), "release Mach receive right"); }
     catch (error) { closeFailure = error; throw error; }
   };
-  return Object.freeze({
+  const owner: MachReceiveRight = Object.freeze({
     receive(): MachMessage {
       if (closed) throw new Error("Mach receive owner is closed");
       const message = Buffer.alloc(HEADER_BYTES + INLINE_BYTES + AUDIT_TRAILER_BYTES + 4);
@@ -204,6 +211,52 @@ function ownReceive(name: number): MachReceiveRight {
     },
     close,
   });
+  receiveNames.set(owner, () => { if (closed) throw new Error("Mach receive owner is closed"); return name; });
+  return owner;
+}
+/** Derive a SEND reference from our actual receive owner. A namespace lookup
+ * cannot substitute a different endpoint in this capability handoff. */
+export function sendToMachReceiver(receiver: MachReceiveRight): MachSendRight {
+  const name = receiveNames.get(receiver)?.();
+  if (name === undefined) throw new TypeError("endpoint must be an open native Mach receive owner");
+  const api = mach(); success(api.insert(api.task, name, name, 20 /* MAKE_SEND */), "derive endpoint send reference");
+  return ownSend(name);
+}
+export function duplicateMachSendRight(source: MachSendRight): MachSendRight {
+  const name = sendNames.get(source)?.();
+  if (name === undefined) throw new TypeError("source must be an open native Mach send owner");
+  const api = mach(); success(api.refs(api.task, name, 0 /* SEND */, 1), "copy endpoint send reference");
+  return ownSend(name);
+}
+/** Fixed launch slot 2 is an ordinary user endpoint, never a task, bootstrap
+ * lookup or arbitrary caller-supplied port. Slot 1 separately authenticates
+ * its expected sender; possession alone grants no role or RPC authority. */
+export function inheritedMachPeerEndpoint(): MachSendRight {
+  const api = mach(), address = Buffer.alloc(8), count = Buffer.alloc(4);
+  success(api.registered(api.task, address, count), "read inherited endpoint slots");
+  const length = count.readUInt32LE(), pointer = address.readBigUInt64LE();
+  let names: number[] = [], result: MachSendRight | undefined;
+  const cleanup = (): void => cleanupAll([
+    ...names.filter(name => name !== 0 && name !== 0xffffffff).map(name => () => success(api.deallocate(api.task, name), "return inherited slot reference")),
+    () => { if (length !== 0) success(api.freePorts(api.task, pointer, BigInt(length) * 4n), "return inherited slot array"); },
+  ]);
+  try {
+    return withCleanup(() => {
+      if (length > 3 || length !== 0 && pointer === 0n) throw new StoreError("AUTH_FAILED", "invalid inherited endpoint array");
+      if (length !== 0) {
+        const decoded: unknown = decode(decode(address, "void *"), "uint32_t", length);
+        if (!(decoded instanceof Uint32Array) || decoded.length !== length) throw new StoreError("AUTH_FAILED", "invalid inherited endpoint layout");
+        names = Array.from(decoded);
+      }
+      const name = names[2], bits = Buffer.alloc(4), type = Buffer.alloc(4), ignored = Buffer.alloc(8);
+      if (name === undefined || name === 0 || name === 0xffffffff || api.type(api.task, name, bits) !== 0 ||
+          (bits.readUInt32LE() & 0x110000) !== 0x10000 /* SEND, no DEAD_NAME */ ||
+          api.kobject(api.task, name, type, ignored) !== 0 || type.readUInt32LE() !== 0xffffffff /* IPC_OTYPE_UNKNOWN */)
+        throw new StoreError("AUTH_FAILED", "inherited peer endpoint is unavailable");
+      success(api.refs(api.task, name, 0 /* SEND */, 1), "retain inherited peer endpoint");
+      result = ownSend(name); return result;
+    }, cleanup);
+  } catch (error) { return withCleanup(() => { throw error; }, () => result?.close()); }
 }
 /** Independent owners for one local endpoint's receive and send references. */
 export function createMachEndpoint(): { readonly receive: MachReceiveRight; readonly send: MachSendRight } {

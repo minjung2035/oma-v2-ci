@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { closeSync, readSync, writeSync } from "node:fs";
 import { controlPipe } from "@oma/native/control-socket";
 import { currentDarwinAuditToken } from "@oma/native/audit-session";
-import { createMachEndpoint, createMachFilePort, openMachFilePort } from "@oma/native/mach-message";
+import { createMachEndpoint, createMachFilePort, duplicateMachSendRight, sendToMachReceiver, openMachFilePort } from "@oma/native/mach-message";
 
 test("001. A full actual Mach queue returns fileport send copies and permits bounded delivery retry", { timeout: 15000 }, t => {
   if (process.platform !== "darwin") {
@@ -43,4 +43,19 @@ test("001. A full actual Mach queue returns fileport send copies and permits bou
   close(received); delivered.reply.close(); source.close();
   assert.equal(endpoint.receive.receive().kind, "again");
   assert.throws(() => writeSync(pipe.write, Buffer.from([1])), { code: "EPIPE" }, "every received and pseudo-received reader was returned");
+});
+
+test("002. Actual receiver-derived send owners retain independent references and reject copied JS shapes", t => {
+  assert.throws(() => sendToMachReceiver({ receive() {}, close() {} }), TypeError);
+  assert.throws(() => duplicateMachSendRight({ send() {}, destination() {}, close() {} }), TypeError);
+  if (process.platform !== "darwin") return assert.throws(createMachEndpoint, { code: "UNSUPPORTED_PROFILE" });
+  const endpoint = createMachEndpoint(), derived = sendToMachReceiver(endpoint.receive), copy = duplicateMachSendRight(derived);
+  t.after(() => { endpoint.receive.close(); endpoint.send.close(); derived.close(); copy.close(); });
+  endpoint.send.close(); derived.close();
+  assert.equal(copy.send(123, Buffer.alloc(4)), "sent");
+  const message = endpoint.receive.receive(); assert.equal(message.kind, "data"); assert.equal(message.id, 123);
+  assert.equal(message.sender.pid, process.pid); assert.equal(message.reply, null);
+  assert.throws(() => duplicateMachSendRight(derived), /closed/);
+  endpoint.receive.close(); assert.throws(() => sendToMachReceiver(endpoint.receive), /closed/);
+  assert.equal(copy.destination(), "dead");
 });

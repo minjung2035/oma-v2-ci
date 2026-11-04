@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "a48188b8497bfb1948dc3eb9d07dcb1abe9658dffd7c5c3b46a58823596afb54",
+  "manifest": "c1443968daa0be7903dd0c6e0f78fb79f249820381526e97d1924414e8072b61",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1200,7 +1200,7 @@
     },
     {
       "path": "packages/file-descriptors/src/index.ts",
-      "sha256": "fda49aaad1913d799f66c501dfc6eb96b5094c40801e8e9b4d2e5d6c3108ad87"
+      "sha256": "ab21ca5b45be054b4d74c83a3589418f17b914d32918d9c8722273722da11db1"
     },
     {
       "path": "packages/git/package.json",
@@ -1444,7 +1444,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "03316be678831ccc04e669695f518a272dc3cf6400a2403614aa80b3eb9cec42"
+      "sha256": "51343502c98f2c376c4f0fd7eaa271e7e4da0f3b9370fd0e8717cd8d82b26b9a"
     },
     {
       "path": "packages/native/src/audit-token.ts",
@@ -1484,7 +1484,7 @@
     },
     {
       "path": "packages/native/src/mach-message.ts",
-      "sha256": "6111c0d23fcc7ebbf71e636c0edd7542cf7ddb9ee44f3e49c872ec8e78b59311"
+      "sha256": "35a332748a387992cfbd165978e5de8f219ddba6c3bfc78818eb8ea3866de52f"
     },
     {
       "path": "packages/native/src/metadata-observation.ts",
@@ -1600,19 +1600,19 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "e87fc41e85b64c692b93aba59c80a37b55a2c6806c4af375ebd4371af84725ca"
+      "sha256": "d4d3b92da6416a0805a41be6a96052e3d593d0897b9d818ce2ab9376b80d140c"
     },
     {
       "path": "packages/platform-mac/src/job-helper/config.h",
-      "sha256": "7587cb3d4d922d642d4ce8bd9865f829b0928b1a9addb85e5bc607ba6c58073b"
+      "sha256": "8cbb8ab392b1145d411c969c9c018e56a00c1ae8e327f5eddaaaf8f181046888"
     },
     {
       "path": "packages/platform-mac/src/job-helper/main.c",
-      "sha256": "43bff55fec7ad01733de54fb76bcde37f1c4508904e49c4f4e8df7a31e37cf4d"
+      "sha256": "e9135113e813b4e60697e624a682f3e2ad59d5f2fdc9fccfa02d95759b808e4f"
     },
     {
       "path": "packages/platform-mac/src/job-launch.ts",
-      "sha256": "51342d05547851ee491703f1d4da495eeb8dedb612d408e870f223b3644651db"
+      "sha256": "f76dc886e10dc184c161473c4c822e81800693a1df141b087e86655b37cc5da7"
     },
     {
       "path": "packages/platform-mac/src/job-recovery.ts",
@@ -1620,7 +1620,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-scope.ts",
-      "sha256": "e83b54599cde90eacf6325dd15f4fc0366b5aba09634288191f3d359be12ff7c"
+      "sha256": "a722dc41468bfcb3dea7c455af8a32b906aef155c87c217a0abe0f3af1f6f4df"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1643,6 +1643,10 @@
       "sha256": "5f3f44cbc57ab43ff97fedeb77321f9fdf40edddf6cf6691f9244e6592129088"
     },
     {
+      "path": "packages/platform-mac/src/mach-peer-source.ts",
+      "sha256": "ea52df9694da20796c164235a54a416289a64d0ea5a8526fd4413ff0cc882828"
+    },
+    {
       "path": "packages/platform-mac/src/mach-poll.ts",
       "sha256": "108a0a8596707b8d09c711ceea3b8f6765e8273b2ba7dae2e6705d36400c3b8f"
     },
@@ -1652,7 +1656,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "e658d591138045ed6431e7ec211ade3e139f64b70fd908f228fe921000048ced"
+      "sha256": "5645d628759c5e0cb91021ba575cabcd04e76c240cde85b8089ac834b7633ecf"
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",

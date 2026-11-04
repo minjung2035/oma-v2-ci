@@ -585,12 +585,13 @@ test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal",
   }
   proxy.machGate = pinned; validate();
   pinned.helperSource = "production-bundled-job-helper";
-  pinned.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB1", bytes: 100,
+  pinned.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB2", bytes: 100,
     sha256: "e".repeat(64), slots: [...slots], imageStages: 2, heldCwd: true, privateTrace: true };
   pinned.heldCwd = { selected: { path: "/held-moved", dev: "1", ino: "2" }, replacement: { path: "/held", dev: "1", ino: "3" },
     replacementEffect: false, hostCwd: "/host", hostCwdAfter: "/host" }; pinned.tools.cwd = structuredClone(pinned.heldCwd.selected);
   pinned.configurationHandlesReturned = true; pinned.beforeConfigAttack = { pid: child + 4 }; pinned.rejectedBeforeReady = 2; validate();
   for (const corrupt of [value => { value.helperSource = "fixture"; }, value => { value.configurationChannel.bytes = 262145; },
+    value => { value.configurationChannel.framing = "OMAJOB1"; },
     value => { value.configurationChannel.slots.pop(); }, value => { value.configurationChannel.imageStages = 1; },
     value => { value.configurationChannel.heldCwd = false; }, value => { value.configurationHandlesReturned = false; },
     value => { value.configurationReturnError = "writer unknown"; }, value => { value.beforeConfigAttack.pid = host; },

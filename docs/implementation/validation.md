@@ -1560,10 +1560,63 @@ hosted arm64 미취득 중 관측을 계속하기 위해 [공식 Intel26 label](
 common matrix에 보조로 추가했다. Intel26과 기존 arm64가 첫 두 slot을 사용하며 모든 Ubuntu/Mac15/gate를 유지한다.
 Intel의 결과를 arm64 target qualification으로 승격하지 않는다. 새 architecture/실행 순서의 효과도 아직 NOT_RUN이다.
 
+### SOURCE41 실제 Mac26 arm64 결과와 새 peer 채널 연결
+
+Native [41867409124](https://github.com/minjung2035/oma-v2-ci/actions/runs/41867409124)의 source
+`ca39f54f6ecd6f4ae75f32f37e1413efbc7c6709`에서 Mac26 arm64 공통 runtime **341/341 PASS**,
+fail/cancel/skip/todo0을 확인했다. 입력15858개 digest
+`994efb0e3638d77d38188525447aef34ce43874989d206ecdd2714ac81e0ae2e`와 runtime 산출물은 shared 전후 같았다.
+eager artifact13342927114의 SHA-256은 `5554993bd829778eee0914f9c0dd22dfb61c4c5f1d820aa59300bd093ca54e77`다.
+full artifact13344046616의 SHA-256 `d28a56905fe0bb48c6910dede7f68f5a65901958676f008f75dc5a17af075608`도 대조했다.
+
+실제 Seatbelt·Node 안에서 inherited task-name20·full audit8 words·서로 다른 positive CID와 native source pin을 확인했다.
+자기 task-name과 user port는 거절됐다. 원래 Host의 ordinary exec/death 뒤 기존 pin과 **새 Node client** 모두
+원래 capability를 거절했다. C에서는 exec 뒤 원래 name의 kobject15·audit17 실패와 새 pidVersion을 관측했다.
+host UUID와 held directory statfs 관측도 독립 C와 일치했다. Mach pin의 boot/CID callback은 실제 kernel sender로
+확인했지만 실제 Actor/run admission을 완료한 검사는 아니다.
+
+독립 패키지는26/27이며 기존 Git preparation guard1 FAIL이다. 전체 Mac 지원 완료로 쓰지 않는다.
+Mac26 gate는 runner 미취득으로 cancelled다. Mac15 common은336/341·5 FAIL이며 새 task-name C fixture가
+SDK15에 없는 enum typedef/상수 이름 때문에 compile 전에 거절됐다. artifact13344908519의 SHA-256
+`8160aa5f6dc935824b7c03e048eb17d2aa3e1d79f491fb0881b4a4605e805733`을 대조했다. kernel 동작 실패로 해석하지 않는다.
+후속 fixture는 동일 natural_t RPC ABI와 고정 XNU wire 값20/UINT32_MAX를 사용한다. 실제 Mac15 재실행은 NOT_RUN이다.
+보조 Intel26 공통은320/341·21 FAIL로, unsigned main-image 거절과 fdopendir/readdir ABI 혼용을 확인했다.
+ABI 수정은 후속 입력에 포함했으나 실제 Intel 재실행 전이다. arm64 목표와 보조 Intel 결과를 합치지 않는다.
+
+같은 source의 Ubuntu selected integration은471/472이며 V23A mixed event-loop lag185ms로 기존100ms 예산을 넘었다.
+원시 artifact13344168576 SHA-256 `fe0f5453a4b77eaf84da3a2438d48fff6e93bf290a8559f2027076c07e959806`을 대조했다.
+원래 SOURCE36의 간헐323ms와 별개 입력의 재발이며 원인 수리로 쓰지 않는다. 별도 frozen SOURCE41 worktree의
+전체 Linux 실행은 진행 중이고 관측한 V23A는 mixed37ms·read27ms·writeMax56ms였다. 전체 완료 결과는 아직 아니다.
+그 실행과 공식 Architecture41867409213 모두 optional scope port 두 항목의 stale interface fingerprint를 찾았다.
+공식 baseline은 사전44/44·main4757/4758·fail1이고 fast1182/1183도 같은 fingerprint 실패다.
+durable937/937·property42/42·stress16/16·platform79/79는 PASS다. 공식 ZIP13345266311의 SHA-256은
+`b46aa9db8a67ab29cefa5a574589cda138e19772ac35a3cc715397188440227b`다.
+현재 contract golden은 의도한 PinnedPeerIdentity/BrokerUnits 두 항목만 갱신했다. public/durable DTO·역사 snapshot은
+유지했고 전체 contract evolution7/7이 통과했다. 이는 새 권한 승인이나 성능 실패의 수리가 아니다.
+
+후속 구현은 listener의 **실제 소유 receive right**에서 SEND를 만들고 자기 kernel token을 함께 capture한다.
+namespace lookup으로 endpoint를 다시 얻지 않는다. private OMAJOB2 frame과 authenticated PEER packet을 받은 C helper는
+genuine read-only task-name을 다시 얻어 full token·same UID·distinct CID를 확인한 뒤 registered slots
+`[discard, task-name, endpoint]`만 넘긴다. 원래 peer의 exec/death는 helper의 live 검사에서도 거절된다.
+공유 launch owner의 witness→prepared→현재 authority→release 순서는 유지한다.
+
+client dial은 fixed inherited source/endpoint를 요구하며 public-name lookup fallback을 제거했다.
+OPEN/OPENED의 nonce와 endpoint-purpose hash는 상관관계만 정하고, genuine kernel full token과 source/watch liveness가
+모든 수신·송신의 peer 근거다. 매 요청의 current Actor/run/lease 검사는 기존 공통 Broker owner가 계속 소유한다.
+다른 살아 있는 signed Node가 reply right를 넘겨받아 응답하는 negative와 actual Seatbelt job의393217-byte 왕복·EOF를
+새 실제 OS 회귀에 넣었다. **이 새 producer/consumer 경로의 실제 Mac 실행은 NOT_RUN**이다.
+local build와 관련73/73·skip0은 PASS지만 Linux의 Mac 시나리오는 platform refusal이다.
+변경한 @oma/platform-mac와 선언된 dependency7개만 pack/install한 설치 검사는 PASS다. monorepo에서 installed-runtime을
+직접 부른 첫 시도는 의도한 absent-dependency assertion에 걸렸으며 독립 설치 결과로 사용하지 않았다.
+추가 V23A sync-fs trace 실행은 mixed66ms·read23ms·writeMax85ms, 가장 긴 관측 fsync3.526ms였다.
+CI의185ms를 재현하거나 설명하지 못했으며100ms 예산은 유지한다.
+private Runner/Worker topology, 설치 JS·dependency generation, Society lease·manual reboot recovery는 미완료이며
+G-AUTH/G-PROCESS/G-FILES OPEN·product BLOCKED·execution guard를 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `994efb0e3638d77d38188525447aef34ce43874989d206ecdd2714ac81e0ae2e` (15858 files).
+verification input digest `78e8f5d8d1bc458cf4038133fffbaea24d679d6391dcc91290089ba6418d1d52` (15860 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

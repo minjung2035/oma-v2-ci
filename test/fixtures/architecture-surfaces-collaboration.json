@@ -1,6 +1,6 @@
 {
   "schema": 4,
-  "note": "collaboration-v1 / DR72 current consumer interfaces. The DR49–69 native snapshot remains in architecture-surfaces-native.json. This fixture records the explicit original-invocation, accepted publication/review and role-record ports; it is a source contract, not authored approval or runtime/platform/provider qualification. 2026-11-04 reviewed delta: internal prepare forwards the actual response budget and completion accepts compact identity while retaining canonical receipt proof; no model/public mutation method was added.",
+  "note": "collaboration-v1 / DR72 current consumer interfaces. The DR49–69 native snapshot remains in architecture-surfaces-native.json. This fixture records the explicit original-invocation, accepted publication/review and role-record ports; it is a source contract, not authored approval or runtime/platform/provider qualification. 2026-11-04 reviewed delta: internal prepare forwards the actual response budget and completion accepts compact identity while retaining canonical receipt proof; no model/public mutation method was added. MAC current-scope binding adds optional physical inScope observation to PinnedPeerIdentity and optional spawn-witness scopeIdentity to BrokerUnits. Only those two dispatch fingerprints change; these mechanisms grant no Actor/run authority and this snapshot is not runtime qualification or authored approval.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
       "PeerIdentity": {
@@ -9,7 +9,7 @@
       },
       "PinnedPeerIdentity": {
         "exported": true,
-        "sha256": "153b5f2b764bed5d06b9477018ad7c412e8cd77b7438f3ab71b71ddbd3947ea6"
+        "sha256": "18ab5069e16e01a5d3c7320649fb11a9f67882bc8d1a8b19ca15e57febd2fee2"
       },
       "PublicAgentView": {
         "exported": true,
@@ -81,7 +81,7 @@
       },
       "BrokerUnits": {
         "exported": true,
-        "sha256": "b457e97b3c02b6e428d703c416dd1279a9a8ae52ea8c4ad064a5fc4cdb77e6ed"
+        "sha256": "67a0077bffb1b98b00b9aa45c39e93f1377f8fe7ba8afc307fc0cf29d3ebaecf"
       },
       "BrokerViews": {
         "exported": true,

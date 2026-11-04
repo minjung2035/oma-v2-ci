@@ -5,12 +5,12 @@
  */
 import { EventEmitter } from "node:events";
 import type { Duplex } from "node:stream";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { StoreError } from "@oma/domain/errors";
 import { deadline } from "@oma/process/deadline";
 import type { PacketStream } from "@oma/process/packet-stream";
 import {
-  createMachEndpoint, listenMachService, lookupMachService,
+  createMachEndpoint, inheritedMachPeerEndpoint, isMachAuditSender, listenMachService,
   type MachMessage, type MachReceiveRight, type MachSendRight, type MachAuditSender,
 } from "@oma/native/mach-message";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
@@ -18,6 +18,8 @@ import { bindMachSender, type MachPeerPin, type MachPeerBinding } from "./audit-
 import { machStream } from "./mach-stream.js";
 import { machPoll } from "./mach-poll.js";
 import { machRendezvousName } from "./mach-address.js";
+import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
+import { peerFromMachReceiver, type DarwinJobPeer } from "./mach-peer-source.js";
 
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104;
 const unavailable = (message: string): StoreError => new StoreError("BROKER_UNAVAILABLE", message);
@@ -31,12 +33,18 @@ type Packet = Extract<MachMessage, { kind: "data" }>;
  * handshake is pending. No bearer/PID from a body becomes peer evidence.
  */
 export function dialMachChannel(path: string, handshakeSeconds: number): { readonly socket: Duplex; readonly ready: Promise<void> } {
-  const name = machRendezvousName(path), ms = duration(handshakeSeconds), nonce = randomBytes(16);
+  const name = machRendezvousName(path), ms = duration(handshakeSeconds);
+  const nonce = Buffer.concat([randomBytes(16), createHash("sha256").update(name).digest()]);
   const expires = performance.now() + ms;
-  const service = lookupMachService(name);
+  const source = pinInheritedDarwinPeer();
+  let service: MachSendRight;
+  try { service = inheritedMachPeerEndpoint(); }
+  catch (error) { return withCleanup(() => { throw error; }, () => source.close()); }
+  const expected = (sender: MachAuditSender): boolean => isMachAuditSender(sender) && source.alive() &&
+    sender.token.every((word, index) => word === source.token[index]);
   let local: ReturnType<typeof createMachEndpoint>;
   try { local = createMachEndpoint(); }
-  catch (error) { return withCleanup(() => { throw error; }, () => service.close()); }
+  catch (error) { return withCleanup(() => { throw error; }, () => cleanupAll([() => service.close(), () => source.close()])); }
   let remote: MachSendRight | null = null, pin: MachPeerPin | null = null, opened = false, sent = false;
   let binding: MachPeerBinding | undefined;
   let poll: ReturnType<typeof machPoll> | undefined, cancel = (): void => {};
@@ -46,14 +54,18 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
   const socket = machStream({
     receive: local.receive,
     send: {
-      send: (id, bytes, reply) => remote === null ? "again" : remote.send(id, bytes, reply),
-      destination: () => remote?.destination() ?? "unknown",
+      send: (id, bytes, reply) => {
+        if (remote === null) return "again";
+        if (!source.alive() || pin === null || !pin.alive()) throw new StoreError("AUTH_FAILED", "expected Mach peer is no longer live");
+        return remote.send(id, bytes, reply);
+      },
+      destination: () => source.alive() ? remote?.destination() ?? "unknown" : "unknown",
       close: () => remote?.close(),
     },
-  }, sender => pin !== null && pin.sameSender(sender) && pin.alive(), async () => {
+  }, sender => expected(sender) && pin !== null && pin.sameSender(sender) && pin.alive(), async () => {
     reject(unavailable("Mach connection ended before readiness"));
     await withAsyncCleanup(async () => {
-      cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => pin?.close()]);
+      cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => pin?.close(), () => source.close()]);
     }, () => binding?.close());
   }, () => opened);
   const fail = (error: unknown): void => {
@@ -65,6 +77,7 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
   socket.on("error", reject);
   const receive = (): void => {
     if (socket.destroyed || opened || binding !== undefined) return;
+    if (!source.alive()) { fail(new StoreError("AUTH_FAILED", "expected Mach peer ended during connection")); return; }
     if (performance.now() >= expires) { fail(unavailable("Mach rendezvous deadline exceeded")); return; }
     if (!sent) {
       if (service.send(OPEN, nonce, local.send) === "again") return;
@@ -74,7 +87,7 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
     if (message.kind === "again") return;
     let transferred = false;
     withCleanup(() => {
-      if (message.id !== OPENED || message.reply === null || !message.bytes.equals(nonce))
+      if (message.id !== OPENED || message.reply === null || !message.bytes.equals(nonce) || !expected(message.sender))
         throw new StoreError("AUTH_FAILED", "invalid Mach rendezvous reply");
       remote = message.reply; transferred = true;
       binding = bindMachSender(message.sender);
@@ -83,6 +96,7 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
       void acquisition.ready.then(() => {
         if (socket.destroyed) return;
         if (performance.now() >= expires) throw unavailable("Mach rendezvous deadline exceeded");
+        if (!expected(message.sender)) throw new StoreError("AUTH_FAILED", "expected Mach peer changed during connection");
         pin = acquisition.take();
         cleanupAll([() => service.close(), () => local.send.close(), cancel, () => poll?.close()]);
         opened = true; resolve();
@@ -103,6 +117,7 @@ interface Pending {
 }
 class MachListener extends EventEmitter {
   private receiver: MachReceiveRight | null = null;
+  private purpose: Buffer | null = null;
   private poll: ReturnType<typeof machPoll> | null = null;
   private readonly pending = new Set<Pending>();
   private readonly checking = new Set<Promise<void>>();
@@ -120,6 +135,7 @@ class MachListener extends EventEmitter {
     this.started = true;
     try {
       this.receiver = listenMachService(machRendezvousName(path));
+      this.purpose = createHash("sha256").update(machRendezvousName(path)).digest();
       this.poll = machPoll(() => this.tick(), error => {
         this.poll?.close();
         if (error instanceof AggregateError) this.closeFailure ??= error;
@@ -129,6 +145,12 @@ class MachListener extends EventEmitter {
       queueMicrotask(() => { if (!this.closing) this.emit("listening"); });
     } catch (error) { queueMicrotask(() => this.emit("error", error)); }
     return this;
+  }
+  /** Borrow this listener's actual owned endpoint for a trusted job launch.
+   * No public service lookup is involved in the handoff. */
+  peerSource(): DarwinJobPeer {
+    if (this.receiver === null || this.closing) throw unavailable("Mach listener has no live peer source");
+    return peerFromMachReceiver(this.receiver);
   }
   private discard(ticket: Pending): void {
     if (!this.pending.delete(ticket)) return;
@@ -149,7 +171,8 @@ class MachListener extends EventEmitter {
     let clientOwned = false, pin: MachPeerPin | null = null, endpoint: ReturnType<typeof createMachEndpoint> | null = null;
     let binding: MachPeerBinding | undefined, expired = false, ticket: Pending | undefined, cancel = (): void => {};
     try {
-      if (message.id !== OPEN || message.bytes.length !== 16 || message.reply === null ||
+      if (message.id !== OPEN || message.bytes.length !== 48 || this.purpose === null ||
+          !message.bytes.subarray(16).equals(this.purpose) || message.reply === null ||
           this.maximum !== undefined && this.pending.size + this.streams.size + this.checking.size >= this.maximum) return;
       const expires = performance.now() + duration(this.seconds);
       binding = bindMachSender(message.sender);

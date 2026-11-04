@@ -8,7 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-struct oma_job_config { uint32_t fd_count, *slots; int stages, trace; char **argv, **env; };
+struct oma_job_config { uint32_t fd_count, *slots, peer[8]; int stages, trace, has_peer; char **argv, **env; };
 struct oma_job_cursor { const unsigned char *at, *end; };
 static _Noreturn void oma_job_refused(void) {
   fputs("invalid private job configuration\n", stderr); _exit(125);
@@ -34,14 +34,15 @@ static char *oma_job_string(struct oma_job_cursor *cursor) {
 }
 static struct oma_job_config oma_job_read(int fd) {
   unsigned char header[32]; oma_job_read_exact(fd, header, sizeof header);
-  if (memcmp(header, "OMAJOB1\0", 8)) oma_job_refused();
+  if (memcmp(header, "OMAJOB2\0", 8)) oma_job_refused();
   struct oma_job_cursor cursor = { header + 8, header + sizeof header };
   uint32_t size = oma_job_word(&cursor), argc = oma_job_word(&cursor), envc = oma_job_word(&cursor);
   struct oma_job_config result = {0}; result.fd_count = oma_job_word(&cursor);
-  result.stages = (int)oma_job_word(&cursor); result.trace = (int)oma_job_word(&cursor);
+  result.stages = (int)oma_job_word(&cursor); uint32_t flags = oma_job_word(&cursor);
+  result.trace = (int)(flags & 1); result.has_peer = (flags & 2) != 0;
   if (size < sizeof header || size > 262144 || argc < 1 || argc > 16384 || envc > 4096 ||
       result.fd_count < 3 || result.fd_count > 128 || (result.stages != 1 && result.stages != 2) ||
-      (result.trace != 0 && result.trace != 1)) oma_job_refused();
+      (flags & ~3U) != 0) oma_job_refused();
   unsigned char *body = malloc(size - sizeof header); if (body == NULL) oma_job_refused();
   oma_job_read_exact(fd, body, size - sizeof header);
   unsigned char extra; if (read(fd, &extra, 1) != 0 || close(fd) != 0) oma_job_refused();
@@ -56,6 +57,10 @@ static struct oma_job_config oma_job_read(int fd) {
     result.slots[i] = slot; if (slot < 3) standard |= 1U << slot;
   }
   if (standard != 7) oma_job_refused();
+  if (result.has_peer) {
+    for (int i = 0; i < 8; ++i) result.peer[i] = oma_job_word(&cursor);
+    if (result.peer[1] == 0 || result.peer[5] < 2 || result.peer[5] > INT32_MAX || result.peer[7] == 0) oma_job_refused();
+  }
   for (uint32_t i = 0; i < argc; ++i) result.argv[i] = oma_job_string(&cursor);
   if (result.argv[0][0] != '/') oma_job_refused();
   for (uint32_t i = 0; i < envc; ++i) {

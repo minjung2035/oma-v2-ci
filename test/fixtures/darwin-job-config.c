@@ -10,6 +10,8 @@ int main(void) {
   struct oma_job_config config = oma_job_read(STDIN_FILENO);
   printf("%d %d\n", config.stages, config.trace);
   for (uint32_t i = 0; i < config.fd_count; ++i) printf("%u ", config.slots[i]);
-  putchar('\n'); strings(config.argv); strings(config.env); oma_job_free(config);
+  putchar('\n');
+  if (config.has_peer) { for (int i = 0; i < 8; ++i) printf("%u ", config.peer[i]); putchar('\n'); }
+  strings(config.argv); strings(config.env); oma_job_free(config);
   return 0;
 }

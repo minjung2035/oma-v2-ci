@@ -12,10 +12,13 @@ import type { DarwinCoalitionIdentity } from "@oma/native/audit-session";
 import { controlPipe } from "@oma/native/control-socket";
 import { startDarwinJobControl, type DarwinJobControl, type DarwinJobFile } from "./job-control.js";
 import { prepareSeatbelt, type SeatbeltPolicy } from "./seatbelt.js";
+import type { DarwinJobPeer } from "./mach-peer-source.js";
+export { inheritedDarwinJobPeer, peerFromMachReceiver, type DarwinJobPeer } from "./mach-peer-source.js";
 
 export interface DarwinJobScopeOptions extends ProcessIOOptions {
   readonly files?: readonly DarwinJobFile[];
   readonly stderrFd?: number;
+  readonly peer?: DarwinJobPeer;
 }
 interface Inputs extends DarwinJobScopeOptions {
   readonly images: readonly string[];
@@ -101,7 +104,7 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     }
     // After child creation is attempted, first acquire its blocked kernel
     // identity. A late cancellation stops that identity before any setup gate.
-    attempted = true; control = await startDarwinJobControl(command, files, images);
+    attempted = true; control = await startDarwinJobControl(command, files, images, undefined, options.peer);
     const job = control, capture = task;
     void job.terminal.then(ended => {
       if (ended.kind === "waited") { status = terminalStatus(ended.waitStatus); onExit(status.code, status.signal); }

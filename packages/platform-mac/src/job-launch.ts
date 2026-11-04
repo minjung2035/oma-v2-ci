@@ -8,25 +8,31 @@ import { fileURLToPath } from "node:url";
 export function bundledJobHelper(): string {
   return fileURLToPath(new URL("./job-helper/oma-job-helper", import.meta.url));
 }
-export function encodeDarwinJob(command: CommandSpec, slots: readonly number[], imageStages: 1 | 2, trace = false): Uint8Array {
+export function encodeDarwinJob(command: CommandSpec, slots: readonly number[], imageStages: 1 | 2, trace = false,
+  expectedPeer?: readonly number[]): Uint8Array {
   const source = snapshotCommand(command), descriptors = [...slots];
   if (!source.executable.startsWith("/") || ![1, 2].includes(imageStages) || typeof trace !== "boolean" ||
       descriptors.length < 3 || descriptors.length > 128 || new Set(descriptors).size !== descriptors.length ||
       ![0, 1, 2].every(fd => descriptors.includes(fd)) ||
       descriptors.some(fd => !Number.isSafeInteger(fd) || fd < 0 || fd > 65535))
     throw new StoreError("UNSUPPORTED_PROFILE", "invalid private Darwin job configuration");
+  const peer = expectedPeer === undefined ? undefined : [...expectedPeer];
+  if (peer !== undefined && (peer.length !== 8 || peer.some(word => !Number.isSafeInteger(word) || word < 0 || word > 0xffffffff) ||
+      peer[1] === 0 || peer[5]! < 2 || peer[5]! > 0x7fffffff || peer[7] === 0))
+    throw new StoreError("UNSUPPORTED_PROFILE", "invalid private Darwin peer generation");
   const argv = [source.executable, ...source.argv], environment = Object.entries(source.env)
     .filter((entry): entry is [string, string] => entry[1] !== undefined).map(([key, value]) => key + "=" + value);
   if (argv.length > 16384 || environment.length > 4096)
     throw new StoreError("UNSUPPORTED_PROFILE", "Darwin job argument count exceeds its native bound");
   const strings = [...argv, ...environment].map(value => Buffer.from(value));
-  const size = 32 + descriptors.length * 4 + strings.reduce((sum, value) => sum + 4 + value.length, 0);
+  const size = 32 + descriptors.length * 4 + (peer === undefined ? 0 : 32) + strings.reduce((sum, value) => sum + 4 + value.length, 0);
   if (size > 262144) throw new StoreError("UNSUPPORTED_PROFILE", "Darwin job configuration exceeds its native bound");
-  const bytes = Buffer.alloc(size); bytes.write("OMAJOB1\0", 0, "ascii");
-  [size, argv.length, environment.length, descriptors.length, imageStages, Number(trace)]
+  const bytes = Buffer.alloc(size); bytes.write("OMAJOB2\0", 0, "ascii");
+  [size, argv.length, environment.length, descriptors.length, imageStages, Number(trace) | (peer === undefined ? 0 : 2)]
     .forEach((word, index) => bytes.writeUInt32LE(word, 8 + index * 4));
   let offset = 32;
   for (const fd of descriptors) { bytes.writeUInt32LE(fd, offset); offset += 4; }
+  for (const word of peer ?? []) { bytes.writeUInt32LE(word, offset); offset += 4; }
   for (const value of strings) {
     bytes.writeUInt32LE(value.length, offset); offset += 4;
     bytes.set(value, offset); offset += value.length;

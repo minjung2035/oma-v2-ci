@@ -21,6 +21,7 @@ import { bundledJobHelper, encodeDarwinJob } from "./job-launch.js";
 import { submitLaunchdJob, startLaunchdJob } from "./launchd-job.js";
 import { machoImageCdHashes } from "./macho-image.js";
 import { machPoll } from "./mach-poll.js";
+import { captureDarwinJobPeer, type DarwinJobPeer } from "./mach-peer-source.js";
 
 export interface DarwinJobFile { readonly target: number; readonly fd: number }
 type DarwinJobTerminal = { readonly kind: "waited"; readonly pid: number; readonly waitStatus: number } |
@@ -64,7 +65,7 @@ async function image(pin: DarwinProcessPin, hashes: readonly string[]): Promise<
  * READY. No channel or pathname grants workload/actor authority. The returned
  * identity is transient until a qualified journal producer accepts it. */
 export async function startDarwinJobControl(source: CommandSpec, files: readonly DarwinJobFile[],
-  images: readonly string[], signal?: AbortSignal): Promise<DarwinJobControl> {
+  images: readonly string[], signal?: AbortSignal, peerSource?: DarwinJobPeer): Promise<DarwinJobControl> {
   let attempted = false;
   const owners: (() => void)[] = [], pins: DarwinProcessPin[] = [];
   let root: DarwinProcessPin | undefined, rootAccepted = false;
@@ -73,7 +74,9 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "job setup was cancelled");
     if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0 || stages !== 1 && stages !== 2 || images[0] !== command.executable)
       throw new StoreError("UNSUPPORTED_PROFILE", "job setup requires explicit Darwin main image stages");
-    const frame = encodeDarwinJob(command, targets, stages), hashes = images.map(selected), helper = bundledJobHelper(), helperHashes = selected(helper);
+    const peer = peerSource === undefined ? undefined : captureDarwinJobPeer(peerSource);
+    if (peer !== undefined) owners.push(() => peer.endpoint.close());
+    const frame = encodeDarwinJob(command, targets, stages, false, peer?.token), hashes = images.map(selected), helper = bundledJobHelper(), helperHashes = selected(helper);
     const capabilities = files.map(file => { const port = createMachFilePort(file.fd); owners.push(() => port.close()); return port; });
     const cwd = openDirectory(command.cwd ?? process.cwd());
     const directory = withCleanup(() => createMachFilePort(cwd), () => closeSync(cwd)); owners.push(() => directory.close());
@@ -195,6 +198,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       } finally { cleanupAll([() => config?.close(), () => { writer?.destroy(); },
         () => { if (read >= 0) closeSync(read); }, () => { if (write >= 0) closeSync(write); }]); }
       await sendSetup(0x4f4d412b, directory); directory.close();
+      if (peer !== undefined) { await sendSetup(0x4f4d412d, peer.endpoint); peer.endpoint.close(); }
       const first = take(0x4f4d4123);
       for (const [index, file] of capabilities.entries()) await sendSetup(0x4f4d4130 + index, file);
       await sendSetup(0x4f4d4122, sinkSend); await observeTarget(await first, 0);

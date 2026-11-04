@@ -3,6 +3,7 @@
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <mach_debug/ipc_info.h>
 #include <bsm/libbsm.h>
 #include <servers/bootstrap.h>
 #include <libproc.h>
@@ -23,6 +24,8 @@
 enum { INIT = 0x4f4d4120, ACK, SEED, READY, GO, FIN, CLOSED, TARGET = 0x4f4d4128, TARGET_GO };
 static FILE *trace;
 static uint32_t expected[8], rejected;
+static mach_port_t peer_name;
+static audit_token_t peer_expected;
 static volatile sig_atomic_t child_pid, expired;
 static audit_token_t target_token;
 struct unique_process { uint8_t uuid[16]; uint64_t unique, parent; int32_t version, parent_version; uint64_t reserved[2]; };
@@ -50,6 +53,11 @@ static void deadline(int number) {
 }
 static int host_live(void) {
   struct unique_process before = {0}, after = {0}; struct proc_bsdinfo bsd = {0};
+  if (peer_name != MACH_PORT_NULL) {
+    audit_token_t peer = {{0}}; mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
+    if (task_info(peer_name, TASK_AUDIT_TOKEN, (task_info_t)&peer, &count) != KERN_SUCCESS ||
+        count != TASK_AUDIT_TOKEN_COUNT || memcmp(&peer, &peer_expected, sizeof peer)) return 0;
+  }
   return proc_pidinfo((pid_t)expected[5], 17, 0, &before, sizeof before) == sizeof before &&
     proc_pidinfo((pid_t)expected[5], PROC_PIDTBSDINFO, 0, &bsd, sizeof bsd) == sizeof bsd &&
     proc_pidinfo((pid_t)expected[5], 17, 0, &after, sizeof after) == sizeof after &&
@@ -155,6 +163,22 @@ int main(int argc, char **argv) {
   mach_ok(mach_port_deallocate(mach_task_self(), file), "return working directory SEND reference");
   require(fstat(directory, &status_directory) == 0 && S_ISDIR(status_directory.st_mode) &&
     fchdir(directory) == 0 && close(directory) == 0, "enter held working directory");
+  mach_port_t peer_endpoint = MACH_PORT_NULL;
+  if (config.has_peer) {
+    memcpy(peer_expected.val, config.peer, sizeof config.peer);
+    require(audit_token_to_euid(peer_expected) == getuid(), "same-UID peer source");
+    mach_ok(task_name_for_pid(mach_task_self(), audit_token_to_pid(peer_expected), &peer_name), "acquire read-only peer source");
+    require(host_live(), "original peer generation is not live");
+    uint64_t peer_coalitions[5] = {0}, own_coalitions[5] = {0};
+    require(proc_pidinfo(audit_token_to_pid(peer_expected), 20, 0, peer_coalitions, sizeof peer_coalitions) == sizeof peer_coalitions &&
+      proc_pidinfo(getpid(), 20, 0, own_coalitions, sizeof own_coalitions) == sizeof own_coalitions &&
+      peer_coalitions[0] != 0 && own_coalitions[0] != 0 && peer_coalitions[0] != own_coalitions[0], "distinct positive peer coalition");
+    peer_endpoint = receive(receiver, 0x4f4d412d /* PEER */, 1);
+    natural_t type = 0; mach_vm_address_t ignored = 0;
+    mach_ok(mach_port_kobject(mach_task_self(), peer_endpoint, &type, &ignored), "ordinary peer endpoint type");
+    require(type == UINT32_MAX && peer_endpoint != receiver && peer_endpoint != host &&
+      peer_endpoint != bootstrap_port && peer_endpoint != peer_name, "distinct user peer endpoint");
+  }
   if (config.trace) {
     file = receive(receiver, 0x4f4d412c /* TRACE */, 1);
     int descriptor = fileport_makefd(file); require(descriptor >= 0, "import trace fileport");
@@ -180,9 +204,10 @@ int main(int argc, char **argv) {
     if (trace != NULL) fprintf(trace, "{\"phase\":\"fileport\",\"slot\":%u,\"closeOnExec\":true}\n", config.slots[index]);
   }
   mach_port_t sink = receive(receiver, SEED, 1);
-  require(sink != receiver && sink != host && sink != bootstrap_port, "distinct bootstrap sink");
+  require(sink != receiver && sink != host && sink != bootstrap_port && sink != peer_endpoint && sink != peer_name, "distinct bootstrap sink");
   mach_ok(task_set_bootstrap_port(mach_task_self(), sink), "job child bootstrap seed");
-  mach_ok(mach_ports_register(mach_task_self(), &sink, 1), "job child registered seed");
+  mach_port_t inherited[3] = { sink, peer_name, peer_endpoint };
+  mach_ok(mach_ports_register(mach_task_self(), inherited, config.has_peer ? 3 : 1), "job child registered capabilities");
   pid_t child = 0;
   posix_spawnattr_t attributes;
   require(posix_spawnattr_init(&attributes) == 0 &&
@@ -228,6 +253,8 @@ int main(int argc, char **argv) {
   mach_ok(mach_port_mod_refs(mach_task_self(), receiver, MACH_PORT_RIGHT_RECEIVE, -1), "job receiver close");
   mach_ok(mach_port_deallocate(mach_task_self(), host), "job Host reference return");
   mach_ok(mach_port_deallocate(mach_task_self(), sink), "job sink reference return");
+  if (peer_endpoint != MACH_PORT_NULL) mach_ok(mach_port_deallocate(mach_task_self(), peer_endpoint), "job peer endpoint return");
+  if (peer_name != MACH_PORT_NULL) mach_ok(mach_port_deallocate(mach_task_self(), peer_name), "job peer source return");
   if (trace != NULL) require(fclose(trace) == 0, "job trace close");
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }

@@ -28,13 +28,23 @@ test("001. Frozen private job bytes reach the C decoder exactly, and malformed o
   assert.equal(original.stdout, "2 1\n0 1 2 7 3 \n13:/literal/node\n0:\n3:a\nb\n6:한글\n12:$() `quoted`\n\n6:EMPTY=\n11:VALUE=x=y\nz\n\n");
   const single = observe(encodeDarwinJob({ ...command, argv: [], env: {} }, [0, 1, 2], 1));
   assert.equal(single.status, 0, single.stderr); assert.equal(single.stdout, "1 0\n0 1 2 \n13:/literal/node\n\n\n");
+  const peer = [501, 501, 20, 501, 20, 4100, 100001, 42];
+  const bound = Buffer.from(encodeDarwinJob({ ...command, argv: [], env: {} }, [0, 1, 2], 1, false, peer));
+  peer.fill(0);
+  const boundResult = observe(bound); assert.equal(boundResult.status, 0, boundResult.stderr);
+  assert.equal(boundResult.stdout, "1 0\n0 1 2 \n501 501 20 501 20 4100 100001 42 \n13:/literal/node\n\n\n");
+  for (const corrupt of [bytes => bytes.writeUInt32LE(0, 44 + 5 * 4), bytes => bytes.writeUInt32LE(0, 44 + 7 * 4),
+    bytes => bytes.writeUInt32LE(4, 28), bytes => bytes.write("OMAJOB1", 0, "ascii")]) {
+    const bytes = Buffer.from(bound); corrupt(bytes); assert.equal(observe(bytes).status, 125);
+  }
+  assert.throws(() => encodeDarwinJob(command, [0, 1, 2], 1, false, peer), { code: "UNSUPPORTED_PROFILE" });
   for (const size of [0, 7, 31, 32, frame.length - 1]) {
     const refused = observe(frame.subarray(0, size)); assert.equal(refused.status, 125, refused.stderr);
   }
   const corruptions = [bytes => bytes[0] ^= 1, bytes => bytes.writeUInt32LE(262145, 8),
     bytes => bytes.writeUInt32LE(0, 12), bytes => bytes.writeUInt32LE(4097, 16),
     bytes => bytes.writeUInt32LE(129, 20), bytes => bytes.writeUInt32LE(3, 24),
-    bytes => bytes.writeUInt32LE(2, 28), bytes => bytes.writeUInt32LE(65536, 32),
+    bytes => bytes.writeUInt32LE(4, 28), bytes => bytes.writeUInt32LE(65536, 32),
     bytes => bytes.writeUInt32LE(0, 36), bytes => bytes.writeUInt32LE(4, 40),
     bytes => bytes.writeUInt32LE(0xffffffff, 52), bytes => bytes[56] = 0,
     bytes => bytes[56] = 46, bytes => bytes.write("EMPTY", bytes.indexOf("VALUE=")),

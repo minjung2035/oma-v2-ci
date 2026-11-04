@@ -107,7 +107,7 @@ export interface DarwinPeerSourcePin {
 /** Fixed inherited slot 1; no PID, pathname, environment claim or arbitrary
  * caller-supplied port can substitute for it. A source in our own coalition
  * is refused. The trusted launch owner must supply this read-only task name;
- * production launch currently supplies only the discard seed and thus refuses.
+ * the private job helper supplies it alongside an independently owned endpoint.
  * This ephemeral pin cannot survive reboot and publishes no durable identity. */
 export function pinInheritedDarwinPeer(): DarwinPeerSourcePin {
   const api = native(), address = Buffer.alloc(8), count = Buffer.alloc(4);
