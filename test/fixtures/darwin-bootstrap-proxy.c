@@ -90,6 +90,13 @@ static void *serve(void *unused) {
     }
     if (object_type(request) != dictionary_type) { release_object(request); break; }
     const char *name = string_for(request, "name");
+    /* Preserve the actual request before invoking any private audit/reply
+     * operation whose current ABI may abort or fail. */
+    flockfile(trace);
+    fprintf(trace, "{\"phase\":\"received\",\"subsystem\":%llu,\"routine\":%llu,\"type\":%llu,\"handle\":%llu,\"name\":",
+      (unsigned long long)integer_for(request, "subsystem"), (unsigned long long)integer_for(request, "routine"),
+      (unsigned long long)integer_for(request, "type"), (unsigned long long)integer_for(request, "handle"));
+    json_string(name); fputs("}\n", trace); funlockfile(trace);
     object name_object = value_for(request, "name");
     int selected = name_object && object_type(name_object) == string_type &&
       unsigned_field(request, "subsystem", 5) && unsigned_field(request, "routine", 207) &&

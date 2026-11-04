@@ -346,6 +346,16 @@ WNOWAIT 뒤 alarm disarm과 직접 child join을 기록한다. 숫자 PID는 이
 로컬 arm64 SDK compile·Node fixture 문법·parser/Seatbelt41/41·skip0·전체 architecture 검사가 통과했다.
 원시는 `/tmp/oma-macos-ninth-{sdk,parser,focused,architecture}.log` 또는 `.tap`이다.
 
+### lookup 중개의 cleanup 판정 보강 — 실제 후속 실행 전
+
+중개 parent의 private ABI 실패가 직접 child join 미확인을 감출 수 있는 경로를 수정했다.
+command를 시작했다면 실패 status에서도 실제 terminal/join trace가 필요하다. 없으면 fixture 전체의
+controlledGenerationsExited를 세우지 않고 cleanup 실패로 남긴다. 기존 validator는 실패 comparison의
+unjoined trace를 허용하여 새 회귀가1 FAIL이었고, 수정 뒤 parser/Seatbelt41/41 PASS·skip0다.
+private audit/reply 호출 전 실제 request trace도 먼저 기록한다. 로컬 SDK compile·Node 문법은 PASS다.
+`dc65b4be010`의 실제 관측을 판독할 때도 join 없는 결과를 완료로 사용하지 않는다. 제품 backend와
+실행 guard는 그대로다. 원시는 `/tmp/oma-macos-proxy-join-{red,green}.tap`·`-sdk.log`다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -538,6 +548,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `e27bd52a4947689d40df94ae22ddb89ff535f6d7f523c79c69ef28f6921c78db` (15828 files).
+verification input digest `e87e719470906257aeb363060c22f7972de7b0072d1aeaed51ae5b301431d437` (15828 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

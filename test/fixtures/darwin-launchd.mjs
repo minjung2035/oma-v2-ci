@@ -732,6 +732,10 @@ finally {
   if (actor !== undefined) {
     try {
       await waitFor(() => targets.every(originalExited), 12000);
+      const proxy = observation.bootstrap?.lookupProxy;
+      if (proxy?.command !== undefined)
+        assert.ok(proxy.trace?.at(-1)?.phase === "terminal" && proxy.trace.at(-1).joined === true,
+          "lookup proxy command ended without observing its controlled child return");
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }

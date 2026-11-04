@@ -421,6 +421,8 @@ export function validateDarwinObservation(name, observations) {
           !["OBSERVED", "SETUP_FAILED"].includes(proxy.status) ||
           proxy.status === "SETUP_FAILED" && typeof proxy.error !== "string")
         throw new Error("semantic lookup proxy loses its private ABI limitation or actual outcome");
+      if (proxy.command !== undefined && !(proxy.trace?.at(-1)?.phase === "terminal" && proxy.trace.at(-1).joined === true))
+        throw new Error("failed lookup proxy cannot hide an unobserved controlled child return");
       if (proxy.status === "OBSERVED") {
         const { command, ports, tools, trace } = proxy;
         const ready = trace?.find(entry => entry.phase === "ready"), spawned = trace?.find(entry => entry.phase === "spawn");

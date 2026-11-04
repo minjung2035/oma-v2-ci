@@ -502,6 +502,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { delete value.bootstrap.lookupProxy; },
     value => { value.bootstrap.lookupProxy.privateApi = false; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
+    value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },
     value => { value.bootstrap.lookupProxy.trace[1].childPid += 1; },
     value => { value.bootstrap.lookupProxy.trace[2].name = 'com.apple.anything'; },
     value => { value.bootstrap.lookupProxy.profileSha256 = '0'.repeat(64); },
