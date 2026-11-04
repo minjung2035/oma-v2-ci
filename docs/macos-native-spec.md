@@ -194,7 +194,7 @@ Linux mount 주소(`/workspace`, `/inbox.md` 등)는 공통 `PathView`의 논리
 | Mach transport/audit leaf·POSIX file/metadata leaf·Seatbelt recipe | 각 leaf의 실제 실행·반례를 보고 채택; 현재 파일 존재를 완료로 계산하지 않음 |
 | Keychain WIP와 사용자 변경 | branch/snapshot을 확인하고 보존; 오래된 인계의 미통합 표기를 현재 사실로 쓰지 않음 |
 
-`audit-session.ts`의 scan→empty·합성 token은 boot/CID 조회·genuine kernel token leaf로 교체했다. 이 leaf의 실제 Mac 조합은 아직 미실행이며 기존 boot 결박 없는 witness의 recovery는 unavailable/거절이다. `execution-launch.ts`의 throw-only 경로는 여전히 미구현이다. launch-data 소유권/ABI/argv/stdio 문제도 별도다. 후보를 교체하면 미사용 코드·exports·caller를 함께 제거하고 guard만 성공으로 바꾸지 않는다.
+`audit-session.ts`의 scan→empty·합성 token은 boot/CID 조회·genuine kernel token leaf로 교체했다. 두 OS 각3회 실제 leaf의 late-fork 제어와 독립 CID ESRCH를 확인했으며, loaded job의 equal counter는 populated로 보존했다. 기존 boot 결박 없는 witness의 recovery는 unavailable/거절이다. `execution-launch.ts`의 throw-only 경로는 여전히 미구현이다. launch-data 소유권/ABI/argv/stdio 문제도 별도다. 후보를 교체하면 미사용 코드·exports·caller를 함께 제거하고 guard만 성공으로 바꾸지 않는다.
 
 ## 11. 작업 단위와 판정
 

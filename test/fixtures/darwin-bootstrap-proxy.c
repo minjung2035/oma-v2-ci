@@ -103,7 +103,7 @@ static int answer(mach_msg_size_t size, const mach_msg_audit_trailer_t *observed
   mach_msg_type_name_t disposition = MACH_MSGH_BITS_REMOTE(request->msgh_bits);
   kern_return_t sent = -1;
   mach_msg_size_t reply_bytes = 0;
-  if (request->msgh_id == 0x400000cf && MACH_PORT_VALID(request->msgh_remote_port) &&
+  if (deny_all != 2 && request->msgh_id == 0x400000cf && MACH_PORT_VALID(request->msgh_remote_port) &&
       disposition == MACH_MSG_TYPE_MOVE_SEND_ONCE) {
     union { struct port_reply port; mig_reply_error_t error; } reply = {0};
     mach_msg_header_t *header = &reply.error.Head;
@@ -158,7 +158,7 @@ static void deadline(int signal_number) {
 }
 int main(int argc, char **argv) {
   require(getuid() > 0 && argc >= 4, "ordinary UID: trace executable [arguments]");
-  deny_all = strcmp(argv[2], "--deny-all") == 0;
+  deny_all = strcmp(argv[2], "--deny-all") == 0 ? 1 : strcmp(argv[2], "--drop-all") == 0 ? 2 : 0;
   int executable_index = deny_all ? 3 : 2;
   require(argc > executable_index, "proxy target executable");
   trace = fopen(argv[1], "wx"); require(trace != NULL, "exclusive proxy trace");

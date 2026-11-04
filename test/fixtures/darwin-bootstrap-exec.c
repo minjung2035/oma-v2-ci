@@ -5,6 +5,7 @@
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <mach/host_special_ports.h>
 #include <servers/bootstrap.h>
 #include <libproc.h>
 #include <sandbox.h>
@@ -121,6 +122,24 @@ static void print_path(FILE *output, const struct path_observation *value) {
   if (value->kind == NULL) fputs("null", output);
   else fprintf(output, "\"%s\"", value->kind);
   fputs("}", output);
+}
+static int observe_logd_lookup(const char *report_path) {
+  mach_port_t destination = MACH_PORT_NULL;
+  int status = bootstrap_look_up(bootstrap_port, "com.apple.logd", &destination);
+  mach_port_type_t rights = 0;
+  int type_status = MACH_PORT_VALID(destination) ? mach_port_type(mach_task_self(), destination, &rights) : -1;
+  int release_status = MACH_PORT_VALID(destination) ? mach_port_deallocate(mach_task_self(), destination) : -1;
+  mach_port_t host = mach_host_self(), host_control = MACH_PORT_NULL;
+  int host_status = host_get_special_port(host, HOST_LOCAL_NODE, HOST_LAUNCHCTL_PORT, &host_control);
+  int control_release = MACH_PORT_VALID(host_control) ? mach_port_deallocate(mach_task_self(), host_control) : -1;
+  int host_release = mach_port_deallocate(mach_task_self(), host);
+  FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive bootstrap lookup report");
+  fprintf(output, "{\"phase\":\"public-bootstrap-lookup\",\"pid\":%d,\"uid\":%u,\"name\":\"com.apple.logd\","
+    "\"status\":%d,\"port\":%u,\"typeStatus\":%d,\"rights\":%u,\"releaseStatus\":%d,"
+    "\"hostLaunchctl\":{\"status\":%d,\"port\":%u,\"releaseStatus\":%d,\"hostReleaseStatus\":%d}}\n",
+    getpid(), (unsigned)getuid(), status, destination, type_status, rights, release_status,
+    host_status, host_control, control_release, host_release);
+  require(fclose(output) == 0, "complete public lookup report"); return 0;
 }
 static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {
   struct snapshot ports = snapshot();
@@ -369,6 +388,7 @@ int main(int argc, char **argv) {
   require(getuid() != 0, "ordinary user required");
   if (argc == 4 && strcmp(argv[1], "observe-initial-sandbox") == 0) return observe_initial_sandbox(argv[2], argv[3]);
   if (argc == 3 && strcmp(argv[1], "observe-subset") == 0) return observe_subset(argv[2]);
+  if (argc == 3 && strcmp(argv[1], "observe-logd-lookup") == 0) return observe_logd_lookup(argv[2]);
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);
   if (argc == 7 && strcmp(argv[1], "observe-child-resolver") == 0) return observe_child_resolver(argv);

@@ -174,6 +174,10 @@ const bootstrapRecord = () => {
       direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
   });
   const baseline = variants[0].node, sessionPid = 900, sessionTarget = 'gui/501/org.oma.probe.test.session-service';
+  baseline.tools.nativeLookupCommand = command('/owned/bootstrap-exec', ['observe-logd-lookup', '/owned/lookup.json'], 9802);
+  baseline.tools.nativeLookup = { phase: 'public-bootstrap-lookup', pid: 9802, uid: 501, name: 'com.apple.logd',
+    status: 0, port: 444, typeStatus: 0, rights: 65536, releaseStatus: 0,
+    hostLaunchctl: { status: 5, port: 0, releaseStatus: -1, hostReleaseStatus: 0 } };
   const sessionGlobal = 'gui/501/org.oma.probe.test.session-global', sessionReport = '/owned/work/session-tools.json';
   const sessionTools = structuredClone(baseline.tools);
   sessionTools.pid = sessionPid; sessionTools.service.argv[1] = sessionTarget;
@@ -522,12 +526,16 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { delete value.bootstrap.appSandbox; },
     value => { delete value.bootstrap.denyBootstrap; },
     value => { delete value.bootstrap.lookupProxy; },
+    value => { value.bootstrap.variants[0].node.tools.nativeLookup.pid += 1; },
+    value => { delete value.bootstrap.variants[0].node.tools.nativeLookup.hostLaunchctl; },
     value => { value.bootstrap.lookupProxy.privateAbi = false; },
     value => { value.bootstrap.lookupProxy.lifetime = { status: 'OBSERVED', fixtureOnly: true,
       tokenSource: 'kernel-task-name-port', fixtureReleaseUsedBeforeObservation: false, controlBackend: 'saved-pid' }; },
     value => { value.bootstrap.lookupProxy.lifetime = { status: 'SETUP_FAILED', fixtureOnly: true,
       tokenSource: 'kernel-task-name-port', fixtureReleaseUsedBeforeObservation: false, started: true, error: 'lost child' }; },
     value => { value.bootstrap.lookupProxy.denial = { status: 'SETUP_FAILED', fixtureOnly: true, denyAll: true,
+      command: value.bootstrap.lookupProxy.command, trace: [], error: 'no join' }; },
+    value => { value.bootstrap.lookupProxy.dropAll = { status: 'SETUP_FAILED', fixtureOnly: true, denyAll: true, dropAll: true,
       command: value.bootstrap.lookupProxy.command, trace: [], error: 'no join' }; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
     value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },

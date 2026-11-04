@@ -276,6 +276,10 @@ const command = (executable, argv, environment = process.env) => {
 };
 save();
 value.service = command("/bin/launchctl", ["kickstart", target]); save();
+value.nativeLookupCommand = command(launcher, ["observe-logd-lookup", report + ".lookup.json"]);
+try { value.nativeLookup = JSON.parse(readFileSync(report + ".lookup.json", "utf8")); }
+catch (error) { value.nativeLookupError = String(error); }
+save();
 try { writeFileSync("node-output.txt", "BOOTSTRAP_NATIVE_OK\\n"); value.write = "BOOTSTRAP_NATIVE_OK\\n"; }
 catch (error) { value.writeError = { code: error.code, message: error.message }; }
 try { writeFileSync(canary, "UNEXPECTED_WRITE\\n"); value.deniedWrite = "unexpected-success"; }
@@ -467,7 +471,8 @@ value.complete = true; save();
         // Compare the lookup boundary with the already observed late-fork
         // recovery primitive. These are controlled actors, never an app gate.
         const lifetime = { status: "SETUP_FAILED", fixtureOnly: true,
-          tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false, controlBackend: "production-native" };
+          tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false, controlBackend: "production-native",
+          launchDomain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, guiAbsent: false };
         proxy.lifetime = lifetime;
         try {
           assert.equal(proxy.status, "OBSERVED", "lookup compatibility prerequisite");
@@ -478,6 +483,7 @@ value.complete = true; save();
             denied: [], executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
           writeFileSync(profilePath, scopeProfile, { mode: 0o600 });
           const scope = loadJob("proxy-lifetime", executable, "unused", undefined, {
+            domain: lifetime.launchDomain, background: true, sessionCreate: true,
             argv: [executable, tracePath, launcher, "inherited", profilePath, portsPath, directory,
               actor, "scope-inherited-profile", directory] });
           const other = loadJob("proxy-lifetime-other", actor, "hold");
@@ -540,29 +546,31 @@ value.complete = true; save();
         } catch (error) { lifetime.error = String(error); }
         // Does compatibility require returning any OS port at all? Keep the
         // same non-null bootstrap seed and receiver, but refuse every lookup.
-        const denial = { status: "SETUP_FAILED", fixtureOnly: true, denyAll: true };
-        proxy.denial = denial;
-        try {
-          const executable = join(root, "bootstrap-proxy"), tracePath = join(root, "proxy-denial.jsonl");
-          const service = loadJob("proxy-denial-service", actor, "once", undefined, { directoryRoot: directory });
-          const global = loadJob("proxy-denial-global", actor, "once", undefined, { directoryRoot: directory });
-          const portsPath = join(directory, "proxy-denial-ports.json"), report = join(directory, "proxy-denial-tools.json");
-          denial.command = observe(executable, [tracePath, "--deny-all", launcher, name, profilePath, portsPath, directory,
-            process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
-            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)], 35000);
-          Object.assign(denial, { profileSha256: createHash("sha256").update(profile).digest("hex"),
-            trace: existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [],
-            target: service.target, globalTarget: global.target, ports: optionalJson(portsPath), tools: optionalJson(report) });
-          for (const [target, result] of [[service, denial.tools?.service], [global, denial.tools?.bootstrapGlobal?.service]])
-            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
-              await waitFor(() => existsSync(join(target.directory, "once.json")));
-          Object.assign(denial, { guestEffect: effect(service), globalGuestEffect: effect(global),
-            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
-          assert.equal(denial.tools?.complete, true, `deny-all proxy incomplete: ${denial.command.stderr}`);
-          assert.equal(denial.trace.at(-1)?.joined, true, "deny-all proxy child was not joined");
-          denial.status = "OBSERVED";
-        } catch (error) { denial.error = String(error); }
+        for (const stem of ["denial", "drop-all"]) {
+          const denial = { status: "SETUP_FAILED", fixtureOnly: true, denyAll: true, dropAll: stem === "drop-all" };
+          proxy[stem === "denial" ? "denial" : "dropAll"] = denial;
+          try {
+            const executable = join(root, "bootstrap-proxy"), tracePath = join(root, `proxy-${stem}.jsonl`);
+            const service = loadJob(`proxy-${stem}-service`, actor, "once", undefined, { directoryRoot: directory });
+            const global = loadJob(`proxy-${stem}-global`, actor, "once", undefined, { directoryRoot: directory });
+            const portsPath = join(directory, `proxy-${stem}-ports.json`), report = join(directory, `proxy-${stem}-tools.json`);
+            denial.command = observe(executable, [tracePath, stem === "denial" ? "--deny-all" : "--drop-all", launcher, name, profilePath, portsPath, directory,
+              process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+              unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)], 35000);
+            Object.assign(denial, { profileSha256: createHash("sha256").update(profile).digest("hex"),
+              trace: existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [],
+              target: service.target, globalTarget: global.target, ports: optionalJson(portsPath), tools: optionalJson(report) });
+            for (const [target, result] of [[service, denial.tools?.service], [global, denial.tools?.bootstrapGlobal?.service]])
+              if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+                await waitFor(() => existsSync(join(target.directory, "once.json")));
+            Object.assign(denial, { guestEffect: effect(service), globalGuestEffect: effect(global),
+              canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+            assert.equal(denial.tools?.complete, true, `deny-all proxy incomplete: ${denial.command.stderr}`);
+            assert.equal(denial.trace.at(-1)?.joined, true, "deny-all proxy child was not joined");
+            denial.status = "OBSERVED";
+          } catch (error) { denial.error = String(error); }
+        }
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
@@ -880,6 +888,9 @@ finally {
       if (proxy?.denial?.command !== undefined)
         assert.ok(proxy.denial.trace?.at(-1)?.phase === "terminal" && proxy.denial.trace.at(-1).joined === true,
           "deny-all proxy command ended without observing its controlled child return");
+      if (proxy?.dropAll?.command !== undefined)
+        assert.ok(proxy.dropAll.trace?.at(-1)?.phase === "terminal" && proxy.dropAll.trace.at(-1).joined === true,
+          "drop-all proxy command ended without observing its controlled child return");
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }

@@ -456,18 +456,35 @@ export function validateDarwinObservation(name, observations) {
             throw new Error("production-native lifetime loses boot binding, exact hints/effects or independent scope observations");
         }
       }
-      if (proxy.denial !== undefined) {
-        const denial = proxy.denial;
+      for (const key of ["denial", "dropAll"]) if (proxy[key] !== undefined) {
+        const denial = proxy[key];
         if (denial.fixtureOnly !== true || denial.denyAll !== true || !["OBSERVED", "SETUP_FAILED"].includes(denial.status) ||
+            key === "dropAll" && denial.dropAll !== true ||
             denial.status === "SETUP_FAILED" && typeof denial.error !== "string" ||
             denial.command !== undefined && !(denial.trace?.at(-1)?.phase === "terminal" && denial.trace.at(-1).joined === true))
           throw new Error("deny-all comparison loses refusal mode or actual child cleanup");
         if (denial.status === "OBSERVED" &&
             (denial.trace.find(entry => entry.phase === "ready")?.denyAll !== true ||
               denial.trace.some(entry => entry.phase === "mach-request" && (entry.selected !== false || entry.name !== null || entry.replyBytes === 52)) ||
+              key === "dropAll" && denial.trace.some(entry => entry.phase === "mach-request" && entry.replyBytes !== 0) ||
               denial.profileSha256 !== proxy.profileSha256 || denial.tools?.complete !== true ||
               denial.tools.pid !== denial.ports?.pid || denial.ports?.sandboxApplied !== true))
           throw new Error("deny-all comparison lacks actual denied requests and sandboxed tools");
+      }
+      for (const tools of [...bootstrap.variants.map(variant => variant.node.tools), proxy.tools,
+        proxy.denial?.tools, proxy.dropAll?.tools, session?.tools, bootstrap.messageFilter?.tools,
+        bootstrap.denyBootstrap?.tools, bootstrap.appSandbox?.tools, bootstrap.appSandbox?.reverse?.tools,
+        bootstrap.appSandbox?.only?.tools]) {
+        if (tools?.nativeLookupCommand === undefined && tools?.nativeLookup === undefined) continue;
+        const command = tools.nativeLookupCommand, lookup = tools.nativeLookup;
+        if (!outcome(command) || command.executable !== launcher || command.argv[0] !== "observe-logd-lookup" ||
+            !(lookup === undefined && (command.exitCode !== 0 || command.signal !== null || command.error !== undefined) ||
+              lookup?.phase === "public-bootstrap-lookup" && lookup.name === "com.apple.logd" && lookup.pid === command.pid &&
+              lookup.uid === baseline.ports.uid && signed32(lookup.status) && portNumber(lookup.port) &&
+              signed32(lookup.typeStatus) && portNumber(lookup.rights) && signed32(lookup.releaseStatus) &&
+              signed32(lookup.hostLaunchctl?.status) && portNumber(lookup.hostLaunchctl.port) &&
+              signed32(lookup.hostLaunchctl.releaseStatus) && signed32(lookup.hostLaunchctl.hostReleaseStatus)))
+          throw new Error("public bootstrap lookup loses its actual caller, result, rights or host-capability comparison");
       }
       if (proxy.status === "OBSERVED") {
         const { command, ports, tools, trace } = proxy;

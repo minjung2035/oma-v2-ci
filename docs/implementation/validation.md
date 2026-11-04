@@ -514,6 +514,35 @@ C reference의 CID 조회·독립 live CID를 유지했다. loaded job의 equal 
 기존 `--invalidate-stale` 모드로 authored notes를 보존하고 새 승인을 만들지 않은 장부를 생성했다.
 현재31 CHANGED_WITHOUT_ORACLE·14337 NOT_REVIEWED·220 REMOVED이며 review closure 완료가 아니다.
 
+### production leaf의 실제 결과 — source `9c14a735349`
+
+Native [41790468826](https://github.com/minjung2035/oma-v2-ci/actions/runs/41790468826)의 양 OS 각3회에서
+실제 새 Node process가 production leaf를 호출했다. kernel boot UUID/CID 취득·wrong-member false·
+정확한 member signal true·post-snapshot fork의 다음 hint/control round를 확인했다. 매번2 round 뒤
+leaf는 empty, 독립 C reference는 CID ESRCH였고 별도 live CID 조회는0이었다. loaded positive job은
+실제 started=2/exited=2인데도 ID 조회0이었으며 leaf는 여섯 번 모두 populated를 보존했다.
+이 결과는 narrow primitive의 조합이다. journal producer·실제 제품 owner crash/recovery·모든 admission을
+증명하지 않으며, boot 결박 없는 legacy witness의 unavailable/거절과 제품 launch guard는 유지한다.
+
+입력15829개 `dcc98f3961d855b8903031d4aa57805bdfc793db730f0880bb8db411fe07067c`와 runtime은 양 OS
+전후 동일했다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED·product BLOCKED다. SHA-256 확인한
+`lookup-proxy/native-leaf/`의 Mac26 ZIP은 `2cda0bd0fa3ab1d36710eebeb5f14e5bca3c85b0c3bdc75c175b932b52cbaef1`,
+Mac15 ZIP은 `3183915e1b24e2a993eb1fe111209b9f055cdd409b5427aae354e052643a92ae`다.
+`observed-native-leaf-summary.json`은6회 실제 identity·fresh Node control·paired query를 요약한다.
+
+### 다음 입력 — public lookup 수용·전체 요청 폐기·Background 조합
+
+public `bootstrap_look_up` client가 실제 port/right를 얻었는지 별도 C 호출로 기록한다. 송신52-byte 성공이나
+일반 도구 실행을 client 수용으로 간주하지 않는다. 같은 caller에서 HOST_LAUNCHCTL_PORT 취득 결과와
+참조 반납도 기록한다. 이 read-only 권한 관측은 실제 service 실행 성공/실패와 구분한다.
+
+추가 drop-all receiver는 모든 message를 SDK destructor로 폐기하며 새 reply·lookup·port 반환을 하지 않는다.
+동일 도구/DNS·fresh service 두 경로·실제 child join과 비교한다. 성공하면 wire ID·이름 scan 없이
+non-null endpoint만으로 호환되는지 좁힐 수 있지만 현재는 **NOT_RUN**이다.
+기존 production-leaf lifetime job은 user/UID·Background·SessionCreate 조건으로 옮겨 audit session이
+다른 fresh controller의 제어를 대조한다. GUI 부재·제품 headless 지원이나 complete backend를 뜻하지 않는다.
+로컬 C 두 image의 arm64 SDK object compile·Node 문법·parser/Seatbelt42/42·skip0가 통과했다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -706,6 +735,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `dcc98f3961d855b8903031d4aa57805bdfc793db730f0880bb8db411fe07067c` (15829 files).
+verification input digest `0568d0555683ee0df9914ac1c392eb335ad5127e9cdc2e4dfcfd962542bf4ac6` (15829 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
