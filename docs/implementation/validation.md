@@ -858,10 +858,36 @@ posix_spawn slot으로 연결한다. release 전 output 없음과 child의 입�
 현재 C SDK object compile·workspace build·MJS syntax·parser/Seatbelt44/44·전체 architecture는 PASS이며 실제 Darwin fileport handoff는 NOT_RUN이다.
 이 대조는 regular-file stdio이며 pipe streaming/backpressure·전체 process owner와 durable recovery 연결은 남아 있다.
 
+### 실제 pipe 전달과 EOF 대조 — 후속 입력 / Darwin NOT_RUN
+
+같은 Host gate를 별도 service/job/CID에서 반복하되 stdio는 anonymous POSIX pipe로 전달한다.
+helper의 READY가 모든 import를 확인한 뒤 Host의 fileport SEND 복사본을 반환한다. helper도 spawn 뒤
+자신의 FD source를 닫아 child 종료 후 실제 EOF가 가능해야 한다. private7은 별도 read-only fileport다.
+stdout1,048,593 bytes·stderr1,048,605 bytes를 동시에 drain하고 길이·SHA-256·실제 reader close를 대조한다.
+오류 경로도 알려진 CID 종료와 pipe handle 반환을 확인해야 fixture cleanup을 완료로 기록한다.
+
+로컬 parser/Seatbelt44/44·MJS syntax가 통과했다. 같은 controlPipe/Node read-stream capture의 실제 Linux
+대조도 두 byte count/hash·EOF·close를 통과했으며 `/tmp/oma-macos-pipe-gate-linux-smoke.log`에 있다.
+이것은 pipe capture harness의 관측이며 Darwin fileport 또는 제품 scope proof가 아니다. 실제 Mac은 NOT_RUN이다.
+
+### 선택한 image와 fileport의 실제 결과 — source `63dc521bf8c`
+
+Native [41801020566](https://github.com/minjung2035/oma-v2-ci/actions/runs/41801020566)의 양 Mac 각3회에서
+native audit 관측은 선택한 Node CDHash에 일치하고 별도 signed shell에는 -67050으로 거절했다. 호출 뒤
+목록 변경도 이미 고정한 requirement를 바꾸지 않았다. source FD를 닫은 fileport의 실제 SEND 전달·같은 inode와
+bytes·cursor 공유·일반 Mach port import 거절도6회 확인했다. 별도 job gate6회도 선택한 helper image 일치와
+다른 signed Node 거절·stdio0/1/2와 private7의 실제 bytes·release 전 무출력·최종 CID 반환을 확인했다.
+
+입력15830개 `d236558d4f02c74727503c7839bafefc4dda126700d6b5c73d83e5b3e4d697fd`와 runtime 산출물은 전후 같았다.
+API SHA-256 대조한 Mac15 ZIP `828533b915f7e772048cd4a4c93b4c0f7cfe8716d0a2d1b113d63fef66200f77`,
+Mac26 ZIP `857744d44a34dbe123e724860a5bacdaeecddfe68030dd5bbbb7fd3d70d9bb03`와 결과는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/fileport/`다. 전체 gate 수와 제품 BLOCKED는 그대로다.
+이 source의 전달은 regular file이며 후속 pipe 입력과 혼합하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `d236558d4f02c74727503c7839bafefc4dda126700d6b5c73d83e5b3e4d697fd` (15830 files).
+verification input digest `629f7edea4d6ccd5a3c1db6a8c9125d31dbbb3390dc97f7d558bf43a4ee19f6a` (15830 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

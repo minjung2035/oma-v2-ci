@@ -2,6 +2,7 @@
  * missing, failed or unexecuted rows can never become completed observations. */
 import { validateDescriptorCapabilityObservation } from "./descriptor-capability-observation.mjs";
 import { isIP } from "node:net";
+import { createHash } from "node:crypto";
 export const DARWIN_CASE_REPETITIONS = 3;
 export const DARWIN_PROCESS_TIMEOUT_MS = 120000;
 const program = row => Object.freeze({ ...row, names: Object.freeze(row.names), link: Object.freeze(row.link ?? []) });
@@ -492,13 +493,13 @@ export function validateDarwinObservation(name, observations) {
             sink.command?.argv?.[1] !== "--external-sink" || sink.command.argv[2] !== sink.serviceName))
           throw new Error("native discard comparison lacks its actual receiver, policy or completed tools");
       }
-      if (proxy.machGate !== undefined) {
-        const gate = proxy.machGate;
+      for (const key of ["machGate", "machPipeGate"]) if (proxy[key] !== undefined) {
+        const gate = proxy[key], piped = key === "machPipeGate";
         const words = token => Array.isArray(token) && token.length === 8 && token.every(portNumber) && token[5] > 1 && token[7] !== 0;
         if (gate.fixtureOnly !== true || gate.protocol !== 1 || gate.domain !== `user/${baseline.ports.uid}` ||
             gate.sessionType !== "Background" || gate.sessionCreate !== true || gate.launchOnlyOnce !== true ||
             !["OBSERVED", "SETUP_FAILED"].includes(gate.status) || gate.status === "SETUP_FAILED" && typeof gate.error !== "string" ||
-            gate.identity !== undefined && gate.scopeGone !== true)
+            gate.identity !== undefined && gate.scopeGone !== true || piped && gate.pipeHandlesReturned !== true)
           throw new Error("Mach job gate loses its constructor, outcome or independently observed cleanup");
         if (gate.status === "OBSERVED" &&
             (![gate.sourceSha256, gate.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
@@ -511,11 +512,16 @@ export function validateDarwinObservation(name, observations) {
                   gate.otherOrigin?.kind !== "unavailable" || !Number.isInteger(gate.otherOrigin.osStatus) || gate.otherOrigin.osStatus === 0 ||
                   !Array.isArray(gate.otherCdHashes) || !gate.otherCdHashes.length ||
                   gate.otherCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash) || gate.expectedCdHashes.includes(hash))) ||
-              gate.fileports !== undefined && (gate.fileports.transport !== "native-fileport" ||
+              gate.fileports !== undefined && (gate.fileports.transport !== (piped ? "native-fileport-pipe" : "native-fileport") ||
                 JSON.stringify(gate.fileports.slots) !== "[0,1,2,7]" ||
                 gate.fileports.beforeRelease?.stdout !== "" || gate.fileports.beforeRelease?.stderr !== "" ||
                 gate.fileports.child?.input !== "MACH_INPUT\n" || gate.fileports.child?.private !== "MACH_PRIVATE\n" ||
-                gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n" ||
+                (piped ? gate.fileports.readersClosed !== true ||
+                  ["stdout", "stderr"].some((key, index) => {
+                    const expected = Buffer.alloc(index === 0 ? 1048593 : 1048605, index === 0 ? 97 : 98);
+                    return gate.fileports[key]?.bytes !== expected.length ||
+                      gate.fileports[key]?.sha256 !== createHash("sha256").update(expected).digest("hex");
+                  }) : gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n") ||
                 JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== "[0,1,2,7]" ||
                 gate.trace.some(row => row.phase === "fileport" && row.closeOnExec !== true)) ||
               !Number.isSafeInteger(gate.rejectedAtFinish) || gate.rejectedAtFinish < 2 ||

@@ -3,7 +3,8 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { once } from "node:events";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -18,6 +19,7 @@ import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalit
   signalDarwinCoalitionMember } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { GIT_ENV } from "@oma/process/policies";
+import { controlPipe } from "@oma/native/control-socket";
 import { observeNodeLibc } from "./darwin-libc.mjs";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
@@ -274,9 +276,10 @@ import { lookup } from "node:dns/promises";
 import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
 const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout, resolverSymbols] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
-if (process.argv.at(-1) === "mach-fileports-v1") {
+if (["mach-fileports-v1", "mach-fileports-pipe-v1"].includes(process.argv.at(-1))) {
   value.fileports = { input: readFileSync(0, "utf8"), private: readFileSync(7, "utf8") };
-  writeFileSync(1, "MACH_STDOUT\\n"); writeFileSync(2, "MACH_STDERR\\n");
+  writeFileSync(1, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048593, 97) : "MACH_STDOUT\\n");
+  writeFileSync(2, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048605, 98) : "MACH_STDERR\\n");
 }
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -644,137 +647,185 @@ value.complete = true; save();
           assert.equal(nativeSink.trace.at(-1)?.joined, true); nativeSink.status = "OBSERVED";
         } catch (error) { nativeSink.error = String(error); }
         finally { clearInterval(sinkTimer); sink?.close(); }
-        const gate = { status: "SETUP_FAILED", fixtureOnly: true, protocol: 1,
-          domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
-        proxy.machGate = gate;
-        let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl;
-        const gateFiles = [];
-        try {
-          const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, "mach-job-gate");
-          gate.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
-          gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-o", executable]);
-          run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
-          gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
-          const cdhash = path => {
-            const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", path]);
-            const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
-            assert.ok(hash, JSON.stringify(signature)); return hash;
-          };
-          gate.expectedCdHashes = [cdhash(executable)]; gate.otherCdHashes = [cdhash(process.execPath)];
-          assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
-          const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
-          assert.equal(system.func("int task_info(unsigned int, int, void *, void *)")(
-            hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
-          assert.equal(count.readUInt32LE(), 8);
-          gate.expectedHostToken = Array.from({ length: 8 }, (_, index) => ownToken.readUInt32LE(index * 4));
-          assert.equal(gate.expectedHostToken[5], process.pid);
-          const serviceName = `${prefix}.job-gate`, sinkName = `${prefix}.job-discard`;
-          gateSink = listenMachDiscardService(sinkName); gateSinkSend = lookupMachService(sinkName);
-          gate.discarded = 0;
-          gateSinkTimer = setInterval(() => {
-            try { for (let n = 0; n < 64 && gateSink.discard(); ++n) gate.discarded++; }
-            catch (error) { gate.receiveError = String(error); clearInterval(gateSinkTimer); }
-          }, 1);
-          const service = loadJob("mach-gate-service", actor, "once", undefined, { directoryRoot: directory });
-          const global = loadJob("mach-gate-global", actor, "once", undefined, { directoryRoot: directory });
-          const tracePath = join(root, "mach-job-gate.jsonl"), portsPath = join(directory, "mach-gate-ports.json"), report = join(directory, "mach-gate-tools.json");
-          const filePaths = { input: join(directory, "mach-input"), stdout: join(directory, "mach-stdout"),
-            stderr: join(directory, "mach-stderr"), private: join(directory, "mach-private") };
-          writeFileSync(filePaths.input, "MACH_INPUT\n", { flag: "wx" }); writeFileSync(filePaths.private, "MACH_PRIVATE\n", { flag: "wx" });
-          gate.fileports = { transport: "native-fileport", slots: [0, 1, 2, 7] };
-          for (const [path, mode] of [[filePaths.input, "r"], [filePaths.stdout, "wx"], [filePaths.stderr, "wx"], [filePaths.private, "r"]]) {
-            const borrowed = openSync(path, mode, 0o600);
-            try { gateFiles.push(createMachFilePort(borrowed)); }
-            finally { closeSync(borrowed); }
-          }
-          const job = loadJob("mach-gate", executable, "unused", undefined, { domain: gate.domain, background: true,
-            sessionCreate: true, launchOnlyOnce: true, machServices: [serviceName],
-            argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, name, profilePath, portsPath,
-              directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-              unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
-              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), "mach-fileports-v1"] });
-          gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
-          const nativeModule = import.meta.resolve("@oma/native/mach-message");
-          const attempt = code => run(process.execPath, ["--input-type=module", "-e", `
-import {createMachEndpoint,listenMachService,lookupMachService} from ${JSON.stringify(nativeModule)};
-const name=${JSON.stringify(serviceName)};
-${code}`]);
-          gate.preemption = JSON.parse(attempt(`let taken=false,code=null;try{const r=listenMachService(name);taken=true;r.close();}catch(error){code=error.machCode??String(error);}console.log(JSON.stringify({pid:process.pid,taken,code}));`).stdout);
-          assert.equal(gate.preemption.taken, false, "foreign process acquired the declared job receive right");
-          run("/bin/launchctl", ["kickstart", job.target]);
-          gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
-          const one = Buffer.alloc(4); one.writeUInt32LE(1);
-          const attack = id => attempt(`const s=lookupMachService(name),p=createMachEndpoint(),b=Buffer.alloc(4);b.writeUInt32LE(1);s.send(${id},b,${id === 0x4f4d4120 ? "p.send" : "undefined"});s.close();p.send.close();p.receive.close();console.log(JSON.stringify({pid:process.pid}));`);
-          gate.beforeInitAttack = JSON.parse(attack(0x4f4d4120).stdout);
-          const receiveGate = async id => {
-            const end = performance.now() + 10000;
-            while (performance.now() < end) {
-              const packet = gateControl.receive.receive();
-              if (packet.kind === "again") { await delay(2); continue; }
-              assert.equal(packet.id, id); assert.equal(packet.bytes.length, 16); assert.equal(packet.reply, null);
-              assert.equal(packet.bytes.readUInt32LE(0), 1);
-              if (gate.helperToken) assert.deepEqual(packet.sender.token, gate.helperToken);
-              return packet;
-            }
-            throw new Error("Mach job gate response deadline");
-          };
-          assert.equal(gateService.send(0x4f4d4120, one, gateControl.send), "sent");
-          const ack = await receiveGate(0x4f4d4121); gate.helperToken = [...ack.sender.token];
-          gate.identity = identifyDarwinCoalition(ack.sender.pid); assert.ok(gate.identity);
-          assert.notEqual(gate.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId,
-            "job gate must have a distinct kernel coalition");
-          const origin = observeDarwinAuditOrigin(ack.sender.token, gate.expectedCdHashes);
-          gate.origin = await origin.result; await origin.returned; assert.equal(gate.origin.kind, "matched");
-          const other = observeDarwinAuditOrigin(ack.sender.token, gate.otherCdHashes);
-          gate.otherOrigin = await other.result; await other.returned; assert.equal(gate.otherOrigin.kind, "unavailable");
-          for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
-          assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
-          const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
-          gate.beforeReleaseAttack = JSON.parse(attack(0x4f4d4124).stdout);
-          gate.reportBeforeHostRelease = existsSync(portsPath);
-          assert.equal(gate.reportBeforeHostRelease, false);
-          gate.fileports.beforeRelease = { stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") };
-          assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
-          assert.equal(gateService.send(0x4f4d4124, one), "sent");
-          const fin = await receiveGate(0x4f4d4125);
-          gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
-          assert.equal(gateService.send(0x4f4d4126, one), "sent");
-          await waitFor(() => {
-            const result = usage(gate.identity.coalitionId);
-            gate.after = result; return result.returnCode === -1 && result.errno === 3;
-          });
-          gate.registration = run("/bin/launchctl", ["print", job.target], false); assert.equal(gate.registration.exitCode, 113);
-          job.active = false;
-          Object.assign(gate, { profileSha256: createHash("sha256").update(profile).digest("hex"),
-            trace: readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)),
-            ports: optionalJson(portsPath), tools: optionalJson(report), guestEffect: effect(service), globalGuestEffect: effect(global) });
-          assert.equal(gate.tools?.complete, true); assert.equal(gate.ports?.pid, gate.childPid);
-          Object.assign(gate.fileports, { child: gate.tools.fileports,
-            stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") });
-          assert.deepEqual(gate.fileports.child, { input: "MACH_INPUT\n", private: "MACH_PRIVATE\n" });
-          assert.equal(gate.fileports.stdout, "MACH_STDOUT\n"); assert.equal(gate.fileports.stderr, "MACH_STDERR\n");
-          assert.equal(gate.waitStatus, 0); assert.ok(gate.rejectedAtFinish >= 2);
-          assert.equal(gate.receiveError, undefined); assert.ok(gate.discarded > 0);
-          gate.status = "OBSERVED";
-        } catch (error) { gate.error = String(error); }
-        finally {
-          clearInterval(gateSinkTimer);
-          gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
-          for (const file of gateFiles) file.close();
-          if (gate.identity) {
-            gate.cleanupRounds = [];
-            const end = performance.now() + 8000;
-            try {
-              for (;;) {
-                const population = observeDarwinCoalitionPopulation(gate.identity);
-                if (population === "empty") { gate.scopeGone = true; break; }
-                assert.notEqual(population, "unknown", "Mach gate cleanup lost kernel observation");
-                assert.ok(performance.now() < end, "Mach gate cleanup deadline");
-                const hints = darwinCoalitionMemberHints(gate.identity);
-                gate.cleanupRounds.push({ hints, effects: hints.map(pid => signalDarwinCoalitionMember(gate.identity, pid)) });
-                await delay(25);
+        for (const pipeTransfer of [false, true]) {
+          const gateTag = pipeTransfer ? "mach-pipe-gate" : "mach-gate";
+          const gate = { status: "SETUP_FAILED", fixtureOnly: true, protocol: 1,
+            domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
+          proxy[pipeTransfer ? "machPipeGate" : "machGate"] = gate;
+          let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl;
+          const gateFiles = [];
+          const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0];
+          const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
+          try {
+            const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, gateTag);
+            gate.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
+            gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-o", executable]);
+            run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
+            gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
+            const cdhash = path => {
+              const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", path]);
+              const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
+              assert.ok(hash, JSON.stringify(signature)); return hash;
+            };
+            gate.expectedCdHashes = [cdhash(executable)]; gate.otherCdHashes = [cdhash(process.execPath)];
+            assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
+            const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
+            assert.equal(system.func("int task_info(unsigned int, int, void *, void *)")(
+              hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
+            assert.equal(count.readUInt32LE(), 8);
+            gate.expectedHostToken = Array.from({ length: 8 }, (_, index) => ownToken.readUInt32LE(index * 4));
+            assert.equal(gate.expectedHostToken[5], process.pid);
+            const serviceName = `${prefix}.${gateTag}`, sinkName = `${prefix}.${gateTag}-discard`;
+            gateSink = listenMachDiscardService(sinkName); gateSinkSend = lookupMachService(sinkName);
+            gate.discarded = 0;
+            gateSinkTimer = setInterval(() => {
+              try { for (let n = 0; n < 64 && gateSink.discard(); ++n) gate.discarded++; }
+              catch (error) { gate.receiveError = String(error); clearInterval(gateSinkTimer); }
+            }, 1);
+            const service = loadJob(`${gateTag}-service`, actor, "once", undefined, { directoryRoot: directory });
+            const global = loadJob(`${gateTag}-global`, actor, "once", undefined, { directoryRoot: directory });
+            const tracePath = join(root, `${gateTag}.jsonl`), portsPath = join(directory, `${gateTag}-ports.json`), report = join(directory, `${gateTag}-tools.json`);
+            const filePaths = { input: join(directory, `${gateTag}-input`), stdout: join(directory, `${gateTag}-stdout`),
+              stderr: join(directory, `${gateTag}-stderr`), private: join(directory, `${gateTag}-private`) };
+            writeFileSync(filePaths.input, "MACH_INPUT\n", { flag: "wx" }); writeFileSync(filePaths.private, "MACH_PRIVATE\n", { flag: "wx" });
+            gate.fileports = { transport: pipeTransfer ? "native-fileport-pipe" : "native-fileport", slots: [0, 1, 2, 7] };
+            const sources = [[filePaths.input, "r"], [filePaths.stdout, "wx"], [filePaths.stderr, "wx"], [filePaths.private, "r"]];
+            for (const [index, [path, mode]] of sources.entries()) {
+              if (pipeTransfer && index < 3) {
+                const pipe = controlPipe(); pipeDescriptors.add(pipe.read); pipeDescriptors.add(pipe.write);
+                const borrowed = index === 0 ? pipe.read : pipe.write;
+                try { gateFiles.push(createMachFilePort(borrowed)); } finally { closePipe(borrowed); }
+                if (index === 0) {
+                  assert.equal(writeSync(pipe.write, "MACH_INPUT\n"), 11); closePipe(pipe.write);
+                } else {
+                  const reader = createReadStream("", { fd: pipe.read, autoClose: true });
+                  pipeReaders.push(reader); pipeDescriptors.delete(pipe.read);
+                  const drain = (async () => {
+                    const chunks = [];
+                    for await (const chunk of reader) {
+                      captured[index - 1] += chunk.length;
+                      assert.ok(captured[index - 1] <= 2 * 1024 * 1024, "bounded pipe capture"); chunks.push(Buffer.from(chunk));
+                    }
+                    if (!reader.closed) await once(reader, "close");
+                    const bytes = Buffer.concat(chunks);
+                    return { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
+                  })();
+                  void drain.catch(() => {}); drains.push(drain);
+                }
+              } else {
+                const borrowed = openSync(path, mode, 0o600);
+                try { gateFiles.push(createMachFilePort(borrowed)); } finally { closeSync(borrowed); }
               }
-            } catch (error) { gate.cleanupError = String(error); }
+            }
+            const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
+              sessionCreate: true, launchOnlyOnce: true, machServices: [serviceName],
+              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, name, profilePath, portsPath,
+                directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+                unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+                JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"] });
+            gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
+            const nativeModule = import.meta.resolve("@oma/native/mach-message");
+            const attempt = code => run(process.execPath, ["--input-type=module", "-e", `
+  import {createMachEndpoint,listenMachService,lookupMachService} from ${JSON.stringify(nativeModule)};
+  const name=${JSON.stringify(serviceName)};
+  ${code}`]);
+            gate.preemption = JSON.parse(attempt(`let taken=false,code=null;try{const r=listenMachService(name);taken=true;r.close();}catch(error){code=error.machCode??String(error);}console.log(JSON.stringify({pid:process.pid,taken,code}));`).stdout);
+            assert.equal(gate.preemption.taken, false, "foreign process acquired the declared job receive right");
+            run("/bin/launchctl", ["kickstart", job.target]);
+            gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
+            const one = Buffer.alloc(4); one.writeUInt32LE(1);
+            const attack = id => attempt(`const s=lookupMachService(name),p=createMachEndpoint(),b=Buffer.alloc(4);b.writeUInt32LE(1);s.send(${id},b,${id === 0x4f4d4120 ? "p.send" : "undefined"});s.close();p.send.close();p.receive.close();console.log(JSON.stringify({pid:process.pid}));`);
+            gate.beforeInitAttack = JSON.parse(attack(0x4f4d4120).stdout);
+            const receiveGate = async id => {
+              const end = performance.now() + 10000;
+              while (performance.now() < end) {
+                const packet = gateControl.receive.receive();
+                if (packet.kind === "again") { await delay(2); continue; }
+                assert.equal(packet.id, id); assert.equal(packet.bytes.length, 16); assert.equal(packet.reply, null);
+                assert.equal(packet.bytes.readUInt32LE(0), 1);
+                if (gate.helperToken) assert.deepEqual(packet.sender.token, gate.helperToken);
+                return packet;
+              }
+              throw new Error("Mach job gate response deadline");
+            };
+            assert.equal(gateService.send(0x4f4d4120, one, gateControl.send), "sent");
+            const ack = await receiveGate(0x4f4d4121); gate.helperToken = [...ack.sender.token];
+            gate.identity = identifyDarwinCoalition(ack.sender.pid); assert.ok(gate.identity);
+            assert.notEqual(gate.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId,
+              "job gate must have a distinct kernel coalition");
+            const origin = observeDarwinAuditOrigin(ack.sender.token, gate.expectedCdHashes);
+            gate.origin = await origin.result; await origin.returned; assert.equal(gate.origin.kind, "matched");
+            const other = observeDarwinAuditOrigin(ack.sender.token, gate.otherCdHashes);
+            gate.otherOrigin = await other.result; await other.returned; assert.equal(gate.otherOrigin.kind, "unavailable");
+            for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
+            assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
+            const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
+            // READY acknowledges all imports. Keeping any SEND fileport copy
+            // would retain the pipe's open description and prevent real EOF.
+            for (const file of gateFiles.splice(0)) file.close();
+            gate.beforeReleaseAttack = JSON.parse(attack(0x4f4d4124).stdout);
+            gate.reportBeforeHostRelease = existsSync(portsPath);
+            assert.equal(gate.reportBeforeHostRelease, false);
+            if (pipeTransfer) assert.deepEqual(captured, [0, 0]);
+            gate.fileports.beforeRelease = pipeTransfer ? { stdout: "", stderr: "" } :
+              { stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") };
+            assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
+            assert.equal(gateService.send(0x4f4d4124, one), "sent");
+            const fin = await receiveGate(0x4f4d4125);
+            gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
+            assert.equal(gateService.send(0x4f4d4126, one), "sent");
+            await waitFor(() => {
+              const result = usage(gate.identity.coalitionId);
+              gate.after = result; return result.returnCode === -1 && result.errno === 3;
+            });
+            gate.registration = run("/bin/launchctl", ["print", job.target], false); assert.equal(gate.registration.exitCode, 113);
+            job.active = false;
+            Object.assign(gate, { profileSha256: createHash("sha256").update(profile).digest("hex"),
+              trace: readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)),
+              ports: optionalJson(portsPath), tools: optionalJson(report), guestEffect: effect(service), globalGuestEffect: effect(global) });
+            assert.equal(gate.tools?.complete, true); assert.equal(gate.ports?.pid, gate.childPid);
+            if (pipeTransfer) await waitFor(() => pipeReaders.every(reader => reader.closed));
+            const output = pipeTransfer ? await Promise.all(drains) :
+              [readFileSync(filePaths.stdout, "utf8"), readFileSync(filePaths.stderr, "utf8")];
+            Object.assign(gate.fileports, { child: gate.tools.fileports, stdout: output[0], stderr: output[1] });
+            assert.deepEqual(gate.fileports.child, { input: "MACH_INPUT\n", private: "MACH_PRIVATE\n" });
+            if (pipeTransfer) {
+              const expected = [Buffer.alloc(1048593, 97), Buffer.alloc(1048605, 98)].map(bytes =>
+                ({ bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }));
+              assert.deepEqual(output, expected); gate.fileports.readersClosed = pipeReaders.every(reader => reader.closed);
+              assert.equal(gate.fileports.readersClosed, true);
+            } else {
+              assert.equal(gate.fileports.stdout, "MACH_STDOUT\n"); assert.equal(gate.fileports.stderr, "MACH_STDERR\n");
+            }
+            assert.equal(gate.waitStatus, 0); assert.ok(gate.rejectedAtFinish >= 2);
+            assert.equal(gate.receiveError, undefined); assert.ok(gate.discarded > 0);
+            gate.status = "OBSERVED";
+          } catch (error) { gate.error = String(error); }
+          finally {
+            clearInterval(gateSinkTimer);
+            gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
+            for (const file of gateFiles) file.close();
+            for (const fd of pipeDescriptors) closePipe(fd);
+            for (const reader of pipeReaders) reader.destroy();
+            if (gate.identity) {
+              gate.cleanupRounds = [];
+              const end = performance.now() + 8000;
+              try {
+                for (;;) {
+                  const population = observeDarwinCoalitionPopulation(gate.identity);
+                  if (population === "empty") { gate.scopeGone = true; break; }
+                  assert.notEqual(population, "unknown", "Mach gate cleanup lost kernel observation");
+                  assert.ok(performance.now() < end, "Mach gate cleanup deadline");
+                  const hints = darwinCoalitionMemberHints(gate.identity);
+                  gate.cleanupRounds.push({ hints, effects: hints.map(pid => signalDarwinCoalitionMember(gate.identity, pid)) });
+                  await delay(25);
+                }
+              } catch (error) { gate.cleanupError = String(error); }
+            }
+            if (pipeTransfer) {
+              try { await waitFor(() => pipeReaders.every(reader => reader.closed)); gate.pipeHandlesReturned = true; }
+              catch (error) { gate.pipeReturnError = String(error); }
+            }
           }
         }
         // WebKit's macOS profile filters bootstrap messages while retaining
@@ -1131,8 +1182,11 @@ finally {
       if (proxy?.nativeSink?.result !== undefined)
         assert.ok(proxy.nativeSink.trace?.at(-1)?.phase === "terminal" && proxy.nativeSink.trace.at(-1).joined === true,
           "native sink comparison cannot hide an unjoined controlled child");
-      if (proxy?.machGate?.identity)
-        assert.equal(proxy.machGate.scopeGone, true, "Mach gate comparison cannot hide an unobserved scope");
+      for (const gate of [proxy?.machGate, proxy?.machPipeGate]) {
+        if (gate?.identity) assert.equal(gate.scopeGone, true, "Mach gate comparison cannot hide an unobserved scope");
+        if (gate?.fileports?.transport === "native-fileport-pipe")
+          assert.equal(gate.pipeHandlesReturned, true, "Mach pipe comparison cannot hide an unreturned reader");
+      }
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }
