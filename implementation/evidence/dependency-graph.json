@@ -2811,7 +2811,7 @@
   "node:perf_hooks": 5,
   "node:readline": 1,
   "node:sqlite": 4,
-  "node:stream": 13,
+  "node:stream": 14,
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 8,

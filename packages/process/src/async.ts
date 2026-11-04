@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "n
 export type { ChildProcess, ChildProcessWithoutNullStreams };
 import { closeSync, constants, openSync, writeSync } from "node:fs";
 import { performance } from "node:perf_hooks";
+import type { Readable, Writable } from "node:stream";
 import { deadline } from "./deadline.js";
 import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { StoreError } from "@oma/domain/errors";
@@ -13,26 +14,45 @@ export { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 
 const PROCESS_GROUP_PLATFORMS = new Set<NodeJS.Platform>(["linux", "darwin"]);
 
-export interface AsyncProcessOptions {
-  /** Trusted cgroup.procs descriptor; the child moves itself before exec. */
-  readonly placementFd?: number;
-  /** Synchronous streaming consumer. Bytes are borrowed only for this call;
-   * consumer failure terminates the owned child and remains unobserved. */
+/** Capture policy shared by a direct child and an OS-owned execution source. */
+export interface ProcessIOOptions {
+  /** Bytes are borrowed synchronously; consumer failure remains unobserved. */
   readonly stdoutSink?: (bytes: Uint8Array) => void;
   readonly stderrSink?: (bytes: Uint8Array) => void;
-  /** A trusted helper can pass its own stderr through without a second
-   * unbounded stream buffer. Caller owns this descriptor until child close. */
-  readonly stderrFd?: number;
-  /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
+  /** Host/coordinator cancellation, never accepted-work cancellation on EOF. */
   readonly signal?: AbortSignal;
-  /** A POSIX direct child may own a process group; this is no descendant fence. */
+}
+/** Owned I/O and physical observations, not an arbitrary-descendant scope.
+ * The producer reports actual terminal status and its own close observation.
+ * Shared capture separately joins every owned stdio close; live scope pins
+ * and private control capabilities remain with their separate scope owner.
+ * An observation error is not death.
+ * `terminate` owns its platform capability and sends no saved-PID signal here.
+ */
+export interface ProcessIO {
+  readonly stdin: Writable | null;
+  readonly stdout: Readable | null;
+  readonly stderr: Readable | null;
+  readonly stderrForwarded?: true;
+  onError(listener: (error: Error, kind: "spawn-failed" | "unobserved") => void): void;
+  onExit(listener: (code: number | null, signal: NodeJS.Signals | null) => void): void;
+  onClose(listener: (code: number | null, signal: NodeJS.Signals | null) => void): void;
+  terminate(): void;
+  /** Optional direct-process event-loop handle; never a death observation. */
+  unref?(): void;
+}
+export interface AsyncProcessOptions extends ProcessIOOptions {
+  /** Trusted cgroup.procs descriptor; the child moves itself before exec. */
+  readonly placementFd?: number;
+  /** Borrowed trusted stderr descriptor, retained by its caller until close. */
+  readonly stderrFd?: number;
+  /** Direct-child process group, never an arbitrary-descendant fence. */
   readonly processGroup?: boolean;
-  /** Owned file capabilities mapped to child descriptors 3, 4, ...; never pathname reopens. */
   readonly inheritedFds?: readonly number[];
 }
 export interface ProcessTask {
   readonly result: Promise<ProcessObservation>;
-  /** Direct child and its stdio actually closed. A bounded unknown result may precede this. */
+  /** Producer and its stdio actually closed. A bounded unknown result may precede this. */
   readonly closed: Promise<void>;
   cancel(): void;
 }
@@ -53,14 +73,12 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   if (options.stderrFd !== undefined && (!Number.isSafeInteger(options.stderrFd) || options.stderrFd < 0 || options.stderrSink !== undefined || spec.stderrSpool !== undefined))
     throw new TypeError("invalid stderr descriptor or conflicting sink");
   const started = performance.now();
-  let resolveResult!: (value: ProcessObservation) => void;
-  let resolveClosed!: () => void;
-  const result = new Promise<ProcessObservation>(resolve => { resolveResult = resolve; });
-  const closed = new Promise<void>(resolve => { resolveClosed = resolve; });
   const empty = (kind: "aborted" | "spawn-failed", error: unknown = null): ProcessObservation => ({ kind, exitCode: null,
     signal: null, errorCode: processErrorCode(error), elapsedMs: performance.now() - started,
     stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), stdoutTruncated: false, stderrTruncated: false });
-  if (signal?.aborted) { resolveResult(empty("aborted")); resolveClosed(); return { result, closed, cancel() {} }; }
+  const unstarted = (kind: "aborted" | "spawn-failed", error: unknown = null): ProcessTask =>
+    ({ result: Promise.resolve(empty(kind, error)), closed: Promise.resolve(), cancel() {} });
+  if (signal?.aborted) return unstarted("aborted");
   const placement = options.placementFd;
   if (placement !== undefined && (!Number.isSafeInteger(placement) || placement < 0)) throw new TypeError("invalid workload placement descriptor");
   const placementChildFd = 3 + inheritedFds.length;
@@ -72,7 +90,46 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   try {
     child = spawn(executable, argv, { cwd: spec.cwd, env: placement === undefined ? { ...spec.env } : {}, shell: false,
       detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", options.stderrFd ?? "pipe", ...inheritedFds, ...(placement === undefined ? [] : [placement])] });
-  } catch (error) { resolveResult(empty("spawn-failed", error)); resolveClosed(); return { result, closed, cancel() {} }; }
+  } catch (error) { return unstarted("spawn-failed", error); }
+  let directExited = false;
+  child.once("exit", () => { directExited = true; });
+  const io: ProcessIO = {
+    stdin: child.stdin, stdout: child.stdout, stderr: child.stderr,
+    ...(options.stderrFd === undefined ? {} : { stderrForwarded: true as const }),
+    onError: listener => { child.once("error", error => listener(error, "spawn-failed")); },
+    onExit: listener => { child.once("exit", listener); },
+    onClose: listener => { child.once("close", listener); },
+    terminate() {
+      try {
+        if (ownGroup && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch (error) {
+        // A group signal error is not group death. Still attempt this child;
+        // preserve the first native error exactly as the shared capture did.
+        try { if (!directExited) child.kill("SIGKILL"); } catch { /* primary error retained */ }
+        throw error;
+      }
+    },
+    unref: () => child.unref(),
+  };
+  return captureProcessIO(spec, io, options, started);
+}
+/** Takes an already-owned stream source; starts no process and establishes no
+ * scope identity. The same bounded capture/spool/timeout/drain policy is used
+ * by startProcess. An already-aborted signal still stops and joins this source.
+ */
+export function observeProcessIO(source: CommandSpec, io: ProcessIO, options: ProcessIOOptions = {}): ProcessTask {
+  const spec = snapshotCommand(source);
+  if (io.stderrForwarded === true && (io.stderr !== null || options.stderrSink !== undefined || spec.stderrSpool !== undefined))
+    throw new TypeError("forwarded stderr conflicts with captured stderr");
+  return captureProcessIO(spec, io, options, performance.now());
+}
+function captureProcessIO(spec: CommandSpec, io: ProcessIO, options: ProcessIOOptions, started: number): ProcessTask {
+  const signal = options.signal;
+  let resolveResult!: (value: ProcessObservation) => void;
+  let resolveClosed!: () => void;
+  const result = new Promise<ProcessObservation>(resolve => { resolveResult = resolve; });
+  const closed = new Promise<void>(resolve => { resolveClosed = resolve; });
   const out: Buffer[] = [], err: Buffer[] = [];
   let outBytes = 0, errBytes = 0, outLimited = false, errLimited = false;
   let failure: ProcessObservation["kind"] | null = null, nativeError: unknown = null;
@@ -113,7 +170,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
       stdoutTruncated: outLimited, stderrTruncated: errLimited,
       ...(outSpool === null ? {} : { stdoutSpooledTo: outSpool.path }),
       ...(errSpool === null ? {} : { stderrSpooledTo: errSpool.path }),
-      ...(options.stderrFd === undefined ? {} : { stderrForwarded: true as const }),
+      ...(io.stderrForwarded === true ? { stderrForwarded: true as const } : {}),
       signal: exitSignal, errorCode: processErrorCode(nativeError), elapsedMs: performance.now() - started };
     out.length = 0; err.length = 0;
     if (kind === "exited" && typeof exitCode === "number") resolveResult({ ...capture, kind, exitCode });
@@ -123,8 +180,8 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
     if (observedClose) return;
     // Retention is already byte-bounded. Close our own handles, not purported
     // worker descendants. The owner keeps an uncertain preparation slot blocked.
-    child.stdin?.destroy(); child.stdout?.destroy(); child.stderr?.destroy();
-    child.unref();
+    io.stdin?.destroy(); io.stdout?.destroy(); io.stderr?.destroy();
+    io.unref?.();
     finish("unobserved", observedExit, observedSignal);
   };
   const startDrainDeadline = (): void => {
@@ -137,14 +194,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
     failure ??= reason; startDrainDeadline();
     if (terminationRequested || exited) return;
     terminationRequested = true;
-    try {
-      if (ownGroup && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
-      else child.kill("SIGKILL");
-    } catch (error) {
-      nativeError ??= error;
-      // A group signal error is not group death. Still attempt this owned child.
-      try { if (!exited) child.kill("SIGKILL"); } catch (secondary) { nativeError ??= secondary; }
-    }
+    try { io.terminate(); } catch (error) { nativeError ??= error; }
   };
   const onAbort = (): void => terminate("aborted");
   const timer = deadline(spec.timeoutMs, () => terminate("timed-out"));
@@ -194,20 +244,35 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
     if ((output ? spec.stdoutOverflow : spec.stderrOverflow) !== "discard") terminate("output-limited");
   };
   const streamError = (error: Error): void => { nativeError ??= error; terminate("unobserved"); };
-  child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
-  child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));
-  child.stdout?.on("error", streamError); child.stderr?.on("error", streamError); child.stdin?.on("error", streamError);
-  child.once("error", error => { nativeError ??= error; failure ??= "spawn-failed"; startDrainDeadline(); });
-  child.once("exit", (code, exitSignal) => { exited = true; observedExit = code; observedSignal = exitSignal; startDrainDeadline(); });
-  child.once("close", (code, exitSignal) => {
+  const streams = [...new Set([io.stdin, io.stdout, io.stderr].filter((stream): stream is Readable | Writable => stream !== null))];
+  let producerClose: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+  const finishClose = (): void => {
+    if (observedClose || producerClose === undefined || streams.some(stream => !stream.closed)) return;
     observedClose = true; timer(); drainTimer?.();
     signal?.removeEventListener("abort", onAbort);
-    const kind = failure ?? (exitSignal ? "signalled" : typeof code === "number" && Number.isSafeInteger(code) && code >= 0 ? "exited" : "unobserved");
+    const { code, signal: exitSignal } = producerClose;
+    const complete = [io.stdout, io.stderr].every(stream => stream === null || stream.readableEnded);
+    const kind = failure ?? (!complete ? "unobserved" : exitSignal ? "signalled" :
+      typeof code === "number" && Number.isSafeInteger(code) && code >= 0 ? "exited" : "unobserved");
     finish(kind, code, exitSignal); resolveClosed();
+  };
+  for (const stream of streams) stream.on("close", finishClose);
+  io.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
+  io.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));
+  io.stdout?.on("error", streamError); io.stderr?.on("error", streamError); io.stdin?.on("error", streamError);
+  io.onError((error, kind) => {
+    nativeError ??= error;
+    if (kind === "spawn-failed") { failure ??= kind; startDrainDeadline(); }
+    else terminate("unobserved");
+  });
+  io.onExit((code, exitSignal) => { exited = true; observedExit = code; observedSignal = exitSignal; startDrainDeadline(); });
+  io.onClose((code, exitSignal) => {
+    if (producerClose !== undefined) return;
+    producerClose = { code, signal: exitSignal }; startDrainDeadline(); finishClose();
   });
   signal?.addEventListener("abort", onAbort, { once: true });
   if (signal?.aborted) onAbort();
-  try { child.stdin?.end(spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input)); }
+  try { io.stdin?.end(spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input)); }
   catch (error) { nativeError ??= error; terminate("unobserved"); }
   return Object.freeze({ result, closed, cancel: onAbort });
 }

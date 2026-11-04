@@ -1092,10 +1092,51 @@ root/helper/Node의 cwd는 recipe의 작업 디렉터리를 사용한다. 생성
 task-port adversary는 control/name과 선택적으로 존재하는 read/inspect export를 각각 관측하며, export 부재는
 거절 성공으로 계산하지 않는다. 근거는 `/tmp/oma-macos-private-profile-{focused,isolation,build}.log` 또는 `.tap`다.
 
+### production private profile의 실제 결과 — source `5923a679c58`
+
+Native [41816225702](https://github.com/minjung2035/oma-v2-ci/actions/runs/41816225702)의 양 Mac 각3회에서
+regular/pipe gate 모두 OBSERVED다. held helper/Node/launcher bytes의 CDHash가 독립 codesign과 일치했고,
+그 목록으로 실제 stopped image를 검증했다. production `oma-seatbelt`는 fileport FD3의 profile frame/EOF를
+소비한 뒤 Node를 SETEXEC|START_SUSPENDED했다. 다른 pidVersion의 최종 Node 검증·Host release·정상 tools/DNS·
+stdio bytes/EOF·profile writer 반환·CID ESRCH/registration113을 모두 확인했다. 각각 Mac26 114/6·Mac15 111/9이며
+제품 BLOCKED다. protected script/library generation·제품 scope/journal/auth producer의 qualification은 아니다.
+
+수정한 Host task-port probe6회는 exit0이다. Host는 control/name/read/inspect API 모두 존재하고 취득0이었으며,
+control port의 bootstrap 조회0을 확인했다. name 조회4·read/inspect 조회20도 별개로 남겼다. sandbox의12회는
+control/name 취득5·read/inspect 취득-1이었다. 이들 API 외의 권한 경로나 expected Broker를 증명하지 않는다.
+caller-stack MIG 조회로 바꾼 결과이며 앞선 public-wrapper SIGSEGV를 소급 PASS로 바꾸지 않는다.
+
+입력15834개 `63e33490f37d60684af439a792853062c657750b2d4b50509a0c6a3bb9ca50d0`와 runtime은 전후 같다.
+API SHA-256 Mac26 `4b3482482199e8341b8289bc7c88cd376ef1f86345fa43e7128c0d6afced5148`·Mac15
+`a36a566b3ea2066475b4f8cf629c66738f911b0cad72baa5679c90a48c423206`를 대조했다. 원시와 요약은
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/held-profile/`다. 로컬 `57be0da077c`와 같은
+tree `39c09b93561a13386b966b7a902db16278c55187`를 expected-head·non-force로 발행한 입력이다.
+
+별도 Architecture [41813037141](https://github.com/minjung2035/oma-v2-ci/actions/runs/41813037141)의 이전
+`53f4b54c26d` native-all은 **4759/4759 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges=[]**다.
+13 command 모두 code0이며 API SHA-256 `cffcdb2de695b45952f549aba8f47acc7cf3a4f5995f22bee7003a64628622de`와
+대조한 artifact는 `helper-stop/linux-all-art-13315381089/`에 있다. 후속 source의 전체 PASS로 합산하지 않는다.
+
+### 공통 process의 실제 stream source 관측
+
+`observeProcessIO`와 `startProcess`는 같은 capture/spool/sink/timeout/silence/abort/drain 구현을 사용한다.
+OS adapter는 실제 producer의 terminal/close와 owned stdio stream·종료 capability만 공급한다. 공유 owner가
+각 stdio의 실제 close를 따로 기다리며, live scope pin·현재 권한·journal retire는 execution owner에 남는다.
+이 observer는 process를 만들거나 command 실행·scope death를 증명하지 않는다.
+
+실제 anonymous pipe·독립 producer의 input snapshot/whole spool, producer exit 뒤 후손이 잡은 stdio tail,
+실제 exit0 뒤 관측 오류, 이미 취소된 live source의 종료/FD 반환, EOF 없는 reader 반환5건을 추가했다. 새 observer 중간 버전은
+producer close를 stdio 반환으로 읽어3건에서 tail 유실/조기 closed를 보고했다. 원시는
+`/tmp/oma-macos-process-io-producer-close-red.tap`에 보존했다. 별도 EOF 반례도 수정 전 실제 실패했다
+(`process-io-short-eof-red.tap`). 공유 owner의 stdio join/EOF 검사 뒤 process/async76/76과 실제 Linux
+scope/crash/native53/53이 통과했다. 이는 위 Darwin producer와의 제품 연결이나 전체 회귀 PASS가 아니다.
+같은 수정의 독립 packed 설치27/27도 통과했다. 외부 선언 diagnostics44의 기존 범위는 그대로이며,
+소유한 stream의 complete EOF와 물리 close·producer close를 함께 관측해야 정상 결과가 된다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `63e33490f37d60684af439a792853062c657750b2d4b50509a0c6a3bb9ca50d0` (15834 files).
+verification input digest `4b6b1374808a4bf76ad936cd60b698755994bc3117267da0fd66b0c508fb580d` (15835 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
