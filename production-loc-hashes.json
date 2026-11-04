@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "7b9231346cf564882e551aa5e19af5feeddeb576ff5601a2da919fa6cb4095f7"
+      "sha256": "9592d9f00abe222a4dd57cf7dd07e5b095901006a28b54743ac6a405b17f1be0"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -1592,7 +1592,7 @@
     },
     {
       "path": "packages/platform-mac/src/execution-launch.ts",
-      "sha256": "de80384d43701c431bcddc0596755969efa928497d26bd9819f93c82ab6bc921"
+      "sha256": "dc1cb513960df30edb5d0fc4f0cf97644619b73f40bb8f64c7921f58346a548e"
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",

@@ -1401,10 +1401,46 @@ local의 Mac recovery scenario는 platform refusal이며 kernel recovery PASS가
 
 새 v3 writer/recovery의 독립 packed27/27와 전체 구조 검사도 통과했다. Mac adapter는18 public entries이며 외부 선언 diagnostics44·ledger 미검토를 유지한다.
 
+### fresh Darwin v3 recovery의 실제 성공과 application 연결
+
+`39c533683f3` Native [41847949278](https://github.com/minjung2035/oma-v2-ci/actions/runs/41847949278)의
+Mac15 eager ZIP `13331183950` SHA-256 `67bb7ab6737c141acb008378278cc0c82c10cf3cdd9464afb3dc36b90add4a78`,
+Mac26 `13332038787` SHA-256 `5669717721123304c7d85f8b31ddf605872261672e8708059aa75c3f0ce930a5`를 대조했다.
+양 OS **331/331·fail/cancel/skip/todo0**, input/runtime 전후 동일이며 입력은15850개
+`4733b4562ca1414ceaf39a2fd61ce5e536ec38e577d84790f6933f077c60cadd`다.
+실제 Host SIGKILL 뒤 stopped helper, raw detached 후손, production Seatbelt detached 후손의 v3 witness를
+새 controller가 다시 관측하고, fresh token으로 제어해 CID 소멸 뒤에만 retire했다. 독립 descendant pin도 exited였다.
+opening-only는 실제 bytes를 보존하며 unknown을 유지했고, v2 원본 prefix와 hash는 바꾸지 않았다.
+자신의 CID 제어와 legacy Darwin PID/session 복구는 거절했다. 이 성공은 제품 lease·actor role·installed JS proof가 아니다.
+원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/coalition-recovery/`다.
+
+이 결과 뒤 application의 Darwin backend에 새 observe/acquire와 명시적 v3 writer를 연결했다.
+launch guard는 계속 실제 workload를 만들지 않는다. guard의 positive noncreation을 공통 owner에 알려
+실행되지 않은 scope의 opening을 retire하고 반복 시도에서도 원래 UNSUPPORTED_PROFILE을 유지한다.
+공통 owner 이전에 object spread가 lazy setup getter를 실행하지 않도록 wrapper는 원래 accessor를 지연 전달한다.
+Seatbelt crash의 후속 Mac 검사는 실제 `recoverExecutionState` 조립 경로를 사용한다. 이 application 연결의 Mac은 아직 NOT_RUN이다.
+현재 build·local66/66, 별도 실제 Linux66/66은 통과했다. local의 새 Mac scenario는 platform refusal이다.
+
+### expected Broker task-name capability 후보 — 실제 Mac 미실행
+
+기존 nonce·valid signed Node만으로 expected Broker를 정하지 않는다. 후보는 trusted shim이 sandbox 전에
+실제 controller의 task-name right를 얻고 full kernel token을 대조한 뒤, discard seed와 그 최소 right만 등록하는 것이다.
+production Seatbelt source의 SETEXEC와 Node→C child를 거친 뒤에도 source 조회가 되는지 controlled probe를 추가했다.
+product helper에 capability를 넣거나 actor/role 권한을 주지는 않는다.
+
+[고정 kobject 조회](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/mach_debug.c#L531)와
+SDK의 IPC_OTYPE_TASK_NAME20을 먼저 확인한다. 사용자 port에 `task_info` RPC를 보내 가짜 응답을 kernel 사실로 읽지 않는다.
+[task_info converter](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task.c#L6458)는
+TASK_DYLD_INFO에 더 강한 task-read를 요구한다. probe는 Host bootstrap/registered ports/DYLD info 획득 거절,
+관계없는 살아 있는 PID의 task-name 획득 거절, 원래 source와 자신의 CID 조회 결과를 각각 기록한다.
+Host CID 조회가 실패한 것을 outside-scope proof로 바꾸지 않는다. genuine own-task name20도 expected Broker가 아니라는 반례를 둔다.
+SDK26.5 arm64 `-Wall -Wextra -Werror` object compile만 확인했으며 실제 sandbox/Node 상속·거절은 NOT_RUN이다.
+이 후보는 Host death/exec에 따른 revoke와 다른 scope capability 전달도 별도 검증해야 하므로 아직 채택하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4733b4562ca1414ceaf39a2fd61ce5e536ec38e577d84790f6933f077c60cadd` (15850 files).
+verification input digest `5421f4d5c053f6299476960fd0a7b29e055ddb4f4cd54488c4f464196dd4ad66` (15852 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

@@ -2,7 +2,7 @@
  * The actual workload reports its kernel identity through its native channel. */
 import { StoreError } from "@oma/domain/errors";
 import type { CommandSpec, ProcessObservation } from "@oma/process/command";
-import type { BlockedExecution } from "@oma/process/owned-execution";
+import { ExecutionNotStarted, type BlockedExecution } from "@oma/process/owned-execution";
 import type { DarwinSessionWitness } from "@oma/native/audit-session";
 
 export interface DarwinScopeControls {
@@ -13,5 +13,5 @@ export interface DarwinScopeControls {
   readonly stderrFd?: number;
 }
 export async function launchBlockedDarwin(command: CommandSpec, controls: DarwinScopeControls = {}): Promise<BlockedExecution<DarwinSessionWitness>> {
-  throw new StoreError("UNSUPPORTED_PROFILE", "Darwin execution requires the native launch-data channel");
+  throw new ExecutionNotStarted(new StoreError("UNSUPPORTED_PROFILE", "Darwin execution requires the native launch-data channel"));
 }

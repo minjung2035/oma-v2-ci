@@ -11,25 +11,27 @@ import { observeNamespaceProcess, pinNamespaceInit, type NamespaceInitIdentity }
 import { launchBlockedNamespace } from "@oma/platform-linux/namespace-execution";
 import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { launchBlockedDarwin } from "@oma/platform-mac/execution-launch";
+import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
+import { EXECUTION_JOURNAL_VERSION, DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 
 type Observation = { readonly kind: "running"; readonly identity: ExecutionWitness } | { readonly kind: "exited" | "unavailable" };
 interface Backend {
+  readonly journalVersion: typeof EXECUTION_JOURNAL_VERSION | typeof DARWIN_EXECUTION_JOURNAL_VERSION;
   launch: (command: CommandSpec, options: Record<string, unknown>) => Promise<BlockedExecution<ExecutionWitness>>;
   observe: (witness: ExecutionWitness) => Observation;
   acquire: (witness: ExecutionWitness) => RecoveryScope<ExecutionWitness>;
 }
 function backend(): Backend {
   if (process.platform === "darwin") return {
+    journalVersion: DARWIN_EXECUTION_JOURNAL_VERSION,
     launch: launchBlockedDarwin,
-    // Legacy Darwin records have no boot binding or qualified recovery producer.
-    // Retain the journal and refuse reuse instead of returning its saved identity.
-    observe: (): Observation => ({ kind: "unavailable" }),
-    acquire: () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "legacy Darwin scope has no fresh recovery capability"); },
+    observe: observeDarwinJobScope,
+    acquire: acquireDarwinJobScope,
   };
   if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "native execution requires a supported platform");
-  return { launch: launchBlockedNamespace,
+  return { journalVersion: EXECUTION_JOURNAL_VERSION, launch: launchBlockedNamespace,
     observe: (witness: ExecutionWitness): Observation => witness.kind === "linux-namespace" ? observeNamespaceProcess(witness.pid) : { kind: "unavailable" },
     acquire: (witness: ExecutionWitness) => {
       if (witness.kind !== "linux-namespace") throw new StoreError("RUN_TERMINATION_UNKNOWN", "Linux recovery witness has the wrong platform identity");
@@ -39,7 +41,7 @@ function backend(): Backend {
 export async function recoverExecutionState(stateRoot: string, fresh: boolean): Promise<void> {
   const selected = backend();
   if (fresh) ExecutionJournal.initialize(stateRoot);
-  const journal = ExecutionJournal.open(stateRoot);
+  const journal = ExecutionJournal.open(stateRoot, selected.journalVersion);
   await withAsyncCleanup(() => new ExecutionCoordinator(journal, selected.observe, selected.acquire).recover(), () => journal.close());
 }
 export class ExecutionRuntime {
@@ -55,8 +57,15 @@ export class ExecutionRuntime {
     const budget = this.workload, lease = budget?.acquire();
     try {
       const scope = await this.selected.launch(budget?.command(command) ?? command, { ...options, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
-      return { ...scope, result: scope.result.then(result => ({ ...result, ...(lease === undefined ? {} : { resources: { ...lease.events(), scope: lease.path } }) })),
+      // Preserve lazy setup: spreading scope would invoke its getter before
+      // the common owner has published the acquired kernel witness.
+      const wrapped: BlockedExecution<ExecutionWitness> = { witness: scope.witness, closed: scope.closed,
+        population: () => scope.population(), release: () => scope.release(), terminate: () => scope.terminate(),
+        result: scope.result.then(result => ({ ...result, ...(lease === undefined ? {} : { resources: { ...lease.events(), scope: lease.path } }) })),
         close: () => { scope.close(); lease?.close(); } };
+      for (const key of ["prepared", "terminal"] as const) if (key in scope)
+        Object.defineProperty(wrapped, key, { enumerable: true, get: () => scope[key] });
+      return wrapped;
     } catch (error) {
       if (lease !== undefined) try { lease.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "workload launch remains owned"); }
       throw error;
@@ -66,7 +75,7 @@ export class ExecutionRuntime {
   private readonly selected = backend();
   private readonly owner: ExecutionCoordinator<ExecutionWitness>;
   constructor(stateRoot: string) {
-    this.journal = ExecutionJournal.open(stateRoot);
+    this.journal = ExecutionJournal.open(stateRoot, this.selected.journalVersion);
     this.owner = new ExecutionCoordinator(this.journal, this.selected.observe, this.selected.acquire);
   }
   recover(): Promise<void> { return this.owner.recover(); }

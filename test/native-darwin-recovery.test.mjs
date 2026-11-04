@@ -2,7 +2,7 @@
  * No product lease, actor authority or installed-JS qualification is inferred. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ import { DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-format
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
 import { currentDarwinAuditToken, identifyDarwinCoalition, pinDarwinProcess } from "@oma/native/audit-session";
+import { ExecutionRuntime, recoverExecutionState } from "#oma-test/app/runtime/execution-runtime";
 
 const legacy = { kind: "darwin-audit-session", auditSession: 1, coalitionId: "2", pid: 3, pidVersion: 4 };
 test("001. Legacy Darwin recovery never turns a saved PID/session into live authority", () => {
@@ -74,8 +75,10 @@ for (const point of ["witness", "released", "released-seatbelt"]) test(`003. Act
       descendant = pinDarwinProcess(pid); f.pins.push(descendant);
       assert.equal(descendant.state(), "live"); assert.deepEqual(descendant.identity, row.witness);
     }
-    await new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope).recover();
-    assert.deepEqual(journal.entries(), []); assert.equal(observeDarwinJobScope(row.witness).kind, "exited");
+    if (point === "released-seatbelt") {
+      journal.close(); await recoverExecutionState(f.root, false);
+    } else await new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope).recover();
+    assert.deepEqual(ExecutionJournal.inspect(f.root), []); assert.equal(observeDarwinJobScope(row.witness).kind, "exited");
     if (descendant) assert.equal(descendant.state(), "exited");
     assert.deepEqual(readFileSync(f.file).subarray(0, before.length), before, "old frames remain byte-identical");
   } finally { journal.close(); }
@@ -89,4 +92,17 @@ test("004. Actual opening-only Host crash remains unknown and leaves journal byt
     await assert.rejects(new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope).recover(), { code: "RUN_TERMINATION_UNKNOWN" });
     assert.deepEqual(readFileSync(f.file), before); assert.equal(journal.entries().length, 1);
   } finally { journal.close(); }
+});
+
+test("005. Actual application guard retires positive noncreation and preserves unsupported refusal on retry", async t => {
+  if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-darwin-guard-")));
+  ExecutionJournal.initialize(root); const runtime = new ExecutionRuntime(root);
+  t.after(async () => { await runtime.close(); rmSync(root, { recursive: true }); });
+  const command = { executable: process.execPath, argv: ["-e", "require('node:fs').writeFileSync('entered','forbidden')"], env: {}, cwd: root,
+    timeoutMs: 1000, stdoutBytes: 0, stderrBytes: 0 };
+  for (let attempt = 0; attempt < 2; ++attempt) {
+    await assert.rejects(runtime.run("candidate", command, undefined, () => {}), { code: "UNSUPPORTED_PROFILE" });
+    assert.deepEqual(ExecutionJournal.inspect(root), []); assert.equal(existsSync(join(root, "entered")), false);
+  }
 });
