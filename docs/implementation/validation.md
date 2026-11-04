@@ -543,6 +543,36 @@ non-null endpoint만으로 호환되는지 좁힐 수 있지만 현재는 **NOT_
 다른 fresh controller의 제어를 대조한다. GUI 부재·제품 headless 지원이나 complete backend를 뜻하지 않는다.
 로컬 C 두 image의 arm64 SDK object compile·Node 문법·parser/Seatbelt42/42·skip0가 통과했다.
 
+### public lookup·drop-all·Background 조합의 실제 결과 — source `c54ca8cbfa9`
+
+Native [41791642317](https://github.com/minjung2035/oma-v2-ci/actions/runs/41791642317)의 두 OS 각3회에서
+실제 public lookup은 inherited baseline에서0·SEND right·정상 반납이었으나 제안된52-byte proxy reply에서는
+5·port0이었다. deny-all·drop-all도5·port0이었다. **52-byte reply의 client 수용은 확인되지 않았으며 port
+중개 구현으로 채택하지 않는다.** 일반 도구/DNS 성공을 lookup 성공으로 계산하지 않는다.
+HOST_LAUNCHCTL_PORT 취득은 baseline/proxy/deny/drop 모두 status4·port0이었고 host right 반납은0이었다.
+이 한 API 대조를 모든 권한 재취득 경로의 폐쇄로 일반화하지 않는다.
+
+모든 요청을 폐기한 drop-all은 실제 replyBytes0·선택/반환 port0으로 Node·Git·compiler·일반 C/Node DNS와
+exit0·실제 join·timeout 없음을 보존했다. fresh service 두 경로는 모두 exit5·effect=null이었다.
+production leaf의 lifetime job을 user/501·Background·SessionCreate로 옮긴 조합도 양 OS 각3회 모두
+late/post-snapshot fork 제어와 독립 CID ESRCH·다른 live CID 조회0을 보존했다. GUI 부재·실제품 recovery는
+아직 미검증이며 제품 backend와 guard를 바꾸지 않는다.
+
+입력15829개 `0568d0555683ee0df9914ac1c392eb335ad5127e9cdc2e4dfcfd962542bf4ac6`와 runtime은 양 OS
+전후 동일했다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED·product BLOCKED다. SHA-256 확인한
+`lookup-proxy/drop-all/`의 Mac26 ZIP은 `e6c0da73da7e9130a5c0b62ead4b1e8ed282e791ba3d5580aedf8e965cab1ff2`,
+Mac15 ZIP은 `0a44786d8fd9daee891efe470800e108b122b8da727a7d760afa828911c18963`이다.
+
+### 다음 입력 — LaunchOnlyOnce와 label 없는 CID 반환 관측
+
+Background·SessionCreate의 별도 controlled once job에만 LaunchOnlyOnce를 추가한다. 고정
+[Apple source](https://github.com/apple-oss-distributions/launchd/blob/d448a1c8f70a61202f8705f94337f686b87c30c4/src/core.c#L6066)의
+job_useless는 시작한 only-once job의 종료를 제거 조건으로 사용한다. 현재 OS에서는 **NOT_RUN**이다.
+실제 actor 종료 후 explicit bootout 없이 CID/독립 live CID·production leaf를 조회하고 print/restart 결과를
+별도 기록한다. CLI113은 fixture registration 정리 관측에만 사용하며 scope 죽음은 kernel 조회로 구분한다.
+이 옵션이 실제 CID를 반납하면 저장 label을 신호 권한으로 삼지 않는 조합의 다음 후보가 된다.
+성공 전 제품 constructor·journal 형식·scope 판정을 변경하지 않는다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -735,6 +765,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0568d0555683ee0df9914ac1c392eb335ad5127e9cdc2e4dfcfd962542bf4ac6` (15829 files).
+verification input digest `11636e71e4b180701d5f3bb5bf680cef7ddee08c11dfa879e61820c39b7c6b07` (15829 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

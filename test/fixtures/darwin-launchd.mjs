@@ -63,7 +63,8 @@ function loadJob(name, executable, mode, hash, options = {}) {
     ExitTimeOut: 1, StandardOutPath: join(directory, "stdout"), StandardErrorPath: join(directory, "stderr"),
     ...(hash === undefined ? {} : { SpawnConstraint: { cdhash: Buffer.from(hash, "hex") } }),
     ...(options.sessionCreate === true ? { SessionCreate: true } : {}),
-    ...(options.background === true ? { LimitLoadToSessionType: "Background" } : {}) };
+    ...(options.background === true ? { LimitLoadToSessionType: "Background" } : {}),
+    ...(options.launchOnlyOnce === true ? { LaunchOnlyOnce: true } : {}) };
   writeFileSync(path, `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(definition)}</plist>`, { mode: 0o600 });
   // Submission failure can be ambiguous; cleanup still addresses our own label.
   const jobDomain = options.domain ?? domain;
@@ -797,6 +798,37 @@ value.complete = true; save();
       bootout(job);
       background.status = "OBSERVED";
     } catch (error) { background.error = String(error); }
+    const oneShot = { status: "SETUP_FAILED", fixtureOnly: true, domain: `user/${process.getuid()}`,
+      sessionType: "Background", sessionCreate: true, launchOnlyOnce: true, explicitBootoutBeforeObservation: false };
+    observation.oneShot = oneShot;
+    try {
+      const job = loadJob("background-one-shot", actor, "once", undefined,
+        { domain: oneShot.domain, background: true, sessionCreate: true, launchOnlyOnce: true });
+      oneShot.target = job.target;
+      oneShot.kickstart = run("/bin/launchctl", ["kickstart", job.target], false);
+      assert.equal(oneShot.kickstart.exitCode, 0, JSON.stringify(oneShot.kickstart));
+      await waitFor(() => existsSync(join(job.directory, "once.json")));
+      oneShot.actor = remember(marker(job.directory, "once"));
+      await waitFor(() => originalExited(oneShot.actor.identity));
+      oneShot.afterExit = await observeReaping(oneShot.actor.resource, observation.controllerChild.resource);
+      oneShot.printAfterExit = run("/bin/launchctl", ["print", job.target], false);
+      oneShot.restart = run("/bin/launchctl", ["kickstart", job.target], false);
+      oneShot.afterRestart = usage(oneShot.actor.resource);
+      const current = marker(job.directory, "once");
+      if (current.pid !== oneShot.actor.pid) oneShot.restartedActor = remember(current);
+      const entry = fileURLToPath(new URL("./darwin-coalition-control.mjs", import.meta.url));
+      const identity = { kind: "darwin-resource-coalition", bootId: observation.boot.stdout.trim().toLowerCase(),
+        coalitionId: oneShot.actor.resource };
+      oneShot.nativePopulation = JSON.parse(run(process.execPath, [entry, "population", JSON.stringify(identity)]).stdout);
+      // These CLI results record registration cleanup only. Independent CID
+      // queries, not print text or marker absence, carry the lifetime observation.
+      oneShot.autoRemovalObserved = oneShot.printAfterExit.exitCode === 113 && oneShot.restart.exitCode === 113 &&
+        oneShot.afterRestart.available === true && oneShot.afterRestart.returnCode === -1 && oneShot.afterRestart.errno === 3;
+      if (oneShot.autoRemovalObserved) assert.equal(oneShot.nativePopulation.result, "empty");
+      if (oneShot.autoRemovalObserved) job.active = false;
+      else bootout(job);
+      oneShot.status = "OBSERVED";
+    } catch (error) { oneShot.error = String(error); }
     // No SpawnConstraint: independently qualify ordinary job provisioning.
     const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
     // Keep the host positive on a separate, otherwise equivalent job. Reusing

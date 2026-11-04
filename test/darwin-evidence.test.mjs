@@ -59,6 +59,14 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
         status: "OBSERVED", target: "user/501/org.oma.probe.test.background",
         kickstart: launchctlRecord("kickstart", "user/501/org.oma.probe.test.background"),
         actor: { pid: 108, uid: 501, auditTokenStatus: 0, auditTokenCount: 8, auditSession: 100004, coalitionBytes: 40, resource: "43" } },
+      oneShot: { fixtureOnly: true, domain: "user/501", sessionType: "Background", sessionCreate: true, launchOnlyOnce: true,
+        explicitBootoutBeforeObservation: false, status: "OBSERVED", target: "user/501/org.oma.probe.test.once", actor: { pid: 109, uid: 501, resource: "44" },
+        kickstart: launchctlRecord("kickstart", "user/501/org.oma.probe.test.once"),
+        printAfterExit: { ...launchctlRecord("print", "user/501/org.oma.probe.test.once"), exitCode: 113 },
+        restart: { ...launchctlRecord("kickstart", "user/501/org.oma.probe.test.once"), exitCode: 113 },
+        afterExit: { samples: [{ elapsedMs: 1, aggregate: { ...coalitionQuery(), returnCode: -1, errno: 3 }, otherAggregate: coalitionQuery() }] },
+        afterRestart: { ...coalitionQuery(), returnCode: -1, errno: 3 }, autoRemovalObserved: true,
+        nativePopulation: { mode: "population", uid: 501, identity: { coalitionId: "44" }, result: "empty" } },
       scope: { members: { leader: { resource: "41" }, detached: { pid: 101, sandboxed: true } }, control: { resource: "42", pid: 102 },
       afterBootout: { otherAcknowledged: true },
       admission: { privateInterface: true, available: true, uid: 501, callerResource: "41",
@@ -405,6 +413,22 @@ test("014. Native darwin: Background comparison preserves domain, ordinary UID a
   }
   good.background = { fixtureOnly: true, domain: "user/501", sessionType: "Background", sessionCreate: true,
     guiAbsent: false, status: "SETUP_FAILED", error: "actual bootstrap refused" };
+  validateDarwinObservation("launchd-scope", { launchdScope: good });
+});
+test("015. Native darwin: one-shot observations cannot replace kernel scope evidence with registration text", () => {
+  const good = launchdRecord("launchd-scope");
+  for (const corrupt of [
+    value => { delete value.oneShot; },
+    value => { value.oneShot.explicitBootoutBeforeObservation = true; },
+    value => { value.oneShot.afterRestart = coalitionQuery(); },
+    value => { value.oneShot.nativePopulation.result = "populated"; },
+    value => { value.oneShot.afterExit.samples = []; },
+  ]) {
+    const bad = structuredClone(good); corrupt(bad);
+    assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
+  }
+  good.oneShot = { fixtureOnly: true, domain: "user/501", sessionType: "Background", sessionCreate: true,
+    launchOnlyOnce: true, explicitBootoutBeforeObservation: false, status: "SETUP_FAILED", error: "actual option refused" };
   validateDarwinObservation("launchd-scope", { launchdScope: good });
 });
 test("005. Native darwin: launchd scope refuses ambiguous lookup, admission and child cleanup evidence", () => {

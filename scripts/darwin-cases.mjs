@@ -712,6 +712,27 @@ export function validateDarwinObservation(name, observations) {
       const pairs = record => Array.isArray(record?.samples) && record.samples.length > 0 &&
         record.samples.every(sample => Number.isFinite(sample.elapsedMs) && sample.elapsedMs >= 0 &&
           query(sample.aggregate) && query(sample.otherAggregate));
+      const oneShot = value.oneShot;
+      if (oneShot?.fixtureOnly !== true || oneShot.domain !== `user/${admission.uid}` || oneShot.sessionType !== "Background" ||
+          oneShot.sessionCreate !== true || oneShot.launchOnlyOnce !== true || oneShot.explicitBootoutBeforeObservation !== false ||
+          !["OBSERVED", "SETUP_FAILED"].includes(oneShot.status) || oneShot.status === "SETUP_FAILED" && typeof oneShot.error !== "string")
+        throw new Error("one-shot comparison loses its exact constructor or explicit-removal limitation");
+      if (oneShot.status === "OBSERVED") {
+        const command = (record, verb) => record?.executable === "/bin/launchctl" &&
+          JSON.stringify(record.argv) === JSON.stringify([verb, oneShot.target]) && Number.isSafeInteger(record.exitCode) &&
+          record.signal === null && typeof record.stdout === "string" && typeof record.stderr === "string";
+        const removed = oneShot.printAfterExit?.exitCode === 113 && oneShot.restart?.exitCode === 113 &&
+          oneShot.afterRestart?.available === true && oneShot.afterRestart.returnCode === -1 && oneShot.afterRestart.errno === 3;
+        if (typeof oneShot.target !== "string" || !oneShot.target.startsWith(`${oneShot.domain}/org.oma.probe.`) ||
+            !Number.isSafeInteger(oneShot.actor?.pid) || oneShot.actor.pid <= 1 || oneShot.actor.uid !== admission.uid ||
+            !decimal(oneShot.actor.resource) || !pairs(oneShot.afterExit) || !query(oneShot.afterRestart) ||
+            !command(oneShot.kickstart, "kickstart") || oneShot.kickstart.exitCode !== 0 ||
+            !command(oneShot.printAfterExit, "print") || !command(oneShot.restart, "kickstart") ||
+            oneShot.autoRemovalObserved !== removed || oneShot.nativePopulation?.mode !== "population" ||
+            oneShot.nativePopulation.uid !== admission.uid || oneShot.nativePopulation.identity?.coalitionId !== oneShot.actor.resource ||
+            !["populated", "empty", "unknown"].includes(oneShot.nativePopulation.result) || removed && oneShot.nativePopulation.result !== "empty")
+          throw new Error("one-shot comparison lacks actual registration, restart and independent CID outcomes");
+      }
       if (exit?.controlledGenerationsExited !== true || !pairs(exit))
         throw new Error("launchd scope lacks paired post-exit kernel queries");
       if (admission?.privateInterface !== true || typeof admission.available !== "boolean" ||
