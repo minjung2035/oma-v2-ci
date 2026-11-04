@@ -6,7 +6,13 @@
 
 `work/model-surface-cleanup`의 `9de6ee91`에 macOS 브랜치 `88abfea5`를 병합했다. Linux의 동일한 EAGAIN 재시도 구현과 전용 contained-open 회귀를 유지하고, Darwin bootstrap 관측·검증과 exact Unix socket·root alias 처리를 통합한다. 중복된 owned-cleanup EAGAIN 사례는 기존 native 전용 시험으로 유지하며 새 구현이나 중복 시험을 추가하지 않는다. macOS 브랜치의 [검증 원문](../archive/macos-native-2026-11-04/implementation/validation.md)은 당시 입력의 기록으로 별도 보존한다.
 
-병합본의 빌드·타입 검사와 관련 선택 실행 **302 PASS / 0 FAIL / 0 SKIP**를 확인했다. 실제 위임 cgroup·pinned bwrap의 사전 실행도 **3 PASS / 0 FAIL / 0 SKIP**다. 문서 링크·명세 inventory와 보관 원문 SHA-256은 모두 통과했다. Linux 전체 실행은 아직 미완료이며, 병합 전 전체 결과나 선택 PASS를 현재 입력의 전체 PASS로 계산하지 않는다. 원시는 `/tmp/oma-macos-merge-actual-{build,typecheck}.log`, `/tmp/oma-macos-merge-actual-focused.tap`, `/tmp/oma-macos-merge-cgroup-preflight.tap`에 있다. 실제 Darwin 실행은 NOT_RUN이며 `launchBlockedDarwin()`은 native launch-data channel 부재로 여전히 UNIMPLEMENTED다. G-PROCESS·G-FILES·G-AUTH와 fresh Society admission closure는 유지한다.
+**병합 커밋 `7f5ceee5`의 Linux 전체 실행은 4,733 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo다.** Node 26.0.0·UID 1000·delegated user scope·실제 pinned bwrap 0.12.0의 private overlay에서 repository `scripts/test-local.mjs`를 수정 없이 실행했다. 기본 동시성 4, 전체 556개 파일, 단독 3개/44 PASS와 병렬 553개/4,689 PASS이며 native 필수 6개 파일도 포함한다. 실행·입력 재확인 시간은 **1201.806초**다(2026-11-04 10:24:42–10:44:44 KST).
+
+실행 전후 **15,825개 검증 입력의 bytes가 동일**하고 changed=[]다. 고정 입력 digest는 `29cca543e96b38a8dc30049ef64c7d157a69eac5997397d48ea758bab968e17f`다. 원시는 `/tmp/oma-macos-merged-linux-20261104/`의 `full-run.json`, `full.log`, `before-inputs.json`, `after-inputs.json`, `summary-serial.tap`, `summary-parallel.tap`에 보존한다. 성공한 runner가 원래대로 정리하는 TAP은 외부 검증 harness가 열린 read FD로 보존했으며, runner·테스트 선택·시간 제한·단언을 변경하지 않았다. 이 결과 문단은 실행 후 보고 출력이다. 아래 현재 구조 binding은 출력 이후 identity로서 고정 입력의 runtime digest와 구분한다.
+
+빌드·타입 검사, 관련 선택 실행 **302 PASS**, 실제 위임 cgroup·pinned bwrap 사전 실행 **3 PASS**, module/architecture·transaction·durable boundary·문서·명세 inventory 검사도 통과했다. 원시는 `/tmp/oma-macos-merge-actual-{build,typecheck,architecture}.log`, `/tmp/oma-macos-merge-actual-focused.tap`, `/tmp/oma-macos-merge-cgroup-preflight.tap`에 있다. 보관한 macOS 기록 3개의 SHA-256도 원문과 일치한다.
+
+실제 Darwin 실행은 **NOT_RUN**이며 `launchBlockedDarwin()`은 native launch-data channel 부재로 여전히 **UNIMPLEMENTED**다. G-PROCESS·G-FILES·G-AUTH와 fresh Society admission closure를 유지한다. Linux 결과를 macOS 지원·외부 provider qualification·실서비스 cutover 완료로 확대하지 않는다.
 
 ## 추가 경계 테스트의 최종 전체 검증
 
@@ -186,6 +192,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `29cca543e96b38a8dc30049ef64c7d157a69eac5997397d48ea758bab968e17f` (15825 files).
+verification input digest `a6b584d4cb039f6409e7998b8dbbdadb989c8e238e2c9fc89ba2dd50b75c8c59` (15825 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
