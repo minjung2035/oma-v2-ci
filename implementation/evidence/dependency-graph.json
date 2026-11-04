@@ -2943,7 +2943,7 @@
   "node:crypto": 63,
   "node:dns": 1,
   "node:events": 3,
-  "node:fs": 136,
+  "node:fs": 137,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,

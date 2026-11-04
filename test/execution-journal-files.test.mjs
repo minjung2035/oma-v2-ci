@@ -113,3 +113,23 @@ test("007. Actual unsupported guard cannot poison a journal slot with a never-cr
     }
   } finally { await owner.drain(); journal.close(); }
 });
+
+test("005. Darwin preparation keys keep concurrent scopes distinct without rewriting existing journal frames",t=>{
+ const f=fixture(t),initial=readFileSync(f.file),one='preparation:11111111-1111-4111-8111-111111111111',two='preparation:22222222-2222-4222-8222-222222222222';
+ const journal=ExecutionJournal.open(f.root,DARWIN_EXECUTION_JOURNAL_VERSION);
+ try{
+  const a=journal.reserve(one),b=journal.reserve(two),legacy=journal.reserve('preparation');
+  assert.deepEqual(ExecutionJournal.inspect(f.root).map(r=>r.slot),[one,two,'preparation']);
+  assert.deepEqual(readFileSync(f.file).subarray(0,initial.length),initial);
+  const before=readFileSync(f.file);
+  for(const invalid of ['preparation:principal','preparation:../outside','preparation:11111111-1111-1111-8111-111111111111'])assert.throws(()=>journal.reserve(invalid),TypeError);
+  assert.deepEqual(readFileSync(f.file),before);
+  // No child was created by this format-only fixture.
+  a.retire();b.retire();legacy.retire();assert.deepEqual(journal.entries(),[]);
+ }finally{journal.close();}
+});
+test("006. The Linux journal keeps its previous preparation key grammar",t=>{
+ const f=fixture(t),journal=ExecutionJournal.open(f.root),before=readFileSync(f.file);
+ try{assert.throws(()=>journal.reserve('preparation:11111111-1111-4111-8111-111111111111'),TypeError);assert.deepEqual(readFileSync(f.file),before);}
+ finally{journal.close();}
+});

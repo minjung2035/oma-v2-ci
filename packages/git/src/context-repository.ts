@@ -154,10 +154,10 @@ export class ContextRepository {
       fsyncDir(staging);
       const directory = workFd;
       const run = (argv: readonly string[], input?: Uint8Array) => this.preparation.run({
-        executable: "/usr/bin/git", argv: ["-C", "/proc/self/fd/3", ...argv], env: CONTEXT_ENV,
+        executable: "/usr/bin/git", argv: ["-C", ".", ...argv], env: CONTEXT_ENV,
         ...(input === undefined ? {} : { input }), timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
         stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
-      }, undefined, [directory, held.descriptor]);
+      }, undefined, [directory, held.descriptor], {}, { directoryFd: directory });
       const success = async (argv: readonly string[], input?: Uint8Array) => requirePreparedSuccess(await run(argv, input), "context preparation");
       await success(["init", "-q", `--object-format=${format}`]);
       if (expected !== null) {

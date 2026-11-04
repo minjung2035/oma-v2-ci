@@ -12,7 +12,7 @@ import { encodeDarwinJob } from "../dist/job-launch.js";
 test("001. Frozen private job bytes reach the C decoder exactly, and malformed or partial frames refuse", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-job-config-"));
   t.after(() => rmSync(root, { recursive: true }));
-  const executable = join(root, "decode"), include = fileURLToPath(new URL("../src/job-helper", import.meta.url));
+  const executable = join(root, "decode"), include = fileURLToPath(new URL("../../native/src/job-helper", import.meta.url));
   const fixture = fileURLToPath(new URL("../../../test/fixtures/darwin-job-config.c", import.meta.url));
   const built = spawnSync(process.platform === "darwin" ? "/usr/bin/xcrun" : "/usr/bin/cc",
     [...(process.platform === "darwin" ? ["clang"] : []), "-Wall", "-Wextra", "-Werror", "-I", include, fixture, "-o", executable],

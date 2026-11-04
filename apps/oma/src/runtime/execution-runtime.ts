@@ -86,9 +86,9 @@ export class ExecutionRuntime {
     }
     this.journal = ExecutionJournal.open(stateRoot, this.selected.journalVersion);
     this.owner = new ExecutionCoordinator(this.journal, this.selected.observe, this.selected.acquire);
-    try { if (physicalLaunch !== undefined) this.releasePreparation = configurePreparationExecution({ run: (command, signal, files, sinks) =>
+    try { if (physicalLaunch !== undefined) this.releasePreparation = configurePreparationExecution({ run: (command, signal, files, sinks, controls) =>
       this.owner.run({ slot: "preparation:" + randomUUID(), launch: () => this.launch(command, { ...sinks,
-        files: files.map((fd, index) => ({ target: index + 3, fd })), ...(signal === undefined ? {} : { signal }) }),
+        files: files.map((fd, index) => ({ target: index + 3, fd })), ...(controls?.directoryFd === undefined ? {} : { directoryFd: controls.directoryFd }), ...(signal === undefined ? {} : { signal }) }),
         authorize() { if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation authority was cancelled"); },
         ...(signal === undefined ? {} : { signal }) }) }); }
     catch (error) { withCleanup(() => { throw error; }, () => this.journal.close()); }

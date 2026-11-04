@@ -40,8 +40,11 @@ const ZERO = "0".repeat(64);
 const BOOT = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function keys(value: Record<string, unknown>, expected: string[]): boolean { return Object.keys(value).sort().join() === expected.sort().join(); }
-function slot(value: unknown): value is string { return typeof value === "string" &&
-  (["candidate", "quarantine", "restic", "preparation"].includes(value) || value.startsWith("resident:") && isValidActorName(value.slice(9))); }
+function slot(value: unknown, version: JournalVersion): value is string { return typeof value === "string" &&
+  (["candidate", "quarantine", "restic", "preparation"].includes(value) || value.startsWith("resident:") && isValidActorName(value.slice(9)) ||
+    // Native preparations have independent scopes, never fabricated Resident
+    // identities. Existing slot values/frames remain valid and are not rewritten.
+    version === DARWIN_EXECUTION_JOURNAL_VERSION && value.startsWith("preparation:") && UUID_V4_RE.test(value.slice("preparation:".length))); }
 function identity(value: unknown, version: JournalVersion): value is ExecutionWitness {
   if (!object(value) || typeof value.kind !== "string") return false;
   if (version === DARWIN_EXECUTION_JOURNAL_VERSION)
@@ -62,7 +65,7 @@ function identity(value: unknown, version: JournalVersion): value is ExecutionWi
 function event(value: unknown, version: JournalVersion): value is Event {
   if (!object(value)) return false;
   if (value.kind === "initialize") return keys(value, ["kind", "owner"]) && typeof value.owner === "string" && value.owner.startsWith("/");
-  if (!["opening", "witness", "closed"].includes(String(value.kind)) || !slot(value.slot) ||
+  if (!["opening", "witness", "closed"].includes(String(value.kind)) || !slot(value.slot, version) ||
       typeof value.execution !== "string" || !UUID_V4_RE.test(value.execution)) return false;
   return value.kind === "witness" ? keys(value, ["kind", "slot", "execution", "witness"]) && identity(value.witness, version)
     : keys(value, ["kind", "slot", "execution"]);
@@ -142,7 +145,7 @@ export class ExecutionJournal {
   entries(): readonly ExecutionJournalEntry[] { this.assertOpen(); return [...this.entriesBySlot.values()]; }
   reserve(name: string): { readonly execution: string; publish: (witness: ExecutionWitness) => void; retire: () => void } {
     this.assertOpen();
-    if (!slot(name)) throw new TypeError("invalid execution slot");
+    if (!slot(name, this.version)) throw new TypeError("invalid execution slot");
     if (this.entriesBySlot.has(name)) throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous execution scope is not retired");
     const execution = uuidV4(); this.append({ kind: "opening", slot: name, execution });
     return Object.freeze({

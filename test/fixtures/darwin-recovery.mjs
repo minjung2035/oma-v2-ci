@@ -24,15 +24,17 @@ const descendant = "const fs=require('node:fs');fs.writeFileSync('descendant.pid
 const source = `const {spawn}=require('node:child_process');spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore',env:{}}).unref();setInterval(()=>{},1000)`;
 const command = { executable: realpathSync(process.execPath), argv: ["-e", source], env: { HOME: root, TMPDIR: root }, cwd: root,
   timeoutMs: 20000, stdoutBytes: 0, stderrBytes: 128 };
+let preparationFailure;
 if (point === "released-preparation") {
   const runtime = new ExecutionRuntime(root, launchDarwinJobScope);
-  const run = new PreparationExecutor().run(command); void run.catch(() => {});
+  const run = new PreparationExecutor().run(command); void run.catch(error => { preparationFailure = error; });
 } else await controlledOwner().begin({ slot: "candidate", launch: () => point === "released-seatbelt" ? launchSeatbeltJobScope(command, {
   readable: [], writable: [{ path: root, kind: "directory" }], denied: [],
   executable: [{ path: command.executable, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"],
 }) : launchDarwinJobScope(command), authorize() {} });
 const deadline = performance.now() + 10000;
 while (!existsSync(root + "/pulse") || statSync(root + "/pulse").size === 0) {
+  if (preparationFailure !== undefined) throw preparationFailure;
   if (performance.now() >= deadline) throw new Error("controlled detached descendant did not start"); await delay(5);
 }
 die();

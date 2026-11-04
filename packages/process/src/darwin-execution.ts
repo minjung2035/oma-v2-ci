@@ -16,6 +16,8 @@ import { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
 import type { DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export { inheritedDarwinJobPeer, peerFromMachReceiver, type DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export interface DarwinJobScopeOptions extends ProcessIOOptions {
+  /** Borrowed exact directory; no pathname reopen or /dev/fd traversal. */
+  readonly directoryFd?: number;
   readonly files?: readonly DarwinJobFile[];
   readonly stderrFd?: number;
   readonly peer?: DarwinJobPeer;
@@ -55,7 +57,7 @@ function terminalStatus(status: number): { code: number | null; signal: NodeJS.S
   return { code: null, signal: name as NodeJS.Signals };
 }
 async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExecution<DarwinCoalitionIdentity>> {
-  const signal = options.signal, stderrFd = options.stderrFd;
+  const signal = options.signal, stderrFd = options.stderrFd, directoryFd = options.directoryFd;
   const captureOptions: ProcessIOOptions = { ...(signal === undefined ? {} : { signal }),
     ...(options.stdoutSink === undefined ? {} : { stdoutSink: options.stdoutSink }),
     ...(options.stderrSink === undefined ? {} : { stderrSink: options.stderrSink }) };
@@ -66,6 +68,7 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     const targets = [...extra.map(file => file.target), ...inputs.map(input => input.fd)];
     if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0 || images.length !== 1 && images.length !== 2 || images[0] !== command.executable ||
         inputs.length > 0 && images.length !== 2 || new Set(targets).size !== targets.length ||
+        directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || command.cwd !== undefined) ||
         targets.some(fd => !Number.isSafeInteger(fd) || fd < 3 || fd > 65535) ||
         stderrFd !== undefined && (command.stderrBytes !== 0 || captureOptions.stderrSink !== undefined))
       throw new StoreError("UNSUPPORTED_PROFILE", "invalid Darwin job scope inputs");
@@ -104,7 +107,7 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     }
     // After child creation is attempted, first acquire its blocked kernel
     // identity. A late cancellation stops that identity before any setup gate.
-    attempted = true; control = await startDarwinJobControl(command, files, images, darwinSetupProcess, undefined, options.peer);
+    attempted = true; control = await startDarwinJobControl(command, files, images, darwinSetupProcess, undefined, options.peer, directoryFd);
     const job = control, capture = task;
     void job.terminal.then(ended => {
       if (ended.kind === "waited") { status = terminalStatus(ended.waitStatus); onExit(status.code, status.signal); }

@@ -1,3 +1,4 @@
+import { fstatSync } from "node:fs";
 import { ExecutionNotStarted } from "@oma/domain/process-command";
 import { runDarwinPreparation } from "./darwin-preparation.js";
 import { StoreError } from "@oma/domain/errors";
@@ -20,9 +21,14 @@ export type PreparationQuiescence = "quiescent" | "active" | "unknown";
  * run proceed. What it must never do is treat the unproven run as complete;
  * the flag clears on the observation, never on the attempt.
  */
+export interface PreparationControls {
+  /** Borrowed directory capability, retained by its caller through completion.
+   * The command must not also select a pathname cwd. */
+  readonly directoryFd?: number;
+}
 export interface PreparationExecutionPort {
   run(command: CommandSpec, signal: AbortSignal | undefined, inheritedFds: readonly number[],
-    sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink">): Promise<ProcessObservation>;
+    sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink">, controls?: PreparationControls): Promise<ProcessObservation>;
 }
 let preparationExecution: PreparationExecutionPort | undefined;
 /** A trusted application lifetime may bind preparation to its durable scope
@@ -51,8 +57,12 @@ export class PreparationExecutor {
     if (observed === "quiescent") { this.uncertain = false; unprovenPreparations.delete(this); }
     return observed;
   }
-  async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = [], sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink"> = {}): Promise<ProcessObservation> {
-    const command = snapshotCommand(source), files = Object.freeze([...inheritedFds]), capture = Object.freeze({ ...sinks });
+  async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = [], sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink"> = {}, controls: PreparationControls = {}): Promise<ProcessObservation> {
+    const command = snapshotCommand(source), files = Object.freeze([...inheritedFds]), capture = Object.freeze({ ...sinks }),
+      directoryFd = controls.directoryFd;
+    if (directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || command.cwd !== undefined || !fstatSync(directoryFd).isDirectory()))
+      throw new TypeError("preparation directory requires one held directory and no pathname cwd");
+    const placementControls = Object.freeze(directoryFd === undefined ? {} : { directoryFd });
     if (files.some(fd => !Number.isSafeInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");
     if (process.platform !== "linux" && process.platform !== "darwin")
@@ -62,7 +72,7 @@ export class PreparationExecutor {
     try {
       const selected = preparationExecution;
       if (selected !== undefined || process.platform === "darwin") {
-        const run = Promise.resolve().then(() => selected === undefined ? runDarwinPreparation(command, signal, files, capture) : selected.run(command, signal, files, capture));
+        const run = Promise.resolve().then(() => selected === undefined ? runDarwinPreparation(command, signal, files, capture, placementControls) : selected.run(command, signal, files, capture, placementControls));
         const closure = run.then(observation => {
           if (observation.kind !== "exited") { this.uncertain = true; unprovenPreparations.add(this); }
         }, error => {
@@ -75,7 +85,10 @@ export class PreparationExecutor {
       }
       const placement = acquirePreparationPlacement();
       let task: ReturnType<typeof startProcess>;
-      try { task = startProcess(command, { ...(placement === undefined ? {} : { placementFd: placement.placementFd }), ...sinks, processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) }); }
+      // The parent keeps this exact directory descriptor until close. This
+      // Linux proc entry is used before exec, independent of child FD slots.
+      const physical = directoryFd === undefined ? command : { ...command, cwd: `/proc/${process.pid}/fd/${directoryFd}` };
+      try { task = startProcess(physical, { ...(placement === undefined ? {} : { placementFd: placement.placementFd }), ...sinks, processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) }); }
       catch (error) { placement?.close(); throw error; }
       const closure = task.result.then(observation => {
         if (observation.kind !== "exited") unprovenPreparations.add(this);

@@ -75,7 +75,7 @@ async function image(pin: DarwinProcessPin, hashes: readonly string[], retry = t
  * READY. No channel or pathname grants workload/actor authority. The returned
  * identity is transient until a qualified journal producer accepts it. */
 export async function startDarwinJobControl(source: CommandSpec, files: readonly DarwinJobFile[],
-  images: readonly string[], invoke: DarwinSetupProcess, signal?: AbortSignal, peerSource?: DarwinJobPeer): Promise<DarwinJobControl> {
+  images: readonly string[], invoke: DarwinSetupProcess, signal?: AbortSignal, peerSource?: DarwinJobPeer, directoryFd?: number): Promise<DarwinJobControl> {
   let attempted = false;
   const owners: (() => void)[] = [], pins: DarwinProcessPin[] = [];
   let root: DarwinProcessPin | undefined, rootAccepted = false;
@@ -84,12 +84,17 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "job setup was cancelled");
     if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0 || stages !== 1 && stages !== 2 || images[0] !== command.executable)
       throw new StoreError("UNSUPPORTED_PROFILE", "job setup requires explicit Darwin main image stages");
+    if (directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || command.cwd !== undefined || !fstatSync(directoryFd).isDirectory()))
+      throw new StoreError("UNSUPPORTED_PROFILE", "job requires one held directory and no pathname cwd");
     const peer = peerSource === undefined ? undefined : captureDarwinJobPeer(peerSource);
     if (peer !== undefined) owners.push(() => peer.endpoint.close());
     const frame = encodeDarwinJob(command, targets, stages, false, peer?.token), hashes = images.map(selected), helper = bundledJobHelper(), helperHashes = selected(helper);
     const capabilities = files.map(file => { const port = createMachFilePort(file.fd); owners.push(() => port.close()); return port; });
-    const cwd = openDirectory(command.cwd ?? process.cwd());
-    const directory = withCleanup(() => createMachFilePort(cwd), () => closeSync(cwd)); owners.push(() => directory.close());
+    const directory = directoryFd === undefined ? (() => {
+      const cwd = openDirectory(command.cwd ?? process.cwd());
+      return withCleanup(() => createMachFilePort(cwd), () => closeSync(cwd));
+    })() : createMachFilePort(directoryFd);
+    owners.push(() => directory.close());
     const token = currentDarwinAuditToken(), label = "org.oma.job." + randomUUID(), serviceName = label + ".control";
     const endpoint = createMachEndpoint(); owners.push(() => endpoint.receive.close(), () => endpoint.send.close());
     const sink = listenMachDiscardService(label + ".discard"); owners.push(() => sink.close());

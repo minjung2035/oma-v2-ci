@@ -2141,10 +2141,83 @@ SOURCE50 최종 고정 입력에서 build→독립 설치를 순서대로 마쳤
 이후 변경은 이 결과 기록과 구조 input binding뿐이며 production/compiled bytes는 바꾸지 않았다.
 Mac preparation·수정한 descendant case·새 Host-crash 연결의 실제 실행은 발행 뒤 별도 회수한다.
 
+### SOURCE50 실제 preparation·Worker 결과와 held cwd/slot 연결 수정 (SOURCE51)
+
+SOURCE50 `ea204e13a1c135a40c378e9b79a056be6ee4498b` Native
+[41919477476](https://github.com/minjung2035/oma-v2-ci/actions/runs/41919477476)의
+ARM shared ZIP13365633886 SHA-256
+`5042ada02a642673f3f09ab0d13e5c8c0a05bb938d173bda1e9227c85fc22170`,
+Intel shared ZIP13365879258 SHA-256
+`6e449628a18e9a678a49c9ee2da1fee0832fa6ac897402c4b97ea6fdf998b634`를 대조했다.
+양쪽374개 중371 PASS/3 FAIL·cancel/skip/todo0다. canonical15888/
+`7ebaa66f0718296f682b27ffe47e5503718289199c1a6c06a56b74f83a4bc417`는 양쪽 전후 같다.
+runtime15526/27 전후도 ARM
+`e28507e110745c0f09223bd6ca8e4f0c479c96a4aba4dd45125bdc0fbc8be746`, Intel
+`aef6568b2937b008593c16c400e7d693da60571d46745b8bef0a7c1def854fb0`로 각각 같다.
+
+Host transport pin으로 실제 outer CID를 대조한 direct Runner→Seatbelt Worker의 원래 Host full8 token,
+양방향393217 bytes·authenticated EOF·complete scope 반환은 양쪽 PASS다.
+standalone preparation의 FD3·capture도 양쪽 PASS다. application preparation과 그 Host-crash case는
+실행 전 invalid execution slot으로 막혔다. 준비 작업의 UUID suffix를 기존 slot parser가 거절한 것이다.
+시험이 이 빠른 거절을 삼키고 effect만 기다려 deadline으로 보고했으므로 SOURCE51은 원래 예외/결과를 먼저 보존한다.
+나머지 실패는 C frame decoder 시험이 이동 전 PlatformMac header include 경로를 사용한 compile 실패다.
+Native 소유 header로 연결하며 C/header4개의 bytes와 malformed/partial-frame 거절 조건은 유지한다.
+
+SOURCE51은 Darwin v2의 내부 slot 값에 preparation:<UUID-v4> namespace를 추가한다.
+동시 준비 작업마다 독립 journal row를 갖고 다른 준비 작업이나 Resident를 대신하지 않는다.
+기존 literal preparation·다른 기존 slot·header·frame fields·hash chain·witness encoding은 유지한다.
+기존 기록을 다시 쓰거나 accepted plan/request/receipt/state bytes를 migration하지 않는다.
+Linux v1의 slot grammar는 바꾸지 않으며 불완전 UUID·principal 이름·경로 문자열은 거절한다.
+실제 파일 시험으로 독립 opening3개·기존 prefix bytes 보존·invalid append 무변경·Linux 거절을 확인했다.
+새 purpose는 역할 권한이 아니며 opening-only/unknown의 기존 recovery 거절을 유지한다.
+
+ContextRepository의 -C /proc/self/fd/3 의존은 제거한다. shared workflow는 -C .와 held directory를 넘긴다.
+Process는 Linux의 유지한 parent proc descriptor, Darwin은 기존 helper의 directory fileport/fchdir를 사용한다.
+호출자는 FD를 완료까지 보유하며 pathname cwd와 함께 주면 시작 전 거절한다. control도 await 전에 복사한다.
+경로를 rename한 뒤 replacement를 만들어도 원래 held directory에만 쓰는 실제 Linux 회귀가 PASS다.
+기존 context publication·preaccept·shutdown·owned-directory도 올바른 dist/test 출력에서 존재를 확인하고 실행했다.
+이전 선택 실행에 적은 test-dist 경로는 없어서 Node의 glob가 해당 TS 인자를 실행하지 않았다.
+앞선57/57 수치는 실제 실행한 MJS 수치이며 빠진 TS를 검증한 근거로 사용하지 않는다.
+이번 수정 뒤 build와 실제 선택75/75·fail/cancel/skip/todo0가 PASS다.
+
+실제 Mac application 취소 시험은 aborted 결과와 실제 complete CID 소멸을 각각 요구한다.
+owner stop에 없는 child wait status를 SIGKILL이라고 만들어내지 않는다.
+동시 application 준비 작업2개도 각기 다른 row/CID를 갖고 하나를 멈춰도 다른 작업이 살아 있는지 시험한다.
+Context preparation의 실제 Git object/GOAL bytes와 accepted ref 미변경을 common 및 독립 packed Git smoke에 추가했다.
+이 SOURCE51의 Mac 실행·동시 slot/Host-crash/held-cwd qualification은 아직 NOT_RUN이다.
+기존 product guard·default launchBlockedDarwin guard·세 OPEN gate는 유지한다.
+
+SOURCE50 ARM runtime ZIP13366003794 SHA-256
+`1aeb62b1f5de8ea2ac213d8bdcbd308512db6b057374b008e0aa035ca7fa83b0`의 독립 packed 설치는27/27 PASS다.
+이 결과는 SOURCE51에서 추가한 Context candidate 생성의 검증을 대신하지 않는다.
+ARM gate ZIP13365499978 SHA-256
+`9acafe5f6925e3f2d9d1742e4032c8e6ef632dbd9c6e8a382c6d235977297ec0`,
+Mac15 gate ZIP13366204002 SHA-256
+`443fe15545c15ff884842a6fd2863b1dc8766d57843ef41cb12f4aaf84cf65b5`는
+각120 executed/114 OBSERVED/6 Worker SETUP_FAILED다. Mac15는 Darwin24.6/SDK15.5다.
+canonical 전후는 위 SOURCE50과 같고 ARM runtime은 위 shared 값, Mac15 runtime15526/27 전후는
+`b52d551473728c7cb044d003bddc0e076dd6e0c42754535cf1500705708a6808`로 같다.
+제품은 여전히 BLOCKED다.
+
+SOURCE49 full Linux Architecture
+[41912881861](https://github.com/minjung2035/oma-v2-ci/actions/runs/41912881861)의
+artifact13365663333 SHA-256
+`95122b31fc8a3629a7c1deed9e3444cbf353d8f19c8e87bde9848f7292c6e508`도 대조했다.
+source `4470da78dd79a658ef277a91d45fe93ba08e3e8f`, before/after15874/
+`8d4ae9f663e403fb88e6a46d688921bbc9d772c9c0793ac09e524eebf44b7f02`가 같다.
+all4827/4827·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
+이 결과를 SOURCE51이나 전체 Mac 제품 완료로 옮겨 쓰지 않는다.
+
+SOURCE51 최종 고정 production의 build·선택75/75·Linux 독립 packed27/27이 PASS다.
+확장한 Git smoke의 실제 context candidate/GOAL bytes·accepted ref 미변경도 이 독립 설치에서 확인했다.
+전체 module/architecture/durable boundary/문서/spec gate가 통과했다.
+구조 자료는 NOT_REVIEWED14361·CHANGED_WITHOUT_ORACLE30·REMOVED220을 유지하며 승인을 생성하지 않았다.
+이후 변경은 이 결과와 input binding이며, SOURCE51 실제 Mac 재검증은 아직 회수 전이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7ebaa66f0718296f682b27ffe47e5503718289199c1a6c06a56b74f83a4bc417` (15888 files).
+verification input digest `d85e277c069b01e1e39bb82d8fed4d7ea36f62677e70a7e02f5bf24a521514a8` (15889 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

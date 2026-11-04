@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { preparationShutdownBarrier } from "@oma/process/preparation";
+import { withAsyncCleanup } from "@oma/native/cleanup";
 import { registerHooks } from "node:module";
 import { mkdtempSync, realpathSync, rmSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,7 +22,7 @@ assert.deepEqual(evaluated, [], "workflow imports evaluated command implementati
 
 const { GitRepository } = await import("@oma/git/repository");
 const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-installed-git-")));
-try {
+await withAsyncCleanup(async () => {
   const projectGit = join(root, "project.git");
   const run = args => {
     const child = spawnSync("/usr/bin/git", args, { encoding: "utf8", env: {
@@ -47,6 +50,13 @@ try {
   assert.equal(repository.integration.compareAndSwap(oid, candidate).kind, "candidate");
   assert.equal(repository.integration.main().value, candidate);
   assert.deepEqual(repository.integration.published().value, [candidate]);
+  const contextTree = join(root, "context-preparation", "tree"), contextBytes = Buffer.from("# Installed context\n");
+  mkdirSync(contextTree, { recursive: true }); writeFileSync(join(contextTree, "GOAL.md"), contextBytes);
+  const manifest = [{ path: "GOAL.md", bytes: contextBytes.length, sha256: createHash("sha256").update(contextBytes).digest("hex") }];
+  const contextCandidate = await repository.context.prepareCandidate(contextTree, manifest, null);
+  assert.equal(run(["--git-dir", join(root, "context.git"), "show", contextCandidate + ":GOAL.md"]), "# Installed context");
+  assert.equal(repository.context.current(), null, "preparation does not publish the accepted context ref");
+  assert.equal(repository.context.preparationQuiescent(contextTree), true);
   const { CanonicalHealthObserver } = await import("@oma/git/canonical-health");
   const health = new CanonicalHealthObserver(projectGit);
   const pending = health.assertHealthy();
@@ -57,4 +67,4 @@ try {
   await assert.rejects(health.assertHealthy(), { code: "STORE_CORRUPT" });
   assert.equal(existsSync(`${projectGit}.fsck.stderr`), false);
 
-} finally { rmSync(root, { recursive: true, force: true }); }
+}, async () => { await preparationShutdownBarrier(); rmSync(root, { recursive: true, force: true }); });
