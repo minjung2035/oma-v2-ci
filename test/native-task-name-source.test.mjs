@@ -1,7 +1,7 @@
 /** Physical expected-peer source candidate; no product authority is granted. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -127,4 +127,65 @@ for (const change of ["exec", "death"]) test(`002. Actual held source capability
   assert.equal(after.generationBytes === 56 && after.pidVersion === original[7], false,
     "the old capability must never substitute for a fresh matching kernel generation");
   t.diagnostic(JSON.stringify({ change, before, after }));
+});
+
+for (const change of ["exec", "death"]) test(`003. Actual sandboxed source pin and a fresh client reject the original capability after Host ${change}`, { timeout: 45000 }, async t => {
+  if (process.platform !== "darwin") return assert.throws(pinInheritedDarwinPeer, { code: "UNSUPPORTED_PROFILE" });
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-source-fresh-"))), executable = join(root, "source");
+  let journal, owner, writer, read, source, sourceClosed, sourceLines;
+  t.after(async () => {
+    let safe = false;
+    try { await owner?.drain(); safe = true; }
+    finally {
+      try { journal?.close(); writer?.destroy(); if (read !== undefined) closeSync(read); }
+      finally {
+        if (source?.exitCode === null && source.signalCode === null) source.kill("SIGKILL");
+        await sourceClosed; sourceLines?.close();
+        if (safe) rmSync(root, { recursive: true }); else t.diagnostic(`Retained unconfirmed source scope ${root}`);
+      }
+    }
+  });
+  const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror",
+    fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
+  assert.equal(compile.status, 0, compile.stderr);
+  const replacement = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');process.stdout.write(JSON.stringify(currentDarwinAuditToken())+'\\n');setInterval(()=>{},1000);`;
+  const script = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');process.send(currentDarwinAuditToken());
+    process.once('message',()=>process.execve(process.execPath,[process.execPath,'--input-type=module','-e',${JSON.stringify(replacement)}],{}));`;
+  source = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "pipe", "ipc"] });
+  let stderr = ""; source.stderr.on("data", bytes => { stderr += bytes; });
+  sourceClosed = new Promise((yes, no) => { source.once("error", no); source.once("close", (code, signal) => yes({ code, signal })); }); void sourceClosed.catch(() => {});
+  sourceLines = createInterface({ input: source.stdout });
+  const [token] = await once(source, "message"); assert.equal(token[5], source.pid);
+  const node = realpathSync(process.execPath), libdir = realpathSync(fileURLToPath(new URL("../", import.meta.url)));
+  const fixture = new URL(`./fixtures/darwin-peer-source-revocation.mjs?change=${change}`, import.meta.url).href;
+  const target = { executable, argv: ["--after-sandbox", String(process.pid), node, executable,
+    `import(${JSON.stringify(fixture)}).catch(e=>{console.error(e);process.exitCode=1;});`], env: { HOME: root, TMPDIR: root },
+    cwd: root, timeoutMs: 20000, stdoutBytes: 16384, stderrBytes: 8192 };
+  const recipe = prepareSeatbelt(target, { readable: [{ path: libdir, kind: "directory" }], mapped: [{ path: libdir, kind: "directory" }],
+    writable: [{ path: root, kind: "directory" }], denied: [], executable: [executable, node].map(path => ({ path, kind: "file" })),
+    unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"] });
+  const pipe = controlPipe(); read = pipe.read; writer = new Socket({ fd: pipe.write, readable: false, writable: true });
+  const returned = once(writer, "close"); void returned.catch(() => {}); writer.end(recipe.privateInputs[0].bytes);
+  ExecutionJournal.initialize(root); journal = ExecutionJournal.open(root, DARWIN_EXECUTION_JOURNAL_VERSION);
+  owner = new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope);
+  let finished, failure;
+  const running = owner.run({ slot: "candidate", authorize() {}, launch: async () => {
+    try { return await launchDarwinJobScope({ ...recipe.command, executable, argv: [...token.map(String), ...recipe.command.argv] }, { files: [{ target: 3, fd: read }] }); }
+    finally { closeSync(read); read = undefined; }
+  } }).then(result => { finished = result; return result; }, error => { failure = error; throw error; }); void running.catch(() => {});
+  const deadline = performance.now() + 10000, ready = join(root, "source-ready.json");
+  while (!existsSync(ready) && finished === undefined && failure === undefined && performance.now() < deadline) await delay(5);
+  if (failure) throw failure;
+  assert.equal(existsSync(ready), true, JSON.stringify(finished));
+  assert.deepEqual(JSON.parse(readFileSync(ready, "utf8")), { token, alive: true });
+  if (change === "exec") {
+    const changed = once(sourceLines, "line"); source.send("exec"); const next = JSON.parse((await changed)[0]);
+    assert.equal(next[5], token[5]); assert.notEqual(next[7], token[7]);
+  } else { source.kill("SIGKILL"); assert.deepEqual(await sourceClosed, { code: null, signal: "SIGKILL" }, stderr); }
+  writeFileSync(join(root, "source-changed"), "go");
+  const result = await running; await returned;
+  assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
+  const rows = result.stdout.toString().trim().split("\n").map(JSON.parse); t.diagnostic(JSON.stringify(rows));
+  assert.deepEqual(rows.at(-1), { nativeRevoke: change, freshProcessRefused: true });
+  assert.deepEqual(journal.entries(), []);
 });

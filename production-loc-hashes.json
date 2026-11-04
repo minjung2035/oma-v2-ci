@@ -1468,7 +1468,7 @@
     },
     {
       "path": "packages/native/src/directory-layout.ts",
-      "sha256": "39455e0020be232087a64c8005cb7a578534d1b87f7e7a9197e44c994c57d827"
+      "sha256": "1efe60056176c4a2ffdf76f9fcb65f84d90b19df40fdef8012f98d91f803bfb2"
     },
     {
       "path": "packages/native/src/files.ts",

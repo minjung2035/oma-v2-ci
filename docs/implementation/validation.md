@@ -1505,10 +1505,44 @@ macOS arm64 capacity constraints를 명시했다. 제품 실행 실패나 billin
 요청하지 않는다. Mac26·15/Ubuntu와 모든 oracle·기존 timeout·실패 기준·eager/final artifact는 유지한다.
 이 순서 변경의 runner 취득 효과는 아직 NOT_RUN이며 결과 없는 job을 PASS로 채우지 않는다.
 
+### source d7c8bd14e572의 실제 Linux 전체 PASS와 후속 Mac runner 취소
+
+Architecture [41854973606](https://github.com/minjung2035/oma-v2-ci/actions/runs/41854973606)의 native-all ZIP
+`13339926354` SHA-256 `5b2a547c4a70da3709ac3678f8c4c62123e84dd2ee70840e52e8b8c951a02155`를 대조·판독했다.
+all **4795/4795 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges[]**,13 commands 모두0이었다.
+status responsiveness001은 원래100ms 기준으로 mixed35ms·write max50ms·read lag7ms·inFlight1이었다.
+앞선 source의323ms 실패 원인이나 수리를 확정하지 않는다. 원시는 `peer-source/linux-all-art-13339926354/`다.
+후속 source `137df7eed5c6` Native [41858260000](https://github.com/minjung2035/oma-v2-ci/actions/runs/41858260000)는
+Ubuntu만 완료했고 Mac4개는 모두 runner 미취득 cancelled다. 새 host identity·Host exec/death의 Mac 실행 증거는 없다.
+순차 matrix의 source `1a7191956fd1`도 아직 Mac 관측이 없으며 PASS로 채우지 않는다.
+
+### Darwin held-directory filesystem 관측 — 실제 Mac 미실행
+
+기존 state-root 정책의 Linux filesystem magic을 Darwin type 번호에 적용하는 경로를 확인했다.
+`darwinDirectoryFilesystem`은 held directory의 public statfs64에서 type/name·MNT_LOCAL·MNT_RDONLY·
+MNT_EXT_FSKIT를 읽는다. 실패·잘못된 layout/name은 UNSUPPORTED_PROFILE이며 local로 추정하지 않는다.
+SDK26.5 C static assertions로2168 bytes와 각 필드 offset을 arm64/x64에서 확인했고,
+object symbol의 arm64 `fstatfs`와 x64 `fstatfs$INODE64` 구분도 확인했다. 이것은 runtime proof가 아니다.
+실제 C·Node type과 FFI 결과, held directory rename 뒤 동일 관측, regular-file FD 거절을 비교하는 검사를 추가했다.
+임의 NFS/SMB/FUSE mount나 실제 Mac flags는 NOT_RUN이다. state-root caller에는 아직 연결하지 않았다.
+build·관련 local61/61·기존 Linux state-root 정책1/1은 PASS다. local의 새 Mac 검사는 platform refusal이다.
+
+같은 입력은 source pin을 실제 sandbox 안에서 먼저 잡은 뒤 Host exec/death를 만들고 old pin revoke를 확인한다.
+변경 뒤 **새 Node 프로세스**도 원래 kernel capability만으로 다시 인증되지 않아야 한다. 프로세스 내부 cache나
+단순 PID version 비교만으로 이 반례를 통과시키지 않는다. 새 검사는 실제 Mac NOT_RUN이며 채널 연결은 유지 보류다.
+
+파일 보호의 F_SETLEASE 대안도 검토했다. [고정 XNU](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_subr.c)의
+allow_setlease는 private `com.apple.private.vfs.file-leases`를 요구하고, timeout 뒤 강제 lease release도 구현한다.
+기본 privileged/entitlement 없는 immutable installation이나 Society lease 대체로 채택하지 않는다. Mac 실험을 했다는 주장은 아니다.
+
+후속 CI는 Mac26 common을 먼저 요청한다. 새 workflow 입력끼리는 같은 branch concurrency group의 이전 run을
+supersede한다. 이미 시작한 group 없는 과거 run을 이 변경이 취소했다고 쓰지 않는다. 실제 실행된 실패와 cancelled를
+구분하고 eager artifact를 보존하며, 최신 입력의 전체 검증을 마치기 전 제품 완료로 선언하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `82ff7b08096394d45270253d5d7cde030d6a355e071cbbb6d5815916bf337014` (15854 files).
+verification input digest `fa1baf8845d26d6514076c9117d34d063ad1b9eccd3212f9d9f95c7af47689ea` (15857 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

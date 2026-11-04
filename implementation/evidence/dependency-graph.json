@@ -2797,7 +2797,7 @@
   "@earendil-works/pi-coding-agent": 51,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 15,
+  "koffi": 16,
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,
