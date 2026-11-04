@@ -52,7 +52,7 @@ static void identity(FILE *output, pid_t pid) {
     "\"version\":%d,\"bsdBytes\":%d,\"status\":%u}", pid, bytes, saved, unique.unique,
     unique.version, bsd_bytes, bsd.pbi_status);
 }
-static int sandboxed;
+static int sandboxed, inherited_profile;
 static void describe(FILE *output) {
   struct coalition_ids ids = {0};
   errno = 0;
@@ -189,7 +189,7 @@ static void service_probe(void) {
   require(fclose(output) == 0 && rename("service-admission.tmp", "service-admission.json") == 0, "service observation publish");
 }
 static void hold(const char *role, int prune) {
-  if (strcmp(role, "detached") == 0) { apply_profile(); service_probe(); }
+  if (strcmp(role, "detached") == 0) { if (!inherited_profile) apply_profile(); service_probe(); }
   if (prune) close_descriptors();
   publish(role, 1);
   struct timespec start, now, pause = { .tv_nsec = 25000000 };
@@ -340,7 +340,9 @@ int main(int argc, char **argv) {
   require(argc == 3 && chdir(argv[2]) == 0, "private observation directory");
   if (strcmp(argv[1], "once") == 0) { publish("once", 1); return 0; }
   if (strcmp(argv[1], "hold") == 0) { hold("other", 1); return 0; }
-  require(strcmp(argv[1], "scope") == 0, "scope mode");
+  inherited_profile = strcmp(argv[1], "scope-inherited-profile") == 0;
+  require(inherited_profile || strcmp(argv[1], "scope") == 0, "scope mode");
+  if (inherited_profile) sandboxed = 1; /* Fixture input; launcher records actual sandbox_init. */
   pid_t ordinary = fork(); require(ordinary >= 0, "ordinary fork");
   if (ordinary == 0) { hold("ordinary", 1); _exit(0); }
   pid_t intermediate = fork(); require(intermediate >= 0, "detached fork");

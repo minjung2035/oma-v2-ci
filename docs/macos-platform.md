@@ -205,7 +205,7 @@ Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin �
 후속 양 Mac의 공통 runtime289개와 LSP 설치·async child stdio·quarantine 검증/import는 통과했으나 bootstrap 제거 뒤
 일반 C 후손의 libc DNS 실패도 재현됐다. 실제 audit session 분리에서도 외부 service 실행이 허용됐다.
 표준 App Sandbox 뒤 custom profile 적용은 EPERM, 반대 순서는 SIGABRT였다. App 단독도 정상 도구와 함께 다른 coalition의 fresh service 실행을 허용했다. private message filter 규칙은 init EPERM이었다. plain deny도 외부 service를 허용했다. Mac26의 candidate는 gate·lease·script/native build를 완료했으나
-lookup 중개는 수신5·도구 startup 미도달이었다. 실제 queued interface ID를 확인했으나 decoder5였다. 제한된 port reply의 후속 대조는 미실행이며
+private decoder 중개는 수신5·도구 startup 미도달이었다. 제한된 public Mach reply 대조는 두 OS 각3회 정상 도구·DNS·종료를 보존했고 fresh service 두 경로는 exit5·effect 없음이었다. owner 종료·late fork와의 조합 및 전체 권한 closure는 아직 미검증이며
 세 gate와 Mac native 제품 실행 차단은 유지한다.
 Linux의 실제 경로 연결과 Darwin primitive 연결,
 전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와

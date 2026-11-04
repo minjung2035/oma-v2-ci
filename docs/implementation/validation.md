@@ -416,6 +416,38 @@ handoff 증명으로 승격하지 않는다. 새 로컬 SDK compile·Node 문법
 전체 architecture 검사는 PASS다. 원시는 `/tmp/oma-macos-proxy-raw-{sdk,focused,architecture}.log` 또는
 `.tap`이며 제품 guard와 기존 Linux 경로는 그대로다.
 
+### 제한된 port reply의 실제 결과 — source `c8a69786e22`
+
+Native [41786561812](https://github.com/minjung2035/oma-v2-ci/actions/runs/41786561812)의 두 OS 각3회에서
+proxy child의 실제 pre-exec Seatbelt report·Node 쓰기·canary EPERM·Git hash·compiler·일반 C/Node DNS를
+확인했다. 모두 child exit0·waitStatus0·timedOut=false·joined=true다. 고정 logd 이름 요청의52-byte reply
+전송은 성공했다. 이 전송 성공만으로 client가 받은 port의 전체 의미나 private wire ABI를 검증한 것은 아니다.
+다른 interface 요청은 전달하지 않았다. fresh service와 global bootstrap 복구 뒤 다른 fresh service의
+launchctl은 모두 exit5·numeric deadline cleanup 없음·guestEffect=null이었다. 정상 도구와 이 두 service
+반례를 함께 보존한 첫 제한된 후보이며, 모든 service admission과 arbitrary-descendant 종료 증명은 아니다.
+
+입력15828개 `b8ba93b9ecffb2141e1cc90e5320b6e6a50b4f2c7980bbff2c42624c514fbdeb`와 runtime 산출물은
+양 OS 전후 동일하다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED이며 product BLOCKED다.
+SHA-256 확인한 원시는 `lookup-proxy/raw-reply/`다. Mac26 ZIP
+`00b3de1d7c788640cc6ef77de6eeb41e593b23cc55ff4211c04a01b90b9686d1`, Mac15 ZIP
+`c32f95ae184b6c64f6fc5cef266b5c6b0d246b0f2a759dca5468772450ce85c1`이다.
+
+마지막 제품 TS 변경 `fdf08e7dca9`의 Architecture
+[41780793092](https://github.com/minjung2035/oma-v2-ci/actions/runs/41780793092) native-all도 SHA-256 대조했다.
+all4745/4745 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges=[]다. 원시 ZIP
+`2674c9f581fe693742c972d7c0ea735c93efa89538b066f547baf97e24bf567c`는 위 경로의
+`art-13300608008/all/result.json`이다. 이 과거 full을 현재 입력의 결과로 바꾸지 않는다.
+
+### 다음 입력 — lookup 중개와 owner-loss·late-fork의 조합
+
+launchd의 별도 job이 proxy를 시작하고 같은 renderer의 좁은 profile을 실제 적용한 뒤 controlled actor를
+exec한다. fork·setsid·double-fork·FD 폐쇄 후 job을 제거하고 살아 있는 후손의 late fork를 관측한다.
+새 controller는 기존 kernel task-name token 취득과 generation/CID 상관 확인만 사용한다. 첫 PID hint
+snapshot 뒤 태어난 후손도 다음 round에서 처리하고 CID 조회를 독립 live CID와 함께 보존한다.
+profile 재적용은 하지 않는다. marker/PID는 조정·검색 힌트이며 role·죽음의 권한이 아니다.
+시작 후 후손 종료를 확인하지 못하면 전체 cleanup 완료를 거절한다. 이 추가 조합은 **NOT_RUN**이며
+제품 backend·gate·headless 지원 판정을 바꾸지 않는다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -608,6 +640,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `b8ba93b9ecffb2141e1cc90e5320b6e6a50b4f2c7980bbff2c42624c514fbdeb` (15828 files).
+verification input digest `bfabcf9ae313b41bd3df735976f8dd163bce60701f42e79dc1ee9e4566e4dd75` (15828 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

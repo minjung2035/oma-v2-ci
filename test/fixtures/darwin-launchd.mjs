@@ -443,6 +443,58 @@ value.complete = true; save();
           assert.equal(proxy.trace.at(-1)?.joined, true, "lookup proxy child was not joined");
           proxy.status = "OBSERVED";
         } catch (error) { proxy.error = String(error); }
+        // Compare the lookup boundary with the already observed late-fork
+        // recovery primitive. These are controlled actors, never an app gate.
+        const lifetime = { status: "SETUP_FAILED", fixtureOnly: true,
+          tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false };
+        proxy.lifetime = lifetime;
+        try {
+          assert.equal(proxy.status, "OBSERVED", "lookup compatibility prerequisite");
+          const executable = join(root, "bootstrap-proxy"), tracePath = join(root, "proxy-lifetime.jsonl");
+          const directory = join(root, "proxy-lifetime");
+          const portsPath = join(directory, "ports.json"), profilePath = join(root, "proxy-lifetime.sb");
+          const scopeProfile = seatbeltProfile({ readable: [], writable: [{ path: directory, kind: "directory" }],
+            denied: [], executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
+          writeFileSync(profilePath, scopeProfile, { mode: 0o600 });
+          const scope = loadJob("proxy-lifetime", executable, "unused", undefined, {
+            argv: [executable, tracePath, launcher, "inherited", profilePath, portsPath, directory,
+              actor, "scope-inherited-profile", directory] });
+          const other = loadJob("proxy-lifetime-other", actor, "hold");
+          const service = loadJob("proxy-lifetime-service", actor, "once", undefined, { directoryRoot: directory });
+          writeFileSync(join(directory, "service-target"), `${service.target}\n`, { mode: 0o600 });
+          Object.assign(lifetime, { target: scope.target, otherTarget: other.target, serviceTarget: service.target,
+            profileSha256: createHash("sha256").update(scopeProfile).digest("hex") });
+          lifetime.started = true; // A failed submission/start may still have had an effect.
+          run("/bin/launchctl", ["kickstart", scope.target]);
+          run("/bin/launchctl", ["kickstart", other.target]);
+          await waitFor(() => ["leader", "ordinary", "detached", "service-admission"]
+            .every(name => existsSync(join(directory, `${name}.json`))) && existsSync(join(other.directory, "other.json")));
+          const members = Object.fromEntries(["leader", "ordinary", "detached"]
+            .map(name => [name, remember(marker(directory, name))]));
+          const control = remember(marker(other.directory, "other"));
+          const trace = readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+          const ready = trace.find(entry => entry.phase === "ready");
+          const proxyIdentity = inspect(ready.pid);
+          assert.equal(proxyIdentity.uniqueBytes, 56); assert.match(proxyIdentity.unique, /^[1-9][0-9]*$/);
+          targets.push(proxyIdentity);
+          Object.assign(lifetime, { trace, ports: optionalJson(portsPath), proxyIdentity, members, control,
+            before: usage(members.leader.resource), otherBefore: usage(control.resource),
+            serviceAttempt: marker(directory, "service-admission"),
+            guestEffect: effect(service) });
+          bootout(scope);
+          writeFileSync(join(directory, "ping"), "after proxy owner removal");
+          await waitFor(() => existsSync(join(directory, "late.json")));
+          lifetime.late = remember(marker(directory, "late"));
+          lifetime.wrongMember = JSON.parse(run(actor, ["signal-member", String(control.pid), members.leader.resource]).stdout);
+          lifetime.remainingMember = JSON.parse(run(actor, ["signal-member", String(members.detached.pid), members.leader.resource]).stdout);
+          lifetime.discoveryRecovery = await recoverFromHints(members.leader.resource, control.resource, directory);
+          lifetime.after = usage(members.leader.resource);
+          lifetime.otherAfter = usage(control.resource);
+          lifetime.traceAfter = readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+          await waitFor(() => [...Object.values(members).map(member => member.identity), proxyIdentity].every(originalExited));
+          lifetime.controlledGenerationsExited = true;
+          lifetime.status = "OBSERVED";
+        } catch (error) { lifetime.error = String(error); }
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
@@ -736,6 +788,9 @@ finally {
       if (proxy?.command !== undefined)
         assert.ok(proxy.trace?.at(-1)?.phase === "terminal" && proxy.trace.at(-1).joined === true,
           "lookup proxy command ended without observing its controlled child return");
+      if (proxy?.lifetime?.started)
+        assert.equal(proxy.lifetime.controlledGenerationsExited, true,
+          "proxy lifetime comparison cannot hide unobserved descendants");
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }
