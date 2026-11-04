@@ -60,6 +60,10 @@
       "types": "./dist/launchd-job.d.ts",
       "default": "./dist/launchd-job.js"
     },
+    "./macho-image": {
+      "types": "./dist/macho-image.d.ts",
+      "default": "./dist/macho-image.js"
+    },
     "./resident-sandbox": {
       "types": "./dist/resident-sandbox.d.ts",
       "default": "./dist/resident-sandbox.js"

@@ -32,6 +32,9 @@ export interface SeatbeltPolicy {
    * launcher consumes the frame and gives the target /dev/null on stdin.
    * Workers keep descriptor 3 so stdin remains their RPC channel. */
   readonly profileInput?: "descriptor" | "stdin";
+  /** Trusted execution owner validates the mapped target before continuing
+   * this kernel stop. No workload authority is carried by this flag. */
+  readonly suspendExec?: boolean;
 }
 const SYSTEM_READS = ["/System/Library", "/usr/lib", "/usr/share", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 const SYSTEM_EXEC = ["/bin", "/sbin", "/usr/bin", "/usr/sbin"];
@@ -127,6 +130,7 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
   if (profileInput !== undefined && profileInput !== "descriptor" && profileInput !== "stdin")
     refused("Seatbelt profile input is invalid");
   const stdin = profileInput === "stdin";
+  if (policy.suspendExec !== undefined && typeof policy.suspendExec !== "boolean") refused("Seatbelt exec gate is invalid");
   if (stdin && (command.input !== undefined || command.stdinFd !== undefined))
     refused("Seatbelt stdin profile cannot replace command input");
   path(command.executable); path(launcher);
@@ -164,6 +168,7 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
   return { ...command, executable: launcher,
     ...(stdin ? { input: frame } : {}),
     argv: [...(stdin ? ["--profile-stdin"] : []), ...(descriptors.length ? [`--keep-fds=${descriptors.join(",")}`] : []),
+      ...(policy.suspendExec === true ? ["--start-suspended"] : []),
       command.executable, ...command.argv] };
 }
 export function bundledSeatbeltHelper(): string {

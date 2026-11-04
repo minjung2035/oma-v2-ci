@@ -533,6 +533,38 @@ test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal",
     gate.initialImage = structuredClone(initial); corrupt(gate.initialImage); assert.throws(validate);
   }
   gate.initialImage = initial; validate();
+  gate.expectedCdHashes = ["a".repeat(40)]; gate.otherCdHashes = ["b".repeat(40)];
+  gate.otherOrigin = { kind: "unavailable", osStatus: -67050 };
+  gate.imageSelections = [gate.expectedCdHashes, gate.otherCdHashes, gate.targetImage.expectedCdHashes].map(cdHashes =>
+    ({ source: "held-regular-bytes", path: "/owned/selected-image", bytes: 1024, sha256: "c".repeat(64),
+      cdHashes: [...cdHashes], independentCdHash: cdHashes[0] }));
+  validate();
+  const selections = structuredClone(gate.imageSelections);
+  for (const corrupt of [value => { value.pop(); }, value => { value[0].source = "path-check"; },
+    value => { value[0].independentCdHash = "d".repeat(40); }, value => { value[0].sha256 = "missing"; },
+    value => { value[0].cdHashes = [...gate.otherCdHashes]; value[0].independentCdHash = gate.otherCdHashes[0]; }]) {
+    gate.imageSelections = structuredClone(selections); corrupt(gate.imageSelections); assert.throws(validate);
+  }
+  gate.imageSelections = selections; validate();
+  const slots = [0, 1, 2, 7, 3];
+  gate.profileChannel = { source: "production-prepareSeatbelt", framing: "OMASBPL1", fd: 3, frameBytes: 128,
+    sha256: "d".repeat(64), payloadSha256: proxy.profileSha256 }; gate.profileHandlesReturned = true;
+  gate.fileports = { transport: "native-fileport", slots, beforeRelease: { stdout: "", stderr: "" },
+    child: { input: "MACH_INPUT\n", private: "MACH_PRIVATE\n" }, stdout: "MACH_STDOUT\n", stderr: "MACH_STDERR\n" };
+  gate.finalImage = { ...structuredClone(gate.targetImage), reportBeforeRelease: false,
+    outputBeforeRelease: { stdout: 0, stderr: 0 }, expectedCdHashes: [...gate.otherCdHashes], otherCdHashes: [...gate.expectedCdHashes] };
+  gate.finalImage.token[7]++; gate.beforeFinalReleaseAttack = { pid: child + 3 }; gate.rejectedAtFinish = 3;
+  gate.trace = [...slots.map(slot => ({ phase: "fileport", slot, closeOnExec: true })),
+    { phase: "suspended", stage: "launcher", childPid: child, stopSignal: 0 },
+    { phase: "suspended", stage: "target", childPid: child, stopSignal: 0 }, { phase: "terminal", joined: true }];
+  validate();
+  const profile = structuredClone(gate.profileChannel);
+  for (const patch of [{ fd: 7 }, { frameBytes: 16 }, { source: "profile-path" }, { payloadSha256: "bad" }]) {
+    gate.profileChannel = { ...profile, ...patch }; assert.throws(validate);
+  }
+  gate.profileChannel = profile; gate.profileHandlesReturned = false; assert.throws(validate);
+  gate.profileHandlesReturned = true; gate.fileports.slots = [0, 1, 2, 7]; assert.throws(validate);
+  gate.fileports.slots = slots; validate();
 });
 
 test("013. Native darwin: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {

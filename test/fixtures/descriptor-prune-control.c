@@ -62,5 +62,5 @@ int main(int argc, char **argv) {
   }
   struct oma_fd_policy policy = { NULL, 0 };
   if (strcmp(argv[2], "none") != 0) policy = oma_parse_kept_fds(argv[2]);
-  oma_exec_with_fds(argv[0], next, environ, policy);
+  oma_exec_with_fds(argv[0], next, environ, policy, 0);
 }

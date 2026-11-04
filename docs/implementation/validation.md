@@ -1047,10 +1047,55 @@ assertion이나 실행 선택·예산을 줄이지 않았다.
 workload에서 각각 관측한다. self task 양성·각 reference 반환·command 종료와 원시 report를 남긴다. timeout,
 부분 report·Host 기준선 부재를 정책 차단 PASS로 읽지 않으며 현재 입력에서 Darwin 결과는 NOT_RUN이다.
 
+### helper 시작 정지의 실제 결과 — source `53f4b54c26d`
+
+Native [41813036923](https://github.com/minjung2035/oma-v2-ci/actions/runs/41813036923)의 양 Mac 각3회에서
+regular/pipe gate 모두 OBSERVED다. public WaitForDebugger는 helper를 status4로 정지시켰다. Host는 실제
+task-name token·선택 CDHash 일치·다른 image 거절·trace 부재를 확인하고, 다시 같은 generation/token을
+대조해 SIGCONT했다. 이후 helper의 Mach ACK가 그 full token과 일치했다. launcher→Node의 두 stop·실제
+stdio bytes/EOF·정상 도구·CID/registration 반환도 유지됐다. Mac26 114 OBSERVED/6 SETUP_FAILED·Mac15 111/9다.
+
+Host의 `sudo -n id -u`는 두 OS 각3회 exit0·UID0이었지만 두 Mach workload 각6회는 spawn EPERM이었다.
+task-control/name 취득은 sandbox에서 status5였다. 그러나 Host 기준선은6회 모두 SIGSEGV·불완전 report여서
+해당 비교는 qualification하지 않는다. crash report는 `_kernelrpc_mach_ports_lookup3`→`mach_ports_lookup`을
+가리킨다. 고정 [public wrapper source](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/mach/task.c#L81)는
+remote target에 배열을 할당한 뒤 그 주소를 caller의 출력 주소로 사용한다. 추가 probe에서 이 wrapper를
+원격 task에 사용한 것은 부적절했다. 후속 fixture는 고정 MIG query의 세 SEND 출력만 caller stack으로 받아
+반환한다. fixture-only SPI이며 production API/권한 우회로 채택하지 않는다. 수정 뒤 실제 Mac은 NOT_RUN이다.
+
+입력15832개 `853989920c9c7bba7b5b8a639428cc4388a350b11f3eaaf397bb97947f09002a`와 runtime은 전후 같다.
+API SHA-256 Mac26 `0f52a75976e4433fd26d2f8a3f7a01fe864f0a9cd6048a0e4a78c92497b10ae4`·Mac15
+`3e0d601bf4792ac1780c39dcad7dabdfa5d213515ea77ff730277d01a2baad29`를 대조했다. artifact·요약은
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/helper-stop/`다. 로컬 `326f7ab23b7`의15개 blob와
+tree `77a69b77b0a211f760b93fc20ef0aaeb63716805`가 모두 같은 GitHub API commit이다. SSH key 거절 뒤 연결
+도구로 해당 branch를 expected-head·non-force 갱신했다. 원래 로컬 commit은 checkpoint branch에 보존했다.
+제품 BLOCKED·세 gate OPEN·legacy recovery 거절은 유지한다.
+
+### held image digest와 production private profile — 후속 입력 / Darwin NOT_RUN
+
+`machoImageCdHashes`는 held bytes에서 CPU별 thin/fat Mach-O의 CodeDirectory hash만 추출한다.
+[고정 code-signature layout](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/cs_blobs.h)과
+SDK loader/fat header를 대조했다. 잘린/중복/겹친 범위·지원하지 않는 hash/architecture는 거절한다. 이 digest
+선택은 page/CMS 검증이나 설치 generation proof가 아니다. Host fixture는 같은 held regular bytes의 전후 metadata와
+full SHA-256을 남기고 독립 codesign의 CDHash와 대조한 목록을 실제 stopped-image requirement에 사용한다.
+Linux에서 Zig가 만든 실제 arm64 Mach-O의 CDHash는 독립 Python hashlib 결과와 같았다. 이는 file-format 관측이다.
+
+production `oma-seatbelt`는 private profile FD3의 전체 frame/EOF·sandbox 적용·FD pruning 뒤 선택적으로
+SETEXEC|START_SUSPENDED한다. 기존 target input과 FD7은 유지하며 실패 시 unconfined exec로 가지 않는다.
+Mach gate는 profile을 별도 fileport/pipe로 전달하고 그 writer의 실제 반환도 기다린다. 오류 시 scope 종료를
+먼저 요청해, 정지한 target이 읽지 않는 profile pipe의 drain을 기다리는 교착을 피한다.
+이 production helper의 두 번째 stop·private profile 조합과 held-byte 선택의 실제 Mac은 새 CI에서 확인한다.
+workspace build·관련107/107·C4개 SDK object compile은 PASS이며 제품 scope/journal/auth 연결은 미완료다.
+Linux의 독립 packed 설치27/27도 통과했다. 새 Mach-O export는 설치된 package에서 import하고 Linux ELF를
+거절했다. 기존 외부 선언 diagnostics44의 범위는 유지하며 이를 전체 diagnostics0으로 보고하지 않는다.
+root/helper/Node의 cwd는 recipe의 작업 디렉터리를 사용한다. 생성된 Node fixture도 별도로 syntax 검사했다.
+task-port adversary는 control/name과 선택적으로 존재하는 read/inspect export를 각각 관측하며, export 부재는
+거절 성공으로 계산하지 않는다. 근거는 `/tmp/oma-macos-private-profile-{focused,isolation,build}.log` 또는 `.tap`다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `853989920c9c7bba7b5b8a639428cc4388a350b11f3eaaf397bb97947f09002a` (15832 files).
+verification input digest `63e33490f37d60684af439a792853062c657750b2d4b50509a0c6a3bb9ca50d0` (15834 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

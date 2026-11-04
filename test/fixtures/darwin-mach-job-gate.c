@@ -142,10 +142,10 @@ int main(int argc, char **argv) {
   mach_port_t receiver = MACH_PORT_NULL;
   mach_ok(bootstrap_check_in(bootstrap_port, argv[1], &receiver), "check in declared job service");
   mach_port_t host = receive(receiver, INIT, 1); send_control(host, ACK, 0, 0);
-  const int slots[] = { 0, 1, 2, 7 }; int descriptors[4];
+  const int slots[] = { 0, 1, 2, 7, 3 }; int descriptors[5];
   posix_spawn_file_actions_t files;
   require(posix_spawn_file_actions_init(&files) == 0, "target file actions");
-  for (int index = 0; index < 4; ++index) {
+  for (int index = 0; index < 5; ++index) {
     mach_port_t file = receive(receiver, 0x4f4d4130 + index, 1);
     int received = fileport_makefd(file); require(received >= 0, "import Host fileport");
     mach_ok(mach_port_deallocate(mach_task_self(), file), "return imported fileport SEND reference");
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
   if (spawned == 0 && child > 0) child_pid = child;
   require(posix_spawnattr_destroy(&attributes) == 0, "return target attributes");
   require(posix_spawn_file_actions_destroy(&files) == 0, "return file actions");
-  for (int index = 0; index < 4; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
+  for (int index = 0; index < 5; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
   require(spawned == 0 && child > 0, "controlled job child spawn"); alarm(30);
   int stop_status = stopped_target(child, "launcher");
   send_control(host, READY, child, stop_status);

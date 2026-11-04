@@ -405,6 +405,7 @@ packages/platform-mac/src/mach-address.ts
 packages/platform-mac/src/mach-poll.ts
 packages/platform-mac/src/mach-stream.ts
 packages/platform-mac/src/mach-transport.ts
+packages/platform-mac/src/macho-image.ts
 packages/platform-mac/src/native-assets.ts
 packages/platform-mac/src/native-channel.ts
 packages/platform-mac/src/path-view.ts

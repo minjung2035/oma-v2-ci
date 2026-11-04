@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <stddef.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -145,33 +146,46 @@ static int observe_logd_lookup(const char *report_path) {
 }
 /* Read-only reacquisition adversary. A PID chooses a probe candidate, never
  * a signal target. Return every acquired task/bootstrap/registered reference. */
-static void observe_task_capability(FILE *output, pid_t pid, int name_only) {
+static void observe_task_capability(FILE *output, pid_t pid, int flavor) {
   mach_port_t task = MACH_PORT_NULL, bootstrap = MACH_PORT_NULL;
-  kern_return_t acquired = name_only ? task_name_for_pid(mach_task_self(), pid, &task) : task_for_pid(mach_task_self(), pid, &task);
+  const char *kind = flavor == 0 ? "control" : flavor == 1 ? "name" : flavor == 2 ? "read" : "inspect";
+  int available = 1; errno = 0;
+  kern_return_t acquired;
+  if (flavor < 2) acquired = flavor ? task_name_for_pid(mach_task_self(), pid, &task) : task_for_pid(mach_task_self(), pid, &task);
+  else {
+    typedef int (*get_lesser_task)(mach_port_t, pid_t, mach_port_t *);
+    get_lesser_task get = (get_lesser_task)dlsym(RTLD_DEFAULT, flavor == 2 ? "task_read_for_pid" : "task_inspect_for_pid");
+    available = get != NULL;
+    acquired = available ? get(mach_task_self(), pid, &task) : KERN_NOT_SUPPORTED;
+  }
+  int acquisition_errno = errno;
   kern_return_t special = KERN_INVALID_ARGUMENT, special_return = KERN_INVALID_ARGUMENT;
   kern_return_t registered = KERN_INVALID_ARGUMENT, registered_return = KERN_SUCCESS, task_return = KERN_INVALID_ARGUMENT;
-  mach_port_array_t ports = NULL; mach_msg_type_number_t count = 0; unsigned int valid = 0;
+  mach_port_t ports[3] = {0}; mach_msg_type_number_t count = 0; unsigned int valid = 0;
   if (acquired == KERN_SUCCESS && MACH_PORT_VALID(task)) {
     special = task_get_special_port(task, TASK_BOOTSTRAP_PORT, &bootstrap);
     if (MACH_PORT_VALID(bootstrap)) special_return = mach_port_deallocate(mach_task_self(), bootstrap);
-    registered = mach_ports_lookup(task, &ports, &count);
+    /* The public wrapper allocates in target_task (XNU f6217f89
+     * libsyscall/mach/task.c:91), so it is not a read-only remote probe.
+     * This fixture-only pinned MIG query returns SENDs into our local stack.
+     * Missing SPI is an unavailable observation, never a production fallback. */
+    typedef kern_return_t (*lookup_three)(task_t, mach_port_t *, mach_port_t *, mach_port_t *);
+    lookup_three query = (lookup_three)dlsym(RTLD_DEFAULT, "_kernelrpc_mach_ports_lookup3");
+    registered = query == NULL ? KERN_NOT_SUPPORTED : query(task, &ports[0], &ports[1], &ports[2]);
     if (registered == KERN_SUCCESS) {
+      count = 3;
       for (mach_msg_type_number_t at = 0; at < count; ++at) if (MACH_PORT_VALID(ports[at])) {
         ++valid;
         kern_return_t returned = mach_port_deallocate(mach_task_self(), ports[at]);
         if (returned != KERN_SUCCESS) registered_return = returned;
       }
-      if (ports != NULL) {
-        kern_return_t returned = vm_deallocate(mach_task_self(), (vm_address_t)ports, count * sizeof *ports);
-        if (returned != KERN_SUCCESS) registered_return = returned;
-      }
     }
     task_return = mach_port_deallocate(mach_task_self(), task);
   }
-  fprintf(output, "{\"pid\":%d,\"nameOnly\":%s,\"acquireStatus\":%d,\"task\":%u,"
+  fprintf(output, "{\"pid\":%d,\"flavor\":\"%s\",\"apiAvailable\":%s,\"acquireStatus\":%d,\"acquireErrno\":%d,\"task\":%u,"
     "\"bootstrapStatus\":%d,\"bootstrap\":%u,\"bootstrapReturn\":%d,\"registeredStatus\":%d,"
     "\"registeredCount\":%u,\"registeredValid\":%u,\"registeredReturn\":%d,\"taskReturn\":%d}",
-    pid, name_only ? "true" : "false", acquired, task, special, bootstrap, special_return,
+    pid, kind, available ? "true" : "false", acquired, acquisition_errno, task, special, bootstrap, special_return,
     registered, count, valid, registered_return, task_return);
 }
 static int observe_host_capabilities(const char *report, const char *candidate) {
@@ -182,7 +196,9 @@ static int observe_host_capabilities(const char *report, const char *candidate) 
   fprintf(output, "{\"pid\":%d,\"uid\":%u,\"candidate\":%ld,\"self\":", getpid(), (unsigned)getuid(), value);
   observe_task_capability(output, getpid(), 0); fputs(",\"control\":", output);
   observe_task_capability(output, (pid_t)value, 0); fputs(",\"name\":", output);
-  observe_task_capability(output, (pid_t)value, 1); fputs("}\n", output);
+  observe_task_capability(output, (pid_t)value, 1); fputs(",\"read\":", output);
+  observe_task_capability(output, (pid_t)value, 2); fputs(",\"inspect\":", output);
+  observe_task_capability(output, (pid_t)value, 3); fputs("}\n", output);
   require(fclose(output) == 0, "complete capability report"); alarm(0); return 0;
 }
 static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {

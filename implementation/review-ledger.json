@@ -3,7 +3,7 @@
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
   "CHANGED_WITHOUT_ORACLE": 32,
-  "NOT_REVIEWED": 14336,
+  "NOT_REVIEWED": 14337,
   "REMOVED": 220
  },
  "lanes": {
@@ -2912,7 +2912,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/audit-peer.ts",
@@ -2968,8 +2969,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/mach-address.ts",
@@ -2998,6 +2998,14 @@
    "status": "NOT_REVIEWED",
    "by": [],
    "oracles": []
+  },
+  {
+   "path": "packages/platform-mac/src/macho-image.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/native-assets.ts",
@@ -3032,21 +3040,24 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/seatbelt/main.c",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/package.json",
@@ -3116,8 +3127,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/packet-stream.ts",

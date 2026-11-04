@@ -27,6 +27,11 @@ test("001. Seatbelt preparation keeps arguments and stdin separate from the prof
   command.argv[0] = "changed after preparation"; command.env.HOME = "/human";
   assert.equal(result.command.argv.at(-2), "an argument");
   assert.equal(result.command.env.HOME, "/oma/private/home");
+  const stopped = prepareSeatbelt(source(), { ...policy(), suspendExec: true });
+  assert.equal(stopped.command.argv[0], "--start-suspended");
+  assert.equal(stopped.command.input, source().input); assert.equal(stopped.privateInputs[0].fd, 3);
+  assert.equal(stopped.profile, result.profile);
+  assert.throws(() => prepareSeatbelt(source(), { ...policy(), suspendExec: "yes" }), { code: "UNSUPPORTED_PROFILE" });
 });
 test("002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view", () => {
   for (const key of ["DYLD_INSERT_LIBRARIES", "LD_PRELOAD", "BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "SSH_AUTH_SOCK", "__XPC_DYLD_FRAMEWORK_PATH"]) {

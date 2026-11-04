@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "c8b9585e6597b0322c8911db94d18d13ead7d39dfae0f54d926b1020c5c1ae5f",
+  "manifest": "5347b496e4767a72b18507306e347375ed21544be4abaa91d384249a4ee29c6c",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -1580,7 +1580,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "2e54dff6e66c09a6d87a52031ede87af9a1ffe97a69f59c267b9ab8aa76bbec0"
+      "sha256": "b15d73b10287ffd9efcf9f99f0e2ffae3e62ef750a5aa50df72aa844eeb73e08"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1631,6 +1631,10 @@
       "sha256": "e658d591138045ed6431e7ec211ade3e139f64b70fd908f228fe921000048ced"
     },
     {
+      "path": "packages/platform-mac/src/macho-image.ts",
+      "sha256": "2104a0af71477e702fa2dbf6e3e629b3855277c0620a13759da99b36f1b0a1e0"
+    },
+    {
       "path": "packages/platform-mac/src/native-assets.ts",
       "sha256": "59121afb321ea67e20ec85c03404ff13aff441d80a57fc4b365c98c82c71e29c"
     },
@@ -1648,15 +1652,15 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "e13ee31d1bbd24c56da26605992b1c06f1abadbed6f2256d2611bef1b255520d"
+      "sha256": "62502ba30bcb2e3a04d9e8d4d1db6007c31b893a15b4395a4de42b18c65165f1"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
-      "sha256": "220dfd584a6f1956398c5696a2437d7c575cb72fcc4e0a7bfa9f3a9ed92a56ad"
+      "sha256": "a7fbfe42d04ce8654ebb90686ee6a6f366f23f54b92c88bb3ab70fdc6ebc99de"
     },
     {
       "path": "packages/platform-mac/src/seatbelt/main.c",
-      "sha256": "f37380253f35492a5817467b8fd18919d70338bae5693c6d512766e8b65848f0"
+      "sha256": "8879a715a46a4e1f81b658bb2a81a101833eed0c06095e9360f4973c44d366cc"
     },
     {
       "path": "packages/process/package.json",

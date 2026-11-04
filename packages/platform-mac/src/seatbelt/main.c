@@ -30,10 +30,11 @@ static void receive(int fd, void *buffer, size_t length) {
 }
 int main(int argc, char **argv) {
   int target = 1;
-  int profile_fd = 3, keep_seen = 0;
+  int profile_fd = 3, keep_seen = 0, suspended = 0;
   struct oma_fd_policy kept = { NULL, 0 };
   while (target < argc && argv[target][0] != '/') {
     if (strcmp(argv[target], "--profile-stdin") == 0 && profile_fd == 3) profile_fd = 0;
+    else if (strcmp(argv[target], "--start-suspended") == 0 && !suspended) suspended = 1;
     else if (strncmp(argv[target], "--keep-fds=", 11) == 0 && !keep_seen) {
       kept = oma_parse_kept_fds(argv[target] + 11);
       keep_seen = 1;
@@ -103,5 +104,5 @@ int main(int argc, char **argv) {
       if (close(empty) != 0) failed("Seatbelt target stdin close");
     }
   }
-  oma_exec_with_fds(argv[target], argv + target, environ, kept);
+  oma_exec_with_fds(argv[target], argv + target, environ, kept, suspended);
 }

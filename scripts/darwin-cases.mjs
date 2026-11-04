@@ -495,6 +495,7 @@ export function validateDarwinObservation(name, observations) {
       }
       for (const key of ["machGate", "machPipeGate"]) if (proxy[key] !== undefined) {
         const gate = proxy[key], piped = key === "machPipeGate";
+        const slots = gate.profileChannel === undefined ? [0, 1, 2, 7] : [0, 1, 2, 7, 3];
         const words = token => Array.isArray(token) && token.length === 8 && token.every(portNumber) && token[5] > 1 && token[7] !== 0;
         const image = record => words(record.token) && record.token[5] === gate.childPid && record.pid === gate.childPid &&
           Number.isSafeInteger(record.stopStatus) && record.stopStatus >= 0 && record.stopStatus <= 0xffff &&
@@ -508,7 +509,8 @@ export function validateDarwinObservation(name, observations) {
         if (gate.fixtureOnly !== true || gate.protocol !== 1 || gate.domain !== `user/${baseline.ports.uid}` ||
             gate.sessionType !== "Background" || gate.sessionCreate !== true || gate.launchOnlyOnce !== true ||
             !["OBSERVED", "SETUP_FAILED"].includes(gate.status) || gate.status === "SETUP_FAILED" && typeof gate.error !== "string" ||
-            gate.identity !== undefined && gate.scopeGone !== true || piped && gate.pipeHandlesReturned !== true)
+            gate.identity !== undefined && gate.scopeGone !== true || piped && gate.pipeHandlesReturned !== true ||
+            gate.profileChannel !== undefined && gate.profileHandlesReturned !== true)
           throw new Error("Mach job gate loses its constructor, outcome or independently observed cleanup");
         if (gate.status === "OBSERVED" &&
             (![gate.sourceSha256, gate.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
@@ -519,6 +521,13 @@ export function validateDarwinObservation(name, observations) {
                   ![gate.jobSubmission, gate.jobStart].every(result => result?.kind === "exited" && result.exitCode === 0 &&
                     result.signal === null && result.errorCode === null)) ||
               gate.preemption?.taken !== false || gate.origin?.kind !== "matched" || gate.reportBeforeHostRelease !== false ||
+              gate.imageSelections !== undefined && (!Array.isArray(gate.imageSelections) || gate.imageSelections.length !== 3 ||
+                gate.imageSelections.some((selected, index) => selected.source !== "held-regular-bytes" ||
+                  typeof selected.path !== "string" || !selected.path.startsWith("/") ||
+                  !Number.isSafeInteger(selected.bytes) || selected.bytes <= 0 || !/^[0-9a-f]{64}$/.test(selected.sha256) ||
+                  !Array.isArray(selected.cdHashes) || !selected.cdHashes.includes(selected.independentCdHash) ||
+                  JSON.stringify(selected.cdHashes) !== JSON.stringify([gate.expectedCdHashes, gate.otherCdHashes,
+                    gate.targetImage?.expectedCdHashes][index]))) ||
               gate.initialImage !== undefined && (gate.initialImage.status !== "OBSERVED" ||
                 gate.initialImage.tokenSource !== "kernel-task-name-port" || !words(gate.initialImage.token) ||
                 gate.initialImage.pid !== gate.helperToken[5] ||
@@ -536,7 +545,7 @@ export function validateDarwinObservation(name, observations) {
                   !Array.isArray(gate.otherCdHashes) || !gate.otherCdHashes.length ||
                   gate.otherCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash) || gate.expectedCdHashes.includes(hash))) ||
               gate.fileports !== undefined && (gate.fileports.transport !== (piped ? "native-fileport-pipe" : "native-fileport") ||
-                JSON.stringify(gate.fileports.slots) !== "[0,1,2,7]" ||
+                JSON.stringify(gate.fileports.slots) !== JSON.stringify(slots) ||
                 gate.fileports.beforeRelease?.stdout !== "" || gate.fileports.beforeRelease?.stderr !== "" ||
                 gate.fileports.child?.input !== "MACH_INPUT\n" || gate.fileports.child?.private !== "MACH_PRIVATE\n" ||
                 (piped ? gate.fileports.readersClosed !== true ||
@@ -545,8 +554,14 @@ export function validateDarwinObservation(name, observations) {
                     return gate.fileports[key]?.bytes !== expected.length ||
                       gate.fileports[key]?.sha256 !== createHash("sha256").update(expected).digest("hex");
                   }) : gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n") ||
-                JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== "[0,1,2,7]" ||
+                JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== JSON.stringify(slots) ||
                 gate.trace.some(row => row.phase === "fileport" && row.closeOnExec !== true)) ||
+              gate.profileChannel !== undefined && (gate.profileChannel.source !== "production-prepareSeatbelt" ||
+                gate.profileChannel.framing !== "OMASBPL1" || gate.profileChannel.fd !== 3 ||
+                !Number.isSafeInteger(gate.profileChannel.frameBytes) || gate.profileChannel.frameBytes <= 16 ||
+                !/^[0-9a-f]{64}$/.test(gate.profileChannel.sha256) || gate.profileChannel.payloadSha256 !== proxy.profileSha256 ||
+                gate.fileports === undefined || gate.finalImage === undefined ||
+                gate.profileWriteError !== undefined || gate.profileReturnError !== undefined) ||
               gate.targetImage !== undefined && (!image(gate.targetImage) ||
                 !gate.trace.some(row => row.phase === "suspended" && row.childPid === gate.childPid &&
                   row.stopSignal === ((gate.targetImage.stopStatus >>> 8) & 0xff))) ||

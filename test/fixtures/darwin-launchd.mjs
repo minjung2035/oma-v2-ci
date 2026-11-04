@@ -3,7 +3,7 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { closeSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, copyFileSync, createReadStream, createWriteStream, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { once } from "node:events";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -11,9 +11,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
-import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
+import { bundledSeatbeltHelper, prepareSeatbelt, seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { submitLaunchdJob, startLaunchdJob } from "@oma/platform-mac/launchd-job";
+import { machoImageCdHashes } from "@oma/platform-mac/macho-image";
 import { runProcessSync, runProcess } from "@oma/process/run";
 import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
@@ -66,7 +67,7 @@ function loadJob(name, executable, mode, hash, options = {}) {
   const label = options.label ?? `${prefix}.${name}`, directory = join(options.directoryRoot ?? root, name), path = join(root, `${label}.plist`);
   mkdirSync(directory, { mode: 0o700 });
   const definition = { Label: label, Program: executable, ProgramArguments: options.argv ?? [executable, mode, directory],
-    WorkingDirectory: directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
+    WorkingDirectory: options.workingDirectory ?? directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
     ExitTimeOut: 1, StandardOutPath: join(directory, "stdout"), StandardErrorPath: join(directory, "stderr"),
     ...(hash === undefined ? {} : { SpawnConstraint: { cdhash: Buffer.from(hash, "hex") } }),
     ...(options.sessionCreate === true ? { SessionCreate: true } : {}),
@@ -83,7 +84,7 @@ function loadJob(name, executable, mode, hash, options = {}) {
     assert.equal(options.background && options.sessionCreate && options.launchOnlyOnce, true);
     job.nativeRegistration = submitLaunchdJob({ label, machServices: options.machServices,
       startSuspended: options.startSuspended,
-      command: { executable, argv: definition.ProgramArguments.slice(1), env: {}, cwd: directory,
+      command: { executable, argv: definition.ProgramArguments.slice(1), env: options.environment ?? {}, cwd: definition.WorkingDirectory,
         timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 } }, 10000);
     assert.equal(job.nativeRegistration.target, job.target);
   } else {
@@ -292,6 +293,17 @@ if (["mach-fileports-v1", "mach-fileports-pipe-v1"].includes(process.argv.at(-1)
   value.fileports = { input: readFileSync(0, "utf8"), private: readFileSync(7, "utf8") };
   writeFileSync(1, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048593, 97) : "MACH_STDOUT\\n");
   writeFileSync(2, process.argv.at(-1) === "mach-fileports-pipe-v1" ? Buffer.alloc(1048605, 98) : "MACH_STDERR\\n");
+  const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
+  const library = load(null), task = decode.uint(library.symbol("mach_task_self_")), bootstrap = Buffer.alloc(4), ids = Buffer.alloc(40);
+  if (library.func("int task_get_special_port(unsigned int, int, void *)")(task, 4, bootstrap) !== 0)
+    throw new Error("controlled Node bootstrap observation failed");
+  const seed = bootstrap.readUInt32LE();
+  if (library.func("int mach_port_deallocate(unsigned int, unsigned int)")(task, seed) !== 0)
+    throw new Error("controlled Node bootstrap reference return failed");
+  if (load("/usr/lib/libproc.dylib").func("int proc_pidinfo(int, int, uint64_t, void *, int)")(process.pid, 20, 0n, ids, 40) !== 40)
+    throw new Error("controlled Node coalition observation failed");
+  writeFileSync(process.argv.at(-2), JSON.stringify({ pid: process.pid, resource: ids.readBigUInt64LE().toString(),
+    sandboxApplied: true, bootstrap: seed, observationSource: "controlled-Node-after-production-launcher" }));
 }
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
@@ -678,6 +690,7 @@ value.complete = true; save();
             domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
           proxy[pipeTransfer ? "machPipeGate" : "machGate"] = gate;
           let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl, gateJob, gatePaths, gateTracePath;
+          let profileWriter, profileClosed;
           const gateFiles = [];
           const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0], pipeHeads = [Buffer.alloc(0), Buffer.alloc(0)];
           const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
@@ -687,14 +700,28 @@ value.complete = true; save();
             gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-lbsm", "-o", executable]);
             run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
             gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
-            const cdhash = path => {
+            gate.imageSelections = [];
+            const cdhashes = path => {
+              const descriptor = openSync(path, "r");
+              let bytes;
+              try {
+                const before = fstatSync(descriptor, { bigint: true }); assert.equal(before.isFile(), true);
+                bytes = readFileSync(descriptor);
+                const after = fstatSync(descriptor, { bigint: true });
+                for (const key of ["dev", "ino", "size", "mtimeNs", "ctimeNs"]) assert.equal(after[key], before[key]);
+                assert.equal(BigInt(bytes.length), before.size);
+              } finally { closeSync(descriptor); }
+              const selected = machoImageCdHashes(bytes, process.arch);
               const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", path]);
-              const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
-              assert.ok(hash, JSON.stringify(signature)); return hash;
+              const independent = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
+              assert.ok(selected.includes(independent), JSON.stringify(signature));
+              gate.imageSelections.push({ source: "held-regular-bytes", path, bytes: bytes.length,
+                sha256: createHash("sha256").update(bytes).digest("hex"), cdHashes: selected, independentCdHash: independent });
+              return selected;
             };
-            gate.expectedCdHashes = [cdhash(executable)]; gate.otherCdHashes = [cdhash(process.execPath)];
+            gate.expectedCdHashes = cdhashes(executable); gate.otherCdHashes = cdhashes(process.execPath);
             assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
-            gate.targetImage = { expectedCdHashes: [cdhash(launcher)], otherCdHashes: [...gate.otherCdHashes] };
+            gate.targetImage = { expectedCdHashes: cdhashes(bundledSeatbeltHelper()), otherCdHashes: [...gate.otherCdHashes] };
             assert.notDeepEqual(gate.targetImage.expectedCdHashes, gate.targetImage.otherCdHashes);
             gate.finalImage = { expectedCdHashes: [...gate.otherCdHashes], otherCdHashes: [...gate.targetImage.expectedCdHashes] };
             const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
@@ -717,7 +744,7 @@ value.complete = true; save();
               stderr: join(directory, `${gateTag}-stderr`), private: join(directory, `${gateTag}-private`) };
             gatePaths = filePaths; gateTracePath = tracePath;
             writeFileSync(filePaths.input, "MACH_INPUT\n", { flag: "wx" }); writeFileSync(filePaths.private, "MACH_PRIVATE\n", { flag: "wx" });
-            gate.fileports = { transport: pipeTransfer ? "native-fileport-pipe" : "native-fileport", slots: [0, 1, 2, 7] };
+            gate.fileports = { transport: pipeTransfer ? "native-fileport-pipe" : "native-fileport", slots: [0, 1, 2, 7, 3] };
             const sources = [[filePaths.input, "r"], [filePaths.stdout, "wx"], [filePaths.stderr, "wx"], [filePaths.private, "r"]];
             for (const [index, [path, mode]] of sources.entries()) {
               if (pipeTransfer && index < 3) {
@@ -748,12 +775,25 @@ value.complete = true; save();
                 try { gateFiles.push(createMachFilePort(borrowed)); } finally { closeSync(borrowed); }
               }
             }
+            const recipe = prepareSeatbelt({ executable: process.execPath,
+              argv: [script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+                unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+                JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), portsPath,
+                pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"],
+              env: { HOME: directory, TMPDIR: directory }, cwd: directory, timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 },
+              { ...policy, preserveFds: [7], suspendExec: true, environmentKeys: ["HOME", "TMPDIR"] });
+            assert.equal(recipe.profile, profile); assert.equal(recipe.privateInputs.length, 1); assert.equal(recipe.privateInputs[0].fd, 3);
+            const frame = Buffer.from(recipe.privateInputs[0].bytes), profilePipe = controlPipe();
+            pipeDescriptors.add(profilePipe.read); pipeDescriptors.add(profilePipe.write);
+            try { gateFiles.push(createMachFilePort(profilePipe.read)); } finally { closePipe(profilePipe.read); }
+            profileWriter = createWriteStream("", { fd: profilePipe.write, autoClose: true }); pipeDescriptors.delete(profilePipe.write);
+            profileClosed = once(profileWriter, "close"); void profileClosed.catch(() => {}); profileWriter.end(frame);
+            gate.profileChannel = { source: "production-prepareSeatbelt", framing: "OMASBPL1", fd: 3, frameBytes: frame.length,
+              sha256: createHash("sha256").update(frame).digest("hex"), payloadSha256: createHash("sha256").update(profile).digest("hex") };
             const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
               sessionCreate: true, launchOnlyOnce: true, nativeRegistration: true, startSuspended: true, machServices: [serviceName],
-              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, "suspended-inherited", profilePath, portsPath,
-                directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-                unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
-                JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"] });
+              environment: recipe.command.env, workingDirectory: recipe.command.cwd,
+              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), recipe.command.executable, ...recipe.command.argv] });
             gateJob = job;
             gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
             const jobModule = fileURLToPath(import.meta.resolve("@oma/platform-mac/launchd-job"));
@@ -865,6 +905,7 @@ value.complete = true; save();
             assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
             assert.equal(gateService.send(0x4f4d4124, one), "sent");
             const final = await receiveGate(0x4f4d4128);
+            await profileClosed; assert.equal(profileWriter.closed, true);
             Object.assign(gate.finalImage, { pid: final.bytes.readUInt32LE(8), stopStatus: final.bytes.readUInt32LE(12),
               token: Array.from({ length: 8 }, (_, index) => final.bytes.readUInt32LE(16 + index * 4)) });
             assert.equal(gate.finalImage.pid, gate.targetImage.pid); assert.equal(gate.finalImage.token[5], gate.finalImage.pid);
@@ -927,6 +968,7 @@ value.complete = true; save();
             for (const file of gateFiles) file.close();
             for (const fd of pipeDescriptors) closePipe(fd);
             for (const reader of pipeReaders) reader.destroy();
+            profileWriter?.destroy();
             if (gate.identity) {
               gate.cleanupRounds = [];
               const end = performance.now() + 8000;
@@ -941,6 +983,12 @@ value.complete = true; save();
                   await delay(25);
                 }
               } catch (error) { gate.cleanupError = String(error); }
+            }
+            if (profileWriter) {
+              try {
+                await waitFor(() => profileWriter.closed); await profileClosed;
+                gate.profileHandlesReturned = true;
+              } catch (error) { gate.profileReturnError = String(error); }
             }
             if (pipeTransfer) {
               try { await waitFor(() => pipeReaders.every(reader => reader.closed)); gate.pipeHandlesReturned = true; }
@@ -1319,6 +1367,7 @@ finally {
         if (gate?.identity) assert.equal(gate.scopeGone, true, "Mach gate comparison cannot hide an unobserved scope");
         if (gate?.fileports?.transport === "native-fileport-pipe")
           assert.equal(gate.pipeHandlesReturned, true, "Mach pipe comparison cannot hide an unreturned reader");
+        if (gate?.profileChannel) assert.equal(gate.profileHandlesReturned, true, "Mach profile comparison cannot hide an unreturned writer");
       }
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }

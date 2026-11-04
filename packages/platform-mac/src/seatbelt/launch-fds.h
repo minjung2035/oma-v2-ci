@@ -13,6 +13,7 @@
 #if defined(__APPLE__)
 #include <libproc.h>
 #include <sys/proc_info.h>
+#include <spawn.h>
 #endif
 struct oma_fd_policy { int *fds; size_t count; };
 static _Noreturn void oma_fd_refused(const char *reason) {
@@ -58,7 +59,7 @@ static inline int oma_fd_kept(int fd, struct oma_fd_policy policy) {
   return first < policy.count && policy.fds[first] == fd;
 }
 static inline _Noreturn void oma_exec_with_fds(const char *executable, char *const argv[],
-    char *const env[], struct oma_fd_policy policy) {
+    char *const env[], struct oma_fd_policy policy, int suspended) {
   struct proc_taskinfo task;
   errno = 0;
   if (proc_pidinfo(getpid(), PROC_PIDTASKINFO, 0, &task, sizeof(task)) != (int)sizeof(task) ||
@@ -103,6 +104,17 @@ static inline _Noreturn void oma_exec_with_fds(const char *executable, char *con
     }
   }
   free(entries);
+  if (suspended) {
+    posix_spawnattr_t attributes;
+    int result = posix_spawnattr_init(&attributes);
+    if (result != 0) { errno = result; perror("Seatbelt suspended attributes"); _exit(125); }
+    result = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETEXEC | POSIX_SPAWN_START_SUSPENDED);
+    pid_t replaced = 0;
+    if (result == 0) result = posix_spawn(&replaced, executable, NULL, &attributes, argv, env);
+    int returned = posix_spawnattr_destroy(&attributes);
+    errno = result != 0 ? result : returned != 0 ? returned : EIO;
+    perror("Seatbelt suspended target exec"); _exit(125);
+  }
   execve(executable, argv, env);
   perror("Seatbelt target exec");
   _exit(125);
