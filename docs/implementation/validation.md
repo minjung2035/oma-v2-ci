@@ -148,6 +148,40 @@ Seatbelt·동일 Node/Git/compiler/libc DNS·별도 fresh GUI service를 유지�
 원시는 `/tmp/oma-macos-fourth-{build,focused,early,architecture}.log` 또는 `.tap`,
 `/tmp/oma-macos-directory-search-{red,green}.tap`과 `/tmp/oma-native-ci-wrapper-resource.tap`이다.
 
+### 네 번째 실제 Mac·CI 결과 — source `e2d29938e75`
+
+Native [41773314673](https://github.com/minjung2035/oma-v2-ci/actions/runs/41773314673)의 양 Mac 각3회에서
+표준 App Sandbox 서명본은 custom profile 적용 전 owned0600 canary 읽기를 EPERM1로 거절했고 같은
+unsigned image는 읽었다. 실제 enforcement는 관측했지만 **그 뒤 `sandbox_init`은 모두 EPERM·exit2**여서
+Node·DNS·서비스 호출에 도달하지 않았다. 정책의 교집합이나 closure를 증명하지 않는다. 원시는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/app-sandbox/`이며 API digest와 ZIP을 대조했다.
+Mac26 gate `fcff623fe281be4eb4b13dddd7aad0e6ae65c0d1c7914d223e221aee38c7fbbd`,
+Mac15 gate `6ee7a61c742372aea6fcada460ccef8fddce79552411a7ebd0eb324a281bb19d`다.
+
+양 Mac 공통286/286 PASS·skip0이며 독립 설치는 기존 Git guard1건이 남았다. 로컬 Linux 독립 packed
+설치는27/27 PASS다(`/tmp/oma-macos-fourth-package-isolation.log`). Ubuntu 공통278·native execution46·
+integration472는 PASS이나 setup의 `systemctl set-property … Delegate=yes`가 거절돼 전체 job은 FAIL이다.
+Architecture [41773314617](https://github.com/minjung2035/oma-v2-ci/actions/runs/41773314617)도 동일 setup
+오류로 actual full은 NOT_RUN이다. 이를 controller 검증 성공이나 제품 회귀로 바꾸지 않는다.
+
+### 다섯 번째 입력 — disposable Git metadata·정책 적용 순서
+
+candidate/quarantine의 설정 파일 교체가 전체 ancestor flush를 요청하는 것을 실제 POSIX search-only
+root로 재현했다. 두 사례 모두 수정 전 `flushDirectoryChain→openDirectory` EACCES로 실패했다.
+두 caller만 기존 `withinDirectory`·`replaceDerivedEntry`를 사용하여 held parent에서 private 임시 파일을
+쓰고 file flush·rename·parent flush한다. disposable checkout attributes/alternates는 accepted evidence가
+아니며 기존 accepted publication·전체 durable-directory helper를 변경하지 않는다. 같은 실제 Git checkout·
+thin bundle/prerequisite 검증은 수정 후2/2 PASS이며 root mode·canonical refs·accepted bundle bytes를 보존했다.
+원시는 `/tmp/oma-macos-git-ancestor-{red,green}.tap`이다. 양 Mac 공통 실행 목록에도 이 사례를 추가했다.
+
+CI 위임은 runtime instance drop-in으로 바꾸고 actual writable controller preflight를 유지한다.
+App Sandbox는 반대 순서(custom policy 적용→동일 signed image exec)도 별도 비교한다. outer 적용 결과와
+inner의 같은 PID·profile 경로·일반 tools·새 service target을 보존한다. inner가 새 정책을 적용했다고 쓰지
+않으며 standalone 서명의 실제 canary 관측과도 구분한다. 기존 App-first 실패를 남긴다. 새 source의 hosted
+CI·actual Mac·전체 Linux 결과는 발행 전 NOT_RUN이며 제품 backend·실행 guard는 아직 미채택/유지다.
+다섯 번째 입력의 전체 build·parser/정책/실제 search-only Git49개·실제 Linux Git/private gate와 관련 선택94개는
+모두 PASS·skip0다. 원시는 `/tmp/oma-macos-fifth-{build,parser,focused,architecture}.log` 또는 `.tap`이다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -340,6 +374,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `fd8801f61104b8159abe5efd073af6b0a6022627ddea42621672c4856274af1d` (15826 files).
+verification input digest `48e665fe5b4be1867d96f465e056f71e54259f4fada24e9538339270921d6e5c` (15827 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

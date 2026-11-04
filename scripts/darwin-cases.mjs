@@ -482,6 +482,34 @@ export function validateDarwinObservation(name, observations) {
           targets.add(selected);
         }
       }
+      const reverse = app.reverse;
+      if (!["OBSERVED", "SETUP_FAILED"].includes(reverse?.status) ||
+          reverse.status === "SETUP_FAILED" && typeof reverse.error !== "string")
+        throw new Error("reverse App Sandbox order has no actual outcome");
+      if (reverse.status === "OBSERVED") {
+        const command = reverse.command, outer = reverse.outer, ports = reverse.ports, tools = reverse.tools;
+        if (!outcome(command) || command.executable !== launcher || command.argv[4] !== app.signed ||
+            command.argv[0] !== "inherited" || command.argv[5] !== "inherited-profile" ||
+            command.argv[1] !== command.argv[6] || command.argv[3] !== command.argv[8] ||
+            outer?.pid !== command.pid || outer.mode !== "inherited" || outer.profileSource !== "applied-here" ||
+            outer.sandboxApplied !== true || ports?.pid !== command.pid || ports.mode !== "inherited-profile" ||
+            ports.profileSource !== "exec-inherited" || ports.sandboxApplied !== true ||
+            ports.uid !== baseline.ports.uid || outer.uid !== ports.uid || !snapshot(outer.before) || !snapshot(ports.after) ||
+            typeof reverse.profileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(reverse.profileSha256) ||
+            tools?.complete !== true || tools.pid !== ports.pid || !dns(tools.dns) ||
+            !outcome(tools.service) || tools.service.executable !== "/bin/launchctl" ||
+            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", reverse.target]) ||
+            command.argv[11] !== reverse.target || command.argv[20] !== reverse.globalTarget ||
+            !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
+            !nodeGlobal(tools.bootstrapGlobal, tools.pid, ports.uid, reverse.globalTarget) ||
+            typeof reverse.canaryPreserved !== "boolean")
+          throw new Error("reverse App Sandbox order loses its actual applied outer policy, same-task exec or tool results");
+        for (const selected of [reverse.target, reverse.globalTarget]) {
+          if (!target(selected) || targets.has(selected)) throw new Error("reverse App Sandbox comparison reuses a service target");
+          targets.add(selected);
+        }
+      }
     }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||

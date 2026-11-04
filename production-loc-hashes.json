@@ -1208,7 +1208,7 @@
     },
     {
       "path": "packages/git/src/candidate-check.ts",
-      "sha256": "139866419d1f242919b1c38c36926bd4bbd4b7adb6a58f64e2f1078f579e244c"
+      "sha256": "73b9a49648cfceb625c86918afe6ad3debaf51374a939bdbc864fb4c5db3ec40"
     },
     {
       "path": "packages/git/src/canonical-command.ts",
@@ -1288,7 +1288,7 @@
     },
     {
       "path": "packages/git/src/quarantine-worker.ts",
-      "sha256": "6893645aa3f3cbe5ee907478dc249306c0464e3b06fdc54e3f9e418aada42617"
+      "sha256": "b21b7862cf38c92d81d660e2fa1f4e8cec6af663bcf14c0e34539e296b8337db"
     },
     {
       "path": "packages/git/src/quarantine.ts",

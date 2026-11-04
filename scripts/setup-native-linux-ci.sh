@@ -17,7 +17,7 @@ oma_native_evidence=$1
 mkdir -p "$oma_native_evidence"
 node --input-type=module -e 'import {spawnSync} from "node:child_process"; console.log(JSON.stringify(Object.fromEntries(["rg","fd","fdfind","corepack"].map(command=>{const r=spawnSync(command,["--version"],{encoding:"utf8"});return [command,{status:r.status,error:r.error?.code,stdout:r.stdout,stderr:r.stderr}]}))))' > "$oma_native_evidence"/prerequisites-before.json
 sudo apt-get update
-sudo apt-get install -y bubblewrap meson ninja-build libcap-dev pkg-config ripgrep fd-find
+sudo apt-get install -y bubblewrap dbus-user-session meson ninja-build libcap-dev pkg-config ripgrep fd-find
 # The pinned SDK's completion pass executes the real fd binary.
 mkdir -p "$oma_native_tools/bin"
 ln -s /usr/bin/fdfind "$oma_native_tools/bin/fd"
@@ -82,9 +82,16 @@ cloc --version > "$oma_native_evidence/cloc-version.txt"
 # https://www.freedesktop.org/software/systemd/man/255/systemd.resource-control.html#Delegate=
 : "${GITHUB_ENV:?Actions environment handoff is required}"
 oma_native_uid=$(id -u)
+oma_native_unit_dir="/run/systemd/system/user@${oma_native_uid}.service.d"
+# Delegate is a unit setting, not a set-property field on Ubuntu's existing
+# user@ service. Configure this one disposable runner's runtime instance before
+# starting its manager; never rewrite the vendor template or product launcher.
+sudo mkdir -p "$oma_native_unit_dir"
+printf '[Service]\nDelegate=cpu memory pids\nCPUAccounting=yes\nMemoryAccounting=yes\nTasksAccounting=yes\n' | sudo tee "$oma_native_unit_dir/50-oma-native-ci.conf" > "$oma_native_evidence/cgroup-user-unit.conf"
+sudo systemctl daemon-reload
 sudo loginctl enable-linger "$(id -un)"
-sudo systemctl set-property --runtime "user@${oma_native_uid}.service" Delegate=yes CPUAccounting=yes MemoryAccounting=yes TasksAccounting=yes
 sudo systemctl start "user@${oma_native_uid}.service"
+sudo systemctl show "user@${oma_native_uid}.service" -p Delegate -p DelegateControllers > "$oma_native_evidence/cgroup-user-unit-properties.txt"
 export XDG_RUNTIME_DIR="/run/user/$oma_native_uid"
 echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
 systemctl --user is-active default.target > "$oma_native_evidence/user-manager-status.txt"

@@ -2,7 +2,8 @@
  * overrides preserve committed bytes; gitlinks use the same domain refusal. */
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
-import { replaceDerivedFile } from "@oma/storage/durable-fs";
+import { replaceDerivedEntry } from "@oma/storage/durable-fs";
+import { withinDirectory } from "@oma/native/files";
 import { runProcess } from "@oma/process/async";
 import { GIT_ENV } from "@oma/process/policies";
 import { replaceProcess } from "@oma/process/replace";
@@ -97,7 +98,11 @@ export async function executeCandidateCheck(input: CandidateInvocation, beforeEx
   await git(["init", "-q", `--object-format=${format}`, workspace]);
   await git(["-C", workspace, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance", project, input.candidate]);
   ensureOwnedDirectory(join(workspace, ".git/info"), workspace, 0o700);
-  replaceDerivedFile(join(workspace, ".git/info/attributes"), "* -text -filter -ident !eol !working-tree-encoding\n", 0o600);
+  // Unaccepted setup bytes belong to this disposable workspace. Its owner
+  // supplies the root; setup must not open/flush ancestors outside its view.
+  const attributes = join(workspace, ".git/info/attributes");
+  withinDirectory(attributes, (parent, name) => replaceDerivedEntry(parent, name, attributes,
+    "* -text -filter -ident !eol !working-tree-encoding\n", 0o600));
   await git(["-C", workspace, "-c", "core.autocrlf=false", "-c", "core.symlinks=true", "checkout", "-q", "--detach", input.candidate]);
   if (input.pipeline !== undefined) {
     if (!status) throw new StoreError("UNSUPPORTED_PROFILE", "pipeline requires a private receipt channel");

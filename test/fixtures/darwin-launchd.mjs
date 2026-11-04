@@ -358,7 +358,7 @@ value.complete = true; save();
       const directTarget = loadJob(`${name}-direct`, actor, "once"), nodeTarget = loadJob(`${name}-node`, actor, "once");
       const restoredTarget = loadJob(`${name}-restored`, actor, "once");
       const globalTarget = loadJob(`${name}-global`, actor, "once");
-      const profile = seatbeltProfile({ readable: [
+      const policy = { readable: [
         ...[actor, launcher, script, libcEntry, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         { path: developerTools.contents, kind: "directory" },
         { path: unixSocketCanary.directory, kind: "directory" },
@@ -367,7 +367,8 @@ value.complete = true; save();
         writable: [{ path: directory, kind: "directory" }], denied: [],
         executable: [actor, launcher, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
         unixSockets: [dnsEndpoint, ...(dnsResolvedEndpoint === dnsEndpoint ? [] : [dnsResolvedEndpoint]), unixSocketCanary.listed],
-        machServices: [], environmentKeys: [] });
+        machServices: [], environmentKeys: [] };
+      const profile = seatbeltProfile(policy);
       const profilePath = join(directory, "profile.sb"); writeFileSync(profilePath, profile, { mode: 0o600 });
       const directPorts = join(directory, "direct-ports.json"), nodePorts = join(directory, "node-ports.json");
       const toolsReport = join(directory, "tools.json");
@@ -435,7 +436,8 @@ value.complete = true; save();
         // Standard App Sandbox is a separate candidate. Retain the inherited
         // bootstrap and the same custom policy and ordinary tools. No private
         // entitlement, root helper or replacement resolver is introduced.
-        const app = { status: "SETUP_FAILED", fixtureOnly: true, mechanism: "standard-app-sandbox" };
+        const app = { status: "SETUP_FAILED", fixtureOnly: true, mechanism: "standard-app-sandbox",
+          reverse: { status: "SETUP_FAILED", error: "signing or initial controls not reached" } };
         observation.bootstrap.appSandbox = app;
         try {
           const identifier = `${prefix}.sandbox`, bundle = join(root, "SandboxProbe.app");
@@ -481,8 +483,35 @@ value.complete = true; save();
               await waitFor(() => existsSync(join(target.directory, "once.json")));
           Object.assign(app, { guestEffect: effect(service), globalGuestEffect: effect(global),
             canaryPreserved: readFileSync(appSandboxCanary, "utf8") === "OWNED_APP_SANDBOX_CANARY\n" });
+          const reverse = { status: "SETUP_FAILED" }; app.reverse = reverse;
+          try {
+            // Apply the custom policy in the unsigned task, then exec the
+            // signed image. Do not silently reapply or drop either layer.
+            const reverseProfile = seatbeltProfile({ ...policy,
+              readable: [...policy.readable, { path: bundle, kind: "directory" }],
+              executable: [...policy.executable, { path: signed, kind: "file" }] });
+            const profilePath = join(directory, "app-reverse.sb"); writeFileSync(profilePath, reverseProfile, { mode: 0o600 });
+            const service = loadJob("app-reverse-service", actor, "once"), global = loadJob("app-reverse-global", actor, "once");
+            const outerPath = join(directory, "app-reverse-outer.json"), innerPath = join(directory, "app-reverse-inner.json");
+            const report = join(directory, "app-reverse-tools.json");
+            const command = observe(launcher, [name, profilePath, outerPath, directory, signed,
+              "inherited-profile", profilePath, innerPath, directory, process.execPath, script,
+              service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+              unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
+            Object.assign(reverse, { command, profileSha256: createHash("sha256").update(reverseProfile).digest("hex"),
+              target: service.target, globalTarget: global.target, outer: optionalJson(outerPath),
+              ports: optionalJson(innerPath), tools: optionalJson(report) });
+            for (const [target, result] of [[service, reverse.tools?.service], [global, reverse.tools?.bootstrapGlobal?.service]])
+              if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+                await waitFor(() => existsSync(join(target.directory, "once.json")));
+            Object.assign(reverse, { guestEffect: effect(service), globalGuestEffect: effect(global),
+              canaryPreserved: readFileSync(appSandboxCanary, "utf8") === "OWNED_APP_SANDBOX_CANARY\n" });
+            assert.equal(reverse.tools?.complete, true, `reverse-order child incomplete: ${command.stderr}`);
+            reverse.status = "OBSERVED";
+          } catch (error) { reverse.error = String(error); }
           assert.equal(app.initial[1].command.exitCode, 0, JSON.stringify(app.initial));
-          assert.equal(app.tools?.complete, true, JSON.stringify({ command, tools: app.tools }));
+          assert.equal(app.tools?.complete, true, `App Sandbox before custom policy incomplete: ${command.stderr}`);
           app.status = "OBSERVED";
         } catch (error) { app.error = String(error); }
       }

@@ -202,6 +202,17 @@ const bootstrapRecord = () => {
     command:{...structuredClone(baseline.command),executable:signed,pid:appPid},
     ports:{...structuredClone(baseline.ports),pid:appPid},tools:appTools,
     target:appTarget,globalTarget:appGlobal,canaryPreserved:true };
+  const reversePid=920, reverseTarget='gui/501/org.oma.probe.test.reverse-service', reverseGlobal='gui/501/org.oma.probe.test.reverse-global';
+  const reverseTools=structuredClone(appTools);reverseTools.pid=reversePid;reverseTools.service.argv[1]=reverseTarget;
+  reverseTools.bootstrapGlobal.pid=reversePid;reverseTools.bootstrapGlobal.service.argv[1]=reverseGlobal;
+  appSandbox.reverse={status:'OBSERVED',profileSha256:'c'.repeat(64),target:reverseTarget,globalTarget:reverseGlobal,
+    command:command('/owned/bootstrap-exec',['inherited','/owned/app-profile','/owned/app-outer','/owned/work',signed,
+      'inherited-profile','/owned/app-profile','/owned/app-inner','/owned/work','/owned/node','/owned/tools',
+      reverseTarget,'/owned/canary','/owned/compiler','/owned/git','{}','/owned/bootstrap-exec','/owned/listed',
+      '/owned/unlisted','/owned/report',reverseGlobal],reversePid),
+    outer:{...structuredClone(baseline.ports),pid:reversePid,profileSource:'applied-here'},
+    ports:{...structuredClone(baseline.ports),pid:reversePid,mode:'inherited-profile',profileSource:'exec-inherited'},
+    tools:reverseTools,canaryPreserved:true};
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
@@ -443,6 +454,11 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
     value => { delete value.bootstrap.session; },
     value => { delete value.bootstrap.appSandbox; },
+    value => { delete value.bootstrap.appSandbox.reverse; },
+    value => { value.bootstrap.appSandbox.reverse.outer.sandboxApplied = false; },
+    value => { value.bootstrap.appSandbox.reverse.ports.pid += 1; },
+    value => { value.bootstrap.appSandbox.reverse.command.argv[6] = '/different/profile'; },
+    value => { value.bootstrap.appSandbox.reverse.tools.service.argv[1] = value.bootstrap.variants[0].node.target; },
     value => { value.bootstrap.appSandbox.signedSha256 = value.bootstrap.appSandbox.unsignedSha256; },
     value => { value.bootstrap.appSandbox.initial[0].observation.canaryOpened = false; },
     value => { value.bootstrap.appSandbox.initial[1].observation.pid += 1; },
@@ -513,7 +529,8 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
   }
   const unknown = structuredClone(good);
   unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
-  unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed'};
+  unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed',
+    reverse:{status:'SETUP_FAILED',error:'initial controls not reached'}};
   const spawnFailure = unknown.bootstrap.variants[1].childResolvers[0];
   Object.assign(spawnFailure.parent, { spawnStatus: 1, childPid: 0, joined: false, waitStatus: 0 });
   spawnFailure.observation = null;

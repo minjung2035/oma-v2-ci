@@ -204,7 +204,8 @@ OS filename은 malformed UTF-8을 거절하고 선두 U+FEFF를 보존한다. �
 Darwin CI에서 NOTE_TRACK 거절과 setsid 후손 생존, mode-000 event pin 거절을 실제로 관측했다.
 후속 양 Mac의 공통 runtime283개와 LSP 설치·async child stdio는 통과했으나 bootstrap 제거 뒤
 일반 C 후손의 libc DNS 실패도 재현됐다. 실제 audit session 분리에서도 외부 service 실행이 허용됐다.
-표준 App Sandbox는 아직 실기 전 후보이며 세 gate와 Mac native 제품 실행 차단은 유지한다.
+표준 App Sandbox 뒤 custom profile 적용도 양 Mac에서 EPERM으로 거절됐다. 반대 순서는 미실행 후보이며
+세 gate와 Mac native 제품 실행 차단은 유지한다.
 Linux의 실제 경로 연결과 Darwin primitive 연결,
 전체 회귀·owner/규범 결박의 완료를 구분한다. 세부 구현·실패와
 재개점은 [전환 기록](implementation/native-transition.md)과 [인계](HANDOFF.md)를 따른다.

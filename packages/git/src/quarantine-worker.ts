@@ -3,7 +3,8 @@
  * second fixed invocation after the verifier's whole scope ended. */
 import { join } from "node:path";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
-import { replaceDerivedFile } from "@oma/storage/durable-fs";
+import { replaceDerivedEntry } from "@oma/storage/durable-fs";
+import { withinDirectory } from "@oma/native/files";
 import { runProcess } from "@oma/process/async";
 import { GIT_ENV } from "@oma/process/policies";
 import { decodeProcessText } from "@oma/process/run";
@@ -68,7 +69,11 @@ export async function executeQuarantinePhase(input: QuarantineInput): Promise<vo
     throw new StoreError("BUNDLE_INVALID", "bundle object format differs from the canonical repository");
   await command(REPO, ["init", "-q", "--bare", `--object-format=${format}`], "UNSUPPORTED_PROFILE");
   ensureOwnedDirectory(join(REPO, "objects", "info"), ROOT, 0o700);
-  replaceDerivedFile(join(REPO, "objects", "info", "alternates"), alternateObjectDirectory(join(PROJECT, "objects")), 0o600);
+  // This disposable verifier's derived alternate is not accepted evidence.
+  // Retain the parent for replacement and flush only this owned directory.
+  const alternates = join(REPO, "objects", "info", "alternates");
+  withinDirectory(alternates, (parent, name) => replaceDerivedEntry(parent, name, alternates,
+    alternateObjectDirectory(join(PROJECT, "objects")), 0o600));
   await command(REPO, ["bundle", "verify", BUNDLE], "BUNDLE_INVALID");
   const heads = (await command(REPO, ["bundle", "list-heads", BUNDLE], "BUNDLE_INVALID", true)).trimEnd().split("\n");
   if (heads.length !== 1 || heads[0] !== `${input.candidate} ${input.exportRef}`)
