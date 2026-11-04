@@ -16,6 +16,9 @@ export interface LaunchdJobDefinition {
   readonly label: string;
   readonly command: CommandSpec;
   readonly machServices?: readonly string[];
+  /** Kernel stop before the helper executes its first instruction. Startup
+   * still needs fresh image/identity validation and an explicit continuation. */
+  readonly startSuspended?: boolean;
 }
 export interface LaunchdJobRegistration {
   readonly domain: string;
@@ -44,6 +47,8 @@ function plist(value: Plist): string {
 export function renderLaunchdJob(definition: LaunchdJobDefinition): string {
   name(definition.label);
   const command = snapshotCommand(definition.command), services = [...(definition.machServices ?? [])];
+  if (definition.startSuspended !== undefined && typeof definition.startSuspended !== "boolean")
+    throw new TypeError("invalid helper startup gate");
   if (!command.executable.startsWith("/") || command.cwd !== undefined && !command.cwd.startsWith("/") ||
       command.timeoutMs !== null || command.input !== undefined || command.stdinFd !== undefined ||
       command.stdoutBytes !== 0 || command.stderrBytes !== 0 ||
@@ -58,6 +63,7 @@ export function renderLaunchdJob(definition: LaunchdJobDefinition): string {
     ...(command.cwd === undefined ? {} : { WorkingDirectory: command.cwd }),
     RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
     SessionCreate: true, LaunchOnlyOnce: true, LimitLoadToSessionType: "Background",
+    WaitForDebugger: definition.startSuspended === true,
     StandardInPath: "/dev/null", StandardOutPath: "/dev/null", StandardErrorPath: "/dev/null",
     ...(services.length ? { MachServices: Object.fromEntries(services.map(service => [service, true])) } : {}) };
   return '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">' + plist(definitionBytes) + "</plist>";

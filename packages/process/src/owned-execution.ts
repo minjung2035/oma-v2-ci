@@ -10,6 +10,12 @@ import { withCleanup, withAsyncCleanup } from "@oma/native/cleanup";
 
 export interface BlockedExecution<Witness> {
   readonly witness: Witness;
+  /** Trusted setup may continue after the kernel witness is published. No
+   * arbitrary workload is released until this and a fresh authority check. */
+  readonly prepared?: Promise<void>;
+  /** Leader or supervisor termination before capture/FD drain. This requests
+   * settlement; it never proves the scope empty or its resources returned. */
+  readonly terminal?: Promise<void>;
   readonly result: Promise<ProcessObservation>;
   readonly closed: Promise<void>;
   population(): "populated" | "empty" | "unknown";
@@ -127,6 +133,7 @@ export class ExecutionCoordinator<Witness> {
               if (population === "empty") break;
               if (population === "unknown") throw new Error("recovered scope death is unobserved");
               await setTimeout(10);
+              pin.terminate();
             }
           }, () => {
             try { pin.close(); } catch (error) { this.failure ??= error; throw error; }
@@ -163,12 +170,35 @@ export class ExecutionCoordinator<Witness> {
     const owner: Owned<Witness> = { reservation, scope: null, launch: null, settling: null, uncertain: false, empty: false, returned, failed };
     this.active.set(request.slot, owner);
     const failures: unknown[] = [];
-    const terminate = (): void => { try { owner.scope?.terminate(); } catch (error) { failures.push(error); } };
+    let interruptPreparation: ((error: unknown) => void) | undefined;
+    const terminate = (): void => {
+      interruptPreparation?.(new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled during blocked preparation"));
+      try { owner.scope?.terminate(); } catch (error) { failures.push(error); }
+    };
     owner.launch = Promise.resolve().then(() => request.launch(reservation.execution)).then(scope => {
       owner.scope = scope;
       request.signal?.addEventListener("abort", terminate, { once: true });
       owner.reservation.publish(scope.witness);
+      const settle = (): Promise<void> | undefined => this.active.get(request.slot) === owner ? this.settle(request.slot, owner) : undefined;
+      const terminal = scope.terminal?.then(settle, error => { failures.push(error); return settle(); });
+      void terminal?.catch(error => { failures.push(error); });
+      return scope;
+    });
+    // Scope creation/publication must not wait for preparation or admission:
+    // drain can terminate an already-owned scope while its setup is pending.
+    const admitted = owner.launch.then(async scope => {
       if (this.stopping || request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled before release");
+      if (scope.prepared !== undefined) {
+        const interrupted = new Promise<never>((_resolve, reject) => { interruptPreparation = reject; });
+        try {
+          await Promise.race([scope.prepared, interrupted, scope.closed.then(() => {
+            throw new StoreError(this.stopping || request.signal?.aborted ? "CANCELLED_BEFORE_COMMIT" : "BROKER_UNAVAILABLE",
+              "execution closed during blocked preparation");
+          })]);
+        } finally { interruptPreparation = undefined; }
+      }
+      if (this.active.get(request.slot) !== owner || owner.empty || owner.uncertain || owner.settling !== null || this.stopping || request.signal?.aborted)
+        throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution ownership changed during preparation");
       request.prepared?.(reservation.execution, scope.witness);
       if (this.stopping || request.signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "execution was cancelled during preparation publication");
       request.authorize();
@@ -179,13 +209,13 @@ export class ExecutionCoordinator<Witness> {
     const completion = (async (): Promise<ProcessObservation> => {
       let primary: { error: unknown } | null = null;
       let observation: ProcessObservation | undefined;
-      try { observation = await (await owner.launch!).result; }
+      try { observation = await (await admitted).result; }
       catch (error) {
         primary = { error: error instanceof ExecutionNotStarted ? error.cause : error };
       }
       finally {
         request.signal?.removeEventListener("abort", terminate);
-        if (this.active.has(request.slot)) try { await this.settle(request.slot, owner); } catch (error) { failures.push(error); }
+        if (this.active.get(request.slot) === owner) try { await this.settle(request.slot, owner); } catch (error) { failures.push(error); }
       }
       if (failures.length) throw new StoreError([...(primary === null ? [] : [primary.error]), ...failures].some(error =>
         error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", "execution or scope cleanup is unconfirmed",
@@ -197,7 +227,7 @@ export class ExecutionCoordinator<Witness> {
     // A shutdown or launch failure can settle before the caller gets a ticket.
     // Keep rejection observed without changing the promise returned to its owner.
     void completion.catch(() => {});
-    try { await owner.launch; } catch { await completion; throw new Error("unreachable execution completion"); }
+    try { await admitted; } catch { await completion; throw new Error("unreachable execution completion"); }
     return Object.freeze({ execution: reservation.execution, witness: owner.scope!.witness, completion,
       population: () => owner.empty ? "empty" : owner.scope?.population() ?? "unknown",
       stop: () => this.active.get(request.slot) === owner ? this.settle(request.slot, owner) : Promise.resolve(),
@@ -258,7 +288,10 @@ export class ExecutionCoordinator<Witness> {
         if (population === "empty") break;
         if (population === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "scope observation failed; ownership retained",
           failures.length ? { cause: new AggregateError(failures) } : undefined);
+        if (failures.length) throw new StoreError("RUN_TERMINATION_UNKNOWN", "populated scope termination failed; ownership retained",
+          { cause: new AggregateError(failures) });
         await setTimeout(10);
+        try { scope.terminate(); } catch (error) { failures.push(error); }
       }
       await scope.closed;
       owner.empty = true;

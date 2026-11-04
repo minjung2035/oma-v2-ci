@@ -53,7 +53,7 @@ SDK 선언만으로 stable public API라고 보지 않는다. header의 private/
 
 ### 4.1 공유할 계약
 
-실행 시작은 `opening 기록 → 실제 child/scope 취득 → witness 영속화 → 현재 권한 재검사 → gate release`다. 종료는 `admission/wake 차단 → grant 철회 → 종료 요청 → 필요한 종료 관측 → pipe/log/FD drain → journal retire`다. 정상 실행과 crash recovery는 판단을 구분하고 관측 primitive만 공유한다.
+실행 시작은 `opening 기록 → 실제 child/scope 취득 → witness 영속화 → trusted setup 완료 → 현재 권한 재검사 → gate release`다. 공통 owner는 setup 대기 중에도 취득한 scope를 종료할 수 있어야 한다. 종료는 `admission/wake 차단 → grant 철회 → 종료 요청 → 필요한 종료 관측 → pipe/log/FD drain → journal retire`다. leader/supervisor terminal 통지로 후손 종료를 먼저 요청하되 terminal 자체를 death/FD drain으로 읽지 않는다. 정상 실행과 crash recovery는 판단을 구분하고 관측 primitive만 공유한다.
 
 다음 세 관측을 한 boolean으로 합치지 않는다.
 

@@ -981,10 +981,76 @@ SDK object compile·MJS syntax·module 경계를 포함한62/62·전체 architec
 registration 조회도113일 때만 해당 one-shot label의 cleanup을 완료로 기록한다. 둘 중 하나만으로 끝났다고 하지 않는다.
 제품 실행 guard·durable producer/recovery와 G-AUTH/G-FILES의 미완료는 유지한다.
 
+### public constructor와 최종 Node stop의 실제 결과 — source `d9179f66b7c`
+
+Native [41807809569](https://github.com/minjung2035/oma-v2-ci/actions/runs/41807809569)의 양 Mac 각3회에서
+regular/pipe gate 모두 OBSERVED다. production constructor의 submit/start는 실제 exit0이며, 같은 PID의
+launcher와 최종 Node가 서로 다른 kernel pidVersion으로 각각 정지했다. Host는 각 image의 선택 CDHash와
+다른 signed image 거절을 대조하고, 최종 TARGET_GO 전 Node report·stdout·stderr가 없음을 확인했다.
+full kernel sender가 다른 INIT/GO/TARGET_GO3건은 모두 거절됐다. 정상 Node/Git/compiler/DNS·fresh service
+두 경로 exit5·child join·CID ESRCH·registration113도 확인했다. pipe의 두 byte count/hash·EOF·reader close와
+handle 반환은 앞서 정의한 기대값에 일치한다. Mac15 호환성 관측은 Mac26 지원 qualification과 구분한다.
+
+입력15831개 `3973a96158875fb125ccb91a8e1d818a8f5c70b8dd2dc5fdc9d8b0de5c576d40`와 runtime 산출물은 전후 같다.
+API SHA-256 Mac26 `32da3b17d02f3d52042e09b4d1380c97b5dc36529555746c22cc92a1c27e2613`·Mac15
+`bbdab2e61b88375a09f93e9b48cd35cd9a4fe55cd190e0aad30eb46361cf987a`와 대조한 artifact와
+요약은 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/public-job/`다. Mac26 전체114 OBSERVED/6 SETUP_FAILED·Mac15 111/9,
+제품 BLOCKED·세 gate OPEN이다. 이번 성공은 이전 실패 원인설의 확정이나 protected script/library generation·
+durable producer/recovery·expected Broker/current role의 qualification이 아니다.
+
+같은 source의 양 Mac 공통 runtime은 각293/293·skip/cancel/todo0이다. 독립 설치는 각26/27이며 @oma/git의
+Linux preparation guard에서 거절됐다. Ubuntu는 native 실행46·leaf3·Restic setup8·integration472가 통과했다.
+세 runtime artifact의 input/runtime 전후 동일과 API SHA-256을 대조했다. 전체 Linux 실행과 합산하지 않는다.
+별도 Architecture [41807809449](https://github.com/minjung2035/oma-v2-ci/actions/runs/41807809449)의 같은 source
+native-all은 **4751/4751 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges=[]**다. API SHA-256
+`4377dad38f6197498d3c5dc08beb046646e6893b17f849390342b1c0f5796fce`와 대조한 artifact는 위 root의
+`linux-all-art-13311959770/`에 있다. 후속 공통 owner/시작 정지 변경 입력의 전체 결과로 재해석하지 않는다.
+
+### witnessed setup과 terminal-before-drain 공통 owner
+
+공통 owner는 실제 scope를 받은 즉시 witness를 게시하고, 선택적인 trusted preparation 완료 뒤 현재 권한을
+다시 확인해 release한다. drain/abort는 준비 완료를 기다리지 않고 이미 취득한 scope의 종료를 요청한다.
+선택적인 terminal 통지는 결과의 stdio drain 전에 후손 종료를 시작하게 하며 death proof를 대신하지 않는다.
+normal/recovery cleanup은 population이 populated인 동안 재탐색·종료를 반복하고, empty와 closed를 모두
+관측한 뒤에만 journal을 retire한다. Darwin backend 연결과 새 durable witness는 아직 없다.
+종료 요청이 실패한 populated scope는 unknown으로 보존하고 후속 stop에서 재관측한다. 이미 반환한 이전
+scope의 늦은 result는 같은 slot의 새 owner를 정리할 수 없다.
+
+controlled state-machine5건은 authority 지연/철회·준비 중 drain·terminal-before-capture·late member/FD drain을
+검사한다. 첫 계약은 이전 owner에 대해 실제 실패했고 수정 뒤 process49/49·workspace build27/27이 통과했다.
+실제 Linux namespace/취소/crash19/19와 native execution46/46도 통과했다. 최초 외부 bwrap wrapper는 /dev bind가
+없어 제품 외 최소 fork와 /dev/null 접근부터 EACCES였다. /dev bind를 복원한 동일 일반 UID 환경의 결과를
+사용하며, 최초 실패를 제품 결함 수리나 Darwin 실행 proof로 계산하지 않는다. 원시는
+`/tmp/oma-macos-staged-owner-{process,native-linux-dev-bind,linux-execution}.tap`에 있다.
+
+### helper의 첫 instruction 전 gate — 후속 입력 / Darwin NOT_RUN
+
+public one-shot constructor에 `WaitForDebugger`를 명시하는 선택적 시작 정지를 추가했다.
+[고정 launchd manual](https://github.com/apple-oss-distributions/launchd/blob/d448a1c8f70a61202f8705f94337f686b87c30c4/man/launchd.plist.5#L288)과
+[START_SUSPENDED 연결](https://github.com/apple-oss-distributions/launchd/blob/d448a1c8f70a61202f8705f94337f686b87c30c4/src/core.c#L4608)을 대조했다.
+fixture는 launchctl PID를 hint로만 쓰고 새 kernel task-name capability·실제 stopped generation·선택 CDHash를
+확인한다. token·generation·정지 상태를 다시 확인한 뒤 SDK token으로만 SIGCONT하며, 후속 Mach ACK는 그
+full token과 같아야 한다. task-name 반환·wrong image 거절·같은 CID·release 전 trace 부재도 별도로 대조한다.
+이 시작 정지는 protected script/library generation이나 제품 scope/journal producer의 완료가 아니다.
+
+공통 owner8개 state-machine·기존 process·job constructor는 합계54/54, parser/Seatbelt/constructor47/47이
+통과했다. 최종 Linux native 실행/crash53/53도 PASS·fail/cancel/skip/todo0이다. 원시는
+`/tmp/oma-macos-helper-stop-{process,focused,linux-native}.tap`다. 실제 Mac 시작 정지는 새 CI에서 확인한다.
+현재 source에서 두 ownership guard만 제거한 별도 임시 module의007/008은 모두 실제 실패했다.
+이는 state-machine negative control이며 kernel proof나 이전 committed 입력의 실행으로 계산하지 않는다.
+중간 Linux 재실행은 double-fork의 orphan 단일 조회에서52/53이었다. 기존 fixture는 report의 생성만 기다려
+기록 완료나 중간 parent의 exit/reparent와 동기화하지 않았다. 어느 창이 해당 실패였는지는 원시만으로
+확정하지 않는다. 완전한 report와 실제 namespace-init children/PPid를 같은 기존10초 한도에서 관측하도록
+수리한 뒤 전체53개를 다시 실행했다. 실패는 `*-linux-native-orphan-failure.tap`에 보존하며, 종료 후 후손 사망
+assertion이나 실행 선택·예산을 줄이지 않았다.
+같은 fixture는 read-only host task/bootstrap/registered-port 취득과 `sudo -n /usr/bin/id -u`를 Host·두 Mach
+workload에서 각각 관측한다. self task 양성·각 reference 반환·command 종료와 원시 report를 남긴다. timeout,
+부분 report·Host 기준선 부재를 정책 차단 PASS로 읽지 않으며 현재 입력에서 Darwin 결과는 NOT_RUN이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `3973a96158875fb125ccb91a8e1d818a8f5c70b8dd2dc5fdc9d8b0de5c576d40` (15831 files).
+verification input digest `853989920c9c7bba7b5b8a639428cc4388a350b11f3eaaf397bb97947f09002a` (15832 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

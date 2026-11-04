@@ -519,6 +519,16 @@ export function validateDarwinObservation(name, observations) {
                   ![gate.jobSubmission, gate.jobStart].every(result => result?.kind === "exited" && result.exitCode === 0 &&
                     result.signal === null && result.errorCode === null)) ||
               gate.preemption?.taken !== false || gate.origin?.kind !== "matched" || gate.reportBeforeHostRelease !== false ||
+              gate.initialImage !== undefined && (gate.initialImage.status !== "OBSERVED" ||
+                gate.initialImage.tokenSource !== "kernel-task-name-port" || !words(gate.initialImage.token) ||
+                gate.initialImage.pid !== gate.helperToken[5] ||
+                JSON.stringify(gate.initialImage.token) !== JSON.stringify(gate.helperToken) ||
+                gate.initialImage.identity?.bootId !== gate.identity?.bootId ||
+                gate.initialImage.identity?.coalitionId !== gate.identity?.coalitionId ||
+                gate.initialImage.stoppedStatus !== 4 || gate.initialImage.traceBeforeRelease !== false ||
+                gate.initialImage.continued !== 0 || gate.initialImage.taskNameReturned !== true ||
+                gate.initialImage.origin?.kind !== "matched" || gate.initialImage.otherOrigin?.kind !== "unavailable" ||
+                !Number.isInteger(gate.initialImage.otherOrigin.osStatus) || gate.initialImage.otherOrigin.osStatus === 0) ||
               gate.expectedCdHashes !== undefined &&
                 (!Array.isArray(gate.expectedCdHashes) || !gate.expectedCdHashes.length ||
                   gate.expectedCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash)) ||

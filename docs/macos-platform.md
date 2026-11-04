@@ -82,6 +82,9 @@ close·성공한 kill은 전체 사망 증명이 아니다. unknown scope의 liv
 관측 journal은 명령·accepted plan·receipt·credential·재생 queue가 아니며, 누락·손상·부분
 frame을 빈 scope 목록으로 읽지 않는다. 기록의 PID만으로 복구 중 신호를 보내지 않는다.
 초기 journal 게시 직후의 process crash와 재초기화도 기존 bytes를 교체하지 못한다.
+trusted setup이 계속되는 동안에도 이미 게시한 scope를 drain할 수 있어야 하며, 준비 완료 뒤 현재 권한을
+다시 확인한다. leader/supervisor terminal 통지는 capture drain 전 후손 종료를 요청할 수 있으나,
+별도 scope empty와 FD 반환 관측을 대체하지 않는다. 살아 있는 후손의 후속 생성도 종료 owner가 계속 관측한다.
 
 **MUST [NATIVE-012]** DR54 복구는 현재 tenure와 journal의 배타 소유 하에서만 수행한다.
 저장 PID에 신호를 보내지 않고, 새로 얻은 namespace-init capability의 전체 identity가

@@ -1612,7 +1612,7 @@
     },
     {
       "path": "packages/platform-mac/src/launchd-job.ts",
-      "sha256": "6fba99e555a4208f7d1da585469e5a29836bbe47c8ef0351a22e76f3f500ceef"
+      "sha256": "24e965c547be0cf483b8cacd68428e92fbba69bc7165b9ab697112f801d288f5"
     },
     {
       "path": "packages/platform-mac/src/mach-address.ts",
@@ -1696,7 +1696,7 @@
     },
     {
       "path": "packages/process/src/owned-execution.ts",
-      "sha256": "a45672bfbe7ca28c9431c6733002ebbc05e375ea916cb99cb639b3f3ff6c0f39"
+      "sha256": "5484aa58eaeb1be50e79c06fbcaaed71e1445ce9e761dac3e140baf3dd9c74ce"
     },
     {
       "path": "packages/process/src/packet-stream.ts",

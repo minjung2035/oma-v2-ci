@@ -143,6 +143,48 @@ static int observe_logd_lookup(const char *report_path) {
     host_status, host_control, control_release, host_release, alarm_blocked ? "true" : "false");
   require(fclose(output) == 0, "complete public lookup report"); return 0;
 }
+/* Read-only reacquisition adversary. A PID chooses a probe candidate, never
+ * a signal target. Return every acquired task/bootstrap/registered reference. */
+static void observe_task_capability(FILE *output, pid_t pid, int name_only) {
+  mach_port_t task = MACH_PORT_NULL, bootstrap = MACH_PORT_NULL;
+  kern_return_t acquired = name_only ? task_name_for_pid(mach_task_self(), pid, &task) : task_for_pid(mach_task_self(), pid, &task);
+  kern_return_t special = KERN_INVALID_ARGUMENT, special_return = KERN_INVALID_ARGUMENT;
+  kern_return_t registered = KERN_INVALID_ARGUMENT, registered_return = KERN_SUCCESS, task_return = KERN_INVALID_ARGUMENT;
+  mach_port_array_t ports = NULL; mach_msg_type_number_t count = 0; unsigned int valid = 0;
+  if (acquired == KERN_SUCCESS && MACH_PORT_VALID(task)) {
+    special = task_get_special_port(task, TASK_BOOTSTRAP_PORT, &bootstrap);
+    if (MACH_PORT_VALID(bootstrap)) special_return = mach_port_deallocate(mach_task_self(), bootstrap);
+    registered = mach_ports_lookup(task, &ports, &count);
+    if (registered == KERN_SUCCESS) {
+      for (mach_msg_type_number_t at = 0; at < count; ++at) if (MACH_PORT_VALID(ports[at])) {
+        ++valid;
+        kern_return_t returned = mach_port_deallocate(mach_task_self(), ports[at]);
+        if (returned != KERN_SUCCESS) registered_return = returned;
+      }
+      if (ports != NULL) {
+        kern_return_t returned = vm_deallocate(mach_task_self(), (vm_address_t)ports, count * sizeof *ports);
+        if (returned != KERN_SUCCESS) registered_return = returned;
+      }
+    }
+    task_return = mach_port_deallocate(mach_task_self(), task);
+  }
+  fprintf(output, "{\"pid\":%d,\"nameOnly\":%s,\"acquireStatus\":%d,\"task\":%u,"
+    "\"bootstrapStatus\":%d,\"bootstrap\":%u,\"bootstrapReturn\":%d,\"registeredStatus\":%d,"
+    "\"registeredCount\":%u,\"registeredValid\":%u,\"registeredReturn\":%d,\"taskReturn\":%d}",
+    pid, name_only ? "true" : "false", acquired, task, special, bootstrap, special_return,
+    registered, count, valid, registered_return, task_return);
+}
+static int observe_host_capabilities(const char *report, const char *candidate) {
+  char *end = NULL; long value = strtol(candidate, &end, 10);
+  require(*candidate != 0 && *end == 0 && value > 1 && value <= INT_MAX && value != getpid(), "capability candidate PID");
+  alarm(2);
+  FILE *output = fopen(report, "wx"); require(output != NULL, "exclusive capability report");
+  fprintf(output, "{\"pid\":%d,\"uid\":%u,\"candidate\":%ld,\"self\":", getpid(), (unsigned)getuid(), value);
+  observe_task_capability(output, getpid(), 0); fputs(",\"control\":", output);
+  observe_task_capability(output, (pid_t)value, 0); fputs(",\"name\":", output);
+  observe_task_capability(output, (pid_t)value, 1); fputs("}\n", output);
+  require(fclose(output) == 0, "complete capability report"); alarm(0); return 0;
+}
 static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {
   struct snapshot ports = snapshot();
   struct unix_observation dns_socket = {0}, canonical_socket = {0}, listed_socket = {0}, unlisted_socket = {0};
@@ -391,6 +433,7 @@ int main(int argc, char **argv) {
   if (argc == 4 && strcmp(argv[1], "observe-initial-sandbox") == 0) return observe_initial_sandbox(argv[2], argv[3]);
   if (argc == 3 && strcmp(argv[1], "observe-subset") == 0) return observe_subset(argv[2]);
   if (argc == 3 && strcmp(argv[1], "observe-logd-lookup") == 0) return observe_logd_lookup(argv[2]);
+  if (argc == 4 && strcmp(argv[1], "observe-host-capabilities") == 0) return observe_host_capabilities(argv[2], argv[3]);
   if (argc == 5 && strcmp(argv[1], "observe-dns") == 0) return observe_dns(argv[2], argv[3], argv[4]);
   if (argc == 5 && strcmp(argv[1], "observe-resolver") == 0) return observe_resolver(argv[2], argv[3], argv[4]);
   if (argc == 7 && strcmp(argv[1], "observe-child-resolver") == 0) return observe_child_resolver(argv);

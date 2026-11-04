@@ -521,6 +521,18 @@ test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal",
   gate.trace[0].stopSignal = 19; assert.throws(validate); gate.trace[0].stopSignal = 0;
   gate.targetImage.stopStatus = 0x137f; gate.trace[0].stopSignal = 19; assert.throws(validate); gate.trace[0].stopSignal = 0;
   gate.targetImage.stopStatus = 0; assert.throws(validate); gate.targetImage.stopStatus = 127; validate();
+  gate.initialImage = { status: "OBSERVED", tokenSource: "kernel-task-name-port", pid: gate.helperToken[5],
+    token: [...gate.helperToken], identity: { ...identity }, stoppedStatus: 4, traceBeforeRelease: false,
+    continued: 0, taskNameReturned: true, origin: { kind: "matched" }, otherOrigin: { kind: "unavailable", osStatus: -67050 } };
+  validate();
+  const initial = structuredClone(gate.initialImage);
+  for (const corrupt of [value => { value.token[7]++; }, value => { value.identity.coalitionId = "43"; },
+    value => { value.stoppedStatus = 2; }, value => { value.traceBeforeRelease = true; },
+    value => { value.taskNameReturned = false; }, value => { value.origin.kind = "unavailable"; },
+    value => { value.otherOrigin.osStatus = 0; }]) {
+    gate.initialImage = structuredClone(initial); corrupt(gate.initialImage); assert.throws(validate);
+  }
+  gate.initialImage = initial; validate();
 });
 
 test("013. Native darwin: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {

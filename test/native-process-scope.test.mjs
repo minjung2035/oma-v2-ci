@@ -94,14 +94,28 @@ test("006. Native scope: setsid double-fork descendant with all inherited FDs cl
   const ticket = await f.owner.begin({ slot: 'resident:escape', launch: () => launchBlockedNamespace(f.command(
     `require('node:child_process').execFileSync(${JSON.stringify(binary)},[${JSON.stringify(report)}],{stdio:'ignore'});setInterval(()=>{},1000)`)), authorize() {} });
   const end = performance.now() + 10000;
-  while (!existsSync(report)) { assert.ok(performance.now() < end, 'actual escaped descendant did not report'); await setTimeout(5); }
-  const [innerPid, innerSession] = readFileSync(report, 'utf8').trim().split(' ').map(Number);
+  let escaped, innerPid, innerSession, lastChildren = [], reportBytes = '';
+  // Creation precedes dprintf/fsync, and the intermediate parent can still be
+  // exiting after the grandchild writes. Observe the complete frame and the
+  // actual adoption; file existence alone proves neither transition.
+  while (escaped === undefined) {
+    if (existsSync(report)) reportBytes = readFileSync(report, 'utf8');
+    const frame = /^([1-9][0-9]*) ([1-9][0-9]*)\n$/.exec(reportBytes);
+    if (frame) {
+      [innerPid, innerSession] = frame.slice(1).map(Number);
+      lastChildren = readFileSync(`/proc/${ticket.witness.pid}/task/${ticket.witness.pid}/children`, 'utf8').trim().split(/\s+/).map(Number);
+      escaped = lastChildren.find(pid => {
+        try {
+          const status = readFileSync(`/proc/${pid}/status`, 'utf8'), match = /^NSpid:\s+([0-9\t ]+)$/m.exec(status);
+          return match !== null && Number(match[1].trim().split(/\s+/).at(-1)) === innerPid &&
+            Number(/^PPid:\s+([0-9]+)$/m.exec(status)?.[1]) === ticket.witness.pid;
+        } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+      });
+    }
+    assert.ok(performance.now() < end, JSON.stringify({ message: 'escaped descendant did not become an observed namespace orphan', reportBytes, lastChildren }));
+    if (escaped === undefined) await setTimeout(5);
+  }
   assert.notEqual(innerPid, innerSession, 'the second fork is outside the session leader');
-  const children = readFileSync(`/proc/${ticket.witness.pid}/task/${ticket.witness.pid}/children`, 'utf8').trim().split(/\s+/).map(Number);
-  const escaped = children.find(pid => {
-    try { const match = /^NSpid:\s+([0-9\t ]+)$/m.exec(readFileSync(`/proc/${pid}/status`, 'utf8')); return Number(match[1].trim().split(/\s+/).at(-1)) === innerPid; }
-    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
-  });
   assert.ok(escaped, 'actual orphan is reparented to the namespace init');
   assert.equal(observeNamespaceProcess(escaped).kind, 'running');
   await ticket.stop(); await ticket.completion;

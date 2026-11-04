@@ -82,6 +82,7 @@ function loadJob(name, executable, mode, hash, options = {}) {
     assert.equal(jobDomain, `user/${process.getuid()}`);
     assert.equal(options.background && options.sessionCreate && options.launchOnlyOnce, true);
     job.nativeRegistration = submitLaunchdJob({ label, machServices: options.machServices,
+      startSuspended: options.startSuspended,
       command: { executable, argv: definition.ProgramArguments.slice(1), env: {}, cwd: directory,
         timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 } }, 10000);
     assert.equal(job.nativeRegistration.target, job.target);
@@ -299,6 +300,12 @@ const command = (executable, argv, environment = process.env) => {
     error: child.error?.message, errorCode: child.error?.code, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
 };
 save();
+if (["mach-fileports-v1", "mach-fileports-pipe-v1"].includes(process.argv.at(-1))) {
+  value.capabilitiesCommand = command(launcher, ["observe-host-capabilities", report + ".capabilities.json", ${JSON.stringify(String(process.pid))}]);
+  try { value.capabilities = JSON.parse(readFileSync(report + ".capabilities.json", "utf8")); }
+  catch (error) { value.capabilitiesError = String(error); }
+  value.elevation = command("/usr/bin/sudo", ["-n", "/usr/bin/id", "-u"]); save();
+}
 value.service = command("/bin/launchctl", ["kickstart", target]); save();
 value.nativeLookupCommand = command(launcher, ["observe-logd-lookup", report + ".lookup.json"]);
 try { value.nativeLookup = JSON.parse(readFileSync(report + ".lookup.json", "utf8")); }
@@ -394,7 +401,14 @@ value.complete = true; save();
     const positive = loadJob("bootstrap-positive", actor, "once");
     const positiveKickstart = run("/bin/launchctl", ["kickstart", positive.target]);
     await waitFor(() => existsSync(join(positive.directory, "once.json")));
+    const hostCapabilityReport = join(root, "host-capabilities.json");
+    const hostCapabilityCommand = observe(launcher, ["observe-host-capabilities", hostCapabilityReport, String(process.pid)], 5000);
+    let hostCapabilities, hostCapabilitiesError;
+    try { hostCapabilities = JSON.parse(readFileSync(hostCapabilityReport, "utf8")); }
+    catch (error) { hostCapabilitiesError = String(error); }
+    const hostElevation = observe("/usr/bin/sudo", ["-n", "/usr/bin/id", "-u"], 5000);
     observation.bootstrap = { renderer: "production-seatbeltProfile",
+      hostCapabilityCommand, hostCapabilities, hostCapabilitiesError, hostElevation,
       sourceSha256: createHash("sha256").update(readFileSync(bootstrapSource)).digest("hex"),
       executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
       positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
@@ -735,7 +749,7 @@ value.complete = true; save();
               }
             }
             const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
-              sessionCreate: true, launchOnlyOnce: true, nativeRegistration: true, machServices: [serviceName],
+              sessionCreate: true, launchOnlyOnce: true, nativeRegistration: true, startSuspended: true, machServices: [serviceName],
               argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, "suspended-inherited", profilePath, portsPath,
                 directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
                 unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
@@ -753,6 +767,50 @@ value.complete = true; save();
             gate.preemption = JSON.parse(attempt(`let taken=false,code=null;try{const r=listenMachService(name);taken=true;r.close();}catch(error){code=error.machCode??String(error);}console.log(JSON.stringify({pid:process.pid,taken,code}));`).stdout);
             assert.equal(gate.preemption.taken, false, "foreign process acquired the declared job receive right");
             gate.jobStart = startLaunchdJob(job.nativeRegistration, 10000);
+            // launchctl's PID is only a candidate. A held kernel task-name
+            // capability, fresh stopped generation and selected image precede
+            // the first helper instruction. Its later Mach ACK must agree.
+            gate.initialImage = { status: "SETUP_FAILED", tokenSource: "kernel-task-name-port" };
+            const initial = gate.initialImage;
+            await waitFor(() => {
+              const state = run("/bin/launchctl", ["print", job.target]);
+              const pids = [...state.stdout.matchAll(/^\s*pid = ([1-9][0-9]*)\s*$/gm)];
+              if (pids.length !== 1) return false;
+              initial.pid = Number(pids[0][1]);
+              const value = inspect(initial.pid);
+              return value.bsdBytes === 136 && value.status === 4;
+            }, 5000);
+            const before = inspect(initial.pid), port = Buffer.alloc(4), self = hostDecode.uint(system.symbol("mach_task_self_"));
+            assert.equal(before.uniqueBytes, 56); assert.equal(before.bsdBytes, 136); assert.equal(before.status, 4);
+            assert.equal(system.func("int task_name_for_pid(unsigned int, int, void *)")(self, initial.pid, port), 0);
+            assert.notEqual(port.readUInt32LE(), 0);
+            try {
+              const bytes = Buffer.alloc(32), tokenCount = Buffer.alloc(4); tokenCount.writeUInt32LE(8);
+              const info = system.func("int task_info(unsigned int, int, void *, void *)");
+              assert.equal(info(port.readUInt32LE(), 15, bytes, tokenCount), 0); assert.equal(tokenCount.readUInt32LE(), 8);
+              initial.token = Array.from({ length: 8 }, (_, index) => bytes.readUInt32LE(index * 4));
+              assert.equal(initial.token[5], initial.pid); assert.equal(initial.token[1], process.getuid());
+              assert.equal(initial.token[7], before.version);
+              initial.identity = identifyDarwinCoalition(initial.pid); assert.ok(initial.identity);
+              assert.notEqual(initial.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId);
+              const expected = observeDarwinAuditOrigin(initial.token, gate.expectedCdHashes);
+              initial.origin = await expected.result; await expected.returned; assert.equal(initial.origin.kind, "matched");
+              const other = observeDarwinAuditOrigin(initial.token, gate.otherCdHashes);
+              initial.otherOrigin = await other.result; await other.returned; assert.equal(initial.otherOrigin.kind, "unavailable");
+              const after = inspect(initial.pid); assert.equal(after.uniqueBytes, 56); assert.equal(after.unique, before.unique);
+              assert.equal(after.version, before.version); assert.equal(after.status, 4); initial.stoppedStatus = after.status;
+              tokenCount.writeUInt32LE(8); const fresh = Buffer.alloc(32);
+              assert.equal(info(port.readUInt32LE(), 15, fresh, tokenCount), 0); assert.equal(tokenCount.readUInt32LE(), 8);
+              assert.deepEqual(fresh, bytes);
+              initial.traceBeforeRelease = existsSync(tracePath); assert.equal(initial.traceBeforeRelease, false);
+              gate.identity = initial.identity;
+              const proc = hostLoad("/usr/lib/libproc.dylib");
+              initial.continued = proc.func("int proc_signal_with_audittoken(void *, int)")(fresh, 19 /* SIGCONT */);
+              assert.equal(initial.continued, 0); initial.status = "OBSERVED";
+            } finally {
+              assert.equal(system.func("int mach_port_deallocate(unsigned int, unsigned int)")(self, port.readUInt32LE()), 0);
+              initial.taskNameReturned = true;
+            }
             gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
             const one = Buffer.alloc(4); one.writeUInt32LE(1);
             const attack = id => attempt(`const s=lookupMachService(name),p=createMachEndpoint(),b=Buffer.alloc(4);b.writeUInt32LE(1);s.send(${id},b,${id === 0x4f4d4120 ? "p.send" : "undefined"});s.close();p.send.close();p.receive.close();console.log(JSON.stringify({pid:process.pid}));`);
@@ -771,7 +829,9 @@ value.complete = true; save();
             };
             assert.equal(gateService.send(0x4f4d4120, one, gateControl.send), "sent");
             const ack = await receiveGate(0x4f4d4121); gate.helperToken = [...ack.sender.token];
+            assert.deepEqual(gate.helperToken, gate.initialImage.token);
             gate.identity = identifyDarwinCoalition(ack.sender.pid); assert.ok(gate.identity);
+            assert.deepEqual(gate.identity, gate.initialImage.identity);
             assert.notEqual(gate.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId,
               "job gate must have a distinct kernel coalition");
             const origin = observeDarwinAuditOrigin(ack.sender.token, gate.expectedCdHashes);
