@@ -21,10 +21,14 @@ int main(int argc, char **argv) {
       MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
       &sequence, &size, &id, (mach_msg_trailer_info_t)&trailer, &count);
     if (result == KERN_SUCCESS) {
-      if (count != sizeof trailer || trailer.msgh_trailer_size != sizeof trailer ||
-          trailer.msgh_trailer_type != MACH_MSG_TRAILER_FORMAT_0) return 66;
-      printf("{\"pid\":%d,\"sequence\":%u,\"size\":%u,\"id\":%d,\"token\":[",
-        getpid(), sequence, size, id);
+      /* Unlike mach_msg receive copyout, peek retains the queued trailer's
+       * original minimum-size header. Its returned byte count bounds AUDIT. */
+      if (count != sizeof trailer || trailer.msgh_trailer_type != MACH_MSG_TRAILER_FORMAT_0) {
+        fprintf(stderr, "peek trailer count=%u type=%u stored-size=%u\n", count, trailer.msgh_trailer_type, trailer.msgh_trailer_size);
+        return 66;
+      }
+      printf("{\"pid\":%d,\"sequence\":%u,\"size\":%u,\"id\":%d,\"returnedTrailerBytes\":%u,\"storedTrailerBytes\":%u,\"token\":[",
+        getpid(), sequence, size, id, count, trailer.msgh_trailer_size);
       for (unsigned i = 0; i < 8; ++i) printf("%s%u", i ? "," : "", trailer.msgh_audit.val[i]);
       printf("]}\n"); fflush(stdout);
       for (;;) pause();

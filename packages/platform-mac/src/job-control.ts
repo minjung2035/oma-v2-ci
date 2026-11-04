@@ -23,11 +23,14 @@ import { machoImageCdHashes } from "./macho-image.js";
 import { machPoll } from "./mach-poll.js";
 
 export interface DarwinJobFile { readonly target: number; readonly fd: number }
+type DarwinJobTerminal = { readonly kind: "waited"; readonly pid: number; readonly waitStatus: number } |
+  { readonly kind: "stopped" };
 export interface DarwinJobControl {
   readonly identity: DarwinCoalitionIdentity;
   /** Lazy: trusted setup starts only when the shared owner has persisted identity. */
   readonly prepared: Promise<void>;
-  readonly terminal: Promise<{ readonly pid: number; readonly waitStatus: number }>;
+  /** Owner-requested stop has no fabricated child wait status. */
+  readonly terminal: Promise<DarwinJobTerminal>;
   /** The actual helper generation ended; descendant population is separate. */
   readonly closed: Promise<void>;
   population(): "populated" | "empty" | "unknown";
@@ -96,11 +99,11 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     await image(root, helperHashes); rootAccepted = true;
     const controller = root, identity = controller.identity, service = lookupMachService(serviceName); owners.push(() => service.close());
     let pending: { id: number; yes(message: Data): void; no(error: unknown): void } | undefined;
-    let problem: Error | undefined, prepared: Promise<void> | undefined, ready = false, released = false, returned = false, stopping = false;
+    let problem: Error | undefined, prepared: Promise<void> | undefined, ready = false, released = false, returned = false, stopping = false, ownerStopped = false;
     let terminalDone = false, rootDone = false, allReturned = false, closeFailure: unknown;
     const inputReturns: Promise<void>[] = [];
-    let finish!: (value: { pid: number; waitStatus: number }) => void, failTerminal!: (error: unknown) => void, finishRoot!: () => void;
-    const terminal = new Promise<{ pid: number; waitStatus: number }>((yes, no) => { finish = yes; failTerminal = no; });
+    let finish!: (value: DarwinJobTerminal) => void, failTerminal!: (error: unknown) => void, finishRoot!: () => void;
+    const terminal = new Promise<DarwinJobTerminal>((yes, no) => { finish = yes; failTerminal = no; });
     const rootClosed = new Promise<void>(yes => { finishRoot = yes; });
     const closed = rootClosed.then(async () => { await prepared?.catch(() => {}); await Promise.all(inputReturns); allReturned = true; });
     void terminal.catch(() => {});
@@ -120,7 +123,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       problem = error;
       try { terminate(); } catch (cause) { problem = unknown("job observation and termination failed", new AggregateError([error, cause])); }
       pending?.no(problem); pending = undefined;
-      if (!terminalDone) { terminalDone = true; failTerminal(problem); }
+      if (!terminalDone && !ownerStopped) { terminalDone = true; failTerminal(problem); }
     };
     const one = Buffer.alloc(4); one.writeUInt32LE(1);
     const send = (id: number, right?: MachSendRight): void => {
@@ -156,7 +159,10 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
         if (state === "changed" || state === "unknown") failed(unknown("job helper generation became unobserved"));
         if (!rootDone && (state === "exited" || observeDarwinCoalitionPopulation(identity) === "empty")) {
           rootDone = true;
-          if (!terminalDone) failed(unknown("job helper ended before a terminal response"));
+          if (!terminalDone && ownerStopped) {
+            terminalDone = true; finish({ kind: "stopped" });
+            pending?.no(new StoreError("CANCELLED_BEFORE_COMMIT", "job helper stopped at its owner's request")); pending = undefined;
+          } else if (!terminalDone) failed(unknown("job helper ended before a terminal response"));
           finishRoot();
         }
       } catch (error) { failed(error instanceof Error ? error : unknown("job control observation failed", error)); }
@@ -199,7 +205,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       const ended = take(0x4f4d4125);
       void ended.then(packet => {
         if (!target || packet.bytes.readUInt32LE(8) !== target.pid) throw unknown("job terminal child did not agree");
-        terminalDone = true; finish({ pid: target.pid, waitStatus: packet.bytes.readUInt32LE(12) }); send(0x4f4d4126);
+        terminalDone = true; finish({ kind: "waited", pid: target.pid, waitStatus: packet.bytes.readUInt32LE(12) }); send(0x4f4d4126);
       }).catch(error => failed(error));
       ready = true;
     };
@@ -208,7 +214,8 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
         prepared ??= (rootDone || returned ? Promise.reject(unknown("job helper already ended")) : prepare()).catch(error => { failed(error); throw error; });
         void prepared.catch(() => {}); return prepared;
       },
-      population: () => observeDarwinCoalitionPopulation(identity), terminate,
+      population: () => observeDarwinCoalitionPopulation(identity),
+      terminate() { ownerStopped = true; terminate(); },
       release() {
         if (!ready || stopping || released || returned || problem || !target || target.state() !== "stopped" || controller.state() !== "live")
           throw problem ?? unknown("job workload gate is not ready");

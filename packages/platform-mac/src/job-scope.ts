@@ -103,7 +103,9 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     // identity. A late cancellation stops that identity before any setup gate.
     attempted = true; control = await startDarwinJobControl(command, files, images);
     const job = control, capture = task;
-    void job.terminal.then(ended => { status = terminalStatus(ended.waitStatus); onExit(status.code, status.signal); })
+    void job.terminal.then(ended => {
+      if (ended.kind === "waited") { status = terminalStatus(ended.waitStatus); onExit(status.code, status.signal); }
+    })
       .catch(error => onError(error instanceof Error ? error : new Error("job terminal is unobserved", { cause: error }), "unobserved"));
     void job.closed.then(() => onClose(status.code, status.signal));
     closeRaw();

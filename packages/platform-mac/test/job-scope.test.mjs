@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { ExecutionCoordinator, ExecutionNotStarted } from "@oma/process/owned-execution";
 import { launchDarwinJobScope, launchSeatbeltJobScope } from "../dist/job-scope.js";
 
-function owner(t) {
+function owner(t, published = () => {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-real-mac-job-"))), rows = [], trace = [];
   const journal = { entries: () => rows.map(row => ({ ...row })), reserve(slot) {
     const row = { slot, execution: "one", witness: null }; rows.push(row);
-    return { execution: row.execution, publish(witness) { row.witness = witness; trace.push("publish"); },
+    return { execution: row.execution, publish(witness) { row.witness = witness; trace.push("publish"); published(); },
       retire() { trace.push("retire"); rows.splice(rows.indexOf(row), 1); } };
   }, retire() { throw new Error("unexpected startup recovery"); } };
   const runtime = new ExecutionCoordinator(journal, () => ({ kind: "unavailable" }));
@@ -75,4 +75,27 @@ test("003. Actual Darwin scope joins private Seatbelt setup EOF, final Node gate
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0); assert.equal(result.stdout.toString(), "ready");
   assert.equal(result.stderr.toString(), "EPERM"); assert.equal(readFileSync(forbidden, "utf8"), "HOST_CANARY");
   assert.equal(readFileSync(join(f.root, "entered"), "utf8"), "1048601"); assert.equal(f.rows.length, 0);
+});
+
+test("005. Actual released Darwin workload abort retains its reason through complete scope and I/O return", { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return linuxRefusal();
+  const f = owner(t), controller = new AbortController(); let output = "";
+  const command = f.command(["-e", "process.stdout.write('ready');setInterval(()=>{},1000)"]);
+  const result = await f.runtime.run({ slot: "abort", signal: controller.signal,
+    launch: () => launchDarwinJobScope(command, { signal: controller.signal, stdoutSink(bytes) {
+      output += Buffer.from(bytes).toString(); if (output === "ready") controller.abort();
+    } }), authorize() { f.trace.push("authorize"); } });
+  assert.equal(output, "ready"); assert.equal(result.kind, "aborted");
+  assert.deepEqual(f.trace, ["publish", "authorize", "retire"]); assert.equal(f.rows.length, 0);
+});
+
+test("006. Actual Darwin cancellation after witness publication joins unopened setup and all pipe returns", { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return linuxRefusal();
+  const controller = new AbortController(), f = owner(t, () => controller.abort());
+  const command = { ...f.command(["-e", "require('node:fs').writeFileSync('entered','forbidden')"]), input: Buffer.alloc(1048601, 98) };
+  await assert.rejects(f.runtime.run({ slot: "cancel-setup", signal: controller.signal,
+    launch: () => launchDarwinJobScope(command, { signal: controller.signal }),
+    authorize() { throw new Error("cancelled setup reached authority"); } }), error => error.code === "CANCELLED_BEFORE_COMMIT");
+  assert.equal(existsSync(join(f.root, "entered")), false);
+  assert.deepEqual(f.trace, ["publish", "retire"]); assert.equal(f.rows.length, 0);
 });

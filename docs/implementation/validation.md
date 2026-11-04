@@ -1303,10 +1303,56 @@ probe는 privileged service나 business runtime이 아니며 제품 lease/launch
 SDK26.5 arm64 `-Wall -Wextra -Werror` object compile과 Linux의 명시적 Darwin primitive 거절만 확인했다.
 실제 Mac queue 보존·same-UID 철회 반례는 아직 **NOT_RUN**이며 새 format/caller에는 연결하지 않는다.
 
+### journal 접근·owner 요청 종료의 실제 실패와 수정 — 새 Mac 미실행
+
+`fa637ad97ce` Native [41839739427](https://github.com/minjung2035/oma-v2-ci/actions/runs/41839739427)의
+Mac15 common ZIP `13329245946` SHA-256 `084230d0a85b591f59eeada26c8c0efa5a4fb852e5c0e83ddab5e250a2cb8455`,
+Mac26 `13326869759` SHA-256 `6cc843d0cf34836fbd0319aa43d1ba22d77065961592a0f12c779341faec2465`를 대조했다.
+두 OS 모두 **311/316·fail5·skip/cancel0**이며 input/runtime은 전후 같다.
+수정한 Seatbelt 통합은 양 OS에서 실제 private profile EOF→selected final Node stop→fresh authorize→
+1MiB stdin/출력/금지 canary 보존과 CID 정리를 통과했다. 공통 owner의 journal은 아직 memory다.
+권한 철회는 두 OS 모두 실제 authorize에 도달했지만 owner가 helper를 종료한 것을 예상 밖 terminal 손실로
+처리해 `RUN_TERMINATION_UNKNOWN`을 덧붙였다. 나머지4건은 journal의 read-only event FD를
+`/dev/fd`로 read/write upgrade하려다 EACCES가 난 실제 파일 접근 실패다. 이 결과를 product PASS로 쓰지 않는다.
+원시는 `job-scope/followup/`의 SHA 검증 ZIP과 `tests.log`다.
+
+새 수정은 journal에 필요한 read/write·append 권한을 처음부터 명시적으로 취득한다.
+Darwin은 kernel beneath/no-link와 O_EVTONLY·O_NONBLOCK으로 열린 같은 FD에서 regular type을 확인한 뒤에만
+data I/O를 한다. `/dev/fd` upgrade·pathname 재검사 후 재열기·독립 cursor claim은 없다.
+읽기 전용 기본 capability와 일반 metadata pin은 read/write로 바꾸지 않으며 Linux O_PATH 경로도 보존한다.
+permission-independent pin이나 모든 device driver의 open 부작용까지 증명한 것으로 읽지 않는다.
+새 검사는 held inode의 경로 교체 뒤 append, read-only 쓰기 거절, symlink 거절, bounded FIFO 거절과
+queued bytes 미소비를 실제 kernel에서 확인한다. journal 형식/기존 bytes는 변경하지 않는다.
+
+owner 요청의 stop과 관측 실패 뒤의 내부 cleanup을 구분했다. 실제 helper exit 또는 CID 소멸을 본 뒤
+owner 요청 stop의 terminal 알림을 완료하되 child wait status는 만들지 않는다. 선행 관측 실패는 남으며,
+전체 scope의 positive empty와 capture/pipe/callback 반환·close는 공유 owner가 여전히 따로 요구한다.
+기존 fresh authority 거절 외에 실제 workload 시작 후 abort와 witness publish 직후 trusted setup 이전 취소를 추가했다.
+새 Mac 관측은 아직 **NOT_RUN**이며 legacy launch/recovery guard와 세 product gate OPEN을 유지한다.
+
+lease probe 첫 source `b94338eda7d`의 Mac26 common ZIP `13329971187` SHA-256
+`f60e0fb6320aeb339a0c548122271466f17f4f15b1be281afec2fc001e799404`를 대조했다.
+probe는 내가 Native send API의 4-byte alignment 계약에 맞지 않는5-byte body를 전달해 메시지 enqueue 전 TypeError로 실패했다.
+keeper compile은 통과했으나 queued sender·crash·이름 철회는 아직 실행 근거가 없다. body를4 bytes로 고쳤다.
+또 고정 [ipc_kmsg 초기화](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/ipc_kmsg.c#L524)와
+[peek 복사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/mach_port.c#L966)를 대조해,
+receive copyout과 달리 peek의 stored trailer header는 minimum-size 그대로이고 반환 count가 복사 bytes를 정함을 확인했다.
+count와 format을 검증하고 stored size는 raw 관측으로 남긴다. 실제 Mac 재관측 전 후보 판정은 유지한다.
+
+현재 수정본 build와 local59/59·fail/cancel/skip/todo0, 별도 실제 Linux namespace/credential/Git53/53을 확인했다.
+`/tmp/oma-macos-journal-access-release-{build.log,local.tap}`와 `journal-access-linux-native.tap`가 명령 결과를 소유한다.
+Mac scope scenario는 이 Linux 실행에서 platform refusal만 검증했으며 Mac stop 성공으로 합산하지 않는다.
+Darwin event acquisition에는 NONBLOCK/NOCTTY를 명시해 writer 없는 FIFO도 bounded하게 검사하며,
+regular 여부를 확인하기 전에 data read/write를 하지 않는다. 실제 Mac의 read/write·append/abort 판정은 아직 미실행이다.
+CI는 공통 runtime 테스트 직후 source/runtime 전후 digest와 raw TAP을 별도 `native-shared-*` artifact에 보존한다.
+기존 전체 공통 artifact·독립 package 검사와 최종 입력 비교도 유지한다. 앞선 실패 결과는 바꾸지 않는다.
+
+수정본의 독립 packed 설치27/27와 전체 구조 검사도 통과했다. 외부 선언 diagnostics44와 ledger 미검토는 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `5c67183a2c95e73aa7d95a3be319735e8bddc5ee6d1cb50e2c17068850cdf7b4` (15846 files).
+verification input digest `330a23b1445e79c320470c18915a3926f0c6672ea13bb41486494c4114efd9aa` (15847 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

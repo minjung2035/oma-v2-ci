@@ -99,7 +99,8 @@ export function openBeneath(
       // Darwin has no permission-independent O_PATH. O_EVTONLY is the narrow
       // event-only capability; inaccessible entries fail closed here.
       return checked(darwinOpen(directory, path,
-        0x00008000 | 0x01000000 | 0x20000000 | 0x1000 | (flags & constants.O_DIRECTORY), "unsigned int", 0));
+        0x00008000 | 0x01000000 | 0x20000000 | 0x1000 |
+        0x4 /* O_NONBLOCK */ | 0x00020000 /* O_NOCTTY */ | (flags & constants.O_DIRECTORY), "unsigned int", 0));
     }
     // O_NOFOLLOW_ANY also rejects the final symlink. XNU rejects combining
     // it with O_NOFOLLOW, which shared callers may already have requested.
@@ -137,8 +138,24 @@ export function openBeneath(
     );
   return checked(result);
 }
-/** Inspect with O_PATH before opening for I/O, so a raced FIFO/device is never consumed. */
-export function openRegularBeneath(directory: number, path: string): number {
+/** Caller requests its I/O access at acquisition, never upgrades a Darwin
+ * metadata pin through /dev/fd. No data I/O occurs before regular-file checks.
+ * An event-only open is not a permission-independent Linux O_PATH capability. */
+export function openRegularBeneath(directory: number, path: string,
+  options: { readonly writable?: boolean; readonly append?: boolean } = {}): number {
+  const writable = options.writable ?? false, append = options.append ?? false;
+  if (typeof writable !== "boolean" || typeof append !== "boolean" || append && !writable)
+    throw new TypeError("invalid regular-file access");
+  const flags = (writable ? constants.O_RDWR : constants.O_RDONLY) | constants.O_NONBLOCK | (append ? constants.O_APPEND : 0);
+  if (process.platform === "darwin") {
+    // O_NONBLOCK also bounds acquisition of a substituted FIFO. We do not
+    // read/write a nonregular entry or claim an independent reopened cursor.
+    const fd = openBeneath(directory, path, flags | 0x00008000 /* O_EVTONLY */ | 0x00020000 /* O_NOCTTY */);
+    try {
+      if (!fstatSync(fd).isFile()) throw new StoreError("STORE_CORRUPT", "contained entry is not a regular file");
+      return fd;
+    } catch (error) { return withCleanup(() => { throw error; }, () => closeSync(fd)); }
+  }
   const pin = openBeneath(
     directory,
     path,
@@ -152,9 +169,9 @@ export function openRegularBeneath(directory: number, path: string): number {
           "STORE_CORRUPT",
           "contained entry is not a regular file",
         );
-      result = process.platform === "darwin" ? reopenPinned(pin, constants.O_RDONLY | constants.O_NONBLOCK) : openSync(
+      result = openSync(
         `/proc/self/fd/${pin}`,
-        constants.O_RDONLY | constants.O_NONBLOCK,
+        flags,
       );
       return result;
     }, () => closeSync(pin));

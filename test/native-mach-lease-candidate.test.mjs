@@ -60,7 +60,7 @@ test("001. Actual queued Mach owner survives keeper crash; same-UID job withdraw
     launchctl("bootstrap", domain, definition); registrations.add(label); outputs.push(output); return { label, output };
   }
   const first = register(), token = currentDarwinAuditToken(), old = lookupMachService(service); rights.push(old);
-  assert.equal(old.send(OWNER, Buffer.from("owner")), "sent");
+  assert.equal(old.send(OWNER, Buffer.alloc(4, 1)), "sent");
   const [one] = await until(() => { const rows = observations(first.output); return rows.length ? rows : null; }, "initial keeper did not peek");
   assert.deepEqual(one.token, token); assert.equal(one.id, OWNER);
   const pin = pinDarwinProcess(one.pid); pins.push(pin); assert.equal(pin.terminate(), true);
@@ -75,7 +75,7 @@ test("001. Actual queued Mach owner survives keeper crash; same-UID job withdraw
     import {currentDarwinAuditToken} from '@oma/native/audit-session';
     import {lookupMachService} from '@oma/native/mach-message';
     const port=lookupMachService(${JSON.stringify(service)});
-    if(port.send(${OWNER},Buffer.from('second-owner'))!=='sent')throw new Error('second claim not enqueued');
+    if(port.send(${OWNER},Buffer.alloc(4,2))!=='sent')throw new Error('second claim not enqueued');
     console.log(JSON.stringify(currentDarwinAuditToken()));port.close();setTimeout(()=>{},60000);`], { stdio: ["ignore", "pipe", "pipe"] });
   const childClosed = once(second, "close"); void childClosed.catch(() => {});
   children.push({ process: second, closed: childClosed });

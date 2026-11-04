@@ -10,7 +10,7 @@ import { isValidActorName, UUID_V4_RE } from "@oma/domain/identifiers";
 import { EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { uuidV4 } from "@oma/native/identity";
 import { lockFileDescriptor } from "@oma/native/linux";
-import { chmodPinned, pinBeneath, reopenPinned, withinDirectory } from "@oma/native/files";
+import { chmodPinned, openRegularBeneath, pinBeneath, reopenPinned, withinDirectory } from "@oma/native/files";
 import { withCleanup } from "@oma/native/cleanup";
 import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { openOwnedDirectoryPath } from "./directory.js";
@@ -91,6 +91,13 @@ export class ExecutionJournal {
     try {
       withCleanup(() => {
         assertNoRecovery(parent);
+        if (process.platform === "darwin") {
+          fd = openRegularBeneath(parent, "scopes.jsonl", { writable: true, append: true });
+          const stat = fstatSync(fd);
+          if (stat.nlink !== 1) corrupt("is not an exclusively named regular file");
+          chmodPinned(fd, (stat.mode & 0o7777) | 0o600);
+          return;
+        }
         const pin = pinBeneath(parent, "scopes.jsonl");
         withCleanup(() => {
           const stat = fstatSync(pin);
@@ -109,6 +116,11 @@ export class ExecutionJournal {
     let fd: number | undefined;
     return withCleanup(() => {
       withinDirectory(join(resolve(stateRoot), "execution", "scopes.jsonl"), (parent, name) => {
+        if (process.platform === "darwin") {
+          fd = openRegularBeneath(parent, name);
+          if (fstatSync(fd).nlink !== 1) corrupt("diagnostic snapshot is not an exclusively named regular file");
+          return;
+        }
         const pin = pinBeneath(parent, name);
         withCleanup(() => {
           const stat = fstatSync(pin);

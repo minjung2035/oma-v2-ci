@@ -1472,7 +1472,7 @@
     },
     {
       "path": "packages/native/src/files.ts",
-      "sha256": "5359eee51a414fbd0ae4e7e56b5acc6483993cab65bbd05a6e08ccc63ccef510"
+      "sha256": "5ecbf03c3a6a049e8812dfca00836a61cc383dd08593ae77fb01f63b991bfb7e"
     },
     {
       "path": "packages/native/src/identity.ts",
@@ -1600,7 +1600,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "30f8a38fc8387b482694244da9faf31fc35ee440c90cd4475d904591e7056f90"
+      "sha256": "e87fc41e85b64c692b93aba59c80a37b55a2c6806c4af375ebd4371af84725ca"
     },
     {
       "path": "packages/platform-mac/src/job-helper/config.h",
@@ -1616,7 +1616,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-scope.ts",
-      "sha256": "45d228f90397d73fba89a3accf532b6ff6f56e0332999d6a67b08335e7f86770"
+      "sha256": "e83b54599cde90eacf6325dd15f4fc0366b5aba09634288191f3d359be12ff7c"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -2020,7 +2020,7 @@
     },
     {
       "path": "packages/storage/src/execution-journal.ts",
-      "sha256": "ec7b005a7554df0b81c64c1f9817af95f34b0b4d36d2fbf5548faf284f59b22d"
+      "sha256": "1e0f5560688e4a0bf0a306de172b889ce0493107f622eed9b0261daeba9609ca"
     },
     {
       "path": "packages/storage/src/execution-recovery.ts",
