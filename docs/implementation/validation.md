@@ -909,10 +909,48 @@ API SHA-256 대조한 Mac26 ZIP `8dfb80f44ee5018c6ee629e92094d7c8bf5ed3ac21ca69e
 Mac15 ZIP `2cdf02753d20b6e9d5029adc65ed01f4646a354e17b0ffad81762497f7163e71`과 실제 실패는
 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/pipe/`에 있다. 제품 BLOCKED는 유지한다.
 
+### 최종 Node image의 두 번째 gate — 후속 입력 / Darwin NOT_RUN
+
+첫 launcher image의 stop/검증/GO 뒤, controlled Seatbelt launcher는 POSIX_SPAWN_SETEXEC와
+START_SUSPENDED로 최종 Node image를 같은 PID에 올린다. job helper는 두 번째 stop에서 kernel token을
+다시 취득한다. Host가 Node CDHash 일치·launcher CDHash 거절·같은 CID·아직 없는 Node report/출력을
+확인한 뒤 별도 TARGET_GO를 보낸다. 세 번째 foreign GO도 실제 kernel sender로 거절해야 한다.
+
+이 입력의 C helper2개 SDK object compile·MJS syntax·parser/Seatbelt44/44는 PASS다. 실제 Mac은 NOT_RUN이다.
+두 main-image 관측은 script/library protected generation, production profile byte-channel·stdio owner·durable
+producer/recovery·G-AUTH의 expected Broker/current role/run proof를 대체하지 않는다.
+
+### production native leaf 뒤 Linux 전체 — source `8a881a63a74`
+
+Architecture [41796440738](https://github.com/minjung2035/oma-v2-ci/actions/runs/41796440738)의 full serial
+**4747/4747 PASS·fail/cancel/skip/todo0·errors[]**다. 검사13개 command는 모두 code0이며 sourceChanges=[]다.
+API SHA-256 `5b098cfc2ceec63844d9f577dba21b9838f629e6ac34f46098caa4b1d3b563fa`와 대조한 artifact는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/native-discard/linux-all/`에 있다.
+이는 해당 source의 Linux 전체 회귀이며 후속 CDHash/fileport source나 Darwin 제품 전체 PASS로 합산하지 않는다.
+
+### pipe와 suspended gate 원시 결과 / verifier 오류 — source `7f332fa478c`
+
+Native [41802869640](https://github.com/minjung2035/oma-v2-ci/actions/runs/41802869640)의 최종 launchd-bootstrap3건씩은
+parser의 `stopSignal > 0` 조건 때문에 SETUP_FAILED였다. 원시 stdout은 양 OS 각3회의 regular/pipe gate 모두
+선택한 stopped launcher image 일치·다른 signed image 거절·Host 전용 release·정상 tools/DNS·child join·CID ESRCH를
+보고한다. pipe stdout1,048,593 bytes의 SHA-256은 `c26032d5154f96bd29c799447d715ab681d8d0aa308ecc6f321a35d98f0672da`,
+stderr1,048,605 bytes는 `4cc03dc29be85d2ca4c9fa76f851804953e1ac604a36ffe00cf4813db4fc2311`이며 실제 EOF/reader close도 확인했다.
+
+실제 START_SUSPENDED는 C의 WIFSTOPPED 판정을 통과한 status127·WSTOPSIG0이었다. parser의 양수 signal 요구는
+잘못 추가한 조건이다. stopStatus의 stopped bits와 보고된 signal의 정확한 관계를 대조하도록 고쳤고, signal0의
+정상 입력과 불일치/비정지 상태 거절 회귀를 추가했다. 보존 stdout6건은 수정 parser로 모두 재판독됐다.
+이는 새 kernel 실행이나 과거 CI 판정의 소급 PASS가 아니다. 로컬 parser/Seatbelt는45/45 PASS다.
+
+입력15830개 `95df59f773ced795320a9c74b035986c56ae6b1581ef89179581f38f0e8ba1be`와 runtime 산출물은 전후 같았다.
+API SHA-256 대조한 Mac15 ZIP `f0137e7394b3fe2f377063e0d59acbd2481f4cb15db3f10453a58522269a07e0`,
+Mac26 ZIP `275acf654728c53ab94496cf609e9c473d380445b325aa6af406e2876c0de45a`와 원시 stdout은
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/suspended-gate/`에, 재판독은
+`/tmp/oma-macos-suspended-raw-replay.log`에 있다. 제품 BLOCKED·세 gate OPEN은 그대로다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `95df59f773ced795320a9c74b035986c56ae6b1581ef89179581f38f0e8ba1be` (15830 files).
+verification input digest `032c7c7d104721f274c15c181fb13041ae16e5256e7ef42ea82a771c88279e6a` (15830 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

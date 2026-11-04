@@ -671,6 +671,7 @@ value.complete = true; save();
             assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
             gate.targetImage = { expectedCdHashes: [cdhash(launcher)], otherCdHashes: [...gate.otherCdHashes] };
             assert.notDeepEqual(gate.targetImage.expectedCdHashes, gate.targetImage.otherCdHashes);
+            gate.finalImage = { expectedCdHashes: [...gate.otherCdHashes], otherCdHashes: [...gate.targetImage.expectedCdHashes] };
             const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
             assert.equal(system.func("int task_info(unsigned int, int, void *, void *)")(
               hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
@@ -721,7 +722,7 @@ value.complete = true; save();
             }
             const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
               sessionCreate: true, launchOnlyOnce: true, machServices: [serviceName],
-              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, name, profilePath, portsPath,
+              argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, "suspended-inherited", profilePath, portsPath,
                 directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
                 unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
                 JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"] });
@@ -743,7 +744,7 @@ value.complete = true; save();
               while (performance.now() < end) {
                 const packet = gateControl.receive.receive();
                 if (packet.kind === "again") { await delay(2); continue; }
-                assert.equal(packet.id, id); assert.equal(packet.bytes.length, id === 0x4f4d4123 ? 48 : 16); assert.equal(packet.reply, null);
+                assert.equal(packet.id, id); assert.equal(packet.bytes.length, [0x4f4d4123, 0x4f4d4128].includes(id) ? 48 : 16); assert.equal(packet.reply, null);
                 assert.equal(packet.bytes.readUInt32LE(0), 1);
                 if (gate.helperToken) assert.deepEqual(packet.sender.token, gate.helperToken);
                 return packet;
@@ -785,9 +786,29 @@ value.complete = true; save();
               { stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") };
             assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
             assert.equal(gateService.send(0x4f4d4124, one), "sent");
+            const final = await receiveGate(0x4f4d4128);
+            Object.assign(gate.finalImage, { pid: final.bytes.readUInt32LE(8), stopStatus: final.bytes.readUInt32LE(12),
+              token: Array.from({ length: 8 }, (_, index) => final.bytes.readUInt32LE(16 + index * 4)) });
+            assert.equal(gate.finalImage.pid, gate.targetImage.pid); assert.equal(gate.finalImage.token[5], gate.finalImage.pid);
+            assert.equal(gate.finalImage.stopStatus & 0xff, 0x7f);
+            gate.finalImage.identity = identifyDarwinCoalition(gate.finalImage.pid);
+            assert.deepEqual(gate.finalImage.identity, gate.identity);
+            const finalOrigin = observeDarwinAuditOrigin(gate.finalImage.token, gate.finalImage.expectedCdHashes);
+            gate.finalImage.origin = await finalOrigin.result; await finalOrigin.returned;
+            assert.equal(gate.finalImage.origin.kind, "matched");
+            const finalOther = observeDarwinAuditOrigin(gate.finalImage.token, gate.finalImage.otherCdHashes);
+            gate.finalImage.otherOrigin = await finalOther.result; await finalOther.returned;
+            assert.equal(gate.finalImage.otherOrigin.kind, "unavailable");
+            gate.beforeFinalReleaseAttack = JSON.parse(attack(0x4f4d4129).stdout);
+            gate.finalImage.reportBeforeRelease = existsSync(report); assert.equal(gate.finalImage.reportBeforeRelease, false);
+            gate.finalImage.outputBeforeRelease = pipeTransfer ? { stdout: captured[0], stderr: captured[1] } :
+              { stdout: statSync(filePaths.stdout).size, stderr: statSync(filePaths.stderr).size };
+            assert.deepEqual(gate.finalImage.outputBeforeRelease, { stdout: 0, stderr: 0 });
+            assert.equal(gateService.send(0x4f4d4129, one), "sent");
             const fin = await receiveGate(0x4f4d4125);
             gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
             assert.equal(gate.targetImage.pid, gate.childPid);
+            assert.equal(gate.finalImage.pid, gate.childPid); assert.ok(gate.rejectedAtFinish >= 3);
             assert.equal(gateService.send(0x4f4d4126, one), "sent");
             await waitFor(() => {
               const result = usage(gate.identity.coalitionId);

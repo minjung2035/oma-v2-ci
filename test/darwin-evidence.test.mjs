@@ -501,6 +501,27 @@ test("005. Native darwin: launchd scope refuses ambiguous lookup, admission and 
   }
 });
 
+test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal", () => {
+  const record = bootstrapRecord(), proxy = record.bootstrap.lookupProxy, host = record.bootstrap.ffi.host.pid;
+  record.boot = { stdout: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\n" };
+  const child = host + 1000, token = pid => [0, 501, 20, 501, 20, pid, 1001, 1];
+  const identity = { kind: "darwin-resource-coalition", bootId: record.boot.stdout.trim().toLowerCase(), coalitionId: "42" };
+  const gate = proxy.machGate = { status: "OBSERVED", fixtureOnly: true, protocol: 1, domain: "user/501",
+    sessionType: "Background", sessionCreate: true, launchOnlyOnce: true, identity, scopeGone: true,
+    sourceSha256: "a".repeat(64), executableSha256: "b".repeat(64), expectedHostToken: token(host), helperToken: token(child - 1),
+    preemption: { taken: false }, origin: { kind: "matched" }, reportBeforeHostRelease: false, rejectedAtFinish: 2,
+    beforeInitAttack: { pid: child + 1 }, beforeReleaseAttack: { pid: child + 2 }, childPid: child, waitStatus: 0,
+    ports: { pid: child, sandboxApplied: true, resource: "42" }, after: { returnCode: -1, errno: 3 },
+    registration: { exitCode: 113 }, tools: { complete: true }, profileSha256: proxy.profileSha256, discarded: 1,
+    targetImage: { pid: child, token: token(child), stopStatus: 127, identity, origin: { kind: "matched" },
+      otherOrigin: { kind: "unavailable", osStatus: -67050 }, expectedCdHashes: ["a".repeat(40)], otherCdHashes: ["b".repeat(40)] },
+    trace: [{ phase: "suspended", childPid: child, stopSignal: 0 }, { phase: "terminal", joined: true }] };
+  const validate = () => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: record });
+  validate();
+  gate.trace[0].stopSignal = 19; assert.throws(validate); gate.trace[0].stopSignal = 0;
+  gate.targetImage.stopStatus = 0; assert.throws(validate); gate.targetImage.stopStatus = 127; validate();
+});
+
 test("013. Native darwin: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {
   const good = bootstrapRecord();
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: good });
@@ -578,9 +599,6 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.lookupProxy.machPipeGate = { status: 'SETUP_FAILED', fixtureOnly: true, protocol: 1,
       domain: 'user/501', sessionType: 'Background', sessionCreate: true, launchOnlyOnce: true,
       error: 'pipe drain failed', pipeHandlesReturned: false }; },
-    value => { value.bootstrap.lookupProxy.machGate = { status: 'OBSERVED', fixtureOnly: true, protocol: 1,
-      domain: 'user/501', sessionType: 'Background', sessionCreate: true, launchOnlyOnce: true,
-      targetImage: { token: [], stopStatus: 0, origin: { kind: 'matched' } } }; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
     value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },
     value => { value.bootstrap.lookupProxy.trace[1].childPid += 1; },

@@ -496,6 +496,14 @@ export function validateDarwinObservation(name, observations) {
       for (const key of ["machGate", "machPipeGate"]) if (proxy[key] !== undefined) {
         const gate = proxy[key], piped = key === "machPipeGate";
         const words = token => Array.isArray(token) && token.length === 8 && token.every(portNumber) && token[5] > 1 && token[7] !== 0;
+        const image = record => words(record.token) && record.token[5] === gate.childPid && record.pid === gate.childPid &&
+          Number.isSafeInteger(record.stopStatus) && record.stopStatus >= 0 && record.stopStatus <= 0xffff && (record.stopStatus & 0xff) === 0x7f &&
+          record.identity?.bootId === gate.identity?.bootId && record.identity?.coalitionId === gate.identity?.coalitionId &&
+          record.origin?.kind === "matched" && record.otherOrigin?.kind === "unavailable" &&
+          Number.isInteger(record.otherOrigin.osStatus) && record.otherOrigin.osStatus !== 0 &&
+          [record.expectedCdHashes, record.otherCdHashes].every(hashes => Array.isArray(hashes) && hashes.length > 0 &&
+            hashes.every(hash => typeof hash === "string" && /^[0-9a-f]{40}$/.test(hash))) &&
+          !record.expectedCdHashes.some(hash => record.otherCdHashes.includes(hash));
         if (gate.fixtureOnly !== true || gate.protocol !== 1 || gate.domain !== `user/${baseline.ports.uid}` ||
             gate.sessionType !== "Background" || gate.sessionCreate !== true || gate.launchOnlyOnce !== true ||
             !["OBSERVED", "SETUP_FAILED"].includes(gate.status) || gate.status === "SETUP_FAILED" && typeof gate.error !== "string" ||
@@ -524,17 +532,15 @@ export function validateDarwinObservation(name, observations) {
                   }) : gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n") ||
                 JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== "[0,1,2,7]" ||
                 gate.trace.some(row => row.phase === "fileport" && row.closeOnExec !== true)) ||
-              gate.targetImage !== undefined && (!words(gate.targetImage.token) ||
-                gate.targetImage.token[5] !== gate.childPid || gate.targetImage.pid !== gate.childPid ||
-                !Number.isSafeInteger(gate.targetImage.stopStatus) || (gate.targetImage.stopStatus & 0xff) !== 0x7f ||
-                gate.targetImage.identity?.bootId !== gate.identity?.bootId ||
-                gate.targetImage.identity?.coalitionId !== gate.identity?.coalitionId ||
-                gate.targetImage.origin?.kind !== "matched" || gate.targetImage.otherOrigin?.kind !== "unavailable" ||
-                !Number.isInteger(gate.targetImage.otherOrigin.osStatus) || gate.targetImage.otherOrigin.osStatus === 0 ||
-                ![gate.targetImage.expectedCdHashes, gate.targetImage.otherCdHashes].every(hashes =>
-                  Array.isArray(hashes) && hashes.length > 0 && hashes.every(hash => typeof hash === "string" && /^[0-9a-f]{40}$/.test(hash))) ||
-                gate.targetImage.expectedCdHashes.some(hash => gate.targetImage.otherCdHashes.includes(hash)) ||
-                !gate.trace.some(row => row.phase === "suspended" && row.childPid === gate.childPid && row.stopSignal > 0)) ||
+              gate.targetImage !== undefined && (!image(gate.targetImage) ||
+                !gate.trace.some(row => row.phase === "suspended" && row.childPid === gate.childPid &&
+                  row.stopSignal === ((gate.targetImage.stopStatus >>> 8) & 0xff))) ||
+              gate.finalImage !== undefined && (!image(gate.finalImage) || gate.finalImage.reportBeforeRelease !== false ||
+                gate.finalImage.outputBeforeRelease?.stdout !== 0 || gate.finalImage.outputBeforeRelease?.stderr !== 0 ||
+                gate.beforeFinalReleaseAttack?.pid === gate.expectedHostToken[5] || gate.rejectedAtFinish < 3 ||
+                !gate.trace.some(row => row.phase === "suspended" && row.stage === "target" && row.childPid === gate.childPid &&
+                  row.stopSignal === ((gate.finalImage.stopStatus >>> 8) & 0xff)) ||
+                JSON.stringify(gate.trace.filter(row => row.phase === "suspended").map(row => row.stage)) !== '["launcher","target"]') ||
               !Number.isSafeInteger(gate.rejectedAtFinish) || gate.rejectedAtFinish < 2 ||
               gate.beforeInitAttack?.pid === gate.expectedHostToken[5] || gate.beforeReleaseAttack?.pid === gate.expectedHostToken[5] ||
               gate.waitStatus !== 0 || gate.ports?.pid !== gate.childPid || gate.ports.sandboxApplied !== true ||

@@ -397,6 +397,8 @@ int main(int argc, char **argv) {
   require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];
+  int suspended_exec = strcmp(mode, "suspended-inherited") == 0;
+  if (suspended_exec) mode = "inherited";
   int code_signature_profile = strcmp(mode, "app-only") == 0;
   int inherited_profile = code_signature_profile || strcmp(mode, "inherited-profile") == 0;
   int clear_bootstrap = !inherited_profile && strcmp(mode, "inherited") != 0;
@@ -444,6 +446,17 @@ int main(int argc, char **argv) {
   require(fclose(output) == 0, "complete observation report");
   release_snapshot(&before, dropped, dropped_count);
   release_snapshot(&after, NULL, 0);
+  if (suspended_exec) {
+    posix_spawnattr_t attributes;
+    require(posix_spawnattr_init(&attributes) == 0 &&
+      posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETEXEC | POSIX_SPAWN_START_SUSPENDED) == 0,
+      "final target suspended exec attributes");
+    pid_t unused = 0;
+    int result = posix_spawn(&unused, argv[5], NULL, &attributes, &argv[5], environ);
+    fprintf(stderr, "final suspended exec returned: %d\n", result);
+    require(posix_spawnattr_destroy(&attributes) == 0, "failed final exec attributes return");
+    return 126;
+  }
   execve(argv[5], &argv[5], environ);
   fprintf(stderr, "direct exec refused: errno %d\n", errno);
   return 126;
