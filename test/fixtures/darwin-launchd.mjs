@@ -132,6 +132,25 @@ async function recoverFromHints(id, other, directory) {
   }
   return { input: "resource-coalition-only", beforeFixtureRelease: true, afterSnapshot, rounds };
 }
+async function recoverUsingNative(identity, other, directory, invoke) {
+  const rounds = [], end = performance.now() + 8000;
+  let afterSnapshot;
+  for (;;) {
+    const discovery = invoke("hints", JSON.stringify(identity));
+    assert.ok(Array.isArray(discovery.result));
+    if (!rounds.length) {
+      writeFileSync(join(directory, "fork-after-snapshot"), "controlled birth after native hint snapshot");
+      await waitFor(() => existsSync(join(directory, "after-snapshot.json")));
+      afterSnapshot = remember(marker(directory, "after-snapshot"));
+    }
+    const controls = discovery.result.map(pid => invoke("signal", JSON.stringify(identity), String(pid)));
+    const aggregate = usage(identity.coalitionId), otherAggregate = usage(other);
+    rounds.push({ discovery, controls, aggregate, otherAggregate });
+    if (aggregate.available === true && aggregate.returnCode === -1 && aggregate.errno === 3 || performance.now() >= end) break;
+    await delay(25);
+  }
+  return { input: "production-native-member-hints", beforeFixtureRelease: true, afterSnapshot, rounds };
+}
 function originalExited(target) {
   const current = inspect(target.pid);
   // Read-only exact-generation observation; never a signal or empty-scope oracle.
@@ -448,7 +467,7 @@ value.complete = true; save();
         // Compare the lookup boundary with the already observed late-fork
         // recovery primitive. These are controlled actors, never an app gate.
         const lifetime = { status: "SETUP_FAILED", fixtureOnly: true,
-          tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false };
+          tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false, controlBackend: "production-native" };
         proxy.lifetime = lifetime;
         try {
           assert.equal(proxy.status, "OBSERVED", "lookup compatibility prerequisite");
@@ -483,18 +502,40 @@ value.complete = true; save();
             before: usage(members.leader.resource), otherBefore: usage(control.resource),
             serviceAttempt: marker(directory, "service-admission"),
             guestEffect: effect(service) });
+          const entry = fileURLToPath(new URL("./darwin-coalition-control.mjs", import.meta.url));
+          const implementationEntry = fileURLToPath(import.meta.resolve("@oma/native/audit-session"));
+          lifetime.nativeControl = { entry, sourceSha256: createHash("sha256").update(readFileSync(entry)).digest("hex"),
+            implementationEntry, implementationSha256: createHash("sha256").update(readFileSync(implementationEntry)).digest("hex") };
+          const invoke = (...argv) => JSON.parse(run(process.execPath, [entry, ...argv]).stdout);
+          lifetime.identityRecord = invoke("identity", String(members.leader.pid));
+          const identity = lifetime.identityRecord.result;
+          assert.equal(identity.coalitionId, members.leader.resource);
+          assert.equal(identity.bootId, observation.boot.stdout.trim().toLowerCase());
+          lifetime.nativeBefore = invoke("population", JSON.stringify(identity));
+          const emptyIdentity = { ...identity, coalitionId: observation.bootstrap.positiveControl.resource };
+          lifetime.loadedEmptyJob = { reference: usage(emptyIdentity.coalitionId),
+            native: invoke("population", JSON.stringify(emptyIdentity)) };
           bootout(scope);
           writeFileSync(join(directory, "ping"), "after proxy owner removal");
           await waitFor(() => existsSync(join(directory, "late.json")));
           lifetime.late = remember(marker(directory, "late"));
-          lifetime.wrongMember = JSON.parse(run(actor, ["signal-member", String(control.pid), members.leader.resource]).stdout);
-          lifetime.remainingMember = JSON.parse(run(actor, ["signal-member", String(members.detached.pid), members.leader.resource]).stdout);
-          lifetime.discoveryRecovery = await recoverFromHints(members.leader.resource, control.resource, directory);
+          lifetime.wrongMember = invoke("signal", JSON.stringify(identity), String(control.pid));
+          lifetime.remainingMember = invoke("signal", JSON.stringify(identity), String(members.detached.pid));
+          lifetime.discoveryRecovery = await recoverUsingNative(identity, control.resource, directory, invoke);
           lifetime.after = usage(members.leader.resource);
           lifetime.otherAfter = usage(control.resource);
+          lifetime.nativeAfter = invoke("population", JSON.stringify(identity));
           lifetime.traceAfter = readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line));
           await waitFor(() => [...Object.values(members).map(member => member.identity), proxyIdentity].every(originalExited));
           lifetime.controlledGenerationsExited = true;
+          assert.equal(lifetime.nativeBefore.result, "populated");
+          assert.equal(lifetime.wrongMember.result, false);
+          assert.equal(lifetime.remainingMember.result, true);
+          assert.equal(lifetime.nativeAfter.result, "empty");
+          assert.equal(lifetime.after.available, true); assert.equal(lifetime.after.errno, 3);
+          assert.equal(lifetime.otherAfter.returnCode, 0);
+          if (lifetime.loadedEmptyJob.reference.returnCode === 0)
+            assert.equal(lifetime.loadedEmptyJob.native.result, "populated", "equal task counters cannot prove resource removal");
           lifetime.status = "OBSERVED";
         } catch (error) { lifetime.error = String(error); }
         // Does compatibility require returning any OS port at all? Keep the

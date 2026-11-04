@@ -11,7 +11,6 @@ import { observeNamespaceProcess, pinNamespaceInit, type NamespaceInitIdentity }
 import { launchBlockedNamespace } from "@oma/platform-linux/namespace-execution";
 import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { launchBlockedDarwin } from "@oma/platform-mac/execution-launch";
-import { observeDarwinSessionPopulation, terminateDarwinSessionMembers, type DarwinSessionWitness } from "@oma/native/audit-session";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 
@@ -24,17 +23,10 @@ interface Backend {
 function backend(): Backend {
   if (process.platform === "darwin") return {
     launch: launchBlockedDarwin,
-    observe: (witness: ExecutionWitness): Observation => {
-      if (witness.kind !== "darwin-audit-session") return { kind: "unavailable" };
-      const population = observeDarwinSessionPopulation(witness);
-      return population === "unknown" ? { kind: "unavailable" as const } : population === "empty" ? { kind: "exited" as const } : { kind: "running" as const, identity: witness };
-    },
-    acquire: (witness: ExecutionWitness) => {
-      if (witness.kind !== "darwin-audit-session") throw new StoreError("RUN_TERMINATION_UNKNOWN", "Darwin recovery witness has the wrong platform identity");
-      return { identity: witness,
-      population: () => observeDarwinSessionPopulation(witness),
-      terminate: () => terminateDarwinSessionMembers(witness), close: () => {} };
-    },
+    // Legacy Darwin records have no boot binding or qualified recovery producer.
+    // Retain the journal and refuse reuse instead of returning its saved identity.
+    observe: (): Observation => ({ kind: "unavailable" }),
+    acquire: () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "legacy Darwin scope has no fresh recovery capability"); },
   };
   if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "native execution requires a supported platform");
   return { launch: launchBlockedNamespace,

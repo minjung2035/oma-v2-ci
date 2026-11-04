@@ -523,6 +523,8 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { delete value.bootstrap.denyBootstrap; },
     value => { delete value.bootstrap.lookupProxy; },
     value => { value.bootstrap.lookupProxy.privateAbi = false; },
+    value => { value.bootstrap.lookupProxy.lifetime = { status: 'OBSERVED', fixtureOnly: true,
+      tokenSource: 'kernel-task-name-port', fixtureReleaseUsedBeforeObservation: false, controlBackend: 'saved-pid' }; },
     value => { value.bootstrap.lookupProxy.lifetime = { status: 'SETUP_FAILED', fixtureOnly: true,
       tokenSource: 'kernel-task-name-port', fixtureReleaseUsedBeforeObservation: false, started: true, error: 'lost child' }; },
     value => { value.bootstrap.lookupProxy.denial = { status: 'SETUP_FAILED', fixtureOnly: true, denyAll: true,

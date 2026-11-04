@@ -477,6 +477,43 @@ session 조건의 의미를 설명하지만 현재 OS 성공을 보장하지 않
 **NOT_RUN**이다. parser/Seatbelt42/42·skip0·C 두 image의 arm64 SDK object compile은 PASS다.
 실행 guard·journal 형식·Linux backend는 유지한다.
 
+### deny-all·Background의 실제 결과 — source `5d2951c8a62`
+
+Native [41788772347](https://github.com/minjung2035/oma-v2-ci/actions/runs/41788772347)의 두 OS 각3회에서
+deny-all은 selected request0·반환 OS port0으로 Node·Git·compiler·일반 C/Node DNS를 보존했다.
+child는 모두 exit0·waitStatus0·실제 join·timeout 없음이었다. fresh service와 global 복구 뒤의 다른
+service는 모두 exit5·effect=null이었다. 정상 도구 보존이 고정 logd port 반환을 필요로 한다는
+가정은 이 대조에서 지지되지 않았다. 모든 Mach message 거절·dead port 방식이나 전체 admission은 미검증이다.
+
+명시적인 Background user/501 job도 양 OS 각3회 실제 UID501·audit token count8·별도 audit session·
+40-byte coalition 결과로 실행됐다. root·entitlement·GUI job 사용은 추가하지 않았다. 이 조건의 성공을
+이전 default user-domain 성공이나 GUI 없는 머신의 qualification으로 바꾸지 않는다.
+
+입력15828개 `e4e5c848084e3861527fddc76f05711519827724096137a76132df2e343fddc8`와 runtime은 양 OS
+전후 동일했다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED·product BLOCKED다. SHA-256 대조 원시는
+`lookup-proxy/deny-all/`이며 Mac26 ZIP `5ed38c3be5cf010433ae13270dab4a98125496fd28ff7427c0861fbbab7298ca`,
+Mac15 ZIP `76b2b41309660e621b19d250944da473db2f4d3a84c66783b330406a3ff739ad`다.
+
+### 다음 입력 — 실제 production coalition leaf의 교체·검증
+
+`@oma/native/audit-session`에서 PID count를 byte로 읽던 enumeration·32-byte CID·합성 audit token·
+scan→empty 구현을 제거했다. 새 좁은 leaf는 kernel boot UUID·40-byte CID·coalition ID 조회와 genuine
+task-name token을 사용한다. ID 조회가 성공하면 task count가 같아도 populated이며 ESRCH나 긍정적인
+다른 boot만 empty다. scan은 bounded hint만 제공하며 각 효과 전에 generation/CID/kernel token을
+상관 확인한다. controller 자신의 CID 제어는 거절하고 task-name right를 반환한다.
+
+기존 boot 결박 없는 Darwin journal witness는 App에서 unavailable/복구 거절로 남긴다. 저장 witness를
+fresh identity로 echo하던 경로를 제거했으며 기존 journal bytes·형식을 변경하지 않는다. 새 transient
+identity는 아직 durable producer나 complete backend에 연결하지 않았다.
+
+동일 launchd/proxy/late-fork fixture의 controller를 새 Node executable의 production leaf로 바꾸고
+C reference의 CID 조회·독립 live CID를 유지했다. loaded job의 equal task counter 대조도 보존한다.
+실제 Mac은 **NOT_RUN**이다. 로컬 build·관련 native/process/parser/policy58/58·skip0는 PASS다.
+원시는 `/tmp/oma-macos-coalition-leaf-{build,focused}.log` 또는 `.tap`이며 Linux backend·제품 launch guard는 유지한다.
+전체 architecture 검사도 PASS다. 기본 evidence refresh는 삭제된 역사 review 경로 때문에 거절됐으며,
+기존 `--invalidate-stale` 모드로 authored notes를 보존하고 새 승인을 만들지 않은 장부를 생성했다.
+현재31 CHANGED_WITHOUT_ORACLE·14337 NOT_REVIEWED·220 REMOVED이며 review closure 완료가 아니다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -669,6 +706,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `e4e5c848084e3861527fddc76f05711519827724096137a76132df2e343fddc8` (15828 files).
+verification input digest `dcc98f3961d855b8903031d4aa57805bdfc793db730f0880bb8db411fe07067c` (15829 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

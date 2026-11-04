@@ -430,6 +430,31 @@ export function validateDarwinObservation(name, observations) {
             lifetime.status === "SETUP_FAILED" && typeof lifetime.error !== "string" ||
             lifetime.started && lifetime.controlledGenerationsExited !== true)
           throw new Error("proxy lifetime comparison cannot hide unobserved descendants or its fixture limitation");
+        if (lifetime.controlBackend !== undefined && lifetime.controlBackend !== "production-native")
+          throw new Error("proxy lifetime comparison names an unknown control backend");
+        if (lifetime.status === "OBSERVED" && lifetime.controlBackend === "production-native") {
+          const identity = lifetime.identityRecord?.result, recovery = lifetime.discoveryRecovery;
+          const response = (record, mode) => record?.mode === mode && Number.isSafeInteger(record.pid) && record.pid > 1 &&
+            record.uid === baseline.ports.uid && record.bootId === identity?.bootId &&
+            (mode === "identity" || JSON.stringify(record.identity) === JSON.stringify(identity));
+          if (!identity || identity.kind !== "darwin-resource-coalition" ||
+              identity.coalitionId !== lifetime.members?.leader?.resource ||
+              identity.bootId !== value.boot?.stdout?.trim().toLowerCase() ||
+              !response(lifetime.identityRecord, "identity") || lifetime.identityRecord.targetPid !== lifetime.members.leader.pid ||
+              ![lifetime.nativeControl?.sourceSha256, lifetime.nativeControl?.implementationSha256]
+                .every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
+              !response(lifetime.nativeBefore, "population") || lifetime.nativeBefore.result !== "populated" ||
+              !response(lifetime.nativeAfter, "population") || lifetime.nativeAfter.result !== "empty" ||
+              !response(lifetime.wrongMember, "signal") || lifetime.wrongMember.targetPid !== lifetime.control?.pid || lifetime.wrongMember.result !== false ||
+              !response(lifetime.remainingMember, "signal") || lifetime.remainingMember.targetPid !== lifetime.members?.detached?.pid || lifetime.remainingMember.result !== true ||
+              recovery?.input !== "production-native-member-hints" || recovery.beforeFixtureRelease !== true ||
+              !Array.isArray(recovery.rounds) || !recovery.rounds.length ||
+              recovery.rounds.some(round => !response(round.discovery, "hints") || !Array.isArray(round.discovery.result) ||
+                !Array.isArray(round.controls) || round.controls.length !== round.discovery.result.length ||
+                round.controls.some((control, index) => !response(control, "signal") || control.targetPid !== round.discovery.result[index] || typeof control.result !== "boolean")) ||
+              lifetime.after?.returnCode !== -1 || lifetime.after.errno !== 3 || lifetime.otherAfter?.returnCode !== 0)
+            throw new Error("production-native lifetime loses boot binding, exact hints/effects or independent scope observations");
+        }
       }
       if (proxy.denial !== undefined) {
         const denial = proxy.denial;

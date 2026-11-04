@@ -1,9 +1,12 @@
-/** Read-only process/coalition observations and exact-token termination.
- * Launchd provisioning and authority/recovery policy stay with shared owners. */
-import { errno, load } from "koffi";
-import { getSystemErrorName } from "node:util";
+/** Darwin resource-coalition observations and fresh kernel-token control.
+ * PID enumeration supplies hints only. Population comes from the coalition
+ * lookup, never a process count. XNU f6217f89 observation ABI; no control syscall.
+ */
+import { decode, errno, load } from "koffi";
 import { StoreError } from "@oma/domain/errors";
+import { withCleanup } from "./cleanup.js";
 
+/** Legacy persisted shape. It lacks boot identity and cannot authorize recovery. */
 export type DarwinSessionWitness = {
   readonly kind: "darwin-audit-session";
   readonly auditSession: number;
@@ -11,91 +14,130 @@ export type DarwinSessionWitness = {
   readonly pid: number;
   readonly pidVersion: number;
 };
+/** A physical identity only; admission and role remain with the shared owner. */
+export interface DarwinCoalitionIdentity {
+  readonly kind: "darwin-resource-coalition";
+  readonly bootId: string;
+  readonly coalitionId: string;
+}
 interface ProcCalls {
-  list(buffer: Buffer, bytes: number): number;
+  readonly task: number;
+  list(buffer: Buffer | null, bytes: number): number;
   info(pid: number, flavor: number, arg: bigint, buffer: Buffer, bytes: number): number;
+  usage(id: bigint, buffer: Buffer, bytes: number): number;
+  sysctl(name: string, output: Buffer, bytes: Buffer, input: null, inputBytes: number): number;
+  taskName(task: number, pid: number, output: Buffer): number;
+  taskInfo(task: number, flavor: number, output: Buffer, count: Buffer): number;
+  deallocate(task: number, port: number): number;
   signal(token: Buffer, signal: number): number;
 }
 let calls: ProcCalls | undefined;
 function native(): ProcCalls {
   if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
-    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin scope observation requires the 64-bit libproc backend");
+    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin coalition control requires the 64-bit libproc backend");
   calls ??= (() => {
-    const library = load("/usr/lib/libproc.dylib");
-    return { list: library.func("int proc_listallpids(void *buffer, int bytes)"),
-      info: library.func("int proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, int bytes)"),
-      signal: library.func("int proc_signal_with_audittoken(void *token, int signal)") };
+    const library = load(null), proc = load("/usr/lib/libproc.dylib");
+    return { task: decode.uint(library.symbol("mach_task_self_")),
+      list: proc.func("int proc_listallpids(void *buffer, int bytes)"),
+      info: proc.func("int proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, int bytes)"),
+      usage: library.func("int coalition_info_resource_usage(uint64_t id, void *buffer, size_t bytes)"),
+      sysctl: library.func("int sysctlbyname(const char *name, void *output, void *bytes, const void *input, size_t inputBytes)"),
+      taskName: library.func("int task_name_for_pid(unsigned int task, int pid, void *output)"),
+      taskInfo: library.func("int task_info(unsigned int task, int flavor, void *output, void *count)"),
+      deallocate: library.func("int mach_port_deallocate(unsigned int task, unsigned int port)"),
+      signal: proc.func("int proc_signal_with_audittoken(void *token, int signal)") };
   })();
   return calls;
 }
-function validWitness(witness: DarwinSessionWitness): void {
-  if (witness.kind !== "darwin-audit-session" || !/^[0-9]{1,20}$/.test(witness.coalitionId) ||
-      ![witness.auditSession, witness.pid, witness.pidVersion].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0xffffffff))
-    throw new TypeError("invalid Darwin execution witness");
+function unknown(message: string): never { throw new StoreError("RUN_TERMINATION_UNKNOWN", message); }
+const BOOT = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+function valid(identity: DarwinCoalitionIdentity): void {
+  if (identity.kind !== "darwin-resource-coalition" || !BOOT.test(identity.bootId) ||
+      !/^[1-9][0-9]{0,19}$/.test(identity.coalitionId) || BigInt(identity.coalitionId) > 0xffffffffffffffffn)
+    throw new TypeError("invalid Darwin resource-coalition identity");
 }
-function failed(operation: string): never {
-  const code = getSystemErrorName(-errno());
-  throw Object.assign(new Error(`${operation}: ${code}`), { code });
+function validPid(pid: number): void {
+  if (!Number.isSafeInteger(pid) || pid < 2 || pid > 0x7fffffff) throw new TypeError("invalid Darwin process PID");
+}
+export function currentDarwinBootId(): string {
+  const output = Buffer.alloc(64), size = Buffer.alloc(8); size.writeBigUInt64LE(BigInt(output.length));
+  if (native().sysctl("kern.bootsessionuuid", output, size, null, 0) !== 0 || size.readBigUInt64LE() !== 37n || output[36] !== 0)
+    unknown("Darwin kernel boot identity is unavailable");
+  const value = output.subarray(0, 36).toString("ascii").toLowerCase();
+  if (!BOOT.test(value)) unknown("Darwin kernel boot identity is malformed");
+  return value;
 }
 function coalition(pid: number): string | null {
-  const result = Buffer.alloc(32), size = native().info(pid, 20, 0n, result, result.length);
-  if (size === 0) return null;
-  if (size !== result.length) failed("coalition observation");
+  errno(0);
+  const result = Buffer.alloc(40), size = native().info(pid, 20, 0n, result, result.length), saved = errno();
+  if (size === 0 && saved === 3 /* ESRCH */) return null;
+  if (size !== result.length || result.readBigUInt64LE(0) === 0n) unknown("Darwin resource membership is unavailable");
   return result.readBigUInt64LE(0).toString();
 }
-function processToken(pid: number, auditSession: number, auid: number): Buffer | null {
-  const unique = Buffer.alloc(56), uniqueSize = native().info(pid, 17, 0n, unique, unique.length);
-  if (uniqueSize === 0) return null;
-  if (uniqueSize !== unique.length) failed("process version observation");
-  const bsd = Buffer.alloc(136), bsdSize = native().info(pid, 3, 0n, bsd, bsd.length);
-  if (bsdSize === 0) return null;
-  if (bsdSize !== bsd.length || bsd.readUInt32LE(12) !== pid) failed("process identity observation");
-  const token = Buffer.alloc(32);
-  token.writeUInt32LE(auid, 0); token.writeUInt32LE(bsd.readUInt32LE(20), 4);
-  token.writeUInt32LE(bsd.readUInt32LE(24), 8); token.writeUInt32LE(bsd.readUInt32LE(28), 12);
-  token.writeUInt32LE(bsd.readUInt32LE(32), 16); token.writeUInt32LE(pid, 20);
-  token.writeUInt32LE(auditSession, 24); token.writeUInt32LE(unique.readUInt32LE(36), 28);
-  return token;
+export function identifyDarwinCoalition(pid: number): DarwinCoalitionIdentity | null {
+  validPid(pid);
+  const bootId = currentDarwinBootId(), coalitionId = coalition(pid);
+  if (currentDarwinBootId() !== bootId) unknown("Darwin boot changed while observing resource identity");
+  return coalitionId === null ? null : Object.freeze({ kind: "darwin-resource-coalition", bootId, coalitionId });
 }
-function members(witness: DarwinSessionWitness): number[] | null {
+export function observeDarwinCoalitionPopulation(identity: DarwinCoalitionIdentity): "populated" | "empty" | "unknown" {
+  valid(identity);
   try {
-    const api = native();
-    for (let bytes = 65536; bytes <= 4 * 1024 * 1024; bytes *= 4) {
-      const buffer = Buffer.alloc(bytes), count = api.list(buffer, bytes);
-      if (count < 0 || count % 4 !== 0) return null;
-      if (count === bytes) continue;
-      const found: number[] = [];
-      for (let offset = 0; offset < count; offset += 4) {
-        const pid = buffer.readUInt32LE(offset);
-        if (pid !== 0 && coalition(pid) === witness.coalitionId) found.push(pid);
-      }
-      return found;
-    }
-    return null;
-  } catch { return null; }
+    // A positively observed different boot cannot retain this boot's tasks.
+    if (currentDarwinBootId() !== identity.bootId) return "empty";
+    errno(0);
+    const counts = Buffer.alloc(16), result = native().usage(BigInt(identity.coalitionId), counts, counts.length), saved = errno();
+    // A successful lookup remains populated even when task counters are equal.
+    // Only ID removal (ESRCH), not a transient empty scan, closes this identity.
+    return result === 0 ? "populated" : result === -1 && saved === 3 ? "empty" : "unknown";
+  } catch { return "unknown"; }
 }
-export function observeDarwinExecutionLeader(pid: number, auditSession: number, coalitionId: string, auid = 0): DarwinSessionWitness | null {
-  if (!Number.isSafeInteger(pid) || pid < 2 || !Number.isSafeInteger(auditSession) || auditSession <= 0 || !/^[0-9]{1,20}$/.test(coalitionId)) return null;
-  const token = processToken(pid, auditSession, auid);
-  return token === null ? null : { kind: "darwin-audit-session", auditSession, coalitionId, pid, pidVersion: token.readUInt32LE(28) };
-}
-export function observeDarwinSessionPopulation(witness: DarwinSessionWitness): "populated" | "empty" | "unknown" {
-  validWitness(witness);
-  const current = members(witness);
-  return current === null ? "unknown" : current.length === 0 ? "empty" : "populated";
-}
-/** Every effect targets a fresh PID+pidversion token. Coalition observation
- * selects scope membership; numeric saved PIDs alone are never signaled. */
-export function terminateDarwinSessionMembers(witness: DarwinSessionWitness, auid = 0): void {
-  validWitness(witness);
-  const current = members(witness);
-  if (current === null) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Darwin scope membership could not be observed");
-  for (const pid of current) {
-    const token = processToken(pid, witness.auditSession, auid);
-    if (token === null) continue;
-    if (native().signal(token, 9) !== 0) {
-      if (errno() === 3 /* ESRCH */) continue;
-      failed("signal Darwin scope member");
-    }
+/** Hints may be incomplete; no result of this function proves scope death. */
+export function darwinCoalitionMemberHints(identity: DarwinCoalitionIdentity): readonly number[] {
+  valid(identity);
+  if (currentDarwinBootId() !== identity.bootId) return [];
+  const api = native(), estimate = api.list(null, 0);
+  if (estimate < 0) unknown("Darwin process enumeration is unavailable");
+  const capacity = Math.min(65536, estimate + 64), buffer = Buffer.alloc(capacity * 4);
+  const count = api.list(buffer, buffer.length);
+  if (count < 0) unknown("Darwin process hints could not be read");
+  const found: number[] = [];
+  for (let index = 0; index < Math.min(count, capacity); ++index) {
+    const pid = buffer.readInt32LE(index * 4);
+    if (pid < 2) continue;
+    // An unreadable unrelated process cannot turn the scope into empty.
+    try { if (coalition(pid) === identity.coalitionId) found.push(pid); } catch { /* hint only */ }
   }
+  return Object.freeze(found);
+}
+/** A hint PID never supplies signal authority. Acquire a genuine kernel token,
+ * correlate its generation and CID, then use the SDK's version-checked effect.
+ * false means no effect; it is neither scope death nor a successful stop. */
+export function signalDarwinCoalitionMember(identity: DarwinCoalitionIdentity, pid: number): boolean {
+  valid(identity); validPid(pid);
+  if (currentDarwinBootId() !== identity.bootId) return false;
+  if (coalition(process.pid) === identity.coalitionId) unknown("Darwin controller cannot terminate its own resource coalition");
+  const api = native(), before = Buffer.alloc(56);
+  if (api.info(pid, 17, 0n, before, before.length) !== before.length) return false;
+  if (coalition(pid) !== identity.coalitionId) return false;
+  const port = Buffer.alloc(4);
+  if (api.taskName(api.task, pid, port) !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff)
+    unknown("Darwin member task-name capability is unavailable");
+  const token = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
+  return withCleanup(() => {
+    if (api.taskInfo(port.readUInt32LE(), 15 /* TASK_AUDIT_TOKEN */, token, count) !== 0 || count.readUInt32LE() !== 8)
+      unknown("Darwin member kernel audit token is unavailable");
+    const after = Buffer.alloc(56);
+    if (api.info(pid, 17, 0n, after, after.length) !== after.length ||
+        before.readBigUInt64LE(16) === 0n || before.readBigUInt64LE(16) !== after.readBigUInt64LE(16) ||
+        before.readUInt32LE(32) === 0 || before.readUInt32LE(32) !== after.readUInt32LE(32) ||
+        token.readUInt32LE(20) !== pid || token.readUInt32LE(4) !== process.geteuid?.() ||
+        token.readUInt32LE(28) !== before.readUInt32LE(32) || currentDarwinBootId() !== identity.bootId) return false;
+    errno(0);
+    if (api.signal(token, 9) === 0) return true;
+    if (errno() === 3 /* ESRCH: exact generation already gone */) return false;
+    unknown("Darwin exact-token member termination was refused");
+  }, () => {
+    if (api.deallocate(api.task, port.readUInt32LE()) !== 0) unknown("Darwin member task-name capability was not returned");
+  });
 }
