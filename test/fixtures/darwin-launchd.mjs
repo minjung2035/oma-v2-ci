@@ -62,12 +62,14 @@ function loadJob(name, executable, mode, hash, options = {}) {
     WorkingDirectory: directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
     ExitTimeOut: 1, StandardOutPath: join(directory, "stdout"), StandardErrorPath: join(directory, "stderr"),
     ...(hash === undefined ? {} : { SpawnConstraint: { cdhash: Buffer.from(hash, "hex") } }),
-    ...(options.sessionCreate === true ? { SessionCreate: true } : {}) };
+    ...(options.sessionCreate === true ? { SessionCreate: true } : {}),
+    ...(options.background === true ? { LimitLoadToSessionType: "Background" } : {}) };
   writeFileSync(path, `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(definition)}</plist>`, { mode: 0o600 });
   // Submission failure can be ambiguous; cleanup still addresses our own label.
-  const job = { label, target: `${domain}/${label}`, directory, active: true };
+  const jobDomain = options.domain ?? domain;
+  const job = { label, target: `${jobDomain}/${label}`, directory, active: true };
   jobs.push(job);
-  run("/bin/launchctl", ["bootstrap", domain, path]);
+  run("/bin/launchctl", ["bootstrap", jobDomain, path]);
   return job;
 }
 function bootout(job) {
@@ -495,6 +497,31 @@ value.complete = true; save();
           lifetime.controlledGenerationsExited = true;
           lifetime.status = "OBSERVED";
         } catch (error) { lifetime.error = String(error); }
+        // Does compatibility require returning any OS port at all? Keep the
+        // same non-null bootstrap seed and receiver, but refuse every lookup.
+        const denial = { status: "SETUP_FAILED", fixtureOnly: true, denyAll: true };
+        proxy.denial = denial;
+        try {
+          const executable = join(root, "bootstrap-proxy"), tracePath = join(root, "proxy-denial.jsonl");
+          const service = loadJob("proxy-denial-service", actor, "once", undefined, { directoryRoot: directory });
+          const global = loadJob("proxy-denial-global", actor, "once", undefined, { directoryRoot: directory });
+          const portsPath = join(directory, "proxy-denial-ports.json"), report = join(directory, "proxy-denial-tools.json");
+          denial.command = observe(executable, [tracePath, "--deny-all", launcher, name, profilePath, portsPath, directory,
+            process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)], 35000);
+          Object.assign(denial, { profileSha256: createHash("sha256").update(profile).digest("hex"),
+            trace: existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [],
+            target: service.target, globalTarget: global.target, ports: optionalJson(portsPath), tools: optionalJson(report) });
+          for (const [target, result] of [[service, denial.tools?.service], [global, denial.tools?.bootstrapGlobal?.service]])
+            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+              await waitFor(() => existsSync(join(target.directory, "once.json")));
+          Object.assign(denial, { guestEffect: effect(service), globalGuestEffect: effect(global),
+            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+          assert.equal(denial.tools?.complete, true, `deny-all proxy incomplete: ${denial.command.stderr}`);
+          assert.equal(denial.trace.at(-1)?.joined, true, "deny-all proxy child was not joined");
+          denial.status = "OBSERVED";
+        } catch (error) { denial.error = String(error); }
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
@@ -703,6 +730,24 @@ value.complete = true; save();
     assert.equal(observation.matchingB.variant, 2);
     bootout(matchB);
   } else {
+    // An explicit Background job is a different condition from the previously
+    // failed default user-domain submission. A GUI-hosted runner still cannot
+    // qualify a machine without a graphical login.
+    const background = { status: "SETUP_FAILED", fixtureOnly: true, domain: `user/${process.getuid()}`,
+      sessionType: "Background", sessionCreate: true, guiAbsent: false };
+    observation.background = background;
+    try {
+      const job = loadJob("background-once", actor, "once", undefined,
+        { domain: background.domain, background: true, sessionCreate: true });
+      background.target = job.target;
+      background.kickstart = run("/bin/launchctl", ["kickstart", job.target], false);
+      assert.equal(background.kickstart.exitCode, 0, JSON.stringify(background.kickstart));
+      await waitFor(() => existsSync(join(job.directory, "once.json")));
+      background.actor = remember(marker(job.directory, "once"));
+      await waitFor(() => originalExited(background.actor.identity));
+      bootout(job);
+      background.status = "OBSERVED";
+    } catch (error) { background.error = String(error); }
     // No SpawnConstraint: independently qualify ordinary job provisioning.
     const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
     // Keep the host positive on a separate, otherwise equivalent job. Reusing
@@ -791,6 +836,9 @@ finally {
       if (proxy?.lifetime?.started)
         assert.equal(proxy.lifetime.controlledGenerationsExited, true,
           "proxy lifetime comparison cannot hide unobserved descendants");
+      if (proxy?.denial?.command !== undefined)
+        assert.ok(proxy.denial.trace?.at(-1)?.phase === "terminal" && proxy.denial.trace.at(-1).joined === true,
+          "deny-all proxy command ended without observing its controlled child return");
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }

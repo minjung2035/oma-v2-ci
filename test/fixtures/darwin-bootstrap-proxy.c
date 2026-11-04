@@ -24,6 +24,7 @@
 static FILE *trace;
 static mach_port_t endpoint, original;
 static atomic_int stopping;
+static int deny_all;
 static volatile sig_atomic_t child_pid, expired;
 extern char **environ;
 static void require(int condition, const char *operation) {
@@ -91,7 +92,7 @@ static int answer(mach_msg_size_t size, const mach_msg_audit_trailer_t *observed
     MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) | MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
     0, capacity, endpoint, 0, MACH_PORT_NULL);
   if (received != KERN_SUCCESS) { free(request); return 0; }
-  const char *name = request->msgh_id == 0x400000cf ? selected_service((unsigned char *)request, request->msgh_size) : NULL;
+  const char *name = !deny_all && request->msgh_id == 0x400000cf ? selected_service((unsigned char *)request, request->msgh_size) : NULL;
   char seen[128]; observed_service((unsigned char *)request, request->msgh_size, seen);
   mach_port_t result = MACH_PORT_NULL;
   int lookup = name ? bootstrap_look_up(original, name, &result) : BOOTSTRAP_NOT_PRIVILEGED;
@@ -157,6 +158,9 @@ static void deadline(int signal_number) {
 }
 int main(int argc, char **argv) {
   require(getuid() > 0 && argc >= 4, "ordinary UID: trace executable [arguments]");
+  deny_all = strcmp(argv[2], "--deny-all") == 0;
+  int executable_index = deny_all ? 3 : 2;
+  require(argc > executable_index, "proxy target executable");
   trace = fopen(argv[1], "wx"); require(trace != NULL, "exclusive proxy trace");
   require(fcntl(fileno(trace), F_SETFD, FD_CLOEXEC) == 0, "private trace close on exec");
   require(setvbuf(trace, NULL, _IOLBF, 0) == 0, "trace buffering");
@@ -168,8 +172,8 @@ int main(int argc, char **argv) {
   fprintf(trace, "{\"phase\":\"host-lookup\",\"status\":%d}\n", warm_status);
   mach_success(mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE, &endpoint), "proxy receive right");
   mach_success(mach_port_insert_right(task, endpoint, endpoint, MACH_MSG_TYPE_MAKE_SEND), "proxy send right");
-  fprintf(trace, "{\"phase\":\"ready\",\"pid\":%d,\"uid\":%u,\"original\":%u,\"proxy\":%u,\"privateAbi\":true}\n",
-    getpid(), (unsigned)getuid(), original, endpoint);
+  fprintf(trace, "{\"phase\":\"ready\",\"pid\":%d,\"uid\":%u,\"original\":%u,\"proxy\":%u,\"privateAbi\":true,\"denyAll\":%s}\n",
+    getpid(), (unsigned)getuid(), original, endpoint, deny_all ? "true" : "false");
   sigset_t alarms; require(sigemptyset(&alarms) == 0 && sigaddset(&alarms, SIGALRM) == 0 &&
     sigprocmask(SIG_BLOCK, &alarms, NULL) == 0, "proxy alarm mask");
   struct sigaction action = {0}; action.sa_handler = deadline;
@@ -178,7 +182,7 @@ int main(int argc, char **argv) {
   mach_success(task_set_bootstrap_port(task, endpoint), "child bootstrap seed");
   mach_success(mach_ports_register(task, &endpoint, 1), "child registered seed");
   pid_t child = 0;
-  int spawned = posix_spawn(&child, argv[2], NULL, NULL, &argv[2], environ);
+  int spawned = posix_spawn(&child, argv[executable_index], NULL, NULL, &argv[executable_index], environ);
   kern_return_t restored = task_set_bootstrap_port(task, original), registered_again = mach_ports_register(task, registered, count);
   flockfile(trace); fprintf(trace, "{\"phase\":\"spawn\",\"status\":%d,\"childPid\":%d,\"restored\":%d,\"registered\":%d}\n",
     spawned, child, restored, registered_again); funlockfile(trace);

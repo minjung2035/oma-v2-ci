@@ -55,11 +55,16 @@ static void identity(FILE *output, pid_t pid) {
 static int sandboxed, inherited_profile;
 static void describe(FILE *output) {
   struct coalition_ids ids = {0};
+  audit_token_t audit = {{0}};
+  mach_msg_type_number_t audit_count = TASK_AUDIT_TOKEN_COUNT;
+  int audit_status = task_info(mach_task_self(), TASK_AUDIT_TOKEN, (task_info_t)&audit, &audit_count);
   errno = 0;
   int size = proc_pidinfo(getpid(), 20, 0, &ids, sizeof ids), saved = size == (int)sizeof ids ? 0 : errno;
   fprintf(output, "{\"variant\":%d,\"sandboxed\":%s,\"pid\":%d,\"parent\":%d,\"group\":%d,\"session\":%d,"
+    "\"uid\":%u,\"auditTokenStatus\":%d,\"auditTokenCount\":%u,\"auditSession\":%u,"
     "\"coalitionBytes\":%d,\"coalitionErrno\":%d,\"resource\":\"%" PRIu64 "\",\"jetsam\":\"%" PRIu64 "\",\"identity\":",
-    PROBE_VARIANT, sandboxed ? "true" : "false", getpid(), getppid(), getpgrp(), getsid(0), size, saved, ids.ids[0], ids.ids[1]);
+    PROBE_VARIANT, sandboxed ? "true" : "false", getpid(), getppid(), getpgrp(), getsid(0),
+    (unsigned)getuid(), audit_status, audit_count, audit.val[6], size, saved, ids.ids[0], ids.ids[1]);
   identity(output, getpid()); fputc('}', output);
 }
 static void publish(const char *name, int observation) {

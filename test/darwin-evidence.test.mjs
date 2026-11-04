@@ -55,7 +55,11 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
   domain: "gui/501",
   ...(name === "launchd-image" ? { matchingA: { variant: 1 }, matchingB: { variant: 2 },
     cdhashes: ["a".repeat(40), "b".repeat(40)], replacedImage: { markerAfterTwoSeconds: false } }
-    : { scope: { members: { leader: { resource: "41" }, detached: { pid: 101, sandboxed: true } }, control: { resource: "42", pid: 102 },
+    : { background: { fixtureOnly: true, domain: "user/501", sessionType: "Background", sessionCreate: true, guiAbsent: false,
+        status: "OBSERVED", target: "user/501/org.oma.probe.test.background",
+        kickstart: launchctlRecord("kickstart", "user/501/org.oma.probe.test.background"),
+        actor: { pid: 108, uid: 501, auditTokenStatus: 0, auditTokenCount: 8, auditSession: 100004, coalitionBytes: 40, resource: "43" } },
+      scope: { members: { leader: { resource: "41" }, detached: { pid: 101, sandboxed: true } }, control: { resource: "42", pid: 102 },
       afterBootout: { otherAcknowledged: true },
       admission: { privateInterface: true, available: true, uid: 501, callerResource: "41",
         attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
@@ -381,6 +385,24 @@ test("004. Native darwin: launchd observations reject missing image controls, cl
   assert.throws(() => validateDarwinObservation("launchd-scope",
     { launchdScope: { ...launchdRecord("launchd-scope"), scope: { afterBootout: { otherAcknowledged: false } } } }));
 });
+test("014. Native darwin: Background comparison preserves domain, ordinary UID and GUI limitation", () => {
+  const good = launchdRecord("launchd-scope");
+  validateDarwinObservation("launchd-scope", { launchdScope: good });
+  for (const corrupt of [
+    value => { delete value.background; },
+    value => { value.background.domain = "gui/501"; },
+    value => { value.background.guiAbsent = true; },
+    value => { value.background.actor.uid = 0; },
+    value => { value.background.actor.auditTokenCount = 0; },
+    value => { value.background.kickstart.argv[1] = "user/501/foreign"; },
+  ]) {
+    const bad = structuredClone(good); corrupt(bad);
+    assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
+  }
+  good.background = { fixtureOnly: true, domain: "user/501", sessionType: "Background", sessionCreate: true,
+    guiAbsent: false, status: "SETUP_FAILED", error: "actual bootstrap refused" };
+  validateDarwinObservation("launchd-scope", { launchdScope: good });
+});
 test("005. Native darwin: launchd scope refuses ambiguous lookup, admission and child cleanup evidence", () => {
   const good = launchdRecord("launchd-scope");
   for (const corrupt of [
@@ -501,6 +523,10 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { delete value.bootstrap.denyBootstrap; },
     value => { delete value.bootstrap.lookupProxy; },
     value => { value.bootstrap.lookupProxy.privateAbi = false; },
+    value => { value.bootstrap.lookupProxy.lifetime = { status: 'SETUP_FAILED', fixtureOnly: true,
+      tokenSource: 'kernel-task-name-port', fixtureReleaseUsedBeforeObservation: false, started: true, error: 'lost child' }; },
+    value => { value.bootstrap.lookupProxy.denial = { status: 'SETUP_FAILED', fixtureOnly: true, denyAll: true,
+      command: value.bootstrap.lookupProxy.command, trace: [], error: 'no join' }; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
     value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },
     value => { value.bootstrap.lookupProxy.trace[1].childPid += 1; },

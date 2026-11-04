@@ -423,6 +423,27 @@ export function validateDarwinObservation(name, observations) {
         throw new Error("semantic lookup proxy loses its private ABI limitation or actual outcome");
       if (proxy.command !== undefined && !(proxy.trace?.at(-1)?.phase === "terminal" && proxy.trace.at(-1).joined === true))
         throw new Error("failed lookup proxy cannot hide an unobserved controlled child return");
+      if (proxy.lifetime !== undefined) {
+        const lifetime = proxy.lifetime;
+        if (lifetime.fixtureOnly !== true || lifetime.tokenSource !== "kernel-task-name-port" ||
+            lifetime.fixtureReleaseUsedBeforeObservation !== false || !["OBSERVED", "SETUP_FAILED"].includes(lifetime.status) ||
+            lifetime.status === "SETUP_FAILED" && typeof lifetime.error !== "string" ||
+            lifetime.started && lifetime.controlledGenerationsExited !== true)
+          throw new Error("proxy lifetime comparison cannot hide unobserved descendants or its fixture limitation");
+      }
+      if (proxy.denial !== undefined) {
+        const denial = proxy.denial;
+        if (denial.fixtureOnly !== true || denial.denyAll !== true || !["OBSERVED", "SETUP_FAILED"].includes(denial.status) ||
+            denial.status === "SETUP_FAILED" && typeof denial.error !== "string" ||
+            denial.command !== undefined && !(denial.trace?.at(-1)?.phase === "terminal" && denial.trace.at(-1).joined === true))
+          throw new Error("deny-all comparison loses refusal mode or actual child cleanup");
+        if (denial.status === "OBSERVED" &&
+            (denial.trace.find(entry => entry.phase === "ready")?.denyAll !== true ||
+              denial.trace.some(entry => entry.phase === "mach-request" && (entry.selected !== false || entry.name !== null || entry.replyBytes === 52)) ||
+              denial.profileSha256 !== proxy.profileSha256 || denial.tools?.complete !== true ||
+              denial.tools.pid !== denial.ports?.pid || denial.ports?.sandboxApplied !== true))
+          throw new Error("deny-all comparison lacks actual denied requests and sandboxed tools");
+      }
       if (proxy.status === "OBSERVED") {
         const { command, ports, tools, trace } = proxy;
         const ready = trace?.find(entry => entry.phase === "ready"), spawned = trace?.find(entry => entry.phase === "spawn");
@@ -626,6 +647,21 @@ export function validateDarwinObservation(name, observations) {
       throw new Error("launchd scope observation lacks its independent live job control");
     if (name === "launchd-scope") {
       const scope = value.scope, admission = scope.admission, exit = scope.afterControlledExit;
+      const background = value.background;
+      if (background?.fixtureOnly !== true || background.domain !== `user/${admission?.uid}` ||
+          background.sessionType !== "Background" || background.sessionCreate !== true || background.guiAbsent !== false ||
+          !["OBSERVED", "SETUP_FAILED"].includes(background.status) ||
+          background.status === "SETUP_FAILED" && typeof background.error !== "string")
+        throw new Error("Background comparison loses its exact user-domain condition or GUI limitation");
+      if (background.status === "OBSERVED" &&
+          (typeof background.target !== "string" || !background.target.startsWith(`${background.domain}/org.oma.probe.`) ||
+            background.kickstart?.executable !== "/bin/launchctl" || background.kickstart.exitCode !== 0 ||
+            background.kickstart.signal !== null || JSON.stringify(background.kickstart.argv) !== JSON.stringify(["kickstart", background.target]) ||
+            !Number.isSafeInteger(background.actor?.pid) || background.actor.pid <= 1 || background.actor.uid !== admission.uid ||
+            background.actor.auditTokenStatus !== 0 || background.actor.auditTokenCount !== 8 ||
+            !Number.isSafeInteger(background.actor.auditSession) || background.actor.auditSession <= 0 ||
+            background.actor.coalitionBytes !== 40 || !/^[1-9][0-9]*$/.test(background.actor.resource)))
+        throw new Error("Background comparison lacks an ordinary-UID execution and actual audit/coalition observation");
       const decimal = text => typeof text === "string" && /^[0-9]+$/.test(text);
       const query = result => result && typeof result.available === "boolean" &&
         [0, -1].includes(result.returnCode) && Number.isSafeInteger(result.errno) &&
