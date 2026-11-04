@@ -412,6 +412,37 @@ value.complete = true; save();
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
       if (name === "inherited") {
+        // A separate semantic-lookup experiment, without transparent message
+        // forwarding or an Apple entitlement. Its private libxpc ABI is WIP.
+        const proxy = { status: "SETUP_FAILED", fixtureOnly: true, privateApi: true,
+          signatureSource: "Chromium 45.0.2454.85 xpc_private_stubs.sig" };
+        observation.bootstrap.lookupProxy = proxy;
+        try {
+          const source = fileURLToPath(new URL("./darwin-bootstrap-proxy.c", import.meta.url));
+          const executable = join(root, "bootstrap-proxy"), tracePath = join(root, "bootstrap-proxy.jsonl");
+          proxy.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
+          proxy.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-o", executable]);
+          proxy.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
+          const service = loadJob("proxy-service", actor, "once", undefined, { directoryRoot: directory });
+          const global = loadJob("proxy-global", actor, "once", undefined, { directoryRoot: directory });
+          const portsPath = join(directory, "proxy-ports.json"), report = join(directory, "proxy-tools.json");
+          proxy.command = observe(executable, [tracePath, launcher, name, profilePath, portsPath, directory,
+            process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)], 35000);
+          Object.assign(proxy, { profileSha256: createHash("sha256").update(profile).digest("hex"),
+            trace: existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [],
+            target: service.target, globalTarget: global.target, effectDirectory: service.directory, globalEffectDirectory: global.directory,
+            ports: optionalJson(portsPath), tools: optionalJson(report) });
+          for (const [target, result] of [[service, proxy.tools?.service], [global, proxy.tools?.bootstrapGlobal?.service]])
+            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+              await waitFor(() => existsSync(join(target.directory, "once.json")));
+          Object.assign(proxy, { guestEffect: effect(service), globalGuestEffect: effect(global),
+            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+          assert.equal(proxy.tools?.complete, true, `lookup proxy incomplete: ${proxy.command.stderr}`);
+          assert.equal(proxy.trace.at(-1)?.joined, true, "lookup proxy child was not joined");
+          proxy.status = "OBSERVED";
+        } catch (error) { proxy.error = String(error); }
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
@@ -577,11 +608,13 @@ value.complete = true; save();
         } catch (error) { app.error = String(error); }
       }
     }
-    const pids = observation.bootstrap.variants.flatMap(variant => [
+    const proxy = observation.bootstrap.lookupProxy;
+    const pids = [...observation.bootstrap.variants.flatMap(variant => [
       ...variant.directResolvers.map(record => record.command?.pid),
       ...variant.childResolvers.flatMap(record => [record.command?.pid, record.parent?.childPid]),
       variant.node.tools?.nativeDnsCommand?.pid,
-      ...(variant.node.tools?.resolvers ?? []).map(record => record.command?.pid)])
+      ...(variant.node.tools?.resolvers ?? []).map(record => record.command?.pid)]),
+      proxy?.command?.pid, ...(proxy?.trace ?? []).filter(entry => entry.phase === "spawn").map(entry => entry.childPid)]
       .filter(pid => Number.isSafeInteger(pid) && pid > 0);
     const diagnostics = { purpose: "read-only violations for owned DNS observers; not authority or death proof", pids };
     if (pids.length && performance.now() - started < 73000) {

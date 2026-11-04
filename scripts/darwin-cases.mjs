@@ -415,6 +415,47 @@ export function validateDarwinObservation(name, observations) {
         }
       }
       const session = bootstrap.session, baseline = bootstrap.variants[0].node;
+      const proxy = bootstrap.lookupProxy;
+      if (proxy?.fixtureOnly !== true || proxy.privateApi !== true ||
+          proxy.signatureSource !== "Chromium 45.0.2454.85 xpc_private_stubs.sig" ||
+          !["OBSERVED", "SETUP_FAILED"].includes(proxy.status) ||
+          proxy.status === "SETUP_FAILED" && typeof proxy.error !== "string")
+        throw new Error("semantic lookup proxy loses its private ABI limitation or actual outcome");
+      if (proxy.status === "OBSERVED") {
+        const { command, ports, tools, trace } = proxy;
+        const ready = trace?.find(entry => entry.phase === "ready"), spawned = trace?.find(entry => entry.phase === "spawn");
+        const terminal = trace?.at(-1), hashes = [proxy.sourceSha256, proxy.executableSha256];
+        const services = ["com.apple.logd", "com.apple.system.logger", "com.apple.system.opendirectoryd.libinfo"];
+        if (!hashes.every(value => typeof value === "string" && /^[0-9a-f]{64}$/.test(value)) ||
+            proxy.profileSha256 !== bootstrap.variants[0].profileSha256 || !outcome(proxy.compilation) ||
+            proxy.compilation.executable !== "/usr/bin/xcrun" || proxy.compilation.exitCode !== 0 ||
+            !outcome(command) || command.argv[1] !== launcher || command.argv[2] !== "inherited" ||
+            command.argv[6] !== baseline.command.argv[4] || command.argv[8] !== proxy.target || command.argv[17] !== proxy.globalTarget ||
+            ready?.pid !== command.pid || ready.uid !== baseline.ports.uid || ready.privateApi !== true ||
+            !portNumber(ready.original) || !portNumber(ready.proxy) || ready.original === ready.proxy ||
+            spawned?.status !== 0 || spawned.restored !== 0 || spawned.registered !== 0 ||
+            !Number.isSafeInteger(spawned.childPid) || spawned.childPid < 2 || spawned.childPid === command.pid ||
+            terminal?.phase !== "terminal" || terminal.childPid !== spawned.childPid || terminal.joined !== true || terminal.timedOut !== false ||
+            !Number.isSafeInteger(terminal.waitStatus) || ports?.pid !== spawned.childPid || ports.mode !== "inherited" ||
+            ports.sandboxApplied !== true || ports.uid !== ready.uid || !snapshot(ports.before) || !snapshot(ports.after) ||
+            proxy.effectDirectory !== `${command.argv[5]}/proxy-service` || proxy.globalEffectDirectory !== `${command.argv[5]}/proxy-global` ||
+            tools?.complete !== true || tools.pid !== ports.pid || !dns(tools.dns) || !outcome(tools.git) || !outcome(tools.compiler) ||
+            !outcome(tools.service) || tools.service.executable !== "/bin/launchctl" ||
+            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", proxy.target]) ||
+            !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
+            !nodeGlobal(tools.bootstrapGlobal, ports.pid, ports.uid, proxy.globalTarget) || typeof proxy.canaryPreserved !== "boolean" ||
+            ![proxy.guestEffect, proxy.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1) ||
+            trace.some(entry => entry.phase === "request" &&
+              (!Number.isSafeInteger(entry.senderPid) || entry.senderPid < 2 || typeof entry.selected !== "boolean" ||
+                !signed32(entry.lookup) || !signed32(entry.replyStatus) || typeof entry.replyCreated !== "boolean" ||
+                entry.selected && (entry.subsystem !== 5 || entry.routine !== 207 || entry.type !== 7 || entry.handle !== 0 || !services.includes(entry.name)))))
+          throw new Error("semantic lookup proxy lacks a joined actual child, exact policy, request decisions or normal tools");
+        for (const selected of [proxy.target, proxy.globalTarget]) {
+          if (!target(selected) || targets.has(selected)) throw new Error("semantic lookup proxy reuses a service target");
+          targets.add(selected);
+        }
+      }
       for (const [key, stem, suffix, revision, numbers] of [
         ["messageFilter", "filter", "(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number 204 207 301 711 800 804))))\n",
           "adc20e859dbd1652b5542788d3d641960dce85e5", "[204,207,301,711,800,804]"],

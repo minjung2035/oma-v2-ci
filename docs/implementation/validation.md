@@ -299,6 +299,53 @@ private message filter와 별도로 production policy에 `(deny mach-bootstrap)`
 전체 build·관련60/60·skip0·생성 candidate ES module 문법·전체 architecture 검사가 통과했다.
 원시는 `/tmp/oma-macos-eighth-{final-build,final-focused,architecture}.log` 또는 `.tap`이다.
 
+### 여덟 번째 실제 결과 — source `fdf08e7dca9`
+
+Native [41780793085](https://github.com/minjung2035/oma-v2-ci/actions/runs/41780793085)의 첫 지원 대상
+**macOS26 arm64/SDK26.5에서 candidate 각3회가 모두 OBSERVED**다. 실제 exact checkout·private gate
+release1·status/gate FD 정리·lease FD9 identity 유지·canonical write 거절·자기 script·`/usr/bin/cc`의
+native build와 그 output 실행을 완료했다. machine Xcode 상태 파일의 실제 read/hash·r+ open 거절·
+실행 전후 같은 bytes도 확인했다. quarantine은 양 OS에서 계속 verify→import·refs/accepted bytes/cursor
+보존을 완료했다. Mac26 gate114 OBSERVED /6 SETUP_FAILED, Mac15는111/9이며 두 제품 판정은 BLOCKED다.
+Worker6건은 native launch guard로 남아 있다.
+
+Mac15의 candidate는 license 오류를 지나 Xcode shim의 MobileDevice.framework 로드 거절·exit72에
+도달했다. 이 framework의 정확한 물리 경로나 추가 허용이 충분한지는 미확정이다. Mac15 호환성 실패를
+감추거나 일반 framework·Preferences grant로 확대하지 않았다. 양 Mac 공통289/289·skip0, packed26/27다.
+
+plain `(deny mach-bootstrap)`는 양 OS 각3회 모두 init·정상 Node/Git/compiler/DNS를 통과했으나 두 fresh
+service 호출도 exit0·**다른 coalition**의 actor 실행이었다. 따라서 이 규칙도 service admission closure의
+해법으로 미채택이다. private message-filter EPERM·App Sandbox·port 제거의 결과와 구분한다.
+입력15827개 `7c8bd2f784d767b2db6b125a52ed601aebcb807de48ae128e57c6629f26bb57f`·runtime 산출물은 전후 같다.
+API SHA-256 대조 원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/plain-bootstrap-denial/`다.
+Mac26 gate ZIP `452d7c580512eae9c0c0c107557894e06e6af6e1a31a123ff9fdefad77aeedbd`,
+Mac15 gate ZIP `369b7e07bab531b068e153067a1cf2fcef18645a73cc972532a7bca1384050a3`와
+`observed-denial-summary.json`에 실제 service/client CID·도구 결과를 보존했다.
+
+여섯 번째 입력 `7c7a3da6acf`의 Architecture
+[41778257974](https://github.com/minjung2035/oma-v2-ci/actions/runs/41778257974)도 SHA-256 대조했다.
+all **4745/4745 PASS·skip0·errors[]**,13 command exit0·sourceChanges=[]다. fast1154·durable937·property42·
+stress16·platform79도 모두 PASS·skip0·errors[]다. 원시는 `app-only/arch-*`이며 native-all ZIP
+`43ab15d20be714c24ce55c6232ca325829bf965f505a9fc89eac0207aeefd272`, baseline ZIP
+`ed3c64b20ba49c01c74546de14a07934d347f6cb63cb953c88b05a41572dfa3a`다. 이 과거 full을 새 입력의 결과로 쓰지 않는다.
+
+### 아홉 번째 입력 — 의미가 제한된 bootstrap lookup 중개 실험
+
+새 controlled C parent는 다른 프로세스의 메시지를 그대로 전달하지 않는다. 미리 정한 세 OS 서비스의
+일반 lookup 요청에만 원래 bootstrap에서 새 lookup을 수행해 reply를 만들고 다른 routine/name을 거절한다.
+parent의 원래 bootstrap과 child에 지정한 port를 구분하고, 기존 Seatbelt·inherited child·같은 도구/DNS·
+독립 fresh service 효과와 실제 요청 trace를 비교한다. 새로운 root나 entitlement는 없다.
+
+이는 [Chromium45의 private XPC signature](https://chromium.googlesource.com/chromium/src/+/refs/tags/45.0.2454.85/sandbox/mac/xpc_private_stubs.sig)를
+사용한 **호환성 prototype**이다. 현재 SDK의 export와 로컬 arm64 object compile만 확인했으며 실제
+Mac ABI·일반 후손의 정상 동작·service admission은 **NOT_RUN**이다. API 부재·startup 실패·timeout도
+명시적으로 보존한다. source/executable/profile hash·실제 parent/child PID·kernel sender PID·요청별 결정·
+WNOWAIT 뒤 alarm disarm과 직접 child join을 기록한다. 숫자 PID는 이 unreaped owned child의 fixture
+정리에만 사용한다. per-request Mach reference 반환과 arbitrary-descendant death·role authority·headless는
+미검증이며 product backend를 연결하지 않는다. canonical input·실행 guard·Linux backend는 유지한다.
+로컬 arm64 SDK compile·Node fixture 문법·parser/Seatbelt41/41·skip0·전체 architecture 검사가 통과했다.
+원시는 `/tmp/oma-macos-ninth-{sdk,parser,focused,architecture}.log` 또는 `.tap`이다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -491,6 +538,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7c8bd2f784d767b2db6b125a52ed601aebcb807de48ae128e57c6629f26bb57f` (15827 files).
+verification input digest `e27bd52a4947689d40df94ae22ddb89ff535f6d7f523c79c69ef28f6921c78db` (15828 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
