@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { Store } from "@oma/storage";
 import { LifecycleModule as Lifecycle } from "@oma/lifecycle";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 
 /** Leaves, in `root`, one of every artifact a request makes before its
  * acceptance, as a broker that died before accepting would leave them. */
@@ -73,7 +73,7 @@ function strandedArtifacts(root: string, mail: { freezeObject(id: string, eml: {
   return { object: join(root, "mail", "objects", `${object}.eml`), stagedCopy, wire, submit, archiveTemporary, context, quarantine };
 }
 
-test("DR10 / P0-4: what a broker made before an acceptance that never happened is collected; what an accepted plan names is kept", async () => {
+test("001. What a broker made before an acceptance that never happened is collected; what an accepted plan names is kept", async () => {
   const f = await preparedFixture();
   try {
     const acceptedObjects = readdirSync(join(f.root, "mail", "objects"));
@@ -91,7 +91,7 @@ test("DR10 / P0-4: what a broker made before an acceptance that never happened i
   } finally { f.close(); }
 });
 
-test("DR10: startup recovery collects before anything is admitted or bootstrapped", async () => {
+test("002. Startup recovery collects before anything is admitted or bootstrapped", async () => {
   const f = await preparedFixture();
   try {
     const left = strandedArtifacts(f.root, f.mail);
@@ -106,7 +106,7 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
   } finally { f.close(); }
 });
 
-test("AV-19: a stranded context .prepare-* tree is collected; an accepted or unparseable one is kept", () => {
+test("003. A stranded context .prepare-* tree is collected; an accepted or unparseable one is kept", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-prepare-"));
   try {
     const revisions = join(root, "world", "context", "revisions");
@@ -145,7 +145,7 @@ async function preacceptEvents(t: import("node:test").TestContext, f: Awaited<Re
   return { events, collected: reconcile.preacceptCollection! };
 }
 
-test("FJ-1: a published context revision is the product, not residue: only genuine residue is kept and reported", async t => {
+test("004. A published context revision is the product, not residue: only genuine residue is kept and reported", async t => {
   // The audited collection reached every `world/context/revisions/<oid>`
   // directory -- the name every real revision has (domain/derived.ts) -- and,
   // finding no `.prepare-*` binding, kept it as "not a name this broker
@@ -172,7 +172,7 @@ test("FJ-1: a published context revision is the product, not residue: only genui
   } finally { f.close(); }
 });
 
-test("FJ-2: a name that vanishes between the listing and its stat does not fail startup collection", t => {
+test("005. A name that vanishes between the listing and its stat does not fail startup collection", t => {
   // The mail-object loop (and the staging decisions) called lstatSync without
   // throwIfNoEntry: a name removed between readdir and lstat threw ENOENT out
   // of startup recovery. A vanished name has nothing left to collect or keep.
@@ -200,7 +200,7 @@ test("FJ-2: a name that vanishes between the listing and its stat does not fail 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("FJ-3: the reconcile.preaccept event names what it kept, bounded to the first eight entries", async t => {
+test("006. The reconcile.preaccept event names what it kept, bounded to the first eight entries", async t => {
   // The audited event carried only counts: an operator could see that
   // something was kept but not what or why.
   const f = await preparedFixture();
@@ -225,7 +225,7 @@ test("FJ-3: the reconcile.preaccept event names what it kept, bounded to the fir
   } finally { f.close(); }
 });
 
-test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {
+test("007. The broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {
   const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   assert.equal(readCurrentHostPolicy("/config.json", "demo", () => config), config);
   for (const failure of [Object.assign(new Error("EIO: i/o error"), { code: "EIO" }), new Error("config: quota.societyAgents must be a safe integer")])
@@ -234,7 +234,7 @@ test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', ne
     "a readable policy of another society is a changed one");
 });
 
-test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepted does not reinterpret it", async () => {
+test("008. A host policy edited after a create was accepted does not reinterpret it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0v10-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -250,9 +250,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
     // transaction); an edit lands right after acceptance and would resolve a
     // child with fewer capabilities from then on.
     let resolutions = 0;
-    const lifecycle = createLifecycleModule(store, units,
-      { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
-      (_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief), mail);
+    const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief)), mail);
     const receipt = await lifecycle.create({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, { name: "child", from: info.base, brief: "brief" }, "p0v10");
     assert.equal(receipt.state, "succeeded", "the accepted plan is completed with the spec it froze");
     assert.deepEqual([...JSON.parse(store.getAgent("child")!.specJson).capabilities].sort(), [...ALL_CAPS].sort());
@@ -262,7 +260,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
 // Retired DR13 unit-command classification case is preserved in the archive.
 // Unknown native execution is covered by the real scope/journal regressions.
 
-test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused, and the newer file is kept", () => {
+test("009. CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused, and the newer file is kept", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const settings = readSettings(f.input);
@@ -275,7 +273,7 @@ test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no lo
   } finally { f.close(); }
 });
 
-test("DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads", () => {
+test("010. A crash before an inline commit point changes nothing, one after it leaves a configuration that loads", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const original = readFileSync(f.input);
@@ -293,7 +291,7 @@ test("DR12 / P0-3: a crash before an inline commit point changes nothing, one af
   } finally { f.close(); }
 });
 
-test("DR12: a flush that fails after the inline commit point is reported as unconfirmed, and the next edit flushes first", () => {
+test("011. A flush that fails after the inline commit point is reported as unconfirmed, and the next edit flushes first", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const settings = readSettings(f.input);
@@ -308,7 +306,7 @@ test("DR12: a flush that fails after the inline commit point is reported as unco
   } finally { f.close(); }
 });
 
-test("DR12: a first-run configuration is created where none exists and never overwrites one another start made", () => {
+test("012. A first-run configuration is created where none exists and never overwrites one another start made", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const path = join(f.root, "fresh.json");
@@ -322,7 +320,7 @@ test("DR12: a first-run configuration is created where none exists and never ove
   } finally { f.close(); }
 });
 
-test("DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcome is unknown and names the key", async () => {
+test("013. A CLI a tool stopped gave no answer; the tool says the outcome is unknown and names the key", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-dr13-client-"));
   installRuntime({ ...CLIENT_RUNTIME, channel: () => ({ connect: async () => {}, close() {},
     call: async () => { throw new Error("connection lost"); } }) });
@@ -338,7 +336,7 @@ test("DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcom
   } finally { installClientRuntime(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes; the write is refused", { skip: process.getuid?.() === 0 }, async () => {
+test("014. A workspace entry that cannot be observed is not zero bytes; the write is refused", { skip: process.getuid?.() === 0 }, async () => {
   const workspace = mkdtempSync(join(tmpdir(), "oma-p0v15-"));
   const locked = join(workspace, "locked");
   try {
@@ -356,12 +354,11 @@ test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes
   } finally { chmodSync(locked, 0o700); rmSync(workspace, { recursive: true, force: true }); }
 });
 
-test("P0-7: a draining broker removes its status view, so a view that is there is a live broker's", async () => {
+test("015. A draining broker removes its status view, so a view that is there is a live broker's", async () => {
   const f = await preparedFixture();
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   try {
     await broker.start();
@@ -372,7 +369,7 @@ test("P0-7: a draining broker removes its status view, so a view that is there i
   } finally { (f.store as unknown as { close(): void }).close = () => undefined; f.close(); }
 });
 
-test("P0-7: a crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest", () => {
+test("016. A crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-binding-"));
   try {
     const binding = { society: "demo", canonicalProjectPath: "/project" };
@@ -392,7 +389,7 @@ test("P0-7: a crash while binding a society to its project leaves no binding or 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR13 / CLI-003, P0-2: the Control Panel's exit is the CLI's reading of the code, so an unknown is never a settled failure", () => {
+test("017. The Control Panel's exit is the CLI's reading of the code, so an unknown is never a settled failure", () => {
   for (const code of Object.keys(ERROR_METADATA) as ErrorCode[])
     assert.equal(codeFor(new StoreError(code, code)), errorExit(code), code);
   for (const unknown of ["RUN_TERMINATION_UNKNOWN", "REF_STATE_UNKNOWN", "SESSION_BOUNDARY_UNCONFIRMED", "PROVIDER_OUTCOME_UNKNOWN", "STORE_CORRUPT", "DB_BUSY"] as const)
@@ -410,7 +407,7 @@ test("DR13 / CLI-003, P0-2: the Control Panel's exit is the CLI's reading of the
   assert.equal(errorExit(elsewhere.code), 2);
 });
 
-test("DR13 / DR12: a configuration file that cannot be read now is not a changed one; the edit waits and writes nothing", { skip: process.getuid?.() === 0 }, () => {
+test("018. A configuration file that cannot be read now is not a changed one; the edit waits and writes nothing", { skip: process.getuid?.() === 0 }, () => {
   const f = createCompleteConfigurationFixture();
   try {
     const settings = readSettings(f.input);
@@ -425,7 +422,7 @@ test("DR13 / DR12: a configuration file that cannot be read now is not a changed
   } finally { f.close(); }
 });
 
-test("DR13 / P0-5: a local observation that did not answer is 'cannot be observed now', never a changed, invalid, corrupt or unsupported fact", { skip: process.getuid?.() === 0 }, () => {
+test("019. A local observation that did not answer is 'cannot be observed now', never a changed, invalid, corrupt or unsupported fact", { skip: process.getuid?.() === 0 }, () => {
   const errno = (code: string) => Object.assign(new Error(code), { code });
   assert.equal(unobserved(errno("EACCES"), "x")?.code, "BROKER_UNAVAILABLE");
   assert.equal(unobserved(errno("EIO"), "x")?.code, "BROKER_UNAVAILABLE");
@@ -462,7 +459,7 @@ test("DR13 / P0-5: a local observation that did not answer is 'cannot be observe
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR13 / P0-5: a ledger query that failed without saying the database is corrupt does not fence the society as corrupt", () => {
+test("020. A ledger query that failed without saying the database is corrupt does not fence the society as corrupt", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-query-"));
   try {
     const store = new Store(join(root, "runtime.sqlite"));

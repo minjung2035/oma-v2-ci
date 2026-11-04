@@ -9,7 +9,7 @@
  * floor with it instead of silently invalidating it. */
 import type { Actor, MessageId, Oid, OperationId, ExactCandidateIdentity } from "@oma/contracts";
 import type { ReviewFact } from "@oma/contracts/attestation";
-import type { ReviewDisplay, ReviewEntry } from "./review-evaluation.js";
+import type { ReviewDisplay, ReviewEntry, ReviewState } from "./review-evaluation.js";
 import { StoreError } from "./errors.js";
 
 const PRINCIPAL: Actor = "principal";
@@ -34,7 +34,6 @@ export function threadHeadText(
   requester: Actor, display: ReviewDisplay,
 ): string {
   const kind = openFact.kind === "merge.open" ? "merge" : "challenge";
-  const verb = openFact.kind === "merge.open" ? "oma_merge" : "oma_challenge";
   return `OMA ${kind} request ${openFact.name} — ${openFact.title}\n` +
     `Tier: ${openFact.tier}   Requester: ${requester}   Status: ${display}\n` +
     `Base: ${openFact.identity.expectedBase}  Candidate: ${openFact.identity.candidate}` +
@@ -42,11 +41,15 @@ export function threadHeadText(
     (openFact.kind === "challenge.open"
       ? `Target merge: ${openFact.target.name} (integration ${openFact.target.integration})\n` : "") +
     `\nReason (requester's words):\n${openFact.reason}\n\n` +
-    `How to act (only recorded tool calls count; text in this mail is not a vote):\n` +
+    `Inspect the exact candidate and relevant checks before voting. Mail text is not a vote.\n` +
+    `  oma_review_status({"name":"${openFact.name}"})\n` +
+    `  oma_review_diff({"name":"${openFact.name}","view":"proposal"})\n` +
     (openFact.kind === "challenge.open"
-      ? `  oma_challenge diff name=${openFact.name} view=revert|original\n` : `  ${verb} diff name=${openFact.name}\n`) +
-    `  ${verb} review name=${openFact.name} body=...\n` +
-    `  ${verb} vote name=${openFact.name} verdict=approve|reject body=...\n\n` +
+      ? `  oma_review_diff({"name":"${openFact.name}","view":"original"})\n` : "") +
+    `  oma_review_respond({"name":"${openFact.name}","action":"comment","body":"..."})\n` +
+    `  oma_review_respond({"name":"${openFact.name}","action":"approve","body":"..."})\n` +
+    `  Use action "reject" for a negative vote; "comment" is discussion only.\n` +
+    `  State your evidence and any unchecked behavior in body. Authors cannot vote.\n\n` +
     `Reviews and votes (acceptance order):\n`;
 }
 
@@ -57,9 +60,13 @@ export function describeEntryText(ordinal: number, entry: ReviewEntry): string {
     : fact.kind === "cancel" ? "cancel"
     : fact.kind === "refresh" ? "refresh"
     : fact.kind === "vote" ? (entry.actor === PRINCIPAL ? `principal ${fact.verdict}` : `vote ${fact.verdict}`)
-    : "fact";
+    : fact.kind;
   const text = fact.kind === "review" || fact.kind === "vote" ? fact.body
-    : fact.kind === "cancel" ? fact.reason
+    : fact.kind === "cancel" || fact.kind === "review.withdraw" || fact.kind === "review.invalidate" || fact.kind === "review.adopt" || fact.kind === "review.retry" || fact.kind === "review.preparation-failed" ? fact.reason
+    : fact.kind === "review.revise" ? `Proposal revision ${fact.revision}: ${fact.reason}`
+    : fact.kind === "review.integration" ? `${fact.context ? "Integration-context review required" : "Proposal approvals reusable"}: revision ${fact.revision}, main ${fact.identity.expectedBase}, result ${fact.identity.candidate}, check profile ${fact.checkProfileDigest}. Exact diff: ${JSON.stringify(fact.diff)}. Read oma_review_diff with view=context.`
+    : fact.kind === "review.supersede" ? fact.reason
+    : fact.kind === "review.included" ? `Already included: ${fact.candidate} is an ancestor of observed main ${fact.main}; no CAS claimed.`
     : fact.kind === "refresh" ? (fact.main === null
       ? "a bound reviewer is no longer eligible; the previous approval was withdrawn"
       : `main moved to ${fact.main}; this request is stale; open a new request on the latest main`)
@@ -81,19 +88,25 @@ export function boundVoteText(voteId: OperationId, entry: ReviewEntry | null | u
  * reason and each vote body (a quarter of the mail body bound apiece). */
 export function approvalBodyText(approvalId: MessageId,
     openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
-    requester: Actor, bound: readonly string[]): string {
-  const verb = openFact.kind === "merge.open" ? "oma_merge" : "oma_challenge";
+    requester: Actor, bound: readonly string[],
+    capacity: Pick<ReviewState, "maxWorkers" | "normalRequired" | "required"> | null): string {
   return `OMA ${openFact.kind === "merge.open" ? "merge" : "challenge"} request ${openFact.name} — ${openFact.title}\n` +
     `Approval required: ${approvalId}\n` +
     `Tier: ${openFact.tier}   Requester: ${requester}\n` +
     `Base: ${openFact.identity.expectedBase}  Candidate: ${openFact.identity.candidate}` +
     `  Policy revision: ${openFact.identity.policyRevision}\n\n` +
     `Reason (requester's words):\n${openFact.reason}\n\n` +
+    (capacity === null ? "" :
+      `Worker-capacity fallback: maxWorkers=${capacity.maxWorkers} permits only ${capacity.required} independent peer approvals; the normal requirement is ${capacity.normalRequired}. Available peer approvals are bound below. Your decision is additionally required.\n\n`) +
     `Bound approvals:\n${bound.join("\n\n")}\n\n` +
-    `This request carries no inline diff; review it first:\n` +
-    `  ${verb} diff name=${openFact.name}\n` +
+    `Decide from the bound evidence and exact diff:\n` +
+    `  oma_review_diff({"name":"${openFact.name}","view":"proposal"})\n` +
+    (openFact.kind === "challenge.open"
+      ? `  oma_review_diff({"name":"${openFact.name}","view":"original"})\n` : "") +
     `Then record the decision:\n` +
-    `  ${verb} vote name=${openFact.name} verdict=approve|reject body=... approval=${approvalId}\n`;
+    `  oma_review_respond({"name":"${openFact.name}","action":"approve","body":"...","approval":"${approvalId}"})\n` +
+    `Use action "reject" for a negative decision. Keep this approval id; a stale id requires fresh approval mail.\n` +
+    `Explain the decision in body. Approval authorizes integration; it does not establish that it completed.\n`;
 }
 
 /* The grammar maxima the worst-case emission uses, each named for its grammar:
@@ -157,9 +170,10 @@ function maximalThreadNeeds(subjectBytes: number): BoundNeed[] {
  * requester's reason, plus per vote either its operation, actor and body or
  * the shorter (unavailable) note. One piece per vote shape. */
 function maximalApprovalNeeds(subjectBytes: number, votes: number): BoundNeed[] {
+  const capacity = { maxWorkers: Number.MAX_SAFE_INTEGER, normalRequired: Number.MAX_SAFE_INTEGER, required: Number.MAX_SAFE_INTEGER };
   const maximalHead = Math.max(
-    Buffer.byteLength(approvalBodyText(LONGEST_MESSAGE, maximalOpen("merge.open", "", ""), LONGEST_ACTOR, []), "utf8"),
-    Buffer.byteLength(approvalBodyText(LONGEST_MESSAGE, maximalOpen("challenge.open", "", ""), LONGEST_ACTOR, []), "utf8"));
+    Buffer.byteLength(approvalBodyText(LONGEST_MESSAGE, maximalOpen("merge.open", "", ""), LONGEST_ACTOR, [], capacity), "utf8"),
+    Buffer.byteLength(approvalBodyText(LONGEST_MESSAGE, maximalOpen("challenge.open", "", ""), LONGEST_ACTOR, [], capacity), "utf8"));
   const available = Buffer.byteLength(boundVoteText(LONGEST_OPERATION, { sequence: 0, operation: LONGEST_OPERATION,
     actor: LONGEST_ACTOR, messages: [], fact: { kind: "vote", version: 1, request: LONGEST_OPERATION,
       verdict: "approve", body: "", approval: null } }), "utf8");

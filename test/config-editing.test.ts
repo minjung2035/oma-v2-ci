@@ -16,7 +16,7 @@ function filesBelow(root: string): string[] {
 function snapshot(paths: readonly string[]) {
     return Object.fromEntries(paths.map((path) => [path, observeFile(path)]));
 }
-test("V11A: the inline writer validates before replacement", () => {
+test("001. The inline writer validates before replacement", () => {
     const fixture = createCompleteConfigurationFixture();
     try {
         const before = observeFile(fixture.input);
@@ -35,9 +35,9 @@ test("V11A: the inline writer validates before replacement", () => {
 for (const mode of ["inline", "split"] as const) {
     for (const [field, value, message] of [
         ["worker-limit", 3, /not editable|Unknown|unknown|unsupported/i],
-        [INITIAL_WORKERS, -1, /non-negative|Invalid|invalid|integer/i],
+        [INITIAL_WORKERS, -1, /at least (?:1|one)|non-negative|Invalid|invalid|integer/i],
     ] as const) {
-        test(`V11A: invalid ${mode} ${field} edit is rejected before every authored file`, () => {
+        test(`002. Invalid ${mode} ${field} edit is rejected before every authored file`, () => {
             const fixture = createCompleteConfigurationFixture();
             try {
                 const path = mode === "inline" ? fixture.input : fixture.path;

@@ -60,8 +60,8 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
       default: messages = [];
     }
     if (messages.length === 0) continue;
-    let archiveAbsent = false;
     for (const message of messages) {
+      let delivered = false;
       const expectation = { bytes: message.bytes, sha256: message.sha256 };
       expectedObjects.add(`${message.id}.eml`);
       (message.audience === "workers" ? expectedWorkers : expectedArchives).add(maildirCurName(message.id));
@@ -70,7 +70,6 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
       fileResult(archive, "MAIL_ARCHIVE", operation.id, operation.state === "succeeded");
       if (archive.kind === "present") publishedMail.add(operation.id);
       else if (archive.kind === "absent") {
-        archiveAbsent = true;
         if (operation.state !== "failed") pendingPublications++;
       }
       for (const delivery of facts.deliveries.filter(row => row.operationId === operation.id && row.messageId === message.id)) {
@@ -79,14 +78,14 @@ export function inspectIntegrity(snapshot: unknown, context: InspectionContext, 
         const current = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "cur"), expectation));
         const fresh = observe(() => files.file(mailInboxPathAt(context.stateRoot, delivery.recipient, message.id, "new"), expectation));
         fileResult(current, "INBOX_CUR", message.id); fileResult(fresh, "INBOX_NEW", message.id);
-        if (current.kind === "present" || fresh.kind === "present") publishedMail.add(operation.id);
+        if (current.kind === "present" || fresh.kind === "present") { publishedMail.add(operation.id); delivered = true; }
         if (current.kind === "present" && fresh.kind === "present") ledger.add("corrupt", "DUPLICATE_MAILBOX_NAMES", "filesystem", message.id);
         if (delivery.materialized === 1 && current.kind === "absent" && fresh.kind === "absent") ledger.add("corrupt", "MATERIALIZED_FILE_MISSING", "filesystem", message.id);
         if (delivery.presented === 1 && current.kind === "absent") ledger.add("corrupt", "PRESENTED_CUR_MISSING", "filesystem", message.id);
         if (operation.state === "succeeded" && delivery.materialized !== 1) ledger.add("corrupt", "SUCCESS_WITH_UNMATERIALIZED_DELIVERY", "deliveries", message.id);
       }
+      if (archive.kind === "absent" && delivered) ledger.add("corrupt", "DELIVERY_WITHOUT_ARCHIVE", "filesystem", operation.id);
     }
-    if (archiveAbsent && publishedMail.has(operation.id)) ledger.add("corrupt", "DELIVERY_WITHOUT_ARCHIVE", "filesystem", operation.id);
     if (operation.state === "failed" && publishedMail.has(operation.id)) ledger.add("corrupt", "FAILED_PARENT_PUBLICATION", "filesystem", operation.id);
     if (operation.kind === "agent.create" && publishedMail.has(operation.id) && facts.agents.find(agent => agent.name === operation.plan.spec.name)?.desired === "provisioning")
       ledger.add("corrupt", "CREATE_MAIL_BEFORE_READY", "filesystem", operation.id);

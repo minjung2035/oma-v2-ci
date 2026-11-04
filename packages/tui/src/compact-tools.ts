@@ -146,24 +146,39 @@ function listed(value: unknown): string | undefined {
   return undefined;
 }
 
-/** The argument a one-line call row shows, per tool; anything else is the
- * generic "first useful argument" reading. */
+/** Typed calls summarize their target and operation, not their body/reason.
+ * Personal's engine built-ins retain path summaries; other tools fall back to
+ * the generic "first useful argument" reading. */
 const SUMMARY: Readonly<Record<string, (args: Record<string, unknown>) => string | undefined>> = {
   oma_mail_send: args => {
     const to = listed(args.to), subject = listed(args.subject);
     return [to, subject].filter((part): part is string => part !== undefined && part !== "").join(" · ") || undefined;
   },
   oma_mail_read: args => listed(args.messageId),
+  oma_mail_reply: args => listed(args.messageId),
   oma_mail_ack: args => listed(args.messageId),
   oma_status: args => listed(args.agent),
   oma_society: args => listed(args.action),
-  oma_agent_lifecycle: args => [listed(args.name), listed(args.action)]
+  oma_agent_control: args => [listed(args.name), listed(args.action)]
     .filter((part): part is string => part !== undefined).join(" ") || undefined,
-  oma_merge: args => [listed(args.action), listed(args.name)].filter((part): part is string => part !== undefined).join(" ") || undefined,
-  oma_challenge: args => [listed(args.action), listed(args.name)].filter((part): part is string => part !== undefined).join(" ") || undefined,
+  oma_merge_open: args => [listed(args.tier), listed(args.title)].filter(Boolean).join(" · ") || undefined,
+  oma_challenge_open: args => [listed(args.merge), listed(args.tier), listed(args.title)].filter(Boolean).join(" · ") || undefined,
+  oma_review_list: args => listed(args.kind),
+  oma_review_status: args => listed(args.name),
+  oma_review_diff: args => [listed(args.name), listed(args.view), listed(args.path)].filter(Boolean).join(" · ") || undefined,
+  oma_review_respond: args => [listed(args.name), listed(args.action)].filter(Boolean).join(" ") || undefined,
+  oma_review_cancel: args => listed(args.name),
+  oma_topic_subscription: args => [listed(args.action), listed(args.topic)].filter(Boolean).join(" ") || undefined,
+  oma_context_publish: args => listed(args.directory),
+  oma_candidate_publish: args => [listed(args.candidate), listed(args.subject)].filter(Boolean).join(" · ") || undefined,
+  oma_operation_status: args => listed(args.key),
+  toolset: args => listed(args.select),
   read: args => listed(args.path) ?? listed(args.file_path),
   write: args => listed(args.path) ?? listed(args.file_path),
   edit: args => listed(args.path) ?? listed(args.file_path),
+  replace: args => listed(args.path),
+  insert: args => listed(args.path),
+  replace_within: args => listed(args.path),
   ls: args => listed(args.path) ?? ".",
   find: args => `${listed(args.pattern) ?? "…"} in ${listed(args.path) ?? "."}`,
   grep: args => `/${listed(args.pattern) ?? "…"}/ in ${listed(args.path) ?? "."}`,
@@ -226,6 +241,30 @@ function railed(component: Component, theme: CompactTheme): Component {
   const rail = theme.fg("borderMuted", RAIL);
   const width = RAIL.length;
   return new Lines(columns => component.render(Math.max(1, columns - width)).map(line => rail + line));
+}
+
+/** A delivered batch is a message, not a fabricated tool call or task receipt.
+ * Only its presentation is folded; Pi retains the original content and owns
+ * expansion for live messages and replayed history. */
+export function renderMailDelivery(
+  message: { readonly content: string | CompactResult["content"]; readonly details?: unknown },
+  options: { readonly expanded: boolean }, theme: CompactTheme,
+): Component {
+  const text = typeof message.content === "string" ? message.content : resultText({ content: message.content });
+  const output = normalizeLineEndings(text).replace(UNSEEN_EXCEPT_LAYOUT, "").trimEnd();
+  const ids = (message.details as { messageIds?: unknown } | undefined)?.messageIds;
+  const summary = Array.isArray(ids) ? `${ids.length} ${ids.length === 1 ? "message" : "messages"}` : undefined;
+  const title = theme.fg("toolTitle", theme.bold("mail receive"));
+  const heading = new Lines(columns => [truncateToWidth(
+    ` ${paintIndicator(theme, "success", 0)} ${title}${summary === undefined ? "" : ` ${theme.fg("toolOutput", summary)}`}`,
+    columns, "…",
+  )]);
+  const rows = new Rows(heading);
+  if (options.expanded && output !== "") rows.add(underRail(theme, theme.fg("toolOutput", output)));
+  const count = countLines(output);
+  rows.add(new Lines(columns => [truncateToWidth(theme.fg("borderMuted",
+    ` └ Received${count === 0 ? "" : ` · ${count} ${count === 1 ? "line" : "lines"}`}`), columns, "…")]));
+  return rows;
 }
 
 interface RowState {

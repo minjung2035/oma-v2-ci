@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, writeFileSync, linkSync, symlinkSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { clientCall, clientProcessArgs } from "./fixtures/client-process.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Store } from "@oma/storage";
@@ -22,7 +22,7 @@ const cases = [
   { name: "traversal", path: "decisions/../escape.md", bytes: Buffer.from("escape") },
 ];
 
-test("CTX-001: broker-domain rejects unsupported paths and non-text before acceptance", async () => {
+test("001. Broker-domain rejects unsupported paths and non-text before acceptance", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-security-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -54,7 +54,7 @@ test("CTX-001: broker-domain rejects unsupported paths and non-text before accep
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", async () => {
+test("002. A rejected context publish leaves no staging artifact", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-staging-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -93,7 +93,7 @@ test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", as
   } finally { store.close(); removeTree(root); }
 });
 
-test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before connecting", () => {
+test("003. Real client rejects symlink, hardlink, metadata and binary before connecting", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-cli-"));
   try {
     for (const name of ["symlink", "directory-link", "hardlink", ...cases.filter(item => item.name !== "traversal").map(item => item.name)]) {
@@ -111,7 +111,7 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
         if (item.path === ".git/config") mkdirSync(join(dir, ".git"));
         writeFileSync(join(dir, item.path), item.bytes);
       }
-      const child = spawnSync(process.execPath, [fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url)), "context", "publish", dir, "--expect", "none", "--request", name], {
+      const child = spawnSync(process.execPath, clientProcessArgs(clientCall("publishContext", dir, null, name)), {
         env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
       });
       assert.equal(child.status, 2, `${name}: ${child.stderr}`);
@@ -123,7 +123,7 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
     writeFileSync(join(valid, "GOAL.md"), "# 한글 goal\n");
     writeFileSync(join(valid, "RATIONALE.md"), "");
     writeFileSync(join(valid, "decisions/a..b.md"), "valid\n");
-    const child = spawnSync(process.execPath, [fileURLToPath(new URL("../../apps/oma/dist/cli.js", import.meta.url)), "context", "publish", valid, "--expect", "none", "--request", "valid"], {
+    const child = spawnSync(process.execPath, clientProcessArgs(clientCall("publishContext", valid, null, "valid")), {
       env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
     });
     assert.equal(child.status, 3, child.stderr);

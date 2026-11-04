@@ -2,9 +2,9 @@
   "schema": 1,
   "qualification": "NOT_REVIEWED; local probes only; native Mac/VM/provider turn NOT_RUN",
   "versions": {
-    "@earendil-works/pi-coding-agent": "1.0.1",
-    "@earendil-works/pi-tui": "1.0.1",
-    "@earendil-works/pi-ai": "1.0.3",
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
     "pi-open-tui": "0.3.11"
   },
   "contacts": [
@@ -18,6 +18,8 @@
         "handleFatalRuntimeError",
         "renderProjectTrustWarningIfNeeded",
         "suggestBugReport",
+        "getChangelogForDisplay",
+        "showNewVersionNotification",
         "crashReportInstructions",
         "updateTerminalTitle",
         "handleExportCommand",
@@ -32,7 +34,7 @@
       "fields": [
         "hideThinkingBlock"
       ],
-      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal rather than the private renderer field."
+      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal. Automatic Pi release displays are suppressed without changing manual changelog, extension updates or ordinary warnings."
     },
     {
       "id": "optional-search-tool-module",

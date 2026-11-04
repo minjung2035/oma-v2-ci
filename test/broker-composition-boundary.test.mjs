@@ -117,8 +117,8 @@ function fixture() {
     },
   };
   const views = {
-    status() {
-      calls.push("views.status");
+    statusOf(snapshot, actor) {
+      calls.push(["views.status", snapshot, actor]);
       return [];
     },
   };
@@ -136,6 +136,7 @@ function fixture() {
       status(...args) { calls.push(["review.status", ...args]); return "review-status"; },
   };
   const git = {
+    hasSharedCommit(commit) { calls.push(["git.hasSharedCommit", commit]); return commit === "a".repeat(40); },
     knownRefs() {
       calls.push("git.knownRefs");
       return { main: "main", published: [] };
@@ -160,7 +161,7 @@ function fixture() {
   return { calls, state, store, mail, units, views, lifecycle, git, reviews };
 }
 
-test("P18 public composition exposes only projected capabilities and keeps lookups live", async () => {
+test("001. Public composition exposes only projected capabilities and keeps lookups live", async () => {
   const { createPublicDispatchPorts, projectorCalls } = loadComposition();
   const { calls, state, store, mail, units, views, lifecycle, git, reviews } = fixture();
   const ports = createPublicDispatchPorts(
@@ -197,12 +198,14 @@ test("P18 public composition exposes only projected capabilities and keeps looku
   assert.deepEqual(Object.keys(ports.lifecycle).sort(), [
     "ack",
     "create",
+    "creation",
     "follow",
     "setSociety",
     "start",
     "stop",
   ]);
   assert.deepEqual(Object.keys(ports.git).sort(), [
+    "hasSharedCommit",
     "integrate",
     "isPublished",
     "knownRefs",
@@ -214,13 +217,22 @@ test("P18 public composition exposes only projected capabilities and keeps looku
   assert.deepEqual(Object.keys(ports.review).sort(), ["record", "status"]);
   const auth = { actor: "alice" }, input = { kind: "review", name: "merge-00000000-0000-4000-8000-000000000000", body: "review" };
   assert.equal(await ports.review.record(auth, "key", input), "attestation");
-  assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input]);
+  assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input, undefined]);
   assert.equal(ports.review === reviews, false, "the review owner must not escape through a nested port");
   assert.deepEqual(Object.keys(ports.review).sort(), ["record", "status"]);
-  assert.equal(await ports.review.status(auth, "oma_merge/cand", 16, "r1"), "review-status");
-  assert.deepEqual(calls.pop(), ["review.status", auth, "oma_merge/cand", 16, "r1"]);
-  assert.equal(ports.lifecycle.setSociety({}, "closed", "request"), "society");
+  assert.equal(await ports.lifecycle.setSociety({}, "closed", "request"), "society");
   assert.equal(calls.pop(), "lifecycle.setSociety");
+  const snapshot = { observedAtMs: 1, units: new Map(), failure: null };
+  assert.deepEqual(ports.views.status("alice", snapshot), []);
+  assert.deepEqual(calls.pop(), ["views.status", snapshot, "alice"]);
+  assert.equal(ports.git.hasSharedCommit("a".repeat(40)), true);
+  assert.deepEqual(calls.pop(), ["git.hasSharedCommit", "a".repeat(40)]);
+  assert.equal(ports.git.hasSharedCommit("b".repeat(40)), false);
+  assert.deepEqual(calls.pop(), ["git.hasSharedCommit", "b".repeat(40)]);
+  const sharedRead = git.hasSharedCommit, unavailable = new Error("shared reachability unobserved");
+  git.hasSharedCommit = () => { throw unavailable; };
+  assert.throws(() => ports.git.hasSharedCommit("a".repeat(40)), error => error === unavailable, "unknown is not an unpublished fact");
+  git.hasSharedCommit = sharedRead;
   const view = ports.store.getAgent("alice");
   assert.deepEqual(Object.keys(view).sort(), [
     "desired",
@@ -254,7 +266,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
   mail.send = originalSend;
 });
 
-test("P18 internal composition exposes narrow live capabilities without concrete owners", () => {
+test("002. Internal composition exposes narrow live capabilities without concrete owners", () => {
   const { createInternalDispatchDataPorts, inboxReads } = loadComposition();
   const { calls, store, mail } = fixture();
   const peers = {

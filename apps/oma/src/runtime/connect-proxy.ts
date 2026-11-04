@@ -220,12 +220,24 @@ export class ConnectProxy {
           delete headers["proxy-authorization"]; delete headers["proxy-connection"];
           const outgoing = request({ hostname: host, port, path: `${url.pathname}${url.search}`,
             method: req.method, headers, agent }, response => {
+            const interrupted = (): void => { if (!res.writableFinished) res.destroy(); };
+            response.once("aborted", interrupted);
+            response.once("error", interrupted);
+            response.once("close", () => {
+              // A partial keep-alive response never reaches pipe's normal end.
+              // Close downstream rather than report truncated bytes as complete.
+              if (!response.complete) interrupted();
+            });
             res.writeHead(response.statusCode ?? 502, response.headers);
             response.pipe(res);
           });
           tunnels.add(req.socket);
           res.once("close", () => { tunnels.delete(req.socket); outgoing.destroy(); agent.destroy(); });
-          outgoing.on("error", () => { if (!res.headersSent) res.writeHead(502, { Connection: "close" }); res.end(); agent.destroy(); });
+          outgoing.on("error", () => {
+            if (res.headersSent) res.destroy();
+            else { res.writeHead(502, { Connection: "close" }); res.end(); }
+            agent.destroy();
+          });
           req.once("aborted", () => { outgoing.destroy(); agent.destroy(); });
           req.pipe(outgoing);
           try { audit(`${host}:${port}`, "allow", "HTTP connected"); } catch { /* diagnostics */ }

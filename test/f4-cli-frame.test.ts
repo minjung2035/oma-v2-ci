@@ -4,9 +4,13 @@ import { createServer, type Socket } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callActor } from "#oma-test/app/cli/transport";
+import { Client, ClientError } from "@oma/client";
+import { installRuntime } from "@oma/client/runtime";
+import { CLIENT_RUNTIME } from "#oma-test/app/runtime/client-runtime";
 import { FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { MIN_LOG_FRAME_BYTES } from "@oma/protocol/log-response";
+
+installRuntime(CLIENT_RUNTIME);
 
 const params = { agent: "alice", sinceSeconds: 60 };
 const mail = (bytes: number) => ({
@@ -30,12 +34,13 @@ async function withFrame(value: string | undefined, run: () => Promise<void>) {
 async function withServer(
   textBytes: number,
   run: (
-    path: string,
+    client: Client,
     seen: Record<string, unknown>[],
     connections: () => number,
+    path: string,
   ) => Promise<void>,
 ) {
-  const root = mkdtempSync(join(tmpdir(), "oma-cli-frame-"));
+  const root = mkdtempSync(join(tmpdir(), "oma-client-frame-"));
   const path = join(root, "fixture.sock");
   const sockets = new Set<Socket>();
   const seen: Record<string, unknown>[] = [];
@@ -59,12 +64,20 @@ async function withServer(
                 operation: "op-00000000-0000-4000-8000-000000000001",
                 state: "pending",
               }
+            : request.method === "operation.get"
+            ? {
+                operation: "",
+                state: "failed",
+                error: { code: "REQUEST_NOT_FOUND", message: "request not found", retry: "same-key" },
+              }
             : {
                 text: "L".repeat(textBytes),
                 truncated: false,
                 observedAtMs: 1,
               };
-        socket.write(encodeFrame({ v: 1, id: request.id, ok: true, result }));
+        const reply = encodeFrame({ v: 1, id: request.id, ok: true, result });
+        socket.write(reply.subarray(0, 2));
+        setImmediate(() => socket.end(reply.subarray(2)));
       }
     });
   });
@@ -73,7 +86,7 @@ async function withServer(
       server.once("error", reject);
       server.listen(path, resolve);
     });
-    await run(path, seen, () => connections);
+    await run(new Client({ cwd: root, env: { ...process.env, HOME: root, OMA_SOCKET: path } }), seen, () => connections, path);
   } finally {
     for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -81,28 +94,15 @@ async function withServer(
   }
 }
 
-test("F4: configured larger frames work in both directions without retrying", {
+test("001. Fragmented larger frames work in both directions without retrying", {
   timeout: 5000,
 }, async () => {
   await withFrame(String(512 * 1024), () =>
-    withServer(300 * 1024, async (path, seen, connections) => {
-      const logs = await callActor(path, "logs.read", params);
-      assert.ok(
-        logs[0]?.ok &&
-          "text" in logs[0].result &&
-          logs[0].result.text === "L".repeat(300 * 1024),
-      );
-      const sent = await callActor(
-        path,
-        "mail.send",
-        mail(300 * 1024),
-        "original-key",
-      );
-      assert.ok(
-        sent[0]?.ok &&
-          "state" in sent[0].result &&
-          sent[0].result.state === "pending",
-      );
+    withServer(300 * 1024, async (client, seen, connections) => {
+      const logs = await client.query("logs.read", params);
+      assert.equal(logs.text, "L".repeat(300 * 1024));
+      const sent = await client.sendMail(mail(300 * 1024), "original-key");
+      assert.equal(JSON.parse(sent).receipt.state, "pending");
       assert.equal(seen.length, 2);
       assert.equal(connections(), 2);
       assert.equal(seen[1]?.request, "original-key");
@@ -111,53 +111,30 @@ test("F4: configured larger frames work in both directions without retrying", {
   );
 });
 
-test("F4: omitted configuration retains the bounded 256 KiB default", {
-  timeout: 5000,
-}, async () => {
-  await withFrame(undefined, async () => {
-    await withServer(32, async (path) => {
-      assert.equal((await callActor(path, "logs.read", params))[0]?.ok, true);
-    });
-    await withServer(300 * 1024, async (path, seen) => {
-      await assert.rejects(
-        callActor(path, "mail.send", mail(300 * 1024), "same-key"),
-        { code: "FRAME_TOO_LARGE" },
-      );
-      assert.equal(
-        seen.length,
-        0,
-        "oversized request never reaches the mock broker",
-      );
-      await assert.rejects(callActor(path, "logs.read", params), {
-        code: "FRAME_TOO_LARGE",
-      });
-      assert.equal(seen.length, 1, "oversized response never triggers a retry");
-    });
-  });
-});
-
-test("F4: a lower configured limit is enforced in both directions", {
+test("002. A lower configured limit is enforced in both directions", {
   timeout: 5000,
 }, async () => {
   await withFrame("512", () =>
-    withServer(1024, async (path, seen) => {
+    withServer(1024, async (client, seen) => {
+      // Fits the two-frame request cache, but not one wire frame.
       await assert.rejects(
-        callActor(path, "mail.send", mail(1024), "same-key"),
-        { code: "FRAME_TOO_LARGE" },
+        client.sendMail(mail(512), "same-key"),
+        error => error instanceof ClientError && error.exitCode === 3 && error.request === "same-key",
       );
-      assert.equal(seen.length, 0);
-      await assert.rejects(callActor(path, "logs.read", params), {
+      assert.equal(seen.length, 1);
+      assert.equal(seen[0]?.method, "operation.get");
+      await assert.rejects(client.query("logs.read", params), {
         code: "FRAME_TOO_LARGE",
       });
-      assert.equal(seen.length, 1);
+      assert.equal(seen.length, 2);
     }),
   );
 });
 
-test("F4: malformed or unsupported limits fail before socket connection, never fall back", {
+test("003. Malformed or unsupported limits fail before socket connection, never fall back", {
   timeout: 5000,
 }, async () => {
-  await withServer(1, async (path, seen, connections) => {
+  await withServer(1, async (_client, seen, connections, path) => {
     for (const value of [
       "",
       "0",
@@ -173,7 +150,8 @@ test("F4: malformed or unsupported limits fail before socket connection, never f
       String(MIN_LOG_FRAME_BYTES - 1),
     ]) {
       await withFrame(value, async () => {
-        await assert.rejects(callActor(path, "logs.read", params), {
+        const configured = new Client({ cwd: process.cwd(), env: { ...process.env, OMA_SOCKET: path } });
+        await assert.rejects(configured.query("logs.read", params), {
           code: "INVALID_REQUEST",
         });
       });

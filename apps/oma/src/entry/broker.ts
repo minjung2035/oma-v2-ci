@@ -43,6 +43,7 @@ import { projectGitPathAt } from "@oma/domain/paths";
 import { residentProjectGit } from "@oma/domain/resident-paths";
 import { SessionStorage } from "../runtime/session-storage.js";
 import type { StorageResident } from "../runtime/session-storage-state.js";
+import { collaborationSocietyBirth, readSessionBirth, requireCollaborationSociety } from "../runtime/session-mode.js";
 function usage(): never {
     console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]");
     process.exit(4);
@@ -69,6 +70,9 @@ catch (error) {
 }
 const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
+    // DR72: standalone startup must refuse before run-root/lock creation,
+    // Store open, workspace restore, execution recovery or provisioning.
+    requireCollaborationSociety(readSessionBirth(stateRoot), society);
     assertNativeRuntime();
     assertHostDirectoryLayout(runRoot, true);
     // P0-8: the run root's parent (`…/oma` under the runtime dir) is oma's own;
@@ -126,6 +130,7 @@ async function main(): Promise<void> {
     let storagePreparation: Promise<void> | null = null;
     let toolPreparation: Promise<MacDeveloperTools | undefined> | null = null;
     let sessionStorage: SessionStorage | null = null;
+    let storageCloseMode: "keep-hot" | "on-close" = "keep-hot";
     let executions: ExecutionRuntime | null = null;
     let residents: NativeResidents | null = null;
     let storageResidents: readonly StorageResident[] | null = null;
@@ -145,7 +150,7 @@ async function main(): Promise<void> {
                 await toolPreparation.catch(() => { });
             await lifetime.shutdown();
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
-                try { await sessionStorage.archive(storageResidents); }
+                try { await sessionStorage.close(storageResidents, storageCloseMode); }
                 catch (error) { console.error("Session workspace reclamation did not finish; recovery data retained:", error instanceof Error ? error.message : String(error)); }
             }
             principalHost?.close();
@@ -184,6 +189,9 @@ async function main(): Promise<void> {
     try {
         const cfg = loadConfig(configPath);
         graceSeconds = cfg.limits.receiptWaitSeconds;
+        storageCloseMode = cfg.storage?.closeMode ?? "keep-hot";
+        if (cfg.schemaVersion === 4 && cfg.storage === undefined)
+            console.error("Session storage now defaults to keep-hot: closing retains workspace disk usage. Use oma archive --society " + society + " or storage.closeMode=on-close in configuration v5 to reclaim it.");
         if (cfg.society !== society)
             throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
         assertHostDirectoryLayout(cfg.installation.libdir);
@@ -194,6 +202,10 @@ async function main(): Promise<void> {
         const nativeOwner = executions;
         lifetime.retainNative(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()));
         await executions.recover();
+        if (cfg.resources !== undefined) {
+            const resources = executions.configureResources(cfg.resources, stateRoot);
+            console.error(JSON.stringify({ event: "workload.resources", observedAtMs: Date.now(), ...resources }));
+        }
         sessionStorage = SessionStorage.forSociety({ stateRoot, society, fence: claim.fence,
             log: line => console.error(line), quiesce: (residents, action) => {
                 // SQLite is closed here. This projection is bound to its exact
@@ -235,7 +247,7 @@ async function main(): Promise<void> {
             developerTools = await toolPreparation;
             if (stopping !== null) { await stopping; return; }
         }
-        const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
+        const integrationPolicy = integrationPolicyFromConfig(cfg);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
         const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
         lifetime.retainStore(() => store.close());
@@ -245,7 +257,7 @@ async function main(): Promise<void> {
             (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation),
             { ...(developerTools === undefined ? {} : { developerTools }) });
         residents = units;
-        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
+        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
@@ -253,22 +265,29 @@ async function main(): Promise<void> {
             checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
-            () => executionOwner.confirmDead("candidate"));
-        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration), (candidate, check, cancellation, authorize) => checks.run(candidate, check, cancellation, authorize), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
+            () => executionOwner.confirmDead("candidate"), cfg.resources);
+        const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize, attempt) => checks.run(candidate, check, cancellation, authorize, attempt), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
             bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
         const hasGoal = (): boolean => git.hasCommittedContext();
+        const activationAllowed = (): boolean => {
+            lifecycle.assertActiveCapacity();
+            return lifetime.permitsActivation;
+        };
         const lifecycle = createLifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
-            hasGoal, activationAllowed: () => lifetime.permitsActivation,
-            residentProjectGit: residentProjectGit() }, resolveSpec, mail);
+            ownerSignal: preparationAbort.signal, hasGoal, activationAllowed,
+            residentProjectGit: residentProjectGit() }, resolveSpec, mail, git);
+        views.bindCollaborationRecords({ mail, git, lifecycle,
+            reviews: auth => reviews.observeRecords(auth, collaborationSocietyBirth(stateRoot, society, store.getAgent("principal"))),
+            logs: actor => units.logFiles(actor) });
         const reconcile = createReconcileModule(store, mail, git, reviews, units, lifecycle, {
-            projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
+            projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed,
             ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
             sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
         });
         // PR-001: only the host that started this process gets a Principal
         // endpoint, and credentials leave only on the channel that host holds --
         // never through a file, an environment or this process's own output.
-        const broker = createBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
+        const broker = createBroker({ ...(cfg.collaborationFreshMutations === undefined ? {} : { collaborationFreshMutations: cfg.collaborationFreshMutations }), store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: reviews, reviewTargets: reviews, reconcile: reconcile, paths: { stateRoot, runRoot, society, hasGoal,
             quiesceOnDrain: async () => {
                 await reconcile.quiesceForShutdown();
                 storageResidents = store.listAgents().filter(agent => agent.role === "resident")
@@ -297,6 +316,7 @@ async function main(): Promise<void> {
                             console.error(`Restored rootfs entry to its expected value: ${path}`);
                     await lifecycle.bootstrap(cfg);
                     validateStoredProfiles();
+                    lifecycle.assertActiveCapacity();
                 });
                 if (store.getAgent("principal")) {
                     for (const directory of ["new", "cur", "tmp"])
@@ -307,6 +327,8 @@ async function main(): Promise<void> {
             notify: () => {
                 broker.notifyReady();
                 console.error("broker ready");
+                if (cfg.collaborationFreshMutations === "closed")
+                    console.error("Selected collaboration-v1 fresh model mutations are closed for this broker lifetime. Original accepted recovery, observations, legacy sessions and supervising-host controls remain available. This is not Worker termination or completed drain evidence.");
             },
             activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
         });

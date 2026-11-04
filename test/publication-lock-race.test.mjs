@@ -14,7 +14,7 @@ import * as contained from "@oma/native/files";
 import * as errors from "@oma/domain/errors";
 import * as leaf from "@oma/native/linux";
 
-test("DR39: a collector between temporary creation and locking cannot remove the live publication", () => {
+test("001. A collector between temporary creation and locking cannot remove the live publication", () => {
   const root = fs.mkdtempSync(path.join(tmpdir(), "oma-publish-lock-"));
   const parent = contained.openDirectory(root);
   let raced = false, production;

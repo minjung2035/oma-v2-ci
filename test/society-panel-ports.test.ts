@@ -20,7 +20,7 @@ function fixture() {
     setOutcome: () => { outcome = { kind: "saved-unread", reason: "saved; cannot observe" }; },
     setFailure: (value: unknown) => { failure = value; } };
 }
-test("DR41: Society panel consumes one complete settings view per projection without a storage implementation", () => {
+test("001. Society panel consumes one complete settings view per projection without a storage implementation", () => {
   const f = fixture();
   f.ports.configFields(); assert.equal(f.reads(), 1);
   const dashboard = f.ports.dashboard(); assert.equal(f.reads(), 2); assert.equal(dashboard.unread, null);
@@ -30,7 +30,7 @@ test("DR41: Society panel consumes one complete settings view per projection wit
   assert.equal(f.reads(), 3);
   assert.equal(f.ports.dashboard().principalModel.configured, "unknown");
 });
-test("DR41: Society settings port preserves saved-unread, unknown bootstrap and thrown publication uncertainty", () => {
+test("002. Society settings port preserves saved-unread, unknown bootstrap and thrown publication uncertainty", () => {
   const f = fixture(); f.setOutcome();
   assert.deepEqual(f.ports.setField("initial-workers", 2), { kind: "saved-unread", reason: "saved; cannot observe" });
   assert.deepEqual(f.saves, [["initial-workers", 2, "unknown"]]);

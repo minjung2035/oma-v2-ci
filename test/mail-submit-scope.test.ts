@@ -53,7 +53,7 @@ async function pendingSend(t: TestContext, f: MailFixture, key = "pending") {
   return operation;
 }
 
-test("V20A: a mail object whose publication fails after its link is removed before any acceptance", async (t) => {
+test("001. A mail object whose publication fails after its link is removed before any acceptance", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -69,7 +69,7 @@ test("V20A: a mail object whose publication fails after its link is removed befo
   } finally { f.close(); }
 });
 
-test("V20A: a refused mail acceptance whose cleanup also fails reports the refusal first and keeps the object", async (t) => {
+test("002. A refused mail acceptance whose cleanup also fails reports the refusal first and keeps the object", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -102,7 +102,7 @@ test("V20A: a refused mail acceptance whose cleanup also fails reports the refus
   } finally { f.close(); }
 });
 
-test("V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients", async (t) => {
+test("003. A same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -125,7 +125,7 @@ test("V20A: a same-key retry after acceptance returns the frozen message; recove
   } finally { f.close(); }
 });
 
-test("V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once", async (t) => {
+test("004. A submit same-key retry after acceptance reads no new bundle, and publication happens once", async (t) => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-submit-scope-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -166,7 +166,7 @@ test("V20A: a submit same-key retry after acceptance reads no new bundle, and pu
       if (notified++ === 0) throw new StoreError("BROKER_UNAVAILABLE", "injected loss after publication");
       return publishGated(...args);
     });
-    await assert.rejects(git.reconcile(accepted.id));
+    await assert.rejects(git.reconcile(accepted.id), { code: "BROKER_UNAVAILABLE", message: "injected loss after publication" });
     assert.equal(publications, 1);
     assert.notEqual(store.getOperationById(accepted.id)?.state, "succeeded");
     // The next recovery re-observes the published ref and settles without publishing again.
@@ -180,7 +180,7 @@ test("V20A: a submit same-key retry after acceptance reads no new bundle, and pu
   } finally { store.close(); removeTree(root); }
 });
 
-test("V20B: recovery rebuilds only the missing derived links from the unchanged authoritative object", async (t) => {
+test("005. Recovery rebuilds only the missing derived links from the unchanged authoritative object", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -199,7 +199,7 @@ test("V20B: recovery rebuilds only the missing derived links from the unchanged 
   } finally { f.close(); }
 });
 
-test("V20B: a derived name holding other bytes is conflicting evidence, never overwritten or success", async (t) => {
+test("006. A derived name holding other bytes is conflicting evidence, never overwritten or success", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -214,7 +214,7 @@ test("V20B: a derived name holding other bytes is conflicting evidence, never ov
   } finally { f.close(); }
 });
 
-test("V20B: an existing archive without every delivery materialized never records success", async (t) => {
+test("007. An existing archive without every delivery materialized never records success", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction((tx) => tx.follow("work", "bob"));
@@ -239,7 +239,7 @@ test("V20B: an existing archive without every delivery materialized never record
   } finally { f.close(); }
 });
 
-test("DR46 Mail: recovery repairs owned mailbox modes before observing deliveries", async (t) => {
+test("008. Mail: recovery repairs owned mailbox modes before observing deliveries", async (t) => {
   const f = mailFixture();
   try {
     f.store.transaction(tx => tx.follow("work", "bob"));

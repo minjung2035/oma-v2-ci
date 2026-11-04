@@ -63,7 +63,7 @@ const PUBLICATION_POINTS: readonly (readonly [DurabilityPoint, DurabilityPhase])
 ];
 
 for (const [point, phase] of PUBLICATION_POINTS) {
-  test(`P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges`, async () => {
+  test(`001. Fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-fault-"));
     let store: Store | null = null;
     try {
@@ -122,7 +122,7 @@ for (const [point, phase] of PUBLICATION_POINTS) {
   });
 }
 
-test("P7 fault ambiguous file-fsync in an accepted staging write: accepted intent stays recoverable", async () => {
+test("002. Fault ambiguous file-fsync in an accepted staging write: accepted intent stays recoverable", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fault-stage-"));
   try {
     const staging = join(root, "staging", "op-fixture");
@@ -147,7 +147,7 @@ test("P7 fault ambiguous file-fsync in an accepted staging write: accepted inten
   } finally { removeTree(root); }
 });
 
-test("P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone", async () => {
+test("003. Fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fault-derived-"));
   try {
     const target = join(root, "world", "agents.tsv");
@@ -183,7 +183,7 @@ test("P7 fault derived rename: derived view replacement is idempotent and leaves
   } finally { removeTree(root); }
 });
 
-test("P7 fault temporary cleanup: an owned temporary is removed once and never confused with evidence", async () => {
+test("004. Fault temporary cleanup: an owned temporary is removed once and never confused with evidence", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-fault-temp-"));
   try {
     const path = join(root, "staging", "partial.tmp");

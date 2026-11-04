@@ -141,7 +141,7 @@ function corrupts(raw: unknown, context: OperationDecodeContext): void {
 }
 
 for (const kind of KINDS) {
-  test(`all states decode without rewriting supported ${kind} bytes`, () => {
+  test(`001. All states decode without rewriting supported ${kind} bytes`, () => {
     const f = fixture(kind);
     const original = JSON.stringify(f.raw);
     const pending = decodeOperation(f.raw, f.context);
@@ -165,7 +165,7 @@ for (const kind of KINDS) {
     assert.equal(JSON.stringify(f.raw), original);
   });
 
-  test(`single-field corruption is rejected for ${kind}`, () => {
+  test(`002. Single-field corruption is rejected for ${kind}`, () => {
     const f = fixture(kind);
     assert.equal(decodeOperation(f.raw, f.context).kind, kind, "positive control must pass before mutations");
     for (const damaged of [
@@ -185,7 +185,7 @@ for (const kind of KINDS) {
   });
 }
 
-test("DR46 result separation: an embedded plan result is rejected, and the terminal result still matches intent", () => {
+test("003. Result separation: an embedded plan result is rejected, and the terminal result still matches intent", () => {
   const f = fixture("git.integrate");
   assert.equal(decodeOperation(f.raw, f.context).kind, "git.integrate");
   corrupts({ ...f.raw, state: "succeeded", result_json: JSON.stringify(f.result),
@@ -193,7 +193,7 @@ test("DR46 result separation: an embedded plan result is rejected, and the termi
   corrupts({ ...f.raw, state: "succeeded", result_json: JSON.stringify({ ...f.result, changed: false }) }, f.context);
 });
 
-test("delivery observations match the exact frozen message and recipient set", () => {
+test("004. Delivery observations match the exact frozen message and recipient set", () => {
   const f = fixture("mail.send");
   assert.equal(decodeOperation(f.raw, f.context).kind, "mail.send");
   const delivery = { operation_id: OP, message_id: MESSAGE, recipient: "alice" };
@@ -207,7 +207,7 @@ test("delivery observations match the exact frozen message and recipient set", (
   corrupts(route.raw, { ...route.context, relations: { ...route.context.relations, deliveries: () => [delivery] } });
 });
 
-test("create aliases require the original identity and reject cycles without recursion overflow", () => {
+test("005. Create aliases require the original identity and reject cycles without recursion overflow", () => {
   const f = fixture("agent.create");
   const aliasPlan = { ...f.plan, initialMessage: null, existingCreation: OP };
   const alias = { ...f.raw, id: OTHER, request_key: "linked-fixture", plan_json: serializePlanIntent(aliasPlan) };

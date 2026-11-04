@@ -16,7 +16,7 @@ import { ALL_CAPS } from "./fixtures/spec.js";
 
 for (const state of ["open", "closed"] as const) {
   for (const point of ["accepted", "settled", "unknown", "superseded"] as const) {
-    test(`DR27/P0-7: society ${state} SIGKILL after ${point} preserves its fence and same-key history`, async t => {
+    test(`001. Society ${state} SIGKILL after ${point} preserves its fence and same-key history`, async t => {
       const root = mkdtempSync(join(tmpdir(), "oma-society-crash-"));
       let opened: Store | undefined;
       t.after(() => { opened?.close(); rmSync(root, { recursive: true, force: true }); });

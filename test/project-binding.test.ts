@@ -32,7 +32,7 @@ function repository(path: string, content = "x\n"): string {
 const cleanup = (root: string) => { spawnSync("chmod", ["-R", "u+rwX", root]); rmSync(root, { recursive: true, force: true }); };
 const code = (value: string) => (error: unknown) => error instanceof StoreError && error.code === value;
 
-test("V16A: different canonical projects get different default societies; aliases of one project get the same", () => {
+test("001. Different canonical projects get different default societies; aliases of one project get the same", () => {
   const root = scratch();
   try {
     const a = join(root, "one", "app"); const b = join(root, "two", "app");
@@ -55,7 +55,7 @@ test("V16A: different canonical projects get different default societies; aliase
   } finally { cleanup(root); }
 });
 
-test("V16A: a binding is compared in full, so a truncated-identity collision cannot take over another project's society", () => {
+test("002. A binding is compared in full, so a truncated-identity collision cannot take over another project's society", () => {
   const root = scratch();
   try {
     const state = join(root, "oma", "same-0000000000000000");
@@ -83,7 +83,7 @@ test("V16A: a binding is compared in full, so a truncated-identity collision can
   } finally { cleanup(root); }
 });
 
-test("V16B: an existing unbound society is bound only on explicit request; a fresh one is bound at once", () => {
+test("003. An existing unbound society is bound only on explicit request; a fresh one is bound at once", () => {
   const root = scratch();
   try {
     const fresh = join(root, "oma", "fresh");
@@ -100,7 +100,7 @@ test("V16B: an existing unbound society is bound only on explicit request; a fre
   } finally { cleanup(root); }
 });
 
-test("V16B: provisioning never reseeds an existing canonical main from another project", () => {
+test("004. Provisioning never reseeds an existing canonical main from another project", () => {
   const root = scratch();
   try {
     const first = repository(join(root, "a"), "a\n");
@@ -115,7 +115,7 @@ test("V16B: provisioning never reseeds an existing canonical main from another p
   } finally { cleanup(root); }
 });
 
-test("V16B: an unreadable project or a broken canonical repository fails provisioning instead of seeding an empty root", () => {
+test("005. An unreadable project or a broken canonical repository fails provisioning instead of seeding an empty root", () => {
   const root = scratch();
   try {
     // A project whose repository cannot be read is not "a directory with no commits".
@@ -156,7 +156,7 @@ test("V16B: an unreadable project or a broken canonical repository fails provisi
   } finally { cleanup(root); }
 });
 
-test("V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal", () => {
+test("006. A leftover staging repository from an interrupted start is neither adopted nor fatal", () => {
   const root = scratch();
   try {
     const state = join(root, "state");

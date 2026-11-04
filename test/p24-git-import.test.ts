@@ -13,7 +13,7 @@ import {
 import { makeValidAgent } from "./fixtures/spec.js";
 
 for (const format of ["sha1", "sha256"] as const) {
-  test(`P07: ${format} import retains only main and immutable publication, not a scratch ref`, async () => {
+  test(`001. Git import: ${format} import retains only main and immutable publication, not a scratch ref`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-import-hygiene-"));
     const store = new Store(join(root, "runtime.sqlite"));
     try {

@@ -5,8 +5,7 @@ import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
 import { freezeMessageFacts, messagePlanFrom, defaultLogicalReplyTo } from "@oma/mail/facts";
 import { buildEml, renderFrozenMessage } from "@oma/mail/serialize";
-import { headerEnd, readableBody } from "@oma/mail/display";
-import { readableMail as extensionReadableMail } from "@oma/extension/mail-tools";
+import { readableBody, decodedMailBody } from "@oma/mail/display";
 import { decodeSubject, parseEmlHeaders } from "@oma/mail/headers";
 import { parseRfcMessageId, headerMessageIdCheck, exactCandidateCheck } from "@oma/domain/mail-values";
 import { parseMessageFileId } from "@oma/domain/identifiers";
@@ -44,7 +43,7 @@ async function pinnedBytes(subject: string, body: string): Promise<Buffer> {
   return raw;
 }
 
-test("frozen logical facts produce byte-identical pinned MIME and one timestamp", async () => {
+test("001. Frozen logical facts produce byte-identical pinned MIME and one timestamp", async () => {
   const to = ["principal"];
   const references = [first, second];
   const tuple = { ...approvalFor };
@@ -74,7 +73,7 @@ test("frozen logical facts produce byte-identical pinned MIME and one timestamp"
   assert.deepEqual(plan.replyHeaders.references, [first, second]);
 });
 
-test("folded approval policy preserves the exact revision and encoded whitespace", async () => {
+test("002. Folded approval policy preserves the exact revision and encoded whitespace", async () => {
   const revision = "rev-52224b22672dc0d77f224ccb93c05042";
   // Independent wire fixture: the first word is on a continuation line.
   const wire = ["X-OMA-Kind: approval_required", "X-OMA-Approval-Repo: project",
@@ -94,7 +93,7 @@ test("folded approval policy preserves the exact revision and encoded whitespace
   }
 });
 
-test("logical and RFC reply selection share policy without sharing grammars", () => {
+test("003. Logical and RFC reply selection share policy without sharing grammars", () => {
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob", "commons", "topic/work"]), ["commons", "topic/work"]);
   assert.deepEqual(defaultLogicalReplyTo("alice", ["bob"]), ["alice"]);
   assert.deepEqual(defaultReplyTo("alice@demo.oma.invalid", ["bob@demo.oma.invalid", "commons@demo.oma.invalid"]), ["commons@demo.oma.invalid"]);
@@ -122,7 +121,7 @@ const headerFixture = [
   "Content-Transfer-Encoding: 8bit",
 ].join("\r\n");
 
-test("independent folded header fixture retains order duplicates and second precision", () => {
+test("004. Independent folded header fixture retains order duplicates and second precision", () => {
   const bytes = Buffer.concat([Buffer.from(`${headerFixture}\r\n\r\n`), Buffer.from([255, 0, 254])]);
   const result = parseEmlHeaders(bytes);
   assert.deepEqual(result.references, [second, first, second, `${id}@demo.oma.invalid`]);
@@ -132,7 +131,7 @@ test("independent folded header fixture retains order duplicates and second prec
   assert.deepEqual(parseEmlHeaders(headerFixture.replace(/\r\n/g, "\n")), result);
 });
 
-test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds", () => {
+test("005. Parser rejects ambiguous fields unsupported MIME invalid tuples and bounds", () => {
   for (const damage of [
     `${headerFixture}\r\nMESSAGE-ID: <${first}>`,
     // #28: the bare pre-release form is not a header identity anywhere it appears.
@@ -155,14 +154,13 @@ test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds
 });
 
 
-test("MAIL-003/DR27: fresh MIME preserves exact body and subject bytes in both readers", async () => {
+test("006. Fresh MIME preserves exact body and subject bytes in the canonical display and record readers", async () => {
   for (const body of ["", "plain", "plain\n", "a\nb\n", "\ufeffgoal", "Goal\r\nSecond\n", "한글\n", "a".repeat(4096)]) {
     for (const subject of ["Goal", "  Goal  ", "a  b", "a\tb", "=?UTF-8?B?Z29hbA==?=", "한글 ".repeat(5), "a".repeat(998)]) {
       const emitted = await buildEml({ from: "alice@demo.oma.invalid", to: ["bob@demo.oma.invalid"], replyTo: [],
         subject, body, kind: "message", contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, dateMs });
       assert.equal(readableBody(emitted.text), body);
-      const shown = extensionReadableMail(emitted.text); const end = headerEnd(shown);
-      assert.equal(shown.slice(end.at + end.length), body);
+      assert.equal(decodedMailBody(emitted.text), body);
       assert.equal(decodeSubject(parseEmlHeaders(emitted.text).subject), subject);
       assert.equal(emitted.bytes, Buffer.byteLength(emitted.text));
     }

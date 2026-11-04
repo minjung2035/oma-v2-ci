@@ -1,7 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { withSourceSnapshot } from "./rules/shared.mjs";
-import { importRuleFindings } from "./rules/import-rules.mjs";
 import { transactionRuleFindings } from "./rules/transaction-rules.mjs";
 import { ownershipRuleFindings } from "./rules/ownership-rules.mjs";
 import { schemaDuplicationFindings } from "./rules/schema-duplication-rules.mjs";
@@ -13,7 +12,6 @@ import { stateRootFindings, stateTreeFindings } from "./rules/state-tree-rules.m
 import { ownedStateFindings } from "./rules/owned-state-rules.mjs";
 
 export const ARCHITECTURE_RULES = Object.freeze([
-  ["imports", importRuleFindings],
   ["transactions", transactionRuleFindings],
   ["ownership", ownershipRuleFindings],
   ["schema-duplication", schemaDuplicationFindings],

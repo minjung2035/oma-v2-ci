@@ -7,10 +7,15 @@ import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObserv
 import { StoreError } from "@oma/domain/errors";
 import { fencedStdio, SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV } from "./fence.js";
 export { SOCIETY_FENCE_FD, SOCIETY_FENCE_ENV };
+/** Owned-child clients use the same cleanup policy without importing native
+ * primitives. This does not request termination or establish child death. */
+export { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 
 const PROCESS_GROUP_PLATFORMS = new Set<NodeJS.Platform>(["linux", "darwin"]);
 
 export interface AsyncProcessOptions {
+  /** Trusted cgroup.procs descriptor; the child moves itself before exec. */
+  readonly placementFd?: number;
   /** Synchronous streaming consumer. Bytes are borrowed only for this call;
    * consumer failure terminates the owned child and remains unobserved. */
   readonly stdoutSink?: (bytes: Uint8Array) => void;
@@ -56,10 +61,17 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
     signal: null, errorCode: processErrorCode(error), elapsedMs: performance.now() - started,
     stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), stdoutTruncated: false, stderrTruncated: false });
   if (signal?.aborted) { resolveResult(empty("aborted")); resolveClosed(); return { result, closed, cancel() {} }; }
+  const placement = options.placementFd;
+  if (placement !== undefined && (!Number.isSafeInteger(placement) || placement < 0)) throw new TypeError("invalid workload placement descriptor");
+  const placementChildFd = 3 + inheritedFds.length;
+  // Fixed shell builtins move this direct child before any workload can fork.
+  // User argv remains positional data. The cgroup capability is closed on exec.
+  const executable = placement === undefined ? spec.executable : "/bin/bash";
+  const argv = placement === undefined ? [...spec.argv] : ["--noprofile", "--norc", "-c", `builtin printf 0 >&${placementChildFd} || builtin exit 125; builtin exec ${placementChildFd}>&-; builtin exec /usr/bin/env -i "$@"`, "oma-workload", ...Object.entries(spec.env).filter((entry): entry is [string, string] => entry[1] !== undefined).map(([key, value]) => `${key}=${value}`), spec.executable, ...spec.argv];
   let child: ReturnType<typeof spawn>;
   try {
-    child = spawn(spec.executable, [...spec.argv], { cwd: spec.cwd, env: { ...spec.env }, shell: false,
-      detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", options.stderrFd ?? "pipe", ...inheritedFds] });
+    child = spawn(executable, argv, { cwd: spec.cwd, env: placement === undefined ? { ...spec.env } : {}, shell: false,
+      detached: ownGroup, stdio: [spec.stdinFd ?? "pipe", "pipe", options.stderrFd ?? "pipe", ...inheritedFds, ...(placement === undefined ? [] : [placement])] });
   } catch (error) { resolveResult(empty("spawn-failed", error)); resolveClosed(); return { result, closed, cancel() {} }; }
   const out: Buffer[] = [], err: Buffer[] = [];
   let outBytes = 0, errBytes = 0, outLimited = false, errLimited = false;
@@ -84,7 +96,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const spill = (output: boolean, head: readonly Buffer[]): Spool | null => {
     const path = output ? spec.stdoutSpool! : spec.stderrSpool!;
     try {
-      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
       try { for (const chunk of head) writeAll(fd, chunk); }
       catch (error) { try { closeSync(fd); } catch { /* the open file is the failure's to keep */ } throw error; }
       return { fd, path };

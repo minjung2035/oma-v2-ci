@@ -1,6 +1,6 @@
 /** Review's live ledger projection and captured synchronous acceptance scope. */
 import type { Actor, MessageId, MessagePlan, OperationId, RequestKey } from "@oma/contracts";
-import type { AgentRow, NewOperation } from "@oma/contracts/ledger";
+import type { AgentRow, DeliveryRow, NewOperation } from "@oma/contracts/ledger";
 import type { SynchronousResult } from "@oma/contracts/durable";
 import type { DecodedOperation } from "@oma/protocol/operation-codec";
 import type { MailRoutingReader } from "@oma/mail/ports";
@@ -14,7 +14,9 @@ export interface ReviewTransaction {
   setOperationSucceeded(id: OperationId, resultJson: string): void;
 }
 export interface ReviewLedger extends ReviewAuthorityLedger, MailRoutingReader {
+  listAgents(): ReturnType<ReviewAuthorityLedger["listAgents"]>;
   getAgent(actor: Actor): AgentRow | null;
+  getDelivery(id: MessageId, actor: Actor): Pick<DeliveryRow, "materialized"> | null;
   societyOpen(): boolean;
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent";
   retriedOperation(actor: Actor, key: RequestKey): DecodedOperation;

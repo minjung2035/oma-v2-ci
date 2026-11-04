@@ -6,14 +6,31 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync
 import { dirname, join } from "node:path";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot } from "@oma/config";
 import { collectManagedGenerations, generationIdOf, managedGenerationOf, MANAGED_DIRECTORY, MANAGED_LIMITS, } from "@oma/config/generations";
-import { commitManagedEdit, commitField, readSettings, PRINCIPAL_MODEL } from "#oma-test/app/application/settings";
+import { commitManagedEdit, commitField, readSettings, PRINCIPAL_MODEL, commitRoleSet, roleSetOf } from "#oma-test/app/application/settings";
 import { replaceDerivedFile, DurabilityFaultError, type DurabilityFault } from "@oma/storage/durable-fs";
 import { StoreError } from "@oma/domain/errors";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 const principalModel = (snapshot: ConfigurationSnapshot): string => snapshot.config.agentProfiles[snapshot.config.principalProfile]!.modelProfile;
 const withPrincipalModel = (snapshot: ConfigurationSnapshot, model: string) => validateConfig({ ...snapshot.config,
     agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...snapshot.config.agentProfiles.principal!, modelProfile: model } } });
-test("D02 generation identity: golden vectors pin the byte framing", () => {
+for (const inline of [false,true]) test(`016. First-conversion orphan generations are collected under an ${inline?"inline":"manual"} manifest`,()=>{
+ const f=createCompleteConfigurationFixture();try{
+  const path=inline?f.input:f.path, before=readFileSync(path), snapshot=loadConfigurationSnapshot(path);
+  const commit=(faults?: Parameters<typeof commitManagedEdit>[3])=>inline
+    ? commitRoleSet(loadConfigurationSnapshot(path),withPrincipalModel(snapshot,"review"),roleSetOf(snapshot),faults)
+    : commitManagedEdit(loadConfigurationSnapshot(path),withPrincipalModel(snapshot,"review"),{},faults);
+  assert.throws(()=>commit(fault=>{
+   if(fault.point==="derived-rename" && fault.phase==="before" && fault.path===path) throw new DurabilityFaultError(fault);
+  }));
+  assert.deepEqual(readFileSync(path),before);
+  const generations=join(dirname(path),MANAGED_DIRECTORY,"generations");
+  assert.ok(readdirSync(generations).some(x=>/^g-/.test(x)));
+  assert.ok(collectManagedGenerations(loadConfigurationSnapshot(path)).some(x=>/^g-/.test(x)));
+  assert.deepEqual(readdirSync(generations),[]);
+  assert.equal(commit().kind,"committed");
+ }finally{f.close();}
+});
+test("001. Generation identity: golden vectors pin the byte framing", () => {
     // The oracle is the system's sha256sum over the same framed bytes; the local
     // lane forbids a shell, so it is invoked with direct argv on stdin.
     const digestOf = (bytes: string): string => spawnSync("sha256sum", [], { input: bytes, encoding: "utf8" }).stdout.split(" ")[0]!;
@@ -27,7 +44,7 @@ test("D02 generation identity: golden vectors pin the byte framing", () => {
     assert.equal(generationIdOf(ab), `g-${digestOf("oma-config-generation-v1\na\n1\n1\nb\n1\n2\n")}`);
     assert.notEqual(generationIdOf(new Map([["a", Buffer.from("12")]])), generationIdOf(new Map([["a", Buffer.from("1")], ["2", Buffer.alloc(0)]])));
 });
-test("V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration", () => {
+test("002. A crash at any point of a managed commit leaves the complete old or the complete new configuration", () => {
     // Enumerate every durability point one commit passes, then crash at each.
     const probe = createCompleteConfigurationFixture();
     const points: DurabilityFault[] = [];
@@ -74,7 +91,7 @@ test("V13A: a crash at any point of a managed commit leaves the complete old or 
         }
     }
 });
-test("D02/P0-8: the managed tail's repair boundary is the first name oma made -- the bundle's own parent is never repaired", () => {
+test("003. The managed tail's repair boundary is the first name oma made -- the bundle's own parent is never repaired", () => {
     const f = createCompleteConfigurationFixture();
     try {
         // `f.root` is whichever directory the Human's `--config` happened to place
@@ -93,7 +110,7 @@ test("D02/P0-8: the managed tail's repair boundary is the first name oma made --
         f.close();
     }
 });
-test("D02/P0-8: a stray at the managed tail's boundary slot is refused, never unlinked from a user's directory", () => {
+test("004. A stray at the managed tail's boundary slot is refused, never unlinked from a user's directory", () => {
     const f = createCompleteConfigurationFixture();
     try {
         // `.oma-config` names the boundary itself: its parent is the user's bundle
@@ -112,7 +129,7 @@ test("D02/P0-8: a stray at the managed tail's boundary slot is refused, never un
         f.close();
     }
 });
-test("D02/P0-8: a bundle inside oma's own tree repairs the degraded owned ancestors the caller names", () => {
+test("005. A bundle inside oma's own tree repairs the degraded owned ancestors the caller names", () => {
     const f = createCompleteConfigurationFixture();
     try {
         // `.projects/<project>` beneath the data root stands for a project's
@@ -139,7 +156,7 @@ test("D02/P0-8: a bundle inside oma's own tree repairs the degraded owned ancest
         f.close();
     }
 });
-test("V13A negative control: the old role-then-host in-place writer is caught by the mixed-state oracle", () => {
+test("006. Negative control: the old role-then-host in-place writer is caught by the mixed-state oracle", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const before = loadConfigurationSnapshot(f.path);
@@ -154,7 +171,7 @@ test("V13A negative control: the old role-then-host in-place writer is caught by
         f.close();
     }
 });
-test("V13B: a manual bundle migrates without touching its files, and a stale or externally changed snapshot is refused", () => {
+test("007. A manual bundle migrates without touching its files, and a stale or externally changed snapshot is refused", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const manual = readdirSync(join(f.output, "roles")).map(name => [name, readFileSync(join(f.output, "roles", name))] as const);
@@ -192,7 +209,7 @@ test("V13B: a manual bundle migrates without touching its files, and a stale or 
         f.close();
     }
 });
-test("V13B: a shared manual role expands into per-profile copies with the same effective meaning", () => {
+test("008. A shared manual role expands into per-profile copies with the same effective meaning", () => {
     const f = createCompleteConfigurationFixture();
     try {
         // principal and resident hold identical profiles; point both at one file.
@@ -214,7 +231,7 @@ test("V13B: a shared manual role expands into per-profile copies with the same e
         f.close();
     }
 });
-test("V13B: a same-semantic save publishes nothing", () => {
+test("009. A same-semantic save publishes nothing", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const snapshot = loadConfigurationSnapshot(f.path);
@@ -227,7 +244,7 @@ test("V13B: a same-semantic save publishes nothing", () => {
         f.close();
     }
 });
-test("V13B: an explicit export writes a flat manual bundle to a new directory with the same meaning", () => {
+test("010. An explicit export writes a flat manual bundle to a new directory with the same meaning", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const snapshot = loadConfigurationSnapshot(f.path);
@@ -248,7 +265,7 @@ test("V13B: an explicit export writes a flat manual bundle to a new directory wi
         f.close();
     }
 });
-test("V13C: the edit budget refuses at exhaustion, and quiescent collection keeps the current and previous generations only", () => {
+test("011. The edit budget refuses at exhaustion, and quiescent collection keeps the current and previous generations only", () => {
     const f = createCompleteConfigurationFixture();
     try {
         const limits = { generations: 4, bytes: MANAGED_LIMITS.bytes };
@@ -292,7 +309,7 @@ test("V13C: the edit budget refuses at exhaustion, and quiescent collection keep
         f.close();
     }
 });
-test("V13B / CFG-005: a role-only change (extension selection) is a new policy revision", () => {
+test("012. A role-only change (extension selection) is a new policy revision", () => {
     const f = createCompleteConfigurationFixture();
     try {
         spawnSync("mkdir", ["-p", join(f.installation, "extensions")]);
@@ -307,6 +324,83 @@ test("V13B / CFG-005: a role-only change (extension selection) is a new policy r
         // And back: another new revision, not the manual one.
         assert.equal(commitManagedEdit(after, after.config, { resident: { extensions: core } }).kind, "committed");
         assert.notEqual(loadConfigurationSnapshot(f.path).config.integration.policyRevision, after.config.integration.policyRevision);
+    }
+    finally {
+        f.close();
+    }
+});
+test("013. A generation mutated between its publication and the manifest commit is refused at the commit point", () => {
+    const f = createCompleteConfigurationFixture();
+    try {
+        const generations = join(f.output, MANAGED_DIRECTORY, "generations");
+        const snapshot = loadConfigurationSnapshot(f.path);
+        const manifest = readFileSync(f.path);
+        const before = existsSync(generations) ? new Set(readdirSync(generations)) : new Set<string>();
+        let mutatedId: string | null = null;
+        // The writer this module already assumes it cannot serialize against
+        // (P0-8: same UID, ignores the configuration lock). A same-meaning
+        // addition cannot be seen by the loader-based reproduction proof: the
+        // manifest must not name a generation whose tree is not its identity.
+        assert.throws(() => commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review"), {}, fault => {
+            if (mutatedId !== null || fault.point !== "derived-rename" || fault.phase !== "before" || !fault.path.endsWith("/operations/config.json"))
+                return;
+            const id = readdirSync(generations).find(entry => /^g-[0-9a-f]{64}$/.test(entry) && !before.has(entry));
+            assert.ok(id !== undefined, "the commit published its generation before it named it");
+            chmodSync(join(generations, id), 0o700);
+            writeFileSync(join(generations, id, "extraneous.json"), "{}\n");
+            mutatedId = id;
+        }), (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" &&
+            error.message.includes("holds other bytes than the commit published"));
+        assert.notEqual(mutatedId, null, "the controlled mutation did not run at the manifest's commit point");
+        assert.deepEqual(readFileSync(f.path), manifest, "a refused commit never replaces the manifest");
+        assert.equal(principalModel(loadConfigurationSnapshot(f.path)), "standard", "the complete old configuration stands");
+        // The stray's tree keeps the name the refused commit gave it: the next
+        // commit that produces the same bytes is refused by the reuse path
+        // (`sameBytes`, "holds other bytes"), and the manifest still stands.
+        const reopened = loadConfigurationSnapshot(f.path);
+        assert.throws(() => commitManagedEdit(reopened, withPrincipalModel(reopened, "review")),
+            (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" && error.message.includes("holds other bytes"));
+        assert.deepEqual(readFileSync(f.path), manifest, "a refused reuse never replaces the manifest");
+        // A different target publishes over its own generation: the refused
+        // name is a record/leftover a collection removes, not a wedge for edits.
+        assert.equal(commitManagedEdit(reopened, validateConfig({ ...reopened.config,
+            limits: { ...reopened.config.limits, logBytes: reopened.config.limits.logBytes + 5 } })).kind, "committed");
+        const settled = loadConfigurationSnapshot(f.path);
+        assert.equal(settled.config.limits.logBytes, reopened.config.limits.logBytes + 5);
+        // The refused publication is a record whose commit never followed, the
+        // state a crash between the record and the manifest already leaves: a
+        // quiescent collection does not keep its tree as the current one.
+        assert.ok(collectManagedGenerations(settled).includes(mutatedId!), "the refused generation's tree is collected");
+        assert.equal(existsSync(join(generations, mutatedId!)), false);
+    }
+    finally {
+        f.close();
+    }
+});
+test("014. A generation rewritten in a meaning-preserving form is refused at the commit point", () => {
+    const f = createCompleteConfigurationFixture();
+    try {
+        const generations = join(f.output, MANAGED_DIRECTORY, "generations");
+        const snapshot = loadConfigurationSnapshot(f.path);
+        const before = existsSync(generations) ? new Set(readdirSync(generations)) : new Set<string>();
+        let rewritten: string | null = null;
+        // The loader-based reproduction proof sees the same values; only the
+        // bytes differ. The manifest's generation is bound to the bytes this
+        // commit published, not to any tree that loads to the same meaning.
+        assert.throws(() => commitManagedEdit(snapshot, withPrincipalModel(snapshot, "review"), {}, fault => {
+            if (rewritten !== null || fault.point !== "derived-rename" || fault.phase !== "before" || !fault.path.endsWith("/operations/config.json"))
+                return;
+            const id = readdirSync(generations).find(entry => /^g-[0-9a-f]{64}$/.test(entry) && !before.has(entry));
+            assert.ok(id !== undefined, "the commit published its generation before it named it");
+            const role = join(generations, id, "roles", "resident.json");
+            chmodSync(join(generations, id, "roles"), 0o700);
+            chmodSync(role, 0o600);
+            writeFileSync(role, JSON.stringify(JSON.parse(readFileSync(role, "utf8"))));
+            rewritten = id;
+        }), (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" &&
+            error.message.includes("holds other bytes than the commit published"));
+        assert.notEqual(rewritten, null, "the controlled rewrite did not run at the manifest's commit point");
+        assert.equal(principalModel(loadConfigurationSnapshot(f.path)), "standard", "the complete old configuration stands");
     }
     finally {
         f.close();

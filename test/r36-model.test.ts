@@ -112,7 +112,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
 const defaultSeed = integerParameter("OMA_TEST_SEED", 0x36c0ffee, 0xffffffff);
 const count = integerParameter("OMA_TEST_ACTIONS", 64, 10000);
 for (const seed of [defaultSeed, 0, 1, 0xffffffff]) {
-  test(`R36 model seed=${seed} actions=${count} prng=${PRNG_REVISION}`, { timeout: 300000 }, async t => {
+  test(`001. Model seed=${seed} actions=${count} prng=${PRNG_REVISION}`, { timeout: 300000 }, async t => {
     const sequence = generateActions(seed, count), metadata = replayMetadata(seed, { actions: count });
     assert.deepEqual(sequence, generateActions(seed, count), "recorded seed must regenerate identical actions");
     try { await replay(sequence); }
@@ -127,9 +127,9 @@ for (const seed of [defaultSeed, 0, 1, 0xffffffff]) {
     }
   });
 }
-for (const [index, sequence] of MODEL_CORPUS.entries()) test(`R36 model authored corpus ${index}`, () => replay(sequence));
+for (const [index, sequence] of MODEL_CORPUS.entries()) test(`002. Model authored corpus ${index}`, () => replay(sequence));
 
-test("R36 minimizer and corpus rediscover injected unknown-recovery loss without a provider", async () => {
+test("003. Minimizer and corpus rediscover injected unknown-recovery loss without a provider", async () => {
   const sequence = MODEL_CORPUS[2]!;
   const buggy = async (actions: readonly Action[]) => {
     const model = initialModel();

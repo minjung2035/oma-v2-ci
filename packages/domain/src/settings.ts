@@ -44,4 +44,5 @@ export type ConfigField = ChoiceField | NumberField | LinkField;
  */
 export type PromptOutcome =
   | { readonly kind: "accepted" }
+  | { readonly kind: "handled" } // consumed by the Human host, never submitted to the model
   | { readonly kind: "refused"; readonly reason: string };

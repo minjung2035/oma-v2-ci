@@ -174,7 +174,7 @@ const assertStateShape = (after: ReviewState, o: ReviewEntry, ledger: readonly R
   // Display and the missing/shortfall strings agree with the computed sets.
   const expectedDisplay = after.terminal !== null ? after.terminal
     : after.rejectors.length > 0 ? "blocked"
-    : after.ready ? "applying"
+    : after.ready ? "ready"
     : after.tier === "HIGH" && after.approvalValid ? "principal-pending" : "peer-needed";
   assert.equal(after.display, expectedDisplay, `${lbl}: display`);
   if (after.terminal === "cancelled") assert.ok(after.missing.includes("cancelled"), `${lbl}: missing cancelled`);
@@ -224,8 +224,8 @@ const simulate = (seed: number, index: number): string => {
   const withdrawnIds: MessageId[] = [];
   let nextSeq = 2, nextOp = 100, nextMid = 1;
   const st = (entries: readonly ReviewEntry[]) =>
-    reviewState({ open: o, entries: [...entries], eligible: new Set(eligible),
-      highPeerFloor: floor, integration: null });
+    reviewState({maxWorkers: 64, open: o, entries: [...entries], eligible: new Set(eligible),
+      highPeerFloor: floor, integration: null});
   const steps = 4 + int(r, MAX_STEPS - 3);
   for (let j = 0; j < steps; j++) {
     const at = lbl(j);
@@ -355,18 +355,18 @@ const simulate = (seed: number, index: number): string => {
       `|${after.display}`);
   }
   // Epilogue: an integration projection drives the display deterministically.
-  for (const [state, display] of [["pending", "applying"], ["succeeded", "applied"],
+  for (const [state, display] of [["pending", "waiting-resources"], ["succeeded", "applied"],
       ["failed", "blocked"], ["unknown", "unknown"]] as const) {
-    const projected = reviewState({ open: o, entries: [...ledger], eligible: new Set(eligible),
-      highPeerFloor: floor, integration: { operation: OP(900), state, errorCode: null } });
+    const projected = reviewState({maxWorkers: 64, open: o, entries: [...ledger], eligible: new Set(eligible),
+      highPeerFloor: floor, integration: { operation: OP(900), state, errorCode: null }});
     assert.equal(projected.display, display, `${lbl(-1)}: integration ${state} display`);
   }
   coverage.sequences++;
   return log.join("\n");
 };
 
-test(`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} ` +
-     `(${SEQUENCES_PER_SEED} ledgers each), determinism by double evaluation`, () => {
+test(`001. Review evaluation fuzz: ${`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} ` +
+     `(${SEQUENCES_PER_SEED} ledgers each), determinism by double evaluation`}`, () => {
   for (const seed of SEEDS)
     for (let i = 0; i < SEQUENCES_PER_SEED; i++) {
       const first = simulate(seed, i);
@@ -375,7 +375,7 @@ test(`seeded evaluator invariant sweep — mulberry32 seeds ${SEEDS.join(", ")} 
     }
 });
 
-test("evaluator fuzz coverage report", () => {
+test("002. Evaluator fuzz coverage report", () => {
   // Existence proof that the sweep exercised the interesting regions; a seed
   // change that collapses coverage (e.g. no approvals ever emitted) must fail.
   assert.ok(coverage.sequences >= SEEDS.length * SEQUENCES_PER_SEED, "all sequences ran");

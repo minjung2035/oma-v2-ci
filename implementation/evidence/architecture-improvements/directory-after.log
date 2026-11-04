@@ -1,0 +1,12 @@
+✔ IMP-F01: uncertain mkdir present requires positive held-directory evidence (72.824173ms)
+✔ IMP-F01: uncertain mkdir missing requires positive held-directory evidence (22.184199ms)
+✔ IMP-F01: uncertain mkdir link requires positive held-directory evidence (18.031175ms)
+✔ IMP-F01: uncertain mkdir denied requires positive held-directory evidence (15.177598ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 345.926577

@@ -27,6 +27,10 @@ export interface BoundaryEvidence {
   adapterRevision: string; receiptPath: string;
   // MUST [S-03]: Version-specific proof format is gated; a caller boolean is not proof.
 }
+/** Private completion identifies the receipt. Its original absolute paths
+ * remain in that verified receipt; older full-path requests are also checked. */
+export type BatchCompletionInput = Pick<BoundaryEvidence, "batchId" | "incarnation" | "adapterRevision"> &
+  Partial<Pick<BoundaryEvidence, "sessionPath" | "receiptPath">>;
 
 export interface RunLease { actor: Actor; incarnation: number; socketHostPath: string }
 
@@ -81,6 +85,7 @@ export interface SandboxDirectories {
 
 
 export interface SandboxHost {
+  tmpfsMaxBytes?: number;
   /** Host path of the OMA installation, read-only to the Worker. It carries
    * the vendored engine, the trusted core extension and the model-facing CLI,
    * independently of the platform confinement mechanism. */
@@ -88,6 +93,9 @@ export interface SandboxHost {
   /** DR25: host path of the package store `oma pi install` installs into,
    * mounted read-only inside when any role may load a package's extension. */
   packages?: string | undefined;
+  /** Explicit role-scoped observation root; never the whole state directory.
+   * The adapter validates its actor binding and grants read-only access only. */
+  recordRoot?: string;
   /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
   /** TUI-003: installation-relative entries hidden from model code. The

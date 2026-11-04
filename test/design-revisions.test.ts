@@ -23,7 +23,7 @@ function created(cfg: HostConfig): readonly string[] {
  * in a society already bootstrapped no setting could change that, because
  * CREATE-002 tied the host's delegation of code.integrate to the Principal
  * holding it. */
-test("DR4 / A-002, CREATE-002: code.integrate is given by the host's profile, not by the parent", () => {
+test("001. Code.integrate is given by the host's profile, not by the parent", () => {
   assert.deepEqual([...HOST_GRANTED], ["code.integrate"]);
   const cfg = defaults();
   const principal = cfg.agentProfiles[cfg.principalProfile]!;
@@ -49,7 +49,7 @@ test("DR4 / A-002, CREATE-002: code.integrate is given by the host's profile, no
   assert.deepEqual(created(narrowed), ["code.integrate"]);
 });
 
-test("DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and off, for workers created afterwards", () => {
+test("002. The Human turns worker integrate on and off, for workers created afterwards", () => {
   const f = createCompleteConfigurationFixture();
   try {
     const before = readSettings(f.path);
@@ -72,7 +72,7 @@ test("DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and 
 /** DR3 -- ERR-001, the error table, CTX-003: a failure's message was always
  * its code, so "BROKER_UNAVAILABLE: BROKER_UNAVAILABLE" was all a caller
  * learnt, and facts the spec returns were erased with the internals. */
-test("DR3 / ERR-001: a failure carries only the facts its code may, and every code has its words", async () => {
+test("003. A failure carries only the facts its code may, and every code has its words", async () => {
   const { ERROR_DESCRIPTIONS, ERROR_METADATA, StoreError, failureText, publicDetails, publicFailure } = await import("@oma/domain/errors");
   assert.deepEqual(Object.keys(ERROR_DESCRIPTIONS).sort(), Object.keys(ERROR_METADATA).sort());
   const oid = "1".repeat(40);
@@ -93,7 +93,7 @@ test("DR3 / ERR-001: a failure carries only the facts its code may, and every co
   assert.equal(failureText({ code: "INVALID_REQUEST", message: "invalid params for mail.send" }), "INVALID_REQUEST: invalid params for mail.send");
 });
 
-test("DR3 / AUTH-001: a capability revoked before acceptance names the capability", async () => {
+test("004. A capability revoked before acceptance names the capability", async () => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
@@ -115,7 +115,7 @@ test("DR3 / AUTH-001: a capability revoked before acceptance names the capabilit
 /** DR7 -- D03, LIFE-006 (AV31): the broker was in the terminal's session, so a
  * hang-up there killed it mid-drain. A supervised service leads its own
  * session; its lifetime is its channel and an explicit stop. */
-test("DR7 / D03: a supervised service leads its own session, apart from its starter's terminal", async () => {
+test("005. A supervised service leads its own session, apart from its starter's terminal", async () => {
   const { spawnSupervisedService } = await import("@oma/process/async");
   const { readFileSync } = await import("node:fs");
   const sessionOf = (stat: string): number => Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[3]);
@@ -130,7 +130,7 @@ test("DR7 / D03: a supervised service leads its own session, apart from its star
   assert.equal(sessionOf(stat), child.pid, "the service does not lead its session");
 });
 
-test("DR3: a failure after acceptance keeps the facts its code may carry", async () => {
+test("006. A failure after acceptance keeps the facts its code may carry", async () => {
   // The thirteenth run: a create refused while another completed said
   // BROKER_UNAVAILABLE without its reason, because the accepted wrapper dropped it.
   const { StoreError, acceptedFailure, publicFailure } = await import("@oma/domain/errors");

@@ -47,6 +47,10 @@
     "./peer-identity": {
       "types": "./dist/peer-identity.d.ts",
       "default": "./dist/peer-identity.js"
+    },
+    "./workload-budget": {
+      "types": "./dist/workload-budget.d.ts",
+      "default": "./dist/workload-budget.js"
     }
   },
   "scripts": {

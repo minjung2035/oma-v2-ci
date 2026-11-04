@@ -1,13 +1,53 @@
 /** Layout locates a birth record; only that record owns session identity.
  * No index, implicit import, or corruption-to-default fallback. */
 import { listOwnedDirectory } from "@oma/storage/directory";
+import { Buffer } from "node:buffer";
 import { basename, join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { isValidSocietyName, UUID_V4_RE } from "@oma/domain/identifiers";
 import { modelWorkspacePathAt } from "@oma/domain/paths";
+import type { PiEvent } from "@oma/engine/pi-rpc";
 import { observeProjectBinding } from "./project-binding.js";
 import { PERSONAL_SESSIONS, readSessionBirth, sessionRootForHistory, type SessionBirth } from "./session-mode.js";
 import { assertSessionHistory } from "./session-history.js";
+
+/** AUD-12: the answer to one `/resume` observation travels as one or more
+ * frames bounded by the interactive channel's frame limit. A personal session
+ * catalog outgrows a single frame, and delivering it as one either killed the
+ * channel at its frame check or would have hidden the sessions past the
+ * bound; `more: true` tells the engine's observer (ProjectSessionDirectories)
+ * that the same `id` continues, so the whole list still arrives. A directory
+ * that cannot fit even alone is reported instead of dropped, and a small
+ * catalog stays the one frame it always was. */
+export function sessionDirectoryReplies(id: string, dirs: readonly string[], current: string, frameBytes: number): PiEvent[] {
+  const frame = (chunk: readonly string[], more: boolean): PiEvent =>
+    ({ type: "session_dirs", id, dirs: [...chunk], current, ...(more ? { more: true } : {}) });
+  const finalOverhead = Buffer.byteLength(JSON.stringify(frame([], false)));
+  if (finalOverhead > frameBytes)
+    return [{ type: "session_dirs", id, dirs: [], error: `The session catalog header is larger than one control frame (${frameBytes} bytes)` }];
+  // Count each directory once. A final suffix has no continuation field, so
+  // it can fit even when its first entry would not fit a continuation frame.
+  const overhead = Buffer.byteLength(JSON.stringify(frame([], true)));
+  const sizes = dirs.map(dir => Buffer.byteLength(JSON.stringify(dir)));
+  let remaining = sizes.reduce((sum, size) => sum + size, 0) + Math.max(0, sizes.length - 1);
+  const replies: PiEvent[] = [];
+  let start = 0;
+  while (finalOverhead + remaining > frameBytes) {
+    let end = start, bytes = overhead;
+    while (end < dirs.length) {
+      const cost = sizes[end]! + (end === start ? 0 : 1);
+      if (bytes + cost > frameBytes) break;
+      bytes += cost; end++;
+    }
+    if (end === start)
+      return [{ type: "session_dirs", id, dirs: [], error: `A session directory is larger than one control frame (${frameBytes} bytes)` }];
+    replies.push(frame(dirs.slice(start, end), true));
+    remaining -= bytes - overhead + 1; // This chunk and the next separating comma.
+    start = end;
+  }
+  replies.push(frame(dirs.slice(start), false));
+  return replies;
+}
 
 export async function sessionBirthForHistory(dataRoot: string, file: string, cwd: string): Promise<SessionBirth> {
   const root = sessionRootForHistory(dataRoot, file);

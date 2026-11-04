@@ -8,7 +8,7 @@ import { InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { PI_INTERACTIVE_PRIVATE_MEMBERS, PI_INTERACTIVE_PRIVATE_FIELDS } from "../dist/pi-compat/interactive-mode.js";
 
 const inventory = JSON.parse(readFileSync(new URL("../dist/pi-compat/contacts.json", import.meta.url), "utf8"));
-test("Engine private contacts: exact installed versions and every named private member are pinned", () => {
+test("001. Engine private contacts: exact installed versions and every named private member are pinned", () => {
   const require = createRequire(import.meta.url);
   for (const [name, expected] of Object.entries(inventory.versions)) {
     const metadata = name === "pi-open-tui" ? pathToFileURL(require.resolve(name + "/package.json"))

@@ -1,8 +1,10 @@
 // MUST [M-003]: runtime schema validation at trust boundaries; unknown fields are
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
-export { attestationInputProblem as attestationParamsCheck } from "./attestation.js";
+export { reviewInputProblem as attestationParamsCheck } from "./attestation.js";
 import type { Json, RequestKey } from "@oma/contracts/identity";
+import type { ProtocolLimits } from "@oma/contracts/host";
+import { LEGACY_CREATE_BRIEF_BYTES } from "./limits.js";
 import { contextEntriesCheck } from "./context-policy.js";
 import {
   isExportRef,
@@ -22,6 +24,7 @@ export {
   logicalAddressCheck as checkLogicalAddress,
 } from "./mail-values.js";
 import {
+  isValidActor,
   isValidActorName,
   isValidRequestKey,
   isValidFullOid,
@@ -154,6 +157,14 @@ export function checkFiniteNumber(opts?: {
 // ---------------------------------------------------------------------------
 export const checkActor: Check = (v) =>
   typeof v === "string" && isValidActorName(v) ? null : "invalid actor name";
+/** A name a status roster row can carry: the Principal row name or a managed
+ * Resident identity, which is exactly what the registry admits as a row name.
+ * `status.get`'s `agent` selects one such row and its `after` is a `next` the
+ * same projection emitted earlier, so both admit a row name and nothing wider.
+ * Slots that name a controllable Worker keep `checkActor`, which refuses the
+ * Principal: a cursor is not an authority and grants none. */
+export const checkStatusName: Check = (v) =>
+  typeof v === "string" && isValidActor(v) ? null : "invalid status name";
 export const checkTopic: Check = (v) =>
   typeof v === "string" && isValidTopicName(v) ? null : "invalid topic name";
 export const checkOid: Check = (v) =>
@@ -183,6 +194,7 @@ export function checkBlobDescriptor(maxBytes: number): Check {
       "application/x-git-bundle",
       "application/vnd.oma.context-v1",
       "application/vnd.oma.provider-v1",
+      "application/vnd.oma.attachments-v1",
     ] as const),
   });
 }
@@ -217,7 +229,7 @@ const reviewMailMetaCheck: Check = (value) => {
         name: requestNameCheck, revision: checkInt({ min: 0 }) })(value);
     case "approval": {
       const invalid = checkObject({ role: checkEnum(["approval"] as const), request: operationIdCheck,
-        name: requestNameCheck, votes: checkArray(operationIdCheck, { min: 1 }) })(value);
+        name: requestNameCheck, votes: checkArray(operationIdCheck), basis: checkOptional(operationIdCheck) })(value);
       if (invalid !== null) return invalid;
       const votes = (value as { votes: string[] }).votes;
       return new Set(votes).size === votes.length ? null : "duplicate approval votes";
@@ -266,11 +278,16 @@ export const messagePlanCheck: Check = (value) => {
   const plan = value as {
     kind: string; to: string[]; audience?: string; approvalFor?: unknown;
     review?: { role: string };
+    recipients: string[]; replyHeaders: { inReplyTo: string | null; references: string[] };
   };
   const toIs = (expected: readonly string[]) =>
     plan.to.length === expected.length && expected.every((address, index) => plan.to[index] === address);
-  if (plan.review === undefined)
-    return plan.audience === undefined ? null : "workers audience requires review metadata";
+  if (plan.review === undefined) {
+    if (plan.audience === undefined) return null;
+    return plan.replyHeaders.inReplyTo !== null && plan.replyHeaders.references.includes(plan.replyHeaders.inReplyTo) &&
+      !plan.to.includes("principal") && !plan.recipients.includes("principal")
+      ? null : "workers audience requires review metadata or a workers-only reply";
+  }
   const hidden = plan.audience === undefined;
   switch (plan.review.role) {
     case "thread":
@@ -376,6 +393,12 @@ export function mailParamsCheck(
     subject: value => checkString({ max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value),
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
+    content: checkOptional(checkObject({ bytes: checkInt({ min: 1, max: l.bundleBytes }), sha256: checkString({ re: /^[a-f0-9]{64}$/ }), mediaType: checkEnum(["application/vnd.oma.attachments-v1"]) })),
+    collaboration: checkOptional(checkObject({ version: checkEnum(["collaboration-v1"]), resolutions: checkArray(checkOid),
+      freeze: checkOptional(checkObject({ version: checkEnum(["mail-root-v1"]), operation: operationIdCheck, dateMs: checkInt({ min: 0, max: 8640000000000000 }) })),
+      attachments: checkArray(checkObject({ commit: checkOid, objectFormat: checkEnum(["sha1", "sha256"]),
+        stage: checkOptional(checkObject({ exportRef: checkExportRef, prerequisites: checkArray(checkOid),
+          bundle: checkObject({ bytes: checkInt({ min: 1, max: l.bundleBytes }), sha256: checkString({ re: /^[a-f0-9]{64}$/ }), mediaType: checkEnum(["application/x-git-bundle"]) }) })) })) })),
     approvalFor: checkOptional(exactCandidateCheck),
     replyToMessage: checkOptional(messageIdCheck),
     refs: checkOptional(
@@ -396,7 +419,20 @@ export function mailParamsCheck(
   return (value) => {
     const error = shape(value);
     if (error) return error;
-    const mail = value as { kind: string; to: string[]; approvalFor?: unknown };
+    const mail = value as { kind: string; to: string[]; approvalFor?: unknown; refs?: unknown; collaboration?: { freeze?: { dateMs: number }; resolutions: string[]; attachments: { commit: string; objectFormat: "sha1" | "sha256"; stage?: { bundle: { bytes: number } } }[] } };
+    if (mail.collaboration !== undefined && (mail.refs !== undefined || mail.approvalFor !== undefined ||
+        !["message", "critical"].includes(mail.kind) || mail.to.length === 0))
+      return "collaboration mail requires explicit recipients, ordinary/critical kind and no legacy reference or approval fields";
+    if (mail.collaboration !== undefined && JSON.stringify([...new Set(mail.collaboration.resolutions)]) !== JSON.stringify(mail.collaboration.attachments.map(source => source.commit)))
+      return "attachment manifest must deduplicate the original resolved OIDs in first-occurrence order";
+    if (mail.collaboration?.attachments.some(source => source.objectFormat !== (source.commit.length === 40 ? "sha1" : "sha256")))
+      return "attachment object format differs from its full OID";
+    const uploads = mail.collaboration?.attachments.filter(source => source.stage !== undefined) ?? [];
+    const content = (value as { content?: { bytes: number } }).content;
+    if (content !== undefined && mail.collaboration?.freeze === undefined || mail.collaboration?.freeze !== undefined && mail.collaboration.freeze.dateMs % 1000 !== 0)
+      return "mail ingress requires its original root; a frozen message date must use whole seconds";
+    if ((uploads.length > 0) !== (content !== undefined) || content !== undefined && uploads.reduce((sum, source) => sum + source.stage!.bundle.bytes, 0) !== content.bytes)
+      return "attachment ingress must match its ordered bundle manifest exactly";
     if (mail.kind === "approval_required")
       return mail.approvalFor && mail.to.includes("principal")
         ? null
@@ -407,11 +443,23 @@ export function mailParamsCheck(
   };
 }
 
-export const agentCreateParamsCheck: Check = checkObject({
-  name: checkActor,
-  from: checkOid,
-  brief: checkString({ min: 1, max: 8 * 1024 }),
-});
+export function agentCreateParamsCheckFor(limits: Pick<ProtocolLimits, "bundleBytes" | "mailBodyBytes">): Check {
+  const shape = checkObject({ name: checkActor, from: checkOid, brief: checkString({ min: 1 }),
+    content: checkOptional(checkBlobDescriptor(limits.bundleBytes)),
+    collaboration: checkOptional(checkObject({ version: checkEnum(["collaboration-v1"]),
+      freeze: checkObject({ version: checkEnum(["create-root-v1"]), operation: value => isValidOperationId(value) ? null : "invalid create root", dateMs: checkInt({ min: 0, max: 8640000000000000 }) }),
+      stage: checkOptional(checkObject({ exportRef: checkExportRef, prerequisites: checkArray(checkOid) })) })) });
+  return value => {
+    const problem = shape(value); if (problem !== null) return problem;
+    const input = value as import("@oma/contracts/values").AgentCreateInput;
+    if (!input.collaboration) return input.content === undefined && Buffer.byteLength(input.brief, "utf8") <= LEGACY_CREATE_BRIEF_BYTES ? null : "legacy creation cannot carry source ingress";
+    const briefProblem = checkString({ min: 1, max: limits.mailBodyBytes })(input.brief); if (briefProblem !== null) return briefProblem;
+    if (!input.brief.trim() || input.collaboration.freeze.dateMs % 1000 !== 0) return "creation requires a nonblank brief and whole-second original Date";
+    return (input.content === undefined) === (input.collaboration.stage === undefined) &&
+      (input.content === undefined || input.content.mediaType === "application/x-git-bundle" && input.content.bytes > 0) ? null : "create source requires its exact Git bundle descriptor";
+  };
+}
+export const agentCreateParamsCheck: Check = agentCreateParamsCheckFor({ bundleBytes: Number.MAX_SAFE_INTEGER, mailBodyBytes: Number.MAX_SAFE_INTEGER });
 export function gitSubmitParamsCheck(
   l: ParamsLimits,
 ): Check {
@@ -474,12 +522,18 @@ export const operationReadParamsCheck: Check = checkObject({
   sha256: checkOptional(checkString({ re: /^[0-9a-f]{64}$/ })),
 });
 export const statusGetParamsCheck: Check = checkObject({
-  agent: checkOptional(checkActor),
-  after: checkOptional(checkActor),
+  agent: checkOptional(checkStatusName),
+  after: checkOptional(checkStatusName),
 });
-export const reviewStatusParamsCheck: Check = checkObject({
-  name: checkOptional(requestNameCheck),
-});
+const reviewDetailParams = checkObject({ name: requestNameCheck, reviewerAfter: checkOptional(checkActor) });
+const reviewListParams = checkObject({ kind: checkEnum(["merge", "challenge"] as const), after: checkOptional(requestNameCheck) });
+export const reviewStatusParamsCheck: Check = value => {
+  if (reviewDetailParams(value) === null) return null;
+  const error = reviewListParams(value);
+  if (error) return error;
+  const query = value as { kind: "merge" | "challenge"; after?: string };
+  return query.after === undefined || query.after.startsWith(`${query.kind}-`) ? null : "review cursor kind does not match";
+};
 export const logsReadParamsCheck: Check = checkObject({
   agent: checkActor,
   sinceSeconds: checkInt({ min: 1, max: 31536000 }),

@@ -73,7 +73,7 @@ function harness(overrides: Partial<AppPorts> = {}, terminal = fakeTerminal()) {
   return { app, terminal, prompts, last: () => (terminal.frames.at(-1) ?? []).join("\n") };
 }
 
-test("NB-04: the open mail's body is read once per message, not once per frame", async () => {
+test("001. The open mail's body is read once per message, not once per frame", async () => {
   let reads = 0;
   const h = harness({ body: path => { reads += 1; return { text: `body of ${path}`, truncated: false }; } });
   // Open the first message and look at it for many frames.
@@ -91,7 +91,7 @@ test("NB-04: the open mail's body is read once per message, not once per frame",
   assert.equal(reads, 2, "a closed message is re-read on reopen");
 });
 
-test("NB-05: Pending counts Residents only; the Principal's own count stays its own row", () => {
+test("002. Pending counts Residents only; the Principal's own count stays its own row", () => {
   const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) });
   const row = (agent: string, pending: number): AgentStatus => ({
     agent, desired: "enabled", activeState: "active", subState: "running", unitResult: "success",
@@ -105,7 +105,7 @@ test("NB-05: Pending counts Residents only; the Principal's own count stays its 
   assert.equal(status.principalPending, 5, "and they are not lost either -- they are its own count");
 });
 
-test("NB-06: a failure message survives process.exit behind it, even past the pipe's buffer", () => {
+test("003. A failure message survives process.exit behind it, even past the pipe's buffer", () => {
   const exit = fileURLToPath(new URL(import.meta.resolve("#oma-test/app/application/exit")));
   // Well past any pipe buffer: a buffered write() has no chance to drain
   // before process.exit. On Linux the Human's stream is stderr.
@@ -117,7 +117,7 @@ test("NB-06: a failure message survives process.exit behind it, even past the pi
   assert.ok(run.stderr.endsWith("TAIL\n"), "the message's tail reached the pipe -- it was drained, not dropped");
 });
 
-test("NB-07: a typed character the screen cannot show is never sent", () => {
+test("004. A typed character the screen cannot show is never sent", () => {
   const typed = (...chunks: number[][]): string => {
     const decoder = new KeyDecoder(() => 0);
     return [...chunks.flatMap(chunk => decoder.push(Uint8Array.from(chunk))), ...decoder.finish()]
@@ -137,7 +137,7 @@ test("NB-07: a typed character the screen cannot show is never sent", () => {
   assert.equal(typed(bytes("A한 B")), "A한 B");
 });
 
-test("NB-08: a Linux-console function key (ESC [ [ A-E) is one key, not a leak into the draft", () => {
+test("005. A Linux-console function key (ESC [ [ A-E) is one key, not a leak into the draft", () => {
   for (const final of ["A", "B", "C", "D", "E"]) {
     const decoder = new KeyDecoder(() => 0);
     const keys = [...decoder.push(Buffer.from(`${ESC}[[${final}x`)), ...decoder.finish()];
@@ -150,7 +150,7 @@ test("NB-08: a Linux-console function key (ESC [ [ A-E) is one key, not a leak i
   assert.deepEqual(keys.map(key => key.kind), ["down", "char"]);
 });
 
-test("NB-10: text typed while the panel is open waits in the draft instead of vanishing", () => {
+test("006. Text typed while the panel is open waits in the draft instead of vanishing", () => {
   const h = harness();
   h.app.feed(CTRL_X);
   assert.match(h.last(), /\[Dashboard\]/, "the panel is open");
@@ -160,7 +160,7 @@ test("NB-10: text typed while the panel is open waits in the draft instead of va
   assert.deepEqual(h.prompts, ["send later"], "typed behind the panel, sent after it closed");
 });
 
-test("NB-10: a paste behind the panel is kept the same way", async () => {
+test("007. A paste behind the panel is kept the same way", async () => {
   const h = harness();
   h.app.feed(CTRL_X);
   h.app.feed(Buffer.from(`${ESC}[200~pasted${ESC}[201~`));
@@ -170,18 +170,20 @@ test("NB-10: a paste behind the panel is kept the same way", async () => {
   assert.deepEqual(h.prompts, ["pasted"]);
 });
 
-test("NB-11: swapText truncates on grapheme boundaries -- a flag is kept whole or dropped whole", () => {
+test("008. SwapText truncates on grapheme boundaries -- a flag is kept whole or dropped whole", () => {
   const flags = "🇫🇷🇩🇪🇯🇵🇰🇷"; // four regional-indicator pairs, 2 cells each
   const line = `│${"from".padEnd(30)}│`;
   const swapped = swapText(line, "from", flags, false);
   // Every regional indicator that survived is paired: an odd count of them
   // anywhere would mean a half flag was drawn.
-  const regionals = [...swapped].filter(char => /🇦-🇿/u.test(char)).length;
+  const regionals = [...swapped].filter(char => /\p{Regional_Indicator}/u.test(char)).length;
+  assert.ok(regionals > 0, "the fixture must actually retain regional indicators");
+  assert.equal([...flags].filter(char => /\p{Regional_Indicator}/u.test(char)).length, 8);
   assert.equal(regionals % 2, 0, "no half a flag on screen");
   assert.doesNotMatch(swapped, /�/, "no replacement character from a split pair");
 });
 
-test("NB-12: brandFooter uses a gap after the ~ marker, even when the widest gap is before it", () => {
+test("009. BrandFooter uses a gap after the ~ marker, even when the widest gap is before it", () => {
   // A huge gap before the ~ used to win the width contest and leave the
   // branding nowhere to go.
   const line = `${ESC}[36mAA${" ".repeat(30)}${ESC}[39m${" ".repeat(4)}${ESC}[36m~${ESC}[39m${" ".repeat(8)}END`;
@@ -189,7 +191,7 @@ test("NB-12: brandFooter uses a gap after the ~ marker, even when the widest gap
   assert.match(branded.replace(/\x1b\[[0-9;]*m/g, ""), /myproj/, "the project went into the gap after ~");
 });
 
-test("NB-13: at a minimal terminal the panel's footer -- the way back -- stays on screen", () => {
+test("010. At a minimal terminal the panel's footer -- the way back -- stays on screen", () => {
   const h = harness({}, fakeTerminal(80, 4));
   h.app.feed(CTRL_X);
   const frame = h.terminal.frames.at(-1)!;
@@ -197,7 +199,7 @@ test("NB-13: at a minimal terminal the panel's footer -- the way back -- stays o
   assert.match(frame.join("\n"), /Esc Back/, "the footer is drawn, not pushed off");
 });
 
-test("NB-13: at a minimal terminal a notice on the mail detail is not pushed off by the head", () => {
+test("011. At a minimal terminal a notice on the mail detail is not pushed off by the head", () => {
   const h = harness({ mail: () => ({ rows: [
     { id: "m1", from: "worker-a", kind: "question", subject: "s", unread: true, path: "/tmp/m1",
       earlier: ["/tmp/e1", "/tmp/e2", "/tmp/e3", "/tmp/e4", "/tmp/e5"] },
@@ -209,7 +211,7 @@ test("NB-13: at a minimal terminal a notice on the mail detail is not pushed off
   assert.match(frame.join("\n"), /the notice that must remain visible/);
 });
 
-test("NB-14: an over-width cluster wraps into its own line, not a blank one first", () => {
+test("012. An over-width cluster wraps into its own line, not a blank one first", () => {
   // A cluster wider than the whole line (한 is 2 cells, the line is 1) used
   // to push the still-empty line before itself: a blank row no Human typed.
   assert.deepEqual(wrap("한한한", 1), ["한", "한", "한"]);
@@ -221,7 +223,7 @@ test("NB-14: an over-width cluster wraps into its own line, not a blank one firs
   assert.deepEqual(wrap("", 5), [""]);
 });
 
-test("NB-15: a destroyed output takes no frame -- draw, repaint and restore skip the write", () => {
+test("013. A destroyed output takes no frame -- draw, repaint and restore skip the write", () => {
   const input = { isTTY: true, setRawMode() {}, resume() {}, pause() {}, on() {}, off() {} };
   const writes: string[] = [];
   const output = {
@@ -237,7 +239,7 @@ test("NB-15: a destroyed output takes no frame -- draw, repaint and restore skip
   assert.equal(writes.length, 2, "no write touched the dead stream");
 });
 
-test("NB-15: a live stream's write failure still reaches the caller that owns it", () => {
+test("014. A live stream's write failure still reaches the caller that owns it", () => {
   // The chooser relies on the throw to close rather than escape its resize
   // listener, so "guarded" must not mean "swallowed everywhere".
   const input = { isTTY: true, setRawMode() {}, resume() {}, pause() {}, on() {}, off() {} };
@@ -251,7 +253,7 @@ test("NB-15: a live stream's write failure still reaches the caller that owns it
   terminal.restore(); // its codes name no frame; the exit hook returns.
 });
 
-test("NB-15: a draw that throws cannot escape through the app's input listener", () => {
+test("015. A draw that throws cannot escape through the app's input listener", () => {
   const terminal = fakeTerminal();
   terminal.draw = () => { throw new Error("stream is gone"); };
   terminal.repaint = () => { throw new Error("stream is gone"); };

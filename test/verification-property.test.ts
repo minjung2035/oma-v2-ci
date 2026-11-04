@@ -4,7 +4,7 @@ import { JsonlReader, type PiEvent } from "@oma/protocol/jsonl";
 
 const SEED = 0x35c0ffee;
 const CASES = 512;
-test(`R35 property: JSONL LF/UTF-8 split-merge seed=${SEED} cases=${CASES}`, () => {
+test(`001. Property: JSONL LF/UTF-8 split-merge seed=${SEED} cases=${CASES}`, () => {
   let state = SEED;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state; };
   const texts = ["", "alpha", "한글", "🙂", "line\nnext", "\r", "quote\"slash\\", "\u0000"];

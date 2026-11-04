@@ -11,7 +11,7 @@ import { readBatchView } from "@oma/tool-runtime/batch-view";
 import { type BatchView as BatchManifest } from "@oma/protocol/batch-view";
 import { integerEnv } from "@oma/tool-runtime/shared";
 
-import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX } from "@oma/protocol/delivery-boundary";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX, PI_DELIVERY_NOT_STARTED_PREFIX } from "@oma/protocol/delivery-boundary";
 
 export function registerDelivery(pi: ExtensionAPI, waitRequested?: () => Promise<boolean>): void {
   const root = process.env.OMA_BATCH_VIEW ?? "/run/oma-view";
@@ -45,15 +45,23 @@ export function registerDelivery(pi: ExtensionAPI, waitRequested?: () => Promise
   pi.registerCommand("oma-deliver", {
     description: "Deliver one broker-prepared immutable mail batch",
     handler: async (args, ctx) => {
+      const notStarted = (reason: "unavailable" | "invalid-batch"): void => {
+        // Only before sendMessage, with no pending delivery AND an idle engine.
+        // A busy or unknown run supplies no such proof, even if this command fails.
+        if (!pending && ctx.isIdle()) ctx.ui.notify(`${PI_DELIVERY_NOT_STARTED_PREFIX}${JSON.stringify({
+          adapterRevision: PI_ADAPTER_REVISION, batchId: args.trim(), reason,
+        })}`, "error");
+      };
       if (pending || frameBytes === null || batchMaxMessages === null) {
+        notStarted("unavailable");
         ctx.ui.notify("OMA delivery adapter is unavailable or busy", "error");
         return;
       }
-      const batch = readBatchView(args.trim(), root, {
-        frameBytes,
-        batchMaxMessages,
-      });
+      let batch: BatchManifest | null;
+      try { batch = readBatchView(args.trim(), root, { frameBytes, batchMaxMessages }); }
+      catch (error) { notStarted("invalid-batch"); throw error; }
       if (!batch) {
+        notStarted("invalid-batch");
         ctx.ui.notify("Invalid or unavailable OMA batch", "error");
         return;
       }

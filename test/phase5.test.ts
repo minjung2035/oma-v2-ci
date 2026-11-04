@@ -69,7 +69,7 @@ async function envOf(): Promise<Env> {
         society,
         hasGoal: () => true,
         activationAllowed: () => true,
-    }, resolver, mail);
+    }, Object.assign(resolver, { maxWorkers: () => 6 }), mail);
     const views = new ViewsModule(store, state, society, "p");
     const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: {
         stateRoot: state,
@@ -111,7 +111,7 @@ function seed(store: Store, specs: Array<[
         }
     });
 }
-test("AUTH-002: durable effect requires the resolved method capability", async () => {
+test("001. Durable effect requires the resolved method capability", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
@@ -233,7 +233,7 @@ function auth(actor: string, caps: Capability[]): AuthContext {
     };
 }
 // ---------------------------------------------------------------------------
-test("T11-neq: non-unit process cannot open a run on the runner channel", async () => {
+test("002. Non-unit process cannot open a run on the runner channel", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
@@ -244,7 +244,7 @@ test("T11-neq: non-unit process cannot open a run on the runner channel", async 
         await env.cleanup();
     }
 });
-test("T31-neg: forged batch.complete from outside the owning unit is rejected", async () => {
+test("003. Forged batch.complete from outside the owning unit is rejected", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
@@ -272,7 +272,7 @@ test("T31-neg: forged batch.complete from outside the owning unit is rejected", 
 
 
 
-test("BATCH-001: failed view publication retries the same prepared snapshot", async () => {
+test("004. Failed view publication retries the same prepared snapshot", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
@@ -295,7 +295,7 @@ test("BATCH-001: failed view publication retries the same prepared snapshot", as
         await env.cleanup();
     }
 });
-test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid recovery", async () => {
+test("005. Mailbox moves reject rogue bytes and preserve valid recovery", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"], ["principal", "principal", "enabled"]]);
@@ -334,7 +334,7 @@ test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid reco
         await env.cleanup();
     }
 });
-test("T25 deterministic core: capped batches alternate direct and public mail", async () => {
+test("006. Deterministic core: capped batches alternate direct and public mail", async () => {
     const env = await envOf();
     try {
         seed(env.store, [
@@ -396,7 +396,7 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
         await env.cleanup();
     }
 });
-test("prepared batch manifest shape stays compatible with the trusted extension", async () => {
+test("007. Prepared batch manifest shape stays compatible with the trusted extension", async () => {
     const env = await envOf();
     try {
         seed(env.store, [["a", "resident", "enabled"]]);
@@ -434,7 +434,7 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
         await env.cleanup();
     }
 });
-test("SB-005-negative: candidate argv rejects empty commands and removes execution caps", () => {
+test("008. Candidate argv rejects empty commands and removes execution caps", () => {
     const paths = { rootfs: "/trusted/rootfs", node: process.execPath, libdir: "/checks" };
     const check = { id: "bounds", argv: ["/bin/true"], env: {},
     };
@@ -449,7 +449,7 @@ test("SB-005-negative: candidate argv rejects empty commands and removes executi
     }).code === "UNSUPPORTED_PROFILE");
 });
 
-test("NATIVE-CANDIDATE-DR37: real checks use network, outlive legacy caps and stop descendants on owner loss or request cancellation", { timeout: 20000 }, async t => {
+test("009. Real checks use network, outlive legacy caps and stop descendants on owner loss or request cancellation", { timeout: 20000 }, async t => {
     const { residentOptions, prepareResident } = await import("./fixtures/resident.js");
     const { runGitText } = await import("@oma/process/policies");
     const { CandidateChecks } = await import("#oma-test/app/runtime/candidate-checks");
@@ -510,7 +510,7 @@ test("NATIVE-CANDIDATE-DR37: real checks use network, outlive legacy caps and st
     assert.equal(hits, 3);
 });
 
-test("DR37: MCP command credentials execute through the installed adapter policy", async (t) => {
+test("010. MCP command credentials execute through the installed adapter policy", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'oma-mcp-credential-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     const { ExecutionJournal } = await import('@oma/storage/execution-journal');
@@ -538,8 +538,8 @@ test("DR37: MCP command credentials execute through the installed adapter policy
     await withAsyncCleanup(async () => {
         await executions.recover();
         const result = await executions.run('preparation', runnerScope({
-            executable: process.execPath, argv: ['--input-type=module', '-e', program],
-            env: { PATH: '/usr/bin:/bin', HOME: dir, PI_CODING_AGENT_DIR: dir },
+            executable: '/usr/bin/env', argv: ['-i', 'PATH=/usr/bin:/bin', `HOME=${dir}`, `PI_CODING_AGENT_DIR=${dir}`, process.execPath, '--input-type=module', '-e', program],
+            env: {},
             timeoutMs: 10000, stdoutBytes: 65536, stderrBytes: 65536,
         }), undefined, () => {});
         assert.equal(result.kind, 'exited', result.stderr.toString());
@@ -548,7 +548,7 @@ test("DR37: MCP command credentials execute through the installed adapter policy
         assert.deepEqual(ExecutionJournal.inspect(dir), []);
     }, () => executions.close());
 });
-test("DR37: web configured and per-call proxies perform real requests under the restored policy", async (t) => {
+test("011. Web configured and per-call proxies perform real requests under the restored policy", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'oma-web-proxy-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     const prior = process.env.PI_CODING_AGENT_DIR;

@@ -11,7 +11,7 @@ import { StoreError } from "@oma/domain/errors";
 import { closeEvery } from "@oma/native/files";
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
-test("R14: a native peer pin closes once after both connection and executing owners release", () => {
+test("001. A native peer pin closes once after both connection and executing owners release", () => {
   let closes = 0; let alive = true;
   const peer = new SharedPeerPin(() => alive, () => { closes++; });
   const release = peer.retainForExecution();
@@ -23,7 +23,7 @@ test("R14: a native peer pin closes once after both connection and executing own
   assert.equal(closes, 1); assert.throws(() => peer.retainForExecution(), StoreError);
 });
 
-test("R14: a transferred spool remains readable after disconnect and is unlinked once by its task", async () => {
+test("002. A transferred spool remains readable after disconnect and is unlinked once by its task", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r14-spool-"));
   try {
     const bytes = Buffer.from("first\nsecond\n");
@@ -39,7 +39,7 @@ test("R14: a transferred spool remains readable after disconnect and is unlinked
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R14: zero bytes are exact; mismatched length/hash never acquires execution ownership", () => {
+test("003. Zero bytes are exact; mismatched length/hash never acquires execution ownership", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r14-zero-"));
   try {
     const empty = new TransportSpool(root, { bytes: 0, sha256: hash(Buffer.alloc(0)) });
@@ -55,7 +55,7 @@ test("R14: zero bytes are exact; mismatched length/hash never acquires execution
 
 const openDescriptors = (): number => readdirSync("/proc/self/fd").length;
 
-test("P0V-65 / R10, P0-4: every descriptor handed to closeEvery is given back, whichever fails to close", () => {
+test("004. Every descriptor handed to closeEvery is given back, whichever fails to close", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-close-every-"));
   try {
     // Two distinct numbers: the one closed first is not reused for the other.
@@ -67,7 +67,7 @@ test("P0V-65 / R10, P0-4: every descriptor handed to closeEvery is given back, w
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-65 / R10, P0-4: a spool reader that fails before its stream exists gives its descriptor back", async t => {
+test("005. A spool reader that fails before its stream exists gives its descriptor back", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-spool-gap-"));
   t.after(() => { syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   const bytes = Buffer.from("body\n");

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { displayCopy, safeToolPresentation } from "@oma/engine/interactive-display";
-test("DR22: render copies remove untrusted controls without changing tool or receipt bytes", () => {
+test("001. Render copies remove untrusted controls without changing tool or receipt bytes", () => {
     const text = "한글\x1b[2J‮evil⁦\n👩‍💻";
     const value = { content: [{ type: "text", text }], details: { receipt: text } };
     const clean = displayCopy(value);
@@ -31,7 +31,7 @@ test("DR22: render copies remove untrusted controls without changing tool or rec
     leaf.loop = deep;
     assert.doesNotThrow(() => displayCopy(deep), "provider-controlled depth cannot overflow a recursive walk");
 });
-test("DR22: upstream tool renderers get sanitized copies but execute keeps its original arguments", () => {
+test("002. Upstream tool renderers get sanitized copies but execute keeps its original arguments", () => {
     const observed = [];
     const original = {
         name: "example", label: "Example", description: "Test", parameters: {},

@@ -6,6 +6,9 @@
 import type { ExactCandidateIdentity, MailInput } from "@oma/contracts/values";
 import { isValidActorName, isValidFullOid, isValidMessageId, isValidTopicName } from "./identifiers.js";
 
+/** Subject fallback only. The caller's exactly empty message body stays empty. */
+export const COMMITTED_WORK_FALLBACK = "Shared committed work";
+
 const KINDS = Object.freeze({
   message: true, question: true, result: true, alert: true, context: true,
   approval_required: true, critical: true,
@@ -65,6 +68,11 @@ export function parseRfcMessageId(value: unknown): RfcMessageId | null {
 
 /** One exact tuple grammar. Its container determines whether it is a mail claim
  * or authenticated attestation; these bytes alone never confer authority. */
+export function policyRevisionCheck(value: unknown): string | null {
+  return typeof value !== "string" || Buffer.byteLength(value, "utf8") < 1 ||
+    Buffer.byteLength(value, "utf8") > 128 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)
+    ? "invalid approval policy revision" : null;
+}
 export function exactCandidateCheck(value: unknown): string | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected approval identity object";
   const identity = value as Record<string, unknown>;
@@ -74,10 +82,7 @@ export function exactCandidateCheck(value: unknown): string | null {
   if (identity.repo !== "project" || identity.targetRef !== "refs/heads/main") return "invalid approval repository/target";
   if (!isValidFullOid(identity.expectedBase) || !isValidFullOid(identity.candidate)) return "invalid approval full OID";
   if (identity.expectedBase.length !== identity.candidate.length) return "approval OIDs must use the same object format";
-  if (typeof identity.policyRevision !== "string" || Buffer.byteLength(identity.policyRevision, "utf8") < 1 ||
-    Buffer.byteLength(identity.policyRevision, "utf8") > 128 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(identity.policyRevision))
-    return "invalid approval policy revision";
-  return null;
+  return policyRevisionCheck(identity.policyRevision);
 }
 export function isExactCandidateIdentity(value: unknown): value is ExactCandidateIdentity {
   return exactCandidateCheck(value) === null;

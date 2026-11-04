@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
-test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate records", { timeout: 120000 }, () => {
+test("001. Structural evidence rejects stale, incomplete and duplicate records", { timeout: 120000 }, () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-compliance-"));
   const script = resolve("scripts/compliance.mjs");
   const reportScript = resolve("scripts/adversarial-report.mjs");
@@ -17,7 +17,7 @@ test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate 
   const run = (...args: string[]) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024 });
   const report = () => spawnSync(process.execPath, [reportScript], { cwd: dir, encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024 });
   const trace = "implementation/traceability.json";
-  const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/candidate-check.ts", "apps/oma/src/entry/quarantine.ts", "apps/oma/src/cli.ts", "packages/extension/src/index.ts"];
+  const roots = ["apps/oma/src/entry/broker.ts", "apps/oma/src/entry/runner.ts", "apps/oma/src/entry/candidate-check.ts", "apps/oma/src/entry/quarantine.ts", "apps/oma/src/runtime/client-preload.ts", "packages/extension/src/index.ts"];
   const matrix = (first: number, last: number) => Array.from({ length: last - first + 1 }, (_, index) =>
     `| T${String(index + first).padStart(2, "0")} / fixture | synthetic structural oracle, not production evidence |`).join("\n");
   const sourceWalk = (path: string): string[] => {

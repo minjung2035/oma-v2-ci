@@ -44,7 +44,7 @@ function fixture(options: { returning?: Promise<void>; watchFailure?: Error } = 
   };
 }
 
-test("packet stream retains one blocked write and emits each original byte once", { timeout: 3000 }, async t => {
+test("001. Packet stream retains one blocked write and emits each original byte once", { timeout: 3000 }, async t => {
   const f = fixture(); t.after(() => f.stream.destroy());
   const bytes = Buffer.alloc(103); bytes.forEach((_, index) => { bytes[index] = index; });
   let completed = false;
@@ -59,7 +59,7 @@ test("packet stream retains one blocked write and emits each original byte once"
   assert.equal(f.closes(), 0, "write EOF leaves the readable half owned");
 });
 
-test("packet stream refuses a foreign EOF before delivering end", { timeout: 3000 }, async () => {
+test("002. Packet stream refuses a foreign EOF before delivering end", { timeout: 3000 }, async () => {
   const f = fixture(); let ended = false;
   const failed = once(f.stream, "error"), closed = new Promise<void>(resolve => f.stream.once("close", resolve));
   f.stream.on("end", () => { ended = true; }); f.stream.resume();
@@ -68,7 +68,7 @@ test("packet stream refuses a foreign EOF before delivering end", { timeout: 300
   assert.equal(ended, false); assert.equal(f.closes(), 1); assert.equal(f.stream.resourcesReturned, true);
 });
 
-test("authenticated packet EOF preserves half-open replies and closes after both halves", { timeout: 3000 }, async t => {
+test("003. Authenticated packet EOF preserves half-open replies and closes after both halves", { timeout: 3000 }, async t => {
   const f = fixture(); t.after(() => f.stream.destroy());
   const chunks: Buffer[] = [];
   f.stream.on("data", bytes => { assert.ok(Buffer.isBuffer(bytes)); chunks.push(bytes); });
@@ -81,7 +81,7 @@ test("authenticated packet EOF preserves half-open replies and closes after both
   assert.deepEqual(f.output, [{ kind: "data", bytes: Buffer.from("answer") }, { kind: "end" }]);
 });
 
-test("packet write failure settles its callback and preserves cleanup failure", { timeout: 3000 }, async () => {
+test("004. Packet write failure settles its callback and preserves cleanup failure", { timeout: 3000 }, async () => {
   const f = fixture(), primary = new Error("enqueue not observed"), cleanup = new Error("right return not observed");
   f.fail(primary, cleanup);
   const failed = once(f.stream, "error"), closed = new Promise<void>(resolve => f.stream.once("close", resolve));
@@ -92,7 +92,7 @@ test("packet write failure settles its callback and preserves cleanup failure", 
   assert.equal(f.stream.resourcesReturned, false);
 });
 
-test("packet close waits for asynchronous resource return before close", { timeout: 3000 }, async t => {
+test("005. Packet close waits for asynchronous resource return before close", { timeout: 3000 }, async t => {
   let release!: () => void;
   const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
   const f = fixture({ returning }); let closed = false;
@@ -102,7 +102,7 @@ test("packet close waits for asynchronous resource return before close", { timeo
   release(); await done; assert.equal(f.stream.resourcesReturned, true);
 });
 
-test("packet setup failure still joins asynchronous cleanup", { timeout: 3000 }, async t => {
+test("006. Packet setup failure still joins asynchronous cleanup", { timeout: 3000 }, async t => {
   let release!: () => void;
   const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
   const primary = new Error("watch setup refused"), f = fixture({ returning, watchFailure: primary });
@@ -112,7 +112,7 @@ test("packet setup failure still joins asynchronous cleanup", { timeout: 3000 },
   release(); assert.equal((await failed)[0], primary); await done; assert.equal(f.stream.resourcesReturned, true);
 });
 
-test("packet asynchronous cleanup rejection preserves the pending write error", { timeout: 3000 }, async () => {
+test("007. Packet asynchronous cleanup rejection preserves the pending write error", { timeout: 3000 }, async () => {
   let rejectReturn!: (error: Error) => void;
   const returning = new Promise<void>((_resolve, reject) => { rejectReturn = reject; }); void returning.catch(() => {});
   const f = fixture({ returning }), primary = new Error("connection cancelled"), cleanup = new Error("native callback return failed");
@@ -124,7 +124,7 @@ test("packet asynchronous cleanup rejection preserves the pending write error", 
   assert.equal(await writeError, error); assert.equal(f.closes(), 1); assert.equal(f.stream.resourcesReturned, false);
 });
 
-test("packet cancellation before construction acquires no readiness watch", { timeout: 3000 }, async t => {
+test("008. Packet cancellation before construction acquires no readiness watch", { timeout: 3000 }, async t => {
   let release!: () => void;
   const returning = new Promise<void>(resolve => { release = resolve; }); t.after(release);
   const f = fixture({ returning }), done = new Promise<void>(resolve => f.stream.once("close", resolve));

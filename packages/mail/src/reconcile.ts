@@ -49,7 +49,7 @@ export async function reconcileMailOperation(store: MailLedger, mail: MailRecove
     ? { kind: "attest.record", request: reviewRequestName(store, plan),
         messages: plan.messages.map(message => message.id), recipientCount: deliveries.length }
     : { kind: operation.kind, message: messages[0]!.id,
-        recipientCount: deliveries.length, archivePath: mail.archivePath(messages[0]!.id) };
+        recipientCount: deliveries.length, archivePath: mail.archivePath(messages[0]!.id, messages[0]!.audience) };
   store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify(result)));
 }
 export async function reconcileOrdinaryMail(store: MailLedger, mail: MailRecoveryPort, effects: MailRecoveryEffects): Promise<RecoveryCounts> {

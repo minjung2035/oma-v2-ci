@@ -50,7 +50,7 @@ function seedAgents(store: Store, specs: Array<[
 }
 
 // ---------------------------------------------------------------------------
-test("T14: commons routing keeps stopped, excludes retired/provisioning/principal", async () => {
+test("001. Commons routing keeps stopped, excludes retired/provisioning/principal", async () => {
   const { store, mail, dir } = fresh();
   seedAgents(store, [["a", "resident", "enabled"], ["b", "resident", "enabled"],
     ["c", "resident", "stopped"], ["d", "resident", "retired"],
@@ -65,7 +65,7 @@ test("T14: commons routing keeps stopped, excludes retired/provisioning/principa
   seal({ store, dir });
 });
 
-test("T15: topic with no followers publishes to archive only, recipientCount 0", async () => {
+test("002. Topic with no followers publishes to archive only, recipientCount 0", async () => {
   const { store, mail, dir } = fresh();
   seedAgents(store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
   const receipt = await mail.send(auth("a"), "k1", { to: ["topic/none"], subject: "s", kind: "message", body: "x" });
@@ -77,7 +77,7 @@ test("T15: topic with no followers publishes to archive only, recipientCount 0",
   seal({ store, dir });
 });
 
-test("T16: follow/unfollow, union dedupe, snapshot fixed after membership change", async () => {
+test("003. Follow/unfollow, union dedupe, snapshot fixed after membership change", async () => {
   const { store, mail, dir } = fresh();
   seedAgents(store, [["a", "resident", "enabled"], ["b", "resident", "enabled"], ["c", "resident", "enabled"]]);
   const topic = "auth";
@@ -97,7 +97,7 @@ test("T16: follow/unfollow, union dedupe, snapshot fixed after membership change
   seal({ store, dir });
 });
 
-test("T17: reply header contract; CR/LF injection rejected", async () => {
+test("004. Reply header contract; CR/LF injection rejected", async () => {
   const { store, dir, society } = fresh();
   seedAgents(store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
   const emlDirect = await buildEml({
@@ -171,7 +171,7 @@ async function sendAndKill(dir: string, stop: MailStopPoint, opts: Record<string
 }
 
 /// T18: kill after staging — no object, no DB row; same-key re-send works.
-test("T18: kill after eml stage -> nothing accepted; same key resend succeeds", async () => {
+test("005. Kill after eml stage -> nothing accepted; same key resend succeeds", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t18-"));
   await seed(dir, "a:enabled,b:enabled,c:enabled");
   const out = await sendAndKill(dir, "stage", { OMA_TO: "b,c", OMA_KEY: "k18" });
@@ -186,7 +186,7 @@ test("T18: kill after eml stage -> nothing accepted; same key resend succeeds", 
 });
 
 /// T19: kill after object publish, before T-send — unreferenced object, retry OK.
-test("T19: kill after object fsync -> unreferenced object, no recipients; resend OK", async () => {
+test("006. Kill after object fsync -> unreferenced object, no recipients; resend OK", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t19-"));
   await seed(dir, "a:enabled,b:enabled");
   const out = await sendAndKill(dir, "object", { OMA_TO: "b", OMA_KEY: "k19" });
@@ -202,7 +202,7 @@ test("T19: kill after object fsync -> unreferenced object, no recipients; resend
 });
 
 /// T20: kill after DB accept, before archive — reconcile publishes archive+inboxes.
-test("T20: kill after acceptance -> reconcile completes archive and all recipients", async () => {
+test("007. Kill after acceptance -> reconcile completes archive and all recipients", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t20-"));
   await seed(dir, "a:enabled,b:enabled,c:enabled");
   const out = await sendAndKill(dir, "accepted", { OMA_TO: "b,c", OMA_KEY: "k20" });
@@ -226,7 +226,7 @@ test("T20: kill after acceptance -> reconcile completes archive and all recipien
 });
 
 /// T21: A/B published (B already in cur), C killed — only C supplemented, no re-creation.
-test("T21: partial fanout a+b done, b in cur -> reconcile adds only c, no duplicates", async () => {
+test("008. Partial fanout a+b done, b in cur -> reconcile adds only c, no duplicates", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t21-"));
   await seed(dir, "a:enabled,b:enabled,c:enabled");
   const out = await sendAndKill(dir, "inbox-2", { OMA_TO: "a,b,c", OMA_KEY: "k21" });
@@ -247,7 +247,7 @@ test("T21: partial fanout a+b done, b in cur -> reconcile adds only c, no duplic
 });
 
 /// T22: link published, materialized flag not yet written — reconcile marks without duplication.
-test("T22: link published before materialized flag -> reconcile completes, no duplicate file", async () => {
+test("009. Link published before materialized flag -> reconcile completes, no duplicate file", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t22-"));
   await seed(dir, "a:enabled,b:enabled");
   const out = await sendAndKill(dir, "inbox-1", { OMA_TO: "a,b", OMA_KEY: "k22" });
@@ -267,7 +267,7 @@ test("T22: link published before materialized flag -> reconcile completes, no du
 });
 
 // ---------------------------------------------------------------------------
-test("batch notice caps at 6 items and points at /inbox.md", () => {
+test("010. Batch notice caps at 6 items and points at /inbox.md", () => {
   const ids = Array.from({ length: 10 }, (_, i) => generateMessageId(generateOperationId(), i));
   const notice = batchNotice(ids);
   const lines = notice.split("\n");
@@ -276,7 +276,7 @@ test("batch notice caps at 6 items and points at /inbox.md", () => {
   assert.ok(notice.endsWith("/inbox.md"));
 });
 
-test("T32: path-based views — rename is atomic, open fd keeps old content", () => {
+test("011. Path-based views — rename is atomic, open fd keeps old content", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-t32-"));
   const target = join(dir, "inbox.md");
   writeAtomic(target, "v1\n");

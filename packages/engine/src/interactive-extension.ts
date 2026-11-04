@@ -1,5 +1,5 @@
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { PI_BOUNDARY_PREFIX } from '@oma/protocol/delivery-boundary';
+import { PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX, PI_DELIVERY_NOT_STARTED_PREFIX } from '@oma/protocol/delivery-boundary';
 import { UNSEEN_EXCEPT_LAYOUT } from '@oma/domain/unseen-text';
 import { adaptInteractiveUi } from './pi-compat/interactive-ui.js';
 import { ownedEditor } from './pi-compat/prompt-editor.js';
@@ -12,6 +12,16 @@ import type { InteractiveInput } from './interactive-input.js';
 import type { createInteractiveSelections } from './interactive-selections.js';
 import type { createInteractiveEvents } from './interactive-events.js';
 import type { ProjectSessionDirectories } from './session-directories.js';
+/** AUD-03: the delivery protocol's notices are the host's evidence, not text
+ * for the Human's screen. The trusted extension raises them through
+ * `ctx.ui.notify`, and the interactive engine is the Principal's only spawn --
+ * so the bridge has to hand every one of them to the host channel the
+ * Principal's delivery watches. The run boundary and the never-started
+ * preflight refusal decide whether a delivery happened and whether the
+ * session's claim is given back; each must reach the host whether or not
+ * anything draws it. Human-facing notices (the extension's own sentences)
+ * carry none of these spellings and stay on the terminal. */
+const DELIVERY_NOTICE_PREFIXES: readonly string[] = [PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX, PI_DELIVERY_NOT_STARTED_PREFIX];
 export function createInteractiveExtension(input: {
     presentation: EnginePresentation;
 }, view: InteractiveView, state: InteractiveState, human: InteractiveInput, choices: ReturnType<typeof createInteractiveSelections>, events: ReturnType<typeof createInteractiveEvents>, sessionDirs: ProjectSessionDirectories, limits: {
@@ -24,6 +34,7 @@ export function createInteractiveExtension(input: {
         // OMA's, and Pi's own renderers still draw a row's opened body.
         const compact = input.presentation.createCompactTools();
         pi.registerToolRenderer(compact.resolver);
+        pi.registerMessageRenderer("oma-mail", input.presentation.renderMail);
         pi.on("agent_start", () => compact.agentStarted());
         pi.on("agent_end", () => compact.agentEnded());
         pi.on("tool_execution_start", event => compact.toolStarted(event.toolCallId));
@@ -33,6 +44,10 @@ export function createInteractiveExtension(input: {
             description: "Open oma settings: Dashboard, Config, Mail (also Ctrl+X)", handler: async () => {
                 view.openPanel();
             }
+        });
+        if (human.hostControlNavigation) pi.registerCommand("control", {
+            description: "End this conversation and return the terminal to the host's private Human editor; no Worker/Society command",
+            handler: async args => { human.hostNavigation(`/control${args.length > 0 ? ` ${args}` : ""}`); }
         });
         pi.registerCommand("society", {
             description: "Choose Personal or Society before starting a conversation", handler: choices.chooseSessionMode
@@ -72,7 +87,7 @@ export function createInteractiveExtension(input: {
                 editor: factory => factory && ((tui, theme, keys) => {
                     view.editorInstalled = true;
                     return ownedEditor(factory(tui, theme, keys), {
-                        submit: human.submit, isCommand: human.isCommand, thinkingVisibility: human.thinkingVisibility, extensionCommand: human.extensionCommand, panel: view.openPanel, suggest: human.suggest,
+                        hostNavigation: human.hostNavigation, submit: human.submit, isCommand: human.isCommand, thinkingVisibility: human.thinkingVisibility, extensionCommand: human.extensionCommand, panel: view.openPanel, suggest: human.suggest,
                         frameBytes: limits.frameBytes,
                         refuse: () => ctx.ui.notify("Input exceeds the allowed size; edit the draft before submitting.", "warning"),
                         pasteImage: () => ctx.ui.notify("Pasted images are not sent; an oma prompt is text only.", "warning")
@@ -93,7 +108,7 @@ export function createInteractiveExtension(input: {
                     };
                 }),
                 notify: (message, level, upstream) => {
-                    if (message.startsWith(PI_BOUNDARY_PREFIX)) {
+                    if (DELIVERY_NOTICE_PREFIXES.some(prefix => message.startsWith(prefix))) {
                         rpc.send({
                             type: "extension_ui_request", method: "notify", message, notifyType: level ?? "info"
                         });

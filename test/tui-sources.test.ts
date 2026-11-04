@@ -1,3 +1,4 @@
+import { principalPaths } from "./fixtures/principal-paths.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -20,30 +21,27 @@ import { STATUS_STALE_MS, encodeStatusView, statusViewPath } from "@oma/protocol
 import { sessionArgv } from "@oma/engine/principal-session";
 function digest(text: string): string { return createHash("sha256").update(text).digest("hex"); }
 function config(root: string): HostConfig {
-    return {
-        schemaVersion: 4,
-        society: "demo",
-        installation: { node: process.execPath, libdir: root,  deploymentDigest: digest("d") },
-        modelProfiles: {
-            cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
-            strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
-        },
-        agentProfiles: {
-            principal: { modelProfile: "strong", capabilities: [], delegable: [], childProfile: "resident" },
-            resident: { modelProfile: "cheap", capabilities: [], delegable: [], childProfile: null },
-        },
-        principalProfile: "principal",
-        initialResidents: [{ name: "a", profile: "resident", brief: "seed a" }, { name: "b", profile: "resident", brief: "seed b" }],
-        integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
-        limits: {
-            frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64,
-            contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576,
-            batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1,
-        }
-    };
+    return {schemaVersion: 4, maxWorkers: 16, society: "demo",
+    installation: { node: process.execPath, libdir: root,  deploymentDigest: digest("d") },
+    modelProfiles: {
+        cheap: { provider: "p", model: "cheap", inferenceTimeoutSeconds: 1 },
+        strong: { provider: "p", model: "strong", inferenceTimeoutSeconds: 1 },
+    },
+    agentProfiles: {
+        principal: { modelProfile: "strong", capabilities: [], delegable: [], childProfile: "resident" },
+        resident: { modelProfile: "cheap", capabilities: [], delegable: [], childProfile: null },
+    },
+    principalProfile: "principal",
+    initialResidents: [{ name: "a", profile: "resident", brief: "seed a" }, { name: "b", profile: "resident", brief: "seed b" }],
+    integration: { policyRevision: "rev-initial", protectedPaths: [], checks: [] },
+    limits: {
+        frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64, replyReferences: 64,
+        contextFiles: 256, contextBytes: 8388608, bundleBytes: 268435456, logBytes: 1048576,
+        batchMaxMessages: 24, idleStreamSeconds: 1, receiptWaitSeconds: 1,
+    }};
 }
 function scratch(prefix: string): string { return mkdtempSync(join(tmpdir(), prefix)); }
-test("T93/TUI-005,009: a Principal model change rewrites only its profile reference", () => {
+test("001. A Principal model change rewrites only its profile reference", () => {
     const root = scratch("oma-tui-settings-");
     try {
         const settings = settingsOf(join(root, "config.json"), config(root));
@@ -59,7 +57,7 @@ test("T93/TUI-005,009: a Principal model change rewrites only its profile refere
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T93/TUI-005: an undeclared model or profile name is refused, not coerced", () => {
+test("002. An undeclared model or profile name is refused, not coerced", () => {
     const root = scratch("oma-tui-settings-");
     try {
         const settings = settingsOf(join(root, "config.json"), config(root));
@@ -71,7 +69,7 @@ test("T93/TUI-005: an undeclared model or profile name is refused, not coerced",
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T94/TUI-007: writing settings replaces config.json atomically with a fresh policy revision", () => {
+test("003. Writing settings replaces config.json atomically with a fresh policy revision", () => {
     const root = scratch("oma-tui-write-");
     try {
         const path = join(root, "config.json");
@@ -94,7 +92,7 @@ test("T94/TUI-007: writing settings replaces config.json atomically with a fresh
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T96/TUI-008: Initial workers is bootstrap seed only and never touches the running quota", () => {
+test("004. Initial workers is bootstrap seed only and never touches the running quota", () => {
     const root = scratch("oma-tui-seed-");
     try {
         const settings = settingsOf(join(root, "config.json"), config(root));
@@ -113,7 +111,7 @@ test("T96/TUI-008: Initial workers is bootstrap seed only and never touches the 
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T96/TUI-007: every exposed field declares an apply scope that matches its real effect", () => {
+test("005. Every exposed field declares an apply scope that matches its real effect", () => {
     const root = scratch("oma-tui-scope-");
     try {
         const fields = fieldsOf(config(root), "resident");
@@ -130,7 +128,7 @@ test("T96/TUI-007: every exposed field declares an apply scope that matches its 
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T97/TUI-010: the core extension stays first and selection is confined to libdir", () => {
+test("006. The core extension stays first and selection is confined to libdir", () => {
     const fixture = createCompleteConfigurationFixture();
     try {
         const extensionDir = join(fixture.installation, "extensions");
@@ -168,7 +166,7 @@ test("T97/TUI-010: the core extension stays first and selection is confined to l
         fixture.close();
     }
 });
-test("T97/TUI-010: an inline config exposes only the locked core and refuses edits", () => {
+test("007. An inline config exposes only the locked core and refuses edits", () => {
     const root = scratch("oma-tui-inline-");
     try {
         const path = join(root, "config.json");
@@ -183,7 +181,7 @@ test("T97/TUI-010: an inline config exposes only the locked core and refuses edi
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("TUI-010/WP14.04: the written entry list keeps the core first, stays deduplicated and keeps the authored order", () => {
+test("008. The written entry list keeps the core first, stays deduplicated and keeps the authored order", () => {
     assert.deepEqual(nextEntries([CORE_EXTENSION], "extensions/b.js", true), [CORE_EXTENSION, "extensions/b.js"]);
     // Enabling appends; it does not re-sort what the host authored.
     assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/b.js"], "extensions/a.js", true), [CORE_EXTENSION, "extensions/b.js", "extensions/a.js"]);
@@ -191,7 +189,7 @@ test("TUI-010/WP14.04: the written entry list keeps the core first, stays dedupl
     assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/a.js"], "extensions/a.js", true), [CORE_EXTENSION, "extensions/a.js"]);
     assert.deepEqual(nextEntries([CORE_EXTENSION], CORE_EXTENSION, false), [CORE_EXTENSION]);
 });
-test("T98/TUI-011: unread comes from the mailbox position, and no read state is written", () => {
+test("009. Unread comes from the mailbox position, and no read state is written", () => {
     const root = scratch("oma-tui-mail-");
     try {
         const box = principalMailbox(root);
@@ -219,7 +217,7 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("B4: mail rows name parties by the roster, and keep the header's names without one", () => {
+test("010. Mail rows name parties by the roster, and keep the header's names without one", () => {
     const root = scratch("oma-tui-names-");
     try {
         const box = principalMailbox(root);
@@ -256,7 +254,7 @@ test("B4: mail rows name parties by the roster, and keep the header's names with
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AV-11: arrival order comes from the journal; inode times are only its fallback", () => {
+test("011. Arrival order comes from the journal; inode times are only its fallback", () => {
     const root = scratch("oma-tui-arrival-");
     try {
         const box = principalMailbox(root);
@@ -291,7 +289,7 @@ test("AV-11: arrival order comes from the journal; inode times are only its fall
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("mail-v1 / spec §6: a thread folds into the latest arrival's row; earlier revisions stay reachable", () => {
+test("012. Mail-v1 / spec §6: a thread folds into the latest arrival's row; earlier revisions stay reachable", () => {
     const root = scratch("oma-tui-thread-");
     try {
         const box = principalMailbox(root);
@@ -330,7 +328,7 @@ test("mail-v1 / spec §6: a thread folds into the latest arrival's row; earlier 
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("TUI-011: folded and encoded headers are read without truncating the subject", () => {
+test("013. Folded and encoded headers are read without truncating the subject", () => {
     const encoded = Buffer.from("긴 제목", "utf8").toString("base64");
     const parsed = parseMessage([
         "From: a@demo.oma.invalid",
@@ -344,7 +342,7 @@ test("TUI-011: folded and encoded headers are read without truncating the subjec
     assert.equal(parsed.headers["references"], "<one@x> <two@x>");
     assert.equal(parsed.body, "body");
 });
-test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of guessing", () => {
+test("014. The Dashboard keeps an unobserved value unknown instead of guessing", () => {
     const root = scratch("oma-tui-dash-");
     try {
         const cfg = config(root);
@@ -385,7 +383,7 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("P0V-66 / R11, P0-5: mail in a batch prepared while the session was in a turn still waits for it", () => {
+test("015. Mail in a batch prepared while the session was in a turn still waits for it", () => {
     const root = scratch("oma-tui-prepared-");
     try {
         // The batch was prepared -- its two messages left new/ for cur/ -- and the
@@ -405,7 +403,7 @@ test("P0V-66 / R11, P0-5: mail in a batch prepared while the session was in a tu
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("TUI-012/SB-002-E: the Dashboard states required confinement without claiming an observed execution", () => {
+test("016. The Dashboard states required confinement without claiming an observed execution", () => {
     const root = scratch("oma-tui-sandbox-");
     try {
         const lines = dashboardLines({
@@ -418,7 +416,7 @@ test("TUI-012/SB-002-E: the Dashboard states required confinement without claimi
     } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("TUI-021: the Dashboard reads the broker's status view and never invents one", async () => {
+test("017. The Dashboard reads the broker's status view and never invents one", async () => {
     const root = scratch("oma-tui-view-");
     try {
         let clock = Date.UTC(2026, 8, 19, 12, 0, 0);
@@ -451,7 +449,7 @@ test("TUI-021: the Dashboard reads the broker's status view and never invents on
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("TUI-021: a malformed or foreign status view is unknown, not partially shown", async () => {
+test("018. A malformed or foreign status view is unknown, not partially shown", async () => {
     const root = scratch("oma-tui-view-bad-");
     try {
         const now = Date.UTC(2026, 8, 19);
@@ -478,8 +476,8 @@ test("TUI-021: a malformed or foreign status view is unknown, not partially show
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T92/TUI-004,014: the Principal session runs Pi in RPC mode; OMA suppresses only extension discovery", () => {
-    const argv = sessionArgv({ piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" }, { society: "demo", provider: "pi", model: "current", extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }] });
+test("019. The Principal session runs Pi in RPC mode; OMA suppresses only extension discovery", () => {
+    const argv = sessionArgv({ piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", ...principalPaths(), home: "/h" }, { society: "demo", provider: "pi", model: "current", extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }] });
     assert.equal(argv[0], "--mode");
     assert.equal(argv[1], "rpc");
     for (const flag of ["--no-approve", "--no-extensions"])
@@ -495,10 +493,10 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode; OMA suppresses
     // The core extension is passed once, not duplicated by the profile list.
     assert.equal(argv.filter(entry => entry === "/lib/core.js").length, 1);
     assert.ok(argv.includes("/lib/review.js"));
-    const pinned = sessionArgv({ piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" }, { society: "demo", provider: "openai-codex", model: "gpt", extensions: [] });
+    const pinned = sessionArgv({ piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", ...principalPaths(), home: "/h" }, { society: "demo", provider: "openai-codex", model: "gpt", extensions: [] });
     assert.equal(pinned[pinned.indexOf("--model") + 1], "openai-codex/gpt");
 });
-test("DR27/CREATE-003: obsolete Worker quota is absent from settings", () => {
+test("020. Obsolete Worker quota is absent from settings", () => {
     const root = scratch("oma-total-workers-");
     try {
         assert.equal(fieldsOf(config(root), "resident").some(field => field.id === "worker-limit"), false);
@@ -510,7 +508,7 @@ test("DR27/CREATE-003: obsolete Worker quota is absent from settings", () => {
 });
 for (const desired of ["provisioning", "enabled", "stopped", "retired"] as const)
     for (const activeState of ["active", "inactive"] as const)
-        test(`DR27/CREATE-003: ${desired}/${activeState} consumes one created slot; activity stays a separate observation`, () => {
+        test(`021. Tui sources: ${desired}/${activeState} consumes one created slot; activity stays a separate observation`, () => {
             const cfg = config("/fixture");
             const status: AgentStatus = { agent: "worker", desired, activeState, subState: null, unitResult: null, execMainStatus: null,
                 pending: 0, preparedBatches: 0, reason: null, runnerObservedAtMs: null };
@@ -520,7 +518,7 @@ for (const desired of ["provisioning", "enabled", "stopped", "retired"] as const
             assert.equal(rows.get("Workers"), "1 created");
             assert.equal(rows.get("Active"), activeState === "active" ? "1" : "0");
         });
-test("DR27/P0-5: an unknown unit does not erase its created slot or invent active capacity", () => {
+test("022. An unknown unit does not erase its created slot or invent active capacity", () => {
     const status: AgentStatus = { agent: "worker", desired: "enabled", activeState: null, subState: null, unitResult: null,
         execMainStatus: null, pending: 0, preparedBatches: 0, reason: "Unit unavailable", runnerObservedAtMs: null };
     const rows = new Map(dashboardLines({ config: config("/fixture"), principalModel: { configured: "strong", session: null }, unread: 0,

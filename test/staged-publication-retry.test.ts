@@ -19,7 +19,7 @@ const verify = (root: string): void => {
   assert.equal(readFileSync(join(root, "GOAL.md"), "utf8"), "frozen\n");
 };
 
-test("a completed rename can be retried without recreating its missing staging tree", () => {
+test("001. A completed rename can be retried without recreating its missing staging tree", () => {
   const f = fixture();
   try {
     assert.equal(publishStagedDirectory(f.staging, f.destination, verify), "published");
@@ -32,7 +32,7 @@ test("a completed rename can be retried without recreating its missing staging t
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("ENOENT from existing-destination verification is not permission to replace it", () => {
+test("002. ENOENT from existing-destination verification is not permission to replace it", () => {
   const f = fixture();
   try {
     mkdirSync(f.destination);
@@ -45,7 +45,7 @@ test("ENOENT from existing-destination verification is not permission to replace
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("existing different trees and symlink destinations are never merged or removed", () => {
+test("003. Existing different trees and symlink destinations are never merged or removed", () => {
   const f = fixture();
   try {
     mkdirSync(f.destination);
@@ -62,7 +62,7 @@ test("existing different trees and symlink destinations are never merged or remo
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("derived current links do not traverse their target and leave no temporary aliases", () => {
+test("004. Derived current links do not traverse their target and leave no temporary aliases", () => {
   const f = fixture();
   try {
     const current = join(f.root, "current");

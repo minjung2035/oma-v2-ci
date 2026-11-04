@@ -1,5 +1,6 @@
 /** Restic argv and child/FD lifetime. Storage supplies stream validation;
  * this module cannot interpret checkpoints, tree digests or archive metadata. */
+import { randomUUID } from "node:crypto";
 import { closeSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
@@ -65,7 +66,7 @@ export class ResticProcess {
     }, () => closeSync(fd));
   }
   async inventory(snapshot: string): Promise<string> {
-    const file = join(this.options.stage, "snapshot-inventory.jsonl");
+    const file = join(this.options.stage, `snapshot-inventory-${randomUUID()}.jsonl`);
     await this.execute(["ls", "--long", snapshot], { spool: file }); return file;
   }
   async dump(snapshot: string, consume: (bytes: Uint8Array) => void): Promise<void> {

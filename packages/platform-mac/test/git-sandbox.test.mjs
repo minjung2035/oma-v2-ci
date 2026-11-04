@@ -11,9 +11,9 @@ const tools=describeMacDeveloperTools(developer,developer+'/usr/bin/git',develop
 const host={node:'/opt/pinned-node/bin/node',libdir:'/opt/oma installation',tools};
 const root='/private/var/oma/staging/한 글자 "\\line\nstage',project='/private/var/oma/repos/project.git';
 const candidate='a'.repeat(40),view={git:tools.git,project,workspace:root+'/workspace'};
-const check=snapshotIntegrationPolicy({policyRevision:'test',protectedPaths:[],checks:[{id:'exact',argv:['node','literal "\\$()\narg'],
+const check=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', protectedPaths: [], checks: [{id:'exact',argv:['node','literal "\\$()\narg'],
   env:{HOME:'/human',PATH:'/human/bin',GIT_CONFIG_GLOBAL:'/human/gitconfig',CHECK:'literal'}}]}).checks[0];
-test('Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks',()=>{
+test("001. Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks",()=>{
   const recipe=candidateSeatbelt(host,view,root+'/tmp',candidate,check),env=recipe.command.env;
   assert.deepEqual(recipe.command.argv.slice(0,2),['--profile-stdin','--keep-fds=6,8,9']);
   assert.deepEqual(recipe.privateInputs,[]);assert.ok(recipe.command.input instanceof Uint8Array);
@@ -28,7 +28,7 @@ test('Mac setup describes the selected exact developer bundle without granting i
   assert.ok(!recipe.profile.includes(`(allow process-exec* (subpath ${JSON.stringify(project)}))`));
   for(const broad of ['/Applications','/Library','/Users','/private/var/oma'])assert.ok(!recipe.profile.includes(`(subpath ${JSON.stringify(broad)})`));
 });
-test('Mac quarantine separates readonly accepted input, writable verify repo and canonical promotion',()=>{
+test("002. Mac quarantine separates readonly accepted input, writable verify repo and canonical promotion",()=>{
   const base={candidate,exportRef:exportRefForRequestKey('mac-plan'),prerequisites:[]};
   for(const phase of ['verify','import']){
     const view={git:tools.git,project,root,bundle:root+'/input.bundle',temporary:root+'/'+phase+'-tmp'};
@@ -40,12 +40,12 @@ test('Mac quarantine separates readonly accepted input, writable verify repo and
     assert.equal(recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(root+'/repo')}))`),phase==='verify');
   }
 });
-test('Mac setup refuses overlapping staging, widened toolchains and loader injection',async()=>{
+test("003. Mac setup refuses overlapping staging, widened toolchains and loader injection",async()=>{
   for(const temporary of [project,project+'/tmp',view.workspace,view.workspace+'/tmp','/'])
     assert.throws(()=>candidateSeatbelt(host,view,temporary,candidate,check));
   for(const libdir of ['/private/var/oma',project,view.workspace])
     assert.throws(()=>candidateSeatbelt({...host,libdir},view,root+'/tmp',candidate,check),{code:'UNSUPPORTED_PROFILE'});
-  const injected=snapshotIntegrationPolicy({policyRevision:'test',protectedPaths:[],checks:[{id:'bad',argv:['node'],env:{DYLD_INSERT_LIBRARIES:'/human/inject'}}]}).checks[0];
+  const injected=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', protectedPaths: [], checks: [{id:'bad',argv:['node'],env:{DYLD_INSERT_LIBRARIES:'/human/inject'}}]}).checks[0];
   assert.throws(()=>candidateSeatbelt(host,view,root+'/tmp',candidate,injected),{code:'UNSUPPORTED_PROFILE'});
   for(const input of [['/Applications','/usr/bin/git','/usr/libexec/git-core'],[developer,'/usr/bin/git',tools.execPath],
     [developer,tools.git,'/human/helpers'],[developer+'\n',tools.git,tools.execPath]])assert.throws(()=>describeMacDeveloperTools(...input),{code:'UNSUPPORTED_PROFILE'});

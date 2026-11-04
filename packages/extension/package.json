@@ -28,10 +28,6 @@
       "types": "./dist/principal-channel.d.ts",
       "default": "./dist/principal-channel.js"
     },
-    "./principal-tools": {
-      "types": "./dist/principal-tools.d.ts",
-      "default": "./dist/principal-tools.js"
-    },
     "./prompt-boundary": {
       "types": "./dist/prompt-boundary.d.ts",
       "default": "./dist/prompt-boundary.js"
@@ -65,7 +61,7 @@
     "@oma/tool-hashline": "0.1.0",
     "@oma/tool-web": "0.1.0",
     "@oma/tool-mcp": "0.1.0",
-    "@earendil-works/pi-coding-agent": "1.0.1",
+    "@earendil-works/pi-coding-agent": "1.2.0",
     "typebox": "1.3.27"
   },
   "devDependencies": {

@@ -33,8 +33,8 @@ import { renameAt, linkAt } from "@oma/native/posix-files";
  * step.
  */
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, fstatSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { closeSync, existsSync, fstatSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { StoreError, unobserved } from "@oma/domain/errors";
 import { isValidSocietyName } from "@oma/domain/identifiers";
 import { modelWorkspaceFor } from "@oma/domain/derived";
@@ -47,7 +47,7 @@ import { ensureOwnedDirectory, removeOwnedFile } from "@oma/storage/directory";
 import { TreeLease, collectLeasedTree } from "@oma/storage/tree-lease";
 import { openRegularBeneath, withinDirectory } from "@oma/native/files";
 import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
-import { projectGitPathAt, projectMirrorPathAt } from "@oma/domain/paths";
+import { assertModelScope, collaborationRecordRootPathAt, projectGitPathAt, projectMirrorPathAt } from "@oma/domain/paths";
 
 
 /** Directories the broker, mail and Git modules expect to already exist. */
@@ -285,6 +285,53 @@ function seedEmptyRoot(projectGit: string): boolean {
   return createCanonicalMain(projectGit, commit.stdout.trim(), "the canonical root commit");
 }
 
+/** The physical identity of a path whose tail may not exist yet: every
+ * symlink in the longest existing ancestor is resolved, and the
+ * not-yet-created remainder keeps its names under that ancestor.
+ * `provisionSociety` creates its leaf after this check, so a guard that
+ * compared only the spelling it was given (INV09) admitted a state root that
+ * resolves into the project input -- the alias of the same tree passed while
+ * the canonical spelling was refused, and the Git snapshot taken at the
+ * repository top would carry the Human's private state out of it. An entry
+ * that exists but cannot be resolved (a dangling link, a link loop) has no
+ * physical identity; it is refused, never admitted lexically (P0-5). */
+function physicalPath(path: string): string {
+  let candidate = path;
+  const missing: string[] = [];
+  for (;;) {
+    try { return join(realpathSync(candidate), ...missing.reverse()); }
+    catch (error) {
+      let present: boolean;
+      try { present = lstatSync(candidate, { throwIfNoEntry: false }) !== undefined; }
+      catch { present = true; }
+      if (present)
+        throw new StoreError("UNSUPPORTED_PROFILE", "the society state root cannot be resolved to a physical path");
+      const parent = dirname(candidate);
+      if (parent === candidate) throw error;
+      missing.push(basename(candidate));
+      candidate = parent;
+    }
+  }
+}
+
+/** Project input and private runtime state must never be the same tree. Git
+ * snapshots start at the repository top, even when OMA was invoked below it.
+ * Both the spelling the caller gave and its physical identity are checked:
+ * the first keeps a state root named inside the project refused even when a
+ * link inside the project currently points elsewhere, the second refuses a
+ * spelling that reaches the project through an alias or a not-yet-created
+ * leaf under one. */
+export function assertProjectStateBoundary(projectDir: string, stateRoot: string): void {
+  const source = realpathSync(projectDir);
+  const top = runGitText([...SNAPSHOT_GIT_OPTIONS, "-C", source, "rev-parse", "--show-toplevel"]);
+  const project = top.status === 0 ? realpathSync(top.stdout.replace(/\n$/, "")) : source;
+  const state = physicalPath(stateRoot);
+  try { assertModelScope(project, [stateRoot, state]); }
+  catch (error) {
+    if (!(error instanceof StoreError) || error.code !== "UNSUPPORTED_PROFILE") throw error;
+    throw new StoreError("UNSUPPORTED_PROFILE", "the project input and society state root must not overlap");
+  }
+}
 /** Brings a society's state tree to the point where the broker will start, by
  * creating what is absent and nothing else. Safe to call on every run and safe
  * to lose a race with another start; it reports what it had to create, and
@@ -292,10 +339,7 @@ function seedEmptyRoot(projectGit: string): boolean {
 export function provisionSociety(stateRoot: string, options: ProvisionOptions & { verifyHistory: (repository: string) => Promise<void> }): Promise<ProvisionReport>;
 export function provisionSociety(stateRoot: string, options?: ProvisionOptions): ProvisionReport;
 export function provisionSociety(stateRoot: string, options: ProvisionOptions = {}): ProvisionReport | Promise<ProvisionReport> {
-  // P0-4: a binding publication that died before or after its link left its
-  // private temporary; only the tenure holder writes one, and it runs this.
-  collectBindingTemporaries(stateRoot);
-  collectRepositoryStaging(stateRoot);
+  if (options.projectDir !== undefined) assertProjectStateBoundary(options.projectDir, stateRoot);
   const created: string[] = [];
   for (const relative of [".", ...OWNED_DIRECTORIES]) {
     const path = relative === "." ? stateRoot : join(stateRoot, relative);
@@ -306,6 +350,15 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
     const made = ensureOwnedDurableDirectory(path, dirname(stateRoot), 0o700);
     if (made.includes(path)) created.push(relative);
   }
+  // DR35/MCS-R01: the private engine may open before broker readiness. Create
+  // only its permitted container, never a synthetic empty/healthy projection.
+  const recordRoot = collaborationRecordRootPathAt(stateRoot, "principal");
+  if (ensureOwnedDurableDirectory(recordRoot, stateRoot, 0o700).includes(recordRoot))
+    created.push(relative(stateRoot, recordRoot));
+  // P0-4: a binding publication that died before or after its link left its
+  // private temporary; only the tenure holder writes one, and it runs this.
+  collectBindingTemporaries(stateRoot);
+  collectRepositoryStaging(stateRoot);
   if (options.conversationOnly === true) {
     const report = Object.freeze({ created: Object.freeze(created), seeded: false, seedSource: null, seedNote: null,
       mirrorNote: null, gitlinkNote: null, pendingRepairs: Object.freeze([]) });

@@ -20,8 +20,9 @@ import {
   seedGit,
 } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { runCliWithPeer } from "./fixtures/cli-peer.js";
-import { runCliWithLookup } from "./fixtures/cli-lookup.js";
+import { runClientWithPeer } from "./fixtures/client-peer.js";
+import { runClientWithLookup } from "./fixtures/client-lookup.js";
+import { clientCall } from "./fixtures/client-process.js";
 
 function fixture(format: "sha1" | "sha256" = "sha1") {
   const root = mkdtempSync(join(tmpdir(), "oma-submit-audit-"));
@@ -85,7 +86,7 @@ function probe(home: string, fault: "none" | "git" | "read"): string {
       return spawn(command, args, options);
     };
     fs.openSync = (path, ...args) => { const fd = open(path, ...args); if (typeof path === 'string' && path.endsWith('/candidate.bundle')) bundleFd = fd; return fd; };
-    // P0V-78: the bundle is read through the CLI's one bounded reader.
+    // P0V-78: the bundle is read through the production bounded reader.
     fs.readSync = (fd, ...args) => { if (${JSON.stringify(fault)} === 'read' && fd === bundleFd) throw Object.assign(new Error('controlled bundle read error'), { code: 'EIO' }); return read(fd, ...args); };
     syncBuiltinESMExports();`,
   );
@@ -113,13 +114,12 @@ for (const format of ["sha1", "sha256"] as const)
     "self-contained",
     "already-known",
   ] as const) {
-    test(`CLI submit: ${mode} ${format} uses broker evidence and freezes the original candidate`, async () => {
+    test(`001. Client submit: ${mode} ${format} uses broker evidence and freezes the original candidate`, async () => {
       const f = fixture(format);
       try {
         const key = `submit-${mode}`;
         const preload = probe(f.home, "none");
-        const bodyPath = join(f.home, "body.txt");
-        writeFileSync(bodyPath, "\ufeff  first\r\nsecond\rthird\n \r\n");
+        const bodyText = "\ufeff  first\r\nsecond\rthird\n \r\n";
         writeFileSync(join(f.home, "tmp/keep.txt"), "unrelated fixture");
         const unrelated = gitCommand(f.cwd, [
           "-c",
@@ -132,32 +132,16 @@ for (const format of ["sha1", "sha256"] as const)
           "unrelated root",
         ]);
         const requested = mode === "already-known" ? f.base : f.candidate;
-        const run = await runCliWithPeer(
-          f.home,
-          f.cwd,
-          [
-            "submit",
-            requested,
-            "--request",
-            key,
-            "--to",
-            "b",
-            "--file",
-            bodyPath,
-          ],
+        const run = await runClientWithPeer(f.home, f.cwd,
+          clientCall("publishCandidate", { candidate: requested, to: ["b"], subject: "candidate", body: bodyText }, key),
           async (request, body) => {
             if (request.method === "git.known") {
               assert.deepEqual(request.params, { candidate: requested });
               return {
-                v: 1,
-                id: request.id,
-                ok: true,
+                v: 1, id: request.id, ok: true,
                 result: {
                   hasCandidate: mode === "already-known",
-                  prerequisites:
-                    mode === "self-contained"
-                      ? ["f".repeat(f.base.length), unrelated]
-                      : [f.base],
+                  prerequisites: mode === "self-contained" ? ["f".repeat(f.base.length), unrelated] : [f.base],
                 },
               };
             }
@@ -166,26 +150,12 @@ for (const format of ["sha1", "sha256"] as const)
             const params = request.params as SubmitInput;
             assert.equal(params.candidate, requested);
             assert.equal(params.body, "\ufeff  first\nsecond\rthird\n \n");
-            assert.deepEqual(
-              params.prerequisites,
-              mode === "incremental" ? [f.base] : [],
-            );
-            assert.notEqual(
-              f.base,
-              f.parent,
-              "first parent is not the broker's available base",
-            );
+            assert.deepEqual(params.prerequisites, mode === "incremental" ? [f.base] : []);
+            assert.notEqual(f.base, f.parent, "first parent is not the broker's available base");
             assert.equal(params.bundle === undefined, mode === "already-known");
-            const result = await f.git.submit(
-              gitAuth,
-              key,
-              params,
-              body ?? (async function* () {})(),
-            );
+            const result = await f.git.submit(gitAuth, key, params, body ?? (async function* () {})());
             return { v: 1, id: request.id, ok: true, result };
-          },
-          preload,
-        );
+          }, preload);
         assert.equal(run.signal, null);
         assert.equal(run.status, 0, run.stderr);
         assert.deepEqual(
@@ -199,7 +169,6 @@ for (const format of ["sha1", "sha256"] as const)
         assert.equal(cached.kind, "present");
         if (cached.kind !== "present")
           throw new Error("missing frozen request");
-        rmSync(bodyPath);
         gitCommand(f.cwd, [
           "-c",
           "user.name=Fixture",
@@ -210,13 +179,8 @@ for (const format of ["sha1", "sha256"] as const)
           "-qm",
           "moved HEAD",
         ]);
-        const retry = await runCliWithLookup(
-          f.home,
-          f.cwd,
-          ["submit", "HEAD", "--request", key, "--to", "b", "--file", bodyPath],
-          key,
-          cached.value.lastReceipt!,
-        );
+        const replay = clientCall("publishCandidate", { candidate: "HEAD", to: ["b"], subject: "candidate", body: "changed after freezing" }, key);
+        const retry = await runClientWithLookup(f.home, f.cwd, replay, key, cached.value.lastReceipt!);
         assert.equal(retry.status, 0, retry.stderr);
         assert.equal(retry.requests.length, 1);
         assert.equal(retry.requests[0]!.method, "operation.get");
@@ -226,8 +190,7 @@ for (const format of ["sha1", "sha256"] as const)
         // would matter only for a resend, which a receipt makes unnecessary.
         if (cached.value.digest !== undefined) {
           rmSync(new RequestCache(f.home).bodyPath(key));
-          const lookedUp = await runCliWithLookup(f.home, f.cwd,
-            ["submit", "HEAD", "--request", key, "--to", "b", "--file", bodyPath], key, cached.value.lastReceipt!);
+          const lookedUp = await runClientWithLookup(f.home, f.cwd, replay, key, cached.value.lastReceipt!);
           assert.equal(lookedUp.status, 0, lookedUp.stderr);
           assert.deepEqual(lookedUp.requests.map(request => request.method), ["operation.get"]);
         }
@@ -238,33 +201,28 @@ for (const format of ["sha1", "sha256"] as const)
   }
 
 for (const fault of ["git", "read"] as const) {
-  test(`CLI submit: ${fault} failure cleans the private bundle before exiting`, async () => {
+  test(`002. Client submit: ${fault} failure cleans the private bundle before exiting`, async () => {
     const f = fixture();
     try {
       const key = `failed-${fault}`;
       writeFileSync(join(f.home, "tmp/keep.txt"), "unrelated fixture");
-      const run = await runCliWithPeer(
-        f.home,
-        f.cwd,
-        ["submit", f.candidate, "--request", key],
+      const run = await runClientWithPeer(f.home, f.cwd,
+        clientCall("publishCandidate", { candidate: f.candidate, subject: "candidate", body: "publish" }, key),
         async (request) => {
           assert.equal(request.method, "git.known");
           return {
-            v: 1,
-            id: request.id,
-            ok: true,
+            v: 1, id: request.id, ok: true,
             result: { hasCandidate: false, prerequisites: [f.base] },
           };
-        },
-        probe(f.home, fault),
-      );
+        }, probe(f.home, fault));
       assert.equal(run.signal, null);
       assert.equal(run.status, fault === "git" ? 2 : 3, run.stderr);
-      assert.match(
-        run.stderr,
-        fault === "git" ? /git bundle/ : /controlled bundle read error/,
-      );
-      assert.equal(run.requests.length, 1);
+      const failure = JSON.parse(run.stderr);
+      assert.equal(failure.code, fault === "git" ? "INVALID_REQUEST" : "INTERNAL_ERROR");
+      assert.equal(failure.retry, fault === "git" ? "never" : "same-key");
+      assert.equal(failure.request, key);
+      assert.equal(run.stdout, "");
+      assert.deepEqual(run.requests.map((request) => request.method), ["git.known"]);
       assertTemporaryCleanup(f.home, key);
       assert.equal(new RequestCache(f.home).read(key).kind, "absent");
       assert.equal(f.store.getOperation("a", key), null);

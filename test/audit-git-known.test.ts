@@ -21,6 +21,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
     units: { statusSnapshot: unused },
     views: { status: unused },
     lifecycle: {
+      creation: unused,
       create: async () => unused(),
       start: unused,
       stop: unused,
@@ -80,7 +81,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
   };
 }
 
-test("CLI submit: git.known includes current main and deduplicates published tips", async () => {
+test("001. CLI submit: git.known includes current main and deduplicates published tips", async () => {
   const main = "a".repeat(40);
   const published = "b".repeat(40);
   const query = fixture(4096, main, [main, published, published]);
@@ -94,7 +95,7 @@ test("CLI submit: git.known includes current main and deduplicates published tip
   });
 });
 
-test("CLI submit: git.known remains frame-bounded without hiding candidate presence", async () => {
+test("002. CLI submit: git.known remains frame-bounded without hiding candidate presence", async () => {
   const main = "a".repeat(64);
   const published = Array.from({ length: 100 }, (_, index) =>
     index.toString(16).padStart(64, "0"),

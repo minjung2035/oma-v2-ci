@@ -72,6 +72,8 @@ export class ContextCoordinator {
   }
   private requireRecoveryAuthority(actor: string): void {
     const row = this.store.getAgent(actor);
+    if (row?.role === "resident" && !this.store.societyOpen())
+      throw new StoreError("AGENT_NOT_READY", "society execution is closed");
     if (row?.desired === "stopped" || row?.desired === "retired")
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "stopped actor cannot advance context during recovery");
     if (!row || row.desired !== "enabled" || !capabilitiesOf(row).has("context.publish"))

@@ -31,7 +31,7 @@ function world(send, waitMs = 5000) {
   return { query, sent, timers, fire(timer) { now = timer.at; timers.delete(timer); timer.run(); },
     answer(index, dirs) { query.accept({ type: 'session_dirs', id: sent[index].id, dirs }); } };
 }
-test('DR29: session selector waits across the native timer limit without an early empty list', async () => {
+test("001. Session selector waits across the native timer limit without an early empty list", async () => {
   const w = world(undefined, 0x7fffffff + 5000);
   let settled = false; const pending = w.query.read().then(value => { settled = true; return value; });
   const first = [...w.timers][0]; assert.equal(first.ms, 0x7fffffff);
@@ -51,25 +51,25 @@ async function completed(promise) {
   return result.value;
 }
 
-test('session directories: exact answers include this society once and return the timer', async () => {
+test("002. Session directories: exact answers include this society once and return the timer", async () => {
   const w = world(); const result = w.query.read();
   w.answer(0, ['/other', '/own', '/other']);
   assert.deepEqual(plain(await completed(result)), ['/own', '/other']); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: concurrent requests receive their own out-of-order answers', async () => {
+test("003. Session directories: concurrent requests receive their own out-of-order answers", async () => {
   const w = world(); const first = w.query.read(), second = w.query.read();
   assert.notEqual(w.sent[0].id, w.sent[1].id);
   w.answer(1, ['/second']); w.answer(0, ['/first']);
   assert.deepEqual(plain(await completed(first)), ['/own', '/first']); assert.deepEqual(plain(await completed(second)), ['/own', '/second']);
   assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: an old timeout cannot discard a newer request', async () => {
+test("004. Session directories: an old timeout cannot discard a newer request", async () => {
   const w = world(); const first = w.query.read(), old = [...w.timers][0];
   const second = w.query.read(); w.fire(old); w.answer(1, ['/new']);
   assert.deepEqual(plain(await completed(first)), ['/own']); assert.deepEqual(plain(await completed(second)), ['/own', '/new']);
   assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: late answer and late timer cannot settle the next request', async () => {
+test("005. Session directories: late answer and late timer cannot settle the next request", async () => {
   const w = world(); const first = w.query.read(), old = [...w.timers][0]; w.fire(old); await completed(first);
   let value; const second = w.query.read().then(dirs => { value = dirs; });
   w.answer(0, ['/old']); old.run(); await flush(); assert.equal(value, undefined);
@@ -77,42 +77,80 @@ test('session directories: late answer and late timer cannot settle the next req
   assert.deepEqual(plain(value), ['/own', '/new']); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
 for (const event of [{ type: 'session_dirs', id: undefined, dirs: ['/bad'] }, { type: 'session_dirs', id: 'other', dirs: ['/bad'] },
-  { type: 'notice', dirs: ['/bad'] }, { type: 'session_dirs', dirs: [3] }, { type: 'session_dirs', dirs: '/bad' }]) {
-  test(`session directories: malformed or mismatched response is ignored ${JSON.stringify(event)}`, async () => {
+  { type: 'notice', dirs: ['/bad'] }, { type: 'session_dirs', dirs: [3] }, { type: 'session_dirs', dirs: '/bad' },
+  { type: 'session_dirs', dirs: ['/bad'], more: 'yes' }, { type: 'session_dirs', dirs: ['/bad'], more: null }]) {
+  test(`006. Session directories: malformed or mismatched response is ignored ${JSON.stringify(event)}`, async () => {
     const w = world(); let settled = false; const result = w.query.read().then(dirs => { settled = true; return dirs; });
     w.query.accept({ id: w.sent[0].id, ...event });
     await flush(); assert.equal(settled, false); assert.equal(w.timers.size, 1);
     w.answer(0, ['/valid']); assert.deepEqual(plain(await completed(result)), ['/own', '/valid']);
   });
 }
-test('session directories: send failure rejects and returns the timer', async () => {
+test("007. Session directories: a paginated catalog accumulates in order and settles once on the frame that ends it", async () => {
+  for (const ending of [{}, { more: false }]) {
+    const w = world(); const result = w.query.read(); const id = w.sent[0].id;
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/own', '/a'], more: true });
+    await flush();
+    assert.equal(w.query.pending.size, 1, 'an unfinished run keeps its request open');
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/a', '/b'], more: true });
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/c'], ...ending });
+    assert.deepEqual(plain(await completed(result)), ['/own', '/a', '/b', '/c']);
+    assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/late'], more: true });
+    await flush(); assert.equal(w.query.pending.size, 0, 'a settled request takes no more frames');
+  }
+});
+test("008. Session directories: each paginated run accumulates only its own request", async () => {
+  const w = world(); const first = w.query.snapshot(), second = w.query.read();
+  const [firstId, secondId] = [w.sent[0].id, w.sent[1].id];
+  w.query.accept({ type: 'session_dirs', id: firstId, dirs: ['/first-a'], more: true });
+  w.query.accept({ type: 'session_dirs', id: secondId, dirs: ['/second'] });
+  w.query.accept({ type: 'session_dirs', id: firstId, dirs: ['/first-b'] });
+  assert.deepEqual(plain(await completed(second)), ['/own', '/second']);
+  const settled = await completed(first);
+  assert.deepEqual(plain(settled.dirs), ['/own', '/first-a', '/first-b']);
+  assert.equal(settled.error, undefined, 'a complete run reports no error');
+  assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
+});
+test("009. Session directories: an error ends the run with what accumulated and says so", async () => {
+  for (const errorAtEnd of [false, true]) {
+    const w = world(); const result = w.query.snapshot(); const id = w.sent[0].id;
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/a'], more: true });
+    w.query.accept({ type: 'session_dirs', id, dirs: ['/b'], ...(errorAtEnd ? { more: true } : {}), error: 'catalog unavailable' });
+    const snapshot = await completed(result);
+    assert.deepEqual(plain(snapshot.dirs), ['/own', '/a', '/b']);
+    assert.equal(snapshot.error, 'catalog unavailable', 'a partial catalog is never returned as a whole one');
+    assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
+  }
+});
+test("010. Session directories: send failure rejects and returns the timer", async () => {
   const problem = new Error('send failed'), w = world(() => { throw problem; });
   await assert.rejects(w.query.read(), error => error === problem); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: abort settles only its request and detaches its listener', async () => {
+test("011. Session directories: abort settles only its request and detaches its listener", async () => {
   const w = world(), controller = new AbortController(), reason = new Error('selector closed');
   const first = w.query.read(controller.signal), rejected = assert.rejects(first, error => error === reason), second = w.query.read();
   controller.abort(reason); await rejected; assert.equal(w.timers.size, 1);
   w.answer(0, ['/old']); w.answer(1, ['/new']); assert.deepEqual(plain(await completed(second)), ['/own', '/new']);
 });
-test('session directories: pre-abort sends nothing', async () => {
+test("012. Session directories: pre-abort sends nothing", async () => {
   const w = world(), controller = new AbortController(); controller.abort(new Error('gone'));
   await assert.rejects(w.query.read(controller.signal), /gone/); assert.equal(w.sent.length, 0); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: reply detaches cancellation and late abort changes nothing', async () => {
+test("013. Session directories: reply detaches cancellation and late abort changes nothing", async () => {
   const w = world(); const listeners = new Set();
   const signal = { aborted: false, addEventListener(_type, fn) { listeners.add(fn); }, removeEventListener(_type, fn) { listeners.delete(fn); } };
   const result = w.query.read(signal); assert.equal(listeners.size, 1); w.answer(0, ['/ok']);
   assert.deepEqual(plain(await completed(result)), ['/own', '/ok']); assert.equal(listeners.size, 0); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: owner close settles all pending observations once and forbids reacquisition', async () => {
+test("014. Session directories: owner close settles all pending observations once and forbids reacquisition", async () => {
   const w = world(); const first = w.query.read(), second = w.query.read(); const old = [...w.timers];
   w.query.close(); w.query.close(); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
   assert.deepEqual(plain(await completed(first)), ['/own']); assert.deepEqual(plain(await completed(second)), ['/own']);
   for (const timer of old) timer.run(); w.answer(0, ['/late']);
   assert.deepEqual(plain(await completed(w.query.read())), ['/own']); assert.equal(w.sent.length, 2); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);
 });
-test('session directories: synchronous answer and channel close during send return every timer', async () => {
+test("015. Session directories: synchronous answer and channel close during send return every timer", async () => {
   for (const close of [false, true]) {
     const w = world(event => close ? w.query.close() : w.query.accept({ type: 'session_dirs', id: event.id, dirs: ['/sync'] }));
     assert.deepEqual(plain(await completed(w.query.read())), close ? ['/own'] : ['/own', '/sync']); assert.equal(w.timers.size, 0); assert.equal(w.query.pending.size, 0);

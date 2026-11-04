@@ -103,7 +103,6 @@ try {
     paths: {
       piCommand: process.env.OMA_PI_COMMAND ?? "/usr/bin/pi",
       coreExtension: resolve("packages/extension/dist/index.js"),
-      cli: resolve("apps/oma/dist/cli.js"),
       workspace,
       sessionDir: sessions,
       agentHome,

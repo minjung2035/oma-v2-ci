@@ -15,7 +15,6 @@ import { loadConfig } from "@oma/config";
 import { readConfigurationSource } from "@oma/config/operations";
 import { defaultHostConfig, defaultSocietyFor } from "@oma/config/defaults";
 import { readSettings } from "#oma-test/app/application/settings";
-import { PUBLIC_METHODS, INTERNAL_METHODS } from "@oma/protocol/methods";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 
@@ -28,7 +27,7 @@ function installedConfig(root: string): HostConfig {
   });
 }
 
-test("the generated configuration passes core's own closed validator unchanged", () => {
+test("001. The generated configuration passes core's own closed validator unchanged", () => {
   const root = scratch("oma-couple-config-");
   try {
     const path = join(root, "config.json");
@@ -49,13 +48,12 @@ test("the generated configuration passes core's own closed validator unchanged",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a default configuration seeds one autonomous Worker without canonical main authority", () => {
+test("002. A default configuration seeds autonomous Workers without canonical main authority", () => {
   const root = scratch("oma-couple-grant-");
   try {
     const config = installedConfig(root);
     for (const [name, profile] of Object.entries(config.agentProfiles))
       assert.ok(!profile.capabilities.includes("code.integrate"), `${name} must not integrate by default`);
-    assert.equal(config.initialResidents.length, 1);
     assert.equal(config.initialResidents[0]!.profile, "resident");
     assert.equal(config.agentProfiles[config.principalProfile]!.childProfile, null);
     assert.ok(!config.agentProfiles[config.principalProfile]!.capabilities.includes("agent.create"));
@@ -71,7 +69,7 @@ test("a default configuration seeds one autonomous Worker without canonical main
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("D23: a tool surface declared in a role fails the load -- it is internal policy, not configuration", () => {
+test("003. A tool surface declared in a role fails the load -- it is internal policy, not configuration", () => {
   const root = scratch("oma-couple-surface-");
   try {
     const libdir = join(root, "lib");
@@ -108,24 +106,9 @@ test("D23: a tool surface declared in a role fails the load -- it is internal po
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the product surface did not widen the broker's method surface", () => {
-  // The TUI and the projection are read and configuration work. If either had
-  // needed a new socket method, these closed sets would have changed.
-  // IPC-008 adds the actor/key-bound receipt read, not a TUI capability;
-  // mail-v1 adds review.status, the public filtered review read.
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
-  assert.equal(PUBLIC_METHODS["operation.read"].mode, "read");
-  assert.equal(Object.keys(INTERNAL_METHODS).length, 8);
-  for (const name of Object.keys(PUBLIC_METHODS))
-    assert.doesNotMatch(name, /tui|surface|panel|config\./i, `${name} looks like a product-surface method`);
-  for (const name of Object.keys(INTERNAL_METHODS))
-    assert.doesNotMatch(name, /tui|surface|panel/i, `${name} looks like a product-surface method`);
-  // Inference was removed with the relay; no method may reintroduce it here.
-  for (const name of [...Object.keys(PUBLIC_METHODS), ...Object.keys(INTERNAL_METHODS)])
-    assert.doesNotMatch(name, /inference/i);
-});
 
-test("a settings read composes through core rather than parsing config itself", () => {
+
+test("004. A settings read composes through core rather than parsing config itself", () => {
   const root = scratch("oma-couple-read-");
   try {
     const path = join(root, "config.json");

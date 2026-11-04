@@ -41,7 +41,7 @@ function seed(path: string): Store {
   return store;
 }
 
-test("R10: full-row scalars never coerce numeric strings, flags or incomplete projections", () => {
+test("001. Full-row scalars never coerce numeric strings, flags or incomplete projections", () => {
   for (const invalid of ["1", 1.5, Number.MAX_SAFE_INTEGER + 1, -1, NaN, Infinity]) assert.throws(() => safeInteger(invalid, "fixture"), isCorrupt);
   const agent = makeValidAgent();
   const raw = { name: agent.name, spec_hash: agent.specHash, role: agent.role, desired: agent.desired, incarnation: 1,
@@ -57,7 +57,7 @@ test("R10: full-row scalars never coerce numeric strings, flags or incomplete pr
   assert.throws(() => decodeDeliveryRow({ ...delivery, presented: "0" }), isCorrupt);
 });
 
-test("R10: one-field durable corruption fails before validated values escape on get and list", () => {
+test("002. One-field durable corruption fails before validated values escape on get and list", () => {
   const cases: Array<{ table: string; column: string; value: SQLInputValue; where: string; get: (store: Store) => unknown; list: (store: Store) => unknown }> = [
     { table: "agents", column: "spec_hash", value: "f".repeat(64), where: "name='alice'", get: s => s.getAgent("alice"), list: s => s.listAgents() },
     { table: "agents", column: "role", value: "principal", where: "name='alice'", get: s => s.getAgent("alice"), list: s => s.listAgents() },
@@ -92,7 +92,7 @@ test("R10: one-field durable corruption fails before validated values escape on 
   }
 });
 
-test("R10: normal restart and independent acknowledgement preserve exact facts", () => {
+test("003. Normal restart and independent acknowledgement preserve exact facts", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-row-restart-"));
   const path = join(root, "runtime.sqlite");
   seed(path).close();

@@ -8,28 +8,48 @@
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { isMutationMethod } from "./receipt-codec.js";
 
-/** The version this build reads and writes. v0.1.0 is a pre-release: no
- * backward compatibility with development-time formats is owed, so the only
- * readable version is the one this build writes. Any other persisted version
- * is fail-closed: no migration is attempted and no rewrite happens. */
-export const SCHEMA_USER_VERSION_WRITTEN = 4;
-export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([SCHEMA_USER_VERSION_WRITTEN]);
+/** Version 5 gates durable review/resource changes. Version 4 is read only
+ * long enough for the Store owner to make a durable backup and advance the
+ * schema gate. Historical intent/result bytes are never rewritten. */
+export const SCHEMA_USER_VERSION_WRITTEN = 5;
+export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([4, SCHEMA_USER_VERSION_WRITTEN]);
 export const WIRE_PROTOCOL_VERSION = 1;
 /** DR51: process-crash recovery observations, not accepted intent or a task queue. */
 export const EXECUTION_JOURNAL_VERSION = 2 as const;
-/** The envelope identifies the only accepted development plan format. */
+/** Legacy producers retain their original development envelope on new legacy work. */
 export const PLAN_ENVELOPE_VERSION = 3 as const;
+/** Only collaboration mail uses v4. Legacy producers continue to write v3. */
+export const COLLABORATION_PLAN_ENVELOPE_VERSION = 4 as const;
+export const COLLABORATION_PUBLICATION_PLAN_ENVELOPE_VERSION = 5 as const;
+/** Legacy/default writer metadata is unchanged; explicit collaboration has its own writer. */
 export const PLAN_FORMAT_WRITTEN = "v3" as const;
-export const PLAN_FORMAT_READABLE: readonly string[] = Object.freeze(["v2", PLAN_FORMAT_WRITTEN]);
+export const COLLABORATION_PLAN_FORMAT_WRITTEN = "v4" as const;
+export const PLAN_FORMATS_WRITTEN: readonly string[] = Object.freeze([PLAN_FORMAT_WRITTEN, COLLABORATION_PLAN_FORMAT_WRITTEN, "v5"]);
+export const PLAN_FORMAT_READABLE: readonly string[] = Object.freeze(["v2", ...PLAN_FORMATS_WRITTEN]);
 
+/** One writer-version owner; classification never validates or upgrades an intent. */
+export function planEnvelopeVersion(value: unknown): 3 | 4 | 5 {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return PLAN_ENVELOPE_VERSION;
+  const intent = value as Record<string, unknown>;
+  if (intent.kind === "agent.create" && Object.hasOwn(intent, "source")) return COLLABORATION_PUBLICATION_PLAN_ENVELOPE_VERSION;
+  if (intent.kind !== "mail.send" || !Object.hasOwn(intent, "attachments")) return PLAN_ENVELOPE_VERSION;
+  const manifest = intent.attachments;
+  const extended = manifest !== null && typeof manifest === "object" && !Array.isArray(manifest) &&
+    (Object.hasOwn(manifest, "freeze") || Array.isArray((manifest as Record<string, unknown>).sources) &&
+      ((manifest as Record<string, unknown>).sources as unknown[]).some(source => source !== null && typeof source === "object" &&
+        (Object.hasOwn(source, "local") || Object.hasOwn(source, "publicationOrdinal") || Object.hasOwn(source, "reachableFrom"))));
+  return extended ? COLLABORATION_PUBLICATION_PLAN_ENVELOPE_VERSION : COLLABORATION_PLAN_ENVELOPE_VERSION;
+}
 /** Envelope inspection only. Intent validation belongs to operation-codec. */
 export function currentPlanIntent(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   const envelope = value as Record<string, unknown>;
   if (Object.keys(envelope).length !== 2 || !Object.hasOwn(envelope, "version") ||
-      !Object.hasOwn(envelope, "intent") || ![2, PLAN_ENVELOPE_VERSION].includes(envelope.version as number)) return null;
+      !Object.hasOwn(envelope, "intent") || ![2, PLAN_ENVELOPE_VERSION, COLLABORATION_PLAN_ENVELOPE_VERSION, COLLABORATION_PUBLICATION_PLAN_ENVELOPE_VERSION].includes(envelope.version as number)) return null;
   if (envelope.intent === null || typeof envelope.intent !== "object" || Array.isArray(envelope.intent)) return null;
   const intent = envelope.intent as Record<string, unknown>;
+  const expected = planEnvelopeVersion(intent);
+  if (envelope.version !== expected && !(envelope.version === 2 && expected === PLAN_ENVELOPE_VERSION)) return null;
   if (intent.kind === "agent.create" && (envelope.version === 2 ? Object.hasOwn(intent, "execution") :
       intent.execution !== "native" || Object.hasOwn(intent, "unitNames"))) return null;
   return intent;
@@ -62,6 +82,15 @@ export const CURRENT_PLAN_FIELDS: readonly PersistedField[] = Object.freeze([
   { kind: "mail.send", field: "message.kind", class: "immutable-logical-fact" },
   { kind: "mail.send", field: "message.contextRevision", class: "immutable-logical-fact" },
   { kind: "mail.send", field: "message.replyHeaders", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.sources", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.sources.reachableFrom", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.freeze.operation", class: "derived-durable-identity" },
+  { kind: "mail.send", field: "attachments.freeze.dateMs", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.observedAtMs", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.sources.local.bundle.path", class: "host-derived-physical-locator" },
+  { kind: "mail.send", field: "attachments.sources.local.bundle.sha256", class: "immutable-logical-fact" },
+  { kind: "mail.send", field: "attachments.sources.local.dependency", class: "derived-durable-identity" },
+  { kind: "mail.send", field: "attachments.sources.publishedRef", class: "derived-durable-identity" },
   { kind: "mail.send", field: "message.objectPath", class: "derived-durable-identity" },
   { kind: "mail.send", field: "message.sha256", class: "immutable-logical-fact" },
   { kind: "mail.send", field: "message.bytes", class: "immutable-logical-fact" },
@@ -69,6 +98,13 @@ export const CURRENT_PLAN_FIELDS: readonly PersistedField[] = Object.freeze([
   { kind: "agent.create", field: "spec", class: "immutable-logical-fact" },
   { kind: "agent.create", field: "specHash", class: "derived-durable-identity" },
   { kind: "agent.create", field: "workspacePath", class: "host-derived-physical-locator" },
+  { kind: "agent.create", field: "source.freeze.operation", class: "derived-durable-identity" },
+  { kind: "agent.create", field: "source.freeze.dateMs", class: "immutable-logical-fact" },
+  { kind: "agent.create", field: "source.observedAtMs", class: "immutable-logical-fact" },
+  { kind: "agent.create", field: "source.publication.local.bundle.path", class: "host-derived-physical-locator" },
+  { kind: "agent.create", field: "source.publication.local.bundle.sha256", class: "immutable-logical-fact" },
+  { kind: "agent.create", field: "source.publication.local.dependency", class: "derived-durable-identity" },
+  { kind: "agent.create", field: "source.publication.publishedRef", class: "derived-durable-identity" },
   { kind: "agent.create", field: "unitNames", class: "derived-durable-identity" },
   { kind: "agent.create", field: "execution", class: "immutable-logical-fact" },
   { kind: "git.submit", field: "publishedRef", class: "derived-durable-identity" },
@@ -82,7 +118,7 @@ export const CURRENT_PLAN_FIELDS: readonly PersistedField[] = Object.freeze([
 export const HOST_DERIVED_PLAN_FIELDS: readonly string[] = Object.freeze(
   [...new Set(CURRENT_PLAN_FIELDS.filter(field => field.class === "host-derived-physical-locator").map(field => field.field))]);
 
-export type PlanFormatClassification = { readonly format: "v2" | "v3" } | { readonly format: "unknown"; readonly reason: string };
+export type PlanFormatClassification = { readonly format: "v2" | "v3" | "v4" | "v5" } | { readonly format: "unknown"; readonly reason: string };
 
 /** Shape classifier, not a validator: decoding still runs the closed plan check
  * and the relation checks. A shape this build does not recognize is `unknown`,
@@ -96,7 +132,7 @@ export function classifyPersistedPlan(value: unknown): PlanFormatClassification 
   if (plan.kind === "git.submit" && plan.bundle !== null && typeof (plan.bundle as { path?: unknown })?.path !== "string")
     return { format: "unknown", reason: "v2 submit bundle has no staging locator" };
   if (plan.kind === "context.publish" && typeof plan.stagingPath !== "string") return { format: "unknown", reason: "v2 context plan has no staging locator" };
-  return { format: (value as { version: number }).version === 2 ? "v2" : "v3" };
+  return { format: (value as { version: number }).version === 2 ? "v2" : (value as { version: number }).version === COLLABORATION_PLAN_ENVELOPE_VERSION ? "v4" : (value as { version: number }).version === COLLABORATION_PUBLICATION_PLAN_ENVELOPE_VERSION ? "v5" : "v3" };
 }
 
 export interface PlanPortabilityFinding {
@@ -113,9 +149,16 @@ export function planPortability(plans: readonly { readonly kind: string; readonl
   for (const entry of plans) {
     const classification = classifyPersistedPlan(entry.plan);
     if (classification.format === "unknown") { findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze([]), portable: false })); continue; }
-    if (entry.kind === "agent.create") findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze(["workspacePath"]), portable: false }));
+    if (entry.kind === "agent.create") findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze(["workspacePath", ...(classification.format === "v5" ? ["source.publication.local.bundle.path"] : [])]), portable: false }));
     else if (entry.kind === "git.submit") findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze(currentPlanIntent(entry.plan)!.bundle === null ? [] : ["bundle.path"]), portable: false }));
     else if (entry.kind === "context.publish") findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze(["stagingPath"]), portable: false }));
+    else if (entry.kind === "mail.send") {
+      const manifest = currentPlanIntent(entry.plan)!.attachments;
+      const local = manifest !== null && typeof manifest === "object" && !Array.isArray(manifest) &&
+        Array.isArray((manifest as Record<string, unknown>).sources) && ((manifest as Record<string, unknown>).sources as unknown[])
+          .some(source => source !== null && typeof source === "object" && Object.hasOwn(source, "local"));
+      findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze(local ? ["attachments.sources.local.bundle.path"] : []), portable: !local }));
+    }
     else findings.push(Object.freeze({ kind: entry.kind, fields: Object.freeze([]), portable: true }));
   }
   return Object.freeze(findings);

@@ -6,7 +6,7 @@ import { once } from "node:events";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { sandboxSeccompFilter } from "@oma/platform-linux/sandbox-seccomp";
 for (const filtered of [false, true])
-    test(`DR27: private sandbox arguments preserve exact values and RPC stdin (filter=${filtered})`, { timeout: 15_000 }, async (t) => {
+    test(`001. Private sandbox arguments preserve exact values and RPC stdin (filter=${filtered})`, { timeout: 15_000 }, async (t) => {
         const value = 'synthetic-placeholder \n" --unshare-net 한글';
         const program = `process.stdout.write(JSON.stringify({value:process.env.FIXTURE_VALUE,empty:process.env.EMPTY_VALUE,boundary:process.env.BOUNDARY_VALUE,filter:process.env.FILTER_VALUE,args:process.env.ARGS_VALUE,argv:process.argv.slice(1)})+'\\n');
     process.stdin.once('data', b=>{process.stdout.write(b); process.exit(0);});`;
@@ -35,7 +35,7 @@ for (const filtered of [false, true])
         assert.equal(code, 0, stderr);
         assert.equal(stdout.split("\n").slice(1).join("\n"), "rpc-input\n");
     });
-test("DR27: malformed private argument ownership is refused before spawn", () => {
+test("002. Malformed private argument ownership is refused before spawn", () => {
     assert.throws(() => spawnSandboxed(["bwrap", "--args", "9", "--", "/bin/true"], {}), /descriptor owner/);
     assert.throws(() => spawnSandboxed(["bwrap", "--seccomp", "5", "--", "/bin/true"], {}, sandboxSeccompFilter()), /seccomp 3/);
     assert.throws(() => spawnSandboxed(["bwrap", "--setenv", "X", "a\0b", "--", "/bin/true"], {}), /NUL-free/);
@@ -46,7 +46,7 @@ test("DR27: malformed private argument ownership is refused before spawn", () =>
     assert.throws(() => spawnSandboxed(["bwrap", "--setenv", "X", "--seccomp", "--", "/bin/true"], {}, sandboxSeccompFilter()), /seccomp 3/);
     assert.throws(() => spawnSandboxed(["bwrap", "--seccomp", "3", "--seccomp", "3", "--", "/bin/true"], {}, sandboxSeccompFilter()), /seccomp 3/);
 });
-test("DR27: bubblewrap refusing before reading all private bytes reports an exit, not an unhandled socket error", { timeout: 10_000 }, async (t) => {
+test("003. Bubblewrap refusing before reading all private bytes reports an exit, not an unhandled socket error", { timeout: 10_000 }, async (t) => {
     const child = spawnSandboxed(["bwrap", "--size", "invalid-size", "--setenv", "FIXTURE_VALUE", "x".repeat(256 * 1024),
         "--seccomp", "3", "--", "/bin/true"], {}, sandboxSeccompFilter());
     const closed = once(child, "close");

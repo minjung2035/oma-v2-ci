@@ -1,5 +1,5 @@
 // AUTH-003/RUN-001: a pathname or dead connector is not proof that a run is dead.
-import type { Actor, RunLease } from "@oma/contracts";
+import type { Actor, PreparedBatch, RunLease } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionScopePin, SettlementQuiescence } from "@oma/contracts/runtime";
 type Population = ReturnType<ExecutionScopePin["population"]>;
@@ -22,6 +22,7 @@ type RunState =
 export class OwnedRun {
   private state: RunState = { phase: "opening" };
   private waiting = false;
+  private batch: { readonly id: string; readonly messageIds: readonly string[] } | null = null;
   readonly identity: RunIdentity;
   constructor(actor: Actor, incarnation: number, invocationId: string, private readonly pin: ExecutionScopePin) {
     this.identity = Object.freeze({ actor, incarnation, invocationId, scopeIdentity: pin.identity });
@@ -44,10 +45,33 @@ export class OwnedRun {
     this.state = { phase: "live", lease, endpoint };
     return lease;
   }
+  private assertLive(incarnation: number): void {
+    if (this.state.phase !== "live" || incarnation !== this.identity.incarnation)
+      throw new StoreError("STALE_RUN", "operation requires the current live run");
+  }
+  /** One runner consumes one broker-prepared batch. This is a handoff record,
+   * not a presentation receipt or a model-authored list of messages to defer. */
+  recordBatch(batch: Pick<PreparedBatch, "id" | "agent" | "incarnation" | "messageIds">): void {
+    this.assertLive(batch.incarnation);
+    if (batch.agent !== this.identity.actor)
+      throw new StoreError("BATCH_CONFLICT", "batch handoff belongs to another actor");
+    if (this.batch !== null) {
+      if (this.batch.id !== batch.id || this.batch.messageIds.length !== batch.messageIds.length ||
+          this.batch.messageIds.some((id, index) => id !== batch.messageIds[index]))
+        throw new StoreError("BATCH_CONFLICT", "a live run cannot replace its handed batch");
+      return;
+    }
+    if (this.waiting) throw new StoreError("STALE_RUN", "a waiting run cannot acquire a batch");
+    this.batch = Object.freeze({ id: batch.id, messageIds: Object.freeze([...batch.messageIds]) });
+  }
+  waitMessages(incarnation: number): readonly string[] {
+    this.assertLive(incarnation);
+    if (this.batch === null) throw new StoreError("BATCH_CONFLICT", "wait requires a batch handed to this run");
+    return this.batch.messageIds;
+  }
   /** RUN-003: ephemeral intent belongs to this live incarnation, never its successor. */
   wait(incarnation: number, observe: boolean): boolean {
-    if (this.state.phase !== "live" || incarnation !== this.identity.incarnation)
-      throw new StoreError("STALE_RUN", "wait requires the current live run");
+    this.assertLive(incarnation);
     if (!observe) this.waiting = true;
     return this.waiting;
   }

@@ -39,7 +39,7 @@ import { pathToFileURL } from "node:url";
 import type { Readable } from "node:stream";
 import { CHANNEL_FD, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, spawnSupervisedService } from "@oma/process/async";
 import { societyLeaseName, tryHoldSociety } from "#oma-test/app/runtime/society-lease";
-import { runCliProcess, type CliResult } from "./fixtures/cli-child.js";
+import { runOwnedProcess, type OwnedProcessResult } from "./fixtures/owned-process.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-lease-"));
 
@@ -89,7 +89,7 @@ function otherProcess(stateRoot: string, scriptRoot: string): {
   };
 }
 
-test("T119 the lease is one process's at a time", async () => {
+test("001. The lease is one process's at a time", async () => {
   const root = scratch();
   try {
     const stateRoot = join(root, "state");
@@ -112,7 +112,7 @@ test("T119 the lease is one process's at a time", async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 a process that dies gives the society back", async () => {
+test("002. A process that dies gives the society back", async () => {
   // The product's own failure mode: an `oma` killed outright, or a machine
   // that lost power. Nothing runs to release anything, so the kernel must be
   // what releases it -- which is why this is a lock on an open descriptor and
@@ -136,7 +136,7 @@ test("T119 a process that dies gives the society back", async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 releasing is idempotent, and releasing twice does not give away someone else's society", async () => {
+test("003. Releasing is idempotent, and releasing twice does not give away someone else's society", async () => {
   const root = scratch();
   try {
     const stateRoot = join(root, "state");
@@ -156,7 +156,7 @@ test("T119 releasing is idempotent, and releasing twice does not give away someo
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119 a state root that cannot be trusted is refused before the society is taken, not reported as someone else's", () => {
+test("004. A state root that cannot be trusted is refused before the society is taken, not reported as someone else's", () => {
   // The distinction the whole design rests on: a null answer means another
   // process owns the society and this one shows a Control Panel. A state root
   // that cannot be trusted is not that answer, and returning null for it would
@@ -188,7 +188,7 @@ test("T119 a state root that cannot be trusted is refused before the society is 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/FS-005 taking the society writes nothing, and nothing on the filesystem is the lease", () => {
+test("005. Taking the society writes nothing, and nothing on the filesystem is the lease", () => {
   // Two claims, and the second is the one the previous design could not make.
   //
   // A lease named by a pathname is only as exclusive as that pathname. Any
@@ -220,7 +220,7 @@ test("T119/FS-005 taking the society writes nothing, and nothing on the filesyst
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 the lease is the state tree's, so one state tree is one society however it is reached", () => {
+test("006. The lease is the state tree's, so one state tree is one society however it is reached", () => {
   // The lease used to be named after the run root, which meant one
   // XDG_DATA_HOME reached from two XDG_RUNTIME_DIRs -- two terminals, a
   // systemd session and a login shell -- was two leases over one private
@@ -307,7 +307,7 @@ const freeWithin = async (stateRoot: string, ms: number): Promise<boolean> => {
   }
 };
 
-test("T119/REC-007 a killed host does not hand the society on while its engine is still running", async () => {
+test("007. A killed host does not hand the society on while its engine is still running", async () => {
   // The property the previous design could not have. `close()` on a child is a
   // signal, not a death, and a host that is killed outright sends nothing at
   // all -- so ordering statements in a teardown could never make this true.
@@ -333,7 +333,7 @@ test("T119/REC-007 a killed host does not hand the society on while its engine i
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 negative control: a host whose engine did not inherit the lease hands the society on at once", async () => {
+test("008. Negative control: a host whose engine did not inherit the lease hands the society on at once", async () => {
   // The same host, the same kill, the same engine -- with only the inherited
   // descriptor taken away. If this ever stops passing, the test above has
   // stopped being evidence of anything: it would be proving that the engine
@@ -351,7 +351,7 @@ test("T119/REC-007 negative control: a host whose engine did not inherit the lea
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 a descendant the engine started keeps the society too", async () => {
+test("009. A descendant the engine started keeps the society too", async () => {
   // The audit's wording is "the engine and its descendants", and it is the
   // right wording: an engine that spawns a tool and dies has not finished
   // writing to the society. An inherited descriptor refers to the same open
@@ -460,7 +460,7 @@ async function heldByTheChildAlone(stateRoot: string, lease: { release: () => vo
     `the society stayed locked after ${what} was gone`);
 }
 
-test("T119/REC-007 an owned RPC child is started holding the society lease, at the descriptor the product declares", async () => {
+test("010. An owned RPC child is started holding the society lease, at the descriptor the product declares", async () => {
   // Not "the lease is somewhere in the child": a child that has to work out
   // which descriptor its lease is cannot pass it on, and passing it on is the
   // whole requirement -- the engine starts the model-facing CLI, which writes
@@ -484,7 +484,7 @@ test("T119/REC-007 an owned RPC child is started holding the society lease, at t
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 negative control: an owned RPC child started without the fence does not keep the society", async () => {
+test("011. Negative control: an owned RPC child started without the fence does not keep the society", async () => {
   // The same helper, the same child, the same release -- with only the fence
   // argument left off. If this ever fails, the test above has stopped being
   // evidence: it would mean the society stays locked for reasons that have
@@ -510,7 +510,7 @@ test("T119/REC-007 negative control: an owned RPC child started without the fenc
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 the fence and the channel keep their own descriptors, so neither displaces the other", async () => {
+test("012. The fence and the channel keep their own descriptors, so neither displaces the other", async () => {
   // The engine reads its credential off `CHANNEL_FD` and must never read the
   // lease there; the lease must be present all the same. Asserting only "the
   // lease is somewhere" would pass a helper that overwrote the channel with
@@ -530,7 +530,7 @@ test("T119/REC-007 the fence and the channel keep their own descriptors, so neit
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 a supervised service is started holding the society lease itself", async () => {
+test("013. A supervised service is started holding the society lease itself", async () => {
   // The broker's own case. A broker that outlives its host can still write to
   // the society's database, so it has to be as fenced as the engine is -- and
   // it is started by a different helper, which is why this is asserted and not
@@ -549,7 +549,7 @@ test("T119/REC-007 a supervised service is started holding the society lease its
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 a supervised service keeps its supervision channel and its fence apart", async () => {
+test("014. A supervised service keeps its supervision channel and its fence apart", async () => {
   const root = scratch();
   try {
     const stateRoot = join(root, "state");
@@ -579,7 +579,7 @@ test("T119/REC-007 a supervised service keeps its supervision channel and its fe
  * society, engine inherits the lease, engine starts the CLI, host and engine
  * are killed outright, and the question is whether another `oma` can take the
  * society while that CLI is still writing. Nothing is stood in for -- these
- * are three real processes and the product's own `runCliProcess`.
+ * are three real processes using the product's owned process launcher.
  */
 function engineStartingACli(scriptRoot: string, fence: number, declare: boolean): {
   readonly engine: ChildProcess;
@@ -630,7 +630,7 @@ function engineStartingACli(scriptRoot: string, fence: number, declare: boolean)
   return { engine, report };
 }
 
-test("T119/REC-007 the model-facing CLI the engine starts holds the society, and keeps it after the host and the engine are killed", async () => {
+test("015. The model-facing CLI the engine starts holds the society, and keeps it after the host and the engine are killed", async () => {
   const root = scratch();
   try {
     const stateRoot = join(root, "state");
@@ -666,7 +666,7 @@ test("T119/REC-007 the model-facing CLI the engine starts holds the society, and
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 negative control: an engine that does not declare its fence starts a CLI that outlives the society", async () => {
+test("016. Negative control: an engine that does not declare its fence starts a CLI that outlives the society", async () => {
   // This is the product as the audit found it: the engine held the lease, and
   // `runCliProcess` passed descriptors 0-2 and nothing else. Every other test
   // in this file passed in that build. The only difference here is the one
@@ -697,7 +697,7 @@ test("T119/REC-007 negative control: an engine that does not declare its fence s
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T119/REC-007 a declared fence that is not there stops the CLI from starting, rather than starting it unfenced", async () => {
+test("017. A declared fence that is not there stops the CLI from starting, rather than starting it unfenced", async () => {
   // A process told to pass the lease on and unable to find it cannot give a
   // child the fence it was told to give. Starting the child anyway would start
   // exactly the unfenced writer the declaration existed to prevent, so this is
@@ -711,10 +711,10 @@ test("T119/REC-007 a declared fence that is not there stops the CLI from startin
     const plainFile = join(root, "not-a-socket");
     writeFileSync(plainFile, "");
     const notASocket = openSync(plainFile, "r");
-    const start = (declared: string): CliResult | Promise<CliResult> => {
+    const start = (declared: string): OwnedProcessResult | Promise<OwnedProcessResult> => {
       process.env[SOCIETY_FENCE_ENV] = declared;
       try {
-        return runCliProcess({ node: process.execPath, cli: "-e", args: ["0"], cwd: "/",
+        return runOwnedProcess({ executable: process.execPath, args: ["-e", "0"], cwd: "/",
           env: { ...childEnv }, timeoutMs: 5000 });
       } finally { delete process.env[SOCIETY_FENCE_ENV]; }
     };

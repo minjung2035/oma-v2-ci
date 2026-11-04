@@ -32,7 +32,7 @@ function fixture(): { root: string } {
   return { root: mkdtempSync(join(tmpdir(), "oma-owned-dir-")) };
 }
 
-test("FS-005: an owned tree whose root lost every permission bit is still removed", () => {
+test("001. An owned tree whose root lost every permission bit is still removed", () => {
   const f = fixture();
   try {
     const tree = join(f.root, "dead");
@@ -47,7 +47,7 @@ test("FS-005: an owned tree whose root lost every permission bit is still remove
   } finally { sweep(f.root); }
 });
 
-test("FS-005: an owned tree holding owner-read-less subdirectories is removed whole", () => {
+test("002. An owned tree holding owner-read-less subdirectories is removed whole", () => {
   const f = fixture();
   try {
     const tree = join(f.root, "dead");
@@ -69,7 +69,7 @@ test("FS-005: an owned tree holding owner-read-less subdirectories is removed wh
   } finally { sweep(f.root); }
 });
 
-test("FS-005: the owner-bits repair adds missing bits and keeps the mode's special bits", () => {
+test("003. The owner-bits repair adds missing bits and keeps the mode's special bits", () => {
   const f = fixture();
   try {
     const dir = join(f.root, "setgid-dir");
@@ -91,7 +91,7 @@ test("FS-005: the owner-bits repair adds missing bits and keeps the mode's speci
   } finally { sweep(f.root); }
 });
 
-test("FS-005: an owned directory opens by path even at mode-000 -- the leaf is pinned and repaired", () => {
+test("004. An owned directory opens by path even at mode-000 -- the leaf is pinned and repaired", () => {
   const f = fixture();
   try {
     const dir = join(f.root, "store");
@@ -107,7 +107,7 @@ test("FS-005: an owned directory opens by path even at mode-000 -- the leaf is p
   } finally { sweep(f.root); }
 });
 
-test("FS-005: an owned ensure repairs every component at and below its boundary -- and never above it", () => {
+test("005. An owned ensure repairs every component at and below its boundary -- and never above it", () => {
   const f = fixture();
   const oma = join(f.root, "oma");
   const store = join(oma, ".packages");
@@ -146,7 +146,7 @@ test("FS-005: an owned ensure repairs every component at and below its boundary 
   } finally { sweep(g.root); }
 });
 
-test("FS-005: an owned ensure refuses a boundary that is not its own ancestor", () => {
+test("006. An owned ensure refuses a boundary that is not its own ancestor", () => {
   const f = fixture();
   try {
     const oma = join(f.root, "oma");
@@ -162,7 +162,7 @@ test("FS-005: an owned ensure refuses a boundary that is not its own ancestor", 
   } finally { sweep(f.root); }
 });
 
-test("FS-005: a stray where an owned component must be a directory is collected -- at or above the boundary it stands", () => {
+test("007. A stray where an owned component must be a directory is collected -- at or above the boundary it stands", () => {
   const f = fixture();
   const oma = join(f.root, "oma");
   const store = join(oma, ".packages");
@@ -195,7 +195,7 @@ test("FS-005: a stray where an owned component must be a directory is collected 
   } finally { sweep(f.root); }
 });
 
-test("DR24: an unused session tree holding owner-read-less directories still goes whole", () => {
+test("008. An unused session tree holding owner-read-less directories still goes whole", () => {
   const f = fixture();
   try {
     const session = join(f.root, "session");

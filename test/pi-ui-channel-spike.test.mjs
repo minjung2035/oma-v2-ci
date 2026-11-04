@@ -27,9 +27,9 @@ function uiFactory() {
   return { ui, requests };
 }
 
-test("#10 spike: Pi 1.0.1 exposes only fixed UI RPC methods, not arbitrary method/params", async () => {
+test("001. Spike: Pi 1.2.0 exposes only fixed UI RPC methods, not arbitrary method/params", async () => {
   const manifest = JSON.parse(readFileSync(join(dist, "../package.json"), "utf8"));
-  assert.equal(manifest.version, "1.0.1", "repeat the spike when upgrading Pi");
+  assert.equal(manifest.version, "1.2.0", "repeat the spike when upgrading Pi");
   const { ui, requests } = uiFactory();
   const message = 'OMA_PI_BOUNDARY_V1 {"batchId":"batch"}';
   ui.notify(message, "info");
@@ -48,7 +48,7 @@ test("#10 spike: Pi 1.0.1 exposes only fixed UI RPC methods, not arbitrary metho
   assert.doesNotMatch(declarations, /method: "oma\./);
 });
 
-test("#12 engine oracle: branded commands carry no argument hint that a structured replacement would lose", async () => {
+test("002. Engine oracle: branded commands carry no argument hint that a structured replacement would lose", async () => {
   const { BUILTIN_SLASH_COMMANDS } = await import(pathToFileURL(join(dist, "core/slash-commands.js")));
   for (const name of ["quit", "new", "resume", "changelog"]) {
     const command = BUILTIN_SLASH_COMMANDS.find(command => command.name === name);

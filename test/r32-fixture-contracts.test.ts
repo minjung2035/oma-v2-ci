@@ -17,7 +17,7 @@ import { corruptOperationForTest, corruptValueForTest, mutateRawRowAfterClose } 
 
 const OP = "op-00000000-0000-4000-8000-000000000001";
 
-test("R32: normal primitive fixtures have valid shapes, hashes and owned identities", () => {
+test("001. Normal primitive fixtures have valid shapes, hashes and owned identities", () => {
   const spec = makeValidResolvedSpec();
   const agent = makeValidAgent();
   assert.equal(resolvedSpecCheck(spec), null);
@@ -34,7 +34,7 @@ test("R32: normal primitive fixtures have valid shapes, hashes and owned identit
   assert.deepEqual(JSON.parse(batch.messageIdsJson), [message.id]);
 });
 
-test("R32: valid ledger control decodes before exactly one raw field is corrupted", () => {
+test("002. Valid ledger control decodes before exactly one raw field is corrupted", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-valid-fixture-"));
   const path = join(root, "runtime.sqlite");
   const valid = makeValidOperation({ stateRoot: root, id: OP });
@@ -58,7 +58,7 @@ test("R32: valid ledger control decodes before exactly one raw field is corrupte
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R32: cache normal factory round-trips; corrupt-value helper does not mutate its control", () => {
+test("003. Cache normal factory round-trips; corrupt-value helper does not mutate its control", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-valid-cache-"));
   try {
     const input = makeValidFrozenRequest();

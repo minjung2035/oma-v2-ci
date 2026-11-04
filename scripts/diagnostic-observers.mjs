@@ -43,7 +43,7 @@ export function createDiagnosticObservers(context, options = {}) {
       const ref = command.length === 4 && command[0] === "rev-parse" && command[1] === "--verify" && command[2] === "--quiet" &&
         (command[3] === "refs/heads/main" || isPublishedRef(command[3])) && input === undefined;
       const commit = command.length === 2 && command[0] === "cat-file" && command[1] === "--batch-check=%(objecttype)" &&
-        typeof input === "string" && input.endsWith("^{commit}\n") && isValidFullOid(input.slice(0, -10));
+        typeof input === "string" && input.endsWith("\n") && isValidFullOid(input.slice(0, -1));
       const ancestry = command.length === 4 && command[0] === "merge-base" && command[1] === "--is-ancestor" &&
         isValidFullOid(command[2]) && isValidFullOid(command[3]) && input === undefined;
       if (!ref && !commit && !ancestry) return unavailable();

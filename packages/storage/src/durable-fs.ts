@@ -322,6 +322,20 @@ function publishOnce(parent: number, name: string, target: string, data: string 
   });
 }
 
+/** Derived bytes replaced through an already-held parent; never accepted evidence.
+ * The private random temporary is not a collectible leased publication. `use`
+ * is the caller's exact-mode hook for a restore that must reproduce a recorded
+ * preimage: an exclusive create is masked by the process umask, and only the
+ * caller knows whether its mode is a subject of the umask or an exact value. */
+export function replaceDerivedEntry(parent: number, name: string, target: string, bytes: string | Uint8Array, mode = 0o600,
+  use?: (fd: number) => void): void {
+  const temporary = `.${name}.${randomUUID()}.tmp`;
+  writeExclusiveFsyncedEntry(parent, temporary, join(dirname(target), temporary), bytes, mode, undefined, use);
+  withCleanup(() => { renameAt(parent, temporary, parent, name); fsyncSync(parent); }, () => {
+    try { unlinkAt(parent, temporary); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    fsyncSync(parent);
+  });
+}
 /** Derived-only replacement: exclusive temporary -> file fsync -> close ->
  * rename -> parent fsync. This function owns only its random temporary, never a
  * glob or an accepted source. A post-rename flush failure does not prove that

@@ -2,7 +2,6 @@
  * and inside views. One table serves the mount plan, the arguments handed to
  * the engine, and the callers that validate or translate -- so the views
  * cannot drift. Kernel layer: pure path policy, no store or broker imports. */
-import { DEPLOYMENT_LAYOUT } from "./deployment.js";
 import { StoreError } from "./errors.js";
 import type { PathView, SandboxEndpoints, SandboxHost, SandboxDirectories as ResidentDirectories } from "@oma/contracts/runtime";
 
@@ -24,6 +23,7 @@ export const RESIDENT_PATHS = Object.freeze({
   /** mail-v1: worker-only review mail; a Resident's tools read it here. */
   workerArchive: "/mail/workers",
   selfMail: "/mail/self", view: "/run/oma-view", world: "/world",
+  records: "/oma",
   projectGit: "/git/project.git", socket: "/run/oma/control.sock",
   /** DR18 (D-8): the human's committed project history, read-only. */
   projectMirror: "/git/project-mirror.git",
@@ -78,17 +78,6 @@ export const RESIDENT_INFERENCE_PORT = 8317;
  * loopback forwarder standard tools reach through HTTP_PROXY et al. */
 export const RESIDENT_EGRESS_PORT = 8318;
 
-/** AV16, CLI-001: what `oma` is inside the sandbox -- the pinned Node running
- * the installed model-facing CLI -- and the PATH that finds it (the pinned
- * Node's directory too, so `node` is the pinned one). The build writes the
- * script from here; the package check compares the installed one with it. */
-export function modelCommandScript(): string {
-  return '#!/bin/sh\n# CLI-001: trusted composition supplies the current model path view.\n'
-    + 'case "${OMA_NODE-}" in /*) ;; *) exit 125 ;; esac\n'
-    + 'case "${OMA_CLI-}" in /*) ;; *) exit 125 ;; esac\n'
-    + 'case "$OMA_CLI" in *\\\\*) exit 125 ;; esac\n'
-    + 'exec "$OMA_NODE" "$OMA_CLI" "$@"\n';
-}
 /** One environment policy for mounted and host layouts. Callers supply only
  * trusted paths in that layout, and platform grammars apply it after extras. */
 export function residentEnvironment(paths: { readonly libdir: string; readonly node: string; readonly home: string; readonly temporary: string },
@@ -97,14 +86,14 @@ export function residentEnvironment(paths: { readonly libdir: string; readonly n
     throw new StoreError("UNSUPPORTED_PROFILE", "resident environment requires normalized view paths");
   if (!Array.isArray(toolDirectories))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident tool directories require a closed list");
-  const search = [`${paths.libdir}/${dirnameOf(DEPLOYMENT_LAYOUT.modelCommand)}`, dirnameOf(paths.node), `${paths.home}/.local/bin`,
+  const search = [dirnameOf(paths.node), `${paths.home}/.local/bin`,
     ...toolDirectories, "/usr/bin", "/bin"];
   if (search.some(value => !trustedResidentPath(value) || value.includes(":")))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident PATH requires representable absolute directories");
   return Object.freeze({
     HOME: paths.home,
     PATH: search.join(":"),
-    OMA_NODE: paths.node, OMA_CLI: `${paths.libdir}/${DEPLOYMENT_LAYOUT.cli}`,
+    OMA_NODE: paths.node,
     LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC", TERM: "xterm-256color", TMPDIR: paths.temporary,
     SHELL: "/bin/sh", USER: "agent", LOGNAME: "agent",
     XDG_DATA_HOME: `${paths.home}/.local/share`, XDG_RUNTIME_DIR: `${paths.home}/.run`,
@@ -135,7 +124,7 @@ export function hostSessionPath(dirs: ResidentDirectories, insidePath: string, s
 }
 
 /** The installation a Resident's plan mounts: its files and (DR25) the installed packages. */
-export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages">;
+export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages" | "recordRoot">;
 
 /** One directory table supplies both OS recipes and PathView. Only this
  * actor's workspace/home/sessions are writable; the mirror stays optional. */
@@ -144,6 +133,7 @@ export function residentDirectoryPolicy(host: MountedInstallation, dirs: Residen
 }[] {
   return [
     ["libdir", host.libdir], ...(host.packages === undefined ? [] : [["packages", host.packages]]),
+    ...(host.recordRoot === undefined ? [] : [["records", host.recordRoot]]),
     ...["workspace", "home", "sessions", "archive", "workerArchive", "selfMail", "view", "world", "projectGit", "projectMirror"]
       .map(name => [name, dirs[name as keyof ResidentDirectories]]),
   ].map(([name, path]) => Object.freeze({ name: name!, path: path!, view: RESIDENT_PATHS[name as keyof typeof RESIDENT_PATHS],

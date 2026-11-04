@@ -59,7 +59,7 @@ async function liveComplete(f: Fixture, sessionPath: string): Promise<unknown> {
   catch (error) { return codeOf(error); }
 }
 
-test("V06A: a verified receipt completes the batch and the runner presents nothing again", async t => {
+test("001. A verified receipt completes the batch and the runner presents nothing again", async t => {
   const f = await preparedFixture();
   try {
     const session = completeSession(f.root, f.batch);
@@ -67,14 +67,16 @@ test("V06A: a verified receipt completes the batch and the runner presents nothi
     const runner = await runnerConsume(t, f);
     assert.equal(runner.error, null);
     assert.equal(runner.deliveries, 0);
-    assert.deepEqual(runner.completions.map(call => call.sessionPath), [session]);
+    assert.deepEqual(runner.completions, [{batchId:f.batch.id,incarnation:f.batch.incarnation,adapterRevision:PI_ADAPTER_REVISION}]);
+    const observed=observeDeliveryReceipt(f.root,f.batch,TEST_VIEW_LIMITS.frameBytes);
+    assert.equal(observed.kind,"verified");if(observed.kind==="verified")assert.equal(observed.receipt.sessionPath,session);
     assert.equal(await liveComplete(f, session), null);
     assert.equal(f.store.getBatch(f.batch.id)?.state, "completed");
     assert.equal(f.presented(), 1);
   } finally { f.close(); }
 });
 
-test("DR27: runner wait leaves no receipt or batch completion and preserves delivery and desired intent", async t => {
+test("002. Runner wait leaves no receipt or batch completion and preserves delivery and desired intent", async t => {
   const f = await preparedFixture();
   try {
     const before = f.store.getDelivery(f.batch.messageIds[0]!, "alice");
@@ -91,7 +93,7 @@ test("DR27: runner wait leaves no receipt or batch completion and preserves deli
 });
 
 for (const where of ["receipt-directory", "receipt"] as const) {
-  test(`V06A: an observed absent ${where} lets the runner present once, but completes nothing`, async t => {
+  test(`003. An observed absent ${where} lets the runner present once, but completes nothing`, async t => {
     const f = await preparedFixture();
     try {
       if (where === "receipt") mkdirSync(dirname(f.receipt), { recursive: true, mode: 0o700 });
@@ -110,7 +112,7 @@ const unavailable: ReadonlyArray<{ readonly point: string; readonly arrange: (f:
   { point: "a vanished runner root the batch was prepared under", arrange: f => rmSync(join(agentRootPathAt(f.root, "alice"), "runner"), { recursive: true }) },
 ];
 for (const item of unavailable) {
-  test(`V06A: ${item.point} is unavailable evidence: no completion and no new delivery`, async t => {
+  test(`004. Receipt observation: ${item.point} is unavailable evidence: no completion and no new delivery`, async t => {
     assert.notEqual(process.getuid?.(), 0, "permission-based unavailability needs a non-root test user");
     const f = await preparedFixture();
     try {
@@ -137,7 +139,7 @@ const conflicting: ReadonlyArray<{ readonly point: string; readonly arrange: (f:
   } },
 ];
 for (const item of conflicting) {
-  test(`V06A: ${item.point} is conflicting evidence: preserved, never completed or re-presented`, async t => {
+  test(`005. Receipt observation: ${item.point} is conflicting evidence: preserved, never completed or re-presented`, async t => {
     const f = await preparedFixture(2);
     try {
       const session = completeSession(f.root, f.batch);
@@ -169,7 +171,7 @@ function diagnosticOf(observation: ReceiptObservation) {
   return observation.diagnostic;
 }
 
-test("V06A: the observer returns verified receipts it issued, and nothing else counts as one", async () => {
+test("006. The observer returns verified receipts it issued, and nothing else counts as one", async () => {
   const f = await preparedFixture();
   try {
     const session = published(f);
@@ -183,7 +185,7 @@ test("V06A: the observer returns verified receipts it issued, and nothing else c
   } finally { f.close(); }
 });
 
-test("V06A: absence names which name is missing, under a runner root that exists", async () => {
+test("007. Absence names which name is missing, under a runner root that exists", async () => {
   const f = await preparedFixture();
   try {
     assert.deepEqual(observe(f), { kind: "absent", missing: "receipt-directory" });
@@ -197,7 +199,7 @@ test("V06A: absence names which name is missing, under a runner root that exists
   } finally { f.close(); }
 });
 
-test("V06A: an observation that did not complete is unavailable, with its cause and the expected identity", async () => {
+test("008. An observation that did not complete is unavailable, with its cause and the expected identity", async () => {
   assert.notEqual(process.getuid?.(), 0, "permission-based unavailability needs a non-root test user");
   const f = await preparedFixture();
   try {
@@ -216,7 +218,7 @@ test("V06A: an observation that did not complete is unavailable, with its cause 
   } finally { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o700); f.close(); }
 });
 
-test("V06A: conflicting evidence says what differs, and a legacy incarnation is never accepted as current", async () => {
+test("009. Conflicting evidence says what differs, and a legacy incarnation is never accepted as current", async () => {
   const f = await preparedFixture(2);
   try {
     const session = completeSession(f.root, f.batch);
@@ -242,7 +244,7 @@ test("V06A: conflicting evidence says what differs, and a legacy incarnation is 
   } finally { f.close(); }
 });
 
-test("V06A: a receipt directory that cannot be opened is unavailable, never absent", async () => {
+test("010. A receipt directory that cannot be opened is unavailable, never absent", async () => {
   assert.notEqual(process.getuid?.(), 0, "permission-based unavailability needs a non-root test user");
   const f = await preparedFixture();
   try {
@@ -254,7 +256,7 @@ test("V06A: a receipt directory that cannot be opened is unavailable, never abse
   } finally { chmodSync(dirname(f.receipt), 0o700); f.close(); }
 });
 
-test("V06A: live completion binds the current run's incarnation and the receipt's session", async () => {
+test("011. Live completion binds the current run's incarnation and the receipt's session", async () => {
   const f = await preparedFixture(1);
   try {
     const session = published(f);
@@ -278,7 +280,7 @@ const afterPublication: ReadonlyArray<{ readonly point: string; readonly arrange
   { point: "behind a directory that cannot be read", arrange: f => { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o000); } },
 ];
 for (const item of afterPublication) {
-  test(`P0V-107 / F-04, P0-1: once published, a receipt settles its batch though the session it names was then ${item.point}`, async t => {
+  test(`012. Once published, a receipt settles its batch though the session it names was then ${item.point}`, async t => {
     const f = await preparedFixture(2);
     try {
       const session = completeSession(f.root, f.batch);
@@ -289,7 +291,9 @@ for (const item of afterPublication) {
       const runner = await runnerConsume(t, f);
       assert.equal(runner.error, null);
       assert.equal(runner.deliveries, 0, "a delivered batch is not presented again");
-      assert.deepEqual(runner.completions.map(call => call.sessionPath), [session]);
+      assert.deepEqual(runner.completions, [{batchId:f.batch.id,incarnation:f.batch.incarnation,adapterRevision:PI_ADAPTER_REVISION}]);
+    const observed=observeDeliveryReceipt(f.root,f.batch,TEST_VIEW_LIMITS.frameBytes);
+    assert.equal(observed.kind,"verified");if(observed.kind==="verified")assert.equal(observed.receipt.sessionPath,session);
       assert.deepEqual(readFileSync(f.receipt), before);
     } finally { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o700); f.close(); }
   });

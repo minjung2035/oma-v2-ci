@@ -48,7 +48,7 @@ function fixture() {
 const publishWithFaults = publishDeliveryReceipt as typeof publishDeliveryReceipt &
   ((stateRoot: string, batch: PreparedBatch, boundary: DeliveryBoundary, maximum: number, faults?: DurabilityObserver) => ReturnType<typeof publishDeliveryReceipt>);
 
-test("V05A: receipt success follows temp fsync, no-replace publication, validation and parent fsync", () => {
+test("001. Receipt success follows temp fsync, no-replace publication, validation and parent fsync", () => {
   const f = fixture();
   try {
     const events: DurabilityFault[] = [];
@@ -72,7 +72,7 @@ test("V05A: receipt success follows temp fsync, no-replace publication, validati
   } finally { f.close(); }
 });
 
-test("V05A: invalid boundary is rejected before a final name exists", () => {
+test("002. Invalid boundary is rejected before a final name exists", () => {
   const f = fixture();
   try {
     const invalid = { ...f.boundary("0123abcd"), batchId: generateBatchId() };
@@ -81,7 +81,27 @@ test("V05A: invalid boundary is rejected before a final name exists", () => {
   } finally { f.close(); }
 });
 
-test("V05A: a crash at temp write never leaves partial bytes under the final name", () => {
+test("014. A receipt-sized limit still admits the larger SDK boundary entry and rejects oversized receipts before evidence I/O", () => {
+  const f = fixture();
+  try {
+    const operation = generateOperationId();
+    f.batch.messageIds = [0, 1, 2].map(index => messageIdForOperation(operation, index));
+    const boundary = f.boundary("0123abcd");
+    writeFileSync(boundary.sessionPath, `{"type":"session","version":3}\n${f.entry("0123abcd")}\n`);
+    const maximum = Buffer.byteLength(JSON.stringify({ schemaVersion: 1, actor: f.batch.agent,
+      messageIds: f.batch.messageIds, ...boundary }) + "\n");
+    const entry = readFileSync(boundary.sessionPath, "utf8").trimEnd().split("\n").at(-1)!;
+    assert.ok(Buffer.byteLength(entry + "\n") > maximum, "fixture must reproduce the SDK envelope larger than its receipt");
+    const events: DurabilityFault[] = [];
+    assert.throws(() => publishWithFaults(f.root, f.batch, boundary, maximum - 1, event => events.push(event)), /encoded receipt exceeds/u);
+    assert.deepEqual(events, [], "oversized receipt is rejected before flushing the session or creating a publication");
+    const receipt = publishDeliveryReceipt(f.root, f.batch, boundary, maximum);
+    assert.deepEqual(receipt.messageIds, f.batch.messageIds);
+    assert.deepEqual(readDeliveryReceipt(f.root, f.batch, maximum), receipt);
+  } finally { f.close(); }
+});
+
+test("003. A crash at temp write never leaves partial bytes under the final name", () => {
   const f = fixture();
   try {
     const fail: DurabilityObserver = event => {
@@ -93,7 +113,7 @@ test("V05A: a crash at temp write never leaves partial bytes under the final nam
   } finally { f.close(); }
 });
 
-test("V05A: final publication followed by parent-fsync uncertainty preserves the valid final receipt", () => {
+test("004. Final publication followed by parent-fsync uncertainty preserves the valid final receipt", () => {
   const f = fixture();
   try {
     let validated = false;
@@ -109,7 +129,7 @@ test("V05A: final publication followed by parent-fsync uncertainty preserves the
   } finally { f.close(); }
 });
 
-test("V05B: EEXIST returns the first valid private receipt and never overwrites it", () => {
+test("005. EEXIST returns the first valid private receipt and never overwrites it", () => {
   const f = fixture();
   try {
     const first = publishDeliveryReceipt(f.root, f.batch, f.boundary("0123abcd"), TEST_VIEW_LIMITS.frameBytes);
@@ -125,7 +145,7 @@ test("V05B: EEXIST returns the first valid private receipt and never overwrites 
   } finally { f.close(); }
 });
 
-test("V05B: conflicting existing receipt is preserved and never converted to success", () => {
+test("006. Conflicting existing receipt is preserved and never converted to success", () => {
   const f = fixture();
   try {
     const path = runnerReceiptPathAt(f.root, "alice", f.batch.id);
@@ -144,7 +164,7 @@ test("V05B: conflicting existing receipt is preserved and never converted to suc
   } finally { f.close(); }
 });
 
-test("V05A: the receipt file itself is flushed before it is published, and its directory after", () => {
+test("007. The receipt file itself is flushed before it is published, and its directory after", () => {
   // The fault seams name where a flush belongs; this watches the flushes
   // themselves, so a seam that fires without its fsync is caught.
   const f = fixture();
@@ -168,7 +188,7 @@ test("V05A: the receipt file itself is flushed before it is published, and its d
   } finally { fs.fsyncSync = real; syncBuiltinESMExports(); f.close(); }
 });
 
-test("DR11: no receipt is published for a boundary the session file does not hold", () => {
+test("008. No receipt is published for a boundary the session file does not hold", () => {
   const f = fixture();
   try {
     const path = runnerReceiptPathAt(f.root, "alice", f.batch.id);
@@ -185,12 +205,16 @@ test("DR11: no receipt is published for a boundary the session file does not hol
   } finally { f.close(); }
 });
 
-test("DR11: the session file and its directory are flushed before the receipt's name exists", () => {
+test("009. The session file and its directory are flushed before the receipt's name exists", () => {
   const f = fixture();
   const real = fs.fsyncSync;
   const flushed: string[] = [];
-  const session = fstatSync(fs.openSync(f.sessionPath, "r"));
-  const directory = fstatSync(fs.openSync(dirname(f.sessionPath), "r"));
+  const observedStat = (path: string) => {
+    const fd = fs.openSync(path, "r");
+    try { return fstatSync(fd); } finally { fs.closeSync(fd); }
+  };
+  const session = observedStat(f.sessionPath);
+  const directory = observedStat(dirname(f.sessionPath));
   fs.fsyncSync = (fd: number) => {
     const stat = fstatSync(fd);
     if (stat.ino === session.ino) flushed.push("session");
@@ -207,7 +231,7 @@ test("DR11: the session file and its directory are flushed before the receipt's 
   } finally { fs.fsyncSync = real; syncBuiltinESMExports(); f.close(); }
 });
 
-test("DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it", () => {
+test("010. A crash after the session flush and before the receipt leaves no receipt, and the retry publishes it", () => {
   const f = fixture();
   try {
     const path = runnerReceiptPathAt(f.root, "alice", f.batch.id);

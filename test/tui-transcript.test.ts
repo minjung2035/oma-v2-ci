@@ -27,7 +27,7 @@ function appendCounting(texts: readonly string[]): string[] {
   return entries;
 }
 
-test("TUI-023: one produced reply is bounded by its lines, not by being one append", () => {
+test("001. One produced reply is bounded by its lines, not by being one append", () => {
   const reply = Array.from({ length: LINES * 4 }, (_, index) => `l${index}`).join("\n");
   const transcript = new Transcript();
   transcript.append(reply);
@@ -42,7 +42,7 @@ test("TUI-023: one produced reply is bounded by its lines, not by being one appe
     "the control did not reproduce the defect this test exists for");
 });
 
-test("TUI-023: one produced line is bounded by bytes, not left to hold a megabyte", () => {
+test("002. One produced line is bounded by bytes, not left to hold a megabyte", () => {
   const huge = "a".repeat(LINE_BYTES * 8);
   assert.deepEqual(storedLines("short"), ["short"]);
   const pieces = storedLines(huge);
@@ -63,7 +63,7 @@ test("TUI-023: one produced line is bounded by bytes, not left to hold a megabyt
     "the control did not reproduce the defect this test exists for");
 });
 
-test("TUI-023: a bounded line is still valid UTF-8, and a cluster is not split where it need not be", () => {
+test("003. A bounded line is still valid UTF-8, and a cluster is not split where it need not be", () => {
   const korean = "가".repeat(LINE_BYTES);
   for (const piece of storedLines(korean)) {
     assert.ok(bytesOf(piece) <= LINE_BYTES);
@@ -95,7 +95,7 @@ test("TUI-023: a bounded line is still valid UTF-8, and a cluster is not split w
   }
 });
 
-test("TUI-023: every producer's line breaks are line breaks, whatever the terminal wrote", () => {
+test("004. Every producer's line breaks are line breaks, whatever the terminal wrote", () => {
   const transcript = new Transcript();
   transcript.append("a\r\nb\rc\nd");
   assert.deepEqual(transcript.lines, ["a", "b", "c", "d"]);
@@ -107,7 +107,7 @@ test("TUI-023: every producer's line breaks are line breaks, whatever the termin
   assert.equal(empty.heldBytes, 0);
 });
 
-test("TUI-023: one enormous append leaves only the tail, and many small ones agree with it", () => {
+test("005. One enormous append leaves only the tail, and many small ones agree with it", () => {
   // The implementation trims as each line arrives rather than once at the end,
   // so a reply far larger than the bound is never first held in full. Peak
   // memory inside one call is not observable from here and is not claimed: what

@@ -16,8 +16,9 @@ function load(file, dependencies, globals = {}) {
   });
   return module.exports;
 }
-function world() {
+function world(frameBytes) {
   const bounds = load('packages/domain/src/surface-bounds.ts', {});
+  const protocol = load('packages/domain/src/protocol-limits.ts', {});
   const host = new EventEmitter();
   const input = new EventEmitter(), output = new EventEmitter();
   const raw = [], bytes = [], timers = new Set();
@@ -26,18 +27,32 @@ function world() {
     resume() { resumes++; }, pause() { pauses++; } });
   Object.assign(output, { columns: 80, rows: 24, write(value) { bytes.push(value); return true; } });
   const screen = load('packages/tui/src/screen.ts', { '@oma/domain/surface-bounds': bounds }, { process: host, Buffer });
-  const { PanelTerminal } = load('packages/tui/src/panel-terminal.ts', { '@oma/domain/surface-bounds': bounds, './screen.js': screen }, {
+  const { PanelTerminal } = load('packages/tui/src/panel-terminal.ts', { '@oma/domain/surface-bounds': bounds, '@oma/domain/protocol-limits': protocol, './screen.js': screen }, {
     setTimeout(run) { const timer = { run, unref() {} }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
   });
-  const panel = new PanelTerminal({ input, output }, () => true);
+  const panel = new PanelTerminal({ input, output }, () => true, frameBytes);
   return { panel, input, output, raw, bytes, timers, host, screen,
     tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
     get resumes() { return resumes; }, get pauses() { return pauses; },
   };
 }
+test("014. Remote panel fragments preserve long Unicode/ANSI lines and wait for each write", async t=>{
+ const w=world(768);t.after(()=>w.panel.restore());
+ const frames=[], lines=["\u001b[32m"+"한🙂".repeat(2000)+"\u001b[0m", "last line"];
+ let release;const blocked=new Promise(resolve=>{release=resolve;});
+ let finished;const done=new Promise(resolve=>{finished=resolve;});
+ w.panel.handoff(async event=>{frames.push(event);if(frames.length===1)await blocked;if(event.end)finished();});
+ w.panel.open({columns:80,rows:24});w.panel.draw(lines);
+ assert.equal(frames.length,1);await Promise.resolve();assert.equal(frames.length,1);
+ release();await done;
+ assert.ok(frames.length>4);
+ assert.ok(frames.every(event=>Buffer.byteLength(JSON.stringify(event))<=768));
+ assert.equal(frames[0].start,true);assert.equal(frames.at(-1).end,true);
+ assert.deepEqual(JSON.parse(frames.map(event=>event.fragment).join("")).lines,lines);
+});
 
-test('DR27 terminal: unclaimed startup draws once and final restore returns modes/listeners', t => {
+test("001. Terminal: unclaimed startup draws once and final restore returns modes/listeners", t => {
   const w = world(); t.after(() => w.panel.restore());
   let shown = 0, keys = 0, resized = 0;
   w.panel.onKeys(() => { keys++; }); w.panel.onResize(() => { resized++; });
@@ -52,7 +67,7 @@ test('DR27 terminal: unclaimed startup draws once and final restore returns mode
   assert.equal(w.timers.size, 0);
 });
 
-test('DR27 terminal: restore before startup cancels fallback instead of reacquiring raw mode', t => {
+test("002. Terminal: restore before startup cancels fallback instead of reacquiring raw mode", t => {
   const w = world(); t.after(() => w.panel.restore());
   let shown = 0;
   w.panel.whenUnclaimed(() => { shown++; });
@@ -65,7 +80,7 @@ test('DR27 terminal: restore before startup cancels fallback instead of reacquir
   assert.equal(w.host.listenerCount('exit'), 0);
 });
 
-for (const claim of ['handoff', 'reclaim']) test(`DR27 terminal: ${claim} returns the losing startup timer`, t => {
+for (const claim of ['handoff', 'reclaim']) test(`003. Terminal: ${claim} returns the losing startup timer`, t => {
   const w = world(); t.after(() => w.panel.restore());
   let shown = 0; w.panel.whenUnclaimed(() => { shown++; });
   if (claim === 'handoff') w.panel.handoff(() => {}); else w.panel.reclaim();
@@ -73,7 +88,7 @@ for (const claim of ['handoff', 'reclaim']) test(`DR27 terminal: ${claim} return
   w.tick(); assert.equal(shown, 0);
 });
 
-test('DR27 terminal: rearming replaces its own timer and old callback cannot claim the terminal', t => {
+test("004. Terminal: rearming replaces its own timer and old callback cannot claim the terminal", t => {
   const w = world(); t.after(() => w.panel.restore());
   const shown = [];
   w.panel.whenUnclaimed(() => { shown.push('old'); });
@@ -84,14 +99,14 @@ test('DR27 terminal: rearming replaces its own timer and old callback cannot cla
   w.tick(); assert.deepEqual(shown, ['new']);
 });
 
-test('DR27 terminal: final restore is idempotent after remote ownership', () => {
+test("005. Terminal: final restore is idempotent after remote ownership", () => {
   const w = world(); w.panel.handoff(() => {});
   w.panel.restore(); const bytes = [...w.bytes], pauses = w.pauses;
   w.panel.restore();
   assert.deepEqual(w.bytes, bytes); assert.equal(w.pauses, pauses); assert.deepEqual(w.raw, [false]);
 });
 
-test('DR27 terminal: late UI callbacks after final restore cannot acquire, register or draw', t => {
+test("006. Terminal: late UI callbacks after final restore cannot acquire, register or draw", t => {
   const w = world(); t.after(() => w.panel.restore());
   w.panel.restore(); let sent = 0;
   w.panel.whenUnclaimed(() => { sent++; });
@@ -103,7 +118,7 @@ test('DR27 terminal: late UI callbacks after final restore cannot acquire, regis
   assert.equal(w.host.listenerCount('exit'), 0); assert.equal(w.timers.size, 0);
 });
 
-test('DR27 terminal: local-to-remote-to-local handoff keeps one listener owner', t => {
+test("007. Terminal: local-to-remote-to-local handoff keeps one listener owner", t => {
   const w = world(); t.after(() => w.panel.restore());
   let keys = 0, frames = 0;
   w.panel.onKeys(() => { keys++; }); w.panel.reclaim();
@@ -116,7 +131,7 @@ test('DR27 terminal: local-to-remote-to-local handoff keeps one listener owner',
   assert.equal(w.host.listenerCount('exit'), 1);
 });
 
-test('DR27 terminal: restored screen cannot acquire late input/resize listeners', () => {
+test("008. Terminal: restored screen cannot acquire late input/resize listeners", () => {
   const w = world(); const screen = w.screen.openTerminal({ input: w.input, output: w.output });
   screen.restore(); screen.onKeys(() => {}); screen.onResize(() => {}); screen.restore();
   assert.equal(w.input.listenerCount('data'), 0); assert.equal(w.output.listenerCount('resize'), 0);
@@ -142,7 +157,7 @@ function returned(w) {
   assert.equal(w.host.listenerCount('exit'), 0);
 }
 for (const [owner, method] of [['input', 'setRawMode'], ['input', 'resume'], ['output', 'write'], ['host', 'once']]) {
-  test(`DR27 terminal: failed screen acquisition at ${owner}.${method} returns partial modes`, () => {
+  test(`009. Terminal: failed screen acquisition at ${owner}.${method} returns partial modes`, () => {
     const w = world(), problem = failOnce(w[owner], method);
     assert.throws(() => w.screen.openTerminal({ input: w.input, output: w.output }), error => error === problem);
     returned(w);
@@ -151,7 +166,7 @@ for (const [owner, method] of [['input', 'setRawMode'], ['input', 'resume'], ['o
   });
 }
 for (const owner of ['input', 'output']) {
-  test(`DR27 terminal: failed panel ${owner} wiring returns the acquired screen before retry`, () => {
+  test(`010. Terminal: failed panel ${owner} wiring returns the acquired screen before retry`, () => {
     const w = world(); w.panel.onKeys(() => {}); w.panel.onResize(() => {});
     const problem = failOnce(w[owner], 'on');
     assert.throws(() => w.panel.reclaim(), error => error === problem);
@@ -162,7 +177,7 @@ for (const owner of ['input', 'output']) {
   });
 }
 for (const [owner, method] of [['host', 'off'], ['input', 'off'], ['output', 'off'], ['input', 'setRawMode'], ['input', 'pause']]) {
-  test(`DR27 terminal: failed ${owner}.${method} cleanup cannot strand the remaining resources`, () => {
+  test(`011. Terminal: failed ${owner}.${method} cleanup cannot strand the remaining resources`, () => {
     const w = world(); w.panel.onKeys(() => {}); w.panel.onResize(() => {}); w.panel.reclaim();
     const problem = failOnce(w[owner], method);
     assert.throws(() => w.panel.restore(), error => error === problem || error.errors?.includes(problem));
@@ -170,13 +185,13 @@ for (const [owner, method] of [['host', 'off'], ['input', 'off'], ['output', 'of
     const count = w.bytes.length; w.panel.restore(); assert.equal(w.bytes.length, count);
   });
 }
-test('DR27 terminal: failed screen setup retains its primary error and attempts all cleanup', () => {
+test("012. Terminal: failed screen setup retains its primary error and attempts all cleanup", () => {
   const w = world(); const primary = failOnce(w.output, 'write'), cleanup = failOnce(w.input, 'pause');
   assert.throws(() => w.screen.openTerminal({ input: w.input, output: w.output }),
     error => error.errors?.[0] === primary && (error.errors?.[1] === cleanup || error.errors?.[1]?.errors?.includes(cleanup)));
   returned(w);
 });
-test('DR27 terminal: remote pause failure still restores terminal modes once', () => {
+test("013. Terminal: remote pause failure still restores terminal modes once", () => {
   const w = world(); w.panel.handoff(() => {}); const problem = failOnce(w.input, 'pause');
   assert.throws(() => w.panel.restore(), error => error === problem || error.errors?.includes(problem));
   returned(w);

@@ -32,7 +32,7 @@ function fixture(t) {
       stdoutBytes: 65536, stderrBytes: 65536, stdoutOverflow: 'discard', stderrOverflow: 'discard' });
   } };
 }
-test('native scope: durable witness and fresh authority precede the first arbitrary effect', { timeout: 15000 }, async t => {
+test("001. Native scope: durable witness and fresh authority precede the first arbitrary effect", { timeout: 15000 }, async t => {
   const f = fixture(t), effect = join(f.root, 'effect'); let witness, authorized = false;
   const result = await f.owner.run({ slot: 'candidate', launch: () => launchBlockedNamespace(f.command(`require('node:fs').writeFileSync(${JSON.stringify(effect)}, 'once'); process.stdout.write('executed')`)),
     prepared: (_execution, observed) => { witness = observed; assert.equal(existsSync(effect), false); },
@@ -47,7 +47,7 @@ test('native scope: durable witness and fresh authority precede the first arbitr
   assert.equal(readFileSync(effect, 'utf8'), 'once'); assert.equal(f.owner.confirmDead('candidate'), true);
   assert.deepEqual(f.journal.entries(), []); assert.notEqual(observeNamespaceProcess(witness.pid).kind, 'running');
 });
-test('native scope: revoked authority leaves no effect and retires only after kernel death', { timeout: 15000 }, async t => {
+test("002. Native scope: revoked authority leaves no effect and retires only after kernel death", { timeout: 15000 }, async t => {
   const f = fixture(t), effect = join(f.root, 'forbidden'); let witness;
   const refused = new StoreError('CAPABILITY_DENIED', 'authority changed after preparation');
   await assert.rejects(f.owner.run({ slot: 'candidate', launch: () => launchBlockedNamespace(f.command(`require('node:fs').writeFileSync(${JSON.stringify(effect)}, 'forbidden')`)),
@@ -55,7 +55,7 @@ test('native scope: revoked authority leaves no effect and retires only after ke
   assert.equal(existsSync(effect), false); assert.equal(f.owner.confirmDead('candidate'), true);
   assert.deepEqual(f.journal.entries(), []); assert.notEqual(observeNamespaceProcess(witness.pid).kind, 'running');
 });
-test('native scope: cancellation after witness publication cannot release the blocked init', { timeout: 15000 }, async t => {
+test("003. Native scope: cancellation after witness publication cannot release the blocked init", { timeout: 15000 }, async t => {
   const f = fixture(t), effect = join(f.root, 'cancelled'), controller = new AbortController(); let authorized = false;
   await assert.rejects(f.owner.run({ slot: 'candidate', signal: controller.signal,
     launch: () => launchBlockedNamespace(f.command(`require('node:fs').writeFileSync(${JSON.stringify(effect)}, 'forbidden')`), { signal: controller.signal }),
@@ -63,7 +63,7 @@ test('native scope: cancellation after witness publication cannot release the bl
   assert.equal(authorized, false); assert.equal(existsSync(effect), false); assert.equal(f.owner.confirmDead('candidate'), true);
   assert.deepEqual(f.journal.entries(), []);
 });
-test('native scope: trusted child is a separately pinned namespace PID 2, not the launcher', { timeout: 15000 }, async t => {
+test("004. Native scope: trusted child is a separately pinned namespace PID 2, not the launcher", { timeout: 15000 }, async t => {
   const f = fixture(t), controller = new AbortController();
   const ticket = await f.owner.begin({ slot: 'resident:alpha', signal: controller.signal,
     launch: () => launchBlockedNamespace(f.command('setInterval(() => {}, 1000)'), { signal: controller.signal }), authorize() {} });
@@ -80,7 +80,7 @@ test('native scope: trusted child is a separately pinned namespace PID 2, not th
     assert.equal(f.owner.confirmDead('resident:alpha'), true); assert.deepEqual(f.journal.entries(), []);
   } finally { pin.close(); }
 });
-test('native journal: read-only diagnostics cannot repair mode-000 data into a successful empty observation', async t => {
+test("005. Native journal: read-only diagnostics cannot repair mode-000 data into a successful empty observation", async t => {
   const f = fixture(t), file = join(f.root, 'execution/scopes.jsonl');
   chmodSync(file, 0);
   assert.throws(() => ExecutionJournal.inspect(f.root), { code: 'EACCES' });
@@ -88,7 +88,7 @@ test('native journal: read-only diagnostics cannot repair mode-000 data into a s
   chmodSync(file, 0o600);
   assert.deepEqual(ExecutionJournal.inspect(f.root), []);
 });
-test('native scope: setsid double-fork descendant with all inherited FDs closed ends with its namespace', { timeout: 15000 }, async t => {
+test("006. Native scope: setsid double-fork descendant with all inherited FDs closed ends with its namespace", { timeout: 15000 }, async t => {
   const f = fixture(t), binary = join(f.root, 'escape'), report = join(f.root, 'escaped');
   execFileSync('/usr/bin/cc', ['-Wall', '-Wextra', '-Werror', fileURLToPath(new URL('./fixtures/namespace-escape.c', import.meta.url)), '-o', binary]);
   const ticket = await f.owner.begin({ slot: 'resident:escape', launch: () => launchBlockedNamespace(f.command(
@@ -109,7 +109,7 @@ test('native scope: setsid double-fork descendant with all inherited FDs closed 
   assert.equal(f.owner.confirmDead('resident:escape'), true);
 });
 for (const phase of ['after-initialize', 'after-opening', 'after-witness', 'after-effect', 'before-closed', 'after-closed'])
-  test(`native recovery: real owner SIGKILL at ${phase}`, { timeout: 20000 }, async t => {
+  test(`007. Native recovery: real owner SIGKILL at ${phase}`, { timeout: 20000 }, async t => {
     const root = mkdtempSync(join(process.env.OMA_NATIVE_EVIDENCE_DIR ?? tmpdir(), 'oma-execution-crash-'));
     const child = fork(fileURLToPath(new URL('./fixtures/execution-crash.mjs', import.meta.url)), [root, phase], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
     const closed = once(child, 'close'); let recovered = false, journal;

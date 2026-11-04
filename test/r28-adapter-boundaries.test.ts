@@ -21,7 +21,7 @@ import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-
 const limits = { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 1 };
 const errorCode = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
-test("R28: JSONL split/merge preserves LF-only boundaries and UTF-8", () => {
+test("001. JSONL split/merge preserves LF-only boundaries and UTF-8", () => {
   const events = [{ type: "one", text: "새 메일 🙂\n" }, { type: "two", id: "2" }];
   const source = Buffer.from(events.map(event => JSON.stringify(event)).join("\n") + "\n");
   for (let split = 0; split <= source.length; split++) {
@@ -35,7 +35,7 @@ test("R28: JSONL split/merge preserves LF-only boundaries and UTF-8", () => {
   reader.finish(); assert.deepEqual(found, events);
 });
 
-test("R28: oversized, malformed and partial-final JSONL poison rather than resynchronize", () => {
+test("002. Oversized, malformed and partial-final JSONL poison rather than resynchronize", () => {
   for (const bytes of [Buffer.from("x".repeat(33)), Buffer.from("{bad}\n"), Buffer.from([0xff, 0x0a]),
     Buffer.from('{"type":"one"}\r{"type":"two"}\n'), Buffer.from("[]\n")]) {
     const reader = new JsonlReader(32); let dispatched = 0;
@@ -49,7 +49,7 @@ test("R28: oversized, malformed and partial-final JSONL poison rather than resyn
   assert.throws(() => partial.feed(Buffer.from("\n"), () => assert.fail("poisoned reader dispatched")));
 });
 
-test("DR15 / P0-5: a well-formed line longer than the bound is skipped whole and reported; the lines around it are read", () => {
+test("003. A well-formed line longer than the bound is skipped whole and reported; the lines around it are read", () => {
   const big = JSON.stringify({ type: "message_end", message: { role: "assistant", content: "x".repeat(200) } });
   const source = Buffer.from(`{"type":"one"}\n${big}\n{"type":"two"}\n`);
   // Every split, including ones inside the oversized line and at its LF.
@@ -74,7 +74,7 @@ test("DR15 / P0-5: a well-formed line longer than the bound is skipped whole and
   assert.throws(() => open.finish());
 });
 
-test("R28: observer exceptions preserve their identity and stop later events", () => {
+test("004. Observer exceptions preserve their identity and stop later events", () => {
   const reader = new JsonlReader(128); const failure = new Error("observer failed"); let calls = 0;
   assert.throws(() => reader.feed(Buffer.from('{"type":"one"}\n{"type":"two"}\n'), () => { calls++; throw failure; }),
     error => error === failure);
@@ -88,7 +88,7 @@ function blockStdinForTest(child: ChildProcessWithoutNullStreams): void {
   child.stdin.write = (() => false) as typeof child.stdin.write;
 }
 
-test("R28: pending stdin writes time out, reject overlap and settle on owned close", { timeout: 5000 }, async t => {
+test("005. Pending stdin writes time out, reject overlap and settle on owned close", { timeout: 5000 }, async t => {
   const child = spawn(process.execPath, ["-e", "process.stdin.resume(); setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
   const exited = once(child, "close");
   const client = new PiRpcClient(child, limits); t.after(() => client.close());
@@ -105,7 +105,7 @@ test("R28: pending stdin writes time out, reject overlap and settle on owned clo
   assert.equal(child.stdout.listenerCount("data"), 0);
 });
 
-test("R28: stderr is drained as counts, never retained as diagnostic body", { timeout: 5000 }, async t => {
+test("006. Stderr is drained as counts, never retained as diagnostic body", { timeout: 5000 }, async t => {
   const secret = "PRIVATE_PROVIDER_PROMPT";
   const count = 1024;
   const child = spawn(process.execPath, ["-e", `process.stderr.write(${JSON.stringify(secret)}.repeat(${count})); setInterval(() => {}, 1000)`], { stdio: ["pipe", "pipe", "pipe"] });
@@ -118,7 +118,7 @@ test("R28: stderr is drained as counts, never retained as diagnostic body", { ti
   client.close(); await exited;
 });
 
-test("R28: incomplete stdout line and late observer close release owned child resources", { timeout: 5000 }, async t => {
+test("007. Incomplete stdout line and late observer close release owned child resources", { timeout: 5000 }, async t => {
   const child = spawn(process.execPath, ["-e", "process.stdout.write('{'); setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
   const exited = once(child, "close"); const client = new PiRpcClient(child, limits); t.after(() => client.close());
   const unsubscribe = client.onEvent(() => assert.fail("partial JSON was dispatched"));
@@ -128,7 +128,7 @@ test("R28: incomplete stdout line and late observer close release owned child re
   unsubscribe(); unsubscribe(); client.close(); await exited;
 });
 
-test("R28: batch FD read rejects source overflow, invalid UTF-8 and symlink leaves", () => {
+test("008. Batch FD read rejects source overflow, invalid UTF-8 and symlink leaves", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r28-view-"));
   const id = "b-00000000-0000-4000-8000-000000000001";
   const path = join(root, `batch-${id}.json`);
@@ -144,7 +144,7 @@ test("R28: batch FD read rejects source overflow, invalid UTF-8 and symlink leav
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R28: sandbox recipes bind decoded lease and private actor paths but never attest candidate execution", () => {
+test("009. Sandbox recipes bind decoded lease and private actor paths but never attest candidate execution", () => {
   const stateRoot = "/tmp/oma-r28-state"; const runRoot = "/tmp/oma-r28-run";
   const value = { actor: "alice", incarnation: 2, socketHostPath: actorSocketPathAt(runRoot, "alice", 2) };
   const lease = decodeRunLease(value, { actor: "alice", runRoot });
@@ -178,7 +178,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
 // up at the first failed message would report a provider failure for a batch
 // the engine went on to deliver. Both shapes must end at the same boundary.
 for (const retried of [false, true]) {
-test(`R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { ...RESIDENT_TEST_OPTIONS, timeout: 10000 }, async () => {
+test(`010. Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { ...RESIDENT_TEST_OPTIONS, timeout: 10000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r28-pi-"));
   try {
     const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "workerArchive", "projectGit", "view"].map(name => {
@@ -225,7 +225,7 @@ process.on("SIGTERM", () => process.exit(0));
 }
 
 for (const stage of ["stdout", "stderr", "stdin"] as const) {
-  test(`DR27/P0-4: partial RPC ${stage} registration failure returns its streams and child`, { timeout: 5000 }, async t => {
+  test(`011. Partial RPC ${stage} registration failure returns its streams and child`, { timeout: 5000 }, async t => {
     const child = spawn(process.execPath, ["-e", "process.stdin.resume(); setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
     const exited = once(child, "close");
     t.after(async () => { child.kill("SIGKILL"); await exited; });

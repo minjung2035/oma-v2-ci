@@ -24,7 +24,7 @@ export class TuiTransport {
   constructor(
     private readonly stateRoot: string,
     private readonly society: string,
-    /** A view larger than one frame is not one the broker wrote. */
+    /** Aggregate document budget shared with its publisher. */
     private readonly maxBytes: number,
     private readonly now: () => number = Date.now,
   ) {}

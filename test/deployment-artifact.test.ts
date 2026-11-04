@@ -52,7 +52,7 @@ syncBuiltinESMExports();
     env: { PATH: "/usr/bin:/bin", HOME: work, ...env } });
 }
 
-test("V31A: the installation alone resolves its entries, schema, templates and its own engine", { timeout: 120_000 }, async () => {
+test("001. The installation alone resolves its entries, schema, templates and its own engine", { timeout: 120_000 }, async () => {
   const work = mkdtempSync(join(tmpdir(), "oma-v31a-"));
   try {
     const prefix = join(work, "install");
@@ -61,6 +61,7 @@ test("V31A: the installation alone resolves its entries, schema, templates and i
     await checkPackage(prefix);
     const run = guarded(work, `
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 const prefix = ${JSON.stringify(prefix)};
 const { resolvePiRuntime } = await import(prefix + "/packages/engine/dist/pi-runtime.js");
 const { runtimeAssets, assertRuntimeAssets } = await import(prefix + "/apps/oma/dist/runtime/assets.js");
@@ -75,9 +76,10 @@ for (const [name, path] of Object.entries(DEPLOYMENT_LAYOUT.entries)) {
   const loaded = spawnSync(process.execPath, [prefix + "/" + path, ...(name === "society" ? ["--help"] : [])], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
   entries[name] = { status: loaded.status, stderr: loaded.stderr.slice(0, 300) };
 }
-const cli = spawnSync(process.execPath, [prefix + "/" + DEPLOYMENT_LAYOUT.cli], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
+const { Client } = await import(prefix + "/packages/client/dist/index.js");
 console.log(JSON.stringify({ bundle: runtime.bundle, version: version.stdout.trim(), versionStatus: version.status, entries,
-  cli: { status: cli.status, stderr: cli.stderr.slice(0, 200) } }));
+  client: typeof Client, modelCommand: existsSync(prefix + "/apps/oma/dist/libexec/oma"),
+  modelCli: existsSync(prefix + "/apps/oma/dist/cli.js") }));
 `);
     assert.equal(run.status, 0, run.stderr);
     const result = JSON.parse(run.stdout.trim().split("\n").at(-1)!);
@@ -91,12 +93,13 @@ console.log(JSON.stringify({ bundle: runtime.bundle, version: version.stdout.tri
       else assert.notEqual(loaded.status, 0, `${name} started without arguments`);
       assert.doesNotMatch(loaded.stderr, /source tree|Cannot find module|ERR_MODULE_NOT_FOUND/, `${name}: ${loaded.stderr}`);
     }
-    assert.equal(result.cli.status, 2, result.cli.stderr);
-    assert.match(result.cli.stderr, /usage:/);
+    assert.equal(result.client, "function");
+    assert.equal(result.modelCommand, false);
+    assert.equal(result.modelCli, false);
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
-test("V31A: an installation without its engine is refused, not handed another installation's", { timeout: 120_000 }, () => {
+test("002. An installation without its engine is refused, not handed another installation's", { timeout: 120_000 }, () => {
   const work = mkdtempSync(join(tmpdir(), "oma-v31a-"));
   try {
     const prefix = join(work, "install");
@@ -119,7 +122,7 @@ catch (error) { console.log(JSON.stringify({ code: error.code, message: error.me
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
-test("V31B: the package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
+test("003. The package check names a missing asset, a stale entry and a dependency that is not the locked one", { timeout: 120_000 }, async () => {
   const { checkPackage } = await import(CHECK) as { checkPackage(root: string): Promise<unknown> };
   for (const [name, damage, expected] of [
     ["missing credential primitive", (prefix: string) => rmSync(join(prefix, "packages/platform-mac/dist/keychain/main.swift")), /main\.swift|missing|asset/i],

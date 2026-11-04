@@ -17,12 +17,16 @@
     "tool": "scripts/vendor-pi-hashline.mjs",
     "divergences": {
       "file-kind.js": {
-        "reason": "OMA read seam: the whole file load — sniff sample and body — goes through one injectable opener. In a host engine the adapter installs the contained opener (workspace/readable-root admission plus the descriptor-relative no-follow walk), so a hashline read cannot reach a path the workspace guard would refuse. Uninstalled, upstream's plain fs open is the behavior — the seam adds authority routing, never weakens it.",
-        "edits": 2
+        "reason": "OMA read seam: the whole file load — sniff sample and body — goes through one injectable opener. In a host engine the adapter installs the contained opener (workspace/readable-root admission plus the descriptor-relative no-follow walk), so a hashline read cannot reach a path the workspace guard would refuse. Uninstalled, upstream's plain fs open is the behavior — the seam adds authority routing, never weakens it. Image bytes are captured with a bounded read from that same descriptor, so the SDK cannot reopen or reinterpret the path.",
+        "edits": 3
       },
       "file-kind.d.ts": {
         "reason": "Declaration for the file-kind.js OMA read seam (see the .js divergence) so the adapter's installer call type-checks under NodeNext.",
-        "edits": 1
+        "edits": 2
+      },
+      "read.js": {
+        "reason": "Image rendering uses the admitted snapshot bytes and MIME type with SDK read operations; it never reopens a model-supplied path or follows its @ shorthand.",
+        "edits": 2
       },
       "fs-write.js": {
         "reason": "OMA write seam, fail-closed: the two commit paths (commit.js and batch.js's multi-edit close) are rerouted from upstream's writeAtomic to an installed writer, and the read-back verification read is rerouted to the same seam's read. OMA's adapter installs the contained serialized writer — quota decided inside the serialization, no-follow descriptor walks, inode-identity check against the read snapshot. With no channel installed the seam throws instead of falling back to readFile/writeAtomic — a missing channel means the contained boundary was never wired, and a silent fallback would read or write the mutation target outside it. writeAtomic itself is kept but confined to the bundle's own state directory (config.js's configPath() under configDir(), redirected by the adapter into OMA-owned space via PI_HASHLINE_DIR — a different ownership domain); any other direct writeAtomic target — e.g. replace-undo.js's undo write, were that tool ever registered — refuses closed instead of writing uncontained. The identity contract is upstream's: a missing or replaced inode refuses before a byte is written.",
@@ -1533,13 +1537,13 @@
     },
     {
       "path": "runtime/file-kind.d.ts",
-      "bytes": 764,
-      "sha256": "73b9a6cd6705efc08f2f67fc2fa6945a6d34c99317a5ca08b5738130d9aabb81"
+      "bytes": 783,
+      "sha256": "fdf538a5ff38feeea8a9bc21cd5c805f57f50c69cf5fe53797859c3a3ece38d6"
     },
     {
       "path": "runtime/file-kind.js",
-      "bytes": 6179,
-      "sha256": "da8ba865dc59a380ed894f3764b0afb5b8c77848a053d142b864928ad00f1ad5"
+      "bytes": 6878,
+      "sha256": "a52fd2231e917d0202cffdb67e7aa8517de647fee80242b4222b40935c36278f"
     },
     {
       "path": "runtime/file-reader.d.ts",
@@ -1743,8 +1747,8 @@
     },
     {
       "path": "runtime/read.js",
-      "bytes": 12787,
-      "sha256": "256ed18b64603c90b91093d53f46f500db51299b70c503cd9d23b7b4ae99b9df"
+      "bytes": 13033,
+      "sha256": "91e57bd1b2d31e822a1ee6ff8cc8b6ab92a5c17553bc996b61087939abac2c2d"
     },
     {
       "path": "runtime/replace-diff.d.ts",
@@ -2817,5 +2821,5 @@
       "sha256": "16e1adab2395005d09e878bd6a485fc84aba20d13b51bdb64d5f32b624caae9c"
     }
   ],
-  "bundleSha256": "ade4a5df44e7e62587b8f2ce6e996e78d8acc829c96297e26e25d307b5b6629f"
+  "bundleSha256": "f7209336a67449876de7008e857119637f9922e5b2afde01d485047a6212303b"
 }

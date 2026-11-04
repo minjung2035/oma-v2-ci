@@ -16,12 +16,14 @@ export interface StorageCheckpoint {
   readonly digest: string;
   readonly ledger: readonly (string | null)[];
 }
-export interface SessionStorageState {
-  readonly kind: "oma-session-storage-v1";
+interface StorageIdentity {
   readonly society: string;
   readonly project: string;
   readonly checkpoint: StorageCheckpoint | null;
 }
+export type StoragePhase = "hot" | "archiving" | "cold" | "restoring";
+export type SessionStorageState = StorageIdentity & ({ readonly kind: "oma-session-storage-v1" } |
+  { readonly kind: "oma-session-storage-v2"; readonly generation: number; readonly phase: StoragePhase });
 const bad = (): never => { throw new StoreError("STORE_CORRUPT", "invalid session storage selection; existing data was retained"); };
 const hash = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -45,8 +47,14 @@ export function readStorageText(path: string): string | null {
 export function parseStorageState(text: string, society: string, project: string): SessionStorageState {
   const value: unknown = JSON.parse(text);
   if (!object(value)) return bad();
-  keys(value, "checkpoint,kind,project,society");
-  if (value.kind !== "oma-session-storage-v1" || value.society !== society || value.project !== project) return bad();
+  if (value.kind === "oma-session-storage-v1") keys(value, "checkpoint,kind,project,society");
+  else if (value.kind === "oma-session-storage-v2") {
+    keys(value, "checkpoint,generation,kind,phase,project,society");
+    if (!Number.isSafeInteger(value.generation) || (value.generation as number) < 0 ||
+        !["hot", "archiving", "cold", "restoring"].includes(value.phase as string) ||
+        ((value.phase === "hot" || value.phase === "archiving") !== (value.checkpoint === null))) return bad();
+  } else return bad();
+  if (value.society !== society || value.project !== project) return bad();
   const checkpoint = value.checkpoint;
   if (checkpoint === null) return value as unknown as SessionStorageState;
   if (!object(checkpoint)) return bad();

@@ -19,7 +19,7 @@ function world(t) {
   return store;
 }
 for (const [name, project] of [["Git", gitLedger], ["Review", reviewLedger]]) {
-  test(`DR46 ${name}: captured writes cannot escape T or borrow a later T`, t => {
+  test(`001. Git review ledger projection: ${name}: captured writes cannot escape T or borrow a later T`, t => {
     const store = world(t), ledger = project(store);
     let saved;
     ledger.transaction(tx => { saved = tx; assert.ok(Object.isFrozen(tx)); });
@@ -38,7 +38,7 @@ for (const [name, project] of [["Git", gitLedger], ["Review", reviewLedger]]) {
     ledger.transaction(tx => { assert.notEqual(tx, saved); stale(); });
     assert.equal(store.inTransaction, false);
   });
-  test(`DR46 ${name}: real projection rejects Promises and thenables; readers remain live`, t => {
+  test(`002. Git review ledger projection: ${name}: real projection rejects Promises and thenables; readers remain live`, t => {
     const store = world(t), ledger = project(store);
     assert.throws(() => ledger.transaction(() => Promise.resolve("late")), internal);
     assert.throws(() => ledger.transaction(() => ({ then() {} })), internal);
@@ -54,7 +54,7 @@ for (const [name, project] of [["Git", gitLedger], ["Review", reviewLedger]]) {
     }
   });
 }
-test("DR46 Review: observed corruption fences the original Store through the projection", t => {
+test("003. Review: observed corruption fences the original Store through the projection", t => {
   const store = world(t), gate = new AdmissionGate();
   bindAdmissionGate(store, gate);
   const ledger = reviewLedger(store);

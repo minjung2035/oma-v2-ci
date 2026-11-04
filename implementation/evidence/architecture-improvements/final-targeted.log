@@ -1,0 +1,174 @@
+✔ IMP-R29: prepared-ref collection retains active, unknown and accepted ownership (551.357629ms)
+✔ IMP-R16: reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta (1160.380414ms)
+{"event":"review.advance","request":"op-a020450c-9b0f-4e79-9305-6b278ca9aab7","code":"CHECK_FAILED"}
+✔ IMP-R17: individual changes pass but combined invariant fails on prepared I (445.448891ms)
+✔ IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-context vote (571.398276ms)
+{"event":"review.advance","request":"op-83fc01a7-2442-4d31-8e33-9cb47a5ec7e6","code":"CHECK_FAILED"}
+✔ IMP-R19: revision preserves old failure bytes, resets code approval and races expectedRevision (632.614773ms)
+{"event":"review.advance","request":"op-d6b96e35-a7e4-4bb5-94b7-1a20071cb186","code":"STALE_BASE"}
+✔ IMP-R20: known main movement before CAS supersedes only the attempt and automatically prepares again (384.342478ms)
+✔ IMP-R21: already-included is a separate fact with no integration receipt (109.417414ms)
+{"event":"review.advance","request":"op-3c93f9c3-8bac-4b1c-b64f-c9c335e3d0f0","code":"CHECK_FAILED"}
+✔ IMP-R19: policy adoption preserves qualified code votes but creates current policy authority; host retry is explicit (688.54077ms)
+✔ IMP-R18: conflict stays blocked without repeated preparation and explicit revision resolves it (610.134882ms)
+✔ IMP-R26: only completed approved CAS links prove a later main, arbitrary ancestry does not (500.523838ms)
+✔ IMP-R27: an included proposal needs no additional peer vote and creates no success receipt (153.979018ms)
+✔ IMP-R28: HIGH context requires fresh peer and Principal decisions bound to actual M/I (985.45389ms)
+✔ IMP-R30: SIGKILL before prepared-integration CAS preserves exact M/I and accepted bytes (856.512366ms)
+✔ IMP-R30: SIGKILL after prepared-integration CAS preserves exact M/I and accepted bytes (790.425973ms)
+✔ IMP-R31: normal merge ancestry carries a binary edit across a rename and requires exact-context review (604.611727ms)
+✔ AV7 / INV03, P0V-61: each record names the generation its commit replaced, so a record lost before it changes nothing (84.481273ms)
+✔ P0V-47 / F1, P0-3: a record an append left unfinished is closed off, so the next record and the previous generation survive (150.629677ms)
+✔ AV7 / INV02: a journal that cannot be read removes no generation, only what was never committed (75.139968ms)
+✔ AV7 / INV02, P0V-61: when no record says what the current generation's commit replaced, every generation is kept (74.463345ms)
+✔ DR46: retired journal names refuse load, edit and collection without changing existing bytes (71.826736ms)
+✔ P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the generation its last commit replaced (67.869061ms)
+✔ P0V-72 / F5, P0-5: a journal read that returns less than was asked is read on, and one that ends early keeps everything (156.074208ms)
+✔ AV7 / INV02: an existing generation that cannot be read is not reported as holding other bytes (73.823924ms)
+✔ DR46 / P0-5: a journal append that writes zero bytes refuses without replacing the manifest (68.171222ms)
+✔ Review client: merge open resolves HEAD + origin/main, submits once, then opens (157.178752ms)
+✔ Review client: same-key replay after HEAD moved returns the frozen request (236.758587ms)
+✔ Review client: merge open with no recorded base refuses before any request (127.652323ms)
+✔ Review client: dirty workspace warns; known candidate skips the submit; pending submit stops the open (255.498326ms)
+✔ Review client: a refused `git status` is not reported as a clean workspace (125.239944ms)
+✔ Review client: a `.git` that is present but damaged is not an absent workspace (122.020462ms)
+✔ Review client: a bare repository has no work tree that could be dirty (119.473023ms)
+To /tmp/oma-merge-diff-HJ8TrZ/canon.git
+ * [new branch]      2df6f4460d7fb99df1e55fc5621a65d8cc99f48b -> main
+ * [new reference]   47a51edfe483975d3f9bd62fa9fb88bbc5995b38 -> refs/oma/published/alice/op-80866995-daa2-4a33-8cbe-73bb69cd9e5f
+✔ Review client: open outside a repository has no workspace to observe (105.954633ms)
+✔ Review client: exact diff pagination and challenge original view use frozen identities (1120.851434ms)
+✔ Review client: prepared challenges skip publication and replacement challenges publish first (245.999532ms)
+✔ DR46 current review: exact candidate identity uses the shared non-coercing grammar; missing conditions survive public sanitization (0.917654ms)
+✔ F36: optional system binds are closed, absence-gated, and include symlink targets (1.716247ms)
+✔ F34/F35: explicit entries cannot override the normalized base environment (6.805445ms)
+✔ U1: config validation and Resident plans reject missing confinement and host-root profiles (1.798377ms)
+✔ F34/F35/F36 live: locale, identity, temp, user-local PATH and support files work without host env or network (252.647617ms)
+✔ FI-1: a Resident's Git commits as its actor, and no Git flow waits on an editor or a prompt (0.977263ms)
+✔ FI-2: the pinned Node's npm, npx and corepack are mounted and linked beside it (10.078627ms)
+✔ FI-2: the toolchain contract -- this host's pinned Node ships the commands a Worker is promised (0.249711ms)
+✔ FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx (404.839882ms)
+✔ SCN-C01: a confined Resident commits and submits; the candidate is published, and the Principal gets the result mail (2621.328152ms)
+✔ SCN-C02: inside the sandbox the provider key is only a placeholder; the relay hands the provider the real one (2180.589367ms)
+✔ SCN-C03: submitting the same request twice publishes one candidate under one operation (2509.464712ms)
+✔ SCN-C04: a Resident's LOW merge request applies itself; main moves exactly to its candidate (2790.806154ms)
+✔ SCN-C05: a proposal on an earlier base is accepted and its changed integration context requires review (3136.762323ms)
+✔ SCN-C06: the Principal publishes the shared context; a confined Resident reads it from /world (3410.994491ms)
+✔ SCN-C07: without git.submit a Resident's merge open is refused and main does not move (AUTH-001) (2308.62831ms)
+✔ SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox filter (the program vsock-seccomp holds to refusing vsock) (2160.117243ms)
+✔ SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident through the read-only mirror, which it submits by the existing path (2498.313554ms)
+✔ SCN-C10 / DR25: a confined Resident's engine loads an installed package's extension from the read-only store (directory), and sees nothing else of the Human's (2307.661119ms)
+✔ SCN-C10 / DR25: a confined Resident's engine loads an installed package's extension from the read-only store (link), and sees nothing else of the Human's (2293.479746ms)
+Cloning into '/tmp/oma-scn-HvHJwi/oma/demo/scratch/push-alice-r01'...
+Cloning into '/tmp/oma-scn-yf7gWm/oma/demo/scratch/push-alice-r02'...
+✔ SCN-R01: HIGH merge end-to-end — approval mail, Principal diff and vote, application, completion notice (1676.864341ms)
+Cloning into '/tmp/oma-scn-qL0WWD/oma/demo/scratch/push-alice-r03'...
+✔ SCN-R02: the Principal's own surface refuses Worker actions and worker-mail paths (1397.061281ms)
+Cloning into '/tmp/oma-scn-0lpeug/oma/demo/scratch/push-alice-r04'...
+✔ SCN-R03: a stale approval id is refused; the fresh approval's id applies (1707.237646ms)
+Cloning into '/tmp/oma-scn-2PZcSJ/oma/demo/scratch/push-alice-r05'...
+✔ SCN-R04: a Principal reject closes the request; later Worker votes are refused (1339.949543ms)
+Cloning into '/tmp/oma-scn-KZ7y8K/oma/demo/scratch/push-alice-r06'...
+✔ SCN-R05: MEDIUM applies on one Worker approval; the Principal sees only the completion notice (1575.612058ms)
+Cloning into '/tmp/oma-scn-aAXtzp/oma/demo/scratch/push-alice-r07'...
+✔ SCN-R06: an approval accepted while the engine is down delivers exactly once after restarts (1972.747358ms)
+Cloning into '/tmp/oma-scn-oMuRlZ/oma/demo/scratch/push-alice-r08'...
+✔ SCN-R07: a completion notice over the body bound arrives in ordered parts the model reads (1276.540656ms)
+Cloning into '/tmp/oma-scn-1NNECQ/oma/demo/scratch/push-alice-r09'...
+✔ SCN-R08: a HIGH challenge prepares the revert; the Principal sees both patches and applies it (1678.957525ms)
+✔ SCN-R09: a same-key model vote retry returns the same receipt and records once (1525.131647ms)
+✔ Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks (2.784831ms)
+✔ Mac quarantine separates readonly accepted input, writable verify repo and canonical promotion (1.153844ms)
+✔ Mac setup refuses overlapping staging, widened toolchains and loader injection (1.474766ms)
+✖ Mac Worker command keeps literal argv, physical cwd and owned environment (2.975591ms)
+✔ Mac Worker recipe refuses forged leases and every substituted actor directory (1.490816ms)
+✖ Mac Worker recipe fixes owned environment and refuses ambient secrets and preload substitution (0.710013ms)
+✔ Mac Worker recipe refuses broad installation roots, escaped hidden paths and nonphysical entries (0.666862ms)
+✔ Mac Worker private-state overlap: libdir nested outside writable actor roots is refused (0.299852ms)
+✔ Mac Worker private-state overlap: packages nested outside writable actor roots is refused (0.247131ms)
+✔ Mac Worker private-state overlap: node nested outside writable actor roots is refused (0.218761ms)
+✔ Mac Worker private-state overlap: developer nested outside writable actor roots is refused (0.297681ms)
+✔ P2 native shared pipeline: fresh retry, setup dependency, separate logs, tracked generation and private receipts (337.13894ms)
+✔ P2 native step timeout stops pipeline and proves whole scope death before fresh retry (461.476703ms)
+✔ P2 native npm cache: restore verified downloads into a private cache; cache hit still runs all checks (495.052761ms)
+✖ Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI (4.150905ms)
+✖ Mac Worker App port refuses missing tools and snapshots the observed installation (1.578426ms)
+✔ Mac Worker App port refuses selected developer roots overlapping writable actor state (0.716153ms)
+✔ Linux Worker composition refuses a Mac installation launch (0.141821ms)
+ℹ tests 81
+ℹ suites 0
+ℹ pass 77
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 58097.142103
+
+✖ failing tests:
+
+test at packages/platform-mac/test/resident-sandbox.test.mjs:31:1
+✖ Mac Worker command keeps literal argv, physical cwd and owned environment (2.975591ms)
+  Error [StoreError]: Seatbelt command environment contains an unapproved entry
+      at refused (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:19:35)
+      at commandFor (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:124:13)
+      at prepareSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:160:37)
+      at residentSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/resident-sandbox.js:56:12)
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/test/resident-sandbox.test.mjs:33:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    code: 'UNSUPPORTED_PROFILE',
+    details: undefined
+  }
+
+test at packages/platform-mac/test/resident-sandbox.test.mjs:52:1
+✖ Mac Worker recipe fixes owned environment and refuses ambient secrets and preload substitution (0.710013ms)
+  Error [StoreError]: Seatbelt command environment contains an unapproved entry
+      at refused (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:19:35)
+      at commandFor (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:124:13)
+      at prepareSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:160:37)
+      at residentSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/resident-sandbox.js:56:12)
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/test/resident-sandbox.test.mjs:54:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12) {
+    code: 'UNSUPPORTED_PROFILE',
+    details: undefined
+  }
+
+test at test/mac-worker-plan.test.mjs:19:1
+✖ Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI (4.150905ms)
+  Error [StoreError]: Seatbelt command environment contains an unapproved entry
+      at refused (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:19:35)
+      at commandFor (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:124:13)
+      at prepareSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:160:37)
+      at residentSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/resident-sandbox.js:56:12)
+      at Object.residentPlan (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/apps/oma/dist/engine/resident-effects.js:34:28)
+      at planPiSpawn (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/engine/dist/pi-spawn-plan.js:184:20)
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/test/mac-worker-plan.test.mjs:20:68)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17) {
+    code: 'UNSUPPORTED_PROFILE',
+    details: undefined
+  }
+
+test at test/mac-worker-plan.test.mjs:42:1
+✖ Mac Worker App port refuses missing tools and snapshots the observed installation (1.578426ms)
+  Error [StoreError]: Seatbelt command environment contains an unapproved entry
+      at refused (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:19:35)
+      at commandFor (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:124:13)
+      at prepareSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/seatbelt.js:160:37)
+      at residentSeatbelt (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/platform-mac/dist/resident-sandbox.js:56:12)
+      at Object.residentPlan (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/apps/oma/dist/engine/resident-effects.js:34:28)
+      at planPiSpawn (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/engine/dist/pi-spawn-plan.js:184:20)
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/test/mac-worker-plan.test.mjs:46:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18) {
+    code: 'UNSUPPORTED_PROFILE',
+    details: undefined
+  }

@@ -3,6 +3,7 @@ import { UNSEEN_EXCEPT_LAYOUT } from '@oma/domain/unseen-text';
 import type { EnginePresentation } from './presentation.js';
 import type { InteractiveOutput } from './interactive-state.js';
 import type { PiEvent } from './pi-rpc.js';
+import { TERMINAL_BOUNDS } from '@oma/domain/surface-bounds';
 export function createInteractiveView(input: {
     readonly presentation: EnginePresentation;
 }, ui: InteractiveOutput) {
@@ -26,6 +27,8 @@ export function createInteractiveView(input: {
     let panelOpen = false;
     let panelDone: (() => void) | undefined;
     let panelLines: string[] = [];
+    let panelFragments: string[] | null = null;
+    let panelBytes = 0;
     let redraw: (() => void) | undefined;
     // B3: the waiting queue is the session's fact; these are only its latest
     // picture, repainted on every snapshot and re-applied across reloads.
@@ -64,6 +67,7 @@ export function createInteractiveView(input: {
         redraw = undefined;
         panelOpen = false;
         panelLines = [];
+        panelFragments = null; panelBytes = 0;
         releaseUi?.();
         releaseUi = undefined;
         context = undefined;
@@ -154,7 +158,22 @@ export function createInteractiveView(input: {
                 });
             });
         }
+        else if (event.type === 'panel_frame' && typeof event.fragment === 'string') {
+            if (event.start === true) { panelFragments = []; panelBytes = 0; }
+            if (panelFragments === null) return;
+            panelBytes += Buffer.byteLength(event.fragment);
+            if (panelBytes > TERMINAL_BOUNDS.panelFrameBytes.value) { panelFragments = null; return; }
+            panelFragments.push(event.fragment);
+            if (event.end !== true) return;
+            const text = panelFragments.join(''); panelFragments = null; panelBytes = 0;
+            let frame: PiEvent;
+            try { frame = JSON.parse(text); } catch { return; }
+            if (frame?.type !== 'panel_frame' || !Array.isArray(frame.lines) || !frame.lines.every(x => typeof x === 'string')) return;
+            panelLines = frame.lines; redraw?.();
+            if (frame.open === false) panelDone?.();
+        }
         else if (event.type === 'panel_frame' && Array.isArray(event.lines) && event.lines.every(x => typeof x === 'string')) {
+            panelFragments = null; panelBytes = 0;
             panelLines = event.lines;
             redraw?.();
             if (event.open === false)

@@ -1,7 +1,7 @@
 /** Actual pinned SDK private-file compatibility probes. No provider or native Mac qualification. */
 import test from "node:test";
 import assert from "node:assert/strict";
-test("Open TUI: every command the engine lists as built in reaches the engine, not the model", async () => {
+test("001. Open TUI: every command the engine lists as built in reaches the engine, not the model", async () => {
     const { PI_BUILTIN_COMMANDS } = await import("@oma/engine/interactive");
     // The engine's own list, read from its file: the mirror must cover it.
     const engine = new URL("./core/slash-commands.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
@@ -9,7 +9,7 @@ test("Open TUI: every command the engine lists as built in reaches the engine, n
     const missing = BUILTIN_SLASH_COMMANDS.map(command => command.name).filter(name => !PI_BUILTIN_COMMANDS.has(name));
     assert.deepEqual(missing, []);
 });
-test("oma's identity: /export writes to the Human's project under oma's name, as the engine's own parser reads it", async () => {
+test("002. Oma's identity: /export writes to the Human's project under oma's name, as the engine's own parser reads it", async () => {
     const { omaExportCommand } = await import("@oma/engine/interactive");
     const engine = new URL("./modes/interactive/interactive-mode.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
     const { InteractiveMode } = await import(engine.href);
@@ -33,7 +33,7 @@ test("oma's identity: /export writes to the Human's project under oma's name, as
     }
     assert.equal(omaExportCommand(undefined, "/home/me/proj", undefined), null, "an unsaved session is the engine's to refuse");
 });
-test("oma's identity: a crash's extension advice and the terminal title say oma, not the engine's CLI", async () => {
+test("003. Oma's identity: a crash's extension advice and the terminal title say oma, not the engine's CLI", async () => {
     const { ENGINE_EXTENSION_ADVICE, omaCrashHint, omaTerminalTitle } = await import("@oma/engine/interactive");
     const engine = new URL("./modes/interactive/interactive-mode.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
     const { formatCrashExtensionHint } = await import(engine.href);

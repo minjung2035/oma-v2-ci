@@ -76,6 +76,8 @@ export async function executeQuarantinePhase(input: QuarantineInput): Promise<vo
   await command(REPO, ["fetch", "--progress", "--no-tags", BUNDLE, `${input.exportRef}:refs/oma/input`], "BUNDLE_INVALID");
   if ((await command(REPO, ["rev-parse", "refs/oma/input"], "BUNDLE_INVALID", true)) !== `${input.candidate}\n`)
     throw new StoreError("BUNDLE_INVALID", "quarantined candidate differs from the accepted OID");
+  if ((await command(REPO, ["cat-file", "-t", "refs/oma/input"], "BUNDLE_INVALID", true)) !== "commit\n")
+    throw new StoreError("BUNDLE_INVALID", "bundle candidate must name a commit object without peeling a tag");
   try { await command(REPO, ["fsck", "--strict", "--no-reflogs", "--progress"], "BUNDLE_INVALID"); }
   catch (error) {
     if (!(error instanceof StoreError) || error.code !== "BUNDLE_INVALID") throw error;

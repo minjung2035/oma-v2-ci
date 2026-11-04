@@ -31,8 +31,10 @@ export interface ReconcileUnits {
 export interface ReconcileEffects {
   observeStoreFailure(error: unknown): void;
   quiesceResidents(): void | Promise<void>;
+  /** Read-only accepted-plan/artifact integrity, before admission; never physical recovery. */
+  validateRecoveryArtifacts?(): Promise<void>;
   collectUnacceptedArtifacts(): PreacceptCollection;
   canonicalMain(): GitObservation<string>;
   assertCanonicalHealthy(): Promise<void>;
-  hasPendingWork(actor: Actor): boolean;
+  pendingWork(actor: Actor): ReadonlySet<string>;
 }

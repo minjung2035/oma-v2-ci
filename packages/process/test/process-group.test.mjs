@@ -44,7 +44,7 @@ function leader(observed) {
   assert.equal(observed.group, observed.pid); assert.equal(observed.session, observed.pid);
 }
 
-test("POSIX group launch creates a real session leader while ordinary launch inherits its group", { timeout: 15000 }, async t => {
+test("001. POSIX group launch creates a real session leader while ordinary launch inherits its group", { timeout: 15000 }, async t => {
   await owned(launch("observe"), async ({ task, ready }) => {
     const info = await ready, result = await task.result; await task.closed;
     assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0);
@@ -58,7 +58,7 @@ test("POSIX group launch creates a real session leader while ordinary launch inh
     t.diagnostic(JSON.stringify({ platform: process.platform, ownGroup: info }));
   });
 });
-test("POSIX group cancellation joins the actual child and streams", { timeout: 15000 }, async t => {
+test("002. POSIX group cancellation joins the actual child and streams", { timeout: 15000 }, async t => {
   await owned(launch("wait", { processGroup: true }), async ({ task, ready }) => {
     const info = await ready; leader(info); task.cancel(); task.cancel();
     const result = await task.result; await task.closed;
@@ -66,7 +66,7 @@ test("POSIX group cancellation joins the actual child and streams", { timeout: 1
     t.diagnostic(JSON.stringify({ platform: process.platform, child: info, result: result.kind, signal: result.signal, directChildClosed: true }));
   });
 });
-test("POSIX group deadline retains the timeout result through actual child close", { timeout: 15000 }, async t => {
+test("003. POSIX group deadline retains the timeout result through actual child close", { timeout: 15000 }, async t => {
   await owned(launch("wait", { processGroup: true }, 2000), async ({ task, ready }) => {
     const info = await ready; leader(info);
     const result = await task.result; await task.closed;
@@ -74,7 +74,7 @@ test("POSIX group deadline retains the timeout result through actual child close
     t.diagnostic(JSON.stringify({ platform: process.platform, child: info, result: result.kind, signal: result.signal, directChildClosed: true }));
   });
 });
-test("POSIX group launch retains the explicitly supplied file descriptor", { timeout: 15000 }, async t => {
+test("004. POSIX group launch retains the explicitly supplied file descriptor", { timeout: 15000 }, async t => {
   const canary = join(root, "canary"); writeFileSync(canary, "fixture-owned identity");
   const fd = openSync(canary, "r");
   try {

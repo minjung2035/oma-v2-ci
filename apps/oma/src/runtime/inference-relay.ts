@@ -6,8 +6,8 @@
  * and this process attaches the real credential and forwards to the one
  * endpoint the host declared.
  *
- * It is a byte relay. It does not read the stream, reassemble messages, count
- * tokens or price anything — those stay with the engine (INF-001). What it does
+ * It does not interpret inference content, count tokens or price anything —
+ * those stay with the engine (INF-001). What it does
  * own is the chokepoint: the destination is fixed, the caller cannot choose its
  * own authorization, and a request whose outcome is unclear is never resent
  * (INF-004).
@@ -24,7 +24,7 @@
  * travels back: a response whose bytes carry it is cut off before they reach
  * the sandbox, so the relay asks for responses it can see (no compression).
  */
-import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, validateHeaderName, validateHeaderValue, type ClientRequest, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Transform, type Duplex } from "node:stream";
 import type { Socket } from "node:net";
@@ -49,8 +49,6 @@ const CALLER_AUTHORITY = Object.freeze(new Set([
   "authorization", "x-api-key", "api-key", "x-goog-api-key",
 ]));
 
-const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
-const UNSAFE_VALUE = /[\r\n\0]/;
 
 /** Open connections the relay keeps per request it may carry at once. */
 export const RELAY_CONNECTIONS_PER_REQUEST = 4;
@@ -122,7 +120,111 @@ class CredentialTripwire {
     this.tail = Buffer.from(window.subarray(window.length - held));
     return window.subarray(0, window.length - held);
   }
-  finish(): Buffer { return this.tail; }
+  finish(): Buffer { const tail = this.tail; this.tail = Buffer.alloc(0); return tail; }
+}
+
+/** Inspect message payloads, not arbitrary TCP boundaries. Safe bytes are
+ * reframed as continuations so a withheld prefix never leaves an incomplete
+ * frame blocking a peer's ping/pong or its next message. Only a partial header,
+ * a control payload (at most 125 bytes), and the possible key prefix are held. */
+class WebSocketCredentialGuard extends Transform {
+  private header = Buffer.alloc(0);
+  private remaining = 0;
+  private opcode = 0;
+  private final = false;
+  private messageOpcode = 0;
+  private emitted = false;
+  private control = Buffer.alloc(0);
+  private readonly wire: CredentialTripwire;
+
+  constructor(private readonly secret: Buffer) {
+    super();
+    this.wire = new CredentialTripwire(secret);
+  }
+
+  private frame(opcode: number, final: boolean, payload: Buffer): void {
+    const header = Buffer.alloc(payload.length < 126 ? 2 : 4);
+    header[0] = (final ? 0x80 : 0) | opcode;
+    header[1] = payload.length < 126 ? payload.length : 126;
+    if (payload.length >= 126) header.writeUInt16BE(payload.length, 2);
+    this.push(header);
+    if (payload.length > 0) this.push(payload);
+  }
+
+  private data(payload: Buffer, final = false): void {
+    for (let at = 0; at < payload.length; at += 65535) {
+      this.frame(this.emitted ? 0 : this.messageOpcode, false, payload.subarray(at, at + 65535));
+      this.emitted = true;
+    }
+    if (final) {
+      this.frame(this.emitted ? 0 : this.messageOpcode, true, Buffer.alloc(0));
+      this.messageOpcode = 0;
+      this.emitted = false;
+    }
+  }
+
+  private complete(): void {
+    if (this.opcode >= 8) {
+      if (this.control.indexOf(this.secret) >= 0) throw new Error("the credential is in the response");
+      this.frame(this.opcode, true, this.control);
+      this.control = Buffer.alloc(0);
+    } else if (this.final) {
+      this.data(this.wire.finish(), true);
+    }
+    this.header = Buffer.alloc(0);
+  }
+
+  override _transform(chunk: Buffer, _encoding: BufferEncoding, done: (error?: Error | null) => void): void {
+    try {
+      let at = 0;
+      while (at < chunk.length) {
+        if (this.header.length < 2 || this.remaining === 0) {
+          let needed = 2;
+          if (this.header.length >= 2) {
+            const length = this.header[1]! & 127;
+            needed = length === 126 ? 4 : length === 127 ? 10 : 2;
+          }
+          const count = Math.min(needed - this.header.length, chunk.length - at);
+          this.header = Buffer.concat([this.header, chunk.subarray(at, at + count)]);
+          at += count;
+          if (this.header.length < needed || this.header.length < 2) continue;
+          const length = this.header[1]! & 127;
+          if ((length === 126 && this.header.length < 4) || (length === 127 && this.header.length < 10)) continue;
+          this.opcode = this.header[0]! & 15;
+          this.final = (this.header[0]! & 128) !== 0;
+          if ((this.header[0]! & 0x70) !== 0 || (this.header[1]! & 128) !== 0 ||
+              ![0, 1, 2, 8, 9, 10].includes(this.opcode))
+            throw new Error("invalid provider WebSocket frame");
+          const size = length < 126 ? BigInt(length) : length === 126
+            ? BigInt(this.header.readUInt16BE(2)) : this.header.readBigUInt64BE(2);
+          if (size > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("invalid provider WebSocket length");
+          this.remaining = Number(size);
+          if (this.opcode >= 8) {
+            if (!this.final || size > 125n) throw new Error("invalid provider WebSocket control frame");
+          } else if (this.opcode === 0) {
+            if (this.messageOpcode === 0) throw new Error("unexpected provider WebSocket continuation");
+          } else {
+            if (this.messageOpcode !== 0) throw new Error("unfinished provider WebSocket message");
+            this.messageOpcode = this.opcode;
+          }
+          if (this.remaining === 0) { this.complete(); continue; }
+        }
+        const count = Math.min(this.remaining, chunk.length - at);
+        const payload = chunk.subarray(at, at + count);
+        at += count;
+        this.remaining -= count;
+        if (this.opcode >= 8) this.control = Buffer.concat([this.control, payload]);
+        else this.data(this.wire.inspect(payload));
+        if (this.remaining === 0) this.complete();
+      }
+      done();
+    } catch (error) { done(error as Error); }
+  }
+
+  override _flush(done: (error?: Error | null) => void): void {
+    done(this.header.length !== 0 || this.messageOpcode !== 0
+      ? new Error("incomplete provider WebSocket message") : undefined);
+  }
 }
 
 /** The origin a request is resolved against to canonicalise it. Nothing is sent
@@ -224,13 +326,18 @@ export class InferenceRelay {
     this.offer();
   }
 
+  private offering = false;
   private offer(): void {
-    while (this.queue.length > 0 && this.inFlight < this.limits.concurrent) {
-      const entry = this.queue.shift()!;
-      entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
-      if (entry.socket.destroyed || entry.socket.closed) continue;
-      entry.run();
-    }
+    if (this.offering) return;
+    this.offering = true;
+    try {
+      while (this.queue.length > 0 && this.inFlight < this.limits.concurrent) {
+        const entry = this.queue.shift()!;
+        entry.socket.off("close", entry.cancel); entry.socket.off("end", entry.cancel); entry.socket.off("error", entry.cancel);
+        if (entry.socket.destroyed || entry.socket.closed) continue;
+        entry.run();
+      }
+    } finally { this.offering = false; }
   }
 
   static async open(
@@ -259,13 +366,22 @@ export class InferenceRelay {
     if (!Number.isSafeInteger(limits.concurrent) || limits.concurrent <= 0 ||
       !Number.isSafeInteger(limits.timeoutMs) || limits.timeoutMs <= 0)
       throw new StoreError("UNSUPPORTED_PROFILE", "relay limits are invalid");
-    for (const [name, value] of Object.entries(target.headers))
-      if (!HEADER_NAME.test(name) || typeof value !== "string" || UNSAFE_VALUE.test(value))
-        throw new StoreError("UNSUPPORTED_PROFILE", "relay credential header is invalid");
+    for (const [name, value] of Object.entries(target.headers)) {
+      try {
+        validateHeaderName(name);
+        if (typeof value !== "string") throw new Error("not a string");
+        validateHeaderValue(name, value);
+      } catch { throw new StoreError("UNSUPPORTED_PROFILE", "relay credential header is invalid"); }
+    }
     const swap = target.substitute;
-    if (swap !== undefined && (swap.placeholder.length < 16 || swap.secret.length === 0 ||
-      swap.placeholder === swap.secret || UNSAFE_VALUE.test(swap.placeholder) || UNSAFE_VALUE.test(swap.secret)))
-      throw new StoreError("UNSUPPORTED_PROFILE", "relay substitution is invalid");
+    if (swap !== undefined) {
+      try {
+        if (swap.placeholder.length < 16 || swap.secret.length === 0 || swap.placeholder === swap.secret)
+          throw new Error("invalid substitution");
+        validateHeaderValue("authorization", swap.placeholder);
+        validateHeaderValue("authorization", swap.secret);
+      } catch { throw new StoreError("UNSUPPORTED_PROFILE", "relay substitution is invalid"); }
+    }
     return parsedOrigin(target.origin);
   }
 
@@ -394,8 +510,9 @@ export class InferenceRelay {
   }
 
   private upstreamOptions(method: string, path: string, headers: Record<string, string | string[]>) {
+    const hostname = this.origin.hostname;
     return {
-      protocol: this.origin.protocol, hostname: this.origin.hostname,
+      protocol: this.origin.protocol, hostname: hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname,
       ...(this.origin.port.length > 0 ? { port: Number(this.origin.port) } : {}),
       method, path, headers,
     };
@@ -427,7 +544,8 @@ export class InferenceRelay {
       return true;
     };
 
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", path,
+    let upstream: ClientRequest;
+    try { upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", path,
       headers), response => {
       progress();
       response.on("data", progress);
@@ -447,7 +565,11 @@ export class InferenceRelay {
       response.pipe(this.guarded(cut)).pipe(outgoing);
       response.on("end", () => { settle(); });
       response.on("error", () => { if (settle()) this.failed += 1; outgoing.destroy(); });
-    });
+    }); } catch {
+      if (settle()) this.failed += 1;
+      this.refuse(outgoing, 502, "provider request failed");
+      return;
+    }
     // One monotonic clock covers DNS/connect/TLS and response silence. A
     // socket-only timeout starts too late and overflows for large budgets.
     const progress = (): void => {
@@ -483,9 +605,9 @@ export class InferenceRelay {
     incoming.pipe(upstream);
   }
 
-  /** A WebSocket upgrade is tunnelled the same way: rewritten once at the
-   * handshake, then carried as bytes in both directions. The frames that
-   * follow are not read, so the relay learns nothing about their contents. */
+  /** Rewrite the upgrade handshake once. Client frames travel unchanged;
+   * provider frames are streamed through the credential guard when a key is
+   * held, preserving message payloads and independent control-frame progress. */
   private tunnel(incoming: IncomingMessage, socket: Duplex, head: Buffer): void {
     const admitted = this.admit(incoming, true);
     if ("status" in admitted) { this.refuseTunnel(socket, admitted.status, admitted.reason); return; }
@@ -512,7 +634,14 @@ export class InferenceRelay {
     // given back -- a provider connection with no engine left is closed, not
     // left for the provider to end.
     let provider: Duplex | null = null;
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", path, headers));
+    let upstream: ClientRequest;
+    try { upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", path, headers)); }
+    catch {
+      this.tunnels.delete(socket);
+      if (settle()) this.failed += 1;
+      this.refuseTunnel(socket, 502, "provider request failed");
+      return;
+    }
     socket.once("close", () => { this.tunnels.delete(socket); upstream.destroy(); provider?.destroy(); settle(); });
     socket.on("error", () => { socket.destroy(); });
 
@@ -542,7 +671,10 @@ export class InferenceRelay {
       provider = providerSocket;
       providerSocket.on("data", progress);
       if (socket.destroyed) { providerSocket.destroy(); return; }
-      const guard = this.guarded(() => { providerSocket.destroy(); cut(); });
+      const guard = this.target.substitute === undefined
+        ? this.guarded(() => { providerSocket.destroy(); cut(); })
+        : new WebSocketCredentialGuard(Buffer.from(this.target.substitute.secret, "utf8"));
+      guard.on("error", () => { providerSocket.destroy(); cut(); });
       if (head.length > 0) providerSocket.write(head);
       this.tunnels.add(providerSocket);
       providerSocket.once("close", () => { this.tunnels.delete(providerSocket); socket.destroy(); });

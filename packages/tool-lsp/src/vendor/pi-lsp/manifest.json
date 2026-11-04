@@ -22,16 +22,16 @@
         "edits": 1
       },
       "lsp-client.js": {
-        "reason": "OMA bounds inside the wire path, all honest degradation now: stderr accumulation cap (truncation-only, with the marker tracked by an explicit dropped flag); the inbound frame bound -- a declared oversized body refuses only the request its sniffed id actually names (an unidentifiable frame is dropped and counted, never blamed on the sole pending request) and is discarded in bounded memory so the wire realigns and the server survives; accumulation with no frame boundary at all is stream garbage that refuses the pending requests and clears the buffer, again without killing the server. Pushed diagnostics are truncated with visible markers and counts (per-file count, per-message length, a tracked-document bound whose drops are flagged into resolved lists on every return path, waiter timeouts included) -- never a #fail. Every inbound frame chunk is reported to registered sinks so the caller's stall window resets on progress instead of a fixed deadline, permanent 'error' listeners on the child and its stdio keep a post-start error from crashing the engine or orphaning the server, and didOpen reports stdin backpressure through the write's own return value so the open loop awaits a bounded didDrain() instead of materializing the corpus in memory.",
-        "edits": 16
+        "reason": "OMA bounds inside the wire path, all honest degradation now: stderr accumulation cap (truncation-only, with the marker tracked by an explicit dropped flag); the inbound frame bound -- a declared oversized body refuses only the request its sniffed id actually names (an unidentifiable frame is dropped and counted, never blamed on the sole pending request) and is discarded in bounded memory so the wire realigns and the server survives; accumulation with no frame boundary at all is stream garbage that refuses the pending requests and clears the buffer, again without killing the server. Pushed diagnostics are truncated with visible markers and counts (per-file count, per-message length, a tracked-document bound whose drops are flagged into resolved lists on every return path, waiter timeouts included) -- never a #fail. Every inbound frame chunk is reported to registered sinks so the caller's stall window resets on progress instead of a fixed deadline, permanent 'error' listeners on the child and its stdio keep a post-start error from crashing the engine or orphaning the server, and didOpen reports stdin backpressure through the write's own return value so the open loop awaits a bounded didDrain() instead of materializing the corpus in memory. All client timers use the shared monotonic deadline, so long request and silence windows never overflow into immediate timeouts.",
+        "edits": 17
       },
       "lsp-client.d.ts": {
         "reason": "OMA divergence: the emitted declaration mirrors the spliced runtime surface -- didOpen returns stdin's backpressure signal, didDrain settles a backpressured write, and the marker helpers are declared.",
         "edits": 2
       },
       "runner.js": {
-        "reason": "OMA policy on what a pull response carries: a pull diagnostics array is truncated with the same visible markers and counts the client applies on the push path -- never a thrown call for size alone, and no read-time byte bound (didOpen carries the whole text either way, so a file size cap only blocks a real fix). The open loop honors stdin backpressure -- a buffered write awaits the client's bounded didDrain() so a large corpus never materializes in this process's memory while the server reads slowly. The diagnostics fan-out settles per file: one file's timeout or failure degrades its own entry to a named error marker and the completed files keep their results, while the caller's abort still refuses the call. The accumulated workspace-edit list across all selected actions stays bounded in count and newText bytes -- it refuses that one request mid-collection because a truncated edit list would fabricate a corrupt fix, which is worse than a clean refusal, and an unbounded materialization is a memory bound whose failure mode (engine OOM) is worse than the refusal. The resolve loop itself is unbounded: each codeAction/resolve round-trip is already bounded by the request timeout and the call's stall window resets on every answered frame, so a large legitimate action set completes.",
-        "edits": 6
+        "reason": "OMA policy on what a pull response carries: a pull diagnostics array is truncated with the same visible markers and counts the client applies on the push path -- never a thrown call for size alone, and no read-time byte bound (didOpen carries the whole text either way, so a file size cap only blocks a real fix). The open loop honors stdin backpressure -- a buffered write awaits the client's bounded didDrain() so a large corpus never materializes in this process's memory while the server reads slowly. The diagnostics fan-out settles per file: one file's timeout or failure degrades its own entry to a named error marker and the completed files keep their results, while the caller's abort still refuses the call. The accumulated workspace-edit list across all selected actions stays bounded in count and newText bytes -- it refuses that one request mid-collection because a truncated edit list would fabricate a corrupt fix, which is worse than a clean refusal, and an unbounded materialization is a memory bound whose failure mode (engine OOM) is worse than the refusal. The resolve loop itself is unbounded: each codeAction/resolve round-trip is already bounded by the request timeout and the call's stall window resets on every answered frame, so a large legitimate action set completes. Fix previews retain the exact didOpen input for OMA's serialized stale-content check.",
+        "edits": 7
       },
       "files.js": {
         "reason": "OMA conversion of the workspace walk: the recursion became an explicit stack, so a deep tree is collected whole -- never dropped for depth (the old OMA_MAX_COLLECT_DEPTH silently stopped) and never recursed into a stack overflow. Children are pushed in reverse sorted order so pops visit them in the recursion's own depth-first order; the collected list is identical.",
@@ -91,8 +91,8 @@
     },
     {
       "path": "runtime/lsp-client.js",
-      "bytes": 35796,
-      "sha256": "6268597985185691f76a3d1b3f320692e9dba27b6eb703aae4df9a3c66889499"
+      "bytes": 35981,
+      "sha256": "7e8b83fb89023aee7e4591f48750c6b06a1d660f6e07e2d6f55788404721a4ae"
     },
     {
       "path": "runtime/routes.d.ts",
@@ -111,8 +111,8 @@
     },
     {
       "path": "runtime/runner.js",
-      "bytes": 11405,
-      "sha256": "f7d527ebbb7464a735f2ecc3690a43e51ebe493f3774a4e08993a066d1591887"
+      "bytes": 11434,
+      "sha256": "be04f869e60f9245b81d50f92e9c6cce9ab9ddb831c4c25c47981169a56e68df"
     },
     {
       "path": "runtime/session-lifecycle.d.ts",
@@ -285,5 +285,5 @@
       "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
     }
   ],
-  "bundleSha256": "59a572cb4c0226c3e073bb9d9ee3254977cf3ec78c1adf809103c2263fe4227a"
+  "bundleSha256": "37ad8b2affe284634cf80938564fef8117b89f3d8d60784665c1d47430573795"
 }

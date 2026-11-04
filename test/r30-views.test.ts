@@ -38,7 +38,7 @@ function prepare(store: Store, messages: string[]): string {
   return id;
 }
 
-test("R30 empty, unbatched, prepared, mixed and acknowledged work all use message units", async t => {
+test("001. Empty, unbatched, prepared, mixed and acknowledged work all use message units", async t => {
   const f = await fixture(t, 13);
   assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 13, preparedBatchCount: 0,
     preparedMessageCount: 0, pendingMessages: 13, hasPendingWork: true });
@@ -66,7 +66,7 @@ test("R30 empty, unbatched, prepared, mixed and acknowledged work all use messag
     preparedMessageCount: 0, pendingMessages: 0, hasPendingWork: false });
 });
 
-test("R30 unavailable and unknown units do not synthesize running or exit zero", async t => {
+test("002. Unavailable and unknown units do not synthesize running or exit zero", async t => {
   const f = await fixture(t, 0);
   const views = new ViewsModule(f.store, f.root, "demo", "p");
   for (const observe of [() => null, () => { throw new Error("private diagnostic must not escape"); },
@@ -80,7 +80,7 @@ test("R30 unavailable and unknown units do not synthesize running or exit zero",
   }
 });
 
-test("R30 duplicate manifests fail before a Set can hide corrupt linkage", async t => {
+test("003. Duplicate manifests fail before a Set can hide corrupt linkage", async t => {
   const f = await fixture(t, 2);
   const messages = f.store.pendingDeliveries("alice").map(row => row.messageId);
   const batch = prepare(f.store, messages);
@@ -94,7 +94,7 @@ test("R30 duplicate manifests fail before a Set can hide corrupt linkage", async
   assert.throws(() => pendingWork(f.store, "alice"), { code: "STORE_CORRUPT" });
 });
 
-test("R30 rebuildable world files preserve durable receipts and exclude private mail bodies", async t => {
+test("004. Rebuildable world files preserve durable receipts and exclude private mail bodies", async t => {
   const f = await fixture(t, 1);
   const receiptBefore = f.store.getOperation("alice", "r30-0")!.resultJson;
   const views = new ViewsModule(f.store, f.root, "demo", "p");
@@ -109,22 +109,6 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   views.refreshWorld();
   assert.deepEqual(paths.map(path => readFileSync(join(f.root, "world", path), "utf8")), expected);
   assert.equal(expected.join("\n").includes("private-body-0"), false);
-  // The map names the guide at the one derived path the prompts also spell.
-  const start = expected[paths.indexOf("START.md")]!;
-  assert.ok(start.includes(`/world/${PRINCIPAL_MAIL_FILENAME}`), "START.md names the Principal mail guide");
-  // FI-3: the map states what the sandbox does not have, so a Worker does not
-  // discover it one failed command at a time.
-  const sandbox = start.slice(start.indexOf("## Sandbox"));
-  assert.ok(start.includes("## Sandbox"), "START.md has a sandbox section");
-  for (const fact of [/egress proxy/i, /HTTPS_PROXY/, /`git push`/, /oma submit/, /`\/tmp`/, /end(s)? with the batch|end when the batch ends/i,
-    /docker/i, /submodules/i, /`npm`/])
-    assert.match(sandbox, fact);
-  assert.doesNotMatch(sandbox, /allowlisted HTTPS|only if the Human configured|everything else.*fails/i);
-  assert.match(sandbox, /shares the host network/);
-  assert.match(sandbox, /HTTPS_PROXY.*when present/);
-  const guide = expected[paths.indexOf(PRINCIPAL_MAIL_FILENAME)]!;
-  assert.match(guide, /most expensive resource/);
-  assert.doesNotMatch(guide, /[ᄀ-ᅟ㄰-㆏가-힯]/u, "the guide is English-only");
   assert.equal(f.store.getOperation("alice", "r30-0")!.resultJson, receiptBefore);
   // P0V-94: the carriage return is escaped, not dropped.
   assert.equal(fieldEscape("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline\\r");

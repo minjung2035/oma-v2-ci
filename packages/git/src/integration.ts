@@ -13,7 +13,7 @@ import { reused } from "@oma/domain/request-identity";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 import type { PlanFor } from "@oma/domain/durable";
 import { assertCurrentActor, capabilitiesOf } from "@oma/domain/authority";
-import { StoreError, AcceptedFailure, type EffectKnowledge, type ErrorPhase, acceptedFailurePolicy, failureMessage } from "@oma/domain/errors";
+import { StoreError, AcceptedFailure, type EffectKnowledge, type ErrorPhase, acceptedFailurePolicy, failureMessage, errorCodeOf } from "@oma/domain/errors";
 import { requestHash } from "@oma/domain/request-identity";
 import { generateOperationId } from "@oma/native/identity";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
@@ -37,9 +37,11 @@ export interface IntegrationEffects {
    * added, so changed-path diffs cannot stand in for this observation. */
   gitlinks(candidate: Oid): GitObservation<readonly string[]>;
   compareAndSwap(base: Oid, candidate: Oid): RefAfterCas;
-  runCheck(candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void): Promise<void>;
+  runCheck(candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void, attempt?: string): Promise<void>;
   noopWitness?(ref: string): GitObservation<Oid>;
   authorizeNoop?(ref: string, candidate: Oid): GitObservation<Oid>;
+  preparedRef?(ref: string): GitObservation<Oid>;
+  verifyDiff?(diff: import("@oma/contracts/files").ReviewDiffArtifact): void;
   submitters?(base: Oid, candidate: Oid): readonly string[];
 }
 function observed<T>(observation: GitObservation<T>, description: string): T {
@@ -51,6 +53,8 @@ function observed<T>(observation: GitObservation<T>, description: string): T {
 }
 
 export class IntegrationCoordinator {
+  private readonly phases = new Map<OperationId, "checking" | "applying">();
+  executionPhase(request: OperationId) { return this.phases.get(request); }
   private readonly bound: IntegrationSnapshot | null;
   private readonly checking = new Map<OperationId, AbortController>();
   cancelMerge(request: OperationId): void { this.checking.get(request)?.abort(); }
@@ -116,9 +120,13 @@ export class IntegrationCoordinator {
   private receipt(id: string): Receipt { return receiptOfOperation(this.operation(id)); }
   private async succeed(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.plan.merge !== undefined) {
+      const merge = this.currentMerge(operation);
       if (this.mail === null) throw new StoreError("BROKER_UNAVAILABLE", "integration publication owner is unavailable");
-      const proof = new IntegrationPublicationObserver(this.effects).integration(operation);
-      try { await this.mail.publishGated(operation.id, proof); }
+      const proof = new IntegrationPublicationObserver(this.effects,this.store).integration(operation);
+      try {
+        if (merge.diff) this.effects.verifyDiff?.(merge.diff);
+        await this.mail.publishGated(operation.id, proof);
+      }
       catch (error) {
         if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
         // PUB-002: the canonical effect is proven; an unavailable mail sink
@@ -168,6 +176,33 @@ export class IntegrationCoordinator {
         throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");
     }
   }
+  /** DR72: old accepted plans remain readable, never an alternate executor.
+   * Refuse before observations/publication/settlement and outside failure policy:
+   * release incompatibility is not a new fact about the original operation. */
+  private currentMerge(operation: OperationOf<"git.integrate">): Extract<NonNullable<PlanFor<"git.integrate">["merge"]>, { version: 2 | 3 }> {
+    const merge = operation.plan.merge;
+    if (merge === undefined) throw new StoreError("STORE_CORRUPT", "reviewed application requires a merge plan");
+    if (merge.version !== 3)
+      throw new StoreError("UNSUPPORTED_PROFILE", "original reviewed integration plan is unsupported for current execution; preserve its facts, bytes and unresolved work for the original release/owner to diagnose or drain; no legacy direct integration");
+    return merge;
+  }
+  private requireMergeEligible(policy: IntegrationSnapshot, operation: OperationOf<"git.integrate">): void {
+    const plan = operation.plan;
+    const merge = this.currentMerge(operation);
+    const preparation = merge.preparation === undefined ? null : this.store.getOperationById(merge.preparation);
+    const fact = preparation?.kind === "attest.record" ? preparation.plan.fact : null;
+    if (!fact || fact.kind !== "review.integration") throw new StoreError("STORE_CORRUPT","accepted preparation is missing");
+    if (!observed(this.effects.published(),"source publication").includes(fact.source.candidate))
+      throw new StoreError("CANDIDATE_NOT_PUBLISHED","original proposal is no longer published");
+    if (fact.preparedRef === null) return this.requireEligible(policy,plan.base,plan.candidate);
+    if (fact.preparedRef !== `refs/oma/prepared/${preparation!.id}` || this.effects.preparedRef === undefined ||
+        observed(this.effects.preparedRef(fact.preparedRef),"prepared ref") !== plan.candidate)
+      throw new StoreError("REF_STATE_UNKNOWN","broker-owned candidate reference is not proven");
+    if (!observed(this.effects.ancestry(plan.base,plan.candidate),"integration ancestry")) throw new StoreError("NOT_DESCENDANT","integration does not contain expected main");
+    requireNoGitlinks(observed(this.effects.gitlinks(plan.candidate),"integration gitlinks"));
+    const changes = observed(this.effects.changedPaths(plan.base,plan.candidate),"integration paths");
+    if (changes.some(c => policy.protectedPaths.some(p => protectedPathMatches(c.path,p)))) throw new StoreError("PROTECTED_PATH","actual integration touches a protected path");
+  }
   private verifyAcceptedPolicy(policy: IntegrationSnapshot, operation: OperationOf<"git.integrate">): void {
     if (policy.policyIdentity !== operation.plan.policyIdentity)
       throw new StoreError("POLICY_CHANGED", "accepted integration policy facts changed; restart with the current policy before new acceptance");
@@ -196,6 +231,12 @@ export class IntegrationCoordinator {
   }
   private rejectAccepted(id: string, error: unknown, phase: ErrorPhase, knowledge: EffectKnowledge): never {
     const policy = acceptedFailurePolicy(error, phase, knowledge);
+    // No main effect is not proof that a check scope died. Keep the attempt
+    // unresolved so a retry cannot overlap an unconfirmed execution.
+    if (errorCodeOf(error) === "RUN_TERMINATION_UNKNOWN") {
+      this.unknown(id);
+      throw new AcceptedFailure("RUN_TERMINATION_UNKNOWN", failureMessage(error) ?? "check scope death is unknown", knowledge);
+    }
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
     throw new AcceptedFailure(policy.code, failureMessage(error) ?? "integration observation or settlement failed", knowledge);
@@ -210,7 +251,7 @@ export class IntegrationCoordinator {
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
     if (policy.tiered !== null)
-      throw new StoreError("UNSUPPORTED_PROFILE", "this society reviews with oma_merge/oma_challenge");
+      throw new StoreError("UNSUPPORTED_PROFILE", "this society requires the current reviewed collaboration path and its declared records; direct integration is unavailable");
     if (policy.tiered === null && input.tier !== undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
     this.requireWriterSlot();
@@ -250,7 +291,7 @@ export class IntegrationCoordinator {
         this.requireWriterSlot(id);
         this.verifyCurrentPolicy(plan.policyRevision);
         this.verifyAcceptedPolicy(policy, operation);
-      });
+      }, operation.id);
       if (!this.stillAtBase(operation)) return this.receipt(id);
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);
@@ -278,14 +319,12 @@ export class IntegrationCoordinator {
    * and the CAS boundary. */
   async applyMerge(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
-    const plan = operation.plan;
-    if (plan.merge === undefined)
-      throw new StoreError("STORE_CORRUPT", "reviewed application requires a merge plan");
+    const plan = operation.plan, merge = this.currentMerge(operation);
     let knowledge: EffectKnowledge = "possible";
     try {
       const main = this.effects.main();
       if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-      if (main.kind === "present" && main.value === plan.candidate) {
+      if (main.kind === "present" && new IntegrationPublicationObserver(this.effects,this.store).applied(plan.candidate,main.value)) {
         // The canonical effect already happened (a completed CAS whose result
         // write never committed): publish the frozen notices and settle.
         knowledge = "applied";
@@ -300,31 +339,38 @@ export class IntegrationCoordinator {
         throw new StoreError("POLICY_CHANGED", "accepted integration policy no longer matches the configured profile");
       assertSupportedIntegration(policy);
       this.verifyCurrentPolicy(plan.policyRevision);
-      this.requireEligible(policy, plan.base, plan.candidate);
+      this.requireMergeEligible(policy, operation);
       if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
-      this.reviewGate.assertApplicable(plan.merge.request);
+      this.reviewGate.assertApplicable(merge.request);
       const cancellation = new AbortController();
-      this.checking.set(plan.merge.request, cancellation);
+      this.checking.set(merge.request, cancellation);
+      this.phases.set(merge.request, "checking");
       try {
         for (const check of policy.checks) {
           await this.effects.runCheck(plan.candidate, check, cancellation.signal, () => {
             this.verifyCurrentPolicy(plan.policyRevision);
             this.verifyAcceptedPolicy(policy, operation);
-            this.requireMergeAuthority(operation, plan.merge!.request);
-          });
+            this.requireMergeAuthority(operation, merge.request);
+          }, operation.id);
           if (cancellation.signal.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled during checks");
         }
-      } finally { this.checking.delete(plan.merge.request); }
+      } finally { this.checking.delete(merge.request); }
+      const finalMain = this.effects.main();
+      if (finalMain.kind === "present" && finalMain.value !== plan.base && finalMain.value !== plan.candidate)
+        throw new StoreError("STALE_BASE","main advanced before this attempt issued CAS");
       if (!this.stillAtBase(operation)) return;
-      this.requireEligible(policy, plan.base, plan.candidate);
+      this.requireMergeEligible(policy, operation);
       this.verifyCurrentPolicy(plan.policyRevision);
-      this.requireMergeAuthority(operation, plan.merge.request);
+      this.requireMergeAuthority(operation, merge.request);
+      if (merge.diff) this.effects.verifyDiff?.(merge.diff);
+      this.phases.set(merge.request, "applying");
       knowledge = "possible";
       const after = this.effects.compareAndSwap(plan.base, plan.candidate);
       if (after.kind !== "candidate") { this.unknown(operation.id); return; }
       knowledge = "applied";
       await this.succeed(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }
+    finally { this.phases.delete(merge.request); }
   }
 
   async reconcile(operation: OperationOf<"git.integrate">): Promise<void> {
@@ -345,7 +391,7 @@ export class IntegrationCoordinator {
       }
       const main = this.effects.main();
       if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-      if (!noOp && main.kind === "present" && main.value === plan.candidate) {
+      if (!noOp && main.kind === "present" && new IntegrationPublicationObserver(this.effects,this.store).applied(plan.candidate,main.value)) {
         knowledge = "applied";
         await this.succeed(operation);
         return;
@@ -368,7 +414,7 @@ export class IntegrationCoordinator {
         this.requireWriterSlot(operation.id);
         this.verifyCurrentPolicy(plan.policyRevision);
         this.verifyAcceptedPolicy(policy, operation);
-      });
+      }, operation.id);
       if (!this.stillAtBase(operation)) return;
       this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(plan.policyRevision);

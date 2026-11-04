@@ -1,7 +1,8 @@
 // MUST [DB-001..009]: sole broker writer; synchronous transactions.
 // No Git/process/filesystem effects or await inside transactions (M-004).
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, lstatSync } from "node:fs";
+import { readFileSync, lstatSync, openSync, closeSync, fsyncSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Actor, MessageId, OperationId, RequestKey } from "@oma/contracts/identity";
@@ -31,7 +32,7 @@ import { observeStoreFailure } from "@oma/domain/admission";
 
 export type { Transaction, StoreReads, StoreWrites } from "./transaction.js";
 
-export const SCHEMA_PATH = fileURLToPath(new URL("./schema-v4.sql", import.meta.url));
+export const SCHEMA_PATH = fileURLToPath(new URL("./schema-v5.sql", import.meta.url));
 /** SQLITE_BUSY or SQLITE_LOCKED, read from SQLite's result code rather than
  * from its message (P0V-69). */
 export function isBusyError(error: unknown): boolean {
@@ -237,6 +238,19 @@ export class Store implements StoreQueries, StoreWrites {
     // writes. Anything else fails closed with no migration attempt and no
     // rewrite of the existing file.
     if (version === SCHEMA_USER_VERSION_WRITTEN) return;
+    if (version === 4) {
+      // The schema is unchanged. Snapshot the complete SQLite state (including
+      // WAL) before installing the reader gate; accepted bytes are untouched.
+      if (this.path !== ":memory:") {
+        const backup = `${this.path}.before-v5-${randomUUID()}.sqlite`;
+        this.db.prepare("VACUUM INTO ?").run(backup);
+        for (const path of [backup, dirname(backup)]) {
+          const fd = openSync(path, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
+        }
+      }
+      this.db.exec("BEGIN IMMEDIATE; PRAGMA user_version = 5; COMMIT");
+      return;
+    }
     if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
     try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
@@ -308,6 +322,14 @@ export class Store implements StoreQueries, StoreWrites {
     } finally { this.transitions.reset(); }
   }
   get inTransaction(): boolean { return this.transactions.active || (this.db.isOpen && this.db.isTransaction); }
+  /** Ephemeral invalidation hint only. It resets on connection reopen and may
+   * advance for rolled-back work. It is neither a durable change cursor, snapshot,
+   * proof of absence nor authority; consumers still read the actual facts. */
+  observationStamp(): string {
+    const local = safeInteger(fullRow(this.prepare("SELECT total_changes() AS changes").get(), ["changes"], "local observation invalidation").changes, "local observation invalidation");
+    const external = safeInteger(fullRow(this.prepare("PRAGMA data_version").get(), ["data_version"], "external observation invalidation").data_version, "external observation invalidation");
+    return `${local}/${external}`;
+  }
   private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
@@ -369,6 +391,11 @@ export class Store implements StoreQueries, StoreWrites {
     return operation;
   }
   getOperationById(id: OperationId): DecodedOperation | null { return this.journal.getById(id); }
+  operationSequence(id: OperationId): number | null { return this.reader.operationSequence(id); }
+  acceptedOperationPage(after = 0, through?: number, maximum = 128) {
+    this.assertAvailable();
+    return this.reader.acceptedOperationPage(after, through, maximum);
+  }
   /** Bounded presentation lookup: ordinary mail needs no full operation decode.
    * Only an integration's validated accepted plan can identify a notice. */
   integrationNoticeRequester(messageId: MessageId): Actor | null {
@@ -386,6 +413,7 @@ export class Store implements StoreQueries, StoreWrites {
   }
   latestAgentAction(agent: Actor, actor?: Actor) { return this.reader.latestAction(agent, actor); }
   submittedOperations() { return this.reader.submissions(); }
+  attachmentRoots() { return this.reader.attachmentRoots(); }
   attestationFacts() { return this.reader.attestations(); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }
@@ -411,6 +439,27 @@ export class Store implements StoreQueries, StoreWrites {
     const operation = this.getOperationById(id);
     if (!operation || operation.kind !== "context.publish" || operation.state !== "succeeded" || operation.plan.candidate !== candidate)
       throw new StoreError("STORE_CORRUPT", "completed context projection differs from its decoded row");
+    return operation;
+  }
+  /** Exact successful CAS links only; ancestry by itself never proves an earlier effect. */
+  findSucceededIntegration(candidate: string): OperationOf<"git.integrate"> | null {
+    this.assertAvailable();
+    if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "invalid completed integration candidate");
+    let selected: unknown;
+    try {
+      selected = this.db.prepare(`SELECT id FROM operations WHERE kind='git.integrate' AND state='succeeded'
+        AND json_extract(plan_json, '$.intent.candidate')=?
+        AND json_extract(plan_json, '$.intent.base')<>? ORDER BY rowid DESC LIMIT 1`).get(candidate,candidate);
+    } catch (error) {
+      if (isBusyError(error)) throw new StoreError("DB_BUSY", "completed integration query failed");
+      throw normalizeStorageFailure(error);
+    }
+    if (selected === undefined) return null;
+    const id = fullRow(selected, ["id"], "completed integration projection").id;
+    if (!isValidOperationId(id)) throw new StoreError("STORE_CORRUPT", "invalid completed integration identity");
+    const operation = this.getOperationById(id);
+    if (!operation || operation.kind !== "git.integrate" || operation.state !== "succeeded" || operation.plan.candidate !== candidate)
+      throw new StoreError("STORE_CORRUPT", "completed integration projection differs from its decoded row");
     return operation;
   }
   updateOperationPlanJson(id: OperationId, planJson: string): void { this.journal.prepare(id, planJson); }

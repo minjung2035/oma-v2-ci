@@ -113,8 +113,17 @@ const OMA_DIVERGENCES = Object.freeze({
       "keep a post-start error from crashing the engine or orphaning the " +
       "server, and didOpen reports stdin backpressure through the " +
       "write's own return value so the open loop awaits a bounded " +
-      "didDrain() instead of materializing the corpus in memory.",
+      "didDrain() instead of materializing the corpus in memory. All client " +
+      "timers use the shared monotonic deadline, so long request and silence " +
+      "windows never overflow into immediate timeouts.",
     edits: [
+      {
+        find: `import { spawn } from "node:child_process";`,
+        replace: `import { spawn } from "node:child_process";
+import { alarm as omaAlarm } from "@oma/protocol/alarm";
+const setTimeout = (callback, ms) => omaAlarm(Math.max(1, ms) / 1000, callback);
+const clearTimeout = timer => timer?.cancel();`,
+      },
       {
         find: "const PROCESS_EXIT_GRACE_MS = 500;",
         replace: `const PROCESS_EXIT_GRACE_MS = 500;
@@ -559,8 +568,14 @@ export declare class LspClient {`,
       "is worse than the refusal. The resolve loop itself is unbounded: " +
       "each codeAction/resolve round-trip is already bounded by the " +
       "request timeout and the call's stall window resets on every " +
-      "answered frame, so a large legitimate action set completes.",
+      "answered frame, so a large legitimate action set completes. Fix previews " +
+      "retain the exact didOpen input for OMA's serialized stale-content check.",
     edits: [
+      {
+        find: `            text: params.write ? undefined : newText,`,
+        replace: `            text: params.write ? undefined : newText,
+            inputText: text,`,
+      },
       {
         find: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "./text-edits.js";`,
         replace: `import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits, OMA_MAX_WORKSPACE_EDITS, OMA_MAX_WORKSPACE_EDIT_BYTES } from "./text-edits.js";

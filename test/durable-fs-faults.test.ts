@@ -32,7 +32,7 @@ function fixture(run: (root: string, source: string, target: string, bytes: Buff
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
-test("immutable and derived callers use different shared owners", () => {
+test("001. Immutable and derived callers use different shared owners", () => {
   fixture((root, source, target, bytes) => {
     publishImmutableFile(source, target, sha256Hex(bytes));
     assert.deepEqual(fs.readFileSync(target), bytes);
@@ -51,7 +51,7 @@ test("immutable and derived callers use different shared owners", () => {
   });
 });
 
-test("a derived write failure before rename preserves the old file and removes only its temporary", { concurrency: false }, t => {
+test("002. A derived write failure before rename preserves the old file and removes only its temporary", { concurrency: false }, t => {
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     scoped(t, () => {
@@ -62,7 +62,7 @@ test("a derived write failure before rename preserves the old file and removes o
   });
 });
 
-test("an uncertain rename can leave the new derived file visible and is never reported as no effect", { concurrency: false }, t => {
+test("003. An uncertain rename can leave the new derived file visible and is never reported as no effect", { concurrency: false }, t => {
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     assert.throws(() => replaceDerivedFile(target, "new", 0o600, fault => {
@@ -75,7 +75,7 @@ test("an uncertain rename can leave the new derived file visible and is never re
   });
 });
 
-test("post-link fsync failure leaves immutable evidence for an idempotent retry", { concurrency: false }, t => {
+test("004. Post-link fsync failure leaves immutable evidence for an idempotent retry", { concurrency: false }, t => {
   fixture((_root, source, target, bytes) => {
     scoped(t, () => {
       t.mock.method(fs, "fsyncSync", (...[fd]: Parameters<typeof native.fsync>) => { if (fs.fstatSync(fd).isFile()) throw eio(); native.fsync(fd); });
@@ -87,7 +87,7 @@ test("post-link fsync failure leaves immutable evidence for an idempotent retry"
   });
 });
 
-test("EXDEV partial destination-side copy never exposes partial canonical bytes", { concurrency: false }, t => {
+test("005. EXDEV partial destination-side copy never exposes partial canonical bytes", { concurrency: false }, t => {
   fixture((root, source, target, bytes) => {
     scoped(t, () => {
       t.mock.method(fs, "writeFileSync", (...[file, data, options]: Parameters<typeof native.write>) => {
@@ -103,7 +103,7 @@ test("EXDEV partial destination-side copy never exposes partial canonical bytes"
   });
 });
 
-test("recursive fsync rejects a linked subtree rather than traversing its target", () => {
+test("006. Recursive fsync rejects a linked subtree rather than traversing its target", () => {
   fixture((root, _source, _target) => {
     const tree = join(root, "tree"); const outside = join(root, "outside");
     fs.mkdirSync(tree); fs.mkdirSync(outside); fs.writeFileSync(join(outside, "evidence"), "retained");
@@ -113,7 +113,7 @@ test("recursive fsync rejects a linked subtree rather than traversing its target
   });
 });
 
-test("P0V-71 / F4, P0-3: a durable directory's whole path is flushed, also on the retry of a call whose flush failed", { concurrency: false }, () => {
+test("007. A durable directory's whole path is flushed, also on the retry of a call whose flush failed", { concurrency: false }, () => {
   const root = fs.mkdtempSync(join(tmpdir(), "oma-durable-path-"));
   try {
     const leaf = join(root, "a", "b", "c");
@@ -130,7 +130,7 @@ test("P0V-71 / F4, P0-3: a durable directory's whole path is flushed, also on th
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-59: a no-replace publication that fails while writing leaves no file under the name, and never replaces one", { concurrency: false }, t => {
+test("008. A no-replace publication that fails while writing leaves no file under the name, and never replaces one", { concurrency: false }, t => {
   fixture((root, _source, target) => {
     scoped(t, () => { t.mock.method(fs, "writeFileSync", () => { throw eio(); }); },
       () => assert.throws(() => publishNoReplace(target, "partial unit"), isEio));
@@ -155,7 +155,7 @@ function stealTemporaryOnce(): { observer: DurabilityObserver; attempts: () => n
   return { observer, attempts: () => started };
 }
 
-test("FJ-8: a no-replace publication whose temporary was taken restarts once and lands its bytes", () => {
+test("009. A no-replace publication whose temporary was taken restarts once and lands its bytes", () => {
   fixture((root, _source, target) => {
     const { observer, attempts } = stealTemporaryOnce();
     assert.equal(publishNoReplace(target, "second attempt's bytes", 0o600, observer), "created");
@@ -165,7 +165,7 @@ test("FJ-8: a no-replace publication whose temporary was taken restarts once and
   });
 });
 
-test("FJ-8: a no-replace publication that keeps losing its temporary refuses after three attempts", () => {
+test("010. A no-replace publication that keeps losing its temporary refuses after three attempts", () => {
   fixture((root, _source, target) => {
     let started = 0;
     const observer: DurabilityObserver = fault => {
@@ -180,7 +180,7 @@ test("FJ-8: a no-replace publication that keeps losing its temporary refuses aft
   });
 });
 
-test("FJ-8: a derived replacement whose temporary was taken restarts once and lands its bytes", () => {
+test("011. A derived replacement whose temporary was taken restarts once and lands its bytes", () => {
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     const { observer, attempts } = stealTemporaryOnce();
@@ -191,7 +191,7 @@ test("FJ-8: a derived replacement whose temporary was taken restarts once and la
   });
 });
 
-test("FJ-8: a derived replacement that keeps losing its temporary refuses after three attempts", () => {
+test("012. A derived replacement that keeps losing its temporary refuses after three attempts", () => {
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     let started = 0;

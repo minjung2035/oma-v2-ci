@@ -67,11 +67,11 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     // ships them there; the rootfs links them beside the Node.
     ...nodeToolchainMounts(h.node).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
     "--proc", "/proc", "--dev", "/dev",
-    "--tmpfs", "/tmp",
+    ...(h.tmpfsMaxBytes === undefined ? [] : ["--size", String(h.tmpfsMaxBytes)]), "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,
     ...(h.hidden ?? []).flatMap(({ path, kind }) => {
       const target = `${RESIDENT_PATHS.libdir}/${path}`;
-      return kind === "dir" ? ["--tmpfs", target, "--remount-ro", target] : ["--ro-bind", "/dev/null", target];
+      return kind === "dir" ? [...(h.tmpfsMaxBytes === undefined ? [] : ["--size", String(h.tmpfsMaxBytes)]), "--tmpfs", target, "--remount-ro", target] : ["--ro-bind", "/dev/null", target];
     }),
     // DR25: only the package store -- package code and its package manager's
     // list -- never the engine home, which holds the Human's login.

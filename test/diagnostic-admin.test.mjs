@@ -40,19 +40,19 @@ function acceptedIntegration(store, base, candidate) {
   return id;
 }
 const args = root => ["--state", root, "--society", "fixture", "--mode", "offline", "--quiesced"];
-test("P6 admin: closed argv grammar requires explicit offline quiescence and has no repair switch", () => {
+test("001. Admin: closed argv grammar requires explicit offline quiescence and has no repair switch", () => {
   assert.equal(parseDiagnosticArgs(args("/tmp/example")).mode, "offline");
   for (const value of [[], [...args("/tmp/a"), "--repair"], [...args("/tmp/a"), "--state", "/tmp/b"], args("relative"), args("/tmp/../a"),
     ["--state", "/tmp/a", "--society", "fixture", "--mode", "offline"], [...args("/tmp/a"), "--max-rows", "10001"]]) assert.throws(() => parseDiagnosticArgs(value));
 });
-test("P6 admin: actual standalone command leaves accepted data and source bytes unchanged", t => {
+test("002. Admin: actual standalone command leaves accepted data and source bytes unchanged", t => {
   const f = physicalLedger(t), before = f.snapshot(), bytes = readFileSync(f.object);
   const result = spawnSync(process.execPath, ["scripts/check-state.mjs", ...args(f.root)], { encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const report = JSON.parse(result.stdout); assert.equal(report.status, "PASS"); assert.equal(report.pendingOperations, 1);
   assert.deepEqual(f.snapshot(), before); assert.deepEqual(readFileSync(f.object), bytes);
 });
-test("P6 admin: unavailable live user bus stays UNKNOWN and is not cgroup-death proof", t => {
+test("003. Admin: unavailable live user bus stays UNKNOWN and is not cgroup-death proof", t => {
   const f = physicalLedger(t);
   const result = spawnSync(process.execPath, ["scripts/check-state.mjs", "--state", f.root, "--society", "fixture", "--mode", "live"],
     { env: { ...process.env, DBUS_SESSION_BUS_ADDRESS: `unix:path=${f.root}/missing-bus`, XDG_RUNTIME_DIR: f.root }, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
@@ -60,7 +60,7 @@ test("P6 admin: unavailable live user bus stays UNKNOWN and is not cgroup-death 
   const report = JSON.parse(result.stdout); assert.equal(report.status, "UNKNOWN");
   assert.ok(report.issues.some(issue => issue.entity === "units"));
 });
-test("P6 admin: actual Git history accepts a later descendant but rejects a lost integrated candidate", t => {
+test("004. Admin: actual Git history accepts a later descendant but rejects a lost integrated candidate", t => {
   const f = ledgerFixture(t), repo = repoFixture(f.root), id = acceptedIntegration(f.store, repo.base, repo.candidate);
   const before = f.store.getOperationById(id); const good = checkState(args(f.root));
   assert.equal(good.status, "PASS", JSON.stringify(good));
@@ -69,7 +69,7 @@ test("P6 admin: actual Git history accepts a later descendant but rejects a lost
   assert.ok(bad.issues.some(issue => issue.code === "INTEGRATED_CANDIDATE_LOST"));
   assert.deepEqual(f.store.getOperationById(id), before);
 });
-test("P6 admin: command budget and invalid method/ref requests cannot become successful empty observations", t => {
+test("005. Admin: command budget and invalid method/ref requests cannot become successful empty observations", t => {
   const f = ledgerFixture(t), repo = repoFixture(f.root), context = { stateRoot: f.root, society: "fixture" };
   const observer = createDiagnosticObservers(context, { limits: { maxCommands: 1 } });
   assert.equal(observer.git.commit(repo.repo, repo.candidate).kind, "present");
@@ -85,7 +85,7 @@ test("P6 admin: command budget and invalid method/ref requests cannot become suc
   }
   assert.equal(noCommands.commands, 0);
 });
-test("P6 admin: canonical context tree byte/path relations are read from real Git objects", t => {
+test("006. Admin: canonical context tree byte/path relations are read from real Git objects", t => {
   const f = ledgerFixture(t), r = repoFixture(f.root), bytes = Buffer.from("goal\n");
   const blob = git(r.repo, ["hash-object", "-w", "--stdin"], bytes);
   const tree = git(r.repo, ["mktree"], `100644 blob ${blob}\tGOAL.md\n`);
@@ -96,7 +96,7 @@ test("P6 admin: canonical context tree byte/path relations are read from real Gi
   assert.equal(observer.git.contextTree(r.repo, candidate, [{ ...entries[0], sha256: "a".repeat(64) }]).kind, "corrupt");
   assert.equal(observer.git.contextTree(r.repo, candidate, [...entries, { path: "RATIONALE.md", bytes: 1, sha256: "a".repeat(64) }]).kind, "corrupt");
 });
-test("P6 admin: child environments exclude provider and inherited Git hooks/config variables", t => {
+test("007. Admin: child environments exclude provider and inherited Git hooks/config variables", t => {
   const f = ledgerFixture(t), r = repoFixture(f.root); const seen = [];
   const observer = createDiagnosticObservers({ stateRoot: f.root, society: "fixture" }, { invoke(spec) {
     seen.push(spec);

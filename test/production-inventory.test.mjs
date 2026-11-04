@@ -37,7 +37,7 @@ function fixture() {
   put("packages/process/src/async.ts");
   return { root, roots, put, close() { rmSync(root, { recursive: true, force: true }); } };
 }
-test("R38 C05: every witnessed new owner is enumerated without requiring cloc", () => {
+test("001. Every witnessed new owner is enumerated without requiring cloc", () => {
   const f = fixture();
   try {
     const files = writeProductionInventory(f.root);
@@ -51,7 +51,7 @@ test("R38 C05: every witnessed new owner is enumerated without requiring cloc", 
     assert.ok(assertProductionInventory(f.root).includes("packages/process/src/new-owner.ts"));
   } finally { f.close(); }
 });
-test("R38 C05: omission, duplicate identity and out-of-root paths cannot lower the inventory", () => {
+test("002. Omission, duplicate identity and out-of-root paths cannot lower the inventory", () => {
   const f = fixture();
   try {
     f.put("production-manifest.json", JSON.stringify(f.roots.filter(root => root !== "apps/oma/src")));
@@ -65,7 +65,7 @@ test("R38 C05: omission, duplicate identity and out-of-root paths cannot lower t
     assert.throws(() => collectProductionFiles(f.root), /unsupported .in language/);
   } finally { f.close(); }
 });
-test("R38 C05: equal bytes in distinct source files are counted, symlink sources are rejected", () => {
+test("003. Equal bytes in distinct source files are counted, symlink sources are rejected", () => {
   const f = fixture();
   try {
     f.put("apps/oma/src/duplicate-a.ts", "export const same = 1;\n");
@@ -78,7 +78,7 @@ test("R38 C05: equal bytes in distinct source files are counted, symlink sources
   } finally { f.close(); }
 });
 
-test("R38: the measured artifacts are bound to the source they were taken from", () => {
+test("004. The measured artifacts are bound to the source they were taken from", () => {
   const f = fixture();
   try {
     const files = writeProductionInventory(f.root);
@@ -176,7 +176,7 @@ test("R38: the measured artifacts are bound to the source they were taken from",
   } finally { f.close(); }
 });
 
-test("R38: the pinned tool re-measures real source and catches a forged count", () => {
+test("005. The pinned tool re-measures real source and catches a forged count", () => {
   // Not a stand-in: the real cloc on real files. A dev host or CI runner without
   // the pinned version fails here rather than skipping -- a gate that silently
   // could not measure is the thing this test exists to rule out.
@@ -218,7 +218,7 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
   } finally { f.close(); }
 });
 
-test("R38: the verification closure includes every class of local gate input", () => {
+test("006. The verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
     "apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore", "README.md",
     "package.json", "package-lock.json",
@@ -248,7 +248,7 @@ test("R38: the verification closure includes every class of local gate input", (
   assert.equal(files.some(file => file.startsWith("docs/archive/")), false);
 });
 
-test("R38: package, compiler, owner, spec and workflow changes all change the verification digest", () => {
+test("007. Package, compiler, owner, spec and workflow changes all change the verification digest", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
@@ -288,7 +288,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
   } finally { f.close(); }
 });
 
-test("R38: a clean checkout can bind input bytes before dependency installation", () => {
+test("008. A clean checkout can bind input bytes before dependency installation", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
@@ -309,7 +309,7 @@ test("R38: a clean checkout can bind input bytes before dependency installation"
   } finally { f.close(); }
 });
 
-test("R38: README link findings cannot change without changing their verification identity", () => {
+test("009. README link findings cannot change without changing their verification identity", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
@@ -330,7 +330,7 @@ test("R38: README link findings cannot change without changing their verificatio
   } finally { f.close(); }
 });
 
-test("R38: newly discovered project guidance is bound even when its placement is invalid", () => {
+test("010. Newly discovered project guidance is bound even when its placement is invalid", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
@@ -352,7 +352,7 @@ test("R38: newly discovered project guidance is bound even when its placement is
   } finally { f.close(); }
 });
 
-test("DR44: structural rebinding is idempotent and preserves authored outcomes and review claims", () => {
+test("011. Structural rebinding is idempotent and preserves authored outcomes and review claims", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
@@ -381,7 +381,7 @@ test("DR44: structural rebinding is idempotent and preserves authored outcomes a
   } finally { f.close(); }
 });
 
-test("R38: the lane's bound source is the canonical closure -- committed digests in, CI artifacts out", () => {
+test("012. The lane's bound source is the canonical closure -- committed digests in, CI artifacts out", () => {
   // K63/AV-20261003-30: verify-lane once listed `production-loc.json` at the
   // repo root, where it never exists -- the binding was vacuous, and the
   // measurement-hashes sibling was named nowhere. The lane now binds
@@ -415,7 +415,7 @@ test("R38: the lane's bound source is the canonical closure -- committed digests
   } finally { f.close(); }
 });
 
-test("R38: the validation record names the verification inputs that were run, by their bytes", () => {
+test("013. The validation record names the verification inputs that were run, by their bytes", () => {
   const record = readFileSync(new URL("../docs/implementation/validation.md", import.meta.url), "utf8");
   const quoted = [...record.matchAll(/verification input digest `([0-9a-f]{64})` \((\d+) files\)/g)]
     .map(([, value, files]) => ({ digest: value, files: Number(files) }));
@@ -424,7 +424,7 @@ test("R38: the validation record names the verification inputs that were run, by
     "the validation record names verification inputs that are not this tree's");
 });
 
-test("R38: the figures the validation record quotes remain historical; current LOC is CI-generated evidence", () => {
+test("014. The figures the validation record quotes remain historical; current LOC is CI-generated evidence", () => {
   // A historical number must not acquire the authority of a current source
   // measurement when LOC evidence moves from committed input to CI artifacts.
   const record = readFileSync(new URL("../docs/implementation/validation.md", import.meta.url), "utf8");

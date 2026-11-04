@@ -16,7 +16,7 @@ import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 
 const peer = { pid: 1, uid: 1000, gid: 1000 };
 
-test("DR18 / MAIL-001/002: a topic is followed by Residents; the Principal's follow is refused and records nothing", t => {
+test("001. A topic is followed by Residents; the Principal's follow is refused and records nothing", t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-dr18-route-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(join(dir, "runtime.sqlite"));
@@ -35,18 +35,17 @@ test("DR18 / MAIL-001/002: a topic is followed by Residents; the Principal's fol
   assert.deepEqual(store.subscribers("release"), ["worker-a"]);
 });
 
-test("DR18 / S-01-CANDIDATE: checks without resource profiles are refused, and the root protects every change", async () => {
+test("002. Checks without resource profiles are refused, and the root protects every change", async () => {
   const { protectedPathMatches } = await import("@oma/domain/git-facts");
   const { assertSupportedIntegration, snapshotIntegrationPolicy } = await import("@oma/domain/integration-policy");
   for (const path of ["README.md", "apps/oma/src/a.ts", "deep/er/file", ".github/workflows/ci.yml"])
     assert.equal(protectedPathMatches(path, "/"), true, path);
   assert.equal(protectedPathMatches("apps/oma/src/a.ts", "docs/"), false);
   assert.equal(protectedPathMatches("docs/a.md", "docs/"), true);
-  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p", protectedPaths: [],
-    checks: [{ id: "test", argv: ["/usr/bin/true"], env: {} }] })));
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: "p", protectedPaths: [], checks: [{ id: "test", argv: ["/usr/bin/true"], env: {} }]})));
 });
 
-test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login over the Human's one engine home, needing no session", async t => {
+test("003. `oma login` hands the terminal to the engine's own login over the Human's one engine home, needing no session", async t => {
   const { chmodSync, existsSync, mkdirSync: mkdir, readdirSync, writeFileSync } = await import("node:fs");
   const { spawnSync } = await import("node:child_process");
   const { tryHoldSociety } = await import("#oma-test/app/runtime/society-lease");
@@ -82,7 +81,7 @@ test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login
   held.release();
 });
 
-test("DR18 / D-8: every start brings the project's committed branch history into the society's mirror, and nothing else of the project", async t => {
+test("004. Every start brings the project's committed branch history into the society's mirror, and nothing else of the project", async t => {
   const { spawnSync } = await import("node:child_process");
   const { mkdirSync: mkdir, writeFileSync } = await import("node:fs");
   const { provisionSociety } = await import("#oma-test/app/runtime/provision");
@@ -131,7 +130,7 @@ test("DR18 / D-8: every start brings the project's committed branch history into
   assert.match(provisionSociety(stateRoot, { projectDir: elsewhere }).mirrorNote ?? "", /not a Git repository/);
 });
 
-test("DR18 / S-06: a state root on a network or user-space file system is refused; a local one is accepted", () => {
+test("005. A state root on a network or user-space file system is refused; a local one is accepted", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-dr18-fs-"));
   try {
     const root = join(dir, "state", "oma", "a");
@@ -158,7 +157,7 @@ test("DR18 / S-06: a state root on a network or user-space file system is refuse
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("DR18 / D-5: a sandbox is started with its filter exactly when its argv loads one", () => {
+test("006. A sandbox is started with its filter exactly when its argv loads one", () => {
   const env = { PATH: "/usr/bin:/bin" };
   // A filter named but not given, or given but not named: refused before anything runs.
   assert.throws(() => spawnSandboxed(["bwrap", "--seccomp", "3", "--", "/bin/true"], env),

@@ -15,7 +15,7 @@ export const READ_FACETS = freezeTable({
   operations: {
     get: "getOperation", getById: "getOperationById", classifyKey: "claimKey", retried: "retriedOperation",
     recoverableIds: "recoverableOperations", physicalCreate: "findPhysicalCreate",
-    succeededContext: "findSucceededContext", latestAction: "latestAgentAction", latestSociety: "latestSocietyAction", submissions: "submittedOperations",
+    succeededContext: "findSucceededContext", latestAction: "latestAgentAction", latestSociety: "latestSocietyAction", attachmentRoots: "attachmentRoots", submissions: "submittedOperations",
   },
   attestations: { all: "attestationFacts" },
   agents: { get: "getAgent", all: "listAgents" },
@@ -65,6 +65,7 @@ export function readFacets(store: StoreQueries): ReadFacets {
       latestAction: (agent, actor) => store.latestAgentAction(agent, actor),
       latestSociety: () => store.latestSocietyAction(),
       submissions: () => store.submittedOperations(),
+      attachmentRoots: () => store.attachmentRoots(),
     }),
     attestations: Object.freeze({ all: () => store.attestationFacts() }),
     agents: Object.freeze({ get: name => store.getAgent(name), all: () => store.listAgents() }),

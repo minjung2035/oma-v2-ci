@@ -1,0 +1,38 @@
+✔ NATIVE-TOPO-01: actual broker entry uses its explicit roots without a user manager and drains (1738.368829ms)
+✔ NATIVE-TOPO-02: actual broker entry starts its runner and recovers a witnessed scope after SIGKILL (5324.45664ms)
+✔ Open TUI: actual Principal tools, queued input, panel and normal terminal restoration (4634.27844ms)
+✔ Open TUI: actual Principal tools, queued input, panel and resume terminal restoration (5091.379281ms)
+✔ Open TUI: actual Principal tools, queued input, panel and kill terminal restoration (2612.421619ms)
+✔ Open TUI: actual Principal tools, queued input, panel and mail terminal restoration (3609.24168ms)
+✔ Open TUI: actual Principal tools, queued input, panel and retry-recover terminal restoration (2902.804788ms)
+✔ Open TUI: actual Principal tools, queued input, panel and retry-exhaust terminal restoration (2941.270854ms)
+✔ Open TUI: actual Principal tools, queued input, panel and reload-update terminal restoration (3487.328991ms)
+✔ Open TUI: actual Principal tools, queued input, panel and reload-failure terminal restoration (3364.983323ms)
+✔ FS-005: an owned tree whose root lost every permission bit is still removed (2.145752ms)
+✔ FS-005: an owned tree holding owner-read-less subdirectories is removed whole (1.398598ms)
+✔ FS-005: the owner-bits repair adds missing bits and keeps the mode's special bits (0.613023ms)
+✔ FS-005: an owned directory opens by path even at mode-000 -- the leaf is pinned and repaired (0.338562ms)
+✔ FS-005: an owned ensure repairs every component at and below its boundary -- and never above it (1.79026ms)
+✔ FS-005: an owned ensure refuses a boundary that is not its own ancestor (0.749974ms)
+✔ FS-005: a stray where an owned component must be a directory is collected -- at or above the boundary it stands (0.824025ms)
+✔ DR24: an unused session tree holding owner-read-less directories still goes whole (0.610123ms)
+✔ startup: a strict transfer observation belongs only to the newly created mirror (185.96192ms)
+✔ startup: a transfer containing missing-link cannot grant a verification observation (45.630775ms)
+✔ startup: a transfer containing duplicate-tree-entry cannot grant a verification observation (48.926544ms)
+✔ AV-07/P0: canonical publication waits for concurrent history validation (true) (107.501271ms)
+✔ AV-07/P0: canonical publication waits for concurrent history validation (false) (76.317477ms)
+✔ AV-07/P0: a consumed provisioning proof cannot hide later repository corruption (60.717009ms)
+✔ DR35 preparation produces the bound project's snapshot before completing (141.2786ms)
+✔ DR35 cancellation preserves the inherited fence until the native writer actually closes (54.974108ms)
+✔ IMP-F01: uncertain mkdir present requires positive held-directory evidence (72.765997ms)
+✔ IMP-F01: uncertain mkdir missing requires positive held-directory evidence (22.521436ms)
+✔ IMP-F01: uncertain mkdir link requires positive held-directory evidence (17.805209ms)
+✔ IMP-F01: uncertain mkdir denied requires positive held-directory evidence (15.202485ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 37257.824617

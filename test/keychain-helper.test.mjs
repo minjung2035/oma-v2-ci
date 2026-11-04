@@ -60,7 +60,7 @@ if (process.platform === "darwin") {
       throw error;
     } finally { closeEvery(parent, childFd); }
   }
-  test("Darwin Keychain helper: compiled image answers fragmented control without credential access", { timeout: 10000 }, async t => {
+  test("001. Darwin Keychain helper: compiled image answers fragmented control without credential access", { timeout: 10000 }, async t => {
     const request = Buffer.from(JSON.stringify({ id: 1, op: "fixture-only", account: "fixture-한글" }) + "\n");
     const answer = await run(t, [...request].map(byte => Buffer.from([byte])), true);
     assert.equal(answer.code, 0);
@@ -68,7 +68,7 @@ if (process.platform === "darwin") {
     assert.equal(response.id, 1); assert.equal(response.ok, false);
     assert.equal(typeof response.error, "string");
   });
-  test("Darwin Keychain helper: supervision EOF ends the actual child", { timeout: 10000 }, async t => {
+  test("002. Darwin Keychain helper: supervision EOF ends the actual child", { timeout: 10000 }, async t => {
     const answer = await run(t, []); assert.equal(answer.code, 0); assert.equal(answer.output.length, 0);
   });
   for (const [name, input] of [
@@ -76,7 +76,7 @@ if (process.platform === "darwin") {
     ["unterminated frame", Buffer.from('{"id":1')],
     ["invalid UTF-8", Buffer.from([0xff, 10])],
     ["unexpected credential request fields", Buffer.from('{"id":1,"op":"keychain.get","account":"fixture-only","extra":true}\n')],
-  ]) test(`Darwin Keychain helper: ${name} exits before credential access`, { timeout: 10000 }, async t => {
+  ]) test(`003. Darwin Keychain helper: ${name} exits before credential access`, { timeout: 10000 }, async t => {
     const answer = await run(t, [input]); assert.equal(answer.code, 2); assert.equal(answer.output.length, 0);
   });
 }

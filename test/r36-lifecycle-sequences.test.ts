@@ -91,11 +91,11 @@ async function replay(sequence: readonly Scenario[]): Promise<void> {
   }
 }
 for (const [index, scenario] of corpus.entries())
-  test(`R36 lifecycle replay C01/C02 corpus ${index}`, () => replay([scenario]));
+  test(`001. Lifecycle replay regression corpus ${index}`, () => replay([scenario]));
 const count = integerParameter("OMA_TEST_ACTIONS", 32, 10000);
 const selectedSeed = integerParameter("OMA_TEST_SEED", 0x2536cafe, 0xffffffff);
 for (const seed of [selectedSeed, 0, 1, 0xffffffff]) {
-  test(`R36 lifecycle replay seed=${seed} actions=${count} prng=${PRNG_REVISION}`, { timeout: 300000 }, async t => {
+  test(`002. Lifecycle replay seed=${seed} actions=${count} prng=${PRNG_REVISION}`, { timeout: 300000 }, async t => {
     const sequence = generate(seed, count);
     assert.deepEqual(generate(seed, count), sequence);
     try { await replay(sequence); }

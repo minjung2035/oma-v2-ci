@@ -25,12 +25,14 @@ export const KERNEL_ZONES = Object.freeze([
       // BL2: the ask_user_question contract — bounds, question/answer/result
       // shapes, reserved labels, normalizer and the fail-closed validator.
       "packages/domain/src/ask-user-question/questionnaire.ts",
-      "apps/oma/src/cli/request-intent.ts",
+      "apps/oma/src/runtime/request-intent.ts",
       "packages/domain/src/admission.ts",
       "packages/domain/src/attestation-relations.ts",
       "packages/domain/src/canonical-json.ts",
       "packages/config/src/defaults.ts",
       "packages/domain/src/role-prompts.ts",
+      "packages/domain/src/collaboration-prompts.ts",
+      "packages/domain/src/collaboration-surface.ts",
       "packages/domain/src/capabilities.ts",
       "packages/domain/src/child-policy.ts",
       "packages/domain/src/context-policy.ts",
@@ -67,10 +69,22 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "packages/native/src/metadata-observation.ts",
       "packages/protocol/src/client-codecs.ts",
-      "apps/oma/src/cli/cache-codec.ts",
+      "apps/oma/src/runtime/request-cache-codec.ts",
+      "apps/oma/src/runtime/invocation-codec.ts",
+      // Closed exact-target derivation and invocation transport representations;
+      // these own no Store admission, filesystem effects or execution lifetime.
+      "packages/domain/src/collaboration-review.ts",
+      "packages/protocol/src/failure-codec.ts",
+      "packages/protocol/src/invocation-mail.ts",
+      "packages/protocol/src/invocation-rejection.ts",
+      "packages/protocol/src/invocation-resolution.ts",
+      "packages/protocol/src/invocation-submission.ts",
+      "packages/domain/src/collaboration-targets.ts",
+      "packages/domain/src/collaboration-inputs.ts",
       "packages/domain/src/attestation.ts",
       "packages/domain/src/agent-spec.ts",
       "packages/domain/src/integration-policy.ts",
+      "packages/domain/src/check-pipeline.ts",
       "packages/domain/src/git-facts.ts",
       "packages/protocol/src/persisted-formats.ts",
       "packages/domain/src/durable.ts",
@@ -113,6 +127,9 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/file-descriptors/src/index.ts",
       "packages/tool-files/src/descriptor-files.ts",
       "packages/tool-files/src/index.ts",
+      "packages/tool-files/src/results.ts",
+      // SDK-free no-follow private tool state, with no ledger or execution authority.
+      "packages/tool-files/src/private-state.ts",
       "packages/domain/src/authority.ts",
       "packages/client/src/context.ts",
       "packages/process/src/fence.ts",
@@ -206,6 +223,8 @@ export const KERNEL_ZONES = Object.freeze([
       // under the caller's state directory; delivery mechanism, no ledger facts.
       "packages/storage/src/output-spool.ts",
       "packages/storage/src/execution-journal.ts",
+      "packages/storage/src/execution-recovery.ts",
+      "packages/storage/src/package-replacement.ts",
     ],
   },
   {
@@ -264,6 +283,8 @@ const PURE_NATIVE_IMPORTS = Object.freeze({
   "packages/domain/src/derived.ts": ["node:crypto"],
   "packages/domain/src/spec-identity.ts": ["node:crypto"],
   "packages/domain/src/paths.ts": ["node:path"],
+  // Closed host-environment path grammar only; no filesystem observation.
+  "packages/domain/src/collaboration-prompts.ts": ["node:path"],
   "packages/domain/src/durable.ts": ["node:path"],
   "packages/protocol/src/run-lease.ts": ["node:path"],
   // Actor/root grammar only: join trusted paths; no filesystem observation.

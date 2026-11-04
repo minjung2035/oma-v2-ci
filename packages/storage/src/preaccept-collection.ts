@@ -15,15 +15,48 @@
  * lock does not reach a child, so this broker's start proves nothing of its
  * death (P0-5), but a lease every child inherited does. One whose lease is
  * held, or that has none (made before leases), is reported and kept. */
-import { lstatSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, fstatSync, lstatSync, readdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { setImmediate } from "node:timers/promises";
 import type { DecodedOperation as OperationRow } from "@oma/protocol/operation-codec";
 import type { PreacceptCollection } from "@oma/contracts/runtime";
 import { isValidFullOid, parseMessageId, parseOperationId } from "@oma/domain/identifiers";
-import { submitBundlePathAt } from "@oma/domain/paths";
+import { submitBundlePathAt, projectGitPathAt } from "@oma/domain/paths";
 import { removeOwnedFile, removeOwnedTree, repairOwnedEntryMode } from "./directory.js";
 import { collectLeasedTree } from "./tree-lease.js";
-import { ownedMessages } from "@oma/domain/durable";
+import { ownedMessages, publicationSources } from "@oma/domain/durable";
+import { StoreError, normalizeStorageFailure } from "@oma/domain/errors";
+import { openDirectory, openRegularBeneath } from "@oma/native/files";
+import { withAsyncCleanup } from "@oma/native/cleanup";
+import { digestDescriptor } from "./cache-trees.js";
+
+/** Admission verifies accepted bytes without waiting for their physical effect.
+ * Only unfinished plans are scanned, with bounded-memory reads and cooperative
+ * yields. The plan decoder validates ledger relationships before any wake. */
+export async function validateRecoveryArtifacts(stateRoot: string, store: {
+  recoverableOperations(): string[]; getOperationById(id: string): OperationRow | null;
+}): Promise<void> {
+  for (const id of store.recoverableOperations()) {
+    const operation = store.getOperationById(id);
+    if (operation === null) throw new StoreError("STORE_CORRUPT", "recoverable operation is missing");
+    for (const message of ownedMessages(operation.plan)) {
+      try {
+        const parent = openDirectory(dirname(join(stateRoot, message.objectPath)));
+        await withAsyncCleanup(async () => {
+          const fd = openRegularBeneath(parent, basename(message.objectPath));
+          await withAsyncCleanup(async () => {
+            if (fstatSync(fd).size !== message.bytes || await digestDescriptor(fd) !== message.sha256)
+              throw new StoreError("STORE_CORRUPT", "immutable file size or digest differs");
+          }, () => closeSync(fd));
+        }, () => closeSync(parent));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new StoreError("STORE_CORRUPT", "immutable file is missing");
+        throw normalizeStorageFailure(error);
+      }
+    }
+    await setImmediate();
+  }
+}
 
 /** The one-time temporary a publication names `.<target>.<uuid>.tmp`, or
  * `.<target>.<uuid>.held.tmp` when it carries its writer's lock (P0V-111). */
@@ -52,6 +85,29 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: { getOperat
     kept.push({ path, reason: found.kind === "active" ? `${what}; a process that works in it still holds its lease`
       : `${what}; its quiescence is not proven (${found.reason})` });
   };
+  // Exact diff results are written by the broker; a helper only streams into
+  // the broker pipe. The startup broker lease therefore proves writer death.
+  const results = join(projectGitPathAt(stateRoot), "oma-results");
+  for (const name of names(results)) {
+    const id = name.endsWith(".result") ? parseOperationId(`op-${name.slice(0, -7)}`) : null;
+    const path = join(results, name);
+    if (id === null) { kept.push({ path, reason: "not a derived review result" }); continue; }
+    const operation = accepted(id);
+    if (operation?.kind === "git.integrate" && operation.plan.merge !== undefined && operation.plan.merge.version !== 1 &&
+        operation.plan.merge.diff?.reference.startsWith(`oma-result:${id.slice(3)}:`)) continue;
+    if (operation?.kind === "attest.record" && operation.plan.fact.kind === "review.integration" && operation.plan.fact.diff.reference.startsWith(`oma-result:${id.slice(3)}:`)) continue;
+    // A result is an exclusively named regular file (tool-files RESULT
+    // integrity: no link, no follow). Anything else wearing the name -- a
+    // directory, a link -- is not the entry this broker derives: removing it
+    // would either fail (EISDIR aborts startup) or delete a tree the sweep
+    // cannot prove oma made, so it is reported and kept like every other
+    // underivable name. A name that vanished between the listing and its
+    // observation has nothing left to collect.
+    const observed = lstatSync(path, { throwIfNoEntry: false });
+    if (observed === undefined) continue;
+    if (!observed.isFile()) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
+    remove(path);
+  }
   // Frozen message objects: the plan that owns one names its id.
   const objects = join(stateRoot, "mail", "objects");
   for (const name of names(objects)) {
@@ -103,6 +159,7 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: { getOperat
     if (submit !== null && staged.isDirectory()) {
       const operation = accepted(submit);
       if (operation?.kind === "git.submit" && operation.plan.bundle?.path === submitBundlePathAt(stateRoot, submit)) continue;
+      if (operation !== null && publicationSources(operation.plan).some(source => source.local !== undefined)) continue;
       remove(path, true);
       continue;
     }

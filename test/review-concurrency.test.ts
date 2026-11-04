@@ -11,7 +11,7 @@ import type { Receipt, MessagePlan } from "@oma/contracts";
 import { fixture, messages, inboxCount } from "./fixtures/review-fixture.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 
-test("DR44: Integration's pre-CAS authority never calls the public Review workflow", async () => {
+test("001. Integration's pre-CAS authority never calls the public Review workflow", async () => {
   const f = fixture();
   try {
     f.reviews.assertApplicable = () => { throw new Error("workflow callback reached CAS"); };
@@ -23,7 +23,7 @@ test("DR44: Integration's pre-CAS authority never calls the public Review workfl
   } finally { f.close(); }
 });
 
-test("cancel cannot claim success after CAS while the integration notice is still pending", { timeout: 10_000 }, async () => {
+test("002. Cancel cannot claim success after CAS while the integration notice is still pending", { timeout: 10_000 }, async () => {
   const f = fixture();
   let release!: () => void, entered!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -48,7 +48,7 @@ test("cancel cannot claim success after CAS while the integration notice is stil
   } finally { release(); await opening; f.close(); }
 });
 
-test("DR44: review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
+test("003. Review acceptance snapshots recipients without mutating frozen thread or completion plans", async () => {
   const f = fixture();
   try {
     const prepared: MessagePlan[] = [];
@@ -94,7 +94,76 @@ const attestationMessages = (f: ReturnType<typeof fixture>) =>
 const mailOfRole = (f: ReturnType<typeof fixture>, role: "approval" | "withdrawn" | "decision" | "thread" | "notice") =>
   attestationMessages(f).filter(m => m.review?.role === role);
 
-test("8 concurrent Worker votes on one HIGH request: serialized acceptance, one op per key, one approval", async () => {
+for (const kind of ["merge", "challenge"] as const) test(
+  `004. Submitter provenance changing after ${kind} mail freeze refuses stale authority and permits fresh independent review`,
+  { timeout: 10_000 }, async () => {
+    const f = fixture();
+    const frozen = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const freeze = f.mail.freezeReviewMessage.bind(f.mail);
+    let paused = false;
+    try {
+      let base = f.base;
+      let target: string | undefined;
+      if (kind === "challenge") {
+        const candidate = f.candidateWith({ "target.txt": "original\n" });
+        await f.submit("alice", candidate, "target-submit");
+        await f.open("alice", { tier: "LOW", candidate }, "target-open");
+        target = f.requestName("target-open");
+        base = candidate;
+      }
+      const candidate = f.candidateWith({ "replacement.txt": "review this\n" }, base);
+      await f.submit("alice", candidate, "first-submit");
+      f.mail.freezeReviewMessage = async (...args) => {
+        const result = await freeze(...args);
+        if (!paused && result.message.review?.role === "thread") {
+          paused = true;
+          frozen.resolve();
+          await resume.promise;
+        }
+        return result;
+      };
+      const input = kind === "merge"
+        ? { kind: "merge.open" as const, title: "freshness", reason: "review it", tier: "MEDIUM" as const, candidate, base }
+        : { kind: "challenge.open" as const, merge: target!, title: "freshness", reason: "review it", tier: "LOW" as const, candidate, base };
+      const pending = settle(f.reviews.record(f.auth("alice"), "freshness-open", input));
+      await frozen.promise;
+      const submitted = await f.submit("bob", candidate, "late-submit");
+      assert.equal(submitted.state, "succeeded", "new provenance is durably published before acceptance");
+      const before = f.store.attestations.all().length;
+      const delivered = inboxCount(f, "bob");
+      resume.resolve();
+      const outcome = await pending;
+      assert.equal(codeOf(outcome), "BROKER_UNAVAILABLE");
+      assert.equal(f.store.getOperation("alice", "freshness-open"), null, "stale open owns no accepted identity");
+      assert.equal(f.store.attestations.all().length, before, "stale mail cannot become durable authority");
+      assert.equal(inboxCount(f, "bob"), delivered, "stale frozen thread is not delivered");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      assert.equal((await f.reviews.record(f.auth("alice"), "freshness-open", input)).state, "succeeded",
+        "same key can prepare fresh provenance");
+      const name = f.requestName("freshness-open");
+      assert.deepEqual(f.stateOf(name).authors, ["alice", "bob"]);
+      await assert.rejects(f.vote("alice", name, "approve", "requester's vote", "self-requester"), { code: "SELF_REVIEW" });
+      await assert.rejects(f.vote("bob", name, "approve", "new submitter's vote", "self-submitter"), { code: "SELF_REVIEW" });
+      assert.deepEqual(f.stateOf(name).approvers, []);
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "self review never applies main");
+      const independent = await f.vote("carol", name, "approve", "independently checked", "fresh-peer");
+      if (kind === "challenge") {
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "challenge still requires two peers");
+        await f.vote("dave", name, "approve", "second independent check", "fresh-peer-2");
+      }
+      assert.equal(f.stateOf(name).display, "applied");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+      assert.equal((await f.vote("carol", name, "approve", "independently checked", "fresh-peer")).operation,
+        independent.operation, "accepted vote retry keeps its identity");
+    } finally {
+      resume.resolve();
+      f.mail.freezeReviewMessage = freeze;
+      f.close();
+    }
+  });
+
+test("005. 8 concurrent Worker votes on one HIGH request: serialized acceptance, one op per key, one approval", async () => {
   const f = fixture(); try {
     addAgents(f, ["erin", "fred", "gail", "henry", "iris"]);
     const candidate = f.candidateWith({ "one.txt": "a" });
@@ -151,7 +220,7 @@ test("8 concurrent Worker votes on one HIGH request: serialized acceptance, one 
 });
 
 for (const order of ["cancel-first", "vote-first"] as const) test(
-  `cancel vs approve race (${order}): loser refuses or the request cancels before apply`, async () => {
+  `006. Cancel vs approve race (${order}): loser refuses or the request cancels before apply`, async () => {
     const f = fixture(); try {
       const candidate = f.candidateWith({ "one.txt": "a" });
       await f.submit("alice", candidate);
@@ -191,7 +260,7 @@ for (const order of ["cancel-first", "vote-first"] as const) test(
     } finally { f.close(); }
   });
 
-test("concurrent opens: same key shares one operation, different keys refuse REQUEST_EXISTS", async () => {
+test("007. Concurrent opens: same key shares one operation, different keys refuse REQUEST_EXISTS", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     const other = f.candidateWith({ "two.txt": "b" });
@@ -234,7 +303,7 @@ test("concurrent opens: same key shares one operation, different keys refuse REQ
   } finally { f.close(); }
 });
 
-test("concurrent Principal votes on one approval: exactly one decision is recorded", async () => {
+test("008. Concurrent Principal votes on one approval: exactly one decision is recorded", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -276,7 +345,7 @@ test("concurrent Principal votes on one approval: exactly one decision is record
   } finally { f.close(); }
 });
 
-test("concurrent same-key facts never double-record; a same-actor re-vote serializes", async () => {
+test("009. Concurrent same-key facts never double-record; a same-actor re-vote serializes", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -315,7 +384,7 @@ test("concurrent same-key facts never double-record; a same-actor re-vote serial
   } finally { f.close(); }
 });
 
-test("concurrent review + vote + cancel on one request: facts serialize, terminal wins", async () => {
+test("010. Concurrent review + vote + cancel on one request: facts serialize, terminal wins", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);

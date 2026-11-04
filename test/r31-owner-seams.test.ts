@@ -15,14 +15,14 @@ import { Broker } from "@oma/broker";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { ViewsModule } from "#oma-test/app/views";
 import { LifecycleModule } from "@oma/lifecycle";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { sendWithStop, StopSignal } from "./fixtures/mail-faults.js";
 import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: 1000, gid: 1000 } };
 
-test("R31 public facade delegates status and mutation with the original authority and receipt semantics", async t => {
+test("001. Public facade delegates status and mutation with the original authority and receipt semantics", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-r31-composition-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
@@ -33,8 +33,7 @@ test("R31 public facade delegates status and mutation with the original authorit
   t.mock.method(units, "observeStatus", async (agents: readonly string[]) =>
     new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" }])));
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) } });
   const before = Date.now();
   const status = await broker.dispatch(auth, { v: 1, id: "status", method: "status.get", params: { agent: "alice" } }, null);
@@ -56,7 +55,7 @@ test("R31 public facade delegates status and mutation with the original authorit
   assert.equal(expandAddresses, routingOwner, "the compatibility facade reexports one owner, not a second definition");
 });
 
-test("R31 acceptance fault hook still intercepts the physical Store transaction after SQL owner movement", async t => {
+test("002. Acceptance fault hook still intercepts the physical Store transaction after SQL owner movement", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-r31-fault-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });

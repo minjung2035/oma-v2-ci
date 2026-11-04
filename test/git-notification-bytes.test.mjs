@@ -11,7 +11,7 @@ import { createMailModule } from "#oma-test/app/broker/mail-composition";
 import { makeValidAgent } from "../dist/test/fixtures/spec.js";
 
 for (const kind of ["result", "context"]) {
-  test(`DR46 Git ${kind}: notification port preserves the original exact MIME recipe`, async t => {
+  test(`001. Git ${kind}: notification port preserves the original exact MIME recipe`, async t => {
     const root = mkdtempSync(join(tmpdir(), "oma-git-mail-bytes-"));
     const store = new Store(join(root, "runtime.sqlite"));
     t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });

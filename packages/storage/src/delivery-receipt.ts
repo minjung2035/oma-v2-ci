@@ -341,7 +341,14 @@ function makeBoundaryDurable(stateRoot: string, batch: PreparedBatch, boundary: 
       const fd = openRegularBeneath(holder, basename(offset));
       try {
         const size = fstatSync(fd).size;
-        const window = Math.min(size, maximum);
+        // The pinned SDK entry has its own envelope, larger than a receipt
+        // for short session paths. Keep that entire last entry plus the
+        // preceding newline before discarding a cut first row.
+        const entryBytes = Buffer.byteLength(JSON.stringify({ type: "custom", customType: "oma-delivery-boundary",
+          id: boundary.entryId, parentId: "ffffffff", timestamp: "9999-12-31T23:59:59.999Z",
+          data: { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation,
+            messageIds: batch.messageIds, sessionPath: boundary.sessionPath } })) + 1;
+        const window = Math.min(size, Math.max(maximum, entryBytes) + 1);
         const bytes = Buffer.alloc(window);
         let filled = 0;
         while (filled < window) {
@@ -374,10 +381,10 @@ export function publishDeliveryReceipt(
     messageIds: [...batch.messageIds],
     ...boundary,
   }, batch, stateRoot);
-  makeBoundaryDurable(stateRoot, batch, boundary, maximum, faults);
   const encoded = `${JSON.stringify(candidate)}\n`;
   if (Buffer.byteLength(encoded) > maximum)
     return invalid("encoded receipt exceeds the configured frame limit");
+  makeBoundaryDurable(stateRoot, batch, boundary, maximum, faults);
   const path = runnerReceiptPathAt(stateRoot, batch.agent, batch.id);
   ensureOwnedDurableDirectory(dirname(path), stateRoot, 0o700, faults);
   const parent = openDirectory(dirname(path));

@@ -55,6 +55,7 @@ function dispatcher(text: string, frameBytes: number) {
     review: null,
 git: null,
     lifecycle: {
+      creation: () => ({ capability: false, childProfile: null, childHasMailSend: null, maxWorkers: 6, workerCount: 1, observedAtMs: 1 }),
       create: async () => unused(),
       start: unused,
       stop: unused,
@@ -94,7 +95,7 @@ for (const [name, source, frameBytes, id] of [
     'id"\\한😀'.repeat(12),
   ],
 ] as const) {
-  test(`F3: ${name} remains a decodable bounded success`, async () => {
+  test(`001. Log frame: ${name} remains a decodable bounded success`, async () => {
     const params = { agent: "alice", sinceSeconds: 60 };
     const response = await dispatcher(source, frameBytes).dispatch(
       auth,
@@ -130,7 +131,7 @@ for (const [name, source, frameBytes, id] of [
   });
 }
 
-test("F3: minimal and complete responses retain truthful truncation metadata", () => {
+test("002. Minimal and complete responses retain truthful truncation metadata", () => {
   const view = {
     text: "",
     truncated: false,
@@ -152,7 +153,7 @@ test("F3: minimal and complete responses retain truthful truncation metadata", (
   }
 });
 
-test("F3: raw journal byte truncation never manufactures a partial UTF-8 character", () => {
+test("003. Raw journal byte truncation never manufactures a partial UTF-8 character", () => {
   const bytes = Buffer.from("A😀Z");
   for (const max of [1, 2, 3, 4])
     assert.deepEqual(boundedLogOutput(bytes, max), {
@@ -174,7 +175,7 @@ test("F3: raw journal byte truncation never manufactures a partial UTF-8 charact
 });
 
 
-test("DR27: nonexistent log target is refused instead of reported as an empty journal", async () => {
+test("004. Nonexistent log target is refused instead of reported as an empty journal", async () => {
   const response = await dispatcher("", limits.frameBytes).dispatch(auth,
     { v: 1, id: "missing", method: "logs.read", params: { agent: "missing", sinceSeconds: 60 } }, null);
   const decoded = decodeRpcReply("logs.read", response, "missing", { agent: "missing", sinceSeconds: 60 });
@@ -182,7 +183,7 @@ test("DR27: nonexistent log target is refused instead of reported as an empty jo
   if (!decoded.ok) assert.equal(decoded.error.code, "ADDRESS_NOT_FOUND");
 });
 
-test("NB-20: status.get names an address like logs.read does", async () => {
+test("005. Status.get names an address like logs.read does", async () => {
   const missing = await dispatcher("", limits.frameBytes).dispatch(auth,
     { v: 1, id: "s-missing", method: "status.get", params: { agent: "missing" } }, null);
   const decodedMissing = decodeRpcReply("status.get", missing, "s-missing", { agent: "missing" });
@@ -195,7 +196,7 @@ test("NB-20: status.get names an address like logs.read does", async () => {
   assert.equal(decodedPresent.ok, true);
 });
 
-test("NB-03: a text over budget by one byte is a strict prefix, never whole text called truncated", () => {
+test("006. A text over budget by one byte is a strict prefix, never whole text called truncated", () => {
   const view = { text: "L".repeat(128), truncated: false, observedAtMs: 7 };
   const sizeOf = (result: unknown) => Buffer.byteLength(JSON.stringify({ v: 1, id: "b", ok: true, result }));
   const whole = boundedLogResponse("b", view, limits.frameBytes);

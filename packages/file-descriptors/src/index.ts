@@ -4,6 +4,7 @@ import { getSystemErrorName } from "node:util";
 import { decode, errno, load } from "koffi";
 
 let native: ReturnType<typeof initialize> | undefined;
+let exclusiveRename: ((from: number, source: string, to: number, name: string, flags: number) => number) | undefined;
 function initialize() {
   if (process.platform !== "linux" && process.platform !== "darwin")
     throw new Error("descriptor operations require Linux or Darwin");
@@ -19,6 +20,15 @@ function initialize() {
 }
 function descriptor(fd: number): void {
   if (!Number.isSafeInteger(fd) || fd < 0) throw new TypeError("invalid directory descriptor");
+}
+/** Atomic publication of one complete entry; EEXIST preserves the winner. */
+export function renameExclusiveAt(from: number, source: string, to: number, name: string): void {
+  entry(from, source); entry(to, name);
+  if (process.platform !== "linux" && process.platform !== "darwin") throw new Error("exclusive rename requires Linux or Darwin");
+  exclusiveRename ??= load(null).func(process.platform === "linux"
+    ? "int renameat2(int from, const char *source, int to, const char *name, unsigned int flags)"
+    : "int renameatx_np(int from, const char *source, int to, const char *name, unsigned int flags)");
+  checked(exclusiveRename(from, source, to, name, process.platform === "linux" ? 1 : 4));
 }
 function entry(fd: number, name: string): void {
   descriptor(fd);
@@ -51,7 +61,8 @@ export function reopenDirectory(fd: number): number {
   return checked((native ??= initialize()).open(fd, ".", constants.O_RDONLY | constants.O_DIRECTORY | closeOnExec(), "unsigned int", 0));
 }
 
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+export function utf8Decoder(): TextDecoder { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }); }
+const utf8 = utf8Decoder();
 /** fdopendir consumes only our fresh cursor; the caller's FD remains untouched. */
 export function directoryNames(fd: number): string[] {
   const duplicate = reopenDirectory(fd), api = native!;

@@ -11,6 +11,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./private-state": {
+      "types": "./dist/private-state.d.ts",
+      "default": "./dist/private-state.js"
+    },
+    "./results": {
+      "types": "./dist/results.d.ts",
+      "default": "./dist/results.js"
     }
   },
   "scripts": {

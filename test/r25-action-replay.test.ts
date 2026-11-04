@@ -7,7 +7,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
   for (const state of ["pending", "unknown"] as const) {
     for (const entry of ["normal", "recovery"] as const) {
       for (const changed of ["desired", "incarnation", "desired-and-incarnation"] as const) {
-        test(`R25 C01/C02 ${kind} ${state} ${entry}: superseded ${changed} never authorizes a new physical effect`, async () => {
+        test(`001. Action replay: ${kind} ${state} ${entry}: superseded ${changed} never authorizes a new physical effect`, async () => {
           const f = lifecycleReplayFixture();
           try {
             const prior = f.seedPending(kind, "old-action", state);
@@ -36,7 +36,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
     }
   }
   for (const entry of ["normal", "recovery"] as const) {
-    test(`R25 ${kind} ${entry}: unchanged accepted intent completes with its frozen epoch`, async () => {
+    test(`002. Action replay: ${kind} ${entry}: unchanged accepted intent completes with its frozen epoch`, async () => {
       const f = lifecycleReplayFixture();
       try {
         const prior = f.seedPending(kind, "same-intent");
@@ -53,7 +53,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
       } finally { f.close(); }
     });
   }
-  test(`R25 ${kind}: stale caller and revoked manager cannot replay an accepted action`, async () => {
+  test(`003. Action replay: ${kind}: stale caller and revoked manager cannot replay an accepted action`, async () => {
     const f = lifecycleReplayFixture();
     try {
       const prior = f.seedPending(kind, "unauthorized");
@@ -71,7 +71,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
   });
 }
 
-test("AV-20261003-27/R25: a same-key terminal receipt replays over a GOAL withdrawn since acceptance", async () => {
+test("004. A same-key terminal receipt replays over a GOAL withdrawn since acceptance", async () => {
   const f = lifecycleReplayFixture();
   try {
     const accepted = await f.dispatch("agent.start", "terminal-goal");
@@ -89,7 +89,7 @@ test("AV-20261003-27/R25: a same-key terminal receipt replays over a GOAL withdr
 });
 
 for (const kind of ["agent.start", "agent.stop"] as const) {
-  test(`AV-20261003-27/P0 ${kind}: a terminal same-key receipt replays over a retired target`, async () => {
+  test(`005. Action replay: ${kind}: a terminal same-key receipt replays over a retired target`, async () => {
     const f = lifecycleReplayFixture();
     try {
       const accepted = await f.dispatch(kind, `terminal-${kind}`);
@@ -117,7 +117,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
       assert.equal(f.units.effects.length, 1);
     } finally { f.close(); }
   });
-  test(`AV-20261003-27/P0 ${kind}: an unresolved same-key retry over a retired target reports unknown, not a refusal`, async () => {
+  test(`006. Action replay: ${kind}: an unresolved same-key retry over a retired target reports unknown, not a refusal`, async () => {
     const f = lifecycleReplayFixture();
     try {
       const prior = f.seedPending(kind, `unresolved-${kind}`, "pending");
@@ -132,7 +132,7 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
   });
 }
 
-test("R25: no GOAL, provisioning, retired and unknown death retain their own rejection boundaries", async () => {
+test("007. No GOAL, provisioning, retired and unknown death retain their own rejection boundaries", async () => {
   const f = lifecycleReplayFixture();
   try {
     f.controls.hasGoal = false;

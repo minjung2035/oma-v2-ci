@@ -57,7 +57,7 @@ history는 자동 변환하거나 삭제하지 않는다. 위 Linux 설치 안�
 
 ## 역할별 운영 설정
 
-모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 `agentProfile` 검증을 통과해야 한다. 현재 HostConfig schema 4에는 quota·실행 자원 필드가 없으며, 이전 필드를 넣으면 거절한다.
+모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 `agentProfile` 검증을 통과해야 한다. 현재 HostConfig는 schema 4·5를 읽고 새 기본 설정은 schema 5로 작성한다. schema 5의 Worker 상한·resource profile·storage 설정은 해당 검증을 따르며, 과거 `quota` 형식을 자동 변환하지 않는다.
 
 ## 세션 모드
 
@@ -171,24 +171,62 @@ DR49: foreground broker가 공통 Resident owner와 execution journal을 소유�
 실행 작업·독립 scope 종료·FD completion을 기다린 뒤 Store를 닫는다. user systemd와
 unit 설치·manager runtime directory는 실행 조건이 아니다. namespace/peer/file primitive가
 없거나 이전 scope가 unknown이면 시작하지 않는다.
-DR37/DR46에서 저장량·실행 자원·agent count quota는 제거했다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
+DR37/DR46에서 저장량·실행 자원·agent count quota를 제거했고, DR66은 아래의 Worker 인원 상한만 복원한다. 실제 ENOSPC·권한·I/O 실패까지 없어지는 것은 아니다.
 
 ## 현재 실행 제한
 
-로딩 결과는 현재 closed `HostConfig` schema 4로 검증한다(DR49). 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
+로딩 결과는 closed `HostConfig` schema 4·5로 검증한다. 새 기본 설정은 schema 5이며, 이전 설정과 journal 형식을 자동 변환하지 않는다. 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
 Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
-DR37 이후 OMA는 storage/agent count, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한을 admission이나 systemd property로 집행하지 않는다. DR46에서 제거한 `quota`와 과거 resource 필드는 현재 HostConfig 4에서도 거절하며 구버전 설정을 자동 변환하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있다. stream의 선언 크기·해시 일치 검사는 계속 수행한다. S-03의 run 중 steer는 v1에 없다([DR18](design-revisions.md)). 가격·usage·error/cancel codec은 동봉 엔진이 소유하며 OMA에는 비용 상한이 없다.
+## 모델 도구와 협업 기록
+
+현재 source의 `collaboration-v1` 등록 목록은 [collaboration-surface.ts](../packages/domain/src/collaboration-surface.ts)가 소유한다. 운영 지원·이행 완료 여부는 [검증 상태](implementation/validation.md)와 별도로 확인한다.
+
+| 역할 | OMA 행동 |
+|---|---|
+| Worker | `oma_send`, `oma_spawn`, `oma_merge`, `oma_challenge`, `oma_review`, `oma_wait`, `oma_follow` |
+| Principal | `oma_send`, `oma_review`, `oma_goal`, `oma_society` |
+
+상태·메일·Review·receipt·로그는 허용된 기록 루트의 index에서 찾아 일반 `read`·검색 도구로 읽는다. 과거 전용 reader·모델 ACK·caller가 지정하는 request key를 새 호출 방법으로 안내하지 않는다. 원래 저장 사실과 과거 receipt는 별개로 보존한다.
+
+`lsp_tools`와 `web_tools`는 선택한 그룹을 누적하고 결과 저장 뒤 다음 경계에 적용한다. 구형 `toolset`의 전체 optional 집합 교체 방식은 현재 사용법이 아니다. Principal의 LSP 그룹에는 `lsp_status`만 있으며 MCP 기능을 이 역할 구분만으로 추가 차단하지 않는다.
+
+Worker는 commit과 exact target에 기반해 `oma_merge`·`oma_challenge`·`oma_review`를 사용한다. 입력 필드·재시도·withdraw·own submission 의미는 [도구 계약](model-collaboration-surface/tools.md)에 있다. 접수·현재 실행·완료는 서로 다른 관측이다. 알 수 없는 결과에 새 호출을 만들어 같은 효과를 반복하지 않는다.
+
+기본 역할 안내는 [프롬프트 계약](model-collaboration-surface/prompts.md)을 따른다. custom prompt는 자동으로 덮어쓰지 않으며, 구형 도구 이름이나 `toolset` 안내가 남았다면 현재 계약과 대조한다. 과거 session과 accepted history를 새 실행 계약으로 자동 변환하지 않는다.
+
+DR66 limits active Workers, not lifetime registrations. HostConfig 4's `maxWorkers` is a positive safe integer, defaulting to 6; the default initial Worker count is 3 and must fit the cap. Active means a resident with `desired=enabled`, including an enabled Worker waiting for mail. Principal, provisioning, stopped and retired rows are not counted. Stopping or retiring a Worker allows another identity to use its slot; an unconfirmed physical stop still blocks unsafe reuse. Fresh create at a full cap is refused before a new operation or Worker is accepted. Creation publication and stopped-to-enabled start also check admission atomically. An accepted creation that loses a slot race remains pending/provisioning and is completed by normal reconciliation after release; it does not publish successful readiness or its initial delivery prematurely. Replay and already-enabled start do not reserve another slot.
+
+The Config field **Active Worker capacity** applies after restart. After the authored cap changes, the old broker refuses fresh create and fresh start with `POLICY_CHANGED`; terminal replay and safe stop remain available. A restarted broker refuses activation when its enabled registry already exceeds the new cap. Stop enough Workers before lowering the cap; historical registrations are never automatically deleted or retired. The host status field `creation.workerCount` reports the current enabled-resident count, and `maxWorkers` reports its configured ceiling, not the total historical registry size.
+
+Normal peer requirements are one for MEDIUM merge and `highPeerFloor` for HIGH merge and every challenge. Let `A` be the number of currently enabled resident identities in the requester's and submitters' union. The required peer count is `min(normalRequired, max(0, maxWorkers - A))`. All historical authors remain excluded from voting even when inactive. If the required count is reduced, all peers that fit must approve before explicit Principal approval; zero-peer fallback issues approval mail with the open request. HIGH still requires Principal approval, and LOW merge's fast path is unchanged. Temporary reviewer absence, stop, provisioning failure or rejection never lowers quorum. Active-author changes are re-evaluated during acceptance and final application; a changed requirement invalidates an old approval bundle. Current approval identity, author exclusion, Principal delegation, stale-base and final CAS checks remain enforced.
+
+storage, memory/tasks/CPU/tmp/workspace/staging/check-timeout 상한은 여전히 admission이나 systemd property로 집행하지 않는다. 과거 `quota`/resource 필드는 복원하지 않는다. 실제 디스크 부족·권한·호스트 자원 고갈은 실패할 수 있으며 stream 크기·해시 검사는 유지한다. S-03의 run 중 steer는 v1에 없고 OMA 비용 상한도 없다.
 
 ### Resident의 현재 run 양보
 
-Resident sandbox의 `oma agent wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
-다음 모델 호출 없이 현재 run을 끝낸다. `oma agent wait --observe true`는 그 run의
-요청 여부만 JSON으로 읽는다. 이는 작업 완료·ACK·Worker 강제 중지가 아니다.
-이미 명시적으로 수행한 ACK는 그대로이고, 나머지 메일과 prepared batch는 다음 활성화에
+Resident의 `oma_wait`는 실행 중인 도구의 결과가 기록된 안전한 경계에서
+다음 모델 호출 없이 현재 run을 끝낸다. engine 내부 observe 조회는 같은 run의
+요청 여부만 읽는다. blocking receive나 작업 완료·ACK·Worker 강제 중지가 아니다.
+역사적으로 기록된 ACK 사실은 그대로이고, 나머지 메일과 prepared batch는 다음 활성화에
 남는다. 새 incarnation과 broker 재시작에는 wait flag가 넘어가지 않는다.
 조회 실패는 unconfirmed로 남기며, Principal은 이 개별 Worker 양보 명령을 사용하지 않는다.
+
+### Principal 대화의 메일 도착 표시
+
+자동으로 도착한 메일 배치는 분홍색 custom-message 박스 대신 `mail send`와 같은
+컴팩트한 `mail receive` 행으로 표시한다. 기본 상태는 메시지 수와 수신 표시만 보이며,
+기존 도구 펼침 단축키(`Ctrl+O`)로 원래 전달 안내를 열 수 있다. 모델은 안내된 기록 경로를 일반 `read`로 읽고, 사람은 Mail 목록 화면을 사용한다. `Received`는 대화에 도착했다는
+표시이지 ACK·작업 완료·broker 배달 완료 receipt가 아니다. 모델 입력과 저장된 메일
+내용, batch 식별자·message id 및 기존 완료 판정은 그대로다.
+
+### Pi 업데이트 안내
+
+OMA의 Society·Personal 대화에서는 Pi의 자동 `What's New`/`Updated to` 변경 내역과
+`Update Available` 새 버전 안내를 표시하지 않는다. 직접 입력한 `/changelog`,
+확장 패키지 업데이트 안내, 일반 경고와 메일·도구 표시는 유지한다. 표시 정책만
+적용하며 의존성 버전·업데이트 기능·사용자의 changelog 확인 버전은 변경하지 않는다.
 
 ## 봉인된 Resident의 provider 경로
 
@@ -238,19 +276,15 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 ## Tool 표면 (OMA 내부 정책)
 
-Tool 표면 투영은 더 이상 role 설정이 아니다(D23). 모델에게 보이는 tool 집합의 표현은 OMA가 소유하는 정책이고, 신뢰된 core extension만이 `OMA_TOOL_SURFACE` 환경 변수의 인코딩된 계획을 읽어 적용한다. 어떤 role 파일 필드도 이 표면을 선언할 수 없으며, 선언된 필드가 있으면 설정 로드가 거절된다. production 생산자는 broker의 native Resident launch owner다. 고정한 계획을 `OMA_TOOL_SURFACE_HEX`로 전달하고 runner entry가 decode해 engine spawn plan의 `OMA_TOOL_SURFACE`로 전달한다(현재 계획은 두 role 모두 code_intel group 경계를 선언한다). Resident extension은 변수가 없거나 malformed이면 fail closed한다.
+등록 목록과 그룹 사용법은 [모델 도구와 협업 기록](#모델-도구와-협업-기록)을 따른다. 현재 계획은 `version: 3`, `surface: collaboration-v1`와 역할별 `direct`·`groups`를 가진다. 구형 version 2 계획이나 누락·malformed 입력을 현재 계획으로 자동 해석하지 않는다.
 
-표면 계획 자체는 변하지 않았다: `defaultMode`(`DIRECT`/`DISABLED`), `direct`/`disabled` 이름 목록, tool과 하위 group의 명시 참조로만 이루어진 `groups`, 진입점 `roots`. 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
-
-엔진 안에서는 시작 시점 검증이 최종 게이트다. 선언된 이름이 registry에 없거나, group 이름이 등록된 tool과 충돌하거나, 활성화가 지시한 대로 적용되지 않으면 세션은 시작되지 않고 엔진이 명시적으로 종료된다(#5). 침묵하는 축소 적용은 없다. 한편 그 호출 경계는 어떤 tool이 실제로 실행될 수 있는지를 이름이 아니라 출처로 판정한다(D25): builtin이거나, 기록된 SHA-256을 다시 확인한 뒤 spawn argv가 고정한 확장 파일에서 온 tool만 허용된다.
-
-표면 표현은 권한이 아니다. 실제 권한은 sandbox mount/FD/network와 capability가 정한다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다. Society Principal은 [DR29](design-revisions.md#dr29--complete-candidate-checks-and-apply-principal-roles-at-execution-boundaries)의 role 제한을 먼저 적용하고 실행 시에도 검사한다.
+시작과 안전 경계의 registry 검사, 역할·출처·실제 capability 검사는 별개다. 이름 노출은 권한을 부여하지 않으며, 다른 역할의 이름이나 뒤늦은 shadow를 허용하지 않는다. 정확한 admission과 복구 의미는 [실행 계약](model-collaboration-surface/runtime.md)에 있다.
 
 ## 지원과 업그레이드
 
 현재 실행 환경의 검증 범위와 미실행 항목은 [validation](implementation/validation.md)을 확인한다. 플랫폼의 요구 조건은 [Core 계약](implementation-spec.md)과 [macOS 계약](macos-platform.md)을 따른다. 이전 WP31 지원 조합·lockfile 수정 기록은 [과거 qualification 기록](archive/qualification-before-consolidation.md#운영-문서의-wp31-지원-checkpoint)에 보존했다.
 
-HostConfig schema 3·DB schema 4·설정 journal committed-v2를 유지한다. DR52의 새 create
+HostConfig schema 4·5를 읽으며 새 설정은 schema 5다. DB schema 4·설정 journal committed-v2를 유지한다. DR52의 새 create
 plan은 v3의 `execution: "native"`를 기록한다. 과거 v2 plan/terminal receipt는 원래 bytes와
 의미로 읽으며, unit 설치가 필요한 미완료 v2 intent를 native 완료로 정산하지 않는다.
 execution journal v1은 별도의 관측 기록이며 accepted plan이나 권한의 원본이 아니다.

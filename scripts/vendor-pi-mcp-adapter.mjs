@@ -474,17 +474,23 @@ import { omaAgentDir, omaAmbientEnv } from "./utils.js";`,
       "process.env verbatim upstream — under OMA it inherits only " +
       "omaChildEnv's allowlisted subset (the child's env entries still " +
       "override per upstream order). createCaFetch's leaf gains the pinned " +
-      "fetch when upstream left none (OMA rejects caFile at config " +
-      "validation, so the upstream CA branch is unreachable under OMA " +
-      "anyway); the bearer-command and provider-token wrappers' implicit " +
+      "fetch when upstream left none; explicit CA configuration retains " +
+      "its upstream handling. The bearer-command and provider-token wrappers' implicit " +
       "globalThis.fetch defaults and the SSE path's `requestFetch ?? " +
       "globalThis.fetch` fall to omaPinnedFetch so no composition step can " +
-      "leak past the pin.",
+      "leak past the pin. Under OMA, request budgets beyond the pinned SDK's " +
+      "native timer range are refused before a connection or request is started.",
     edits: [
       {
         find: `import { interpolateEnvVars, expandHomePath, providerAuthUrlError, resolveBearerToken, resolveCommandSecretsRecord, resolveConfigPath, resolveServerUrl, } from "./utils.js";`,
         replace: `import { interpolateEnvVars, expandHomePath, providerAuthUrlError, resolveBearerToken, resolveCommandSecretsRecord, resolveConfigPath, resolveServerUrl, } from "./utils.js";
-import { omaCaFetch, omaChildEnv, omaChildEnvFinish, omaPinnedFetch } from "./utils.js";`,
+import { omaCaFetch, omaChildEnv, omaChildEnvFinish, omaPinnedFetch, omaPolicyActive } from "./utils.js";`,
+      },
+      {
+        find: `function normalizeRequestTimeoutMs(timeoutMs) {`,
+        replace: `function normalizeRequestTimeoutMs(timeoutMs) {
+    if (omaPolicyActive() && typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0x7fffffff)
+        throw new Error("[E_OMA_MCP_CONFIG] requestTimeoutMs exceeds the MCP SDK timer limit (2147483647ms)");`,
       },
       {
         find: `    if (inheritEnv) {
@@ -876,12 +882,20 @@ import { omaAmbientEnv } from "./utils.js";`,
     reason:
       "PI_MCP_CONFIG_MODE reads omaAmbientEnv: upstream's 'exclusive' env " +
       "mode decides whether config sources merge or override — under OMA " +
-      "no env may reach that authority decision.",
+      "no env may reach that authority decision. OMA also pins resources off after every config merge, including URL installation.",
     edits: [
+      {
+        find: `    const exposeResources = config.settings?.exposeResources;`,
+        replace: `    const exposeResources = omaPolicyActive() ? false : config.settings?.exposeResources;`,
+      },
+      {
+        find: `.map(([name, entry]) => [name, entry.exposeResources === undefined ? { ...entry, exposeResources } : entry]));`,
+        replace: `.map(([name, entry]) => [name, omaPolicyActive() || entry.exposeResources === undefined ? { ...entry, exposeResources } : entry]));`,
+      },
       {
         find: `import { getMissingEnvVars, parseJsonWithComments, providerAuthUrlError, stripUtf8Bom, toStringRecord } from "./utils.js";`,
         replace: `import { getMissingEnvVars, parseJsonWithComments, providerAuthUrlError, stripUtf8Bom, toStringRecord } from "./utils.js";
-import { omaAmbientEnv } from "./utils.js";`,
+import { omaAmbientEnv, omaPolicyActive } from "./utils.js";`,
       },
       {
         find: `    return process.env.PI_MCP_CONFIG_MODE?.trim().toLowerCase() === "exclusive";`,

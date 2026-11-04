@@ -1,6 +1,6 @@
 {
   "schema": 3,
-  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved. DR63 makes PublicViewsPort.status asynchronous and gives BrokerViews.publishStatus the completed rows so shutdown can join projection without republishing its removed view; only these two port fingerprints change.",
+  "note": "DR49 current native consumer interfaces. The prior DR46 golden and authored reviews remain unchanged. Removes the retired host relay, supplies explicit native execution observations and transport primitives, and preserves strict interface mutation controls. This golden is a source contract, not runtime or OS qualification. DR59 and the Mach connector update only the explicit peer/listener mechanisms and renamed runner-peer port; public and durable DTO snapshots remain unchanged. PathView adds only transient path/session mapping and explicit optional relay endpoints; existing public/durable interface fingerprints remain identical. DR60 changes only SandboxHost by removing Linux-owned rootfs and systemBinds from the common installation contract; every other dispatch fingerprint is preserved. DR63 makes PublicViewsPort.status asynchronous and gives BrokerViews.publishStatus the completed rows so shutdown can join projection without republishing its removed view; only these two port fingerprints change. DR67–69 extend recovery scheduling, first-Worker recovery and review proposal/attempt contracts; this regenerated interface snapshot is not an authored approval.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
       "PeerIdentity": {
@@ -33,11 +33,11 @@
       },
       "PublicLifecyclePort": {
         "exported": true,
-        "sha256": "74572300fcea1fd99998d77a2623f0fa118dfa9c777a29240377f625951b36b2"
+        "sha256": "908358f8c2fb9ebbbbd729d725c79faba4090fc3ce7a5d67daf2579fd6a9e9b8"
       },
       "PublicReviewPort": {
         "exported": true,
-        "sha256": "ad9183874c3b73cbc9b2649563734b25a9bb55ed0c704a8dcc713127a2ef38d2"
+        "sha256": "09bc46473d286e5405c5ff49b6a874f84e15f974a56196ee9569aff16b455c55"
       },
       "PublicGitPort": {
         "exported": true,
@@ -53,7 +53,7 @@
       },
       "InternalMailPort": {
         "exported": true,
-        "sha256": "7dacaa24f0f575ace8e95027a96cb249cca003e1463bcbd6ce67ab30a7f7e9e6"
+        "sha256": "11421fdbb4bd8e87b4951e1d65d3ca0beced6e4f5ca67ee5599024736d0bf109"
       },
       "InternalPeerPort": {
         "exported": true,
@@ -85,7 +85,7 @@
       },
       "BrokerReconcile": {
         "exported": true,
-        "sha256": "1a4fe90daf1e6241314915725426453e6b5a0774d15e5c67462aa7bb3106700e"
+        "sha256": "64824a2fd5bbb12b36679843e823cf128407697a0df152a2413445a01c42322b"
       },
       "BrokerStatusRefresh": {
         "exported": true,
@@ -141,13 +141,21 @@
         "exported": true,
         "sha256": "c162ce778bc3788e423f36d4b68ec6245ede25ca1737ae9c102d7cbca21ba119"
       },
+      "PathView": {
+        "exported": true,
+        "sha256": "f573d48cc434296fbc17c1cab2d7ba7cba01e14b79378335c61065318c5b731e"
+      },
+      "SandboxEndpoints": {
+        "exported": true,
+        "sha256": "c1a02229e506bacdcce857afa3eba2277b88625691cb262ad810e7f9d83c2b43"
+      },
       "SandboxDirectories": {
         "exported": true,
         "sha256": "cbdea3a940fc0fcb7934223cfd4655c86cd1806bfd99b6c5964f60a8e9d7aab9"
       },
       "SandboxHost": {
         "exported": true,
-        "sha256": "2b6b0e60d8c9aec24fd1490de2db0336d083bfda1e8fbf388b348296a8a548ea"
+        "sha256": "e5aaebd54cf9614f4924bd416c29a08e4e54765ee5e218710f580d54068b2d56"
       },
       "DeliveryBoundary": {
         "exported": true,
@@ -188,14 +196,6 @@
       "FencedEngine": {
         "exported": true,
         "sha256": "f872c74084e1b87a852976ee44c9c1aa4ebd599dd834f1b113ecbc0d21277996"
-      },
-      "PathView": {
-        "exported": true,
-        "sha256": "f573d48cc434296fbc17c1cab2d7ba7cba01e14b79378335c61065318c5b731e"
-      },
-      "SandboxEndpoints": {
-        "exported": true,
-        "sha256": "c1a02229e506bacdcce857afa3eba2277b88625691cb262ad810e7f9d83c2b43"
       }
     }
   }

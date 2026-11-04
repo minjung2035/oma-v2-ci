@@ -32,7 +32,7 @@ function refsFor(mutation, spec) {
   for (const dimension of ownership.requiredMutationDimensions) {
     if (!(dimension in spec)) fail(`${mutation} is missing ${dimension}`);
   }
-  for (const dimension of ["workflow", "persistence", "cli", "tests"]) {
+  for (const dimension of ["workflow", "persistence", "client", "tests"]) {
     const values = spec[dimension];
     if (!Array.isArray(values) || values.length === 0)
       fail(`${mutation}.${dimension} must contain at least one owner`);
@@ -60,7 +60,7 @@ function metrics(mutation, spec) {
   for (const stage of ownership.fanoutStages) {
     for (const ref of refs) if (ref.dimension === stage) pipeline.add(ref.path);
   }
-  const runtime = new Set(refs.filter(ref => !["tests", "cli"].includes(ref.dimension)).map(ref => ref.path));
+  const runtime = new Set(refs.filter(ref => !["tests", "client"].includes(ref.dimension)).map(ref => ref.path));
   const tests = new Set(refs.filter(ref => ref.dimension === "tests").map(ref => ref.path));
   const all = new Set(refs.map(ref => ref.path));
   return {

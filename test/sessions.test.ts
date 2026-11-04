@@ -10,7 +10,7 @@ import { removeUnusedTree } from "@oma/storage/directory";
 import { projectSettingsPath, sessionConfigOf } from "#oma-test/app/application/settings";
 import { defaultHostConfig } from "@oma/config/defaults";
 
-test("DR24: every session of a project has a society name of its own, valid, and named for its project", () => {
+test("001. Every session of a project has a society name of its own, valid, and named for its project", () => {
   const project = defaultSocietyFor("/home/me/a-very-long-project-directory-name", "f".repeat(64));
   const first = sessionSocietyName(project, Date.UTC(2026, 8, 29));
   const second = sessionSocietyName(project, Date.UTC(2026, 8, 29) + 1);
@@ -23,7 +23,7 @@ test("DR24: every session of a project has a society name of its own, valid, and
   assert.equal(sessionSocietyName("demo", 0), "demo-0");
 });
 
-test("DR24: a session's configuration is the project's, with its own name and installation", () => {
+test("002. A session's configuration is the project's, with its own name and installation", () => {
   const project = defaultHostConfig({ society: "proj", node: "/old/node", libdir: "/old/",  deploymentDigest: "a".repeat(64) });
   const own = { society: "proj-1", node: "/usr/bin/node", libdir: "/opt/oma/",  deploymentDigest: "b".repeat(64) };
   const session = sessionConfigOf({ ...project, limits: { ...project.limits, logBytes: 6 } }, own);
@@ -33,7 +33,7 @@ test("DR24: a session's configuration is the project's, with its own name and in
   assert.equal(projectSettingsPath("/data/oma", "proj"), "/data/oma/.projects/proj/config.json");
 });
 
-test("DR24: an unused session's tree goes whole -- its links and sockets unlinked, never followed", async t => {
+test("003. An unused session's tree goes whole -- its links and sockets unlinked, never followed", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-unused-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const outside = join(root, "outside"); mkdirSync(outside); writeFileSync(join(outside, "keep"), "kept");
   const session = join(root, "session");

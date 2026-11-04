@@ -1,21 +1,37 @@
 /** TS-001: internal-wire contract owner. Declarations only; wire/persisted v1 unchanged. */
 import type { Failure } from "./errors.js";
 import type { Actor, BatchId, Json } from "./identity.js";
-import type { BoundaryEvidence, PreparedBatch, RunLease } from "./runtime.js";
+import type { BatchCompletionInput, PreparedBatch, RunLease } from "./runtime.js";
 import type { BlobDescriptor } from "./values.js";
 
+export type HostControlParams =
+  | { action: "inspect"; agent: Actor }
+  | { action: "stop" | "release"; agent: Actor; key: string;
+      expected: { incarnation: number; desired: "provisioning" | "enabled" | "stopped" | "retired"; control: string | null } }
+  | { action: "society"; state: "open" | "closed"; key: string }
+  | { action: "receipt"; key: string };
+export type HostControlResult =
+  | { kind: "status"; agent: Actor; desired: "provisioning" | "enabled" | "stopped" | "retired"; incarnation: number;
+      registryObservedAtMs: number; control: { operation: string; actor: Actor; key: string; kind: "agent.start" | "agent.stop"; state: "pending" | "unknown" | "succeeded" | "failed" } | null;
+      principalControl: { operation: string; key: string; kind: "agent.start" | "agent.stop"; state: "pending" | "unknown" | "succeeded" | "failed" } | null;
+      execution: import("./runtime.js").ExecutionObservation | null; executionObservedAtMs: number; executionError: import("./errors.js").ErrorCode | null;
+      termination: "confirmed-dead" | "unconfirmed"; terminationObservedAtMs: number; terminationError: import("./errors.js").ErrorCode | null }
+  | { kind: "receipt"; key: string; receipt: import("./durable.js").Receipt | null };
+
 export interface InternalMethods {
+  'host.control': HostControlParams;
   'runner.open': { agent: Actor; invocationId: string };
   'runner.pending': Record<string, never>;
   'batch.prepare': Record<string, never>;
   'batch.read': { batchId: BatchId };
-  'batch.complete': BoundaryEvidence;
+  'batch.complete': BatchCompletionInput;
   'runner.observe': { reason: string; toolName?: string; observedAtMs: number };
   'principal.attach': { sessionHandle: string; credential: string };
   'principal.detach': Record<string, never>;
 }
 
 export interface InternalResults {
+  'host.control': HostControlResult;
   'runner.open': RunLease;
   'runner.pending': { pending: number; recoverableBatchIds: BatchId[] };
   'batch.prepare': PreparedBatch | null;

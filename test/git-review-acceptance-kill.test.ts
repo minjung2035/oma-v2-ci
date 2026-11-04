@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { fixture } from "./fixtures/review-fixture.js";
 
 for (const feature of ["Git", "Review"] as const)
-  test(`DR46 ${feature} ledger: SIGKILL after projected acceptance, retry and restart preserve intent`, { timeout: 45_000 }, async t => {
+  test(`001. Git review acceptance kill: ${feature} ledger: SIGKILL after projected acceptance, retry and restart preserve intent`, { timeout: 45_000 }, async t => {
     const f = fixture(); t.after(() => f.close());
     const candidate = f.candidateWith({ "change.txt": "fixed candidate\n" });
     await f.submit("alice", candidate);

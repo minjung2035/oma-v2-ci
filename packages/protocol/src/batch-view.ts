@@ -12,6 +12,24 @@ export type BatchView = Pick<
   PreparedBatch,
   "id" | "agent" | "incarnation" | "deliveryMode" | "notice" | "messageIds"
 >;
+/** Trusted preparation context for the full private RPC result, never a model field. */
+export interface BatchReplyBudget {
+  readonly responseId: string;
+  readonly frameBytes: number;
+  readonly noticeBytes?: number;
+}
+export function batchReplyBytes(batch: PreparedBatch, responseId: string): number {
+  return Buffer.byteLength(JSON.stringify({ v: 1, id: responseId, ok: true, result: batch }));
+}
+export function batchReplyNoticeBudget(batch: PreparedBatch, limits: BatchViewLimits | undefined,
+  reply?: BatchReplyBudget): number | null {
+  const view = batchViewNoticeBudget(batch, limits);
+  if (view === null || reply === undefined) return view;
+  if (!Number.isSafeInteger(reply.frameBytes) || reply.frameBytes < 1 ||
+      (reply.noticeBytes !== undefined && (!Number.isSafeInteger(reply.noticeBytes) || reply.noticeBytes < 0)))
+    throw new StoreError("INTERNAL_ERROR", "invalid trusted batch reply budget");
+  return Math.min(view, reply.frameBytes - batchReplyBytes({ ...batch, notice: "" }, reply.responseId) + 2);
+}
 export function validBatchViewLimits(
   limits: BatchViewLimits | undefined,
 ): limits is BatchViewLimits {
@@ -22,6 +40,55 @@ export function validBatchViewLimits(
     Number.isSafeInteger(limits.batchMaxMessages) &&
     limits.batchMaxMessages > 0
   );
+}
+/** R28/AUD-08: the notice room a producer may be *required* to emit even when
+ * every value is elided -- the redelivery line, the elision marker and the
+ * index pointer. The mail producer elides item rows down to this remainder
+ * rather than letting a frame refuse a batch, and a `mail` test pins the
+ * actual wording inside this allowance. */
+export const MIN_BATCH_VIEW_NOTICE_BYTES = 256;
+/** R28/AUD-08: the smallest configured frame that can carry one complete
+ * private batch reply -- identity, one manifest id and the notice
+ * remainder above, with worst-case identifier lengths. Below this no batch
+ * could ever be prepared, so a consumer configuration with a smaller
+ * `limits.frameBytes` is refused at validation. Larger manifests and notices
+ * are the producer's to page and elide; this is only the codec's floor. */
+export const MIN_BATCH_VIEW_FRAME_BYTES: number = batchReplyBytes(
+  {
+    id: `b-${"f".repeat(36)}`,
+    agent: "a".repeat(32),
+    incarnation: Number.MAX_SAFE_INTEGER,
+    deliveryMode: "followUp",
+    notice: "x".repeat(MIN_BATCH_VIEW_NOTICE_BYTES),
+    messageIds: [`m-${"f".repeat(36)}-${String(Number.MAX_SAFE_INTEGER)}`],
+    sessionPath: null, indexPath: "/inbox.md",
+  }, `rpc-${"f".repeat(36)}`,
+);
+/** R28/AUD-08: the JSON-escaped UTF-8 bytes `limits.frameBytes` can still
+ * spend on this exact view's notice once its fixed fields (identity, mode and
+ * the manifest above) are accounted for. A producer that keeps
+ * `Buffer.byteLength(JSON.stringify(notice))` within the budget keeps the
+ * whole view within the frame, whatever the notice says. Null when no lawful
+ * view limits are configured. */
+export function batchViewNoticeBudget(
+  batch: Pick<
+    PreparedBatch,
+    "id" | "agent" | "incarnation" | "deliveryMode" | "messageIds"
+  >,
+  limits: BatchViewLimits | undefined,
+): number | null {
+  if (!validBatchViewLimits(limits)) return null;
+  const withoutNotice = JSON.stringify({
+    id: batch.id,
+    agent: batch.agent,
+    incarnation: batch.incarnation,
+    deliveryMode: batch.deliveryMode,
+    notice: "",
+    messageIds: [...batch.messageIds],
+  });
+  // The empty notice value costs two bytes (`""`); every escaped byte the
+  // real notice adds from there must stay within the frame's remainder.
+  return limits.frameBytes - Buffer.byteLength(withoutNotice) + 2;
 }
 /** The one six-field projection used by the host and isolated extension.
  * Both source JSON and notice use UTF-8 bytes, never UTF-16 string length.

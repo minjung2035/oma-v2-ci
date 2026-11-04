@@ -29,15 +29,15 @@ function world({ platform = 'darwin', marker = '1', launchError, listError, crea
     require(name) { assert.ok(Object.hasOwn(deps, name), name); if (name !== 'node:path' && name !== '@oma/domain/errors' && name !== '@oma/engine/engine-auth') calls.push(['import', name]); return deps[name]; } });
   return { ...module.exports, calls, model, credentials, client };
 }
-test('Personal models: Linux never loads host Keychain or a second model runtime', async () => {
+test("001. Personal models: Linux never loads host Keychain or a second model runtime", async () => {
   const w = world({ platform: 'linux' }); assert.equal(await w.personalModels('/lib', '/engine'), undefined);
   assert.deepEqual(w.calls, []);
 });
-for (const marker of ['', '0', 'true']) test(`Personal models: invalid host marker ${JSON.stringify(marker)} fails before helper acquisition`, async () => {
+for (const marker of ['', '0', 'true']) test(`002. Personal models: invalid host marker ${JSON.stringify(marker)} fails before helper acquisition`, async () => {
   const w = world({ marker }); await assert.rejects(w.personalModels('/lib', '/engine'), { code: 'INVALID_REQUEST' });
   assert.deepEqual(w.calls, []);
 });
-test('Personal models: existing engine models and one Keychain writer owner, without model discovery network', async () => {
+test("003. Personal models: existing engine models and one Keychain writer owner, without model discovery network", async () => {
   const w = world(), owned = await w.personalModels('/bundle/Resources/install', '/host/engine');
   assert.equal(owned.modelRuntime, w.model);
   const credential = w.calls.find(item => item[0] === 'credentials');
@@ -48,13 +48,13 @@ test('Personal models: existing engine models and one Keychain writer owner, wit
   assert.equal(w.calls.some(item => item[0] === 'close'), false); await owned.close();
   assert.equal(w.calls.filter(item => item[0] === 'close').length, 1);
 });
-for (const stage of ['launch', 'list', 'create']) test(`Personal models: ${stage} failure returns only resources acquired, with no alternative credentials`, async () => {
+for (const stage of ['launch', 'list', 'create']) test(`004. Personal models: ${stage} failure returns only resources acquired, with no alternative credentials`, async () => {
   const problem = new StoreError('BROKER_UNAVAILABLE', 'fixture failure'), w = world({ [`${stage}Error`]: problem });
   await assert.rejects(w.personalModels('/lib', '/engine'), error => error === problem);
   assert.equal(w.calls.filter(item => item[0] === 'close').length, stage === 'launch' ? 0 : 1);
   if (stage !== 'create') assert.equal(w.calls.some(item => item[0] === 'models'), false);
 });
-test('Personal models: setup and cleanup failures both remain visible', async () => {
+test("005. Personal models: setup and cleanup failures both remain visible", async () => {
   const problem = new Error('fixture model setup'), cleanup = new Error('fixture close'), w = world({ createError: problem, closeError: cleanup });
   await assert.rejects(w.personalModels('/lib', '/engine'), error => error.name === 'AggregateError' && error.errors[0] === problem && error.errors[1] === cleanup);
 });

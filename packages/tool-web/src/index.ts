@@ -20,6 +20,60 @@ export const WEB_RESEARCH_TOOL_NAMES = Object.freeze([
   "get_search_content",
 ] as const);
 
+const WEB_GUIDANCE: Record<string, { description: string; promptSnippet: string; promptGuidelines: string[] }> = {
+  web_search: {
+    description: "Search the web with the configured provider or an allowed provider selection. Pass query or queries; provider arrays run concurrently. Returns bounded, source-linked results or provider answers and a responseId for stored results. Workflow none avoids generated summaries and curator interaction; other workflows depend on configuration. Retrieve needed evidence with get_search_content or fetch_content.",
+    promptSnippet: "Search for source-linked web evidence; retrieve stored results by responseId.",
+    promptGuidelines: ["Use distinct queries when they add coverage, not a fixed query count. Follow retrieval or content-status instructions in the result; search snippets and provider answers are not proof of the underlying claim."],
+  },
+  source_check: {
+    description: "Gather web evidence for a claim as a bounded structured artifact with source URLs and passage citations. Optional queries refine the search; optional page fetching supplies exact passages. The artifact supports manual assessment, not an automatic truth verdict.",
+    promptSnippet: "Gather sources and cited passages for assessing a claim.",
+    promptGuidelines: ["Read the cited passages and assess whether they support the exact claim, including qualifications and conflicting evidence."],
+  },
+  fetch_content: {
+    description: "Fetch one URL or multiple URLs using an allowed mode. Returns content or mode-specific answers, media or repository results; supported formats and dependencies vary by mode. Use the mode and media parameter help for available options. Results may be bounded or stored for retrieval; follow returned paths, responseId and continuation instructions.",
+    promptSnippet: "Fetch content from known URLs using the available fetch modes.",
+    promptGuidelines: ["Use a known source URL directly when search would add no value. An answer-mode response is generated analysis; distinguish it from fetched source text."],
+  },
+  get_search_content: {
+    description: "Retrieve stored search or fetched content by responseId without repeating the network request. Select a query or URL when needed, then page by character offset and limit, or use findText to locate passages. findText ignores offset and limit. Follow returned continuation fields; an excerpt is not the full stored result.",
+    promptSnippet: "Page or search stored web content using its responseId.",
+    promptGuidelines: ["Reuse the responseId from the original result and retrieve the passages needed for the task rather than fetching the same source again."],
+  },
+};
+
+const WEB_PARAMETER_HELP: Record<string, string> = {
+  query: "Single search query, or the exact stored query to retrieve when using get_search_content.",
+  queries: "Distinct search queries to run concurrently. Add queries only when they cover useful different evidence; source_check defaults to its claim.",
+  numResults: "Results per query; defaults to 5, maximum 20.",
+  includeContent: "Start background retrieval of result-page content. Use the returned responseId and content status to retrieve it.",
+  recencyFilter: "Restrict results to the selected recent period.",
+  domainFilter: "Restrict results to these domains; prefix a domain with - to exclude it.",
+  provider: "Configured provider selection: auto, all available providers, one provider, or an array of provider names. Availability depends on configuration and credentials.",
+  workflow: "none returns results without a curator; summary-review opens a curator with a summary draft; auto-summary generates a summary without opening it.",
+  proxy: "Optional HTTP(S) or SOCKS proxy URL for this call; an empty string requests direct access. Otherwise configured or injected proxy settings apply.",
+  claim: "Precise assertion for which to gather supporting or conflicting source evidence.",
+  fetchContent: "Fetch up to five result pages for exact cited passages.",
+  url: "One URL to fetch, or the exact stored URL to retrieve when using get_search_content.",
+  urls: "URLs to fetch concurrently; use when the fetches are independent.",
+  forceClone: "Allow cloning a GitHub repository even when it exceeds the configured size threshold.",
+  prompt: "Question for video analysis, or the required page-local question in answer mode.",
+  mode: "readable extracts content as Markdown; raw returns the textual HTTP body; answer generates an answer from fetched content and requires prompt.",
+  answerModel: "Optional provider/model override for answer mode; otherwise use configured answer settings or the current model.",
+  timestamp: "Video time in seconds, mm:ss or hh:mm:ss, or a start-end range. A range defaults to six sampled frames; frames changes the count. YouTube extraction requires yt-dlp and ffmpeg.",
+  frames: "Number of video frames, 1-12. With a range, sample across it; with one timestamp, use five-second intervals; alone, sample the video.",
+  model: "Optional Gemini model override for video analysis; otherwise use the configured model or provider default.",
+  auth: "Optional browser-cookie profile request: profile name, or true for a sole profile. OMA credential restrictions still apply; this is not an authority grant.",
+  responseId: "Stored response identifier returned by web_search, source_check or fetch_content.",
+  queryIndex: "Zero-based index of the stored search query to retrieve.",
+  urlIndex: "Zero-based index of the stored URL to retrieve.",
+  offset: "Zero-based character offset within stored content; defaults to 0 and is ignored with findText.",
+  limit: "Maximum stored-content characters requested. Configured output limits and continuation metadata may reduce the returned size; ignored with findText.",
+  findText: "One text or an array of texts to find in selected stored content; overrides offset and limit.",
+  findMode: "Text matching mode; defaults to case-insensitive. Requires findText.",
+};
+
 /** Refused registrations for boundary diagnostics. Commands and shortcuts
  * are forwarded; reset on each registration. */
 export const webFacadeDropped: ReadonlyArray<{ kind: "command" | "shortcut"; name: string }> = [];
@@ -57,7 +111,12 @@ function webFacade(pi: ExtensionAPI, registered: Set<string>): ExtensionAPI {
       if (registered.has(definition.name))
         throw new Error(`[E_OMA_WEB_SURFACE] vendored pi-web-access registered ${definition.name} twice`);
       registered.add(definition.name);
-      return pi.registerTool(definition as Parameters<ExtensionAPI["registerTool"]>[0]);
+      const tool = definition as Parameters<ExtensionAPI["registerTool"]>[0];
+      const parameters = { ...tool.parameters, properties: Object.fromEntries(
+        Object.entries((tool.parameters as typeof tool.parameters & { properties: Record<string, object> }).properties).map(([name, schema]) =>
+          [name, { ...schema, ...(WEB_PARAMETER_HELP[name] === undefined ? {} : { description: WEB_PARAMETER_HELP[name] }) }]),
+      ) } as typeof tool.parameters;
+      return pi.registerTool({ ...tool, ...WEB_GUIDANCE[definition.name], parameters });
     },
     registerCommand: pi.registerCommand.bind(pi),
     registerShortcut: pi.registerShortcut.bind(pi),
@@ -69,6 +128,17 @@ function webFacade(pi: ExtensionAPI, registered: Set<string>): ExtensionAPI {
   return facade as unknown as ExtensionAPI;
 }
 
+/** The refusal diagnostic, on the engine's stderr. Returns whether the stream
+ * took it: the session_start refusal below repeats the reason only when this
+ * first, un-preemptable report never landed, so the operator sees it once. */
+function reportIntegrityRefusal(error: unknown): boolean {
+  try {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`bundled pi-web-access payload failed integrity verification; refusing session: ${message}\n`);
+    return true;
+  } catch { return false; }
+}
+
 export async function registerWebTools(pi: ExtensionAPI): Promise<void> {
   // The vendored payload is verified before any of it becomes a tool --
   // and before any vendored module evaluates: every runtime import happens
@@ -78,11 +148,16 @@ export async function registerWebTools(pi: ExtensionAPI): Promise<void> {
   try {
     verifyVendorBundle(bundleDir);
   } catch (error) {
+    // The reason is stated here, at registration, and the refusal it belongs
+    // to is enforced at session_start. Stating it only at session_start is
+    // not enough: the four web tools are plan names, so a surface plan
+    // refuses this load for the tools the rejected bundle left unregistered
+    // -- and a handler registered earlier in the same load exits the process
+    // before this one runs, leaving the surface's own consequence as the only
+    // thing the operator ever reads. No vendored byte is loaded either way.
+    const reported = reportIntegrityRefusal(error);
     pi.on("session_start", () => {
-      try {
-        const message = error instanceof Error ? error.message : String(error);
-        process.stderr.write(`bundled pi-web-access payload failed integrity verification; refusing session: ${message}\n`);
-      } catch { /* best effort */ }
+      if (!reported) reportIntegrityRefusal(error);
       process.exit(1);
     });
     return;

@@ -44,6 +44,26 @@
       "types": "./dist/child-policy.d.ts",
       "default": "./dist/child-policy.js"
     },
+    "./collaboration-inputs": {
+      "types": "./dist/collaboration-inputs.d.ts",
+      "default": "./dist/collaboration-inputs.js"
+    },
+    "./collaboration-prompts": {
+      "types": "./dist/collaboration-prompts.d.ts",
+      "default": "./dist/collaboration-prompts.js"
+    },
+    "./collaboration-surface": {
+      "types": "./dist/collaboration-surface.d.ts",
+      "default": "./dist/collaboration-surface.js"
+    },
+    "./collaboration-review": {
+      "types": "./dist/collaboration-review.d.ts",
+      "default": "./dist/collaboration-review.js"
+    },
+    "./collaboration-targets": {
+      "types": "./dist/collaboration-targets.d.ts",
+      "default": "./dist/collaboration-targets.js"
+    },
     "./context-policy": {
       "types": "./dist/context-policy.d.ts",
       "default": "./dist/context-policy.js"
@@ -136,10 +156,6 @@
       "types": "./dist/surface-bounds.d.ts",
       "default": "./dist/surface-bounds.js"
     },
-    "./tool-surface": {
-      "types": "./dist/tool-surface.d.ts",
-      "default": "./dist/tool-surface.js"
-    },
     "./turn-admission": {
       "types": "./dist/turn-admission.d.ts",
       "default": "./dist/turn-admission.js"
@@ -211,6 +227,10 @@
     "./actor-address": {
       "types": "./dist/actor-address.d.ts",
       "default": "./dist/actor-address.js"
+    },
+    "./check-pipeline": {
+      "types": "./dist/check-pipeline.d.ts",
+      "default": "./dist/check-pipeline.js"
     }
   },
   "scripts": {

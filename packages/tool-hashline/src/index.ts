@@ -68,14 +68,58 @@ import { FILE_CHANGED_REFUSAL, WorkspaceRefusal, mkdirWithin, readWithin, withFi
 import { admittedRoot } from "@oma/tool-runtime/workspace-guard";
 import { vendoredBundleDir, verifyVendorBundle } from "@oma/tool-runtime/vendor-bundle";
 
-/** The file_edit group's members — the hashline mutation tools. Mirrors
- * `FILE_EDIT_TOOLS` in packages/domain/src/tool-surface.ts; PI-001 keeps this file
- * from importing the domain module, so the surface test binds the two
- * lists. */
+/** The ordinary anchored mutation tools. The collaboration Worker's direct
+ * catalog includes all three; exposure grants no write or containment authority. */
 export const HASHLINE_EDIT_TOOL_NAMES = Object.freeze(["replace", "replace_within", "insert"] as const);
 /** The anchored read replaces the contained `read` registration under the
  * same name, so the surface's `read` entry is unchanged. */
 export const HASHLINE_READ_TOOL_NAME = "read";
+
+/** OMA exposes only this subset; upstream cross-tool guidance is not applicable. */
+function hashlineGuidance(name: string, readOnly: boolean) {
+  const anchors = "Use bare, case-sensitive four-letter anchors from served rows, not line numbers or row content. Added and context rows in a post-edit diff carry live anchors; removed rows do not. Read again when anchors are missing, stale or reclaimed.";
+  const largeRead = "If an admitted line is too long for anchored display, use grep on that exact file path to obtain the complete immutable oma-result, then read its returned reference and next byte offsets. This needs no shell; an oversized-line marker is not the body.";
+  const batch = "Same-file edits in one assistant message may batch: a queued result is not a committed edit. The final call reports the combined result. Use disjoint ranges and inspect the final diff.";
+  switch (name) {
+    case "read": return {
+      description: "Read a file as anchor│content rows, or attach a supported image. offset is a 1-based starting line and limit bounds returned lines; follow the continuation hint when output is truncated. Directories, binary files and UTF-16/UTF-32 text are rejected. An empty text file returns one empty row." + (readOnly ? ` ${largeRead}` : ""),
+      promptSnippet: "Read file contents or images; page text with offset and limit.",
+      promptGuidelines: readOnly ? [largeRead] : [anchors],
+    };
+    case "replace": return {
+      description: "Replace an inclusive range of anchored lines with replacement_lines; an empty string deletes the range. Use the same anchor for both ends of a single line. Returns a post-edit diff with fresh anchors, or a queued result until the same-file batch closes. Pure deletion verifies the endpoints and removes the current interior.",
+      promptSnippet: "Replace or delete whole lines using served anchors.",
+      promptGuidelines: [anchors, batch, "Supply exact replacement text without anchor prefixes. For a partial-line change, use replace_within to preserve the surrounding text."],
+    };
+    case "replace_within": return {
+      description: "Replace exactly one occurrence of replace_old within the inclusive anchored range with replace_new, preserving surrounding text. Matching uses LF line breaks and excludes the final line terminator. Missing or repeated matches are refused with current rows or match locations. Successful changes return fresh-anchor diffs; batched calls may first report queued.",
+      promptSnippet: "Replace one exact text match inside an anchored line or range.",
+      promptGuidelines: [anchors, batch, "Copy replace_old exactly from served content and narrow the range until the match is unique."],
+    };
+    case "insert": return {
+      description: "Insert exact text before or after an anchored line without replacing that line. lines is one string; an empty string inserts one blank line. A trailing line break sets the final inserted line's ending rather than adding another blank line. Returns a fresh-anchor diff, or queued until the same-file batch closes.",
+      promptSnippet: "Insert text before or after a served anchor, preserving its line.",
+      promptGuidelines: [anchors, batch, "Exclude the anchor line and anchor prefixes from lines. Check both insertion boundaries in the returned diff, including blank lines."],
+    };
+    default: throw new Error(`Unexpected hashline tool: ${name}`);
+  }
+}
+
+const HASHLINE_PARAMETER_HELP: Record<string, string> = {
+  path: "File path, relative to the working directory or absolute, within the admitted read roots.",
+  offset: "First line to return, 1-based; omitted starts at line 1.",
+  limit: "Maximum lines to return; omitted uses the reader's output limits. Follow any continuation hint.",
+  remove_from: "Bare four-letter anchor of the first line to remove, inclusive.",
+  remove_to: "Bare four-letter anchor of the last line to remove, inclusive; repeat remove_from for one line.",
+  replacement_lines: 'Exact replacement text without anchor prefixes. "" deletes the range; "\\n" is one blank line. A trailing line break sets the final line ending.',
+  replace_from: "Bare four-letter anchor of the first line to search, inclusive.",
+  replace_to: "Bare four-letter anchor of the last line to search, inclusive; repeat replace_from for one line.",
+  replace_old: "Exact text to match once within the selected range, using LF line breaks and excluding its final terminator.",
+  replace_new: 'Exact replacement for the match; "" deletes it. JSON escapes are decoded once; unmatched text stays unchanged.',
+  anchor: "Bare four-letter anchor of the existing line beside which to insert; that line is preserved.",
+  direction: 'Insert "before" or "after" the anchor line.',
+  lines: 'Exact text to insert without anchor prefixes or the anchor line. "" inserts one blank line; a trailing line break sets the final inserted line ending.',
+};
 
 /** Upstream's `PI_HASHLINE_DIR` redirect: every upstream state file —
  * hash-store.sqlite, anchor-registry sidecars, config.json — lands under
@@ -270,7 +314,7 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
       if (root === null) throw new WorkspaceRefusal("tool path is outside the agent workspace");
       return withFileWithin(root, path, async held => await open(held, "r"));
     });
-  }
+  } else vendored.omaInstallFileReader(undefined);
 
   // The commit channel: upstream's writeAtomic/readFile pair rerouted to
   // OMA's shared contained writer. The inode identity check travels with
@@ -302,25 +346,34 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
   // Upstream's tool registrations — OMA's subset only. `read` replaces the
   // contained read under the same name (last registration wins); the three
   // file_edit members exist only where the role may write.
-  if (options.sandboxed && options.readPath !== undefined) {
+  const registration = Object.create(pi) as ExtensionAPI;
+  let registrySessionKey: string | undefined;
+  registration.registerTool = tool => {
+    const guidance = hashlineGuidance(tool.name, options.readOnly);
+    const parameters = { ...tool.parameters, properties: Object.fromEntries(
+      Object.entries((tool.parameters as typeof tool.parameters & { properties: Record<string, object> }).properties).map(([name, schema]) =>
+        [name, { ...schema, ...(name === "path" && tool.name !== HASHLINE_READ_TOOL_NAME
+          ? { description: "Workspace file to edit, relative or absolute within the writable root." }
+          : HASHLINE_PARAMETER_HELP[name] === undefined ? {} : { description: HASHLINE_PARAMETER_HELP[name] }) }]),
+    ) } as typeof tool.parameters;
+    const prepared = { ...tool, ...guidance, parameters };
+    if (tool.name !== HASHLINE_READ_TOOL_NAME || !options.sandboxed || options.readPath === undefined) {
+      pi.registerTool(prepared); return;
+    }
     const readPath = options.readPath;
-    const registration = Object.create(pi) as ExtensionAPI;
-    registration.registerTool = tool => {
-      if (tool.name !== HASHLINE_READ_TOOL_NAME) { pi.registerTool(tool); return; }
-      const prepare = tool.prepareArguments;
-      pi.registerTool({ ...tool, prepareArguments: args => {
-        const params = prepare === undefined ? args : prepare(args);
-        const named = params as { path?: unknown } | null | undefined;
-        const translated = typeof named?.path === "string" ? { ...named, path: readPath(named.path) } : params;
-        return translated as ReturnType<NonNullable<typeof tool.prepareArguments>>;
-      } });
-    };
-    vendored.regRead(registration);
-  } else vendored.regRead(pi);
+    const prepare = tool.prepareArguments;
+    pi.registerTool({ ...prepared, prepareArguments: args => {
+      const params = prepare === undefined ? args : prepare(args);
+      const named = params as { path?: unknown } | null | undefined;
+      const translated = typeof named?.path === "string" ? { ...named, path: readPath(named.path) } : params;
+      return translated as ReturnType<NonNullable<typeof tool.prepareArguments>>;
+    } });
+  };
+  vendored.regRead(registration);
   if (!options.readOnly) {
-    vendored.regReplace(pi);
-    vendored.regReplaceWithin(pi);
-    vendored.regInsert(pi);
+    vendored.regReplace(registration);
+    vendored.regReplaceWithin(registration);
+    vendored.regInsert(registration);
   }
   // Upstream's write hook: blocks a `write` call whose content echoes a
   // served anchor line, so the builtin write cannot smuggle a stale anchor
@@ -339,12 +392,12 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
     // withAnchorSession: it ensures the anchor registry — which resolves
     // configDir() — before the callback runs.
     redirectHashlineState(options, ctx);
+    registrySessionKey = vendored.sessionKeyFor(ctx);
     return vendored.withAnchorSession(ctx, async () => {
     // Upstream state files now resolve through configDir() ->
     // PI_HASHLINE_DIR, pointed at the OMA-owned directory: hash-store.sqlite,
     // the anchor-registry sidecars and (unused) config.json.
-    // v0.1 coexistence: upstream's session_start removes the builtin `edit`
-    // from the active set. OMA keeps it — both editors stay callable.
+    // Society exposes anchored edits only; the literal builtin edit is excluded.
     await vendored.initHasher();
     vendored.loadHashStore()
       .then(async store => {
@@ -360,10 +413,11 @@ export async function registerHashlineTools(pi: ExtensionAPI, options: HashlineT
     });
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
+  pi.on("session_shutdown", async () => {
+    const key = registrySessionKey;
     try {
-      const key = vendored.sessionKeyFor(ctx);
       if (key !== undefined) vendored.releaseRegistrySession(key);
+      if (registrySessionKey === key) registrySessionKey = undefined;
     } catch (error) {
       console.error("Failed to release anchor registry session:", error);
     }

@@ -57,7 +57,8 @@
   "dependencies": {
     "@oma/contracts": "0.1.0",
     "@oma/protocol": "0.1.0",
-    "@oma/domain": "0.1.0"
+    "@oma/domain": "0.1.0",
+    "@oma/tool-files": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

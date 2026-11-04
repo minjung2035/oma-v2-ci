@@ -15,7 +15,7 @@ function failures(error) {
 }
 
 for (const [entry, kind] of [[true, 'file'], [false, 'file'], [false, 'directory'], [false, 'both']])
-  test(`immutable observation retains corruption when ${entry ? 'entry' : 'path'} ${kind} cleanup fails`, t => {
+  test(`001. Immutable observation retains corruption when ${entry ? 'entry' : 'path'} ${kind} cleanup fails`, t => {
     const root = fs.mkdtempSync(join(tmpdir(), 'oma-immutable-cleanup-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const path = join(root, 'evidence'), bytes = Buffer.from('accepted bytes');
@@ -54,7 +54,7 @@ for (const [entry, kind] of [[true, 'file'], [false, 'file'], [false, 'directory
     assert.equal(fs.readdirSync('/proc/self/fd').length, before, 'every acquired descriptor is returned exactly once');
   });
 
-test('a successful immutable read with failed cleanup is unavailable, never a successful read', t => {
+test("002. A successful immutable read with failed cleanup is unavailable, never a successful read", t => {
   const root = fs.mkdtempSync(join(tmpdir(), 'oma-immutable-close-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'evidence'), bytes = Buffer.from('intact bytes');
@@ -75,7 +75,7 @@ test('a successful immutable read with failed cleanup is unavailable, never a su
 });
 
 for (const stage of ['source', 'destination'])
-  test(`immutable publication retains ${stage} corruption and every descriptor cleanup failure`, t => {
+  test(`003. Immutable publication retains ${stage} corruption and every descriptor cleanup failure`, t => {
     const root = fs.mkdtempSync(join(tmpdir(), 'oma-publication-cleanup-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const source = join(root, 'source'), destination = join(root, 'destination'), bytes = Buffer.from('accepted source');

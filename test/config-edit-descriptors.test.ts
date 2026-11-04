@@ -9,7 +9,7 @@ import {
   readSettings,
 } from "#oma-test/app/application/settings";
 
-test("V11B: one own-key descriptor registry covers every editable field and policy", () => {
+test("001. One own-key descriptor registry covers every editable field and policy", () => {
   assert.equal(Object.getPrototypeOf(EDITABLE_FIELD_DESCRIPTORS), null);
   assert.deepEqual(Object.keys(EDITABLE_FIELD_DESCRIPTORS).sort(), [...EDITABLE_FIELDS].sort());
   assert.equal(Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, EXTENSIONS), false);

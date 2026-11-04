@@ -36,9 +36,7 @@ export function createCompleteConfigurationFixture() {
       delegable: [],
       childProfile: null,
     };
-    const config: HostConfig = {
-    schemaVersion: 4,
-    society: "demo",
+    const config: HostConfig = {schemaVersion: 4, maxWorkers: 6, society: "demo",
     installation: {
         // A node that exists here: a runner entry resolves it for confinement.
         node: process.execPath,
@@ -59,8 +57,7 @@ export function createCompleteConfigurationFixture() {
         { name: "worker", profile: "resident", brief: "work" },
     ],
     integration: { policyRevision: "test", protectedPaths: [], checks: [] },
-    limits: { ...TEST_PROTOCOL_LIMITS }
-};
+    limits: { ...TEST_PROTOCOL_LIMITS }};
     const input = join(root, "legacy.json");
     writeFileSync(input, JSON.stringify(config));
     const output = join(root, "operations");

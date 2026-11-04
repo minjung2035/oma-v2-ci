@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import ts from "typescript";
 
-test("public contracts have no executable statements or implementation imports", async () => {
+test("001. Public contracts have no executable statements or implementation imports", async () => {
   const directory = new URL("../src/", import.meta.url);
   for (const file of readdirSync(directory).filter(file => file.endsWith(".ts"))) {
     const source = ts.createSourceFile(file, readFileSync(new URL(file, directory), "utf8"), ts.ScriptTarget.Latest, true);

@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
-import { SURFACE_LIMITS, planToolSurface, type ToolSurfaceConfig } from "@oma/domain/tool-surface";
 import { INITIAL, step, type PanelData } from "@oma/tui/model";
 import { render } from "@oma/tui/view/index";
 import { unknownDashboard } from "./fixtures/dashboard.js";
@@ -38,7 +37,7 @@ function bundle(root: string, overrides: Record<string, unknown> = {}): string {
     }));
     return index;
 }
-test("a bundle reference that escapes the bundle directory is refused", () => {
+test("001. A bundle reference that escapes the bundle directory is refused", () => {
     const root = scratch("oma-adv-escape-");
     try {
         for (const host of ["../outside.json", "/etc/passwd", "sub/../../outside.json"]) {
@@ -54,7 +53,7 @@ test("a bundle reference that escapes the bundle directory is refused", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("a host file missing the object a write targets fails as corruption, not silently", () => {
+test("002. A host file missing the object a write targets fails as corruption, not silently", () => {
     const root = scratch("oma-adv-corrupt-");
     try {
         const index = bundle(root);
@@ -68,7 +67,7 @@ test("a host file missing the object a write targets fails as corruption, not si
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("a role file that becomes unreadable between read and write is not half-written", () => {
+test("003. A role file that becomes unreadable between read and write is not half-written", () => {
     const root = scratch("oma-adv-race-");
     try {
         const index = bundle(root);
@@ -86,7 +85,7 @@ test("a role file that becomes unreadable between read and write is not half-wri
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("the panel renders at degenerate terminal sizes without exceeding them", () => {
+test("004. The panel renders at degenerate terminal sizes without exceeding them", () => {
     const data: PanelData = Object.freeze({
         dashboard: unknownDashboard("아주 긴 이유 문자열입니다 ".repeat(4)),
         config: Object.freeze([]), extensions: Object.freeze([]),
@@ -106,26 +105,8 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     state = step(state, { kind: "enter" }, data, FRAME_BYTES).state;
     assert.doesNotThrow(() => render({ state, data, transcript: [], body: { text: "본문", truncated: false }, notice: null, busy: false, columns: 0, rows: 0 }));
 });
-test("a tool surface declaration cannot smuggle an oversized or malformed name", () => {
-    const base = (overrides: Partial<ToolSurfaceConfig>): ToolSurfaceConfig => ({ defaultMode: "DISABLED", direct: [], disabled: [], groups: [], roots: [], ...overrides });
-    const long = "a".repeat(200);
-    for (const candidate of [
-        base({ direct: [long] }),
-        base({ direct: ["UPPER"] }),
-        base({ direct: ["9leading"] }),
-        base({ direct: ["has space"] }),
-        base({ direct: ["has/slash"] }),
-        base({ groups: [{ name: long, description: "d", members: [] }] }),
-        base({ groups: [{ name: "g", description: "x".repeat(SURFACE_LIMITS.descriptionBytes + 1), members: [] }] }),
-        base({ groups: [{ name: "g", description: "", members: [] }] }),
-    ])
-        assert.throws(() => planToolSurface(candidate), invalid);
-    // A description at exactly the limit is accepted; the bound is inclusive.
-    assert.doesNotThrow(() => planToolSurface(base({
-        groups: [{ name: "g", description: "x".repeat(SURFACE_LIMITS.descriptionBytes), members: [{ tool: "t" }] }],
-    })));
-});
-test("mail reading survives malformed, empty and non-file entries", () => {
+
+test("005. Mail reading survives malformed, empty and non-file entries", () => {
     const root = scratch("oma-adv-mail-");
     try {
         const box = principalMailbox(root);
@@ -160,7 +141,7 @@ test("mail reading survives malformed, empty and non-file entries", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("an extension list is not taken from outside the installation directory", () => {
+test("006. An extension list is not taken from outside the installation directory", () => {
     const root = scratch("oma-adv-ext-");
     try {
         const index = bundle(root);
@@ -180,7 +161,7 @@ test("an extension list is not taken from outside the installation directory", (
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("a settings write refuses a value the closed config schema would reject", () => {
+test("007. A settings write refuses a value the closed config schema would reject", () => {
     const root = scratch("oma-adv-value-");
     try {
         const index = bundle(root);
@@ -195,7 +176,7 @@ test("a settings write refuses a value the closed config schema would reject", (
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("T124/TUI-011: the Mail screen reads bounded, refuses links, and orders by arrival", () => {
+test("008. The Mail screen reads bounded, refuses links, and orders by arrival", () => {
     const root = scratch("oma-adv-mailbounds-");
     try {
         const box = principalMailbox(root);

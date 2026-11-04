@@ -17,10 +17,12 @@ assert.equal(result.status, 0, result.stderr || "installed executable failed");
 assert.match(result.stdout + result.stderr, /usage: oma/);
 
 // Internal application modules remain shipped for the executable, without becoming package APIs.
-const { readFileSync, readdirSync } = await import("node:fs");
+const { existsSync, readFileSync, readdirSync } = await import("node:fs");
 const appRoot = join(dirname(new URL(import.meta.resolve("@oma/app/runtime/assets")).pathname), "../..");
 const manifest = JSON.parse(readFileSync(join(appRoot, "package.json"), "utf8"));
 assert.deepEqual(Object.keys(manifest.exports).sort(), ["./diagnostics/files", "./diagnostics/integrity", "./diagnostics/ledger", "./runtime/assets"]);
+assert.equal(existsSync(join(appRoot, "dist/cli.js")), false);
+assert.equal(existsSync(join(appRoot, "dist/libexec/oma")), false);
 function inspect(directory, prefix = "") {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const name = prefix + entry.name;

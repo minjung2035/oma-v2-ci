@@ -1,5 +1,6 @@
 import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
+import { prepareReplyEffects } from "#oma-test/app/runtime/input-effects/mail";
 import { serializePlanIntent } from "./fixtures/plan.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -40,6 +41,18 @@ const limits = {
   idleStreamSeconds: 30,
   receiptWaitSeconds: 30,
 };
+test("003. Derived replies fit the host byte bound and repeated replies keep one prefix",async()=>{
+ const f=fixture();try{
+  await f.mail.send(f.auth,"long-subject",{to:["bob"],subject:"한".repeat(170),body:"body",kind:"message"});
+  const operation=f.store.getOperation("alice","long-subject");assert.ok(operation?.kind==="mail.send");
+  const reply=prepareReplyEffects(f.mail.archivePath(operation.plan.message.id),true,512);
+  assert.equal(Buffer.byteLength(reply.inheritedSubject!),511);assert.ok(reply.inheritedSubject!.startsWith("Re: "));
+  await f.mail.send(f.auth,"reply-subject",{to:["bob"],subject:reply.inheritedSubject!,body:"body",kind:"message"});
+  const second=f.store.getOperation("alice","reply-subject");assert.ok(second?.kind==="mail.send");
+  assert.equal(prepareReplyEffects(f.mail.archivePath(second.plan.message.id),true,512).inheritedSubject,reply.inheritedSubject);
+  assert.ok(Buffer.byteLength(prepareReplyEffects(f.mail.archivePath(second.plan.message.id),true,32).inheritedSubject!)<=32);
+ }finally{f.close();}
+});
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-reply-boundary-"));
@@ -82,6 +95,7 @@ function fixture() {
     review: null,
 git: null,
     lifecycle: {
+      creation: unused,
       create: async () => unused(),
       start: unused,
       stop: unused,
@@ -180,7 +194,7 @@ git: null,
   };
 }
 
-test("F1: semantic reply errors leave admission healthy and later mail is accepted", async () => {
+test("001. Semantic reply errors leave admission healthy and later mail is accepted", async () => {
   const f = fixture();
   try {
     const follow = new RegistryOperations(lifecycleLedger(f.store), { nextOperationId: generateOperationId }).follow(
@@ -230,7 +244,7 @@ test("F1: semantic reply errors leave admission healthy and later mail is accept
   }
 });
 
-test("F1: corrupt accepted message bytes still fence subsequent new acceptance", async () => {
+test("002. Corrupt accepted message bytes still fence subsequent new acceptance", async () => {
   const f = fixture();
   try {
     await f.dispatch("original-mail");

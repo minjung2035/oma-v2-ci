@@ -59,7 +59,7 @@ const principalModel = (snapshot: ConfigurationSnapshot): string =>
 const withPrincipalModel = (snapshot: ConfigurationSnapshot, model: string) => validateConfig({ ...snapshot.config,
   agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...snapshot.config.agentProfiles.principal!, modelProfile: model } } });
 
-test("V13A / P0-7: a managed commit SIGKILLed at any durability point leaves the complete old or the complete new configuration", TIMEOUT, () => {
+test("001. A managed commit SIGKILLed at any durability point leaves the complete old or the complete new configuration", TIMEOUT, () => {
   const probe = createCompleteConfigurationFixture();
   const points: DurabilityFault[] = [];
   try {
@@ -97,7 +97,7 @@ test("V13A / P0-7: a managed commit SIGKILLed at any durability point leaves the
   }
 });
 
-test("DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and exact candidate retry", TIMEOUT, () => {
+test("002. SIGKILL in a short journal append preserves the manifest and exact candidate retry", TIMEOUT, () => {
   for (const cut of [1, 66, 133, 134]) {
     const f = createCompleteConfigurationFixture();
     try {
@@ -149,7 +149,7 @@ test("DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and 
   }
 });
 
-test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the old file or one the loader loads", TIMEOUT, () => {
+test("003. An inline commit SIGKILLed at any durability point leaves the old file or one the loader loads", TIMEOUT, () => {
   const probe = createCompleteConfigurationFixture();
   const points: DurabilityFault[] = [];
   let limit = 0;
@@ -182,7 +182,7 @@ test("DR12 / P0-7: an inline commit SIGKILLed at any durability point leaves the
   }
 });
 
-test("DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point leaves no receipt or the whole one, and the retry publishes it", TIMEOUT, () => {
+test("004. A receipt publication SIGKILLed at any durability point leaves no receipt or the whole one, and the retry publishes it", TIMEOUT, () => {
   const fixture = () => {
     const root = mkdtempSync(join(tmpdir(), "oma-receipt-kill-"));
     const operationId = generateOperationId();
@@ -230,7 +230,7 @@ test("DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability poin
   }
 });
 
-test("P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left", TIMEOUT, () => {
+test("005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left", TIMEOUT, () => {
   const probe = mkdtempSync(join(tmpdir(), "oma-derived-kill-"));
   const points: DurabilityFault[] = [];
   try {
@@ -257,7 +257,7 @@ test("P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point leaves th
   }
 });
 
-test("T23 / P0V-96: an immutable publication copied across filesystems and SIGKILLed at any point publishes nothing partial, and the next one collects what it left", TIMEOUT, (t) => {
+test("006. An immutable publication copied across filesystems and SIGKILLed at any point publishes nothing partial, and the next one collects what it left", TIMEOUT, (t) => {
   const sourceRoot = mkdtempSync(join(tmpdir(), "oma-immutable-kill-source-"));
   const shm = "/dev/shm";
   const crossDevice = (() => { try { return statSync(shm).dev !== statSync(sourceRoot).dev; } catch { return false; } })();
@@ -314,7 +314,7 @@ const fsyncCount = (body: string): number => {
   return Number(count);
 };
 
-test("V26B / P0-7: a request freeze SIGKILLed at any flush leaves no request, the whole request, or an orphan body it refuses to rebuild from", TIMEOUT, async () => {
+test("007. A request freeze SIGKILLed at any flush leaves no request, the whole request, or an orphan body it refuses to rebuild from", TIMEOUT, async () => {
   const { RequestCache } = await import("#oma-test/app/request-cache");
   const { makeValidFrozenRequest } = await import("./fixtures/valid.js");
   const input = makeValidFrozenRequest("kill-1", "hello");
@@ -354,7 +354,7 @@ test("V26B / P0-7: a request freeze SIGKILLed at any flush leaves no request, th
   assert.ok(seen.has("absent") && seen.has("present"), `the kill points did not span the freeze: ${[...seen].join(" ")}`);
 });
 
-test("D05 / P0-7: a project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left", TIMEOUT, async () => {
+test("008. A project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left", TIMEOUT, async () => {
   const { collectBindingTemporaries, observeProjectBinding, publishProjectBinding } = await import("#oma-test/app/runtime/provision");
   const binding = { society: "demo", canonicalProjectPath: "/project" };
   const publish = (root: string) => `

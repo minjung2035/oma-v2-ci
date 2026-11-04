@@ -28,7 +28,7 @@ function fixture(t) {
   return { root, dir, fd };
 }
 
-test("directory metadata: actual zero-length attributes prevent reclamation and empty entries pass", t => {
+test("001. Directory metadata: actual zero-length attributes prevent reclamation and empty entries pass", t => {
   const { dir, fd } = fixture(t);
   writeFileSync(join(dir, "empty"), "data"); writeFileSync(join(dir, "attributed"), "data");
   attribute(join(dir, "attributed"));
@@ -36,7 +36,7 @@ test("directory metadata: actual zero-length attributes prevent reclamation and 
   assert.throws(() => assertNoUnpreservedMetadataAt(fd, "attributed"), /has unpreserved metadata; retained/);
 });
 
-test("directory metadata: parent rename and pathname replacement preserve the held directory observation", t => {
+test("002. Directory metadata: parent rename and pathname replacement preserve the held directory observation", t => {
   const { root, dir, fd } = fixture(t);
   writeFileSync(join(dir, "empty"), "data"); writeFileSync(join(dir, "attributed"), "data");
   attribute(join(dir, "attributed"));
@@ -49,7 +49,7 @@ test("directory metadata: parent rename and pathname replacement preserve the he
   assert.equal(process.cwd(), cwd, "the Node host cwd is unchanged");
 });
 
-test("directory metadata: final and dangling symlinks are observed without following their targets", t => {
+test("003. Directory metadata: final and dangling symlinks are observed without following their targets", t => {
   const { root, dir, fd } = fixture(t);
   writeFileSync(join(root, "outside"), "outside"); attribute(join(root, "outside"));
   symlinkSync(join(root, "outside"), join(dir, "link"));
@@ -57,7 +57,7 @@ test("directory metadata: final and dangling symlinks are observed without follo
   assertNoUnpreservedMetadataAt(fd, "link"); assertNoUnpreservedMetadataAt(fd, "dangling");
 });
 
-test("directory metadata: missing entries and invalid directory capabilities never become empty observations", t => {
+test("004. Directory metadata: missing entries and invalid directory capabilities never become empty observations", t => {
   const { dir, fd } = fixture(t); writeFileSync(join(dir, "file"), "data");
   assert.throws(() => assertNoUnpreservedMetadataAt(fd, "missing"), /could not be observed/);
   const file = openSync(join(dir, "file"), constants.O_RDONLY);
@@ -86,7 +86,7 @@ if (process.platform === "darwin") {
     assert.ifError(result.error); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
   };
   for (const [operation, label, directory] of [["flags", "BSD flags", false], ["acl", "extended ACL", false], ["empty-acl-flags", "empty ACL with flags", true]])
-    test(`Darwin metadata: ${label} refuses reclamation without following an outside target`, t => {
+    test(`005. Darwin metadata: ${label} refuses reclamation without following an outside target`, t => {
       const { root, dir, fd } = fixture(t), target = join(root, "outside");
       if (directory) mkdirSync(target); else writeFileSync(target, "outside");
       const outside = openDirectory(root); t.after(() => closeSync(outside));
@@ -96,7 +96,7 @@ if (process.platform === "darwin") {
       symlinkSync(target, join(dir, "link"));
       assertNoUnpreservedMetadataAt(fd, "link");
     });
-  test("Darwin metadata: a real resource fork prevents reclamation", t => {
+  test("006. Darwin metadata: a real resource fork prevents reclamation", t => {
     const { dir, fd } = fixture(t), path = join(dir, "fork"); writeFileSync(path, "data");
     const value = Buffer.from("resource-fork-bytes");
     assert.equal(setAttribute(path, "com.apple.ResourceFork", value), 0, `resource fork errno ${errno()}`);

@@ -102,7 +102,18 @@ export async function loadFileKindAndText(filePath, options) {
             !isTextType(detectedMimeType) &&
             !looksLikeText(sample)) {
             if (IMG_TYPES.has(detectedMimeType)) {
-                return { kind: "image", mimeType: detectedMimeType };
+                if (!openedStats.isFile() || openedStats.size > MAX_BYTES)
+                    throw new Error("[E_PATH_CHANGED] Image changed before its admitted read.");
+                const bytes = Buffer.alloc(openedStats.size + 1);
+                let used = 0;
+                while (used < bytes.length) {
+                    const chunk = await fileHandle.read(bytes, used, bytes.length - used, used);
+                    if (chunk.bytesRead === 0) break;
+                    used += chunk.bytesRead;
+                }
+                if (used > openedStats.size)
+                    throw new Error("[E_PATH_CHANGED] Image grew during its admitted read.");
+                return { kind: "image", mimeType: detectedMimeType, bytes: bytes.subarray(0, used) };
             }
             return {
                 kind: "binary",

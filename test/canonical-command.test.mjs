@@ -35,7 +35,7 @@ function load(changes = {}) {
   return module.exports;
 }
 
-test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evidence and gives its scratch back', t => {
+test("001. A canonical ls-tree spool that cannot be opened answers typed evidence and gives its scratch back", t => {
   const scratchOwner = fs.mkdtempSync(path.join(os.tmpdir(), 'oma-spool-fault-'));
   t.after(() => fs.rmSync(scratchOwner, { recursive: true, force: true }));
   const made = [];
@@ -66,7 +66,7 @@ test('GIT-004: a canonical ls-tree spool that cannot be opened answers typed evi
   assert.deepEqual(fs.readdirSync(scratchOwner), [], 'no scratch residue owned by this invocation');
 });
 
-test('GIT-004: a canonical ls-tree scratch whose run completes disposes on the observation boundary', () => {
+test("002. A canonical ls-tree scratch whose run completes disposes on the observation boundary", () => {
   const made = [];
   const fsWrap = { ...fs, mkdtempSync(prefix) { const dir = fs.mkdtempSync(prefix); made.push(dir); return dir; } };
   const api = load({ 'node:fs': fsWrap });

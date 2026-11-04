@@ -44,7 +44,7 @@ function namelessSocket(connectTo) {
   });
 }
 
-test("AUTH-003: a socket holding no name is not a lease, however much it looks like one", async () => {
+test("001. A socket holding no name is not a lease, however much it looks like one", async () => {
   const a = stateRoot("shape");
   const lease = tryHoldSociety(a.path);
   assert.notEqual(lease, null);
@@ -60,7 +60,7 @@ test("AUTH-003: a socket holding no name is not a lease, however much it looks l
   } finally { lease.release(); a.cleanup(); }
 });
 
-test("AUTH-003: the descriptor that holds the society's name is recognised as its lease", () => {
+test("002. The descriptor that holds the society's name is recognised as its lease", () => {
   const a = stateRoot("self");
   const lease = tryHoldSociety(a.path);
   try {
@@ -72,7 +72,7 @@ test("AUTH-003: the descriptor that holds the society's name is recognised as it
   } finally { lease.release(); a.cleanup(); }
 });
 
-test("AUTH-003: society A's lease is not society B's lease", () => {
+test("003. Society A's lease is not society B's lease", () => {
   const a = stateRoot("a"); const b = stateRoot("b");
   const lease = tryHoldSociety(a.path);
   try {
@@ -83,7 +83,7 @@ test("AUTH-003: society A's lease is not society B's lease", () => {
   } finally { lease.release(); a.cleanup(); b.cleanup(); }
 });
 
-test("AUTH-003: a socket bound to a pathname is not a lease, because a pathname can be replaced", async () => {
+test("004. A socket bound to a pathname is not a lease, because a pathname can be replaced", async () => {
   // The lease lives in the abstract namespace precisely because that namespace
   // has no directory entry: nothing to unlink, rename, or point at another
   // object. A listening AF_UNIX socket on a filesystem path has all three, so
@@ -104,7 +104,7 @@ test("AUTH-003: a socket bound to a pathname is not a lease, because a pathname 
   }
 });
 
-test("AUTH-003: a regular file is not a lease", () => {
+test("005. A regular file is not a lease", () => {
   const a = stateRoot("file");
   mkdirSync(a.path, { recursive: true });
   const path = join(a.path, "not-a-lease");
@@ -121,7 +121,7 @@ test("AUTH-003: a regular file is not a lease", () => {
   } finally { closeSync(fd); a.cleanup(); }
 });
 
-test("AUTH-003: a descriptor that is not open is unreadable, which is not the same as not a lease", () => {
+test("006. A descriptor that is not open is unreadable, which is not the same as not a lease", () => {
   // "I could not establish this" must never be reported as "someone else owns
   // it" or as "this is fine": both readings start an engine on a society whose
   // ownership nothing is holding.
@@ -131,7 +131,7 @@ test("AUTH-003: a descriptor that is not open is unreadable, which is not the sa
 });
 
 /** The regression the fourteenth audit asked for, across a real `execve`. */
-test("AUTH-003: a broker handed society A's lease on descriptor 4 refuses to serve society B", () => {
+test("007. A broker handed society A's lease on descriptor 4 refuses to serve society B", () => {
   const a = stateRoot("proc-a"); const b = stateRoot("proc-b");
   const lease = tryHoldSociety(a.path);
   try {
@@ -163,7 +163,7 @@ test("AUTH-003: a broker handed society A's lease on descriptor 4 refuses to ser
   } finally { lease.release(); a.cleanup(); b.cleanup(); }
 });
 
-test("AUTH-003: a process that declares a lease it does not have fails to start rather than serving", () => {
+test("008. A process that declares a lease it does not have fails to start rather than serving", () => {
   const a = stateRoot("declared");
   const previous = process.env.OMA_SOCIETY_FENCE_FD;
   process.env.OMA_SOCIETY_FENCE_FD = "7";
@@ -177,7 +177,7 @@ test("AUTH-003: a process that declares a lease it does not have fails to start 
 });
 
 /** LOC-003: taking a lock has three answers, and the missing one was dangerous. */
-test("LOC-003: a lock that could not be evaluated is not reported as another owner", () => {
+test("009. A lock that could not be evaluated is not reported as another owner", () => {
   const base = mkdtempSync(join(tmpdir(), "oma-flock-"));
   const path = join(base, "broker.lock");
   writeFileSync(path, "");
@@ -194,7 +194,7 @@ test("LOC-003: a lock that could not be evaluated is not reported as another own
   } finally { closeSync(first); closeSync(second); rmSync(base, { recursive: true, force: true }); }
 });
 
-test("LOC-003: a name nothing holds is free, and holding it twice is refused", () => {
+test("010. A name nothing holds is free, and holding it twice is refused", () => {
   const name = `\0oma.test.${process.pid}.${Date.now()}`;
   const first = holdAbstractName(name);
   assert.equal(first.kind, "held");

@@ -140,6 +140,16 @@ function call(number: number, ...args: unknown[]): number {
 function validPid(pid: number): void {
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid > 0x7fffffff) throw new TypeError("invalid namespace-init PID");
 }
+/** Host-wide death evidence across an actual Linux reboot; never a PID guess. */
+export function linuxBootId(): string { linux(); return bootId(); }
+/** OS-managed host affinity. A copied Society is not proof of the source host's death. */
+export function linuxHostId(): string {
+  linux();
+  const value = readFileSync("/etc/machine-id", "utf8").trim();
+  if (!/^[0-9a-f]{32}$/.test(value) || value === "0".repeat(32))
+    throw new StoreError("UNSUPPORTED_PROFILE", "execution recovery requires an initialized Linux machine identity");
+  return value;
+}
 function bootId(): string {
   const value = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value))

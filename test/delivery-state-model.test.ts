@@ -147,7 +147,7 @@ async function run(seed: number, steps: number): Promise<string[]> {
   }
 }
 
-test("V30A: seeded delivery-evidence sequences follow D01 on the composed runtime", { timeout: 300_000 }, async () => {
+test("001. Seeded delivery-evidence sequences follow D01 on the composed runtime", { timeout: 300_000 }, async () => {
   const seen = new Set<string>();
   for (let seed = 1; seed <= 24; seed += 1) for (const event of await run(seed, 8)) seen.add(event);
   // The sequences reached every kind of event, so no row of the table went unexercised.

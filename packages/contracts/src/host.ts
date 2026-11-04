@@ -1,4 +1,4 @@
-/** TS-001: host contract owner. Declarations only; current host configuration schema 3. */
+/** TS-001: host contract owner. Declarations only; host configuration schemas 4/5. */
 import type { Actor, Capability } from "./identity.js";
 import type { AgentCreateInput, RiskTier } from "./values.js";
 
@@ -52,16 +52,33 @@ export interface AgentProfile {
 }
 
 export interface HostConfig {
-  schemaVersion: 4; society: string;
+  storage?: { closeMode: "keep-hot" | "on-close" };
+  resources?: WorkloadResourceProfile;
+  /** Version-5 operator closure, applied at broker restart. Absence preserves
+   * existing admission checks; neither value approves a new model surface.
+   * Canonical replay/recovery and supervising-host controls remain available. */
+  collaborationFreshMutations?: "closed";
+  schemaVersion: 4 | 5; society: string;
+  /** Explicit host request; only a Society with no Resident history can accept it. */
+  firstWorkerRecovery?: { version: 1; key: string; name: string; profile: string; brief: string };
   installation: { node: string; libdir: string; deploymentDigest: string; packages?: string };
   modelProfiles: Record<string, ModelProfile>;
   agentProfiles: Record<string, AgentProfile>;
   principalProfile: string;
+  /** Maximum currently enabled resident identities; historical registrations do not consume slots. */
+  maxWorkers: number;
   initialResidents: { name: Actor; profile: string; brief: string }[];
   integration: {
+    pipeline?: import("./check-pipeline.js").CheckPipeline;
     policyRevision: string; protectedPaths: string[];
     tiered?: TieredPolicy;
     checks: { id: string; argv: string[]; env: Record<string,string> }[];
   };
   limits: ProtocolLimits;
+}
+
+/** Optional Linux workload budget, separate from logical Worker capacity. */
+export interface WorkloadResourceProfile {
+  version: 1; cpuCores?: number; memoryMaxBytes?: number; swapMaxBytes?: number; tasksMax?: number;
+  checkWallTimeMs?: number; tmpfsMaxBytes?: number; maxConcurrentCheckPipelines?: number;
 }

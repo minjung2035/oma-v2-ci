@@ -4,7 +4,7 @@ import type { ReviewFact } from "./attestation.js";
 import type { Failure } from "./errors.js";
 import type { ResolvedAgentSpec } from "./host.js";
 import type { Actor, Address, MessageId, Oid, OperationId } from "./identity.js";
-import type { ContextEntry, ExactCandidateIdentity, MailInput } from "./values.js";
+import type { CreateSourcePlan, ContextEntry, ExactCandidateIdentity, MailAttachmentPlan, MailInput } from "./values.js";
 
 export type OperationResult =
   | { kind: "society.set"; state: "open" | "closed" }
@@ -45,7 +45,7 @@ export interface MessagePlan {
  * pins the allowed kind/addressing/audience per role. */
 export type ReviewMailMeta =
   | { role: "thread"; request: OperationId; name: string; revision: number }
-  | { role: "approval"; request: OperationId; name: string; votes: OperationId[] }
+  | { role: "approval"; request: OperationId; name: string; votes: OperationId[]; basis?: OperationId }
   | { role: "withdrawn"; request: OperationId; name: string; approval: MessageId }
   | { role: "decision"; request: OperationId; name: string; approval: MessageId }
   | { role: "notice"; request: OperationId; name: string; part: number; parts: number; sha256: string; bytes: number };
@@ -53,11 +53,12 @@ export type ReviewMailMeta =
 export type OperationPlan =
   | { kind: "society.set"; state: "open" | "closed" }
   | { kind: "attest.record"; fact: ReviewFact; messages: MessagePlan[] }
-  | { kind: 'mail.send' | 'agent.continue'; message: MessagePlan }
+  | { kind: 'mail.send'; message: MessagePlan; attachments?: MailAttachmentPlan }
+  | { kind: 'agent.continue'; message: MessagePlan }
   | { kind: 'mail.ack'; recipient: Actor; message: MessageId }
   | { kind: 'route.follow' | 'route.unfollow'; topic: string; agent: Actor }
   | ({ kind: 'agent.create'; spec: ResolvedAgentSpec; specHash: string; parent: Actor;
-      workspacePath: string; initialMessage: MessagePlan | null; existingCreation: OperationId | null } &
+      source?: CreateSourcePlan; workspacePath: string; initialMessage: MessagePlan | null; existingCreation: OperationId | null } &
       ({ execution: 'native' } | { unitNames: string[] }))
   | { kind: 'agent.start' | 'agent.stop'; agent: Actor; previousIncarnation: number;
       desired: 'enabled' | 'stopped'; remainingOperations: OperationId[] }
@@ -66,7 +67,7 @@ export type OperationPlan =
       publishedRef: string; message: MessagePlan }
   | { kind: 'git.integrate'; repo: 'project'; target: 'refs/heads/main'; base: Oid;
       candidate: Oid; policyRevision: string; checkProfileDigest: string; policyIdentity: string; noopRef: string | null;
-      merge?: { version: 1; request: OperationId; name: string; tier: RiskTier; notice: MessagePlan[] } }
+      merge?: ({ version: 1 } | { version: 2 | 3; revision: number; attemptNumber: number; diff?: import("./files.js").ReviewDiffArtifact; preparation?: OperationId }) & { request: OperationId; name: string; tier: RiskTier; notice: MessagePlan[] } }
   | { kind: 'context.publish'; base: Oid | null; candidate: Oid;
       target: 'refs/heads/main'; entries: ContextEntry[]; stagingPath: string; message: MessagePlan; goalMail?: { subject: string }; noopRef: string | null };
 

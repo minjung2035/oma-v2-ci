@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 import { createMailModule } from "#oma-test/app/broker/mail-composition";
@@ -101,7 +102,7 @@ function auth(actor = "a"): AuthContext {
 // ---------------------------------------------------------------------------
 // AUD-1/AUD-2 retain their service-renderer meaning in the raw archive.
 // Current literal argv/backoff/containment are tested through actual native owners.
-test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
+test("001. Candidate sandbox argv does not inherit host environment", () => {
     const argv = candidateSandbox({ rootfs: "/rootfs", node: process.execPath, libdir: "/checks" }, "a".repeat(40), { id: "audit", argv: ["/checks/run"], env: { SAFE: "1" },
     }, []).argv;
     const clear = argv.indexOf("--clearenv");
@@ -110,11 +111,11 @@ test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
     assert.ok(argv.includes("1"));
     assert.ok(!argv.includes(process.env.HOME ?? "__none__"));
 });
-test("AUD-4: default reply-to keeps list traffic on-list and direct traffic direct", () => {
+test("002. Default reply-to keeps list traffic on-list and direct traffic direct", () => {
     assert.deepEqual(defaultReplyTo("a@demo.oma.invalid", ["commons@demo.oma.invalid"]), ["commons@demo.oma.invalid"]);
     assert.deepEqual(defaultReplyTo("a@demo.oma.invalid", ["b@demo.oma.invalid"]), ["a@demo.oma.invalid"]);
 });
-test("AUD-5: parsed EML ancestry never trusts body text as headers", () => {
+test("003. Parsed EML ancestry never trusts body text as headers", () => {
     const text = [
         "From: a@demo.oma.invalid",
         "Message-ID: <m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid>",
@@ -128,7 +129,7 @@ test("AUD-5: parsed EML ancestry never trusts body text as headers", () => {
     assert.equal(headers.omaKind, "message");
     assert.deepEqual(headers.references, []);
 });
-test("AUD-6: atomic writes do not follow a final-path symlink", () => {
+test("004. Atomic writes do not follow a final-path symlink", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-write-"));
     try {
         const victim = join(root, "victim");
@@ -143,7 +144,7 @@ test("AUD-6: atomic writes do not follow a final-path symlink", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-7: immutable publication rejects a conflicting existing file", () => {
+test("005. Immutable publication rejects a conflicting existing file", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-immutable-"));
     try {
         const src = join(root, "src");
@@ -156,14 +157,14 @@ test("AUD-7: immutable publication rejects a conflicting existing file", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-8: actor socket paths remain under Linux sun_path", () => {
+test("006. Actor socket paths remain under Linux sun_path", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-sock-"));
     try {
         const store = new Store(join(root, "runtime.sqlite"));
         const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
         const units = new PolicyExecution();
         const views = new ViewsModule(store, root, "demo", "p");
-        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => null, mail);
+        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
         // `sun_path` is 108 bytes including the terminator. A run root of exactly 45
         // bytes keeps the max-length actor name with a short incarnation inside the
         // limit (99) and pushes the largest safe incarnation outside it (114).
@@ -178,7 +179,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods", async () => {
+test("007. Public dispatch rejects top-level request on read/ephemeral methods", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-audit-readkey-"));
     try {
         const spec = {
@@ -198,7 +199,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
         const units = new PolicyExecution();
         const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
         const views = new ViewsModule(store, root, "demo", "p");
-        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => null, mail);
+        const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => null), mail);
         const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) }, limits: LIMITS });
         const reply = await broker.dispatch(auth(), { v: 1, id: "r", method: "status.get", request: "forbidden", params: {} } as never, null);
         assert.equal((reply as {

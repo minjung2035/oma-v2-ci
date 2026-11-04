@@ -63,7 +63,7 @@ function exercise(bytes: Buffer, seed: number): void {
   catch (error) { assert.ok(error instanceof StoreError && error.code === "INVALID_REQUEST", "EML target escaped its supported rejection boundary"); }
 }
 
-test("R36 parser corpus fixes independent golden outputs and fatal error behavior", () => {
+test("001. Parser corpus fixes independent golden outputs and fatal error behavior", () => {
   for (const value of VALID_JSON) {
     const bytes = framed(Buffer.from(JSON.stringify(value)));
     for (let cut = 0; cut <= bytes.length; cut++) {
@@ -83,7 +83,7 @@ test("R36 parser corpus fixes independent golden outputs and fatal error behavio
   for (const source of EML_INVALID) assert.throws(() => parseEmlHeaders(source), { code: "INVALID_REQUEST" });
 });
 
-for (const seed of FUZZ_SEEDS) test(`R36 parser fuzz seed=${seed} cases=${cases} prng=${PRNG_REVISION}`, { timeout: 60000 }, async t => {
+for (const seed of FUZZ_SEEDS) test(`002. Parser fuzz seed=${seed} cases=${cases} prng=${PRNG_REVISION}`, { timeout: 60000 }, async t => {
   const random = new Seeded(seed), metadata = replayMetadata(seed, { cases, maxCaseBytes: MAX_CASE_BYTES });
   const corpus = [...INVALID_JSON, ...GIT_INVALID, SETUP_VALID, SETUP_FAILED, ...SETUP_INVALID, EML_VALID, ...EML_INVALID];
   for (let index = 0; index < cases; index++) {
@@ -104,7 +104,7 @@ for (const seed of FUZZ_SEEDS) test(`R36 parser fuzz seed=${seed} cases=${cases}
   }
 });
 
-test("R36 durable decoders reject one-field mutations after a valid control", () => {
+test("003. Durable decoders reject one-field mutations after a valid control", () => {
   const agent = makeValidAgent("alice");
   const raw = { name: agent.name, role: agent.role, desired: agent.desired, incarnation: agent.incarnation,
     profile: agent.profile, created_by: agent.createdBy, spec_hash: agent.specHash, spec_json: agent.specJson, created_at_ms: 1, updated_at_ms: 1 };
@@ -113,7 +113,7 @@ test("R36 durable decoders reject one-field mutations after a valid control", ()
     assert.throws(() => decodeAgentRow(corruptValueForTest(raw, "incarnation", value)), { code: "STORE_CORRUPT" });
 });
 
-test("R36 parser mutation sentinel redetects duplicate-key acceptance from the saved corpus", () => {
+test("004. Parser mutation sentinel redetects duplicate-key acceptance from the saved corpus", () => {
   const source = INVALID_JSON[1];
   assert.throws(() => parseJsonObject(Buffer.from(source)), FrameError);
   const mutant = (text: string) => JSON.parse(text); // deliberately removes the duplicate-key guard

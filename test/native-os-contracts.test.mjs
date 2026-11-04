@@ -40,7 +40,7 @@ function actor(t, args, fd) {
   return { child, closed, receive, send: message => new Promise((resolve, reject) => child.send(message, error => error ? reject(error) : resolve())) };
 }
 
-test('real OS: no-replace publication has exactly one winner in cross-process races', { timeout: 30000 }, async t => {
+test("001. Real OS: no-replace publication has exactly one winner in cross-process races", { timeout: 30000 }, async t => {
   const root = scratch(t); writeFileSync(join(root, 'a'), 'immutable-a'); writeFileSync(join(root, 'b'), 'immutable-b');
   const held = openDirectory(root);
   try {
@@ -61,7 +61,7 @@ test('real OS: no-replace publication has exactly one winner in cross-process ra
   } finally { closeSync(held); }
 });
 
-test('real OS: flock contention and SIGKILL release follow the actual owning process', { timeout: 20000 }, async t => {
+test("002. Real OS: flock contention and SIGKILL release follow the actual owning process", { timeout: 20000 }, async t => {
   const root = scratch(t), path = join(root, 'broker.lock'), owner = actor(t, ['lock', path]);
   assert.deepEqual(await owner.receive(), { ready: true });
   assert.equal(ProcessLock.tryAcquire(path), null);
@@ -73,7 +73,7 @@ test('real OS: flock contention and SIGKILL release follow the actual owning pro
   assert.throws(() => next.descriptor, { code: 'BROKER_UNAVAILABLE' });
 });
 
-test('real OS: an inherited descriptor keeps flock after the parent owner closes', { timeout: 20000 }, async t => {
+test("003. Real OS: an inherited descriptor keeps flock after the parent owner closes", { timeout: 20000 }, async t => {
   const root = scratch(t), path = join(root, 'broker.lock'), original = ProcessLock.acquire(path);
   try {
     const retained = actor(t, ['retain'], original.descriptor); assert.deepEqual(await retained.receive(), { ready: true });
@@ -83,7 +83,7 @@ test('real OS: an inherited descriptor keeps flock after the parent owner closes
   } finally { original.close(); }
 });
 
-test('real OS: native root and file capabilities are closed across exec without explicit handoff', { timeout: 20000 }, async t => {
+test("004. Real OS: native root and file capabilities are closed across exec without explicit handoff", { timeout: 20000 }, async t => {
   const root = scratch(t), held = openDirectory(root), file = openBeneath(held, 'data', constants.O_CREAT | constants.O_EXCL | constants.O_RDWR, 0o600);
   try {
     const identities = [held, file].map(fd => { const s = fstatSync(fd, { bigint: true }); return { fd, dev: String(s.dev), ino: String(s.ino) }; });
@@ -93,7 +93,7 @@ test('real OS: native root and file capabilities are closed across exec without 
   } finally { closeSync(file); closeSync(held); }
 });
 
-test('real OS: directory cursors cover multiple buffers and leave no descriptor behind on repeated use', () => {
+test("005. Real OS: directory cursors cover multiple buffers and leave no descriptor behind on repeated use", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'oma-os-cursors-'))), held = openDirectory(root);
   try {
     for (let i = 0; i < 520; i++) writeFileSync(join(root, String(i).padStart(4, '0') + '-한글-🙂'), '');
@@ -108,7 +108,7 @@ test('real OS: directory cursors cover multiple buffers and leave no descriptor 
   } finally { closeSync(held); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('real OS: readlink preserves raw bytes, long targets and syscall errors', () => {
+test("006. Real OS: readlink preserves raw bytes, long targets and syscall errors", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'oma-os-links-'))), held = openDirectory(root);
   try {
     const raw = Buffer.from([0x2e, 0x2e, 0x2f, 0xff, 0xfe]);
@@ -123,7 +123,7 @@ test('real OS: readlink preserves raw bytes, long targets and syscall errors', (
   } finally { closeSync(held); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('real OS: a concurrent directory-to-symlink swap never writes outside the held root', { timeout: 30000 }, async t => {
+test("007. Real OS: a concurrent directory-to-symlink swap never writes outside the held root", { timeout: 30000 }, async t => {
   const root = scratch(t), inside = join(root, 'inside'), outside = join(root, 'outside');
   mkdirSync(inside); mkdirSync(outside); mkdirSync(join(inside, 'branch')); writeFileSync(join(outside, 'sentinel'), 'untouched');
   const held = openDirectory(inside);
@@ -148,7 +148,7 @@ test('real OS: a concurrent directory-to-symlink swap never writes outside the h
 });
 
 
-test('real OS: permission failure and a closed directory are errors, never empty observations', t => {
+test("008. Real OS: permission failure and a closed directory are errors, never empty observations", t => {
   assert.notEqual(process.getuid(), 0, 'qualification requires an unprivileged test account');
   const root = scratch(t), held = openDirectory(root);
   writeFileSync(join(root, 'retained'), 'retained bytes');
@@ -166,7 +166,7 @@ test('real OS: permission failure and a closed directory are errors, never empty
   assert.throws(() => directoryNames(held), { code: 'EBADF' });
 });
 
-test('real OS: failed close still closes every remaining owner and retains both syscall failures', t => {
+test("009. Real OS: failed close still closes every remaining owner and retains both syscall failures", t => {
   const root = scratch(t), a = openDirectory(root), b = openDirectory(root);
   closeSync(a);
   assert.throws(() => closeEvery(a, b), { code: 'EBADF' });
@@ -182,7 +182,7 @@ test('real OS: failed close still closes every remaining owner and retains both 
   } finally { closeSync(held); }
 });
 
-test('real OS: ancestry distinguishes live siblings and retains identity across observed exit', { timeout: 20000 }, async t => {
+test("010. Real OS: ancestry distinguishes live siblings and retains identity across observed exit", { timeout: 20000 }, async t => {
   const root = scratch(t), a = actor(t, ['lock', join(root, 'a.lock')]), b = actor(t, ['lock', join(root, 'b.lock')]);
   assert.deepEqual(await a.receive(), { ready: true }); assert.deepEqual(await b.receive(), { ready: true });
   const parent = hostProcessProbe.identity(process.pid), first = hostProcessProbe.identity(a.child.pid), sibling = hostProcessProbe.identity(b.child.pid);
@@ -197,7 +197,7 @@ test('real OS: ancestry distinguishes live siblings and retains identity across 
 });
 
 
-test('real OS: peer UID comes from the kernel and a closed endpoint grants no identity', { timeout: 20000 }, async t => {
+test("011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity", { timeout: 20000 }, async t => {
   const root = scratch(t, '/tmp'), path = join(root, 'peer.sock'), sockets = new Set();
   const server = createServer(socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   owners.get(t).push(async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); });

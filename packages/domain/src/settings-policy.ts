@@ -11,12 +11,16 @@ export interface FieldSettings {
 export const PRINCIPAL_MODEL = "principal-model";
 export const WORKER_MODEL = "worker-model";
 export const INITIAL_WORKERS = "initial-workers";
+export const MAX_WORKERS = "max-workers";
+export const COLLABORATION_ADMISSION = "collaboration-admission";
 export const WORKER_PROFILE = "worker-profile";
 export const WORKER_INTEGRATE = "worker-integrate";
 export const EDITABLE_FIELDS = Object.freeze([
     PRINCIPAL_MODEL,
     WORKER_MODEL,
     INITIAL_WORKERS,
+    MAX_WORKERS,
+    COLLABORATION_ADMISSION,
     WORKER_PROFILE,
     WORKER_INTEGRATE,
 ] as const);
@@ -230,13 +234,42 @@ const DESCRIPTOR_SOURCE = {
         apply: "bootstrap-only",
         blocked: seedsBlocked,
         view: (config: HostConfig) => ({
-            kind: "number" as const, value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value,
+            kind: "number" as const, value: config.initialResidents.length, min: 1, max: Math.min(config.maxWorkers, CONFIG_BOUNDS.maxInitialWorkers.value),
         }),
         transform: (settings: FieldSettings, value: FieldValue) => {
-            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
+            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "Society requires at least one initial Worker");
             // A seed needs a Worker profile only when one is added.
             const count = value as number;
+            assertKnown(count <= settings.config.maxWorkers, "initial workers exceed active Worker capacity");
             return withSeedCount(settings.config, count, count > settings.config.initialResidents.length ? workerTarget(settings) : "");
+        },
+    }),
+    [MAX_WORKERS]: Object.freeze({
+        label: "Active Worker capacity",
+        apply: "restart",
+        view: (config: HostConfig) => ({
+            kind: "number" as const, value: config.maxWorkers, min: Math.max(1, config.initialResidents.length), max: Number.MAX_SAFE_INTEGER,
+        }),
+        transform: (settings: FieldSettings, value: FieldValue) => {
+            assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 1, "active Worker capacity must be a positive safe integer");
+            assertKnown((value as number) >= settings.config.initialResidents.length, "active Worker capacity is below the initial worker count");
+            return { ...settings.config, maxWorkers: value as number };
+        },
+    }),
+    [COLLABORATION_ADMISSION]: Object.freeze({
+        label: "Collaboration fresh model mutations (not cutover approval)",
+        apply: "restart",
+        blocked: (config: HostConfig) => config.schemaVersion !== 5 ? "Requires configuration version 5; legacy configuration is unchanged" : null,
+        view: (config: HostConfig) => ({
+            kind: "choice" as const, value: config.collaborationFreshMutations ?? "normal", options: ["normal", "closed"],
+        }),
+        transform: (settings: FieldSettings, value: FieldValue): HostConfig => {
+            assertKnown(settings.config.schemaVersion === 5, "collaboration closure requires configuration version 5");
+            assertKnown(value === "normal" || value === "closed", "collaboration admission is normal or closed");
+            const next = { ...settings.config };
+            if (value === "closed") next.collaborationFreshMutations = "closed";
+            else delete next.collaborationFreshMutations;
+            return next;
         },
     }),
     [WORKER_PROFILE]: Object.freeze({

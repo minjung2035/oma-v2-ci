@@ -38,7 +38,7 @@ function contextFixture(t) {
   const revision = join(f.root, "world/context/revisions", source.candidate);
   return { f, source, repo, revision };
 }
-test("P6 publication: pending context may await snapshot/mail without fabricated terminal success", t => {
+test("001. Publication: pending context may await snapshot/mail without fabricated terminal success", t => {
   const { f, repo, source } = contextFixture(t);
   const before = f.store.getOperationById(f.id);
   assert.equal(observe(f).status, "PASS");
@@ -47,7 +47,7 @@ test("P6 publication: pending context may await snapshot/mail without fabricated
   const report = observe(f); assert.notEqual(report.status, "FAIL", JSON.stringify(report));
   assert.deepEqual(f.store.getOperationById(f.id), before);
 });
-test("P6 publication: succeeded context requires exact snapshot/current/canonical manifest", t => {
+test("002. Publication: succeeded context requires exact snapshot/current/canonical manifest", t => {
   const { f, repo, source, revision } = contextFixture(t);
   mkdirSync(revision, { recursive: true }); writeFileSync(join(revision, "GOAL.md"), source.bytes, { mode: 0o644 }); chmodSync(revision, 0o555);
   git(repo, ["update-ref", "refs/heads/main", source.candidate]);
@@ -58,7 +58,7 @@ test("P6 publication: succeeded context requires exact snapshot/current/canonica
   const bad = observe(f); assert.equal(bad.status, "FAIL"); assert.ok(bad.issues.some(i => i.code === "CONTEXT_CURRENT_MISMATCH"));
   assert.equal(readlinkSync(pointer), `revisions/${"a".repeat(40)}`);
 });
-test("P6 publication: published submission ref must point to its exact accepted candidate", t => {
+test("003. Publication: published submission ref must point to its exact accepted candidate", t => {
   const source = objects(t); git(source.repo, ["update-ref", "refs/heads/fixture", source.candidate]);
   const f = physicalLedger(t, { kind: "git.submit", candidate: source.candidate }); const repo = install(source.repo, f, "project.git");
   git(repo, ["update-ref", f.plan.publishedRef, source.candidate]); f.publish();
@@ -67,4 +67,13 @@ test("P6 publication: published submission ref must point to its exact accepted 
   const tree = git(repo, ["mktree"], ""), different = git(repo, ["commit-tree", tree], "different\n"); git(repo, ["update-ref", f.plan.publishedRef, different]);
   const report = observe(f); assert.equal(report.status, "FAIL"); assert.ok(report.issues.some(i => i.code === "PUBLISHED_REF_MISMATCH"));
   assert.equal(git(repo, ["rev-parse", f.plan.publishedRef]), different);
+});
+
+test("004. The real diagnostic adapter rejects an annotated tag as an exact candidate commit",t=>{
+ const source=objects(t);git(source.repo,['update-ref','refs/heads/fixture',source.candidate]);
+ git(source.repo,['tag','-a','-m','annotation','candidate-tag',source.candidate]);const tagged=git(source.repo,['rev-parse','refs/tags/candidate-tag']);
+ const f=physicalLedger(t,{kind:'git.submit',candidate:tagged}),repo=install(source.repo,f,'project.git');
+ git(repo,['update-ref',f.plan.publishedRef,tagged]);f.publish();
+ const report=observe(f);assert.equal(report.status,'FAIL',JSON.stringify(report));
+ assert.ok(report.issues.some(issue=>issue.code==='CANDIDATE_INVALID'));
 });

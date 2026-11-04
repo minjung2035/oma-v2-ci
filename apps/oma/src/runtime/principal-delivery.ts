@@ -26,6 +26,7 @@ import { StoreError } from "@oma/domain/errors";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import type { CheckedReceipt } from "@oma/contracts/runtime";
 import { runnerReceiptPathAt } from "@oma/domain/paths";
+import { deliveryNotStartedOf } from "@oma/protocol/delivery-boundary";
 import { boundaryOf } from "@oma/engine/pi-adapter";
 import type { PiEvent } from "@oma/engine/pi-rpc";
 
@@ -82,7 +83,9 @@ export function principalHostBroker(runRoot: string, limits: Pick<ProtocolLimits
   };
   return {
     prepare: () => call<PreparedBatch | null>("batch.prepare", {}),
-    complete: async evidence => { await call("batch.complete", { ...evidence }); },
+    complete: async evidence => { await call("batch.complete", {
+      batchId: evidence.batchId, incarnation: evidence.incarnation, adapterRevision: evidence.adapterRevision,
+    }); },
   };
 }
 
@@ -183,6 +186,7 @@ export class PrincipalDelivery {
    * from the receipt instead of presenting the batch again. */
   private async deliverOne(batch: PreparedBatch, enter: (phase: DeliveryPhase) => void): Promise<CheckedReceipt> {
     let accepted: boolean | null = null;
+    let started = false, notStarted = false;
     let settled = false;
     let lastStop = "";
     let ended = false;
@@ -191,6 +195,9 @@ export class PrincipalDelivery {
     const changed = (): Promise<void> => new Promise(resolve => { wake = resolve; });
     let next = changed();
     const unsubscribe = this.session.onEvent(event => {
+      if (event.type === "agent_start") started = true;
+      const refusal = deliveryNotStartedOf(event);
+      if (!started && refusal?.batchId === batch.id) notStarted = true;
       if (event.type === "response" && event.id === batch.id && event.command === "prompt")
         accepted = event.success === true;
       if (event.type === "message_end") {
@@ -218,6 +225,7 @@ export class PrincipalDelivery {
       // failure, and a batch abandoned mid-turn would be delivered twice.
       for (;;) {
         if (!this.session.running) { ended = true; break; }
+        if (notStarted) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the trusted adapter did not start this delivery");
         if (accepted === false) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the engine refused the delivery command");
         if (settled) {
           if (boundary !== null) break;

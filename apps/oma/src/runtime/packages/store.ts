@@ -22,6 +22,7 @@ import { StoreError, unobserved } from "@oma/domain/errors";
 import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "@oma/config/operations";
 import { readUserFile, replaceUserFile } from "../user-files.js";
 import { listOwnedDirectory, repairOwnedEntryMode } from "@oma/storage/directory";
+import { assertPackageReplacementSettled } from "@oma/storage/package-replacement";
 import type { PackageDirectories } from "../../ports/package-files.js";
 
 /** The store's directory name, beside the engine home and every session. */
@@ -222,6 +223,7 @@ function indexBytes(path: string): string | null {
 export function readPackageIndex(store: string): readonly InstalledPackage[] {
   const root = packageStoreRoot(store);
   if (root === null) return Object.freeze([]);
+  assertPackageReplacementSettled(root);
   const file = indexBytes(join(root, PACKAGE_INDEX));
   if (file === null) return Object.freeze([]);
   let value: unknown;

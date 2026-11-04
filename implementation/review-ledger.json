@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 61,
-  "NOT_REVIEWED": 14275,
+  "CHANGED_WITHOUT_ORACLE": 60,
+  "NOT_REVIEWED": 14308,
   "REMOVED": 220
  },
  "lanes": {
@@ -26,7 +26,14 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "ef1c8556a7093327e9b7af8a7c6cb9bd37cceeb7946b46a39469a250f84e745d"
+   "sha256": "14fc3e8ead3b709a5255e89dd2855a2647a460924402a1039d6df9755cf9a557"
+  },
+  {
+   "path": "apps/oma/src/application/execution-recovery.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "apps/oma/src/application/exit.ts",
@@ -50,7 +57,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "3dbc3f147c373cf936158bac25d008984ece78bd5ce37301a2465c61b5024c1f"
+   "sha256": "e4ba447967464fc3a8655e2f122b7bedccb2ef018dddc3409a4e1be0ef733a22"
   },
   {
    "path": "apps/oma/src/application/mail.ts",
@@ -68,6 +75,13 @@
   },
   {
    "path": "apps/oma/src/application/project-settings.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/application/session-archive.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -137,7 +151,7 @@
     "DR63"
    ],
    "oracles": [],
-   "sha256": "6f395b6cb4ae9bd5e850f8c9ce5c96fa463ef576a8bbdd8ac9eea216d20f7047"
+   "sha256": "f8712a7a0c275bb572acb367c755e19644aac14a4f5146d0637d909e481b586b"
   },
   {
    "path": "apps/oma/src/broker/composition.ts",
@@ -155,6 +169,13 @@
   },
   {
    "path": "apps/oma/src/broker/git-ledger.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/broker/invocation-sources.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -197,163 +218,6 @@
   },
   {
    "path": "apps/oma/src/broker/review-composition.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/arguments.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/cache-codec.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/agent.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/context.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/logs.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/merge.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/routes.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/send.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/society.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/status.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/commands/submit.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/effects.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/effects/code.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/effects/context.ts",
-   "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "53917ba1714b74496bea75ab04f61a64f57fb2cdbb45f83702813cf746b6ee95"
-  },
-  {
-   "path": "apps/oma/src/cli/effects/goal.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/effects/mail.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/effects/submit.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/exit.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/request-intent.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/request-service.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "apps/oma/src/cli/transport.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -445,6 +309,13 @@
   },
   {
    "path": "apps/oma/src/entry/candidate-check.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/entry/download-cache.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -608,6 +479,13 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/collaboration-sources.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "apps/oma/src/runtime/compile-cache.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -629,7 +507,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "d28942fb2cecebb0458554a35ccbeea8a3e95c50e796da4be0e6ed1473203133"
+   "sha256": "378b02b18efe850205ba8bab82e572bfb0ba762f8a13368b17d9eae358c1d8b0"
   },
   {
    "path": "apps/oma/src/runtime/execution-runtime.ts",
@@ -639,7 +517,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "ce85fb6c6e5dca4e32bed8cfb6a155ae0e3bece6b0c629a89472f91d7900b42f"
+   "sha256": "b2356713ec2c2a7f23157ae96ea44a5e26d2635656b7883919cea5fa52ef6b26"
   },
   {
    "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -656,6 +534,13 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/host-invocations.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "apps/oma/src/runtime/host-tenure.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -663,7 +548,63 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/human-controls.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "apps/oma/src/runtime/inference-relay.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects/code.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects/context.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects/goal.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects/mail.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/input-effects/submit.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/invocation-codec.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -691,7 +632,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "6ba75d836cafd6083bcae84f1b784cef9858201689bd217b3511c5f39f571b33"
+   "sha256": "5033fa34e903e2882a0211e8bbe1ddce6127d9abc335938210d30c85b929952f"
   },
   {
    "path": "apps/oma/src/runtime/native-support.ts",
@@ -736,6 +677,20 @@
    "oracles": []
   },
   {
+   "path": "apps/oma/src/runtime/pipeline-cache.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/pipeline-recorder.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "apps/oma/src/runtime/principal-delivery.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -757,7 +712,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "7b3f8cf26d3b074725553bb74df7baed2733f938d5f478840eed82fa2d4f351c"
+   "sha256": "5ef319f7e7de2508e9c41e1ff0de8b71511ba103a12ceb53264fffaa7bd1b152"
   },
   {
    "path": "apps/oma/src/runtime/quarantine-execution.ts",
@@ -767,7 +722,21 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "79cc90c2caba626f533e05172ff6f6e17ea6c0e9542bdf31225c4212c56e4e0a"
+   "sha256": "0a760481868b0dde05bc9630a3c192ecd97e0b9d6fb8a3d7ad04d55af0aa5880"
+  },
+  {
+   "path": "apps/oma/src/runtime/request-cache-codec.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/runtime/request-intent.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runtime/resident-tools.ts",
@@ -826,13 +795,6 @@
    "oracles": []
   },
   {
-   "path": "apps/oma/src/runtime/society-slot.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "apps/oma/src/runtime/supervision-channel.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -854,7 +816,56 @@
     "DR63"
    ],
    "oracles": [],
-   "sha256": "b179c8222e16ca93ba2e87a4dfabffd31fab87a6a5508742bc7659ca1580d6f4"
+   "sha256": "75aa3e215eb557b38dfa394df616aa1d9dfb515498a32aca8f66be2eaa02b1bb"
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-history.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-logs.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-mail.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-receipts.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-review-materials.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-reviews.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "apps/oma/src/views/collaboration-state.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "apps/oma/src/views/mail-notices.ts",
@@ -975,7 +986,7 @@
     "DR63"
    ],
    "oracles": [],
-   "sha256": "5baeb5346e59c25a03dfa85e1c325389f69e580ad807a9704b44ca3ebf351363"
+   "sha256": "e44a7c065cc10c938c709f455aee60cb41d8ce374d2b74435f1f2c658d02ecfe"
   },
   {
    "path": "packages/broker/src/internal-dispatcher.ts",
@@ -1031,7 +1042,7 @@
     "DR63"
    ],
    "oracles": [],
-   "sha256": "2c06fe4af22c48d8d57f9da18fada6ad7f15c24024aebb35ea374e706530b60e"
+   "sha256": "4cda56de04b1d3aa4b63071de8d52ea8877532d1d2099808e4805f9cf806cbf7"
   },
   {
    "path": "packages/broker/src/principal-endpoint.ts",
@@ -1055,7 +1066,7 @@
     "DR63"
    ],
    "oracles": [],
-   "sha256": "9c7382d3a580f1a89f29c9594e963467616436ad5461bc9e5322ac7b805d2d88"
+   "sha256": "0c9f25679b28ceb0431709aaef16b33dd9da890d2389d1c67ae55179cf0ce379"
   },
   {
    "path": "packages/broker/src/replies.ts",
@@ -1180,7 +1191,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "517dfa7114fb4b95ebcda10d0985f3610220351b214452cab94418df37e5c78f"
+   "sha256": "7779525896e1cf538b52e3c29a7d4984dad5d841f2a2fcbdb8290b2b9e3325b0"
   },
   {
    "path": "packages/config/src/index.ts",
@@ -1226,6 +1237,13 @@
   },
   {
    "path": "packages/contracts/src/attestation.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/contracts/src/check-pipeline.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -1442,7 +1460,49 @@
    "oracles": []
   },
   {
+   "path": "packages/domain/src/check-pipeline.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/domain/src/child-policy.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/domain/src/collaboration-inputs.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/domain/src/collaboration-prompts.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/domain/src/collaboration-review.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/domain/src/collaboration-surface.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/domain/src/collaboration-targets.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -1470,7 +1530,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "e6d27563f99b357aafcd8914b4df6f978243e7d2f8044d9a2ec6fac447456d99"
+   "sha256": "2eb9a0e61a6d570c13b53bf5ff6be4af439a337b7bf5eb1172c1e73aae15d7f6"
   },
   {
    "path": "packages/domain/src/derived.ts",
@@ -1677,13 +1737,6 @@
   },
   {
    "path": "packages/domain/src/surface-bounds.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/domain/src/tool-surface.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2117,6 +2170,27 @@
    "oracles": []
   },
   {
+   "path": "packages/extension/src/collaboration-help.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/extension/src/collaboration-invocations.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/extension/src/collaboration-tools.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/extension/src/delivery.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -2159,21 +2233,7 @@
    "oracles": []
   },
   {
-   "path": "packages/extension/src/principal-tools.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
    "path": "packages/extension/src/prompt-boundary.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
-  },
-  {
-   "path": "packages/extension/src/review-tools.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2197,7 +2257,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "246dea7f62d48e61c860d90197df43fb176a6d77506697e3f06c4234f8fe1fdb"
+   "sha256": "fda49aaad1913d799f66c501dfc6eb96b5094c40801e8e9b4d2e5d6c3108ad87"
   },
   {
    "path": "packages/git/package.json",
@@ -2207,7 +2267,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "bb6288558ff87e5781e469062981e365cadeebcd3c83efa16d576cd988d0436d"
+   "sha256": "cae4745fd4c7c139938d2e81f6bd9f022ba9534b93a16e4d9394a28eeb344ea3"
   },
   {
    "path": "packages/git/src/candidate-check.ts",
@@ -2217,7 +2277,7 @@
     "DR49"
    ],
    "oracles": [],
-   "sha256": "8758aceea9815b3fd6ee5a377d982a4854af2dc1ab68bba5d9a6d318f831ef0d"
+   "sha256": "139866419d1f242919b1c38c36926bd4bbd4b7adb6a58f64e2f1078f579e244c"
   },
   {
    "path": "packages/git/src/canonical-command.ts",
@@ -2228,6 +2288,13 @@
   },
   {
    "path": "packages/git/src/canonical-health.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/git/src/check-pipeline.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2258,7 +2325,21 @@
    "oracles": []
   },
   {
+   "path": "packages/git/src/download-cache.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/git/src/index.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/git/src/integration-preparation.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2273,6 +2354,13 @@
   },
   {
    "path": "packages/git/src/integration.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/git/src/mail-attachments.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2317,6 +2405,13 @@
    "oracles": []
   },
   {
+   "path": "packages/git/src/provenance-index.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/git/src/publication.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -2339,7 +2434,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "edc9165c0f0b6c0a9561e2bdc5a0d3745801f8274a084e584f715adc09966e4c"
+   "sha256": "5979ee6d347448f8c7c4250461e2dc40a5d3f6f6f537154be4f47abd549ae74e"
   },
   {
    "path": "packages/git/src/read-port.ts",
@@ -2364,6 +2459,20 @@
   },
   {
    "path": "packages/git/src/repository.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/git/src/review-artifact.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/git/src/review-record.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -2545,6 +2654,13 @@
    "oracles": []
   },
   {
+   "path": "packages/mail/src/records.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/mail/src/review-documents.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -2645,7 +2761,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "bf6e35cb0a058ff72bc0ce8fdfd98620874fb2373c6541a1c59aea40506460a9"
+   "sha256": "5359eee51a414fbd0ae4e7e56b5acc6483993cab65bbd05a6e08ccc63ccef510"
   },
   {
    "path": "packages/native/src/identity.ts",
@@ -2700,7 +2816,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "1f08a47f97a5499b9938ad7e37d51773f6c60fcbbed381d2925085367f70e335"
+   "sha256": "4d391581ae269f3077e12cefd6f2775241edb29df57f0a66ce8ce4f5738d1910"
   },
   {
    "path": "packages/native/src/posix-files.ts",
@@ -2755,7 +2871,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "1db35e0b1085775242165596ee8e47cb492e1e8f2ccc6b753f62be3041cb92f2"
+   "sha256": "44725d4f7ba8ffe02771aff1b37efffc4d0d89dcc2f928e3471b64d260bb437a"
   },
   {
    "path": "packages/platform-linux/src/bubblewrap-arguments.ts",
@@ -2807,7 +2923,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "c866c5927b70fe6e5f241ecfecfbab30a8bb2b2a4d509adaa66d6934eb459c8e"
+   "sha256": "97a8f7fd46016b958b17c168646d442ca1745797075b6f84b5ae2bcd533e0a5b"
   },
   {
    "path": "packages/platform-linux/src/runner-scope.ts",
@@ -2832,6 +2948,13 @@
   },
   {
    "path": "packages/platform-linux/src/worker-spawn.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/platform-linux/src/workload-budget.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3196,6 +3319,13 @@
    "oracles": []
   },
   {
+   "path": "packages/protocol/src/failure-codec.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/protocol/src/frame.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -3211,6 +3341,34 @@
   },
   {
    "path": "packages/protocol/src/host-channel.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/protocol/src/invocation-mail.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/protocol/src/invocation-rejection.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/protocol/src/invocation-resolution.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/protocol/src/invocation-submission.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3273,7 +3431,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "35f1e110dae2078a70db44e6a6179b8ca5478f9de8089252941b828578bbce4c"
+   "sha256": "bf58b37b935aa3944a7d40141ac7fd066f7f56e7269934defd6638f75fbce6b7"
   },
   {
    "path": "packages/protocol/src/principal-credential.ts",
@@ -3368,6 +3526,13 @@
   },
   {
    "path": "packages/reconcile/src/index.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/reconcile/src/lane.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3479,7 +3644,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "46f361a1bc9e16188c99d678db6e1c167bdb068ed176c86b7cf36f67019b4e9f"
+   "sha256": "6eb7f730a50e6c40acf282ecbdb7cd0e87a24b322f670ebd84af7864d4cd5f0c"
   },
   {
    "path": "packages/storage/src/arrival-journal.ts",
@@ -3540,7 +3705,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "41c0ae61aaa1b01717161cceadbcc9fc0d884b2ea31cc2b453ef318779d69ab2"
+   "sha256": "1d05bc4de51978e49095e3646541ad4abf9045c19ec714b3b27d35974bb6dc3c"
   },
   {
    "path": "packages/storage/src/diagnostic-snapshot.ts",
@@ -3557,7 +3722,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "5893bf7119c26e5cba2585443e89dd1efc48901f14690975af2b5950494c062e"
+   "sha256": "0ad0430a6dbdc0b61c4a8975d0e961f89a66b60b36031382d6ff965494c1da90"
   },
   {
    "path": "packages/storage/src/durable-fs.ts",
@@ -3567,7 +3732,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "b7af5dcde6f83326e8a63cf2dd4f7fb8f639aa3ffb0651a58c73a746fa77b29a"
+   "sha256": "4abbfa5956306613473150edae640c9e0109ef9a6cb1b5f6994a533090f21c43"
   },
   {
    "path": "packages/storage/src/execution-journal.ts",
@@ -3578,7 +3743,14 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "3d089c6566e9ba283287a8096dc0724240e10a8e11241aa240f91c1ca8680d32"
+   "sha256": "ec7b005a7554df0b81c64c1f9817af95f34b0b4d36d2fbf5548faf284f59b22d"
+  },
+  {
+   "path": "packages/storage/src/execution-recovery.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/execution-staging.ts",
@@ -3667,6 +3839,13 @@
    "oracles": []
   },
   {
+   "path": "packages/storage/src/package-replacement.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/storage/src/package-staging.ts",
    "primary": null,
    "status": "CHANGED_WITHOUT_ORACLE",
@@ -3716,7 +3895,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "7341ca188d272c5ce5214157ef0fee523951c99d3ea63706979418d3c0870ff9"
+   "sha256": "2110e096f4e61d47b08d7eb39cab6a46751d8add219dfb233adb70a685e250ea"
   },
   {
    "path": "packages/storage/src/restic-tar.ts",
@@ -3748,6 +3927,13 @@
   },
   {
    "path": "packages/storage/src/schema-v4.sql",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/storage/src/schema-v5.sql",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
@@ -3830,7 +4016,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "e2fbf28426f16d09f16e18707a37b3cbafdcc533085c8b8d64b4a7ba3394fa03"
+   "sha256": "9af409cd8abd3a618e7b985c7809b376f6aa9d748f07012ec85d8bce5f1080d2"
   },
   {
    "path": "packages/tool-files/src/descriptor-files.ts",
@@ -3840,7 +4026,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "97324625e2dab65d735e3c523481ca09b35b5a10740d0d4026c8591c0953cd0a"
+   "sha256": "451e3f6fe2089acbbb51dbea59cad6ca6d4e1c5b46175ad09584368cef3bfc8e"
   },
   {
    "path": "packages/tool-files/src/errors.ts",
@@ -3857,7 +4043,21 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "a92d930b636a1b451b8f7ae36bd48b2d5ada40c5f3dde6495d80b9eed67fafa2"
+   "sha256": "0eb7a997eb25d51204bdffe89ae36fb23117011084c358ae41467b7a2786a036"
+  },
+  {
+   "path": "packages/tool-files/src/private-state.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/tool-files/src/results.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/tool-hashline/package.json",
@@ -26071,6 +26271,13 @@
    "oracles": []
   },
   {
+   "path": "packages/tool-runtime/src/collaboration-groups.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/tool-runtime/src/contained-search.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -26085,7 +26292,21 @@
    "oracles": []
   },
   {
+   "path": "packages/tool-runtime/src/private-state.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
    "path": "packages/tool-runtime/src/provenance.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "packages/tool-runtime/src/result-read.ts",
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],

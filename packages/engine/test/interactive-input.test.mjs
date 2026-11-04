@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ownedEditor } from "@oma/engine/pi-compat/prompt-editor";
 import { CONVERSATION_BOUNDS } from "@oma/domain/surface-bounds";
-test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA", () => {
+test("001. Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA", () => {
     let draft = "";
     const upstream = [];
     const keys = [];
@@ -87,7 +87,7 @@ test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt 
     editor.handleInput("x".repeat(CONVERSATION_BOUNDS.promptBytes.value));
     assert.equal(draft, "Human draft!", "overflow recovery restores expanded paste contents, not an orphaned marker");
 });
-test("B2: /thinking show and /thinking hide are OMA's; every other /thinking stays the engine's", () => {
+test("002. Thinking show and /thinking hide are OMA's; every other /thinking stays the engine's", () => {
     let draft = "";
     const upstream = [];
     const history = [];
@@ -134,7 +134,7 @@ test("B2: /thinking show and /thinking hide are OMA's; every other /thinking sta
     assert.deepEqual(submitted, ["thinking show"], "a bare word is still a prompt");
     assert.deepEqual(history, ["/thinking show", "/thinking hide", "thinking show"], "consumed commands land in the editor's history like any prompt does");
 });
-test("B2: the deterministic set flips the engine's toggle only on a difference", async () => {
+test("003. The deterministic set flips the engine's toggle only on a difference", async () => {
     const { setThinkingBlockHidden } = await import("@oma/engine/pi-compat/interactive-mode");
     let toggles = 0;
     const internals = { hideThinkingBlock: true, toggleThinkingBlockVisibility() { toggles += 1; this.hideThinkingBlock = !this.hideThinkingBlock; } };
@@ -150,7 +150,7 @@ test("B2: the deterministic set flips the engine's toggle only on a difference",
     assert.equal(setThinkingBlockHidden({ isHidden: () => internals.hideThinkingBlock, toggle: () => internals.toggleThinkingBlockVisibility() }, true), true);
     assert.equal(internals.hideThinkingBlock, true);
 });
-test("a Human prompt keeps the engine's own expansion semantics; /oma-deliver stays refused", async () => {
+test("004. A Human prompt keeps the engine's own expansion semantics; /oma-deliver stays refused", async () => {
     const { rpcPromptOptions, isDeliveryCommand } = await import("@oma/engine/interactive");
     // `/skill:name` and `/template` are suggested by the engine's autocomplete;
     // upstream's prompt expands them only when expandPromptTemplates is set --
@@ -174,7 +174,7 @@ test("a Human prompt keeps the engine's own expansion semantics; /oma-deliver st
     assert.match(source, /if \(expandPromptTemplates && text\.startsWith\("\/"\)\)/, "upstream no longer gates extension commands on expandPromptTemplates -- /oma-deliver delivery would break");
 });
 
-test("oma's identity: the engine's commands that would send the session to its developers or bring another session in are refused", async () => {
+test("005. Oma's identity: the engine's commands that would send the session to its developers or bring another session in are refused", async () => {
     const { NOT_IN_OMA, PI_BUILTIN_COMMANDS } = await import("@oma/engine/interactive");
     for (const name of ["bug", "import", "trust"]) {
         assert.ok(PI_BUILTIN_COMMANDS.has(name), `${name} is not an engine command`);
@@ -186,7 +186,7 @@ test("oma's identity: the engine's commands that would send the session to its d
 });
 
 
-test("DR24: the engine's session keys open oma's sessions, and its command list says oma", async () => {
+test("006. The engine's session keys open oma's sessions, and its command list says oma", async () => {
     const hosted = [];
     const upstream = [];
     let provided;

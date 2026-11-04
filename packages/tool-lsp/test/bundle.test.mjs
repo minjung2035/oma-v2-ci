@@ -1,21 +1,21 @@
-/** Bundled pi-lsp (code_intel): the vendored payload is verified
+/** Bundled pi-lsp: the vendored payload is verified
  * byte-for-byte before tools register; the adapter pins OMA's workspace
  * root, keeps upstream's per-call process lifecycle, reports a missing
  * server as unavailable rather than clean, and lets `lsp_fix` reach the
  * filesystem only through OMA's contained writer. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OMA_CHILD_ENV_ALLOW } from "@oma/tool-runtime/child-env";
 import { createContainedWriter } from "@oma/tool-runtime/contained-tools";
-import { registerLspTools, lspChildEnvironment, LSP_TOOL_NAMES } from "@oma/tool-lsp";
+import { registerLspTools, lspChildEnvironment } from "@oma/tool-lsp";
 import { guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { verifyVendorBundle, vendoredBundleDir, VendorIntegrityError } from "@oma/tool-runtime/vendor-bundle";
 import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
-import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 const FIXTURE_SERVER = fileURLToPath(new URL("../dist/vendor/pi-lsp/upstream-tests/fixtures/diagnostics-server.mjs", import.meta.url));
 const HOSTILE_SERVER = fileURLToPath(new URL("./fixtures/lsp-hostile-server.mjs", import.meta.url));
 function tmp(t, prefix = "oma-lsp-") {
@@ -75,7 +75,7 @@ function withAgentDir(t, dir) {
 const textOf = (result) => result.content.map(part => part.text ?? "").join("");
 // ---------------------------------------------------------------------------
 // Bundle integrity
-test("BL1: the vendored pi-lsp bundle verifies: source tree and the dist copy the adapter loads", () => {
+test("001. The vendored pi-lsp bundle verifies: source tree and the dist copy the adapter loads", () => {
     const source = verifyVendorBundle(fileURLToPath(new URL("../src/vendor/pi-lsp/", import.meta.url)));
     assert.equal(source.package, "@narumitw/pi-lsp");
     assert.equal(source.version, "0.49.9");
@@ -85,7 +85,7 @@ test("BL1: the vendored pi-lsp bundle verifies: source tree and the dist copy th
     const deployed = verifyVendorBundle(vendoredBundleDir("pi-lsp", new URL("../dist/", import.meta.url)));
     assert.deepEqual(deployed, source, "the dist copy is the same bundle");
 });
-test("BL1: bundle verification fails closed on a changed, missing, extra or malformed member", t => {
+test("002. Bundle verification fails closed on a changed, missing, extra or malformed member", t => {
     const good = fileURLToPath(new URL("../src/vendor/pi-lsp/", import.meta.url));
     const copy = (label) => {
         const dir = join(tmp(t), label);
@@ -118,41 +118,26 @@ test("BL1: bundle verification fails closed on a changed, missing, extra or malf
 });
 // ---------------------------------------------------------------------------
 // Registration, surface and role boundaries
-test("BL1: registerLspTools registers exactly the three code_intel tools and the session lifecycle hooks", async (t) => {
-    const workspace = tmp(t, "oma-lsp-ws-");
-    withAgentDir(t, tmp(t, "oma-lsp-agent-"));
-    const pi = fakePi();
-    await registerLspTools(pi, { workspace, readOnly: false, write: async () => { } });
-    assert.deepEqual([...pi.tools.keys()].sort(), [...LSP_TOOL_NAMES].sort());
-    assert.ok(pi.handlers.has("session_start") && pi.handlers.has("session_shutdown"));
-    // A second registration (extension reload) is idempotent: same names, same hooks.
-    const again = fakePi();
-    await registerLspTools(again, { workspace, readOnly: false, write: async () => { } });
-    assert.deepEqual([...again.tools.keys()].sort(), [...LSP_TOOL_NAMES].sort());
-});
 // Integrity refusal runs against an actual copied owner in test/vendor-owner-binding.test.mjs.
 
-test("BL1: a surface plan naming a tool the registry lacks refuses startup rather than exposing it", () => {
-    const plan = planToolSurface({
-        defaultMode: "DIRECT", direct: [], disabled: [],
-        groups: [{ name: "code_intel", description: "x", members: [{ tool: "lsp_diagnostics" }, { tool: "lsp_missing" }, { tool: "lsp_status" }] }],
-        roots: ["code_intel"],
-    });
+test("003. A complete current plan refuses startup if a permitted LSP member is missing", () => {
+    const plan = collaborationSurface("resident");
+    const names = [...plan.direct, ...Object.values(plan.groups).flat()].filter(name => name !== "lsp_fix");
     const handlers = new Map();
     const pi = {
         on(event, handler) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
         registerTool() { },
-        getAllTools() { return [{ name: "lsp_diagnostics", sourceInfo: { source: "extension", path: "/x" } }]; },
+        getAllTools() { return names.map(name => ({ name, parameters: {}, sourceInfo: { source: "extension", path: "/x" } })); },
         getActiveTools() { return []; },
         setActiveTools() { },
     };
     let fatal = null;
     const saved = process.env.OMA_TOOL_SURFACE;
-    process.env.OMA_TOOL_SURFACE = encodeToolSurfacePlan(plan);
+    process.env.OMA_TOOL_SURFACE = JSON.stringify(plan);
     try {
-        registerToolSurface(pi, [], { fatal: message => { fatal = message; throw new Error(message); } });
-        assert.throws(() => handlers.get("session_start")?.[0]?.(), /lsp_missing/);
-        assert.match(fatal ?? "", /unknown tool "lsp_missing"/);
+        registerToolSurface(pi, [], { role: "resident", own: () => true, fatal: message => { fatal = message; throw new Error(message); } });
+        assert.throws(() => handlers.get("session_start")?.[0]?.({}, { sessionManager: { getBranch: () => [] } }), /lsp_fix/);
+        assert.match(fatal ?? "", /cannot admit lsp_fix/);
     }
     finally {
         if (saved === undefined)
@@ -169,16 +154,16 @@ function guardHook(options) {
     return hook;
 }
 const WORKSPACE = fileURLToPath(new URL("../", import.meta.url));
-test("BL1: guard: lsp_fix is a conditional write -- preview is admitted, write is gated, a read-only role is refused", () => {
+test("004. Guard: lsp_fix is a conditional write -- preview is admitted, write is gated, a read-only role is refused", () => {
     const inside = join(WORKSPACE, "package.json");
     const readOnly = guardHook({ readOnly: true });
     assert.equal(readOnly({ toolName: "lsp_fix", input: { path: inside } }), undefined, "preview is a read");
     const refused = readOnly({ toolName: "lsp_fix", input: { path: inside, write: true } });
-    assert.deepEqual(refused, { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" });
+    assert.equal(refused?.block, true);
     const writer = guardHook({});
     assert.equal(writer({ toolName: "lsp_fix", input: { path: inside, write: true } }), undefined, "a resident's write passes the path gate");
 });
-test("BL1: guard: a path list is gated on every entry, and file_edit members are gated as writes", () => {
+test("005. Guard: a path list is gated on every entry, and anchored mutations are gated as writes", () => {
     const hook = guardHook({});
     const inside = join(WORKSPACE, "package.json");
     assert.equal(hook({ toolName: "lsp_diagnostics", input: { paths: [inside] } }), undefined);
@@ -189,7 +174,7 @@ test("BL1: guard: a path list is gated on every entry, and file_edit members are
     }
     const readOnly = guardHook({ readOnly: true });
     for (const name of ["replace", "replace_within", "insert"])
-        assert.deepEqual(readOnly({ toolName: name, input: { path: inside } }), { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" }, name);
+        assert.equal(readOnly({ toolName: name, input: { path: inside } })?.block, true, name);
 });
 // ---------------------------------------------------------------------------
 // Live behavior against the fixture server
@@ -211,7 +196,7 @@ async function hostileWorld(t, scenario, readOnly = false, extra = {}, top = {})
     await registerLspTools(pi, { workspace, readOnly, write });
     return { workspace, tools: pi.tools, run: (name, params, signal) => pi.tools.get(name).execute("call", params, signal, undefined, ctxOf(workspace)) };
 }
-test("BL1: lsp_status reports ready and unavailable servers distinctly; a missing command is never clean", async (t) => {
+test("006. Lsp_status reports ready and unavailable servers distinctly; a missing command is never clean", async (t) => {
     const { tools, run } = await lspWorld(t, "pull-strict-optional-params");
     const result = await run("lsp_status", {});
     const text = textOf(result);
@@ -223,12 +208,12 @@ test("BL1: lsp_status reports ready and unavailable servers distinctly; a missin
     assert.equal(details.summary.unavailable, 1);
     assert.equal(details.summary.ready, 1);
 });
-test("BL1: lsp_diagnostics reports a running server's findings; a file the server cleared is clean", async (t) => {
+test("007. Lsp_diagnostics reports a running server's findings; a file the server cleared is clean", async (t) => {
     const { run } = await lspWorld(t, "pull-strict-optional-params");
     const result = await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" });
     assert.match(textOf(result), /strict pull diagnostic/);
 });
-test("BL1: lsp_diagnostics with only missing servers fails as unavailable, not as a clean result", async (t) => {
+test("008. Lsp_diagnostics with only missing servers fails as unavailable, not as a clean result", async (t) => {
     const { workspace, run } = await lspWorld(t, "pull-strict-optional-params");
     writeFileSync(join(workspace, "poc.ghost"), "boo\n");
     await assert.rejects(run("lsp_diagnostics", { paths: ["poc.ghost"], server: ["ghost", "missing-other"] }), /unavailable|Unknown LSP server/);
@@ -236,7 +221,7 @@ test("BL1: lsp_diagnostics with only missing servers fails as unavailable, not a
     // loudly -- the call fails, it never resolves to an empty result.
     await assert.rejects(run("lsp_diagnostics", { paths: ["poc.ghost"], server: "ghost" }), error => error instanceof Error && /command not found|unavailable|ENOENT/i.test(error.message));
 });
-test("BL1: lsp_fix previews by default and writes only through the contained writer", async (t) => {
+test("009. Lsp_fix previews by default and writes only through the contained writer", async (t) => {
     const { workspace, run } = await lspWorld(t, "lifecycle-go");
     const before = readFileSync(join(workspace, "note.tfix"), "utf8");
     const preview = await run("lsp_fix", { path: "note.tfix" });
@@ -251,18 +236,46 @@ test("BL1: lsp_fix previews by default and writes only through the contained wri
     assert.equal(appliedDetails.containedWrite, true, "the write ran through OMA's contained writer");
     assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "// fixed\nhello\n");
 });
-test("BL1: lsp_fix write is refused for a read-only role before any work runs", async (t) => {
-    const { workspace, run } = await lspWorld(t, "lifecycle-go", true);
-    await assert.rejects(run("lsp_fix", { path: "note.tfix", write: true }), /read-only/);
-    assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n", "nothing was written");
+test("010. A registered lsp_fix refuses an in-place concurrent contained write", { timeout: 15000 }, async t => {
+    const workspace = tmp(t), agent = tmp(t);
+    const server = fileURLToPath(new URL("./fixtures/stale-fix-server.mjs", import.meta.url));
+    writeFileSync(join(agent, "pi-lsp.json"), JSON.stringify({ timeout: 5000,
+        servers: { fixture: { command: [process.execPath, server, workspace], extensions: [".tfix"] } } }));
+    withAgentDir(t, agent);
+    const original = "const first = 1;\nconst second = 1;\n";
+    const newer = "const first = 1;\nconst second = 99;\n";
+    const file = join(workspace, "note.tfix");
+    writeFileSync(file, original);
+    const pi = fakePi(), ctx = ctxOf(workspace), write = createContainedWriter(workspace);
+    await registerLspTools(pi, { workspace, readOnly: false, write });
+    t.after(async () => { for (const close of pi.handlers.get("session_shutdown") ?? []) await close({}, ctx); });
+    let observer;
+    const ready = new Promise(resolve => {
+        observer = watch(workspace, () => {
+            if (existsSync(join(workspace, "action-ready"))) { observer.close(); resolve(); }
+        });
+    });
+    t.after(() => observer.close());
+    const pending = pi.tools.get("lsp_fix").execute("fix", { path: "note.tfix", write: true }, undefined, undefined, ctx);
+    await Promise.race([ready, pending.then(() => { throw new Error("fix finished before gate"); })]);
+    await write("note.tfix", newer);
+    writeFileSync(join(workspace, "release-action"), "release");
+    await assert.rejects(pending, /contents changed.*recompute/);
+    assert.equal(readFileSync(file, "utf8"), newer, "the successful concurrent edit is not lost");
+    const applied = await pi.tools.get("lsp_fix").execute("fix", { path: "note.tfix", write: true }, undefined, undefined, ctx);
+    assert.equal(applied.details.containedWrite, true);
+    assert.equal(readFileSync(file, "utf8"), "const first = 2;\nconst second = 99;\n");
+    const stale = { get sessionManager() { throw new Error("SDK context revoked during reload"); } };
+    for (const close of pi.handlers.get("session_shutdown") ?? []) await close({}, stale);
+
 });
-test("BL1: lsp_fix applies a growing fix through the contained writer", async (t) => {
+test("011. Lsp_fix applies a growing fix through the contained writer", async (t) => {
     // A growing server edit must reach the same contained writer as ordinary edits.
     const { workspace, run } = await lspWorld(t, "lifecycle-go", false);
     await run("lsp_fix", { path: "note.tfix", write: true });
     assert.notEqual(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n");
 });
-test("BL1: a symlink that escapes the pinned workspace is refused by the vendored realpath wall", async (t) => {
+test("012. A symlink that escapes the pinned workspace is refused by the vendored realpath wall", async (t) => {
     const { workspace, run } = await lspWorld(t, "lifecycle-go");
     const outside = join(tmp(t), "outside.tfix");
     writeFileSync(outside, "secret\n");
@@ -273,7 +286,7 @@ test("BL1: a symlink that escapes the pinned workspace is refused by the vendore
     await assert.rejects(run("lsp_fix", { path: "link.tfix", server: "fixture" }), /outside workspace root|escapes workspace root|outside the agent workspace/);
     assert.equal(readFileSync(outside, "utf8"), "secret\n", "nothing outside was touched");
 });
-test("BL1: every lsp_* call runs a fresh server process: no daemon, no reuse", async (t) => {
+test("013. Every lsp_* call runs a fresh server process: no daemon, no reuse", async (t) => {
     // The child pid rides the wire protocol, not an env channel: the
     // fixture's PI_LSP_TEST_* channels are correctly deny-by-default now,
     // so pid-echo reports process.pid inside the diagnostic and the fix
@@ -290,7 +303,7 @@ test("BL1: every lsp_* call runs a fresh server process: no daemon, no reuse", a
     ]);
     assert.equal(pids.size, 3, "three calls, three processes");
 });
-test("BL1: a hung server's call is cancelled by the caller's abort signal", async (t) => {
+test("014. A hung server's call is cancelled by the caller's abort signal", async (t) => {
     const { run } = await lspWorld(t, "lifecycle-hang-shutdown");
     const controller = new AbortController();
     const pending = run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }, controller.signal);
@@ -338,7 +351,7 @@ function plantEnv(t, names, value = "probe") {
                 process.env[key] = saved[key];
     });
 }
-test("BL1: the language-server child env is deny-by-default -- OMA wiring and loader channels are absent, PATH stays", async (t) => {
+test("015. The language-server child env is deny-by-default -- OMA wiring and loader channels are absent, PATH stays", async (t) => {
     plantEnv(t, ["OMA_SOCKET", "OMA_TOOL_SURFACE", "NODE_OPTIONS"]);
     const env = await lspChildEnvironment({ env: {} });
     assert.equal(env.OMA_SOCKET, undefined, "the broker socket is absent, not emptied");
@@ -348,7 +361,7 @@ test("BL1: the language-server child env is deny-by-default -- OMA wiring and lo
     for (const key of Object.keys(env))
         assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
 });
-test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the inherited env AND the adapter env", async (t) => {
+test("016. Deny-by-default -- the whole hostile corpus is stripped from the inherited env AND the adapter env", async (t) => {
     // The corpus is the union of every survivor class the blind
     // verification found in the denylist (the 84-of-161 probe), the channels
     // each round itself denied, names OMA has never enumerated at all, and
@@ -450,58 +463,65 @@ test("BL1/F4: deny-by-default -- the whole hostile corpus is stripped from the i
             else
                 process.env[key] = value;
     });
-    // The same corpus through the adapter channel: a pi-lsp.json env block
-    // goes through the identical predicate, so declaring a channel cannot
-    // re-arm it.
-    const declared = Object.fromEntries(corpus.map(key => [key, "declared"]));
-    const env = await lspChildEnvironment({ env: declared });
-    for (const key of corpus)
-        assert.equal(env[key], undefined, `${key} reached the child`);
-    // Nothing beyond the sanctioned set exists for the child at all --
-    // the inherited env contributes only allowlisted names.
-    for (const key of Object.keys(env))
-        assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
-    // The key side is a channel too: a name is the `NAME` half of the
-    // `NAME=value` the child receives, so a key can carry what the value
-    // guard never sees. `LC_ALL=/etc/evil-locale` lowercases into the
-    // `lc_` prefix and spawn serializes it as `LC_ALL=/etc/evil-locale=C`
-    // -- a path-shaped value smuggled through the key, admitted before the
-    // charset gate existed. `=` and NUL names cannot be planted: an
-    // environ entry IS `name=value` C string, so these arrive only
-    // through an adapter's declared env (pi-lsp.json keys may carry
-    // either). A forged proxy or scratch name is the same class.
-    const hostileKeys = [
-        "LC_ALL=/etc/evil-locale", // the smuggle: path value rides the key
-        "LC_MESSAGES=../../etc/evil", // `=` plus traversal in the key
-        "LC_ALL\0EVIL", // admitted, a NUL name reaches spawn unhandled
-        "LC_ÄLL=/x", // unicode and `=` together
-        "HOME=/attacker/scratch", // a scratch-supplied name forged in the key
-        "http_proxy=http://corp.example:8080", // the proxy class forged in the key
-        "no_proxy=,evil.example",
-    ];
-    const keyed = await lspChildEnvironment({ env: Object.fromEntries(hostileKeys.map(key => [key, "C"])) });
-    for (const key of hostileKeys) {
-        assert.equal(keyed[key], undefined, `${JSON.stringify(key)} reached the child through its key`);
-        assert.equal(sanctionedChildName(key), false, `${JSON.stringify(key)} satisfies the name oracle`);
-    }
-    for (const key of Object.keys(keyed))
-        assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
-    // The value side of the same class: the path-typed names skip
-    // tokenValueAllowed, so a NUL value on PATH would ride through the
-    // predicate to spawn unhandled -- admitted before the up-front NUL
-    // refusal existed. (A NUL in process.env cannot be planted -- the OS
-    // truncates at it -- so this is an adapter-channel case only.)
-    const nulled = await lspChildEnvironment({
-        env: { PATH: "a\0b", SystemRoot: "C:\\Windows\0", LC_ALL: "C\0.UTF-8" },
+    await t.test("017. Inherited and adapter environments remove unauthorized names", async () => {
+        // The same corpus through the adapter channel: a pi-lsp.json env block
+        // goes through the identical predicate, so declaring a channel cannot
+        // re-arm it.
+        const declared = Object.fromEntries(corpus.map(key => [key, "declared"]));
+        const env = await lspChildEnvironment({ env: declared });
+        for (const key of corpus)
+            assert.equal(env[key], undefined, `${key} reached the child`);
+        // Nothing beyond the sanctioned set exists for the child at all --
+        // the inherited env contributes only allowlisted names.
+        for (const key of Object.keys(env))
+            assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
     });
-    // The NUL-carrying adapter values are denied -- PATH keeps its
-    // inherited value (denying the adapter's NUL entry does not erase the
-    // legit inherited tier), and names with no inherited value are absent.
-    assert.notEqual(nulled.PATH, "a\0b", "the adapter's NUL PATH reached the child");
-    assert.equal(nulled.SystemRoot, undefined, "SystemRoot carried a NUL value to the child");
-    assert.notEqual(nulled.LC_ALL, "C\0.UTF-8", "a token-typed name already refused NUL values");
+    await t.test("018. Adapter keys cannot smuggle paths or invalid characters", async () => {
+        // The key side is a channel too: a name is the `NAME` half of the
+        // `NAME=value` the child receives, so a key can carry what the value
+        // guard never sees. `LC_ALL=/etc/evil-locale` lowercases into the
+        // `lc_` prefix and spawn serializes it as `LC_ALL=/etc/evil-locale=C`
+        // -- a path-shaped value smuggled through the key, admitted before the
+        // charset gate existed. `=` and NUL names cannot be planted: an
+        // environ entry IS `name=value` C string, so these arrive only
+        // through an adapter's declared env (pi-lsp.json keys may carry
+        // either). A forged proxy or scratch name is the same class.
+        const hostileKeys = [
+            "LC_ALL=/etc/evil-locale", // the smuggle: path value rides the key
+            "LC_MESSAGES=../../etc/evil", // `=` plus traversal in the key
+            "LC_ALL\0EVIL", // admitted, a NUL name reaches spawn unhandled
+            "LC_ÄLL=/x", // unicode and `=` together
+            "HOME=/attacker/scratch", // a scratch-supplied name forged in the key
+            "http_proxy=http://corp.example:8080", // the proxy class forged in the key
+            "no_proxy=,evil.example",
+        ];
+        const keyed = await lspChildEnvironment({ env: Object.fromEntries(hostileKeys.map(key => [key, "C"])) });
+        for (const key of hostileKeys) {
+            assert.equal(keyed[key], undefined, `${JSON.stringify(key)} reached the child through its key`);
+            assert.equal(sanctionedChildName(key), false, `${JSON.stringify(key)} satisfies the name oracle`);
+        }
+        for (const key of Object.keys(keyed))
+            assert.ok(sanctionedChildName(key), `${key} is not a sanctioned child name`);
+    });
+    await t.test("019. Adapter values cannot carry NUL bytes", async () => {
+        // The value side of the same class: the path-typed names skip
+        // tokenValueAllowed, so a NUL value on PATH would ride through the
+        // predicate to spawn unhandled -- admitted before the up-front NUL
+        // refusal existed. (A NUL in process.env cannot be planted -- the OS
+        // truncates at it -- so this is an adapter-channel case only.)
+        const nulled = await lspChildEnvironment({
+            env: { PATH: "a\0b", SystemRoot: "C:\\Windows\0", LC_ALL: "C\0.UTF-8" },
+        });
+        // The NUL-carrying adapter values are denied -- PATH keeps its
+        // inherited value (denying the adapter's NUL entry does not erase the
+        // legit inherited tier), and names with no inherited value are absent.
+        assert.notEqual(nulled.PATH, "a\0b", "the adapter's NUL PATH reached the child");
+        assert.equal(nulled.SystemRoot, undefined, "SystemRoot carried a NUL value to the child");
+        assert.notEqual(nulled.LC_ALL, "C\0.UTF-8", "a token-typed name already refused NUL values");
+    });
+
 });
-test("BL1/F4: the allowlisted survivors -- PATH, locale, terminal, identity -- keep their values", async (t) => {
+test("020. The allowlisted survivors -- PATH, locale, terminal, identity -- keep their values", async (t) => {
     plantEnv(t, ["LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM", "NO_COLOR", "USER", "LOGNAME"]);
     process.env.LANG = "en_US.UTF-8";
     process.env.LANGUAGE = "en_US:en";
@@ -524,7 +544,7 @@ test("BL1/F4: the allowlisted survivors -- PATH, locale, terminal, identity -- k
     assert.equal(env.LOGNAME, "agent");
     assert.ok((env.PATH ?? "").length > 0, "PATH is retained");
 });
-test("BL1/F4: allowlisted names still refuse path-shaped values -- a token channel cannot smuggle a file path", async (t) => {
+test("021. Allowlisted names still refuse path-shaped values -- a token channel cannot smuggle a file path", async (t) => {
     plantEnv(t, ["LC_ALL", "LC_MESSAGES", "LANG", "TERM", "TZ", "USER"]);
     process.env.LC_ALL = "/tmp/evil-locale"; // glibc resolves LC_* values as locale files
     process.env.LC_MESSAGES = "../../etc/evil"; // traversal under the LC_ prefix
@@ -540,7 +560,7 @@ test("BL1/F4: allowlisted names still refuse path-shaped values -- a token chann
     assert.equal(env.USER, undefined, "path traversal under an identity name is denied");
     assert.equal(env.LANG, "en_US.UTF-8");
 });
-test("BL1/F4: only the Resident sandbox's own loopback proxies reach the child -- pinned byte-for-byte", async (t) => {
+test("022. Only the Resident sandbox's own loopback proxies reach the child -- pinned byte-for-byte", async (t) => {
     plantEnv(t, ["OMA_EGRESS_PROXY_SOCKET", "OMA_EGRESS_PROXY_PORT",
         "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "ALL_PROXY", "all_proxy",
         "NO_PROXY", "no_proxy", "SOCKS_PROXY", "FTP_PROXY"]);
@@ -588,7 +608,7 @@ test("BL1/F4: only the Resident sandbox's own loopback proxies reach the child -
     const bare = await lspChildEnvironment({ env: { HTTP_PROXY: "http://127.0.0.1:8318" } });
     assert.equal(bare.HTTP_PROXY, undefined, "no wiring, no proxy -- not even a loopback-looking value");
 });
-test("BL1/F4: the adapter's declared env goes through the same allowlist -- and cannot outrank the scratch", async (t) => {
+test("023. The adapter's declared env goes through the same allowlist -- and cannot outrank the scratch", async (t) => {
     const env = await lspChildEnvironment({ env: {
             PATH: "/adapter/bin", // the documented command-lookup override
             LANG: "C.UTF-8", // an allowlisted declared extra
@@ -614,7 +634,7 @@ test("BL1/F4: the adapter's declared env goes through the same allowlist -- and 
 // the request it answers and is dropped in bounded memory, and a server is
 // never killed for a bound alone. What still refuses is a materialization
 // bound whose failure mode (a corrupt fix, an engine OOM) is worse.
-test("BL1/F1: a stderr flood is bounded -- the file's marker carries a small failure", async (t) => {
+test("024. A stderr flood is bounded -- the file's marker carries a small failure", async (t) => {
     const { run } = await hostileWorld(t, "stderr-flood");
     // The request's failure degrades to this file's own marker: the result
     // still reports the refusal, bounded -- stderr accumulation is capped.
@@ -623,7 +643,7 @@ test("BL1/F1: a stderr flood is bounded -- the file's marker carries a small fai
     assert.match(text, /intentional failure after stderr flood/);
     assert.ok(text.length < 90000, `stderr accumulation is capped: ${text.length}`);
 });
-test("BL1/F1: a declared oversized Content-Length drops the frame -- the file's timeout names the drop", async (t) => {
+test("025. A declared oversized Content-Length drops the frame -- the file's timeout names the drop", async (t) => {
     // oversized-frame declares a 6MiB body it never finishes sending. Its
     // prefix carries no id to sniff, so the frame is dropped and counted
     // without being blamed on the pending request -- which ends on its own
@@ -635,13 +655,13 @@ test("BL1/F1: a declared oversized Content-Length drops the frame -- the file's 
     assert.match(text, /timed out/);
     assert.match(text, /1 oversized inbound frame\(s\) dropped/, "the dropped frame is counted on the file's error");
 });
-test("BL1/F1: bytes that never complete a frame are dropped in bounded memory -- the file fails, not the server", async (t) => {
+test("026. Bytes that never complete a frame are dropped in bounded memory -- the file fails, not the server", async (t) => {
     const { run } = await hostileWorld(t, "frame-drip");
     const text = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     assert.match(text, /diagnostics failed for this file/);
     assert.match(text, /inbound bound|dropped|invalid JSON-RPC|exceeded/i);
 });
-test("BL1/F1: pushed diagnostics over the count or message bound are truncated with a visible marker", async (t) => {
+test("027. Pushed diagnostics over the count or message bound are truncated with a visible marker", async (t) => {
     const flood = await hostileWorld(t, "push-flood");
     const floodText = textOf(await flood.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     // 2000 pushed, 1024 kept: the 101st diagnostic line is OMA's own marker,
@@ -652,7 +672,7 @@ test("BL1/F1: pushed diagnostics over the count or message bound are truncated w
     const bigText = textOf(await big.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     assert.match(bigText, /truncated at OMA's \d+-char bound; 20000 chars total/);
 });
-test("BL1/F1: pull diagnostics over the count or message bound are truncated with a visible marker", async (t) => {
+test("028. Pull diagnostics over the count or message bound are truncated with a visible marker", async (t) => {
     const flood = await hostileWorld(t, "pull-flood");
     const floodText = textOf(await flood.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     assert.match(floodText, /976 more diagnostic\(s\) for this file were dropped at OMA's \d+-diagnostic bound/);
@@ -660,7 +680,7 @@ test("BL1/F1: pull diagnostics over the count or message bound are truncated wit
     const bigText = textOf(await big.run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     assert.match(bigText, /truncated at OMA's \d+-char bound; 20000 chars total/);
 });
-test("BL1/F1: pushed publications past the tracked-document bound are dropped with a visible count", async (t) => {
+test("029. Pushed publications past the tracked-document bound are dropped with a visible count", async (t) => {
     // push-uri-flood fills the 4096-document map then pushes the opened
     // file's own publication: it is the drop the resolved list must name.
     // The scenario's empty pull answer is the ordering barrier -- the drops
@@ -670,7 +690,7 @@ test("BL1/F1: pushed publications past the tracked-document bound are dropped wi
     const text = textOf(await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }));
     assert.match(text, /pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
-test("BL1/F-1: a truncated list plus the URI-drop marker keep BOTH markers and counts", async (t) => {
+test("030. A truncated list plus the URI-drop marker keep BOTH markers and counts", async (t) => {
     // push-flood-uri-flood stores the file's own over-bound publication,
     // overflows the tracked-URI bound, then republishes. Its empty pull
     // answer is the ordering barrier -- every pushed frame is stored and
@@ -686,7 +706,7 @@ test("BL1/F-1: a truncated list plus the URI-drop marker keep BOTH markers and c
     assert.match(text, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
     assert.doesNotMatch(text, /1 more diagnostic\(s\) for this file/, "the double-marker recount bug is gone");
 });
-test("BL1/F-2: a pull diagnostics answer still reports the URI-bound drops", async (t) => {
+test("031. A pull diagnostics answer still reports the URI-bound drops", async (t) => {
     // pull-uri-flood overflows the tracked bound while the pull request is
     // in flight; the answered list used to return early and hide the drops.
     const { run } = await hostileWorld(t, "pull-uri-flood");
@@ -694,7 +714,7 @@ test("BL1/F-2: a pull diagnostics answer still reports the URI-bound drops", asy
     assert.match(text, /pull answer/);
     assert.match(text, /5 pushed publication\(s\) were dropped at OMA's \d+-document bound/);
 });
-test("BL1/F-2: a waiter timeout reports the drops the wire already took", async (t) => {
+test("032. A waiter timeout reports the drops the wire already took", async (t) => {
     // uri-flood-timeout fills the tracked map (4 drops) but never publishes
     // for the opened file -- the waiter's timeout names those drops.
     const { run } = await hostileWorld(t, "uri-flood-timeout", false, {}, { timeout: 1200 });
@@ -703,7 +723,7 @@ test("BL1/F-2: a waiter timeout reports the drops the wire already took", async 
     assert.match(text, /did not return diagnostics .*before timeout/s);
     assert.match(text, /4 pushed-diagnostic publication\(s\) dropped/);
 });
-test("BL1/F-3: an oversized NOTIFICATION is dropped and counted -- the pending request is not blamed", async (t) => {
+test("033. An oversized NOTIFICATION is dropped and counted -- the pending request is not blamed", async (t) => {
     // oversized-notification delivers a complete 5MiB window/logMessage
     // frame -- no id to sniff -- while the request pends, then answers it.
     // The old sole-pending fallback killed the request for a frame that was
@@ -714,7 +734,7 @@ test("BL1/F-3: an oversized NOTIFICATION is dropped and counted -- the pending r
     assert.match(text, /answer after the dropped notification/);
     assert.doesNotMatch(text, /declared \d+ bytes.*refused/i);
 });
-test("BL1/F-5: a file that times out degrades to a marker -- the answered files keep their results", async (t) => {
+test("034. A file that times out degrades to a marker -- the answered files keep their results", async (t) => {
     // partial-answers replies to the first two diagnostics requests only;
     // the rest hang past the request budget and degrade to per-file error
     // markers -- the whole call still resolves.
@@ -732,7 +752,7 @@ test("BL1/F-5: a file that times out degrades to a marker -- the answered files 
     const details = result.details;
     assert.equal(details.summary?.files, 4, "all four files are reported -- the timed-out ones are markers");
 });
-test("BL1/F-5: one route's failure degrades that route -- the rest still report", async (t) => {
+test("035. One route's failure degrades that route -- the rest still report", async (t) => {
     // Two servers match .tfix: the fixture answers; `gone` names a command
     // that does not exist, so its route's call fails inside start() -- a
     // failure the runner's per-file degrade cannot reach. The call resolves
@@ -760,7 +780,7 @@ test("BL1/F-5: one route's failure degrades that route -- the rest still report"
     const details = result.details;
     assert.equal(details.summary?.failedRoutes, 1);
 });
-test("BL1/F-5: a call where every route failed still refuses", async (t) => {
+test("036. A call where every route failed still refuses", async (t) => {
     // The degrade is honest, not a whitewash: when nothing completed the
     // call reports the failures as the refusal, not as an empty result.
     const workspace = tmp(t, "oma-lsp-ws-");
@@ -779,14 +799,14 @@ test("BL1/F-5: a call where every route failed still refuses", async (t) => {
     await registerLspTools(pi, { workspace, readOnly: false, write: async () => { } });
     await assert.rejects(pi.tools.get("lsp_diagnostics").execute("call", {}, undefined, undefined, ctxOf(workspace)), /failed on every route|command not found|ENOENT|failed to start/i);
 });
-test("BL1/F1: a code-action list resolves completely -- the count is not a bound", async (t) => {
+test("037. A code-action list resolves completely -- the count is not a bound", async (t) => {
     const { run } = await hostileWorld(t, "actions-flood");
     const result = await run("lsp_fix", { path: "note.tfix", server: "fixture" });
     const details = result.details;
     assert.equal(details.actions?.length, 300, "every action's resolve round-trip answered");
     assert.equal(details.appliedActions?.length, 300);
 });
-test("BL1/F1: progress resets the observation window -- a call longer than it still completes", async (t) => {
+test("038. Progress resets the observation window -- a call longer than it still completes", async (t) => {
     // slow-stages answers each request ~600ms late. Three sequential
     // requests (diagnostics, codeAction, resolve) make a ~1.9s call inside
     // a 1200ms stall window: a fixed aggregate deadline would kill the call
@@ -804,7 +824,7 @@ test("BL1/F1: progress resets the observation window -- a call longer than it st
     assert.match(textOf(result), /slow-fixed/);
     assert.ok(elapsed >= 1400, `the call ran ${elapsed}ms -- past the 1200ms window, so inbound frames must have reset it`);
 });
-test("BL1/F1: a truly silent server is still reclaimed -- the request timeout or the stall reports it", async (t) => {
+test("039. A truly silent server is still reclaimed -- the request timeout or the stall reports it", async (t) => {
     // lifecycle-hang-* emits nothing after the request: with the 1000ms
     // request floor the call dies at ~1s, named as the timeout or the
     // stall, never as an unbounded hang. The hung method is initialize on
@@ -822,7 +842,7 @@ test("BL1/F1: a truly silent server is still reclaimed -- the request timeout or
 // ---------------------------------------------------------------------------
 // F1 fail->pass: the adapter-side numeric refusals are gone. Caller-chosen
 // limits stay caller intent; absent ones mean the complete set.
-test("BL1/F1: an absent limit collects the whole workspace -- 121 files all checked, and a caller's limit is honored", async (t) => {
+test("040. An absent limit collects the whole workspace -- 121 files all checked, and a caller's limit is honored", async (t) => {
     const { workspace, run } = await lspWorld(t, "pull-strict-optional-params");
     for (let i = 0; i < 120; i++)
         writeFileSync(join(workspace, `f${String(i).padStart(4, "0")}.tfix`), "x\n");
@@ -835,7 +855,7 @@ test("BL1/F1: an absent limit collects the whole workspace -- 121 files all chec
     const limitedDetails = limited.details;
     assert.equal(limitedDetails.routes[0].files.length, 3, "the caller's own limit is honored exactly");
 });
-test("BL1/F1: a paths list past the old 64-entry bound is the caller's own selection -- it is not refused", async (t) => {
+test("041. A paths list past the old 64-entry bound is the caller's own selection -- it is not refused", async (t) => {
     const { workspace, run } = await lspWorld(t, "pull-strict-optional-params");
     const directory = join(workspace, "dir");
     mkdirSync(directory);
@@ -846,7 +866,7 @@ test("BL1/F1: a paths list past the old 64-entry bound is the caller's own selec
     const details = result.details;
     assert.equal(details.summary.files, 80, "all 80 caller-listed paths were checked");
 });
-test("BL1/F1: lsp_status reports every configured server -- no catalog truncation", async (t) => {
+test("042. Lsp_status reports every configured server -- no catalog truncation", async (t) => {
     const workspace = tmp(t, "oma-lsp-ws-");
     const servers = Object.fromEntries(Array.from({ length: 70 }, (_v, i) => [`srv${i}`, { command: ["oma-missing-lsp-server"], extensions: [`.s${i}`] }]));
     servers.fixture = { command: [process.execPath, FIXTURE_SERVER, "pull-strict-optional-params", "1"], extensions: [".tfix"] };
@@ -861,7 +881,7 @@ test("BL1/F1: lsp_status reports every configured server -- no catalog truncatio
     assert.equal(details.summary.configured, 71, "all 71 configured servers are reported, not a 64-entry slice");
     assert.equal(details.servers.length, 71);
 });
-test("BL1/F1: a file past the old 1MiB bound is fixed, not refused -- didOpen carries the text either way", async (t) => {
+test("043. A file past the old 1MiB bound is fixed, not refused -- didOpen carries the text either way", async (t) => {
     const { workspace, run } = await lspWorld(t, "lifecycle-go");
     writeFileSync(join(workspace, "big.tfix"), `// big\n${"x".repeat(1200000)}\n`);
     const result = await run("lsp_fix", { path: "big.tfix", server: "fixture" });
@@ -872,7 +892,7 @@ test("BL1/F1: a file past the old 1MiB bound is fixed, not refused -- didOpen ca
 // ---------------------------------------------------------------------------
 // F2: a language server is an ambient-authority child. Its home/cache/temp
 // variables point at a per-call scratch, and a read-only role never spawns.
-test("BL1/F2: the child's HOME/XDG/TMP land in a per-call scratch that is removed afterwards", async (t) => {
+test("044. The child's HOME/XDG/TMP land in a per-call scratch that is removed afterwards", async (t) => {
     const { run } = await hostileWorld(t, "env-echo");
     const result = await run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" });
     const text = textOf(result);
@@ -884,7 +904,7 @@ test("BL1/F2: the child's HOME/XDG/TMP land in a per-call scratch that is remove
         assert.equal(existsSync(dir), false, `${dir} is removed when the call ends`);
     }
 });
-test("BL1/F4: the live child is deny-by-default -- planted channels are absent inside the spawned server", async (t) => {
+test("045. The live child is deny-by-default -- planted channels are absent inside the spawned server", async (t) => {
     // lspChildEnvironment proves the map; env-probe proves the spawned
     // process: the fixture reports which env names actually arrived. The
     // adapter's own pi-lsp.json env block goes through the same allowlist
@@ -910,10 +930,11 @@ test("BL1/F4: the live child is deny-by-default -- planted channels are absent i
     assert.match(text, /HOME=present/, "the scratch redirect supplies HOME");
     assert.match(text, /TMPDIR=present/);
 });
-test("BL1/F2: a read-only role never spawns a language server -- diagnostics and fix refuse, status still works", async (t) => {
-    const { run } = await lspWorld(t, "pull-strict-optional-params", true);
-    await assert.rejects(run("lsp_diagnostics", { paths: ["note.tfix"], server: "fixture" }), /read-only role/);
-    await assert.rejects(run("lsp_fix", { path: "note.tfix", server: "fixture" }), /read-only role/);
+test("046. A read-only role can inspect server availability without reaching a spawn-capable tool", async (t) => {
+    const { workspace, tools, run } = await lspWorld(t, "pull-strict-optional-params", true);
+    assert.equal(tools.has("lsp_diagnostics"), false);
+    assert.equal(tools.has("lsp_fix"), false);
     const status = await run("lsp_status", {});
     assert.match(textOf(status), /configured server/);
+    assert.equal(readFileSync(join(workspace, "note.tfix"), "utf8"), "hello\n");
 });

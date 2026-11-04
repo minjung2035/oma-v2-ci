@@ -2,7 +2,6 @@
 import type {
   Actor,
   AuthContext,
-  BoundaryEvidence,
   RunLease,
   InternalMethods,
   PreparedBatch,
@@ -140,6 +139,7 @@ export class InternalDispatcher {
             id,
             await mail.prepare(
               peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer),
+              undefined, id,
             ),
           );
         }
@@ -164,6 +164,7 @@ export class InternalDispatcher {
           );
           return okAnswer(id, { completed: true });
         }
+        case "host.control":
         case "batch.read":
         case "principal.attach":
         case "principal.detach":

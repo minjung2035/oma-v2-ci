@@ -19,13 +19,16 @@ import type { ExecutionObservation, ExecutionScopePin } from "@oma/contracts/run
 import type { ViewsModule } from "../views.js";
 import { StatusRefresh } from "@oma/broker/status-refresh";
 import { Broker, type BrokerPaths, type PrincipalHostChannel } from "@oma/broker";
-import type { BrokerLedger, BrokerTransaction, BrokerDependencies, BrokerMail, BrokerUnits, BrokerViews, BrokerEffects, PublicReviewPort } from "@oma/broker/ports";
+import type { BrokerLedger, BrokerTransaction, BrokerDependencies, BrokerMail, InternalMailPort, BrokerUnits, BrokerViews, BrokerEffects, PublicReviewPort } from "@oma/broker/ports";
 import { createPublicDispatchPorts, createInternalDispatchDataPorts } from "./composition.js";
 import { credentialStream, prepareCredentialListener } from "@oma/platform-linux/credential-stream";
 import { pinLinuxPeer } from "@oma/platform-linux/peer-identity";
 import { StoreError } from "@oma/domain/errors";
 import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
 
+import type { ReviewModule } from "@oma/review";
+import { createInvocationSources } from "./invocation-sources.js";
+import { HostInvocations } from "../runtime/host-invocations.js";
 export function brokerLedger(store: Store): BrokerLedger {
   return Object.freeze({
     agentNames: () => store.agentNames(), getAgent: actor => store.getAgent(actor),
@@ -42,13 +45,17 @@ export function brokerLedger(store: Store): BrokerLedger {
 export interface BrokerComposition {
   store: Store; mail: MailModule; units: BrokerExecution; views: ViewsModule;
   lifecycle: LifecycleModule; git: GitModule | null; reviews: PublicReviewPort | null;
+  reviewTargets?: Pick<ReviewModule, "exactTargetGuard" | "proposalMetadata" | "targetSource" | "existingResolution"> | null;
   reconcile: ReconcileModule | null; paths: BrokerPaths; limits: ProtocolLimits;
   /** Already held before configuration/Store/recovery; its outer lifetime releases it. */
   lock: ProcessLock;
   principalHost?: PrincipalHostChannel | undefined;
+  /** Trusted startup policy only, not a model/engine argument or an effect ledger. */
+  collaborationFreshMutations?: "closed";
 }
 export interface BrokerExecution extends BrokerUnits {
   pin(scope: string): ExecutionScopePin;
+  collaborationRecordsSelected?(actor: Actor): boolean;
   observeStatus(actors: readonly Actor[]): Promise<ReadonlyMap<Actor, ExecutionObservation | "no-unit">>;
 }
 function linuxSocket(stream: Duplex): Socket {
@@ -58,6 +65,26 @@ function linuxSocket(stream: Duplex): Socket {
 export function createBroker(input: BrokerComposition): Broker {
   const { store, mail, units, views, lifecycle, git, reviews, reconcile, paths, limits, lock, principalHost } = input;
   const status = new StatusRefresh(() => store.agentNames(), agents => units.observeStatus(agents));
+  if (input.collaborationFreshMutations !== undefined && input.collaborationFreshMutations !== "closed")
+    throw new StoreError("UNSUPPORTED_PROFILE", "unknown collaboration fresh-mutation admission policy");
+  const invocations = new HostInvocations(store, paths.stateRoot, paths.society,
+    actor => units.collaborationRecordsSelected?.(actor) === true, 2 * limits.frameBytes, limits.subjectBytes,
+    oid => git?.isPublished(oid) === true, createInvocationSources(paths.stateRoot, paths.society, limits, mail, input.reviewTargets ?? null, git, lifecycle), input.collaborationFreshMutations);
+  views.bindCollaborationInvocations(auth => invocations.records(auth));
+  const prepare: InternalMailPort["prepare"] = async (auth, deferred, responseId) => {
+    const selected = units.collaborationRecordsSelected?.(auth.actor) === true;
+    const reply = responseId === undefined ? undefined : { responseId, frameBytes: limits.frameBytes,
+      ...(selected ? { noticeBytes: views.collaborationDeliveryNoticeBytes(auth) } : {}) };
+    const batch = await mail.prepare(auth, deferred, reply);
+    if (selected) {
+      const snapshot = await status.request();
+      // Same owner on startup, reconnect and the next delivery boundary. A failure
+      // returns no model activation; the original prepared batch remains recoverable.
+      const records = views.refreshCollaborationRecords(auth, snapshot, batch ?? undefined);
+      if (batch !== null) return views.publishCollaborationDelivery(auth, batch, records.inbox, reply);
+    }
+    return batch;
+  };
   const transport: Pick<BrokerEffects, "pinPeer" | "assertEndpoint" | "openListener" | "peerStream" | "prepareEndpoint"> = process.platform === "darwin"
     ? createMachBrokerTransport(limits.idleStreamSeconds)
     : {
@@ -77,17 +104,31 @@ export function createBroker(input: BrokerComposition): Broker {
   const dependencies: BrokerDependencies = {
     acquireRunScope: scope => units.pin(scope),
     ledger: brokerLedger(store),
-    mail: Object.freeze<BrokerMail>({ prepare: auth => mail.prepare(auth), complete: (auth, evidence) => mail.complete(auth, evidence),
+    mail: Object.freeze<BrokerMail>({ prepare: (auth, responseId) => prepare(auth, undefined, responseId), complete: (auth, evidence) => mail.complete(auth, evidence),
       settleFromReceipt: (quiescence, batch) => mail.settleFromReceipt(quiescence, batch) }),
     units: Object.freeze<BrokerUnits>({ observe: actor => units.observe(actor), scopeRoot: actor => units.scopeRoot(actor), runnerAlive: actor => units.runnerAlive(actor),
       readLogs: (actor, since, limit) => units.readLogs(actor, since, limit),
       bindRunRevoker: revoke => units.bindRunRevoker(revoke) }),
-    views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => views.publishStatus(snapshot, agents),
+    views: Object.freeze<BrokerViews>({ refreshWorld: () => views.refreshWorld(), publishStatus: (snapshot, agents) => {
+      views.publishStatus(snapshot, agents);
+      views.refreshCollaborationObservations(snapshot);
+    },
       observeRunnerSource: read => views.observeRunnerSource(read) }),
-    reconcile: reconcile === null ? null : Object.freeze({ sweep: () => reconcile.sweep() }),
+    reconcile: reconcile === null ? null : Object.freeze({
+      sweep: () => reconcile.sweep(),
+      pulse: () => reconcile.pulse?.(),
+      wait: (actor: string, incarnation: number, messages: readonly string[]) => reconcile.wait(actor, incarnation, messages),
+      deferredWork: (actor: string, incarnation: number) => reconcile.deferredWork(actor, incarnation),
+    }),
     status: Object.freeze({ request: () => status.request() }),
-    public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits),
-    internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot),
+    principalPreparationBeforeRegistration: () => units.collaborationRecordsSelected?.("principal") === true,
+    hostControl: (auth, params) => {
+      if (units.collaborationRecordsSelected?.("principal") !== true)
+        throw new StoreError("UNSUPPORTED_PROFILE", "Human collaboration controls require the explicitly selected Society surface");
+      return lifecycle.control(auth, params);
+    },
+    public: createPublicDispatchPorts(store, mail, status, views, lifecycle, git, reviews, limits, invocations),
+    internal: createInternalDispatchDataPorts(store, mail, paths.stateRoot, prepare),
     effects: Object.freeze<BrokerEffects>({
       ...transport,
       bindAdmission: gate => bindAdmissionGate(store, gate),

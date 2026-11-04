@@ -41,3 +41,11 @@ export function controlPipe(): { readonly read: number; readonly write: number }
   try { closeOnExec(read); closeOnExec(write); return Object.freeze({ read, write }); }
   catch (error) { return withCleanup(() => { throw error; }, () => cleanupAll([() => closeSync(read), () => closeSync(write)])); }
 }
+
+/** A trusted pipeline supervisor retains a private status descriptor while
+ * children run. Same-uid descendants must not open its /proc FDs or memory. */
+export function protectPipelineSupervisor(): void {
+  if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "pipeline supervisor protection requires Linux");
+  const prctl = load(null).func("int prctl(int option, unsigned long a2, unsigned long a3, unsigned long a4, unsigned long a5)");
+  if (prctl(4 /* PR_SET_DUMPABLE */, 0, 0, 0, 0) !== 0 || prctl(3 /* PR_GET_DUMPABLE */, 0, 0, 0, 0) !== 0) failed();
+}

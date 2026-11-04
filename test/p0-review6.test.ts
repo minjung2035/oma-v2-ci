@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -17,10 +18,15 @@ import { fileURLToPath } from "node:url";
 import { Store, SCHEMA_PATH } from "@oma/storage";
 import { StoreError, errorCodeOf, publicFailure } from "@oma/domain/errors";
 import { AdmissionGate } from "@oma/domain/admission";
+import { principalEnvironment } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { clientEnvironment } from "@oma/extension/mail-tools";
+import { bundleBytes, contextBytes } from "@oma/client/settings";
+import { defaultHostConfig } from "@oma/config/defaults";
 
 const schemaPath = SCHEMA_PATH;
 
-test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption the fence sees, and nothing else with that code is", t => {
+test("001. An INTEGER the driver cannot hand over is corruption the fence sees, and nothing else with that code is", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-overflow-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "runtime.sqlite");
@@ -49,7 +55,7 @@ test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption
   assert.equal(healthy.state, "healthy");
 });
 
-test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall clock was set back meanwhile", async () => {
+test("002. An Enter after a paste's burst submits even when the wall clock was set back meanwhile", async () => {
   const { KeyDecoder } = await import("@oma/tui/keys");
   const { TERMINAL_BOUNDS } = await import("@oma/domain/surface-bounds");
   const wall = Date.now;
@@ -96,7 +102,7 @@ async function gone(pid: number): Promise<void> {
   for (let i = 0; i < 200; i++) { try { process.kill(pid, 0); } catch { return; } await new Promise(r => setTimeout(r, 10)); }
 }
 
-test("P0V-77 / R6-04, P0-4: a crashed maker's tree is kept while a child still holds its lease, and collected once none does", async t => {
+test("003. A crashed maker's tree is kept while a child still holds its lease, and collected once none does", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-lease-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const tree = join(root, "quarantine-ns-x");
@@ -116,7 +122,7 @@ test("P0V-77 / R6-04, P0-4: a crashed maker's tree is kept while a child still h
   assert.equal(existsSync(join(root, "legacy", "x")), true);
 });
 
-test("P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free", async t => {
+test("004. The next provision collects a crashed repository staging only when its lease is free", async t => {
   const stateRoot = mkdtempSync(join(tmpdir(), "oma-provision-lease-"));
   t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
   mkdirSync(join(stateRoot, "repos"), { recursive: true });
@@ -131,7 +137,7 @@ test("P0V-77 / R6-04: the next provision collects a crashed repository staging o
   assert.equal(existsSync(join(stateRoot, "repos", "project.git")), true, "and made the repository");
 });
 
-test("P0V-77 / R6-04: startup recovery collects an unaccepted quarantine or context tree by its lease, and keeps a held or unleased one", async t => {
+test("005. Startup recovery collects an unaccepted quarantine or context tree by its lease, and keeps a held or unleased one", async t => {
   const stateRoot = mkdtempSync(join(tmpdir(), "oma-preaccept-lease-"));
   t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
   const staging = join(stateRoot, "staging"); mkdirSync(staging, { recursive: true });
@@ -150,7 +156,7 @@ test("P0V-77 / R6-04: startup recovery collects an unaccepted quarantine or cont
   assert.equal(existsSync(freeTree), false);
 });
 
-test("R6-04: a synchronous command inherits the descriptors it is given, from 3 on, as a git holding a lease must", async t => {
+test("006. A synchronous command inherits the descriptors it is given, from 3 on, as a git holding a lease must", async t => {
   const { runProcessSync } = await import("@oma/process/run");
   const root = mkdtempSync(join(tmpdir(), "oma-inherit-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -171,7 +177,7 @@ function cliChild(script: string, options: { cwd?: string; env?: Record<string, 
   });
 }
 
-test("P0V-78 / R6-05, INV10: a context tree is read only up to the context stream's bound, refused before the document that overflows it is read", t => {
+test("007. A context tree is read only up to the context stream's bound, refused before the document that overflows it is read", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-bound-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const tree = join(root, "ctx");
@@ -182,9 +188,9 @@ test("P0V-78 / R6-05, INV10: a context tree is read only up to the context strea
   ftruncateSync(big, 64 * 1024 * 1024);
   closeSync(big);
   const prepare = `
-    import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/context"))};
+    import { prepareContextEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/runtime/input-effects/context"))};
     process.on("exit", () => process.stdout.write(JSON.stringify({ arrayBuffers: process.memoryUsage().arrayBuffers })));
-    // w10: fail() throws a ClientError the CLI's fatal() ends; the child ends it the same way.
+    // The standalone client process preserves ClientError's exit classification.
     try {
       const prepared = prepareContextEffects(${JSON.stringify(tree)});
       process.stdout.write(JSON.stringify({ bytes: prepared.digest.bytes }) + "\\n");
@@ -205,7 +211,7 @@ test("P0V-78 / R6-05, INV10: a context tree is read only up to the context strea
   assert.match(over.stderr, /larger than a request can carry \(8 bytes\) at RATIONALE\.md/);
 });
 
-test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle stream's bound", t => {
+test("008. A submission's bundle is read only up to the bundle stream's bound", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-bundle-bound-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { GIT_CONFIG_NOSYSTEM: "1", HOME: root, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid",
@@ -221,7 +227,7 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
   git("commit", "-q", "-m", "a");
   const candidate = git("rev-parse", "HEAD");
   const submit = `
-    import { prepareSubmitEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/cli/effects/submit"))};
+    import { prepareSubmitEffects } from ${JSON.stringify(import.meta.resolve("#oma-test/app/runtime/input-effects/submit"))};
     try {
       const prepared = prepareSubmitEffects(${JSON.stringify(candidate)}, "cli-${randomUUID()}", { hasCandidate: false, prerequisites: [] });
       process.stdout.write(JSON.stringify({ bytes: prepared.content.length }));
@@ -235,18 +241,13 @@ test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle
   assert.match(over.message, new RegExp(`larger than a request can carry \\(${whole.bytes - 1} bytes\\)`));
 });
 
-test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the society's stream bounds, and an omitted one is the reference value", async () => {
-  const { principalEnvironment } = await import("@oma/engine/principal-session");
-  const { cliEnvironment } = await import("@oma/extension/mail-tools");
-  const { cliBundleBytes, cliContextBytes } = await import("#oma-test/app/cli/transport");
-  const { defaultHostConfig } = await import("@oma/config/defaults");
+test("009. The client uses the society's stream bounds and rejects malformed bounds", async () => {
   const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, addresses: 64, contextBytes: 12345, bundleBytes: 67890 };
   const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
     { society: "demo", provider: "pi", model: "current", extensions: [] }, limits);
   assert.equal(principal.OMA_CONTEXT_BYTES, "12345");
   assert.equal(principal.OMA_BUNDLE_BYTES, "67890");
-  // A Resident's engine, whose shell and tools run the same CLI.
-  const { planPiSpawn } = await import("@oma/engine/pi-spawn-plan");
+  // Resident engine and in-process tools share the same configured bounds.
   const options = residentOptions("/srv/oma");
   const resident = planPiSpawn(residentEngineEffects.sandbox, { ...options, limits: { ...options.limits, ...limits } });
   assert.equal(resident.args[resident.args.indexOf("OMA_CONTEXT_BYTES") + 1], "12345");
@@ -255,25 +256,25 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   try {
     process.env.OMA_CONTEXT_BYTES = principal.OMA_CONTEXT_BYTES;
     process.env.OMA_BUNDLE_BYTES = principal.OMA_BUNDLE_BYTES;
-    const forwarded = cliEnvironment("/h", "/s", "/a");
-    assert.equal(forwarded.OMA_CONTEXT_BYTES, "12345", "the tools' CLI environment drops the context bound");
-    assert.equal(forwarded.OMA_BUNDLE_BYTES, "67890", "the tools' CLI environment drops the bundle bound");
-    assert.equal(cliContextBytes(), 12345);
-    assert.equal(cliBundleBytes(), 67890);
+    const forwarded = clientEnvironment("/h", "/s", "/a");
+    assert.equal(forwarded.OMA_CONTEXT_BYTES, "12345", "the client environment drops the context bound");
+    assert.equal(forwarded.OMA_BUNDLE_BYTES, "67890", "the client environment drops the bundle bound");
+    assert.equal(contextBytes(), 12345);
+    assert.equal(bundleBytes(), 67890);
     process.env.OMA_CONTEXT_BYTES = "8 MiB";
-    assert.throws(() => cliContextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
+    assert.throws(() => contextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
     delete process.env.OMA_CONTEXT_BYTES;
     delete process.env.OMA_BUNDLE_BYTES;
     const reference = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",  deploymentDigest: "a".repeat(64) }).limits;
-    assert.equal(cliContextBytes(), reference.contextBytes);
-    assert.equal(cliBundleBytes(), reference.bundleBytes);
+    assert.equal(contextBytes(), reference.contextBytes);
+    assert.equal(bundleBytes(), reference.bundleBytes);
   } finally {
     for (const [name, value] of [["OMA_CONTEXT_BYTES", saved.context], ["OMA_BUNDLE_BYTES", saved.bundle]] as const)
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
 
-test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the characters behind it", async () => {
+test("010. An SS3 report is one key or none, never an Escape and the characters behind it", async () => {
   const { KeyDecoder } = await import("@oma/tui/keys");
   const { decodeKeys } = await import("./fixtures/keys.js");
   const ss3 = (text: string) => decodeKeys(Buffer.from(`\u001bO${text}`));
@@ -300,7 +301,7 @@ test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the 
   assert.deepEqual(decodeKeys(Buffer.from("\u001b[A")), [{ kind: "up" }]);
 });
 
-test("P0V-79 / R6-06: the terminal owner asks for normal cursor keys when it takes the terminal and whenever it repaints", async () => {
+test("011. The terminal owner asks for normal cursor keys when it takes the terminal and whenever it repaints", async () => {
   const { openTerminal } = await import("@oma/tui/screen");
   const input = { isTTY: false, resume() {}, pause() {}, on() {}, setRawMode() {} } as unknown as NodeJS.ReadStream;
   const written: string[] = [];
@@ -325,7 +326,7 @@ function publishKilledAt(target: string, bytes: string, point: string, phase: st
     process.stdout.write("finished");`], { encoding: "utf8", timeout: 30_000 });
 }
 
-test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves its name absent or whole, and the next one collects what it left", async t => {
+test("012. A no-replace publication killed at any step leaves its name absent or whole, and the next one collects what it left", async t => {
   const { publishNoReplace } = await import("@oma/storage/durable-fs");
   const root = mkdtempSync(join(tmpdir(), "oma-no-replace-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -351,7 +352,7 @@ test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves
   }
 });
 
-test("P0V-84 / R6-08, P0V-111: a temporary whose writer is alive is not collected, nor one written without a lock", async t => {
+test("013. A temporary whose writer is alive is not collected, nor one written without a lock", async t => {
   const { publishNoReplace } = await import("@oma/storage/durable-fs");
   const root = mkdtempSync(join(tmpdir(), "oma-no-replace-live-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -380,7 +381,7 @@ test("P0V-84 / R6-08, P0V-111: a temporary whose writer is alive is not collecte
   assert.equal(readFileSync(join(root, "k.json"), "utf8"), "first");
 });
 
-test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation leaves no main or the one it made, and the next start keeps it", async t => {
+test("014. Provisioning killed at the canonical main's creation leaves no main or the one it made, and the next start keeps it", async t => {
   const provision = new URL(import.meta.resolve("#oma-test/app/runtime/provision")).href;
   for (const point of ["before-main", "after-main"] as const) {
     const stateRoot = mkdtempSync(join(tmpdir(), `oma-main-${point}-`));
@@ -420,7 +421,7 @@ test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation
   }
 });
 
-test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the character it is, so strict JSON refuses a BOM", async () => {
+test("015. Every UTF-8 reading keeps a U+FEFF as the character it is, so strict JSON refuses a BOM", async () => {
   const owner = await import("@oma/domain/utf8");
   const vectors: Array<[string, Uint8Array]> = [
     ["leading BOM", Buffer.from("﻿a")], ["BOM only", Buffer.from("﻿")], ["inner BOM", Buffer.from("a﻿b")],
@@ -457,7 +458,7 @@ test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the charact
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿goal")), null);
 });
 
-test("P0V-87 / R6-10: mail accepted after the clock was set back is still delivered after the mail accepted before it", async t => {
+test("016. Mail accepted after the clock was set back is still delivered after the mail accepted before it", async t => {
   const { MailModule } = await import("@oma/mail");
   const { makeValidAgent } = await import("./fixtures/spec.js");
   const dir = mkdtempSync(join(tmpdir(), "oma-order-"));
@@ -490,7 +491,7 @@ test("P0V-87 / R6-10: mail accepted after the clock was set back is still delive
   assert.deepEqual((await store.pendingWorkRows()).unbatched.filter(row => row.recipient === "b").map(row => row.messageId), accepted);
 });
 
-test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused", async () => {
+test("017. Ledger SQL that orders by a wall-clock column is refused", async () => {
   const { transactionRuleFindings } = await import(new URL("../../scripts/architecture/rules/transaction-rules.mjs", import.meta.url).href);
   const root = mkdtempSync(join(tmpdir(), "oma-order-rule-"));
   try {
@@ -506,7 +507,7 @@ test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observes a failure of its own", async () => {
+test("018. A sweep observes a recovery failure once, and still observes a failure of its own", async () => {
   const { OperationRecovery } = await import("@oma/reconcile/operations");
   const row = { id: "op1", kind: "git.submit", state: "pending" } as never;
   // The review's counterexample: the observer's own verdict comes back to it.
@@ -526,7 +527,7 @@ test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observ
   assert.equal(vanished.length, 1);
 });
 
-test("P0V-90 / R6-13: a generation already present is reused only if it holds these files and nothing else", async () => {
+test("019. A generation already present is reused only if it holds these files and nothing else", async () => {
   const { loadConfigurationSnapshot, validateConfig } = await import("@oma/config");
   const { commitManagedEdit } = await import("#oma-test/app/application/settings");
   const { MANAGED_DIRECTORY } = await import("@oma/config/generations");
@@ -557,7 +558,7 @@ test("P0V-90 / R6-13: a generation already present is reused only if it holds th
   }
 });
 
-test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is refused by name, not assumed away", async t => {
+test("020. A runner or a retried key the ledger no longer knows is refused by name, not assumed away", async t => {
   const { InternalDispatcher } = await import("@oma/broker/internal-dispatcher");
   const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true, sameSender: () => false,
     retainForExecution: () => () => undefined, releaseConnection: () => undefined };
@@ -584,7 +585,7 @@ test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is re
     (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" && /answered as a retry/.test(error.message));
 });
 
-test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer it cannot give is not \"no GOAL\"", async t => {
+test("021. A run is opened on the GOAL owner's answer, and an answer it cannot give is not \"no GOAL\"", async t => {
   const { MailModule } = await import("@oma/mail");
   const { Broker } = await import("@oma/broker");
   const { PolicyExecution } = await import("./fixtures/execution.js");
@@ -598,8 +599,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 64);
   const units = new PolicyExecution();
   const views = new ViewsModule(store, root, "demo", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   let answer: () => boolean = () => false;
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() } });
   const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<unknown>).bind(broker);
@@ -609,7 +609,7 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
   await assert.rejects(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
 });
 
-test("P0V-94 / R6-17: a derived TSV field escapes every control character itself, reversibly", async () => {
+test("022. A derived TSV field escapes every control character itself, reversibly", async () => {
   const { fieldEscape } = await import("#oma-test/app/views");
   assert.equal(fieldEscape("a\tb\nc\rd\\e"), "a\\tb\\nc\\rd\\\\e");
   assert.equal(fieldEscape("\u001b[2Jx\u0000\u007f\u0085"), "\\x1b[2Jx\\x00\\x7f\\x85", "a terminal instruction or a C1 control reached the reader");

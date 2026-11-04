@@ -29,7 +29,14 @@ export interface CommandSpec {
   readonly stdoutSpool?: string;
   readonly stderrSpool?: string;
 }
+export interface WorkloadMetrics {
+  readonly observedAtMs: number; readonly cpuThrottlingScope: string;
+  readonly memoryPeakBytes: number | null; readonly swapPeakBytes: number | null; readonly tasksPeak: number | null;
+  readonly cpuUsageUsec: number | null; readonly cpuThrottledUsec: number | null; readonly cpuThrottledPeriods: number | null;
+  readonly unavailable: readonly string[];
+}
 export interface Capture {
+  readonly resources?: { readonly oomKills: number; readonly taskLimitHits: number; readonly scope: string; readonly metrics?: WorkloadMetrics };
   readonly stdout: Buffer; readonly stderr: Buffer;
   readonly stdoutTruncated: boolean; readonly stderrTruncated: boolean;
   /** Set when the stream was spooled: `stdout`/`stderr` hold the retained

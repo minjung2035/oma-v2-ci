@@ -60,12 +60,12 @@ function failOnce(target, name, when = () => true) {
 }
 const contains = (error, expected) => error === expected || error?.errors?.some(e => contains(e, expected));
 
-test('mode selector: non-TTY defaults without terminal or listeners', async () => {
+test("001. Mode selector: non-TTY defaults without terminal or listeners", async () => {
   const w = world({ tty: false }); assert.equal(await w.result, 'society');
   assert.deepEqual(w.raw, []); assert.deepEqual(w.bytes, []); assert.equal(w.pauses, 0);
 });
 for (const [keys, expected] of [['\r', 'society'], ['\x1b[B\r', 'personal'], ['\x1b[A\r', 'personal'], ['\x1b[B\x1b[A\r', 'society']]) {
-  test(`mode selector: ${JSON.stringify(keys)} selects ${expected}`, async () => {
+  test(`002. Mode selector: ${JSON.stringify(keys)} selects ${expected}`, async () => {
     const w = world(); w.send(keys); assert.equal(await w.result, expected); returned(w);
   });
 }
@@ -73,52 +73,52 @@ for (const [kind, act] of [
   ['escape', w => { w.send('\x1b'); w.tick(); }], ['interrupt', w => w.send('\x03')], ['eof key', w => w.send('\x04')],
   ['input end', w => w.input.emit('end')], ['input close', w => w.input.emit('close')], ['output close', w => w.output.emit('close')],
   ...['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'].map(signal => [signal, w => w.host.emit(signal)]),
-]) test(`mode selector: ${kind} cancels and returns the terminal`, async () => {
+]) test(`003. Mode selector: ${kind} cancels and returns the terminal`, async () => {
   const w = world(); let settled = false; void w.result.then(() => { settled = true; });
   act(w); await Promise.resolve(); assert.equal(settled, true, 'cancellation must settle, not hang');
   assert.equal(await w.result, null); returned(w);
 });
-test('mode selector: fragmented cursor key replaces timer and fences its stale callback', async () => {
+test("004. Mode selector: fragmented cursor key replaces timer and fences its stale callback", async () => {
   const w = world(); w.send('\x1b'); const old = [...w.timers][0];
   w.send('[B'); old.run(); w.send('\r');
   assert.equal(await w.result, 'personal'); returned(w);
 });
-test('mode selector: selection consumes no later key in the same read', async () => {
+test("005. Mode selector: selection consumes no later key in the same read", async () => {
   const w = world(); let reads = 0;
   Object.defineProperty(w.output, 'columns', { get() { reads++; return 80; } });
   w.send('\r\x1b[B\r\x03');
   assert.equal(await w.result, 'society'); assert.equal(reads, 0, 'no display work after terminal return'); returned(w);
 });
-test('mode selector: cancellation owns even an already queued timer', async () => {
+test("006. Mode selector: cancellation owns even an already queued timer", async () => {
   const w = world(); w.send('\x1b'); const old = [...w.timers][0]; w.host.emit('SIGTERM');
   const count = w.bytes.length; old.run(); assert.equal(w.bytes.length, count);
   assert.equal(await w.result, null); returned(w);
 });
-test('mode selector: pasted keystrokes never select a mode', async () => {
+test("007. Mode selector: pasted keystrokes never select a mode", async () => {
   const w = world(); w.send('\x1b[200~\r\x1b[B\r\x1b[201~');
   assert.equal(w.raw.at(-1), true); w.advance(); w.send('\r'); assert.equal(await w.result, 'society'); returned(w);
 });
-for (const owner of ['input', 'output']) test(`mode selector: ${owner} failure rejects and returns all resources`, async () => {
+for (const owner of ['input', 'output']) test(`008. Mode selector: ${owner} failure rejects and returns all resources`, async () => {
   const w = world(), problem = new Error('stream failed');
   w[owner].emit('error', problem); await assert.rejects(w.result, error => error === problem); returned(w);
 });
 for (const [owner, method, when] of [['input', 'setRawMode'], ['output', 'write'], ['input', 'on'], ['host', 'on', name => name === 'SIGTERM']]) {
-  test(`mode selector: acquisition failure at ${owner}.${method} returns partial ownership`, async () => {
+  test(`009. Mode selector: acquisition failure at ${owner}.${method} returns partial ownership`, async () => {
     let problem; const w = world({ fault(w) { problem = failOnce(w[owner], method, when); } });
     await assert.rejects(w.result, error => contains(error, problem)); returned(w);
   });
 }
-for (const owner of ['input', 'output', 'host']) test(`mode selector: failed ${owner} listener return still restores terminal`, async () => {
+for (const owner of ['input', 'output', 'host']) test(`010. Mode selector: failed ${owner} listener return still restores terminal`, async () => {
   const w = world(), problem = failOnce(w[owner], 'off'); w.send('\r');
   await assert.rejects(w.result, error => contains(error, problem)); returned(w);
 });
-test('mode selector: resize write failure closes instead of escaping its listener', async () => {
+test("011. Mode selector: resize write failure closes instead of escaping its listener", async () => {
   const w = world(); w.output.columns = 42;
   const problem = failOnce(w.output, 'write');
   assert.doesNotThrow(() => w.output.emit('resize'));
   await assert.rejects(w.result, error => contains(error, problem)); returned(w);
 });
-test('mode selector: small screens retain both choices without wrapping', async () => {
+test("012. Mode selector: small screens retain both choices without wrapping", async () => {
   const w = world({ columns: 20, rows: 4 });
   const frame = w.bytes.at(-1).replace(/^\x1b\[H/, '').split('\r\n');
   assert.ok(frame.every(line => tui.visibleWidth(line) < 20), 'line wraps into another row');

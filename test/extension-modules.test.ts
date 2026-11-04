@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { ExtensionModules } from "@oma/engine/extension-modules";
 
-for (const format of ["ts", "js", "mjs", "module-js"]) test(`Extension modules: ${format} reload observes changed code and rejects its next failure`, async t => {
+for (const format of ["ts", "js", "mjs", "module-js"]) test(`001. Extension modules: ${format} reload observes changed code and rejects its next failure`, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-modules-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   if (format === "module-js") writeFileSync(join(root, "package.json"), '{"type":"module"}');
@@ -28,7 +28,7 @@ for (const format of ["ts", "js", "mjs", "module-js"]) test(`Extension modules: 
   assert.equal(description(), undefined); loader.getExtensions().runtime.invalidate();
 });
 
-test("Extension modules: relative dependencies and late imports keep their parent's generation; unrelated modules are unchanged", async t => {
+test("002. Extension modules: relative dependencies and late imports keep their parent's generation; unrelated modules are unchanged", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-imports-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const file = join(root, "entry.mjs"), other = join(root, "other.mjs"), dependency = join(root, "dependency.mjs");
@@ -51,7 +51,7 @@ test("Extension modules: relative dependencies and late imports keep their paren
   assert.notEqual(unowned, second); assert.equal(await import(pathToFileURL(file).href), unowned);
 });
 
-test("Extension modules: a failed path replacement preserves the complete selected set and its generation", async t => {
+test("003. Extension modules: a failed path replacement preserves the complete selected set and its generation", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-paths-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const firstFile = join(root, "first.mjs"), secondFile = join(root, "second.mjs");
@@ -66,7 +66,7 @@ test("Extension modules: a failed path replacement preserves the complete select
   assert.notEqual(await import(pathToFileURL(secondFile).href), second, "the retained entry advances only after complete validation");
 });
 
-test("Extension modules: independent owners sharing a dependency do not replace each other's identities", async t => {
+test("004. Extension modules: independent owners sharing a dependency do not replace each other's identities", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-owners-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const oneFile = join(root, "one.mjs"), twoFile = join(root, "two.mjs"), dependency = join(root, "shared.mjs");

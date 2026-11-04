@@ -1,10 +1,11 @@
 /** Principal engine admission, prompt/delivery attribution and actual child lifetime. */
-import { stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, type ChildProcess } from "@oma/process/async";
+import { stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, cleanupAll, withAsyncCleanup, type ChildProcess } from "@oma/process/async";
 import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "./interactive-channel.js";
 import type { FencedEngine } from "@oma/contracts/runtime";
 import type { PiRpcStreams } from "./pi-rpc.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_FD, encodeHostMessage } from "@oma/protocol/host-channel";
+import { deliveryNotStartedOf } from "@oma/protocol/delivery-boundary";
 import { assertModelScope } from "@oma/domain/paths";
 import { PiRpcClient, alarm, assertPiRpcLimits, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "./pi-rpc.js";
 import type { EngineStartEffects } from "./ports.js";
@@ -14,6 +15,7 @@ import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPrompt
 import { TurnAdmission, type TurnOwner } from "@oma/domain/turn-admission";
 import type { PromptOutcome } from "@oma/domain/settings";
 import { sessionArgv, sessionEnv, type SessionPaths, type SessionProfile } from "./principal-launch.js";
+import { requireCollaborationSurface } from "@oma/domain/collaboration-surface";
 import { projectEvent, queuePreviewLine } from "./principal-events.js";
 export { newSessionHandle, principalSessionDir, principalWorkspace, principalEnvironment,
   sessionArgv, sessionEnv, PACKAGE_STORE_ENV } from "./principal-launch.js";
@@ -28,6 +30,9 @@ export interface SessionSink {
   readonly onLine: (line: string) => void;
   readonly onUi?: (event: PiEvent) => void;
   readonly onBusy: (busy: boolean) => void;
+  /** Product input routing only. Engine-relayed text is never Human control
+   * authority; a host may refuse it or request terminal return without effects. */
+  readonly onHumanInput?: (text: string) => PromptOutcome;
   readonly onEnd: (reason: string) => void;
   /** One named prompt did not reach the engine, with the text it was.
    *
@@ -57,11 +62,15 @@ export class PrincipalSession {
   private ready = true;
 
   sendUi(event: PiEvent): void { this.ui?.send(event); }
+  sendUiAndWait(event: PiEvent): Promise<void> {
+    return this.ui?.sendAndWait(event) ?? Promise.reject(new Error("interactive UI is unavailable"));
+  }
   private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
   private readonly frameBytes: number;
   private readonly turns = new TurnAdmission();
+  private deliveryClaim: { batchId: string; started: boolean } | null = null;
 
   /** Resolves when the operating system has reaped the engine, not when this
    * process asked it to stop. `close()` sends a signal; a teardown that took
@@ -113,9 +122,10 @@ export class PrincipalSession {
             sequence += 1;
             // Said so the screen can tell the Human the prompt waits its turn.
             const queued = this.busy;
-            const outcome = this.submit(event.text);
+            const outcome = this.sink.onHumanInput?.(event.text) ?? this.submit(event.text);
             last = { type: "input_result", id: event.id, accepted: outcome.kind === "accepted",
-              ...(outcome.kind === "refused" ? { reason: outcome.reason } : { queued }) };
+              ...(outcome.kind === "refused" ? { reason: outcome.reason } : outcome.kind === "handled"
+                ? { reason: "The host handled this navigation request. No Principal prompt was submitted." } : { queued }) };
             this.ui?.send(last);
           } else if (["ready", "quit", "panel_open", "panel_size", "panel_key", "sessions_request", "switch", "engine_state", "worker_model"].includes(event.type))
             this.sink.onUi?.(event);
@@ -124,21 +134,26 @@ export class PrincipalSession {
       }
       // The private socket the credential travels on. Kept open for the life of
       // the session so a restarted broker's credential can replace the old one.
+      // SAFETY: both owned spawn paths reserve HOST_CHANNEL_FD as the private bidirectional socket.
       this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
       this.channel.on("error", () => {});
       this.rpc.onEvent(event => this.observe(event));
       void this.rpc.completion.then(async result => {
         this.closed = true;
-        this.ui?.close();
-        const reason = result.state === "failed"
-          ? `Session ended with an error: ${this.errorWords(result.error)}`
-          : "Session ended.";
-        this.handBack(reason);
-        this.turns.settle();
-        this.sink.onBusy(false);
-        if (uiSocket) await this.exited;
-        this.sink.onEnd(reason);
-      });
+        let reason = "Session ended.";
+        // Presentation/cleanup failure cannot suppress the original OS-exit
+        // observation or leave a reclaimed terminal waiting on a lost callback.
+        await withAsyncCleanup(async () => cleanupAll([
+          () => { if (result.state === "failed") reason = `Session ended with an error: ${this.errorWords(result.error)}`; },
+          () => this.ui?.close(),
+          () => this.handBack(reason),
+          () => { this.turns.settle(); },
+          () => this.sink.onBusy(false),
+        ]), async () => {
+          if (uiSocket) await this.exited;
+          this.sink.onEnd(reason);
+        });
+      }).catch(error => { console.error("Principal session completion or notification failed:", error); });
     } catch (error) {
       // No completed session was handed to the host. Returning partial owners
       // must not emit onEnd or invite another prompt into this failed session.
@@ -162,12 +177,14 @@ export class PrincipalSession {
     // PR-004: the model's tools are confined to `workspace`, which holds
     // neither the Human's session history nor the engine's credentials.
     assertModelScope(paths.workspace, [paths.sessionDir, ...(paths.piAgentDir === undefined ? [] : [paths.piAgentDir])]);
+    requireCollaborationSurface(paths.toolSurface, "principal");
+    const argv = sessionArgv(paths, profile), environment = sessionEnv(env, profile, paths);
     if (paths.piAgentDir !== undefined) preparePiRetry(effects.settings, paths.piAgentDir);
     if (paths.interactiveEntry !== undefined) {
       if (paths.fence === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "interactive session requires its lease descriptor");
       const child = spawnOwnedInteractive(paths.piCommand, ["--import", new URL("./pi-compat/interactive-tool-setup.js", import.meta.url).href,
-        paths.interactiveEntry, ...sessionArgv(paths, profile)], paths.workspace,
-        { ...sessionEnv(env, profile, paths), OMA_UI_IDLE_SECONDS: String(limits.idleStreamSeconds),
+        paths.interactiveEntry, ...argv], paths.workspace,
+        { ...environment, OMA_UI_IDLE_SECONDS: String(limits.idleStreamSeconds),
           OMA_UI_RECEIPT_SECONDS: String(limits.receiptWaitSeconds), OMA_PROJECT_DISPLAY: paths.project ?? paths.workspace,
           ...(paths.sessionFile === undefined ? {} : { OMA_SESSION_FILE: paths.sessionFile }),
           TERM: process.env.TERM ?? "xterm-256color", ...(process.env.COLORTERM ? { COLORTERM: process.env.COLORTERM } : {}) }, paths.fence);
@@ -178,9 +195,9 @@ export class PrincipalSession {
     }
     const child = spawnOwnedRpc(
       paths.piCommand,
-      [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],
+      [...(paths.piArgs ?? []), ...argv],
       paths.workspace,
-      sessionEnv(env, profile, paths),
+      environment,
       true,
       paths.fence,
     );
@@ -189,6 +206,9 @@ export class PrincipalSession {
 
   /** The one place the session's state moves in answer to the engine. */
   private observe(event: PiEvent): void {
+    if (event.type === "agent_start" && this.deliveryClaim) this.deliveryClaim.started = true;
+    const refusal = deliveryNotStartedOf(event);
+    if (refusal && this.deliveryClaim?.batchId === refusal.batchId && !this.deliveryClaim.started) this.release("delivery");
     if (event.type === "response" && event.command === "prompt") {
       const prompt = this.turns.response(event.id);
       if (prompt !== null && event.success !== true) {
@@ -229,6 +249,7 @@ export class PrincipalSession {
    * synchronously, so nothing can start between the two steps. */
   private free(): void {
     if (this.closed) return;
+    this.deliveryClaim = null;
     const next = this.turns.settle();
     this.emitQueue();
     this.reportBusy();
@@ -252,9 +273,11 @@ export class PrincipalSession {
    * engine never answered is reported apart and is not resent. */
   private handBack(reason: string): void {
     const { unconfirmed, unsent } = this.turns.end();
-    if (unconfirmed !== null) this.sink.onPromptUnconfirmed?.(unconfirmed, reason);
-    for (const text of unsent) this.sink.onPromptFailed(text, reason);
-    this.emitQueue();
+    cleanupAll([
+      ...(unconfirmed === null ? [] : [() => this.sink.onPromptUnconfirmed?.(unconfirmed, reason)]),
+      ...unsent.map(text => () => this.sink.onPromptFailed(text, reason)),
+      () => this.emitQueue(),
+    ]);
   }
 
   private nextRequestId(): string {
@@ -304,6 +327,7 @@ export class PrincipalSession {
     // Claimed before the command is written, and given back if it cannot be.
     if (!this.ready || !this.turns.claimDelivery())
       throw new StoreError("BATCH_CONFLICT", "the principal session is already spoken for");
+    this.deliveryClaim = { batchId, started: false };
     this.reportBusy();
     try { await this.sendPrompt(batchId, `/oma-deliver ${batchId}`, "delivery"); }
     catch (error) {
@@ -324,6 +348,7 @@ export class PrincipalSession {
     if (this.closed) return;
     const outcome = this.turns.release(owner);
     if (!outcome.released) return;
+    if (owner === "delivery") this.deliveryClaim = null;
     this.emitQueue();
     this.reportBusy();
     if (outcome.next !== null) this.write(outcome.next);
@@ -345,10 +370,7 @@ export class PrincipalSession {
    */
   submit(text: string): PromptOutcome {
     if (this.ready === false) return { kind: "refused", reason: "Preparing the conversation UI." };
-    if (this.closed) {
-      this.sink.onEnd("Cannot send: the session has ended.");
-      return { kind: "refused", reason: "Session ended." };
-    }
+    if (this.closed) return { kind: "refused", reason: "Session ended." };
     if (!humanPromptFitsFrame(text, this.frameBytes))
       return { kind: "refused", reason: "Input exceeds this session's UTF-8 prompt limit." };
     const claim = this.turns.claimHuman(text);
@@ -363,9 +385,11 @@ export class PrincipalSession {
    * closes; the completion that follows finds nothing left to hand back. */
   close(): void {
     if (this.closed) return;
-    this.handBack("Session closed.");
     this.closed = true;
-    this.ui?.close();
-    this.rpc.close();
+    cleanupAll([
+      () => this.handBack("Session closed."),
+      () => this.ui?.close(),
+      () => this.rpc.close(),
+    ]);
   }
 }

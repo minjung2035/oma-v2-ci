@@ -16,6 +16,8 @@ export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
   "handleFatalRuntimeError",
   "renderProjectTrustWarningIfNeeded",
   "suggestBugReport",
+  "getChangelogForDisplay",
+  "showNewVersionNotification",
   "crashReportInstructions",
   "updateTerminalTitle",
   "handleExportCommand",
@@ -42,6 +44,8 @@ interface InteractiveModeInternals {
   getCrashExtensionHint(error: unknown): string | undefined;
   crashReportInstructions(): string;
   suggestBugReport(): void;
+  getChangelogForDisplay(): string | undefined;
+  showNewVersionNotification(release: unknown): void;
   showManagedToolStatus(status: { type: string; message: string }): void;
   renderProjectTrustWarningIfNeeded(): void;
   showSessionSelector(): void;
@@ -98,6 +102,10 @@ export function adaptInteractiveMode(mode: InteractiveMode): InteractiveModeCont
   assertInteractiveCompatibility(mode, VERSION);
   // The only cast follows version and every private member/field validation.
   const own = mode as unknown as InteractiveModeInternals;
+  // OMA owns its release UI. Suppress only automatic Pi release displays,
+  // not /changelog, extension updates, ordinary warnings or the update machinery.
+  own.getChangelogForDisplay = () => undefined;
+  own.showNewVersionNotification = () => {};
   const failure = (runtime: ModeRuntime, label: string): void => {
     const fatal = own.handleFatalRuntimeError.bind(mode);
     own.handleFatalRuntimeError = async (prefix, error) => {

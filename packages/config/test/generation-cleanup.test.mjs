@@ -18,19 +18,20 @@ import * as stateFormat from '../dist/state-format.js';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 import * as native from '@oma/native/files';
+import * as linux from '@oma/native/linux';
 import * as durable from '@oma/storage/durable-fs';
 import { removeOwnedTree } from '@oma/storage/directory';
 import { StoreError, primaryFailure, errorCodeOf } from '@oma/domain/errors';
 const source = fs.readFileSync(new URL('../src/generations.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText + '\nexports.publishForProbe = publishGeneration;';
 for (const effectFails of [false, true]) for (const failures of [[], ['roles'], ['prompts'], ['roles', 'prompts', 'tree']]) {
-  test(`Generation cleanup: effect=${effectFails}, failed closes=${failures.join(',') || 'none'} retain every owner and primary`, () => {
+  test(`001. Generation cleanup: effect=${effectFails}, failed closes=${failures.join(',') || 'none'} retain every owner and primary`, () => {
     const root = fs.mkdtempSync(join(tmpdir(), 'oma-generation-cleanup-')), generations = join(root, 'generations');
     fs.mkdirSync(generations);
     const held = new Map(), attempted = [], closeErrors = new Map(failures.map(name => [name, Object.assign(new Error(`close ${name}`), { code: 'EIO' })]));
     const primary = new StoreError('STORE_CORRUPT', 'original publication failure');
     const deps = {
-      '@oma/native/posix-files': posixFiles,
+      '@oma/native/posix-files': posixFiles, '@oma/native/linux': linux,
       '@oma/file-descriptors': descriptors,
       'node:fs': { ...fs, closeSync(fd) {
         const name = held.get(fd); attempted.push(name); fs.closeSync(fd);

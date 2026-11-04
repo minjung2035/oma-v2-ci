@@ -7,6 +7,8 @@ import type { ReviewFact } from "@oma/contracts/attestation";
 import { StoreError } from "@oma/domain/errors";
 import { reviewState, planEffects, type ReviewEntry, type ReviewState,
   type ReviewStateInput } from "@oma/domain/review-evaluation";
+import { ReviewAuthorityReader } from "@oma/review/authority";
+import { makeValidAgent } from "./fixtures/spec.js";
 
 const OP = (n: number): OperationId => `op-00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const MID = (n: number): MessageId => `m-00000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
@@ -55,21 +57,21 @@ const withMessages = (entry: ReviewEntry, messages: readonly MessagePlan[]): Rev
 
 const state = (openEntry: ReviewEntry, entries: readonly ReviewEntry[],
     over: Partial<Omit<ReviewStateInput, "open" | "entries">> = {}): ReviewState =>
-  reviewState({ open: openEntry, entries, eligible: over.eligible ?? ELIGIBLE,
-    highPeerFloor: over.highPeerFloor ?? 2, integration: over.integration ?? null });
+  reviewState({ maxWorkers: over.maxWorkers ?? 6, open: openEntry, entries, eligible: over.eligible ?? ELIGIBLE,
+    highPeerFloor: over.highPeerFloor ?? 2, integration: over.integration ?? null});
 const effects = (openEntry: ReviewEntry, before: readonly ReviewEntry[], after: readonly ReviewEntry[],
     over: Partial<Omit<ReviewStateInput, "open" | "entries">> = {}) =>
   planEffects(state(openEntry, before, over), state(openEntry, after, over));
 
-test("LOW merge is ready immediately; missing is empty", () => {
+test("001. LOW merge is ready immediately; missing is empty", () => {
   const s = state(open("LOW"), []);
-  assert.equal(s.ready, true); assert.equal(s.display, "applying");
+  assert.equal(s.ready, true); assert.equal(s.display, "ready");
   assert.deepEqual(s.missing, []); assert.equal(s.required, 0);
   assert.equal(s.name, "merge-00000000-0000-4000-8000-000000000000"); assert.equal(s.requester, "alice");
   assert.deepEqual(s.authors, ["alice"]);
 });
 
-test("MEDIUM needs one eligible Worker approve; shortfall is reported", () => {
+test("002. MEDIUM needs one eligible Worker approve; shortfall is reported", () => {
   const s0 = state(open("MEDIUM"), []);
   assert.equal(s0.ready, false); assert.equal(s0.display, "peer-needed");
   assert.deepEqual(s0.missing, ["1 more approving Worker review (have 0 of 1)"]);
@@ -78,7 +80,7 @@ test("MEDIUM needs one eligible Worker approve; shortfall is reported", () => {
   assert.deepEqual(s1.bundle, [OP(2)]);
 });
 
-test("an author's approve is tracked but never counted", () => {
+test("003. An author's approve is tracked but never counted", () => {
   const s = state(open("MEDIUM"), [vote(2, "alice", "approve")]);
   assert.equal(s.ready, false); assert.deepEqual(s.approvers, []);
   assert.equal(s.latestVotes.get("alice")?.operation, OP(2));
@@ -86,7 +88,7 @@ test("an author's approve is tracked but never counted", () => {
   assert.equal(s2.ready, true);
 });
 
-test("an ineligible approver does not count, but an ineligible rejector still blocks", () => {
+test("004. An ineligible approver does not count, but an ineligible rejector still blocks", () => {
   const eligible = new Set(["alice", "bob"]);
   const s = state(open("MEDIUM"), [vote(2, "carol", "approve")], { eligible });
   assert.equal(s.ready, false);
@@ -98,14 +100,14 @@ test("an ineligible approver does not count, but an ineligible rejector still bl
   assert.deepEqual(blocked.missing, ["rejected by carol"]);
 });
 
-test("a reject blocks until the same actor's later approve clears it", () => {
+test("005. A reject blocks until the same actor's later approve clears it", () => {
   const entries = [vote(2, "bob", "reject"), vote(3, "bob", "approve")];
   const s = state(open("MEDIUM"), entries);
   assert.equal(s.ready, true); assert.deepEqual(s.rejectors, []);
   assert.deepEqual(s.latestVotes.get("bob")?.fact, entries[1]!.fact);
 });
 
-test("HIGH: one approve emits nothing; the second approves with the bundle in vote order", () => {
+test("006. HIGH: one approve emits nothing; the second approves with the bundle in vote order", () => {
   const o = open("HIGH");
   const fx1 = effects(o, [], [vote(2, "bob", "approve")]);
   assert.equal(fx1.withdraw, null); assert.equal(fx1.approve, null);
@@ -116,7 +118,37 @@ test("HIGH: one approve emits nothing; the second approves with the bundle in vo
   assert.equal(s.ready, false); assert.equal(s.display, "peer-needed");
 });
 
-test("a third approve leaves the bundle valid and emits no Principal mail", () => {
+test("007. Approval vote identities must bind current eligible independent approvals, not merely valid operation IDs", () => {
+  const o = open("HIGH");
+  const entries = [
+    vote(2, "bob", "approve"),
+    vote(3, "carol", "approve"),
+    review(4, "dave"),
+    vote(5, "alice", "approve"),
+    vote(6, "dave", "reject"),
+    vote(7, "dave", "approve"),
+    vote(8, "bob", "approve"),
+  ];
+  for (const [label, votes] of [
+    ["unknown", [OP(90), OP(9)]],
+    ["opening fact", [OP(1), OP(9)]],
+    ["non-vote review", [OP(4), OP(9)]],
+    ["author", [OP(5), OP(9)]],
+    ["superseded rejection", [OP(6), OP(9)]],
+    ["superseded approval", [OP(2), OP(9)]],
+  ] as const) {
+    const approved = withMessages(vote(9, "carol", "approve"), [approvalMessage(MID(9), votes)]);
+    const s = state(o, [...entries, approved]);
+    assert.equal(s.approvalValid, false, label);
+    assert.equal(s.ready, false, label);
+  }
+  const approved = withMessages(vote(9, "carol", "approve"), [approvalMessage(MID(9), [OP(8), OP(9)])]);
+  assert.equal(state(o, [...entries, approved]).approvalValid, true, "current independent approvals remain valid");
+  assert.equal(state(o, [...entries, approved], { eligible: new Set(["alice", "carol", "dave"]) }).approvalValid,
+    false, "an ineligible bundled voter is not binding");
+});
+
+test("008. A third approve leaves the bundle valid and emits no Principal mail", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -130,7 +162,7 @@ test("a third approve leaves the bundle valid and emits no Principal mail", () =
   assert.equal(fx.withdraw, null); assert.equal(fx.approve, null);
 });
 
-test("superseding a bundled vote withdraws the old approval and sends a new one", () => {
+test("009. Superseding a bundled vote withdraws the old approval and sends a new one", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -145,7 +177,7 @@ test("superseding a bundled vote withdraws the old approval and sends a new one"
   assert.deepEqual(fx.approve, [OP(3), OP(4)]);
 });
 
-test("quorum still holds after an approver retires: withdrawn then a new approval", () => {
+test("010. Quorum still holds after an approver retires: withdrawn then a new approval", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -164,7 +196,7 @@ test("quorum still holds after an approver retires: withdrawn then a new approva
   assert.deepEqual(fx.approve, [OP(3), OP(4)]);
 });
 
-test("a bundled approver regaining eligibility does not invalidate the sent approval", () => {
+test("011. A bundled approver regaining eligibility does not invalidate the sent approval", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -183,7 +215,7 @@ test("a bundled approver regaining eligibility does not invalidate the sent appr
   assert.equal(fx.withdraw, null); assert.equal(fx.approve, null);
 });
 
-test("a reject after the approval was sent withdraws it and sends none", () => {
+test("012. A reject after the approval was sent withdraws it and sends none", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -198,7 +230,7 @@ test("a reject after the approval was sent withdraws it and sends none", () => {
   assert.equal(after.display, "blocked");
 });
 
-test("Principal approve on the current approval makes a HIGH request ready", () => {
+test("013. Principal approve on the current approval makes a HIGH request ready", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -208,13 +240,13 @@ test("Principal approve on the current approval makes a HIGH request ready", () 
   const s = state(o, entries);
   assert.equal(s.approvalValid, true);
   assert.equal(s.principal?.operation, OP(4));
-  assert.equal(s.ready, true); assert.equal(s.display, "applying"); assert.deepEqual(s.missing, []);
+  assert.equal(s.ready, true); assert.equal(s.display, "ready"); assert.deepEqual(s.missing, []);
   const waiting = state(o, entries.slice(0, 2));
   assert.equal(waiting.display, "principal-pending");
   assert.deepEqual(waiting.missing, [`Principal decision on approval ${MID(1)}`]);
 });
 
-test("a Principal vote naming a withdrawn approval is not counted", () => {
+test("014. A Principal vote naming a withdrawn approval is not counted", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -228,7 +260,7 @@ test("a Principal vote naming a withdrawn approval is not counted", () => {
   assert.equal(s.ready, false); assert.equal(s.display, "principal-pending");
 });
 
-test("a Principal reject closes the request", () => {
+test("015. A Principal reject closes the request", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -243,7 +275,7 @@ test("a Principal reject closes the request", () => {
   assert.equal(fx.approve, null);
 });
 
-test("cancel by the requester cancels and withdraws a current approval", () => {
+test("016. Cancel by the requester cancels and withdraws a current approval", () => {
   const o = open("HIGH");
   const entries = [
     vote(2, "bob", "approve"),
@@ -258,7 +290,7 @@ test("cancel by the requester cancels and withdraws a current approval", () => {
   assert.equal(fx.approve, null);
 });
 
-test("a refresh with a moved main marks the request stale; a null main does not", () => {
+test("017. A refresh with a moved main marks the request stale; a null main does not", () => {
   const o = open("LOW");
   assert.equal(state(o, [refresh(2, "3".repeat(40))]).terminal, "stale");
   assert.equal(state(o, [refresh(2, "3".repeat(40))]).display, "stale");
@@ -266,16 +298,16 @@ test("a refresh with a moved main marks the request stale; a null main does not"
   assert.equal(state(o, [refresh(2, null)]).ready, true);
 });
 
-test("an ordinary review entry does not change readiness", () => {
+test("018. An ordinary review entry does not change readiness", () => {
   const s = state(open("MEDIUM"), [review(2, "bob"), vote(3, "carol", "approve")]);
   assert.equal(s.ready, true);
 });
 
-test("integration state drives the display", () => {
+test("019. Integration state drives the display", () => {
   const ready = state(open("LOW"), []);
   const integration = (s: "pending" | "unknown" | "succeeded" | "failed") =>
     ({ operation: OP(50), state: s, errorCode: null }) as const;
-  assert.equal(state(open("LOW"), [], { integration: integration("pending") }).display, "applying");
+  assert.equal(state(open("LOW"), [], { integration: integration("pending") }).display, "waiting-resources");
   assert.equal(state(open("LOW"), [], { integration: integration("succeeded") }).display, "applied");
   assert.equal(state(open("LOW"), [], { integration: integration("failed") }).display, "blocked");
   assert.equal(state(open("LOW"), [], { integration: integration("unknown") }).display, "unknown");
@@ -284,7 +316,7 @@ test("integration state drives the display", () => {
   assert.equal(ready.ready, true);
 });
 
-test("a LOW challenge requires highPeerFloor approves", () => {
+test("020. A LOW challenge requires highPeerFloor approves", () => {
   const o = open("LOW", "challenge.open", OP(9), 5);
   const at = (seq: number, actor: string, verdict: "approve" | "reject") => vote(seq, actor, verdict, OP(9));
   const s0 = state(o, [at(6, "bob", "approve")], { highPeerFloor: 2 });
@@ -293,7 +325,7 @@ test("a LOW challenge requires highPeerFloor approves", () => {
   assert.equal(s1.ready, true);
 });
 
-test("the earliest terminal event wins", () => {
+test("021. The earliest terminal event wins", () => {
   const o = open("LOW");
   const s = state(o, [refresh(2, "3".repeat(40)), cancel(3)]);
   assert.equal(s.terminal, "stale");
@@ -301,17 +333,82 @@ test("the earliest terminal event wins", () => {
   assert.equal(s2.terminal, "cancelled");
 });
 
-test("inconsistent inputs are corrupt", () => {
+test("022. Inconsistent inputs are corrupt", () => {
   const o = open("LOW");
   const corrupt = (fn: () => unknown) => assert.throws(fn,
     (e: unknown) => e instanceof StoreError && e.code === "STORE_CORRUPT");
-  corrupt(() => reviewState({ open: o, entries: [vote(3, "bob", "approve"), vote(2, "carol", "approve")],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [vote(1, "bob", "approve")],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [vote(2, "bob", "approve", OP(7))],
-    eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: { ...o, fact: { kind: "review", version: 1, request: OP(1), body: "b" } },
-    entries: [], eligible: ELIGIBLE, highPeerFloor: 2, integration: null }));
-  corrupt(() => reviewState({ open: o, entries: [], eligible: ELIGIBLE, highPeerFloor: 0, integration: null }));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(3, "bob", "approve"), vote(2, "carol", "approve")],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(1, "bob", "approve")],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [vote(2, "bob", "approve", OP(7))],
+    eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: { ...o, fact: { kind: "review", version: 1, request: OP(1), body: "b" } },
+    entries: [], eligible: ELIGIBLE, highPeerFloor: 2, integration: null}));
+  corrupt(() => reviewState({maxWorkers: 64, open: o, entries: [], eligible: ELIGIBLE, highPeerFloor: 0, integration: null}));
+});
+
+test("023. Reviewer observations preserve counted approvals, stopped rejects and frozen authors", () => {
+  const opened = open("HIGH");
+  assert.equal(opened.fact.kind, "merge.open");
+  if (opened.fact.kind !== "merge.open") throw new Error("wrong fixture");
+  const input = { ...opened, fact: { ...opened.fact, submitters: ["alice", "absent"] } };
+  const agents = [makeValidAgent("alice", { desired: "stopped", capabilities: [] }),
+    makeValidAgent("bob", { capabilities: [] }), makeValidAgent("carol", { desired: "stopped" }),
+    makeValidAgent("dave"), makeValidAgent("principal")];
+  const observed = state(input, [vote(2, "bob", "approve"), vote(3, "carol", "reject"),
+    vote(4, "dave", "reject"), vote(5, "dave", "approve")], { eligible: new Set(["bob", "dave"]) });
+  const authority = new ReviewAuthorityReader({ listAgents: () => agents,
+    attestationFacts: () => [], getOperation: () => null }, 2, 6);
+  const rows = authority.reviewers(observed);
+  assert.deepEqual(observed.approvers, ["bob", "dave"], "present mail capability must not reinterpret accepted votes");
+  assert.deepEqual(observed.rejectors, ["carol"], "stopping a reviewer must not erase a reject");
+  assert.deepEqual(rows, [
+    { name: "absent", desired: null, exclusions: ["author", "missing-agent"], latestVote: null },
+    { name: "alice", desired: "stopped", exclusions: ["author", "not-enabled", "missing-mail-send"], latestVote: null },
+    { name: "bob", desired: "enabled", exclusions: ["missing-mail-send"], latestVote: "approve" },
+    { name: "carol", desired: "stopped", exclusions: ["not-enabled"], latestVote: "reject" },
+    { name: "dave", desired: "enabled", exclusions: [], latestVote: "approve" },
+  ]);
+});
+
+for (const kind of ["merge.open", "challenge.open"] as const) test(
+  `024. Review evaluation: ${kind}: only active author occupancy reduces potential peer capacity; every author stays excluded`, () => {
+    const original = open(kind === "merge.open" ? "MEDIUM" : "LOW", kind);
+    if (original.fact.kind !== kind) throw new Error("wrong opening fixture");
+    const opened = { ...original, fact: { ...original.fact, submitters: ["alice", "bob", "retired", "provisioning"] } };
+    const pending = state(opened, [vote(2, "bob", "approve")], {
+      maxWorkers: 2, eligible: new Set(["alice"]),
+    });
+    assert.deepEqual(pending.authors, ["alice", "bob", "provisioning", "retired"]);
+    assert.equal(pending.required, 1, "inactive historical authors leave the other slot available");
+    assert.equal(pending.capacityFallback, kind === "challenge.open", "challenge keeps the high peer floor");
+    assert.deepEqual(pending.approvers, [], "a stopped historical author's vote is never independent");
+    assert.equal(pending.ready, false);
+    const occupied = state(opened, [vote(2, "bob", "approve")], {
+      maxWorkers: 2, eligible: new Set(["alice", "bob"]),
+    });
+    assert.equal(occupied.required, 0, "two active authors occupy both slots");
+    assert.equal(occupied.principalRequired, true);
+    assert.deepEqual(occupied.approvers, [], "reactivation never makes an author independent");
+    const noAuthorsActive = state(opened, [], { maxWorkers: 2, eligible: new Set() });
+    assert.equal(noAuthorsActive.required, kind === "merge.open" ? 1 : 2,
+      "missing live reviewers do not create capacity fallback");
+    assert.equal(noAuthorsActive.capacityFallback, false);
+  });
+
+test("025. Active author departure invalidates zero-peer approval and its Principal decision", () => {
+  const opened = withMessages(open("HIGH"), [approvalMessage(MID(1), [])]);
+  const decision = vote(2, "principal", "approve", OP(1), MID(1));
+  const before = state(opened, [decision], { maxWorkers: 1, eligible: new Set(["alice"]) });
+  assert.equal(before.required, 0);
+  assert.equal(before.approvalValid, true);
+  assert.equal(before.ready, true);
+  const after = state(opened, [decision], { maxWorkers: 1, eligible: new Set() });
+  assert.equal(after.required, 1, "the freed active slot can hold an independent reviewer");
+  assert.equal(after.approvalValid, false);
+  assert.equal(after.ready, false);
+  assert.deepEqual(planEffects(before, after), {
+    withdraw: { id: MID(1), reason: "approval superseded" }, approve: null,
+  });
 });

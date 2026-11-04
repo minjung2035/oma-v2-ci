@@ -17,7 +17,7 @@ import { LifecycleModule } from "@oma/lifecycle";
 import { StoreError } from "@oma/domain/errors";
 import { encodeFrame } from "@oma/protocol/frame";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js"
 import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitFixture, seedGit } from "./fixtures/git-crash.js";
 import { padTree, removePad } from "./fixtures/storage-pad.js";
@@ -70,8 +70,7 @@ function society(t: TestContext) {
   const units = new PolicyExecution();
   t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" }));
   const views = new ViewsModule(store, root, "crash", "p");
-  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true },
-    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  const lifecycle = createLifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
   const paths = { stateRoot: root, runRoot: join(root, "run"), society: "crash", hasGoal: goalPublishedAt(root) };
   const broker = testBroker({ store: store, mail: mail, units: units, views: views, lifecycle: lifecycle, git: git, reviews: null, reconcile: null, paths: paths, limits: LIMITS });
   // This fixture supplies scripted bytes to the public framing/ownership
@@ -99,7 +98,7 @@ function society(t: TestContext) {
   return { root, store, git, paths, broker, bundle, serve, submitFrame, mailSend, wires };
 }
 
-test("V22A: a streamed submission owns its body until execution settles while ordinary mail proceeds", async t => {
+test("001. A streamed submission owns its body until execution settles while ordinary mail proceeds", async t => {
   const entered = deferred(); const release = deferred();
   t.after(() => release.resolve());
   const f = society(t);
@@ -132,7 +131,7 @@ test("V22A: a streamed submission owns its body until execution settles while or
   assert.equal((await f.mailSend("after-settle")).ok, true, "settled transport does not gate new mail");
 });
 
-test("P0V-50 / F4, P0-4: a caller that goes away does not remove the body its accepted execution owns", async t => {
+test("002. A caller that goes away does not remove the body its accepted execution owns", async t => {
   const entered = deferred(); const release = deferred();
   t.after(() => release.resolve());
   const f = society(t);
@@ -158,7 +157,7 @@ test("P0V-50 / F4, P0-4: a caller that goes away does not remove the body its ac
   await until(() => f.wires().length === 0, "the execution-owned body to close");
 });
 
-test("V22A: partial transport bodies close once and large-tree streams remain unrestricted", async t => {
+test("003. Partial transport bodies close once and large-tree streams remain unrestricted", async t => {
   const f = society(t);
   // Closed mid-stream: the unaccepted partial transport copy is removed.
   const cut = f.serve();

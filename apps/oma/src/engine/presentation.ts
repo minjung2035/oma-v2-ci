@@ -2,8 +2,8 @@
 import type { EnginePresentation } from "@oma/engine/presentation";
 import { stylePanel } from "@oma/tui/panel-style";
 import { registerAskUserQuestionPresenter } from "@oma/tui/ask-user-question/presenter";
-import { createCompactToolRuntime } from "@oma/tui/compact-tools";
+import { createCompactToolRuntime, renderMailDelivery } from "@oma/tui/compact-tools";
 export const enginePresentation: EnginePresentation = {
-  stylePanel, createCompactTools: createCompactToolRuntime,
+  stylePanel, createCompactTools: createCompactToolRuntime, renderMail: renderMailDelivery,
   registerQuestions: (pi, deps) => { registerAskUserQuestionPresenter(pi, deps); },
 };

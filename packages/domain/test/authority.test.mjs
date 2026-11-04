@@ -7,7 +7,7 @@ import { resolvedSpec } from "./fixtures/agent-spec.mjs";
 const rejects = (specJson) => {
     assert.throws(() => capabilitiesOf({ specJson }), (error) => error instanceof StoreError && error.code === "STORE_CORRUPT", specJson);
 };
-test("authority accepts only a closed resolved spec", () => {
+test("001. Authority accepts only a closed resolved spec", () => {
     const base = JSON.parse(resolvedSpec(["mail.send"], "child", "agent"));
     for (const bad of [
         { ...base, modelProfile: undefined },

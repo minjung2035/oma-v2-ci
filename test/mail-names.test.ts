@@ -4,7 +4,7 @@ import { mailNamerFor, mailPartyName } from "@oma/tui/mail-names";
 
 /** Actual names remain stable across roster changes. */
 
-test("B4: the fixed roles map without a roster", () => {
+test("001. The fixed roles map without a roster", () => {
   const name = mailNamerFor(undefined);
   assert.equal(name("residents"), "residents");
   assert.equal(name("commons"), "commons");
@@ -15,7 +15,7 @@ test("B4: the fixed roles map without a roster", () => {
   assert.equal(name("ghost"), "ghost");
 });
 
-test("B4: a roster preserves actual worker names", () => {
+test("002. A roster preserves actual worker names", () => {
   const name = mailNamerFor(["principal", "worker-b", "worker-a"]);
   assert.equal(name("worker-a"), "worker-a");
   assert.equal(name("worker-b"), "worker-b");
@@ -27,7 +27,7 @@ test("B4: a roster preserves actual worker names", () => {
   assert.equal(name("worker-z"), "worker-z");
 });
 
-test("B4: names do not depend on roster order", () => {
+test("003. Names do not depend on roster order", () => {
   const forward = mailNamerFor(["worker-a", "worker-b", "worker-c"]);
   const shuffled = mailNamerFor(["worker-c", "worker-a", "worker-b", "worker-a"]);
   for (const local of ["worker-a", "worker-b", "worker-c"])
@@ -35,7 +35,7 @@ test("B4: names do not depend on roster order", () => {
   assert.equal(forward("worker-c"), "worker-c");
 });
 
-test("B4: a roster actor named like a topic is a worker, not a topic", () => {
+test("004. A roster actor named like a topic is a worker, not a topic", () => {
   // parseDisplayedAddress lets an actor keep its name over the topic shape;
   // the screen agrees -- the roster decides before the shape does.
   const name = mailNamerFor(["topic-x", "worker-a"]);
@@ -44,7 +44,7 @@ test("B4: a roster actor named like a topic is a worker, not a topic", () => {
   assert.equal(mailNamerFor(["worker-a"])("topic-x"), "topic/x");
 });
 
-test("B4: mailPartyName preserves actor identities", () => {
+test("005. MailPartyName preserves actor identities", () => {
   const workers = ["worker-a", "worker-b"];
   assert.equal(mailPartyName("worker-b", workers), "worker-b");
   assert.equal(mailPartyName("worker-b", undefined), "worker-b");

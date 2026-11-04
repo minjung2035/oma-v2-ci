@@ -34,7 +34,7 @@
  */
 import { randomBytes } from "node:crypto";
 import type { Duplex } from "node:stream";
-import type { AuthContext, BoundaryEvidence, PreparedBatch, Request } from "@oma/contracts";
+import type { AuthContext, BatchCompletionInput, PreparedBatch, Request } from "@oma/contracts";
 import { StoreError, publicFailure } from "@oma/domain/errors";
 import { INTERNAL_METHODS, internalEnvelopeProblem } from "@oma/protocol/methods";
 import {
@@ -89,12 +89,17 @@ export interface PrincipalEndpointPorts extends ConnectionPorts {
 }
 
 export interface PrincipalHostEndpointPorts extends ConnectionPorts {
-  readonly prepare: (auth: AuthContext) => Promise<PreparedBatch | null>;
-  readonly complete: (auth: AuthContext, evidence: BoundaryEvidence) => Promise<void>;
+  readonly prepare: (auth: AuthContext, responseId?: string) => Promise<PreparedBatch | null>;
+  readonly complete: (auth: AuthContext, evidence: BatchCompletionInput) => Promise<void>;
   /** The engine this broker currently holds a Principal registration for, or
    * null when it holds none. Read on every request, because a registration is
    * retired by events this endpoint never sees. */
   readonly registeredEngine: () => number | null;
+  /** Selected startup/reconnect only. Preparation is not presentation or ACK;
+   * completion still requires the registered engine's original evidence. */
+  readonly prepareBeforeRegistration?: () => boolean;
+  /** Selected Human operations only. No model/extension connection reaches this port. */
+  readonly control?: (auth: AuthContext, params: import("@oma/contracts/internal-wire").HostControlParams) => Promise<import("@oma/contracts/internal-wire").HostControlResult>;
 }
 
 interface RegisteredSession {
@@ -297,6 +302,8 @@ export class PrincipalEndpoint {
             // P0V-32: the envelope is read the way every internal one is.
             const problem = internalEnvelopeProblem(raw);
             if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
+            if (INTERNAL_METHODS["principal.detach"].paramsCheck(raw.params) !== null)
+              throw new StoreError("INVALID_REQUEST", "invalid principal detach parameters");
             attachedTo = null;
             this.attached.delete(socket);
             // The declared answer (response-codec), not a shape of its own.
@@ -345,10 +352,9 @@ export class PrincipalEndpoint {
   }
 }
 
-/** PR-002: the host's endpoint for delivering mail to the Principal. It serves
- * exactly the runner's two delivery methods, with their registered shapes, for
- * the Principal actor, to exactly one process: the host at the other end of
- * the supervision channel. */
+/** PR-002: Principal delivery still requires a registered engine. Explicit
+ * Human controls instead require the supervising host itself and the original
+ * Lifecycle authority. Neither route is served to model/extension descendants. */
 export class PrincipalHostEndpoint {
   private open = true;
 
@@ -380,26 +386,36 @@ export class PrincipalHostEndpoint {
     // what a caller may retry. It is also settled before anything about the
     // Principal, because whether a method exists does not depend on whether a
     // session is registered.
+    if (method === "host.control") {
+      if (INTERNAL_METHODS[method].paramsCheck(raw.params) !== null)
+        throw new StoreError("INVALID_REQUEST", "invalid Human control parameters");
+      if (!this.ports.control) throw new StoreError("UNSUPPORTED_PROFILE", "Human collaboration controls are not bound");
+      // Host identity is pinned to the supervision peer, not to a model credential
+      // or an engine registration. Keep the original live capability getter.
+      const source = this.ports.principalContext(peer, () => this.open && peer.alive());
+      if (!source) throw new StoreError("AUTH_FAILED", "no current Principal authority for this supervising host");
+      const auth: AuthContext = { actor: source.actor, role: source.role, incarnation: source.incarnation, peer: source.peer, channel: "host",
+        get capabilities() { return source.capabilities; } };
+      return okAnswer(id, await this.ports.control(auth, raw.params as import("@oma/contracts/internal-wire").HostControlParams));
+    }
     if (method !== "batch.prepare" && method !== "batch.complete")
       throw new StoreError("UNKNOWN_METHOD", `method ${String(method)} is not served on the principal host endpoint`);
-    // Being the host is not being a Principal. Delivery puts the society's mail
-    // into an engine and records a boundary against it, and only a registration
-    // this broker made says which engine that is and that this broker accepted
-    // it. Without one there is nothing to deliver to, however sure the host is
-    // that it has an engine: a refused or not-yet-answered registration used to
-    // be indistinguishable here from an accepted one.
-    if (this.ports.registeredEngine() === null)
-      throw new StoreError("AUTH_FAILED", "no principal session is registered with this broker");
-    const auth = this.ports.principalContext(peer, () => this.ports.registeredEngine() !== null);
+    // Legacy delivery and every completion require a registered engine. The
+    // selected supervising host may prepare the original batch/records before
+    // startup; this neither presents it nor creates completion evidence.
+    const live = (): boolean => this.open && peer.alive() && (this.ports.registeredEngine() !== null ||
+      (method === "batch.prepare" && this.ports.prepareBeforeRegistration?.() === true));
+    if (!live()) throw new StoreError("AUTH_FAILED", "no principal session is registered with this broker");
+    const auth = this.ports.principalContext(peer, live);
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to deliver to");
     if (method === "batch.prepare") {
       if (INTERNAL_METHODS["batch.prepare"].paramsCheck(raw.params) !== null)
         throw new StoreError("INVALID_REQUEST", "invalid batch.prepare parameters");
-      return okAnswer(id, await this.ports.prepare(auth));
+      return okAnswer(id, await this.ports.prepare(auth, id));
     }
     if (INTERNAL_METHODS["batch.complete"].paramsCheck(raw.params) !== null)
       throw new StoreError("INVALID_REQUEST", "invalid batch.complete parameters");
-    await this.ports.complete(auth, raw.params as BoundaryEvidence);
+    await this.ports.complete(auth, raw.params as BatchCompletionInput);
     return okAnswer(id, { completed: true });
   }
 }

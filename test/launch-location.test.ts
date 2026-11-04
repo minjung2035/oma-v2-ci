@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { hostLaunchLocation, launchedLocation, launchedPath, launchLocationArgv } from "#oma-test/app/runtime/assets";
 
-test("D03 host location: XDG roots from the host's environment and an absolute config path", () => {
+test("001. Host location: XDG roots from the host's environment and an absolute config path", () => {
   const custom = hostLaunchLocation("demo", { XDG_DATA_HOME: "/d", XDG_RUNTIME_DIR: "/r", HOME: "/h" }, "rel/c.json");
   assert.deepEqual({ ...custom }, { society: "demo", stateRoot: "/d/oma/demo", runRoot: "/r/oma/demo", configPath: join(process.cwd(), "rel/c.json") });
   const fallback = hostLaunchLocation("demo", { HOME: "/h" });
@@ -13,7 +13,7 @@ test("D03 host location: XDG roots from the host's environment and an absolute c
   assert.deepEqual(launchedLocation(["--society", "demo", ...launchLocationArgv(custom)], "demo"), custom);
 });
 
-test("D03 host location: an environment with no data root is said, never /tmp", () => {
+test("002. Host location: an environment with no data root is said, never /tmp", () => {
   // A process whose environment holds neither XDG_DATA_HOME nor HOME has no
   // data root at all; writing a society's state under a guessed /tmp would be
   // a shared-space write nobody asked for. It is named instead.
@@ -26,7 +26,7 @@ test("D03 host location: an environment with no data root is said, never /tmp", 
   assert.equal(rooted.stateRoot, "/d/oma/demo");
 });
 
-test("D03 launched location: every part given once, normalized, absolute and naming this society", () => {
+test("003. Launched location: every part given once, normalized, absolute and naming this society", () => {
   const good = ["--config", "/c/x.json", "--state-root", "/d/oma/demo", "--run-root", "/r/oma/demo"];
   assert.equal(launchedLocation(good, "demo").configPath, "/c/x.json");
   const refused: string[][] = [

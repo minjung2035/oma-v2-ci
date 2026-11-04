@@ -20,7 +20,7 @@ function fixture(t: TestContext, reader?: CacheReader) {
 }
 const follow = (key = "follow-1"): FreezeInput => ({ key, method: "route.follow", params: { topic: "commons" }, createdAtMs: 1 });
 
-test("RequestCache publishes body before frozen metadata and round-trips valid legacy shape", t => {
+test("001. RequestCache publishes body before frozen metadata and round-trips valid legacy shape", t => {
   const { dir, cache } = fixture(t); const input = context();
   assert.equal(input.digest?.sha256, HELLO_HASH);
   assert.deepEqual(cache.read(input.key), { kind: "absent" });
@@ -35,7 +35,7 @@ test("RequestCache publishes body before frozen metadata and round-trips valid l
   assert.equal(cache.read("legacy").kind, "present");
 });
 
-test("malformed, extended, wrong-method and wrong-relation cache JSON are corrupt, never absent", t => {
+test("002. Malformed, extended, wrong-method and wrong-relation cache JSON are corrupt, never absent", t => {
   const { dir, cache } = fixture(t);
   cache.freeze(follow("bad")); const path = join(dir, "bad.json");
   assert.equal(cache.read("bad").kind, "present");
@@ -65,7 +65,7 @@ test("malformed, extended, wrong-method and wrong-relation cache JSON are corrup
   assert.equal(decodeReceipt(null).ok, false, "null is not a Receipt");
 });
 
-test("I/O uncertainty is preserved instead of becoming an absent cache", t => {
+test("003. I/O uncertainty is preserved instead of becoming an absent cache", t => {
   for (const code of ["EACCES", "EIO"]) {
     const { cache } = fixture(t, () => ({ kind: "unavailable", reason: code }));
     assert.deepEqual(cache.read("cache-1"), { kind: "unavailable", reason: code });
@@ -77,7 +77,7 @@ test("I/O uncertainty is preserved instead of becoming an absent cache", t => {
   assert.deepEqual(cache.readBody("cache-1", { bytes: 5, sha256: HELLO_HASH }), { kind: "absent" });
 });
 
-test("body-only crashes and metadata-only corruption cannot reconstruct a freeze", t => {
+test("004. Body-only crashes and metadata-only corruption cannot reconstruct a freeze", t => {
   const { dir, cache } = fixture(t);
   mkdirSync(dir, { recursive: true }); replaceArtifactBytes(cache.bodyPath("orphan"), "hello");
   assert.equal(cache.read("orphan").kind, "corrupt");
@@ -94,7 +94,7 @@ test("body-only crashes and metadata-only corruption cannot reconstruct a freeze
   assert.equal(readdirSync(dir).includes("cache-1.body"), false);
 });
 
-test("initial freeze cannot overwrite an identity or smuggle in a receipt", t => {
+test("005. Initial freeze cannot overwrite an identity or smuggle in a receipt", t => {
   const { dir, cache } = fixture(t); cache.freeze(context(), Buffer.from("hello"));
   const before = readFileSync(join(dir, "cache-1.json"), "utf8");
   assert.equal(cache.freeze(context(), Buffer.from("hello")).kind, "existing");
@@ -104,7 +104,7 @@ test("initial freeze cannot overwrite an identity or smuggle in a receipt", t =>
   assert.equal(readFileSync(cache.bodyPath("cache-1"), "utf8"), "hello");
 });
 
-test("receipt updates cannot replace immutable request fields or change operation identity", t => {
+test("006. Receipt updates cannot replace immutable request fields or change operation identity", t => {
   const { dir, cache } = fixture(t); cache.freeze(follow());
   const pending = { operation: OP, state: "pending" };
   assert.deepEqual(cache.updateReceipt("follow-1", pending), { ...follow(), lastReceipt: pending });
@@ -114,7 +114,7 @@ test("receipt updates cannot replace immutable request fields or change operatio
   assert.equal(readFileSync(join(dir, "follow-1.json"), "utf8"), bytes);
 });
 
-test("competing processes cannot publish different bodies for one frozen identity", async t => {
+test("007. Competing processes cannot publish different bodies for one frozen identity", async t => {
   const { home, cache } = fixture(t); const sourceUrl = new URL(import.meta.resolve("#oma-test/app/request-cache")).href;
   const run = (text: string) => {
     const source = `import { RequestCache } from ${JSON.stringify(sourceUrl)};
@@ -147,7 +147,7 @@ test("competing processes cannot publish different bodies for one frozen identit
   if (body.kind === "present") assert.ok(["hello", "world"].includes(Buffer.from(body.value).toString()));
 });
 
-test("P0V-71 / F4, P0-3: the first freeze in a home makes every name on the cache's new path durable", t => {
+test("008. The first freeze in a home makes every name on the cache's new path durable", t => {
   const { home, dir, cache } = fixture(t);
   const fs = createRequire(import.meta.url)("node:fs") as typeof import("node:fs");
   const real = fs.fsyncSync;

@@ -17,7 +17,7 @@ import { makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { makeValidMessagePlan } from "./fixtures/valid.js";
 import { lifecycleReplayFixture } from "./fixtures/lifecycle-replay.js";
 
-test("V03-S1: durable plan owner itself rejects a mismatched resolved spec digest", () => {
+test("001. Durable plan owner itself rejects a mismatched resolved spec digest", () => {
   const operationId = generateOperationId();
   const spec = makeValidResolvedSpec("bob");
   const check = operationPlanCheck("agent.create", {
@@ -43,7 +43,7 @@ test("V03-S1: durable plan owner itself rejects a mismatched resolved spec diges
   );
 });
 
-test("V03-S2: acceptance authority owner checks durable capability independently of a permissive live lease", () => {
+test("002. Acceptance authority owner checks durable capability independently of a permissive live lease", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-authority-owner-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -69,7 +69,7 @@ test("V03-S2: acceptance authority owner checks durable capability independently
   }
 });
 
-test("V03-S3: Store update owner forbids every retired state exit without workflow help", () => {
+test("003. Store update owner forbids every retired state exit without workflow help", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-retired-owner-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
@@ -95,7 +95,7 @@ test("V03-S3: Store update owner forbids every retired state exit without workfl
   }
 });
 
-test("P08: missing activation gates fail at construction and an explicit closed gate emits no start effect", async () => {
+test("004. Missing activation gates fail at construction and an explicit closed gate emits no start effect", async () => {
   const f = lifecycleReplayFixture();
   try {
     const paths = {
@@ -141,7 +141,7 @@ test("P08: missing activation gates fail at construction and an explicit closed 
   }
 });
 
-test("A02: a second same-process lock open cannot borrow the first descriptor's authority", () => {
+test("005. A second same-process lock open cannot borrow the first descriptor's authority", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-single-lock-"));
   const path = join(root, "broker.lock");
   const first = ProcessLock.acquire(path);

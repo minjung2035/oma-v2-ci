@@ -1,0 +1,78 @@
+✔ AV7 / INV03, P0V-61: each record names the generation its commit replaced, so a record lost before it changes nothing (85.941286ms)
+✔ P0V-47 / F1, P0-3: a record an append left unfinished is closed off, so the next record and the previous generation survive (147.256658ms)
+✔ AV7 / INV02: a journal that cannot be read removes no generation, only what was never committed (72.997211ms)
+✔ AV7 / INV02, P0V-61: when no record says what the current generation's commit replaced, every generation is kept (77.032389ms)
+✔ DR46: retired journal names refuse load, edit and collection without changing existing bytes (71.035703ms)
+✔ P0V-61 / R06, P0-3: a configuration that returns (A, B, A) keeps B, the generation its last commit replaced (69.331776ms)
+✔ P0V-72 / F5, P0-5: a journal read that returns less than was asked is read on, and one that ends early keeps everything (162.156321ms)
+✔ AV7 / INV02: an existing generation that cannot be read is not reported as holding other bytes (67.820159ms)
+✔ DR46 / P0-5: a journal append that writes zero bytes refuses without replacing the manifest (68.891803ms)
+✔ F36: optional system binds are closed, absence-gated, and include symlink targets (1.804657ms)
+✔ F34/F35: explicit entries cannot override the normalized base environment (7.04152ms)
+✔ U1: config validation and Resident plans reject missing confinement and host-root profiles (2.021448ms)
+✔ F34/F35/F36 live: locale, identity, temp, user-local PATH and support files work without host env or network (241.719391ms)
+✔ FI-1: a Resident's Git commits as its actor, and no Git flow waits on an editor or a prompt (1.044235ms)
+✔ FI-2: the pinned Node's npm, npx and corepack are mounted and linked beside it (9.773582ms)
+✔ FI-2: the toolchain contract -- this host's pinned Node ships the commands a Worker is promised (0.222161ms)
+✖ FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx (334.393315ms)
+✔ Mac Worker command keeps literal argv, physical cwd and owned environment (3.396465ms)
+✔ Mac Worker recipe refuses forged leases and every substituted actor directory (1.357216ms)
+✔ Mac Worker recipe fixes owned environment and refuses ambient secrets and preload substitution (2.127709ms)
+✔ Mac Worker recipe refuses broad installation roots, escaped hidden paths and nonphysical entries (0.695843ms)
+✔ Mac Worker private-state overlap: libdir nested outside writable actor roots is refused (0.274232ms)
+✔ Mac Worker private-state overlap: packages nested outside writable actor roots is refused (0.203011ms)
+✔ Mac Worker private-state overlap: node nested outside writable actor roots is refused (0.245741ms)
+✔ Mac Worker private-state overlap: developer nested outside writable actor roots is refused (0.272211ms)
+✔ Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI (4.527449ms)
+✔ Mac Worker App port refuses missing tools and snapshots the observed installation (2.21486ms)
+✔ Mac Worker App port refuses selected developer roots overlapping writable actor state (0.543542ms)
+✔ Linux Worker composition refuses a Mac installation launch (0.111351ms)
+✔ R38 C05: every witnessed new owner is enumerated without requiring cloc (10.385905ms)
+✔ R38 C05: omission, duplicate identity and out-of-root paths cannot lower the inventory (3.123943ms)
+✔ R38 C05: equal bytes in distinct source files are counted, symlink sources are rejected (2.465701ms)
+✔ R38: the measured artifacts are bound to the source they were taken from (32.447048ms)
+✔ R38: the pinned tool re-measures real source and catches a forged count (861.715504ms)
+✔ R38: the verification closure includes every class of local gate input (96.981973ms)
+✔ R38: package, compiler, owner, spec and workflow changes all change the verification digest (25.641109ms)
+✔ R38: a clean checkout can bind input bytes before dependency installation (78.883396ms)
+✔ R38: README link findings cannot change without changing their verification identity (4.471129ms)
+✔ R38: newly discovered project guidance is bound even when its placement is invalid (5.076792ms)
+✔ DR44: structural rebinding is idempotent and preserves authored outcomes and review claims (4.254018ms)
+✔ R38: the lane's bound source is the canonical closure -- committed digests in, CI artifacts out (521.628634ms)
+✔ R38: the validation record names the verification inputs that were run, by their bytes (350.110013ms)
+✔ R38: the figures the validation record quotes remain historical; current LOC is CI-generated evidence (2106.532827ms)
+✔ V32A: the committed ledger accounts for every current and baseline file, with evidence for every review (747.5418ms)
+✔ DR27/V32A: historical review cannot certify unbound working-tree changes (49.469681ms)
+✔ V32A: verification git plumbing runs under the canonical process bound (0.471762ms)
+✔ V32A: a working-tree review is bound to the reviewed file bytes (611.608011ms)
+✔ V32A: approval is refused while files are unreviewed or a required lane has not run (1621.187342ms)
+✔ V32A: every plan oracle is a test, or carried by tests an executed lane requires, or recorded as not run (2109.16468ms)
+✔ V32A: an assignment is not a review, and a claimed review needs real oracles (2916.824867ms)
+✔ V32A: with every file reviewed and every lane run, and only then, the verdict is approval (5709.96959ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 50
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19936.796786
+
+✖ failing tests:
+
+test at dist/test/sandbox-environment.test.js:204:1
+✖ FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx (334.393315ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\d+\.\d+\.\d+$/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/dist/test/sandbox-environment.test.js:246:16)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /^\d+\.\d+\.\d+$/,
+    operator: 'match',
+    diff: 'simple'
+  }

@@ -22,7 +22,7 @@ const entries = [
 
 // Literal expectations come from CTX-001 and the supported v1 validator, not
 // from the refactored descriptor or generator being checked.
-test("the exact supported context path vocabulary is retained", () => {
+test("001. The exact supported context path vocabulary is retained", () => {
   assert.equal(wirePathCheck, contextPathCheck, "wire validation must use the same owner");
   assert.equal(wireFileCheck, contextFileCheck, "content validation must use the same owner");
   for (const name of ["GOAL.md", "RATIONALE.md", "decisions/0001.md", "decisions/reason.md"])
@@ -31,7 +31,7 @@ test("the exact supported context path vocabulary is retained", () => {
     assert.notEqual(contextPathCheck(name), null, name);
 });
 
-test("shared policy preserves accepted UTF-8 Markdown instead of adding a content blacklist", () => {
+test("002. Shared policy preserves accepted UTF-8 Markdown instead of adding a content blacklist", () => {
   for (const text of ["# GOAL\n한국어 목적\n", " \n", "<!-- explanation -->\n", "#!/example\nThis is documentation, not an executable file.\n"]) {
     assert.equal(contextFileCheck("GOAL.md", Buffer.from(text)), null, text);
   }
@@ -41,7 +41,7 @@ test("shared policy preserves accepted UTF-8 Markdown instead of adding a conten
     assert.notEqual(contextFileCheck("GOAL.md", bytes), null);
 });
 
-test("wire and durable manifests share path ordering and overflow rules without rewriting input", () => {
+test("003. Wire and durable manifests share path ordering and overflow rules without rewriting input", () => {
   const payload = { expected: null, entries, content: { bytes: 12, sha256: SHA, mediaType: "application/vnd.oma.context-v1" } };
   const before = JSON.stringify(payload);
   const checkWire = contextPublishParamsCheck(limits);
@@ -57,7 +57,7 @@ test("wire and durable manifests share path ordering and overflow rules without 
 });
 
 
-test("DR27: explicit GOAL mail meets the mail body bound before stream admission", () => {
+test("004. Explicit GOAL mail meets the mail body bound before stream admission", () => {
   const payload = { expected: null, entries, content: { bytes: 12, sha256: SHA, mediaType: "application/vnd.oma.context-v1" } };
   const check = contextPublishParamsCheck({ ...limits, mailBodyBytes: 4 });
   assert.equal(check(payload), null, "ordinary context files retain the context bound");

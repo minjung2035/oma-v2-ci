@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import type { ProjectSessionDirectories } from './session-directories.js';
 import type { InteractiveView } from './interactive-view.js';
 import type { InteractiveState, InteractiveOutput } from './interactive-state.js';
-import type { InteractiveInput } from './interactive-input.js';
+import { requestSessionSwitch, type InteractiveInput } from './interactive-input.js';
 type EngineModel = NonNullable<AgentSession['model']>;
 type EngineEffort = ConstructorParameters<typeof ThinkingSelectorComponent>[0];
 export function createInteractiveSelections(view: InteractiveView, state: InteractiveState, ui: InteractiveOutput, human: Pick<InteractiveInput, 'pendingInput'>, sessionDirs: ProjectSessionDirectories, ownSessions: string, brand: {
@@ -149,8 +149,8 @@ export function createInteractiveSelections(view: InteractiveView, state: Intera
                             view.notify(String(error), "error");
                     });
                 else
-                    ui.send({
-                        type: "switch", session: path
+                    void requestSessionSwitch(view, state, ui, { session: path }).catch(error => {
+                        if (view.current(epoch)) view.notify(String(error), "error");
                     });
             }, () => done(), () => {
                 done();

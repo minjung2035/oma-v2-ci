@@ -25,7 +25,7 @@ try {
   observed = JSON.parse(executed.stdout);
 } finally { rmSync(work, { recursive: true, force: true }); }
 
-test("descriptor oracle: actual kernel identity, cursor positions and exec markers are distinct observations", t => {
+test("001. Descriptor oracle: actual kernel identity, cursor positions and exec markers are distinct observations", t => {
   assert.equal(observed.case, "descriptor-oracle-controls");
   const value = observed.fileDescriptors;
   t.diagnostic(JSON.stringify({ oracle: "descriptor-capabilities", observed: value }));
@@ -61,7 +61,7 @@ for (const [name, change] of [
   ["failed fileport without errno", row => { row.fileport.available = true; row.fileport.makeportReturn = -1; row.fileport.makeportErrno = 0; }],
   ["extra support claim", row => { row.supported = true; }],
   ["NUL-joined extra fields", row => { row["exec\0fileport"] = row.exec; delete row.exec; delete row.fileport; }],
-]) test(`descriptor evidence grammar refuses ${name}`, () => {
+]) test(`002. Descriptor evidence grammar refuses ${name}`, () => {
   const row = structuredClone(observed.fileDescriptors); change(row);
   assert.throws(() => validateDescriptorCapabilityObservation(row));
 });

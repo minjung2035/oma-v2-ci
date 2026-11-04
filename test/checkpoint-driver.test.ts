@@ -60,7 +60,7 @@ async function fixture(run: (root: string) => Promise<void>) {
 
 for (const expected of DERIVED_FAILURE_CASES) {
   const { point } = expected;
-  test(`V02B: confirmed process death at ${point} has a fresh physical observer`, async (t) => {
+  test(`001. Confirmed process death at ${point} has a fresh physical observer`, async (t) => {
     await fixture(async (root) => {
       const before = observeFile(join(root, "pointer"));
       const stopped = await killAtCheckpoint(
@@ -92,7 +92,7 @@ for (const [mode, reason] of [
   ["silent", /timeout/],
   ["throw-only", /not reached/],
 ] as const) {
-  test(`V02B: ${mode} cannot be reported as checkpoint-qualified death`, async () => {
+  test(`002. Checkpoint driver: ${mode} cannot be reported as checkpoint-qualified death`, async () => {
     await fixture(async (root) => {
       const failure = await killAtCheckpoint(
         worker,
@@ -119,7 +119,7 @@ for (const [mode, reason] of [
   });
 }
 
-test("V02B: actual death leaves the pre-rename temporary whereas ordinary throw cleaned it", async () => {
+test("003. Actual death leaves the pre-rename temporary whereas ordinary throw cleaned it", async () => {
   await fixture(async (root) => {
     await killAtCheckpoint(
       worker,
@@ -137,7 +137,7 @@ test("V02B: actual death leaves the pre-rename temporary whereas ordinary throw 
   });
 });
 
-test("V02B: a lying checkpoint message cannot satisfy the independent effect oracle", async () => {
+test("004. A lying checkpoint message cannot satisfy the independent effect oracle", async () => {
   await fixture(async (root) => {
     await killAtCheckpoint(
       worker,
@@ -149,7 +149,7 @@ test("V02B: a lying checkpoint message cannot satisfy the independent effect ora
   });
 });
 
-test("V02B: actual Mail acceptance survives commit-before-response in a fresh process", async (t) => {
+test("005. Actual Mail acceptance survives commit-before-response in a fresh process", async (t) => {
   await fixture(async (root) => {
     const expected = MAIL_ACCEPTANCE_EXPECTED;
     const store = new Store(join(root, "runtime.sqlite"));
@@ -201,7 +201,7 @@ test("V02B: actual Mail acceptance survives commit-before-response in a fresh pr
   });
 });
 
-test("V02B: published Git CAS is observed independently before result mail and response", async (t) => {
+test("006. Published Git CAS is observed independently before result mail and response", async (t) => {
   await fixture(async (root) => {
     const expected = GIT_PUBLICATION_EXPECTED;
     const store = new Store(join(root, "runtime.sqlite"));

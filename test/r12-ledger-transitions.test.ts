@@ -41,7 +41,7 @@ function batch(store: Store): void {
   assert.equal(store.getBatch(BATCH)?.state, "prepared");
 }
 
-test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fail and no row read as corrupt", t => {
+test("001. A wall clock that steps back makes no state change fail and no row read as corrupt", t => {
   const at = Date.UTC(2026, 8, 26, 12);
   t.mock.timers.enable({ apis: ["Date"], now: at });
   const store = fixture(t);
@@ -69,7 +69,7 @@ test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fai
   assert.ok(operation.updatedAtMs >= operation.createdAtMs);
 });
 
-test("P0V-56 / R01, P0-5: a clock that steps back after materialization does not make the batch's completion corrupt", t => {
+test("002. A clock that steps back after materialization does not make the batch's completion corrupt", t => {
   const created = Date.UTC(2026, 8, 27, 9);
   t.mock.timers.enable({ apis: ["Date"], now: created });
   const store = fixture(t);
@@ -86,7 +86,7 @@ test("P0V-56 / R01, P0-5: a clock that steps back after materialization does not
   assert.equal(store.getBatch(BATCH)?.state, "completed");
 });
 
-test("P0V-56 / R01: an agent and an operation are created with one reading of the clock", t => {
+test("003. An agent and an operation are created with one reading of the clock", t => {
   // Two readings would put the update before the creation if the clock
   // stepped back between them, and the row would then read as corrupt.
   // Here every reading is earlier than the one before it.
@@ -99,7 +99,7 @@ test("P0V-56 / R01: an agent and an operation are created with one reading of th
   assert.equal(operation.updatedAtMs, operation.createdAtMs);
 });
 
-test("P0V-56 / R01, F1: every order of the wall clock across a delivery's stages is a valid history", t => {
+test("004. Every order of the wall clock across a delivery's stages is a valid history", t => {
   // Creation, materialization with the batch, completion and acknowledgement
   // each at one of three wall-clock times, in every combination (3^4): no
   // legal transition is read back as corruption, the fence stays open, and a
@@ -136,7 +136,7 @@ test("P0V-56 / R01, F1: every order of the wall clock across a delivery's stages
   }
 });
 
-test("R12: only the intended identical delivery/subscription conflicts are no-ops", async t => {
+test("005. Only the intended identical delivery/subscription conflicts are no-ops", async t => {
   const store = fixture(t);
   store.transaction(tx => tx.follow("dev", "alice"));
   const delivery = store.getDelivery(MESSAGE, "alice");
@@ -155,20 +155,20 @@ test("R12: only the intended identical delivery/subscription conflicts are no-op
   assert.deepEqual(store.getDelivery(MESSAGE, "alice"), delivery);
 });
 
-test("R12: missing rows are not successful materialization or acknowledgement", t => {
+test("006. Missing rows are not successful materialization or acknowledgement", t => {
   const store = fixture(t);
   assert.throws(() => store.transaction(tx => tx.markMaterialized(EXTRA, "alice")), matches("STORE_CORRUPT"));
   assert.throws(() => store.transaction(tx => tx.markAcknowledged(EXTRA, "alice")), matches("REQUEST_NOT_FOUND"));
 });
 
-test("R12: incomplete batch acceptance rolls back instead of persisting an empty linked set", t => {
+test("007. Incomplete batch acceptance rolls back instead of persisting an empty linked set", t => {
   const store = fixture(t);
   assert.throws(() => store.transaction(tx => tx.insertPreparedBatch({ id: BATCH, agent: "alice", incarnation: 1, messageIds: [MESSAGE], sessionPath: null })), matches("STORE_CORRUPT"));
   assert.equal(store.getBatch(BATCH), null);
   assert.equal(store.getDelivery(MESSAGE, "alice")?.batchId, null);
 });
 
-test("R12: links and completion reject different owner, incarnation, missing/extra/duplicate manifest", t => {
+test("008. Links and completion reject different owner, incarnation, missing/extra/duplicate manifest", t => {
   const store = fixture(t); batch(store);
   for (const values of [[], [MESSAGE, EXTRA], [MESSAGE, MESSAGE]]) {
     assert.throws(() => store.transaction(tx => tx.linkDeliveriesToBatch(BATCH, values)), matches("BATCH_CONFLICT"));
@@ -181,7 +181,7 @@ test("R12: links and completion reject different owner, incarnation, missing/ext
   assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 0);
 });
 
-test("R12, DR9: a later lease is the batch's next attempt, the row keeps its first; completed replay preserves first fact times", async t => {
+test("009. A later lease is the batch's next attempt, the row keeps its first; completed replay preserves first fact times", async t => {
   const store = fixture(t); batch(store);
   store.transaction(tx => tx.updateAgent({ name: "alice", incarnation: 2 }));
   assert.equal(store.getBatch(BATCH)?.incarnation, 1, "the attempt the batch was created in is a past fact");

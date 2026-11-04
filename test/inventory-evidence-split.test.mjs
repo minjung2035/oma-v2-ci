@@ -29,7 +29,7 @@ function fixture(t) {
   }) };
 }
 
-test('K63: check:inventory binds source bytes with no cloc and no LOC/report files', t => {
+test("001. Check:inventory binds source bytes with no cloc and no LOC/report files", t => {
   const f = fixture(t);
   assert.equal(existsSync(join(f.root, 'production-loc.json')), false);
   const checked = f.cli('production-inventory.mjs', [], true);
@@ -47,7 +47,7 @@ test('K63: check:inventory binds source bytes with no cloc and no LOC/report fil
   assertSourceDigests(f.root);
 });
 
-test('K63: duplicate, omitted, extra, reordered and malformed per-file digests are refused', t => {
+test("002. Duplicate, omitted, extra, reordered and malformed per-file digests are refused", t => {
   const f = fixture(t), file = join(f.root, 'production-loc-hashes.json'), original = JSON.parse(readFileSync(file));
   for (const change of [
     records => { records.files[1] = records.files[0]; },
@@ -63,7 +63,7 @@ test('K63: duplicate, omitted, extra, reordered and malformed per-file digests a
   }
 });
 
-test('K63: CI measures into an artifact directory without rewriting committed source claims', t => {
+test("003. CI measures into an artifact directory without rewriting committed source claims", t => {
   const f = fixture(t), output = join(f.root, 'evidence');
   const snapshot = ['production-files.txt', 'production-loc-hashes.json'].map(path => readFileSync(join(f.root, path), 'utf8'));
   const run = f.cli('loc.mjs', ['--out', output]);
@@ -83,7 +83,7 @@ test('K63: CI measures into an artifact directory without rewriting committed so
   assert.equal(readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8'), snapshot[1]);
 });
 
-test('K63: non-code inventory files are classified by cloc verdict, never silently omitted', async t => {
+test("004. Non-code inventory files are classified by cloc verdict, never silently omitted", async t => {
   const f = fixture(t);
   // Vendored-payload style members cloc cannot count -- no recognized
   // language, no bytes. The report must carry them under nonCode with
@@ -130,7 +130,7 @@ test('K63: non-code inventory files are classified by cloc verdict, never silent
     /does not account for every production file/);
 });
 
-test('K63: an inventory member named like an Object.prototype member is accounted own-keyed', async t => {
+test("005. An inventory member named like an Object.prototype member is accounted own-keyed", async t => {
   const { clocCoverage } = await import('../scripts/production-inventory.mjs');
   // `report` and `nonCode` are plain parsed objects, so a literal filename
   // `constructor` or `hasOwnProperty` reads back an inherited member on a
@@ -148,7 +148,7 @@ test('K63: an inventory member named like an Object.prototype member is accounte
   assert.equal(covered.nonCode.get('constructor'), 'temporary editor file');
 });
 
-test('K63: an inventory member named like a report structure key is not its own row', async t => {
+test("006. An inventory member named like a report structure key is not its own row", async t => {
   const { clocCoverage } = await import('../scripts/production-inventory.mjs');
   // A root-level file literally named `header`, `SUM` or `nonCode` collides
   // with the report's own members: reading `report[file]` answers the
@@ -174,7 +174,7 @@ test('K63: an inventory member named like a report structure key is not its own 
   }
 });
 
-test('K63: unavailable measurement stays NOT_RUN and cannot overwrite source digests', t => {
+test("007. Unavailable measurement stays NOT_RUN and cannot overwrite source digests", t => {
   const f = fixture(t), before = readFileSync(join(f.root, 'production-loc-hashes.json'), 'utf8');
   const run = f.cli('loc.mjs', ['--out', join(f.root, 'evidence')], true);
   assert.equal(run.status, 1);

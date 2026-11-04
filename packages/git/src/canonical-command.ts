@@ -98,28 +98,6 @@ export const CANONICAL_SAFE_ARGS: readonly string[] = ["--no-pager", "-c", "core
   "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "diff.external=",
   "-c", "protocol.allow=never"];
 
-/** mail-v1 §6: the canonical merge diff for a completion notice. The returned
- * bytes are the single authoritative diff; consumers render them through
- * `mergeDiffText` and never substitute replacement characters. Output is
- * caller-bounded; exceeding maxBytes throws LIMIT_EXCEEDED and a non-zero or
- * unobserved exit is a REF_STATE_UNKNOWN observation failure, never a diff. */
-export function canonicalMergeDiff(repository: string, base: string, candidate: string, maxBytes: number): Buffer {
-  const result = runProcessSync({ executable: GIT_BIN,
-    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository,
-      "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate],
-    env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
-    timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: maxBytes, stderrBytes: 8192 });
-  if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its document bound");
-  if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
-  if (result.kind !== "exited" || result.exitCode !== 0)
-    throw new StoreError("REF_STATE_UNKNOWN", `canonical merge diff is ${result.kind}${result.exitCode !== null ? ` ${result.exitCode}` : ""}`);
-  return result.stdout;
-}
-
-/** AV-05: the one owner rendering authoritative diff bytes for a text
- * consumer. Valid UTF-8 renders as itself; anything else becomes an honest
- * marker plus a base64 transcription that decodes back to the exact bytes.
- * Replacement characters are never silently introduced. */
 /** mail-v1 §7: the broker prepares a revert of an applied merge on canonical
  * main. `git merge-tree --write-tree --merge-base=<applied candidate> <main>
  * <target base>` merges the pre-merge base into main relative to the merge's
@@ -208,3 +186,47 @@ function headLines(path: string, maxLines: number): string[] {
   } finally { closeSync(fd); }
 }
 
+
+/** Batch traversal output is spooled, so the process count is independent of
+ * submission history and an arbitrary in-memory output cap is not correctness. */
+function batchLines(repository: string, args: readonly string[], input: string | undefined, consume: (line: string) => void): void {
+  const scratch=mkdtempSync(join(tmpdir(),"oma-git-batch-")), spool=join(scratch,"stdout");
+  try {
+    const result=runProcessSync({executable:GIT_BIN,argv:[...CANONICAL_SAFE_ARGS,"--git-dir",repository,...args],env:GIT_ENV,
+      timeoutMs:CANONICAL_PROCESS_LIMITS.timeout,stdoutBytes:0,stderrBytes:8192,stdoutSpool:spool,...(input === undefined ? {} : {input})});
+    if(result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("REF_STATE_UNKNOWN",`batch Git observation is ${result.kind}`);
+    const fd=openSync(spool,constants.O_RDONLY|constants.O_NOFOLLOW);
+    try {
+      const bytes=Buffer.alloc(65536);let tail=Buffer.alloc(0);
+      for(;;){const count=readSync(fd,bytes,0,bytes.length,null);if(count===0)break;
+        const chunk=Buffer.concat([tail,bytes.subarray(0,count)]);let start=0;
+        for(;;){const end=chunk.indexOf(10,start);if(end<0)break;consume(decodeUtf8(chunk.subarray(start,end)));start=end+1;}
+        tail=Buffer.from(chunk.subarray(start));
+      }
+      if(tail.length) throw new StoreError("REF_STATE_UNKNOWN","unterminated batch Git record");
+    } finally {closeSync(fd);}
+  } finally {rmSync(scratch,{recursive:true,force:true});}
+}
+export function canonicalPublishedRefs(repository: string): ReadonlyMap<string,string> {
+  const refs=new Map<string,string>();
+  batchLines(repository,["for-each-ref","--format=%(refname)%00%(objectname)","refs/oma/published/"],undefined,line=>{
+    const parts=line.split("\0");
+    if(parts.length!==2 || !parts[0]!.startsWith("refs/oma/published/") || !isValidFullOid(parts[1]) || refs.has(parts[0]!))
+      throw new StoreError("STORE_CORRUPT","malformed canonical published ref set");
+    refs.set(parts[0]!,parts[1]!);
+  });return refs;
+}
+export function canonicalCommitGraph(repository: string,candidates: readonly string[]): ReadonlyMap<string,readonly string[]> {
+  const graph=new Map<string,readonly string[]>();
+  batchLines(repository,["rev-list","--parents","--stdin"],candidates.map(gitOidArgument).join("\n")+"\n",line=>{
+    const [oid,...parents]=line.split(" ");
+    if(!isValidFullOid(oid)||parents.some(p=>!isValidFullOid(p))||graph.has(oid))throw new StoreError("REF_STATE_UNKNOWN","malformed commit graph");
+    graph.set(oid,parents);
+  });return graph;
+}
+export function canonicalCommitRange(repository: string,base: string,candidate: string): readonly string[] {
+  const commits:string[]=[];
+  batchLines(repository,["rev-list",`${gitOidArgument(base)}..${gitOidArgument(candidate)}`],undefined,line=>{
+    if(!isValidFullOid(line)) throw new StoreError("REF_STATE_UNKNOWN","malformed candidate range");commits.push(line);
+  });return commits;
+}

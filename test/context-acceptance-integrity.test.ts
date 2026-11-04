@@ -16,7 +16,7 @@ import type { OperationOf } from "@oma/protocol/operation-codec";
 import { removeTree } from "./fixtures/cleanup.js";
 const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 async function* once(bytes: Uint8Array): AsyncIterable<Uint8Array> { yield bytes; }
-test("CTX-003/DB-009: T-context-accept already freezes candidate and matching EML context", async () => {
+test("001. T-context-accept already freezes candidate and matching EML context", async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-context-accept-"));
     const state = join(root, "state");
     mkdirSync(state, { recursive: true });

@@ -27,7 +27,7 @@ function bundleOf(spool: PreparedSubmitSpool) {
   return bundle;
 }
 
-test("R20: verified bytes are synced and retained at the identity-derived workflow name", async () => {
+test("001. Verified bytes are synced and retained at the identity-derived workflow name", async () => {
   const root = temporary();
   try {
     const id = generateOperationId();
@@ -48,7 +48,7 @@ test("R20: verified bytes are synced and retained at the identity-derived workfl
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R20: only provably unaccepted exclusively owned files can be discarded", async () => {
+test("002. Only provably unaccepted exclusively owned files can be discarded", async () => {
   const root = temporary();
   try {
     const id = generateOperationId();
@@ -64,7 +64,7 @@ test("R20: only provably unaccepted exclusively owned files can be discarded", a
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R20: exclusive-create failure cannot delete a previously prepared operation file", async () => {
+test("003. Exclusive-create failure cannot delete a previously prepared operation file", async () => {
   const root = temporary();
   try {
     const id = generateOperationId();
@@ -78,7 +78,7 @@ test("R20: exclusive-create failure cannot delete a previously prepared operatio
 });
 
 for (const violation of ["short", "long", "digest"] as const) {
-  test(`R20: ${violation} stream fails before acceptance and leaves no partial canonical bundle`, async () => {
+  test(`004. Submit spool: ${violation} stream fails before acceptance and leaves no partial canonical bundle`, async () => {
     const root = temporary();
     try {
       const control = await prepareSubmitSpool(root, generateOperationId(), descriptor(), chunks(content));
@@ -94,7 +94,7 @@ for (const violation of ["short", "long", "digest"] as const) {
   });
 }
 
-test("R20: the descriptor is copied before asynchronous receipt of raw bytes", async () => {
+test("005. The descriptor is copied before asynchronous receipt of raw bytes", async () => {
   const root = temporary();
   try {
     const declared = descriptor();
@@ -110,7 +110,7 @@ test("R20: the descriptor is copied before asynchronous receipt of raw bytes", a
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R20: a descriptor-free submit accepts no raw body, not an invented empty bundle", async () => {
+test("006. A descriptor-free submit accepts no raw body, not an invented empty bundle", async () => {
   const root = temporary();
   try {
     const id = generateOperationId();
@@ -123,7 +123,7 @@ test("R20: a descriptor-free submit accepts no raw body, not an invented empty b
 });
 
 for (const corruption of ["missing", "digest", "hardlink", "symlink", "directory"] as const) {
-  test(`R20: accepted bundle ${corruption} remains an explicit failed observation`, async () => {
+  test(`007. Accepted bundle ${corruption} remains an explicit failed observation`, async () => {
     const root = temporary();
     try {
       const spool = await prepareSubmitSpool(root, generateOperationId(), descriptor(), chunks(content));

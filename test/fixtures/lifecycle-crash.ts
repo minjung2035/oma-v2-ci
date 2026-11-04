@@ -7,7 +7,7 @@ import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { MailModule } from "@oma/mail";
 import { Store } from "@oma/storage";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { ALL_CAPS, makeValidResolvedSpec } from "./spec.js";
+import { withWorkerCapacity, ALL_CAPS, makeValidResolvedSpec } from "./spec.js"
 import { TEST_VIEW_LIMITS } from "./limits.js";
 
 export function lifecycleFixture(root: string, store: Store, afterRegistration?: () => void) {
@@ -31,8 +31,9 @@ export function lifecycleFixture(root: string, store: Store, afterRegistration?:
   const lifecycle = createLifecycleModule(store, units, {
     stateRoot: root, projectGit: join(root, "repos/project.git"), society, hasGoal: () => false,
     activationAllowed: () => true,
-  }, (_parent, input) => ({ ...frozen, ...input }), mail);
+  }, withWorkerCapacity((_parent, input) => ({ ...frozen, ...input })), mail);
   const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
+    maxWorkers: 6,
     principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "first" }, { name: "peer", profile: "p", brief: "second" }],
     modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p" } },

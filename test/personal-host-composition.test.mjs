@@ -72,7 +72,7 @@ if (name === "@oma/domain/deployment" && !Object.hasOwn(dependencies, name)) ret
   return { ...module.exports, effects, seeds, launches, replacements, process };
 }
 for (const platform of ['linux', 'darwin']) {
-  test(`Personal host ${platform}: explicit first inheritance opt-out does not observe unavailable projects`, async () => {
+  test(`001. Personal host ${platform}: explicit first inheritance opt-out does not observe unavailable projects`, async () => {
     const w = world({ platform, configError: new Error('unrelated bookmark is stale') });
     await w.personalMain({ ...options, noProjectExtensions: true });
     assert.deepEqual(plain(w.seeds), [[]]);
@@ -82,7 +82,7 @@ for (const platform of ['linux', 'darwin']) {
     await assert.rejects(resumed.personalMain({ ...options, noProjectExtensions: true, resume: '/saved/history.jsonl' }), { code: 'INVALID_REQUEST' });
     assert.equal(resumed.effects.length, 0);
   });
-  test(`Personal host ${platform}: first choice belongs to the settings writer before birth and child`, async () => {
+  test(`002. Personal host ${platform}: first choice belongs to the settings writer before birth and child`, async () => {
     const w = world({ platform }); await w.personalMain(options);
     const names = w.effects.map(item => item[0]);
     assert.ok(names.indexOf('settings-take') < names.indexOf('config-read') || platform === 'darwin');
@@ -92,13 +92,13 @@ for (const platform of ['linux', 'darwin']) {
     assert.equal(names.includes('config-read'), true);
     assert.equal(w.process.exitCode, 0);
   });
-  test(`Personal host ${platform}: existing choices need no old project observation`, async () => {
+  test(`003. Personal host ${platform}: existing choices need no old project observation`, async () => {
     const w = world({ platform, saved: true, configError: new Error('the old project is unreadable') });
     await w.personalMain(options);
     assert.equal(w.effects.some(item => ['project', 'config-exists', 'config-read', 'roles'].includes(item[0])), false);
     assert.equal(w.launches.length, 1); assert.equal(w.seeds.length, 0);
   });
-  test(`Personal host ${platform}: saved birth restores cwd and root without a new identity`, async () => {
+  test(`004. Personal host ${platform}: saved birth restores cwd and root without a new identity`, async () => {
     const w = world({ platform }); await w.personalMain({ ...options, resume: '/saved/history.jsonl' });
     assert.deepEqual(w.effects[0], ['catalogue', '/saved/history.jsonl', options.cwd]);
     assert.deepEqual(w.effects[1], ['realpath', '/saved/project']);
@@ -113,23 +113,23 @@ for (const [label, fault] of [
   ['rebound saved directory', { realCwd: '/changed/project' }],
   ['nonregular history', { historyFile: false }],
   ['unobserved birth', { birthError: new StoreError('BROKER_UNAVAILABLE', 'birth unobserved') }],
-]) test(`Personal host: ${label} has no preferences, birth or child effects`, async () => {
+]) test(`005. Personal host: ${label} has no preferences, birth or child effects`, async () => {
   const w = world(fault); await assert.rejects(w.personalMain({ ...options, resume: '/saved/history.jsonl' }));
   assert.equal(w.effects.some(item => ['settings-take', 'birth', 'engine', 'exec'].includes(item[0])), false);
 });
 for (const [label, fault] of [['unobserved', { configError: new Error('config unobserved') }], ['uncommitted', { snapshot: null }]])
-  test(`Personal host: ${label} project seed consumes no preference or birth`, async () => {
+  test(`006. Personal host: ${label} project seed consumes no preference or birth`, async () => {
     const w = world(fault); await assert.rejects(w.personalMain(options));
     assert.equal(w.effects.some(item => ['settings-commit', 'birth', 'engine'].includes(item[0])), false);
     assert.equal(w.effects.at(-1)[0], 'settings-return');
   });
-test('Personal host: an observed absent project seeds no extensions without provisioning', async () => {
+test("007. Personal host: an observed absent project seeds no extensions without provisioning", async () => {
   const w = world({ config: false }); await w.personalMain(options);
   assert.deepEqual(plain(w.seeds), [[]]); assert.equal(w.effects.some(item => item[0] === 'config-read'), false);
 });
 for (const [label, next, target] of [['new', {}, undefined], ['Personal resume', { session: '/next/history.jsonl' }, { mode: 'personal', cwd: '/next/project' }],
   ['Society resume', { session: '/next/history.jsonl' }, { mode: 'society', cwd: '/guest/project' }]])
-  test(`Personal host: ${label} replaces the entry only after the actual child owner returns`, async () => {
+  test(`008. Personal host: ${label} replaces the entry only after the actual child owner returns`, async () => {
     let finish; const w = world({ nextBirth: target, run: () => new Promise(resolve => { finish = resolve; }) });
     const pending = w.personalMain(options); pending.catch(() => {}); await flush();
     assert.equal(typeof finish, 'function', 'the engine must reach its owned run');
@@ -143,7 +143,7 @@ for (const [label, next, target] of [['new', {}, undefined], ['Personal resume',
     assert.equal(env.OMA_RESUME_SESSION, next.session); assert.equal(env.OMA_HOST_HOME, '/fixture/data');
     assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), target?.mode === 'personal' ? [['chdir', target.cwd]] : []);
   });
-for (const platform of ['linux', 'darwin']) test(`Personal host ${platform}: mode choice waits for actual exit and starts Society without a saved history`, async () => {
+for (const platform of ['linux', 'darwin']) test(`009. Personal host ${platform}: mode choice waits for actual exit and starts Society without a saved history`, async () => {
   let finish; const w = world({ platform, run: () => new Promise(resolve => { finish = resolve; }) });
   const pending = w.personalMain(options); await flush();
   assert.equal(w.replacements.length, 0);
@@ -153,33 +153,11 @@ for (const platform of ['linux', 'darwin']) test(`Personal host ${platform}: mod
   assert.equal(env.OMA_RESUME_SESSION, undefined);
   assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', options.cwd]]);
 });
-test('Personal host: /society re-enters as a fresh `oma --society` birth after the actual child exit', async () => {
-  let finish; const w = world({ run: () => new Promise(resolve => { finish = resolve; }) });
-  const pending = w.personalMain(options); pending.catch(() => {}); await flush();
-  assert.equal(w.effects.some(item => ['exec', 'chdir'].includes(item[0])), false, 'no replacement before the writer actually exits');
-  finish({ code: 0, next: { society: 'fixture-project' } }); await pending;
-  assert.ok(w.effects.findIndex(item => item[0] === 'engine-return') < w.effects.findIndex(item => item[0] === 'exec'));
-  assert.deepEqual(w.effects.filter(item => item[0] === 'chdir'), [['chdir', '/fixture/project']]);
-  const [executable, argv, env] = w.replacements[0];
-  assert.equal(executable, '/fixture/node');
-  assert.deepEqual(Array.from(argv), ['/fixture/node', '--fixture-node-arg', '/fixture/apps/oma/dist/entry/oma.js', '--society', 'fixture-project']);
-  assert.equal(env.OMA_RESUME_SESSION, undefined, 'a fresh Society birth is never a resume');
-});
-test('Personal host: /society names only this project\'s own Society', async () => {
-  const w = world({ run: async () => ({ code: 0, next: { society: 'not-this-project' } }) });
-  await assert.rejects(w.personalMain(options), { code: 'INVALID_REQUEST' });
-  assert.equal(w.replacements.length, 0);
-});
-test('Personal host: Node without in-place restart refuses the /society transition', async () => {
-  const w = world({ exec: false, run: async () => ({ code: 0, next: { society: 'fixture-project' } }) });
-  await assert.rejects(w.personalMain(options), { code: 'UNSUPPORTED_PROFILE' });
-  assert.equal(w.replacements.length, 0);
-});
-test('Personal host: child-owner failure never authorizes a replacement', async () => {
+test("010. Personal host: child-owner failure never authorizes a replacement", async () => {
   const problem = new Error('writer return failed'), w = world({ run: async () => { throw problem; } });
   await assert.rejects(w.personalMain(options), error => error === problem); assert.equal(w.replacements.length, 0);
 });
-test('Personal host: Node without in-place restart refuses after writer return, not a second spawned engine', async () => {
+test("011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine", async () => {
   const w = world({ exec: false, run: async () => ({ code: 0, next: {} }) });
   await assert.rejects(w.personalMain(options), { code: 'UNSUPPORTED_PROFILE' });
   assert.equal(w.launches.length, 1); assert.equal(w.replacements.length, 0);

@@ -16,7 +16,7 @@ function spool() {
   const root = mkdtempSync(join(tmpdir(), "oma-storage-verification-")), file = join(root, "spool");
   return { file, write: text => writeFileSync(file, text, { mode: 0o600 }), close: () => rmSync(root, { recursive: true, force: true }) };
 }
-test("storage inventory verifies snapshot binding, exact nanosecond metadata and all members", async () => {
+test("001. Storage inventory verifies snapshot binding, exact nanosecond metadata and all members", async () => {
   const f = spool();
   try {
     const header = { message_type: "snapshot", id: snapshot, paths: ["/source/repos"] };
@@ -29,7 +29,7 @@ test("storage inventory verifies snapshot binding, exact nanosecond metadata and
       [header, directory, { ...file, path: "/repos/extra" }], [header, directory, { ...file, size: 3 }]]) await assert.rejects(check(records));
   } finally { f.close(); }
 });
-test("storage selection admits only bound checkpoint roots and exact closed ledger identities", () => {
+test("002. Storage selection admits only bound checkpoint roots and exact closed ledger identities", () => {
   const state = { kind: "oma-session-storage-v1", society: "first", project: "/project", checkpoint: {
     snapshot, digest: snapshot, roots: ["repos", "agents/worker/workspace"], residents: [{ name: "worker", incarnation: 2 }], ledger: [snapshot, null, null],
   } };
@@ -41,7 +41,7 @@ test("storage selection admits only bound checkpoint roots and exact closed ledg
     { ...state, checkpoint: { ...state.checkpoint, ledger: [null, null, null] } },
     { ...state, checkpoint: { ...state.checkpoint, residents: [{ name: "principal", incarnation: 2 }] } }]) assert.throws(() => check(value));
 });
-test("Restic exit 3 and unknown outcomes never count as complete backup", () => {
+test("003. Restic exit 3 and unknown outcomes never count as complete backup", () => {
   const result = { kind: "exited", exitCode: 0, stdout: Buffer.from("ok"), stderr: Buffer.alloc(0) };
   assert.equal(requireResticSuccess(result), "ok");
   for (const exitCode of [1, 2, 3, 10]) assert.throws(() => requireResticSuccess({ ...result, exitCode }));

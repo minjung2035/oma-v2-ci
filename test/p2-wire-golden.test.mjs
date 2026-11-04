@@ -34,23 +34,27 @@ const additions = {
   'review.status': { name: 'merge-1a2b3c4d-0000-4000-8000-000000000001' },
 };
 for (const [method, params] of Object.entries({ ...vectors, ...additions })) {
-  test(`${["attest.record", "review.status"].includes(method) ? "DR46 current wire" : "P2 wire golden"}: ${method} retains values and rejects extra fields`, () => {
+  test(`001. Wire golden: ${["attest.record", "review.status"].includes(method) ? "DR46 current wire" : "P2 wire golden"}: ${method} retains values and rejects extra fields`, () => {
     const before = JSON.stringify(params);
     assert.deepEqual(decodePublicParams(method, params, context), params);
     assert.equal(JSON.stringify(params), before);
     assert.equal(decodePublicParams(method, { ...params, unexpected: true }, context), null);
   });
 }
-test('P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1', () => {
-  assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), Object.keys({ ...vectors, ...additions }).sort());
+test("002. Wire golden: closed current vocabularies include explicit invocation/host endpoints and preserve historical canonical bytes", () => {
+  // One owner for the closed vocabulary, formerly repeated by two TUI tests.
+  assert.equal(PUBLIC_METHODS['operation.read'].mode, 'read');
+  for (const name of Object.keys(PUBLIC_METHODS)) assert.doesNotMatch(name, /tui|surface|panel|config\.|inference/i);
+  for (const name of Object.keys(INTERNAL_METHODS)) assert.doesNotMatch(name, /tui|surface|panel|inference/i);
+  assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), [...Object.keys({ ...vectors, ...additions }), "invocation.bind", "invocation.prepare"].sort());
   assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
-    'batch.complete', 'batch.prepare', 'batch.read',
+    'batch.complete', 'batch.prepare', 'batch.read', 'host.control',
     'principal.attach', 'principal.detach', 'runner.observe', 'runner.open', 'runner.pending',
   ]);
   assert.equal(canonicalJson({ method: 'mail.send', params: vectors['mail.send'] }),
     '{"method":"mail.send","params":{"body":"body\\n","kind":"message","subject":"subject","to":["alice"]}}');
 });
-test('P2 wire golden: terminal receipt shape is distinct from pending and lookup absence', () => {
+test("003. Wire golden: terminal receipt shape is distinct from pending and lookup absence", () => {
   const result = { kind: 'mail.ack', message, acknowledged: true };
   assert.equal(decodeReceipt({ operation, state: 'succeeded', result }).ok, true);
   assert.equal(decodeReceipt({ operation, state: 'pending', result }).ok, false);

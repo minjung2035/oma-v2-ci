@@ -18,7 +18,7 @@ import { readPersonalSettings, updatePersonalSettings } from "#oma-test/app/runt
 const ENTRY = new URL("../../apps/oma/dist/entry/oma.js", import.meta.url).pathname;
 const TIMEOUT = { timeout: 180_000 };
 
-test("DR25: oma pi install puts a package in oma's store and turns its extension on for this project's Principal and Workers; remove takes it away", TIMEOUT, async t => {
+test("001. Oma pi install puts a package in oma's store and turns its extension on for this project's Principal and Workers; remove takes it away", TIMEOUT, async t => {
   const base = mkdtempSync(join(tmpdir(), "oma-pi-cli-"));
   t.after(() => { spawnSync("chmod", ["-R", "u+rwX", base]); rmSync(base, { recursive: true, force: true }); });
   const source = join(base, "src", "oma-hello-ext");
@@ -103,7 +103,7 @@ test("DR25: oma pi install puts a package in oma's store and turns its extension
   assert.ok(registry.requests.some(line => line.startsWith("GET /oma-hello-ext")), "npm did not ask the local registry");
 });
 
-test("DR25/C20: oma pi install copies a local directory into the store -- indexed, synced and listed like a remote package; a malformed directory is refused", TIMEOUT, async t => {
+test("002. Oma pi install copies a local directory into the store -- indexed, synced and listed like a remote package; a malformed directory is refused", TIMEOUT, async t => {
   const base = mkdtempSync(join(tmpdir(), "oma-pi-local-"));
   t.after(() => { spawnSync("chmod", ["-R", "u+rwX", base]); rmSync(base, { recursive: true, force: true }); });
   // A local package carrying every resource kind the engines get.

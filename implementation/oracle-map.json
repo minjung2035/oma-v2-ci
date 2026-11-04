@@ -4,14 +4,14 @@
   "oracles": {
     "V00A": {
       "carriedBy": [
-        "R38: the validation record names the verification inputs that were run",
-        "R38: the figures the validation record quotes"
+        "013. The validation record names the verification inputs that were run, by their bytes",
+        "014. The figures the validation record quotes remain historical; current LOC is CI-generated evidence"
       ]
     },
     "V00B": {
       "carriedBy": [
-        "R35 evidence policy detects hidden skips",
-        "R35 evidence policy accepts real complete summaries"
+        "002. Evidence policy detects hidden skips, todo, cancellation and critical oracle deletion",
+        "001. Evidence policy accepts real complete summaries but never AST counts as execution"
       ]
     },
     "V05C": {
@@ -20,8 +20,8 @@
     },
     "V10B": {
       "carriedBy": [
-        "R37: native preparation owns the shutdown barrier",
-        "R37: failure before configuration acquisition"
+        "002. Native preparation owns the shutdown barrier independently of a request Promise",
+        "001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy"
       ]
     },
     "V25B": {
@@ -30,15 +30,15 @@
     },
     "V26A": {
       "carriedBy": [
-        "R14: fatal UTF-8/JSON/length/EOF never allows",
-        "R14: disconnect preserves dispatched ownership",
-        "R15: reconnect after a partial header"
+        "003. Fatal UTF-8/JSON/length/EOF never allows a later valid frame to resynchronize",
+        "007. Disconnect preserves dispatched ownership but cancels every queued request",
+        "002. Reconnect after a partial header rejects the old request and ignores old-socket events"
       ]
     },
     "V29B": {
       "carriedBy": [
-        "V02A:",
-        "V32A: the committed ledger"
+        "011. Operations config: ",
+        "001. The committed ledger accounts for every current and baseline file, with evidence for every review"
       ]
     },
     "V30B": {
@@ -47,7 +47,7 @@
     },
     "V32B": {
       "carriedBy": [
-        "R38: the validation record names the verification inputs that were run"
+        "013. The validation record names the verification inputs that were run, by their bytes"
       ],
       "notRun": "ci: work branch 3f0f615113e5cd32116c3959ecb506df6454f5ae pushed; selected native CI passed, full qualification and Darwin G-PROCESS/G-FILES/G-AUTH remain incomplete"
     },
@@ -58,6 +58,425 @@
     "V03B": {
       "carriedBy": [],
       "notRun": "Historical user-manager parser qualification retired by DR49; native observation tests have separate names."
+    },
+    "V01A": {
+      "carriedBy": [
+        "001. Execution order names every WP once and preserves late observation dependencies",
+        "004. Every domain names facts, relations, phase and current authority",
+        "005. All proposed cases have existing rule, owner, oracle and compatibility",
+        "006. Negative controls: deleting uncertainty or legacy mismatch fails review",
+        "007. Existing normative requirements explicitly carry their reviewed decision",
+        "008. Identifies the reviewed architecture bytes"
+      ]
+    },
+    "V01B": {
+      "carriedBy": [
+        "002. Change surfaces retain distinct registries and name real existing owners",
+        "003. Profile review cannot imply unexecuted runtime qualification"
+      ]
+    },
+    "V02A": {
+      "carriedBy": [
+        "011. Operations config: "
+      ]
+    },
+    "V02B": {
+      "carriedBy": [
+        "001. Confirmed process death at ",
+        "002. Checkpoint driver: ",
+        "003. Actual death leaves the pre-rename temporary whereas ordinary throw cleaned it",
+        "004. A lying checkpoint message cannot satisfy the independent effect oracle",
+        "005. Actual Mail acceptance survives commit-before-response in a fresh process",
+        "006. Published Git CAS is observed independently before result mail and response"
+      ]
+    },
+    "V02C": {
+      "carriedBy": [
+        "001. Independent raw SQL and physical Mail effects detect duplicate replay",
+        "003. Controlled unit requests are counted apart from committed lifecycle facts",
+        "006. Stable consistency IDs and real fixture/checkpoint cases belong to explicit lanes"
+      ]
+    },
+    "V04A": {
+      "carriedBy": [
+        "001. Unsupported ",
+        "002. Store open: ",
+        "003. Store open: ",
+        "004. An unversioned foreign schema is not a fresh OMA database",
+        "005. Corrupt bytes are refused without replacement or sidecar creation",
+        "006. Sidecar arrival during preflight prevents writer setup",
+        "007. A killed rollback-journal transaction is preserved, not recovered before refusal",
+        "014. Supported current schema "
+      ]
+    },
+    "V04B": {
+      "carriedBy": [
+        "008. OS read-only permissions refuse writing and retain no constructor handle",
+        "009. Failed ",
+        "010. Initialization and close failures retain both causes",
+        "011. Failed schema application retains its rollback failure and still closes",
+        "012. Busy writer setup closes its handle without releasing another connection's lock",
+        "013. Store open: ",
+        "015. Fresh and supported Store ownership still transfers to the caller"
+      ]
+    },
+    "V05A": {
+      "carriedBy": [
+        "001. Receipt success follows temp fsync, no-replace publication, validation and parent fsync",
+        "002. Invalid boundary is rejected before a final name exists",
+        "003. A crash at temp write never leaves partial bytes under the final name",
+        "004. Final publication followed by parent-fsync uncertainty preserves the valid final receipt",
+        "007. The receipt file itself is flushed before it is published, and its directory after"
+      ]
+    },
+    "V05B": {
+      "carriedBy": [
+        "005. EEXIST returns the first valid private receipt and never overwrites it",
+        "006. Conflicting existing receipt is preserved and never converted to success"
+      ]
+    },
+    "V06A": {
+      "carriedBy": [
+        "001. A verified receipt completes the batch and the runner presents nothing again",
+        "003. An observed absent ",
+        "004. Receipt observation: ",
+        "005. Receipt observation: ",
+        "006. The observer returns verified receipts it issued, and nothing else counts as one",
+        "007. Absence names which name is missing, under a runner root that exists",
+        "008. An observation that did not complete is unavailable, with its cause and the expected identity",
+        "009. Conflicting evidence says what differs, and a legacy incarnation is never accepted as current",
+        "010. A receipt directory that cannot be opened is unavailable, never absent",
+        "011. Live completion binds the current run's incarnation and the receipt's session",
+        "001. Recovery settles only a verified receipt; absent, unavailable and conflicting settle nothing",
+        "002. A completed batch keeps its first terminal fact under recovery"
+      ]
+    },
+    "V06B": {
+      "carriedBy": [
+        "003. Local: a stale runner's live completion stays refused while the broker settles its exact receipt",
+        "004. Local: settlement authority ends with the opening run and names one actor and incarnation",
+        "005. Local: recovery for one actor cannot settle another actor's batch"
+      ]
+    },
+    "V07A": {
+      "carriedBy": [
+        "001. A receipt made durable just before the runner died completes its batch before rollover, with no redelivery"
+      ]
+    },
+    "V07B": {
+      "carriedBy": [
+        "004. Unavailable or conflicting receipt evidence opens no run, keeps the evidence and changes no incarnation",
+        "005. A failure at the incarnation commit leaves the settled batch settled and no live lease"
+      ]
+    },
+    "V08A": {
+      "carriedBy": [
+        "001. A completion that fails after the receipt is retried alone; the engine sees the batch once"
+      ]
+    },
+    "V08B": {
+      "carriedBy": [
+        "005. Conflicting or unavailable receipt evidence presents nothing and is kept"
+      ]
+    },
+    "V09A": {
+      "carriedBy": [
+        "003. An unanswered delivery keeps the session, so a Human prompt waits instead of joining its run"
+      ]
+    },
+    "V09B": {
+      "carriedBy": [
+        "004. When the engine ends, unsent prompts come back once and in order, and an unanswered one is reported apart"
+      ]
+    },
+    "V09C": {
+      "carriedBy": [
+        "005. After the session ends, a late settle frees nothing and starts nothing"
+      ]
+    },
+    "V10A": {
+      "carriedBy": [
+        "001. A turn that keeps making progress past the idle budget still settles",
+        "002. A genuinely silent engine ends the delivery at the idle budget, as idle",
+        "010. An unanswered command ends at the acceptance budget, and says so"
+      ]
+    },
+    "V10C": {
+      "carriedBy": [
+        "011. A budget longer than the native timer limit does not fire early, and cancel is final",
+        "012. Every delivery outcome leaves no timer behind"
+      ]
+    },
+    "V11A": {
+      "carriedBy": [
+        "001. The inline writer validates before replacement",
+        "002. Invalid "
+      ]
+    },
+    "V11B": {
+      "carriedBy": [
+        "001. One own-key descriptor registry covers every editable field and policy"
+      ]
+    },
+    "V11C": {
+      "carriedBy": [
+        "001. The pure validator returns a deep immutable snapshot with own-key maps",
+        "002. Zero bootstrap seeds expose no editable profile target",
+        "003. Config edits do not rewrite accepted Store identities or frozen specs"
+      ]
+    },
+    "V12A": {
+      "carriedBy": [
+        "001. One snapshot uses one manifest even when the pointer is replaced after its read",
+        "005. A file changed after the snapshot read it, before the snapshot completes, fails the snapshot"
+      ]
+    },
+    "V12B": {
+      "carriedBy": [
+        "002. Prompt references remain index-root relative and enter the bounded source closure",
+        "003. Aggregate source bytes are bounded even when each referenced file is individually valid",
+        "004. One configuration file over the document bound is refused even though the whole source would fit"
+      ]
+    },
+    "V13A": {
+      "carriedBy": [
+        "002. A crash at any point of a managed commit leaves the complete old or the complete new configuration"
+      ]
+    },
+    "V13B": {
+      "carriedBy": [
+        "007. A manual bundle migrates without touching its files, and a stale or externally changed snapshot is refused",
+        "008. A shared manual role expands into per-profile copies with the same effective meaning",
+        "009. A same-semantic save publishes nothing",
+        "010. An explicit export writes a flat manual bundle to a new directory with the same meaning"
+      ]
+    },
+    "V13C": {
+      "carriedBy": [
+        "011. The edit budget refuses at exhaustion, and quiescent collection keeps the current and previous generations only"
+      ]
+    },
+    "V14A": {
+      "carriedBy": [
+        "001. The editor offers exactly the files the loader accepts, and an enabled one loads",
+        "002. The scan is bounded, follows no symlink and reports a partial list",
+        "005. A symlink loop under the extension directory is not walked, so a small scan stays complete"
+      ]
+    },
+    "V14B": {
+      "carriedBy": [
+        "003. A declared optional extension whose file is gone can be removed, and only that declaration",
+        "004. The repair does not loosen the loader: another invalid field keeps the configuration uneditable"
+      ]
+    },
+    "V15A": {
+      "carriedBy": [
+        "001. Bootstrap state is read from the observed registry, and unknown is never assumed",
+        "002. Seed fields are editable only while they can still take effect, and say why otherwise",
+        "003. A new Society refuses zero seeds without changing authored configuration",
+        "004. The bootstrap profile changes the seeds only, never a profile's childProfile"
+      ]
+    },
+    "V15B": {
+      "carriedBy": [
+        "006. The dashboard shows the configured model as configured, and the running session's as what it started with"
+      ]
+    },
+    "V16A": {
+      "carriedBy": [
+        "001. Different canonical projects get different default societies; aliases of one project get the same",
+        "002. A binding is compared in full, so a truncated-identity collision cannot take over another project's society"
+      ]
+    },
+    "V16B": {
+      "carriedBy": [
+        "003. An existing unbound society is bound only on explicit request; a fresh one is bound at once",
+        "004. Provisioning never reseeds an existing canonical main from another project",
+        "005. An unreadable project or a broken canonical repository fails provisioning instead of seeding an empty root",
+        "006. A leftover staging repository from an interrupted start is neither adopted nor fatal"
+      ]
+    },
+    "V17A": {
+      "carriedBy": [
+        "001. One cleanup failure does not skip another owned resource",
+        "002. Observation uncertainty retains every preaccept resource",
+        "003. Uncertain native preparation quiescence retains the resource",
+        "004. Scope preserves the primary cause, aggregates cleanup, and reports dispositions",
+        "005. Cleanup-unconfirmed can retry once without creating new ownership",
+        "006. Identity loss is cleanup-unconfirmed and never deletes the replacement"
+      ]
+    },
+    "V17B": {
+      "carriedBy": [
+        "007. An accepted row that does not reference the artifact discards it"
+      ]
+    },
+    "V18A": {
+      "carriedBy": [
+        "010. Preaccept order is stream, staged tree, candidate, mail object, acceptance, then canonical effect",
+        "011. Preaccept ownership: ",
+        "012. A lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them",
+        "013. An unavailable acceptance observation after refusal retains the tree and object",
+        "014. Native preparation uncertainty retains only the tree that preparation may still use",
+        "007. A failed preparation keeps its root when a file it created was replaced",
+        "008. A staging root replaced after preparation is kept, and its cleanup is reported unconfirmed"
+      ]
+    },
+    "V18B": {
+      "carriedBy": [
+        "004. Accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan"
+      ]
+    },
+    "V19A": {
+      "carriedBy": [
+        "015. When ",
+        "016. A registry that changes during preparation refuses the whole seed set and settles every brief",
+        "017. An accepted seed set retains exactly the briefs its plans name"
+      ]
+    },
+    "V19B": {
+      "carriedBy": [
+        "018. A policy refresh that fails after the brief was frozen removes that brief",
+        "019. A same-name, same-spec race has one physical winner and the linked loser owns no brief"
+      ]
+    },
+    "V20A": {
+      "carriedBy": [
+        "001. A mail object whose publication fails after its link is removed before any acceptance",
+        "002. A refused mail acceptance whose cleanup also fails reports the refusal first and keeps the object",
+        "003. A same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients",
+        "004. A submit same-key retry after acceptance reads no new bundle, and publication happens once"
+      ]
+    },
+    "V20B": {
+      "carriedBy": [
+        "005. Recovery rebuilds only the missing derived links from the unchanged authoritative object",
+        "006. A derived name holding other bytes is conflicting evidence, never overwritten or success",
+        "007. An existing archive without every delivery materialized never records success"
+      ]
+    },
+    "V21A": {
+      "carriedBy": [
+        "001. A read preserves authentication, version and DTO checks"
+      ]
+    },
+    "V21B": {
+      "carriedBy": [
+        "001. Over the storage limit reads and accepted same-key lookups answer, new work and safety stops proceed",
+        "002. Over the storage limit runner reads answer and settlement uses its normal validation",
+        "003. Over the storage limit recovery settles safety stages and settles new effects and settlement",
+        "004. Within the limit the same recovery settles the mail and activates the waiting unit",
+        "005. A mail failure after its acceptance is reported as accepted, never as a refusal",
+        "006. A submit effect failure recorded as unknown is reported for same-key lookup",
+        "007. A startup stop that cannot be confirmed still leaves every other resident stopped"
+      ]
+    },
+    "V22A": {
+      "carriedBy": [
+        "001. A streamed submission owns its body until execution settles while ordinary mail proceeds",
+        "003. Partial transport bodies close once and large-tree streams remain unrestricted"
+      ]
+    },
+    "V22B": {
+      "carriedBy": [
+        "001. Large existing state does not block recovery, new mail or activation",
+        "002. Recovery retains frozen bytes in a larger tree and never replays settled facts",
+        "003. Ordinary settlement materializes the frozen mail for every recipient",
+        "004. On a real full filesystem new work is STORAGE_FULL and accepted mail is never complete without its views"
+      ]
+    },
+    "V23A": {
+      "carriedBy": [
+        "001. Concurrent status reads and mutations keep the broker responsive with bounded observation",
+        "002. Status of a society with hundreds of pending messages is one bounded read",
+        "003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands",
+        "004. A failed observation is published as unknown with its time, not as an empty or idle society"
+      ]
+    },
+    "V23B": {
+      "carriedBy": [
+        "014. A status snapshot is display only; start, stop and death proof observe the scope again"
+      ]
+    },
+    "V24A": {
+      "carriedBy": [
+        "001. Git effect evidence: ",
+        "004. A recovery CAS that loses to a third writer after its checks is unknown, never applied"
+      ]
+    },
+    "V24B": {
+      "carriedBy": [
+        "002. A no-op integration recovered after ",
+        "003. An applied non-no-op CAS is settled as history even after stop and policy change"
+      ]
+    },
+    "V25A": {
+      "carriedBy": [
+        "013. Start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can"
+      ]
+    },
+    "V26B": {
+      "carriedBy": [
+        "003. An unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
+        "004. A terminal receipt in the cache is not replaced by a later lesser observation"
+      ]
+    },
+    "V26C": {
+      "carriedBy": [
+        "001. A request is measured in encoded bytes, not characters, before anything is written",
+        "002. A response past the budget in encoded bytes is a failure, never a result",
+        "003. A response for another request id or with an unknown field is not this call's result"
+      ]
+    },
+    "V27A": {
+      "carriedBy": [
+        "002. The bundled engine, on the production plan, delivers a batch to a settled boundary it recorded in its session"
+      ]
+    },
+    "V27B": {
+      "carriedBy": [
+        "002. A key with nothing to replace is refused at once, never retried without end",
+        "009. The relay hands a provider's answer on as it arrives; it never holds the whole response",
+        "012. Idle connections to the relay are bounded, and a request is carried once they end"
+      ]
+    },
+    "V28A": {
+      "carriedBy": [
+        "001. A message the TUI shows is still waiting for the Principal's session, and opening it changes nothing"
+      ]
+    },
+    "V28B": {
+      "carriedBy": [
+        "001. Tui pty: "
+      ]
+    },
+    "V29A": {
+      "carriedBy": [
+        "006. The request-hash set-field recipe is a closed registry of mutation methods and their array params"
+      ]
+    },
+    "V30A": {
+      "carriedBy": [
+        "001. Seeded delivery-evidence sequences follow D01 on the composed runtime"
+      ]
+    },
+    "V31A": {
+      "carriedBy": [
+        "001. The installation alone resolves its entries, schema, templates and its own engine",
+        "002. An installation without its engine is refused, not handed another installation's"
+      ]
+    },
+    "V31B": {
+      "carriedBy": [
+        "003. The package check names a missing asset, a stale entry and a dependency that is not the locked one",
+        "001. Every declared dependency is locked as the same kind, and its production closure is not marked dev"
+      ]
+    },
+    "V32A": {
+      "carriedBy": [
+        "001. The committed ledger accounts for every current and baseline file, with evidence for every review",
+        "005. Approval is refused while files are unreviewed or a required lane has not run"
+      ]
     }
   }
 }

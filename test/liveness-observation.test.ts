@@ -30,7 +30,7 @@ function scripted(answers: readonly PollAnswer[]): { ask: () => PollAnswer; read
   return { ask: () => answers[Math.min(asked++, answers.length - 1)]!, get asked() { return asked; } };
 }
 
-test("AV6 / INV02, INV10: an interrupted poll of a pidfd is asked again, a bounded number of times, and is never an exit", () => {
+test("001. An interrupted poll of a pidfd is asked again, a bounded number of times, and is never an exit", () => {
   const recovering = scripted([interrupted, interrupted, { result: 0, errno: 0, revents: 0 }]);
   assert.deepEqual(livenessFromPoll(recovering.ask), { kind: "running" });
   assert.equal(recovering.asked, 3);
@@ -49,7 +49,7 @@ test("AV6 / INV02, INV10: an interrupted poll of a pidfd is asked again, a bound
   assert.deepEqual(pidfdLiveness(fd), { kind: "failed", errno: EBADF });
 });
 
-test("AV6 / INV02: a Principal engine /proc cannot be read for is refused for now and not retired", () => {
+test("002. A Principal engine /proc cannot be read for is refused for now and not retired", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-av6-"));
   try {
     const script = join(dir, "probe.mjs");

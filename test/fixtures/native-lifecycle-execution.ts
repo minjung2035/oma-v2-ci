@@ -12,8 +12,8 @@ import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { StoreError } from "@oma/domain/errors";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 
-export async function nativeLifecycleExecution(store: Store, root: string) {
-  ExecutionJournal.initialize(root);
+export async function nativeLifecycleExecution(store: Store, root: string, options: { initialize?: boolean } = {}) {
+  if (options.initialize !== false) ExecutionJournal.initialize(root);
   const executions = new ExecutionRuntime(root); await executions.recover();
   let incarnationOf = (actor: string): number | null => store.getAgent(actor)?.incarnation ?? null;
   let revoke: ((actor: string) => void) | undefined;
@@ -32,6 +32,7 @@ export async function nativeLifecycleExecution(store: Store, root: string) {
     }), signal, authorize, prepared),
   });
   return Object.assign(runtime, {
+    executionOwner: executions,
     bindIncarnationReader(reader: (actor: string) => number | null) { incarnationOf = reader; },
     bindRunRevoker(callback: (actor: string) => void) { revoke = callback; },
     scopeRoot: (actor: string) => {

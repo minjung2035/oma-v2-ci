@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {buildFrozenMessage} from '@oma/mail/serialize';
 import {parseEmlHeaders,decodeSubject} from '@oma/mail/headers';
-import {readableBody} from '@oma/mail/display';
+import {readableBody,decodedMailBody} from '@oma/mail/display';
 import {expandAddresses} from '@oma/mail/routing';
 import {renderBatchView} from '@oma/mail/batch-view';
 import {messageIdForOperation} from '@oma/domain/derived';
@@ -14,6 +14,8 @@ const headers=parseEmlHeaders(message.text);
 assert.equal(headers.messageId,`${id}@demo.oma.invalid`);
 assert.equal(decodeSubject(headers.subject),'  folded  subject  ');
 assert.equal(readableBody(message.text),body);
+assert.equal(decodedMailBody(message.text),body);
+assert.throws(()=>decodedMailBody('Content-Transfer-Encoding: base64\n\n/w=='));
 const routing={listAgents:()=>[
  {name:'alice',role:'resident',desired:'enabled'},{name:'bob',role:'resident',desired:'stopped'},
  {name:'pending',role:'resident',desired:'provisioning'},{name:'principal',role:'principal',desired:'enabled'}],subscribers:()=>['bob']};

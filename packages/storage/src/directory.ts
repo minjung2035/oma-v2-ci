@@ -196,7 +196,8 @@ export function* walkOwnedTree(path: string, skip: ReadonlySet<string> = new Set
  * collected (its parent is not oma's). The ancestors above `ownedFrom` are
  * the user's: they are opened the plain way and their modes are never
  * rewritten. */
-export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o755): readonly string[] {
+export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o755,
+  options: { readonly replaceStrays?: boolean } = {}): readonly string[] {
   if (!Number.isInteger(mode) || mode < 0 || mode > 0o777)
     throw new StoreError("STORE_CORRUPT", "invalid directory mode");
   const { root, components } = componentsOf(path);
@@ -213,12 +214,22 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
       current = join(current, component);
       const owned = index >= boundary.components.length - 1;
       const make = (): number => {
+        let uncertain: unknown;
         try { mkdirAt(parent, component, mode); created.push(current); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+        catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "EAGAIN") uncertain = error;
+          else if (code !== "EEXIST") throw error;
+        }
         try {
+          // A transient mkdir observation does not prove existence or absence.
+          // Only the usual held, no-link directory validation can settle it.
           return owned ? openOwnedDirectory(parent, component)
             : openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY);
         } catch (error) {
+          // Keep both observations and never enter stray-leaf repair when the
+          // preceding creation is uncertain. No blind retry or errno rewrite.
+          if (uncertain !== undefined) throw new AggregateError([uncertain, error], "directory creation and observation remain unsettled");
           if (error instanceof StoreError) throw error;
           throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
         }
@@ -233,7 +244,7 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
         // followed), and the step retried once -- but only strictly below
         // the boundary: the boundary component's own parent is the user's,
         // not oma's to write, so its refusal stands.
-        if (index < boundary.components.length || !(error instanceof StoreError) || error.code !== "STORE_CORRUPT") throw error;
+        if (options.replaceStrays === false || index < boundary.components.length || !(error instanceof StoreError) || error.code !== "STORE_CORRUPT") throw error;
         try { unlinkAt(parent, component); }
         catch { throw error; }
         try { fsyncSync(parent); } catch { /* durable, or the retry reports it */ }

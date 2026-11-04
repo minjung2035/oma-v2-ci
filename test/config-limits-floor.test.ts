@@ -29,6 +29,7 @@ import {
   describeEntryText, mailBodyBytesFits, minimumMailBodyBytes, threadHeadText,
 } from "@oma/domain/review-bounds";
 import { MIN_MIXED_BATCH_MESSAGES } from "@oma/domain/limits";
+import { MIN_BATCH_VIEW_FRAME_BYTES } from "@oma/protocol/batch-view";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 
 function withLimits(config: HostConfig, limits: Partial<HostConfig["limits"]>): HostConfig {
@@ -37,13 +38,13 @@ function withLimits(config: HostConfig, limits: Partial<HostConfig["limits"]>): 
   return copy;
 }
 
-test("AV-20261003-07: the shipped limits stay valid above the floor", () => {
+test("001. The shipped limits stay valid above the floor", () => {
   const fixture = createCompleteConfigurationFixture();
   try { assert.doesNotThrow(() => validateConfig(fixture.config)); }
   finally { fixture.close(); }
 });
 
-test("AV-20261003-07: mailBodyBytes at or under the notice-part overhead is refused", () => {
+test("002. MailBodyBytes at or under the notice-part overhead is refused", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     for (const mailBodyBytes of [1, NOTICE_PART_OVERHEAD - 1, NOTICE_PART_OVERHEAD])
@@ -53,7 +54,7 @@ test("AV-20261003-07: mailBodyBytes at or under the notice-part overhead is refu
   } finally { fixture.close(); }
 });
 
-test("AV-20261003-07: mailBodyBytes under the smallest thread revision is refused, the floor itself is not", () => {
+test("003. MailBodyBytes under the smallest thread revision is refused, the floor itself is not", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const subjectBytes = fixture.config.limits.subjectBytes;
@@ -76,7 +77,7 @@ test("AV-20261003-07: mailBodyBytes under the smallest thread revision is refuse
   } finally { fixture.close(); }
 });
 
-test("AV-20261003-07: a batch that cannot carry both mail classes is refused", () => {
+test("004. A batch that cannot carry both mail classes is refused", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     assert.throws(() => validateConfig(withLimits(fixture.config, { batchMaxMessages: MIN_MIXED_BATCH_MESSAGES - 1 })),
@@ -137,7 +138,7 @@ function oracleMinimum(subjectBytes: number): number {
   return candidate;
 }
 
-test("FJ-4: the computed thread floor equals the audited linear scan, value for value", () => {
+test("005. The computed thread floor equals the audited linear scan, value for value", () => {
   // Every subject bound up to 48, then a stride across several kilobytes.
   const sweep = [...Array.from({ length: 48 }, (_, index) => index + 1)];
   for (let subjectBytes = 49; subjectBytes <= 6000; subjectBytes += 173) sweep.push(subjectBytes);
@@ -154,7 +155,7 @@ test("FJ-4: the computed thread floor equals the audited linear scan, value for 
   }
 });
 
-test("FJ-4: a very large subjectBytes is decided in bounded time, and a refusal is INVALID_REQUEST naming the bound", () => {
+test("006. A very large subjectBytes is decided in bounded time, and a refusal is INVALID_REQUEST naming the bound", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const refusal = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST" &&
@@ -197,7 +198,7 @@ function withHighPeerFloor(config: HostConfig, highPeerFloor: number): HostConfi
 const namesBoth = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST" &&
   error.message.includes("limits.mailBodyBytes") && error.message.includes("integration.tiered.highPeerFloor");
 
-test("FJ-5: the shipped configuration (highPeerFloor 2) carries a maximal approval request", () => {
+test("007. The shipped configuration (highPeerFloor 2) carries a maximal approval request", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma",
@@ -209,7 +210,7 @@ test("FJ-5: the shipped configuration (highPeerFloor 2) carries a maximal approv
   } finally { fixture.close(); }
 });
 
-test("FJ-5: a highPeerFloor whose bound votes cannot fit any mailBodyBytes is refused at load, naming both fields", () => {
+test("008. A highPeerFloor whose bound votes cannot fit any mailBodyBytes is refused at load, naming both fields", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     // Reason plus three votes is already four quarters of the bound before
@@ -220,7 +221,7 @@ test("FJ-5: a highPeerFloor whose bound votes cannot fit any mailBodyBytes is re
   } finally { fixture.close(); }
 });
 
-test("FJ-5: the approval floor's boundary -- just inside validates, just outside is refused naming both fields", () => {
+test("009. The approval floor's boundary -- just inside validates, just outside is refused naming both fields", () => {
   const fixture = createCompleteConfigurationFixture();
   try {
     const subjectBytes = fixture.config.limits.subjectBytes;
@@ -245,9 +246,41 @@ test("FJ-5: the approval floor's boundary -- just inside validates, just outside
         actor: ORACLE_LONGEST_ACTOR, messages: [], fact: { kind: "vote", version: 1, request: ORACLE_LONGEST_OPERATION,
           verdict: "approve", body: "x".repeat(quarter), approval: null } });
       return Buffer.byteLength(approvalBodyText(`m-${"0".repeat(36)}-${Number.MAX_SAFE_INTEGER}` as MessageId, fact,
-        ORACLE_LONGEST_ACTOR, [vote, vote]), "utf8");
+        ORACLE_LONGEST_ACTOR, [vote, vote],
+        { maxWorkers: Number.MAX_SAFE_INTEGER, normalRequired: Number.MAX_SAFE_INTEGER, required: Number.MAX_SAFE_INTEGER }), "utf8");
     };
     assert.ok(maximal(floor) <= floor, "a maximal approval request fits the floor");
     assert.ok(maximal(floor - 1) > floor - 1, "and exceeds the bound just under it");
+  } finally { fixture.close(); }
+});
+
+/* ------------------------------------------------------------------------ *
+ * AUD-08/R28: the prepared-batch frame floor.
+ *
+ * A frame that cannot carry one prepared batch view lets `prepare` dead-end
+ * on accepted mail: the view's identity, one manifest id and the notice
+ * remainder the producer always emits must fit. The floor is the codec's own
+ * exported constant (protocol/batch-view.ts MIN_BATCH_VIEW_FRAME_BYTES), the
+ * number the mail producer and the drive path are built on, so this test
+ * pins the boundary rather than a duplicated sum. Manifests longer than the
+ * frame and notices with large subjects are the producer's to page and
+ * elide, so they must NOT move this floor: the audited small-frame shape
+ * (768/16384/512) stays a valid configuration.
+ * ------------------------------------------------------------------------ */
+test("010. A frameBytes below the prepared-batch floor is refused; the floor and the audited shape stay valid", () => {
+  const fixture = createCompleteConfigurationFixture();
+  try {
+    assert.equal(validateConfig(withLimits(fixture.config, { frameBytes: MIN_BATCH_VIEW_FRAME_BYTES })).limits.frameBytes,
+      MIN_BATCH_VIEW_FRAME_BYTES, "a frame exactly at the codec's floor is accepted and preserved");
+    assert.throws(() => validateConfig(withLimits(fixture.config, { frameBytes: MIN_BATCH_VIEW_FRAME_BYTES - 1 })),
+      (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST" &&
+        error.message.includes("limits.frameBytes") && error.message.includes(`minimum ${MIN_BATCH_VIEW_FRAME_BYTES} bytes`),
+      "a bound under the codec's floor cannot always carry one prepared batch view");
+    // The audited configuration: paging and elision carry the batch inside a
+    // 768-byte frame, so validation must keep accepting it, not raise the
+    // floor with the batch size or the subject bound.
+    const audited = withLimits(fixture.config, { frameBytes: 768, mailBodyBytes: 16384, subjectBytes: 512 });
+    assert.equal(validateConfig(audited).limits.frameBytes, 768,
+      "the producer's paging keeps the audited small frame a valid configuration");
   } finally { fixture.close(); }
 });

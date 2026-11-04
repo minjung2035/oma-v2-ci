@@ -3,6 +3,7 @@ import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_pr
 import type { Readable, Writable } from "node:stream";
 import type { ProtocolLimits } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
+import { cleanupAll } from "@oma/process/async";
 import { JsonlReader } from "@oma/protocol/jsonl";
 import { alarm, type Timer } from "@oma/protocol/alarm";
 import type { PiInboundEvent, RpcCommand } from "./pi-compat/wire.js";
@@ -101,8 +102,8 @@ export class PiRpcClient {
       this.streams.stdin.on("drain", this.onDrain);
       child.once("close", this.onChildClose);
     } catch (error) {
-      try { this.terminate(error); }
-      catch (cleanup) { throw new AggregateError([error, cleanup], "Pi transport setup and cleanup failed"); }
+      const ended = this.terminate(error);
+      if (ended?.state === "failed") throw ended.error;
       throw error;
     }
   }
@@ -169,7 +170,7 @@ export class PiRpcClient {
       this.stderrCount + length,
     );
   };
-  private readonly onError = (error: Error): void => this.terminate(error);
+  private readonly onError = (error: Error): void => { this.terminate(error); };
   private readonly onEnd = (): void => {
     if (this.state !== "open") return;
     try {
@@ -257,51 +258,51 @@ export class PiRpcClient {
   close(): void {
     this.terminate();
   }
-  private terminate(error?: unknown): void {
+  private terminate(error?: unknown): PiTransportEnd | undefined {
     if (this.state === "closed") return;
     this.state = "closed";
-    this.reader.close();
-    this.observers.clear();
-    this.partialLineTimer?.cancel();
-    this.partialLineTimer = null;
-    const pending = this.pending;
-    this.pending = null;
-    pending?.timer.cancel();
-    pending?.reject(
-      error ??
-        new StoreError(
-          "BROKER_UNAVAILABLE",
-          "Pi transport closed during write",
-        ),
-    );
-    const child = this.child;
-    this.streams.stdout.off("data", this.onData);
-    this.streams.stdout.off("end", this.onEnd);
-    this.streams.stdout.off("error", this.onError);
-    this.streams.stderr.off("data", this.onStderr);
-    this.streams.stderr.off("error", this.onError);
-    this.streams.stdin.off("error", this.onError);
-    this.streams.stdin.off("drain", this.onDrain);
-    child.off("error", this.onError);
-    child.off("close", this.onChildClose);
-    // Late OS stream errors are absorbed after ownership is released, not emitted
-    // as unhandled EventEmitter errors or delivered to stale observers.
+    // A thrown undefined is still failure; only an omitted cause requests close.
+    let failed = arguments.length !== 0, failure = error;
+    const pending = this.pending, partialLineTimer = this.partialLineTimer, child = this.child;
+    const streams = [...new Set([this.streams.stdin, this.streams.stdout, this.streams.stderr])];
+    this.pending = null; this.partialLineTimer = null;
     const ignore = (): void => {};
-    child.on("error", ignore);
-    for (const stream of [this.streams.stdin, this.streams.stdout, this.streams.stderr]) {
-      stream.on("error", ignore);
-      stream.destroy();
+    try {
+      cleanupAll([
+        () => this.reader.close(),
+        () => this.observers.clear(),
+        () => partialLineTimer?.cancel(),
+        () => pending?.timer.cancel(),
+        () => pending?.reject(failed ? error : new StoreError("BROKER_UNAVAILABLE", "Pi transport closed during write")),
+        () => { this.streams.stdout.off("data", this.onData); },
+        () => { this.streams.stdout.off("end", this.onEnd); },
+        () => { this.streams.stdout.off("error", this.onError); },
+        () => { this.streams.stderr.off("data", this.onStderr); },
+        () => { this.streams.stderr.off("error", this.onError); },
+        () => { this.streams.stdin.off("error", this.onError); },
+        () => { this.streams.stdin.off("drain", this.onDrain); },
+        () => { child.off("error", this.onError); },
+        () => { child.off("close", this.onChildClose); },
+        // Late OS errors belong to a closed transport, not stale observers.
+        () => { child.on("error", ignore); },
+        ...streams.flatMap(stream => [
+          () => { stream.on("error", ignore); }, () => { stream.destroy(); },
+        ]),
+        () => {
+          if (child.exitCode === null && child.signalCode === null) {
+            if (this.stopChild) this.stopChild();
+            else child.kill("SIGKILL");
+          }
+        },
+      ]);
+    } catch (cleanup) {
+      failure = failed ? new AggregateError([error, cleanup], "Pi transport and cleanup failed") : cleanup;
+      failed = true;
     }
-    if (child.exitCode === null && child.signalCode === null) {
-      try {
-        if (this.stopChild) this.stopChild();
-        else child.kill("SIGKILL");
-      } catch {
-        /* only this owned child */
-      }
-    }
-    this.endTransport(
-      error === undefined ? { state: "closed" } : { state: "failed", error },
-    );
+    // Cleanup cannot suppress this original completion. It is transport end,
+    // not OS exit: the owning session retains its separate exit observation.
+    const result: PiTransportEnd = failed ? { state: "failed", error: failure } : { state: "closed" };
+    this.endTransport(result);
+    return result;
   }
 }

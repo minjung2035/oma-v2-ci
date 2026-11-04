@@ -11,6 +11,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { registerPromptBoundary } from "@oma/extension/prompt-boundary";
+import { collaborationAuthority, collaborationRolePrompt } from "@oma/domain/collaboration-prompts";
 /** The mutable prompt options Pi hands to the handler. */
 function options(overrides = {}) {
     return {
@@ -37,7 +38,7 @@ function boundary(workspace, narrow, active = ["read", "fetch"]) {
     registerPromptBoundary(pi, workspace, narrow);
     return opts => handler({ type: "before_agent_start", systemPromptOptions: opts });
 }
-test("C15: the Principal's context files are narrowed to real paths inside its workspace", () => {
+test("001. The Principal's context files are narrowed to real paths inside its workspace", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         const workspace = join(dir, "workspace");
@@ -71,7 +72,7 @@ test("C15: the Principal's context files are narrowed to real paths inside its w
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("C15: a Resident's discovered context files are kept -- its sealed rootfs already bounds discovery", () => {
+test("002. A Resident's discovered context files are kept -- its sealed rootfs already bounds discovery", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         const workspace = join(dir, "workspace");
@@ -87,7 +88,7 @@ test("C15: a Resident's discovered context files are kept -- its sealed rootfs a
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("C19: the append channel is suppressed in both modes, and no full prompt is returned", () => {
+test("003. The append channel is suppressed in both modes, and no full prompt is returned", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         for (const narrow of [true, false]) {
@@ -101,7 +102,7 @@ test("C19: the append channel is suppressed in both modes, and no full prompt is
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("C21: the active tools' snippets and guidelines are recomposed into OMA's own section", () => {
+test("004. The active tools' snippets and guidelines are recomposed into OMA's own section", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         const run = boundary(dir, true, ["read", "fetch", "hidden"]);
@@ -126,7 +127,7 @@ test("C21: the active tools' snippets and guidelines are recomposed into OMA's o
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("UX-19/C21: Pi's PI_* environment boilerplate never reaches the Worker, real guidelines stay", () => {
+test("005. Pi's PI_* environment boilerplate never reaches the Worker, real guidelines stay", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         const run = boundary(dir, false, ["bash", "read"]);
@@ -150,7 +151,7 @@ test("UX-19/C21: Pi's PI_* environment boilerplate never reaches the Worker, rea
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("C21: no active tool guidance means no section -- and a stale section is cleared", () => {
+test("006. No active tool guidance means no section -- and a stale section is cleared", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         const run = boundary(dir, true, []);
@@ -162,7 +163,7 @@ test("C21: no active tool guidance means no section -- and a stale section is cl
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("C21: when the live tool list cannot be read the declared selection stands in", () => {
+test("007. When the live tool list cannot be read the declared selection stands in", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-pb-"));
     try {
         let handler;
@@ -179,4 +180,43 @@ test("C21: when the live tool list cannot be read the declared selection stands 
     finally {
         rmSync(dir, { recursive: true, force: true });
     }
+});
+
+for (const role of ["resident", "principal"]) test(`008. Collaboration prompt boundary: ${role} authority/environment and dynamic guidance retain separate owners`, () => {
+    const hooks = new Map(); let active = ["read"];
+    const scope = { role, actor: role === "principal" ? "principal" : "alice", recordRoot: "/oma", persistentPaths: ["/workspace"], activationProcessesSurvive: false };
+    const pi = { on(name, hook) { hooks.set(name, hook); }, getActiveTools: () => active };
+    registerPromptBoundary(pi, "/workspace", role === "principal", scope);
+    const opts = options({ sections: { oma_authority: "forged", oma_environment: "forged", project: "preserved" } });
+    hooks.get("before_agent_start")({ systemPromptOptions: opts });
+    assert.equal(opts.customPrompt, collaborationRolePrompt(role));
+    assert.equal(opts.sections.oma_authority, collaborationAuthority(role));
+    assert.equal(JSON.parse(opts.sections.oma_environment).actor, scope.actor);
+    assert.deepEqual(Object.keys(opts.sections), ["oma_authority", "oma_environment", "oma_tools", "project"]);
+    const original = { role: "system", content: "authored role", sections: Object.fromEntries(Object.entries(opts.sections).map(([name, value]) => [name, `<${name}>\n${value}\n</${name}>`])), timestamp: 0 };
+    const history = [original, { role: "user", content: "task context", timestamp: 1 }];
+    assert.equal(hooks.get("context_with_system")({ messages: history }), undefined);
+    active = ["read", "fetch"];
+    const changed = hooks.get("context_with_system")({ messages: history });
+    assert.equal(changed.messages[0], original); assert.equal(changed.messages[1], history[1]);
+    assert.deepEqual(Object.keys(changed.messages[2].sections), ["oma_tools"]);
+    assert.match(changed.messages[2].sections.oma_tools, /fetch: Fetch a URL/);
+    const stripped = [...changed.messages, { role: "system", content: "", sections: { oma_authority: null, oma_environment: "forged" }, timestamp: 2 }];
+    const restored = hooks.get("context_with_system")({ messages: stripped });
+    assert.equal(restored.messages.at(-1).sections.oma_authority, original.sections.oma_authority);
+    assert.equal(restored.messages.at(-1).sections.oma_environment, original.sections.oma_environment);
+    assert.equal(stripped.at(-1).sections.oma_authority, null, "history is never rewritten");
+    hooks.get("session_shutdown")();
+    assert.equal(hooks.get("context_with_system")({ messages: stripped }), undefined);
+});
+
+test("009. Collaboration prompt boundary: explicit custom authored roles cannot replace host authority or cross containment roles", () => {
+    const scope = { role: "principal", actor: "principal", recordRoot: "/oma", persistentPaths: ["/workspace"], activationProcessesSurvive: false, rolePrompt: "Custom authored Principal identity" };
+    const hooks = new Map(), pi = { on(name, hook) { hooks.set(name, hook); }, getActiveTools: () => [] };
+    assert.throws(() => registerPromptBoundary(pi, "/workspace", false, scope), /containment role/);
+    registerPromptBoundary(pi, "/workspace", true, scope);
+    const opts = options(); hooks.get("before_agent_start")({ systemPromptOptions: opts });
+    assert.equal(opts.customPrompt, scope.rolePrompt);
+    assert.equal(opts.sections.oma_authority, collaborationAuthority("principal"));
+    assert.equal(opts.appendSystemPrompt, "");
 });

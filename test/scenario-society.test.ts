@@ -1,3 +1,4 @@
+import { callHumanControl } from "#oma-test/app/runtime/human-controls";
 /** Scenario tests: Residents and the whole society, with only the model scripted.
  *
  * Everything of fixtures/scenario.ts, plus the product's own runner process
@@ -12,41 +13,40 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { withScenario, type Scenario } from "./fixtures/scenario.js";
+import { withScenario, SCENARIO_LIMITS, type Scenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
 import { WORKER_MODEL, commitField, commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
-import { runnerReceiptPathAt, workspacePathAt } from "@oma/domain/paths";
+import { runnerReceiptPathAt, workspacePathAt, collaborationRecordRootPathAt } from "@oma/domain/paths";
+import { readableBody } from "@oma/mail/display";
 
 import { RESIDENT_TEST_OPTIONS as TIMEOUT } from "./fixtures/resident.js";
 import { CONFINED_MODEL, CONFINED_MODEL_2, CONFINED_THINKING_MODEL } from "./fixtures/scripted-provider.js";
 const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const noticed = (request: ChatRequest): string[] =>
-  [...request.messages.map(textOf).join("\n").matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
+  [...request.messages.map(textOf).join("\n").matchAll(/\/mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/g)].map(match => match[1]!);
 const receiptIn = (result: string): { operation: string; state: string; result?: { message?: string } } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at)) as { operation: string; state: string; result?: { message?: string } };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.invocation.key, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 /** The Principal sends one mail through the broker, as its tool would. */
 async function principalSends(s: Scenario, to: string[], subject: string, body: string, key: string): Promise<string> {
-  const principal = s.store.getAgent("principal")!;
-  const sent = await s.broker.dispatch({ actor: "principal", incarnation: principal.incarnation, role: "principal", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } },
-  { v: 1, id: key, method: "mail.send", request: key, params: { to, subject, kind: "message", body } } as never, null) as { ok: boolean; result: { result: { message: string } } };
+  const sent = await s.residentSends("principal", { to, subject, body }, key) as { ok: boolean; result: { result: { message: string } } };
   assert.equal(sent.ok, true, JSON.stringify(sent));
   return sent.result.result.message;
 }
 const residentRequests = (s: Scenario) => s.provider.seen.filter(entry => isResident(entry.body));
 
-test("SCN-R01: a Resident's run reads the mail it was given, replies in the thread, and completes its batch once", TIMEOUT, async () => {
+test("001. A Resident's run reads the mail it was given, replies in the thread, and completes its batch once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const task = await principalSends(s, ["worker-a"], "요약 요청", "README를 세 줄로 요약해 주세요.", "p-r01");
     s.script((request, index) => {
-      if (index === 0) return tools(call("oma_mail_read", { messageId: `/mail/archive/cur/${noticed(request)[0]}:2,` }));
-      if (index === 1) return tools(call("oma_mail_send", { to: ["principal"], subject: "Re: 요약 요청", body: "요약: 설치, 실행, 기여.", kind: "result", replyTo: task }));
+      if (index === 0) return tools(call("read", { path: `/oma/mail/messages/${task}.md` }));
+      if (index === 1) return tools(call("oma_send", { to: ["principal"], subject: "Re: 요약 요청", content: { kind: "text", value: "요약: 설치, 실행, 기여." }, replyTo: task }));
       return text("완료했습니다.");
     });
     const run = await s.activate("worker-a");
@@ -64,25 +64,26 @@ test("SCN-R01: a Resident's run reads the mail it was given, replies in the thre
   });
 });
 
-test("SCN-R02: a Resident is offered its own tools and not the Principal's", TIMEOUT, async () => {
+test("002. A Resident is offered its own tools and not the Principal's", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     await principalSends(s, ["worker-a"], "확인", "도구를 확인하세요.", "p-r02");
-    s.script([tools(call("oma_status", {})), text("확인했습니다.")]);
+    s.script([tools(call("read", { path: "/oma/peers/index.md" })), text("확인했습니다.")]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const offered = (residentRequests(s)[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"]) assert.ok(offered.includes(name), `${name} missing`);
+    for (const name of ["oma_spawn", "oma_wait", "read", "oma_send", "oma_follow"])
+      assert.ok(offered.includes(name), `${name} missing`);
     assert.ok(offered.includes("bash"), "the confined Resident lost its sandbox shell");
-    for (const name of ["oma_agent_create", "oma_agent_lifecycle", "oma_context_publish", "oma_route"])
+    for (const name of ["oma_society", "oma_goal_publish", "oma_agent_control", "oma_context_publish"])
       assert.ok(!offered.includes(name), `${name} was offered to a Resident`);
     assert.match(lastResult(residentRequests(s)[1]!.body), /worker-a/);
   });
 });
 
-test("SCN-R03: a Resident writes to another Resident and to the commons; each recipient, the sender included, gets it once", TIMEOUT, async () => {
+test("003. A Resident writes to another Resident and to the commons; each recipient, the sender included, gets it once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b", "worker-c"] }, async s => {
     await principalSends(s, ["worker-a"], "조율", "b와 모두에게 알려주세요.", "p-r03");
-    s.script([tools(call("oma_mail_send", { to: ["worker-b"], subject: "직접", body: "b에게" }), call("oma_mail_send", { to: ["commons"], subject: "공지", body: "모두에게", kind: "alert" })), text("알렸습니다.")]);
+    s.script([tools(call("oma_send", { to: ["worker-b"], subject: "직접", content: { kind: "text", value: "b에게" } }), call("oma_send", { to: ["commons"], subject: "공지", content: { kind: "text", value: "모두에게" } })), text("알렸습니다.")]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     assert.equal(s.inbox("worker-b").length, 2, "worker-b did not get the direct mail and the notice");
@@ -93,7 +94,7 @@ test("SCN-R03: a Resident writes to another Resident and to the commons; each re
   });
 });
 
-test("SCN-R04: a Resident whose provider keeps failing leaves its batch for the next run, which completes it once", TIMEOUT, async () => {
+test("004. A Resident whose provider keeps failing leaves its batch for the next run, which completes it once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const task = await principalSends(s, ["worker-a"], "재시도", "처리해 주세요.", "p-r04");
     s.script(() => ({ kind: "http-error", status: 503 }) as Reply);
@@ -110,7 +111,7 @@ test("SCN-R04: a Resident whose provider keeps failing leaves its batch for the 
   });
 });
 
-test("SCN-R05: a Resident's runner killed mid-run loses no mail; the next run delivers it and completes it once", TIMEOUT, async () => {
+test("005. A Resident's runner killed mid-run loses no mail; the next run delivers it and completes it once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const task = await principalSends(s, ["worker-a"], "중단", "처리해 주세요.", "p-r05");
     s.script(() => ({ kind: "hang" }));
@@ -126,7 +127,7 @@ test("SCN-R05: a Resident's runner killed mid-run loses no mail; the next run de
   });
 });
 
-test("SCN-R06: a Resident that writes a file larger than a frame finishes its run (DR15)", TIMEOUT, async () => {
+test("006. A Resident that writes a file larger than a frame finishes its run (DR15)", TIMEOUT, async () => {
   const content = "row,value\n".repeat(40_000);
   await withScenario({ residents: ["worker-a"] }, async s => {
     await principalSends(s, ["worker-a"], "데이터", "큰 CSV를 만들어 주세요.", "p-r06");
@@ -138,7 +139,7 @@ test("SCN-R06: a Resident that writes a file larger than a frame finishes its ru
   });
 });
 
-test("SCN-R07: a Resident cannot write outside its workspace", TIMEOUT, async () => {
+test("007. A Resident cannot write outside its workspace", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     await principalSends(s, ["worker-a"], "경계", "시도하세요.", "p-r07");
     const outside = join(s.root, "world", "planted.txt");
@@ -150,18 +151,21 @@ test("SCN-R07: a Resident cannot write outside its workspace", TIMEOUT, async ()
   });
 });
 
-test("SCN-S01: the whole society: a Human delegates, a Resident answers, the Principal reads it and reports", TIMEOUT, async () => {
+test("008. The whole society: a Human delegates, a Resident answers, the Principal reads it and reports", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
+    let workerStep = 0, deliveryStep = 0;
     s.script((request, index) => {
       if (isResident(request)) {
-        if (continuesTurn(request)) return text("답장했습니다.");
-        const [task] = noticed(request);
-        return tools(call("oma_mail_send", { to: ["principal"], subject: "Re: 조사", body: "원인은 캐시 만료입니다.", kind: "result", replyTo: task }));
+        if (workerStep++ === 0) return tools(call("read", { path: "/oma/mail/inbox.md" }));
+        if (workerStep > 2) return text("답장했습니다.");
+        const task = /mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/.exec(lastResult(request))![1]!;
+        return tools(call("oma_send", { to: ["principal"], subject: "Re: 조사", content: { kind: "text", value: "원인은 캐시 만료입니다." }, replyTo: task }));
       }
       if (lastUserText(request).includes("조사해")) return continuesTurn(request) ? text("worker-a에게 맡겼습니다.")
-        : tools(call("oma_mail_send", { to: ["worker-a"], subject: "조사", body: "느린 응답의 원인을 조사해 주세요.", kind: "question", request: "s01-task" }));
-      if (continuesTurn(request)) return text("worker-a: 원인은 캐시 만료입니다.");
-      return tools(call("oma_mail_read", { messageId: `/mail/archive/cur/${noticed(request).at(-1)}:2,` }));
+        : tools(call("oma_send", { to: ["worker-a"], subject: "조사", content: { kind: "text", value: "느린 응답의 원인을 조사해 주세요." } }, "s01-task"));
+      if (deliveryStep++ === 0) return tools(call("read", { path: join(collaborationRecordRootPathAt(s.root, "principal"), "mail/inbox.md") }));
+      if (deliveryStep === 2) return tools(call("read", { path: join(collaborationRecordRootPathAt(s.root, "principal"), "mail/messages", `${/mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/.exec(lastResult(request))![1]}.md`) }));
+      return text("worker-a: 원인은 캐시 만료입니다.");
     });
     await s.prompt("느린 응답을 조사해");
     const run = await s.activate("worker-a");
@@ -169,7 +173,7 @@ test("SCN-S01: the whole society: a Human delegates, a Resident answers, the Pri
     assert.equal((await s.deliver()).kind, "delivered");
     assert.ok(s.lines.some(line => line.includes("원인은 캐시 만료입니다")), JSON.stringify(s.lines.slice(-4)));
     // Every fact once: the task, the answer, both deliveries, both batches.
-    const task = s.operations("principal").find(row => row.request_key === "s01-task")!;
+    const task = s.operations("principal").find(row => row.kind === "mail.send")!;
     assert.equal(task.state, "succeeded");
     assert.equal(s.operations("worker-a").filter(row => row.kind === "mail.send").length, 1);
     assert.deepEqual(s.store.preparedBatches("worker-a"), []);
@@ -179,11 +183,11 @@ test("SCN-S01: the whole society: a Human delegates, a Resident answers, the Pri
   });
 });
 
-test("SCN-S02: two Residents answer; the Principal gets both answers in one delivery", TIMEOUT, async () => {
+test("009. Two Residents answer; the Principal gets both answers in one delivery", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     await principalSends(s, ["worker-a", "worker-b"], "의견", "각자 의견을 주세요.", "p-s02");
     s.script(request => (continuesTurn(request) ? text("보냈습니다.")
-      : tools(call("oma_mail_send", { to: ["principal"], subject: "의견", body: `의견 (${request.messages.length})`, kind: "result" }))));
+      : tools(call("oma_send", { to: ["principal"], subject: "의견", content: { kind: "text", value: `의견 (${request.messages.length})` } }))));
     assert.equal((await s.activate("worker-a")).code, 0);
     assert.equal((await s.activate("worker-b")).code, 0);
     s.script([text("두 의견을 받았습니다.")]);
@@ -192,7 +196,7 @@ test("SCN-S02: two Residents answer; the Principal gets both answers in one deli
   });
 });
 
-test("SCN-S03: mail that arrives while a Resident's run is going is left for its next run", TIMEOUT, async () => {
+test("010. Mail that arrives while a Resident's run is going is left for its next run", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const first = await principalSends(s, ["worker-a"], "첫째", "첫 번째 일", "p-s03a");
     let second = "";
@@ -211,12 +215,11 @@ test("SCN-S03: mail that arrives while a Resident's run is going is left for its
   });
 });
 
-test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries retain identity and conflicting briefs refuse", TIMEOUT, async () => {
+test("011. A Worker creates a peer; the first run reads its brief; the same frozen name intent links to its original child and a different brief refuses", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await principalSends(s, ["worker-a"], "Collaborate", "Create a peer.", "create-task");
-    const create = (brief: string, request: string) => tools(call("bash", { command:
-      `printf '%s' '${brief}' > brief.txt && oma agent create worker-n --from HEAD --file brief.txt --request ${request}` }));
-    const creatorReplies = [create("Review the README.", "create-1"), create("Review the README.", "create-1"), create("Different task", "create-2"), text("Ready.")];
+    const create = (brief: string, request: string) => tools(call("oma_spawn", { name: "worker-n", from: "HEAD", brief: { kind: "text", value: brief } }, request));
+    const creatorReplies = [create("Review the README.", "create-1"), create("Review the README.", "create-repeat"), create("Different task", "create-2"), text("Ready.")];
     let creatorStep = 0, childRead = false;
     const creatorRequests: ChatRequest[] = [];
     s.script(request => {
@@ -225,7 +228,7 @@ test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries r
         if (continuesTurn(request)) {
           assert.match(lastResult(request), /Review the README/); childRead = true; return text("Read.");
         }
-        return tools(call("oma_mail_read", { messageId: brief }));
+        return tools(call("read", { path: `/oma/mail/messages/${brief}.md` }));
       }
       creatorRequests.push(request);
       return creatorReplies[creatorStep++] ?? text("Ready.");
@@ -233,21 +236,27 @@ test("SCN-L05: a Worker creates a peer; the first run reads its brief; retries r
     const creator = await s.activate("worker-a"); assert.equal(creator.code, 0, creator.stderr);
     const results = toolResults(creatorRequests.at(-1)!).map(result => result.text);
     const created = receiptIn(results[0]!); assert.equal(created.state, "succeeded");
-    assert.equal(receiptIn(results[1]!).operation, created.operation); assert.match(results[2]!, /AGENT_CONFLICT/);
+    const linked = receiptIn(results[1]!); assert.equal(linked.state, "succeeded");
+    const link = s.store.getOperationById(linked.operation);
+    assert.ok(link?.kind === "agent.create" && link.plan.existingCreation === created.operation && link.plan.initialMessage === null);
+    assert.match(results[2]!, /AGENT_CONFLICT/);
     const agent = s.store.getAgent("worker-n")!; assert.deepEqual([agent.desired, agent.createdBy], ["enabled", "worker-a"]);
     const [brief] = [...s.inbox("worker-n"), ...s.inbox("worker-n", "cur")]; assert.ok(brief, "the peer has no initial brief");
     const id = brief.replace(/:2,.*$/, "");
+    assert.equal(readableBody(s.archived(id)), "Review the README.");
     const deadline = Date.now() + 30_000;
     while ((!childRead || s.store.getDelivery(id, "worker-n")?.presented !== 1) && Date.now() < deadline)
       await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(childRead, true, "the automatically started first run did not read its brief");
     assert.equal(s.store.getDelivery(id, "worker-n")?.presented, 1);
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "agent.create" && row.state === "succeeded").length, 1);
+    const finished = await s.residentFinished("worker-n");
+    assert.equal(finished.execMainStatus, 0, JSON.stringify(finished));
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "agent.create" && row.state === "succeeded").length, 2);
     assert.equal(s.operations("principal").filter(row => row.kind === "agent.create").length, 0);
   });
 });
 
-test("NATIVE-SCN-01: accepted creation starts its first real Resident without a manual activation", TIMEOUT, async () => {
+test("012. Accepted creation starts its first real Resident without a manual activation", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     await principalSends(s, ["worker-a"], "Create", "Create a peer with its initial brief.", "auto-create-task");
     let childRead = false;
@@ -259,10 +268,9 @@ test("NATIVE-SCN-01: accepted creation starts its first real Resident without a 
           childRead = true;
           return text("Read.");
         }
-        return tools(call("oma_mail_read", { messageId: brief }));
+        return tools(call("read", { path: `/oma/mail/messages/${brief}.md` }));
       }
-      return continuesTurn(request) ? text("Created.") : tools(call("bash", { command:
-        "printf '%s' 'Read the exact initial brief.' > auto-brief.txt && oma agent create worker-auto --from HEAD --file auto-brief.txt --request auto-create" }));
+      return continuesTurn(request) ? text("Created.") : tools(call("oma_spawn", { name: "worker-auto", from: "HEAD", brief: { kind: "text", value: "Read the exact initial brief." } }, "auto-create"));
     });
     const creator = await s.activate("worker-a");
     assert.equal(creator.code, 0, creator.stderr);
@@ -270,29 +278,36 @@ test("NATIVE-SCN-01: accepted creation starts its first real Resident without a 
     while ((!childRead || s.store.preparedBatches("worker-auto").length > 0) && Date.now() < deadline)
       await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(childRead, true, "the native creation path did not run the new Resident");
-    const operation = s.store.getOperation("worker-a", "auto-create")!;
+    const operation = s.operations("worker-a").find(row => row.kind === "agent.create")!;
     assert.equal(operation.state, "succeeded");
     const [brief] = [...s.inbox("worker-auto"), ...s.inbox("worker-auto", "cur")];
     assert.ok(brief);
+    assert.equal(readableBody(s.archived(brief.replace(/:2,.*$/, ""))), "Read the exact initial brief.");
     const delivered = s.store.getDelivery(brief.replace(/:2,.*$/, ""), "worker-auto")!;
     assert.equal(delivered.presented, 1);
     assert.equal(s.store.getBatch(delivered.batchId!)?.state, "completed");
     assert.ok(existsSync(runnerReceiptPathAt(s.root, "worker-auto", delivered.batchId!)));
+    const finished = await s.residentFinished("worker-auto");
+    assert.equal(finished.execMainStatus, 0, JSON.stringify(finished));
   });
 });
 
-test("SCN-L06: a stopped Resident is not run; its mail waits; started again, its next run gets the mail", TIMEOUT, async () => {
+test("013. Human stop prevents activation; releasing the observed stop lets the next run get pending mail", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    const lifecycle = (action: "start" | "stop", request: string) => tools(call("oma_agent_lifecycle", { name: "worker-a", action, request }));
-    s.script([lifecycle("stop", "stop-1"), text("멈췄습니다.")]);
-    await s.prompt("worker-a 멈춰");
-    assert.equal(s.store.getAgent("worker-a")?.desired, "stopped", lastResult(s.provider.seen[1]!.body));
+    const control = async (action: "stop" | "release", key: string) => {
+      const status = await callHumanControl(s.runRoot, SCENARIO_LIMITS, { action: "inspect", agent: "worker-a" }, () => {});
+      assert.equal(status.kind, "status");
+      if (status.kind !== "status") throw new Error("expected a current control observation");
+      return callHumanControl(s.runRoot, SCENARIO_LIMITS, { action, agent: "worker-a", key,
+        expected: { incarnation: status.incarnation, desired: status.desired, control: status.control?.operation ?? null } }, () => {});
+    };
+    await control("stop", "human-stop");
+    assert.equal(s.store.getAgent("worker-a")?.desired, "stopped");
     const task = await principalSends(s, ["worker-a"], "대기", "멈춘 동안 온 일", "p-l06");
     const refused = await s.activate("worker-a");
     assert.notEqual(refused.code, 0, "a stopped Resident's runner ran");
     assert.equal(s.store.getDelivery(task, "worker-a")?.presented, 0);
-    s.script([lifecycle("start", "start-1"), text("시작했습니다.")]);
-    await s.prompt("worker-a 다시 시작해");
+    await control("release", "human-release");
     assert.equal(s.store.getAgent("worker-a")?.desired, "enabled");
     await s.restartBroker();
     s.script([text("대기하던 일을 받았습니다.")]);
@@ -301,7 +316,7 @@ test("SCN-L06: a stopped Resident is not run; its mail waits; started again, its
   });
 });
 
-test("SCN-R08: the broker restarts during a Resident's turn; the next run settles the batch from its receipt and does not present it again", TIMEOUT, async () => {
+test("014. The broker restarts during a Resident's turn; the next run settles the batch from its receipt and does not present it again", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const task = await principalSends(s, ["worker-a"], "정산", "처리해 주세요.", "p-r08");
     s.script(() => delayed(1500, text("처리했습니다.")));
@@ -323,7 +338,7 @@ test("SCN-R08: the broker restarts during a Resident's turn; the next run settle
   });
 });
 
-test("SCN-X01: a Worker model changed in the configuration applies from the next activation", TIMEOUT, async () => {
+test("015. A Worker model changed in the configuration applies from the next activation", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     await principalSends(s, ["worker-a"], "첫째", "첫 번째", "p-x01a");
     s.script([text("첫째 완료")]);
@@ -339,14 +354,14 @@ test("SCN-X01: a Worker model changed in the configuration applies from the next
   });
 });
 
-test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers is loaded by a Worker's engine, its tool shown directly", TIMEOUT, async () => {
+test("016. A verified installed Worker extension remains directly callable alongside the collaboration tools", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // The package store as the engine's package manager leaves it, beside every session.
     const packages = join(dirname(s.root), ".packages");
     const entry = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
     const file = join(packages, entry.slice("packages:".length));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, "export default function (pi) {\n  pi.registerTool({ name: \"hello_ext\", label: \"hello\", " +
+    writeFileSync(file, "import { writeFileSync } from 'node:fs';\nexport default function (pi) {\n  pi.on(\"session_start\", () => writeFileSync(\"extension-loaded.txt\", \"loaded\"));\n  pi.registerTool({ name: \"hello_ext\", label: \"hello\", " +
       "description: \"Say hello from an installed package.\", parameters: { type: \"object\", properties: {} },\n" +
       "    async execute() { return { content: [{ type: \"text\", text: \"hello\" }], details: {} }; } });\n}\n");
     await principalSends(s, ["worker-a"], "첫째", "첫 번째", "p-x03a");
@@ -354,6 +369,9 @@ test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers i
     assert.equal((await s.activate("worker-a")).code, 0);
     const named = (index: number) => (residentRequests(s).at(index)!.body.tools ?? []).map(tool => tool.function?.name);
     assert.ok(!named(-1).includes("hello_ext"), "an extension no role chose was loaded");
+    const initialCatalog = residentRequests(s).at(-1)!.body.tools?.find(tool => tool.function?.name === "toolset");
+    assert.ok(!JSON.stringify(initialCatalog ?? {}).includes('"hello_ext"'),
+      "an extension no role chose was offered in the optional catalog");
     // Turned on for the Workers: the configuration names the store and the role names the package's file.
     const current = readSettings(s.configPath);
     writeSettings(s.configPath, { ...current.config, installation: { ...current.config.installation, packages } });
@@ -363,13 +381,20 @@ test("SCN-X03 / DR25: an extension installed for oma and turned on for Workers i
     commitRoleSet(inline.snapshot!, inline.config, { ...roles, [worker]: { ...roles[worker]!, extensions: [...roles[worker]!.extensions, entry] } });
     await principalSends(s, ["worker-a"], "둘째", "확장 도구를 쓰세요", "p-x03b");
     await s.restartBroker();
-    s.script([text("둘째 완료")]);
-    assert.equal((await s.activate("worker-a")).code, 0);
-    assert.ok(named(-1).includes("hello_ext"), `the Worker's engine did not show the installed extension's tool: ${named(-1).join(", ")}`);
+    s.script((request, index) => {
+      const offered = (request.tools ?? []).map(tool => tool.function?.name);
+      assert.ok(offered.includes("hello_ext"), "the verified user extension lost its direct SDK exposure");
+      assert.ok(!offered.includes("toolset"), "the retired selector must remain absent");
+      return index === 0 ? tools(call("hello_ext", {}, "installed-hello")) : text("둘째 완료");
+    });
+    const run = await s.activate("worker-a");
+    assert.equal(run.code, 0, run.stderr);
+    assert.equal(readFileSync(join(workspacePathAt(s.root, "worker-a"), "extension-loaded.txt"), "utf8"), "loaded");
+    assert.equal(toolResults(residentRequests(s).at(-1)!.body).find(result => result.id === "installed-hello")?.text, "hello");
   });
 });
 
-test("SCN-X02 / DR24: a Worker's model and effort chosen from the engine's list are what its next activation asks for", TIMEOUT, async () => {
+test("017. A Worker's model and effort chosen from the engine's list are what its next activation asks for", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const settings = readSettings(s.configPath);
     assert.equal(commitField(settings, WORKER_MODEL, { ...CONFINED_THINKING_MODEL, thinking: "high" }).kind, "saved");
@@ -384,26 +409,13 @@ test("SCN-X02 / DR24: a Worker's model and effort chosen from the engine's list 
   });
 });
 
-test("SCN-P09: a Worker reads status of one agent names that agent and its pending mail", TIMEOUT, async () => {
+test("018. A backend status query for one Worker names that agent and its pending mail", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     await s.residentSends("worker-b", { to: ["worker-a"], subject: "대기", body: "처리 대기" }, "w-p09");
-    s.script([tools(call("oma_status", { agent: "worker-a" })), text("확인")]);
-    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    const status = lastResult(s.provider.seen[1]!.body);
+    const answer = await s.residentCall("worker-a", "status.get", { agent: "worker-a" }, null) as { ok: boolean; result: unknown };
+    assert.equal(answer.ok, true);
+    const status = JSON.stringify(answer.result);
     assert.match(status, /worker-a/);
-    assert.doesNotMatch(status, /worker-b/, "a Worker reads status of one agent listed another");
-  });
-});
-
-test("DR27: a Worker acknowledges delivered mail twice under one request without duplicating the fact", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a"] }, async s => {
-    const message = await principalSends(s, ["worker-a"], "Task", "Read and acknowledge.", "ack-task");
-    const ack = tools(call("oma_mail_ack", { messageId: message, request: "ack-once" }));
-    s.script([ack, ack, text("Acknowledged.")]);
-    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
-    assert.equal(s.store.getDelivery(message, "worker-a")?.acknowledged, 1);
-    const first = receiptIn(lastResult(residentRequests(s)[1]!.body));
-    assert.deepEqual(receiptIn(lastResult(residentRequests(s)[2]!.body)), first);
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "mail.ack").length, 1);
+    assert.doesNotMatch(status, /worker-b/, "a backend status query for one agent listed another");
   });
 });

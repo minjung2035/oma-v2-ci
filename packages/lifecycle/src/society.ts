@@ -19,14 +19,13 @@ import type { LifecycleUnits } from "./ports.js";
  * Otherwise a queued mail wake can outlive an observed empty execution scope. */
 export async function quiesceResidents(store: Pick<LifecycleLedger, "listAgents">, units: Pick<LifecycleUnits, "stop" | "confirmDead">): Promise<void> {
   const failures: unknown[] = [];
-  for (const agent of store.listAgents()) {
-    if (agent.role !== "resident") continue;
+  await Promise.all(store.listAgents().filter(agent => agent.role === "resident").map(async agent => {
     try {
       await units.stop(agent.name, agent.incarnation);
       if (!units.confirmDead(agent.name, agent.incarnation))
         throw new StoreError("RUN_TERMINATION_UNKNOWN", `cannot prove ${agent.name} terminated`);
     } catch (error) { failures.push(error); }
-  }
+  }));
   if (failures.length === 0) return;
   const primary = failures.find(error => errorCodeOf(error) === "STORE_CORRUPT") ?? failures[0];
   if (failures.length === 1) throw primary;

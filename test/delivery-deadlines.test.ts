@@ -1,7 +1,8 @@
 import { residentEngineEffects } from "#oma-test/app/engine/resident-effects";
 // DR27 (WP10, D06): acceptance, control silence, model silence and drain
 // are separate. A delivery has no sum-of-requests wall-clock limit.
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { scaledClock } from "./fixtures/scaled-clock.js";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,10 +15,11 @@ import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "@oma/protocol/delivery-
 
 type Pacing = "malformed" | "premature-eof" | "wait-observation" | "wait-observation-error" | "wait-observation-end-stall" | "wait-observation-stale" | "eof-before-close" | "steady" | "silent-after-accept" | "never-accepts" | "silent-tool" | "unfinished-tool" | "retry-wait" | "stuck-retry" | "silent-inference" | "stuck-inference" | "compaction" | "stuck-compaction" | "compaction-end-stall" | "post-tool-stall" | "compaction-error" | "many-requests";
 
-/** A fake Pi: after accepting, emits one progress event every `everyMs` for
+/** Protocol delays run at 4x in the deadline cases; OS-close and timer-leak
+ * cases explicitly retain real time. A fake Pi: after accepting, emits one progress event every `everyMs` for
  * `forMs`, then the boundary and the settle -- or goes silent, or never
  * answers the command at all. */
-function fakePi(root: string, pacing: Pacing, everyMs: number, forMs: number): string {
+function fakePi(root: string, pacing: Pacing, everyMs: number, forMs: number, speed: number): string {
   const command = join(root, "fake-pi");
   writeFileSync(command, `#!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -26,6 +28,12 @@ const args = process.argv.slice(2);
 const sessionDir = args[args.indexOf("--session-dir") + 1]; mkdirSync(sessionDir, { recursive: true });
 const sessionPath = join(sessionDir, "owned.jsonl"); writeFileSync(sessionPath, '{"type":"session","version":3}\\n');
 const out = value => process.stdout.write(JSON.stringify(value) + "\\n");
+const realTimeout = globalThis.setTimeout, realInterval = globalThis.setInterval, realDate = Date.now;
+const epoch = realDate();
+const setTimeout = (fn, ms, ...args) => realTimeout(fn, ms / ${speed}, ...args);
+const setInterval = (fn, ms, ...args) => realInterval(fn, ms / ${speed}, ...args);
+Date.now = () => epoch + (realDate() - epoch) * ${speed};
+out({ type: "extension_ui_request", method: "notify", message: "OMA_TEST_CLOCK_READY" });
 process.stdin.setEncoding("utf8"); let pending = "";
 process.stdin.on("data", chunk => { pending += chunk; const lines = pending.split("\\n"); pending = lines.pop();
   for (const line of lines) { if (!line) continue; const request = JSON.parse(line);
@@ -115,12 +123,20 @@ setInterval(() => {}, 1000);
   return command;
 }
 
-async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budgets: { idle: number; model: number; accept: number }) {
+async function deliverWith(t: TestContext, pacing: Pacing, everyMs: number, forMs: number, budgets: { idle: number; model: number; accept: number }, accelerate = true) {
   const root = mkdtempSync(join(tmpdir(), "oma-v10a-"));
+  const clock = accelerate ? scaledClock(t, 4) : null;
+  const onEvent = PiRpcClient.prototype.onEvent;
+  const events = clock ? t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, listener: Parameters<typeof onEvent>[0]) {
+    return onEvent.call(this, event => {
+      if (event.type === "extension_ui_request" && event.method === "notify" && event.message === "OMA_TEST_CLOCK_READY") clock?.start();
+      listener(event);
+    });
+  }) : null;
   try {
-    const options = residentOptions(root, root, fakePi(root, pacing, everyMs, forMs));
+    const options = residentOptions(root, root, fakePi(root, pacing, everyMs, forMs, accelerate ? 4 : 1));
     prepareResident(options);
-    writeFileSync(options.paths.coreExtension, "export default function() {}\n"); writeFileSync(options.paths.cli, "\n");
+    writeFileSync(options.paths.coreExtension, "export default function() {}\n");
     const adapter = new PiAdapter(residentEngineEffects, { ...options,
       profile: { ...options.profile, inferenceSeconds: budgets.model },
       limits: { ...options.limits, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept } });
@@ -130,44 +146,44 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
     const started = Date.now();
     try { return { outcome: await adapter.deliver(batch), error: null, ms: Date.now() - started }; }
     catch (error) { return { outcome: null, error: error as Error & { code?: string }, ms: Date.now() - started }; }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { events?.mock.restore(); clock?.restore(); rmSync(root, { recursive: true, force: true }); }
 }
 
-test("V10A: a turn that keeps making progress past the idle budget still settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const result = await deliverWith("steady", 200, 2_500, { idle: 1, model: 10, accept: 2 });
+test("001. A turn that keeps making progress past the idle budget still settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const result = await deliverWith(t, "steady", 200, 2_500, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error, null, String(result.error));
   assert.ok(result.ms >= 2_400, "the turn was not actually longer than the idle budget");
   assert.equal(result.outcome!.entryId, "0123abcd");
 });
 
-test("V10A: a genuinely silent engine ends the delivery at the idle budget, as idle", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const result = await deliverWith("silent-after-accept", 200, 0, { idle: 1, model: 10, accept: 2 });
+test("002. A genuinely silent engine ends the delivery at the idle budget, as idle", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const result = await deliverWith(t, "silent-after-accept", 200, 0, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
   assert.match(result.error!.message, /idle stream budget/);
   assert.ok(result.ms < 5_000, `idle took ${result.ms} ms`);
 });
 
-test("DR27 / WP10: model progress and repeated requests are not limited by total delivery time", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
+test("003. Model progress and repeated requests are not limited by total delivery time", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   for (const [pacing, duration] of [["steady", 2500], ["many-requests", 650]] as const) {
-    const result = await deliverWith(pacing, 200, duration, { idle: 1, model: 2, accept: 2 });
+    const result = await deliverWith(t, pacing, 200, duration, { idle: 1, model: 2, accept: 2 });
     assert.equal(result.error, null, String(result.error));
     assert.ok(result.ms >= 2400, "delivery must outlive one model silence budget");
     assert.equal(result.outcome!.entryId, "0123abcd");
   }
 });
 
-test("DR27 / WP10: silent reasoning before the first token and post-response compaction are not RPC idleness", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
+test("004. Silent reasoning before the first token and post-response compaction are not RPC idleness", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   for (const pacing of ["silent-inference", "compaction", "compaction-error"] as const) {
-    const result = await deliverWith(pacing, 0, 1500, { idle: 1, model: 3, accept: 2 });
+    const result = await deliverWith(t, pacing, 0, 1500, { idle: 1, model: 3, accept: 2 });
     assert.equal(result.error, null, `${pacing}: ${result.error}`);
     assert.ok(result.ms >= 1400);
     assert.equal(result.outcome!.entryId, "0123abcd");
   }
 });
 
-test("DR27 / WP10: an unresponsive inference or compaction is bounded without inventing a receipt", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
+test("005. An unresponsive inference or compaction is bounded without inventing a receipt", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   for (const pacing of ["stuck-inference", "stuck-compaction"] as const) {
-    const result = await deliverWith(pacing, 0, 0, { idle: 1, model: 2, accept: 2 });
+    const result = await deliverWith(t, pacing, 0, 0, { idle: 1, model: 2, accept: 2 });
     assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
     assert.match(result.error!.message, /model silence budget/);
     assert.equal(result.outcome, null);
@@ -175,9 +191,9 @@ test("DR27 / WP10: an unresponsive inference or compaction is bounded without in
   }
 });
 
-test("DR27 / WP10: finishing a compaction or tool restores the control-event budget", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
+test("006. Finishing a compaction or tool restores the control-event budget", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   for (const pacing of ["compaction-end-stall", "post-tool-stall"] as const) {
-    const result = await deliverWith(pacing, 0, 1200, { idle: 1, model: 10, accept: 2 });
+    const result = await deliverWith(t, pacing, 0, 1200, { idle: 1, model: 10, accept: 2 });
     assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
     assert.match(result.error!.message, /idle stream budget/);
     assert.ok(result.ms >= 2100 && result.ms < 6000);
@@ -189,36 +205,36 @@ test("DR27 / WP10: finishing a compaction or tool restores the control-event bud
  * for 30 s, the adapter read the engine as idle, and the run ended
  * DEADLINE_EXCEEDED in the middle of the tool. Builds, installs and test
  * suites are that shape. A tool the engine announced is progress. */
-test("AV24 / WP10: a silent tool the engine announced runs past the idle budget and the turn settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const result = await deliverWith("silent-tool", 200, 2_500, { idle: 1, model: 10, accept: 2 });
+test("007. A silent tool the engine announced runs past the idle budget and the turn settles", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const result = await deliverWith(t, "silent-tool", 200, 2_500, { idle: 1, model: 10, accept: 2 });
   assert.equal(result.error, null, String(result.error));
   assert.ok(result.ms >= 2_400, "the tool was not actually longer than the idle budget");
   assert.equal(result.outcome!.entryId, "0123abcd");
 });
 
-test("DR27 / WP10: a tool owns its runtime, but engine loss still leaves an unconfirmed boundary", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const result = await deliverWith("unfinished-tool", 200, 2500, { idle: 1, model: 2, accept: 2 });
+test("008. A tool owns its runtime, but engine loss still leaves an unconfirmed boundary", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const result = await deliverWith(t, "unfinished-tool", 200, 2500, { idle: 1, model: 2, accept: 2 });
   assert.equal(result.error?.code, "SESSION_BOUNDARY_UNCONFIRMED");
   assert.ok(result.ms >= 2400);
   assert.equal(result.outcome, null);
 });
 
-test("INF-001 / WP10: announced retry backoff is not idle; a missing retry still times out", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const finished = await deliverWith("retry-wait", 0, 1500, { idle: 1, model: 10, accept: 2 });
+test("009. Announced retry backoff is not idle; a missing retry still times out", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const finished = await deliverWith(t, "retry-wait", 0, 1500, { idle: 1, model: 10, accept: 2 });
   assert.equal(finished.error, null);
-  const stuck = await deliverWith("stuck-retry", 0, 1500, { idle: 1, model: 10, accept: 2 });
+  const stuck = await deliverWith(t, "stuck-retry", 0, 1500, { idle: 1, model: 10, accept: 2 });
   assert.equal(stuck.error?.code, "DEADLINE_EXCEEDED"); assert.match(stuck.error!.message, /idle stream budget/);
-  const retried = await deliverWith("retry-wait", 0, 2500, { idle: 1, model: 2, accept: 2 });
+  const retried = await deliverWith(t, "retry-wait", 0, 2500, { idle: 1, model: 2, accept: 2 });
   assert.equal(retried.error, null, "announced backoff is not model silence");
 });
 
-test("V10A: an unanswered command ends at the acceptance budget, and says so", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
-  const result = await deliverWith("never-accepts", 200, 0, { idle: 10, model: 10, accept: 1 });
+test("010. An unanswered command ends at the acceptance budget, and says so", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+  const result = await deliverWith(t, "never-accepts", 200, 0, { idle: 10, model: 10, accept: 1 });
   assert.equal(result.error?.code, "SESSION_BOUNDARY_UNCONFIRMED");
   assert.match(result.error!.message, /accept the delivery command/);
 });
 
-test("V10C: a budget longer than the native timer limit does not fire early, and cancel is final", async () => {
+test("011. A budget longer than the native timer limit does not fire early, and cancel is final", async t => {
   let fired = 0;
   const warnings: string[] = [];
   const onWarning = (warning: Error) => { warnings.push(warning.name); };
@@ -237,7 +253,7 @@ test("V10C: a budget longer than the native timer limit does not fire early, and
   assert.equal(fired, 0, "a cancelled alarm fired");
 });
 
-test("V10C: every delivery outcome leaves no timer behind", { ...RESIDENT_TEST_OPTIONS, timeout: 30_000 }, async () => {
+test("012. Every delivery outcome leaves no timer behind", { ...RESIDENT_TEST_OPTIONS, timeout: 30_000 }, async t => {
   const timers = () => process.getActiveResourcesInfo().filter(kind => kind === "Timeout").length;
   await new Promise(resolve => setTimeout(resolve, 20));
   const before = timers();
@@ -248,51 +264,51 @@ test("V10C: every delivery outcome leaves no timer behind", { ...RESIDENT_TEST_O
     ["malformed", 0, { idle: 10, model: 10, accept: 2 }],
     ["premature-eof", 0, { idle: 10, model: 10, accept: 2 }],
     ["eof-before-close", 100, { idle: 10, model: 10, accept: 2 }],
-  ] as const) await deliverWith(pacing, 100, forMs, budgets);
+  ] as const) await deliverWith(t, pacing, 100, forMs, budgets, false);
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(timers(), before, "a deadline outlived its delivery");
 });
 
-test("DR27: wait observation has its own budget and restores control idleness afterwards", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async () => {
+test("013. Wait observation has its own budget and restores control idleness afterwards", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   const budgets = { idle: 1, model: 3, accept: 2 };
-  const good = await deliverWith("wait-observation", 0, 1500, budgets);
+  const good = await deliverWith(t, "wait-observation", 0, 1500, budgets);
   assert.equal(good.error, null);
   assert.ok(good.outcome);
-  const failed = await deliverWith("wait-observation-error", 0, 1500, budgets);
+  const failed = await deliverWith(t, "wait-observation-error", 0, 1500, budgets);
   assert.equal(failed.error?.code, "SESSION_BOUNDARY_UNCONFIRMED");
   assert.match(failed.error!.message, /could not observe/);
   assert.equal(failed.outcome, null);
-  const stalled = await deliverWith("wait-observation-end-stall", 0, 1500, budgets);
+  const stalled = await deliverWith(t, "wait-observation-end-stall", 0, 1500, budgets);
   assert.equal(stalled.error?.code, "DEADLINE_EXCEEDED");
   assert.match(stalled.error!.message, /idle stream budget/);
   assert.ok(stalled.ms >= 2400 && stalled.ms < 6000);
-  const stale = await deliverWith("wait-observation-stale", 0, 0, budgets);
+  const stale = await deliverWith(t, "wait-observation-stale", 0, 0, budgets);
   assert.equal(stale.error?.code, "DEADLINE_EXCEEDED");
   assert.ok(stale.ms < 4000, "a stale incarnation cannot suspend the idle deadline");
 });
 
-test("DR27 / P0-4: EOF is not child death; adapter success waits for actual close", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
+test("014. EOF is not child death; adapter success waits for actual close", { ...RESIDENT_TEST_OPTIONS, timeout: 20_000 }, async t => {
   let closed = false;
   const original = PiRpcClient.prototype.onEvent;
   t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, ...args: Parameters<typeof original>) {
     this.child.once("close", () => { closed = true; });
     return original.apply(this, args);
   });
-  const result = await deliverWith("eof-before-close", 50, 100, { idle: 2, model: 3, accept: 2 });
+  const result = await deliverWith(t, "eof-before-close", 50, 100, { idle: 2, model: 3, accept: 2 }, false);
   assert.equal(result.error, null);
   assert.ok(result.outcome);
   assert.equal(closed, true, "an ended stream cannot release the live child owner");
 });
 
 for (const pacing of ["silent-after-accept", "never-accepts", "wait-observation-error", "malformed", "premature-eof"] as const) {
-  test(`DR27/P0-4: ${pacing} failure keeps the child until actual close`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
+  test(`015. Delivery deadlines: ${pacing} failure keeps the child until actual close`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
     let closed = false;
     const original = PiRpcClient.prototype.onEvent;
     t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, ...args: Parameters<typeof original>) {
       this.child.once("close", () => { closed = true; });
       return original.apply(this, args);
     });
-    const result = await deliverWith(pacing, 0, 100, { idle: 2, model: 3, accept: 1 });
+    const result = await deliverWith(t, pacing, 0, 100, { idle: 2, model: 3, accept: 1 }, false);
     assert.ok(result.error, "failure cannot become a boundary");
     assert.equal(result.outcome, null);
     assert.equal(closed, true, "a rejected delivery still owns its child until OS close");
@@ -303,7 +319,7 @@ for (const pacing of ["silent-after-accept", "never-accepts", "wait-observation-
 }
 
 for (const pacing of ["silent-after-accept", "never-accepts", "eof-before-close"] as const) {
-  test(`DR27/P0-5: lost ${pacing} close observation is bounded and preserves the original failure`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
+  test(`016. Lost ${pacing} close observation is bounded and preserves the original failure`, { ...RESIDENT_TEST_OPTIONS, timeout: 15_000 }, async t => {
     let actualClose = false;
     let lateClose: ReturnType<typeof setTimeout> | undefined;
     t.after(() => clearTimeout(lateClose));
@@ -325,7 +341,7 @@ for (const pacing of ["silent-after-accept", "never-accepts", "eof-before-close"
       });
       return original.apply(this, args);
     });
-    const result = await deliverWith(pacing, 50, 100, { idle: 2, model: 3, accept: 1 });
+    const result = await deliverWith(t, pacing, 50, 100, { idle: 2, model: 3, accept: 1 }, false);
     assert.equal(actualClose, true);
     assert.equal(result.outcome, null);
     assert.ok(result.error instanceof AggregateError);
@@ -340,7 +356,7 @@ for (const pacing of ["silent-after-accept", "never-accepts", "eof-before-close"
   });
 }
 
-test("DR27/P0-4: delivery event-registration failure returns timers and observes its child close", { ...RESIDENT_TEST_OPTIONS, timeout: 8000 }, async t => {
+test("017. Delivery event-registration failure returns timers and observes its child close", { ...RESIDENT_TEST_OPTIONS, timeout: 8000 }, async t => {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;
   t.mock.method(globalThis, "setTimeout", (action: (...args: unknown[]) => void, ms?: number) => {
@@ -356,7 +372,7 @@ test("DR27/P0-4: delivery event-registration failure returns timers and observes
     throw problem;
   });
   t.after(() => client?.close());
-  const result = await deliverWith("never-accepts", 0, 0, { idle: 2, model: 3, accept: 2 });
+  const result = await deliverWith(t, "never-accepts", 0, 0, { idle: 2, model: 3, accept: 2 }, false);
   assert.equal(result.error, problem, "setup must retain its original failure");
   assert.equal(closed, true, "a failed setup must still observe its owned child's close");
   assert.equal(client?.child.stdout?.listenerCount("data"), 0);

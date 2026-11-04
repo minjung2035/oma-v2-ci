@@ -1,26 +1,29 @@
 /** Installed command and original TUI/tools; inference and user files are local fixtures. */
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, readlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyInstalledProduct } from "./fixtures/installation.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { runPersonalPty } from "./fixtures/personal-native.js";
 
 const hex = (value: string): string => Buffer.from(value).toString("hex");
 const fixtures = join(process.cwd(), "test/fixtures");
 let installRoot: string | undefined;
+const unsettledRoots = new Set<string>();
 before(() => {
   installRoot = realpathSync(mkdtempSync(join(tmpdir(), "oma-personal-installed-")));
   copyInstalledProduct(fileURLToPath(new URL("../../", import.meta.url)), installRoot);
+  writeFileSync(join(installRoot, ".personal-native-canary"), "readonly installation\n");
 });
-after(() => { if (installRoot !== undefined) removeTree(installRoot); });
+after(() => { if (installRoot !== undefined && unsettledRoots.size === 0) removeTree(installRoot); });
 for (const ending of ["tools", "config", "empty-extensions", "extensions", "new", "resume", "fork", "fork-ui", "fork-cancel", "reload-update", "reload-failure", "retry", "cancel", "project-seed", "project-seed-resume", "society-bound"]) {
-  test(`Personal installed PTY: ${ending}, isolated state and restored terminal`, { timeout: 60_000 }, t => {
+  test(`001. Personal installed PTY: ${ending}, isolated state and restored terminal`, { timeout: 60_000 }, async t => {
     const root = mkdtempSync(join(tmpdir(), "oma-personal-pty-"));
-    t.after(() => removeTree(root));
+    unsettledRoots.add(root);
+    t.after(() => { if (!unsettledRoots.has(root)) removeTree(root); });
     // Each write waits on the screen marker its response draws (the scripted
     // response text, a picker title, or the redrawn transcript) instead of a
     // fixed pause that can expire mid-draw under load. A missed expect still
@@ -61,12 +64,15 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
         ...(ending === "reload-update" ? [prompt] : [])]
       : ending === "cancel" ? [step("Cancel this turn\r", "Cancel this turn", 0.5), step("\x1b", "Operation aborted", 0.5), prompt]
       : [prompt];
-    const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify({
-      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending, installRoot!], ready: hex("Your ideas, in motion"),
+    const namespaces = Object.fromEntries(["pid", "mnt", "net"].map(name => [name, readlinkSync(`/proc/self/ns/${name}`)]));
+    const run = await runPersonalPty(root, installRoot!, join(fixtures, "pty-harness.py"), JSON.stringify({
+      argv: [process.execPath, join(fixtures, "personal-pty.mjs"), root, ending, installRoot!, JSON.stringify(namespaces)], ready: hex("Your ideas, in motion"),
       steps: [...steps, { write: hex("\x04"), wait: 2 }],
-    })], { encoding: "utf8", timeout: 55_000, maxBuffer: 16 * 1024 * 1024 });
-    assert.equal(run.status, 0, run.stderr);
-    const result = JSON.parse(run.stdout), output = Buffer.from(result.output, "hex").toString();
+    }));
+    unsettledRoots.delete(root); // helper returned only after the entire native scope closed
+    assert.equal(run.kind, "exited", run.stderr.toString());
+    assert.equal(run.exitCode, 0, run.stderr.toString());
+    const result = JSON.parse(run.stdout.toString()), output = Buffer.from(result.output, "hex").toString();
     assert.equal(result.exited, true, `${result.expectMissed} expects missed; ${output.slice(-8000)}`);
     assert.equal(result.code, ending === "reload-failure" ? 1 : 0, output.slice(-8000));
     const engineExit = JSON.parse(readFileSync(join(root, "engine-exit.json"), "utf8"));
@@ -88,5 +94,11 @@ for (const ending of ["tools", "config", "empty-extensions", "extensions", "new"
     if (ending === "reload-failure") assert.match(output, /FIXTURE_RELOAD_FAILURE/);
     const facts = JSON.parse(readFileSync(join(root, "facts.json"), "utf8"));
     assert.equal(facts.births, ending === "new" ? 2 : 1);
+    if (ending === "tools") {
+      for (const name of ["pid", "mnt", "net"]) assert.notEqual(facts.native.namespaces[name], namespaces[name]);
+      assert.equal(facts.native.manager, "EACCES");
+      assert.equal(facts.native.readonly, "EROFS");
+      assert.equal(readFileSync(join(installRoot!, ".personal-native-canary"), "utf8"), "readonly installation\n");
+    }
   });
 }

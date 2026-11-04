@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { testNames, oraclePresent } from "../scripts/review-closure.mjs";
 
-test("DR46: review discovery follows authored workspace tests without counting comments, strings, fixtures or vendor tests", t => {
+test("001. Review discovery follows authored workspace tests without counting comments, strings, fixtures or vendor tests", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-review-oracle-owner-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const put = (path, text) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text); };
@@ -21,7 +21,7 @@ test("DR46: review discovery follows authored workspace tests without counting c
   for (const id of ["COMMENT", "STRING", "FIXTURE", "VENDOR"]) assert.equal(oraclePresent(names, id), false);
 });
 
-test("DR46: review discovery refuses linked oracle sources instead of reading another owner's tests", t => {
+test("002. Review discovery refuses linked oracle sources instead of reading another owner's tests", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-review-linked-oracle-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "test"));

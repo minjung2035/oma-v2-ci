@@ -6,7 +6,7 @@ import {
   type RejectionObservation,
 } from "./fixtures/verification-oracles.js";
 
-test("V02 accepted submit convergence preserves identity and plan for pending, unknown and succeeded receipts", async () => {
+test("001. Accepted submit convergence preserves identity and plan for pending, unknown and succeeded receipts", async () => {
   for (const state of ["pending", "unknown", "succeeded"]) {
     let row = { id: "accepted", state, planJson: "frozen" };
     const calls: string[] = [];
@@ -22,7 +22,7 @@ test("V02 accepted submit convergence preserves identity and plan for pending, u
     assert.deepEqual(calls, ["accepted"]);
   }
 });
-test("V02 convergence oracle rejects non-settlement, failed state, identity replacement and plan rewrite independently", async () => {
+test("002. Convergence oracle rejects non-settlement, failed state, identity replacement and plan rewrite independently", async () => {
   for (const [change, message] of [
     [{ state: "pending" }, /did not converge/],
     [{ state: "failed" }, /did not converge/],
@@ -53,7 +53,7 @@ test("V02 convergence oracle rejects non-settlement, failed state, identity repl
     /unexpected accepted state/,
   );
 });
-test("V05 bounded rejection oracle requires one explicit correlated protocol error, not silence", () => {
+test("003. Bounded rejection oracle requires one explicit correlated protocol error, not silence", () => {
   const reply = { id: "request", ok: false, error: { code: "STREAM_INVALID" } };
   requireBoundedRejection({ replies: [reply] }, "STREAM_INVALID", "request");
   const invalid: Array<RejectionObservation | undefined> = [

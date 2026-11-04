@@ -26,7 +26,7 @@ function detectsMutant(actions: readonly Action[]): boolean {
   }
   return false;
 }
-test("R36 model mutant: reconciliation losing an unknown operation is detected and reduced to an independently replayable triple", async () => {
+test("001. Model mutant: reconciliation losing an unknown operation is detected and reduced to an independently replayable triple", async () => {
   const corpus = MODEL_CORPUS[2]!;
   assert.equal(detectsMutant(corpus), true);
   const reduced = await minimizeSequence(corpus, async candidate => detectsMutant(candidate));
@@ -40,7 +40,7 @@ test("R36 model mutant: reconciliation losing an unknown operation is detected a
   for (const action of reduced.sequence) advance(model, action);
   assert.equal(stateOf(model, 0), "succeeded");
 });
-test("R36 model minimizer records exhaustion instead of inventing a minimal witness", async () => {
+test("002. Model minimizer records exhaustion instead of inventing a minimal witness", async () => {
   const result = await minimizeSequence(MODEL_CORPUS[2]!, async candidate => detectsMutant(candidate), 1);
   assert.equal(result.probes, 1); assert.equal(result.oneMinimal, false);
 });

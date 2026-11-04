@@ -112,7 +112,7 @@ function ensureOwned(path: string, ownedFrom: string): void {
   // P0-8/DR32: every ensured path is under the rootfs, which is oma's own
   // under the state root -- the boundary is repaired component by component,
   // so a mode-000 skeleton directory a stray left cannot wedge provisioning.
-  try { ensureOwnedDirectory(path, ownedFrom, 0o755); }
+  try { ensureOwnedDirectory(path, ownedFrom, 0o755, { replaceStrays: false }); }
   catch (error) {
     if (error instanceof StoreError) throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a directory`);
     throw error;
@@ -225,7 +225,7 @@ export function prepareResidentRootfs(
   const inside = (path: string): string => join(rootfs, path);
   for (const path of ["/proc", "/dev", "/tmp", "/etc", "/quarantine", "/bundle", dirname(RESIDENT_PATHS.node),
     RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.workerArchive, RESIDENT_PATHS.selfMail,
-    RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
+    RESIDENT_PATHS.records, RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
     RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureOwned(inside(path), pass.boundary);
   for (const path of ["/bundle/input.bundle", RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference, RESIDENT_PATHS.egress])

@@ -10,7 +10,7 @@ import {messageIdForOperation} from '@oma/domain/derived';
 import {sha256Hex} from '@oma/domain/canonical-json';
 const id=messageIdForOperation('op-12345678-1234-4123-8123-123456789abc',0);
 function world(t){const root=mkdtempSync(join(tmpdir(),'oma-held-mailbox-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;}
-test('a held mailbox publishes, observes, appends and moves under the same directory inode',t=>{
+test("001. A held mailbox publishes, observes, appends and moves under the same directory inode",t=>{
  const root=world(t),bytes=Buffer.from('accepted message'),message={id,bytes:bytes.length,sha256:sha256Hex(bytes)};
  const source=mailObjectPathAt(root,id);mkdirSync(dirname(source),{recursive:true});writeFileSync(source,bytes);
  const inboxPath=dirname(mailInboxArrivalPathAt(root,'alice')),held=new HeldMailInbox(root,'alice');
@@ -27,7 +27,7 @@ test('a held mailbox publishes, observes, appends and moves under the same direc
  }finally{held.close();}
  assert.throws(()=>held.observeInboxMessage('cur',message),{code:'INTERNAL_ERROR'});
 });
-test('partial mailbox acquisition closes every directory it already acquired',t=>{
+test("002. Partial mailbox acquisition closes every directory it already acquired",t=>{
  const root=world(t),inbox=dirname(mailInboxArrivalPathAt(root,'alice'));
  mkdirSync(join(inbox,'new'),{recursive:true});execFileSync('mkfifo',[join(inbox,'cur')]);
  const before=readdirSync('/proc/self/fd').length;
@@ -35,7 +35,7 @@ test('partial mailbox acquisition closes every directory it already acquired',t=
  assert.equal(readdirSync('/proc/self/fd').length,before,'a refused cur acquisition cannot retain its inbox/new descriptors');
 });
 
-test('copy fallback retains its caller-owned destination descriptor and complete immutable bytes',async t=>{
+test("003. Copy fallback retains its caller-owned destination descriptor and complete immutable bytes",async t=>{
  const {publishImmutableEntry,observeImmutableEntry}=await import('@oma/storage/immutable-file');
  const {openOwnedDirectoryPath}=await import('@oma/storage/directory');
  const {closeSync,statSync}=await import('node:fs');

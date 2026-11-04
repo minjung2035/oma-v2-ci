@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TransportSpool } from '@oma/storage/transport-spool';
 const descriptor=body=>({bytes:body.length,sha256:createHash('sha256').update(body).digest('hex')});
-test('DR46-F06: transport short writes retain every byte and hand off the actual sealed file',async()=>{
+test("001. Transport short writes retain every byte and hand off the actual sealed file",async()=>{
  const root=fs.mkdtempSync(join(tmpdir(),'oma-short-transport-')),body=Buffer.from('complete bytes');
  const spool=new TransportSpool(root,descriptor(body)),target=spool.fd,realWrite=fs.writeSync;let execution;
  try{
@@ -20,7 +20,7 @@ test('DR46-F06: transport short writes retain every byte and hand off the actual
   assert.deepEqual(fs.readdirSync(root),[]);
  }finally{fs.writeSync=realWrite;syncBuiltinESMExports();execution?.release();spool.releaseConnection();fs.rmSync(root,{recursive:true,force:true});}
 });
-test('DR46-F06: transport zero write refuses once and releases its real file and directory descriptors',()=>{
+test("002. Transport zero write refuses once and releases its real file and directory descriptors",()=>{
  const root=fs.mkdtempSync(join(tmpdir(),'oma-zero-transport-'));
  try{
   const child=spawnSync(process.execPath,['--input-type=module','-e',`

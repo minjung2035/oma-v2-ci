@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanupAll, withCleanup } from '@oma/native/cleanup';
 import { primaryFailure } from '@oma/domain/errors';
-test('Cleanup group attempts every registered owner once and keeps thrown null/undefined', () => {
+test("001. Cleanup group attempts every registered owner once and keeps thrown null/undefined", () => {
   const calls = [], primary = new Error('effect');
   let caught;
   try { withCleanup(() => { throw primary; }, () => cleanupAll([

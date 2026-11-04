@@ -76,7 +76,7 @@ function referenceScc(nodes, adjacency) {
 const normalize = (groups) =>
   groups.map((group) => [...group].sort().join(",")).sort();
 
-test("P15 SCC agrees with independent reachability oracle on exhaustive tiny and seeded random graphs", () => {
+test("001. SCC agrees with independent reachability oracle on exhaustive tiny and seeded random graphs", () => {
   let seed = 0x51cc;
   const random = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -115,7 +115,7 @@ test("P15 SCC agrees with independent reachability oracle on exhaustive tiny and
   );
 });
 
-test("P10 full Program type-only closure is evidence, not runtime package inventory", () => {
+test("002. Full Program type-only closure is evidence, not runtime package inventory", () => {
   fixture(
     {
       "packages/native/src/identity.ts":
@@ -168,7 +168,7 @@ test("P10 full Program type-only closure is evidence, not runtime package invent
   );
 });
 
-test("P15 evidence and analyzer both report runtime self loops", () => {
+test("003. Evidence and analyzer both report runtime self loops", () => {
   fixture({ "packages/native/src/identity.ts": 'import "./identity.js";' }, (root, program) => {
     const graph = graphFromProgram(program, { rootDir: root });
     assert.deepEqual(summarize(graph).runtimeCycles, [["packages/native/src/identity.ts"]]);
@@ -181,7 +181,7 @@ test("P15 evidence and analyzer both report runtime self loops", () => {
   });
 });
 
-test("P15 transaction effect mutations follow direct/imported/local aliases and helper closures", () => {
+test("004. Transaction effect mutations follow direct/imported/local aliases and helper closures", () => {
   const store =
     "class Store { transaction(f: () => unknown) { return f(); } } const store = new Store();";
   for (const effect of [
@@ -218,7 +218,7 @@ test("P15 transaction effect mutations follow direct/imported/local aliases and 
   );
 });
 
-test("P15 import syntax mutations share architecture and runtime closure classification", () => {
+test("005. Import syntax mutations share architecture and runtime closure classification", () => {
   for (const [source, kind] of [
     ['import {value} from "./leaf.js";', "runtime"],
     ['export {value} from "./leaf.js";', "runtime"],
@@ -268,7 +268,7 @@ test("P15 import syntax mutations share architecture and runtime closure classif
   );
 });
 
-test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinct owners", () => {
+test("006. Tier facts, retained codecs and snapshot mechanisms have distinct owners", () => {
   const owners = {
     "packages/domain/src/attestation-relations.ts": "K0-values",
     "packages/domain/src/risk-tier.ts": "K0-values",
@@ -280,7 +280,7 @@ test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinc
   for (const [file, zone] of Object.entries(owners)) assert.equal(kernelZoneOf(file)?.name, zone, file);
 });
 
-test("P13 every semantic zone direction, exact membership and pure external capability are gated", () => {
+test("007. Every semantic zone direction, exact membership and pure external capability are gated", () => {
   const representatives = [
     "packages/domain/src/identifiers.ts",
     "packages/protocol/src/methods.ts",
@@ -372,7 +372,7 @@ test("P13 every semantic zone direction, exact membership and pure external capa
   );
 });
 
-test("P14 declaration-only ports retain pinned implementation conformance outside their owner", () => {
+test("008. Declaration-only ports retain pinned implementation conformance outside their owner", () => {
   assert.equal(ts.version, "5.9.3");
   const program = createArchitectureProgram();
   const ports = program.getSourceFiles().filter(source => isInternalPort(relative(process.cwd(), source.fileName).replaceAll("\\", "/")));
@@ -457,7 +457,7 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   );
 });
 
-test("P15 local path aliases cannot masquerade as external packages to escape the lattice or manifest", () => {
+test("009. Local path aliases cannot masquerade as external packages to escape the lattice or manifest", () => {
   fixture(
     {
       "tsconfig.json": JSON.stringify({
@@ -499,7 +499,7 @@ test("P15 local path aliases cannot masquerade as external packages to escape th
   );
 });
 
-test("P15 persisted evidence identity fails before rule evaluation and exact baselines stay source-bound", () => {
+test("010. Persisted evidence identity fails before rule evaluation and exact baselines stay source-bound", () => {
   fixture(
     {
       "apps/oma/src/entry/example.ts":
@@ -547,7 +547,7 @@ test("P15 persisted evidence identity fails before rule evaluation and exact bas
   );
 });
 
-test("P15 deleting the evidence directory cannot disable the mandatory freshness gate", () => {
+test("011. Deleting the evidence directory cannot disable the mandatory freshness gate", () => {
   fixture(
     {
       "apps/oma/src/entry/example.ts": "export const value = 1;",
@@ -562,7 +562,7 @@ test("P15 deleting the evidence directory cannot disable the mandatory freshness
   );
 });
 
-test("P15 narrowing Store to its declared port does not hide transaction effects", () => {
+test("012. Narrowing Store to its declared port does not hide transaction effects", () => {
   fixture(
     {
       "apps/oma/src/entry/example.ts": `
@@ -582,7 +582,7 @@ test("P15 narrowing Store to its declared port does not hide transaction effects
   );
 });
 
-test("P17 erased contracts reject runtime values, aliases and re-exports without gating type relations", () => {
+test("013. Erased contracts reject runtime values, aliases and re-exports without gating type relations", () => {
   const cases = [
     ['import type { Fact } from "@oma/protocol/operation-codec"; export interface Port { read(): Fact; }', false],
     ['export type { Fact as Alias } from "@oma/protocol/operation-codec";', false],
@@ -607,7 +607,7 @@ test("P17 erased contracts reject runtime values, aliases and re-exports without
     assert.equal(isInternalPort("apps/oma/src/ports-extra/fake.ts"), false);
   });
 });
-test("P23 contract ownership forbids runtime, type, inline-import and re-export edges out of exact L0 contracts", () => {
+test("014. Contract ownership forbids runtime, type, inline-import and re-export edges out of exact L0 contracts", () => {
   const target = "apps/oma/src/storage/value.ts";
   const negative = [
     ["apps/oma/src/ports/runtime.ts", 'import type { Value } from "../storage/value.js"; export interface Port { value: Value; }', "type"],
@@ -645,7 +645,7 @@ test("P23 contract ownership forbids runtime, type, inline-import and re-export 
   }, ["apps/oma/src/**/*.ts", "implementation/**/*.ts"]);
 });
 
-test("P23 contract ownership exempts no contract -> implementation reference", () => {
+test("015. Contract ownership exempts no contract -> implementation reference", () => {
   // The four frozen v1 aliases were migrated to contract-owned declarations, so
   // the allowlist is gone. Each former alias must now be reported, including
   // when it hides behind a rename or the public facade.
@@ -676,7 +676,7 @@ test("P23 contract ownership exempts no contract -> implementation reference", (
   }
 });
 
-test("P23 the migrated vocabulary owners keep a two-way compile-time binding", () => {
+test("016. The migrated vocabulary owners keep a two-way compile-time binding", () => {
   // The contract now declares the closed set and the runtime descriptor must
   // satisfy it. Dropping either side has to fail the build, not the gate.
   const read = file => readFileSync(new URL(file, root), "utf8");
@@ -698,7 +698,7 @@ test("P23 the migrated vocabulary owners keep a two-way compile-time binding", (
   }
 });
 
-test("P23 contract ports cannot hide the concrete Transaction alias behind the public contracts facade", () => {
+test("017. Contract ports cannot hide the concrete Transaction alias behind the public contracts facade", () => {
   fixture({
     "apps/oma/src/ports/runtime.ts": "import type { Transaction } from \"../../../../packages/contracts/src/index.js\"; export interface Port { transaction: Transaction; }",
     "packages/contracts/src/index.ts": "export type { Transaction } from \"./module-contracts.js\";",
@@ -709,7 +709,7 @@ test("P23 contract ports cannot hide the concrete Transaction alias behind the p
     assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "packages/contracts/src/module-contracts.ts"), "the concrete Transaction import must remain rejected");
   }, ["apps/oma/src/**/*.ts", "packages/contracts/src/index.ts", "packages/contracts/src/**/*.ts"]);
 });
-test("P23 hidden compatibility aliases cannot cross the canonical port boundary", () => {
+test("018. Hidden compatibility aliases cannot cross the canonical port boundary", () => {
   fixture({
     "apps/oma/src/ports/runtime.ts": "import type { HiddenTx } from \"../../../../packages/contracts/src/index.js\"; export interface Port { transaction: HiddenTx; }",
     "packages/contracts/src/index.ts": "export type { HiddenTx } from \"./module-contracts.js\";",
@@ -723,7 +723,7 @@ test("P23 hidden compatibility aliases cannot cross the canonical port boundary"
 
 
 
-test("P19 type coupling evidence reports structural reasons without approving or forbidding upward types", () => {
+test("019. Type coupling evidence reports structural reasons without approving or forbidding upward types", () => {
   const graph = graphFromProgram(createArchitectureProgram());
   const evidence = dependencyEvidence(graph).kernel;
   assert.equal(evidence.typeOnlyReview.mode, "report-only");

@@ -8,6 +8,10 @@
  * reason, not shown as current.
  */
 import type { AgentStatus } from "@oma/contracts";
+import { StoreError } from "@oma/domain/errors";
+
+/** Aggregate host-private document; independent of one socket response page. */
+export const STATUS_VIEW_BYTES = 64 * 1024 * 1024;
 
 /** The reason a status row gives for an observed absent managed execution:
  * an observed absence, unlike a row with no reason and no state (not observed).
@@ -31,7 +35,9 @@ export interface StatusView {
 }
 
 export function encodeStatusView(society: string, view: StatusView): string {
-  return `${JSON.stringify({ schema: 1, society, observedAtMs: view.observedAtMs, agents: view.agents })}\n`;
+  const encoded = `${JSON.stringify({ schema: 1, society, observedAtMs: view.observedAtMs, agents: view.agents })}\n`;
+  if (Buffer.byteLength(encoded) > STATUS_VIEW_BYTES) throw new StoreError("LIMIT_EXCEEDED", "aggregate status view exceeds its document byte bound");
+  return encoded;
 }
 
 const DESIRED = Object.freeze(new Set(["provisioning", "enabled", "stopped", "retired"]));

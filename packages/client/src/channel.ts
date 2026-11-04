@@ -125,7 +125,7 @@ export class BrokerChannel {
       const mutation = isPublicMethod(method) && PUBLIC_METHODS[method].mode === "mutation";
       if (mutation ? !isValidRequestKey(options.request) : options.request !== undefined)
         throw new StoreError("INVALID_REQUEST", "request key does not match method policy");
-      const descriptor = method === "git.submit" ? copied.bundle : method === "context.publish" ? copied.content : undefined;
+      const descriptor = method === "git.submit" ? copied.bundle : (method === "context.publish" || method === "invocation.prepare" || method === "mail.send" || method === "agent.create") ? copied.content : undefined;
       const body = options.streamBytes;
       if (body !== undefined && !(body instanceof Uint8Array)) throw new StoreError("STREAM_INVALID", "raw body must be bytes");
       if (descriptor !== undefined) {

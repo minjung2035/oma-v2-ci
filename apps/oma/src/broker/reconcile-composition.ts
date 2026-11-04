@@ -2,11 +2,12 @@
 import { dirname } from "node:path";
 import type { Store } from "@oma/storage";
 import { observeStoreFailure } from "@oma/domain/admission";
-import { collectUnacceptedArtifacts } from "@oma/storage/preaccept-collection";
+import { collectPreparedIntegrations } from "@oma/git/integration-preparation";
+import { collectUnacceptedArtifacts, validateRecoveryArtifacts } from "@oma/storage/preaccept-collection";
 import { createCanonicalObserver } from "@oma/git/canonical-command";
 import { CanonicalHealthObserver } from "@oma/git/canonical-health";
 import { quiesceResidents } from "@oma/lifecycle/society";
-import { pendingWork } from "../views/pending-work.js";
+import { pendingWorkMessages } from "../views/pending-work.js";
 import { ReconcileModule, type ReconcilePaths } from "@oma/reconcile";
 import type { ReconcileMail, ReconcileGit, ReconcileReview, ReconcileUnits, ReconcileLifecycle } from "@oma/reconcile/ports";
 export interface ReconcileCompositionPaths extends Omit<ReconcilePaths, "stateRoot"> { projectGit: string }
@@ -39,9 +40,10 @@ export function createReconcileModule(store: Store, mail: ReconcileMail, git: Re
   }, Object.freeze({
     observeStoreFailure: (error: unknown) => observeStoreFailure(store, error),
     quiesceResidents: () => quiesceResidents(reads, units),
-    collectUnacceptedArtifacts: () => collectUnacceptedArtifacts(dirname(store.path), reads),
+    validateRecoveryArtifacts: () => validateRecoveryArtifacts(dirname(store.path), reads),
+    collectUnacceptedArtifacts: () => { collectPreparedIntegrations(paths.projectGit, reads.getOperationById); return collectUnacceptedArtifacts(dirname(store.path), reads); },
     canonicalMain: () => createCanonicalObserver().ref(paths.projectGit, "refs/heads/main"),
     assertCanonicalHealthy: () => health.assertHealthy(),
-    hasPendingWork: (actor: string) => pendingWork(store, actor).hasPendingWork,
+    pendingWork: (actor: string) => pendingWorkMessages(store, actor),
   }));
 }

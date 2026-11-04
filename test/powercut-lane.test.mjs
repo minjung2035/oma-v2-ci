@@ -17,7 +17,7 @@ const run = (args) => spawnSync(process.execPath, [script, ...args], {
   encoding: "utf8", timeout: 60_000, env: { ...process.env, OMA_POWERCUT_ACK: "" },
 });
 
-test("P9 power-cut lane: every guard refuses an unguarded power-off", () => {
+test("001. Power-cut lane: every guard refuses an unguarded power-off", () => {
   const base = { stateRoot: "/srv/oma/demo", society: "demo", out: "/srv/evidence" };
   const only = (files, ...expected) => {
     const failures = powercutGuards({ ...base, ...files });
@@ -35,7 +35,7 @@ test("P9 power-cut lane: every guard refuses an unguarded power-off", () => {
   assert.ok(guarded.every(item => item.includes("sysrq-trigger")), JSON.stringify(guarded));
 });
 
-test("P9 power-cut lane: the command refuses to run outside a disposable VM", () => {
+test("002. Power-cut lane: the command refuses to run outside a disposable VM", () => {
   const result = run(["--phase", "prepare", "--state", "/tmp/oma-powercut-probe", "--society", "demo", "--out", "/tmp/oma-powercut-evidence"]);
   assert.equal(result.status, 4);
   const payload = JSON.parse(result.stdout.trim());
@@ -47,13 +47,13 @@ test("P9 power-cut lane: the command refuses to run outside a disposable VM", ()
   assert.doesNotMatch(result.stdout, /powerLossProven":true/);
 });
 
-test("P9 power-cut lane: an invalid phase is rejected before any guard evaluation", () => {
+test("003. Power-cut lane: an invalid phase is rejected before any guard evaluation", () => {
   const result = run(["--phase", "recover", "--state", "/tmp/x", "--society", "demo", "--out", "/tmp/y"]);
   assert.equal(result.status, 4);
   assert.match(result.stdout, /--phase must be prepare or verify/);
 });
 
-test("P9 failure models stay separate: the lane never claims to replace the SIGKILL crash lane", () => {
+test("004. Failure models stay separate: the lane never claims to replace the SIGKILL crash lane", () => {
   // The crash lane keeps its own harness and evidence; a guest restart or
   // simulation must not be relabeled as physical power loss.
   const source = readFileSync(new URL("../scripts/powercut-lane.mjs", import.meta.url), "utf8");
@@ -79,7 +79,7 @@ function dummy(t) {
   return { fixture, context, ports, mail, get cuts() { return cuts; }, get checkpoint() { return checkpoint; } };
 }
 
-test("P9 simulation: real accepted mail survives checkpoint, dummy restart and repeated same-key recovery", async t => {
+test("005. Simulation: real accepted mail survives checkpoint, dummy restart and repeated same-key recovery", async t => {
   const d = dummy(t), f = d.fixture;
   const accepted = f.store.getOperationById(f.id);
   const checkpoint = await prepareCheckpoint(d.context, d.ports);
@@ -105,7 +105,7 @@ test("P9 simulation: real accepted mail survives checkpoint, dummy restart and r
   assert.equal(readdirSync(dirname(f.inbox())).length, 1);
 });
 
-test("P9 simulation: missing immutable bytes are a real diagnostic failure, not successful recovery", async t => {
+test("006. Simulation: missing immutable bytes are a real diagnostic failure, not successful recovery", async t => {
   const d = dummy(t);
   const checkpoint = await prepareCheckpoint(d.context, d.ports);
   rmSync(d.fixture.object);
@@ -116,7 +116,7 @@ test("P9 simulation: missing immutable bytes are a real diagnostic failure, not 
   assert.equal(result.powerLossProven, false);
 });
 
-test("P9 simulation: checkpoint failure never calls cut or leaves successful evidence", async t => {
+test("007. Simulation: checkpoint failure never calls cut or leaves successful evidence", async t => {
   const d = dummy(t);
   for (const observed of [{ exitCode: 2, report: { status: "UNKNOWN" } }, { exitCode: 1, report: { status: "PASS" } }]) {
     await assert.rejects(prepareCheckpoint(d.context, { ...d.ports, observe: () => observed }), /integrity check/);
@@ -126,7 +126,7 @@ test("P9 simulation: checkpoint failure never calls cut or leaves successful evi
   assert.equal(d.checkpoint, undefined);
 });
 
-test("P9 simulation: UNKNOWN, failed recovery and foreign or unchanged boot evidence never pass", async t => {
+test("008. Simulation: UNKNOWN, failed recovery and foreign or unchanged boot evidence never pass", async t => {
   const d = dummy(t), checkpoint = await prepareCheckpoint(d.context, d.ports);
   for (const recovery of [{ ...recovered(), ok: false }, { ...recovered(), started: false },
     { ...recovered(), timedOut: true }, { ...recovered(), exitCode: 1 }, { ...recovered(), forced: true }]) {
@@ -147,7 +147,7 @@ test("P9 simulation: UNKNOWN, failed recovery and foreign or unchanged boot evid
   await assert.rejects(verifyCheckpoint(d.context, checkpoint, { ...d.ports, recover: () => { throw new Error("recovery failed"); } }), /recovery failed/);
 });
 
-test("P9 simulation: recovery child readiness, early exit, spawn error and timeout are observed asynchronously", async () => {
+test("009. Simulation: recovery child readiness, early exit, spawn error and timeout are observed asynchronously", async () => {
   const run = code => runRecovery(process.execPath, ["-e", code], { timeoutMs: 500, stopMs: 100 });
   const ready = await run("process.on('SIGTERM',()=>process.exit(0)); process.stderr.write('broker listening'); setInterval(()=>{},1000)");
   assert.equal(ready.ok, true, JSON.stringify(ready));

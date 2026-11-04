@@ -40,20 +40,12 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   settingsPreload: "apps/oma/dist/entry/pi-settings-preload.js",
   clientPreload: "apps/oma/dist/runtime/client-preload.js",
   contract: "packages/contracts/dist/index.js",
-  schema: "packages/storage/dist/schema-v4.sql",
+  schema: "packages/storage/dist/schema-v5.sql",
   extension: "packages/extension/dist/index.js",
   // BL2: the Personal host's `-e` path — the ask_user_question entry point is
   // its own extension file so Personal gets the tool without loading the
   // society-wide trusted extension it has no use for.
   extensionAsk: "packages/extension/dist/ask-user-question.js",
-  // The model-facing command surface, as an installed path. Every agent that
-  // has OMA tools runs this same file; naming it once keeps the Principal's
-  // and a Resident's engine pointed at one binary.
-  cli: "apps/oma/dist/cli.js",
-  // AV16, CLI-001: the `oma` command a Resident runs in its sandbox. The build
-  // writes it from the sandbox's paths (src/sandbox.ts) and the manifest pins it.
-  modelCommand: "apps/oma/dist/libexec/oma",
-  modelCommandBuilder: "packages/domain/dist/resident-paths.js",
   // TUI-002: `tui` is the native host entrypoint a Human runs.
   entries: Object.freeze({ candidateCheck: "apps/oma/dist/entry/candidate-check.js", quarantine: "apps/oma/dist/entry/quarantine.js", broker: "apps/oma/dist/entry/broker.js", preparation: "apps/oma/dist/entry/prepare-society.js", runner: "apps/oma/dist/entry/runner.js", tui: "apps/oma/dist/entry/oma.js", interactive: "apps/oma/dist/entry/pi-interactive.js",
     society: "apps/oma/dist/entry/oma-society.js", personalHost: "apps/oma/dist/entry/personal-host.js", personal: "apps/oma/dist/entry/pi-personal.js",

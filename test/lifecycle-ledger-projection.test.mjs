@@ -13,7 +13,7 @@ function world(t) {
   store.transaction(tx => tx.insertAgent(makeValidAgent("alice")));
   return { store, ledger: lifecycleLedger(store) };
 }
-test("DR46 Lifecycle: every captured write refuses escape or borrowing a later root transaction", t => {
+test("001. Lifecycle: every captured write refuses escape or borrowing a later root transaction", t => {
   const { store, ledger } = world(t); let saved;
   ledger.transaction(tx => { saved = tx; assert.ok(Object.isFrozen(tx)); });
   assert.ok(Object.isFrozen(ledger));
@@ -30,7 +30,7 @@ test("DR46 Lifecycle: every captured write refuses escape or borrowing a later r
   assert.equal(ledger.getAgent("alice").desired, "enabled");
   assert.deepEqual(store.subscribers("work"), []);
 });
-test("DR46 Lifecycle: projected T rejects async continuations and observes live incarnation and intent", t => {
+test("002. Lifecycle: projected T rejects async continuations and observes live incarnation and intent", t => {
   const { store, ledger } = world(t);
   assert.throws(() => ledger.transaction(() => Promise.resolve("late")), { code: "INTERNAL_ERROR" });
   assert.throws(() => ledger.transaction(() => ({ then() {} })), { code: "INTERNAL_ERROR" });

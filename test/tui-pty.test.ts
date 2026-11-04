@@ -37,7 +37,7 @@ function runInPty(mode: string) {
 }
 
 for (const [mode, code] of [["normal", 0], ["exit-without-restore", 3], ["reject", 1]] as const) {
-  test(`V28B: ${mode} hands the terminal back restored`, { skip: python ? false : "python3 with pty/termios is not available", timeout: 60_000 }, () => {
+  test(`001. Tui pty: ${mode} hands the terminal back restored`, { skip: python ? false : "python3 with pty/termios is not available", timeout: 60_000 }, () => {
     const run = runInPty(mode);
     assert.equal(run.exited, true);
     assert.equal(run.code, code);

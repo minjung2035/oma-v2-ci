@@ -21,7 +21,7 @@ import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 const idle: ExecutionObservation = { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, scope: "", invocationId: "" };
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
 
-test("WP23.02: callers during a refresh share one follow-up that starts after them; no caller starts its own", { timeout: 5_000 }, async () => {
+test("001. Callers during a refresh share one follow-up that starts after them; no caller starts its own", { timeout: 5_000 }, async () => {
   const pending: Array<() => void> = [];
   let observations = 0; let clock = 1_000;
   const refresh = new StatusRefresh(() => ["a"], async () => {
@@ -50,7 +50,7 @@ test("WP23.02: callers during a refresh share one follow-up that starts after th
   assert.equal((await late).observedAtMs, 3_000);
 });
 
-test("WP23.02: a hung observation costs each caller the budget and an unknown, and is not started again beside itself", { timeout: 5_000 }, async () => {
+test("002. A hung observation costs each caller the budget and an unknown, and is not started again beside itself", { timeout: 5_000 }, async () => {
   let observations = 0;
   const refresh = new StatusRefresh(() => ["a"], () => { observations += 1; return new Promise(() => {}); }, 40, () => 7);
   const answers = await Promise.all([refresh.request(), refresh.request(), refresh.request()]);
@@ -67,7 +67,7 @@ test("WP23.02: a hung observation costs each caller the budget and an unknown, a
   assert.equal(failed.units.size, 0);
 });
 
-test("AV9 / INV02: Principal status never borrows a Resident's idle or exit-zero observation", async t => {
+test("003. Principal status never borrows a Resident's idle or exit-zero observation", async t => {
   const f = await ledger(t), views = new ViewsModule(f.store, f.root, "demo", "principal");
   const observed: string[] = [];
   const rows = await views.status(undefined, actor => { observed.push(actor); return idle; });
@@ -106,7 +106,7 @@ async function agree(store: Store): Promise<void> {
   assert.equal(all.size, store.listAgents().length);
 }
 
-test("WP23.03: the whole-society projection counts exactly what the per-agent full-row projection counts", async t => {
+test("004. The whole-society projection counts exactly what the per-agent full-row projection counts", async t => {
   const f = await ledger(t);
   await agree(f.store);
   let seed = 23;
@@ -134,7 +134,7 @@ test("WP23.03: the whole-society projection counts exactly what the per-agent fu
   assert.ok(total > 0, "the sequence never produced pending work to compare");
 });
 
-test("WP23.03: what the full-row projection refuses, the whole-society projection refuses too -- never a smaller count", async t => {
+test("005. What the full-row projection refuses, the whole-society projection refuses too -- never a smaller count", async t => {
   const cases: Array<[string, (raw: import("node:sqlite").DatabaseSync, batch: string, messages: string[]) => void]> = [
     ["a manifest repeating a message", (raw, batch, messages) => raw.prepare("UPDATE batches SET message_ids_json=? WHERE id=?").run(JSON.stringify([messages[0], messages[0]]), batch)],
     ["a manifest missing a linked message", (raw, batch, messages) => raw.prepare("UPDATE batches SET message_ids_json=? WHERE id=?").run(JSON.stringify([messages[0]]), batch)],
@@ -157,7 +157,7 @@ test("WP23.03: what the full-row projection refuses, the whole-society projectio
   }
 });
 
-test("WP23.03: a yielding display read does not mix a new batch with its pre-batch deliveries", async t => {
+test("006. A yielding display read does not mix a new batch with its pre-batch deliveries", async t => {
   const f = await ledger(t);
   for (let index = 0; index < 40; index++)
     await f.mail.send(auth, `snapshot-${index}`, { to: ["bob"], subject: "s", kind: "message", body: "x" });
@@ -179,7 +179,7 @@ test("WP23.03: a yielding display read does not mix a new batch with its pre-bat
   } finally { await changed; }
 });
 
-test("WP23.03: the names-only read still refuses a name that is not an identity", async t => {
+test("007. The names-only read still refuses a name that is not an identity", async t => {
   const f = await ledger(t);
   assert.deepEqual(f.store.agentNames(), ["alice", "bob", "carol", "principal"]);
   const path = f.store.path;

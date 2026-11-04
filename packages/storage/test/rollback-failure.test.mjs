@@ -16,7 +16,7 @@ function seed(store) {
 }
 
 for (const mode of ['before', 'after', 'no-op', 'corrupt'])
-  test(`a ${mode} rollback failure preserves both failures and prevents reuse of its connection`, t => {
+  test(`001. A ${mode} rollback failure preserves both failures and prevents reuse of its connection`, t => {
     const root = mkdtempSync(join(tmpdir(), 'oma-rollback-failure-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const path = join(root, 'runtime.sqlite'), store = new Store(path);
@@ -69,7 +69,7 @@ for (const mode of ['before', 'after', 'no-op', 'corrupt'])
     finally { reopened.close(); }
   });
 
-test('an already rolled-back SQLite transaction needs no second rollback and remains usable', () => {
+test("002. An already rolled-back SQLite transaction needs no second rollback and remains usable", () => {
   const store = new Store(':memory:'); seed(store);
   const db = Reflect.get(store, 'db'), exec = db.exec.bind(db);
   const primary = new StoreError('INVALID_REQUEST', 'native transaction already ended');
@@ -89,7 +89,7 @@ test('an already rolled-back SQLite transaction needs no second rollback and rem
   } finally { db.exec = exec; store.close(); }
 });
 
-test('a rollback failure revokes rows buffered by a previously started traversal', () => {
+test("003. A rollback failure revokes rows buffered by a previously started traversal", () => {
   const store = new Store(':memory:'); seed(store);
   const db = Reflect.get(store, 'db'), exec = db.exec.bind(db);
   // Isolate the already-validated reader page from row relationship decoding.

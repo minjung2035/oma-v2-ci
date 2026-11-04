@@ -198,9 +198,13 @@ export function regRead(pi, flags = DEFAULT_EDIT_FLAGS) {
                 abortIf(signal);
                 const file = await loadFileKindAndText(absolutePath, { maxLines: MAX_HASH_LINES, displayPath: rawPath });
                 if (file.kind === "image") {
-                    const builtinRead = createReadTool(ctx.cwd);
+                    const builtinRead = createReadTool(ctx.cwd, { operations: {
+                        access: async () => {},
+                        detectImageMimeType: async () => file.mimeType,
+                        readFile: async () => file.bytes,
+                    } });
                     const executeBuiltinRead = builtinRead.execute;
-                    return executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
+                    return executeBuiltinRead(_toolCallId, { ...params, path: absolutePath }, signal, _onUpdate, ctx);
                 }
                 const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(rawPath, ctx.cwd, { signal, preloadedFile: file, maxLines: MAX_HASH_LINES });
                 const fileLines = splitLines(normalized);

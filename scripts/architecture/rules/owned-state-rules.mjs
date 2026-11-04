@@ -117,6 +117,8 @@ export const OWNED_STATE_OWNERS = Object.freeze([
  * entry says the path the call touches is not an OMA-owned tail, or why the
  * plain call on it is already refused-and-reported. */
 export const OWNED_STATE_EXEMPTIONS = Object.freeze({
+  "packages/platform-linux/src/workload-budget.ts": "the delegated cgroup2 kernel filesystem, checked by statfs; only the owned workload subtree is mutated, never Society state or ancestor controllers; cgroupfs cannot contain user-created symlinks and permission failure reports unsupported/refuses execution",
+  "packages/tool-files/src/descriptor-files.ts": "SDK-free held-descriptor owner for workspace, private snapshots and actor result roots; no-follow opens refuse aliasing and errors, with per-level held parents. PI-001 excludes a storage dependency; no caller path is silently repaired",
   "packages/git/src/host-project.ts": "MacGit.run creates its own output-spool scratch with mkdtemp under the OS temp directory and removes that same scratch after the bounded Git command; metadata-only reads inspect the Human repository, never repair or rewrite its ancestors",
   "packages/storage/src/mail-notices.ts": "read-only Human observation of a bounded broker projection; no-follow descriptor reads report missing, malformed or unreadable metadata explicitly and never repair state without broker ownership",
   "packages/storage/src/published-mail.ts": "read-only publication-link inventory for Human mail and broker projection; metadata probes reject links, report unreadable directories and never turn observation into permission repair",
@@ -134,11 +136,10 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "packages/storage/src/store.ts": "read-only SQLite diagnostics and sidecar identity probes deliberately perform no permission repair, writes or owner takeover; unreadable state refuses the diagnostic",
   "apps/oma/src/application/settings.ts": "metadata-only configuration existence probes after source layout validation; an inaccessible existing source propagates an error instead of being treated as absent",
   "apps/oma/src/application/status-observation.ts": "best-effort read-only status view observation: a failed open is displayed as unavailable and never grants broker authority or permits mutation",
-  "apps/oma/src/cli/effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the CLI caller's own scratch, not oma state",
+  "apps/oma/src/runtime/input-effects/submit.ts": "a fresh mkdtemp under the OS temp directory -- the Client caller's own scratch, not oma state",
   "apps/oma/src/application/society-transition.ts": "the principal-session listing under the state root whose failure already answers `said` -- it refuses to claim silence, and the runtime probe paths above it are the caller's own",
   "packages/tool-lsp/src/lsp-call-scope.ts": "a fresh mkdtemp under the OS temp directory -- the LSP child's own per-call scratch (HOME/XDG/TMP redirection), removed when the call ends; never an OMA-owned tail and never a user path (PI-001 keeps the extension off the storage imports)",
   "packages/tool-mcp/src/index.ts": "the MCP adapter's own state dir under the engine's agent dir -- ensure/chmod of the state root and scratch it just made, the oauth-file-key write, and the scratch/session rm -- engine-owned tails the adapter owns and rotates (PI-001 keeps the extension off the storage imports)",
-  "packages/extension/src/mail-tools.ts": "a fresh mkdtemp under the model's own working directory -- the extension's own scratch (PI-001 keeps it off the storage imports)",
   "packages/tool-runtime/src/contained-search.ts": "the private snapshot's announced-name sweep under the OS temp directory; the complete-result spool is written by the serialized contained writer in contained-tools.ts, not here (PI-001 keeps the extension off the storage imports)",
   "packages/git/src/context-repository.ts": "the context repository's own probes beside its owned ensures -- lstat answers the work tree's shape and a failure refuses loudly",
   "packages/git/src/canonical-command.ts": "fresh mkdtemp directories under the OS temp directory -- the ls-tree and merge-tree output spool scratch, removed in the same call; never an OMA-owned tail",

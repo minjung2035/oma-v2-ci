@@ -3,12 +3,23 @@ import type { Actor, MessageId, OperationId, RequestKey } from "@oma/contracts/i
 import type { AgentRow, BatchRow, DeliveryRow, NewOperation } from "@oma/contracts/ledger";
 import type { SynchronousResult } from "@oma/contracts/durable";
 import type { DecodedOperation } from "@oma/protocol/operation-codec";
-import type { PreparedBatch, MessagePlan, CheckedReceipt, PublicationEvidence } from "@oma/contracts";
+import type { AuthContext, PreparedBatch, MessagePlan, CheckedReceipt, PublicationEvidence } from "@oma/contracts";
 import type { ImmutableObservation } from "@oma/contracts/files";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 import type { BatchViewLimits } from "@oma/protocol/batch-view";
 import type { StoreError } from "@oma/domain/errors";
+import type { MailAttachmentPlan, MailAttachmentSource, MailInput, SharedCommitReference } from "@oma/contracts/values";
 
+/** Git observations plus exact versioned Mail-root dependencies; no standalone submit request. */
+export interface SharedAttachmentPort {
+  prepare(commits: readonly string[]): readonly SharedCommitReference[];
+  observe(sources: readonly MailAttachmentSource[]): undefined;
+  assertUnchanged(sources: readonly MailAttachmentSource[]): undefined;
+  stage?(auth: AuthContext, root: string, key: string, input: MailInput, stream: AsyncIterable<Uint8Array> | undefined,
+    scope: MailPreacceptScope): Promise<MailAttachmentPlan>;
+  finalize?(plan: MailAttachmentPlan): MailAttachmentPlan;
+  complete?(root: string): Promise<void>;
+}
 
 /** Mail owns the capabilities its use cases need. No concrete ledger or SQL API. */
 

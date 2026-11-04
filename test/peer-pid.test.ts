@@ -10,7 +10,7 @@ import { peerCred, peerPidFd, pidfdLiveness } from "@oma/native/linux";
 import { PeerAuthenticator } from "@oma/broker/peer-authenticator";
 import { pinLinuxPeer } from "@oma/platform-linux/peer-identity";
 
-test("AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
+test("001. Native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-peer-pid-"));
   const path = join(root, "peer.sock");
   const server = createServer();
@@ -60,7 +60,7 @@ test("AUTH-003 native: peer pidfd detects connector death while an inherited soc
   }
 });
 
-test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot revive old bindings", { timeout: 5000 }, async () => {
+test("002. Native binding seam: closing sockets releases pidfds and cannot revive old bindings", { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-peer-close-"));
   const path = join(root, "peer.sock");
   const bindings: Array<{ alive: () => boolean } | null> = [];

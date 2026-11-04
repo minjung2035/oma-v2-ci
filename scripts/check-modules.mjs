@@ -10,7 +10,7 @@ import { darwinExecutables } from "./workspace-executables.mjs";
 export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   contracts: [], domain: ["contracts"], native: ["contracts", "domain"], process: ["contracts", "domain", "native"], protocol: ["contracts", "domain"],
   config: ["contracts", "domain", "protocol", "native", "file-descriptors", "storage"],
-  git: ["contracts", "domain", "protocol", "process", "native", "file-descriptors", "storage"],
+  git: ["contracts", "domain", "protocol", "process", "native", "file-descriptors", "storage", "tool-files"],
   app: ["broker","client","config","contracts","domain","engine","extension","file-descriptors","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
   "platform-mac": ["contracts", "domain", "protocol", "native", "process"],
   "platform-linux": ["contracts", "domain", "protocol", "native", "file-descriptors", "process", "storage"],
@@ -29,7 +29,7 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   "tool-mcp": ["contracts", "domain", "protocol", "tool-runtime"],
   "tool-lsp": ["contracts", "domain", "protocol", "tool-runtime", "tool-files"],
   extension: ["contracts", "domain", "protocol", "client", "tool-runtime", "tool-lsp", "tool-hashline", "tool-web", "tool-mcp"],
-  client: ["contracts", "domain", "protocol"], tui: ["contracts", "domain", "protocol"],
+  client: ["contracts", "domain", "protocol", "tool-files"], tui: ["contracts", "domain", "protocol"],
 });
 const slash = path => path.split(sep).join("/");
 const packageName = specifier => specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
@@ -209,7 +209,17 @@ export function moduleFindings(root = process.cwd()) {
         report(slash(relative(root, file)), `Git host adapter API required in ${manifest.name}: ${specifier}`);
       if (name === "@oma/storage" && STORAGE_FILE_CONSUMERS.has(manifest.name) && !STORAGE_FILE_APIS.has(specifier))
         report(slash(relative(root, file)), `storage ledger capability forbidden in ${manifest.name}: ${specifier}`);
-      if (name !== manifest.name && !Object.hasOwn(manifest.dependencies ?? {}, name) && !((test || runtime === false) && Object.hasOwn(manifest.devDependencies ?? {}, name)))
+      // Immutable result-file capabilities are SDK-free and shared by the
+      // publisher and reader. These consumers cannot import model file tools.
+      if (["@oma/git", "@oma/client"].includes(manifest.name) && name === "@oma/tool-files" && specifier !== "@oma/tool-files/results")
+        report(slash(relative(root, file)), `immutable result API required in ${manifest.name}: ${specifier}`);
+      // This installed npm module belongs to the policy-pinned read-only
+      // toolchain, not to the host package's node_modules. No arbitrary loader
+      // or external dependency receives this exception.
+      const npmCacheImport = slash(relative(root,file)) === "packages/git/src/check-pipeline.ts" && specifier === "cacache" && runtime &&
+        /const requireNpm = createRequire\("\/opt\/oma-node\/lib\/node_modules\/npm\/package\.json"\);/.test(readFileSync(file,"utf8")) &&
+        /const cacache = requireNpm\("cacache"\)/.test(readFileSync(file,"utf8"));
+      if (!npmCacheImport && name !== manifest.name && !Object.hasOwn(manifest.dependencies ?? {}, name) && !((test || runtime === false) && Object.hasOwn(manifest.devDependencies ?? {}, name)))
         report(slash(relative(root, file)), `undeclared ${runtime ? "runtime" : "type"} dependency ${specifier}`);
       if (name.startsWith("@oma/")) {
         const target = byName.get(name);

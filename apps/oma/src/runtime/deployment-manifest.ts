@@ -120,7 +120,6 @@ export function deploymentManifest(root: string): DeploymentManifest {
       tree(rootFd, path, path);
     for (const path of [
       DEPLOYMENT_LAYOUT.schema,
-      DEPLOYMENT_LAYOUT.modelCommand,
       "package.json",
       "package-lock.json",
       ...DEPLOYMENT_LAYOUT.workspaces.map(workspace => `${workspace.root}/package.json`),

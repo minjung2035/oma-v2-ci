@@ -1,3 +1,4 @@
+import { beforeDeadline } from "./fixtures/timeout.js";
 import { engineStartEffects } from "#oma-test/app/engine/start-effects";
 // V09A/V09B/V09C (WP09, D06): a real PrincipalSession over a scripted engine.
 // Ownership of the engine's run ends only on settlement, refusal or the
@@ -10,13 +11,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HostTenure } from "#oma-test/app/runtime/host-tenure";
 import { type FencedEngine } from "@oma/contracts/runtime";
-import { PrincipalSession } from "@oma/engine/principal-session";
+import { PrincipalSession, principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
 import { PiRpcClient } from "@oma/engine/pi-rpc";
 import { PrincipalDelivery } from "#oma-test/app/runtime/principal-delivery";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { TurnAdmission } from "@oma/domain/turn-admission";
+import { deliveryNotStartedOf } from '@oma/protocol/delivery-boundary';
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 
-test("DR44: turn admission isolates unknown delivery, transfers queued Humans atomically, and reports unsent input once", () => {
+test("001. Turn admission isolates unknown delivery, transfers queued Humans atomically, and reports unsent input once", () => {
   const turns = new TurnAdmission();
   assert.equal(turns.claimDelivery(), true);
   turns.writing("batch", "/oma-deliver batch", "delivery");
@@ -34,7 +37,7 @@ test("DR44: turn admission isolates unknown delivery, transfers queued Humans at
   assert.deepEqual(turns.end(), { unconfirmed: null, unsent: [] });
 });
 
-test("DR44: a provably unwritten prompt returns the run and keeps the bounded Human queue in order", () => {
+test("002. A provably unwritten prompt returns the run and keeps the bounded Human queue in order", () => {
   const turns = new TurnAdmission();
   assert.equal(turns.claimHuman("unwritten"), "started");
   turns.writing("human-1", "unwritten", "human");
@@ -47,6 +50,7 @@ test("DR44: a provably unwritten prompt returns the run and keeps the bounded Hu
 });
 
 const LIMITS = { frameBytes: TEST_VIEW_LIMITS.frameBytes, idleStreamSeconds: 30, receiptWaitSeconds: 5 };
+const SOURCE_BOUNDS = { OMA_SUBJECT_BYTES: "512", OMA_BODY_BYTES: "262144", OMA_FRAME_BYTES: String(LIMITS.frameBytes), OMA_CONTEXT_BYTES: "8388608" };
 const BATCH_ID = "b-00000000-0000-4000-8000-0000000000a9";
 const BATCH = { id: BATCH_ID, agent: "principal", incarnation: 0,
   messageIds: [], deliveryMode: "followUp", notice: "", sessionPath: null, indexPath: "/inbox.md" } as never;
@@ -56,20 +60,21 @@ async function until(what: string, done: () => boolean, ms = 5000): Promise<void
   assert.fail(`timed out waiting for ${what}`);
 }
 
-function scripted(t?: TestContext, acquired?: (engine: FencedEngine) => void) {
+function scripted(t?: TestContext, acquired?: (engine: FencedEngine) => void, extraArgs: readonly string[] = []) {
   const root = mkdtempSync(join(tmpdir(), "oma-v09-"));
   t?.after(() => rmSync(root, { recursive: true, force: true }));
   const log = join(root, "prompts.log");
   mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
   // AV3: the product's layout -- the model's workspace beside the session
   // history, both inside the private home, neither holding the other.
-  mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
+  mkdirSync(principalWorkspace(root), { recursive: true }); mkdirSync(principalSessionDir(root), { recursive: true });
   const events = { failed: [] as { text: string; reason: string }[], unconfirmed: [] as string[], ends: 0, busy: [] as boolean[] };
   const session = PrincipalSession.start(
-    engineStartEffects, { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log],
-      coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"), workspace: join(root, "workspace"), home: root },
+    engineStartEffects, { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log, ...extraArgs],
+      coreExtension: "/nonexistent/core.js", sessionDir: principalSessionDir(root), workspace: principalWorkspace(root), home: principalWorkspace(root),
+      toolSurface: JSON.stringify(collaborationSurface("principal")), collaborationStateRoot: root },
     { society: "demo", provider: "p", model: "m", extensions: [] },
-    LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+    LIMITS, { ...SOURCE_BOUNDS, PATH: process.env.PATH ?? "/usr/bin:/bin" },
     {
       ...(acquired === undefined ? {} : { onAcquire: acquired }),
       onLine: () => {}, onBusy: busy => events.busy.push(busy), onEnd: () => { events.ends += 1; },
@@ -83,7 +88,7 @@ function scripted(t?: TestContext, acquired?: (engine: FencedEngine) => void) {
     close: async () => { session.close(); await session.exited; rmSync(root, { recursive: true, force: true }); } };
 }
 
-test("V09A: an unanswered delivery keeps the session, so a Human prompt waits instead of joining its run", async () => {
+test("003. An unanswered delivery keeps the session, so a Human prompt waits instead of joining its run", async () => {
   const s = scripted();
   try {
     let now = 0;
@@ -112,7 +117,7 @@ test("V09A: an unanswered delivery keeps the session, so a Human prompt waits in
   } finally { await s.close(); }
 });
 
-test("V09B: when the engine ends, unsent prompts come back once and in order, and an unanswered one is reported apart", async () => {
+test("004. When the engine ends, unsent prompts come back once and in order, and an unanswered one is reported apart", async () => {
   for (const ending of ["engine-exit", "quit"] as const) {
     const s = scripted();
     try {
@@ -136,7 +141,7 @@ test("V09B: when the engine ends, unsent prompts come back once and in order, an
   }
 });
 
-test("V09C: after the session ends, a late settle frees nothing and starts nothing", async () => {
+test("005. After the session ends, a late settle frees nothing and starts nothing", async () => {
   const s = scripted();
   try {
     assert.deepEqual(s.session.submit("hold: long run"), { kind: "accepted" });
@@ -153,7 +158,53 @@ test("V09C: after the session ends, a late settle frees nothing and starts nothi
   } finally { await s.close(); }
 });
 
-test("B3: the waiting queue's snapshot is emitted on every change, folded and cleared at handback", async () => {
+test("006. Refusal by a closing Principal session cannot create or repeat its end notification", async t => {
+  const s = scripted(t);
+  try {
+    s.session.close();
+    assert.equal(s.events.ends, 0, "requesting termination has not delivered the original completion");
+    assert.deepEqual(s.session.submit("after close"), { kind: "refused", reason: "Session ended." });
+    assert.deepEqual(s.session.submit("another refused input"), { kind: "refused", reason: "Session ended." });
+    assert.equal(s.events.ends, 0, "an input refusal cannot manufacture an end notification");
+    await s.session.exited; await until("the original completion notification", () => s.events.ends === 1);
+    assert.deepEqual(s.session.submit("after exit"), { kind: "refused", reason: "Session ended." });
+    assert.equal(s.events.ends, 1, "refusal after completion cannot repeat the notification");
+  } finally { await s.close(); }
+});
+
+test("007. RPC stream cleanup failure preserves its cause, returns independent owners and cannot suppress Principal completion", { timeout: 5000 }, async t => {
+  let rpc: PiRpcClient | undefined;
+  const onEvent = PiRpcClient.prototype.onEvent;
+  t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient, listener: Parameters<PiRpcClient["onEvent"]>[0]) {
+    rpc = this; return onEvent.call(this, listener);
+  });
+  const s = scripted(t), primary = new Error("original RPC read failure"), cleanup = new Error("stdout cleanup failure");
+  try {
+    assert.ok(rpc); const client = rpc;
+    assert.deepEqual(s.session.submit("silent: original input"), { kind: "accepted" });
+    await until("the original input", () => s.written().length === 1);
+    const stdout = client.child.stdout!; const destroy = stdout.destroy;
+    t.mock.method(stdout, "destroy", function (this: typeof stdout, ...args: Parameters<typeof destroy>) {
+      destroy.apply(this, args); throw cleanup;
+    });
+    assert.doesNotThrow(() => stdout.emit("error", primary));
+    const completion = await client.completion;
+    assert.equal(completion.state, "failed");
+    if (completion.state !== "failed") assert.fail("the original RPC failure disappeared");
+    assert.ok(completion.error instanceof AggregateError); assert.deepEqual(completion.error.errors, [primary, cleanup]);
+    assert.equal(client.child.stdin!.destroyed, true); assert.equal(client.child.stderr!.destroyed, true);
+    assert.equal(client.child.killed, true, "one cleanup failure cannot suppress the original owned-child termination request");
+    await s.session.exited; await until("Principal completion after failed cleanup", () => s.events.ends === 1);
+    assert.deepEqual(s.events.unconfirmed, ["silent: original input"]);
+    assert.equal(s.session.busy, false); assert.equal(s.written().length, 1, "uncertain input is never replayed");
+  } finally {
+    t.mock.restoreAll();
+    if (rpc?.child.exitCode === null && rpc.child.signalCode === null) rpc.child.kill("SIGKILL");
+    await s.close();
+  }
+});
+
+test("008. The waiting queue's snapshot is emitted on every change, folded and cleared at handback", async () => {
   const s = scripted();
   const sent: { type: string; total?: unknown; prompts?: unknown }[] = [];
   // The interactive channel is a socket in production; here the same event
@@ -192,25 +243,26 @@ test("B3: the waiting queue's snapshot is emitted on every change, folded and cl
   } finally { await late.close(); }
 });
 
-test("P0V-73 / F6, P0-4: a Principal engine that could not be spawned has ended, and nothing else ends it early", async () => {
+test("009. A Principal engine that could not be spawned has ended, and nothing else ends it early", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-spawn-failed-"));
   try {
     mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
-    mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
+    mkdirSync(principalWorkspace(root), { recursive: true }); mkdirSync(principalSessionDir(root), { recursive: true });
     const session = PrincipalSession.start(
-      engineStartEffects, { piCommand: join(root, "no-such-engine"), coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"),
-        workspace: join(root, "workspace"), home: root },
+      engineStartEffects, { piCommand: join(root, "no-such-engine"), coreExtension: "/nonexistent/core.js", sessionDir: principalSessionDir(root),
+        workspace: principalWorkspace(root), home: principalWorkspace(root),
+        toolSurface: JSON.stringify(collaborationSurface("principal")), collaborationStateRoot: root },
       { society: "demo", provider: "p", model: "m", extensions: [] },
-      LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+      LIMITS, { ...SOURCE_BOUNDS, PATH: process.env.PATH ?? "/usr/bin:/bin" },
       { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {}, onPromptUnconfirmed: () => {} },
     );
-    const outcome = await Promise.race([session.exited.then(() => "ended"), new Promise(resolve => setTimeout(() => resolve("pending"), 2000))]);
+    const outcome = await beforeDeadline(session.exited.then(() => "ended"), 2000, "pending");
     assert.equal(outcome, "ended", "the session of a spawn that failed never ended");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 
-test("DR27/P0-4: Principal event-registration failure returns the engine and private channels", { timeout: 5000 }, async t => {
+test("010. Principal event-registration failure returns the engine and private channels", { timeout: 5000 }, async t => {
   const problem = new Error("injected Principal setup failure");
   let client: PiRpcClient | undefined;
   t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient) { client = this; throw problem; });
@@ -226,7 +278,7 @@ test("DR27/P0-4: Principal event-registration failure returns the engine and pri
 });
 
 
-test("DR27/P0-4: failed Principal setup remains the tenure's engine until actual exit", { timeout: 5000 }, async t => {
+test("011. Failed Principal setup remains the tenure's engine until actual exit", { timeout: 5000 }, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-failed-tenure-"));
   const owner = HostTenure.take(root)!;
   owner.brokerReady();
@@ -258,7 +310,7 @@ test("DR27/P0-4: failed Principal setup remains the tenure's engine until actual
 });
 
 
-test("DR27/P0-4: rejected child acquisition still returns the child before any RPC wiring", { timeout: 5000 }, async t => {
+test("012. Rejected child acquisition still returns the child before any RPC wiring", { timeout: 5000 }, async t => {
   const problem = new Error("host refused acquired engine");
   let acquired: FencedEngine | undefined;
   let rpcWiring = 0;
@@ -270,3 +322,30 @@ test("DR27/P0-4: rejected child acquisition still returns the child before any R
     await acquired.exited;
   } finally { acquired?.close(); await acquired?.exited; }
 });
+
+for (const scenario of ["preflight", "started", "wrong-batch"] as const)
+  test(`013. Principal session ownership: ${scenario} observation ${scenario === "preflight" ? "releases only the unstarted claim" : "cannot release a different/active run"}`, async () => {
+    const extra = ["--hold-delivery", ...(scenario === "started" ? ["--started"] : []), ...(scenario === "wrong-batch" ? ["--wrong-batch"] : [])];
+    const s = scripted(undefined, undefined, extra);
+    let answered = false, started = false, refused = false;
+    s.session.onEvent(event => {
+      if (event.type === "response" && event.id === BATCH_ID) answered = true;
+      if (event.type === "agent_start") started = true;
+      if (deliveryNotStartedOf(event)) refused = true;
+    });
+    try {
+      await s.session.deliver(BATCH_ID);
+      await until("the delivery response", () => answered && (scenario !== "started" || started));
+      assert.deepEqual(s.session.submit("queued Human after delivery"), { kind: "accepted" });
+      process.kill(s.pid(), "SIGWINCH");
+      await until("the preflight observation", () => refused);
+      if (scenario !== "preflight") {
+        assert.equal(s.session.busy, true);
+        assert.deepEqual(s.written(), [`/oma-deliver ${BATCH_ID}`], "Human joined an unresolved/active run");
+        process.kill(s.pid(), "SIGUSR2");
+      }
+      await until("queued Human handoff", () => s.written().includes("queued Human after delivery"));
+      assert.deepEqual(s.written(), [`/oma-deliver ${BATCH_ID}`, "queued Human after delivery"]);
+      assert.deepEqual(s.events.failed, []);
+    } finally { await s.close(); }
+  });

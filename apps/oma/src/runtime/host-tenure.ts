@@ -105,9 +105,10 @@ export class HostTenure {
    * not an RPC error, a timeout, or a stop request. */
   get canStartEngine(): boolean { return !this.over && this.brokerLive && this.engine === null; }
 
-  /** The owned, private conversation can load while the broker prepares. Its
-   * credential and delivery remain closed until brokerReady + registration. */
-  get canPrepareEngine(): boolean { return !this.over && this.engine === null; }
+  /** The initial owned private conversation can load while the broker prepares.
+   * After any broker generation, a successor still needs the current broker.
+   * Credential and delivery always require readiness plus registration. */
+  get canPrepareEngine(): boolean { return !this.over && this.engine === null && (this.generation === 0 || this.brokerLive); }
 
   /** A failed setup still owns the terminal until the acquired child is gone. */
   get engineExited(): Promise<void> { return this.engine?.exited ?? Promise.resolve(); }
@@ -153,6 +154,9 @@ export class HostTenure {
    * that arrives after another readiness or loss belongs to a broker that no
    * longer speaks for this host, and must change nothing. */
   get brokerGeneration(): number { return this.generation; }
+  /** Human operations need this host's current broker, not a model engine or
+   * Principal registration. The broker still checks its own current authority. */
+  get brokerAvailable(): boolean { return !this.over && this.brokerLive; }
 
   /** The live broker minted a credential for this host's engine and the engine
    * has it. Only this makes delivery possible. */

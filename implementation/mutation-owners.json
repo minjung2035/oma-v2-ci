@@ -36,25 +36,25 @@
     }
   },
   "requiredMutationDimensions": [
-    "workflow",
-    "persistence",
-    "recovery",
-    "cli",
-    "tests"
+      "workflow",
+      "persistence",
+      "recovery",
+      "client",
+      "tests"
   ],
   "recoveryStrategies": {
     "physical-replay": "accepted work may require idempotent physical replay after commit/crash",
     "transaction-complete": "the mutation is completed inside its acceptance transaction; no physical recovery handler is expected"
   },
   "fanoutStages": [
-    "wire",
-    "validation",
-    "method",
-    "durableContract",
-    "durable",
-    "codec",
-    "dispatch",
-    "tests"
+      "wire",
+      "validation",
+      "method",
+      "durableContract",
+      "durable",
+      "codec",
+      "dispatch",
+      "tests"
   ],
   "mutations": {
     "society.set": {
@@ -79,10 +79,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/society.ts",
-          "symbol": "runSocietyCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.effect(society.set)"
         }
       ],
       "tests": [
@@ -126,14 +126,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/merge.ts",
-          "symbol": "runMergeCommand"
-        },
-        {
-          "path": "apps/oma/src/cli/commands/merge.ts",
-          "symbol": "runChallengeCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.openMerge + Client.openChallenge + Client.respondReview + Client.cancelReview"
         }
       ],
       "tests": [
@@ -143,7 +139,7 @@
         },
         {
           "path": "test/merge-cli.test.ts",
-          "symbol": "review CLI freeze/replay"
+          "symbol": "review Client freeze/replay"
         },
         {
           "path": "test/tiered-integration.test.ts",
@@ -177,17 +173,13 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/send.ts",
-          "symbol": "runSendCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.sendMail + Client.replyMail + Client.approvalNotice"
         },
         {
-          "path": "apps/oma/src/cli/effects.ts",
-          "symbol": "readBody"
-        },
-        {
-          "path": "apps/oma/src/cli/effects/mail.ts",
+          "path": "apps/oma/src/runtime/input-effects/mail.ts",
           "symbol": "prepareReplyEffects"
         }
       ],
@@ -202,7 +194,7 @@
         },
         {
           "path": "test/refactoring-cli-regressions.test.ts",
-          "symbol": "CLI freeze/replay regression"
+          "symbol": "Client freeze/replay regression"
         }
       ]
     },
@@ -232,10 +224,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/agent.ts",
-          "symbol": "runAgentCommand/continue"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.continueAgent"
         }
       ],
       "tests": [
@@ -249,7 +241,7 @@
         },
         {
           "path": "test/refactoring-cli-regressions.test.ts",
-          "symbol": "CLI freeze/replay regression"
+          "symbol": "Client freeze/replay regression"
         }
       ]
     },
@@ -274,10 +266,10 @@
         "strategy": "transaction-complete",
         "owners": []
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/send.ts",
-          "symbol": "runAckCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.effect(mail.ack)"
         }
       ],
       "tests": [
@@ -291,7 +283,7 @@
         },
         {
           "path": "test/cli.test.ts",
-          "symbol": "ack CLI"
+          "symbol": "ack Client"
         }
       ]
     },
@@ -316,10 +308,10 @@
         "strategy": "transaction-complete",
         "owners": []
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/routes.ts",
-          "symbol": "runRouteCommand(subscribe=true)"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.subscribe(follow)"
         }
       ],
       "tests": [
@@ -333,7 +325,7 @@
         },
         {
           "path": "test/cli.test.ts",
-          "symbol": "route CLI"
+          "symbol": "route Client"
         }
       ]
     },
@@ -358,10 +350,10 @@
         "strategy": "transaction-complete",
         "owners": []
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/routes.ts",
-          "symbol": "runRouteCommand(subscribe=false)"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.subscribe(unfollow)"
         }
       ],
       "tests": [
@@ -375,7 +367,7 @@
         },
         {
           "path": "test/cli.test.ts",
-          "symbol": "route CLI"
+          "symbol": "route Client"
         }
       ]
     },
@@ -405,14 +397,14 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/agent.ts",
-          "symbol": "runAgentCommand/create"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.createAgent"
         },
         {
-          "path": "apps/oma/src/cli/effects.ts",
-          "symbol": "resolveOid + readBody"
+          "path": "apps/oma/src/runtime/input-effects.ts",
+          "symbol": "resolveOid"
         }
       ],
       "tests": [
@@ -456,10 +448,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/agent.ts",
-          "symbol": "runAgentCommand/start"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.controlAgent(start)"
         }
       ],
       "tests": [
@@ -503,10 +495,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/agent.ts",
-          "symbol": "runAgentCommand/stop"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.controlAgent(stop)"
         }
       ],
       "tests": [
@@ -550,17 +542,13 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/submit.ts",
-          "symbol": "runSubmitCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.publishCandidate"
         },
         {
-          "path": "apps/oma/src/cli/effects.ts",
-          "symbol": "resolveOid + readBody + sha256Hex"
-        },
-        {
-          "path": "apps/oma/src/cli/effects/submit.ts",
+          "path": "apps/oma/src/runtime/input-effects/submit.ts",
           "symbol": "prepareSubmitEffects"
         }
       ],
@@ -575,7 +563,7 @@
         },
         {
           "path": "test/audit-cli-submit.test.ts",
-          "symbol": "CLI bundle construction"
+          "symbol": "Client bundle construction"
         },
         {
           "path": "test/recovery-exhaustiveness.test.mjs",
@@ -609,10 +597,10 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/merge.ts",
-          "symbol": "runMergeCommand (status view; the CLI no longer issues git.integrate)"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.query(review.status); integration is broker-owned, not a model-facing tool"
         }
       ],
       "tests": [
@@ -664,13 +652,13 @@
           }
         ]
       },
-      "cli": [
+      "client": [
         {
-          "path": "apps/oma/src/cli/commands/context.ts",
-          "symbol": "runContextCommand"
+          "path": "packages/client/src/index.ts",
+          "symbol": "Client.publishContext + Client.publishGoal"
         },
         {
-          "path": "apps/oma/src/cli/effects/context.ts",
+          "path": "apps/oma/src/runtime/input-effects/context.ts",
           "symbol": "prepareContextEffects"
         }
       ],

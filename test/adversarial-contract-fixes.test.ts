@@ -32,7 +32,7 @@ function tempRoot(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-test("adversarial: EML header casing never rewrites collision text in the body", async () => {
+test("001. Adversarial: EML header casing never rewrites collision text in the body", async () => {
   const eml = await buildEml({
     from: "alice@demo.oma.invalid",
     to: ["principal@demo.oma.invalid"],
@@ -51,7 +51,7 @@ test("adversarial: EML header casing never rewrites collision text in the body",
   assert.match(body, /X-Oma-Context: marker/);
 });
 
-test("adversarial: persisted MessagePlan accepts logical addresses only", () => {
+test("002. Adversarial: persisted MessagePlan accepts logical addresses only", () => {
   const plan: MessagePlan = {
     id: MESSAGE_ID,
     objectPath: `mail/objects/${MESSAGE_ID}.eml`,
@@ -90,7 +90,7 @@ test("adversarial: persisted MessagePlan accepts logical addresses only", () => 
   );
 });
 
-test("adversarial: approval plan and immutable EML headers must be identical", async () => {
+test("003. Adversarial: approval plan and immutable EML headers must be identical", async () => {
   const root = tempRoot("oma-approval-");
   const store = new Store(join(root, "runtime.sqlite"));
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
@@ -147,7 +147,7 @@ test("adversarial: approval plan and immutable EML headers must be identical", a
   }
 });
 
-test("adversarial: operation results are closed and kind-specific", () => {
+test("004. Adversarial: operation results are closed and kind-specific", () => {
   const valid = {
     kind: "route.follow",
     topic: "dev",
@@ -164,7 +164,7 @@ test("adversarial: operation results are closed and kind-specific", () => {
   );
 });
 
-test("adversarial: freezeObject is immutable and collision checked", () => {
+test("005. Adversarial: freezeObject is immutable and collision checked", () => {
   const root = tempRoot("oma-freeze-");
   const store = new Store(join(root, "runtime.sqlite"));
   const mail = createMailModule({ stateRoot: root, society: "demo" }, store, 8);
@@ -183,7 +183,7 @@ test("adversarial: freezeObject is immutable and collision checked", () => {
   }
 });
 
-test("adversarial: terminal operation state cannot be rewritten", () => {
+test("006. Adversarial: terminal operation state cannot be rewritten", () => {
   const root = tempRoot("oma-terminal-");
   const store = new Store(join(root, "runtime.sqlite"));
   const operation = "op-00000000-0000-4000-8000-000000000001";
@@ -242,7 +242,7 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
 
 
 
-test("adversarial: trusted Pi batch view is a closed runtime DTO", () => {
+test("007. Adversarial: trusted Pi batch view is a closed runtime DTO", () => {
   const root = tempRoot("oma-batch-view-");
   const batchId = "b-00000000-0000-4000-8000-000000000001";
   const file = join(root, `batch-${batchId}.json`);

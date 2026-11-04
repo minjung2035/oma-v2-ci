@@ -12,8 +12,10 @@
       "packages/storage/src/store.ts#Store.transaction"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/compliance.test.ts#COMP-005/006"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/compliance.test.ts#001. Structural evidence rejects stale, incomplete and duplicate records"
     ]
   },
   {
@@ -34,10 +36,15 @@
       "packages/domain/src/authority.ts#assertCurrentActor"
     ],
     "negativeTests": [
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: ancestry distinguishes",
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/r37-recovery-observation.test.ts#R37"
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#010. Real OS: ancestry distinguishes live siblings and retains identity across observed exit",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks"
     ]
   },
   {
@@ -53,8 +60,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/crash-boundaries.test.ts#T63",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease"
     ]
   },
   {
@@ -72,9 +81,14 @@
       "packages/process/src/preparation.ts#PreparationExecutor"
     ],
     "negativeTests": [
-      "test/r29-reconcile-accounting.test.ts#R29",
-      "test/r37-recovery-observation.test.ts#R37",
-      "test/r37-shutdown-observation.test.ts#R37"
+      "test/r29-reconcile-accounting.test.ts#001. Concurrent sweeps join one Promise, examine distinct initial IDs and count terminal failures",
+        "test/r29-reconcile-accounting.test.ts#002. Already-terminal snapshot entries are excluded, not counted twice",
+        "test/r29-reconcile-accounting.test.ts#003. Pending/unknown reasons survive no-progress backoff and later retry",
+        "test/r29-reconcile-accounting.test.ts#004. A wall-budget boundary resumes from authoritative IDs, with no durable cursor",
+        "test/r29-reconcile-accounting.test.ts#005. Recursive self-await fails immediately; corruption never returns partial healthy counts",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks",
+      "test/r37-shutdown-observation.test.ts#001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy",
+        "test/r37-shutdown-observation.test.ts#002. Native preparation owns the shutdown barrier independently of a request Promise"
     ]
   },
   {
@@ -109,8 +123,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T66"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at"
     ]
   },
   {
@@ -128,8 +144,11 @@
       "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T39"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#007. Primitive SIGKILL at",
+        "test/crash-boundaries.test.ts#008. Primitive SIGKILL at"
     ]
   },
   {
@@ -145,8 +164,25 @@
       "packages/protocol/src/receipts.ts#receiptOfOperation"
     ],
     "negativeTests": [
-      "test/r37-async-process.test.ts#R37",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/r37-async-process.test.ts#001. Command argv, environment and input bytes are snapshotted before awaiting",
+        "test/r37-async-process.test.ts#002. Child preparation yields the event loop without claiming a latency improvement",
+        "test/r37-async-process.test.ts#003. Stdout overflow is bounded and cannot be a successful observation",
+        "test/r37-async-process.test.ts#004. Explicit diagnostic stderr discard still drains without unbounded retention",
+        "test/r37-async-process.test.ts#005. A command making progress is never cut by the silence window; one that says nothing stalls honestly",
+        "test/r37-async-process.test.ts#006. Output past the in-memory budget spills whole -- the file holds every byte, the head stays in the result",
+        "test/r37-async-process.test.ts#007. A spilled stream also keeps the silence window honest -- progress to the file is progress",
+        "test/r37-async-process.test.ts#008. The synchronous runner refuses a silence window it cannot observe, and spills descriptor-direct",
+        "test/r37-async-process.test.ts#009. A failed second spill open leaks no descriptor and keeps the open's own error",
+        "test/r37-async-process.test.ts#010. Identical stdout and stderr spill paths are refused -- the second O_TRUNC would erase the first stream",
+        "test/r37-async-process.test.ts#011. Timeout and abort never synthesize exit-zero success",
+        "test/r37-async-process.test.ts#012. Pre-abort returns without attempting even an unavailable executable",
+        "test/r37-async-process.test.ts#013. Native spawn failure and known nonzero exit remain different observations",
+        "test/r37-async-process.test.ts#014. Command validation rejects invalid budgets and NUL arguments before spawn",
+        "test/r37-async-process.test.ts#015. One preparation slot rejects concurrent work and releases after known exit",
+        "test/r37-async-process.test.ts#016. An uncertain native outcome keeps the preparation owner blocked",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease"
     ]
   },
   {
@@ -163,7 +199,8 @@
       "packages/process/src/preparation.ts#preparationShutdownBarrier"
     ],
     "negativeTests": [
-      "test/r37-shutdown-observation.test.ts#R37"
+      "test/r37-shutdown-observation.test.ts#001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy",
+        "test/r37-shutdown-observation.test.ts#002. Native preparation owns the shutdown barrier independently of a request Promise"
     ]
   },
   {
@@ -181,8 +218,15 @@
       "scripts/traceability.mjs#indexTrace"
     ],
     "negativeTests": [
-      "test/compliance.test.ts#COMP-005/006",
-      "test/traceability-policy.test.mjs#R39"
+      "test/compliance.test.ts#001. Structural evidence rejects stale, incomplete and duplicate records",
+      "test/traceability-policy.test.mjs#001. Same fingerprint and same links preserve the reviewed record exactly",
+        "test/traceability-policy.test.mjs#002. Moving an owner invalidates proof without rewriting a normative fingerprint",
+        "test/traceability-policy.test.mjs#003. Changing a clause never reuses the old clause's proof",
+        "test/traceability-policy.test.mjs#004. Unreviewed rules stay unlinked rather than receiving a guessed owner",
+        "test/traceability-policy.test.mjs#005. Duplicate, extra and malformed owner records are rejected",
+        "test/traceability-policy.test.mjs#006. Complete core and tiered matrices are separate scopes, not a replacement total",
+        "test/traceability-policy.test.mjs#007. Core success cannot hide missing target oracles or a missing core row",
+        "test/traceability-policy.test.mjs#008. Duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count"
     ]
   },
   {
@@ -197,7 +241,14 @@
       "scripts/traceability.mjs#inventoryAcceptance"
     ],
     "negativeTests": [
-      "test/traceability-policy.test.mjs#R39"
+      "test/traceability-policy.test.mjs#001. Same fingerprint and same links preserve the reviewed record exactly",
+        "test/traceability-policy.test.mjs#002. Moving an owner invalidates proof without rewriting a normative fingerprint",
+        "test/traceability-policy.test.mjs#003. Changing a clause never reuses the old clause's proof",
+        "test/traceability-policy.test.mjs#004. Unreviewed rules stay unlinked rather than receiving a guessed owner",
+        "test/traceability-policy.test.mjs#005. Duplicate, extra and malformed owner records are rejected",
+        "test/traceability-policy.test.mjs#006. Complete core and tiered matrices are separate scopes, not a replacement total",
+        "test/traceability-policy.test.mjs#007. Core success cannot hide missing target oracles or a missing core row",
+        "test/traceability-policy.test.mjs#008. Duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count"
     ]
   },
   {
@@ -216,8 +267,8 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T91",
-      "test/tui-boundary.test.ts#T95"
+      "test/surface-rules.test.mjs#006. Tui-view-boundary: the view sees only data, and only terminal owners draw through the seam",
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ]
   },
   {
@@ -237,9 +288,19 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-app.test.ts#TUI-002",
-      "test/tui-model.test.ts#key decoding",
-      "test/surface-process.test.ts#T112"
+      "test/tui-app.test.ts#015. And CSI tokens survive every terminal read boundary",
+        "test/tui-app.test.ts#016. Malformed and overlong terminal reports stay bounded and never become prompt text",
+        "test/tui-app.test.ts#017. A pasted block is one prompt boundary, not one prompt per line",
+        "test/tui-app.test.ts#018. A paste survives every terminal read boundary it can be split at",
+        "test/tui-app.test.ts#019. Pasted text carries line breaks and tabs, and no terminal instructions",
+        "test/tui-app.test.ts#021. A paste the terminal never ended is rejected whole, and the keyboard lives on",
+        "test/tui-app.test.ts#022. An unfinished terminal report gives up instead of eating the next key",
+        "test/tui-app.test.ts#027. An Enter arriving in the burst after a paste is that paste's newline, not a submission",
+        "test/tui-app.test.ts#028. A clipboard carrying its own end marker cannot submit the text in front of it",
+        "test/tui-app.test.ts#029. A code point the terminal split across reads has a deadline, and never becomes U+FFFD",
+      "test/tui-model.test.ts#014. Key decoding maps arrows, Ctrl+X and text without leaking escape sequences",
+      "test/surface-process.test.ts#002. The terminal owner takes and restores raw mode on a real TTY",
+        "test/surface-process.test.ts#003. A non-TTY stream never attempts raw mode"
     ]
   },
   {
@@ -256,7 +317,25 @@
       "apps/oma/src/runtime/host-tenure.ts#HostTenure"
     ],
     "negativeTests": [
-      "test/oma-composition-policy.test.mjs#T119"
+      "test/oma-composition-policy.test.mjs#003. The lease permits private conversation while broker authority remains closed",
+        "test/oma-composition-policy.test.mjs#007. However many brokers become ready, the society gets one engine",
+        "test/oma-composition-policy.test.mjs#008. Each time a broker becomes ready the engine is registered and given its credential",
+        "test/oma-composition-policy.test.mjs#009. A refused registration grants nothing and delivers nothing",
+        "test/oma-composition-policy.test.mjs#010. Delivery closes when the broker that authorised it ends, and reopens only on a new registration",
+        "test/oma-composition-policy.test.mjs#011. A Control Panel over someone else's society cannot write to it",
+        "test/oma-composition-policy.test.mjs#012. An owner that has given the society back stops being able to write to it",
+        "test/oma-composition-policy.test.mjs#013. Everything started on the strength of the lease inherits it",
+        "test/oma-composition-policy.test.mjs#014. A society whose broker this host does not own gets a Control Panel, not a second engine",
+        "test/oma-composition-policy.test.mjs#015. A broker that could not be started leaves a Control Panel, not an unauthorised engine",
+        "test/oma-composition-policy.test.mjs#016. A society this process stops owning loses the engine that ownership paid for",
+        "test/oma-composition-policy.test.mjs#017. A process that cannot take the society lease writes nothing and starts no broker",
+        "test/oma-composition-policy.test.mjs#019. A broker that is already listening is found before this process writes anything",
+        "test/oma-composition-policy.test.mjs#020. Negative control: with no broker listening, the same run provisions and repairs",
+        "test/oma-composition-policy.test.mjs#024. Quitting gives the society back, and only once the engine is really gone",
+        "test/oma-composition-policy.test.mjs#025. Every signal that asks this process to end takes the same quitting path",
+        "test/oma-composition-policy.test.mjs#026. An engine that will not die does not keep the product from quitting",
+        "test/oma-composition-policy.test.mjs#027. A crash stops the broker and the engine this process started",
+        "test/oma-composition-policy.test.mjs#028. Delivery runs only once a broker is ready, and again as each turn settles"
     ]
   },
   {
@@ -277,8 +356,8 @@
       "packages/engine/src/pi-compat/prompt-editor.ts#ownedEditor"
     ],
     "negativeTests": [
-      "packages/engine/test/interactive-input.test.mjs#Open TUI",
-      "test/open-tui-pty.test.ts#Open TUI"
+      "packages/engine/test/interactive-input.test.mjs#001. Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA",
+      "test/open-tui-pty.test.ts#001. Open TUI: actual Principal tools, queued input, panel and"
     ]
   },
   {
@@ -300,9 +379,11 @@
       "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T93",
-      "test/tui-sources.test.ts#T94",
-      "test/tui-sources.test.ts#T96"
+      "test/tui-sources.test.ts#001. A Principal model change rewrites only its profile reference",
+        "test/tui-sources.test.ts#002. An undeclared model or profile name is refused, not coerced",
+      "test/tui-sources.test.ts#003. Writing settings replaces config.json atomically with a fresh policy revision",
+      "test/tui-sources.test.ts#004. Initial workers is bootstrap seed only and never touches the running quota",
+        "test/tui-sources.test.ts#005. Every exposed field declares an apply scope that matches its real effect"
     ]
   },
   {
@@ -320,7 +401,7 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T95"
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ]
   },
   {
@@ -339,8 +420,9 @@
       "apps/oma/src/application/extensions.ts#toggleExtension"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T97",
-      "test/tui-model.test.ts#T97"
+      "test/tui-sources.test.ts#006. The core extension stays first and selection is confined to libdir",
+        "test/tui-sources.test.ts#007. An inline config exposes only the locked core and refuses edits",
+      "test/tui-model.test.ts#009. The locked core extension cannot be toggled, other rows can"
     ]
   },
   {
@@ -358,8 +440,9 @@
       "apps/oma/src/application/mail.ts#readMailbox"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T98",
-      "test/tui-boundary.test.ts#T95"
+      "test/tui-sources.test.ts#009. Unread comes from the mailbox position, and no read state is written",
+        "test/tui-sources.test.ts#014. The Dashboard keeps an unobserved value unknown instead of guessing",
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ]
   },
   {
@@ -377,7 +460,8 @@
       "packages/tui/src/dashboard.ts#dashboardLines"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T98"
+      "test/tui-sources.test.ts#009. Unread comes from the mailbox position, and no read state is written",
+        "test/tui-sources.test.ts#014. The Dashboard keeps an unobserved value unknown instead of guessing"
     ]
   },
   {
@@ -395,7 +479,7 @@
       "packages/tui/src/view/screens.ts#render"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T95"
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ]
   },
   {
@@ -417,28 +501,31 @@
       "packages/engine/src/principal-session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
-      "test/tui-app.test.ts#T120",
+      "test/tui-app.test.ts#012. An oversized paste is rejected as a whole instead of submitting its prefix",
+        "test/tui-app.test.ts#013. JSON escaping overflow rejects the whole prompt",
+        "test/tui-app.test.ts#020. A paste over the decoder's bound is refused whole, never as its prefix",
+        "test/tui-app.test.ts#026. Recovery from a refused paste never spends a character the Human typed",
       "test/tui-transcript.test.ts#T120",
-      "test/principal-endpoint.test.ts#T120"
+      "test/principal-endpoint.test.ts#031. The host never retains a Human prompt beyond its UTF-8 frame admission",
+        "test/principal-endpoint.test.ts#032. Only so many prompts wait, and the Human is told which one was not taken"
     ]
   },
   {
     "source": "docs/implementation-spec.md",
     "requirements": [
-      "TSP-001",
-      "TSP-003",
       "TSP-004"
     ],
-    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
-    "entrypoint": "apps/oma/src/entry/runner.ts#main",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "apps/oma/src/entry/runner.ts#main",
-      "packages/config/src/operations.ts#readConfigurationSource",
-      "packages/domain/src/tool-surface.ts#planToolSurface"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/domain/src/collaboration-surface.ts#requireCollaborationSurface",
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T99",
-      "test/tool-surface.test.ts#T100"
+      "test/tool-surface.test.ts#007. Malformed, impossible and shadowed current surfaces fail closed",
+      "packages/tool-lsp/test/bundle.test.mjs#046. A read-only role can inspect server availability without reaching a spawn-capable tool"
     ]
   },
   {
@@ -454,8 +541,8 @@
       "packages/config/src/operations.ts#readConfigurationSource"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T100",
-      "test/tool-surface.test.ts#T103"
+      "test/tool-surface.test.ts#002. A role file cannot declare a projection -- the field fails the load, whatever it holds",
+      "test/operations-config.test.ts#009. Runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs"
     ]
   },
   {
@@ -464,34 +551,33 @@
       "TSP-005",
       "TSP-008"
     ],
-    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "owner": "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups",
     "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
       "packages/extension/src/index.ts#extension",
       "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T101"
+      "test/tool-surface.test.ts#005. Only successful persisted group results restore; interrupted/failed calls and different branches remain separate",
+      "test/tool-surface.test.ts#010. Corrupt, partial or foreign committed exposure cannot be restored"
     ]
   },
   {
     "source": "docs/implementation-spec.md",
     "requirements": [
-      "TSP-006",
       "TSP-007"
     ],
-    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
+    "owner": "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups",
     "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
       "packages/extension/src/index.ts#extension",
       "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
-      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T102",
-      "test/tool-surface.test.ts#T103"
+      "test/tool-surface.test.ts#009. An exposed definition cannot disappear or change after a safe boundary",
+      "test/tool-surface.test.ts#008. Late non-catalog registrations stay unavailable; provenance revocation closes the role surface"
     ]
   },
   {
@@ -515,7 +601,7 @@
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
-      "test/pi-runtime.test.ts#T106"
+      "test/pi-runtime.test.ts#016. Running in a bare project needs no setup command and no hand-written config"
     ]
   },
   {
@@ -555,8 +641,68 @@
       "packages/storage/src/delivery-receipt.ts#publishDeliveryReceipt"
     ],
     "negativeTests": [
-      "test/principal-endpoint.test.ts#T114",
-      "test/oma-composition-policy.test.mjs#T119"
+      "test/principal-endpoint.test.ts#002. A broker no host started opens no Principal endpoint at all",
+        "test/principal-endpoint.test.ts#003. The host is told the broker is ready only once both endpoints are listening",
+        "test/principal-endpoint.test.ts#004. The broker accepts only the host's own child as the Principal's engine",
+        "test/principal-endpoint.test.ts#005. The credential is in no file and no environment -- read from outside, as an attacker would",
+        "test/principal-endpoint.test.ts#006. The endpoint refuses every request until the session attaches",
+        "test/principal-endpoint.test.ts#007. The audit's attack -- the right credential and handle from a process the engine did not start",
+        "test/principal-endpoint.test.ts#008. Another session's handle is a conflict, not a failed authentication",
+        "test/principal-endpoint.test.ts#009. Principal mail tools work through the real CLI without orchestration tools",
+        "test/principal-endpoint.test.ts#010. The engine attaches in-process; credentials never enter its environment or a CLI child",
+        "test/principal-endpoint.test.ts#011. A detached engine cannot invent a Principal grant from the environment",
+        "test/principal-endpoint.test.ts#012. A re-registered engine gets a new credential and the old one stops working",
+        "test/principal-endpoint.test.ts#013. A credential from an earlier broker authorises nothing in a later one",
+        "test/principal-endpoint.test.ts#014. Mail to the Principal is delivered into its live session and completed",
+        "test/principal-endpoint.test.ts#015. A turn that does not settle cleanly leaves the mail pending, and it is retried later",
+        "test/principal-endpoint.test.ts#016. Nothing the model runs can mark its own mail delivered",
+        "test/principal-endpoint.test.ts#017. Delivery waits for an idle session rather than landing inside a Human's turn",
+        "test/principal-endpoint.test.ts#019. The credential comparison is fixed-shape and does not stop early",
+        "test/principal-endpoint.test.ts#020. Provisioning creates the directories the Principal's engine and its session use",
+        "test/principal-endpoint.test.ts#021. A Human prompt claims the session before it is written, so delivery cannot slip in",
+        "test/principal-endpoint.test.ts#022. A Human prompt typed during a delivery waits in the host and is not folded into the delivery's run",
+        "test/principal-endpoint.test.ts#023. Every prompt typed while the session was spoken for runs, once each, in order",
+        "test/principal-endpoint.test.ts#024. A prompt the engine refuses gives the session back and is said on the screen",
+        "test/principal-endpoint.test.ts#025. A refused delivery command gives the session back and lets the waiting Human through",
+        "test/principal-endpoint.test.ts#026. A response for a prompt the session has moved on from changes nothing",
+        "test/principal-endpoint.test.ts#027. A prompt the transport cannot carry stops the screen saying the session is busy",
+        "test/principal-endpoint.test.ts#029. The waiting prompt that could not be sent is named, and the rest still go",
+        "test/principal-endpoint.test.ts#030. The busy report comes from the ownership itself, at every move of it",
+        "test/principal-endpoint.test.ts#034. A failed assistant message does not end the delivery -- the run settling does",
+        "test/principal-endpoint.test.ts#035. A run that settles on a failed assistant message is reported as the provider failing",
+        "test/principal-endpoint.test.ts#036. A delivery the engine never answers keeps the session",
+        "test/principal-endpoint.test.ts#037. The extension is ready for the next batch however a turn ended",
+        "test/principal-endpoint.test.ts#038. The Principal's session stays in its own private space",
+        "test/principal-endpoint.test.ts#039. The host is answered on its identity, not on a number another process may hold",
+        "test/principal-endpoint.test.ts#040. A method the host endpoint does not serve is an unknown method, not a refused host",
+        "test/principal-endpoint.test.ts#041. The host is served delivery only while this broker holds a registration for its engine",
+        "test/principal-endpoint.test.ts#042. A registration that ends closes delivery again, without anything telling the endpoint",
+        "test/principal-endpoint.test.ts#043. Stopping the broker releases the supervision channel it was given",
+        "test/principal-endpoint.test.ts#046. Re-registering the session revokes the connections the old one already had",
+        "test/principal-endpoint.test.ts#047. A registration the broker refuses leaves no attached Principal behind",
+        "test/principal-endpoint.test.ts#048. Closing the endpoint revokes the connections that are already attached",
+        "test/principal-endpoint.test.ts#049. Detaching gives up authority rather than parking it for later",
+        "test/principal-endpoint.test.ts#050. An engine that dies takes the authority of the processes it started with it",
+        "test/principal-endpoint.test.ts#051. Revocation reaches every attached connection, and only attached ones",
+      "test/oma-composition-policy.test.mjs#003. The lease permits private conversation while broker authority remains closed",
+        "test/oma-composition-policy.test.mjs#007. However many brokers become ready, the society gets one engine",
+        "test/oma-composition-policy.test.mjs#008. Each time a broker becomes ready the engine is registered and given its credential",
+        "test/oma-composition-policy.test.mjs#009. A refused registration grants nothing and delivers nothing",
+        "test/oma-composition-policy.test.mjs#010. Delivery closes when the broker that authorised it ends, and reopens only on a new registration",
+        "test/oma-composition-policy.test.mjs#011. A Control Panel over someone else's society cannot write to it",
+        "test/oma-composition-policy.test.mjs#012. An owner that has given the society back stops being able to write to it",
+        "test/oma-composition-policy.test.mjs#013. Everything started on the strength of the lease inherits it",
+        "test/oma-composition-policy.test.mjs#014. A society whose broker this host does not own gets a Control Panel, not a second engine",
+        "test/oma-composition-policy.test.mjs#015. A broker that could not be started leaves a Control Panel, not an unauthorised engine",
+        "test/oma-composition-policy.test.mjs#016. A society this process stops owning loses the engine that ownership paid for",
+        "test/oma-composition-policy.test.mjs#017. A process that cannot take the society lease writes nothing and starts no broker",
+        "test/oma-composition-policy.test.mjs#019. A broker that is already listening is found before this process writes anything",
+        "test/oma-composition-policy.test.mjs#020. Negative control: with no broker listening, the same run provisions and repairs",
+        "test/oma-composition-policy.test.mjs#024. Quitting gives the society back, and only once the engine is really gone",
+        "test/oma-composition-policy.test.mjs#025. Every signal that asks this process to end takes the same quitting path",
+        "test/oma-composition-policy.test.mjs#026. An engine that will not die does not keep the product from quitting",
+        "test/oma-composition-policy.test.mjs#027. A crash stops the broker and the engine this process started",
+        "test/oma-composition-policy.test.mjs#028. Delivery runs only once a broker is ready, and again as each turn settles"
     ]
   },
   {
@@ -575,8 +721,58 @@
       "packages/broker/src/process-ancestry.ts#descendsFrom"
     ],
     "negativeTests": [
-      "test/principal-endpoint.test.ts#T114",
-      "test/principal-channel.test.ts#T114"
+      "test/principal-endpoint.test.ts#002. A broker no host started opens no Principal endpoint at all",
+        "test/principal-endpoint.test.ts#003. The host is told the broker is ready only once both endpoints are listening",
+        "test/principal-endpoint.test.ts#004. The broker accepts only the host's own child as the Principal's engine",
+        "test/principal-endpoint.test.ts#005. The credential is in no file and no environment -- read from outside, as an attacker would",
+        "test/principal-endpoint.test.ts#006. The endpoint refuses every request until the session attaches",
+        "test/principal-endpoint.test.ts#007. The audit's attack -- the right credential and handle from a process the engine did not start",
+        "test/principal-endpoint.test.ts#008. Another session's handle is a conflict, not a failed authentication",
+        "test/principal-endpoint.test.ts#009. Principal mail tools work through the real CLI without orchestration tools",
+        "test/principal-endpoint.test.ts#010. The engine attaches in-process; credentials never enter its environment or a CLI child",
+        "test/principal-endpoint.test.ts#011. A detached engine cannot invent a Principal grant from the environment",
+        "test/principal-endpoint.test.ts#012. A re-registered engine gets a new credential and the old one stops working",
+        "test/principal-endpoint.test.ts#013. A credential from an earlier broker authorises nothing in a later one",
+        "test/principal-endpoint.test.ts#014. Mail to the Principal is delivered into its live session and completed",
+        "test/principal-endpoint.test.ts#015. A turn that does not settle cleanly leaves the mail pending, and it is retried later",
+        "test/principal-endpoint.test.ts#016. Nothing the model runs can mark its own mail delivered",
+        "test/principal-endpoint.test.ts#017. Delivery waits for an idle session rather than landing inside a Human's turn",
+        "test/principal-endpoint.test.ts#019. The credential comparison is fixed-shape and does not stop early",
+        "test/principal-endpoint.test.ts#020. Provisioning creates the directories the Principal's engine and its session use",
+        "test/principal-endpoint.test.ts#021. A Human prompt claims the session before it is written, so delivery cannot slip in",
+        "test/principal-endpoint.test.ts#022. A Human prompt typed during a delivery waits in the host and is not folded into the delivery's run",
+        "test/principal-endpoint.test.ts#023. Every prompt typed while the session was spoken for runs, once each, in order",
+        "test/principal-endpoint.test.ts#024. A prompt the engine refuses gives the session back and is said on the screen",
+        "test/principal-endpoint.test.ts#025. A refused delivery command gives the session back and lets the waiting Human through",
+        "test/principal-endpoint.test.ts#026. A response for a prompt the session has moved on from changes nothing",
+        "test/principal-endpoint.test.ts#027. A prompt the transport cannot carry stops the screen saying the session is busy",
+        "test/principal-endpoint.test.ts#029. The waiting prompt that could not be sent is named, and the rest still go",
+        "test/principal-endpoint.test.ts#030. The busy report comes from the ownership itself, at every move of it",
+        "test/principal-endpoint.test.ts#034. A failed assistant message does not end the delivery -- the run settling does",
+        "test/principal-endpoint.test.ts#035. A run that settles on a failed assistant message is reported as the provider failing",
+        "test/principal-endpoint.test.ts#036. A delivery the engine never answers keeps the session",
+        "test/principal-endpoint.test.ts#037. The extension is ready for the next batch however a turn ended",
+        "test/principal-endpoint.test.ts#038. The Principal's session stays in its own private space",
+        "test/principal-endpoint.test.ts#039. The host is answered on its identity, not on a number another process may hold",
+        "test/principal-endpoint.test.ts#040. A method the host endpoint does not serve is an unknown method, not a refused host",
+        "test/principal-endpoint.test.ts#041. The host is served delivery only while this broker holds a registration for its engine",
+        "test/principal-endpoint.test.ts#042. A registration that ends closes delivery again, without anything telling the endpoint",
+        "test/principal-endpoint.test.ts#043. Stopping the broker releases the supervision channel it was given",
+        "test/principal-endpoint.test.ts#046. Re-registering the session revokes the connections the old one already had",
+        "test/principal-endpoint.test.ts#047. A registration the broker refuses leaves no attached Principal behind",
+        "test/principal-endpoint.test.ts#048. Closing the endpoint revokes the connections that are already attached",
+        "test/principal-endpoint.test.ts#049. Detaching gives up authority rather than parking it for later",
+        "test/principal-endpoint.test.ts#050. An engine that dies takes the authority of the processes it started with it",
+        "test/principal-endpoint.test.ts#051. Revocation reaches every attached connection, and only attached ones",
+      "test/principal-channel.test.ts#002. The extension's channel names are the protocol's",
+        "test/principal-channel.test.ts#003. The extension accepts exactly the credential lines the protocol decodes",
+        "test/principal-channel.test.ts#004. The protocol round-trips what it encodes and refuses what it cannot",
+        "test/principal-channel.test.ts#005. A reader splits, joins and stops at the first thing that is not a message",
+        "test/principal-channel.test.ts#006. The extension keeps the latest credential and drops it if the channel lies",
+        "test/principal-channel.test.ts#007. An engine started without the product's channel holds nothing",
+        "test/principal-channel.test.ts#008. A credential descriptor named in the environment is not the Client's credential",
+        "test/principal-channel.test.ts#009. Reading mail never returns more than its bound, even while the file grows",
+        "test/principal-channel.test.ts#010. The owned process output cap counts bytes, not decoded characters"
     ]
   },
   {
@@ -584,16 +780,16 @@
     "requirements": [
       "CLI-001"
     ],
-    "owner": "apps/oma/src/cli/arguments.ts#parseArguments",
-    "entrypoint": "apps/oma/src/cli.ts#main",
+    "owner": "packages/extension/src/mail-tools.ts#registerOmaTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "apps/oma/src/cli.ts#main",
-      "apps/oma/src/cli/commands/send.ts#runSendCommand",
-      "apps/oma/src/cli/arguments.ts#parseArguments"
+      "packages/extension/src/index.ts#extension",
+      "packages/extension/src/mail-tools.ts#registerOmaTools",
+      "packages/client/src/index.ts#Client"
     ],
     "negativeTests": [
-      "test/argument-boundary.test.ts#AV1",
-      "test/f2-cli-request.test.ts#F2"
+      "test/surface-rules.test.mjs#008. Product-tool-separation and resident-product-surface: closures do not cross",
+      "test/tool-surface.test.ts#bad shapes and names"
     ]
   },
   {
@@ -616,9 +812,14 @@
       "packages/protocol/src/methods.ts#principalRequestAllowed"
     ],
     "negativeTests": [
-      "test/model-scope.test.ts#AV3",
-      "test/argument-boundary.test.ts#AV1",
-      "test/principal-stop-fence.test.ts#DR27",
+      "test/model-scope.test.ts#001. The Principal's model scope holds neither the Human's session history nor the engine's credentials",
+        "test/model-scope.test.ts#002. An engine whose workspace overlaps what the product keeps is refused before it starts",
+      "test/argument-boundary.test.ts#001. A value the model supplies cannot leave its slot through OMA's tools",
+      "test/principal-stop-fence.test.ts#001. A Principal stop survives Worker stop, restart and same-key replay; only an explicit resume releases it",
+        "test/principal-stop-fence.test.ts#002. Principal stop fence:",
+        "test/principal-stop-fence.test.ts#003. An unconfirmed physical stop is still an accepted stop fence",
+        "test/principal-stop-fence.test.ts#004. The Principal actor releases its safety stop but cannot orchestrate routine starts",
+        "test/principal-stop-fence.test.ts#005. Broad legacy grants cannot expose Principal routine RPCs; own receipts remain readable",
       "test/tool-surface.test.ts#DR27"
     ]
   },
@@ -636,7 +837,8 @@
       "packages/engine/src/principal-session.ts#principalEnvironment"
     ],
     "negativeTests": [
-      "test/model-scope.test.ts#AV3"
+      "test/model-scope.test.ts#001. The Principal's model scope holds neither the Human's session history nor the engine's credentials",
+        "test/model-scope.test.ts#002. An engine whose workspace overlaps what the product keeps is refused before it starts"
     ]
   },
   {
@@ -651,7 +853,9 @@
       "apps/oma/src/runtime/inference-relay.ts#InferenceRelay"
     ],
     "negativeTests": [
-      "test/inference-relay.test.ts#AV2"
+      "test/inference-relay.test.ts#013. The key is written only into its declared slots; a placeholder anywhere else is refused",
+        "test/inference-relay.test.ts#014. A response that carries the key back is cut off before it reaches the sandbox",
+        "test/inference-relay.test.ts#015. A WebSocket upgrade keeps the same slots and is not compressed"
     ]
   },
   {
@@ -667,9 +871,12 @@
       "packages/native/src/files.ts#withinDirectory"
     ],
     "negativeTests": [
-      "test/held-parent.test.ts#AV5",
-      "test/untrusted-directories.test.ts#AV4",
-      "test/architecture-rule-modules.test.mjs#AV5"
+      "test/held-parent.test.ts#001. A spool whose staging path is replaced after sealing reads and removes only its own file",
+      "test/untrusted-directories.test.ts#001. A receipt's session is found beneath its directory in one resolution; a link at any component is never followed",
+        "test/untrusted-directories.test.ts#002. Once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it",
+      "test/architecture-rule-modules.test.mjs#022. The state-tree rule accepts effects through a held parent, a descriptor or a primitive",
+        "test/architecture-rule-modules.test.mjs#023. The state-tree rule rejects a mutation that names a path",
+        "test/architecture-rule-modules.test.mjs#024. The real tree changes the state tree only through held parents"
     ]
   },
   {
@@ -684,8 +891,18 @@
       "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt"
     ],
     "negativeTests": [
-      "test/untrusted-directories.test.ts#AV4",
-      "test/receipt-observation.test.ts#V06A"
+      "test/untrusted-directories.test.ts#001. A receipt's session is found beneath its directory in one resolution; a link at any component is never followed",
+        "test/untrusted-directories.test.ts#002. Once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it",
+      "test/receipt-observation.test.ts#001. A verified receipt completes the batch and the runner presents nothing again",
+        "test/receipt-observation.test.ts#003. An observed absent",
+        "test/receipt-observation.test.ts#004. Receipt observation:",
+        "test/receipt-observation.test.ts#005. Receipt observation:",
+        "test/receipt-observation.test.ts#006. The observer returns verified receipts it issued, and nothing else counts as one",
+        "test/receipt-observation.test.ts#007. Absence names which name is missing, under a runner root that exists",
+        "test/receipt-observation.test.ts#008. An observation that did not complete is unavailable, with its cause and the expected identity",
+        "test/receipt-observation.test.ts#009. Conflicting evidence says what differs, and a legacy incarnation is never accepted as current",
+        "test/receipt-observation.test.ts#010. A receipt directory that cannot be opened is unavailable, never absent",
+        "test/receipt-observation.test.ts#011. Live completion binds the current run's incarnation and the receipt's session"
     ]
   },
   {
@@ -701,10 +918,23 @@
       "packages/tui/src/session-mode.ts#chooseSessionMode"
     ],
     "negativeTests": [
-      "test/session-mode-selection.test.mjs#mode selector:",
-      "test/session-mode-pty.test.ts#session mode real PTY:",
-      "test/host-arguments.test.ts#session modes:",
-      "test/native-profile.test.mjs#native"
+      "test/session-mode-selection.test.mjs#001. Mode selector: non-TTY defaults without terminal or listeners",
+        "test/session-mode-selection.test.mjs#002. Mode selector:",
+        "test/session-mode-selection.test.mjs#003. Mode selector:",
+        "test/session-mode-selection.test.mjs#004. Mode selector: fragmented cursor key replaces timer and fences its stale callback",
+        "test/session-mode-selection.test.mjs#005. Mode selector: selection consumes no later key in the same read",
+        "test/session-mode-selection.test.mjs#006. Mode selector: cancellation owns even an already queued timer",
+        "test/session-mode-selection.test.mjs#007. Mode selector: pasted keystrokes never select a mode",
+        "test/session-mode-selection.test.mjs#008. Mode selector:",
+        "test/session-mode-selection.test.mjs#009. Mode selector: acquisition failure at",
+        "test/session-mode-selection.test.mjs#010. Mode selector: failed",
+        "test/session-mode-selection.test.mjs#011. Mode selector: resize write failure closes instead of escaping its listener",
+        "test/session-mode-selection.test.mjs#012. Mode selector: small screens retain both choices without wrapping",
+      "test/session-mode-pty.test.ts#001. Session mode real PTY:",
+      "test/host-arguments.test.ts#003. Session modes: only an explicit birth choice changes the default",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes"
     ]
   },
   {
@@ -721,9 +951,29 @@
       "apps/oma/src/runtime/session-mode.ts#publishSessionBirth"
     ],
     "negativeTests": [
-      "test/session-mode-record.test.ts#session mode:",
-      "test/session-history.test.ts#Session history:",
-      "test/personal-host-composition.test.mjs#Personal host"
+      "test/session-mode-record.test.ts#001. Session mode:",
+        "test/session-mode-record.test.ts#002. Session mode: an existing conflicting fact is preserved byte-for-byte",
+        "test/session-mode-record.test.ts#003. Session mode:",
+        "test/session-mode-record.test.ts#004. Session mode: malformed/big bytes remain an error, not absence",
+        "test/session-mode-record.test.ts#005. Session mode: neither linked file nor linked parent imports outside metadata",
+        "test/session-mode-record.test.ts#006. Session mode: history lookup recognizes only exact owned layouts, not existence or authority",
+      "test/session-history.test.ts#001. Session history:",
+        "test/session-history.test.ts#002. Session history: engine-owned version",
+        "test/session-history.test.ts#003. Session history: header bound does not limit the engine-owned conversation",
+        "test/session-history.test.ts#004. Session history: missing, directory and symlink are not repaired or imported",
+        "test/session-history.test.ts#005. Session history:",
+        "test/session-history.test.ts#006. Session history: unsupported header version",
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine"
     ]
   },
   {
@@ -741,14 +991,56 @@
       "packages/engine/src/personal.ts#main"
     ],
     "negativeTests": [
-      "test/personal-pty.test.ts#Personal installed PTY:",
-      "test/personal-models-composition.test.mjs#Personal models:",
-      "test/personal-session-ownership.test.mjs#Personal child:",
-      "test/session-process-owner.test.mjs#Human session process:",
-      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
-      "test/personal-history-lifetime.test.ts#Personal history actual process:",
-      "test/host-arguments.test.ts#session modes:",
-      "test/native-profile.test.mjs#native"
+      "test/personal-pty.test.ts#001. Personal installed PTY:",
+      "test/personal-models-composition.test.mjs#001. Personal models: Linux never loads host Keychain or a second model runtime",
+        "test/personal-models-composition.test.mjs#002. Personal models: invalid host marker",
+        "test/personal-models-composition.test.mjs#003. Personal models: existing engine models and one Keychain writer owner, without model discovery network",
+        "test/personal-models-composition.test.mjs#004. Personal models:",
+        "test/personal-models-composition.test.mjs#005. Personal models: setup and cleanup failures both remain visible",
+      "test/personal-session-ownership.test.mjs#001. Personal child: a mode handoff has one valid target and waits for actual writer exit",
+        "test/personal-session-ownership.test.mjs#002. Personal child: common process owner receives saved cwd, history descriptor and clean environment",
+        "test/personal-session-ownership.test.mjs#003. Personal child:",
+        "test/personal-session-ownership.test.mjs#004. Personal child: close",
+        "test/personal-session-ownership.test.mjs#005. Personal child: only the first valid switch is accepted",
+        "test/personal-session-ownership.test.mjs#006. Personal child: a retired society field is no target and never both",
+        "test/personal-session-ownership.test.mjs#007. Personal child: all host-loss signals forward while the history writer is alive",
+        "test/personal-session-ownership.test.mjs#008. Personal child: signal",
+        "test/personal-session-ownership.test.mjs#009. Personal child: a signal never targets a child whose exit is already observed",
+        "test/personal-session-ownership.test.mjs#010. Personal child: partial",
+        "test/personal-session-ownership.test.mjs#011. Personal child:",
+        "test/personal-session-ownership.test.mjs#012. Personal child: contention refuses before any child exists",
+        "test/personal-session-ownership.test.mjs#013. Personal child: failed signal-listener return still attempts every listener and the lease",
+        "test/personal-session-ownership.test.mjs#014. Personal child: primary spawn and lease cleanup failures are both retained",
+        "test/personal-session-ownership.test.mjs#015. Personal child: Mac credential marker is owned by this launch, not inherited",
+      "test/session-process-owner.test.mjs#001. Human session process: terminal, history lock and IPC have fixed separate descriptors",
+        "test/session-process-owner.test.mjs#002. Human session process: invalid history descriptor",
+        "test/session-process-owner.test.mjs#003. Human session process: direct-spawn validation rejects",
+      "packages/engine/test/personal-engine-ownership.test.mjs#001. Personal engine: credential helper close is awaited before upstream direct exit and disposal runs once",
+        "packages/engine/test/personal-engine-ownership.test.mjs#002. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#003. Personal engine: exit-hint substitution forwards write callback, receiver and backpressure, then restores the writer",
+        "packages/engine/test/personal-engine-ownership.test.mjs#004. Personal engine: initialization and cleanup failures remain visible together",
+        "packages/engine/test/personal-engine-ownership.test.mjs#005. Personal engine: pending",
+        "packages/engine/test/personal-engine-ownership.test.mjs#006. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#007. Personal engine: explicit before-switch cancel=",
+        "packages/engine/test/personal-engine-ownership.test.mjs#008. Personal engine: an IPC send failure returns the transition slot for an explicit retry",
+        "packages/engine/test/personal-engine-ownership.test.mjs#009. Personal engine: an old resume selector cannot quit its replacement",
+        "packages/engine/test/personal-engine-ownership.test.mjs#010. Personal engine: reload uses a previously loaded cache owner before replacing its resource set",
+        "packages/engine/test/personal-engine-ownership.test.mjs#011. Personal engine: rejected reload returns its candidate and awaits helper close before fatal exit",
+        "packages/engine/test/personal-engine-ownership.test.mjs#012. Personal engine: extension replacement failure returns owners before upstream fatal exit",
+        "packages/engine/test/personal-engine-ownership.test.mjs#013. Personal engine: /society opens the mode choice only when requested and hands Society to the host",
+        "packages/engine/test/personal-engine-ownership.test.mjs#014. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#015. Personal engine: Mac mode switch returns to the host Society route",
+        "packages/engine/test/personal-engine-ownership.test.mjs#016. Personal engine: a cancelled before-switch keeps the /society session Personal",
+        "packages/engine/test/personal-engine-ownership.test.mjs#017. Personal engine: a second /society while one is transitioning cannot double-enter",
+        "packages/engine/test/personal-engine-ownership.test.mjs#018. Personal engine: an IPC send failure on /society returns the transition slot for an explicit retry",
+        "packages/engine/test/personal-engine-ownership.test.mjs#019. Personal engine: module-hook cleanup failure still closes credentials and retains the startup failure",
+        "packages/engine/test/personal-engine-ownership.test.mjs#020. Personal engine: branding reads the installed package version rather than a second literal",
+      "test/personal-history-lifetime.test.ts#001. Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
+        "test/personal-history-lifetime.test.ts#002. Personal history actual process: inherited lock survives an exited parent until the fixture writer ends",
+      "test/host-arguments.test.ts#003. Session modes: only an explicit birth choice changes the default",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes"
     ]
   },
   {
@@ -766,9 +1058,33 @@
       "packages/storage/src/durable-fs.ts#replaceDerivedFile"
     ],
     "negativeTests": [
-      "test/personal-settings.test.ts#Personal",
-      "test/personal-host-composition.test.mjs#Personal host",
-      "test/user-files.test.mjs#shared metadata publication:"
+      "test/personal-settings.test.ts#003. Personal settings: explicit user extensions seed once and the Society core never follows",
+        "test/personal-settings.test.ts#004. Personal settings: a package command preserves the first-project seed and reconciles only existing choices",
+        "test/personal-settings.test.ts#005. Personal settings: first project choice is observed inside the one writer lock",
+        "test/personal-settings.test.ts#006. Personal settings: failed first project observation consumes no choice and returns the writer",
+        "test/personal-settings.test.ts#007. Personal settings: contention and malformed saved choices do not observe a first seed",
+        "test/personal-settings.test.ts#008. Personal settings: separate edits read current choices instead of overwriting a stale screen",
+        "test/personal-settings.test.ts#009. Personal settings: update preserves disabled entries and removal cannot resurrect them on restart",
+        "test/personal-settings.test.ts#010. Personal settings: missing assets are reported; changed pinned code is refused before loading",
+        "test/personal-settings.test.ts#011. Personal settings: linked, escaping and Society assets are not alternative selections",
+        "test/personal-settings.test.ts#012. Personal settings: an unreadable index does not mean every package was removed",
+        "test/personal-settings.test.ts#013. Personal settings: corrupt preference bytes are retained, never reset to defaults",
+        "test/personal-settings.test.ts#014. Personal settings: a contended writer changes nothing and releases after an exception",
+        "test/personal-settings.test.ts#015. A Personal extension may be an absolute local file, digest-pinned like every other entry",
+        "test/personal-settings.test.ts#017. The package resource lists survive a Personal settings round-trip and a no-change write",
+        "test/personal-settings.test.ts#018. Personal settings embed the whole index, so their bound tracks it -- a heavy index carries, and the refusal states the bound",
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine",
+      "test/user-files.test.mjs#011. Shared metadata publication:"
     ]
   },
   {
@@ -787,9 +1103,25 @@
       "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch"
     ],
     "negativeTests": [
-      "test/personal-host-composition.test.mjs#Personal host",
-      "test/oma-composition-policy.test.mjs#MODE-005",
-      "test/personal-history-lifetime.test.ts#Personal"
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine",
+      "test/oma-composition-policy.test.mjs#050. Society resumes Personal in its saved cwd only after the outgoing writer dies",
+        "test/oma-composition-policy.test.mjs#051. New removes stale resume and binding intent instead of changing the old birth",
+        "test/oma-composition-policy.test.mjs#052. Failed resume admission leaves the current Society and its display alive",
+        "test/oma-composition-policy.test.mjs#053. Direct Society",
+        "test/oma-composition-policy.test.mjs#054. Shutdown fences a late resume",
+        "test/oma-composition-policy.test.mjs#055. One pending resume owns admission; duplicate switch cannot start a second teardown",
+      "test/personal-history-lifetime.test.ts#001. Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
+        "test/personal-history-lifetime.test.ts#002. Personal history actual process: inherited lock survives an exited parent until the fixture writer ends"
     ]
   },
   {
@@ -830,15 +1162,20 @@
       "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel",
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
-      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
+      "test/native-primitives.test.mjs#007. The real kernel process substrate feeds the shared ancestry and reuse policy",
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#003. Real OS: an inherited descriptor keeps flock after the parent owner closes",
+      "test/native-os-contracts.test.mjs#004. Real OS: native root and file capabilities are closed across exec without explicit handoff",
+      "test/native-os-contracts.test.mjs#011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity",
+      "packages/platform-mac/test/seatbelt.test.mjs#002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view",
       "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
+      "packages/platform-mac/test/seatbelt.test.mjs#005. Seatbelt profile paths remain literals and aggregate profiles never enter argv"
     ]
   },
   {
@@ -857,15 +1194,15 @@
       "packages/native/src/snapshot-reader.ts#SnapshotReader"
     ],
     "negativeTests": [
-      "test/native-primitives.test.mjs#directory effects",
-      "test/native-primitives.test.mjs#contained opens accept caller no-follow",
-      "test/native-primitives.test.mjs#entry metadata preserves",
-      "test/native-primitives.test.mjs#snapshot reader returns",
-      "test/user-files.test.mjs#shared metadata publication:",
+      "test/native-primitives.test.mjs#005. Directory effects remain on the held inode after a pathname replacement",
+      "test/native-primitives.test.mjs#002. Contained opens accept caller no-follow and reject intermediate and final symlinks",
+      "test/native-primitives.test.mjs#006. Entry metadata preserves nanoseconds and link identity without content access",
+      "test/native-primitives.test.mjs#001. Snapshot reader returns final symlink bytes while refusing linked parents",
+      "test/user-files.test.mjs#011. Shared metadata publication:",
       "test/durable-fs-faults.test.ts#P7",
-      "test/native-os-contracts.test.mjs#real OS: no-replace publication",
-      "test/native-os-contracts.test.mjs#real OS: permission failure",
-      "test/native-os-contracts.test.mjs#real OS: a concurrent directory-to-symlink"
+      "test/native-os-contracts.test.mjs#001. Real OS: no-replace publication has exactly one winner in cross-process races",
+      "test/native-os-contracts.test.mjs#008. Real OS: permission failure and a closed directory are errors, never empty observations",
+      "test/native-os-contracts.test.mjs#007. Real OS: a concurrent directory-to-symlink swap never writes outside the held root"
     ]
   },
   {
@@ -883,9 +1220,12 @@
       "packages/storage/src/cache-trees.ts#digestCacheTrees"
     ],
     "negativeTests": [
-      "test/restic-tar.test.mjs#dump",
-      "test/session-storage.test.mjs#session storage restores",
-      "test/session-storage.test.mjs#corrupted backup data"
+      "test/restic-tar.test.mjs#001. Dump verification consumes arbitrary chunk boundaries, bytes, links and complete EOF",
+        "test/restic-tar.test.mjs#002. Dump truncation, duplicate entries, content mutation and invalid metadata refuse reclamation",
+        "test/restic-tar.test.mjs#005. Dump hardlinks reject self, forward and cyclic references without verified file data",
+        "test/restic-tar.test.mjs#006. Dump hardlink chains resolve to verified regular data, including empty files",
+      "test/session-storage.test.mjs#001. Session storage restores Git index, local refs, dirty/ignored files, modes, links and runner history",
+      "test/session-storage.test.mjs#006. Corrupted backup data never replaces a partial cold cache"
     ]
   },
   {
@@ -909,14 +1249,14 @@
       "packages/tool-hashline/src/index.ts#registerHashlineTools"
     ],
     "negativeTests": [
-      "test/module-boundaries.test.mjs#DR41: module boundaries reject",
-      "test/module-boundaries.test.mjs#DR44: conversation and native lifecycle boundaries",
-      "test/native-path-view.test.mjs#PathView mounted:",
-      "test/native-path-view.test.mjs#PathView host:",
-      "test/native-path-view.test.mjs#PathView policy freezes",
-      "test/native-path-view.test.mjs#Mac PathView adapter requires",
-      "packages/tool-hashline/test/bundle.test.mjs#native logical inbox",
-      "test/resident-confinement.test.ts#PathView policy adapter keeps"
+      "test/module-boundaries.test.mjs#001. Module boundaries reject implementation imports including erased type edges",
+      "test/module-boundaries.test.mjs#002. Conversation and native lifecycle boundaries also reject erased, deferred and re-exported implementation imports",
+      "test/native-path-view.test.mjs#001. PathView mounted: one mapping covers paths, exact endpoints and session reversal",
+      "test/native-path-view.test.mjs#002. PathView host: one mapping covers paths, exact endpoints and session reversal",
+      "test/native-path-view.test.mjs#003. PathView policy freezes the session relation and admits no missing relay endpoint",
+      "test/native-path-view.test.mjs#004. Mac PathView adapter requires the decoded root-bound lease without changing physical paths",
+      "packages/tool-hashline/test/bundle.test.mjs#001. Native logical inbox uses the existing anchored read and preserves offset/limit without a root mount",
+      "test/resident-confinement.test.ts#017. PathView policy adapter keeps the issued spawn view for the returned session boundary"
     ]
   },
   {
@@ -930,10 +1270,10 @@
       "scripts/check-modules.mjs#moduleFindings"
     ],
     "negativeTests": [
-      "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
-      "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
-      "test/isolated-declarations.test.mjs#foreign declaration errors",
-      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent"
+      "test/workspace-boundaries.test.mjs#001. Workspace guard accepts declared public imports and rejects transitive and private imports",
+      "test/workspace-boundaries.test.mjs#003. Workspace guard includes type-only cycles and createRequire aliases",
+      "test/isolated-declarations.test.mjs#001. Foreign declaration errors never exempt broken authored declarations or missing imports",
+      "test/workspace-boundaries.test.mjs#008. Tool-files is independent of the SDK and application owners; consumers use its public API"
     ]
   },
   {
@@ -952,10 +1292,11 @@
       "packages/reconcile/src/index.ts#ReconcileModule.sweep"
     ],
     "negativeTests": [
-      "packages/process/test/coalesced-wake.test.mjs#hints during an active callback",
-      "packages/process/test/coalesced-wake.test.mjs#close leaves the active callback",
-      "test/mail-arrival-durability.test.mjs#native wake:",
-      "test/r37-recovery-observation.test.ts#R37: delayed recovery observation"
+      "packages/process/test/coalesced-wake.test.mjs#002. Hints during an active callback request exactly one fresh pass",
+      "packages/process/test/coalesced-wake.test.mjs#005. Close leaves the active callback owned until settlement and cancels its pending hint",
+      "test/mail-arrival-durability.test.mjs#002. Native wake: materialized hints run after commit and retain the original receipt",
+        "test/mail-arrival-durability.test.mjs#003. Native wake: rollback emits no materialized hint and preserves the accepted plan",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks"
     ]
   },
   {
@@ -970,7 +1311,7 @@
       "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
     ],
     "negativeTests": [
-      "packages/process/test/resident-supervisor.test.mjs#start-limit observation",
+      "packages/process/test/resident-supervisor.test.mjs#006. Resident policy: start-limit observation never settles an unknown launch command",
       "test/status-observation.test.ts#UNIT-006"
     ]
   },
@@ -991,15 +1332,15 @@
       "packages/tool-files/src/descriptor-files.ts#openAt"
     ],
     "negativeTests": [
-      "packages/tool-files/test/files.test.mjs#real held descriptors survive",
-      "packages/tool-files/test/files.test.mjs#the actual snapshot is declared",
+      "packages/tool-files/test/files.test.mjs#002. Real held descriptors survive a root rename; links cannot carry a tool write",
+      "packages/tool-files/test/files.test.mjs#003. The actual snapshot is declared before creation and removed after callback failure",
       "packages/tool-files/test/files.test.mjs#unqualified descriptor access refuses",
-      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
-      "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
-      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime",
-      "test/contained-tools.test.ts#G10-02 / P0: a hidden walker result bound",
-      "test/contained-tools.test.ts#G10-02: explicit fd limit zero",
-      "test/contained-tools.test.ts#G10-02: grep completion keeps"
+      "test/workspace-boundaries.test.mjs#008. Tool-files is independent of the SDK and application owners; consumers use its public API",
+      "test/contained-tools.test.ts#001. A write through a dangling link is refused and makes nothing outside the workspace",
+      "test/legacy-removals.test.mjs#003. The removed tool-runtime file implementation cannot return as a compatibility export",
+      "test/contained-tools.test.ts#017. A hidden walker result bound is not the answer -- find returns every path",
+      "test/contained-tools.test.ts#019. Explicit fd limit zero remains unlimited during complete rendering",
+      "test/contained-tools.test.ts#020. Grep completion keeps Pi's fractional limit and discards buffered excess"
     ]
   },
   {
@@ -1015,7 +1356,7 @@
       "packages/storage/src/execution-journal.ts#ExecutionJournal"
     ],
     "negativeTests": [
-      "test/native-process-scope.test.mjs#native scope: cancellation after witness publication"
+      "test/native-process-scope.test.mjs#003. Native scope: cancellation after witness publication cannot release the blocked init"
     ]
   },
   {
@@ -1032,7 +1373,7 @@
       "packages/native/src/pid-namespace.ts#pinNamespaceInit"
     ],
     "negativeTests": [
-      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL"
+      "test/native-process-scope.test.mjs#007. Native recovery: real owner SIGKILL at"
     ]
   },
   {
@@ -1050,15 +1391,18 @@
       "apps/oma/src/entry/broker.ts#main"
     ],
     "negativeTests": [
-      "packages/process/test/resident-supervisor.test.mjs#stop",
-      "test/native-git-execution.test.mjs#native quarantine",
-      "test/native-resident-runtime.test.mjs#Resident close",
-      "test/scenario-society.test.ts#NATIVE-SCN-01",
-      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-ISOLATION-01",
-      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-STATUS-01",
-      "test/status-observation.test.ts#AV9",
-      "test/phase4.test.ts#T38",
-      "test/phase4.test.ts#V25A"
+      "packages/process/test/resident-supervisor.test.mjs#001. Resident policy: inactive status and completed stop commands cannot replace descendant death proof",
+        "packages/process/test/resident-supervisor.test.mjs#003. Resident policy: multiple stop failures retain every primary in their physical order",
+      "test/native-git-execution.test.mjs#007. Native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+        "test/native-git-execution.test.mjs#008. Native quarantine: explicit view preserves quoted Unicode and newline canonical paths with real prerequisites",
+        "test/native-git-execution.test.mjs#009. Native quarantine: a real live scope between phases retains staging and prevents promotion until scope death",
+      "test/native-resident-runtime.test.mjs#002. Resident close coalesces, joins every actual scope and permanently closes start admission",
+      "test/scenario-society.test.ts#012. Accepted creation starts its first real Resident without a manual activation",
+      "test/native-resident-runtime.test.mjs#006. Equal actor names in independent owners cannot reach each other’s actual scope",
+      "test/native-resident-runtime.test.mjs#004. An empty recovered slot never reports exit zero as an observed execution",
+      "test/status-observation.test.ts#003. Principal status never borrows a Resident's idle or exit-zero observation",
+      "test/phase4.test.ts#002. Stopped actor with an unconfirmed stale scope cannot start; incarnation unchanged",
+      "test/phase4.test.ts#013. Start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can"
     ]
   },
   {
@@ -1083,12 +1427,12 @@
       "packages/platform-mac/src/audit-peer.ts#bindMachSender"
     ],
     "negativeTests": [
-      "test/native-credential-stream.test.mjs#credential stream: live connector",
-      "test/native-unix-message.test.mjs#recvmsg actual ABI",
-      "test/packet-stream.test.ts#packet stream refuses a foreign EOF",
-      "test/packet-stream.test.ts#packet write failure settles",
-      "test/packet-stream.test.ts#packet close waits for asynchronous resource return",
-      "test/packet-stream.test.ts#packet asynchronous cleanup rejection preserves",
+      "test/native-credential-stream.test.mjs#003. Credential stream: live connector and pre-existing sibling transfer, queued prefix=",
+      "test/native-unix-message.test.mjs#001. Recvmsg actual ABI and delivered forbidden SCM_RIGHTS return every duplicated descriptor",
+      "test/packet-stream.test.ts#002. Packet stream refuses a foreign EOF before delivering end",
+      "test/packet-stream.test.ts#004. Packet write failure settles its callback and preserves cleanup failure",
+      "test/packet-stream.test.ts#005. Packet close waits for asynchronous resource return before close",
+      "test/packet-stream.test.ts#007. Packet asynchronous cleanup rejection preserves the pending write error",
       "test/fixtures/darwin-mach-stream.mjs#handoff",
       "test/fixtures/darwin-mach-stream.mjs#stale",
       "test/fixtures/darwin-mach-stream.mjs#asyncAudit"
@@ -1107,7 +1451,8 @@
       "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan"
     ],
     "negativeTests": [
-      "test/persisted-state-fuzz.test.ts#persisted"
+      "test/persisted-state-fuzz.test.ts#005. Fuzz persisted version classifier: unknown formats stay unknown and are never upgraded",
+        "test/persisted-state-fuzz.test.ts#007. Fuzz raw persisted row: a fuzzed plan_json leaves the database bytes untouched"
     ]
   },
   {
@@ -1123,7 +1468,8 @@
       "packages/process/src/resident-logs.ts#residentLogView"
     ],
     "negativeTests": [
-      "packages/process/test/resident-logs.test.mjs#Resident log view"
+      "packages/process/test/resident-logs.test.mjs#002. Resident log view joins UTF-8 only within the same invocation, incarnation and stream",
+        "packages/process/test/resident-logs.test.mjs#003. Resident log view bounds UTF-8 bytes and preserves incomplete observations"
     ]
   },
   {
@@ -1140,10 +1486,13 @@
       "packages/git/src/candidate-check.ts#executeCandidateCheck"
     ],
     "negativeTests": [
-      "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
-      "test/candidate-checks.test.ts#INT-007/P0-1",
-      "test/candidate-checks.test.ts#INT-007/P0-5",
-      "test/r36-parser-fuzz.test.ts#R36"
+      "test/native-git-execution.test.mjs#005. Native candidate: revocation after exact checkout refuses the final exec gate",
+      "test/candidate-checks.test.ts#004. Current authority refusal prevents private gate release",
+      "test/candidate-checks.test.ts#005. Incomplete EOF stays poisoned and cannot later authorize exec",
+      "test/r36-parser-fuzz.test.ts#001. Parser corpus fixes independent golden outputs and fatal error behavior",
+        "test/r36-parser-fuzz.test.ts#002. Parser fuzz seed=",
+        "test/r36-parser-fuzz.test.ts#003. Durable decoders reject one-field mutations after a valid control",
+        "test/r36-parser-fuzz.test.ts#004. Parser mutation sentinel redetects duplicate-key acceptance from the saved corpus"
     ]
   },
   {
@@ -1162,11 +1511,13 @@
       "packages/broker/src/lifetime.ts#BrokerLifetime"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native Darwin",
+      "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
       "test/launch-location.test.ts#NATIVE-TOPO-01",
-      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL",
-      "test/rollover-settlement.test.ts#V07B",
-      "packages/broker/test/native-lifetime.test.mjs#native shutdown"
+      "test/native-process-scope.test.mjs#007. Native recovery: real owner SIGKILL at",
+      "test/rollover-settlement.test.ts#004. Unavailable or conflicting receipt evidence opens no run, keeps the evidence and changes no incarnation",
+        "test/rollover-settlement.test.ts#005. A failure at the incarnation commit leaves the settled batch settled and no live lease",
+      "packages/broker/test/native-lifetime.test.mjs#001. Native shutdown refusal retains Store and lock (synchronous=",
+        "packages/broker/test/native-lifetime.test.mjs#002. Native shutdown waits for scope proof before closing Store and lock"
     ]
   },
   {
@@ -1182,11 +1533,24 @@
       "packages/protocol/src/frame.ts#parseJsonObject"
     ],
     "negativeTests": [
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-02",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-03",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-04",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-05",
-      "packages/platform-mac/test/keychain-client-ownership.test.mjs#Keychain client:"
+      "packages/platform-mac/test/keychain-channel.test.mjs#002. Real socket",
+      "packages/platform-mac/test/keychain-channel.test.mjs#003. Real socket",
+      "packages/platform-mac/test/keychain-channel.test.mjs#004. Real timeout ends correlation and rejects other pending work",
+      "packages/platform-mac/test/keychain-channel.test.mjs#005. Retired VM operations write no request and cannot reach the helper",
+      "packages/platform-mac/test/keychain-client-ownership.test.mjs#001. Keychain client: fixed installation path, no PATH lookup",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#002. Keychain client: only get/put requests; fragmented UTF-8 responses retain correlation",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#003. Keychain client:",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#004. Keychain client: invalid response",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#005. Keychain client: locked Keychain rejects without printing the helper response",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#006. Keychain client: oversized",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#007. Keychain client: several individually bounded responses in one read are accepted",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#008. Keychain client: oversized outgoing credential is refused before any write",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#009. Keychain client:",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#010. Keychain client: failed",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#011. Keychain client: synchronous spawn failure has no acquired child to abandon",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#012. Keychain client: fenced writer",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#013. Keychain client: a request the helper never answers ends within its deadline, and the untrusted channel with it",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#014. Keychain client: a wedged close ends the child rather than waiting on it forever"
     ]
   },
   {
@@ -1206,9 +1570,12 @@
       "packages/broker/src/index.ts#Broker.drainAndClose"
     ],
     "negativeTests": [
-      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
-      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
-      "test/status-responsiveness.test.ts#V23A"
+      "test/status-responsiveness.test.ts#005. Mutation hints share one active publication and one fresh follow-up",
+      "test/status-responsiveness.test.ts#006. Shutdown joins a held publication before Store close",
+      "test/status-responsiveness.test.ts#001. Concurrent status reads and mutations keep the broker responsive with bounded observation",
+        "test/status-responsiveness.test.ts#002. Status of a society with hundreds of pending messages is one bounded read",
+        "test/status-responsiveness.test.ts#003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands",
+        "test/status-responsiveness.test.ts#004. A failed observation is published as unknown with its time, not as an empty or idle society"
     ]
   },
   {
@@ -1226,9 +1593,12 @@
       "packages/broker/src/index.ts#Broker.drainAndClose"
     ],
     "negativeTests": [
-      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-01",
-      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-02",
-      "test/status-responsiveness.test.ts#V23A"
+      "test/status-responsiveness.test.ts#007. A completed mutation gives the event loop a turn before its reply",
+      "test/status-responsiveness.test.ts#008. Admission closing during the turn cannot reinterpret the accepted result",
+      "test/status-responsiveness.test.ts#001. Concurrent status reads and mutations keep the broker responsive with bounded observation",
+        "test/status-responsiveness.test.ts#002. Status of a society with hundreds of pending messages is one bounded read",
+        "test/status-responsiveness.test.ts#003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands",
+        "test/status-responsiveness.test.ts#004. A failed observation is published as unknown with its time, not as an empty or idle society"
     ]
   },
   {
@@ -1244,9 +1614,14 @@
       "apps/oma/src/application/exit.ts#fail"
     ],
     "negativeTests": [
-      "test/native-error-presentation.test.ts#Native errors",
-      "test/native-error-presentation.test.ts#Native CLI failure",
-      "test/session-history.test.ts#Session history"
+      "test/native-error-presentation.test.ts#001. Native errors retain paths, errno names, and authored non-English text",
+      "test/native-error-presentation.test.ts#003. Native CLI failure reaches stderr even with the obsolete environment present",
+      "test/session-history.test.ts#001. Session history:",
+        "test/session-history.test.ts#002. Session history: engine-owned version",
+        "test/session-history.test.ts#003. Session history: header bound does not limit the engine-owned conversation",
+        "test/session-history.test.ts#004. Session history: missing, directory and symlink are not repaired or imported",
+        "test/session-history.test.ts#005. Session history:",
+        "test/session-history.test.ts#006. Session history: unsupported header version"
     ]
   },
   {
@@ -1263,10 +1638,11 @@
       "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.requireRunnerPeer"
     ],
     "negativeTests": [
-      "test/runner-channel.test.ts#Native runner rejects",
-      "test/runner-channel.test.ts#RUN-001",
-      "test/host-entry.test.ts#runner execution identity cannot be missing",
-      "test/launch-topology.test.ts#NATIVE-TOPO-02"
+      "test/runner-channel.test.ts#003. Native runner rejects missing or malformed explicit execution identity",
+      "test/runner-channel.test.ts#001. Broker EOF, malformed reply and local stop settle all pending calls",
+        "test/runner-channel.test.ts#002. A prepared handoff requires an explicitly configured Pi adapter",
+      "test/host-entry.test.ts#003. Runner execution identity cannot be missing, repeated or supplied by ambient state",
+      "test/launch-topology.test.ts#002. Actual broker entry starts its runner and recovers a witnessed scope after SIGKILL"
     ]
   },
   {
@@ -1280,10 +1656,10 @@
       "packages/file-descriptors/src/index.ts#openAt"
     ],
     "negativeTests": [
-      "test/workspace-boundaries.test.mjs#NATIVE-025",
-      "test/surface-rules.test.mjs#NATIVE-025",
-      "test/native-os-contracts.test.mjs#real OS: directory cursors",
-      "packages/tool-files/test/files.test.mjs#snapshot walking excludes links"
+      "test/workspace-boundaries.test.mjs#009. Only the descriptor adapter reaches the standalone leaf; the leaf cannot borrow runtime owners",
+      "test/surface-rules.test.mjs#002. The descriptor leaf closure is traversed, not exempted by its public import",
+      "test/native-os-contracts.test.mjs#005. Real OS: directory cursors cover multiple buffers and leave no descriptor behind on repeated use",
+      "packages/tool-files/test/files.test.mjs#004. Snapshot walking excludes links and cleanup does not follow a planted directory link"
     ]
   }
 ]

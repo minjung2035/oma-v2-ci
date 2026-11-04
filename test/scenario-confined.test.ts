@@ -2,12 +2,12 @@
  *
  * The society declares its generated rootfs, so the product's runner starts a
  * Resident's engine under bubblewrap exactly as a deployment does: the
- * trusted extension, bash, the `oma` CLI on the pinned Node, no network, and
+ * trusted extension and bash, no network, and
  * the provider reached only through the runner's relay, which swaps the
  * placeholder the sandbox holds for the key. The scripted provider speaks
  * TLS as one of the engine's own catalogue providers (fixtures/
  * scripted-provider.ts), and the broker has its Git module, so a Resident's
- * commit, `oma submit` and `oma merge open` run through quarantine, review
+ * commit, typed candidate publication and merge open run through quarantine, review
  * and CAS. Not provider evidence (P0-5; INF-001).
  */
 import test from "node:test";
@@ -17,7 +17,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { SCRIPTED_KEY, call, continuesTurn, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
-import { projectGitPathAt } from "@oma/domain/paths";
+import { projectGitPathAt, collaborationRecordRootPathAt } from "@oma/domain/paths";
 import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "#oma-test/app/application/settings";
 
 import { RESIDENT_TEST_OPTIONS as OPTIONS } from "./fixtures/resident.js";
@@ -26,44 +26,52 @@ const lastResult = (request: ChatRequest | undefined): string => toolResults(req
 const git = (s: Scenario, ...args: string[]): string => execFileSync("git", ["--git-dir", projectGitPathAt(s.root), ...args], { encoding: "utf8" }).trim();
 const bash = (command: string) => tools(call("bash", { command }));
 const receiptIn = (result: string): { operation: string; state: string; result?: Record<string, string> } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at, result.lastIndexOf("}") + 1)) as { operation: string; state: string; result?: Record<string, string> };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.invocation.key, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 async function assign(s: Scenario, to: string, body: string, key: string): Promise<string> {
-  const principal = s.store.getAgent("principal")!;
-  const sent = await s.broker.dispatch({ actor: "principal", incarnation: principal.incarnation, role: "principal", channel: "actor",
-    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } },
-  { v: 1, id: key, method: "mail.send", request: key, params: { to: [to], subject: "작업", kind: "message", body } } as never, null) as { ok: boolean; result: { result: { message: string } } };
+  const sent = await s.residentSends("principal", { to: [to], subject: "작업", body }, key) as { ok: boolean; result: { result: { message: string } } };
   assert.equal(sent.ok, true, JSON.stringify(sent));
   return sent.result.result.message;
 }
 const COMMIT = "cd /workspace && echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix";
 
-test("SCN-C01: a confined Resident commits and submits; the candidate is published, and the Principal gets the result mail", OPTIONS, async () => {
+test("001. A confined Resident commits and submits; the candidate is published, and the Principal gets the result mail", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "fix.txt를 만들어 제출하세요.", "c01");
-    s.script(request => (continuesTurn(request) ? text("제출했습니다.")
-      : bash(`${COMMIT} && oma submit HEAD --to principal --subject '수정 제출' --request sub-c01`)));
+    s.script([
+      tools(call("bash", { command: COMMIT })),
+      tools(call("oma_send", { to: ["principal"], subject: "수정 제출", content: { kind: "text", value: "수정했습니다." }, attachments: [{ commit: "HEAD" }] })),
+      text("제출했습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const receipt = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body));
+    const receipt = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body));
     assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
-    const published = receipt.result!.publishedRef!;
+    const sent = s.store.getOperationById(s.operations("worker-a").find(row => row.kind === "mail.send")!.id)!;
+    assert.equal(sent.kind, "mail.send");
+    const source = sent.plan.attachments!.sources[0]!;
+    const published = source.publishedRef;
     assert.match(published, /^refs\/oma\/published\/worker-a\//);
-    assert.equal(git(s, "rev-parse", published), receipt.result!.candidate);
+    assert.equal(git(s, "rev-parse", published), source.commit);
     assert.equal(git(s, "show", `${published}:fix.txt`), "fixed");
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "git.submit").length, 1);
-    // The result mail tells the Principal how to fetch it (CLI-002).
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "mail.send").length, 1);
+    // The result mail tells the Principal how to fetch the published candidate.
     const [result] = s.inbox("principal");
     assert.ok(result, "the Principal got no result mail");
-    s.script(request => (continuesTurn(request) ? text("제출을 확인했습니다.") : tools(call("oma_mail_read", { messageId: result! }))));
+    const principalRecords = collaborationRecordRootPathAt(s.root, "principal");
+    s.script([tools(call("read", { path: join(principalRecords, "mail/messages", `${result}.md`) })),
+      tools(call("read", { path: join(principalRecords, "mail/metadata", `${result}.json`) })), text("제출을 확인했습니다.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    assert.ok(lastResult(s.provider.seen.at(-1)!.body).includes(published), "the result mail does not name the published ref");
+    const observed = toolResults(s.provider.seen.at(-1)!.body).slice(-2);
+    assert.ok(observed[0]!.text.includes("수정했습니다"), "the result mail body was not readable");
+    assert.ok(observed[1]!.text.includes(published), "the permitted immutable attachment metadata must name its publication");
   });
 });
 
-test("SCN-C02: inside the sandbox the provider key is only a placeholder; the relay hands the provider the real one", OPTIONS, async () => {
+test("002. Inside the sandbox the provider key is only a placeholder; the relay hands the provider the real one", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "환경을 확인하세요.", "c02");
     s.script(request => (continuesTurn(request) ? text("확인했습니다.") : bash("env; cat ~/.pi/agent/models.json 2>&1; ls / /workspace")));
@@ -80,34 +88,42 @@ test("SCN-C02: inside the sandbox the provider key is only a placeholder; the re
   });
 });
 
-test("SCN-C03: submitting the same request twice publishes one candidate under one operation", OPTIONS, async () => {
+test("003. Two distinct sends of the same commit preserve its original publication provenance", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "두 번 제출해 보세요.", "c03");
-    const submit = "oma submit HEAD --to principal --subject '반복' --request sub-c03";
-    s.script((request, index) => (index === 0 ? bash(`${COMMIT} && ${submit} && ${submit}`) : text("두 번 불렀습니다.")));
+    const submit = { to: ["principal"], subject: "반복", content: { kind: "text", value: "같은 후보입니다." }, attachments: [{ commit: "HEAD" }] };
+    s.script([
+      tools(call("bash", { command: COMMIT })),
+      tools(call("oma_send", submit, "submit-first")),
+      tools(call("oma_send", submit, "submit-repeat")),
+      text("두 번 불렀습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const results = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
-    const operations = [...results.matchAll(/"operation":"(op-[0-9a-f-]+)"/g)].map(match => match[1]);
-    assert.equal(operations.length, 2, results);
-    assert.equal(operations[0], operations[1], "the repeat was a second operation");
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "git.submit").length, 1);
+    const resident = s.provider.seen.filter(entry => isResident(entry.body));
+    const first = receiptIn(lastResult(resident[2]!.body));
+    const repeated = receiptIn(lastResult(resident[3]!.body));
+    assert.equal(first.state, "succeeded", JSON.stringify(first));
+    assert.equal(repeated.state, "succeeded");
+    assert.notEqual(repeated.operation, first.operation, "a distinct original Pi call is a distinct intentional send");
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "mail.send").length, 2);
     assert.equal(git(s, "for-each-ref", "refs/oma/published/").split("\n").filter(Boolean).length, 1);
-    assert.equal(s.inbox("principal").length, 1, "the Principal was told twice");
+    assert.equal(s.inbox("principal").length, 2, "both intentional sends must reach the recipient");
   });
 });
 
-test("SCN-C04: a Resident's LOW merge request applies itself; main moves exactly to its candidate", OPTIONS, async () => {
+test("004. A Resident's LOW merge request applies itself; main moves exactly to its candidate", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const before = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "제출하고 통합하세요.", "c04");
-    s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && echo 통합 > /tmp/reason.md && oma merge open --tier LOW --title 통합 --file /tmp/reason.md --request mrg-c04`);
-      return text("통합했습니다.");
-    });
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge", { change: { candidate: "HEAD" }, tier: "LOW", title: "통합", reason: "통합" })),
+      text("통합했습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const opened = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body));
+    const opened = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body));
     assert.equal(opened.state, "succeeded", JSON.stringify(opened));
     const candidate = git(s, "for-each-ref", "--format=%(objectname)", "refs/oma/published/");
     assert.equal(git(s, "rev-parse", "refs/heads/main"), candidate, "main did not move to the candidate");
@@ -116,63 +132,71 @@ test("SCN-C04: a Resident's LOW merge request applies itself; main moves exactly
   });
 });
 
-test("SCN-C05: a merge open on a base main has left is refused with the actual main, and changes nothing", OPTIONS, async () => {
+test("005. A proposal on an earlier base is accepted and its changed integration context requires review", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "지난 기준으로 통합해 보세요.", "c05");
-    s.script((request, index) => {
-      // The workspace's origin/main stays at the fetched base; after the first
-      // request applies, opening on it is stale.
-      if (index === 0) return bash(`${COMMIT} && echo 첫번째 > /tmp/r1.md && oma merge open --tier LOW --title 첫번째 --file /tmp/r1.md --request mrg-c05a`);
-      if (index === 1) return bash(`${COMMIT.replace("echo fixed", "echo second")} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
-      return text("거절됐습니다.");
-    });
+    // The workspace's origin/main stays at the fetched base; after the first
+    // request applies, the second proposal retains that original base.
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge", { change: { candidate: "HEAD" }, tier: "LOW", title: "첫번째", reason: "첫번째" })),
+      bash(COMMIT.replace("echo fixed", "echo second")),
+      tools(call("oma_merge", { change: { candidate: "HEAD", base: "refs/remotes/origin/main" }, tier: "LOW", title: "두번째", reason: "두번째" })),
+      text("통합 문맥 검토가 필요합니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
-    assert.match(refused, /STALE_BASE/, refused);
-    assert.match(refused, /exit=2/, "a refused open did not exit as a settled failure (CLI-003)");
+    const resident = s.provider.seen.filter(entry => isResident(entry.body));
+    const opened = receiptIn(lastResult(resident[2]!.body));
+    assert.equal(opened.state, "succeeded", JSON.stringify(opened));
+    const second = receiptIn(lastResult(resident[4]!.body));
+    assert.equal(second.state, "succeeded", JSON.stringify(second));
     const after = git(s, "rev-parse", "refs/heads/main");
     assert.notEqual(after, main, "the first LOW merge should have applied");
-    assert.equal(s.operations("worker-a").filter(row => row.kind === "attest.record" && row.state === "succeeded").length, 1,
-      "only the fresh request was accepted");
+    const integrated = s.operations("worker-a").filter(row => row.kind === "git.integrate" && row.state === "succeeded");
+    assert.equal(integrated.length, 1, "the changed integration context cannot apply without review");
+    const openedFacts = s.operations("worker-a").filter(row => row.kind === "attest.record" && row.state === "succeeded" &&
+      s.store.getOperationById(row.id)?.kind === "attest.record");
+    assert.equal(openedFacts.filter(row => { const op = s.store.getOperationById(row.id); return op?.kind === "attest.record" && op.plan.fact.kind === "merge.open"; }).length, 2, "both proposals are accepted independently of current main");
   });
 });
 
-test("SCN-C06: the Principal publishes the shared context; a confined Resident reads it from /world", OPTIONS, async () => {
+test("006. The Principal publishes the shared context; a confined Resident reads it from /world", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const goal = "# 목표\n로그인 오류를 없앤다.\n";
     s.script(request => (continuesTurn(request) ? text("게시했습니다.")
-      : tools(call("oma_mail_send", { to: ["residents"], subject: "Goal", body: goal, intent: "goal", expectedRevision: "none", request: "ctx-1" }))));
+      : tools(call("oma_goal", { content: { kind: "text", value: goal }, expectedRevision: null }, "ctx-1"))));
     await s.prompt("목표를 게시해");
     const published = receiptIn(lastResult(s.provider.seen[1]!.body));
     assert.equal(published.state, "succeeded", JSON.stringify(published));
     await assign(s, "worker-a", "목표를 읽으세요.", "c06");
-    s.script(request => (continuesTurn(request) ? text("읽었습니다.") : bash("cat /world/context/current/GOAL.md")));
+    s.script(request => (continuesTurn(request) ? text("읽었습니다.") : tools(call("read", { path: "/oma/goal/GOAL.md" }))));
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /로그인 오류를 없앤다/);
   });
 });
 
-test("SCN-C07: without git.submit a Resident's merge open is refused and main does not move (AUTH-001)", OPTIONS, async () => {
+test("007. Without git.submit a Resident's merge open is refused and main does not move (AUTH-001)", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true, submit: false }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "통합해 보세요.", "c07");
-    s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && echo 이유 > /tmp/r.md && oma merge open --tier LOW --title 통합 --file /tmp/r.md --request mrg-c07; echo "exit=$?"`);
-      return text("권한이 없습니다.");
-    });
+    s.script([
+      bash(COMMIT),
+      tools(call("oma_merge", { change: { candidate: "HEAD" }, tier: "LOW", title: "통합", reason: "이유" })),
+      text("권한이 없습니다."),
+    ]);
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
+    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
     assert.match(refused, /CAPABILITY_DENIED/, refused);
-    assert.match(refused, /exit=2/);
     assert.equal(git(s, "rev-parse", "refs/heads/main"), main);
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "git.integrate").length, 0);
   });
 });
 
-test("SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox filter (the program vsock-seccomp holds to refusing vsock)", OPTIONS, async () => {
+test("008. A confined Resident's shell runs under the sandbox filter (the program vsock-seccomp holds to refusing vsock)", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     await assign(s, "worker-a", "필터를 확인하세요.", "c08");
     s.script(request => {
@@ -188,7 +212,7 @@ test("SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox f
   });
 });
 
-test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident through the read-only mirror, which it submits by the existing path", OPTIONS, async () => {
+test("009. The human's later commit reaches a confined Resident through the read-only mirror, which it submits by the existing path", OPTIONS, async () => {
   const { refreshProjectMirror } = await import("#oma-test/app/runtime/provision");
   const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -204,16 +228,23 @@ test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident
       const commit = execFileSync("git", ["-C", human, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
       assert.equal(refreshProjectMirror(s.root, human), null);
       await assign(s, "worker-a", "사람의 새 커밋을 가져와 제출하세요.", "c09");
-      s.script(request => (continuesTurn(request) ? text("제출했습니다.")
-        : bash("cd /workspace && git fetch -q /git/project-mirror.git main:refs/heads/human && git log -1 --format=%s human && oma submit human --to principal --subject '사람 커밋' --request sub-c09")));
+      s.script([
+        tools(call("bash", { command: "cd /workspace && git fetch -q /git/project-mirror.git main:refs/heads/human && git log -1 --format=%s human" }, "fetch-human")),
+        tools(call("oma_send", { to: ["principal"], subject: "사람 커밋", content: { kind: "text", value: "사람의 새 커밋입니다." }, attachments: [{ commit: "human" }] })),
+        text("제출했습니다."),
+      ]);
       const run = await s.activate("worker-a");
       assert.equal(run.code, 0, run.stderr);
-      const result = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
-      assert.match(result, /human work/, `the Resident did not see the human's commit: ${result.slice(0, 300)}`);
-      const receipt = receiptIn(result);
+      const resident = s.provider.seen.filter(entry => isResident(entry.body));
+      const fetched = toolResults(resident[1]!.body).find(result => result.id === "fetch-human")!.text;
+      assert.match(fetched, /human work/, `the Resident did not see the human's commit: ${fetched.slice(0, 300)}`);
+      const receipt = receiptIn(lastResult(resident[2]!.body));
       assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
-      assert.equal(receipt.result!.candidate, commit, "the submitted candidate is not the human's commit");
-      assert.equal(git(s, "show", `${receipt.result!.publishedRef!}:human.txt`), "from the human");
+      const sent = s.store.getOperationById(s.operations("worker-a").find(row => row.kind === "mail.send")!.id)!;
+      assert.equal(sent.kind, "mail.send");
+      const source = sent.plan.attachments!.sources[0]!;
+      assert.equal(source.commit, commit, "the submitted candidate is not the human's commit");
+      assert.equal(git(s, "show", `${source.publishedRef}:human.txt`), "from the human");
       // The mirror is read-only inside: the sandbox's view of it cannot be written.
       assert.notEqual(git(s, "rev-parse", "refs/heads/main"), commit, "the canonical main moved without an integration (MAC-411)");
     } finally { rmSync(human, { recursive: true, force: true }); }
@@ -223,7 +254,7 @@ test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident
 // The store as the engine's package manager leaves it on Linux, and as the
 // macOS engine keeps it: a link to the generation the Mac's packages arrived as.
 for (const layout of ["directory", "link"] as const)
-test(`SCN-C10 / DR25: a confined Resident's engine loads an installed package's extension from the read-only store (${layout}), and sees nothing else of the Human's`, OPTIONS, async () => {
+test(`010. A confined Resident's engine loads an installed package's extension from the read-only store (${layout}), and sees nothing else of the Human's`, OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     // The store beside every session, and the engine home beside it.
     const packages = join(dirname(s.root), ".packages");
@@ -231,7 +262,7 @@ test(`SCN-C10 / DR25: a confined Resident's engine loads an installed package's 
     if (layout === "link") { mkdirSync(files, { recursive: true }); symlinkSync(`.packages-generations/p-${"b".repeat(64)}`, packages); }
     const entry = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
     mkdirSync(join(files, dirname(entry.slice("packages:".length))), { recursive: true });
-    writeFileSync(join(files, entry.slice("packages:".length)), "export default function (pi) {\n  pi.registerTool({ name: \"hello_ext\", label: \"hello\", " +
+    writeFileSync(join(files, entry.slice("packages:".length)), "import { writeFileSync } from 'node:fs';\nexport default function (pi) {\n  pi.on(\"session_start\", () => writeFileSync(\"extension-loaded.txt\", \"loaded\"));\n  pi.registerTool({ name: \"hello_ext\", label: \"hello\", " +
       "description: \"Say hello from an installed package.\", parameters: { type: \"object\", properties: {} },\n" +
       "    async execute() { return { content: [{ type: \"text\", text: \"hello\" }], details: {} }; } });\n}\n");
     mkdirSync(join(dirname(s.root), ".engine"), { recursive: true });
@@ -244,16 +275,21 @@ test(`SCN-C10 / DR25: a confined Resident's engine loads an installed package's 
     commitRoleSet(inline.snapshot!, inline.config, { ...roles, [worker]: { ...roles[worker]!, extensions: [...roles[worker]!.extensions, entry] } });
     await s.restartBroker();
     await assign(s, "worker-a", "설치된 확장을 확인하세요.", "c10");
-    s.script(request => (continuesTurn(request) ? text("확인했습니다.")
-      : bash("test -f /opt/oma-packages/npm/node_modules/oma-hello-ext/extensions/hello.ts && echo store-visible; " +
+    s.script((request, index) => {
+      const offered = (request.tools ?? []).map(tool => tool.function?.name);
+      assert.ok(offered.includes("hello_ext"), "a verified direct user extension must stay callable");
+      assert.ok(!offered.includes("toolset"));
+      return index === 0 ? tools(call("hello_ext", {}, "installed-hello"), call("bash", { command: "cat extension-loaded.txt; test -f /opt/oma-packages/npm/node_modules/oma-hello-ext/extensions/hello.ts && echo store-visible; " +
         "touch /opt/oma-packages/x 2>/dev/null && echo store-writable || echo store-read-only; " +
-        "grep -c '[.]engine' /proc/self/mountinfo || true")));
+        "grep -c '[.]engine' /proc/self/mountinfo || true" }, "installed-containment")) : text("확인했습니다.");
+    });
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const requests = s.provider.seen.filter(item => isResident(item.body));
-    assert.ok((requests[0]!.body.tools ?? []).some(tool => tool.function?.name === "hello_ext"),
-      "the confined engine did not show the installed extension's tool");
-    const said = lastResult(requests[1]!.body);
+    const results = toolResults(requests[1]!.body);
+    assert.equal(results.find(result => result.id === "installed-hello")?.text, "hello");
+    const said = results.find(result => result.id === "installed-containment")?.text ?? "";
+    assert.match(said, /loaded/);
     assert.match(said, /store-visible/);
     assert.match(said, /store-read-only/);
     assert.match(said.trim().split("\n").at(-1) ?? "", /^0$/, `the Human's login is visible inside: ${said}`);

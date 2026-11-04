@@ -43,14 +43,14 @@ function analyze({ count = 2, plan, entries, omitPlan = false, omitRegistry = fa
 }
 
 for (const count of [1, 2, 11, 12]) {
-  test(`P1 operation registry: a matching closed set of ${count} kinds is independent of count`, () => {
+  test(`001. Operation registry: a matching closed set of ${count} kinds is independent of count`, () => {
     const result = analyze({ count, typed: true });
     assert.deepEqual(result.diagnostics, []);
     assert.deepEqual(result.findings, []);
   });
 }
 
-test("P1 operation registry: missing and extra keys fail closed", () => {
+test("002. Operation registry: missing and extra keys fail closed", () => {
   for (const count of [1, 2, 12]) {
     const entries = Array.from({ length: count - 1 }, (_, index) =>
       `"fixture.operation${index}": { planCheck() {}, resultCheck() {}, relationsCheck() {} }`).join(", ");
@@ -60,7 +60,7 @@ test("P1 operation registry: missing and extra keys fail closed", () => {
   assert.ok(analyze({ count: 1, entries: extra }).findings.length > 0);
 });
 
-test("P1 operation registry: each codec field must remain callable", () => {
+test("003. Operation registry: each codec field must remain callable", () => {
   const fields = ["planCheck", "resultCheck", "relationsCheck"];
   for (const field of fields) {
     for (const missing of [true, false]) {
@@ -71,7 +71,7 @@ test("P1 operation registry: each codec field must remain callable", () => {
   }
 });
 
-test("P1 operation registry: missing, empty and nonliteral plan domains are not closed sets", () => {
+test("004. Operation registry: missing, empty and nonliteral plan domains are not closed sets", () => {
   for (const fixture of [
     { omitPlan: true }, { omitRegistry: true }, { plan: "never", entries: "" },
     { plan: "{ kind: string }" },
@@ -81,7 +81,7 @@ test("P1 operation registry: missing, empty and nonliteral plan domains are not 
   ]) assert.ok(analyze(fixture).findings.length > 0, JSON.stringify(fixture));
 });
 
-test("P1 operation registry: compiler rejects a new kind without its codec and accepts complete coverage", () => {
+test("005. Operation registry: compiler rejects a new kind without its codec and accepts complete coverage", () => {
   const missing = analyze({ count: 12, entries: '"fixture.operation0": { planCheck() {}, resultCheck() {}, relationsCheck() {} }', typed: true });
   assert.ok(missing.diagnostics.some(message => message.includes("missing") || message.includes("does not satisfy")));
   assert.deepEqual(analyze({ count: 12, typed: true }).diagnostics, []);

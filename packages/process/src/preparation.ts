@@ -1,5 +1,5 @@
 import { StoreError } from "@oma/domain/errors";
-import { startProcess } from "./async.js";
+import { startProcess, type AsyncProcessOptions } from "./async.js";
 import { snapshotCommand, type CommandSpec, type ProcessObservation } from "./command.js";
 
 // Process-lifetime accounting only: no new queue, sidecar, worker DB or daemon.
@@ -8,6 +8,15 @@ import { snapshotCommand, type CommandSpec, type ProcessObservation } from "./co
 // barrier's evidence that descendant quiescence was never proven -- until its
 // owner re-observes the prepared state quiescent (reverifyStale), which is
 // the authoritative startup recovery in this process's lifetime.
+export interface PreparationPlacement { placementFd: number; close(): void }
+let placementFactory: (() => PreparationPlacement | undefined) | undefined;
+/** Installed by one broker lifetime, never inferred from inherited environment. */
+export function configurePreparationPlacement(factory: () => PreparationPlacement | undefined): () => void {
+  if (placementFactory !== undefined) throw new StoreError("INTERNAL_ERROR", "preparation workload owner is already configured");
+  placementFactory = factory;
+  return () => { if (placementFactory === factory) placementFactory = undefined; };
+}
+export function acquirePreparationPlacement(): PreparationPlacement | undefined { return placementFactory?.(); }
 const nativeClosures = new Set<Promise<void>>();
 /** A direct execution owner resolves only after its independent scope proof
  * and cleanup. A rejected closure stays a shutdown fence for this process. */
@@ -54,17 +63,20 @@ export class PreparationExecutor {
     if (observed === "quiescent") { this.uncertain = false; unprovenPreparations.delete(this); }
     return observed;
   }
-  async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = []): Promise<ProcessObservation> {
+  async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = [], sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink"> = {}): Promise<ProcessObservation> {
     const command = snapshotCommand(source);
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");
     if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "preparation requires the existing Linux process model");
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation was cancelled before child creation");
     this.active = true;
     try {
-      const task = startProcess(command, { processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) });
+      const placement = acquirePreparationPlacement();
+      let task: ReturnType<typeof startProcess>;
+      try { task = startProcess(command, { ...(placement === undefined ? {} : { placementFd: placement.placementFd }), ...sinks, processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) }); }
+      catch (error) { placement?.close(); throw error; }
       const closure = task.result.then(observation => {
         if (observation.kind !== "exited") unprovenPreparations.add(this);
-        return task.closed;
+        return task.closed.then(() => placement?.close());
       });
       nativeClosures.add(closure);
       void closure.then(() => nativeClosures.delete(closure), () => {

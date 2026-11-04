@@ -1504,7 +1504,7 @@ quota 제거 시험은 filesystem directory allocation보다 작은 고정 총�
 | A-11 | mutation-locality의 owner inventory를 명시하고 `--since`/`--until`로 실제 Git 변경 파일을 별도 측정한다. NUL 경로와 untracked pending work를 처리한다. | owner 교집합을 feature 변경 수로 추정하지 않는다. audit 전체의 변경 파일 수를 단일 feature locality로 주장하지 않는다. |
 
 기존 런타임 의미를 보존하는 직접 검증과 최종 기록은
-[DR40 evidence](../test/audit/architecture-2026-10-10.evidence.json)와
+[DR40 evidence](archive/test-audits/architecture-2026-10-10.evidence.json)와
 [현재 검증 상태](implementation/validation.md)를 따른다. 소스 기반 평점 상승을 보증하지 않는다.
 실제 macOS helper·VM·전원 손실·paid provider는 이 Linux 배치의 실행 증거에 포함되지 않는다.
 
@@ -1554,7 +1554,7 @@ host/guest 프로세스 경계, model tool surface·권한·자원 선언의 의
 수치 기반 아키텍처 평점이나 단일 feature 변경 비용 감소는 추정하지 않는다. 직접 변경 비용은 기존
 Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
 [현재 검증 상태](implementation/validation.md), bytes는
-[DR41 evidence](../test/audit/modules-2026-10-10.evidence.json)에 기록한다.
+[DR41 evidence](archive/test-audits/modules-2026-10-10.evidence.json)에 기록한다.
 
 ## DR42 — Native transport·project writer·egress 복구·archive 종료 증명
 
@@ -1598,7 +1598,7 @@ Git changeset 도구로 기록한다. 검증·실패 기록과 native 한계는
 
 실제 Git/ledger/socket/archive 회귀와 Linux user systemd의 살아 있는 parent/child 종료 관측을
 검증한다. 최신 실행 수치·실패 기록은 [validation](implementation/validation.md), bytes·로그는
-[DR42 evidence](../test/audit/host-repairs-2026-10-10.evidence.json)가 소유한다. 이전 startup 목표,
+[DR42 evidence](archive/test-audits/host-repairs-2026-10-10.evidence.json)가 소유한다. 이전 startup 목표,
 native macOS VM·Keychain·VM power loss·paid provider·release 검증의 미완료 상태는 유지한다.
 
 ## DR43 — Society 조립 수명 단위와 플랫폼 책임 경계
@@ -2554,3 +2554,193 @@ snapshot의 projection은 공유한다. Broker가 projection을 await한 다음 
 상태 파일을 되살리지 않는다. public status 응답도 await 뒤 기존 검증 owner로 현재 권한을
 재검사한다. wire/DTO·durable 형식·latency budget은 그대로이며 native golden은 관련 두 port만 갱신한다.
 
+## DR64 — 모델용 CLI를 typed 도구와 core/선택 집합으로 대체한다
+
+[모델 도구 표면 명세](model-tool-surface-spec.md)를 구현한다. Human용 제품 CLI는 유지하고,
+Worker가 broker 업무를 수행하던 모델용 CLI·libexec 자산·구 tool alias·group dispatcher는 제거한다.
+기존 typed Client/request service가 inline brief·body·GOAL, candidate 준비·publication,
+same-key freeze/replay와 receipt 출력을 소유한다. shell 문자열을 조립하는 대체 경로는 없다.
+
+필수 입력이 다른 업무는 별도 도구로 나누고, 동일 계약의 action만 enum으로 묶는다.
+GOAL publication과 mail send를 분리하며 필요한 revision/approval을 schema에서 요구한다.
+Pi의 primitive coercion 전에 non-coercing raw guard를 적용하고 provider 변환은 기존 SDK에 맡긴다.
+
+Worker는 core19/optional21, Principal은 core13/optional8을 제공한다. `toolset`은 선택한 optional
+전체 집합을 교체하며 성공 결과가 저장된 turn 경계에서 적용한다. 재개·branch 전환은 해당
+branch의 확정 snapshot만 복원한다. core·역할·등록 provenance 검사를 유지하고, 편집은 기존
+hashline 계열로 수렴한다. Principal에게 실행 불가능한 LSP 진단·수정 도구는 등록하지 않는다.
+
+reviewer의 현재 capability·작성자/submitter 제외·최신 표·남은 승인 수와 생성 가능한 child
+profile/mail.send를 기존 authority·policy owner에서 관측한다. 관측은 권한 grant가 아니며,
+mutation의 신원·계보·정족수·Principal 승인·expected-old CAS와 accepted history는 바꾸지 않는다.
+
+실제 실행 범위와 한계는 [validation](implementation/validation.md)이 소유한다. Scripted Pi,
+로컬 provider payload와 설치 검사만으로 실제 Sol medium 행동 비교를 통과 처리하지 않는다.
+
+## DR65 — Codex의 실행 중심 prompt 구성을 OMA 역할과 도구 계약에 맞춘다
+
+기본 Principal·Worker prompt, START/Principal handoff, review·redelivery 안내와 전체 모델 도구의
+description·parameter help·guidance를 영어로 정리한다. Codex CLI의 모델별 prompt와 tool
+specification을 참고한 구성·출처는 [모델 도구 표면 명세 §6](model-tool-surface-spec.md#6-prompt와-예시)가 소유한다.
+Codex 전용 shell session·patch·approval API는 가져오지 않는다.
+
+Principal은 설계·계획·중요 판단에 비용을 쓰고 Worker는 구현·조사·테스트·peer review를 수행한다.
+작업 시작과 담당 범위 공유, 독립 작업 분할, 대기 시간 활용, 정확한 증거 전달, 통합까지의 완결을
+유연한 기본 습관으로 명시한다. LOW merge의 사전 승인 없는 fast path와 적용 후 자동 공유·challenge를
+유지하며 추가 review gate를 만들지 않는다. 권한·정족수·same-key·ACK/양보·프로세스 수명은 실제 계약을 따른다.
+
+OMA registration wrapper가 builtin/hashline/LSP/web/MCP 안내를 소유하고 vendor 바이트는 유지한다.
+shell 설명 교체에 필요한 고정 adapter만 기존 Pi factory의 handler로 전달하며, 읽을 수 있게 된
+shell 설정을 반영하고 설정이 바뀔 때만 factory를 갱신한다. Tool selection은 계속 dispatch하지 않는다.
+도구 이름과 schema 검증 제약·custom prompt 보존 정책은 변경하지 않는다.
+
+검증은 실제 Pi prompt 조합·tool 실행·provider payload 직렬화와 관련 회귀로 구분한다.
+실제 모델의 협업 성능 향상은 이 검증으로 입증하지 않으며 실행 범위는 [validation](implementation/validation.md)이 소유한다.
+
+## DR66 — Worker 상한과 구조적 peer 부족의 Principal fallback
+
+The corrected DR66 limit is active Worker capacity, not lifetime registration count.
+HostConfig 4 keeps `maxWorkers` at 6 by default and seeds 3 initial Workers.
+Only resident rows with `desired=enabled` occupy active slots; idle enabled Workers
+still count, while Principal, provisioning, stopped and retired rows do not.
+Fresh create refuses with `LIMIT_EXCEEDED` before acceptance when active capacity
+is full. Creation publication and stopped-to-enabled start recheck admission
+atomically. A previously accepted creation that loses a slot race remains
+pending/provisioning, without publishing readiness or its initial delivery, and
+existing reconciliation completes it after a slot is released. Same-key replay
+and an already-enabled start do not consume another slot.
+Unconfirmed physical termination retains the existing execution safety fence;
+an inactive desired state is not proof of death. Capacity changes require broker
+restart. A cap below the enabled registry fails closed rather than deleting or
+retiring Workers; stop enough Workers before lowering it.
+
+Normal peer requirements remain one for MEDIUM merge and `highPeerFloor` for
+HIGH merge and every challenge. Potential independent capacity is `maxWorkers`
+minus currently enabled resident authors (the requester/submitter union).
+All historical authors remain excluded from voting, including inactive ones.
+Only structural capacity insufficiency reduces the peer count and adds explicit
+Principal approval; zero-peer fallback issues its approval mail at opening.
+Missing/stopped reviewers, failed provisioning and negative votes do not lower
+quorum. HIGH's Principal gate and LOW merge's fast path remain unchanged.
+
+승인 메일의 exact candidate·현재 id, 작성자 배제, 최신 표, Principal delegation,
+stale-base/CAS 검사를 유지한다. 상한은 integration policy identity에도 포함한다.
+status와 기본 영어 안내는 정상/실제 peer 요구 수와 fallback 원인을 드러낸다.
+실제 실행 결과와 한계는 [validation](implementation/validation.md)이 소유한다.
+
+
+## DR67 — 진행·검토·결과 파일과 검사 실행의 수명을 분리한다
+
+사용자가 architecture-improvement-spec의 구현을 요청했다. version 5 저장/설정
+경계에서 reviewer 실행 상태와 수락된 vote의 유효성, 긴 복구와 독립 wake,
+변경 검토와 실패한 검사 재시도, 결과의 전체 bytes와 모델의 초기 preview를 분리한다.
+현재 requester 권한·provenance·unknown·단일 writer·최종 CAS는 유지한다.
+기존 accepted/terminal bytes를 새 규칙으로 다시 쓰지 않는다.
+
+선택적 Linux workload budget과 version 2 검사 pipeline은 기존 native owner와
+후손 종료 증거를 재사용한다. pipeline은 한 checkout/HOME을 공유하되 재시도는
+fresh scope다. 단계 로그는 제어 채널과 구분하고, package cache는 검증된 공개
+다운로드만 private attempt로 복원한다. 새 일반 scheduler나 job DB는 추가하지 않는다.
+
+계약과 단계별 cutover는 [architecture improvement contracts](implementation/architecture-improvements.md),
+실제 시험과 미실행 범위는 [validation](implementation/validation.md)이 소유한다.
+이 결정은 아직 구현하지 않은 P3/P4의 완료 또는 과거 authored review의 재승인이 아니다.
+
+
+## DR68 — 변경안 검토와 실제 통합 결과의 수명을 분리한다
+
+2026-10-30. architecture-improvement-spec P3의 구현 결정이다. 새 open은
+version 3이며 B/C revision과 준비된 M/I를 별도 fact로 연결한다. Git의 정상
+merge ancestry로 clean merge를 준비하고 immutable broker ref와 정확한 diff를
+접수 기록에 연결한다. 충돌은 Worker의 명시적 revise로 해결한다. 원본 delta와
+경로 영향이 보수적 재사용 조건을 만족할 때만 코드 승인을 재사용하며 그 밖에는
+최소 MEDIUM의 M/I context 검토를 받는다. HIGH context는 별도의 Principal
+approval identity를 갖는다. 실제 I를 검사하고 현재 권한·정책·원본 작성자와
+승인을 확인한 뒤 main CAS를 한다. 알려진 pre-CAS main 변경은 시도만 대체하고
+unknown은 계속 writer를 막는다. 단순 descendant가 아니라 완료된 CAS 링크의
+연쇄만 과거 반영 증거로 사용할 수 있다. 이미 포함된 C는 별도 included fact다.
+기존 accepted plan, terminal receipt, 과거 vote bytes는 다시 쓰지 않는다.
+
+## DR69 — 누적 조회와 검색 복사, 정상 종료의 필수 비용을 줄인다
+
+2026-10-30. P4a/P4b/P4c 구현 결정이다. 작성자는 인증된 제출과 매번 새로 관측한
+ref batch로부터 계산하는 파생 인덱스를 사용한다. 검색은 이름과 ignore 제어를
+먼저 관측하고 실제 선택된 파일만 복사하며 inode/제어 파일 변경을 다시 확인한다.
+전체 검색과 diff 결과는 SDK-free tool-files/results의 불변 파일·읽기 계약을
+공유한다. Git/Client는 이 subpath만 사용하며 모델 도구와 storage ledger를
+서로 가져오지 않는다. npm 캐시는 pinned read-only toolchain의 기존 cacache를
+사용하고 자체 registry credential/설치 트리 캐시는 만들지 않는다.
+
+기본 종료는 keep-hot이다. 명시적 host archive 또는 선택된 on-close만 기존의
+backup·내용 검증·checkpoint·cold 선택·회수 절차를 수행한다. v2 저장 선택은
+phase/generation과 동일 Society 소유권·action lock으로 archive/resume를 막는다.
+기존 immutable v1 checkpoint는 그대로 읽고, hot 재개에서 전체 해시를 하지
+않는다. active Society의 회수나 종료 후 남겨둔 background 작업은 없다.
+기존 고정 architecture 및 과거 authored review는 변경하지 않는다. 이 결정의
+현지 검증 범위와 제한은 implementation/architecture-improvements.md에 기록한다.
+
+## DR70 — 모듈 감사의 경쟁·경계 결함을 기존 권한 안에서 수정한다
+
+2026-11-01. 사용자가 macOS와 vendor 내부를 제외한 모듈별 수정과 회귀 보강을
+승인했다. [감사 보고서](module-audit-2026-10-31.md)의 원래 관측을 보존하고
+수정 후 계약 판정과 실행 근거를 구분한다. 고정 architecture와 accepted history,
+과거 authored review는 수정하거나 새 입력의 승인으로 다시 결박하지 않는다.
+
+리뷰의 adopt/revise 경쟁은 같은 iteration의 attempt identity로 접수·조회한다.
+바뀐 scope를 표현할 수 없는 옛 v2 integration을 만들지 않고 기존 v3 준비 경로가
+계속한다. 정상적인 새 사실을 손상으로 해석하지 않으며 과거 receipt는 보존한다.
+
+References 한 칸에서는 직전 parent를 우선하고, 두 칸 이상에서 root와 최신 suffix를
+보존한다. 작은 frame에서도 최초·재안내가 모두 가능한 batch를 고르고 남은 메일은
+다음 batch로 넘긴다. notice의 명시적 metadata 생략은 원문·manifest·index 생략이 아니다.
+frame의 하한은 batch-view codec이 소유하고 기존 두 class fairness는 유지한다.
+
+Principal의 실제 interactive 경로가 전달 통지와 run 시작을 host에 전달한다.
+대량 세션 목록은 기존 request id의 bounded `session_dirs` frame들로 전송하고
+각 로컬 write 완료를 기다린 뒤 마지막 frame까지 누적한다. write 완료는 peer의
+처리나 durable receipt가 아니며, 프레임 사이의 단순 yield는 백프레셔 대기가 아니다.
+`/society`는 MODE-005의 fresh-mode 재진입을 유지하며, DR28의 옛 고정 slot gate와
+끊어진 호출부는 남기지 않는다.
+
+Host-only 리뷰 무효화를 일반 Principal 모델 권한으로 넓히지 않는다.
+AUD-13의 일반 Principal 호출 거절은 DR67과 현재 모델 표면 계약상 의도된 동작이다.
+새 Host RPC나 모델 action을 이 버그 수정에 끼워 넣지 않는다.
+
+파일의 검증과 반환 page는 같은 bytes를 사용한다. 조건부 쓰기는 검증 구간의
+변경을 거절하되 비협조 writer에 대한 원자적 CAS를 주장하지 않는다.
+소유 scratch의 권한 수리는 held capability 안에서만 하며 rollback은 기록한 mode를
+복원한다. 실행 slot의 알려진 busy와 미확인 종료, lock 관측 실패와 소유권을 구분한다.
+Linux openat2의 EAGAIN은 같은 containment flags로 유한 재시도하고 계속 불명이면 거절한다.
+
+MCP 정리는 adapter의 shutdown 뒤에 등록한다. 정상 stdio close의 종료 관측과
+vendor의 SIGKILL fallback 신호 전달은 같은 증거가 아니며 후자를 death proof로
+승격하지 않는다. 무결성 거절은 원인 진단을 보존하면서 계속 fail-closed한다.
+실제 검증 수치·입력·미실행 범위는 [validation](implementation/validation.md)이 소유한다.
+
+## DR71 — 기존 MCP 기능을 새 collaboration 역할 제한으로 추가 차단하지 않는다
+
+사용자는 Principal의 기존 MCP 기능이 의도된 통로라고 정정하고, 이를 보존하는 기준으로 처리하도록 지시했다. 새 collaboration 표면의 OMA 도구 제한을 MCP 서버 전체의 추가 차단·격리 체계 구축 요구로 확대하지 않는다. 앞서 그 확대 해석을 미완료 필수 항목으로 기록한 것은 철회한다. 이 결정은 기존 MCP 동작을 보존하는 범위이며 새 권한·credential·mount·자동 승인을 부여하지 않는다.
+
+기존 vendor gateway, schema, 설정, 환경/credential 정책과 실행 owner를 유지한다. Principal에게 일반 OMA shell/write 도구를 노출하지 않는다는 사실을 근거로 기존 MCP 기능 전체를 금지하거나 별도 MCP qualification을 새 표면 채택의 선결조건으로 만들지 않는다. 모델이 MCP 결과를 Human 지시·OMA authenticated actor·공식 vote·acceptance/receipt로 주장해도 원래 OMA owner의 검증을 대신할 수 없다. OMA mutation RPC의 actor/capability·현재 effect authority, OMA가 제공하는 role projection과 일반 파일 도구의 경계는 그대로다.
+
+[MCS-A54](model-collaboration-surface/validation.md)와 prompt negative-control의 MCP 표현은 위 범위로 명확히 한다. OMA role records의 비노출 요구를 임의의 configured MCP 서버 전체에 대한 새 파일시스템 보장으로 확대하지 않는다. MCP 자체의 기존 기능 회귀는 여전히 검사하며 미실행/실패를 PASS로 바꾸지 않는다. 현재 추가 MCP 차단 source는 작성하지 않았고 실제 침해 경로를 재현했다고 주장하지 않는다. 자동 활성화·legacy 계약 변경의 승인도 아니다.
+
+## DR72 — collaboration 최종 코드에서 레거시 병행 지원을 제거하고 저장 사실은 보존한다
+
+사용자는 collaboration-v1 전체 구현·검증·운영 준비 작업에서 구형 코드·호환층을 전부 제거하도록 선택했다. 기존 spec의 old active session 전용 legacy registry·이중 decoder·자동 fallback을 최종 코드에 보존하는 계획은 이 후속 결정과 충돌한다. [MCS-S13](model-collaboration-surface-spec.md#mcs-s13--최종-코드의-레거시-제거와-저장-사실의-명시적-비호환)이 최종 산출물의 변경 계약이며, MCS-V04/X01/X09의 이전 보존 계획을 그 범위에서 대체한다. DR64/DR66의 과거 승인·실행·수용 번호나 고정 architecture 원문을 소급 수정하지 않는다.
+
+제거 대상은 Society 구형 모델 tool registry·exact-selection runtime·구형 live request decoder·old/new 병행·alias·우회 adapter다. 저장된 session/ledger/accepted plan/receipt/source/key/approval/ACK의 원본은 제거 대상이 아니다. 필요한 drain은 원래 release의 원래 owner가 수행하고 최종 binary에 legacy 실행을 숨겨 두지 않는다. drain을 증명할 수 없거나 unknown이 남으면 명시적 비호환으로 새 실행을 거절하고 원본을 보존한다. 새 decoder의 defaults로 accepted bytes/hash를 다시 쓰거나 새 key로 재접수하지 않는다.
+
+Rollback은 새 admission을 닫고 지원되는 operator/drain 경로를 사용한다. 외부 Git/mail 효과를 backup 복원으로 되돌렸다고 주장하지 않고, 구형 session을 자동으로 새 session으로 승격하지 않는다. Personal 모드·기존 vendor MCP 기능·Human의 개별 stop/release 권한은 이 제거를 이유로 없애거나 확대하지 않는다.
+
+이 결정은 제거 방침과 데이터 보존에 관한 사용자 승인이다. send/spawn/exact authority 등 다른 미결정 gate, 실제 provider/platform qualification, 모델 비교의 완료를 대신하지 않으며 신규 기본 노출·실서비스 활성화·cutover·배포 승인이 아니다. 구현·운영 경로의 실제 완료 판정은 [validation](implementation/validation.md)이 소유한다.
+
+## DR73 — custom-message 전달의 공개 prompt 계약을 위해 공식 SDK 1.2.0을 고정한다
+
+사용자는 실제 Worker 전달에서 최초 system policy가 빠지는 재현과 pinned SDK source를 확인한 뒤, 공식 Pi SDK 1.2.0 갱신 및 관련 동작 재검증을 승인했다. 이 승인은 dependency 변경에 한정된다. 신규 Society admission·기본 노출·실서비스 활성화·cutover·배포 승인이 아니며 기존 qualification을 새 버전에 자동 승계하지 않는다.
+
+SDK 1.0.1의 idle custom-message 시작은 `before_agent_start`와 최초 prompt/loadout 준비를 거치지 않았다. OMA prompt 경계가 ordinary prompt의 hook 순서를 실제 전달에도 전제한 것이 MCS-P01을 만족하지 못했다. 공식 1.2.0의 `sendCustomMessage`는 custom trigger를 공통 SDK run preparation으로 넘기고, public event의 `messageType`이 user/custom 출처를 구분한다. OMA는 같은 prompt owner를 사용하며 delivery를 Human `prompt()`로 바꾸거나 SDK private state·vendor source·provider serializer를 패치하지 않는다.
+
+Coding-agent·AI·TUI 및 그 SDK cohort를 1.2.0으로 고정하고 원래 lock owner로 재해결한다. 기존 private UI 접점은 Engine inventory에 그대로 남겨 version/member/semantic oracle과 설치 검사를 다시 수행한다. 버전 검사를 넓혀 미확인 버전을 허용하거나 기존 UI 기능을 삭제하지 않는다. 이 변경 때문에 private 의존이 제거됐다고 주장하지 않는다.
+
+Persisted `oma-pi-rpc-v1@1.0.1`은 설치 SDK 버전 표시가 아니라 기존 delivery evidence의 protocol revision이다. boundary 의미·형식을 변경하지 않은 이 dependency 갱신으로 그 bytes·과거 receipt를 다시 쓰지 않는다. retired Society의 launch-before-history 거절도 유지한다. finding은 [MCS-AUD-06](priority-0-audit.md#mcs-aud-06--custom-message-run을-ordinary-prompt와-같은-초기화로-가정), 현재 실행과 한계는 [validation](implementation/validation.md)이 소유한다.

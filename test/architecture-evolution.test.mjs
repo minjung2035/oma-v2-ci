@@ -18,7 +18,7 @@ import {
 const root = process.cwd();
 const baseline = createArchitectureProgram();
 const read = (file) => readFileSync(resolve(root, file), "utf8");
-const snapshots = JSON.parse(read("test/fixtures/architecture-surfaces-native.json"));
+const snapshots = JSON.parse(read("test/fixtures/architecture-surfaces-collaboration.json"));
 const wire = "packages/contracts/src/public-wire.ts";
 const durable = "packages/contracts/src/durable.ts";
 const methods = "packages/protocol/src/methods.ts";
@@ -143,7 +143,7 @@ function assertOperationClosure(program) {
   );
 }
 
-test("P22 positive control: current production compiles and has closed operation/dispatch surfaces", () => {
+test("001. Positive control: current production compiles and has closed operation/dispatch surfaces", () => {
   assert.equal(ts.version, "5.9.3");
   assert.deepEqual(errors(baseline).map(message), []);
   assertOperationClosure(baseline);
@@ -152,7 +152,7 @@ test("P22 positive control: current production compiles and has closed operation
   }
 });
 
-test("P22 A: adding a public read method requires DTO, descriptor, handler and response decoder", () => {
+test("002. A: adding a public read method requires DTO, descriptor, handler and response decoder", () => {
   const changedWire = prependType(addInterfaceMember(read(wire), "PublicMethods",
     '"probe.read": { params: Record<string, never>; result: { accepted: boolean } };'), "ReadMethod", '"probe.read"');
   const changes = { [wire]: changedWire };
@@ -181,7 +181,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
   );
 });
 
-test("P22 B: a new operation kind cannot omit result, codec or result-validator ownership", () => {
+test("003. B: a new operation kind cannot omit result, codec or result-validator ownership", () => {
   const changes = { [durable]: prependType(read(durable), "OperationPlan", '{ kind: "probe.mutate" }') };
   const planOnly = programWith(changes);
   assert.throws(() => assertOperationClosure(planOnly), /result kind closure/);
@@ -207,7 +207,7 @@ test("P22 B: a new operation kind cannot omit result, codec or result-validator 
   assertOperationClosure(programWith(changes)); // Schema links only, not a fictitious implemented workflow.
 });
 
-test("P22 C: a new kernel file fails until it receives an explicit semantic owner", () => {
+test("004. C: a new kernel file fails until it receives an explicit semantic owner", () => {
   const file = "packages/domain/src/evolution-probe.ts";
   const graph = graphFromProgram(
     programWith({ [file]: "export const probe = 1;" }),
@@ -229,7 +229,7 @@ test("P22 C: a new kernel file fails until it receives an explicit semantic owne
   );
 });
 
-test("P22 D: optional repair/recover/transaction capabilities cannot silently widen consumer ports", () => {
+test("005. D: optional repair/recover/transaction capabilities cannot silently widen consumer ports", () => {
   // One program carries every optional member: if ordinary assignability
   // caught any single widening the whole-program diagnostic would name it,
   // so one compile proves all six widen silently. The surface review pin
@@ -264,7 +264,7 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
   }
 });
 
-test("V29A: the request-hash set-field recipe is a closed registry of mutation methods and their array params", () => {
+test("006. The request-hash set-field recipe is a closed registry of mutation methods and their array params", () => {
   const identity = "packages/domain/src/request-identity.ts";
   const base = read(identity);
   for (const [name, after] of [
@@ -278,7 +278,7 @@ test("V29A: the request-hash set-field recipe is a closed registry of mutation m
 });
 
 
-test("DR40: Architecture mutations select syntax owners through comments and reformatting", () => {
+test("007. Architecture mutations select syntax owners through comments and reformatting", () => {
   const original = 'export interface /* owner */ Probe\n { readonly value : string; }';
   const changed = addInterfaceMember(original, "Probe", "readonly repair?: () => void;");
   assert.deepEqual(declarationSurface(removeInterfaceMember(changed, "Probe", "repair"), "fixture.ts"), declarationSurface(original, "fixture.ts"));

@@ -51,10 +51,9 @@ function fixture(options: {
     const paths = { stateRoot: root, projectGit, contextGit: join(root, "context.git"), worldDir: join(root, "world"),
         society: "demo" };
     let mail = createMailModule(paths, store, 64);
-    const policy: IntegrationPolicy = { policyRevision: "p1", protectedPaths: [], checks: [],
-        ...(options.tiered === false ? {} : { tiered: {
-                repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: []
-            } }) };
+    const policy: IntegrationPolicy = {maxWorkers: 6, policyRevision: "p1", protectedPaths: [], checks: [], ...(options.tiered === false ? {} : { tiered: {
+            repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: []
+        } })};
     let services = createGitServices(paths, store, mail, policy, () => policy);
     let { git: module, reviews } = services;
     const auth = (actor = "alice"): AuthContext => ({ actor, role: actor === "principal" ? "principal" : "resident",
@@ -75,7 +74,7 @@ function fixture(options: {
         },
         close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
 }
-test("a non-tiered society integrates a submitted candidate directly and replays the receipt", async (t) => {
+test("001. A non-tiered society integrates a submitted candidate directly and replays the receipt", async (t) => {
     const f = fixture({ tiered: false });
     t.after(() => f.close());
     await f.submit();
@@ -94,7 +93,7 @@ test("a non-tiered society integrates a submitted candidate directly and replays
     const report = inspectLedger(readDiagnosticSnapshot(f.root), { stateRoot: f.root, society: "demo" }).report;
     assert.equal(report.status, "PASS", JSON.stringify(report));
 });
-test("a non-tiered society rejects a tier request and a tiered society rejects direct integration", async (t) => {
+test("002. A non-tiered society rejects a tier request and a tiered society rejects direct integration", async (t) => {
     const flat = fixture({ tiered: false });
     t.after(() => flat.close());
     await flat.submit();
@@ -106,7 +105,7 @@ test("a non-tiered society rejects a tier request and a tiered society rejects d
     // And the removed legacy attestation kinds are refused at fresh acceptance.
     await assert.rejects(f.reviews.record(f.auth("alice"), "legacy", { kind: "peer" } as never), code("INVALID_REQUEST"));
 });
-test("a no-op witness is not created when main differs; a matching witness survives main moving later", t => {
+test("003. A no-op witness is not created when main differs; a matching witness survives main moving later", t => {
     const f = fixture();
     t.after(() => f.close());
     const observer = createCanonicalObserver();

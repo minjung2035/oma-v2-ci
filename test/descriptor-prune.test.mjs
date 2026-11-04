@@ -5,7 +5,7 @@ import { mkdtempSync,rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-test('descriptor keep-list grammar rejects reserved, unordered and overflowing channels',()=>{
+test("001. Descriptor keep-list grammar rejects reserved, unordered and overflowing channels",()=>{
   const root=mkdtempSync(join(tmpdir(),'oma-kept-fds-'));
   try {
     const header=fileURLToPath(new URL('../packages/platform-mac/src/seatbelt/',import.meta.url));

@@ -1,3 +1,4 @@
+import { withWorkerCapacity } from "./fixtures/spec.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
 /** Post-listen 'error' settlement (WORKSTREAM §9 — 전신성 부류 전수 스캔):
@@ -64,7 +65,7 @@ function expectPermanent(server: Server): void {
   assert.equal(server.listenerCount("error"), 1, "the startup once-listener is gone; the permanent one stays");
 }
 
-test("post-listen: the inference relay absorbs an accept-class error and keeps the socket bound", async t => {
+test("001. Post-listen: the inference relay absorbs an accept-class error and keeps the socket bound", async t => {
   const { path } = scratch(t);
   const socketPath = path("inference.sock");
   const relay = await InferenceRelay.open(socketPath,
@@ -79,7 +80,7 @@ test("post-listen: the inference relay absorbs an accept-class error and keeps t
   await stillServing(socketPath);
 });
 
-test("post-listen: the CONNECT proxy absorbs an accept-class error through its audit journal", async t => {
+test("002. Post-listen: the CONNECT proxy absorbs an accept-class error through its audit journal", async t => {
   const { path } = scratch(t);
   const socketPath = path("egress.sock");
   const audits: EgressAudit[] = [];
@@ -96,7 +97,7 @@ test("post-listen: the CONNECT proxy absorbs an accept-class error through its a
   await stillServing(socketPath);
 });
 
-test("post-listen: a refusing audit sink cannot throw out of the proxy listener's emit", async t => {
+test("003. Post-listen: a refusing audit sink cannot throw out of the proxy listener's emit", async t => {
   const { path } = scratch(t);
   const socketPath = path("egress.sock");
   const proxy = await ConnectProxy.open({ socketPath,
@@ -112,7 +113,7 @@ test("post-listen: a refusing audit sink cannot throw out of the proxy listener'
 const RUN = { placeholderId: randomUUID(), society: "demo", actor: "principal", incarnation: 0, modelProfile: "default" };
 
 
-test("post-listen: the broker's listener survives a dead journal sink -- the cleanup write cannot escape the emit", async t => {
+test("004. Post-listen: the broker's listener survives a dead journal sink -- the cleanup write cannot escape the emit", async t => {
   // `listen`'s permanent 'error' listener ends in `cleanupError`, whose
   // console.error ran unguarded: a dead stderr inside the emit was the same
   // escape the listener exists to absorb. The run-revoke path in
@@ -120,8 +121,7 @@ test("post-listen: the broker's listener survives a dead journal sink -- the cle
   const f = await preparedFixture();
   const units = new PolicyExecution();
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true },
-    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity((_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units: units, views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle: lifecycle, git: null, reviews: null, reconcile: null, paths: { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true } });
   // The drain is also the teardown: an emit that escaped would otherwise
   // leave both listeners bound and the process could never exit.

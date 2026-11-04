@@ -7,7 +7,7 @@ import { checkExportRef, operationResultCheck, messagePlanCheck } from "@oma/dom
 const MESSAGE = "m-00000000-0000-4000-8000-000000000003-0";
 const REF = "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003";
 
-test("R03: old export refs remain readable without adopting the fresh CLI convention", () => {
+test("001. Old export refs remain readable without adopting the fresh CLI convention", () => {
   for (const ref of ["refs/oma/export/legacy", "refs/oma/export/cli-old-key", `refs/oma/export/${"a".repeat(96)}`]) {
     assert.equal(isExportRef(ref), true);
     assert.equal(checkExportRef(ref), null);
@@ -18,7 +18,7 @@ test("R03: old export refs remain readable without adopting the fresh CLI conven
   }
 });
 
-test("R03: published-ref syntax requires the canonical actor and UUID-v4 operation", () => {
+test("002. Published-ref syntax requires the canonical actor and UUID-v4 operation", () => {
   const result = { kind: "git.submit", candidate: "1".repeat(40), publishedRef: REF, message: MESSAGE, recipientCount: 0 };
   assert.equal(isPublishedRef(REF), true);
   assert.equal(operationResultCheck("git.submit")(result), null);
@@ -33,7 +33,7 @@ test("R03: published-ref syntax requires the canonical actor and UUID-v4 operati
   }
 });
 
-test("R03: mail object paths cannot launder a malformed internal MessageId", () => {
+test("003. Mail object paths cannot launder a malformed internal MessageId", () => {
   const path = "mail/objects/m-00000000-0000-4000-8000-000000000003-0.eml";
   const plan = { id: MESSAGE, objectPath: path, sha256: "a".repeat(64), bytes: 1, dateMs: 0,
     to: ["alice"], recipients: ["alice"], kind: "message", contextRevision: null,

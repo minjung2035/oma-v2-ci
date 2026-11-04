@@ -16,6 +16,16 @@ import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { openOwnedDirectoryPath } from "./directory.js";
 import { ensureOwnedDurableDirectory, publishNoReplace } from "./durable-fs.js";
 
+import { statAt } from "@oma/native/posix-files";
+export const EXECUTION_RECOVERY_FILE = "recovery.json";
+function assertNoRecovery(parent: number): void {
+  if (statAt(parent, EXECUTION_RECOVERY_FILE, { throwIfNoEntry: false }))
+    throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution journal recovery is prepared; reboot the host and apply recovery");
+}
+/** Initial observation bytes only; callers still need an explicit quiescent boundary. */
+export function executionJournalInitial(stateRoot: string): string {
+  return canonicalJson(frame(0, ZERO, { kind: "initialize", owner: resolve(stateRoot) })) + "\n";
+}
 export interface ExecutionJournalEntry {
   readonly slot: string; readonly execution: string;
   readonly witness: ExecutionWitness | null;
@@ -72,14 +82,15 @@ export class ExecutionJournal {
   static initialize(stateRoot: string): void {
     const owner = resolve(stateRoot), root = join(owner, "execution");
     ensureOwnedDurableDirectory(root, owner, 0o700);
-    const initial = frame(0, ZERO, { kind: "initialize", owner });
-    publishNoReplace(join(root, "scopes.jsonl"), canonicalJson(initial) + "\n", 0o600);
+    withinDirectory(join(root, "scopes.jsonl"), parent => assertNoRecovery(parent));
+    publishNoReplace(join(root, "scopes.jsonl"), executionJournalInitial(owner), 0o600);
   }
   static open(stateRoot: string): ExecutionJournal {
     const owner = resolve(stateRoot), parent = openOwnedDirectoryPath(join(owner, "execution"));
     let fd: number | undefined;
     try {
       withCleanup(() => {
+        assertNoRecovery(parent);
         const pin = pinBeneath(parent, "scopes.jsonl");
         withCleanup(() => {
           const stat = fstatSync(pin);
@@ -155,7 +166,9 @@ export class ExecutionJournal {
             value.version !== EXECUTION_JOURNAL_VERSION || value.sequence !== this.sequence || value.previous !== this.previous ||
             !event(value.event) || value.hash !== frame(this.sequence, this.previous, value.event).hash ||
             !Buffer.from(canonicalJson(value)).equals(bytes)) corrupt("frame identity or hash chain differs");
-        this.validateTransition(value.event); this.apply(value as unknown as Frame);
+        this.validateTransition(value.event);
+        // SAFETY: the closed keys, event grammar, sequence and canonical frame hash were verified above.
+        this.apply(value as unknown as Frame);
       }
       // One closed frame has a finite grammar; actor count/history is unbounded.
       if (pending.length > maximumFrame) corrupt("contains an oversized partial frame");

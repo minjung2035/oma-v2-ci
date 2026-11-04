@@ -25,9 +25,9 @@ export function personalBirth(dataRoot: string, cwd: string): { readonly root: s
   return { root, birth };
 }
 /** `next` is the child's declared handoff after a clean exit: `session` is a
- * history to reopen, `society` the project's own Society the host re-enters
- * with `oma --society` — a fresh birth, not this session resumed. */
-export type PersonalExit = { readonly code: number; readonly next?: { readonly session?: string; readonly society?: string; readonly mode?: SessionMode } };
+ * history to reopen, `mode` a mode re-entry the host restarts. It is never an
+ * in-process mode change. */
+export type PersonalExit = { readonly code: number; readonly next?: { readonly session?: string; readonly mode?: SessionMode } };
 export async function runPersonalSession(options: { readonly root: string; readonly dataRoot: string; readonly libdir: string;
   readonly packages: string; readonly resume?: string; readonly env?: NodeJS.ProcessEnv }): Promise<PersonalExit> {
   const birth = readSessionBirth(options.root);
@@ -82,10 +82,9 @@ export async function runPersonalSession(options: { readonly root: string; reado
       child.on("message", value => {
         if (closed || !value || typeof value !== "object" || Array.isArray(value)) return;
         const message = value as Record<string, unknown>;
-        if (next !== undefined || message.type !== "switch" || Object.keys(message).some(key => key !== "type" && key !== "session" && key !== "society" && key !== "mode")) return;
-        if ([message.session, message.society, message.mode].filter(value => value !== undefined).length > 1) return;
-        if (Object.hasOwn(message, "mode")) { if (isSessionMode(message.mode)) next = { mode: message.mode }; return; }
-        if (message.society !== undefined) { if (typeof message.society === "string") next = { society: message.society }; return; }
+        if (next !== undefined || message.type !== "switch" || Object.keys(message).some(key => key !== "type" && key !== "session" && key !== "mode")) return;
+        if ([message.session, message.mode].filter(value => value !== undefined).length > 1) return;
+        if (message.mode !== undefined) { if (isSessionMode(message.mode)) next = { mode: message.mode }; return; }
         if (message.session === undefined) next = {};
         else if (typeof message.session === "string") next = { session: message.session };
       });

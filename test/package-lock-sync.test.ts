@@ -14,7 +14,7 @@ import { join } from "node:path";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 interface LockEntry { version?: string; dev?: boolean; link?: boolean; resolved?: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
 
-test("V31B: every declared dependency is locked as the same kind, and its production closure is not marked dev", () => {
+test("001. Every declared dependency is locked as the same kind, and its production closure is not marked dev", () => {
   const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")) as { packages: Record<string, LockEntry & { devDependencies?: Record<string, string> }> };
   const top = lock.packages[""]!;

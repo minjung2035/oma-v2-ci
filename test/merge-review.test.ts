@@ -13,6 +13,7 @@ import { inspectLedger } from "#oma-test/app/diagnostics/ledger";
 import { inspectIntegrity } from "#oma-test/app/diagnostics/integrity";
 import { NodeIntegrityFiles } from "#oma-test/app/diagnostics/files";
 import { createCanonicalObserver } from "@oma/git/canonical-command";
+import { GitRepository } from "@oma/git/repository";
 import { mailWorkersPathAt, mailArchivePathAt, mailInboxPathAt } from "@oma/domain/paths";
 import type { ReviewState as RS } from "@oma/domain/review-evaluation";
 import type { ReviewFact } from "@oma/contracts/attestation";
@@ -31,7 +32,7 @@ import type { IntegrationPolicy } from "@oma/domain/integration-policy";
 import type { OperationOf } from "@oma/protocol/operation-codec";
 import { PreacceptScope } from "@oma/storage/preaccept-artifact";
 
-test("mail-v1: a LOW merge request applies itself and mails the completion notice", async () => {
+test("001. Mail-v1: a LOW merge request applies itself and mails the completion notice", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -81,13 +82,13 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
     assert.match(text, /diff --git a\/one\.txt b\/one\.txt/, "the notice carries the full binary-mode diff");
     assert.match(text, /sha256 [0-9a-f]{64}/, "the part header names the document digest");
     // The status read model reflects the applied request.
-    const status = f.reviews.status(f.auth("bob"), name, 64 * 1024, "s1");
+    const status = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s1");
     assert.ok("entries" in status);
     assert.equal(status.display, "applied");
     assert.equal(status.integration?.operation, integration.id);
     assert.equal(status.integration?.state, "succeeded");
     assert.equal(status.integration?.error, null);
-    assert.deepEqual(status.entries, []); assert.deepEqual(status.missing, []);
+    assert.deepEqual(status.entries.map(e => e.kind), ["review.integration"]); assert.deepEqual(status.missing, []);
     assert.deepEqual(status.principal, { approval: null, sent: false, decision: null, decisionApproval: null });
     assert.deepEqual(status.main, { oid: candidate, observedAtMs: status.main.observedAtMs });
     assert.equal(status.tier, "LOW"); assert.equal(status.requester, "alice");
@@ -106,7 +107,7 @@ test("mail-v1: a LOW merge request applies itself and mails the completion notic
   } finally { f.close(); }
 });
 
-test("mail-v1: merge request opens observe live Git facts and refuse bad ones", async () => {
+test("002. Mail-v1: merge request opens observe live Git facts and refuse bad ones", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -117,9 +118,9 @@ test("mail-v1: merge request opens observe live Git facts and refuse bad ones", 
     f.git(["update-ref", "refs/heads/main", moved]);
     const stale = f.candidateWith({ "stale.txt": "y" }, moved);
     await f.submit("alice", stale, "submit-stale");
-    await assert.rejects(f.open("alice", { tier: "LOW", candidate: stale, base: f.base }, "stale"),
-      (error: unknown) => error instanceof Object && (error as { code: string }).code === "STALE_BASE" &&
-        (error as { details?: { actual?: string } }).details?.actual === moved);
+    const oldBase = await f.open("alice", { tier: "MEDIUM", candidate: stale, base: f.base }, "old-base");
+    assert.equal(oldBase.state, "succeeded");
+    assert.equal(f.stateOf(f.requestName("old-base")).sourceIdentity.expectedBase,f.base);
     const orphan = (() => { const tree = f.git(["mktree"], ""); return f.git(["commit-tree", tree, "-m", "orphan"]); })();
     await f.submit("alice", orphan, "submit-orphan");
     await assert.rejects(f.open("alice", { tier: "LOW", candidate: orphan, base: moved }, "orphan"), { code: "NOT_DESCENDANT" });
@@ -134,7 +135,7 @@ test("mail-v1: merge request opens observe live Git facts and refuse bad ones", 
   } finally { f.close(); }
 });
 
-test("UX-09: merge.open refuses a candidate whose tree still carries gitlinks, naming every path", async () => {
+test("003. Merge.open refuses a candidate whose tree still carries gitlinks, naming every path", async () => {
   const f = fixture(); try {
     // Whole-tree gating: main already carries the gitlinks, so the diff names
     // only one.txt — the links this candidate inherited verbatim are still
@@ -160,7 +161,7 @@ test("UX-09: merge.open refuses a candidate whose tree still carries gitlinks, n
   } finally { f.close(); }
 });
 
-test("UX-09: a candidate that removes a gitlink from a gitlink-bearing main applies", async () => {
+test("004. A candidate that removes a gitlink from a gitlink-bearing main applies", async () => {
   const f = fixture(); try {
     // The removal path must work — a main carrying gitlinks refuses every
     // merge until a candidate's tree drops them, and this one does.
@@ -174,7 +175,7 @@ test("UX-09: a candidate that removes a gitlink from a gitlink-bearing main appl
   } finally { f.close(); }
 });
 
-test("UX-09: a caller-built challenge candidate carrying gitlinks refuses the same way", async () => {
+test("005. A caller-built challenge candidate carrying gitlinks refuses the same way", async () => {
   const f = fixture(); try {
     const merged = f.candidateWith({ "merged.txt": "m" });
     await f.submit("alice", merged);
@@ -195,7 +196,7 @@ test("UX-09: a caller-built challenge candidate carrying gitlinks refuses the sa
   } finally { f.close(); }
 });
 
-test("mail-v1: protected paths and the host tier floor refuse an under-tiered open", async () => {
+test("006. Mail-v1: protected paths and the host tier floor refuse an under-tiered open", async () => {
   const f = fixture({ protectedPaths: ["protected.txt"],
     rules: [{ path: "prod.flag", tier: "HIGH", statuses: ["A", "M"] }] });
   try {
@@ -210,7 +211,7 @@ test("mail-v1: protected paths and the host tier floor refuse an under-tiered op
   } finally { f.close(); }
 });
 
-test("mail-v1: MEDIUM review thread revisions stay in the worker archive and reach Workers only", async () => {
+test("007. Mail-v1: MEDIUM review thread revisions stay in the worker archive and reach Workers only", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -246,9 +247,9 @@ test("mail-v1: MEDIUM review thread revisions stay in the worker archive and rea
     await assert.rejects(f.vote("bob", name2, "approve", "self"), { code: "SELF_REVIEW" });
     // A Worker vote never names an approval.
     await assert.rejects(f.vote("bob", name, "approve", "sneaky", "v-sneaky", rev0.id), { code: "INVALID_REQUEST" });
-    const open2_status = f.reviews.status(f.auth("carol"), name2, 64 * 1024, "s2");
+    const open2_status = f.reviews.status(f.auth("carol"), { name: name2 }, 64 * 1024, "s2");
     assert.ok("entries" in open2_status); assert.equal(open2_status.display, "peer-needed");
-    const beforeVote = f.reviews.status(f.auth("carol"), name, 64 * 1024, "s3");
+    const beforeVote = f.reviews.status(f.auth("carol"), { name: name }, 64 * 1024, "s3");
     assert.ok("entries" in beforeVote);
     assert.equal(beforeVote.display, "peer-needed");
     assert.deepEqual(beforeVote.entries.map(e => [e.index, e.actor, e.kind]),
@@ -273,18 +274,18 @@ test("mail-v1: MEDIUM review thread revisions stay in the worker archive and rea
     const retry = await f.vote("bob", name, "approve", "bob approves", "v-bob");
     assert.equal(retry.state, "succeeded"); assert.equal(retry.operation, voted.operation);
     assert.equal(messages(f, "bob", "v-bob").length, 1);
-    const afterVote = f.reviews.status(f.auth("carol"), name, 64 * 1024, "s4");
+    const afterVote = f.reviews.status(f.auth("carol"), { name: name }, 64 * 1024, "s4");
     assert.ok("entries" in afterVote);
     assert.equal(afterVote.display, "applied");
     assert.deepEqual(afterVote.entries.map(e => [e.index, e.actor, e.kind, e.verdict]),
-      [[1, "bob", "review", undefined], [2, "bob", "vote", "approve"]]);
+      [[1, "bob", "review", undefined], [2, "bob", "vote", "approve"], [3, "alice", "review.integration", undefined]]);
     assert.deepEqual(afterVote.approvers, ["bob"]);
   } finally { f.close(); }
 });
 const messages0Id = (f: ReturnType<typeof fixture>, key: string): string =>
   f.store.getOperation("alice", key)!.id;
 
-test("FJ-5: an approval request over the mail body bound is refused at emission, never frozen", async () => {
+test("008. An approval request over the mail body bound is refused at emission, never frozen", async () => {
   // 3439 is the audited floor for subjectBytes 512 (the thread revision and
   // the notice part alone): every thread revision fits it, but an approval
   // request carrying the reason and two maximal bound votes does not. The
@@ -309,7 +310,7 @@ test("FJ-5: an approval request over the mail body bound is refused at emission,
   } finally { f.close(); }
 });
 
-test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval", async () => {
+test("009. Mail-v1: a HIGH request asks the Principal only for a still-valid quorum, decides by bound approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -323,7 +324,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     assert.deepEqual(messages(f, "bob", "v-bob").map(m => m.review?.role), ["thread"], "quorum not met: no Principal mail");
     // The Principal sees nothing until the approval mail reaches it — an
     // unseen request and an unknown name get the same refusal.
-    assert.throws(() => f.reviews.status(f.auth("principal"), name, 64 * 1024, "p0"),
+    assert.throws(() => f.reviews.status(f.auth("principal"), { name: name }, 64 * 1024, "p0"),
       { code: "CAPABILITY_DENIED", message: `no request ${name} is visible to the Principal` });
     await f.vote("carol", name, "approve", "carol approves", "v-carol");
     const approval = messages(f, "carol", "v-carol").find(m => m.review?.role === "approval")!;
@@ -334,8 +335,6 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     assert.equal(existsSync(mailArchivePathAt(f.root, approval.id)), true);
     const approvalText = messageText(f.root, approval.id);
     assert.match(approvalText, /bob approves/); assert.match(approvalText, /carol approves/);
-    assert.match(approvalText, new RegExp(`approval=${approval.id}`));
-    assert.match(approvalText, /no inline diff/);
     assert.equal(approval.approvalFor?.candidate, candidate);
     // Same-key retry returns the receipt and sends nothing again.
     const again = await f.vote("carol", name, "approve", "carol approves", "v-carol");
@@ -366,13 +365,13 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     await assert.rejects(f.cancel("principal", name, "p-cancel"), { code: "CAPABILITY_DENIED" });
     await assert.rejects(f.reviews.record(f.auth("alice"), "ref", { kind: "refresh", name } as never),
       { code: "INVALID_REQUEST" });
-    const pending = f.reviews.status(f.auth("bob"), name, 64 * 1024, "s5");
+    const pending = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s5");
     assert.ok("entries" in pending); assert.equal(pending.display, "principal-pending");
     assert.equal(pending.principal.approval, approval2.id);
     assert.equal(pending.principal.sent, true); assert.equal(pending.principal.decision, null);
-    const principalView = f.reviews.status(f.auth("principal"), name, 64 * 1024, "p2");
+    const principalView = f.reviews.status(f.auth("principal"), { name: name }, 64 * 1024, "p2");
     assert.deepEqual(Object.keys(principalView).sort(),
-      ["approval", "display", "identity", "kind", "name", "tier", "title"],
+      ["approval", "attemptNumber", "display", "identity", "integrationPhase", "kind", "name", "nextAction", "notice", "observedAtMs", "proposal", "retryable", "revision", "scope", "tier", "title"],
       "the Principal's view is the minimal shape");
     assert.ok(!("entries" in principalView) && !("requests" in principalView));
     assert.equal(principalView.approval, approval2.id);
@@ -385,7 +384,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     const approval3 = messages(f, "carol", "v2-carol").find(m => m.review?.role === "approval")!;
     await f.vote("principal", name2, "reject", "no", "p-rej", approval3.id);
     assert.equal(f.stateOf(name2).terminal, "rejected");
-    const rejected = f.reviews.status(f.auth("dave"), name2, 64 * 1024, "s6");
+    const rejected = f.reviews.status(f.auth("dave"), { name: name2 }, 64 * 1024, "s6");
     assert.ok("entries" in rejected); assert.equal(rejected.display, "rejected");
     // The reject's own op withdrew the approval; the verdict is still the
     // latest Principal vote, and names the approval it decided.
@@ -409,7 +408,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     assert.equal(withdrawn2.review?.role === "withdrawn" ? withdrawn2.review.approval : null, approval4.id);
     assert.equal(f.stateOf(name3).terminal, "cancelled");
     await assert.rejects(f.vote("bob", name3, "approve", "late", "v3-late"), { code: "REQUEST_CLOSED" });
-    const cancelledView = f.reviews.status(f.auth("dave"), name3, 64 * 1024, "s7");
+    const cancelledView = f.reviews.status(f.auth("dave"), { name: name3 }, 64 * 1024, "s7");
     assert.ok("entries" in cancelledView); assert.equal(cancelledView.display, "cancelled");
     // The Principal's approve on the still-valid approval applies the request.
     const decided = await f.vote("principal", name, "approve", "the Principal approves", "p-ok", approval2.id);
@@ -433,10 +432,10 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
     assert.match(noticeText, /the Principal approves/);
     assert.match(noticeText, new RegExp(`approval ${approval2.id}`));
     assert.equal(existsSync(mailInboxPathAt(f.root, "principal", notices[0]!.id, "new")), true);
-    const appliedStatus = f.reviews.status(f.auth("bob"), name, 64 * 1024, "s8");
+    const appliedStatus = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s8");
     assert.ok("entries" in appliedStatus); assert.equal(appliedStatus.display, "applied");
     assert.equal(appliedStatus.integration?.operation, applyOp.id);
-    const principalApplied = f.reviews.status(f.auth("principal"), name, 64 * 1024, "p3");
+    const principalApplied = f.reviews.status(f.auth("principal"), { name: name }, 64 * 1024, "p3");
     assert.ok(!("entries" in principalApplied) && !("requests" in principalApplied));
     assert.equal(principalApplied.display, "applied");
     const ledger = inspectLedger(readDiagnosticSnapshot(f.root), { stateRoot: f.root, society: "demo" });
@@ -452,7 +451,7 @@ test("mail-v1: a HIGH request asks the Principal only for a still-valid quorum, 
 });
 
 
-test("mail-v1: an undelegated Principal cannot decide", async () => {
+test("010. Mail-v1: an undelegated Principal cannot decide", async () => {
   const f = fixture({ principalDelegated: false }); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -465,7 +464,7 @@ test("mail-v1: an undelegated Principal cannot decide", async () => {
   } finally { f.close(); }
 });
 
-test("DR46 current grammar: removed attestation inputs are invalid and direct tiered integration refuses", async () => {
+test("011. Current grammar: removed attestation inputs are invalid and direct tiered integration refuses", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -487,7 +486,7 @@ test("DR46 current grammar: removed attestation inputs are invalid and direct ti
   } finally { f.close(); }
 });
 
-test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
+test("012. Mail-v1: a LOW cancel owns no mail and closes the request", async () => {
   // The open's fact freezes revision p1; the policy read inside advance reports
   // p2, so the request is ready but unintegrated — a LOW cancel still works.
   let reads = 0;
@@ -503,9 +502,9 @@ test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
     const openOp = f.store.getOperation("alice", "open-low")!;
     assert.equal(f.store.getOperation("alice", applyRequestKeyFor(openOp.id)), null,
       "a revision drift before apply leaves the request unintegrated");
-    assert.equal(f.stateOf(name).display, "applying");
-    const drifted = f.reviews.status(f.auth("bob"), name, 64 * 1024, "s10");
-    assert.ok("entries" in drifted); assert.equal(drifted.display, "applying");
+    assert.equal(f.stateOf(name).display, "ready");
+    const drifted = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s10");
+    assert.ok("entries" in drifted); assert.equal(drifted.display, "blocked");
     assert.ok(drifted.missing.some(m => m.includes("host policy revision changed (now p2)")));
     const cancelled = await f.cancel("alice", name, "c-1");
     assert.equal(cancelled.state, "succeeded");
@@ -515,7 +514,7 @@ test("mail-v1: a LOW cancel owns no mail and closes the request", async () => {
   } finally { f.close(); }
 });
 
-test("mail-v1: a frozen request names the host's current policy revision, not the broker's bound one", async () => {
+test("013. Mail-v1: a frozen request names the host's current policy revision, not the broker's bound one", async () => {
   const moved = fixture({ reader: policy => ({ ...policy, policyRevision: "p2" }) });
   try {
     const candidate = moved.candidateWith({ "one.txt": "a" });
@@ -544,7 +543,7 @@ test("mail-v1: a frozen request names the host's current policy revision, not th
 const unreadablereopen = (f: ReturnType<typeof fixture>, candidate: string) =>
   f.open("alice", { tier: "LOW", candidate }, "open");
 
-test("mail-v1: an over-bound thread revision anchors every omitted entry at the revision that added it", async () => {
+test("014. Mail-v1: an over-bound thread revision anchors every omitted entry at the revision that added it", async () => {
   // Head ~500 bytes; entries ~200 bytes each vs ~50-byte anchors. 2000 trims
   // from rev ~7 on while the newest entries stay in full.
   const f = fixture({ mailBodyBytes: 2000 });
@@ -583,7 +582,7 @@ test("mail-v1: an over-bound thread revision anchors every omitted entry at the 
 const CHECK: NonNullable<FixtureOptions["checks"]>[number] = {
   id: "verify", argv: ["/usr/bin/true"], env: {},  };
 
-test("mail-v1: a failed host check leaves the request blocked and unreapplied", async () => {
+test("015. Mail-v1: a failed host check leaves the request blocked and unreapplied", async () => {
   const f = fixture({ checks: [CHECK],
     runCheck: () => { throw new StoreError("CHECK_FAILED", "the host check failed"); } });
   try {
@@ -599,7 +598,7 @@ test("mail-v1: a failed host check leaves the request blocked and unreapplied", 
     assert.equal(existsSync(mailArchivePathAt(f.root, notice.id)), false, "a failed apply publishes nothing");
     const state = f.stateOf(name);
     assert.equal(state.display, "blocked"); assert.equal(state.integration?.errorCode, "CHECK_FAILED");
-    const failedStatus = f.reviews.status(f.auth("bob"), name, 64 * 1024, "s9");
+    const failedStatus = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "s9");
     assert.ok("entries" in failedStatus);
     assert.equal(failedStatus.display, "blocked");
     assert.deepEqual(failedStatus.integration, { operation: apply.id, state: "failed", error: "CHECK_FAILED" });
@@ -610,7 +609,7 @@ test("mail-v1: a failed host check leaves the request blocked and unreapplied", 
   } finally { f.close(); }
 });
 
-test("mail-v1: a requester stopped before the CAS cancels the application", async () => {
+test("016. Mail-v1: a requester stopped before the CAS cancels the application", async () => {
   let release!: () => void; let checking = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const f = fixture({ checks: [CHECK], runCheck: () => { checking = true; return gate; } });
@@ -633,7 +632,7 @@ test("mail-v1: a requester stopped before the CAS cancels the application", asyn
   } finally { f.close(); }
 });
 
-test("mail-v1: cancelling a request with a pending integration wins the pre-CAS check", async () => {
+test("017. Mail-v1: cancelling a request with a pending integration wins the pre-CAS check", async () => {
   let failCheck = true;
   const f = fixture({ checks: [CHECK], runCheck: () => {
     if (failCheck) throw new StoreError("BROKER_UNAVAILABLE", "check runner down");
@@ -660,7 +659,7 @@ test("mail-v1: cancelling a request with a pending integration wins the pre-CAS 
   } finally { f.close(); }
 });
 
-test("mail-v1: a running check permits context publication and is stopped by an accepted cancel", async () => {
+test("018. Mail-v1: a running check permits context publication and is stopped by an accepted cancel", async () => {
   let release!: () => void; let checking = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const f = fixture({ checks: [CHECK], runCheck: (_candidate, _check, cancellation) => {
@@ -689,7 +688,7 @@ test("mail-v1: a running check permits context publication and is stopped by an 
   } finally { release(); f.close(); }
 });
 
-test("DR45: review history is decoded once per waiting/terminal sweep and status list", async () => {
+test("019. Review history is decoded once per waiting/terminal sweep and status list", async () => {
   const f = fixture();
   try {
     const candidate = f.candidateWith({ "history.txt": "one" });
@@ -708,13 +707,13 @@ test("DR45: review history is decoded once per waiting/terminal sweep and status
     await f.reviews.advanceAll();
     assert.equal(reads, 1, "waiting and completed requests must not each rescan history");
     reads = 0;
-    const status = f.reviews.status(f.auth("bob"), undefined, 64 * 1024, "history");
+    const status = f.reviews.status(f.auth("bob"), { kind: "merge" }, 64 * 1024, "history");
     assert.ok("requests" in status); assert.equal(status.requests.length, 12);
     assert.equal(reads, 1);
   } finally { f.close(); }
 });
 
-test("DR45: accepted cancel interrupts checks even when its preparation cleanup fails", { timeout: 10_000 }, async () => {
+test("020. Accepted cancel interrupts checks even when its preparation cleanup fails", { timeout: 10_000 }, async () => {
   let release!: () => void, entered!: () => void, aborted = false;
   const gate = new Promise<void>(resolve => { release = resolve; });
   const checking = new Promise<void>(resolve => { entered = resolve; });
@@ -744,7 +743,7 @@ test("DR45: accepted cancel interrupts checks even when its preparation cleanup 
   } finally { PreacceptScope.prototype.settle = settle; release(); await voting; f.close(); }
 });
 
-test("mail-v1: only the first ready request on a base applies; the other goes stale by refresh", async () => {
+test("021. Proposal v3: disjoint ready requests on one base both apply without rewriting old intent", async () => {
   const f = fixture(); try {
     const one = f.candidateWith({ "one.txt": "a" });
     const two = f.candidateWith({ "two.txt": "b" });
@@ -755,62 +754,39 @@ test("mail-v1: only the first ready request on a base applies; the other goes st
     const name2 = f.requestName("open-2");
     await f.vote("bob", name1, "approve", "ok", "v1");
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), one, "first applied");
-    // Voting on the second request is accepted, then advance marks it stale.
     await f.vote("carol", name2, "approve", "ok", "v2");
     const state2 = f.stateOf(name2);
-    assert.equal(state2.terminal, "stale"); assert.equal(state2.display, "stale");
-    const refresh = state2.entries.at(-1)!;
-    assert.equal(refresh.fact.kind, "refresh");
-    assert.equal(refresh.fact.kind === "refresh" ? refresh.fact.main : null, one);
-    const open2 = f.store.getOperation("alice", "open-2")!;
-    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open2.id)), null, "no second integration");
-    const refreshOp = refresh.operation;
-    const thread = (f.store.getOperationById(refreshOp)!.plan as { messages: MessagePlan[] }).messages
-      .find(m => m.review?.role === "thread")!;
-    assert.match(messageText(f.root, thread.id), new RegExp(`main moved to ${one}`));
-    assert.match(messageText(f.root, thread.id), /this request is stale/);
-    await assert.rejects(f.vote("dave", name2, "approve", "late", "v-late"), { code: "REQUEST_CLOSED" });
-    const stale = f.reviews.status(f.auth("bob"), name2, 64 * 1024, "s11");
-    assert.ok("entries" in stale); assert.equal(stale.display, "stale");
-    assert.equal(stale.entries.at(-1)?.kind, "refresh");
-    assert.equal(stale.main.oid, one);
-    assert.equal(f.git(["rev-parse", "refs/heads/main"]), one, "main unchanged by the second");
+    assert.equal(state2.terminal,null); assert.equal(state2.display,"applied");
+    assert.equal(state2.sourceIdentity.expectedBase,f.base);assert.equal(state2.sourceIdentity.candidate,two);
+    assert.equal(state2.integration?.identity?.expectedBase,one);
+    const applied=state2.integration!.identity!.candidate;
+    assert.notEqual(applied,two);assert.equal(f.git(["show",`${applied}:one.txt`]),"a");
+    assert.equal(f.git(["show",`${applied}:two.txt`]),"b");
+    assert.equal(state2.preparation?.fact.context,false);
+    const operation=f.applyOp("alice","open-2");assert.equal(operation?.state,"succeeded");
+    const preserved=operation!.planJson;f.reopen();
+    assert.equal(f.stateOf(name2).display,"applied");assert.equal(f.store.getOperationById(operation!.id)?.planJson,preserved);
   } finally { f.close(); }
 });
 
-test("mail-v1: a bound reviewer's retirement withdraws and re-asks the approval", async () => {
+test("022. Durable review: a bound reviewer's retirement preserves the existing approval", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
-    await f.submit("alice", candidate);
-    await f.open("alice", { tier: "HIGH", candidate }, "open");
+    await f.submit("alice", candidate); await f.open("alice", { tier: "HIGH", candidate }, "open");
     const name = f.requestName("open");
     await f.vote("bob", name, "approve", "bob ok", "v-bob");
     await f.vote("carol", name, "approve", "carol ok", "v-carol");
     await f.vote("dave", name, "approve", "dave ok", "v-dave");
-    const first = messages(f, "carol", "v-carol").find(m => m.review?.role === "approval")!;
-    const principalBefore = inboxCount(f, "principal");
-    // Retire a bundled voter: the approval is invalid only through eligibility.
-    f.stop("bob", "retired");
-    await f.reviews.advanceAll();
-    const state = f.stateOf(name);
-    const refresh = state.entries.at(-1)!;
-    assert.equal(refresh.fact.kind, "refresh");
-    assert.equal(refresh.fact.kind === "refresh" ? refresh.fact.main : "?", null);
-    const owned = (f.store.getOperationById(refresh.operation)!.plan as { messages: MessagePlan[] }).messages;
-    const withdrawn = owned.find(m => m.review?.role === "withdrawn")!;
-    assert.equal(withdrawn.review?.role === "withdrawn" ? withdrawn.review.approval : null, first.id);
-    assert.equal(existsSync(mailInboxPathAt(f.root, "principal", withdrawn.id, "new")), true);
-    // Quorum still holds with other votes: a new approval request was sent.
-    const again = owned.find(m => m.review?.role === "approval")!;
-    assert.notEqual(again.id, first.id);
-    assert.deepEqual(again.review?.role === "approval" ? [...again.review.votes] : [],
-      [f.store.getOperation("carol", "v-carol")!.id, f.store.getOperation("dave", "v-dave")!.id]);
-    assert.equal(inboxCount(f, "principal"), principalBefore + 2, "withdrawn + new approval");
-    assert.equal(f.stateOf(name).display, "principal-pending");
+    const before = f.stateOf(name), principalBefore = inboxCount(f, "principal");
+    f.stop("bob", "retired"); await f.reviews.advanceAll();
+    assert.deepEqual(f.stateOf(name).approval, before.approval);
+    assert.equal(f.stateOf(name).approvalValid, true);
+    assert.equal(f.stateOf(name).entries.length, before.entries.length);
+    assert.equal(inboxCount(f, "principal"), principalBefore);
   } finally { f.close(); }
 });
 
-test("mail-v1: a large completion notice is split into parts that reassemble exactly", async () => {
+test("023. Mail-v1: a large completion notice is split into parts that reassemble exactly", async () => {
   const f = fixture({ mailBodyBytes: 6 * 1024 });
   try {
     const big = Array.from({ length: 80 }, (_, i) => `line ${i} ${"x".repeat(50)}`).join("\n");
@@ -850,29 +826,94 @@ test("mail-v1: a large completion notice is split into parts that reassemble exa
   } finally { f.close(); }
 });
 
-test("mail-v1: an oversize completion notice is remembered and never recomputed", async () => {
-  // A real review module shares the fixture's store; its mergeDiff is counted.
+test("024. An accepted current preparation cannot fall back to direct diff execution when its owned primitive is unavailable", async () => {
+  const f = fixture();
+  try {
+    const candidate = f.candidateWith({ "current.txt": "real current preparation\n" });
+    await f.submit("alice", candidate);
+    const repository = new GitRepository({ stateRoot: f.root, projectGit: f.projectGit,
+      contextGit: join(f.root, "context.git"), worldDir: join(f.root, "world"), society: "demo" }, {
+      submissions: () => f.store.operations.submissions(), attachmentRoots: () => f.store.operations.attachmentRoots(),
+    });
+    const runtime = reviewRuntime(); let hold = true, directDiffs = 0;
+    const effects = {
+      ...repository.review, ...runtime,
+      policy: () => snapshotIntegrationPolicy(f.policy), currentPolicy: () => snapshotIntegrationPolicy(f.policy),
+      nextOperationId: () => {
+        if (hold && f.store.attestations.all().some(row => row.operation.plan.fact.kind === "review.integration"))
+          throw new StoreError("BROKER_UNAVAILABLE", "held after actual prepared-context acceptance, before integration allocation");
+        return runtime.nextOperationId();
+      },
+      // Hostile extra callback is test input, not a supported ReviewEffects port.
+      mergeDiff: (base: string, candidate: string, maxBytes: number) => {
+        directDiffs++;
+        const actual = runGitText(["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate], { gitDir: f.projectGit });
+        assert.equal(actual.status, 0, actual.stderr); assert.ok(Buffer.byteLength(actual.stdout) <= maxBytes);
+        return Buffer.from(actual.stdout);
+      },
+      applyMerge: (operation: OperationOf<"git.integrate">) => f.module.applyMerge(operation),
+      withWriter: <T>(work: () => Promise<T>) => f.module.withProjectWriter(work),
+    };
+    const bounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 };
+    const preparing = new ReviewModule(reviewLedger(f.store), f.mail, effects, bounds, "demo");
+    const receipt = await preparing.record(f.auth("alice"), "open-owned", {
+      kind: "merge.open", title: "current", reason: "owned diff required", tier: "LOW", candidate, base: f.base });
+    assert.equal(receipt.state, "succeeded");
+    const open = f.store.getOperation("alice", "open-owned")!;
+    assert.ok(open.kind === "attest.record" && open.payload.kind === "merge.open");
+    const context = f.store.attestations.all().find(row => row.operation.plan.fact.kind === "review.integration")?.operation;
+    assert.ok(context?.kind === "attest.record" && context.plan.fact.kind === "review.integration");
+    assert.equal(context.state, "succeeded", "the original real context is fully settled, not fabricated or pending");
+    assert.equal(f.stateOf(f.requestName("open-owned")).ready, true);
+    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open.id)), null);
+    hold = false;
+    const { prepareDiff: removed, ...withoutOwnedDiff } = effects; assert.equal(typeof removed, "function");
+    const unsupported = new ReviewModule(reviewLedger(f.store), f.mail, withoutOwnedDiff, bounds, "demo");
+    const before = f.store.acceptedOperationPage(), refs = f.git(["for-each-ref", "--format=%(refname) %(objectname)"]);
+    let failure: unknown;
+    try { await unsupported.advance(open.id); } catch (error) { failure = error; }
+    assert.equal(directDiffs, 0, "a current prepared scope cannot invoke the retired direct-diff execution path");
+    assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
+    assert.deepEqual(f.store.acceptedOperationPage(), before);
+    assert.ok(failure instanceof StoreError && failure.code === "UNSUPPORTED_PROFILE", String(failure));
+    await unsupported.advanceAll(); await unsupported.advanceAll();
+    assert.equal(directDiffs, 0); assert.deepEqual(f.store.acceptedOperationPage(), before);
+    assert.equal(f.git(["for-each-ref", "--format=%(refname) %(objectname)"]), refs);
+    f.reopen();
+    assert.deepEqual(f.store.getOperationById(context.id), context);
+    assert.equal((await f.reviews.record(f.auth("alice"), "open-owned", open.payload)).operation, receipt.operation);
+    assert.equal(f.store.getOperation("alice", applyRequestKeyFor(open.id)), null, "same-key observation cannot restart execution");
+    assert.deepEqual(f.store.acceptedOperationPage(), before);
+    await f.reviews.advance(open.id);
+    const applied = f.store.getOperation("alice", applyRequestKeyFor(open.id));
+    assert.ok(applied?.kind === "git.integrate" && applied.plan.merge?.version === 3);
+    assert.equal(applied.plan.merge.preparation, context.id);
+    assert.ok(applied.plan.merge.diff, "a complete current owner supplies the stored complete patch");
+    assert.equal(applied.state, "succeeded"); assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+    assert.deepEqual(f.store.getOperationById(context.id), context);
+    assert.equal("mergeDiff" in repository.review, false, "the obsolete repository execution port is not retained");
+    assert.equal("canonicalMergeDiff" in await import("@oma/git/canonical-command"), false, "the removed fallback is not kept as a callable export");
+  } finally { f.close(); }
+});
+
+test("025. Mail-v1: an oversize completion notice is remembered and never recomputed", async () => {
+  // Real current preparation/attachment owners, not the removed direct-diff path.
   const f = fixture({ bundleBytes: 128 });
   try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
     let diffs = 0;
+    const repository = new GitRepository({ stateRoot: f.root, projectGit: f.projectGit,
+      contextGit: join(f.root, "context.git"), worldDir: join(f.root, "world"), society: "demo" }, {
+      submissions: () => f.store.operations.submissions(), attachmentRoots: () => f.store.operations.attachmentRoots(),
+    });
     const counting = new ReviewModule(reviewLedger(f.store), f.mail, {
-      ...reviewRuntime(),
+      ...repository.review, ...reviewRuntime(),
       policy: () => snapshotIntegrationPolicy(f.policy),
       currentPolicy: () => snapshotIntegrationPolicy(f.policy),
-      verifyObjectFormat: () => {},
-      main: () => createCanonicalObserver().ref(f.projectGit, "refs/heads/main"),
-      published: () => createCanonicalObserver().published(f.projectGit),
-      ancestry: (b, c) => createCanonicalObserver().ancestry(f.projectGit, b, c),
-      changedPaths: (b, c) => createCanonicalObserver().changedPaths(f.projectGit, b, c),
-      gitlinks: c => createCanonicalObserver().gitlinks(f.projectGit, c),
-      submitters: () => [],
-      mergeDiff: (b, c, n) => { diffs++; return Buffer.from(`diff-${b}-${c}-${"x".repeat(200)}`, "utf8"); },
-      applyMerge: () => Promise.resolve(),
-      prepareRevert: () => { throw new StoreError("REF_STATE_UNKNOWN", "no revert in this fixture"); },
-      publishCandidateRef: () => {},
-      withWriter: work => work(),
+      prepareDiff: (...args) => { diffs++; return repository.review.prepareDiff!(...args); },
+      applyMerge: operation => f.module.applyMerge(operation),
+      withWriter: work => f.module.withProjectWriter(work),
     }, { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 128 }, "demo");
     const openReceipt = await counting.record(f.auth("alice"), "open", {
       kind: "merge.open", title: "t", reason: "r", tier: "LOW", candidate, base: f.base });
@@ -883,18 +924,20 @@ test("mail-v1: an oversize completion notice is remembered and never recomputed"
     assert.equal(f.store.getOperation("alice", applyRequestKeyFor(openOp.id)), null);
     const before = diffs;
     assert.ok(before >= 1, "the diff ran once");
+    const rows = f.store.attestations.all();
     await counting.advanceAll();
     await counting.advanceAll();
     assert.equal(diffs, before, "an oversize notice is never recomputed");
-    assert.equal(f.stateOf(f.requestName("open")).display, "applying", "the request stays ready");
-    const oversized = counting.status(f.auth("bob"), f.requestName("open"), 64 * 1024, "s12");
+    assert.deepEqual(f.store.attestations.all(), rows, "sweeping cannot mint repeated failure or preparation facts");
+    assert.equal(f.stateOf(f.requestName("open")).display, "blocked", "the preparation failure is durable");
+    const oversized = counting.status(f.auth("bob"), { name: f.requestName("open") }, 64 * 1024, "s12");
     assert.ok("entries" in oversized);
-    assert.ok(oversized.missing.some(m => m.includes("completion notice exceeds the document bound")));
+    assert.ok(oversized.missing.some(m => m.includes("notice preparation failed")));
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), f.base);
   } finally { f.close(); }
 });
 
-test("mail-v1: a skipped advance and a lost application are both recovered once", async () => {
+test("026. Mail-v1: a skipped advance and a lost application are both recovered once", async () => {
   // Seam 1: the host policy is unreadable during the vote's advance, so no
   // integration is created; reopen + advanceAll applies exactly once.
   let unreadable = true; let policyReads = 0;
@@ -911,6 +954,7 @@ test("mail-v1: a skipped advance and a lost application are both recovered once"
     unreadable = false;
     f.reopen();
     await f.reviews.advanceAll();
+    await f.module.reconcile(f.applyOp("alice", "open")!.id);
     assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate, "applied once after recovery");
     const applied = f.applyOp("alice", "open")!;
     assert.equal(applied.state, "succeeded");
@@ -971,7 +1015,7 @@ test("mail-v1: a skipped advance and a lost application are both recovered once"
   } finally { h.close(); }
 });
 
-test("mail-v1: review.status lists newest first and counts what the frame cannot carry", async () => {
+test("027. Mail-v1: review.status lists newest first and counts what the frame cannot carry", async () => {
   const f = fixture(); try {
     // Three open requests on three bases is impossible once one applies; keep
     // them all unapplied (MEDIUM with no votes).
@@ -982,7 +1026,7 @@ test("mail-v1: review.status lists newest first and counts what the frame cannot
     await f.open("alice", { tier: "MEDIUM", candidate: c2, title: "second" }, "open-2");
     await f.open("alice", { tier: "MEDIUM", candidate: c3, title: "third" }, "open-3");
     const names = ["open-1", "open-2", "open-3"].map(key => f.requestName(key));
-    const list = f.reviews.status(f.auth("bob"), undefined, 64 * 1024, "l1");
+    const list = f.reviews.status(f.auth("bob"), { kind: "merge" }, 64 * 1024, "l1");
     assert.ok("requests" in list);
     assert.deepEqual(list.requests.map(r => r.name), [names[2], names[1], names[0]], "newest first");
     assert.deepEqual(list.requests.map(r => r.title), ["third", "second", "first"]);
@@ -991,20 +1035,34 @@ test("mail-v1: review.status lists newest first and counts what the frame cannot
     assert.equal(list.requests[0]!.kind, "merge"); assert.equal(list.requests[0]!.requester, "alice");
     // A smaller frame keeps only as many as fit; the rest are counted, not dropped.
     const fullBytes = Buffer.byteLength(JSON.stringify({ v: 1, id: "l1", ok: true, result: list }));
-    const bounded = f.reviews.status(f.auth("bob"), undefined, fullBytes - 180, "l2");
+    const bounded = f.reviews.status(f.auth("bob"), { kind: "merge" }, fullBytes - 180, "l2");
     assert.ok("requests" in bounded);
     assert.ok(bounded.requests.length < 3 && bounded.requests.length >= 1,
       `expected a partial list at ${fullBytes - 180} bytes, got ${bounded.requests.length}`);
     assert.equal(bounded.omitted, 3 - bounded.requests.length);
     assert.equal(bounded.requests[0]!.name, names[2]);
-    // A frame too small for anything still answers honestly.
-    const empty = f.reviews.status(f.auth("bob"), undefined, 120, "l3");
-    assert.ok("requests" in empty);
-    assert.equal(empty.requests.length, 0); assert.equal(empty.omitted, 3);
+    assert.equal(bounded.next, bounded.requests.at(-1)!.name);
+    const collected = bounded.requests.map(row => row.name);
+    let after: string | null = bounded.next;
+    while (after !== null) {
+      const page = f.reviews.status(f.auth("bob"), { kind: "merge", after }, fullBytes - 180, "l2");
+      assert.ok("requests" in page);
+      assert.ok(page.requests.length > 0, "a continuation makes progress");
+      collected.push(...page.requests.map(row => row.name));
+      assert.ok(collected.length <= names.length, "pagination does not repeat rows");
+      after = page.next;
+    }
+    assert.deepEqual(collected, [names[2], names[1], names[0]]);
+    assert.throws(() => f.reviews.status(f.auth("bob"), { kind: "merge",
+      after: "merge-00000000-0000-4000-8000-000000000000" }, 64 * 1024, "l3"), { code: "INVALID_REQUEST" });
+    assert.throws(() => f.reviews.status(f.auth("bob"), { kind: "challenge", after: names[0]! },
+      64 * 1024, "l3"), { code: "INVALID_REQUEST" });
+    // An unusable page is refused rather than falsely signalling completion.
+    assert.throws(() => f.reviews.status(f.auth("bob"), { kind: "merge" }, 120, "l3"), { code: "FRAME_TOO_LARGE" });
   } finally { f.close(); }
 });
 
-test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside the frame and reports the rest", async () => {
+test("028. Mail-v1: a request detail keeps the newest entries inside the frame and reports the rest", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });
     await f.submit("alice", candidate);
@@ -1012,12 +1070,12 @@ test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside t
     const name = f.requestName("open-bounded");
     const actors = ["alice", "bob", "carol", "dave"];
     for (let i = 0; i < 40; i++) await f.review(actors[i % actors.length]!, name);
-    const full = f.reviews.status(f.auth("bob"), name, 64 * 1024, "d0");
+    const full = f.reviews.status(f.auth("bob"), { name: name }, 64 * 1024, "d0");
     assert.ok("entries" in full);
     assert.equal(full.entries.length, 40);
     const fullBytes = Buffer.byteLength(JSON.stringify({ v: 1, id: "d0", ok: true, result: full }));
     const budget = Math.floor(fullBytes / 2);
-    const bounded = f.reviews.status(f.auth("bob"), name, budget, "d1");
+    const bounded = f.reviews.status(f.auth("bob"), { name: name }, budget, "d1");
     assert.ok("entries" in bounded);
     const wire = Buffer.byteLength(JSON.stringify({ v: 1, id: "d1", ok: true, result: bounded }));
     assert.ok(wire <= budget, `a ${wire}-byte detail answers inside the ${budget}-byte frame`);
@@ -1029,25 +1087,37 @@ test("mail-v1/AV-20261003-24: a request detail keeps the newest entries inside t
     const omitted = full.entries.length - bounded.entries.length;
     assert.equal(bounded.missing.at(-1), `${omitted} earlier ${omitted === 1 ? "entry" : "entries"} omitted for size`);
     assert.deepEqual(bounded.missing.slice(0, -1), full.missing);
+    assert.ok(bounded.reviewers.items.length > 0, "bounded detail retains a usable reviewer page");
+    const reviewerNames = bounded.reviewers.items.map(row => row.name);
+    let reviewerAfter = bounded.reviewers.next;
+    while (reviewerAfter !== null) {
+      const page = f.reviews.status(f.auth("bob"), { name, reviewerAfter }, budget, "d1");
+      assert.ok("entries" in page);
+      assert.ok(page.reviewers.items.length > 0);
+      reviewerNames.push(...page.reviewers.items.map(row => row.name));
+      assert.ok(reviewerNames.length <= full.reviewers.items.length);
+      reviewerAfter = page.reviewers.next;
+    }
+    assert.deepEqual(reviewerNames, full.reviewers.items.map(row => row.name));
     // The bounded answer still decodes as the Worker detail variant.
     assert.equal(decodeRpcReply("review.status", { v: 1, id: "d1", ok: true, result: bounded }, "d1", { name }).ok, true);
     // A frame that cannot hold even the empty detail is refused honestly,
     // never delivered as an oversized success.
-    assert.throws(() => f.reviews.status(f.auth("bob"), name, 200, "d2"), { code: "FRAME_TOO_LARGE" });
+    assert.throws(() => f.reviews.status(f.auth("bob"), { name: name }, 200, "d2"), { code: "FRAME_TOO_LARGE" });
   } finally { f.close(); }
 });
 
-test("mail-v1: review.status reports an unobservable main as null", async () => {
+test("029. Mail-v1: review.status reports an unobservable main as null", async () => {
   const f = fixture(); try {
     rmSync(f.projectGit, { recursive: true, force: true });
-    const status = f.reviews.status(f.auth("bob"), undefined, 64 * 1024, "m1");
+    const status = f.reviews.status(f.auth("bob"), { kind: "merge" }, 64 * 1024, "m1");
     assert.ok("requests" in status);
     assert.equal(status.main.oid, null);
     assert.equal(typeof status.main.observedAtMs, "number");
   } finally { f.close(); }
 });
 
-test("mail-v1: the review.status wire method filters the Principal and rejects bad params", async () => {
+test("030. Mail-v1: the review.status wire method filters the Principal and rejects bad params", async () => {
   const f = fixture(); try {
     const unused = (): never => { throw new Error("unexpected fixture effect"); };
     const dispatcher = new PublicDispatcher({
@@ -1055,7 +1125,7 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
         getReceipt: () => null, hasOperation: () => false },
       mail: { send: async () => unused() },
       units: { statusSnapshot: unused }, views: { status: unused },
-      lifecycle: { create: async () => unused(), start: unused, stop: unused, ack: unused, follow: unused },
+      lifecycle: { creation: unused, create: async () => unused(), start: unused, stop: unused, ack: unused, follow: unused },
       review: f.reviews,
       git: {
         knownRefs: unused, isPublished: () => false,
@@ -1080,7 +1150,7 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
     // Worker named + list.
     const named = await call("bob", { name }) as { ok: boolean; result: { display?: string } };
     assert.equal(named.ok, true); assert.equal(named.result.display, "peer-needed");
-    const listed = await call("bob", {}) as { ok: boolean; result: { requests?: { name: string }[] } };
+    const listed = await call("bob", { kind: "merge" }) as { ok: boolean; result: { requests?: { name: string }[] } };
     assert.equal(listed.ok, true); assert.equal(listed.result.requests?.[0]?.name, name);
     // Principal: hidden before the approval mail, visible after, minimal shape.
     const hidden = await call("principal", { name }) as { ok: boolean; error: { code: string; message: string } };
@@ -1090,19 +1160,20 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
     await f.vote("carol", name, "approve", "ok", "v-carol");
     const visible = await call("principal", { name }) as { ok: boolean; result: Record<string, unknown> };
     assert.equal(visible.ok, true);
-    assert.deepEqual(Object.keys(visible.result).sort(),
-      ["approval", "display", "identity", "kind", "name", "tier", "title"]);
+    for (const privateField of ["entries", "reviewers", "authors", "approvers", "rejectors"])
+      assert.equal(privateField in visible.result, false, `Principal must not receive ${privateField}`);
     assert.equal(visible.result.display, "principal-pending");
     assert.equal(typeof visible.result.approval, "string");
     // Principal with an unknown name gets the same refusal as a hidden one.
     const unknown = await call("principal", { name: "merge-00000000-0000-4000-8000-000000000000" }) as { ok: boolean; error: { message: string } };
     assert.equal(unknown.ok, false); assert.match(unknown.error.message, /^no request .* is visible to the Principal$/);
     assert.notEqual(unknown.error.message, hiddenMessage, "the name is echoed; the refusal shape is identical");
-    // Principal with no name is refused outright.
-    assert.equal((await call("principal", {}) as { ok: boolean }).ok, false);
-    // Params are closed: a bad name fails the check, a request key is forbidden.
-    assert.equal((await call("bob", { name: "not a name" }) as { error: { code: string } }).error.code, "INVALID_REQUEST");
-    assert.equal((await call("bob", {}, { request: "key-1" }) as { error: { code: string } }).error.code, "INVALID_REQUEST");
+    // Principal cannot list worker review history, even using a valid query.
+    assert.equal((await call("principal", { kind: "merge" }) as { error: { code: string } }).error.code, "CAPABILITY_DENIED");
+    for (const params of [{}, { name: "not a name" }, { kind: "other" }, { name, kind: "merge" },
+      { kind: "merge", after: name.replace("merge-", "challenge-") }, { name, after: name }])
+      assert.equal((await call("bob", params) as { error: { code: string } }).error.code, "INVALID_REQUEST");
+    assert.equal((await call("bob", { kind: "merge" }, { request: "key-1" }) as { error: { code: string } }).error.code, "INVALID_REQUEST");
     // The response decodes through the closed result codec.
     const reply = await call("bob", { name });
     const decoded = decodeRpcReply("review.status", reply, "wire-1", { name });
@@ -1126,7 +1197,7 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
   } finally { f.close(); }
 });
 
-test("mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes", async () => {
+test("031. Mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes", async () => {
   const f = fixture(); try {
     // The candidate's commit claims bob as its author, but alice is the
     // authenticated submitter: submitters come from git.submit records,

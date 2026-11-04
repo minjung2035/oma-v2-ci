@@ -40,7 +40,7 @@ function fixture() {
 const input = Object.freeze({ id: "id", actor: "alice", requestKey: "key", requestHash: "hash",
   kind: "route.follow", payloadJson: '{"topic":"dev"}', planJson: '{"kind":"route.follow"}' });
 
-test("P3 Journal: classify is read-only and preserves retry/reused/absence", () => {
+test("001. Journal: classify is read-only and preserves retry/reused/absence", () => {
   const f = fixture();
   assert.equal(f.journal.classifyKey("alice", "key", "hash"), "absent");
   f.row({ requestHash: "hash" });
@@ -49,7 +49,7 @@ test("P3 Journal: classify is read-only and preserves retry/reused/absence", () 
   assert.ok(f.calls.every(call => call[0] === "get"));
 });
 
-test("P3 Journal: accept requires the live scope even for an exact retry", () => {
+test("002. Journal: accept requires the live scope even for an exact retry", () => {
   const f = fixture(); f.row({ requestHash: "hash" });
   assert.throws(() => f.journal.accept(input), { code: "INTERNAL_ERROR" });
   assert.equal(f.calls.length, 0);
@@ -57,14 +57,14 @@ test("P3 Journal: accept requires the live scope even for an exact retry", () =>
   assert.deepEqual(f.calls, [["get", "alice", "key"]]);
 });
 
-test("P3 Journal: acceptance inserts once without changing frozen bytes", () => {
+test("003. Journal: acceptance inserts once without changing frozen bytes", () => {
   const f = fixture(); f.live(true);
   assert.equal(f.journal.accept(input), "inserted");
   assert.deepEqual(f.calls, [["get", "alice", "key"], ["insert", input]]);
   assert.equal(f.calls[1][1], input);
 });
 
-test("P3 Journal: a different hash is rejected before insert", () => {
+test("004. Journal: a different hash is rejected before insert", () => {
   const f = fixture(); f.live(true); f.row({ requestHash: "other" });
   assert.throws(() => f.journal.accept(input), {
     code: "REQUEST_KEY_REUSED", message: reused("alice", "key").message,
@@ -72,7 +72,7 @@ test("P3 Journal: a different hash is rejected before insert", () => {
   assert.equal(f.calls.filter(call => call[0] === "insert").length, 0);
 });
 
-for (const matching of [true, false]) test(`P3 Journal: unique-key winner is re-observed, matching=${matching}`, () => {
+for (const matching of [true, false]) test(`005. Journal: unique-key winner is re-observed, matching=${matching}`, () => {
   const f = fixture(); f.live(true);
   f.race(new StoreError("REQUEST_KEY_REUSED", "unique"), { requestHash: matching ? "hash" : "other" });
   if (matching) assert.equal(f.journal.accept(input), "retry");
@@ -80,14 +80,14 @@ for (const matching of [true, false]) test(`P3 Journal: unique-key winner is re-
   assert.deepEqual(f.calls.map(call => call[0]), ["get", "insert", "get"]);
 });
 
-test("P3 Journal: non-key failures propagate unchanged", () => {
+test("006. Journal: non-key failures propagate unchanged", () => {
   const f = fixture(); f.live(true); const error = new StoreError("STORE_CORRUPT", "broken");
   f.race(error, null);
   assert.throws(() => f.journal.accept(input), value => value === error);
   assert.equal(f.calls.length, 2);
 });
 
-test("P3 Journal: transition methods delegate to the existing single owner", () => {
+test("007. Journal: transition methods delegate to the existing single owner", () => {
   const f = fixture(); f.live(true);
   f.journal.prepare("id", "frozen plan"); f.journal.succeed("id", "frozen result");
   f.journal.fail("id", "CHECK_FAILED"); f.journal.markUnknown("id");
@@ -99,14 +99,14 @@ test("P3 Journal: transition methods delegate to the existing single owner", () 
     assert.throws(action, { code: "INTERNAL_ERROR" });
 });
 
-test("P3 Journal: readers preserve decoded object identity and recoverable order", () => {
+test("008. Journal: readers preserve decoded object identity and recoverable order", () => {
   const f = fixture(); const row = Object.freeze({ id: "id" }); f.row(row);
   assert.equal(f.journal.get("alice", "key"), row);
   assert.equal(f.journal.getById("id"), row);
   assert.deepEqual(f.journal.recoverableIds(), ["id"]);
 });
 
-test("P3 Journal: mechanism has no SQL, callback workflow, or effect import", () => {
+test("009. Journal: mechanism has no SQL, callback workflow, or effect import", () => {
   const source = ts.createSourceFile("journal.ts", readFileSync("packages/storage/src/operation-journal.ts", "utf8"), ts.ScriptTarget.Latest, true);
   const imports = source.statements.filter(ts.isImportDeclaration)
     .filter(node => !node.importClause?.isTypeOnly).map(node => node.moduleSpecifier.text);

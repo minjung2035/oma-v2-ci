@@ -22,7 +22,7 @@ function fixture(t,purpose="candidate"){
   t.after(async()=>{await owner.close();rmSync(root,{recursive:true,force:true});});
   return {root,owner,staging,slot};
 }
-for(const purpose of ['candidate','runtime-tools']) test(`${purpose} staging: callback fault with a live scope and free lease retains the tree until actual termination and retry`,{timeout:20000},async t=>{
+for(const purpose of ['candidate','runtime-tools']) test(`001. Candidate staging: ${purpose} staging: callback fault with a live scope and free lease retains the tree until actual termination and retry`,{timeout:20000},async t=>{
   const f=fixture(t,purpose),controller=new AbortController(),interrupted=new Error('fixture interruption after the child released its lease');
   let held,first;let ready;const childClosedLease=new Promise(resolve=>{ready=resolve;});let output='';
   t.after(async()=>{controller.abort();await held?.stop();});
@@ -46,7 +46,7 @@ for(const purpose of ['candidate','runtime-tools']) test(`${purpose} staging: ca
   await f.staging.run(async stage=>{assert.notEqual(stage.root,first.root);assert.equal(existsSync(first.root),false);writeFileSync(join(stage.workspace,'retry'),'once');});
   assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
 });
-test('candidate staging: SIGKILL after collection preserves primary bytes and a fresh owner can restart',{timeout:20000},t=>{
+test("002. Candidate staging: SIGKILL after collection preserves primary bytes and a fresh owner can restart",{timeout:20000},t=>{
   // Each actual broker process must acquire the exclusive journal itself.
   // The observing parent initializes it but holds no competing owner lock.
   const f={root:mkdtempSync(join(tmpdir(),'oma-candidate-restart-'))};ExecutionJournal.initialize(f.root);
@@ -70,7 +70,7 @@ test('candidate staging: SIGKILL after collection preserves primary bytes and a 
   assert.notEqual(readFileSync(record,'utf8'),old);assert.equal(readFileSync(primary,'utf8'),'accepted bytes stay primary');
   assert.deepEqual(readdirSync(join(f.root,'staging')),[]);
 });
-test('candidate staging: interrupted mode000 workspace collection preserves an external symlink target and retries',{timeout:20000},async t=>{
+test("003. Candidate staging: interrupted mode000 workspace collection preserves an external symlink target and retries",{timeout:20000},async t=>{
   const f=fixture(t),outside=join(f.root,'outside');mkdirSync(outside);writeFileSync(join(outside,'primary'),'outside stays untouched');
   const failed=new Error('fixture fault after changing owned workspace mode');let first;
   await assert.rejects(f.staging.run(async stage=>{
@@ -81,7 +81,7 @@ test('candidate staging: interrupted mode000 workspace collection preserves an e
   await f.staging.run(async stage=>{writeFileSync(join(stage.workspace,'retry'),'complete');});
   assert.deepEqual(readdirSync(join(f.root,'staging')),[]);assert.equal(readFileSync(join(outside,'primary'),'utf8'),'outside stays untouched');
 });
-test('candidate staging: a real existing tree at the selected nonce is never collected as newly owned staging',{timeout:20000},async t=>{
+test("004. Candidate staging: a real existing tree at the selected nonce is never collected as newly owned staging",{timeout:20000},async t=>{
   const f=fixture(t),nonce='00000000-0000-4000-8000-000000000001',foreign=join(f.root,'staging','candidate-'+nonce);
   mkdirSync(foreign,{recursive:true});writeFileSync(join(foreign,'primary'),'preexisting data stays primary');
   // Only the disposable name is deterministic. File creation, EEXIST, flock,

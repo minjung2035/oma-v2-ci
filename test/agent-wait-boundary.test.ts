@@ -13,7 +13,7 @@ import type { PreparedBatch } from "@oma/contracts";
 const batch: PreparedBatch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
   messageIds: [], sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" };
 
-test("DR27: wait decoder is exact and a wait notice is never a delivery boundary", () => {
+test("001. Wait decoder is exact and a wait notice is never a delivery boundary", () => {
   const good = { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation };
   const event = (value: unknown) => ({ type: "extension_ui_request", method: "notify", message: PI_WAIT_PREFIX + JSON.stringify(value) });
   assert.equal(waitOf(event(good), batch), true);

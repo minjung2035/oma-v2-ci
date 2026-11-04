@@ -2,8 +2,8 @@
  *
  * Each test runs a real society (provisioned state, Store, mail, broker with
  * its Principal and host endpoints), the bundled engine started by the
- * product's PrincipalSession with the trusted extension, the model-facing CLI
- * the extension starts, and the product's PrincipalDelivery. The model is an
+ * product's PrincipalSession with the trusted extension, its typed client,
+ * and the product's PrincipalDelivery. The model is an
  * OpenAI-compatible endpoint answering from a script (fixtures/
  * scripted-provider.ts), so a scenario decides what the model does and the
  * product decides everything else. Assertions are on durable facts: ledger
@@ -20,40 +20,40 @@ import { withScenario } from "./fixtures/scenario.js";
 import { call, continuesTurn, delayed, failing, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
 import { principalSessionDir, principalWorkspace } from "@oma/engine/principal-session";
 
+const mailPath = (root: string, id: string): string => id.startsWith("/") || id.startsWith("..") ? id :
+  join(root, "agents/principal/records/mail/messages", `${id}.md`);
 const TIMEOUT = { timeout: 120_000 };
 
 /** The newest tool result the engine handed the model. */
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 
-test("SCN-P01: a Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
+test("001. A Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
   // mail-v1: the Principal reads code only as a review request's patch; an
   // unknown name answers with the visibility refusal, not a listing.
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("코드를 확인했습니다.")] }, async s => {
+  await withScenario({ residents: ["worker-a"], script: [tools(call("read", { offset: 1, limit: 2000, path: "/world/project" })), text("코드를 확인했습니다.")] }, async s => {
     const turn = await s.prompt("현재 프로젝트 코드를 확인해줘");
     assert.equal(s.provider.seen.length, 2, "the model was not asked again with the tool's result");
-    const offered = (s.provider.seen[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_merge", "oma_challenge", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
-    for (const name of ["bash", "write", "edit", "oma_status", "oma_mail_ack", "oma_agent_create", "oma_git", "oma_review_decide"]) assert.ok(!offered.includes(name), name);
     const result = lastResult(s.provider.seen[1]!.body);
-    assert.match(result, /CAPABILITY_DENIED|Insufficient permission/, result);
+    assert.match(result, /CAPABILITY_DENIED|Insufficient permission|outside|permitted|denied/i, result);
     assert.ok(continuesTurn(s.provider.seen[1]!.body));
     assert.ok(turn.lines.some(line => line.includes("코드를 확인했습니다")), JSON.stringify(turn.lines));
   });
 });
 
 /** The message id a delivery notice names, in the order it lists them. */
-const noticed = (notice: string): string[] => [...notice.matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
+const noticed = (notice: string): string[] => [...new Set([...notice.matchAll(/\/mail\/messages\/(m-[0-9a-f-]+-\d+)\.md/g)].map(match => match[1]!))];
 /** A receipt the model was handed as a tool result. */
 const receiptIn = (result: string): { operation: string; state: string; result?: { message?: string; archivePath?: string } } => {
-  const at = result.indexOf("{");
-  assert.ok(at >= 0, `the tool result carries no receipt: ${result}`);
-  return JSON.parse(result.slice(at)) as { operation: string; state: string; result?: { message?: string; archivePath?: string } };
+  const envelope = JSON.parse(result);
+  assert.equal(typeof envelope.invocation.key, "string");
+  assert.ok(envelope.receipt, `the tool result carries no receipt: ${result}`);
+  return envelope.receipt;
 };
 
-test("SCN-P02: the model sends Korean mail to a Resident; one operation, one delivery, the stored body is what it wrote", TIMEOUT, async () => {
+test("002. The model sends Korean mail to a Resident; one operation, one delivery, the stored body is what it wrote", TIMEOUT, async () => {
   const body = "API 목록을 정리해 주세요.\n우선순위: 인증 → 결제 ✅";
   await withScenario({ residents: ["worker-a"], script: [
-    tools(call("oma_mail_send", { to: ["worker-a"], subject: "작업 요청", body, kind: "question" })), text("보냈습니다."),
+    tools(call("oma_send", { to: ["worker-a"], subject: "작업 요청", content: { kind: "text", value: body } })), text("보냈습니다."),
   ] }, async s => {
     await s.prompt("worker-a에게 API 정리를 부탁해");
     const receipt = receiptIn(lastResult(s.provider.seen[1]!.body));
@@ -65,7 +65,7 @@ test("SCN-P02: the model sends Korean mail to a Resident; one operation, one del
     assert.deepEqual(s.inbox("worker-a"), [message]);
     assert.equal(s.store.getDelivery(message, "worker-a")?.materialized, 1);
     const stored = s.archived(message);
-    assert.match(stored, /^X-OMA-Kind: question/im);
+    assert.match(stored, /^X-OMA-Kind: message/im);
     assert.ok(stored.includes("Subject: =?UTF-8?") || stored.includes("Subject: 작업 요청"), "the subject is not stored");
     // The stored body is what the model wrote, through the transfer encoding.
     const encoded = stored.split("\r\n\r\n").slice(1).join("\r\n\r\n");
@@ -74,7 +74,7 @@ test("SCN-P02: the model sends Korean mail to a Resident; one operation, one del
   });
 });
 
-test("SCN-P03: mail to the Principal is delivered into its session, read, answered as a reply, and completed once", TIMEOUT, async () => {
+test("003. Mail to the Principal is delivered into its session, read, answered as a reply, and completed once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const asked = await s.residentSends("worker-a", { to: ["principal"], subject: "질문", body: "어느 API를 쓸까요?", kind: "question" }, "w-q1") as { ok: boolean; result: { result: { message: string } } };
     assert.equal(asked.ok, true);
@@ -82,9 +82,9 @@ test("SCN-P03: mail to the Principal is delivered into its session, read, answer
     s.script((request, index) => {
       if (index === 0) {
         const ids = noticed(request.messages.map(textOf).join("\n"));
-        return tools(call("oma_mail_read", { messageId: `/mail/archive/cur/${ids[0]}:2,` }));
+        return tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, question) }));
       }
-      if (index === 1) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "Re: 질문", body: "REST로 가세요.", replyTo: question }));
+      if (index === 1) return tools(call("oma_send", { to: ["worker-a"], subject: "Re: 질문", content: { kind: "text", value: "REST로 가세요." }, replyTo: question }));
       return text("답장했습니다.");
     });
     const outcome = await s.deliver();
@@ -104,13 +104,13 @@ test("SCN-P03: mail to the Principal is delivered into its session, read, answer
   });
 });
 
-test("SCN-P04: Principal delivery and repeated reads never manufacture an acknowledgement", TIMEOUT, async () => {
+test("004. Principal delivery and repeated reads never manufacture an acknowledgement", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const sent = await s.residentSends("worker-a", { to: ["principal"], subject: "Report", body: "Finished.", kind: "result" }, "w-r1") as { result: { result: { message: string } } };
     const message = sent.result.result.message;
-    s.script([tools(call("oma_mail_read", { messageId: message })), text("Read.")]);
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, message) })), text("Read.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    s.script([tools(call("oma_mail_read", { messageId: message })), text("Read again.")]);
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, message) })), text("Read again.")]);
     await s.prompt("Read that message again.");
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /Finished/);
     assert.equal(s.store.getDelivery(message, "principal")?.presented, 1);
@@ -120,7 +120,7 @@ test("SCN-P04: Principal delivery and repeated reads never manufacture an acknow
   });
 });
 
-test("SCN-P05: several Residents' mail arrives as one batch; the model reads the index and every message", TIMEOUT, async () => {
+test("005. Several Residents' mail arrives as one batch; the model reads the index and every message", TIMEOUT, async () => {
   const residents = ["worker-a", "worker-b", "worker-c"];
   await withScenario({ residents }, async s => {
     const messages: string[] = [];
@@ -129,9 +129,9 @@ test("SCN-P05: several Residents' mail arrives as one batch; the model reads the
       messages.push(sent.result.result.message);
     }
     s.script((request, index) => {
-      if (index === 0) return tools(call("oma_mail_read", { messageId: "/inbox.md" }));
+      if (index === 0) return tools(call("read", { offset: 1, limit: 2000, path: join(s.root, "agents/principal/records/mail/inbox.md") }));
       const ids = noticed(request.messages.map(textOf).join("\n"));
-      if (index <= ids.length) return tools(call("oma_mail_read", { messageId: ids[index - 1] }));
+      if (index <= ids.length) return tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, ids[index - 1]!) }));
       return text("세 보고를 모두 읽었습니다.");
     });
     const outcome = await s.deliver();
@@ -144,25 +144,32 @@ test("SCN-P05: several Residents' mail arrives as one batch; the model reads the
   });
 });
 
-test("SCN-P06: a Korean body near the body limit is read back whole through the mail tool", TIMEOUT, async () => {
+test("006. A Korean body near the body limit is read back whole through the mail tool", TIMEOUT, async () => {
   const body = "가나다라마바사아자차".repeat(8000);
   assert.ok(Buffer.byteLength(body) <= 262144 && Buffer.byteLength(body) > 200_000);
   await withScenario({ residents: ["worker-a"] }, async s => {
     const sent = await s.residentSends("worker-a", { to: ["principal"], subject: "긴 보고", body, kind: "result" }, "w-long") as { ok: boolean; result: { result: { message: string } } };
     assert.equal(sent.ok, true, JSON.stringify(sent));
     const message = sent.result.result.message;
-    s.script([tools(call("oma_mail_read", { messageId: message })), text("다 읽었습니다.")]);
+    const chunks: Buffer[] = [];
+    s.script((request, index) => {
+      if (index === 0) return tools(call("grep", { path: mailPath(s.root, message), pattern: "." }));
+      const result = JSON.parse(lastResult(request).trim().split("\n").at(-1)!);
+      if (index === 1) return tools(call("read", result.read));
+      chunks.push(Buffer.from(result.dataBase64, "base64"));
+      return result.next === null ? text("Read all pages.") : tools(call("read", {
+        path: result.reference, byteOffset: result.next, byteLimit: 65536 }));
+    });
     assert.equal((await s.deliver()).kind, "delivered");
-    const read = lastResult(s.provider.seen[1]!.body);
-    assert.ok(read.includes(body), `the body was not read whole (${read.length} characters came back)`);
+    assert.ok(Buffer.concat(chunks).toString("utf8").includes(body), "all exact UTF-8 body bytes must reach the model through bounded result pages");
   });
 });
 
-test("SCN-P07: the path a send result shows is the path the same tool reads back", TIMEOUT, async () => {
+test("007. The path a send result shows is the path the same tool reads back", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((request, index) => {
-      if (index === 0) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "기록", body: "다시 읽을 내용" }));
-      if (index === 1) return tools(call("oma_mail_read", { messageId: receiptIn(lastResult(request)).result!.archivePath! }));
+      if (index === 0) return tools(call("oma_send", { to: ["worker-a"], subject: "기록", content: { kind: "text", value: "다시 읽을 내용" } }));
+      if (index === 1) return tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, receiptIn(lastResult(request)).result!.message!) }));
       return text("다시 읽었습니다.");
     });
     await s.prompt("보내고 다시 읽어봐");
@@ -170,9 +177,9 @@ test("SCN-P07: the path a send result shows is the path the same tool reads back
   });
 });
 
-test("SCN-P08: mail to the society's commons reaches every Resident and not the sender", TIMEOUT, async () => {
+test("008. Mail to the society's commons reaches every Resident and not the sender", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"], script: [
-    tools(call("oma_mail_send", { to: ["commons"], subject: "공지", body: "모두 확인하세요.", kind: "alert" })), text("공지했습니다."),
+    tools(call("oma_send", { to: ["commons"], subject: "공지", content: { kind: "text", value: "모두 확인하세요." } })), text("공지했습니다."),
   ] }, async s => {
     await s.prompt("모두에게 공지해");
     const receipt = receiptIn(lastResult(s.provider.seen[1]!.body));
@@ -194,11 +201,11 @@ async function residentAsks(s: Parameters<Parameters<typeof withScenario>[1]>[0]
 const principalSends = (s: Parameters<Parameters<typeof withScenario>[1]>[0]) => s.operations("principal").filter(row => row.kind === "mail.send");
 
 for (const [name, broken] of [["a server error", failing(500)], ["a cut stream", { kind: "cut" } as Reply], ["a body that is not the protocol", { kind: "garbage" } as Reply]] as const)
-  test(`SCN-F01: the engine gets ${name} before the model acts; whatever the engine does about it, the effect happens at most once and the next prompt runs`, TIMEOUT, async () => {
+  test(`009. The engine gets ${name} before the model acts; whatever the engine does about it, the effect happens at most once and the next prompt runs`, TIMEOUT, async () => {
     await withScenario({ residents: ["worker-a"] }, async s => {
       s.script((request, index) => {
         if (index === 0) return broken;
-        return continuesTurn(request) ? text("보냈습니다.") : tools(call("oma_mail_send", { to: ["worker-a"], subject: "재시도", body: "한 번만 가야 합니다.", request: "once-1" }));
+        return continuesTurn(request) ? text("보냈습니다.") : tools(call("oma_send", { to: ["worker-a"], subject: "재시도", content: { kind: "text", value: "한 번만 가야 합니다." } }, "once-1"));
       });
       await s.prompt("worker-a에게 보내");
       // Retrying is the engine's (INF-001): it may ask again or end the run.
@@ -211,10 +218,10 @@ for (const [name, broken] of [["a server error", failing(500)], ["a cut stream",
 
 for (const broken of [{ kind: "disconnect" } as Reply, { kind: "cut" } as Reply, failing(503)])
   for (const recover of [false, true])
-    test(`SCN-RETRY: ${broken.kind} retries five times, then ${recover ? "recovers" : "fails"} without replaying a tool`, TIMEOUT, async () => {
+    test(`010. Provider recovery: ${broken.kind} retries five times, then ${recover ? "recovers" : "fails"} without replaying a tool`, TIMEOUT, async () => {
       await withScenario({ residents: ["worker-a"] }, async s => {
         s.script((_request, index) => {
-          if (index === 0) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "재시도 경계", body: "한 번만" }));
+          if (index === 0) return tools(call("oma_send", { to: ["worker-a"], subject: "재시도 경계", content: { kind: "text", value: "한 번만" } }));
           return recover && index === 6 ? text("연결 복구 완료") : broken;
         });
         const turn = await s.prompt("메일을 보내고 결과를 알려줘");
@@ -232,10 +239,10 @@ for (const broken of [{ kind: "disconnect" } as Reply, { kind: "cut" } as Reply,
       });
     });
 
-test("SCN-RETRY: closing the session during backoff cancels retries without replaying the completed tool", TIMEOUT, async () => {
+test("011. Closing the session during backoff cancels retries without replaying the completed tool", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => index === 0
-      ? tools(call("oma_mail_send", { to: ["worker-a"], subject: "취소 경계", body: "한 번만" }))
+      ? tools(call("oma_send", { to: ["worker-a"], subject: "취소 경계", content: { kind: "text", value: "한 번만" } }))
       : failing(503));
     let cancelled = false;
     const off = s.session.onEvent(event => {
@@ -253,7 +260,7 @@ test("SCN-RETRY: closing the session during backoff cancels retries without repl
   });
 });
 
-test("SCN-RETRY: authentication failure does not retry", TIMEOUT, async () => {
+test("012. Authentication failure does not retry", TIMEOUT, async () => {
   await withScenario({ script: () => failing(401) }, async s => {
     const refused = await s.prompt("응답해 줘");
     assert.equal(s.provider.seen.length, 1);
@@ -261,7 +268,7 @@ test("SCN-RETRY: authentication failure does not retry", TIMEOUT, async () => {
   });
 });
 
-test("SCN-F02: a delivery whose model never answers is not completed; the mail stays and is presented again, then completed once", TIMEOUT, async () => {
+test("013. A delivery whose model never answers is not completed; the mail stays and is presented again, then completed once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const message = await residentAsks(s, "w-f2");
     s.script(() => failing(503));
@@ -279,11 +286,11 @@ test("SCN-F02: a delivery whose model never answers is not completed; the mail s
   });
 });
 
-test("SCN-F03: tool arguments that are not JSON reach the model as a failed call; its corrected call sends once", TIMEOUT, async () => {
+test("014. Tool arguments that are not JSON reach the model as a failed call; its corrected call sends once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((request, index) => {
-      if (index === 0) return tools({ name: "oma_mail_send", args: null, raw: "{\"to\": [\"worker-a\"], \"subject\": " });
-      if (index === 1) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "고친 요청", body: "이번엔 맞습니다." }));
+      if (index === 0) return tools({ name: "oma_send", args: null, raw: "{\"to\": [\"worker-a\"], \"subject\": " });
+      if (index === 1) return tools(call("oma_send", { to: ["worker-a"], subject: "고친 요청", content: { kind: "text", value: "이번엔 맞습니다." } }));
       return text("보냈습니다.");
     });
     await s.prompt("보내");
@@ -292,9 +299,9 @@ test("SCN-F03: tool arguments that are not JSON reach the model as a failed call
   });
 });
 
-test("SCN-F04: mail to an address that does not exist is refused to the model and records nothing", TIMEOUT, async () => {
+test("015. Mail to an address that does not exist is refused to the model and records nothing", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"], script: [
-    tools(call("oma_mail_send", { to: ["nobody"], subject: "없는 주소", body: "x" })), text("그런 agent가 없습니다."),
+    tools(call("oma_send", { to: ["nobody"], subject: "없는 주소", content: { kind: "text", value: "x" } })), text("그런 agent가 없습니다."),
   ] }, async s => {
     await s.prompt("nobody에게 보내");
     // The routing owner answers, before acceptance, and says which name (P0-2).
@@ -306,48 +313,45 @@ test("SCN-F04: mail to an address that does not exist is refused to the model an
   });
 });
 
-test("SCN-F05: a model that repeats a send with the same request key gets the first receipt, not a second mail", TIMEOUT, async () => {
-  const send = call("oma_mail_send", { to: ["worker-a"], subject: "한 번", body: "같은 key", request: "same-key-1" });
-  await withScenario({ residents: ["worker-a"], script: [tools(send), tools(send), text("두 번 불렀습니다.")] }, async s => {
-    await s.prompt("보내고, 확실하게 한 번 더 보내");
-    const [first, second] = toolResults(s.provider.seen[2]!.body).map(result => receiptIn(result.text));
-    assert.equal(first!.operation, second!.operation, "the repeat was a new operation");
+test("016. Repeated original call identity is refused without duplicating its accepted mail", TIMEOUT, async () => {
+  const send = call("oma_send", { to: ["worker-a"], subject: "한 번", content: { kind: "text", value: "같은 호출" } }, "same-call");
+  await withScenario({ residents: ["worker-a"], script: [tools(send), tools(send), text("Done.")] }, async s => {
+    await s.prompt("Send once.");
     assert.equal(principalSends(s).length, 1);
+    assert.equal(principalSends(s)[0]!.state, "succeeded");
     assert.equal(s.inbox("worker-a").length, 1);
+    assert.ok(s.events.some(event => JSON.stringify(event).match(/ambiguous|Duplicate original Pi call/)));
   });
 });
 
-test("SCN-F06: a send while the broker is down is 'outcome unknown' with its key; after the restart, the same key sends it once", TIMEOUT, async () => {
+test("017. A broker outage preserves the unfrozen invocation without reconstructing sources or submitting a replacement", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     await s.stopBroker();
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "중단 중", body: "다시 보낼 내용", request: "outage-1" })), text("나중에 다시 보내겠습니다.")]);
-    await s.prompt("worker-a에게 보내");
-    const unknown = lastResult(s.provider.seen[1]!.body);
-    assert.match(unknown, /outage-1/, `the tool did not name the key to ask again with: ${unknown}`);
-    assert.doesNotMatch(unknown, /"state":"succeeded"/);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "중단 중", content: { kind: "text", value: "다시 보낼 내용" } }, "outage-1")), text("Waiting.")]);
+    await s.prompt("Send this message.");
+    assert.match(lastResult(s.provider.seen[1]!.body), /outage-1/);
+    assert.equal(principalSends(s).length, 0);
     await s.restartBroker();
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "중단 중", body: "다시 보낼 내용", request: "outage-1" })), text("보냈습니다.")]);
-    await s.prompt("이제 다시 보내");
-    const receipt = receiptIn(lastResult(s.provider.seen.at(-1)!.body));
-    assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
-    assert.equal(principalSends(s).length, 1);
-    assert.equal(principalSends(s)[0]!.request_key, "outage-1");
-    assert.equal(s.inbox("worker-a").length, 1);
+    s.script([text("Observe the recovered invocation.")]);
+    await s.prompt("Continue the original authorized work.");
+    assert.equal(principalSends(s).length, 0);
+    assert.equal(s.inbox("worker-a").length, 0);
+    assert.match(s.provider.seen.at(-1)!.body.messages.map(textOf).join("\n"), /No accepted original operation was observed/);
   });
 });
 
-test("SCN-F07: after a broker restart the engine is registered again and authenticated tools keep working", TIMEOUT, async () => {
-  const open = tools(call("oma_society", { action: "open", request: "open-f07" }));
+test("018. After a broker restart the engine is registered again and authenticated tools keep working", TIMEOUT, async () => {
+  const open = tools(call("oma_society", { action: "open" }));
   await withScenario({ residents: ["worker-a"], script: [open, text("Open."), open, text("Still open.")] }, async s => {
     await s.prompt("Open Worker execution.");
     const original = receiptIn(lastResult(s.provider.seen[1]!.body)); assert.equal(original.state, "succeeded");
     await s.restartBroker(); await s.prompt("Look up the same request.");
-    assert.deepEqual(receiptIn(lastResult(s.provider.seen[3]!.body)), original);
-    assert.equal(s.operations("principal").filter(row => row.kind === "society.set").length, 1);
+    assert.equal(receiptIn(lastResult(s.provider.seen[3]!.body)).state, "succeeded");
+    assert.equal(s.operations("principal").filter(row => row.kind === "society.set").length, 2);
   });
 });
 
-test("SCN-F08: an engine killed in the middle of a delivery loses no mail; the next session gets it and completes it once", TIMEOUT, async () => {
+test("019. An engine killed in the middle of a delivery loses no mail; the next session gets it and completes it once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const message = await residentAsks(s, "w-f8");
     s.script(() => ({ kind: "hang" }));
@@ -368,7 +372,7 @@ test("SCN-F08: an engine killed in the middle of a delivery loses no mail; the n
   });
 });
 
-test("SCN-F09: a Human prompt typed during a delivery waits for it and then runs, once", TIMEOUT, async () => {
+test("020. A Human prompt typed during a delivery waits for it and then runs, once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const message = await residentAsks(s, "w-f9");
     s.script((request) => {
@@ -385,18 +389,18 @@ test("SCN-F09: a Human prompt typed during a delivery waits for it and then runs
     await s.idle();
     const humanTurns = s.provider.seen.filter(entry => lastUserText(entry.body).includes("사람의 질문"));
     assert.equal(humanTurns.length, 1, "the Human's prompt was not run exactly once");
-    const deliveryTurn = s.provider.seen.findIndex(entry => lastUserText(entry.body).includes("path=/mail/archive/cur/"));
+    const deliveryTurn = s.provider.seen.findIndex(entry => lastUserText(entry.body).includes("OMA delivered a message batch"));
     const humanTurn = s.provider.seen.findIndex(entry => lastUserText(entry.body).includes("사람의 질문"));
     assert.ok(deliveryTurn >= 0 && deliveryTurn < humanTurn, "the Human's prompt was folded into the delivery's run");
     assert.equal(s.store.getDelivery(message, "principal")?.presented, 1);
   });
 });
 
-test("SCN-F10: the model cannot write the Human's session history or read it", TIMEOUT, async () => {
+test("021. The model cannot write the Human's session history or read it", TIMEOUT, async () => {
   await withScenario({}, async s => {
     const history = principalSessionDir(s.root);
     const target = join(history, "planted.jsonl");
-    s.script([tools(call("write", { path: target, content: "{}" })), tools(call("read", { path: history })), text("못 했습니다.")]);
+    s.script([tools(call("write", { path: target, content: "{}" })), tools(call("read", { offset: 1, limit: 2000, path: history })), text("못 했습니다.")]);
     await s.prompt("세션 기록에 써봐");
     assert.equal(existsSync(target), false, "the model wrote into the session history");
     const results = toolResults(s.provider.seen[2]!.body).map(result => result.text);
@@ -405,20 +409,20 @@ test("SCN-F10: the model cannot write the Human's session history or read it", T
   });
 });
 
-test("SCN-F11: a provider that stops answering mid-turn does not wedge the session; the next prompt runs", TIMEOUT, async () => {
+test("022. A provider that stops answering mid-turn does not wedge the session; the next prompt runs", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => (index < 3 ? { kind: "hang" } : text("이제 답합니다.")));
     await s.prompt("응답해", 60_000);
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("상태 확인")]);
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: "/world/project" })), text("상태 확인")]);
     await s.prompt("상태", 30_000);
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission|outside|permitted|denied/i);
   });
 });
 
-test("SCN-L01: delegate, get a reply, read it, follow up, report -- every fact recorded once and threaded", TIMEOUT, async () => {
+test("023. Delegate, get a reply, read it, follow up, report -- every fact recorded once and threaded", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // 1. The Human delegates; the model asks worker-a.
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "로그인 버그", body: "재현하고 원인을 알려주세요.", kind: "question", request: "task-1" })), text("worker-a에게 맡겼습니다.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "로그인 버그", content: { kind: "text", value: "재현하고 원인을 알려주세요." } }, "task-1")), text("worker-a에게 맡겼습니다.")]);
     await s.prompt("로그인 버그를 worker-a에게 맡겨");
     const task = receiptIn(lastResult(s.provider.seen[1]!.body)).result!.message!;
     // 2. worker-a answers as a reply to the task.
@@ -427,17 +431,17 @@ test("SCN-L01: delegate, get a reply, read it, follow up, report -- every fact r
     const answer = answered.result.result.message;
     // 3. Delivered; the model reads it and follows up in the same thread.
     s.script((request, index) => {
-      if (index === 0) return tools(call("oma_mail_read", { messageId: noticed(request.messages.map(textOf).join("\n"))[0]! }));
-      if (index === 1) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "Re: 로그인 버그", body: "수정해서 제출해 주세요.", replyTo: answer, request: "follow-1" }));
+      if (index === 0) return tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, answer) }));
+      if (index === 1) return tools(call("oma_send", { to: ["worker-a"], subject: "Re: 로그인 버그", content: { kind: "text", value: "수정해서 제출해 주세요." }, replyTo: answer }, "follow-1"));
       return text("원인을 받았고 수정을 요청했습니다.");
     });
     assert.equal((await s.deliver()).kind, "delivered");
     // 4. The Human asks; the model reports from the Worker reply, not status.
-    s.script([tools(call("oma_mail_read", { messageId: answer })), text("진행 중입니다.")]);
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, answer) })), text("진행 중입니다.")]);
     await s.prompt("진행 상황은?");
     // The ledger holds each fact once.
-    const kinds = s.operations("principal").map(row => `${row.kind}:${row.request_key}:${row.state}`).sort();
-    assert.deepEqual(kinds, ["mail.send:follow-1:succeeded", "mail.send:task-1:succeeded"]);
+    const kinds = s.operations("principal").map(row => `${row.kind}:${row.state}`).sort();
+    assert.deepEqual(kinds, ["mail.send:succeeded", "mail.send:succeeded"]);
     assert.equal(s.store.getDelivery(answer, "principal")?.acknowledged, 0);
     assert.equal(s.store.getDelivery(answer, "principal")?.presented, 1);
     // The thread: the follow-up names the answer, and the answer the task.
@@ -451,9 +455,9 @@ test("SCN-L01: delegate, get a reply, read it, follow up, report -- every fact r
   });
 });
 
-test("SCN-L02: the broker and the engine both restart mid-loop; the resumed session keeps the conversation and gets the reply", TIMEOUT, async () => {
+test("024. The broker and the engine both restart mid-loop; the resumed session keeps the conversation and gets the reply", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "배포 준비", body: "체크리스트를 만들어 주세요.", request: "task-l2" })), text("요청했습니다.")]);
+    s.script([tools(call("oma_send", { to: ["worker-a"], subject: "배포 준비", content: { kind: "text", value: "체크리스트를 만들어 주세요." } }, "task-l2")), text("요청했습니다.")]);
     await s.prompt("배포 준비를 worker-a에게 요청해");
     await s.restartBroker();
     await s.restartEngine("SIGKILL");
@@ -464,38 +468,34 @@ test("SCN-L02: the broker and the engine both restart mid-loop; the resumed sess
     assert.equal(delivery.kind, "delivered", JSON.stringify({ delivery, lines: s.lines.slice(-16), events: s.events.slice(-8) }));
     const resumed = s.provider.seen[seenBefore]!.body.messages.map(textOf).join("\n");
     assert.ok(resumed.includes("배포 준비를 worker-a에게 요청해"), "the new engine did not resume the conversation (AV14)");
-    assert.ok(resumed.includes("체크리스트 완료") || /path=\/mail\/archive\/cur\//.test(resumed), "the delivery did not reach the resumed session");
+    assert.ok(resumed.includes("체크리스트 완료") || /OMA delivered a message batch/.test(resumed), "the delivery did not reach the resumed session");
     assert.equal(s.operations("principal").filter(row => row.kind === "mail.send").length, 1);
   });
 });
 
-test("SCN-L03: five rounds of mail, delivery and reading leave nothing prepared and nothing presented twice", TIMEOUT, async () => {
+test("025. Five rounds of mail, delivery and reading leave nothing prepared and nothing presented twice", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const messages: string[] = [];
     for (let round = 1; round <= 5; round += 1) {
       const message = await residentAsks(s, `w-round-${round}`, `라운드 ${round}`);
       messages.push(message);
-      s.script([tools(call("oma_mail_read", { messageId: message })), text(`라운드 ${round} 확인`)]);
+      s.script([tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, message) })), text(`라운드 ${round} 확인`)]);
       assert.equal((await s.deliver()).kind, "delivered", `round ${round}`);
     }
     for (const message of messages) {
       const delivery = s.store.getDelivery(message, "principal")!;
       assert.deepEqual([delivery.presented, delivery.acknowledged], [1, 0]);
     }
-    const notices = s.provider.seen.filter(entry => /path=\/mail\/archive\/cur\//.test(lastUserText(entry.body)) && !continuesTurn(entry.body));
+    const notices = s.provider.seen.filter(entry => /OMA delivered a message batch/.test(lastUserText(entry.body)) && !continuesTurn(entry.body));
     assert.equal(notices.length, 5, "a notice was presented more or less than once per round");
     assert.equal((await s.deliver()).kind, "idle");
   });
 });
 
-test("SCN-L04: a topic reaches the Residents that follow it and nobody else", TIMEOUT, async () => {
+test("026. A topic reaches the Residents that follow it and nobody else", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
-    const agent = s.store.getAgent("worker-b")!;
-    const followed = await s.broker.dispatch({ actor: "worker-b", incarnation: agent.incarnation, role: "resident", channel: "actor",
-      capabilities: new Set(["route.follow"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() } },
-    { v: 1, id: "follow", method: "route.follow", request: "follow-design", params: { topic: "design" } } as never, null) as { ok: boolean };
-    assert.equal(followed.ok, true, JSON.stringify(followed));
-    s.script([tools(call("oma_mail_send", { to: ["topic/design"], subject: "디자인 리뷰", body: "시안을 봐 주세요." })), text("알렸습니다.")]);
+    s.store.transaction(tx => tx.follow("design", "worker-b")); // fixture route; actual oma_follow has separate native scenarios
+    s.script([tools(call("oma_send", { to: ["topic/design"], subject: "디자인 리뷰", content: { kind: "text", value: "시안을 봐 주세요." } })), text("알렸습니다.")]);
     await s.prompt("디자인 토픽에 알려");
     const message = receiptIn(lastResult(s.provider.seen[1]!.body)).result!.message!;
     assert.deepEqual(s.inbox("worker-b"), [message]);
@@ -503,7 +503,7 @@ test("SCN-L04: a topic reaches the Residents that follow it and nobody else", TI
   });
 });
 
-test("SCN-F12: a call to a tool that does not exist changes nothing and the turn still ends", TIMEOUT, async () => {
+test("027. A call to a tool that does not exist changes nothing and the turn still ends", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"], script: [tools(call("oma_delete_everything", { all: true })), text("그런 도구는 없습니다.")] }, async s => {
     const turn = await s.prompt("다 지워");
     assert.ok(turn.lines.some(line => line.includes("그런 도구는 없습니다")));
@@ -512,9 +512,9 @@ test("SCN-F12: a call to a tool that does not exist changes nothing and the turn
   });
 });
 
-test("SCN-F13: a model's answer larger than a frame does not end the session; its oversized send is refused and nothing is recorded", TIMEOUT, async () => {
+test("028. A model's answer larger than a frame does not end the session; its oversized send is refused and nothing is recorded", TIMEOUT, async () => {
   const body = "x".repeat(262144 + 1);
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_mail_send", { to: ["worker-a"], subject: "너무 김", body })), text("너무 깁니다.")] }, async s => {
+  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_send", { to: ["worker-a"], subject: "너무 김", content: { kind: "text", value: body } })), text("너무 깁니다.")] }, async s => {
     const turn = await s.prompt("긴 메일 보내");
     // DR15: the engine's event carrying the whole call is larger than the frame.
     assert.ok(turn.lines.some(line => line.includes("exceeded the display limit")), JSON.stringify(turn.lines));
@@ -523,13 +523,13 @@ test("SCN-F13: a model's answer larger than a frame does not end the session; it
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 0);
     assert.deepEqual(s.inbox("worker-a"), []);
     // The session goes on.
-    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567-0000-4000-8000-000000000000" })), text("계속 동작합니다.")]);
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: "/world/project" })), text("계속 동작합니다.")]);
     await s.prompt("상태");
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission|outside|permitted|denied/i);
   });
 });
 
-test("SCN-F17: an oversized attempted Principal write is refused and the session goes on", TIMEOUT, async () => {
+test("029. An oversized attempted Principal write is refused and the session goes on", TIMEOUT, async () => {
   const content = "데이터 행입니다\n".repeat(20_000);
   await withScenario({ script: [tools(call("write", { path: "big-data.txt", content })), text("썼습니다.")] }, async s => {
     await s.prompt("큰 파일을 써");
@@ -539,20 +539,20 @@ test("SCN-F17: an oversized attempted Principal write is refused and the session
   });
 });
 
-test("SCN-F14: two sends the model makes in one answer both land, each once, each under its own key", TIMEOUT, async () => {
+test("030. Two sends the model makes in one answer both land, each once, each under its own key", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"], script: [
-    tools(call("oma_mail_send", { to: ["worker-a"], subject: "A", body: "A에게", request: "par-a" }), call("oma_mail_send", { to: ["worker-b"], subject: "B", body: "B에게", request: "par-b" })),
+    tools(call("oma_send", { to: ["worker-a"], subject: "A", content: { kind: "text", value: "A에게" } }, "par-a"), call("oma_send", { to: ["worker-b"], subject: "B", content: { kind: "text", value: "B에게" } }, "par-b")),
     text("둘 다 보냈습니다."),
   ] }, async s => {
     await s.prompt("둘에게 동시에 보내");
-    const sends = s.operations("principal").filter(row => row.kind === "mail.send").map(row => `${row.request_key}:${row.state}`).sort();
-    assert.deepEqual(sends, ["par-a:succeeded", "par-b:succeeded"]);
+    const sends = s.operations("principal").filter(row => row.kind === "mail.send").map(row => row.state).sort();
+    assert.deepEqual(sends, ["succeeded", "succeeded"]);
     assert.equal(s.inbox("worker-a").length, 1);
     assert.equal(s.inbox("worker-b").length, 1);
   });
 });
 
-test("SCN-F15: the broker restarts while a delivery's run is going; the mail ends presented once and completed", TIMEOUT, async () => {
+test("031. The broker restarts while a delivery's run is going; the mail ends presented once and completed", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const message = await residentAsks(s, "w-f15");
     s.script(() => delayed(1500, text("처리했습니다.")));
@@ -566,12 +566,12 @@ test("SCN-F15: the broker restarts while a delivery's run is going; the mail end
     for (let attempt = 0; attempt < 3 && s.store.getDelivery(message, "principal")?.presented !== 1; attempt += 1) await s.deliver();
     assert.equal(s.store.getDelivery(message, "principal")?.presented, 1, `first tick ${JSON.stringify(first)}`);
     assert.deepEqual(s.store.preparedBatches("principal"), []);
-    const notices = s.provider.seen.filter(entry => /path=\/mail\/archive\/cur\//.test(lastUserText(entry.body)) && !continuesTurn(entry.body));
+    const notices = s.provider.seen.filter(entry => /OMA delivered a message batch/.test(lastUserText(entry.body)) && !continuesTurn(entry.body));
     assert.ok(notices.length >= 1);
   });
 });
 
-test("SCN-F16: mail that arrives while a delivery runs is delivered by the next step, not folded into the running one", TIMEOUT, async () => {
+test("032. Mail that arrives while a delivery runs is delivered by the next step, not folded into the running one", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
     const first = await residentAsks(s, "w-f16a");
     s.script(() => delayed(800, text("처리했습니다.")));
@@ -591,11 +591,11 @@ test("SCN-F16: mail that arrives while a delivery runs is delivered by the next 
   });
 });
 
-test("SCN-P10: reading a message that does not exist is refused to the model and changes nothing", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a"], script: [
-    tools(call("oma_mail_read", { messageId: "m-00000000-0000-4000-8000-00000000dead-0" }), call("oma_mail_read", { messageId: "../../etc/passwd" })),
+test("033. Reading a message that does not exist is refused to the model and changes nothing", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    s.script([tools(call("read", { offset: 1, limit: 2000, path: mailPath(s.root, "m-00000000-0000-4000-8000-00000000dead-0") }), call("read", { offset: 1, limit: 2000, path: mailPath(s.root, "../../etc/passwd") })),
     text("그런 메일은 없습니다."),
-  ] }, async s => {
+  ]);
     const turn = await s.prompt("그 메일 읽어");
     const [missing, escaped] = toolResults(s.provider.seen[1]!.body).map(result => result.text);
     assert.doesNotMatch(missing!, /root:/);

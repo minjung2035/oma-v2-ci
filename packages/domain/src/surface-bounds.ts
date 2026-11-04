@@ -1,7 +1,7 @@
 /** Declared bounds for the product surface.
  *
  * Core states its limits once in a frozen descriptor (RESOURCE_FIELDS,
- * PROTOCOL_LIMIT_FIELDS, SURFACE_LIMITS) rather than spreading numbers through
+ * PROTOCOL_LIMIT_FIELDS) rather than spreading numbers through
  * the code that uses them. The product surface follows the same rule: every
  * bound a screen relies on is named here, so what the UI will and will not grow
  * to is readable in one place and testable without rendering anything.
@@ -21,6 +21,7 @@ export const bound = (value: number, unit: SurfaceBound["unit"], why: string): S
   Object.freeze({ value, unit, why });
 
 export const TERMINAL_BOUNDS = Object.freeze({
+  panelFrameBytes: bound(4 * 1024 * 1024, "bytes", "maximum assembled host panel, carried in bounded UI fragments"),
   minColumns: bound(20, "cells", "narrower than this cannot show a label and a value"),
   minRows: bound(6, "lines", "conversation, divider, prompt and hint need this many"),
   assumedColumns: bound(80, "cells", "used when the stream reports no width"),

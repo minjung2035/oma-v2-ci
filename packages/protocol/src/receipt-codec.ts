@@ -1,15 +1,14 @@
 /** M-003 / IPC-006: structural receipt decoding, never ledger authority. */
-import type { Failure } from "@oma/contracts/errors";
+import { decodeFailure, type Decoded } from "./failure-codec.js";
+export { decodeFailure, type Decoded } from "./failure-codec.js";
 import type { Json } from "@oma/contracts/identity";
 import type { MutationMethod, OperationResult, Receipt } from "@oma/contracts/durable";
 import { parseOperationId } from "@oma/domain/identifiers";
-import { snapshotJson } from "@oma/domain/canonical-json";
-import { isErrorCode } from "@oma/domain/errors";
+import { canonicalJson, snapshotJson } from "@oma/domain/canonical-json";
 import { checkString, operationResultCheck } from "@oma/domain/validation";
 import { isPublicMethod, PUBLIC_METHODS } from "./methods.js";
 export { isErrorCode } from "@oma/domain/errors";
 
-export type Decoded<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 const invalid = (reason: string): Decoded<never> => ({ ok: false, reason });
 
 export function isMutationMethod(value: unknown): value is MutationMethod {
@@ -23,20 +22,6 @@ function snapshot(value: unknown): Decoded<Json> {
   catch (error) { return invalid(error instanceof Error ? error.message : "invalid JSON value"); }
 }
 
-export function decodeFailure(value: unknown): Decoded<Failure> {
-  const copied = snapshot(value);
-  if (!copied.ok) return copied;
-  const row = copied.value;
-  if (!record(row) || Object.keys(row).some(key => !["code", "message", "retry", "details"].includes(key)))
-    return invalid("failure must be a closed object");
-  if (!isErrorCode(row.code) || typeof row.message !== "string" || checkString()(row.message))
-    return invalid("invalid failure code/message");
-  if (row.retry !== "never" && row.retry !== "same-key" && row.retry !== "after-repair")
-    return invalid("invalid failure retry policy");
-  const failure: Failure = { code: row.code, message: row.message, retry: row.retry };
-  if (Object.hasOwn(row, "details")) failure.details = row.details!;
-  return { ok: true, value: failure };
-}
 
 export function decodeOperationResultShape(value: unknown, expectedKind?: MutationMethod): Decoded<OperationResult> {
   const copied = snapshot(value);
@@ -73,6 +58,22 @@ export function receiptSupersession(previous: Receipt | null, observed: Receipt)
   if (previous === null || !TERMINAL.has(previous.state)) return "supersedes";
   if (!TERMINAL.has(observed.state)) return "stale";
   return previous.state === observed.state ? "stale" : "contradiction";
+}
+
+/** Compare already validated observations of one original operation, not whether
+ * a cache should replace its terminal entry. Reobserving the same terminal fact
+ * is valid even though receiptSupersession deliberately calls it "stale".
+ * Failure wording is diagnostic; its durable code and retry contract must agree.
+ * A successful result is persisted data and cannot change.
+ * This comparison itself proves neither acceptance nor authority. */
+export function receiptFactConflict(previous: Receipt | null, observed: Receipt): boolean {
+  if (previous === null) return false;
+  if (previous.operation !== observed.operation) return true;
+  if (!TERMINAL.has(previous.state)) return false;
+  if (previous.state !== observed.state) return true;
+  return previous.state === "succeeded"
+    ? canonicalJson(previous.result) !== canonicalJson(observed.result)
+    : previous.error?.code !== observed.error?.code || previous.error?.retry !== observed.error?.retry;
 }
 
 /** REQUEST_NOT_FOUND is a lookup result, not a durable operation or cached receipt. */

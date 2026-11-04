@@ -43,7 +43,7 @@ function fixture(roles) {
   } catch (error) { complete.close(); throw error; }
 }
 
-test("CFG-005: a role reference that leaves the bundle is refused before anything is written", () => {
+test("001. A role reference that leaves the bundle is refused before anything is written", () => {
   for (const escape of ["../OUTSIDE.json", "sub/../../OUTSIDE.json"]) {
     const f = fixture({ resident: escape });
     try {
@@ -68,7 +68,7 @@ test("CFG-005: a role reference that leaves the bundle is refused before anythin
   }
 });
 
-test("CFG-005: a role file reached through a symlink is not inside the bundle", () => {
+test("002. A role file reached through a symlink is not inside the bundle", () => {
   const f = fixture({ resident: "link.json" });
   try {
     symlinkSync(f.outside, join(f.root, "link.json"));
@@ -83,7 +83,7 @@ test("CFG-005: a role file reached through a symlink is not inside the bundle", 
   } finally { f.cleanup(); }
 });
 
-test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () => {
+test("003. A bundle the loader accepts is the bundle the screen edits", () => {
   // The control for the controls above: a rule that refused everything would
   // pass them all. A genuine bundle must still be readable, editable, and
   // written in place.
@@ -114,7 +114,7 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
   } finally { f.cleanup(); }
 });
 
-test("CFG-005: the screens do not carry a second reading of the bundle format", () => {
+test("004. The screens do not carry a second reading of the bundle format", () => {
   // Read off the source, not off one run. The composition above would still
   // pass if a screen merely happened to agree with the owner today; what broke
   // was a screen that had its own rule and drifted from it. A screen that

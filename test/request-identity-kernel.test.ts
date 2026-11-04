@@ -33,7 +33,7 @@ const legacyVectors: ReadonlyArray<readonly [string, unknown, string]> = [
   }, '{"method":"context.publish","params":{"content":{"bytes":1,"mediaType":"application/vnd.oma.context-v1","sha256":"digest"},"entries":[{"bytes":1,"path":"GOAL.md","sha256":"digest"}],"expected":null}}'],
 ];
 
-test("all mutation hash domains retain their literal legacy canonical bytes", () => {
+test("001. All mutation hash domains retain their literal legacy canonical bytes", () => {
   for (const [method, params, bytes] of legacyVectors) {
     const identity = buildRequestIdentity(method, params);
     assert.equal(Buffer.from(identity.canonicalBytes).toString("utf8"), bytes, method);
@@ -44,7 +44,7 @@ test("all mutation hash domains retain their literal legacy canonical bytes", ()
   }
 });
 
-test("only the established request string sets are order/duplicate insensitive", () => {
+test("002. Only the established request string sets are order/duplicate insensitive", () => {
   assert.equal(requestHash("mail.send", { to: ["b", "a", "a"] }), requestHash("mail.send", { to: ["a", "b"] }));
   assert.equal(requestHash("git.submit", { to: ["b", "a"], prerequisites: ["b", "a", "b"], paths: ["z", "a"] }),
     requestHash("git.submit", { paths: ["a", "z", "z"], prerequisites: ["a", "b"], to: ["a", "b", "b"] }));
@@ -59,7 +59,7 @@ test("only the established request string sets are order/duplicate insensitive",
   assert.notEqual(requestHash("mail.send", { body: "body" }), requestHash("mail.send", { body: "body\n" }));
 });
 
-test("DR46: separate stream identity is refused; current descriptors remain in params", () => {
+test("003. Separate stream identity is refused; current descriptors remain in params", () => {
   // @ts-expect-error The old third parameter is intentionally outside the current API.
   assert.throws(() => buildRequestIdentity("git.submit", { value: 1 }, { bytes: 2, sha256: "digest" }), TypeError);
   // @ts-expect-error The mutation hash rejects the same removed argument.
@@ -71,7 +71,7 @@ test("DR46: separate stream identity is refused; current descriptors remain in p
     requestHash("git.submit", { bundle: { bytes: 2, sha256: "b" } }));
 });
 
-test("CLI projections share field semantics but never rewrite a frozen cache", () => {
+test("004. CLI projections share field semantics but never rewrite a frozen cache", () => {
   const frozen = Object.freeze({ to: Object.freeze(["bob", "alice", "bob"]), subject: " subject ", body: "frozen body" });
   const before = JSON.stringify(frozen);
   assert.equal(firstRequestProjectionMismatch("mail.send", { to: ["alice", "bob"] }, frozen), null);
@@ -82,7 +82,7 @@ test("CLI projections share field semantics but never rewrite a frozen cache", (
   assert.equal(JSON.stringify(frozen), before);
 });
 
-test("JSON casts, accessors, cycles and non-JSON values cannot bypass identity validation", () => {
+test("005. JSON casts, accessors, cycles and non-JSON values cannot bypass identity validation", () => {
   let getterCalled = false;
   const getter = { get body() { getterCalled = true; return "body"; } };
   assert.throws(() => buildRequestIdentity("mail.send", getter), /accessors/);

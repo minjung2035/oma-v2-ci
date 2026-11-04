@@ -16,9 +16,11 @@ import { omaToolNames, registerOmaTools } from "./mail-tools.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { createToolProvenance, verifiedExtensionPaths, VERIFIED_EXTENSIONS_ENV } from "@oma/tool-runtime/provenance";
 import { registerPromptBoundary } from "./prompt-boundary.js";
-import { registerToolSurface } from "@oma/tool-runtime/tool-surface";
+import { parseSurfacePlan, registerToolSurface } from "@oma/tool-runtime/tool-surface";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, PACKAGE_STORE_ENV, guardWorkspaceTools } from "@oma/tool-runtime/workspace-guard";
 import { containWorkspaceTools, createContainedWriter, logicalReadPathView } from "@oma/tool-runtime/contained-tools";
+import { resultReadSurface } from "@oma/tool-runtime/result-read";
+import { resultRootFor } from "@oma/tool-runtime/contained-search";
 import { registerLspTools } from "@oma/tool-lsp";
 import { registerHashlineTools } from "@oma/tool-hashline";
 import { registerWebTools } from "@oma/tool-web";
@@ -31,8 +33,6 @@ export default async function extension(pi: ExtensionAPI) {
   // does only for the Principal's engine.
   const channel = PrincipalChannel.open();
   const sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX;
-  const waitRequested = registerOmaTools(pi, workspace, channel);
-  const ownTools = omaToolNames(channel.attached);
   // D25: what may run is decided by where a tool came from -- a builtin, or an
   // extension file this engine was spawned with after digest verification --
   // never by the name it answers to. The tools this file registers are proven
@@ -44,6 +44,16 @@ export default async function extension(pi: ExtensionAPI) {
     fileURLToPath(import.meta.url),
     verified.paths,
   );
+  const surface = parseSurfacePlan(process.env.OMA_TOOL_SURFACE);
+  if (surface.state !== "plan" || surface.plan.role !== (channel.attached ? "principal" : "resident")) {
+    // Reject incompatible sessions before registering tools or starting bridges.
+    // In particular, an absent plan must not revive the retired default catalog.
+    registerToolSurface(pi, [], { role: channel.attached ? "principal" : "resident", permitted: provenance.permitted, own: provenance.own });
+    return;
+  }
+  const waitRequested = registerOmaTools(pi, workspace, channel,
+    name => provenance.permitted(name) && provenance.own(name) && pi.getActiveTools().includes(name));
+  const ownTools = omaToolNames(channel.attached);
   // A verified-path list that was written but cannot be read is a policy the
   // engine is holding without being able to prove: the surface cannot be
   // trusted, so the session must not start.
@@ -55,8 +65,14 @@ export default async function extension(pi: ExtensionAPI) {
   // Society's prompt policy: the role prompt owns identity, append channels
   // stay closed, the Principal's context files stay inside its workspace, and
   // the active tools' guidance reaches the prompt Pi's own composition omits.
-  registerPromptBoundary(pi, workspace, channel.attached);
-  registerToolSurface(pi, ownTools, { permitted: provenance.permitted, own: provenance.own });
+  const collaboration = surface.plan, recordRoot = process.env.OMA_RECORD_ROOT;
+  if (!recordRoot || !process.env.OMA_ACTOR) throw new Error("Selected collaboration surface requires its host-bound actor and record root");
+  registerPromptBoundary(pi, workspace, channel.attached, {
+    role: collaboration.role, actor: process.env.OMA_ACTOR!, recordRoot: recordRoot!,
+    persistentPaths: [workspace, ...(process.env.OMA_AGENT_HOME ? [process.env.OMA_AGENT_HOME] : [])],
+    rolePrompt: process.env.OMA_COLLABORATION_ROLE_PROMPT ?? "",
+    activationProcessesSurvive: channel.attached,
+  });
   // C18: the environment names the installed-package store's real root, which
   // the engine's argv advertised resources under. A read may reach it; one
   // that cannot be resolved permits nothing, so the guard fails closed. The
@@ -67,6 +83,13 @@ export default async function extension(pi: ExtensionAPI) {
   if (packageStore !== undefined) {
     try { readableRoots.push(realpathSync(packageStore)); } catch { /* an unobservable store root permits no reads */ }
   }
+  if (recordRoot !== undefined) {
+    // The launch owner supplies only this actor's selected root. The same root
+    // feeds every ordinary read/search/list/hashline path; there is no read RPC.
+    const real = realpathSync(recordRoot);
+    if (real !== recordRoot) throw new Error("The selected record root must not be a symlink alias");
+    readableRoots.push(real);
+  }
   guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, provenance.permitted, readableRoots);
   // One serialized writer serves every mutation path: the contained write
   // and edit tools, and lsp_fix's contained application of server-computed
@@ -75,17 +98,16 @@ export default async function extension(pi: ExtensionAPI) {
   containWorkspaceTools(pi, workspace, sandboxed, channel.attached, readableRoots, workspaceWriter);
   // The bundled pi-lsp extension: vendored bytes verified before tools are
   // registered -- and before any vendored module evaluates, so the await is
-  // load-bearing -- code_intel's three tools behind it, lsp_fix reaching
-  // the filesystem only through the shared contained writer.
+  // load-bearing. Diagnostics/fixes exist only for Workers; lsp_status remains
+  // selectable for both roles. Fixes use the shared contained writer.
   await registerLspTools(pi, { workspace, readOnly: channel.attached, write: workspaceWriter });
   // BL3: the bundled pi-hashline-edit-pro extension -- same fail-closed
   // verification before any vendored module evaluates. It registers the
   // anchored `read` (replacing the contained read under the same name) and,
-  // for a role that may write, the file_edit group (replace,
-  // replace_within, insert) whose commits reach the filesystem only
-  // through the shared contained writer. Registered after the contained
-  // tools so its `read` is the effective registration.
-  await registerHashlineTools(pi, {
+  // for a role that may write, replace, replace_within and insert, whose commits
+  // reach the filesystem only through the shared contained writer. Registered
+  // after the contained tools so its `read` is the effective registration.
+  await registerHashlineTools(resultReadSurface(pi, resultRootFor(workspace)), {
     workspace,
     readableRoots,
     sandboxed,
@@ -97,9 +119,9 @@ export default async function extension(pi: ExtensionAPI) {
   // verification before any vendored module evaluates. The adapter
   // installs the Society web policy (egress pin, ambient-discovery refusals)
   // and drives upstream's own extension factory through a facade that
-  // admits exactly the web_research group: web_search, source_check,
-  // fetch_content, get_search_content. Commands and curator/browser workflows
-  // use Pi's extension API without changing the four model tool names.
+  // admits exactly web_search, source_check, fetch_content and get_search_content.
+  // Commands and curator/browser workflows use Pi's extension API without
+  // changing the four model tool names.
   // Shared network access makes fixed loopback ports unsafe across Workers.
   // Publish the bridges' actual ports before adapters capture their proxy pin.
   await startInferenceBridge(pi);
@@ -122,5 +144,13 @@ export default async function extension(pi: ExtensionAPI) {
   // loads the same file as its own `-e` extension; Residents and Workers
   // never load it, and no surface plan names it for them.
   if (channel.attached) registerAskUserQuestion(pi);
+  // BL4/BL5: the surface is validated after every bundled adapter registered.
+  // Its session_start refusal names the missing plan tools as its cause --
+  // exactly what a rejected bundle leaves behind -- and Pi dispatches
+  // session_start handlers in registration order, exiting the process at the
+  // first refusal. Registered here, a bundle's own integrity refusal is what
+  // ends the session; registered before the adapters, the plan's consequence
+  // preempts the reason the operator needs. Both refusals fail closed.
+  registerToolSurface(pi, ownTools, { role: channel.attached ? "principal" : "resident", permitted: provenance.permitted, own: provenance.own });
   registerDelivery(pi, waitRequested);
 }

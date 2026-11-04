@@ -28,7 +28,7 @@ function fullFixture(t) {
   store.transaction(tx => { tx.deliveries.materialize(message, "alice"); tx.batches.prepare({ id: batch, agent: "alice", incarnation: 0, messageIds: [message], sessionPath: null }); tx.batches.link(batch, [message]); tx.subscriptions.follow("design", "alice"); });
   return { ...fixture, id, message, batch, raw: () => structuredClone(readDiagnosticSnapshot(fixture.root)) };
 }
-test("P6 ledger: all six entities are inspected without changing accepted bytes or flags", t => {
+test("001. Ledger: all six entities are inspected without changing accepted bytes or flags", t => {
   const f = fullFixture(t), before = f.store.getOperationById(f.id), snapshot = f.raw();
   const report = inspectLedger(snapshot, context(f.root)).report;
   assert.equal(report.status, "PASS", JSON.stringify(report));
@@ -37,7 +37,7 @@ test("P6 ledger: all six entities are inspected without changing accepted bytes 
   assert.deepEqual(f.store.getOperationById(f.id), before);
   assert.equal(f.store.getDelivery(f.message, "alice").presented, 0);
 });
-test("P6 reader: closed offline database content is unchanged and nonexistent DB is not created", t => {
+test("002. Reader: closed offline database content is unchanged and nonexistent DB is not created", t => {
   const f = fullFixture(t); f.close();
   const db = join(f.root, "runtime.sqlite"), before = hash(db);
   assert.equal(inspectLedger(readDiagnosticSnapshot(f.root), context(f.root)).report.status, "PASS");
@@ -46,7 +46,7 @@ test("P6 reader: closed offline database content is unchanged and nonexistent DB
   assert.throws(() => readDiagnosticSnapshot(empty));
   assert.equal(existsSync(join(empty, "runtime.sqlite")), false);
 });
-test("P6 reader: symlink database, linked ancestor and unsupported version are rejected without migration", t => {
+test("003. Reader: symlink database, linked ancestor and unsupported version are rejected without migration", t => {
   const f = fullFixture(t); f.close();
   const linked = join(f.root, "linked"); mkdirSync(linked);
   symlinkSync(join(f.root, "runtime.sqlite"), join(linked, "runtime.sqlite"));
@@ -58,13 +58,13 @@ test("P6 reader: symlink database, linked ancestor and unsupported version are r
   assert.throws(() => readDiagnosticSnapshot(f.root), code("STORE_CORRUPT"));
   assert.equal(hash(join(f.root, "runtime.sqlite")), before);
 });
-test("P6 reader: budgets refuse incomplete snapshots rather than returning an empty healthy ledger", t => {
+test("004. Reader: budgets refuse incomplete snapshots rather than returning an empty healthy ledger", t => {
   const f = fullFixture(t);
   assert.throws(() => readDiagnosticSnapshot(f.root, { ...DIAGNOSTIC_READ_LIMITS, maxRows: 1 }), code("LIMIT_EXCEEDED"));
   assert.throws(() => readDiagnosticSnapshot(f.root, { ...DIAGNOSTIC_READ_LIMITS, maxBytes: 1 }), code("LIMIT_EXCEEDED"));
   assert.equal(inspectLedger(f.raw(), context(f.root), { maxRows: 1 }).report.status, "UNKNOWN");
 });
-test("P6 ledger: each malformed closed row is rejected and payloads are not printed", t => {
+test("005. Ledger: each malformed closed row is rejected and payloads are not printed", t => {
   const f = fullFixture(t);
   for (const table of ["agents", "operations", "subscriptions", "deliveries", "batches"]) {
     const raw = f.raw(); raw.tables[table][0].injectedSecret = "do-not-output";
@@ -73,24 +73,24 @@ test("P6 ledger: each malformed closed row is rejected and payloads are not prin
     assert.ok(!JSON.stringify(report).includes("do-not-output"));
   }
 });
-test("P6 ledger: dangling actor, lineage cycle and duplicate identity cannot be hidden by map overwrite", t => {
+test("006. Ledger: dangling actor, lineage cycle and duplicate identity cannot be hidden by map overwrite", t => {
   const f = fullFixture(t);
   const variants = [raw => { raw.tables.operations[0].actor = "bob"; }, raw => { raw.tables.agents[1].created_by = "alice"; }, raw => { raw.tables.agents.push(raw.tables.agents[1]); }];
   for (const mutate of variants) { const raw = f.raw(); mutate(raw); assert.equal(inspectLedger(raw, context(f.root)).report.status, "FAIL"); }
 });
-test("P6 ledger: exact delivery/batch membership, ownership and presentation are independent checks", t => {
+test("007. Ledger: exact delivery/batch membership, ownership and presentation are independent checks", t => {
   const f = fullFixture(t);
   for (const mutate of [raw => { raw.tables.deliveries = []; }, raw => { raw.tables.batches[0].agent = "principal"; }, raw => { raw.tables.batches[0].incarnation = 1; }, raw => { raw.tables.batches[0].state = "completed"; raw.tables.batches[0].completed_at_ms = Date.now(); }]) {
     const raw = f.raw(); mutate(raw); assert.equal(inspectLedger(raw, context(f.root)).report.status, "FAIL");
   }
 });
-test("P6 ledger: operation hash/result relations remain closed", t => {
+test("008. Ledger: operation hash/result relations remain closed", t => {
   const f = fullFixture(t);
   for (const mutate of [raw => { raw.tables.operations[0].request_hash = "b".repeat(64); }, raw => { raw.tables.operations[0].updated_at_ms = 0; }]) {
     const raw = f.raw(); mutate(raw); assert.equal(inspectLedger(raw, context(f.root)).report.status, "FAIL");
   }
 });
-test("P6 ledger: historical route state and explicit unknown are not rewritten to current state", t => {
+test("009. Ledger: historical route state and explicit unknown are not rewritten to current state", t => {
   const f = fullFixture(t), route = routeOperation();
   f.store.transaction(tx => { tx.operations.insert(route); tx.operations.succeed(route.id, routeResult(route)); tx.subscriptions.unfollow("design", "alice"); tx.operations.unknown(f.id); });
   const before = f.raw(), result = inspectLedger(before, context(f.root));
@@ -99,7 +99,7 @@ test("P6 ledger: historical route state and explicit unknown are not rewritten t
   assert.equal(f.store.getOperationById(f.id).state, "unknown");
   assert.deepEqual(f.raw(), before);
 });
-test("P6 ledger: absent table, failed SQLite checks and truncated issues never become PASS", t => {
+test("010. Ledger: absent table, failed SQLite checks and truncated issues never become PASS", t => {
   const f = fullFixture(t);
   const missing = f.raw(); delete missing.tables.attestations;
   assert.equal(inspectLedger(missing, context(f.root)).report.status, "FAIL");

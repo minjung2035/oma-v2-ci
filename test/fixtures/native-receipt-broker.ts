@@ -1,6 +1,7 @@
 /** Receipt/openRun policy over a real owned namespace. The test invokes the
  * server owner directly; this fixture does not authenticate a runner or
  * qualify G-AUTH. Kernel scope population, journal and cleanup are real. */
+import { withWorkerCapacity } from "./spec.js";
 import { join } from "node:path";
 import type { Broker } from "@oma/broker";
 import type { RunLease } from "@oma/contracts";
@@ -23,7 +24,7 @@ export async function nativeReceiptBroker(f: { root: string; store: Store; mail:
   try {
   const spec = resolvedSpecOf(row); units.ensureResident(actor, spec.profile, spec.modelProfile);
   const lifecycle = createLifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos/project.git"),
-    society: "demo", hasGoal: () => true, activationAllowed: () => true }, () => { throw new Error("receipt fixture cannot create agents"); }, f.mail);
+    society: "demo", hasGoal: () => true, activationAllowed: () => true }, withWorkerCapacity(() => { throw new Error("receipt fixture cannot create agents"); }), f.mail);
   const broker = testBroker({ store: f.store, mail: f.mail, units,
     views: new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle,
     git: null, reviews: null, reconcile: null,

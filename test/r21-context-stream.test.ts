@@ -26,7 +26,7 @@ async function* parts(bytes: Uint8Array, width: number): AsyncIterable<Uint8Arra
   yield new Uint8Array(0);
 }
 
-test("R21: streaming text policy agrees with independent valid and invalid UTF-8 vectors at every split", () => {
+test("001. Streaming text policy agrees with independent valid and invalid UTF-8 vectors at every split", () => {
   const cases: Array<{ path: string; bytes: Buffer; valid: boolean }> = [
     { path: "GOAL.md", bytes: Buffer.from("한글\r\n"), valid: true },
     { path: "GOAL.md", bytes: Buffer.from("\uFEFFhello"), valid: true },
@@ -51,7 +51,7 @@ test("R21: streaming text policy agrees with independent valid and invalid UTF-8
   }
 });
 
-test("R21: file boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal bytes and fixed modes", async () => {
+test("002. File boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal bytes and fixed modes", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-stream-"));
   try {
     for (const width of [1, 2, 3, 7, body.length]) {
@@ -68,7 +68,7 @@ test("R21: file boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal
 });
 
 for (const fault of ["short", "long", "aggregate-hash", "entry-hash", "invalid-text"] as const) {
-  test(`R21: ${fault} fails before acceptance and cleans only that preparation`, async () => {
+  test(`003. Context stream: ${fault} fails before acceptance and cleans only that preparation`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-r21-fault-"));
     try {
       const control = await prepareContextStream(root, generateOperationId(), entries(), descriptor(), parts(body, 2));
@@ -93,7 +93,7 @@ for (const fault of ["short", "long", "aggregate-hash", "entry-hash", "invalid-t
   });
 }
 
-test("R21: source mutations after the first await cannot alter frozen metadata", async () => {
+test("004. Source mutations after the first await cannot alter frozen metadata", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-freeze-"));
   try {
     const manifest = entries(); const content = descriptor();
@@ -107,7 +107,7 @@ test("R21: source mutations after the first await cannot alter frozen metadata",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("AV-18: a failed staging-root acquire releases its lease -- nothing holds it after", async () => {
+test("005. A failed staging-root acquire releases its lease -- nothing holds it after", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-lease-"));
   try {
     const id = generateOperationId();
@@ -127,7 +127,7 @@ test("AV-18: a failed staging-root acquire releases its lease -- nothing holds i
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R21: an exclusive-path collision cannot delete an earlier operation's frozen files", async () => {
+test("006. An exclusive-path collision cannot delete an earlier operation's frozen files", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-collision-"));
   try {
     const id = generateOperationId();
@@ -137,7 +137,7 @@ test("R21: an exclusive-path collision cannot delete an earlier operation's froz
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("V18A: a failed preparation keeps its root when a file it created was replaced", async () => {
+test("007. A failed preparation keeps its root when a file it created was replaced", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r21-replaced-"));
   try {
     const id = generateOperationId();
@@ -159,7 +159,7 @@ test("V18A: a failed preparation keeps its root when a file it created was repla
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("V18A: a staging root replaced after preparation is kept, and its cleanup is reported unconfirmed", () => {
+test("008. A staging root replaced after preparation is kept, and its cleanup is reported unconfirmed", () => {
   const base = mkdtempSync(join(tmpdir(), "oma-v18a-root-"));
   try {
     const root = join(base, "staging-op");

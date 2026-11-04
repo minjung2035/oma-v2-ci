@@ -61,7 +61,7 @@ function files(root: string): string[] {
   return out;
 }
 
-test("V06A: recovery settles only a verified receipt; absent, unavailable and conflicting settle nothing", async () => {
+test("001. Recovery settles only a verified receipt; absent, unavailable and conflicting settle nothing", async () => {
   // P0-2: what each observation means is the receipt decision's; the outcome
   // names the decision (settle, present, hold with the spec's error).
   const cases: ReadonlyArray<readonly [string, (f: ReceiptFixture) => void, string, string | null]> = [
@@ -88,7 +88,7 @@ test("V06A: recovery settles only a verified receipt; absent, unavailable and co
   }
 });
 
-test("V06A: a completed batch keeps its first terminal fact under recovery", async () => {
+test("002. A completed batch keeps its first terminal fact under recovery", async () => {
   const f = await preparedFixture();
   try {
     const session = published(f);
@@ -123,7 +123,7 @@ function liveEndpoint(f: ReceiptFixture, registry: RunRegistry, invocation: () =
       Promise<{ ok: boolean; error?: { code?: string } }>;
 }
 
-test("V06B local: a stale runner's live completion stays refused while the broker settles its exact receipt", async () => {
+test("003. Local: a stale runner's live completion stays refused while the broker settles its exact receipt", async () => {
   const f = await preparedFixture();
   try {
     let invocation = OLD;
@@ -154,7 +154,7 @@ test("V06B local: a stale runner's live completion stays refused while the broke
   } finally { f.close(); }
 });
 
-test("V06B local: settlement authority ends with the opening run and names one actor and incarnation", async () => {
+test("004. Local: settlement authority ends with the opening run and names one actor and incarnation", async () => {
   const f = await preparedFixture();
   try {
     published(f);
@@ -172,7 +172,7 @@ test("V06B local: settlement authority ends with the opening run and names one a
   } finally { f.close(); }
 });
 
-test("V06B local: recovery for one actor cannot settle another actor's batch", async () => {
+test("005. Local: recovery for one actor cannot settle another actor's batch", async () => {
   const f = await preparedFixture();
   try {
     f.store.transaction(() => f.store.insertAgent({ name: "bob", ...storedSpec(ALL_CAPS, "p", "bob"), role: "resident",

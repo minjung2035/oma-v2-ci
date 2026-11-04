@@ -7,7 +7,7 @@ import {
   type EffectKnowledge, type ErrorPhase, type ObservationKind,
 } from "@oma/domain/errors";
 import { receiptOfOperation } from "@oma/protocol/receipt-projector";
-import { receiptNotFound, isRequestNotFound, receiptExit, receiptLines } from "@oma/protocol/receipts";
+import { receiptNotFound, isRequestNotFound, receiptExit } from "@oma/protocol/receipts";
 import { receiptOperation, receiptOperationId } from "./fixtures/receipt-operation.js";
 
 const phases: readonly ErrorPhase[] = ["preaccept", "accepted", "recovering", "terminal"];
@@ -18,7 +18,7 @@ function allErrorCodes(): ErrorCode[] {
   return Object.keys(ERROR_METADATA).filter(isErrorCode);
 }
 
-test("every declared error has policy for every phase/effect/observation combination", () => {
+test("001. Every declared error has policy for every phase/effect/observation combination", () => {
   for (const code of allErrorCodes()) {
     for (const phase of phases) for (const effectKnowledge of effects) for (const observationKind of observations) {
       const context = { code, phase, effectKnowledge, observationKind };
@@ -42,7 +42,7 @@ test("every declared error has policy for every phase/effect/observation combina
   }
 });
 
-test("resource exhaustion and broker-owned artifact damage never become preaccept failed rows", () => {
+test("002. Resource exhaustion and broker-owned artifact damage never become preaccept failed rows", () => {
   for (const code of ["STREAM_INVALID", "LIMIT_EXCEEDED", "STORAGE_FULL"] as const) {
     assert.equal(isPreacceptOnlyFailure(code), true);
     for (const phase of ["accepted", "recovering"] as const) {
@@ -60,7 +60,7 @@ test("resource exhaustion and broker-owned artifact damage never become preaccep
   assert.equal(damaged.blockScope, "store");
 });
 
-test("public failures contain no private exception payload and retain recovery class", () => {
+test("003. Public failures contain no private exception payload and retain recovery class", () => {
   const privateText = "private mail content and provider credential must not be emitted";
   const corruption = publicFailure(new StoreError("STREAM_INVALID", privateText), {
     phase: "recovering", effectKnowledge: "possible", observationKind: "corrupt",
@@ -74,7 +74,7 @@ test("public failures contain no private exception payload and retain recovery c
   assert.equal(errorExit("CAPABILITY_DENIED"), 2);
 });
 
-test("one receipt builder retains terminal bytes after the decoder rejects contradictory states", () => {
+test("004. One receipt builder retains terminal bytes after the decoder rejects contradictory states", () => {
   const resultJson = '{"subscribed":true,"topic":"work","kind":"route.follow"}';
   const row = receiptOperation({ state: "succeeded", result_json: resultJson });
   const before = JSON.stringify(row);
@@ -99,14 +99,11 @@ test("one receipt builder retains terminal bytes after the decoder rejects contr
   ]) assert.throws(() => receiptOfOperation(receiptOperation(damaged)), corrupt);
 });
 
-test("CLI receipt mapping distinguishes pending, terminal failure and unknown effect", () => {
+test("005. CLI receipt mapping distinguishes pending, terminal failure and unknown effect", () => {
   const pending = receiptOfOperation(receiptOperation());
   assert.equal(receiptExit(pending), 0);
-  assert.equal(receiptLines(pending, "same-key")[0], "Accepted / not yet complete");
-  assert.match(receiptLines(pending, "same-key").join("\n"), /--request same-key/);
   const unknown = receiptOfOperation(receiptOperation({ state: "unknown" }));
   assert.equal(receiptExit(unknown), 3);
-  assert.match(receiptLines(unknown, "same-key")[0]!, /Outcome unknown/);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);
 });

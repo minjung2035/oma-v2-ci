@@ -46,7 +46,7 @@ function earlierLines(ids: readonly MessageId[], infoOf?: (id: MessageId) => Bat
 }
 
 export function renderBatchView(batch: PreparedBatch, limits?: BatchViewLimits,
-  infoOf?: (id: MessageId) => BatchMessageInfo | null): BatchViewDocuments {
+  infoOf?: (id: MessageId) => BatchMessageInfo | null, readHint?: string): BatchViewDocuments {
   const json = encodeBatchView(batch, limits);
   const { demoted, earlier } = earlierLines(batch.messageIds, infoOf);
   const lines = [`# inbox — ${batch.agent}`, "", `Delivery batch${batch.id} (incarnation ${batch.incarnation})`, ""];
@@ -62,6 +62,6 @@ export function renderBatchView(batch: PreparedBatch, limits?: BatchViewLimits,
       (prior === undefined ? ""
         : `\t earlier revisions: ${prior.map(member => member.displayPath).join(", ")}`));
   }
-  lines.push("", "Read: pass an id or path to oma_mail_read to see the sender's message body (cat shows the raw transfer-encoded message)");
+  lines.push("", readHint ?? "Read: pass an id or path to oma_mail_read to see the sender's message body (cat shows the raw transfer-encoded message)");
   return { json, index: `${lines.join("\n")}\n` };
 }

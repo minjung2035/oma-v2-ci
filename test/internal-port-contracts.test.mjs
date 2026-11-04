@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import ts from "typescript";
 
-test("P23 internal contracts expose only receipt lookup and synchronous transaction semantics", () => {
+test("001. Internal contracts expose only receipt lookup and synchronous transaction semantics", () => {
   const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
   assert.equal(config.error, undefined);
   const { options } = ts.parseJsonConfigFileContent(

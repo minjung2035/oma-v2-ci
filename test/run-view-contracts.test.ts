@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Broker, boundedLogOutput } from "@oma/broker";
@@ -10,6 +10,7 @@ import { ResidentLogStore } from "@oma/storage/resident-logs";
 import { residentLogView } from "@oma/process/resident-logs";
 import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
 import { createNativeResidents } from "#oma-test/app/runtime/native-residents";
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 import { defaultHostConfig } from "@oma/config/defaults";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 import { makeValidAgent } from "./fixtures/spec.js";
@@ -17,7 +18,8 @@ import { makeValidAgent } from "./fixtures/spec.js";
 /** Fresh, explicitly initialized fixture state. No process is launched here;
  * these tests constrain incarnation binding, not arbitrary-descendant death. */
 async function nativeOwner(t: import("node:test").TestContext, incarnation: number) {
-  const root = mkdtempSync(join(tmpdir(), "oma-native-binding-"));
+  const base = mkdtempSync(join(tmpdir(), "oma-native-binding-")), root = join(base, "demo"); mkdirSync(root);
+  publishSessionBirth(root, newSessionBirth(root, "society", base, "collaboration-v1"));
   ExecutionJournal.initialize(root);
   const executions = new ExecutionRuntime(root); await executions.recover();
   const store = new Store(join(root, "runtime.sqlite"));
@@ -26,11 +28,11 @@ async function nativeOwner(t: import("node:test").TestContext, incarnation: numb
      deploymentDigest: "a".repeat(64) });
   const units = createNativeResidents(store, executions, { stateRoot: root, runRoot: join(root, "run"), society: "demo", configPath: join(root, "config.json") },
     config, () => { throw new Error("binding test must never attach an execution"); }, () => {}, () => null);
-  t.after(async () => { await withAsyncCleanup(() => units.close(), () => executions.close()); store.close(); rmSync(root, { recursive: true, force: true }); });
+  t.after(async () => { await withAsyncCleanup(() => units.close(), () => executions.close()); store.close(); rmSync(base, { recursive: true, force: true }); });
   return { units, store };
 }
 
-test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", async t => {
+test("001. ConfirmDead is fenced by the durable monotonic incarnation", async t => {
   const { units } = await nativeOwner(t, 7);
   assert.equal(units.confirmDead("alice", 6), true, "the recovered owner has no execution of a historical incarnation");
   assert.equal(units.confirmDead("alice", 7), true);
@@ -39,7 +41,7 @@ test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", asyn
   assert.equal(units.confirmDead("alice", 7), false, "unobserved incarnation fails closed despite a recovered empty journal");
 });
 
-test("RUN-001: authoritative incarnation binding replaces a stale reader", async t => {
+test("002. Authoritative incarnation binding replaces a stale reader", async t => {
   const { units, store } = await nativeOwner(t, 3);
   units.bindIncarnationReader(() => 99);
   assert.equal(units.confirmDead("alice", 4), true);
@@ -48,7 +50,7 @@ test("RUN-001: authoritative incarnation binding replaces a stale reader", async
   assert.equal(units.confirmDead("alice", 4), false, "the Store binding must replace an older callback");
 });
 
-test("VIEW-003: bounded UTF-8 log prefix never exceeds byte limit", () => {
+test("003. Bounded UTF-8 log prefix never exceeds byte limit", () => {
   const exact = boundedLogOutput(Buffer.from("abc"), 3);
   assert.deepEqual(exact, { text: "abc", truncated: false });
 
@@ -60,7 +62,7 @@ test("VIEW-003: bounded UTF-8 log prefix never exceeds byte limit", () => {
   assert.equal(forced.truncated, true);
 });
 
-test("VIEW-003: real native log spool remains complete while Broker returns a bounded view", async () => {
+test("004. Real native log spool remains complete while Broker returns a bounded view", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-log-bound-"));
   try {
     const logs = new ResidentLogStore(root), invocationId = "a".repeat(32), now = Date.now();

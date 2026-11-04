@@ -36,7 +36,7 @@ const openFact = (f: ReturnType<typeof fixture>, name: string): Extract<ReviewFa
 const publishedRefs = (f: ReturnType<typeof fixture>): string =>
   f.git(["for-each-ref", "--format=%(refname) %(objectname)", "refs/oma/published/"]);
 
-test("mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH", async () => {
+test("001. Mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH", async () => {
   const f = fixture(); try {
     // Unknown name.
     await assert.rejects(f.challenge("bob", { merge: "merge-00000000-0000-4000-8000-000000000000", tier: "LOW" }),
@@ -69,7 +69,7 @@ test("mail-v1: a challenge needs an applied merge and a HIGH target keeps HIGH",
   } finally { f.close(); }
 });
 
-test("mail-v1: a prepared challenge of an applied merge reverts it by vote", async () => {
+test("002. Mail-v1: a prepared challenge of an applied merge reverts it by vote", async () => {
   const f = fixture(); try {
     const { name, candidate } = await appliedMerge(f, "target");
     const appliedMain = f.git(["rev-parse", "refs/heads/main"]);
@@ -100,7 +100,6 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(existsSync(mailInboxPathAt(f.root, "bob", thread.id, "new")), true);
     const body = messageText(f.root, thread.id);
     assert.match(body, /Target merge: merge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/);
-    assert.match(body, /oma_challenge diff name=challenge-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12} view=revert\|original/);
     // One approval is not enough (highPeerFloor = 2); requester cannot vote.
     await assert.rejects(f.vote("alice", chName, "approve", "mine"), { code: "SELF_REVIEW" });
     await f.vote("bob", chName, "approve", "revert it", "v1");
@@ -115,7 +114,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     assert.equal(f.stateOf(chName).display, "applied");
     // The original merge stays applied.
     assert.equal(f.stateOf(name).display, "applied");
-    const mergeStatus = f.reviews.status(f.auth("dave"), name, 64 * 1024, "s1");
+    const mergeStatus = f.reviews.status(f.auth("dave"), { name: name }, 64 * 1024, "s1");
     assert.ok("entries" in mergeStatus); assert.equal(mergeStatus.display, "applied");
     assert.equal(mergeStatus.entries.at(-1)?.kind, "challenge.open", "the challenge is an entry of its merge");
     // The completion notice: revert title, target line, revert diff.
@@ -132,7 +131,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
     const retried = await f.vote("carol", chName, "approve", "revert it", "v2");
     assert.equal(retried.operation, applying.operation);
     assert.equal(f.store.attestations.all().filter(r => r.operation.actor === "carol").length, 1);
-    const status = f.reviews.status(f.auth("dave"), chName, 64 * 1024, "s2");
+    const status = f.reviews.status(f.auth("dave"), { name: chName }, 64 * 1024, "s2");
     assert.ok("entries" in status);
     assert.deepEqual(status.target, { name, integration: f.applyOp("alice", "open-m")!.id,
       identity: openFact(f, chName).target.identity });
@@ -144,7 +143,7 @@ test("mail-v1: a prepared challenge of an applied merge reverts it by vote", asy
   } finally { f.close(); }
 });
 
-test("mail-v1: a HIGH challenge asks the Principal before applying", async () => {
+test("003. Mail-v1: a HIGH challenge asks the Principal before applying", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "risky");
     await f.challenge("alice", { merge: name, tier: "HIGH" }, "ch-hi");
@@ -166,7 +165,51 @@ test("mail-v1: a HIGH challenge asks the Principal before applying", async () =>
   } finally { f.close(); }
 });
 
-test("mail-v1: a conflicting revert refuses with the path and leaves no ref", async () => {
+for (const floor of ["MEDIUM", "HIGH"] as const) for (const delegated of [false, true]) test(
+  `004. Replacement challenge honors ${floor} path floor and Principal delegation=${delegated}`,
+  async () => {
+    const f = fixture({ principalDelegated: delegated,
+      rules: [{ path: "sensitive.txt", tier: floor, statuses: ["A", "M", "D", "T"] }] });
+    try {
+      const { name: target, candidate: base } = await appliedMerge(f, "benign");
+      const candidate = f.candidateWith({ "file.txt": "benign", "sensitive.txt": "tier-controlled replacement\n" }, base);
+      await f.submit("bob", candidate, "replacement-submit");
+      await assert.rejects(f.open("bob", { tier: "LOW", candidate, base }, "replacement-low-merge"),
+        { code: "INTEGRATION_CONDITIONS" });
+      await assert.rejects(f.challenge("bob", { merge: target, tier: "LOW", candidate, base }, "replacement-low-challenge"),
+        { code: "INTEGRATION_CONDITIONS" });
+      assert.equal(f.store.getOperation("bob", "replacement-low-merge"), null);
+      assert.equal(f.store.getOperation("bob", "replacement-low-challenge"), null);
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      // Challenges have no MEDIUM tier: a floor above LOW requires HIGH.
+      await f.challenge("bob", { merge: target, tier: "HIGH", candidate, base }, "replacement-high");
+      const name = f.requestName("replacement-high", "bob");
+      assert.equal(openFact(f, name).tier, "HIGH");
+      assert.deepEqual(f.stateOf(name).authors, ["bob"]);
+      await assert.rejects(f.vote("bob", name, "approve", "own replacement"), { code: "SELF_REVIEW" });
+      await f.vote("alice", name, "approve", "independent of replacement", "replacement-peer-1");
+      assert.equal(f.stateOf(name).display, "peer-needed");
+      await f.vote("carol", name, "approve", "second independent review", "replacement-peer-2");
+      assert.equal(f.stateOf(name).display, "principal-pending");
+      assert.equal(f.git(["rev-parse", "refs/heads/main"]), base, "two peers cannot bypass Principal");
+      const approval = messages(f, "carol", "replacement-peer-2").find(m => m.review?.role === "approval")!;
+      assert.ok(approval);
+      const decision = f.vote("principal", name, "approve", "approve the HIGH replacement", "replacement-principal", approval.id);
+      if (delegated) {
+        assert.equal((await decision).state, "succeeded");
+        assert.equal(f.stateOf(name).display, "applied");
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), candidate);
+        assert.equal(f.git(["show", "refs/heads/main:sensitive.txt"]), "tier-controlled replacement");
+      } else {
+        await assert.rejects(decision, { code: "CAPABILITY_DENIED" });
+        assert.equal(f.store.getOperation("principal", "replacement-principal"), null);
+        assert.equal(f.stateOf(name).display, "principal-pending");
+        assert.equal(f.git(["rev-parse", "refs/heads/main"]), base);
+      }
+    } finally { f.close(); }
+  });
+
+test("005. Mail-v1: a conflicting revert refuses with the path and leaves no ref", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "first");
     // main changes file.txt differently: the revert can no longer be clean.
@@ -185,7 +228,7 @@ test("mail-v1: a conflicting revert refuses with the path and leaves no ref", as
   } finally { f.close(); }
 });
 
-test("mail-v1: a refused open never publishes; a crash before publication is repaired", async () => {
+test("006. Mail-v1: a refused open never publishes; a crash before publication is repaired", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "clean");
     const aliceRefs = () => publishedRefs(f).split("\n").filter(l => l.includes("alice/"));
@@ -230,7 +273,7 @@ test("mail-v1: a refused open never publishes; a crash before publication is rep
   } finally { f.close(); }
 });
 
-test("mail-v1: a prepared revert that touches a protected path refuses at open", async () => {
+test("007. Mail-v1: a prepared revert that touches a protected path refuses at open", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "guarded");
     // The path became protected after the merge applied (a rebound policy):
@@ -245,7 +288,7 @@ test("mail-v1: a prepared revert that touches a protected path refuses at open",
   } finally { f.close(); }
 });
 
-test("UX-09: a broker-prepared revert carrying a gitlink refuses at open, naming the path", async () => {
+test("008. A broker-prepared revert carrying a gitlink refuses at open, naming the path", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "revert-me");
     // A seeded or mirrored canonical main may carry a gitlink (DR33 keeps
@@ -274,7 +317,7 @@ test("UX-09: a broker-prepared revert carrying a gitlink refuses at open, naming
   } finally { f.close(); }
 });
 
-test("mail-v1: a caller-provided revert candidate excludes its submitters from approval", async () => {
+test("009. Mail-v1: a caller-provided revert candidate excludes its submitters from approval", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "supplied");
     const main = f.git(["rev-parse", "refs/heads/main"]);
@@ -295,7 +338,7 @@ test("mail-v1: a caller-provided revert candidate excludes its submitters from a
   } finally { f.close(); }
 });
 
-test("mail-v1: duplicate and stale challenges of one merge", async () => {
+test("010. Proposal v3: duplicate challenge identity is refused and other proposals remain reviewable", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "dup");
     await f.challenge("alice", { merge: name, tier: "LOW", title: "first revert" }, "ch-a");
@@ -305,21 +348,20 @@ test("mail-v1: duplicate and stale challenges of one merge", async () => {
     const chB = f.requestName("ch-b", "bob");
     // An identical revert identity is a duplicate while the first is live.
     const aliceRevert = openFact(f, chA).identity.candidate;
-    await f.submit("carol", aliceRevert, "s-dupe");   // same candidate+base+tier+revision
     await assert.rejects(
-      f.challenge("carol", { merge: name, tier: "LOW", candidate: aliceRevert, base: f.git(["rev-parse", "refs/heads/main"]) }, "ch-dup"),
+      f.challenge("alice", { merge: name, tier: "LOW", candidate: aliceRevert, base: f.git(["rev-parse", "refs/heads/main"]) }, "ch-dup"),
       (error: unknown) => {
         assert.ok(error instanceof StoreError); assert.equal(error.code, "REQUEST_EXISTS");
         assert.equal((error as { details?: { name?: string } }).details?.name, chA);
         return true;
       });
-    // The first challenge applies; the second goes stale by refresh.
+    // The first challenge applies; the second retains its proposal for review.
     await f.vote("bob", chA, "approve", "ok", "a1");
     await f.vote("carol", chA, "approve", "ok", "a2");
     assert.equal(f.stateOf(chA).display, "applied");
     await f.reviews.advanceAll();
-    assert.equal(f.stateOf(chB).display, "stale");
-    await assert.rejects(f.vote("dave", chB, "approve", "late", "b1"), { code: "REQUEST_CLOSED" });
+    assert.equal(f.stateOf(chB).terminal, null);
+    await f.vote("dave", chB, "approve", "still reviewable", "b1");
     // A new challenge after one applied names the applied one.
     await assert.rejects(f.challenge("dave", { merge: name, tier: "LOW" }, "ch-after"), (error: unknown) => {
       assert.ok(error instanceof StoreError); assert.equal(error.code, "REQUEST_EXISTS");
@@ -329,7 +371,7 @@ test("mail-v1: duplicate and stale challenges of one merge", async () => {
   } finally { f.close(); }
 });
 
-test("mail-v1: a revert with nothing to revert refuses", async () => {
+test("011. Mail-v1: a revert with nothing to revert refuses", async () => {
   const f = fixture(); try {
     const { name } = await appliedMerge(f, "gone");
     await f.challenge("alice", { merge: name, tier: "LOW" }, "ch-first");

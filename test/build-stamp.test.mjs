@@ -58,7 +58,6 @@ const FILES = {
     workspaces: [{ name: "@oma/contracts", root: "packages/contracts" }, { name: "@oma/domain", root: "packages/domain" }, { name: "@oma/app", root: "apps/oma" }],
     compiledRoot: "apps/oma/dist", contract: "packages/contracts/dist/index.js",
     schema: "packages/domain/dist/schema.sql", extension: "packages/extension/dist/index.js",
-    modelCommand: "apps/oma/dist/libexec/oma", modelCommandBuilder: "packages/domain/dist/resident-paths.js",
     entries: Object.freeze({ tui: "apps/oma/dist/entry/oma.js" }), runtimeDependencies: Object.freeze([]),
   });`,
   "apps/oma/src/runtime/assets.ts": `import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
@@ -72,13 +71,10 @@ const FILES = {
   "apps/oma/package.json": JSON.stringify({ name: "@oma/app", version: "0.1.0", private: true, type: "module",
     dependencies: {"@oma/domain":"0.1.0", "@oma/contracts":"0.1.0"}, bin:{oma:"dist/entry/oma.js"},
     exports:{"./runtime/assets":{types:"./dist/runtime/assets.d.ts",default:"./dist/runtime/assets.js"}},
-    oma:{assets:["test-native"],modelCommand:"libexec/oma"} }),
+    oma:{assets:["test-native"]} }),
   "apps/oma/tsconfig.json": JSON.stringify({compilerOptions:{rootDir:"src",outDir:"dist",module:"nodenext",moduleResolution:"nodenext",
     target:"es2022",strict:true,skipLibCheck:true,types:[],composite:true,declaration:true,tsBuildInfoFile:".tsbuildinfo"},
     include:["src/**/*.ts"],references:[{path:"../../packages/contracts"},{path:"../../packages/domain"}] }),
-  "packages/domain/src/resident-paths.ts": `export function modelCommandScript(): string {
-    return "#!/bin/sh\\nexec node apps/oma/dist/entry/oma.js \\"$@\\"\\n";
-  }`,
   "apps/oma/src/entry/oma.ts": "#!/usr/bin/env node\nexport {};\n",
 };
 
@@ -109,7 +105,7 @@ function build(root) {
   return run;
 }
 
-test("DR44: discovery, compile and package launch failures cannot certify a build with status zero", t => {
+test("001. Discovery, compile and package launch failures cannot certify a build with status zero", t => {
   for (const [phase, signal] of [[1, false], [2, false], [3, false], [4, false], [1, true]]) {
     const root = fixture(t);
     writeFileSync(join(root, "inject-child.mjs"), `
@@ -144,7 +140,7 @@ function assertRebuild(root, target, change, message) {
   }
 }
 
-test("build stamp: a no-change root test compile preserves its recorded outputs", t => {
+test("002. Build stamp: a no-change root test compile preserves its recorded outputs", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "dist/test/probe.js");
@@ -153,7 +149,7 @@ test("build stamp: a no-change root test compile preserves its recorded outputs"
   assert.equal(statSync(target).ino, emitted, "the skip path rewrote a recorded output");
 });
 
-test("build stamp: appended, same-size-patched, swapped or removed outputs force a rebuild", t => {
+test("003. Build stamp: appended, same-size-patched, swapped or removed outputs force a rebuild", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "dist/test/probe.js");
@@ -181,7 +177,7 @@ test("build stamp: appended, same-size-patched, swapped or removed outputs force
   assert.deepEqual(readFileSync(target), pristine, "the removed output was not restored");
 });
 
-test("build stamp: extra files and directories in dist force a rebuild", t => {
+test("004. Build stamp: extra files and directories in dist force a rebuild", t => {
   const root = fixture(t);
   build(root);
   const extra = join(root, "dist/test/junk-extra.js");
@@ -194,7 +190,7 @@ test("build stamp: extra files and directories in dist force a rebuild", t => {
   assert.equal(existsSync(stray), false, "an extra dist directory survived the skip path");
 });
 
-test("build stamp: a stamp without per-output hashes cannot skip", t => {
+test("005. Build stamp: a stamp without per-output hashes cannot skip", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "dist/test/probe.js");
@@ -206,7 +202,7 @@ test("build stamp: a stamp without per-output hashes cannot skip", t => {
   }, "a name-only stamp skipped the compile");
 });
 
-test("build stamp: an edit to the build's own scripts is an input, not a free ride on the old stamp", t => {
+test("006. Build stamp: an edit to the build's own scripts is an input, not a free ride on the old stamp", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "dist/test/probe.js");
@@ -219,7 +215,7 @@ test("build stamp: an edit to the build's own scripts is an input, not a free ri
   }
 });
 
-test("build stamp: a mode-000 directory inside dist cannot wedge drift recovery", t => {
+test("007. Build stamp: a mode-000 directory inside dist cannot wedge drift recovery", t => {
   const root = fixture(t);
   build(root);
   // The extra directory already fails the recorded-set check; rmSync's blind
@@ -233,7 +229,7 @@ test("build stamp: a mode-000 directory inside dist cannot wedge drift recovery"
   assert.equal(existsSync(locked), false, "the unreadable extra survived drift recovery");
 });
 
-test("workspace cache: unchanged packages retain outputs; damaged outputs, modes and compiler state are restored", t => {
+test("008. Workspace cache: unchanged packages retain outputs; damaged outputs, modes and compiler state are restored", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "apps/oma/dist/entry/oma.js");
@@ -259,7 +255,7 @@ test("workspace cache: unchanged packages retain outputs; damaged outputs, modes
   }
 });
 
-test("workspace cache: dependency changes, added sources, config inheritance and asset edits invalidate their consumers", t => {
+test("009. Workspace cache: dependency changes, added sources, config inheritance and asset edits invalidate their consumers", t => {
   const root = fixture(t);
   build(root);
   const target = join(root, "apps/oma/dist/entry/oma.js");
@@ -282,7 +278,7 @@ test("workspace cache: dependency changes, added sources, config inheritance and
   assert.equal(readFileSync(join(root, "packages/domain/dist/schema.sql"), "utf8"), "SELECT 2;\n");
 });
 
-test("workspace cache: changed external types and newly resolvable declarations cannot reuse old code", t => {
+test("010. Workspace cache: changed external types and newly resolvable declarations cannot reuse old code", t => {
   const root = fixture(t);
   mkdirSync(join(root, "node_modules/fixture-types"));
   writeFileSync(join(root, "node_modules/fixture-types/package.json"), JSON.stringify({ name: "fixture-types", types: "index.d.ts" }));
@@ -306,7 +302,7 @@ test("workspace cache: changed external types and newly resolvable declarations 
   assert.match(run.stdout + run.stderr, /not assignable/);
 });
 
-test("workspace cache: inputs changed after the compiler read cannot certify stale outputs", t => {
+test("011. Workspace cache: inputs changed after the compiler read cannot certify stale outputs", t => {
   for (const [file, next] of [
     ["packages/contracts/src/index.ts", "export const fixtureContract = 2;\n"],
     ["packages/contracts/tsconfig.json", JSON.stringify({ ...JSON.parse(FILES["packages/contracts/tsconfig.json"]),
@@ -337,7 +333,7 @@ syncBuiltinESMExports();
   }
 });
 
-test("workspace build: dependency declaration assets precede consumers and cannot occupy compiler outputs", t => {
+test("012. Workspace build: dependency declaration assets precede consumers and cannot occupy compiler outputs", t => {
   const root = fixture(t), manifestPath = join(root, "packages/contracts/package.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   manifest.oma = { assets: ["vendor"] };
@@ -360,7 +356,7 @@ test("workspace build: dependency declaration assets precede consumers and canno
   assert.match(run.stdout + run.stderr, /asset overlaps compiler output/);
 });
 
-test("workspace cache: source asset permission changes update the installed mode", t => {
+test("013. Workspace cache: source asset permission changes update the installed mode", t => {
   const root = fixture(t);
   build(root);
   chmodSync(join(root, "packages/domain/src/schema.sql"), 0o700);

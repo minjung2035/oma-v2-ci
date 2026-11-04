@@ -15,13 +15,14 @@ import { RequestCache } from "#oma-test/app/request-cache";
 import { decodeSubject, parseEmlHeaders } from "@oma/mail/headers";
 import { gitAuth, gitFixture } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { runCliWithPeer } from "./fixtures/cli-peer.js";
-import { runCliWithLookup } from "./fixtures/cli-lookup.js";
+import { runClientWithPeer } from "./fixtures/client-peer.js";
+import { runClientWithLookup } from "./fixtures/client-lookup.js";
+import { clientCall } from "./fixtures/client-process.js";
 
 const body = "\ufeff  first\r\nsecond\rthird\n \r\n";
 const normalized = "\ufeff  first\nsecond\rthird\n \n";
 
-test("CLI text: UTF-8 subject decoding preserves encoded whitespace and decodes only once", () => {
+test("001. Mail text: UTF-8 subject decoding preserves encoded whitespace and decodes only once", () => {
   assert.equal(decodeSubject("\nplain title"), "plain title");
   assert.equal(decodeSubject("=?UTF-8?Q?caf=C3=A9_=3F?="), "café ?");
   assert.equal(
@@ -51,7 +52,7 @@ for (const [subject, explicit] of [
   ["=?UTF-8?B?aGVsbG8=?= " + "a".repeat(1200), null],
   ["original title", "  explicit subject  "],
 ] as const) {
-  test(`CLI text: reply uses ${explicit === null ? `original ${subject.length}-character subject` : "explicit subject"} and frozen LF body`, async () => {
+  test(`002. Client text: reply uses ${explicit === null ? `original ${subject.length}-character subject` : "explicit subject"} and frozen LF body`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-cli-text-"));
     const home = join(root, "home");
     mkdirSync(home);
@@ -72,25 +73,19 @@ for (const [subject, explicit] of [
       if (original.kind !== "mail.send")
         throw new Error("wrong fixture operation");
       const replyPath = join(home, "original.eml");
-      const bodyPath = join(home, "body.txt");
       writeFileSync(
         replyPath,
         readFileSync(mail.objectPath(original.plan.message.id)),
       );
-      writeFileSync(bodyPath, body);
       const key = "reply";
       const expected = explicit ?? `Re: ${subject}`;
-      const args = [
-        "send",
-        "--reply",
-        replyPath,
-        "--file",
-        bodyPath,
-        "--request",
-        key,
-        ...(explicit === null ? [] : ["--subject", explicit]),
-      ];
-      const run = await runCliWithPeer(home, root, args, async (request) => {
+      // This MIME round-trip fixture admits large original subjects explicitly.
+      // Default-bound derivation has its own real-mail regression.
+      const preload = join(home, "subject-bound.mjs");
+      writeFileSync(preload, `process.env.OMA_SUBJECT_BYTES=${JSON.stringify(String(Math.max(512, Buffer.byteLength(expected))))};\n`);
+      const expression = clientCall("replyMail", { replyFile: replyPath, body,
+        ...(explicit === null ? {} : { subject: explicit }) }, key);
+      const run = await runClientWithPeer(home, root, expression, async (request) => {
         assert.equal(request.method, "mail.send");
         const params = request.params as MailInput;
         assert.equal(params.subject, expected);
@@ -98,14 +93,14 @@ for (const [subject, explicit] of [
         assert.equal(params.replyToMessage, original.plan.message.id);
         const result = await mail.send(gitAuth, key, params);
         return { v: 1, id: request.id, ok: true, result };
-      });
+      }, preload);
       assert.equal(run.signal, null);
       assert.equal(run.status, 0, run.stderr);
       const sent = store.getOperation("a", key)!;
       if (sent.kind !== "mail.send") throw new Error("wrong fixture operation");
       const raw = readFileSync(mail.objectPath(sent.plan.message.id));
       // MAIL-003/P0-2: the MIME subject preserves the same explicit bytes as
-      // the frozen CLI request, including outer whitespace.
+      // the frozen client request, including outer whitespace.
       assert.equal(
         decodeSubject(
           parseEmlHeaders(raw, { maxHeaderBytes: raw.byteLength }).subject,
@@ -116,14 +111,10 @@ for (const [subject, explicit] of [
       assert.equal(cached.kind, "present");
       if (cached.kind !== "present") throw new Error("missing frozen request");
       rmSync(replyPath);
-      rmSync(bodyPath);
-      const retry = await runCliWithLookup(
-        home,
-        root,
-        args,
-        key,
-        cached.value.lastReceipt!,
-      );
+      const retry = await runClientWithLookup(home, root,
+        clientCall("replyMail", { replyFile: replyPath, body: "changed after freezing",
+          ...(explicit === null ? {} : { subject: explicit }) }, key),
+        key, cached.value.lastReceipt!);
       assert.equal(retry.status, 0, retry.stderr);
       assert.equal(retry.requests.length, 1);
       assert.deepEqual(new RequestCache(home).read(key), cached);
@@ -134,23 +125,11 @@ for (const [subject, explicit] of [
   });
 }
 
-test("CLI text: agent brief is normalized before freezing and never reread on retry", async () => {
+test("003. Client text: agent brief is normalized before freezing and a changed brief never replaces it on retry", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-cli-brief-"));
   try {
-    const path = join(home, "brief.txt");
-    writeFileSync(path, body);
     const key = "brief";
-    const args = [
-      "agent",
-      "create",
-      "worker",
-      "--from",
-      "a".repeat(40),
-      "--file",
-      path,
-      "--request",
-      key,
-    ];
+    const expression = clientCall("createAgent", { name: "worker", from: "a".repeat(40), brief: body }, key);
     const handle = async (request: Record<string, unknown>) => {
       if (request.method === "operation.get")
         return {
@@ -176,7 +155,7 @@ test("CLI text: agent brief is normalized before freezing and never reread on re
         },
       };
     };
-    const first = await runCliWithPeer(home, home, args, handle);
+    const first = await runClientWithPeer(home, home, expression, handle);
     assert.equal(first.signal, null);
     assert.equal(first.status, 3, first.stderr);
     assert.match(first.stderr, /Acceptance status unknown: brief/);
@@ -186,8 +165,8 @@ test("CLI text: agent brief is normalized before freezing and never reread on re
     );
     const cached = new RequestCache(home).read(key);
     assert.equal(cached.kind, "present");
-    rmSync(path);
-    const retry = await runCliWithPeer(home, home, args, handle);
+    const retry = await runClientWithPeer(home, home,
+      clientCall("createAgent", { name: "worker", from: "a".repeat(40), brief: "changed after freezing" }, key), handle);
     assert.equal(retry.signal, null);
     assert.equal(retry.status, 3, retry.stderr);
     assert.match(retry.stderr, /Acceptance status unknown: brief/);

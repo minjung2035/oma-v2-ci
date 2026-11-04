@@ -2,6 +2,256 @@
   "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate. Each test says how it stops the process (injection: sigkill, in-process-fault or logical, P0V-83), and the gate checks that the test's code shows it.",
   "boundaries": [
     {
+      "owner": "apps/oma/src/views.ts#ViewsModule.publishCollaborationDelivery",
+      "fact": "actual SIGKILL after batch JSON or delivery-index replacement and parent flush followed by two fresh-process projections preserves original prepared batch identity, incarnation, session, delivery mode, complete message IDs, accepted operations and delivery rows. Each separately timed navigation links its exact immutable inbox generation; later observations cannot mutate earlier generation bytes. It injects no body, ACK, approval or completion. Supplied authentication and process SIGKILL are not whole-broker crash, kernel containment or power-loss qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-projection-boundaries.test.ts",
+          "title": "001. Delivery presentation: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "batch-json",
+            "delivery-index"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-review-materials.ts#CollaborationReviewMaterials.publish",
+      "fact": "actual SIGKILL after exact patch copy, endpoint blob copy or material-manifest publication and parent flush followed by two Store/fresh-process reopens retains exact immutable bytes, original Review/source operations and Git refs. New endpoint observations remain explicitly distinct from originally stored complete patches, and fresh observations cannot collect earlier retained scratch. This creates no acceptance, approval, integration or retention authority; process death is not filesystem power-loss or kernel/macOS containment qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-projection-boundaries.test.ts",
+          "title": "002. Review materials: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "patch-copy",
+            "blob-copy",
+            "material-manifest"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/mail-attachments.ts#MailAttachments.complete",
+      "fact": "actual original Git publication CAS followed immediately by child SIGKILL retains one accepted Mail root, original bundle/message bytes, exact ordinal/ref/commit/format and recipient snapshot; two Store-reopen same-key retries finish original materialization without a second CAS, submit operation, ACK or presentation. Original sender retirement cannot revoke the accepted publication. Both SHA-1 and SHA-256 execute native quarantine; process SIGKILL is not filesystem power-loss or macOS/kernel containment qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-attachment-boundaries.test.ts",
+          "title": "001. Accepted attachment: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "attachment-cas"
+          ]
+        },
+        {
+          "file": "test/collaboration-create-boundaries.test.ts",
+          "title": "001. Selected create: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "source-cas"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-logs.ts#CollaborationLogViews.immutable",
+      "fact": "exact observed diagnostic entry bytes and source/incarnation/range manifests; actual SIGKILL after segment-byte or manifest publication and parent flush, followed by two fresh-process projections, preserves the original native spool frames and canonical/protected accepted Mail facts. No ACK, presentation, instruction authority, execution completion or process-death inference is introduced; this is not filesystem power-loss or SDK/kernel containment qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-receipt-records.test.ts",
+          "title": "003. Diagnostic records: actual SIGKILL after ",
+          "injection": "sigkill",
+          "points": [
+            "segment-bytes",
+            "segment-manifest"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-logs.ts#CollaborationLogViews.derived",
+      "fact": "separately timed derived diagnostic source status and dependency-first discovery; actual SIGKILL after source-status or root-index replacement and parent flush, followed by two fresh-process projections, retains original native spool frames and accepted operation/delivery/binding/freeze without acceptance, send, ACK or presentation. Supplied fixture authentication and process SIGKILL do not qualify physical power loss or SDK/kernel containment",
+      "tests": [
+        {
+          "file": "test/collaboration-receipt-records.test.ts",
+          "title": "003. Diagnostic records: actual SIGKILL after ",
+          "injection": "sigkill",
+          "points": [
+            "source-status",
+            "log-discovery"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-receipts.ts#CollaborationReceiptViews.immutable",
+      "fact": "exact actor-scoped receipt observation bytes, not a broker acceptance ledger; actual SIGKILL after the observation link and parent flush followed by two same-key fresh-process projections preserves canonical accepted operation/delivery and protected binding/freeze. Fixture authentication/selection do not qualify SDK/kernel containment, and process death is not filesystem power loss",
+      "tests": [
+        {
+          "file": "test/collaboration-receipt-records.test.ts",
+          "title": "002. Receipt records: actual SIGKILL after ",
+          "injection": "sigkill",
+          "points": [
+            "immutable-observation"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-receipts.ts#CollaborationReceiptViews.derived",
+      "fact": "derived actor receipt status after its exact immutable evidence, with discovery published only after dependencies; actual SIGKILL after status replacement and parent flush followed by two same-key fresh-process projections does not accept, send, settle, ACK or present Mail and preserves original canonical/protected facts. It is not filesystem power-loss or SDK/kernel containment qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-receipt-records.test.ts",
+          "title": "002. Receipt records: actual SIGKILL after ",
+          "injection": "sigkill",
+          "points": [
+            "mutable-receipt"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.restorePublishedSubmissionMetadata",
+      "fact": "transport-only copy of exact protected compound metadata; actual metadata-file and published-parent fsync interruption, same-key retry and fresh-process restart preserve original metadata/binding bytes and create neither bundle bytes, receipt, original ownership nor acceptance. This boundary test does not prove the host's canonical-child authorization or native publication/parent Review continuation, and is not filesystem power-loss qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-invocations.test.ts",
+          "title": "009. Metadata handoff: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "metadata-file-flush",
+            "published-directory-flush"
+          ]
+        },
+        {
+          "file": "test/collaboration-invocations.test.ts",
+          "title": "EIO preserves original identity and retry without an obsolete bundle",
+          "injection": "in-process-fault",
+          "points": [
+            "metadata-file-flush",
+            "published-directory-flush"
+          ]
+        },
+        {
+          "file": "test/collaboration-invocations.test.ts",
+          "title": "007. Metadata handoff: a competing publisher killed after link cannot bypass the post-observation durability barrier",
+          "injection": "sigkill",
+          "points": [
+            "before-published-directory-flush"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/review-record.ts#withReviewSourceRecord",
+      "fact": "collection of only this recorded-OID observation's private scratch; interrupted or completed collection does not change accepted operations, original source bytes or refs. A fresh exact-OID observation does not collect another observation's retained scratch. This is process SIGKILL evidence, not filesystem power-loss or native kernel containment qualification",
+      "tests": [
+        {
+          "file": "test/collaboration-review-records.test.ts",
+          "title": "003. Source collection: actual SIGKILL during and after scratch removal preserves accepted facts and exact-OID restart",
+          "injection": "sigkill",
+          "points": [
+            "partial-collection",
+            "after-collection"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/execution-recovery.ts#prepareExecutionRecovery",
+      "fact": "exact journal archive and host/root/boot-bound checkpoint survive process death; preparation creates no scope-death proof or accepted-work mutation",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "015. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "archive-rename",
+            "ticket-publication"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/execution-recovery.ts#applyExecutionRecovery",
+      "fact": "a different kernel boot on the original host permits an exact initial observation frame; interrupted reset keeps admission closed and preserves the original archive. Changed-boot observations are controlled, not a real-host reboot qualification",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "015. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "reset"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/package-replacement.ts#preparePackageReplacement",
+      "fact": "a durable exact preimage and prepared record precede movement/replacement of the configured local package",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "004. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "prepared",
+            "old-move",
+            "installing"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/package-replacement.ts#Replacement.save",
+      "fact": "durable install/restore/commit phases retain their meaning after process loss, without reconstructing control files from guesses",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "004. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "installing",
+            "committed"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/package-replacement.ts#Replacement.rollback",
+      "fact": "uncommitted candidate removal restores the original package and exact control bytes idempotently; unrelated sources remain untouched",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "004. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "restore-old",
+            "restore-settings",
+            "rollback-collect"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "packages/storage/src/package-replacement.ts#Replacement.collect",
+      "fact": "only settled replacement preimages become collectible garbage; committed package state is never rolled back by interrupted cleanup",
+      "tests": [
+        {
+          "file": "packages/storage/test/recovery-backlog.test.mjs",
+          "title": "004. SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "collect-rename",
+            "collect-delete",
+            "rollback-collect"
+          ]
+        }
+      ]
+    },
+    {
       "owner": "packages/storage/src/execution-staging.ts#ExecutionStaging.run",
       "fact": "candidate and runtime-tools disposable staging is collected only after independent whole-scope death and an uncontended lease; primary bytes survive interruption and retry. Common TS owner tested on actual Linux, not Darwin kernel qualification",
       "tests": [
@@ -12,12 +262,12 @@
         },
         {
           "file": "test/candidate-staging.test.mjs",
-          "title": "candidate staging: SIGKILL after collection",
+          "title": "002. Candidate staging: SIGKILL after collection preserves primary bytes and a fresh owner can restart",
           "injection": "sigkill"
         },
         {
           "file": "test/candidate-staging.test.mjs",
-          "title": "candidate staging: a real existing tree at the selected nonce",
+          "title": "004. Candidate staging: a real existing tree at the selected nonce is never collected as newly owned staging",
           "injection": "logical"
         }
       ]
@@ -28,7 +278,7 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "P0-7: a draining broker removes its status view",
+          "title": "015. A draining broker removes its status view, so a view that is there is a live broker's",
           "injection": "logical"
         }
       ]
@@ -39,17 +289,17 @@
       "tests": [
         {
           "file": "test/rollover-settlement.test.ts",
-          "title": "V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease",
+          "title": "005. A failure at the incarnation commit leaves the settled batch settled and no live lease",
           "injection": "in-process-fault"
         },
         {
           "file": "test/rollover-settlement.test.ts",
-          "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+          "title": "003. A receipt of an earlier attempt that appears after a later run opened still settles the batch, with no redelivery",
           "injection": "logical"
         },
         {
           "file": "test/delivery-state-model.test.ts",
-          "title": "V30A: seeded delivery-evidence sequences follow D01 on the composed runtime",
+          "title": "001. Seeded delivery-evidence sequences follow D01 on the composed runtime",
           "injection": "logical"
         }
       ]
@@ -60,12 +310,12 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "title": "016. A crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "title": "008. A project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -76,7 +326,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "int-cas",
@@ -86,12 +336,12 @@
         },
         {
           "file": "test/git-effect-evidence.test.ts",
-          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "title": "004. A recovery CAS that loses to a third writer after its checks is unknown, never applied",
           "injection": "logical"
         },
         {
           "file": "test/integration-witness-kill.test.ts",
-          "title": "DR46 witness kill:",
+          "title": "001. Witness kill: ",
           "injection": "sigkill",
           "points": [
             "compareAndSwap",
@@ -106,7 +356,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "int-cas",
@@ -122,7 +372,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "submit-ref"
@@ -130,7 +380,7 @@
         },
         {
           "file": "test/phase8.test.ts",
-          "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+          "title": "002. Reconcile never overwrites a moved published ref; ref==candidate recovers",
           "injection": "in-process-fault"
         }
       ]
@@ -141,7 +391,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "ctx-snapshot",
@@ -156,7 +406,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "ctx-accepted",
@@ -166,7 +416,7 @@
         },
         {
           "file": "test/preaccept-ownership.test.ts",
-          "title": "V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them",
+          "title": "012. A lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them",
           "injection": "in-process-fault"
         }
       ]
@@ -177,7 +427,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "ctx-mail"
@@ -191,7 +441,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "ctx-accepted",
@@ -200,7 +450,7 @@
         },
         {
           "file": "test/r21-context-workflow.test.ts",
-          "title": "V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan",
+          "title": "004. Accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan",
           "injection": "in-process-fault"
         }
       ]
@@ -211,7 +461,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "ctx-cas",
@@ -260,6 +510,11 @@
           "file": "test/merge-review.test.ts",
           "title": "a requester stopped before the CAS cancels the application",
           "injection": "logical"
+        },
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "013. SIGKILL ",
+          "injection": "sigkill"
         }
       ]
     },
@@ -269,7 +524,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "int-before",
@@ -279,7 +534,7 @@
         },
         {
           "file": "test/phase7.test.ts",
-          "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+          "title": "010. A policy unreadable at CAS leaves the accepted integration pending, and recovery integrates once it reads",
           "injection": "in-process-fault"
         }
       ]
@@ -290,13 +545,18 @@
       "tests": [
         {
           "file": "test/r19-integration-decisions.test.ts",
-          "title": "R19: base recovery rechecks conditions twice and completes the same operation",
+          "title": "011. Base recovery rechecks conditions twice and completes the same operation",
           "injection": "logical"
         },
         {
           "file": "test/git-effect-evidence.test.ts",
-          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "title": "004. A recovery CAS that loses to a third writer after its checks is unknown, never applied",
           "injection": "logical"
+        },
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "013. SIGKILL ",
+          "injection": "sigkill"
         }
       ]
     },
@@ -306,12 +566,12 @@
       "tests": [
         {
           "file": "test/phase7.test.ts",
-          "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+          "title": "010. A policy unreadable at CAS leaves the accepted integration pending, and recovery integrates once it reads",
           "injection": "in-process-fault"
         },
         {
           "file": "test/phase7.test.ts",
-          "title": "INT-003: accepted stop intent cancels before main CAS",
+          "title": "006. Accepted stop intent cancels before main CAS",
           "injection": "logical"
         }
       ]
@@ -322,7 +582,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "int-done"
@@ -330,7 +590,7 @@
         },
         {
           "file": "test/git-effect-evidence.test.ts",
-          "title": "V24B: an applied non-no-op CAS is settled as history even after stop and policy change",
+          "title": "003. An applied non-no-op CAS is settled as history even after stop and policy change",
           "injection": "in-process-fault"
         }
       ]
@@ -341,21 +601,22 @@
       "tests": [
         {
           "file": "test/git-effect-evidence.test.ts",
-          "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+          "title": "004. A recovery CAS that loses to a third writer after its checks is unknown, never applied",
           "injection": "logical"
         }
       ]
     },
     {
-      "owner": "packages/git/src/quarantine.ts#QuarantineImporter.importBundle",
-      "fact": "the removal of a settled quarantine namespace",
+      "owner": "packages/git/src/quarantine.ts#QuarantineImporter.runBundle",
+      "fact": "after the original native import scope settles, actual SIGKILL after quarantine-tree removal/parent flush or after lease removal/parent flush preserves the accepted Mail root, original bundle/message bytes, input/plan hashes and exact source/ref relationships across two Store reopens and same-key retries in SHA-1 and SHA-256. A tree-only interruption retains its earlier lease bytes without a fresh import acquiring that collection owner. This tests settled collection, unlike the earlier pre-cleanup submit-import callback; it is not filesystem power-loss or macOS/kernel containment qualification",
       "tests": [
         {
-          "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "file": "test/collaboration-attachment-boundaries.test.ts",
+          "title": "001. Accepted attachment: actual SIGKILL at ",
           "injection": "sigkill",
           "points": [
-            "submit-import"
+            "quarantine-tree-flush",
+            "quarantine-collection-flush"
           ]
         }
       ]
@@ -366,7 +627,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "submit-import",
@@ -381,7 +642,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "submit-mail",
@@ -396,12 +657,12 @@
       "tests": [
         {
           "file": "test/phase8.test.ts",
-          "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+          "title": "002. Reconcile never overwrites a moved published ref; ref==candidate recovers",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "submit-accepted",
@@ -416,7 +677,7 @@
       "tests": [
         {
           "file": "test/unrestricted-admission.test.ts",
-          "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup",
+          "title": "006. A submit effect failure recorded as unknown is reported for same-key lookup",
           "injection": "in-process-fault"
         }
       ]
@@ -427,12 +688,12 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "R20 primitive SIGKILL at submit-stage",
+          "title": "004. Primitive SIGKILL at submit-stage (",
           "injection": "sigkill"
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T57/T58/T63/T66 primitive SIGKILL at",
+          "title": "005. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "submit-accepted"
@@ -440,7 +701,7 @@
         },
         {
           "file": "test/mail-submit-scope.test.ts",
-          "title": "V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once",
+          "title": "004. A submit same-key retry after acceptance reads no new bundle, and publication happens once",
           "injection": "in-process-fault"
         }
       ]
@@ -451,12 +712,12 @@
       "tests": [
         {
           "file": "test/r36-lifecycle-sequences.test.ts",
-          "title": "R36 lifecycle replay seed=",
+          "title": "002. Lifecycle replay seed=",
           "injection": "in-process-fault"
         },
         {
           "file": "test/r25-action-replay.test.ts",
-          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "title": "003. Action replay: ${kind}: stale caller and revoked manager cannot replay an accepted action",
           "injection": "logical"
         }
       ]
@@ -467,12 +728,12 @@
       "tests": [
         {
           "file": "test/r36-lifecycle-sequences.test.ts",
-          "title": "R36 lifecycle replay seed=",
+          "title": "002. Lifecycle replay seed=",
           "injection": "in-process-fault"
         },
         {
           "file": "test/r25-action-replay.test.ts",
-          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "title": "003. Action replay: ${kind}: stale caller and revoked manager cannot replay an accepted action",
           "injection": "logical"
         }
       ]
@@ -483,12 +744,12 @@
       "tests": [
         {
           "file": "test/r36-lifecycle-sequences.test.ts",
-          "title": "R36 lifecycle replay seed=",
+          "title": "002. Lifecycle replay seed=",
           "injection": "in-process-fault"
         },
         {
           "file": "test/r25-action-replay.test.ts",
-          "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+          "title": "003. Action replay: ${kind}: stale caller and revoked manager cannot replay an accepted action",
           "injection": "logical"
         }
       ]
@@ -499,7 +760,7 @@
       "tests": [
         {
           "file": "test/r36-lifecycle-sequences.test.ts",
-          "title": "R36 lifecycle replay seed=",
+          "title": "002. Lifecycle replay seed=",
           "injection": "in-process-fault"
         }
       ]
@@ -509,8 +770,16 @@
       "fact": "a created agent's readiness (provisioning -> enabled)",
       "tests": [
         {
+          "file": "test/collaboration-create-boundaries.test.ts",
+          "title": "001. Selected create: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "ready-commit"
+          ]
+        },
+        {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
+          "title": "008. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "create-ready"
@@ -518,7 +787,7 @@
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "title": "007. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "boot-ready"
@@ -532,7 +801,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "title": "007. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "boot-stage",
@@ -548,7 +817,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
+          "title": "008. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "create-stage",
@@ -563,8 +832,17 @@
       "fact": "a created agent's workspace, execution registration and success",
       "tests": [
         {
+          "file": "test/collaboration-create-boundaries.test.ts",
+          "title": "001. Selected create: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "workspace-publication",
+            "initial-mail"
+          ]
+        },
+        {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
+          "title": "008. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "create-workspace",
@@ -580,7 +858,7 @@
       "tests": [
         {
           "file": "test/phase4.test.ts",
-          "title": "T39/LIFE-007: same name + same resolved spec converges without a second physical create",
+          "title": "007. Same name + same resolved spec converges without a second physical create",
           "injection": "logical"
         }
       ]
@@ -591,7 +869,7 @@
       "tests": [
         {
           "file": "test/r10-ledger-rows.test.ts",
-          "title": "R10: normal restart and independent acknowledgement preserve exact facts",
+          "title": "003. Normal restart and independent acknowledgement preserve exact facts",
           "injection": "logical"
         }
       ]
@@ -602,12 +880,12 @@
       "tests": [
         {
           "file": "test/r25-lifecycle-owners.test.ts",
-          "title": "R25: subscription replay keeps one durable identity and unchanged terminal bytes",
+          "title": "001. Subscription replay keeps one durable identity and unchanged terminal bytes",
           "injection": "logical"
         },
         {
           "file": "test/coordinator-facets.test.mjs",
-          "title": "P3 facets: route acceptance/retry preserves identity and fresh authority timing",
+          "title": "001. Facets: route acceptance/retry preserves identity and fresh authority timing",
           "injection": "logical"
         }
       ]
@@ -661,7 +939,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
+          "title": "008. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "create-workspace"
@@ -669,7 +947,7 @@
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "title": "007. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "boot-workspace"
@@ -682,8 +960,16 @@
       "fact": "a created agent's published workspace (the publication, inside the preparation that holds the clone's lease, R6-04)",
       "tests": [
         {
+          "file": "test/collaboration-create-boundaries.test.ts",
+          "title": "001. Selected create: actual SIGKILL at ",
+          "injection": "sigkill",
+          "points": [
+            "workspace-publication"
+          ]
+        },
+        {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/M-004 primitive SIGKILL at",
+          "title": "008. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "create-workspace"
@@ -691,7 +977,7 @@
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+          "title": "007. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "boot-workspace"
@@ -705,7 +991,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "stage",
@@ -714,12 +1000,12 @@
         },
         {
           "file": "test/phase3.test.ts",
-          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "title": "006. Kill after object fsync -> unreferenced object, no recipients; resend OK",
           "injection": "sigkill"
         },
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "title": "001. What a broker made before an acceptance that never happened is collected; what an accepted plan names is kept",
           "injection": "logical"
         }
       ]
@@ -730,7 +1016,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "accepted"
@@ -738,12 +1024,12 @@
         },
         {
           "file": "test/phase3.test.ts",
-          "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+          "title": "007. Kill after acceptance -> reconcile completes archive and all recipients",
           "injection": "sigkill"
         },
         {
           "file": "test/mail-submit-scope.test.ts",
-          "title": "V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients",
+          "title": "003. A same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients",
           "injection": "in-process-fault"
         }
       ]
@@ -754,12 +1040,12 @@
       "tests": [
         {
           "file": "test/principal-settlement.test.ts",
-          "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+          "title": "001. A completion that fails after the receipt is retried alone; the engine sees the batch once",
           "injection": "in-process-fault"
         },
         {
           "file": "test/runner-channel.test.ts",
-          "title": "NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint",
+          "title": "004. Idle delivery retains its owned endpoint",
           "injection": "logical"
         }
       ]
@@ -770,7 +1056,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "cur"
@@ -778,7 +1064,7 @@
         },
         {
           "file": "test/p24-mail-boundaries.test.ts",
-          "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+          "title": "003. First cur parent flush precedes removing new; a flush fault preserves prepared recovery",
           "injection": "in-process-fault"
         }
       ]
@@ -789,7 +1075,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "prepared"
@@ -803,12 +1089,12 @@
       "tests": [
         {
           "file": "test/rollover-settlement.test.ts",
-          "title": "V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery",
+          "title": "001. A receipt made durable just before the runner died completes its batch before rollover, with no redelivery",
           "injection": "logical"
         },
         {
           "file": "test/rollover-settlement.test.ts",
-          "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+          "title": "003. A receipt of an earlier attempt that appears after a later run opened still settles the batch, with no redelivery",
           "injection": "logical"
         }
       ]
@@ -819,7 +1105,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "archive"
@@ -827,7 +1113,7 @@
         },
         {
           "file": "test/durable-fault-matrix.test.ts",
-          "title": "P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges",
+          "title": "001. Fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges",
           "injection": "in-process-fault"
         }
       ]
@@ -838,7 +1124,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "inbox-a",
@@ -847,7 +1133,7 @@
         },
         {
           "file": "test/mail-arrival-durability.test.mjs",
-          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "title": "007. SIGKILL during a real arrival append, retry and restart retain the accepted message",
           "injection": "sigkill"
         }
       ]
@@ -858,12 +1144,12 @@
       "tests": [
         {
           "file": "test/phase3.test.ts",
-          "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+          "title": "007. Kill after acceptance -> reconcile completes archive and all recipients",
           "injection": "sigkill"
         },
         {
           "file": "test/p24-mail-boundaries.test.ts",
-          "title": "P03: unavailable recovery retains reason and pending evidence, then converges",
+          "title": "002. Unavailable recovery retains reason and pending evidence, then converges",
           "injection": "in-process-fault"
         }
       ]
@@ -874,7 +1160,7 @@
       "tests": [
         {
           "file": "test/phase8.test.ts",
-          "title": "T68d: a dead run's fsck diagnostic spool is collected",
+          "title": "004. A dead run's fsck diagnostic spool is collected -- residue neither blocks nor survives the health observation",
           "injection": "logical"
         }
       ]
@@ -885,12 +1171,12 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "title": "001. What a broker made before an acceptance that never happened is collected; what an accepted plan names is kept",
           "injection": "logical"
         },
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR10: startup recovery collects before anything is admitted or bootstrapped",
+          "title": "002. Startup recovery collects before anything is admitted or bootstrapped",
           "injection": "logical"
         }
       ]
@@ -901,23 +1187,45 @@
       "tests": [
         {
           "file": "test/request-cache.test.ts",
-          "title": "body-only crashes and metadata-only corruption cannot reconstruct a freeze",
+          "title": "004. Body-only crashes and metadata-only corruption cannot reconstruct a freeze",
           "injection": "logical"
         },
         {
           "file": "test/request-cache.test.ts",
-          "title": "competing processes cannot publish different bodies for one frozen identity",
+          "title": "007. Competing processes cannot publish different bodies for one frozen identity",
           "injection": "logical"
         },
         {
           "file": "test/cli-receipt-replay.test.ts",
-          "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
+          "title": "003. An unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "V26B / P0-7: a request freeze SIGKILLed at any flush",
+          "title": "007. A request freeze SIGKILLed at any flush leaves no request, the whole request, or an orphan body it refuses to rebuild from",
           "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.bindInvocation",
+      "fact": "host-scoped original call linkage precedes source preparation; changing tool or arguments cannot create a replacement key",
+      "tests": [
+        {
+          "file": "test/collaboration-invocations.test.ts",
+          "title": "012. Invocation: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/request-cache.ts#RequestCache.writeInvocation",
+      "fact": "original frozen identity, may-have-sent marker and verified receipt linkage advance without inventing a new invocation or effect",
+      "tests": [
+        {
+          "file": "test/collaboration-invocations.test.ts",
+          "title": "012. Invocation: interrupted ",
+          "injection": "in-process-fault"
         }
       ]
     },
@@ -927,17 +1235,17 @@
       "tests": [
         {
           "file": "test/request-cache.test.ts",
-          "title": "receipt updates cannot replace immutable request fields or change operation identity",
+          "title": "006. Receipt updates cannot replace immutable request fields or change operation identity",
           "injection": "logical"
         },
         {
           "file": "test/cli-receipt-replay.test.ts",
-          "title": "V26B: a terminal receipt in the cache is not replaced by a later lesser observation",
+          "title": "004. A terminal receipt in the cache is not replaced by a later lesser observation",
           "injection": "logical"
         },
         {
           "file": "test/cli-receipt-replay.test.ts",
-          "title": "WP26: a receipt the request cache cannot record is still shown, with the key to ask again",
+          "title": "005. A receipt the request cache cannot record is still shown, with the key to ask again",
           "injection": "logical"
         }
       ]
@@ -948,7 +1256,7 @@
       "tests": [
         {
           "file": "test/merge-review.test.ts",
-          "title": "a bound reviewer's retirement withdraws and re-asks the approval",
+          "title": "a bound reviewer's retirement preserves the existing approval",
           "injection": "logical"
         },
         {
@@ -969,7 +1277,7 @@
         },
         {
           "file": "test/merge-review.test.ts",
-          "title": "only the first ready request on a base applies; the other goes stale by refresh",
+          "title": "disjoint ready requests on one base both apply without rewriting old intent",
           "injection": "logical"
         }
       ]
@@ -980,17 +1288,17 @@
       "tests": [
         {
           "file": "test/delivery-receipt-publication.test.ts",
-          "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+          "title": "010. A crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
           "injection": "in-process-fault"
         },
         {
           "file": "test/runner-channel.test.ts",
-          "title": "NATIVE-RUNNER-CONTROL-01: idle delivery retains its owned endpoint",
+          "title": "004. Idle delivery retains its owned endpoint",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+          "title": "004. A receipt publication SIGKILLed at any durability point leaves no receipt or the whole one, and the retry publishes it",
           "injection": "sigkill"
         }
       ]
@@ -1001,7 +1309,7 @@
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "title": "006. A staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
           "injection": "logical"
         }
       ]
@@ -1012,7 +1320,7 @@
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25/C20: a staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
+          "title": "006. A staging interrupted mid-copy leaves only dead content; a retry installs whole and the next change collects it",
           "injection": "logical"
         }
       ]
@@ -1023,7 +1331,7 @@
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25/C20: `oma pi install` of a local path copies it into the store as `local/<name>`",
+          "title": "005. `oma pi install` of a local path copies it into the store as `local/<name>`, indexed and synced like a remote package",
           "injection": "logical"
         }
       ]
@@ -1034,12 +1342,12 @@
       "tests": [
         {
           "file": "test/pi-compat.test.ts",
-          "title": "A4 / P0-5: a held settings lock refuses the write, keeps the bytes, and the retry after release lands",
+          "title": "013. A held settings lock refuses the write, keeps the bytes, and the retry after release lands",
           "injection": "logical"
         },
         {
           "file": "test/pi-compat.test.ts",
-          "title": "A4: malformed or non-object settings are refused with the bytes untouched",
+          "title": "012. Malformed or non-object settings are refused with the bytes untouched",
           "injection": "logical"
         },
         {
@@ -1049,12 +1357,12 @@
         },
         {
           "file": "test/pi-runtime.test.ts",
-          "title": "INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries",
+          "title": "001. Engine retry settings preserve unrelated fields and allow exactly five outer retries",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1075,7 +1383,7 @@
         },
         {
           "file": "test/personal-settings.test.ts",
-          "title": "DR29/P0-5: a failed async project observation consumes no first choice and returns its writer",
+          "title": "002. A failed async project observation consumes no first choice and returns its writer",
           "injection": "logical"
         }
       ]
@@ -1086,12 +1394,12 @@
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25: the engine names a package's extensions; the index keeps them by package, and roles follow a package through updates",
+          "title": "004. The engine names a package's extensions; the index keeps them by package, and roles follow a package through updates",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1102,17 +1410,17 @@
       "tests": [
         {
           "file": "test/principal-settlement.test.ts",
-          "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+          "title": "001. A completion that fails after the receipt is retried alone; the engine sees the batch once",
           "injection": "in-process-fault"
         },
         {
           "file": "test/delivery-receipt-publication.test.ts",
-          "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+          "title": "010. A crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+          "title": "004. A receipt publication SIGKILLed at any durability point leaves no receipt or the whole one, and the retry publishes it",
           "injection": "sigkill"
         }
       ]
@@ -1123,12 +1431,12 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "title": "016. A crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "title": "008. A project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1139,7 +1447,7 @@
       "tests": [
         {
           "file": "test/p0-review6.test.ts",
-          "title": "P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free",
+          "title": "004. The next provision collects a crashed repository staging only when its lease is free",
           "injection": "sigkill"
         }
       ]
@@ -1150,12 +1458,12 @@
       "tests": [
         {
           "file": "test/p0-review6.test.ts",
-          "title": "P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation",
+          "title": "014. Provisioning killed at the canonical main's creation leaves no main or the one it made, and the next start keeps it",
           "injection": "sigkill"
         },
         {
           "file": "test/society-bringup.test.ts",
-          "title": "T115 REC-007: two first starts racing on one state root both survive it",
+          "title": "011. Two first starts racing on one state root both survive it",
           "injection": "logical"
         }
       ]
@@ -1166,7 +1474,7 @@
       "tests": [
         {
           "file": "test/project-binding.test.ts",
-          "title": "V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal",
+          "title": "006. A leftover staging repository from an interrupted start is neither adopted nor fatal",
           "injection": "logical"
         }
       ]
@@ -1177,12 +1485,12 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+          "title": "016. A crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+          "title": "008. A project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1209,12 +1517,12 @@
       "tests": [
         {
           "file": "test/p0-review6.test.ts",
-          "title": "a no-replace publication killed at any step leaves its name absent or whole",
+          "title": "012. A no-replace publication killed at any step leaves its name absent or whole, and the next one collects what it left",
           "injection": "sigkill"
         },
         {
           "file": "test/client.test.ts",
-          "title": "the output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
+          "title": "012. The output spool is content-named: the same answer is one file, and a same-named file of other bytes is not overwritten",
           "injection": "logical"
         }
       ]
@@ -1235,7 +1543,7 @@
         },
         {
           "file": "test/project-preparation-boundaries.test.ts",
-          "title": "failed preparation handoff releases its lease and collects only its own tree",
+          "title": "002. Failed preparation handoff releases its lease and collects only its own tree",
           "injection": "in-process-fault"
         }
       ]
@@ -1246,17 +1554,17 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
+          "title": "010. A crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
           "injection": "in-process-fault"
         },
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused",
+          "title": "009. CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused, and the newer file is kept",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "DR12 / P0-7: an inline commit SIGKILLed at any durability point",
+          "title": "003. An inline commit SIGKILLed at any durability point leaves the old file or one the loader loads",
           "injection": "sigkill"
         }
       ]
@@ -1267,17 +1575,17 @@
       "tests": [
         {
           "file": "test/config-generations.test.ts",
-          "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration",
+          "title": "002. A crash at any point of a managed commit leaves the complete old or the complete new configuration",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "V13A / P0-7: a managed commit SIGKILLed at any durability point",
+          "title": "001. A managed commit SIGKILLed at any durability point leaves the complete old or the complete new configuration",
           "injection": "sigkill"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "DR46 / P0-7: SIGKILL in a short journal append preserves the manifest and exact candidate retry",
+          "title": "002. SIGKILL in a short journal append preserves the manifest and exact candidate retry",
           "injection": "sigkill"
         }
       ]
@@ -1288,12 +1596,12 @@
       "tests": [
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25: an inline configuration crashed at any point of becoming a bundle is the whole old one or the whole new one, and the next start finishes it",
+          "title": "033. An inline configuration crashed at any point of becoming a bundle is the whole old one or the whole new one, and the next start finishes it",
           "injection": "in-process-fault"
         },
         {
           "file": "test/pi-packages.test.ts",
-          "title": "DR25: a role set is committed only against the configuration it was read as, and one already there changes nothing",
+          "title": "034. A role set is committed only against the configuration it was read as, and one already there changes nothing",
           "injection": "logical"
         }
       ]
@@ -1304,13 +1612,123 @@
       "tests": [
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR12: a first-run configuration is created where none exists",
+          "title": "012. A first-run configuration is created where none exists and never overwrites one another start made",
           "injection": "logical"
         },
         {
           "file": "test/surface-process.test.ts",
-          "title": "T111 real SIGKILL at ${point} leaves a configuration a next start can load",
+          "title": "001. Real SIGKILL at ${point} leaves a configuration a next start can load",
           "injection": "sigkill"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-mail.ts#CollaborationMailViews.immutable",
+      "fact": "a verified decoded mail body or generation-bound inbox page; a projection, not acceptance or delivery",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "013. Records: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-mail.ts#CollaborationMailViews.metadata",
+      "fact": "changed role-scoped derived metadata only; unchanged observations reuse exact bytes without affecting ACK or receipts",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "016. History: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-mail.ts#CollaborationMailViews.publishBatch",
+      "fact": "role-scoped mail metadata and the current prepared-batch index, published after dependencies without ACK or completion",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "013. Records: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-history.ts#CollaborationMailHistory.immutable",
+      "fact": "generation-bound complete history pages precede discovery entry points; this observation is not acceptance or delivery",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "016. History: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-history.ts#CollaborationMailHistory.publishIndexes",
+      "fact": "sent/commons/topic/thread discovery points reference already-published dependencies; no cross-file atomic snapshot is claimed",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "016. History: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-history.ts#CollaborationMailHistory.refresh",
+      "fact": "history-only refresh health preserves unknown/unavailable and original ledger, receipts and deliveries on failure",
+      "tests": [
+        {
+          "file": "test/collaboration-mail-records.test.ts",
+          "title": "016. History: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-state.ts#CollaborationStateViews.immutable",
+      "fact": "verified canonical GOAL revision bytes; no context publication or authority is created",
+      "tests": [
+        {
+          "file": "test/collaboration-state-records.test.ts",
+          "title": "010. State: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-state.ts#CollaborationStateViews.refresh",
+      "fact": "role-scoped current GOAL, registry and health observations retain original receipts and report unavailable sources",
+      "tests": [
+        {
+          "file": "test/collaboration-state-records.test.ts",
+          "title": "010. State: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-reviews.ts#CollaborationReviewViews.immutable",
+      "fact": "role-permitted accepted review facts and recorded frozen patches precede status discovery; no decision is accepted",
+      "tests": [
+        {
+          "file": "test/collaboration-review-records.test.ts",
+          "title": "007. Review records: interrupted ",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-reviews.ts#CollaborationReviewViews.mutable",
+      "fact": "changed role-scoped review status and indexes only; dependency conflicts preserve previous discovery and accepted facts",
+      "tests": [
+        {
+          "file": "test/collaboration-review-records.test.ts",
+          "title": "007. Review records: interrupted ",
+          "injection": "in-process-fault"
         }
       ]
     },
@@ -1320,12 +1738,12 @@
       "tests": [
         {
           "file": "test/durable-fault-matrix.test.ts",
-          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "title": "003. Fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1336,17 +1754,17 @@
       "tests": [
         {
           "file": "test/durable-fault-matrix.test.ts",
-          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "title": "003. Fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
           "injection": "in-process-fault"
         },
         {
           "file": "test/status-view.test.ts",
-          "title": "T118: a view dated ahead of the reader's clock is unknown, not current",
+          "title": "003. A view dated ahead of the reader's clock is unknown, not current",
           "injection": "logical"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1357,12 +1775,12 @@
       "tests": [
         {
           "file": "test/durable-fault-matrix.test.ts",
-          "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+          "title": "003. Fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1373,7 +1791,7 @@
       "tests": [
         {
           "file": "test/adversarial-repairs.test.ts",
-          "title": "AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings",
+          "title": "003. Stale Pi managers merge through OMA's lock and preserve trusted project settings",
           "injection": "logical"
         }
       ]
@@ -1389,7 +1807,7 @@
         },
         {
           "file": "test/crash-kill-boundaries.test.ts",
-          "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+          "title": "005. A derived-file replacement SIGKILLed at any point leaves the old or the new bytes, and the next replacement collects what it left",
           "injection": "sigkill"
         }
       ]
@@ -1400,7 +1818,7 @@
       "tests": [
         {
           "file": "test/integration-witness-kill.test.ts",
-          "title": "DR46 witness kill:",
+          "title": "001. Witness kill: ",
           "injection": "sigkill",
           "points": [
             "compareAndSwap",
@@ -1409,7 +1827,7 @@
         },
         {
           "file": "test/tiered-integration.test.ts",
-          "title": "a no-op witness is not created when main differs; a matching witness survives main moving later",
+          "title": "003. A no-op witness is not created when main differs; a matching witness survives main moving later",
           "injection": "logical"
         }
       ]
@@ -1420,7 +1838,7 @@
       "tests": [
         {
           "file": "test/integration-witness-kill.test.ts",
-          "title": "DR46 context witness kill:",
+          "title": "002. Context witness kill: ",
           "injection": "sigkill",
           "points": [
             "authorizeNoop"
@@ -1434,12 +1852,12 @@
       "tests": [
         {
           "file": "test/mail-ledger-projection.test.mjs",
-          "title": "DR46 Mail: a projected transaction cannot escape its original root transaction",
+          "title": "001. Mail: a projected transaction cannot escape its original root transaction",
           "injection": "logical"
         },
         {
           "file": "test/mail-arrival-durability.test.mjs",
-          "title": "DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message",
+          "title": "007. SIGKILL during a real arrival append, retry and restart retain the accepted message",
           "injection": "sigkill"
         }
       ]
@@ -1450,7 +1868,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "stage",
@@ -1459,12 +1877,12 @@
         },
         {
           "file": "test/phase3.test.ts",
-          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "title": "006. Kill after object fsync -> unreferenced object, no recipients; resend OK",
           "injection": "sigkill"
         },
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "title": "001. What a broker made before an acceptance that never happened is collected; what an accepted plan names is kept",
           "injection": "logical"
         }
       ]
@@ -1475,7 +1893,7 @@
       "tests": [
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "cur"
@@ -1483,12 +1901,12 @@
         },
         {
           "file": "test/p24-mail-boundaries.test.ts",
-          "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+          "title": "003. First cur parent flush precedes removing new; a flush fault preserves prepared recovery",
           "injection": "in-process-fault"
         },
         {
           "file": "test/crash-boundaries.test.ts",
-          "title": "T18–T22/T27 primitive SIGKILL at",
+          "title": "001. Primitive SIGKILL at ",
           "injection": "sigkill",
           "points": [
             "stage",
@@ -1497,12 +1915,12 @@
         },
         {
           "file": "test/phase3.test.ts",
-          "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+          "title": "006. Kill after object fsync -> unreferenced object, no recipients; resend OK",
           "injection": "sigkill"
         },
         {
           "file": "test/priority-0.test.ts",
-          "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+          "title": "001. What a broker made before an acceptance that never happened is collected; what an accepted plan names is kept",
           "injection": "logical"
         }
       ]
@@ -1545,7 +1963,7 @@
       "tests": [
         {
           "file": "test/lifecycle-ledger-projection.test.mjs",
-          "title": "DR46 Lifecycle: every captured write refuses escape or borrowing a later root transaction",
+          "title": "001. Lifecycle: every captured write refuses escape or borrowing a later root transaction",
           "injection": "logical"
         },
         {
@@ -1561,34 +1979,34 @@
       "tests": [
         {
           "file": "test/broker-ledger-projection.test.mjs",
-          "title": "DR46 Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes",
+          "title": "001. Broker: incarnation writes retain the original captured T and refuse stale or borrowed scopes",
           "injection": "logical"
         },
         {
           "file": "test/broker-ledger-projection.test.mjs",
-          "title": "DR46 Broker ledger: SIGKILL ",
+          "title": "004. Broker ledger: SIGKILL ",
           "injection": "sigkill"
         }
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archive",
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.archiveHeld",
       "fact": "verified immutable snapshot/checkpoint and cold selection precede cache reclamation; interrupted deletion restores the same bytes",
       "tests": [
         {
           "file": "test/session-storage.test.mjs",
-          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "title": "007. Failure after cold commit and partial reclamation recovers the exact checkpoint",
           "injection": "in-process-fault"
         }
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restore",
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.restoreHeld",
       "fact": "verified staged restoration is recoverable while cold; hot selection follows complete publication",
       "tests": [
         {
           "file": "test/session-storage.test.mjs",
-          "title": "interrupted publication keeps cold selection and recovers without replaying partial cache",
+          "title": "008. Interrupted publication keeps cold selection and recovers without replaying partial cache",
           "injection": "in-process-fault"
         }
       ]
@@ -1599,7 +2017,7 @@
       "tests": [
         {
           "file": "test/session-storage.test.mjs",
-          "title": "failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "title": "007. Failure after cold commit and partial reclamation recovers the exact checkpoint",
           "injection": "in-process-fault"
         }
       ]
@@ -1610,7 +2028,7 @@
       "tests": [
         {
           "file": "test/native-process-scope.test.mjs",
-          "title": "native recovery: real owner SIGKILL at",
+          "title": "007. Native recovery: real owner SIGKILL at ",
           "injection": "sigkill"
         }
       ]
@@ -1621,7 +2039,7 @@
       "tests": [
         {
           "file": "test/native-git-execution.test.mjs",
-          "title": "native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry",
+          "title": "003. Native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry",
           "injection": "sigkill"
         }
       ]
@@ -1632,8 +2050,85 @@
       "tests": [
         {
           "file": "test/native-git-execution.test.mjs",
-          "title": "native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+          "title": "007. Native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
           "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/pipeline-recorder.ts#PipelineRecorder.constructor",
+      "fact": "Started evidence survives receipt publication failure; unknown is never success and a retry has its own directory. In-process fault, not power-cut qualification.",
+      "tests": [
+        {
+          "file": "test/architecture-boundaries.test.mjs",
+          "title": "001. Pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/pipeline-recorder.ts#PipelineRecorder.finish",
+      "fact": "Started evidence survives receipt publication failure; unknown is never success and a retry has its own directory. In-process fault, not power-cut qualification.",
+      "tests": [
+        {
+          "file": "test/architecture-boundaries.test.mjs",
+          "title": "001. Pipeline recorder: receipt publication ENOSPC retains started evidence and cannot report success",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/session-storage.ts#SessionStorage.transition",
+      "fact": "Selected generation survives cold publication failure and exact checkpoint recovers.",
+      "tests": [
+        {
+          "file": "test/session-storage.test.mjs",
+          "title": "007. Failure after cold commit and partial reclamation recovers the exact checkpoint",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/download-cache.ts#fillDownloadCache",
+      "fact": "Corrupt content becomes a miss; exact integrity is required on refill and credential-bearing/private URLs are excluded.",
+      "tests": [
+        {
+          "file": "test/architecture-p2-cache.test.mjs",
+          "title": "001. Download cache: scope/toolchain/setup keys differ, corruption misses, and only anonymous integrity-pinned public tarballs qualify",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "packages/git/src/integration-preparation.ts#collectPreparedIntegrations",
+      "fact": "Only quiescent proven-unaccepted preparations lose refs; unknown ledger reads and live leases retain them, accepted ref and plan bytes survive.",
+      "tests": [
+        {
+          "file": "test/architecture-p3.test.ts",
+          "title": "001. Prepared-ref collection retains active, unknown and accepted ownership",
+          "injection": "in-process-fault"
+        }
+      ]
+    },
+    {
+      "owner": "packages/lifecycle/src/create.ts#CreateCoordinator.recoverFirst",
+      "fact": "Explicit host repair seeds a legacy empty Society exactly once across restart without ordinary Principal creation authority.",
+      "tests": [
+        {
+          "file": "test/worker-autonomy.test.ts",
+          "title": "009. Host recovery seeds exactly one legacy zero-Resident Society",
+          "injection": "logical"
+        }
+      ]
+    },
+    {
+      "owner": "apps/oma/src/views/collaboration-state.ts#CollaborationStateViews.publishIndex",
+      "fact": "role-scoped bounded peer/subscription observation pages are immutable dependencies published before mutable discovery; interrupted physical page/discovery writes, retry and a fresh view owner preserve accepted Mail bytes/receipt and the last good index. This is in-process fault injection, not process-kill or power-loss qualification.",
+      "tests": [
+        {
+          "file": "test/collaboration-state-records.test.ts",
+          "title": "013. State index: interrupted ",
+          "injection": "in-process-fault"
         }
       ]
     }

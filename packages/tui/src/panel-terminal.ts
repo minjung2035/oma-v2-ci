@@ -5,10 +5,13 @@
 import { openTerminal, restoreTerminalModes, type Terminal, type TerminalStreams } from "./screen.js";
 import type { PiEvent } from "@oma/protocol/jsonl";
 import { TERMINAL_BOUNDS } from "@oma/domain/surface-bounds";
+import { REFERENCE_PROTOCOL_LIMITS } from "@oma/domain/protocol-limits";
 
 export class PanelTerminal implements Terminal {
   private local: Terminal | null;
-  private remote: ((event: PiEvent) => void) | null = null;
+  private remote: ((event: PiEvent) => void | Promise<void>) | null = null;
+  private pending: { type: "panel_frame"; open: boolean; lines: string[] } | null = null;
+  private sending = false;
   private keys: ((chunk: Uint8Array) => void) | undefined;
   private resize: (() => void) | undefined;
   private width = TERMINAL_BOUNDS.assumedColumns.value;
@@ -19,7 +22,7 @@ export class PanelTerminal implements Terminal {
   private restored = false;
   private startup: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly streams: TerminalStreams, private readonly isOpen: () => boolean) {
+  constructor(private readonly streams: TerminalStreams, private readonly isOpen: () => boolean, private readonly frameBytes = REFERENCE_PROTOCOL_LIMITS.frameBytes) {
     this.local = null;
   }
   /** A start that has not reached the engine's screen within its budget shows
@@ -39,6 +42,8 @@ export class PanelTerminal implements Terminal {
     if (this.startup !== null) clearTimeout(this.startup);
     this.startup = null;
   }
+  /** The host, rather than an interactive child, currently owns stdin. */
+  get hostInput(): boolean { return !this.restored && this.local !== null; }
   get columns(): number { return this.local?.columns ?? this.width; }
   get rows(): number { return this.local?.rows ?? this.height; }
   onKeys(handler: (chunk: Uint8Array) => void): void { if (this.restored) return; this.keys = handler; this.local?.onKeys(handler); }
@@ -49,11 +54,42 @@ export class PanelTerminal implements Terminal {
     if (this.local) this.local.draw(lines);
     else if (this.panelOpen) {
       const open = this.isOpen();
-      this.remote?.({ type: "panel_frame", open, lines: open ? [...lines] : [] });
+      this.pending = { type: "panel_frame", open, lines: open ? [...lines] : [] };
+      void this.flush().catch(() => {}); // The session owns transport closure.
       if (!open) this.panelOpen = false;
     }
   }
-  handoff(send: (event: PiEvent) => void): void {
+  private async flush(): Promise<void> {
+    if (this.sending) return;
+    this.sending = true;
+    try {
+      while (this.pending && this.remote && !this.restored) {
+        const event = this.pending, send = this.remote;
+        this.pending = null;
+        const text = JSON.stringify(event);
+        if (Buffer.byteLength(text) <= this.frameBytes) { await send(event); continue; }
+        if (Buffer.byteLength(text) > TERMINAL_BOUNDS.panelFrameBytes.value) {
+          await send({type:"panel_frame",open:event.open,lines:["Panel exceeds its display byte limit."]}); continue;
+        }
+        const overhead = Buffer.byteLength(JSON.stringify({type:"panel_frame",fragment:"",start:false,end:false}));
+        let fragment = "", bytes = 0, start = true;
+        for (const point of text) {
+          const cost = Buffer.byteLength(JSON.stringify(point)) - 2;
+          if (bytes + cost > this.frameBytes - overhead) {
+            await send({type:"panel_frame",fragment,start,end:false});
+            if (this.remote !== send || this.restored) return;
+            start = false; fragment = ""; bytes = 0;
+          }
+          fragment += point; bytes += cost;
+        }
+        await send({type:"panel_frame",fragment,start,end:true});
+      }
+    } finally {
+      this.sending = false;
+      if (this.pending && this.remote && !this.restored) void this.flush().catch(() => {});
+    }
+  }
+  handoff(send: (event: PiEvent) => void | Promise<void>): void {
     if (this.restored) return;
     this.cancelStartup();
     this.used = true;
@@ -80,6 +116,7 @@ export class PanelTerminal implements Terminal {
     if (this.local) return;
     this.used = true;
     this.remote = null;
+    this.pending = null;
     this.panelOpen = false;
     const local = openTerminal(this.streams);
     this.local = local;
@@ -98,6 +135,7 @@ export class PanelTerminal implements Terminal {
     this.restored = true;
     this.cancelStartup();
     this.remote = null;
+    this.pending = null;
     this.panelOpen = false;
     this.keys = undefined; this.resize = undefined;
     const local = this.local;

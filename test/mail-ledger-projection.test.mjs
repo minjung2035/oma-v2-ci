@@ -13,7 +13,7 @@ function world(t){
  t.after(()=>{try{store.close();}finally{rmSync(root,{recursive:true,force:true});}});
  return {store,ledger:mailLedger(store)};
 }
-test('DR46 Mail: a projected transaction cannot escape its original root transaction',t=>{
+test("001. Mail: a projected transaction cannot escape its original root transaction",t=>{
  const {store,ledger}=world(t);let saved;
  ledger.transaction(tx=>{saved=tx;assert.ok(Object.isFrozen(tx));});
  assert.ok(Object.isFrozen(ledger));
@@ -26,7 +26,7 @@ test('DR46 Mail: a projected transaction cannot escape its original root transac
  ledger.transaction(tx=>{assert.notEqual(tx,saved);assert.throws(()=>saved.setOperationSucceeded('op-missing','{}'),refused);});
  assert.equal(store.inTransaction,false);
 });
-test('DR46 Mail: real projection retains runtime Promise and thenable rejection',t=>{
+test("002. Mail: real projection retains runtime Promise and thenable rejection",t=>{
  const {store,ledger}=world(t);
  assert.throws(()=>ledger.transaction(()=>Promise.resolve('escaped')),refused);
  assert.throws(()=>ledger.transaction(()=>({then(){}})),refused);
@@ -34,7 +34,7 @@ test('DR46 Mail: real projection retains runtime Promise and thenable rejection'
  store.transaction(tx=>tx.insertAgent(makeValidAgent('alice')));
  assert.equal(ledger.getAgent('alice').name,'alice');
 });
-test('DR46 Mail: readers observe current authority without an adapter snapshot',t=>{
+test("003. Mail: readers observe current authority without an adapter snapshot",t=>{
  const {store,ledger}=world(t);assert.equal(ledger.getAgent('alice'),null);
  store.transaction(tx=>tx.insertAgent(makeValidAgent('alice')));
  assert.equal(ledger.getAgent('alice').incarnation,1);

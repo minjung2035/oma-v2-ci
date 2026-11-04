@@ -2,7 +2,7 @@ import { lifecycleEffects } from "#oma-test/app/broker/lifecycle-composition";
 import { lifecycleLedger } from "#oma-test/app/broker/lifecycle-ledger";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "@oma/storage";
@@ -14,9 +14,12 @@ import { WorkspaceCoordinator } from "@oma/git/workspace";
 import { LifecyclePolicy } from "@oma/lifecycle/policy";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
-import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { withWorkerCapacity, makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { StoreError, publicFailure } from "@oma/domain/errors";
+import { AdmissionGate, bindAdmissionGate } from "@oma/domain/admission";
+import { TreeLease } from "@oma/storage/tree-lease";
+import { workspacePathAt } from "@oma/domain/paths";
 
 function deferred() {
   let resolve!: () => void;
@@ -40,8 +43,35 @@ function fixture() {
   return { root, base, store, caps, auth, ...gitFixture(root, store),
     close() { store.close(); removeTree(root); } };
 }
+test("008. Damaged provisioning workspaces keep their intent without fencing unrelated acceptance",async()=>{
+ const f=fixture(),gate=new AdmissionGate();bindAdmissionGate(f.store,gate);
+ const paths={...f.paths,hasGoal:()=>false,activationAllowed:()=>true},workspace=new WorkspaceCoordinator(paths),units=new PolicyExecution();
+ const policy=new LifecyclePolicy(lifecycleLedger(f.store),withWorkerCapacity((_parent,input)=>makeValidResolvedSpec(input.name,"p",ALL_CAPS,input.from,input.brief)));
+ const creates=new CreateCoordinator(lifecycleLedger(f.store),units,paths,policy,workspace,f.mail,lifecycleEffects(f.root));
+ const ensure=units.ensureResident.bind(units);units.ensureResident=()=>{throw new StoreError("BROKER_UNAVAILABLE","pause after workspace publication");};
+ try{
+  await assert.rejects(creates.create(f.auth,{name:"child",from:f.base,brief:"work"},"damaged-create"));
+  const accepted=f.store.getOperation("a","damaged-create");assert.ok(accepted?.kind==="agent.create");
+  const before=accepted.planJson;writeFileSync(join(accepted.plan.workspacePath,".git/HEAD"),"invalid HEAD\n");units.ensureResident=ensure;
+  await assert.rejects(creates.reconcile(accepted.id),error=>{gate.observe(error);return (error as StoreError).code==="AGENT_CONFLICT";});
+  assert.equal(gate.state,"healthy");assert.equal(f.store.getOperationById(accepted.id)?.planJson,before);
+  assert.equal((await f.mail.send(f.auth,"unrelated-after-damage",{to:["b"],subject:"ok",body:"work",kind:"message"})).state,"succeeded");
+  assert.equal((await creates.create(f.auth,{name:"other",from:f.base,brief:"other"},"other-create")).state,"succeeded");
+ }finally{f.close();}
+});
+test("009. Workspace recovery observes the stale preparation's lease before another actor's tree",async()=>{
+ const f=fixture();try{
+  const workspace=new WorkspaceCoordinator(f.paths),stale=join(f.root,"agents/stale/workspace.tmp");
+  mkdirSync(join(f.root,"agents/stale"),{recursive:true});const held=TreeLease.take(stale,true);
+  Reflect.set(workspace,"preparedPath",stale);Reflect.set(Reflect.get(workspace,"executor"),"uncertain",true);
+  const plan={spec:{name:"next",from:f.base},workspacePath:workspacePathAt(f.root,"next"),specHash:"next"} as never;
+  try{await assert.rejects(workspace.ensure(plan),{code:"REF_STATE_UNKNOWN"});assert.equal(existsSync(workspacePathAt(f.root,"next")),false);}
+  finally{held.release();}
+  await workspace.ensure(plan);assert.equal(existsSync(join(workspacePathAt(f.root,"next"),".git")),true);
+ }finally{f.close();}
+});
 
-test("R37: submit facade awaits quarantined preparation and retains accepted bundle after live revocation", { timeout: 30000 }, async () => {
+test("001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation", { timeout: 30000 }, async () => {
   const f = fixture(); const entered = deferred(); const release = deferred();
   const original = QuarantineImporter.prototype.importBundle;
   // A controlled pending effect, not a replacement for a successful isolation proof.
@@ -74,7 +104,7 @@ test("R37: submit facade awaits quarantined preparation and retains accepted bun
 });
 
 for (const change of ["none", "revoke", "main"] as const) {
-  test(`R37: context preparation boundary preserves ${change === "none" ? "the successful control" : change + " rejection"}`,
+  test(`002. Context preparation boundary preserves ${change === "none" ? "the successful control" : change + " rejection"}`,
     { skip: process.platform !== "linux", timeout: 30000 }, async () => {
       const f = fixture(); const entered = deferred(); const release = deferred();
       const original = ContextRepository.prototype.prepareCandidate;
@@ -114,7 +144,7 @@ for (const change of ["none", "revoke", "main"] as const) {
     });
 }
 
-test("R37: creation awaits a real private workspace before unit publication and rechecks the live lease", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
+test("003. Creation awaits a real private workspace before unit publication and rechecks the live lease", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
   const f = fixture(); const entered = deferred(); const release = deferred();
   const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true };
   const workspace = new WorkspaceCoordinator(paths); const original = workspace.ensure.bind(workspace);
@@ -122,7 +152,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
   const units = new PolicyExecution();
   let unitPublications = 0;
   units.ensureResident = () => { unitPublications++; throw new Error("unit publication must not be reached after revocation"); };
-  const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+  const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
   const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
   let work: Promise<unknown> | undefined;
   try {
@@ -147,7 +177,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
  * repository": the workspace was cloned on the host from the host path, and
  * its `origin` named that path, which the sandbox does not have. GIT-002's
  * clone is from /git/project.git, the Resident's mount. */
-test("AV27 / GIT-002: a new workspace's origin is the canonical repository as its Resident reaches it", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
+test("004. A new workspace's origin is the canonical repository as its Resident reaches it", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
   // w11/U1: every Resident is confined, so the origin is always the sandbox
   // mount -- an omitted override resolves to the default mount, never to the
   // host path the unconfined profile once used.
@@ -160,7 +190,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
       const units = new PolicyExecution();
       // Stop after the workspace: this is about what the preparation left.
       units.ensureResident = () => { throw new Error("stop after the workspace"); };
-      const policy = new LifecyclePolicy(lifecycleLedger(f.store), (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief));
+      const policy = new LifecyclePolicy(lifecycleLedger(f.store), withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)));
       const creates = new CreateCoordinator(lifecycleLedger(f.store), units, paths, policy, workspace, f.mail, lifecycleEffects(paths.stateRoot));
       await creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-origin").catch(() => undefined);
       const accepted = f.store.getOperation("a", "create-origin");
@@ -175,7 +205,7 @@ test("AV27 / GIT-002: a new workspace's origin is the canonical repository as it
  * arch §11 ("main이 이동하면 STALE_BASE와 actual OID를 반환한다"): the ninth
  * functional run's second integrate answered "STALE_BASE: STALE_BASE" and
  * nothing else, so the integrator had to find main by itself. */
-test("AV28 / ERR-001, arch §11: a stale integration names the main it found, and only such conflicts carry a value", { timeout: 30000 }, async () => {
+test("005. A stale integration names the main it found, and only such conflicts carry a value", { timeout: 30000 }, async () => {
   const f = fixture();
   try {
     const body = readFileSync(join(f.root, "candidate.bundle"));

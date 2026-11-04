@@ -1,6 +1,8 @@
 /** CFG-005: required host limits, with no production defaults or additional queue knobs. */
 import { integerFieldsCheck, type IntegerField, type IntegerRecord } from "./integer-fields.js";
 import type { ProtocolLimits } from "@oma/contracts/host";
+/** Bootstrap and configured recovery use the retained, non-ingress creation payload. */
+export const LEGACY_CREATE_BRIEF_BYTES = 8 * 1024;
 
 export const PROTOCOL_LIMIT_FIELDS = Object.freeze({
   frameBytes: Object.freeze({ minInclusive: 1, unit: "bytes" }),

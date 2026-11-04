@@ -1,5 +1,6 @@
 // Mechanism only: callers decide whether a known nonzero exit is a domain fact.
 // A timeout/signal/spawn failure is never represented as an empty successful read.
+import { acquirePreparationPlacement } from "./preparation.js";
 import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
 import { closeSync, constants, openSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -66,17 +67,22 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
     throw error;
   }
   let result: NativeSyncResult;
+  let placement: ReturnType<typeof acquirePreparationPlacement>;
   try {
-    result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env,
-      ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) }, cwd: spec.cwd,
+    placement = acquirePreparationPlacement();
+    const stdio = inheritedFds.length > 0 ? [spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe", ...inheritedFds]
+      : fencedStdio([spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence);
+    const env = { ...spec.env, ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) };
+    const fd = stdio.length;
+    const executable = placement === undefined ? spec.executable : "/bin/bash";
+    const argv = placement === undefined ? [...spec.argv] : ["--noprofile", "--norc", "-c", `builtin printf 0 >&${fd} || builtin exit 125; builtin exec ${fd}>&-; builtin exec /usr/bin/env -i "$@"`, "oma-workload", ...Object.entries(env).filter((entry): entry is [string,string] => entry[1] !== undefined).map(([key,value]) => `${key}=${value}`), spec.executable, ...spec.argv];
+    result = invoke(executable, argv, { env: placement === undefined ? env : {}, cwd: spec.cwd,
       // The output encoding "buffer" is not a valid Buffer.from string encoding.
       // Encode stdin first so native spawnSync never applies it to a string.
       input: spec.input === undefined ? undefined : Buffer.from(spec.input),
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
-      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: inheritedFds.length > 0
-        ? [spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe", ...inheritedFds]
-        : fencedStdio([spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence),
+      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: [...stdio, ...(placement === undefined ? [] : [placement.placementFd])] as SpawnSyncOptionsWithBufferEncoding["stdio"],
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,
@@ -84,6 +90,7 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   } finally {
     if (outFd !== null) try { closeSync(outFd); } catch { /* the file is the caller's; the descriptor was ours */ }
     if (errFd !== null) try { closeSync(errFd); } catch { /* same */ }
+    placement?.close();
   }
   const stdout = bytes(result.stdout); const stderr = bytes(result.stderr);
   const stdoutTruncated = outFd === null && stdout !== null && stdout.length > spec.stdoutBytes;

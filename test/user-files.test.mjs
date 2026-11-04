@@ -30,8 +30,41 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(tmpdir(), 'oma-user-files-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true })); return root;
 }
+
+test("007. Locked engine settings cannot publish a rewrite its reader cannot reopen", async t => {
+  const { lockedUserReplace } = await import("#oma-test/app/runtime/locked-files");
+  const { readUserFile } = await import("#oma-test/app/runtime/user-files");
+  const root = fixture(t), file = path.join(root, "settings.json"), maximum = 1024 * 1024;
+  const original = JSON.stringify({ values: Array(180000).fill(1) });
+  fs.writeFileSync(file, original);
+  assert.ok(Buffer.byteLength(original) < maximum);
+  assert.ok(Buffer.byteLength(JSON.stringify(JSON.parse(original), null, 2)) > maximum);
+  assert.throws(() => lockedUserReplace(root, "settings.json", maximum, current => JSON.stringify(JSON.parse(current), null, 2)), { code: "LIMIT_EXCEEDED" });
+  assert.equal(readUserFile(file, maximum), original, "an unserviceable rewrite preserves the readable original");
+  lockedUserReplace(root, "settings.json", maximum, () => '{"saved":true}');
+  assert.equal(readUserFile(file, maximum), '{"saved":true}', "the rejected writer released its lock");
+});
+
+for (const [encoding, initial] of [["ASCII", "plain"], ["UTF-8", "한😀e\u0301"]]) {
+  for (const delta of [-1, 0, 1]) test(`008. Locked ${encoding} settings at the reader byte bound ${delta >= 0 ? "+" : ""}${delta}`, async t => {
+    const { lockedUserReplace } = await import("#oma-test/app/runtime/locked-files");
+    const { readUserFile } = await import("#oma-test/app/runtime/user-files");
+    const root = fixture(t), file = path.join(root, "settings.json"), maximum = 64;
+    const before = '{"original":true}';
+    fs.writeFileSync(file, before);
+    const prefixBytes = Buffer.byteLength(JSON.stringify({ value: initial }));
+    const next = JSON.stringify({ value: initial + "x".repeat(maximum + delta - prefixBytes) });
+    assert.equal(Buffer.byteLength(next), maximum + delta);
+    const save = () => lockedUserReplace(root, "settings.json", maximum, () => next);
+    if (delta <= 0) { save(); assert.equal(readUserFile(file, maximum), next); }
+    else { assert.throws(save, { code: "LIMIT_EXCEEDED" }); assert.equal(fs.readFileSync(file, "utf8"), before); }
+    lockedUserReplace(root, "settings.json", maximum, () => '{"next":true}');
+    assert.equal(readUserFile(file, maximum), '{"next":true}', "both success and refusal release the writer lock");
+    assert.deepEqual(fs.readdirSync(root).sort(), ["oma-settings.lock", "settings.json"]);
+  });
+}
 for (const platform of ['linux', 'darwin']) {
-  test(`user files ${platform}: absence, whole publication, conflict and derived replacement`, t => {
+  test(`001. User files ${platform}: absence, whole publication, conflict and derived replacement`, t => {
     const root = fixture(t), api = load(platform), dir = path.join(root, 'new', 'nested'), file = path.join(dir, 'record.json');
     assert.equal(api.readUserFile(file, 64), null);
     api.ensureUserDirectory(dir);
@@ -41,7 +74,7 @@ for (const platform of ['linux', 'darwin']) {
     api.replaceUserFile(file, 'derived'); assert.equal(api.readUserFile(file, 64), 'derived');
     assert.deepEqual(fs.readdirSync(dir), ['record.json']);
   });
-  test(`user files ${platform}: malformed and excessive bytes are not absence`, t => {
+  test(`002. User files ${platform}: malformed and excessive bytes are not absence`, t => {
     const root = fixture(t), api = load(platform), file = path.join(root, 'file');
     for (const bytes of [Buffer.from([255]), Buffer.alloc(65, 65)]) {
       fs.writeFileSync(file, bytes); assert.throws(() => api.readUserFile(file, 64), { code: 'STORE_CORRUPT' });
@@ -49,7 +82,7 @@ for (const platform of ['linux', 'darwin']) {
     assert.throws(() => api.readUserFile(file, 0), { code: 'INTERNAL_ERROR' });
     assert.throws(() => api.readUserFile(root, 64), { code: 'STORE_CORRUPT' });
   });
-  test(`user files ${platform}: neither file nor parent symlinks are followed`, t => {
+  test(`003. User files ${platform}: neither file nor parent symlinks are followed`, t => {
     const root = fixture(t), api = load(platform), real = path.join(root, 'real'), linked = path.join(root, 'linked');
     fs.mkdirSync(real); fs.writeFileSync(path.join(real, 'record'), 'unchanged'); fs.symlinkSync(real, linked);
     assert.throws(() => api.ensureUserDirectory(path.join(linked, 'new')));
@@ -58,7 +91,7 @@ for (const platform of ['linux', 'darwin']) {
     assert.throws(() => api.readUserFile(path.join(root, 'record'), 64));
     assert.equal(fs.readFileSync(path.join(real, 'record'), 'utf8'), 'unchanged');
   });
-  test(`user files ${platform}: immutable publication may retain a temporary hardlink; mutable settings may not`, t => {
+  test(`004. User files ${platform}: immutable publication may retain a temporary hardlink; mutable settings may not`, t => {
     const root = fixture(t), file = path.join(root, 'record'), temporary = path.join(root, '.record.partial');
     fs.writeFileSync(temporary, 'first'); fs.linkSync(temporary, file); let returned = 0;
     const api = load(platform, { 'node:fs': { ...fs, closeSync(fd) { returned++; fs.closeSync(fd); } } });
@@ -71,13 +104,13 @@ for (const platform of ['linux', 'darwin']) {
     fs.unlinkSync(temporary);
     assert.equal(api.readUserFile(file, 64, { singleName: true }), 'first');
   });
-  test(`user files ${platform}: IO failure is not an absent or corrupt record`, t => {
+  test(`005. User files ${platform}: IO failure is not an absent or corrupt record`, t => {
     const root = fixture(t), file = path.join(root, 'record'); fs.writeFileSync(file, 'first');
     const problem = Object.assign(new Error('unavailable'), { code: 'EIO' });
     const api = load(platform, { 'node:fs': { ...fs, readSync() { throw problem; } } });
     assert.throws(() => api.readUserFile(file, 64), error => error === problem);
   });
-  test(`user files ${platform}: first-line bound counts bytes, not conversation size or decoded characters`, t => {
+  test(`006. User files ${platform}: first-line bound counts bytes, not conversation size or decoded characters`, t => {
     const root = fixture(t), api = load(platform), file = path.join(root, 'history');
     for (const bytes of ['x'.repeat(64), 'x'.repeat(64) + '\n' + 'body'.repeat(1024), 'é'.repeat(32) + '\nbody']) {
       fs.writeFileSync(file, bytes);
@@ -91,7 +124,7 @@ for (const platform of ['linux', 'darwin']) {
     fs.writeFileSync(file, Buffer.concat([Buffer.from('header\n'), Buffer.from([255])]));
     assert.equal(api.readUserFile(file, 64, { firstLine: true }), 'header', 'the body remains the engine parser\'s responsibility');
   });
-  test(`user files ${platform}: a split first line reads through UTF-8 and newline boundaries`, t => {
+  test(`007. User files ${platform}: a split first line reads through UTF-8 and newline boundaries`, t => {
     const root = fixture(t), file = path.join(root, 'history'); let reads = 0, returned = 0;
     const bytes = 'x'.repeat(4095) + 'é\n' + 'body'.repeat(4096); fs.writeFileSync(file, bytes);
     const api = load(platform, { 'node:fs': { ...fs,
@@ -101,7 +134,7 @@ for (const platform of ['linux', 'darwin']) {
     assert.equal(api.readUserFile(file, 8192, { firstLine: true }), 'x'.repeat(4095) + 'é');
     assert.equal(reads, 2); assert.equal(returned, 1);
   });
-  test(`user files ${platform}: first-line IO failure and concurrent change return their descriptor without inventing absence`, t => {
+  test(`008. User files ${platform}: first-line IO failure and concurrent change return their descriptor without inventing absence`, t => {
     const root = fixture(t), file = path.join(root, 'history'); fs.writeFileSync(file, 'header\nbody');
     const problem = Object.assign(new Error('fixture unavailable'), { code: 'EIO' }); let returned = 0;
     const api = load(platform, { 'node:fs': { ...fs,
@@ -115,7 +148,7 @@ for (const platform of ['linux', 'darwin']) {
     assert.throws(() => changed.readUserFile(file, 64, { firstLine: true }), { code: 'STORE_CORRUPT' });
     assert.equal(returned, 2);
   });
-  test(`user files ${platform}: a growing file is refused with bounded reads`, t => {
+  test(`009. User files ${platform}: a growing file is refused with bounded reads`, t => {
     const root = fixture(t), file = path.join(root, 'record'); fs.writeFileSync(file, 'first'); let calls = 0;
     const api = load(platform, { 'node:fs': { ...fs, readSync(...args) {
       if (++calls === 1) fs.appendFileSync(file, 'growing'); return fs.readSync(...args);
@@ -124,7 +157,7 @@ for (const platform of ['linux', 'darwin']) {
   });
 }
 for (const platform of ['linux', 'darwin']) for (const failed of [false, true])
-  test(`user files ${platform}: ${failed ? 'read and' : 'only'} close failure is not absence or success`, t => {
+  test(`010. User files ${platform}: ${failed ? 'read and' : 'only'} close failure is not absence or success`, t => {
     const root = fixture(t), file = path.join(root, 'record'); fs.writeFileSync(file, 'first');
     const primary = Object.assign(new Error('fixture read failed'), { code: 'EIO' });
     const secondary = Object.assign(new Error('fixture close failed'), { code: 'ENOENT' }); let returned = 0;
@@ -140,7 +173,7 @@ for (const platform of ['linux', 'darwin']) for (const failed of [false, true])
   });
 
 for (const visible of [false, true]) for (const cleanupFailed of [false, true])
-  test(`shared metadata publication: ${visible ? 'visible' : 'pre-link'} primary and cleanup retain knowledge on retry (${cleanupFailed})`, t => {
+  test(`011. Shared metadata publication: ${visible ? 'visible' : 'pre-link'} primary and cleanup retain knowledge on retry (${cleanupFailed})`, t => {
     const root = fixture(t), file = path.join(root, 'record');
     const primary = new Error('publication failed'), secondary = new Error('cleanup failed');
     let armed = true;

@@ -7,7 +7,7 @@ import path from 'node:path';
 
 
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted, packageResources, slot, platform } = {}) {
+function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, sendError, resourceReload, moduleClose, needsTrust, trusted, packageResources, platform } = {}) {
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
@@ -34,6 +34,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     renderProjectTrustWarningIfNeeded() {} suggestBugReport() {} crashReportInstructions() {}
     updateTerminalTitle() {} handleExportCommand() {} getPathCommandArgument() {} getCrashExtensionHint() {}
     showManagedToolStatus() {} showSessionSelector() {} getRegisteredToolDefinition() {} toggleThinkingBlockVisibility() {}
+    getChangelogForDisplay() {} showNewVersionNotification() {}
     stop() { calls.push('stop'); if (fail === 'stop') throw new Error('injected stop'); }
     async shutdown() { await runtime.dispose(); calls.push('upstream-exit'); }
     async handleFatalRuntimeError(_prefix, error) { calls.push(['upstream-fatal', error]); }
@@ -68,7 +69,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     'node:fs': { lstatSync: () => ({ isFile: () => true }), readFileSync: () => '{"version":"fixture-version"}' },
     'node:path': path, 'node:module': { createRequire: () => ({ resolve: () => '/fixture/open-tui/package.json' }) },
     '@earendil-works/pi-coding-agent': {
-      VERSION: '1.0.1', InteractiveMode: Mode, DefaultResourceLoader: Loader,
+      VERSION: '1.2.0', InteractiveMode: Mode, DefaultResourceLoader: Loader,
       // C19: the fixture records the trust decision the entry would persist.
       ProjectTrustStore: class { constructor() { this.values = new Map(trusted === undefined ? [] : [[birth.cwd, trusted]]); } get(cwd) { return this.values.get(cwd); } set(cwd, value) { this.values.set(cwd, value); calls.push(['trust', cwd, value]); } },
       hasTrustRequiringProjectResources: () => needsTrust === true,
@@ -111,7 +112,6 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     './pi-presentation.js': { preparePiInteractive() {} },
     './pi-compat/env.js': { PI_RESUME_HINT: 'To resume this session:' },
     '../runtime/personal-models.js': { personalModels: async () => credentials },
-    '../runtime/society-slot.js': { checkSocietySlot(data, cwd) { calls.push(['slot', data, cwd]); return typeof slot === 'function' ? slot() : slot ?? { kind: 'free', society: 'fixture-society' }; } },
     '@oma/protocol/guest-history': { isGuestHistoryReference: value => value.startsWith('oma-guest-history:') },
     '../platform/host/guest-histories.js': { async inspectMacGuestHistory() { calls.push('guest-history'); },
       async listMacGuestHistories() { return []; } },
@@ -137,7 +137,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
   return { main: () => module.exports.runPersonal(input, ports), runtime, session, calls, hooks, commands, picks, context, stdout, originalWrite, writes };
 }
 
-test('Personal engine: credential helper close is awaited before upstream direct exit and disposal runs once', async () => {
+test("001. Personal engine: credential helper close is awaited before upstream direct exit and disposal runs once", async () => {
   let finish;
   const w = world({ close: () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -150,7 +150,7 @@ test('Personal engine: credential helper close is awaited before upstream direct
   assert.equal(w.stdout.write, w.originalWrite);
 });
 for (const failure of ['runtime', 'services', 'session', 'constructor', 'init', 'stop', 'abort', 'dispose', 'credentials']) {
-  test(`Personal engine: ${failure} failure still returns every acquired owner and preserves the failure`, async () => {
+  test(`002. Personal engine: ${failure} failure still returns every acquired owner and preserves the failure`, async () => {
     const w = world({ fail: failure, run: failure === 'stop' ? async () => {} : undefined });
     await assert.rejects(w.main(), error => error.message.includes(`injected ${failure}`) || error.errors?.some(item => item.message.includes(`injected ${failure}`)));
     assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1);
@@ -161,7 +161,7 @@ for (const failure of ['runtime', 'services', 'session', 'constructor', 'init', 
     if (['abort', 'dispose', 'credentials'].includes(failure)) assert.equal(w.calls.includes('upstream-exit'), false);
   });
 }
-test('Personal engine: exit-hint substitution forwards write callback, receiver and backpressure, then restores the writer', async () => {
+test("003. Personal engine: exit-hint substitution forwards write callback, receiver and backpressure, then restores the writer", async () => {
   const callback = () => {};
   const w = world({ run: async ({ stdout }) => {
     assert.equal(stdout.write('To resume this session: old pi command\n', 'utf8', callback), false);
@@ -172,7 +172,7 @@ test('Personal engine: exit-hint substitution forwards write callback, receiver 
   assert.deepEqual(w.writes[0].args, ['utf8', callback]); assert.equal(w.writes[0].receiver, w.stdout);
   assert.deepEqual(w.writes[1].args, [callback]); assert.equal(w.stdout.write, w.originalWrite);
 });
-test('Personal engine: initialization and cleanup failures remain visible together', async () => {
+test("004. Personal engine: initialization and cleanup failures remain visible together", async () => {
   const w = world({ fail: 'init', dispose: async () => { throw new Error('injected disposal too'); }, close: async () => { throw new Error('injected close too'); } });
   await assert.rejects(w.main(), error => {
     const messages = value => [value.message, ...(value.errors ?? []).flatMap(messages)];
@@ -180,7 +180,7 @@ test('Personal engine: initialization and cleanup failures remain visible togeth
   });
   assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1); assert.equal(w.stdout.write, w.originalWrite);
 });
-for (const target of ['same', 'cross']) test(`Personal engine: pending ${target}-birth admission cannot revive an ended or replaced context`, async () => {
+for (const target of ['same', 'cross']) test(`005. Personal engine: pending ${target}-birth admission cannot revive an ended or replaced context`, async () => {
   let admit, finish;
   const w = world({ catalog: () => new Promise(resolve => { admit = resolve; }), run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush(); const pending = w.runtime.switchSession('/fixture/other.jsonl'); await flush();
@@ -189,7 +189,7 @@ for (const target of ['same', 'cross']) test(`Personal engine: pending ${target}
   assert.equal(w.calls.some(value => Array.isArray(value) && ['same-birth', 'switch'].includes(value[0])), false);
   assert.equal(w.calls.includes('session_before_switch'), false); finish(); await main;
 });
-for (const reason of ['new', 'resume']) test(`Personal engine: ${reason} is serialized and a stale before-switch callback cannot transition`, async () => {
+for (const reason of ['new', 'resume']) test(`006. Personal engine: ${reason} is serialized and a stale before-switch callback cannot transition`, async () => {
   let accept, finish, requests = 0;
   const w = world({ catalog: async () => ({ id: 'other', mode: 'personal' }), beforeSwitch: () => ++requests === 1 ? new Promise(resolve => { accept = resolve; }) : { cancel: true },
     run: async () => new Promise(resolve => { finish = resolve; }) });
@@ -199,14 +199,14 @@ for (const reason of ['new', 'resume']) test(`Personal engine: ${reason} is seri
   w.hooks.session_shutdown({ reason: 'reload' }, w.context); w.hooks.session_start({}, w.context); accept({ cancel: false }); await pending;
   assert.equal(w.calls.some(value => Array.isArray(value) && value[0] === 'switch'), false); finish(); await main;
 });
-for (const cancel of [true, false]) test(`Personal engine: explicit before-switch cancel=${cancel} preserves the host transition meaning`, async () => {
+for (const cancel of [true, false]) test(`007. Personal engine: explicit before-switch cancel=${cancel} preserves the host transition meaning`, async () => {
   let finish;
   const w = world({ beforeSwitch: async () => ({ cancel }), run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush(); await w.runtime.newSession();
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, cancel ? 0 : 1);
   assert.equal(w.calls.includes('upstream-exit'), !cancel); finish(); await main;
 });
-test('Personal engine: an IPC send failure returns the transition slot for an explicit retry', async () => {
+test("008. Personal engine: an IPC send failure returns the transition slot for an explicit retry", async () => {
   let finish;
   const problem = new Error('injected send'), w = world({ sendError: problem, run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -215,14 +215,14 @@ test('Personal engine: an IPC send failure returns the transition slot for an ex
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 2);
   assert.equal(w.calls.includes('upstream-exit'), false); finish(); await main;
 });
-test('Personal engine: an old resume selector cannot quit its replacement', async () => {
+test("009. Personal engine: an old resume selector cannot quit its replacement", async () => {
   let finish;
   const w = world({ run: async ({ mode }) => { mode.showSessionSelector(); await new Promise(resolve => { finish = resolve; }); } });
   const main = w.main(); await flush(); const selector = w.picks[0];
   w.hooks.session_shutdown({ reason: 'reload' }, w.context); w.hooks.session_start({}, w.context); selector.quit(); await flush();
   assert.equal(w.calls.includes('dispose'), false); assert.equal(w.calls.includes('upstream-exit'), false); finish(); await main;
 });
-test('Personal engine: reload uses a previously loaded cache owner before replacing its resource set', async () => {
+test("010. Personal engine: reload uses a previously loaded cache owner before replacing its resource set", async () => {
   const w = world({ run: async ({ runtime }) => { await runtime.session.reload(); } });
   await w.main();
   assert.equal(w.calls.find(value => Array.isArray(value) && value[0] === 'resources-reload')?.[1], true);
@@ -230,7 +230,7 @@ test('Personal engine: reload uses a previously loaded cache owner before replac
   assert.equal(w.calls.filter(value => value === 'modules-refresh').length, 1);
   assert.ok(w.calls.indexOf('modules-refresh') < w.calls.findIndex(value => Array.isArray(value) && value[0] === 'resources-reload'));
 });
-test('Personal engine: rejected reload returns its candidate and awaits helper close before fatal exit', async () => {
+test("011. Personal engine: rejected reload returns its candidate and awaits helper close before fatal exit", async () => {
   let finish, end;
   const problem = new Error('injected resource reload');
   const w = world({ close: () => new Promise(resolve => { finish = resolve; }), resourceReload: async () => { throw problem; },
@@ -245,7 +245,7 @@ test('Personal engine: rejected reload returns its candidate and awaits helper c
   assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1);
   assert.ok(w.calls.some(value => Array.isArray(value) && value[0] === 'upstream-fatal' && value[1] === problem));
 });
-test('Personal engine: extension replacement failure returns owners before upstream fatal exit', async () => {
+test("012. Personal engine: extension replacement failure returns owners before upstream fatal exit", async () => {
   let finish, done;
   const w = world({ close: () => new Promise(resolve => { finish = resolve; }), run: async ({ mode }) => {
     await mode.handleFatalRuntimeError('Failed to fork session', new Error('injected replacement')); done = true;
@@ -256,7 +256,7 @@ test('Personal engine: extension replacement failure returns owners before upstr
   assert.equal(w.calls.filter(value => value === 'dispose').length, 1);
   assert.equal(w.calls.filter(value => value === 'credentials-close').length, 1);
 });
-test('Personal engine: /society opens the mode choice only when requested and hands Society to the host', async () => {
+test("013. Personal engine: /society opens the mode choice only when requested and hands Society to the host", async () => {
   let finish;
   const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -272,7 +272,7 @@ test('Personal engine: /society opens the mode choice only when requested and ha
   finish(); await main;
 });
 for (const condition of ['conversation', 'busy', 'cancel', 'same-mode', 'stale']) {
-  test(`Personal engine: ${condition} keeps the current mode and writer`, async () => {
+  test(`014. Personal engine: ${condition} keeps the current mode and writer`, async () => {
     let finish;
     const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
     const main = w.main(); await flush();
@@ -287,7 +287,7 @@ for (const condition of ['conversation', 'busy', 'cancel', 'same-mode', 'stale']
     finish(); await main;
   });
 }
-test('Personal engine: Mac mode switch returns to the host Society route', async () => {
+test("015. Personal engine: Mac mode switch returns to the host Society route", async () => {
   let finish;
   const w = world({ platform: 'darwin', run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -295,7 +295,7 @@ test('Personal engine: Mac mode switch returns to the host Society route', async
   assert.equal(w.calls.find(value => Array.isArray(value) && value[0] === 'switch')?.[1]?.mode, 'society');
   finish(); await main;
 });
-test('Personal engine: a cancelled before-switch keeps the /society session Personal', async () => {
+test("016. Personal engine: a cancelled before-switch keeps the /society session Personal", async () => {
   let finish;
   const w = world({ beforeSwitch: async () => ({ cancel: true }), run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -304,7 +304,7 @@ test('Personal engine: a cancelled before-switch keeps the /society session Pers
   assert.equal(w.calls.includes('upstream-exit'), false);
   finish(); await main;
 });
-test('Personal engine: a second /society while one is transitioning cannot double-enter', async () => {
+test("017. Personal engine: a second /society while one is transitioning cannot double-enter", async () => {
   let finish, accept;
   const w = world({ beforeSwitch: () => new Promise(resolve => { accept = resolve; }),
     run: async () => new Promise(resolve => { finish = resolve; }) });
@@ -316,7 +316,7 @@ test('Personal engine: a second /society while one is transitioning cannot doubl
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 1);
   finish(); await main;
 });
-test('Personal engine: an IPC send failure on /society returns the transition slot for an explicit retry', async () => {
+test("018. Personal engine: an IPC send failure on /society returns the transition slot for an explicit retry", async () => {
   let finish;
   const problem = new Error('injected send'), w = world({ sendError: problem, run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -325,7 +325,7 @@ test('Personal engine: an IPC send failure on /society returns the transition sl
   assert.equal(w.calls.filter(value => Array.isArray(value) && value[0] === 'switch').length, 2);
   assert.equal(w.calls.includes('upstream-exit'), false); finish(); await main;
 });
-test('Personal engine: module-hook cleanup failure still closes credentials and retains the startup failure', async () => {
+test("019. Personal engine: module-hook cleanup failure still closes credentials and retains the startup failure", async () => {
   const cleanup = new Error('injected module cleanup');
   const w = world({ fail: 'init', moduleClose: () => { throw cleanup; } });
   await assert.rejects(w.main(), error => error.name === 'AggregateError' && error.errors.some(item => item.message === 'injected init') && error.errors.includes(cleanup));
@@ -334,7 +334,7 @@ test('Personal engine: module-hook cleanup failure still closes credentials and 
   assert.ok(w.calls.indexOf('modules-close') < w.calls.indexOf('credentials-close'));
   assert.equal(w.stdout.write, w.originalWrite);
 });
-test('Personal engine: branding reads the installed package version rather than a second literal', async () => {
+test("020. Personal engine: branding reads the installed package version rather than a second literal", async () => {
   let finish;
   const w = world({ run: async () => new Promise(resolve => { finish = resolve; }) });
   const main = w.main(); await flush();
@@ -342,7 +342,7 @@ test('Personal engine: branding reads the installed package version rather than 
   assert.ok(w.calls.some(value => Array.isArray(value) && value[0] === 'brand' && value[1] === 'fixture-version'));
   finish(); await main;
 });
-test('#6: Personal registers only its own command -- the engine keeps /import and the rest of its surface', async () => {
+test("021. Personal registers only its own command -- the engine keeps /import and the rest of its surface", async () => {
   let loader;
   const w = world({ run: async ({ runtime }) => { loader = runtime.services.resourceLoader; } });
   await w.main();
@@ -356,7 +356,7 @@ test('#6: Personal registers only its own command -- the engine keeps /import an
     assert.ok(!/^(no|disable|exclude)/i.test(key) || key === 'noExtensions',
       `a suppressed resource surface reached Personal: ${key}`);
 });
-test('C18: Personal loads the installed packages\' skills, prompt templates and themes, as the Society engines do', async () => {
+test("022. Personal loads the installed packages' skills, prompt templates and themes, as the Society engines do", async () => {
   const packageResources = { skills: ['/store/npm/pkg/skills/roll/SKILL.md'], prompts: ['/store/npm/pkg/prompts/review.md'], themes: ['/store/npm/pkg/themes/dark.json'] };
   let loader;
   const w = world({ packageResources, run: async ({ runtime }) => { loader = runtime.services.resourceLoader; } });
@@ -374,7 +374,7 @@ test('C18: Personal loads the installed packages\' skills, prompt templates and 
     assert.equal(Object.hasOwn(bare.options, key), false, `${key} present without package resources`);
 });
 
-test('C19: Personal\'s project trust is the recorded decision -- never silent, never default', async () => {
+test("023. Personal's project trust is the recorded decision -- never silent, never default", async () => {
   for (const [needsTrust, trusted, expected] of [
     [false, undefined, true],   // nothing gated: trivially trusted, as Pi itself rules
     [true, undefined, false],   // gated folder, no recorded decision: untrusted
@@ -387,7 +387,7 @@ test('C19: Personal\'s project trust is the recorded decision -- never silent, n
       [['project-trusted', expected]], `needsTrust=${needsTrust} trusted=${trusted}`);
   }
 });
-test('C19: the trust row appears only for a folder holding gated resources, and persists then applies', async () => {
+test("024. The trust row appears only for a folder holding gated resources, and persists then applies", async () => {
   // No gated resources: the menu offers no trust row, so there is nothing
   // the decision would change.
   let w = world({ needsTrust: false, run: async ({ commands }) => { await commands.oma.handler('', w.context); } });

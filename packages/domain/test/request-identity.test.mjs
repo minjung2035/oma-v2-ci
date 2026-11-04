@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildRequestIdentity, requestParamsEqual } from "@oma/domain/request-identity";
 import { LineageSnapshot } from "@oma/domain/lineage";
 
-test("request identity preserves text bytes and normalizes only declared set fields", () => {
+test("001. Request identity preserves text bytes and normalizes only declared set fields", () => {
   const original = { to: ["bob", "alice"], subject: "subject", body: "e\u0301\n", kind: "message" };
   const identity = buildRequestIdentity("mail.send", original);
   assert.equal(identity.hash, buildRequestIdentity("mail.send", { ...original, to: ["alice", "bob", "alice"] }).hash);
@@ -14,7 +14,7 @@ test("request identity preserves text bytes and normalizes only declared set fie
   assert.deepEqual(Buffer.from(identity.canonicalBytes), bytes);
   assert.equal(identity.canonicalParams.body, "e\u0301\n");
 });
-test("lineage retains retired actors as facts and refuses cyclic ownership", () => {
+test("002. Lineage retains retired actors as facts and refuses cyclic ownership", () => {
   const graph = new LineageSnapshot([{ name: "principal", createdBy: null },
     { name: "alice", createdBy: "principal", desired: "retired" }, { name: "bob", createdBy: "alice" }]);
   assert.deepEqual(graph.ancestors("bob").map(node => node.name), ["bob", "alice", "principal"]);

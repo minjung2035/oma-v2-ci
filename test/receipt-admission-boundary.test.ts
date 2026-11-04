@@ -7,7 +7,7 @@ import { receiptOperation, receiptOperationRecord } from "./fixtures/receipt-ope
 
 const pending = receiptOperation();
 
-test("admitted receipts reject preaccept-only errors without changing the source row", () => {
+test("001. Admitted receipts reject preaccept-only errors without changing the source row", () => {
   assert.deepEqual(receiptOfOperation(pending), { operation: pending.id, state: "pending" });
   for (const errorCode of ["STREAM_INVALID", "LIMIT_EXCEEDED", "STORAGE_FULL"] as const) {
     const row = Object.freeze({ ...receiptOperationRecord, state: "failed", error_code: errorCode });
@@ -18,7 +18,7 @@ test("admitted receipts reject preaccept-only errors without changing the source
   }
 });
 
-test("terminal failure and uncertain effects never authorize frozen resend", () => {
+test("002. Terminal failure and uncertain effects never authorize frozen resend", () => {
   const failed = receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }));
   assert.deepEqual(failed, {
     operation: pending.id, state: "failed",
@@ -33,7 +33,7 @@ test("terminal failure and uncertain effects never authorize frozen resend", () 
   assert.equal(isRequestNotFound(receiptNotFound), true);
 });
 
-test("successful legacy JSON is projected without rewriting frozen serialized bytes", () => {
+test("003. Successful legacy JSON is projected without rewriting frozen serialized bytes", () => {
   const resultJson = '{"subscribed":true, "topic":"work", "kind":"route.follow"}';
   const row = receiptOperation({ state: "succeeded", result_json: resultJson });
   const receipt = receiptOfOperation(row);

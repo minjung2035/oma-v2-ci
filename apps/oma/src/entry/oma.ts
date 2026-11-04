@@ -9,14 +9,14 @@ import { sessionBirthForHistory } from "../runtime/session-catalog.js";
 import { RESUME_SESSION_ENV } from "@oma/protocol/session-handoff";
 import { requireSessionMode } from "../runtime/session-mode.js";
 import { codeFor, fail } from "../application/exit.js";
-import { exceptionText } from "@oma/domain/errors";
+import { exceptionText, StoreError } from "@oma/domain/errors";
 import { enableProcessCompileCache } from "../runtime/compile-cache.js";
 
 async function main(argv: readonly string[]): Promise<void> {
   enableProcessCompileCache();
   const command = parseOmaArguments(argv);
   if (command.kind === "help") {
-    process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma login\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
+    process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project] [--surface collaboration-v1]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma recover-execution --society <name> [--config <path>] (--prepare | --apply)\n       oma login\ncollaboration-v1 fresh admission remains closed pending required qualification and product decisions.\n" + PACKAGE_USAGE.replace(/^usage: /, "       ") + "\n");
     return;
   }
   if (command.kind !== "session") { await import("./oma-society.js"); return; }
@@ -34,6 +34,7 @@ async function main(argv: readonly string[]): Promise<void> {
   } else if (mode === undefined) {
     mode = "society";
   }
+  if (mode === "personal" && command.surface !== undefined) throw new StoreError("INVALID_REQUEST", "Personal mode has no Society collaboration surface");
   if (mode === "personal") {
     const { personalMain } = await import("./personal-host.js");
     await personalMain({ dataRoot, cwd, ...(resume === undefined ? {} : { resume }),

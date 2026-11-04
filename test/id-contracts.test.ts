@@ -17,7 +17,7 @@ const BAD_VERSION = "00000000-0000-1000-8000-000000000001";
 const BAD_VARIANT = "00000000-0000-4000-7000-000000000001";
 const VIEW_LIMITS = { frameBytes: 4096, batchMaxMessages: 24 };
 
-test("ID-002: operation/message/batch ids require canonical lowercase UUIDv4", () => {
+test("001. Operation/message/batch ids require canonical lowercase UUIDv4", () => {
   assert.equal(isValidOperationId(OP), true);
   assert.equal(isValidMessageId(MESSAGE), true);
   assert.equal(isValidBatchId(BATCH), true);
@@ -33,7 +33,7 @@ test("ID-002: operation/message/batch ids require canonical lowercase UUIDv4", (
   assert.equal(isValidOperationId(OP.toUpperCase()), false);
 });
 
-test("M-003/ID-002: public and persisted message boundaries reject pseudo UUIDs", () => {
+test("002. Public and persisted message boundaries reject pseudo UUIDs", () => {
   assert.equal(mailAckParamsCheck({ message: MESSAGE }), null);
   assert.notEqual(mailAckParamsCheck({ message: `m-${BAD_VERSION}-0` }), null);
   const plan = { id: MESSAGE, objectPath: `mail/objects/${MESSAGE}.eml`, sha256: "a".repeat(64), bytes: 1,
@@ -43,7 +43,7 @@ test("M-003/ID-002: public and persisted message boundaries reject pseudo UUIDs"
   assert.notEqual(messagePlanCheck({ ...plan, id: `m-${BAD_VERSION}-0`, objectPath: `mail/objects/m-${BAD_VERSION}-0.eml` }), null);
 });
 
-test("DB-009/ID-002: durable lifecycle operation references require UUIDv4", () => {
+test("003. Durable lifecycle operation references require UUIDv4", () => {
   const check = operationPlanCheck("agent.start", { operationId: OP, actor: "alice", stateRoot: "/tmp/state", repositoryIdentity: { society: "demo" } });
   const plan = { kind: "agent.start", agent: "alice", previousIncarnation: 0, desired: "enabled", remainingOperations: [] };
   assert.equal(check(plan), null);
@@ -51,7 +51,7 @@ test("DB-009/ID-002: durable lifecycle operation references require UUIDv4", () 
   assert.notEqual(operationPlanCheck("agent.start", { operationId: `op-${BAD_VERSION}`, actor: "alice", stateRoot: "/tmp/state", repositoryIdentity: { society: "demo" } })(plan), null);
 });
 
-test("PI-002/M-003: batch view rejects non-v4 batch and message identities", () => {
+test("004. Batch view rejects non-v4 batch and message identities", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-id-batch-"));
   try {
     const valid = { id: BATCH, agent: "alice", incarnation: 1, deliveryMode: "followUp", notice: "mail", messageIds: [MESSAGE] };
@@ -65,7 +65,7 @@ test("PI-002/M-003: batch view rejects non-v4 batch and message identities", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("R28: the protocol codec and isolated file reader preserve the six-field schema and reject invalid input", t => {
+test("005. The protocol codec and isolated file reader preserve the six-field schema and reject invalid input", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-batch-codec-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const valid = { id: BATCH, agent: "alice", incarnation: 1, deliveryMode: "followUp" as const, notice: "새 메일 🙂", messageIds: [MESSAGE] };

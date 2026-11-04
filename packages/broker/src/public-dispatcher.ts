@@ -81,7 +81,8 @@ export class PublicDispatcher {
     if (params === null) return fail("INVALID_REQUEST", `invalid params for ${method}`);
     if (auth.role === "principal" && auth.channel === "actor" && !principalRequestAllowed(method, params))
       return fail("CAPABILITY_DENIED", "the Principal delegates routine work to Workers");
-    if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
+    if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")) ||
+        (descriptor.stream === "optional-content" && !Object.hasOwn(params, "content")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
     if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") {
       try { this.deps.assertAdmission(); }
       catch (error) {
@@ -117,6 +118,15 @@ export class PublicDispatcher {
     const { id, method, descriptor, params } = validation;
     try {
       switch (method) {
+        case "invocation.bind": {
+          if (!this.deps.invocations) throw new StoreError("UNSUPPORTED_PROFILE", "host invocation linkage is unavailable");
+          return okAnswer(id, await this.deps.invocations.bind(auth, params));
+        }
+        case "invocation.prepare": {
+          if (!this.deps.invocations) throw new StoreError("UNSUPPORTED_PROFILE", "host invocation linkage is unavailable");
+          this.deps.assertAdmission();
+          return okAnswer(id, await this.deps.invocations.prepare(auth, params, stream));
+        }
         case "status.get": {
           // A named agent is an address like the one logs.read checks: absent
           // is an error, not an empty list (NB-20).
@@ -130,7 +140,7 @@ export class PublicDispatcher {
           if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
           const current = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", false);
           if (!current.ok) return errorAnswer(current.id, current.failure);
-          return statusPage(id, snapshot.observedAtMs, agents, this.deps.limits.frameBytes, params.after);
+          return statusPage(id, snapshot.observedAtMs, agents, this.deps.limits.frameBytes, lifecycle.creation(auth), params.after);
         }
         case "operation.read":
           return receiptChunk(id, store.getReceipt(auth.actor, params.key) ?? receiptNotFound, params, this.deps.limits.frameBytes);
@@ -147,7 +157,7 @@ export class PublicDispatcher {
             const hasOperation = store.hasOperation(auth.actor, keyOf(request));
             if (!hasOperation && !git?.isPublished(params.approvalFor.candidate)) throw new StoreError("CANDIDATE_NOT_PUBLISHED", "approval request requires a published candidate");
           }
-          return okAnswer(id, await mail.send(auth, keyOf(request), params));
+          return okAnswer(id, await mail.send(auth, keyOf(request), params, undefined, stream ?? undefined));
         }
         case "attest.record": {
           if (!this.deps.review) throw new StoreError("UNSUPPORTED_PROFILE", "tiered attestation owner is unavailable");
@@ -158,7 +168,7 @@ export class PublicDispatcher {
         case "route.unfollow": return okAnswer(id, lifecycle.follow(auth, params.topic, false, keyOf(request)));
         case "agent.start": return okAnswer(id, await lifecycle.start(auth, params.agent, keyOf(request)));
         case "agent.stop": return okAnswer(id, await lifecycle.stop(auth, params.agent, keyOf(request)));
-        case "agent.create": return okAnswer(id, await lifecycle.create(auth, params, keyOf(request)));
+        case "agent.create": return okAnswer(id, await lifecycle.create(auth, params, keyOf(request), stream ?? undefined));
         case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: params.note }, { kind: "agent.continue", params: { note: params.note } }));
         case "agent.wait": return okAnswer(id, { accepted: this.deps.waitRun(auth, params.observe === true) });
         case "git.known": {
@@ -167,7 +177,9 @@ export class PublicDispatcher {
           const known = [...new Set([refs.main, ...refs.published])];
           // A bounded subset, main first (the contract says so): a bundle built on
           // fewer prerequisites is still complete, only larger.
-          const result = { hasCandidate: known.includes(params.candidate), prerequisites: [] as Oid[] };
+          if (params.reachable === true && git.hasSharedCommit === undefined)
+            throw new StoreError("UNSUPPORTED_PROFILE", "exact shared reachability observations are unavailable");
+          const result = { hasCandidate: params.reachable === true ? git.hasSharedCommit!(params.candidate) : known.includes(params.candidate), prerequisites: [] as Oid[] };
           let bytes = Buffer.byteLength(JSON.stringify(okAnswer(id, result)));
           for (const oid of known) {
             const extra = Buffer.byteLength(JSON.stringify(oid)) + (result.prerequisites.length ? 1 : 0);
@@ -190,7 +202,7 @@ export class PublicDispatcher {
         }
         case "review.status": {
           if (!this.deps.review) throw new StoreError("UNSUPPORTED_PROFILE", "review status owner is unavailable");
-          return okAnswer(id, this.deps.review.status(auth, params.name, this.deps.limits.frameBytes, id));
+          return okAnswer(id, this.deps.review.status(auth, params, this.deps.limits.frameBytes, id));
         }
         case "logs.read": {
           if (this.deps.store.getAgent(params.agent) === null)

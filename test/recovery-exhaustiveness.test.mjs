@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
+import { AsyncLocalStorage } from "node:async_hooks";
 import ts from "typescript";
 import { StoreError } from "@oma/domain/errors";
 import { assertNever } from "@oma/domain/exhaustive";
@@ -43,6 +44,7 @@ function harness(entries, globals) {
 function fixture() {
   const calls = [];
   const value = harness([recover, startup], {
+    recoveryActivation: new AsyncLocalStorage(),
     observeStoreFailure: () => {},
     recoveryCategory: kind => kind,
     // DR10: startup's collection of artifacts made before an acceptance.
@@ -55,6 +57,7 @@ function fixture() {
   Object.assign(value, {
     effects: { observeStoreFailure() {}, assertCanonicalHealthy: async () => { calls.push(["health"]); }, collectUnacceptedArtifacts() { calls.push(["collect"]); return { removed: [], kept: [] }; } },
     starting: false, inFlight: null, mail: { reconcileOperation: async id => { calls.push(["mail", id]); } }, paths: {},
+    sweepPass(observe) { calls.push(["scheduled-recovery", observe]); return Promise.resolve(); },
     activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
       reconcileSociety: id => { calls.push(["society", id]); },
@@ -69,7 +72,7 @@ function fixture() {
   return { value, calls };
 }
 
-test("P3 recovery: physical owners retain every existing route and activation flag", async () => {
+test("001. Recovery: physical owners retain every existing route and activation flag", async () => {
   for (const kind of kinds) {
     const { value, calls } = fixture();
     if (["mail.ack", "route.follow", "route.unfollow"].includes(kind)) {
@@ -86,14 +89,14 @@ test("P3 recovery: physical owners retain every existing route and activation fl
   }
 });
 
-test("P3 recovery: missing Git owner remains gated without a fallback effect", async () => {
+test("002. Recovery: missing Git owner remains gated without a fallback effect", async () => {
   const { value, calls } = fixture();
   value.git = null;
   await assert.rejects(value.recover({ id: "x", kind: "git.submit", state: "pending" }, true), { code: "UNSUPPORTED_PROFILE" });
   assert.deepEqual(calls, []);
 });
 
-test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
+test("003. Recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
   const { value, calls } = fixture();
   value.store = {
     path: "/state/runtime.sqlite",
@@ -103,21 +106,13 @@ test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only h
   await value.startup(false, async () => { calls.push(["prepare"]); });
   // DR10: the collection runs after the quiesce and before anything is prepared.
   assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
-  // mail-v1: startup ends with a reviews advance sweep for requests that
-  // became ready while the broker was down.
-  assert.deepEqual(calls.at(-1), ["reviews"]);
-  const physical = calls.slice(5, -1);
-  assert.equal(physical.length, kinds.length - 3);
-  assert.deepEqual(physical, kinds.filter(kind => !["mail.ack", "route.follow", "route.unfollow"].includes(kind)).map(kind =>
-    kind === "agent.create" ? ["create", kind, false]
-      : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
-      : kind === "society.set" ? ["society", kind]
-      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind]));
-  assert.ok(physical.every(call => !["mail.ack", "route.follow", "route.unfollow"].includes(call[1])));
+  // Startup establishes integrity and schedules recovery without waiting for
+  // long physical effects. Closed-kind routing is exercised separately above.
+  assert.deepEqual(calls.slice(5), [["scheduled-recovery", false]]);
   assert.equal(value.starting, false);
 });
 
-test("P3 recovery: Git routes its three kinds and explicitly ignores other existing kinds", async () => {
+test("004. Recovery: Git routes its three kinds and explicitly ignores other existing kinds", async () => {
   for (const kind of kinds) {
     const calls = [];
     const value = harness([gitReconcile], {});
@@ -134,7 +129,7 @@ test("P3 recovery: Git routes its three kinds and explicitly ignores other exist
   }
 });
 
-test("P3 recovery: bypassing the closed decoder never turns an unknown kind into success", async () => {
+test("005. Recovery: bypassing the closed decoder never turns an unknown kind into success", async () => {
   const { value, calls } = fixture();
   await assert.rejects(value.recover({ id: "bad", kind: "unregistered.kind", state: "pending" }, true), /unhandled closed variant/);
   assert.deepEqual(calls, []);
@@ -176,8 +171,8 @@ function diagnostics(entry, { extraKind = false, omitKind } = {}) {
     return ts.getPreEmitDiagnostics(program).filter(value => value.category === ts.DiagnosticCategory.Error);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
-test("P3 recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking", () => {
-  for (const entry of [recover, startup, gitReconcile]) {
+test("006. Recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking", () => {
+  for (const entry of [recover, gitReconcile]) {
     assert.deepEqual(diagnostics(entry).map(error => ts.flattenDiagnosticMessageText(error.messageText, "\n")), []);
     for (const mutation of [{ extraKind: true }, { omitKind: "git.submit" }]) {
       const errors = diagnostics(entry, mutation);

@@ -24,7 +24,7 @@ and method capability preflight still precede all these module entrypoints.
 */
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
-test("R13: cycles, self-parent, missing parents and unknown actors never become partial trees", () => {
+test("001. Cycles, self-parent, missing parents and unknown actors never become partial trees", () => {
   const corruptGraphs: Array<Array<{ name: string; createdBy: string | null }>> = [
     [{ name: "alice", createdBy: "bob" }, { name: "bob", createdBy: "alice" }],
     [{ name: "alice", createdBy: "alice" }], [{ name: "alice", createdBy: "missing" }],
@@ -36,7 +36,7 @@ test("R13: cycles, self-parent, missing parents and unknown actors never become 
   assert.throws(() => graph.descendants("missing"), code("STORE_CORRUPT"));
 });
 
-test("R13: deep and wide trees have no invented depth or argument-count policy", () => {
+test("002. Deep and wide trees have no invented depth or argument-count policy", () => {
   const deep = Array.from({ length: 10000 }, (_, index) => ({ name: `n-${index}`, createdBy: index === 0 ? null : `n-${index - 1}` }));
   const graph = new LineageSnapshot(deep);
   assert.equal(graph.ancestors("n-9999").length, 10000);
@@ -47,7 +47,7 @@ test("R13: deep and wide trees have no invented depth or argument-count policy",
   assert.equal(wide.isDescendant("root", "root", true), true);
 });
 
-test("R13: current guards re-read lease revocation, incarnation and desired state after a wait", async () => {
+test("003. Current guards re-read lease revocation, incarnation and desired state after a wait", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-live-authority-"));
   const store = new Store(join(root, "runtime.sqlite"));
   let granted: ReadonlySet<Capability> = new Set(["agent.create"]);
@@ -70,17 +70,15 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
 });
 
 function config(): HostConfig {
-  return {
-    schemaVersion: 4, society: "demo", installation: { node: "/node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
-    modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
-    agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p" } },
-    principalProfile: "p", initialResidents: [],
-    integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
-    limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 }
-};
+  return {schemaVersion: 4, maxWorkers: 6, society: "demo", installation: { node: "/node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
+  modelProfiles: { md: { provider: "none", model: "none", inferenceTimeoutSeconds: 1 } },
+  agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p" } },
+  principalProfile: "p", initialResidents: [],
+  integration: { policyRevision: "v1", protectedPaths: [], checks: [] },
+  limits: { frameBytes: 1000, mailBodyBytes: 1000, subjectBytes: 512, addresses: 64, replyReferences: 64, contextFiles: 10, contextBytes: 1000, bundleBytes: 1000, logBytes: 1000, batchMaxMessages: 10, idleStreamSeconds: 30, receiptWaitSeconds: 30 }};
 }
 
-test("R13: pure delegation never expands Principal; refresh fails closed and never reads inside T", () => {
+test("004. Pure delegation never expands Principal; refresh fails closed and never reads inside T", () => {
   let cfg = config(); let inTransaction = false; let reads = 0; let fail = false;
   const resolve = createChildSpecResolver(() => { reads++; if (fail) throw new Error("policy read failed"); return cfg; }, () => inTransaction);
   const parent = { name: "principal", profile: "p", capabilities: ["agent.create", "mail.send"] as const };

@@ -54,7 +54,7 @@ async function returned(lockPath: string): Promise<ProcessLock> {
     await new Promise(resolve => setTimeout(resolve, 10));
   }
 }
-test("Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
+test("001. Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
   { skip: process.platform !== "linux", timeout: 25000 }, async t => {
     const { directory, lockPath, options } = fixture(), run = runPersonalSession(options);
     t.after(async () => {
@@ -72,7 +72,7 @@ test("Personal history actual process: inherited inode, concurrent admission and
     const ended = await run; assert.equal(ended.code, 0); assert.equal(ended.next?.session, "/fixture/next.jsonl");
     const next = ProcessLock.tryAcquire(lockPath); assert.ok(next, "history becomes available after actual child close"); next.close();
   });
-test("Personal history actual process: inherited lock survives an exited parent until the fixture writer ends",
+test("002. Personal history actual process: inherited lock survives an exited parent until the fixture writer ends",
   { skip: process.platform !== "linux", timeout: 25000 }, async t => {
     const { directory, lockPath, options } = fixture(), parentEntry = join(directory, "parent.mjs");
     writeFileSync(parentEntry, `

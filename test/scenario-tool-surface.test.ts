@@ -1,74 +1,115 @@
-/** DR27 / TSP / D23: the tool surface is OMA's internal policy. It reaches an
- * engine as OMA_TOOL_SURFACE in its environment -- the spawn plans' own env --
- * and never through an authored role file, so the scenario sets it the way
- * OMA itself would, on the engine process. */
+/** DR72/MCS: current cumulative exposure through the product engine. Retired or
+ * invalid plans are refused by production launch builders before engine entry.
+ * These scripted-provider tests are not live-provider or platform qualification. */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { runnerSessionDirPathAt } from "@oma/domain/paths";
+import { principalSessionDir, principalWorkspace, sessionArgv } from "@oma/engine/principal-session";
+import { planPiSpawn } from "@oma/engine/pi-spawn-plan";
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 import test from "node:test";
-import { RESIDENT_TEST_OPTIONS } from "./fixtures/resident.js";
+import { RESIDENT_TEST_OPTIONS, residentOptions } from "./fixtures/resident.js";
 import assert from "node:assert/strict";
 import { withScenario } from "./fixtures/scenario.js";
-import { call, text, tools, toolResults } from "./fixtures/scripted-provider.js";
-import { encodeToolSurfacePlan, planToolSurface } from "@oma/domain/tool-surface";
+import { call, text, tools, toolResults, textOf } from "./fixtures/scripted-provider.js";
 
-/** The internal plan for each shape the gate must handle. `valid` groups a
- * routine tool; `collision` names a group after an OMA tool; `unknown`
- * selects a tool the registry never holds. The last two are not configurations
- * a host could write -- the field is closed -- but what reaches the engine as
- * bytes must still fail closed, explicitly, at session start. */
-const plan = (mode: "valid" | "collision" | "unknown"): string => encodeToolSurfacePlan(planToolSurface({
-  defaultMode: "DISABLED",
-  direct: mode === "unknown" ? ["missing_tool"] : [],
-  disabled: [],
-  groups: mode === "unknown" ? [] : [{
-    name: mode === "collision" ? "oma_mail_send" : "files",
-    description: "Explore workspace",
-    members: [{ tool: "ls" }],
-  }],
-  roots: [],
-}));
+for (const role of ["principal", "resident"] as const) for (const mode of ["malformed", "unknown", "retired"] as const)
+  test(`001. Scenario tool surface: ${role} ${mode} plan refuses in its launch builder before sandbox/SDK entry`, () => {
+    const raw = mode === "malformed" ? "{" : mode === "retired" ? JSON.stringify({ version: 2,
+      defaultMode: "DISABLED", direct: ["read"], optional: [], disabled: [] })
+      : JSON.stringify({ ...collaborationSurface(role), direct: ["missing_tool"] });
+    const unsupported = (error: unknown) => error instanceof Error && "code" in error &&
+      error.code === "UNSUPPORTED_PROFILE" && /tool surface.*(unsupported|malformed)/.test(error.message);
+    if (role === "principal") assert.throws(() => sessionArgv({ piCommand: process.execPath,
+      coreExtension: "/lib/core.js", collaborationStateRoot: "/state", workspace: principalWorkspace("/state"),
+      home: "/home", sessionDir: principalSessionDir("/state"), toolSurface: raw }, {
+      society: "demo", provider: "fake", model: "scripted", extensions: [],
+    }), unsupported);
+    else {
+      const base = residentOptions("/state");
+      const options = { ...base, profile: { ...base.profile, toolSurface: raw } };
+      let sandboxEntered = false;
+      assert.throws(() => planPiSpawn({ pathView() { sandboxEntered = true; throw new Error("must not enter sandbox"); } } as never, options), unsupported);
+      assert.equal(sandboxEntered, false);
+    }
+  });
 
-/** The engine ends when the surface cannot be validated. `session.running`
- * tracks the child, so polling it is the observable startup failure. */
-async function engineDied(session: { running: boolean }, timeoutMs = 20_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (session.running && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
-  assert.equal(session.running, false, "a refused surface must stop the engine, not quietly degrade it");
-}
-
-for (const role of ["principal", "resident"] as const) for (const mode of ["valid", "collision", "unknown"] as const)
-  test(`DR27 / TSP / D23: ${role} ${mode} internal surface through the real engine`, { timeout: 120_000, ...(role === "resident" ? { skip: RESIDENT_TEST_OPTIONS.skip } : {}) }, async () => {
-    await withScenario({ residents: ["worker-a"], engineEnv: { OMA_TOOL_SURFACE: plan(mode) } }, async s => {
+for (const { role, entry } of [{ role: "principal", entry: "prompt" }, { role: "principal", entry: "delivery" },
+  { role: "resident", entry: "delivery" }] as const)
+  test(`002. Product engine: ${role} ${entry} cumulative groups, repeat, callable metadata and durable member result`, {
+    timeout: 120_000, ...(role === "resident" ? { skip: RESIDENT_TEST_OPTIONS.skip } : {}),
+  }, async () => {
+    await withScenario({ residents: ["worker-a"] }, async s => {
+      if (entry === "delivery") {
+        // A current Principal action creates the actual accepted trigger delivery.
+        const recipient = role === "resident" ? "worker-a" : "principal";
+        s.script([tools(call("oma_send", { to: [recipient], subject: "Inspect",
+          content: { kind: "text", value: "Inspect the available development environment." } }, "surface-trigger")), text("Sent.")]);
+        await s.prompt("Send the environment-inspection request.");
+        const accepted = s.operations("principal").filter(operation => operation.kind === "mail.send" && operation.state === "succeeded");
+        assert.equal(accepted.length, 1, "the current action must actually accept the trigger mail");
+        assert.deepEqual(s.store.deliveriesForOperation(accepted[0]!.id).map(delivery => delivery.recipient), [recipient]);
+      }
+      const requestStart = s.provider.seen.length;
       const seen: string[][] = [];
       s.script((request, index) => {
         seen.push(request.tools?.map(tool => tool.function!.name!) ?? []);
-        if (mode === "valid" && index === 0) return tools(call("files", {}));
-        if (mode === "valid" && index === 1) return tools(call("ls", { path: "." }));
-        if (mode !== "valid" && index === 0) return tools(call("oma_mail_send", {
-          to: [role === "principal" ? "worker-a" : "principal"], subject: "Surface refusal", body: "Mail remains usable", request: "surface-mail",
-        }));
+        if (index === 0) return tools(call("web_tools", {}, "surface-web"));
+        if (index === 1) return tools(call("lsp_tools", {}, "surface-lsp"));
+        if (index === 2) return tools(call("web_tools", {}, "surface-repeat"), call("lsp_status", {}, "surface-status"));
         return text("Done.");
       });
-      if (mode === "valid") {
-        if (role === "principal") await s.prompt("Inspect the configured surface.");
-        else {
-          await s.residentSends("worker-a", { to: ["worker-a"], subject: "Inspect", body: "Inspect the configured surface." }, "work");
-          const result = await s.activate("worker-a"); assert.equal(result.code, 0, result.stderr);
-        }
-        assert.ok(seen[0]!.includes("files")); assert.ok(!seen[0]!.includes("ls"));
-        assert.ok(seen[1]!.includes("ls"));
-        assert.match(toolResults(s.provider.seen[1]!.body).at(-1)!.text, /enabled 1/);
-        assert.doesNotMatch(toolResults(s.provider.seen[2]!.body).at(-1)!.text, /error|refused|unknown/i);
-      } else {
-        // A surface that cannot be validated must not run the session at all:
-        // the gate closes, the process ends, and no model turn ever starts.
-        if (role === "principal") await engineDied(s.session);
-        else {
-          await s.residentSends("worker-a", { to: ["worker-a"], subject: "Inspect", body: "Inspect the configured surface." }, "work");
-          const result = await s.activate("worker-a");
-          assert.notEqual(result.code, 0, "a refused surface must end the activation");
-        }
-        assert.equal(seen.length, 0, "the model was never asked to run a turn");
-        assert.equal(s.store.getOperation(role === "principal" ? "principal" : "worker-a", "surface-mail"), null,
-          "nothing ran under a surface that failed validation");
+      if (entry === "prompt") await s.prompt("Inspect the available development environment.");
+      else if (role === "principal") assert.equal((await s.deliver()).kind, "delivered");
+      else {
+        const result = await s.activate("worker-a"); assert.equal(result.code, 0, result.stderr);
+      }
+      assert.equal(seen.length, 4, "all three group boundaries reached a subsequent provider request");
+      const plan = collaborationSurface(role);
+      assert.deepEqual([...seen[0]!].sort(), [...plan.direct].sort());
+      assert.deepEqual([...seen[1]!].sort(), [...plan.direct, ...plan.groups.web_tools].sort());
+      const expanded = [...plan.direct, ...Object.values(plan.groups).flat()].sort();
+      assert.deepEqual([...seen[2]!].sort(), expanded); assert.deepEqual([...seen[3]!].sort(), expanded);
+      assert.ok(seen.every(names => !names.includes("toolset") && names.includes("oma_send")));
+      assert.ok(seen.every(names => !names.includes("edit") && !names.includes("powershell")));
+      if (role === "principal") assert.ok(!expanded.includes("lsp_diagnostics") && !expanded.includes("lsp_fix"));
+      const guidance = s.provider.seen.slice(requestStart).map(request => request.body.messages.filter(message => message.role === "system").map(textOf).join("\n"));
+      for (const [index, request] of s.provider.seen.slice(requestStart).entries()) {
+        assert.equal(request.body.messages[0]?.role, "system", `request ${index} needs a leading system message`);
+        const policy = guidance[index]!;
+        assert.ok(policy.includes(role === "principal" ? "You are the Principal of an OMA coding team." : "You are a Worker in an OMA coding team."),
+          `request ${index} retains the authored role`);
+        assert.match(policy, /<oma_authority>[\s\S]*OMA authenticates your actor[\s\S]*<\/oma_authority>/);
+        assert.match(policy, /<oma_tools>[\s\S]*Available tools:[\s\S]*<\/oma_tools>/);
+        const environments = [...policy.matchAll(/<oma_environment>\s*([\s\S]*?)\s*<\/oma_environment>/g)];
+        assert.ok(environments.length > 0, `request ${index} retains host environment`);
+        const environment = JSON.parse(environments.at(-1)![1]!);
+        assert.equal(environment.surface, "collaboration-v1");
+        assert.equal(environment.role, role === "principal" ? "Principal" : "Worker");
+        assert.equal(environment.actor, role === "principal" ? "principal" : "worker-a");
+        assert.equal(environment.workspace, role === "principal" ? principalWorkspace(s.root) : "/workspace");
+        assert.equal(environment.activation_processes_survive, role === "principal");
+        assert.equal(environment.platform, process.platform);
+      }
+      assert.equal(/^- web_search:/m.test(guidance[0]!), false);
+      assert.equal(/^- web_search:/m.test(guidance[1]!), true, "exposed member guidance must reach the real provider payload");
+      assert.equal(/^- lsp_status:/m.test(guidance[2]!), true, "exposed member guidance must reach the real provider payload");
+      assert.equal(/^- web_search:/m.test(guidance[3]!), true, "repeat cannot remove the other group");
+      const status = toolResults(s.provider.seen[requestStart + 3]!.body).find(result => result.id === "surface-status");
+      assert.ok(status, "a directly called exposed member produced a persisted result");
+      const repeat = toolResults(s.provider.seen[requestStart + 3]!.body).find(result => result.id === "surface-repeat");
+      assert.ok(repeat); assert.deepEqual(JSON.parse(repeat.text).added, []);
+      const directory = role === "principal" ? principalSessionDir(s.root) : runnerSessionDirPathAt(s.root, "worker-a");
+      const journals = readdirSync(directory, { recursive: true }).map(String)
+        .filter(name => name.endsWith(".jsonl") && !name.startsWith("hashline/"));
+      const entries = journals.flatMap(name => readFileSync(join(directory, name), "utf8").trim().split("\n").map(line => JSON.parse(line)));
+      const recorded = entries.find(entry => entry.message?.role === "toolResult" && entry.message.toolCallId === "surface-status");
+      assert.ok(recorded); assert.equal(recorded.message.isError, false);
+      const exposures = entries.filter(entry => entry.type === "custom" && entry.customType === "oma-collaboration-exposure");
+      assert.equal(exposures.length, 3);
+      for (const [index, id] of ["surface-web", "surface-lsp", "surface-repeat"].entries()) {
+        const persisted = entries.findIndex(entry => entry.message?.role === "toolResult" && entry.message.toolCallId === id);
+        assert.ok(persisted >= 0 && persisted < entries.indexOf(exposures[index]), "exposure follows its real persisted result");
       }
     });
   });

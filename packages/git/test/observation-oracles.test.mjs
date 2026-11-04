@@ -13,7 +13,7 @@ function evidence(overrides = {}) {
     return { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), ...overrides };
 }
 function observer(value) { return new GitObserver(() => value); }
-test("fixed no-renames pairs preserve filename bytes without treating status as a path", () => {
+test("001. Fixed no-renames pairs preserve filename bytes without treating status as a path", () => {
     const bytes = Buffer.from("M\0M secret.txt\0A\0A\0D\0tab\tname\0T\0line\nname\0", "utf8");
     assert.deepEqual(parseNameStatusZ(bytes), { ok: true, value: [
             { status: "M", path: "M secret.txt" }, { status: "A", path: "A" },
@@ -31,7 +31,7 @@ test("fixed no-renames pairs preserve filename bytes without treating status as 
         ok: true, value: [{ status: "A", path: "\uFEFFname" }],
     }, "a filename BOM is data, not a transport header");
 });
-test("protected path matching retains exact-file and directory-prefix semantics", () => {
+test("002. Protected path matching retains exact-file and directory-prefix semantics", () => {
     assert.equal(protectedPathMatches("M secret.txt", "M secret.txt"), true);
     assert.equal(protectedPathMatches("M secret.txt", "secret.txt"), false);
     assert.equal(protectedPathMatches("A", "A"), true);
@@ -41,7 +41,7 @@ test("protected path matching retains exact-file and directory-prefix semantics"
     assert.equal(protectedPathMatches("tab\tname", "tab\tname"), true);
     assert.equal(protectedPathMatches("anything", "/"), true, "DR18: the root protects the whole tree");
 });
-test("ref absence needs the precise exit and empty-output evidence", () => {
+test("003. Ref absence needs the precise exit and empty-output evidence", () => {
     const absent = evidence({ status: 1 });
     const found = observer(absent).ref("/repository", "refs/heads/main");
     assert.equal(found.kind, "absent");
@@ -65,8 +65,8 @@ test("ref absence needs the precise exit and empty-output evidence", () => {
             assert.equal(value.value, oid);
     }
 });
-test("object ancestry format and published observations never collapse unavailable into negative", () => {
-    assert.equal(observer(evidence({ stdout: Buffer.from(`${BASE}^{commit} missing\n`) })).commit("/repo", BASE).kind, "absent");
+test("004. Object ancestry format and published observations never collapse unavailable into negative", () => {
+    assert.equal(observer(evidence({ stdout: Buffer.from(`${BASE} missing\n`) })).commit("/repo", BASE).kind, "absent");
     assert.equal(observer(evidence({ stdout: Buffer.from("commit\n") })).commit("/repo", BASE).kind, "present");
     assert.equal(observer(evidence({ stdout: Buffer.from("blob\n") })).commit("/repo", BASE).kind, "corrupt");
     assert.equal(observer(evidence({ status: 128 })).commit("/repo", BASE).kind, "unknown");
@@ -85,7 +85,7 @@ test("object ancestry format and published observations never collapse unavailab
     assert.equal(observer(evidence({ stdout: Buffer.from(BASE) })).published("/repo").kind, "corrupt");
     assert.equal(observer(evidence({ status: 1 })).published("/repo").kind, "unknown");
 });
-test("fresh post-CAS observations distinguish expected candidate third absence and uncertainty", () => {
+test("005. Fresh post-CAS observations distinguish expected candidate third absence and uncertainty", () => {
     const observed = (oid) => observer(evidence({ stdout: Buffer.from(`${oid}\n`) })).ref("/repo", "refs/heads/main");
     assert.deepEqual(classifyRefAfterCas(observed(CANDIDATE), BASE, CANDIDATE), { kind: "candidate", oid: CANDIDATE });
     assert.deepEqual(classifyRefAfterCas(observed(BASE), BASE, CANDIDATE), { kind: "expected", oid: BASE });
@@ -97,7 +97,7 @@ test("fresh post-CAS observations distinguish expected candidate third absence a
     assert.deepEqual(classifyRefAfterCas(unknown, BASE, CANDIDATE), { kind: "unknown", observation: unknown });
 });
 for (const format of ["sha1", "sha256"]) {
-    test(`real ${format} Git emits the same exact A M D T pair grammar`, () => {
+    test(`006. Real ${format} Git emits the same exact A M D T pair grammar`, () => {
         const root = mkdtempSync(join(tmpdir(), "oma-git-path-oracle-"));
         const env = {
             ...process.env, HOME: root, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",

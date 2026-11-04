@@ -1,3 +1,4 @@
+import { collaborationSurface } from "@oma/domain/collaboration-surface";
 /** INF-005..008: the whole provider path of a confined Resident, end to end.
  *
  * The last test runs the bundled engine for real, with the trusted core
@@ -36,7 +37,7 @@ function withEnv<T>(changes: Record<string, string | undefined>, run: () => Prom
   });
 }
 
-test("T116 a placeholder keeps the shape provider code reads and none of the secret", () => {
+test("001. A placeholder keeps the shape provider code reads and none of the secret", () => {
   const apiKey = "sk-ant-api03-" + "Q7x".repeat(14);
   const stand = placeholderFor(apiKey);
   assert.ok(stand.startsWith("sk-ant-api03-"), "the kind prefix decides the header scheme; it must stay");
@@ -60,7 +61,7 @@ test("T116 a placeholder keeps the shape provider code reads and none of the sec
   assert.throws(() => placeholderFor("short"), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
 });
 
-test("V27B: a key with nothing to replace is refused at once, never retried without end", () => {
+test("002. A key with nothing to replace is refused at once, never retried without end", () => {
   const header = Buffer.from('{"alg":"RS256"}').toString("base64url");
   for (const key of [
     `${header}.${header}.${"_-".repeat(12)}`,      // a token whose signature has no letter or digit
@@ -80,7 +81,7 @@ test("V27B: a key with nothing to replace is refused at once, never retried with
   }
 });
 
-test("T116 the credential is resolved by the engine from OMA's own agent directory", async () => {
+test("003. The credential is resolved by the engine from OMA's own agent directory", async () => {
   const agentDir = scratch("oma-engine-auth-");
   try {
     await withEnv({ ANTHROPIC_API_KEY: "sk-ant-api03-" + "k".repeat(40) }, async () => {
@@ -119,7 +120,7 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-test("T116 the real engine, given only a placeholder, reaches the provider with the real key", async () => {
+test("004. The real engine, given only a placeholder, reaches the provider with the real key", async () => {
   const work = scratch("oma-chain-");
   const provider = await tlsProvider();
   const previousTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
@@ -138,15 +139,22 @@ test("T116 the real engine, given only a placeholder, reaches the provider with 
     const sessionDir = join(work, "session");
     mkdirSync(agentDir, { recursive: true });
     mkdirSync(sessionDir, { recursive: true });
+    const workspace = join(work, "workspace"), records = join(work, "records"), archive = join(work, "archive");
+    for (const path of [workspace, records, archive]) mkdirSync(path, { recursive: true });
     const runtime = resolvePiRuntime({ stateRoot: work, libdir: root });
     const port = await freePort();
     child = spawnOwnedRpc(runtime.executable, [
       ...runtime.args, "--mode", "rpc", "--no-approve", "--no-context-files", "--no-skills",
-      "--no-prompt-templates", "--no-extensions", "--exclude-tools", "bash,powershell",
+      "--no-prompt-templates", "--no-extensions", "--exclude-tools", "edit,powershell",
       "--session-dir", sessionDir, "--name", "oma-chain",
       "-e", join(root, "packages/extension/dist/index.js"),
       "--model", "anthropic/claude-fable-5",
-    ], work, {
+    ], workspace, {
+      OMA_TOOL_SURFACE: JSON.stringify(collaborationSurface("resident")), OMA_RECORD_ROOT: records,
+      OMA_ACTOR: "worker", OMA_SOCIETY: "demo", OMA_AGENT_HOME: agentDir, OMA_MAIL_ARCHIVE: archive, OMA_SOCKET: join(work, "unused.sock"),
+      OMA_MAIL_ADDRESSES: "128", OMA_FRAME_BYTES: "262144", OMA_CONTEXT_BYTES: "8388608", OMA_BUNDLE_BYTES: "8388608",
+      OMA_SUBJECT_BYTES: "512", OMA_BODY_BYTES: "262144",
+      NODE_OPTIONS: `--import=${new URL("../../apps/oma/dist/runtime/client-preload.js", import.meta.url).href}`,
       HOME: work, PATH: process.env.PATH ?? "/usr/bin:/bin",
       // An empty agent directory and no provider variables: the placeholder is
       // the only key the engine can possibly use.

@@ -28,8 +28,14 @@ function fixture(t: import("node:test").TestContext, format: "sha1" | "sha256" =
   const options = { source: project, parent, format, sourceIsGit: true, temporaryParent: root, executable: "/usr/bin/git" } as const;
   return { root, project, run, parent, options };
 }
+test("016. Non-UTF-8 project paths are rejected as input with the offending bytes", t => {
+  const f=fixture(t);
+  writeFileSync(Buffer.concat([Buffer.from(f.project+"/"),Buffer.from([0xff])]),"bad path");
+  assert.throws(()=>withProjectSnapshot(f.options,()=>assert.fail("invalid path was accepted")),
+    (error:unknown)=>error instanceof StoreError && error.code==="INVALID_REQUEST" && /hex.*ff/.test(error.message));
+});
 
-test("startup: snapshot Git processes do not grow with file or directory count", t => {
+test("001. Startup: snapshot Git processes do not grow with file or directory count", t => {
   const f = fixture(t);
   for (let i = 0; i < 80; i++) {
     const dir = join(f.project, `dir-${i}`); mkdirSync(dir);
@@ -52,7 +58,7 @@ test("startup: snapshot Git processes do not grow with file or directory count",
     "Git builds the whole tree in one process");
 });
 
-test("startup: nested snapshot reads resolve current parents and reject a replacement link", t => {
+test("002. Startup: nested snapshot reads resolve current parents and reject a replacement link", t => {
   const f = fixture(t), relative = "deep/nested/file";
   mkdirSync(join(f.project, "deep/nested"), { recursive: true });
   writeFileSync(join(f.project, relative), "first");
@@ -72,7 +78,7 @@ test("startup: nested snapshot reads resolve current parents and reject a replac
   assert.equal(read(), "second");
 });
 
-test("startup: one private stream preserves binary command-like bytes and unusual filenames", t => {
+test("003. Startup: one private stream preserves binary command-like bytes and unusual filenames", t => {
   const f = fixture(t), bytes = Buffer.alloc(200000, 0x80), name = "odd\n\ttail";
   Buffer.from("\ndone\nblob\nmark :999\ndata 0\n\0").copy(bytes, 65530);
   writeFileSync(join(f.project, name), bytes);
@@ -90,7 +96,7 @@ test("startup: one private stream preserves binary command-like bytes and unusua
   assert.equal(writes, 1); assert.equal(reads, 1);
 });
 
-for (const damage of ["missing", "duplicate", "invalid"]) test(`snapshot refuses ${damage} import marks before publication`, t => {
+for (const damage of ["missing", "duplicate", "invalid"]) test(`004. Snapshot refuses ${damage} import marks before publication`, t => {
   const f = fixture(t), native = childProcess.spawnSync;
   const mock = t.mock.method(childProcess, "spawnSync", ((executable: string, argv: string[], options: Parameters<typeof native>[2]) => {
     const result = native(executable, argv, options);
@@ -107,7 +113,7 @@ for (const damage of ["missing", "duplicate", "invalid"]) test(`snapshot refuses
   finally { mock.mock.restore(); syncBuiltinESMExports(); }
   assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
 });
-for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} snapshot captures raw worktree bytes without touching the source`, t => {
+for (const format of ["sha1", "sha256"] as const) test(`005. Project snapshot: ${format} snapshot captures raw worktree bytes without touching the source`, t => {
   const f = fixture(t, format);
   const marker = join(f.root, "ran");
   const hook = join(f.root, "hook"); writeFileSync(hook, `#!/bin/sh\necho ran >> '${marker}'\ncat\n`); chmodSync(hook, 0o755);
@@ -145,7 +151,7 @@ for (const format of ["sha1", "sha256"] as const) test(`DR27: ${format} snapshot
   assert.equal(existsSync(marker), false, "source fsmonitor/clean filter was executed");
   assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
 });
-test("DR27: a clean project reuses HEAD, while unborn and plain projects keep their files", t => {
+test("006. A clean project reuses HEAD, while unborn and plain projects keep their files", t => {
   const f = fixture(t);
   withProjectSnapshot(f.options, snapshot => assert.equal(snapshot.head, f.parent));
   rmSync(join(f.project, ".git"), { recursive: true });
@@ -158,7 +164,7 @@ test("DR27: a clean project reuses HEAD, while unborn and plain projects keep th
     });
   }
 });
-test("UX-09/DR27: a checked-out submodule refuses the snapshot, naming its path", t => {
+test("007. A checked-out submodule refuses the snapshot, naming its path", t => {
   const f = fixture(t);
   mkdirSync(join(f.project, "dep"));
   f.run("update-index", "--add", "--cacheinfo", `160000,${f.parent},dep`);
@@ -168,7 +174,7 @@ test("UX-09/DR27: a checked-out submodule refuses the snapshot, naming its path"
     (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" &&
       error.message === "snapshot contains a submodule: dep");
 });
-test("DR27: unreadable content and raced parent symlinks refuse a snapshot rather than omit or follow", t => {
+test("008. Unreadable content and raced parent symlinks refuse a snapshot rather than omit or follow", t => {
   const f = fixture(t); const reader = new SnapshotReader(f.project); t.after(() => reader.close());
   chmodSync(join(f.project, "tracked"), 0);
   try { assert.throws(() => withProjectSnapshot(f.options, () => assert.fail("published unreadable snapshot")), /EACCES/); }
@@ -183,7 +189,7 @@ test("DR27: unreadable content and raced parent symlinks refuse a snapshot rathe
 });
 
 for (const host of [false]) {
-  test(`DR27: ${host ? "host" : "society"} snapshot survives async consumption and is collected after settlement`, async t => {
+  test(`009. Project snapshot: ${host ? "host" : "society"} snapshot survives async consumption and is collected after settlement`, async t => {
     const f = fixture(t);
     let release!: () => void;
     const ready = new Promise<void>(resolve => { release = resolve; });
@@ -202,7 +208,7 @@ for (const host of [false]) {
     assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
   });
   for (const asynchronous of [false, true]) {
-    test(`DR27: ${host ? "host" : "society"} snapshot cleans up after ${asynchronous ? "async" : "sync"} consumer failure`, async t => {
+    test(`010. Project snapshot: ${host ? "host" : "society"} snapshot cleans up after ${asynchronous ? "async" : "sync"} consumer failure`, async t => {
       const f = fixture(t); const failure = new Error("consumer failed");
       const consume = () => withProjectSnapshot({ ...f.options, prepare: prepareProjectDirectory }, () => {
         if (asynchronous) return Promise.reject(failure);
@@ -215,7 +221,7 @@ for (const host of [false]) {
   }
 }
 
-test("DR27/P0-4: cleanup attempts every owner and retains the consumer failure first", async t => {
+test("011. Cleanup attempts every owner and retains the consumer failure first", async t => {
   const f = fixture(t);
   const consumer = new Error("consumer failed"), close = new Error("reader close failed"), dispose = new Error("dispose failed");
   const realClose = SnapshotReader.prototype.close;
@@ -234,7 +240,7 @@ test("DR27/P0-4: cleanup attempts every owner and retains the consumer failure f
   assert.deepEqual(readdirSync(f.root).filter(name => name.startsWith(".snapshot")), []);
 });
 
-for (const host of [false]) test(`DR27/FS-005: ${host ? "host" : "society"} preparation never adopts an existing tree`, t => {
+for (const host of [false]) test(`012. Project snapshot: ${host ? "host" : "society"} preparation never adopts an existing tree`, t => {
   const f = fixture(t); const path = join(f.root, "existing"); mkdirSync(path);
   const bytes = join(path, "keep"); writeFileSync(bytes, "not ours");
   assert.throws(() => prepareProjectDirectory(path), { code: "EEXIST" });
@@ -242,7 +248,7 @@ for (const host of [false]) test(`DR27/FS-005: ${host ? "host" : "society"} prep
   assert.equal(existsSync(`${path}.lease`), false);
 });
 
-test("DR27: file/directory/symlink replacements use worktree types without traversing old descendants", t => {
+test("013. File/directory/symlink replacements use worktree types without traversing old descendants", t => {
   const f = fixture(t);
   mkdirSync(join(f.project, "was-directory")); writeFileSync(join(f.project, "was-directory", "child"), "old");
   mkdirSync(join(f.project, "now-link")); writeFileSync(join(f.project, "now-link", "child"), "old");
@@ -263,7 +269,7 @@ test("DR27: file/directory/symlink replacements use worktree types without trave
   });
 });
 
-test("DR27: invoking inside a repository snapshots the whole parent tree without moving or deleting siblings", t => {
+test("014. Invoking inside a repository snapshots the whole parent tree without moving or deleting siblings", t => {
   const f = fixture(t); mkdirSync(join(f.project, "sub")); writeFileSync(join(f.project, "sub", "file"), "committed");
   f.run("add", "."); f.run("commit", "-qm", "subdirectory");
   writeFileSync(join(f.project, "sub", "file"), "dirty"); writeFileSync(join(f.project, "tracked"), "dirty sibling");
@@ -274,7 +280,7 @@ test("DR27: invoking inside a repository snapshots the whole parent tree without
   });
 });
 
-test("DR27/P0-4: a retained Git closure cannot reuse a released preparation descriptor", t => {
+test("015. A retained Git closure cannot reuse a released preparation descriptor", t => {
   const f = fixture(t);
   const git = withProjectSnapshot(f.options, snapshot => snapshot.git);
   assert.throws(() => git(["rev-parse", "HEAD"]), /ownership has ended/);

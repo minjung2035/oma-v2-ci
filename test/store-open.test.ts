@@ -45,7 +45,7 @@ function fileSnapshot(
 }
 
 for (const fixture of ["delete", "wal-closed", "wal-retained"] as const) {
-  test(`V04A: unsupported ${fixture} Store refusal preserves database and sidecars`, (t) => {
+  test(`001. Unsupported ${fixture} Store refusal preserves database and sidecars`, (t) => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-refusal-"));
     const path = join(root, "runtime.sqlite");
     try {
@@ -102,7 +102,7 @@ for (const fixture of ["delete", "wal-closed", "wal-retained"] as const) {
 }
 
 for (const alias of ["uri", "hardlink"] as const) {
-  test(`V04A: ${alias} cannot bypass the physical database and WAL identity preflight`, () => {
+  test(`002. Store open: ${alias} cannot bypass the physical database and WAL identity preflight`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-alias-"));
     const path = join(root, "runtime.sqlite");
     let opened: Store | undefined;
@@ -124,7 +124,7 @@ for (const alias of ["uri", "hardlink"] as const) {
       );
       assert.equal(child.error, undefined);
       assert.equal(child.signal, "SIGKILL");
-      assert.equal(readFileSync(path).readUInt32BE(60), 4);
+      assert.equal(readFileSync(path).readUInt32BE(60), 5);
       const candidate =
         alias === "uri" ? pathToFileURL(path).href : join(root, "alias.sqlite");
       if (alias === "hardlink") linkSync(path, candidate);
@@ -157,7 +157,7 @@ for (const [fixture, existing, suffix] of [
   ["SHM without WAL", true, "-shm"],
   ["journal present", true, "-journal"],
 ] as const) {
-  test(`V04A: ${fixture} is unavailable, never discarded as absent`, () => {
+  test(`003. Store open: ${fixture} is unavailable, never discarded as absent`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-sidecars-"));
     const path = join(root, "runtime.sqlite");
     try {
@@ -177,7 +177,7 @@ for (const [fixture, existing, suffix] of [
   });
 }
 
-test("V04A: an unversioned foreign schema is not a fresh OMA database", () => {
+test("004. An unversioned foreign schema is not a fresh OMA database", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-unversioned-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -193,7 +193,7 @@ test("V04A: an unversioned foreign schema is not a fresh OMA database", () => {
   }
 });
 
-test("V04A: corrupt bytes are refused without replacement or sidecar creation", () => {
+test("005. Corrupt bytes are refused without replacement or sidecar creation", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-corrupt-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -207,7 +207,7 @@ test("V04A: corrupt bytes are refused without replacement or sidecar creation", 
   }
 });
 
-test("V04A: sidecar arrival during preflight prevents writer setup", (t) => {
+test("006. Sidecar arrival during preflight prevents writer setup", (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-changed-"));
   const path = join(root, "runtime.sqlite");
   new Store(path).close();
@@ -241,7 +241,7 @@ test("V04A: sidecar arrival during preflight prevents writer setup", (t) => {
   }
 });
 
-test("V04A: a killed rollback-journal transaction is preserved, not recovered before refusal", () => {
+test("007. A killed rollback-journal transaction is preserved, not recovered before refusal", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-journal-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -281,7 +281,7 @@ test("V04A: a killed rollback-journal transaction is preserved, not recovered be
   }
 });
 
-test("V04B: OS read-only permissions refuse writing and retain no constructor handle", (t) => {
+test("008. OS read-only permissions refuse writing and retain no constructor handle", (t) => {
   assert.notEqual(
     process.getuid?.(),
     0,
@@ -325,7 +325,7 @@ for (const [state, stage] of [
   ["existing", "synchronous"],
   ["existing", "busy_timeout"],
 ] as const) {
-  test(`V04B: failed ${state} Store ${stage} setup closes its real native handle`, (t) => {
+  test(`009. Failed ${state} Store ${stage} setup closes its real native handle`, (t) => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-open-"));
     const path = join(root, "runtime.sqlite");
     if (state === "existing") new Store(path).close();
@@ -410,7 +410,7 @@ for (const [state, stage] of [
   });
 }
 
-test("V04B: initialization and close failures retain both causes", (t) => {
+test("010. Initialization and close failures retain both causes", (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-close-"));
   const primary = new StoreError("STORE_CORRUPT", "initialization failed");
   const cleanup = new Error("close failed");
@@ -439,7 +439,7 @@ test("V04B: initialization and close failures retain both causes", (t) => {
   }
 });
 
-test("V04B: failed schema application retains its rollback failure and still closes", (t) => {
+test("011. Failed schema application retains its rollback failure and still closes", (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-rollback-"));
   const primary = new StoreError("STORE_CORRUPT", "schema application failed");
   const rollback = new Error("rollback failed");
@@ -479,7 +479,7 @@ test("V04B: failed schema application retains its rollback failure and still clo
   }
 });
 
-test("V04B: busy writer setup closes its handle without releasing another connection's lock", (t) => {
+test("012. Busy writer setup closes its handle without releasing another connection's lock", (t) => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-busy-"));
   const path = join(root, "runtime.sqlite");
   new Store(path).close();
@@ -537,7 +537,7 @@ test("V04B: busy writer setup closes its handle without releasing another connec
 });
 
 for (const state of ["new", "existing"] as const)
-  test(`V04B: ${state} reader composition failure closes the actual Store connection`, () => {
+  test(`013. Store open: ${state} reader composition failure closes the actual Store connection`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-reader-"));
     try {
       if (state === "existing") new Store(join(root, "runtime.sqlite")).close();
@@ -585,7 +585,7 @@ for (const state of ["new", "existing"] as const)
   });
 
 for (const mode of ["delete", "retained-wal"] as const) {
-  test(`V04A: supported current schema ${mode} retains its committed operation`, () => {
+  test(`014. Supported current schema ${mode} retains its committed operation`, () => {
     const root = mkdtempSync(join(tmpdir(), "oma-store-supported-"));
     const path = join(root, "runtime.sqlite");
     const operation = makeValidOperation({
@@ -647,7 +647,7 @@ for (const mode of ["delete", "retained-wal"] as const) {
   });
 }
 
-test("V04B: fresh and supported Store ownership still transfers to the caller", () => {
+test("015. Fresh and supported Store ownership still transfers to the caller", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-store-supported-"));
   try {
     const path = join(root, "runtime.sqlite");

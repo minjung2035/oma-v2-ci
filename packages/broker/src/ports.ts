@@ -1,7 +1,7 @@
 /** Broker-owned capabilities. No Store or feature implementor types. */
 import type {
   Actor, AuthContext, Failure, ProtocolLimits, PublicMethods, RequestKey, AgentCreateInput,
-  Oid, MessageId, MailInput, Receipt, Json, AgentStatus, PreparedBatch, BoundaryEvidence,
+  Oid, MessageId, MailInput, Receipt, Json, AgentStatus, PreparedBatch, BatchCompletionInput,
   ExecutionObservation, RunLease,
 } from "@oma/contracts";
 import type { AgentRow, BatchRow } from "@oma/contracts/ledger";
@@ -41,7 +41,7 @@ export interface PublicStorePort {
   readonly hasOperation: (actor: Actor, key: RequestKey) => boolean;
 }
 export interface PublicMailPort {
-  readonly send: (auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }) => Promise<Receipt>;
+  readonly send: (auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }, stream?: AsyncIterable<Uint8Array>) => Promise<Receipt>;
 }
 export interface PublicUnitsPort {
   /** WP23: the broker's shared diagnostic refresh; never authority. */
@@ -51,23 +51,29 @@ export interface PublicViewsPort {
   readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => Promise<AgentStatus[]>;
 }
 export interface PublicLifecyclePort {
+  readonly creation: (auth: AuthContext) => PublicMethods["status.get"]["result"]["creation"];
   readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt | Promise<Receipt>;
-  readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
+  readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey, stream?: AsyncIterable<Uint8Array>) => Promise<Receipt>;
   readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt | Promise<Receipt>;
   readonly stop: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt | Promise<Receipt>;
   readonly ack: (auth: AuthContext, message: MessageId, key: RequestKey) => Receipt;
   readonly follow: (auth: AuthContext, topic: string, subscribe: boolean, key: RequestKey) => Receipt;
 }
 export interface PublicReviewPort {
-  record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt>;
-  status(auth: AuthContext, name: string | undefined, frameBytes: number, responseId: string): PublicMethods["review.status"]["result"];
+  record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"], beforeAccept?: () => undefined): Promise<Receipt>;
+  status(auth: AuthContext, query: PublicMethods["review.status"]["params"], frameBytes: number, responseId: string): PublicMethods["review.status"]["result"];
 }
 export interface PublicGitPort {
   readonly knownRefs: () => { main: string; published: string[] };
   readonly isPublished: (oid: Oid) => boolean;
+  readonly hasSharedCommit?: (oid: Oid) => boolean;
   readonly submit: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.submit"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
   readonly integrate: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.integrate"]["params"]) => Promise<Receipt>;
   readonly publishContext: (auth: AuthContext, key: RequestKey, input: PublicMethods["context.publish"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
+}
+export interface PublicInvocationPort {
+  readonly bind: (auth: AuthContext, params: PublicMethods["invocation.bind"]["params"]) => Promise<PublicMethods["invocation.bind"]["result"]>;
+  readonly prepare: (auth: AuthContext, params: PublicMethods["invocation.prepare"]["params"], bytes?: AsyncIterable<Uint8Array> | null) => PublicMethods["invocation.prepare"]["result"] | Promise<PublicMethods["invocation.prepare"]["result"]>;
 }
 export interface PublicDispatchDependencies {
   readonly store: PublicStorePort;
@@ -77,6 +83,7 @@ export interface PublicDispatchDependencies {
   readonly lifecycle: PublicLifecyclePort;
   readonly git: PublicGitPort | null;
   readonly review: PublicReviewPort | null;
+  readonly invocations?: PublicInvocationPort;
   readonly limits: ProtocolLimits;
   waitRun(auth: AuthContext, observe: boolean): boolean;
   isDraining(): boolean;
@@ -95,10 +102,10 @@ export interface InternalStorePort {
   readonly preparedBatchIds: (agent: Actor) => readonly string[];
 }
 export interface InternalMailPort {
-  readonly prepare: (auth: AuthContext) => Promise<PreparedBatch | null>;
+  readonly prepare: (auth: AuthContext, deferred?: ReadonlySet<string>, responseId?: string) => Promise<PreparedBatch | null>;
   readonly complete: (
     auth: AuthContext,
-    evidence: BoundaryEvidence,
+    evidence: BatchCompletionInput,
   ) => Promise<void>;
   readonly moveToCur: (agent: Actor, ids: readonly string[]) => number;
 }
@@ -130,7 +137,7 @@ export interface InternalDispatchDependencies {
 export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" | "assertAdmission">;
 
 export type PublicDispatchPorts = Pick<PublicDispatchDependencies,
-  "store" | "mail" | "units" | "views" | "lifecycle" | "git" | "review" | "limits">;
+  "store" | "mail" | "units" | "views" | "lifecycle" | "git" | "review" | "invocations" | "limits">;
 export type InternalDispatchDataPorts = Pick<InternalDispatchDependencies,
   "store" | "mail">;
 export interface BrokerTransaction { updateIncarnation(actor: Actor, incarnation: number): void }
@@ -143,8 +150,8 @@ export interface BrokerLedger {
   transaction<T>(body: (tx: BrokerTransaction) => SynchronousResult<T>): T;
 }
 export interface BrokerMail {
-  prepare(auth: AuthContext): Promise<PreparedBatch | null>;
-  complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void>;
+  prepare(auth: AuthContext, responseId?: string): Promise<PreparedBatch | null>;
+  complete(auth: AuthContext, evidence: BatchCompletionInput): Promise<void>;
   settleFromReceipt(quiescence: SettlementQuiescence, batch: string): SettlementOutcome;
 }
 export interface BrokerUnits {
@@ -159,7 +166,12 @@ export interface BrokerViews {
   publishStatus(snapshot: StatusSnapshot, agents: readonly AgentStatus[]): void;
   observeRunnerSource(read: (actor: Actor) => RunnerObservation | null): void;
 }
-export interface BrokerReconcile { sweep(): Promise<RecoveryCounts> }
+export interface BrokerReconcile {
+  pulse?(): void;
+  sweep(): Promise<RecoveryCounts>;
+  wait(actor: Actor, incarnation: number, handedMessages: readonly string[]): void;
+  deferredWork(actor: Actor, incarnation: number): ReadonlySet<string> | undefined;
+}
 export interface BrokerStatusRefresh { request(): Promise<StatusSnapshot> }
 /** Endpoint mechanics supplied by an OS adapter. Readiness and close are
  * observed separately from the Broker's authority and durable lifetime. */
@@ -194,5 +206,9 @@ export interface BrokerDependencies {
   readonly status: BrokerStatusRefresh;
   readonly public: PublicDispatchPorts;
   readonly internal: InternalDispatchDataPorts;
+  /** Trusted immutable surface selection, never an engine/model input. Legacy
+   * delivery keeps its registered-engine prerequisite. */
+  readonly principalPreparationBeforeRegistration?: () => boolean;
+  readonly hostControl?: (auth: AuthContext, params: import("@oma/contracts/internal-wire").HostControlParams) => Promise<import("@oma/contracts/internal-wire").HostControlResult>;
   readonly effects: BrokerEffects;
 }

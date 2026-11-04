@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-test("DR44: private search-tool preload refuses an unqualified Pi upgrade before installing hooks", () => {
+test("001. Private search-tool preload refuses an unqualified Pi upgrade before installing hooks", () => {
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +22,7 @@ console.log('PASS');
   assert.equal(result.stdout.trim(), "PASS");
 });
 
-test("DR35 host runtime resolution and retry setup never load the interactive SDK", () => {
+test("002. Host runtime resolution and retry setup never load the interactive SDK", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-host-startup-"));
   try {
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
@@ -44,7 +44,7 @@ console.log('PASS');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR37/DR44: public autocomplete wrapper restores late fd results without changing the engine prototype", () => {
+test("003. Public autocomplete wrapper restores late fd results without changing the engine prototype", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-late-autocomplete-"));
   try {
     mkdirSync(join(root, "deep", "nested"), { recursive: true });
@@ -87,7 +87,7 @@ console.log('PASS');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("DR35 the interactive import observes search tools without downloading; tool execution retains Pi's installer", () => {
+test("004. The interactive import observes search tools without downloading; tool execution retains Pi's installer", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-interactive-startup-"));
   try {
     const result = spawnSync(process.execPath, ["--import",

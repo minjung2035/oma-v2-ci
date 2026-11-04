@@ -15,7 +15,7 @@ const check = mailParamsCheck({
   bundleBytes: 1048576,
 });
 
-test("MAIL-011: exact approval request is closed and hash-bound", () => {
+test("001. Exact approval request is closed and hash-bound", () => {
   const mail = { to: ["principal"], subject: "review", kind: "approval_required", body: "question", approvalFor };
   assert.equal(check(mail), null);
   assert.equal(check({ ...mail, approvalFor: { ...approvalFor, policyRevision: "😀".repeat(32) } }), null);
@@ -36,7 +36,7 @@ test("MAIL-011: exact approval request is closed and hash-bound", () => {
   }));
 });
 
-test("MAIL-003: approval identity is emitted as broker metadata", async () => {
+test("002. Approval identity is emitted as broker metadata", async () => {
   const identity = { ...approvalFor, policyRevision: " 정책-v1 " };
   const eml = await buildEml({
     from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [],

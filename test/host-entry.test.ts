@@ -8,7 +8,7 @@ import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 
 const entry = (name: "broker" | "runner") => join(import.meta.dirname, "../..", DEPLOYMENT_LAYOUT.entries[name]);
 
-test("ID-001: entrypoints reject traversal before filesystem or socket effects", () => {
+test("001. Entrypoints reject traversal before filesystem or socket effects", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-entry-name-"));
   try {
     for (const name of ["broker", "runner"] as const) {
@@ -22,7 +22,7 @@ test("ID-001: entrypoints reject traversal before filesystem or socket effects",
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("D03: a runner without the whole explicit location is refused, not pointed at the environment's", () => {
+test("002. A runner without the whole explicit location is refused, not pointed at the environment's", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-runner-root-"));
   try {
     const state = join(dir, "data", "oma", "probe");
@@ -40,7 +40,7 @@ test("D03: a runner without the whole explicit location is refused, not pointed 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("runner execution identity cannot be missing, repeated or supplied by ambient state", () => {
+test("003. Runner execution identity cannot be missing, repeated or supplied by ambient state", () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-runner-identity-"));
   const execution = "19f7eb77-6c27-46ce-a60b-6acd2fa9a094";
   try {

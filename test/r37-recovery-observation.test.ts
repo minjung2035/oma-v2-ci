@@ -12,7 +12,7 @@ import { MailModule } from "@oma/mail";
 import { PolicyExecution } from "./fixtures/execution.js";
 import { LifecycleModule } from "@oma/lifecycle";
 import { ReconcileModule } from "@oma/reconcile";
-import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { withWorkerCapacity, makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js"
 import { gitAuth } from "./fixtures/git-crash.js";
 
 function deferred() {
@@ -39,7 +39,7 @@ class ObservedUnits extends PolicyExecution {
 }
 
 for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "death-unknown"] as const) {
-  test(`R37: delayed recovery observation rechecks ${change}`, { timeout: 10000 }, async () => {
+  test(`001. Delayed recovery observation rechecks ${change}`, { timeout: 10000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-r37-recovery-"));
     const store = new Store(join(root, "runtime.sqlite"));
     const units = new ObservedUnits(root);
@@ -54,8 +54,7 @@ for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "dea
       const pending = await mail.send({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, "pending-work", { to: ["a"], subject: "work", kind: "message", body: "work" });
       assert.equal(pending.state, "succeeded");
       const paths = { stateRoot: root, projectGit: join(root, "unused.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true };
-      const lifecycle = createLifecycleModule(store, units, paths,
-        (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+      const lifecycle = createLifecycleModule(store, units, paths, withWorkerCapacity((_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief)), mail);
       const reconcile = createReconcileModule(store, mail, null, null, units, lifecycle,
         { projectGit: paths.projectGit, hasGoal: () => true, activationAllowed: () => activation });
       assert.equal(idle.activeState, "inactive", "normal observation fixture must decode");

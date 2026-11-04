@@ -24,7 +24,7 @@ function terminal(): Terminal & { frames: string[][] } {
   return { frames, columns: 110, rows: 20, draw(lines) { frames.push([...lines]); }, onKeys() {}, onResize() {}, repaint() {}, restore() {} };
 }
 
-test("V28A: a message the TUI shows is still waiting for the Principal's session, and opening it changes nothing", () => {
+test("001. A message the TUI shows is still waiting for the Principal's session, and opening it changes nothing", () => {
   const stateRoot = mkdtempSync(join(tmpdir(), "oma-v28a-"));
   try {
     const mailbox = principalMailbox(stateRoot);

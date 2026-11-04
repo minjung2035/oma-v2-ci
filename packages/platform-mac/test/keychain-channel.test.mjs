@@ -31,7 +31,7 @@ async function fixture(t) {
 }
 const get = (f, deadline = 10000) => f.channel.request('keychain.get', { account: 'fixture-only' }, deadline);
 
-test('NATIVE-KEYCHAIN-01: real sockets retain fragmented UTF-8, BOM values and out-of-order correlation', { timeout: 10000 }, async t => {
+test("001. Real sockets retain fragmented UTF-8, BOM values and out-of-order correlation", { timeout: 10000 }, async t => {
   const f = await fixture(t), first = get(f), second = get(f);
   f.server.write('{"id":2,"ok":true}\n');
   const response = Buffer.from('{"id":1,"ok":true,"value":"\uFEFFfixture-한글"}\n');
@@ -55,7 +55,7 @@ const malformed = [
   ['invalid refusal', Buffer.from('{"id":1,"ok":false}\n')],
   ['oversize line', Buffer.alloc(1024 * 1024 + 1, 0x20)],
 ];
-for (const [name, bytes] of malformed) test(`NATIVE-KEYCHAIN-02: real socket ${name} poisons every pending request`, { timeout: 5000 }, async t => {
+for (const [name, bytes] of malformed) test(`002. Real socket ${name} poisons every pending request`, { timeout: 5000 }, async t => {
   const f = await fixture(t), pending = [get(f), get(f)];
   const refused = pending.map(p => assert.rejects(p, { code: 'BROKER_UNAVAILABLE' }));
   f.server.write(Buffer.concat([bytes, Buffer.from('{"id":1,"ok":true,"value":"must-not-revive"}\n')]));
@@ -63,18 +63,18 @@ for (const [name, bytes] of malformed) test(`NATIVE-KEYCHAIN-02: real socket ${n
   await assert.rejects(get(f), { code: 'BROKER_UNAVAILABLE' });
 });
 
-for (const ending of ['end', 'destroy']) test(`NATIVE-KEYCHAIN-03: real socket ${ending} rejects an unterminated credential`, { timeout: 5000 }, async t => {
+for (const ending of ['end', 'destroy']) test(`003. Real socket ${ending} rejects an unterminated credential`, { timeout: 5000 }, async t => {
   const f = await fixture(t), refused = assert.rejects(get(f), { code: 'BROKER_UNAVAILABLE' });
   if (ending === 'end') f.server.end('{"id":1,"ok":true,"value":"partial');
   else f.server.destroy();
   await refused; await assert.rejects(get(f), { code: 'BROKER_UNAVAILABLE' });
 });
-test('NATIVE-KEYCHAIN-04: real timeout ends correlation and rejects other pending work', { timeout: 5000 }, async t => {
+test("004. Real timeout ends correlation and rejects other pending work", { timeout: 5000 }, async t => {
   const f = await fixture(t);
   await Promise.all([assert.rejects(get(f, 20), { code: 'BROKER_UNAVAILABLE' }), assert.rejects(get(f), { code: 'BROKER_UNAVAILABLE' })]);
   assert.equal(f.client.destroyed, true); await assert.rejects(get(f), { code: 'BROKER_UNAVAILABLE' });
 });
-test('NATIVE-KEYCHAIN-05: retired VM operations write no request and cannot reach the helper', { timeout: 5000 }, async t => {
+test("005. Retired VM operations write no request and cannot reach the helper", { timeout: 5000 }, async t => {
   const f = await fixture(t), requests = [];
   f.server.on('data', chunk => requests.push(chunk));
   await assert.rejects(f.channel.request('vm.start', {}, 1000), { code: 'INVALID_REQUEST' });

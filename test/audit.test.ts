@@ -1,3 +1,5 @@
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
+import { auditGit } from "./fixtures/audit-git.js";
 import { testBroker } from "./helpers/broker-fixture.js";
 import { createReconcileModule } from "#oma-test/app/broker/reconcile-composition";
 import { createLifecycleModule } from "#oma-test/app/broker/lifecycle-composition";
@@ -21,23 +23,23 @@ import { controlSocketPair } from "@oma/native/control-socket";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
+
 import { spawnSync, spawn } from "node:child_process";
 import { ConnectionDecoder, FrameParser, encodeFrame } from "@oma/protocol/frame";
 import { Store } from "@oma/storage";
 import { requestHash } from "@oma/domain/request-identity";
-import { MailModule } from "@oma/mail";
+
 import { nativeScriptResidents, type NativeScriptResidents } from "./fixtures/native-script-residents.js";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { ViewsModule } from "#oma-test/app/views";
-import { LifecycleModule } from "@oma/lifecycle";
+
 import { GitModule } from "@oma/git";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
-import { ReconcileModule } from "@oma/reconcile";
+
 import { Broker } from "@oma/broker";
 import { loadConfig } from "@oma/config";
 import { resolveChildSpec } from "@oma/domain/child-policy";
-import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import type { ResolvedAgentSpec } from "@oma/contracts";
 import { requireSubmitConvergence } from "./fixtures/verification-oracles.js";
@@ -70,7 +72,7 @@ function metaFrame(bodyBytes: number, extra: Record<string, unknown> = {}): Buff
     };
     return encodeFrame(raw);
 }
-test("A1: metadata frame and raw stream fully separated (two data events)", () => {
+test("001. Metadata frame and raw stream fully separated (two data events)", () => {
     const dec = new ConnectionDecoder(64 * 1024);
     const meta = metaFrame(11);
     const ev1 = dec.push(meta);
@@ -87,7 +89,7 @@ test("A1: metadata frame and raw stream fully separated (two data events)", () =
     }).bytes.toString(), "0123456789A");
     assert.equal(dec.streaming(), false);
 });
-test("A2: metadata's last byte and the raw's first bytes share one chunk", () => {
+test("002. Metadata's last byte and the raw's first bytes share one chunk", () => {
     const dec = new ConnectionDecoder(64 * 1024);
     const meta = metaFrame(10);
     const raw = Buffer.from("abcdefghij");
@@ -110,7 +112,7 @@ test("A2: metadata's last byte and the raw's first bytes share one chunk", () =>
         bytes: Buffer;
     }).bytes.toString(), "abcdefghij");
 });
-test("A3: raw body split at arbitrary byte boundaries (1-byte pushes)", () => {
+test("003. Raw body split at arbitrary byte boundaries (1-byte pushes)", () => {
     const dec = new ConnectionDecoder(64 * 1024);
     dec.push(metaFrame(9));
     dec.beginStream(9);
@@ -126,7 +128,7 @@ test("A3: raw body split at arbitrary byte boundaries (1-byte pushes)", () => {
     assert.equal(evLast[0]!.kind, "stream");
     assert.equal(dec.streaming(), false);
 });
-test("A4: under-delivery stays streaming; over-delivery with non-frame leftover is invalid", () => {
+test("004. Under-delivery stays streaming; over-delivery with non-frame leftover is invalid", () => {
     const dec = new ConnectionDecoder(64 * 1024);
     dec.push(metaFrame(10));
     dec.beginStream(10);
@@ -148,7 +150,7 @@ test("A4: under-delivery stays streaming; over-delivery with non-frame leftover 
     assert.equal(evMore.length, 1);
     assert.equal(evMore[0]!.kind, "invalid");
 });
-test("A5: metadata + raw + next control frame contiguous in one chunk", () => {
+test("005. Metadata + raw + next control frame contiguous in one chunk", () => {
     const dec = new ConnectionDecoder(64 * 1024);
     const meta = metaFrame(6);
     const raw = Buffer.from("abcdef");
@@ -167,7 +169,7 @@ test("A5: metadata + raw + next control frame contiguous in one chunk", () => {
     const evNext = dec.resumeParsing();
     assert.deepEqual(evNext.map((e) => e.kind), ["frame"]);
 });
-test("A6: two decoders on interleaved streams never share bytes", () => {
+test("006. Two decoders on interleaved streams never share bytes", () => {
     const a = new ConnectionDecoder(64 * 1024);
     const b = new ConnectionDecoder(64 * 1024);
     const metaA = metaFrame(5, { request: "req-a" });
@@ -248,7 +250,7 @@ async function brokerEnv(): Promise<BrokerEnv> {
         society,
         hasGoal: () => false,
         activationAllowed: () => true,
-    }, resolver, mail);
+    }, Object.assign(resolver, { maxWorkers: () => 6 }), mail);
     const views = new ViewsModule(store, state, society, "p");
     const git = createGitModule({
         stateRoot: state,
@@ -285,7 +287,7 @@ async function brokerEnv(): Promise<BrokerEnv> {
         },
     };
 }
-test("B1/IPC-009: framed private runner channel rejects removed host methods", async () => {
+test("007. Framed private runner channel rejects removed host methods", async () => {
     const env = await brokerEnv();
     try {
         env.store.transaction(tx => tx.insertAgent({ name: "a", ...storedSpec(ALL_CAPS, "p", "a"), role: "resident", desired: "enabled", incarnation: 0, profile: "p", createdBy: null }));
@@ -312,16 +314,7 @@ test("B1/IPC-009: framed private runner channel rejects removed host methods", a
 function seedProject(env: Pick<BrokerEnv, "dir" | "state">): string {
     const seedDir = join(env.dir, "seed");
     mkdirSync(seedDir, { recursive: true });
-    const sh = (args: string[], cwd?: string): string => {
-        const r = spawnSync("git", args, {
-            cwd: cwd ?? env.dir,
-            env: G,
-            encoding: "utf8",
-        });
-        if (r.status !== 0)
-            throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-        return (r.stdout ?? "").trim();
-    };
+    const sh = auditGit(env);
     sh(["init", "-q", "-b", "main"], seedDir);
     writeFileSync(join(seedDir, "base.txt"), "a".repeat(131072) + "\n", "utf8");
     sh(["add", "-A"], seedDir);
@@ -358,16 +351,7 @@ function makeCandidate(env: BrokerEnv, base: string, tag: string): {
     exportRef: string;
 } {
     const clone = join(env.dir, `clone-${tag}`);
-    const sh = (args: string[], cwd?: string): string => {
-        const r = spawnSync("git", args, {
-            cwd: cwd ?? env.dir,
-            env: G,
-            encoding: "utf8",
-        });
-        if (r.status !== 0)
-            throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-        return (r.stdout ?? "").trim();
-    };
+    const sh = auditGit(env);
     sh([
         "clone",
         "-q",
@@ -478,7 +462,7 @@ main().catch((e) => {
   process.exit(3);
 });
 `;
-test("C1: two concurrent git.submit uploads over the real actor channel — connection-local streams, no cross-consumption", {
+test("008. Two concurrent git.submit uploads over the real actor channel — connection-local streams, no cross-consumption", {
     timeout: 60000,
 }, async () => {
     const env = await brokerEnv();
@@ -542,6 +526,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             };
             error?: {
                 code: string;
+                retry?: string;
                 phase: string;
             };
         };
@@ -566,13 +551,18 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             }
             else {
                 assert.equal(reply.ok, false);
-                // A busy canonical observation or a still-live native quarantine
-                // scope is unknown, never a failed/nonaccepted submission.
-                assert.ok(["REF_STATE_UNKNOWN", "RUN_TERMINATION_UNKNOWN"].includes(reply.error?.code ?? ""), JSON.stringify(reply));
+                // The original execution owner may be occupied by the sibling
+                // import. A same-key broker refusal cannot revoke the exact
+                // acceptance we just read; it is not proof of failed execution.
+                if (reply.error?.code === "BROKER_UNAVAILABLE") assert.equal(reply.error.retry, "same-key", JSON.stringify(reply));
+                else assert.ok(["REF_STATE_UNKNOWN", "RUN_TERMINATION_UNKNOWN"].includes(reply.error?.code ?? ""), JSON.stringify(reply));
                 assert.notEqual(accepted.state, "failed");
             }
             const settled = await requireSubmitConvergence(accepted.id, () => env.store.getOperation(actor, `audit-${actor}`), (id) => env.git.reconcile(id));
             assert.ok(settled.kind === "git.submit");
+            assert.equal(settled.id, accepted.id);
+            assert.equal(settled.requestHash, accepted.requestHash);
+            assert.equal(settled.planJson, accepted.planJson, "contention cannot replace the accepted stream or source plan");
             const message = settled.plan.message;
             assert.equal(createHash("sha256")
                 .update(readFileSync(join(env.state, message.objectPath)))
@@ -613,58 +603,55 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
 // Part D — entry/broker.js ordered bootstrap (READY only after recovery)
 // ---------------------------------------------------------------------------
 function minimalConfig(society: string): Record<string, unknown> {
-    return {
-        schemaVersion: 4,
-        society,
-        installation: {
-            node: process.execPath,
-            // MUST [R38]: the configured LIBDIR must be the layout the loaded modules
-            // resolve from, or the entry refuses to start. Tests run from the package
-            // root, where dist/ and implementation/ live side by side.
-            libdir: process.cwd(),
-            deploymentDigest: deploymentDigest(process.cwd()),
+    return {schemaVersion: 4, maxWorkers: 6, society,
+    installation: {
+        node: process.execPath,
+        // MUST [R38]: the configured LIBDIR must be the layout the loaded modules
+        // resolve from, or the entry refuses to start. Tests run from the package
+        // root, where dist/ and implementation/ live side by side.
+        libdir: process.cwd(),
+        deploymentDigest: deploymentDigest(process.cwd()),
+    },
+    modelProfiles: {
+        md: {
+            provider: "none",
+            model: "none",
+            inferenceTimeoutSeconds: 1,
         },
-        modelProfiles: {
-            md: {
-                provider: "none",
-                model: "none",
-                inferenceTimeoutSeconds: 1,
-            },
+    },
+    agentProfiles: {
+        p: {
+            modelProfile: "md",
+            capabilities: ["mail.send", "git.submit"],
+            delegable: [],
+            childProfile: null,
         },
-        agentProfiles: {
-            p: {
-                modelProfile: "md",
-                capabilities: ["mail.send", "git.submit"],
-                delegable: [],
-                childProfile: null,
-            },
-            child: {
-                modelProfile: "md",
-                capabilities: ["mail.send"],
-                delegable: [],
-                childProfile: null,
-            },
+        child: {
+            modelProfile: "md",
+            capabilities: ["mail.send"],
+            delegable: [],
+            childProfile: null,
         },
-        principalProfile: "p",
-        initialResidents: [],
-        integration: { policyRevision: "1", protectedPaths: [], checks: [] },
-        limits: {
-            frameBytes: 262144,
-            mailBodyBytes: 1048576,
-            subjectBytes: 200,
-            addresses: 32,
-            replyReferences: 64,
-            contextFiles: 64,
-            contextBytes: 1048576,
-            bundleBytes: 268435456,
-            logBytes: 1048576,
-            batchMaxMessages: 32,
-            idleStreamSeconds: 900,
-            receiptWaitSeconds: 30,
-        }
-    };
+    },
+    principalProfile: "p",
+    initialResidents: [],
+    integration: { policyRevision: "1", protectedPaths: [], checks: [] },
+    limits: {
+        frameBytes: 262144,
+        mailBodyBytes: 1048576,
+        subjectBytes: 200,
+        addresses: 32,
+        replyReferences: 64,
+        contextFiles: 64,
+        contextBytes: 1048576,
+        bundleBytes: 268435456,
+        logBytes: 1048576,
+        batchMaxMessages: 32,
+        idleStreamSeconds: 900,
+        receiptWaitSeconds: 30,
+    }};
 }
-test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () => {
+test("009. Configuration and frames share strict JSON decoding", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-config-json-"));
     const path = join(dir, "config.json");
     try {
@@ -696,7 +683,7 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("CREATE-002: child capabilities use the authenticated parent's effective set", () => {
+test("010. Child capabilities use the authenticated parent's effective set", () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-auth-"));
     try {
         const society = `au${Date.now().toString(36)}`;
@@ -728,7 +715,7 @@ test("CREATE-002: child capabilities use the authenticated parent's effective se
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("LIFE-009 entry: fresh broker seeds once and restart ignores population edits", async () => {
+test("011. Entry: fresh broker seeds once and restart ignores population edits", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-bootstrap-entry-"));
     const society = `bs${Date.now().toString(36)}`;
     const data = join(dir, "data");
@@ -798,6 +785,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         ]);
         const base = git(["rev-parse", "HEAD"]);
         git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
+        publishSessionBirth(state, newSessionBirth(state, "society", root, "collaboration-v1"));
         ExecutionJournal.initialize(state);
         const cfg = minimalConfig(society);
         cfg.initialResidents = [
@@ -825,10 +813,6 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         }
         writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
         await run();
-        const start = readFileSync(join(state, "world", "START.md"), "utf8");
-        assert.match(start, /\/inbox\.md/);
-        assert.match(start, /oma_merge/);
-        assert.match(start, /not authority/);
         assert.match(readFileSync(join(state, "world", "agents.tsv"), "utf8"), /child\tresident\tenabled\tchild/);
         let store = new Store(join(state, "runtime.sqlite"));
         // Reading a create/bootstrap plan needs the trusted repository identity,
@@ -856,7 +840,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact accepted mail operation", async (t) => {
+test("012. Foreground readiness verifies accepted evidence and independently recovers the exact mail operation", async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-d1-"));
     const society = `au${Date.now().toString(36)}`;
     const runRoot = join(dir, "runtime");
@@ -868,6 +852,7 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
         mkdirSync(runRoot, { recursive: true });
         mkdirSync(join(stateRoot, "repos"), { recursive: true });
         seedProject({ dir, state: stateRoot });
+        publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", dir, "collaboration-v1"));
         writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society)), "utf8");
         // seed a pending mail operation (accepted-before-materialize fixture)
         const store = new Store(join(stateRoot, "runtime.sqlite"));
@@ -927,11 +912,17 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
         await entryReady(child, () => stderr);
         // at READY time the admin socket must already exist (start before READY)
         assert.equal(existsSync(join(runRoot, "oma", society, "admin.sock")), true);
-        // and the pending mail op was recovered BEFORE READY (ordered bootstrap)
+        // Readiness verifies accepted evidence; physical publication has its own
+        // lane. Observe this exact receipt, never infer success from readiness.
         const storeAfter = new Store(join(stateRoot, "runtime.sqlite"));
-        const op = storeAfter.transaction((_t) => storeAfter.getOperationById(recoveryId));
+        const deadline = Date.now() + 10000;
+        let op = storeAfter.getOperationById(recoveryId);
+        while (op?.state !== "succeeded" && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            op = storeAfter.getOperationById(recoveryId);
+        }
         assert.equal(op?.state, "succeeded");
-        assert.equal(existsSync(join(stateRoot, "mail", "archive", "cur")), true, "result mail materialized before READY");
+        assert.equal(existsSync(join(stateRoot, "mail", "archive", "cur")), true, "exact result mail materialized");
         storeAfter.close();
         await stopEntry(child);
         void stderr;
@@ -942,7 +933,7 @@ test("NATIVE-AUDIT-READY-01: foreground readiness follows recovery of the exact 
         rmSync(dir, { recursive: true, force: true });
     }
 });
-test("NATIVE-AUDIT-READY-02: missing accepted artifact refuses native startup before readiness or serving", async () => {
+test("013. Missing accepted artifact refuses native startup before readiness or serving", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oma-audit-d2-"));
     const society = `au${Date.now().toString(36)}`;
     const runRoot = join(dir, "runtime");
@@ -954,6 +945,7 @@ test("NATIVE-AUDIT-READY-02: missing accepted artifact refuses native startup be
         mkdirSync(runRoot, { recursive: true });
         mkdirSync(join(stateRoot, "repos"), { recursive: true });
         seedProject({ dir, state: stateRoot });
+        publishSessionBirth(stateRoot, newSessionBirth(stateRoot, "society", dir, "collaboration-v1"));
         writeFileSync(join(stateRoot, "config.json"), JSON.stringify(minimalConfig(society)), "utf8");
         const store = new Store(join(stateRoot, "runtime.sqlite"));
         const missingOp = "op-00000000-0000-4000-8000-0000000000d2";

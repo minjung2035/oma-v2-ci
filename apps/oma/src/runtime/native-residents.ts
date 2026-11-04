@@ -14,7 +14,6 @@ import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { cleanupAll } from "@oma/native/cleanup";
 import { runnerScope } from "@oma/platform-linux/runner-scope";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
-import { encodedResidentToolSurface } from "@oma/domain/tool-surface";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionRuntime } from "./execution-runtime.js";
 import { ResidentLogStore } from "@oma/storage/resident-logs";
@@ -22,6 +21,9 @@ import { residentLogSinks, residentLogView } from "@oma/process/resident-logs";
 import { acquireExecutionChild } from "@oma/process/owned-execution";
 import { withCleanup } from "@oma/native/cleanup";
 import { encodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
+import { readSessionBirth, requireCollaborationSociety } from "./session-mode.js";
+import { collaborationSurface, requireCollaborationSurface } from "@oma/domain/collaboration-surface";
+import { assertCollaborationProfileCapabilities } from "@oma/domain/collaboration-prompts";
 
 export function createNativeResidents(store: Store, executions: ExecutionRuntime,
   location: { stateRoot: string; runRoot: string; society: string; configPath: string }, config: HostConfig,
@@ -32,7 +34,9 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
   // Freeze them for this owner, including automatically created Residents;
   // ambient changes during another launch cannot supply different bytes.
   const environment = Object.freeze({ ...(launch.environment ?? process.env) });
-  const toolSurface = launch.toolSurface ?? encodedResidentToolSurface();
+  requireCollaborationSociety(readSessionBirth(location.stateRoot), location.society);
+  const toolSurface = launch.toolSurface ?? JSON.stringify(collaborationSurface("resident"));
+  requireCollaborationSurface(toolSurface, "resident");
   const developerTools = launch.developerTools;
   const developerToolsHex = developerTools === undefined ? undefined : encodeMacDeveloperTools(developerTools);
   const logs = new ResidentLogStore(location.stateRoot);
@@ -44,6 +48,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
       const row = store.getAgent(actor);
       if (!row || row.role !== "resident") throw new StoreError("ADDRESS_NOT_FOUND", "Resident identity is missing");
       const spec = resolvedSpecOf(row);
+      assertCollaborationProfileCapabilities("resident", spec.capabilities);
       if (!config.agentProfiles[spec.profile] || !config.modelProfiles[spec.modelProfile])
         throw new StoreError("UNSUPPORTED_PROFILE", "accepted Resident profile cannot execute in this deployment");
       return { profile: spec.profile, modelProfile: spec.modelProfile };
@@ -69,6 +74,8 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
             OMA_PROFILE_HEX: Buffer.from(references.profile).toString("hex"),
             OMA_MODEL_PROFILE_HEX: Buffer.from(references.modelProfile).toString("hex"),
             OMA_TOOL_SURFACE_HEX: Buffer.from(toolSurface).toString("hex") };
+          delete env.OMA_TMPFS_MAX_BYTES;
+          if (config.resources?.tmpfsMaxBytes !== undefined) env.OMA_TMPFS_MAX_BYTES = String(config.resources.tmpfsMaxBytes);
           delete env.OMA_SOCIETY_FENCE_FD; delete env.OMA_HOST_CHANNEL;
           // Explicit trusted launch input, never inherited ambient data. The
           // Runner decodes it before constructing its Worker effects.
@@ -116,6 +123,13 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
     },
   });
   return Object.assign(runtime, {
+    workerSurface: "collaboration-v1" as const,
+    // The admitted original Society birth and frozen current plan control both
+    // records and runner environment. Model/ambient input cannot select either.
+    collaborationRecordsSelected: (actor: string) => {
+      const role = store.getAgent(actor)?.role;
+      return role === "resident" || actor === "principal" && role === "principal";
+    },
     bindRunRevoker: (callback: (actor: string) => void) => { revoke = callback; },
     bindIncarnationReader: (reader: (actor: string) => number | null) => { incarnationOf = reader; },
     scopeRoot: (actor: string) => {
@@ -126,6 +140,8 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
     },
     runnerAlive: (actor: string) => channels.get(actor)?.peer.alive() ?? false,
     readLogs: async (actor: string, sinceSeconds: number, limit: number) => residentLogView(logs.read(actor), sinceSeconds, limit),
+    // Host projection composition only: no model path-to-RPC or live-tail adapter.
+    logFiles: (actor: string) => logs.files(actor),
   });
 }
 export type NativeResidents = ReturnType<typeof createNativeResidents>;

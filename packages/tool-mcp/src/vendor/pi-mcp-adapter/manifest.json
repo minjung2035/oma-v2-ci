@@ -17,7 +17,7 @@
     "tool": "scripts/vendor-pi-mcp-adapter.mjs",
     "divergences": {
       "utils.js": {
-        "reason": "The OMA boundary seam itself. omaInstallMcpPolicy is called by src/extension/mcp-tools.ts before upstream's factory runs; without an installed policy every helper degrades to upstream's own behavior (globalThis.fetch, process.env, tmpdir, the keyring store selector), so the seam is inert payload under a bare upstream load. Under the policy: omaPermits is deny-by-default (a permit absent from the table is refused); omaRequirePermit refuses `!command` credential sinks in resolveCommandSecret before any shell runs, covering env, header, bearer and clientSecret interpolation; omaAmbientEnv is the only ambient-env view vendored code consults on spliced sites (OMA supplies an empty map, so user-land env knobs like MCP_DIRECT_TOOLS, MCP_OAUTH_DIR, NPM_CONFIG_CACHE, BROWSER, MCP_OAUTH_CALLBACK_PORT, SYSTEMONE_ENDPOINT/*_API_KEY and the PI_MCP_ADAPTER_* test/recovery selectors cannot reach in); omaAgentDir/omaTmpdir re-root every getAgentPath-derived write and the output-guard spill root into OMA-owned directories; omaChildEnv runs the shared child-env allowlist over inherited process.env for stdio children; omaPinnedFetch is the egress leaf every HTTP path funnels into — loopback stays direct, everything else rides the vendored undici through a ProxyAgent built on the OMA pin, with upstream's own Request-translation (mirroring http-ca.js) so dispatcher and fetch share the vendored undici implementation; omaCaFetch substitutes that leaf for the whole fetch chain when upstream's CA-only leaf is absent; omaAuthStoreKind/omaOAuthFileKey pin the credential store to what the OMA policy declares; omaSecureKeyringClosed returns the same 'OS secure credential storage is unavailable' shape upstream produces on a host without keyring, so no vendored path can reach the OS keyring, the @napi-rs/keyring native binding or the keyctl recovery spawn; omaUiSessionsRefused is the same closed-by-default predicate for the interactive-UI permit the ui-session/glimpse gates consult; omaPolicyActive lets a spliced site distinguish 'no OMA policy' from 'policy installed'.",
+        "reason": "The OMA boundary seam itself. omaInstallMcpPolicy is called by apps/oma/src/extension/mcp-tools.ts before upstream's factory runs; without an installed policy every helper degrades to upstream's own behavior (globalThis.fetch, process.env, tmpdir, the keyring store selector), so the seam is inert payload under a bare upstream load. Under the policy: omaPermits is deny-by-default (a permit absent from the table is refused); omaRequirePermit refuses `!command` credential sinks in resolveCommandSecret before any shell runs, covering env, header, bearer and clientSecret interpolation; omaAmbientEnv is the only ambient-env view vendored code consults on spliced sites (OMA supplies an empty map, so user-land env knobs like MCP_DIRECT_TOOLS, MCP_OAUTH_DIR, NPM_CONFIG_CACHE, BROWSER, MCP_OAUTH_CALLBACK_PORT, SYSTEMONE_ENDPOINT/*_API_KEY and the PI_MCP_ADAPTER_* test/recovery selectors cannot reach in); omaAgentDir/omaTmpdir re-root every getAgentPath-derived write and the output-guard spill root into OMA-owned directories; omaChildEnv runs the shared child-env allowlist over inherited process.env for stdio children; omaPinnedFetch is the egress leaf every HTTP path funnels into — loopback stays direct, everything else rides the vendored undici through a ProxyAgent built on the OMA pin, with upstream's own Request-translation (mirroring http-ca.js) so dispatcher and fetch share the vendored undici implementation; omaCaFetch substitutes that leaf for the whole fetch chain when upstream's CA-only leaf is absent; omaAuthStoreKind/omaOAuthFileKey pin the credential store to what the OMA policy declares; omaSecureKeyringClosed returns the same 'OS secure credential storage is unavailable' shape upstream produces on a host without keyring, so no vendored path can reach the OS keyring, the @napi-rs/keyring native binding or the keyctl recovery spawn; omaUiSessionsRefused is the same closed-by-default predicate for the interactive-UI permit the ui-session/glimpse gates consult; omaPolicyActive lets a spliced site distinguish 'no OMA policy' from 'policy installed'.",
         "edits": 8
       },
       "utils.d.ts": {
@@ -29,8 +29,8 @@
         "edits": 4
       },
       "server-manager.js": {
-        "reason": "Stdio child env scrub and HTTP egress pin. resolveEnv inherits process.env verbatim upstream — under OMA it inherits only omaChildEnv's allowlisted subset (the child's env entries still override per upstream order). createCaFetch's leaf gains the pinned fetch when upstream left none (OMA rejects caFile at config validation, so the upstream CA branch is unreachable under OMA anyway); the bearer-command and provider-token wrappers' implicit globalThis.fetch defaults and the SSE path's `requestFetch ?? globalThis.fetch` fall to omaPinnedFetch so no composition step can leak past the pin.",
-        "edits": 7
+        "reason": "Stdio child env scrub and HTTP egress pin. resolveEnv inherits process.env verbatim upstream — under OMA it inherits only omaChildEnv's allowlisted subset (the child's env entries still override per upstream order). createCaFetch's leaf gains the pinned fetch when upstream left none; explicit CA configuration retains its upstream handling. The bearer-command and provider-token wrappers' implicit globalThis.fetch defaults and the SSE path's `requestFetch ?? globalThis.fetch` fall to omaPinnedFetch so no composition step can leak past the pin. Under OMA, request budgets beyond the pinned SDK's native timer range are refused before a connection or request is started.",
+        "edits": 8
       },
       "mcp-auth-fetch.js": {
         "reason": "OAuth/auth HTTP through the pinned leaf: the OAuth fetch wrapper's absent-delegate fallback becomes omaPinnedFetch, so authorization- server metadata, token and revocation requests ride the same egress policy as the MCP stream they protect.",
@@ -69,8 +69,8 @@
         "edits": 7
       },
       "config.js": {
-        "reason": "PI_MCP_CONFIG_MODE reads omaAmbientEnv: upstream's 'exclusive' env mode decides whether config sources merge or override — under OMA no env may reach that authority decision.",
-        "edits": 2
+        "reason": "PI_MCP_CONFIG_MODE reads omaAmbientEnv: upstream's 'exclusive' env mode decides whether config sources merge or override — under OMA no env may reach that authority decision. OMA also pins resources off after every config merge, including URL installation.",
+        "edits": 4
       },
       "glimpse-ui.js": {
         "reason": "GLIMPSE_BINARY reads omaAmbientEnv: an operator-exported path to a binary must not select what a UI surface would exec under OMA. And the glimpse viewer itself is gated on the ui-session permit: getGlimpseBinaryPath (the `npm root -g` host probe) and openGlimpseWindow (the host-global/bundled-path glimpseui dynamic import) refuse under an installed OMA policy before either runs — backstops beneath the call-site refusal in proxy-modes.js and direct-tools.js; with no policy upstream's flow stands.",
@@ -307,14 +307,14 @@
         "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="
       }
     },
-    "upstreamTests": "upstream-tests/ is the repository's test surface at the vendored commit (the npm tarball ships no tests): __tests__/ wholesale, the root *.test.ts/*.test.mjs files, test-runner.mjs, vitest.config.ts, the conformance/ driver and the tsconfigs the suite compiles under; kept for provenance and porting, not wired into npm test — upstream's suite needs vitest, the upstream repo layout and for most suites the network",
     "packaging": [
       {
         "upstreamPath": "node_modules/isexe/.npmignore",
         "storedPath": "node_modules/isexe/npmignore.oma-vendor",
         "sha256": "ca06e7ce01ccdd1f477910e1cd1339c23119ecf2386350b8ad876983e1da92ea"
       }
-    ]
+    ],
+    "upstreamTests": "upstream-tests/ is the repository's test surface at the vendored commit (the npm tarball ships no tests): __tests__/ wholesale, the root *.test.ts/*.test.mjs files, test-runner.mjs, vitest.config.ts, the conformance/ driver and the tsconfigs the suite compiles under; kept for provenance and porting, not wired into npm test — upstream's suite needs vitest, the upstream repo layout and for most suites the network"
   },
   "files": [
     {
@@ -10839,8 +10839,8 @@
     },
     {
       "path": "runtime/config.js",
-      "bytes": 80987,
-      "sha256": "76e9618621fae450b2c8bcd4e1c42614658b117493c710ab4289dbaf5df6fd77"
+      "bytes": 81053,
+      "sha256": "c2dc1c28309ce408c5b56f3ff0bff8a659f5c533637fdaed70fe397e132fc3f1"
     },
     {
       "path": "runtime/consent-manager.d.ts",
@@ -11464,8 +11464,8 @@
     },
     {
       "path": "runtime/server-manager.js",
-      "bytes": 89688,
-      "sha256": "722d92f7633404c4c02a57b201c88c018e6fc452210a91d3d4d605c0951ad6fd"
+      "bytes": 89932,
+      "sha256": "034bc9e947d95fa1a481ef50a66907b4d052c8fe24b6fe37f75cf9b80ec73de3"
     },
     {
       "path": "runtime/session-approvals.d.ts",
@@ -13953,5 +13953,5 @@
       "sha256": "e12a3786ea18a5e9106bc5320c0eacec3991ee00476a72d97438a0135f18a82d"
     }
   ],
-  "bundleSha256": "4376ccd9497bff1bf670329a47c4ff50c19079ea5264c2044ef6a0dfe5642cf2"
+  "bundleSha256": "23742f44cda643031776d44ea1dcdbc84b92624126b90e0503e7871d52d8127b"
 }

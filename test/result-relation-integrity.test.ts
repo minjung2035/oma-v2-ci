@@ -47,7 +47,7 @@ const wrongButClosedResult = JSON.stringify({
   subscribed: true,
 });
 
-test("DB-009: closed but semantically wrong success result is rejected before commit", () => {
+test("001. Closed but semantically wrong success result is rejected before commit", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-result-relation-write-"));
   const store = seed(join(root, "runtime.sqlite"));
   try {
@@ -66,7 +66,7 @@ test("DB-009: closed but semantically wrong success result is rejected before co
   }
 });
 
-test("DB-009: persisted closed result that disagrees with plan fails at read boundary", () => {
+test("002. Persisted closed result that disagrees with plan fails at read boundary", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-result-relation-read-"));
   const path = join(root, "runtime.sqlite");
   let store = seed(path);

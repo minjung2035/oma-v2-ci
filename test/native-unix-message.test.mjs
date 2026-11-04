@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { controlSocketPair } from '@oma/native/control-socket';
 import { enableUnixCredentials, receiveUnixMessage } from '@oma/native/unix-message';
 assert.equal(process.platform, 'linux');
-test('recvmsg actual ABI and delivered forbidden SCM_RIGHTS return every duplicated descriptor', () => {
+test("001. Recvmsg actual ABI and delivered forbidden SCM_RIGHTS return every duplicated descriptor", () => {
   const root = mkdtempSync(join(tmpdir(), 'oma-real-recvmsg-')), binary = join(root, 'message');
   try {
     execFileSync('/usr/bin/cc', ['-Wall', '-Wextra', '-Werror', fileURLToPath(new URL('./fixtures/unix-message.c', import.meta.url)), '-o', binary]);

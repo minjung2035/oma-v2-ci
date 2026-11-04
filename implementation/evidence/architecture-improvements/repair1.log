@@ -1,0 +1,659 @@
+✔ IMP-R03: accepted reviewer evidence survives stopped and restart (508.185011ms)
+✔ IMP-R03: accepted reviewer evidence survives retired and restart (408.28797ms)
+✔ IMP-R03/R04: explicit withdrawal changes approval; another Worker cannot invalidate (217.390243ms)
+{"event":"review.advance","request":"op-0c0811d2-91d8-44ba-98af-35b511f2e981","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R04: author stop cannot change frozen quorum and requester stop still fences main (274.178433ms)
+✔ IMP-R01/R02: held recovery and one held unit do not block independent wake; hints coalesce (1.88895ms)
+✔ IMP-R09: current zero seed config rejects; legacy zero remains readable (1.166796ms)
+✔ IMP-M01: version gate preserves accepted bytes and creates a complete legacy backup (57.372924ms)
+{"event":"review.advance","request":"op-d6194362-3a2a-47b3-b8ef-3af0d147e055","code":"CHECK_FAILED"}
+{"event":"review.advance","request":"op-d6194362-3a2a-47b3-b8ef-3af0d147e055","code":"BROKER_UNAVAILABLE"}
+✔ IMP-R05/R06: explicit same-request retry preserves votes and the first failure; concurrent replay has one successor (551.952215ms)
+✔ IMP-R10: notice preparation failure survives restart as blocked and explicit retry succeeds (293.141591ms)
+{"event":"review.advance","request":"op-618ffe6e-6c0e-4313-8e5f-a543378c8ae2","code":"RUN_TERMINATION_UNKNOWN"}
+✔ IMP-R06: an unknown check scope cannot be retried into a second attempt (170.833384ms)
+{"event":"review.advance","request":"op-b0c0e603-32e2-43cf-8ba2-eb81e867880a","code":"CANCELLED_BEFORE_COMMIT"}
+✔ IMP-R03: withdrawing an accepted peer vote while checks run wins the final CAS gate (282.519106ms)
+✔ IMP-R10: a held notice preparation is preparing, not an executing check (225.458494ms)
+✔ IMP-R29: prepared-ref collection retains active, unknown and accepted ownership (552.563458ms)
+✔ IMP-R16: reviewed disjoint proposals from one base integrate in order without resubmission; challenge only actual delta (1161.626256ms)
+{"event":"review.advance","request":"op-dcb744b1-f381-4099-87c4-d2c42320d7c8","code":"CHECK_FAILED"}
+✔ IMP-R17: individual changes pass but combined invariant fails on prepared I (444.628825ms)
+✔ IMP-R18: clean overlapping LOW changes require exact MEDIUM integration-context vote (570.703451ms)
+{"event":"review.advance","request":"op-59016dc8-19d0-48f0-95b0-cb81e21efa13","code":"CHECK_FAILED"}
+✔ IMP-R19: revision preserves old failure bytes, resets code approval and races expectedRevision (637.321972ms)
+{"event":"review.advance","request":"op-75ddbd82-12d4-4baa-bc48-550ed587df76","code":"STALE_BASE"}
+✔ IMP-R20: known main movement before CAS supersedes only the attempt and automatically prepares again (379.207011ms)
+✔ IMP-R21: already-included is a separate fact with no integration receipt (106.544425ms)
+{"event":"review.advance","request":"op-1f41d600-5ab4-47be-a368-dc5960a15da6","code":"CHECK_FAILED"}
+✔ IMP-R19: policy adoption preserves qualified code votes but creates current policy authority; host retry is explicit (668.20379ms)
+✔ IMP-R18: conflict stays blocked without repeated preparation and explicit revision resolves it (605.81613ms)
+✔ IMP-R26: only completed approved CAS links prove a later main, arbitrary ancestry does not (491.481635ms)
+✔ IMP-R27: an included proposal needs no additional peer vote and creates no success receipt (149.166943ms)
+✔ IMP-R28: HIGH context requires fresh peer and Principal decisions bound to actual M/I (969.983875ms)
+✔ IMP-R30: SIGKILL before prepared-integration CAS preserves exact M/I and accepted bytes (868.751536ms)
+✔ IMP-R30: SIGKILL after prepared-integration CAS preserves exact M/I and accepted bytes (782.445634ms)
+✔ V11A: the inline writer validates before replacement (67.189644ms)
+✔ V11A: invalid inline worker-limit edit is rejected before every authored file (61.348234ms)
+✔ V11A: invalid inline initial-workers edit is rejected before every authored file (61.016722ms)
+✔ V11A: invalid split worker-limit edit is rejected before every authored file (64.47154ms)
+✔ V11A: invalid split initial-workers edit is rejected before every authored file (66.164908ms)
+✔ DR34: the CONNECT authority is host:port or [literal]:port, strictly (1.515008ms)
+✔ DR37/39: the actual dial admits local, private, mapped and public addresses on any port (1.412058ms)
+✔ DR34: the dial resolves once and pins the chosen address (0.203631ms)
+✔ DR37: a private resolver answer reaches the connect boundary (0.189741ms)
+✔ DR37: resolver answers are pinned; absence fails and a failed address permits the next (0.628973ms)
+✔ DR34: an allowlisted CONNECT answers 200 and the tunnel carries bytes end to end (22.194283ms)
+✔ DR34: refused CONNECTs -- unlisted names, literals, other ports -- answer 403 and nothing is dialed (3.825889ms)
+✔ DR34: a dial refusal answers 502/403 and the error stays a refusal, never a tunnel (1.780339ms)
+✔ DR34: malformed requests -- non-CONNECT, garbage, oversized heads -- are refused or destroyed (3.192036ms)
+✔ DR34: credential-bearing headers die at the proxy -- the tunnel carries only post-200 bytes (12.211692ms)
+✔ DR34: bytes written with the CONNECT (a racing ClientHello) are forwarded (11.536459ms)
+✔ HTTP proxy: truncated Content-Length keep-alive responses abort downstream and release ownership (6.867355ms)
+✔ HTTP proxy: truncated chunked keep-alive responses abort downstream and release ownership (3.143876ms)
+✔ DR34: a refused request dies with its answer -- no socket lingers in keep-alive or upgrade state (1.87988ms)
+✔ DR34: the audit journal carries the normalized host:port or a redaction marker -- never request bytes (1.358537ms)
+✔ DR34: the proxy socket obeys the same 0600 ownership discipline as every sibling listener (0.552203ms)
+✔ DR34: a failure after the dial ends the upstream it opened -- nothing is orphaned (1.265367ms)
+✔ DR34: an audit sink that throws cannot crash the proxy's synchronous listeners -- the refusal still stands (22.192683ms)
+✔ DR34: an upstream-initiated close ends the tunnel and frees its slot at once (21.887582ms)
+✔ DR34: the tunnel working set queues -- it never refuses; a close grants, a queued close withdraws (233.270494ms)
+✔ DR34: closing the proxy ends its tunnels and removes its name (1.694578ms)
+✔ DR34: with an egress socket the plan binds it and exports the proxy environment; without one it exposes nothing (8.476763ms)
+✔ DR46: current host configuration refuses removed policy fields and prior schema (0.638933ms)
+✔ F3: default 1 MiB log / 256 KiB frame remains a decodable bounded success (10.714855ms)
+✔ F3: JSON escapes and custom smaller frame remains a decodable bounded success (0.458022ms)
+✔ F3: UTF-8, surrogate pairs and escaped request ID remains a decodable bounded success (0.465513ms)
+✔ F3: minimal and complete responses retain truthful truncation metadata (0.765974ms)
+✔ F3: raw journal byte truncation never manufactures a partial UTF-8 character (0.207531ms)
+✔ DR27: nonexistent log target is refused instead of reported as an empty journal (0.448383ms)
+✔ NB-20: status.get names an address like logs.read does (0.521532ms)
+✔ NB-03: a text over budget by one byte is a strict prefix, never whole text called truncated (0.18299ms)
+✔ V22B: large existing state does not block recovery, new mail or activation (64.442669ms)
+✔ V22B: recovery retains frozen bytes in a larger tree and never replays settled facts (20.823247ms)
+✔ V22B: ordinary settlement materializes the frozen mail for every recipient (797.162949ms)
+✔ V22B: on a real full filesystem new work is STORAGE_FULL and accepted mail is never complete without its views (165.972569ms)
+ℹ full filesystem report: {"first":"succeeded","fillCode":"ENOSPC","newWork":{"ok":false,"code":"STORAGE_FULL"},"newRow":null,"staged":[],"recovery":{"examined":1,"repaired":0,"remaining":1},"pending":{"state":"pending","objectIntact":true,"archive":true,"materialized":false}}
+✔ Review client: merge open resolves HEAD + origin/main, submits once, then opens (155.837457ms)
+✔ Review client: same-key replay after HEAD moved returns the frozen request (235.795867ms)
+✔ Review client: merge open with no recorded base refuses before any request (125.680413ms)
+✔ Review client: dirty workspace warns; known candidate skips the submit; pending submit stops the open (245.538887ms)
+✔ Review client: a refused `git status` is not reported as a clean workspace (124.368057ms)
+✔ Review client: a `.git` that is present but damaged is not an absent workspace (119.776913ms)
+✔ Review client: a bare repository has no work tree that could be dirty (109.4112ms)
+To /tmp/oma-merge-diff-Y5a466/canon.git
+ * [new branch]      83966cf684c070344a9b9d57eae4ace5b769a326 -> main
+ * [new reference]   f662bd1ade69bbd001de9acb31c9782a7bd7fe74 -> refs/oma/published/alice/op-b36f3094-221a-43d7-8214-aa72c26d9a1d
+✔ Review client: open outside a repository has no workspace to observe (106.594875ms)
+✖ Review client: exact diff pagination and challenge original view use frozen identities (797.19219ms)
+✔ Review client: prepared challenges skip publication and replacement challenges publish first (225.425954ms)
+✔ DR46 current review: exact candidate identity uses the shared non-coercing grammar; missing conditions survive public sanitization (1.000025ms)
+✔ P0V-25 / N01, P0-4: a credential descriptor named in the environment is not a Client credential source (177.983701ms)
+✔ P0V-27 / N03, P0-4: a broker that could not be started is reported, and the host that tried keeps running (245.815228ms)
+✔ P0V-35 / N12, P0-2: owned process output is decoded as the bytes it wrote, wherever the pipe cut them (224.130377ms)
+✔ P0V-49 / F3, P0-4: a descriptor given back is never closed again when the sequence fails after it (2.992526ms)
+✔ P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progress (36.289426ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 0) (0.467403ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 1) (0.231671ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 2) (0.190631ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 3) (0.192301ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 4) (0.233401ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 5) (0.163261ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 6) (0.190141ms)
+✔ P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap 7) (0.128361ms)
+✔ P0V-33 / N09, P0-1: a failure restated beside a cleanup failure keeps its code, its facts and that it was accepted (0.462852ms)
+✔ P0V-48 / F2, P0-5: each partial line has its own deadline, so a line started late is not cut off by the one before it (1803.705839ms)
+✔ P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is refused, never applied to the Principal (2.472803ms)
+✔ P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Active count unknown, never 0 (0.527903ms)
+✔ P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be established does not run on unsupervised (217.372652ms)
+✔ P0V-37 / N14, P0-2: a message path the Principal was shown reads back through the same mail tool (15.015567ms)
+✔ P0V-36 / N13, P0-2: a message whose body is within the body limit is read back whole by the mail tool (17.507819ms)
+✔ P0V-41 / N18, P0-1: the message a Human opened stays open when a refresh reorders the list or moves it to cur (3.065866ms)
+✔ P0V-40 / N17: a list longer than the screen keeps its selection on screen, and a long body scrolls (2.971376ms)
+✔ P0V-42 / N19, P0-5: a body read only in part is shown as partial, not as the whole message (0.412222ms)
+✔ P0V-43 / N20: one refresh reads the headers of a bounded number of messages, the most recent, and counts the rest (10.922406ms)
+✔ P0V-46 / N23, P0-2: typed and pasted text are read by one rule -- a typed U+FFFD is kept, broken bytes are dropped (1.182646ms)
+✔ DR67 schema5: fresh DDL applies; six entities; reapply rejected (3.863ms)
+✔ T03: invalid enum / negative units / FK / bad flags rejected by constraints (30.177815ms)
+✔ T04: frame reconstruction across arbitrary byte splits (5.179646ms)
+✔ T05: malicious frames are rejected pre-accept with bounded effect (0.743973ms)
+✔ P1-9: NaN/Infinity as string values are accepted; invalid numeric literals rejected (0.319462ms)
+✔ T07: same actor/key/payload converges to one operation with identical receipts (unique constraint) (21.793651ms)
+✔ T08: same key, different payload -> REQUEST_KEY_REUSED (8.144912ms)
+✔ T10: different keys are distinct operations; no semantic dedup (13.71959ms)
+✔ hash: canonical key sorting, set dedupe, stability, descriptor identity (0.350572ms)
+✔ ids: grammar, reserved names, message ids, wire paths (0.364312ms)
+✔ store: batch link cross-row invariant (DB-008/BATCH-001) (22.925257ms)
+✔ ids + hash demo: complete request hash for mail.send (0.242321ms)
+✔ T37: stop saves new mail, empties the actual scope, leaves execution inactive (52.65394ms)
+✔ T38: stopped actor with an unconfirmed stale scope cannot start; incarnation unchanged (19.225199ms)
+✔ REC-001: pending start and stop effects settle from actual native scope state (22.236774ms)
+✔ T13: capability escape — sibling stop denied; created child uses a real frozen base (74.083919ms)
+✔ SEQ-002: unknown old-run death stops startup before mail reconciliation (2.668063ms)
+✔ LIFE-009: bootstrap freezes all seeds before effects and never reseeds a ready registry (86.933715ms)
+✔ T39/LIFE-007: same name + same resolved spec converges without a second physical create (78.679972ms)
+✔ LIFE-007 race: concurrent stable-name creates publish only one mail object (73.796947ms)
+✔ T40/LIFE-001: same stable name with a different resolved spec conflicts (68.34038ms)
+✔ CREATE-003: resolved child policy is rechecked at T-create-intent (65.909057ms)
+✔ T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate until GOAL exists (89.225447ms)
+✔ REC-007: broker singleton lock — second broker refuses the society (5.963941ms)
+✔ V25A: start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can (24.574885ms)
+✔ V23B: a status snapshot is display only; start, stop and death proof observe the scope again (17.836751ms)
+✔ T68a: reconcile startup completes a pending accepted mail (accepted-before-materialize fixture) (44.728789ms)
+✔ T68b: reconcile never overwrites a moved published ref; ref==candidate recovers (299.694663ms)
+✔ T68c: canonical repo integrity is asserted; start-limit surface reported without reset (37.351291ms)
+✔ T68d: a dead run's fsck diagnostic spool is collected -- residue neither blocks nor survives the health observation (41.920995ms)
+✔ INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries (5.200717ms)
+✔ Open TUI: the preview's look is the default, the Human's own choices are kept, telemetry to Pi stays off (5.78149ms)
+✔ INF-001: unreadable, malformed or linked settings cannot silently disable the retry policy (2.693723ms)
+✔ P0-8/DR32: a mode-000 agent directory or themes tail is repaired inside its boundary, never wedged on (2.300081ms)
+✔ P0-8/DR32: damage above the ownership boundary is refused, never repaired or read as absent (0.495002ms)
+✔ INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary (27465.279401ms)
+✔ OMA runs the engine it shipped with, not one found on PATH (0.645273ms)
+✔ the engine entry comes from the package's own bin, not a guessed path (0.394242ms)
+✔ a package that is not Pi is never accepted as the engine (0.365542ms)
+✔ an operator may pin an engine, and a missing or relative pin is refused (0.384162ms)
+✔ an installation without an engine fails closed instead of using a PATH Pi (0.202221ms)
+✔ DR24: the engine is pointed at the Human's one OMA engine home, beside every session and never the user's own Pi (0.343862ms)
+✔ the Principal session carries the isolation variable to the engine (0.130741ms)
+✔ REC-007: the Principal session tells the engine which descriptor its society lease is on (0.122411ms)
+✔ the engine entry precedes Pi's own flags on the command line (0.175971ms)
+✖ T106/TUI-019: running in a bare project needs no setup command and no hand-written config (2.06664ms)
+✔ T114: a broker no host started opens no Principal endpoint at all (45.260261ms)
+✔ T114: the host is told the broker is ready only once both endpoints are listening (31.952873ms)
+✔ T114: the broker accepts only the host's own child as the Principal's engine (31.904483ms)
+✔ T114: the credential is in no file and no environment -- read from outside, as an attacker would (1049.493586ms)
+✔ T114: the endpoint refuses every request until the session attaches (1059.486947ms)
+✔ T114: the audit's attack -- the right credential and handle from a process the engine did not start (1054.11823ms)
+✔ T114: another session's handle is a conflict, not a failed authentication (1063.367887ms)
+✔ T114: Principal mail tools work through the real CLI without orchestration tools (1084.339724ms)
+✔ T114/E27: the engine attaches in-process; credentials never enter its environment or a CLI child (1073.464419ms)
+✔ T114/E27: a detached engine cannot invent a Principal grant from the environment (1073.463909ms)
+✔ T114: a re-registered engine gets a new credential and the old one stops working (1080.052372ms)
+✔ T114: a credential from an earlier broker authorises nothing in a later one (2137.75873ms)
+✔ T114 / PR-002: mail to the Principal is delivered into its live session and completed (1093.908291ms)
+✔ T114 / PR-002: a turn that does not settle cleanly leaves the mail pending, and it is retried later (1089.884631ms)
+✔ T114 / PR-002: nothing the model runs can mark its own mail delivered (1064.510711ms)
+✔ T114 / PR-002: delivery waits for an idle session rather than landing inside a Human's turn (0.548192ms)
+✔ V08B: a busy or replaced session still settles an already-produced boundary with its first receipt, starting no turn (1.232243ms)
+✔ T114: the credential comparison is fixed-shape and does not stop early (0.12702ms)
+✔ T114: provisioning creates the directories the Principal's engine and its session use (46.68987ms)
+✔ T114 / PR-002: a Human prompt claims the session before it is written, so delivery cannot slip in (0.637032ms)
+✔ T114 / PR-002: a Human prompt typed during a delivery waits in the host and is not folded into the delivery's run (0.496251ms)
+✔ T114 / PR-002: every prompt typed while the session was spoken for runs, once each, in order (0.268691ms)
+✔ T114 / PR-002: a prompt the engine refuses gives the session back and is said on the screen (1.538164ms)
+✔ T114 / PR-002: a refused delivery command gives the session back and lets the waiting Human through (0.193881ms)
+✔ T114 / PR-002: a response for a prompt the session has moved on from changes nothing (0.14414ms)
+✔ T114 / PR-002: a prompt the transport cannot carry stops the screen saying the session is busy (2.877448ms)
+✔ V09B: a write that failed after it began is not handed back as unsent and does not free the session (0.32851ms)
+✔ T114 / PR-002: the waiting prompt that could not be sent is named, and the rest still go (2.305165ms)
+✔ T114 / PR-002: the busy report comes from the ownership itself, at every move of it (0.1592ms)
+✔ T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 frame admission (0.09763ms)
+✔ T120 / TUI-023: only so many prompts wait, and the Human is told which one was not taken (0.155001ms)
+✔ V05B: Principal completion uses the first receipt returned by EEXIST publication (2.116415ms)
+✔ T114 / PR-002: a failed assistant message does not end the delivery -- the run settling does (30.614759ms)
+✔ T114 / PR-002: a run that settles on a failed assistant message is reported as the provider failing (0.576791ms)
+✔ T114 / D06: a delivery the engine never answers keeps the session (0.373571ms)
+✔ T114 / PR-002: the extension is ready for the next batch however a turn ended (1075.360504ms)
+✔ T114: the Principal's session stays in its own private space (30.033537ms)
+✔ T114: the host is answered on its identity, not on a number another process may hold (33.053356ms)
+✔ T114 / IPC-012: a method the host endpoint does not serve is an unknown method, not a refused host (35.519581ms)
+✔ T114 / PR-002: the host is served delivery only while this broker holds a registration for its engine (37.255096ms)
+✔ T114 / PR-002: a registration that ends closes delivery again, without anything telling the endpoint (35.802732ms)
+✔ T114: stopping the broker releases the supervision channel it was given (31.924732ms)
+✔ P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope the way every internal channel does (3.120028ms)
+✔ P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before any delivery method runs (0.807592ms)
+✔ T114: re-registering the session revokes the connections the old one already had (2.257586ms)
+✔ T114: a registration the broker refuses leaves no attached Principal behind (2.053075ms)
+✔ T114: closing the endpoint revokes the connections that are already attached (1.981675ms)
+✔ T114: detaching gives up authority rather than parking it for later (2.079226ms)
+✔ T114 / AUTH-003: an engine that dies takes the authority of the processes it started with it (28.560393ms)
+✔ T114: revocation reaches every attached connection, and only attached ones (2.421576ms)
+✔ P0V-57 / R02, P0-2: after corruption is observed the host's delivery endpoint is fenced like the runner channel (36.395534ms)
+✔ P0V-60 / R05, P0-2: the authority a request was handed stops standing when its registration is retired (2.265905ms)
+✔ P0V-60 / R05, P0-2: the Principal's capabilities are read against what the caller was authorised under, at every read (2.270686ms)
+✔ R19: execution writes a complete canonical plan without a redundant result and never repeats CAS on replay (12.073681ms)
+✔ R19: missing rejects before main CAS (1.512274ms)
+✔ R19: ancestry rejects before main CAS (2.816697ms)
+✔ R19: protected rejects before main CAS (3.224329ms)
+✔ UX-09/INT-001: a candidate whose tree carries gitlinks is refused with their paths before a row exists (1.370283ms)
+✔ UX-09: a unknown gitlink observation refuses — uncertain is never "no gitlinks" (1.313184ms)
+✔ UX-09: a refused gitlink observation refuses — uncertain is never "no gitlinks" (1.244523ms)
+✔ UX-09: a corrupt gitlink observation refuses — uncertain is never "no gitlinks" (1.200113ms)
+✔ R19: live revoke after intent prevents the physical commit (2.445407ms)
+✔ R19: live stop after intent prevents the physical commit (2.574816ms)
+✔ R19: live incarnation after intent prevents the physical commit (2.330006ms)
+✔ R19: a same-revision full-policy change is rejected outside the acceptance transaction (1.182404ms)
+✔ R19: missing policy cannot enable a production legacyDirect path (1.089382ms)
+✔ INT-004: trusted check success is reobserved before CAS and retry preserves intent (3.77153ms)
+✔ INT-004: trusted check failure is reobserved before CAS and retry preserves intent (3.005848ms)
+✔ INT-004: trusted check unknown is reobserved before CAS and retry preserves intent (2.543727ms)
+✔ INT-004: trusted check stop is reobserved before CAS and retry preserves intent (2.465296ms)
+✔ INT-004: trusted check policy is reobserved before CAS and retry preserves intent (2.991568ms)
+✔ INT-004: trusted check main is reobserved before CAS and retry preserves intent (3.161978ms)
+✔ R19: post-CAS expected remains unknown and blocks another repository writer (3.173158ms)
+✔ R19: post-CAS third remains unknown and blocks another repository writer (3.016548ms)
+✔ R19: post-CAS unknown remains unknown and blocks another repository writer (3.077648ms)
+✔ R19: recovery of canonical intent settles candidate without replaying execute (2.756157ms)
+✔ R19: base recovery rechecks conditions twice and completes the same operation (2.774717ms)
+✔ R19: recovery main=third blocks without invoking execute (1.831785ms)
+✔ R19: recovery main=absent blocks without invoking execute (1.758425ms)
+✔ R19: recovery main=unknown blocks without invoking execute (1.867005ms)
+✔ R19: an unavailable pre-CAS observation is neither absence nor a failed physical effect (2.240895ms)
+✔ P0V-64 / R09, P0-2: a refusal after acceptance that a cleanup failure was bundled with settles by its own code (2.753847ms)
+✔ active-capacity production smoke: merge excludes stopped historical author without consuming its slot (387.972929ms)
+✔ active-capacity production smoke: merge excludes retired historical author without consuming its slot (308.527365ms)
+✔ active-capacity production smoke: challenge excludes stopped historical author without consuming its slot (662.84057ms)
+✔ active-capacity production smoke: challenge excludes retired historical author without consuming its slot (630.355268ms)
+✔ active-capacity production smoke: merge opening refuses author stop during frozen mail (180.175665ms)
+✔ active-capacity production smoke: merge opening refuses author start during frozen mail (183.684415ms)
+✔ active-capacity production smoke: challenge opening refuses author stop during frozen mail (404.996098ms)
+✔ active-capacity production smoke: challenge opening refuses author start during frozen mail (411.756465ms)
+✔ active-capacity production smoke: author stop/start preserves frozen HIGH approval bundles (364.938865ms)
+✔ active-capacity production smoke: cap1 active requester preserves valid zero-peer Principal escalation (276.466837ms)
+✔ active-capacity production smoke: absent or stopped non-author reviewers never create fallback (133.330966ms)
+✔ active-capacity production smoke: Principal decision remains valid across historical author departure (352.990005ms)
+✔ seeded evaluator invariant sweep — mulberry32 seeds 1201201, 1201202, 1201203 (170 ledgers each), determinism by double evaluation (1679.002503ms)
+✔ evaluator fuzz coverage report (0.143881ms)
+✔ LOW merge is ready immediately; missing is empty (2.030715ms)
+✔ MEDIUM needs one eligible Worker approve; shortfall is reported (0.461041ms)
+✔ an author's approve is tracked but never counted (0.386841ms)
+✔ an ineligible approver does not count, but an ineligible rejector still blocks (0.367141ms)
+✔ a reject blocks until the same actor's later approve clears it (0.211211ms)
+✔ HIGH: one approve emits nothing; the second approves with the bundle in vote order (0.453671ms)
+✔ approval vote identities must bind current eligible independent approvals, not merely valid operation IDs (2.199276ms)
+✔ a third approve leaves the bundle valid and emits no Principal mail (0.268691ms)
+✔ superseding a bundled vote withdraws the old approval and sends a new one (0.401371ms)
+✔ quorum still holds after an approver retires: withdrawn then a new approval (0.377731ms)
+✔ a bundled approver regaining eligibility does not invalidate the sent approval (0.279771ms)
+✔ a reject after the approval was sent withdraws it and sends none (0.239651ms)
+✔ Principal approve on the current approval makes a HIGH request ready (0.26452ms)
+✔ a Principal vote naming a withdrawn approval is not counted (0.242941ms)
+✔ a Principal reject closes the request (0.329271ms)
+✔ cancel by the requester cancels and withdraws a current approval (0.368371ms)
+✔ a refresh with a moved main marks the request stale; a null main does not (0.331181ms)
+✔ an ordinary review entry does not change readiness (0.1458ms)
+✔ integration state drives the display (0.284791ms)
+✔ a LOW challenge requires highPeerFloor approves (0.197391ms)
+✔ the earliest terminal event wins (0.16072ms)
+✔ inconsistent inputs are corrupt (0.410131ms)
+✔ reviewer observations preserve counted approvals, stopped rejects and frozen authors (1.288114ms)
+✔ merge.open: only active author occupancy reduces potential peer capacity; every author stays excluded (0.240041ms)
+✔ challenge.open: only active author occupancy reduces potential peer capacity; every author stays excluded (0.17654ms)
+✔ active author departure invalidates zero-peer approval and its Principal decision (0.226531ms)
+✔ V15A: bootstrap state is read from the observed registry, and unknown is never assumed (0.646342ms)
+✔ V15A: seed fields are editable only while they can still take effect, and say why otherwise (65.955061ms)
+✔ V15A: a new Society refuses zero seeds without changing authored configuration (64.486667ms)
+✔ V15A: the bootstrap profile changes the seeds only, never a profile's childProfile (69.718821ms)
+✔ V15A / WP15.03: confirming the value already configured writes nothing and says so (70.144573ms)
+✔ V15B: the dashboard shows the configured model as configured, and the running session's as what it started with (0.619022ms)
+✔ V15A / WP15.03: an inline configuration confirmed at its current value is not rewritten (61.944961ms)
+✔ DR27: close disables every path, persists across restart, and open preserves individual stops (16.858264ms)
+✖ DR27: failed stop still attempts all Residents; neither new-key open nor timeout means death (5.640685ms)
+✔ DR27: accepted order survives clock rollback; same-key history never changes current execution (7.60422ms)
+✔ DR27: only the current Principal can accept control; closed gate refuses Resident effects, not Principal control (3.624199ms)
+✖ DR27: recovered opening requires current authority, whereas accepted closing finishes its safety fence (7.063009ms)
+✔ DR27: live opening rechecks its lease before releasing execution (4.01018ms)
+✔ DR27/P0: corruption after acceptance remains an accepted failure and does not skip other stops (2.138126ms)
+✔ DR27: closed society keeps queued and prepared mail without an automatic Principal or Resident turn (45.9133ms)
+✔ DR27: reopen resumes enabled pending-mail Workers through reconciliation, never force-stopped Workers (25.559736ms)
+✔ startup: a strict transfer observation belongs only to the newly created mirror (184.23503ms)
+✔ startup: a transfer containing missing-link cannot grant a verification observation (47.311944ms)
+✔ startup: a transfer containing duplicate-tree-entry cannot grant a verification observation (48.325726ms)
+✔ AV-07/P0: canonical publication waits for concurrent history validation (true) (108.339312ms)
+✔ AV-07/P0: canonical publication waits for concurrent history validation (false) (76.387639ms)
+✔ AV-07/P0: a consumed provisioning proof cannot hide later repository corruption (58.837003ms)
+✔ DR35 preparation produces the bound project's snapshot before completing (142.463512ms)
+✔ DR35 cancellation preserves the inherited fence until the native writer actually closes (54.367052ms)
+✔ DR46: a database at user_version 1 fails closed and is never rewritten (5.192594ms)
+✔ DR46: a database at user_version 2 fails closed and is never rewritten (1.870594ms)
+✔ DR46: a database at user_version 3 fails closed and is never rewritten (1.776355ms)
+✔ DR46: a database at user_version 6 fails closed and is never rewritten (1.716715ms)
+✔ DR46: a database at user_version 99 fails closed and is never rewritten (1.791934ms)
+✔ DR27: an unversioned nonempty database is not mistaken for a new one (0.494851ms)
+✔ DR46: a new database gets schema v5 and a v5 database reopens unchanged (2.840207ms)
+✔ V04A: unsupported delete Store refusal preserves database and sidecars (3.211979ms)
+ℹ {"fixture":"delete","before":{"runtime.sqlite":{"dev":"54","ino":"1185510","links":"1","bytes":8192,"sha256":"e14123cd2a13ebe19b9e1e9a4d2308ce0a320c3392508e0d3151bf069ccbf26e","mode":420}},"after":{"runtime.sqlite":{"dev":"54","ino":"1185510","links":"1","bytes":8192,"sha256":"e14123cd2a13ebe19b9e1e9a4d2308ce0a320c3392508e0d3151bf069ccbf26e","mode":420}}}
+✔ V04A: unsupported wal-closed Store refusal preserves database and sidecars (1.075803ms)
+ℹ {"fixture":"wal-closed","before":{"runtime.sqlite":{"dev":"54","ino":"1185515","links":"1","bytes":8192,"sha256":"41ff98a8732bc534f7abb02d2e5aa2973c5a9e7b716b414881315d76ca1b3e0b","mode":420}},"after":{"runtime.sqlite":{"dev":"54","ino":"1185515","links":"1","bytes":8192,"sha256":"41ff98a8732bc534f7abb02d2e5aa2973c5a9e7b716b414881315d76ca1b3e0b","mode":420}}}
+✔ V04A: unsupported wal-retained Store refusal preserves database and sidecars (23.833783ms)
+ℹ {"fixture":"wal-retained","before":{"runtime.sqlite":{"dev":"54","ino":"1185522","links":"1","bytes":8192,"sha256":"cc6cf0aaba32729c62967e05c89e83998039d24607d88ddef564c72b90bf0d2e","mode":420},"runtime.sqlite-shm":{"dev":"54","ino":"1185527","links":"1","bytes":32768,"sha256":"b665bd39c48e071b9bf2351138f9c3125638c8d7044b8a332d8a19c4965c8bad","mode":420},"runtime.sqlite-wal":{"dev":"54","ino":"1185526","links":"1","bytes":4152,"sha256":"877f77b8e7935afc3836404129a9c113a0f2bf23063272ff271e904b8b15dd8f","mode":420}},"after":{"runtime.sqlite":{"dev":"54","ino":"1185522","links":"1","bytes":8192,"sha256":"cc6cf0aaba32729c62967e05c89e83998039d24607d88ddef564c72b90bf0d2e","mode":420},"runtime.sqlite-shm":{"dev":"54","ino":"1185527","links":"1","bytes":32768,"sha256":"b665bd39c48e071b9bf2351138f9c3125638c8d7044b8a332d8a19c4965c8bad","mode":420},"runtime.sqlite-wal":{"dev":"54","ino":"1185526","links":"1","bytes":4152,"sha256":"877f77b8e7935afc3836404129a9c113a0f2bf23063272ff271e904b8b15dd8f","mode":420}}}
+✔ V04A: uri cannot bypass the physical database and WAL identity preflight (24.362593ms)
+✔ V04A: hardlink cannot bypass the physical database and WAL identity preflight (25.509366ms)
+✔ V04A: orphan WAL is unavailable, never discarded as absent (0.714942ms)
+✔ V04A: orphan SHM is unavailable, never discarded as absent (0.577302ms)
+✔ V04A: WAL without SHM is unavailable, never discarded as absent (1.794215ms)
+✔ V04A: SHM without WAL is unavailable, never discarded as absent (1.413913ms)
+✔ V04A: journal present is unavailable, never discarded as absent (1.444453ms)
+✔ V04A: an unversioned foreign schema is not a fresh OMA database (0.753342ms)
+✔ V04A: corrupt bytes are refused without replacement or sidecar creation (0.488512ms)
+✔ V04A: sidecar arrival during preflight prevents writer setup (1.683214ms)
+✔ V04A: a killed rollback-journal transaction is preserved, not recovered before refusal (28.499215ms)
+✔ V04B: OS read-only permissions refuse writing and retain no constructor handle (1.590524ms)
+ℹ POSIX permission denial on owned files; not a read-only mount/EROFS qualification
+✔ V04B: failed new Store foreign_keys setup closes its real native handle (0.936752ms)
+✔ V04B: failed new Store journal_mode setup closes its real native handle (0.698131ms)
+✔ V04B: failed new Store synchronous setup closes its real native handle (0.815093ms)
+✔ V04B: failed new Store busy_timeout setup closes its real native handle (0.818802ms)
+✔ V04B: failed new Store schema setup closes its real native handle (1.034823ms)
+✔ V04B: failed existing Store foreign_keys setup closes its real native handle (1.618804ms)
+✔ V04B: failed existing Store journal_mode setup closes its real native handle (1.647034ms)
+✔ V04B: failed existing Store synchronous setup closes its real native handle (1.840575ms)
+✔ V04B: failed existing Store busy_timeout setup closes its real native handle (1.775095ms)
+✔ V04B: initialization and close failures retain both causes (0.303751ms)
+✔ V04B: failed schema application retains its rollback failure and still closes (0.717712ms)
+✔ V04B: busy writer setup closes its handle without releasing another connection's lock (29.882178ms)
+ℹ SQLite defers native FD closure while another same-process connection holds a POSIX lock: 3 descriptors
+✔ V04B: new reader composition failure closes the actual Store connection (69.14147ms)
+✔ V04B: existing reader composition failure closes the actual Store connection (69.171431ms)
+✔ V04A: supported current schema delete retains its committed operation (7.53244ms)
+✔ V04A: supported current schema retained-wal retains its committed operation (67.897087ms)
+✔ V04B: fresh and supported Store ownership still transfers to the caller (2.033825ms)
+✔ V21B: over the storage limit reads and accepted same-key lookups answer, new work and safety stops proceed (66.899515ms)
+✔ V21B: over the storage limit runner reads answer and settlement uses its normal validation (3.298638ms)
+✔ V21B: over the storage limit recovery settles safety stages and settles new effects and settlement (29.150956ms)
+✔ V21B: within the limit the same recovery settles the mail and activates the waiting unit (14.466188ms)
+✔ V21B: a mail failure after its acceptance is reported as accepted, never as a refusal (11.163169ms)
+✔ V21B: a submit effect failure recorded as unknown is reported for same-key lookup (249.181932ms)
+✔ V21B: a startup stop that cannot be confirmed still leaves every other resident stopped (2.448326ms)
+✔ V26C: a request is measured in encoded bytes, not characters, before anything is written (6.493237ms)
+✔ V26C: a response past the budget in encoded bytes is a failure, never a result (2.081766ms)
+✔ V26C: a response for another request id or with an unknown field is not this call's result (3.314758ms)
+✖ installed recovery coordinator preserves live gates, identity and shared sweep ownership (12.715943ms)
+✔ D03 composition: the product runs the broker itself, so Residents render at its location and are stopped on drain (89.923935ms)
+✔ P1 composition root: Git exists when Lifecycle receives its context reader (17.500416ms)
+✔ P1 composition root: all consumers share a live reader that preserves observation failure (15.655491ms)
+✔ P1 composition root: startup still wires recovery before listen, notify and activation (13.068024ms)
+✔ P1 composition root: only a broker the product started has a Principal endpoint (39.837834ms)
+✔ P0V-28 / N04, P0-5: a broker told it is supervised whose channel cannot be established opens nothing and gives the society back (12.303392ms)
+✔ P1 composition root: the host going away stops the broker (17.844416ms)
+✖ DR48 composition: cold restoration precedes SQLite and archival follows drain and Store.close (12.891254ms)
+✔ DR48 composition: an unreadable cold snapshot opens no Store and grants no activation (9.870466ms)
+✔ P1 composition root: the host's credential channel is the kind of descriptor the broker requires (31.301972ms)
+✔ P1 composition root: the society lock is taken before anything is opened (11.868271ms)
+✔ P1 composition root: a society that already has an owner ends with its own status, opening nothing (11.865951ms)
+✔ P1 composition root: a broker the product did not start takes the society lease itself (18.140607ms)
+✔ P1 composition root: a broker the product started inherits the lease and never takes the name twice (11.095799ms)
+✔ P1 composition root: a fence declaration that cannot be honoured is a startup failure, not ownership (10.887949ms)
+✔ AV31 / D03, LIFE-006: the broker ends through its drain on every host-loss signal, registered before anything slow (10.701318ms)
+✔ P0V-58 / R03, DR16: the rootfs is put right after the startup quiescence and before anything can wake on it (11.26907ms)
+✔ P0V-58 / DR16: a rootfs that could not be put right ends startup: nothing listens and nothing wakes (13.059454ms)
+✔ native config version5 has no Linux rootfs, bind list or caller-selected backend (2.748247ms)
+✔ native config refuses previous or unknown versions even after Linux fields are removed (0.380321ms)
+✔ native config refuses version3 and preserves actual file, history sidecars and primary bytes (2.684538ms)
+✖ surface gate executes real tools, resumes committed selections and cleans up every opened session (1183.30695ms)
+✖ surface gate reports an actual SDK extension error and shuts down before deleting its workspace (1180.295357ms)
+✔ DR39 Society settings: pointer content change is followed even with unchanged stat metadata (150.515705ms)
+✔ DR39 Society settings: an unobservable project pointer is retried instead of cached as unchanged (63.998338ms)
+✔ T119 / DR35: the lease permits private conversation while broker authority remains closed (55.132905ms)
+✔ T119: however many brokers become ready, the society gets one engine (48.051866ms)
+✔ T119: each time a broker becomes ready the engine is registered and given its credential (50.346173ms)
+✔ T119 / PR-002: a refused registration grants nothing and delivers nothing (55.710867ms)
+✔ T119 / PR-002: delivery closes when the broker that authorised it ends, and reopens only on a new registration (39.840935ms)
+✔ T119 / REC-007: a Control Panel over someone else's society cannot write to it (43.551804ms)
+✔ T119 / REC-007: an owner that has given the society back stops being able to write to it (46.504752ms)
+✔ T119 / REC-007: everything started on the strength of the lease inherits it (42.252971ms)
+✔ T119: a society whose broker this host does not own gets a Control Panel, not a second engine (38.490572ms)
+✔ T119: a broker that could not be started leaves a Control Panel, not an unauthorised engine (41.97216ms)
+✔ T119: a society this process stops owning loses the engine that ownership paid for (42.610782ms)
+✔ T119 / REC-007: a process that cannot take the society lease writes nothing and starts no broker (36.314255ms)
+✔ DR24: a start that names no society is a new session of the project, bound to it before anything of it is written (41.63832ms)
+✔ T119 / REC-007: a broker that is already listening is found before this process writes anything (49.774041ms)
+✔ T119 / REC-007 negative control: with no broker listening, the same run provisions and repairs (39.446064ms)
+✔ VAL-002 / FS-005: the run root is judged before the society is taken, not after it is written (37.058937ms)
+✔ VAL-002 negative control: a run root the product can vouch for is judged and then used (34.675742ms)
+✔ P0V-58 / DR16 / DR35: the host prepares private paths and broker startup owns rootfs repair (40.564436ms)
+✔ T119: quitting gives the society back, and only once the engine is really gone (47.086094ms)
+✔ T119 / P0V-81, AV31: every signal that asks this process to end takes the same quitting path (171.487152ms)
+✔ T119: an engine that will not die does not keep the product from quitting (5048.396005ms)
+✔ T119: a crash stops the broker and the engine this process started (37.186539ms)
+✔ T119 / PR-002: delivery runs only once a broker is ready, and again as each turn settles (43.184174ms)
+✔ D05/WP16: the project is observed once and bound before this process writes anything of the society (34.614492ms)
+✔ D05/WP16: a society bound to another project is refused before any write, and the lease is given back (38.066852ms)
+✔ WP15.03: a save whose configuration cannot be read back is reported as saved-unread, and no stale value is shown as current (42.310952ms)
+✔ WP15.03, P0: a save refused because the file changed since it was read shows what the file holds, and the next edit is made from it (34.901453ms)
+✔ V10C: a registration answered after its broker was lost or replaced grants nothing to the new one (88.274504ms)
+✔ DR27: engine start failure is retryable from the fallback without restarting the broker (39.559665ms)
+✔ DR27/P0: an RPC end waits for OS death; stale engine registration cannot grant its successor (34.394351ms)
+✔ DR27: malformed host arguments perform no filesystem, lease, broker or engine work (215.338262ms)
+✔ DR27/P0-4: startup endpoint failure returns its tenure before any terminal or broker exists (38.648223ms)
+✔ DR27/P0-4: startup binding failure returns its tenure before any terminal or broker exists (39.741425ms)
+✔ DR27/P0-4: startup settings failure returns its tenure before any terminal or broker exists (39.885566ms)
+✔ DR27/P0-4: startup provision failure returns its tenure before any terminal or broker exists (40.446117ms)
+✔ DR27/P0-4: startup extensions failure returns its tenure before any terminal or broker exists (33.160178ms)
+✔ DR27/P0-4: an inconclusive startup observation never returns another host's tenure (37.163059ms)
+✔ DR27/P0-4: failed acquired engine keeps the terminal and restart slot until actual exit (39.527155ms)
+✔ DR27: project session directories echo the requesting UI observation id (41.24927ms)
+✔ DR27/P0-4: SIGTERM returns the display poll and fences its late callback (37.76392ms)
+✔ DR27/P0-4: uncaughtException returns the display poll and fences its late callback (34.955433ms)
+✔ DR27/P0-4: SIGTERM fences an in-flight display status response (37.944761ms)
+✔ DR27/P0-4: SIGTERM during initial status cannot restore the closed display (38.007181ms)
+✔ DR27/P0-4: uncaughtException fences an in-flight display status response (36.510928ms)
+✔ DR27/P0-4: uncaughtException during initial status cannot restore the closed display (33.583529ms)
+✔ DR27/P0-4: a disowned host keeps its observation-only display until the Human quits (38.640283ms)
+✔ DR27/P0-4: shutdown during startup cannot acquire a later display poll (37.215109ms)
+✔ Session mode: Society switches to a fresh Personal session only after actual engine exit (40.632298ms)
+✔ DR27/P0-4: relaunch returns the display poll before waiting for the engine (49.220991ms)
+✔ MODE-005: Society resumes Personal in its saved cwd only after the outgoing writer dies (49.610392ms)
+✔ MODE-005: /new removes stale resume and binding intent instead of changing the old birth (48.412239ms)
+✔ MODE-005: failed resume admission leaves the current Society and its display alive (37.665271ms)
+✔ MODE-005: direct Society corrupt resume refuses before ownership or provisioning (39.893886ms)
+✔ MODE-005: direct Society personal resume refuses before ownership or provisioning (39.689605ms)
+✔ MODE-005/P0-4: shutdown fences a late resume success (39.507735ms)
+✔ MODE-005/P0-4: shutdown fences a late resume failure (35.733435ms)
+✔ MODE-005/P0-4: one pending resume owns admission; duplicate switch cannot start a second teardown (44.892009ms)
+✔ P1 public validation: dispatch rechecks stop after preflight (75.567062ms)
+✔ P1 public validation: dispatch rechecks new incarnation after preflight (22.51693ms)
+✔ P1 public validation: dispatch rechecks actor removal after preflight (20.596275ms)
+✔ P1 public validation: dispatch rechecks capability revocation after preflight (16.604385ms)
+✔ P1 public validation: dispatch rechecks parameter policy change after preflight (15.871592ms)
+✔ P1 public validation: dispatch rechecks admission closure after preflight (13.984127ms)
+✔ P1 public validation: changing one version rule changes both phases (22.382149ms)
+✔ P1 public validation: a stream without its optional bundle descriptor is rejected before receiving bytes (14.70957ms)
+✔ P1 public validation: envelope, key, capability and parameter rejection stay shared (106.837974ms)
+✔ P1 public validation: phase-specific error precedence is preserved (13.214005ms)
+✔ P1 public validation: successful requests re-read and re-decode rather than caching preflight (29.299408ms)
+✔ P1 public validation: read/ephemeral keys and draining admission remain fail-closed (21.357407ms)
+✔ P1 public validation: failed current-state observation is never treated as authorization (10.340388ms)
+✔ P1 public validation: bundle-omitted submission without a stream remains valid (10.640348ms)
+✔ P11 public mail.send without approval does not inspect the operation ledger (14.609779ms)
+✔ P11 public mail.send approval checks the ledger before Git publication (11.2222ms)
+✔ P1 public validation: status cannot answer for an incarnation revoked while projection yielded (10.282438ms)
+✔ P3 recovery: physical owners retain every existing route and activation flag (72.974045ms)
+✔ P3 recovery: missing Git owner remains gated without a fallback effect (2.757157ms)
+✔ P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling (3.934571ms)
+✔ P3 recovery: Git routes its three kinds and explicitly ignores other existing kinds (22.023408ms)
+✔ P3 recovery: bypassing the closed decoder never turns an unknown kind into success (2.618906ms)
+✔ P3 recovery: actual case/default coverage compiles, missing/new kinds fail semantic checking (2032.895376ms)
+ℹ tests 449
+ℹ suites 0
+ℹ pass 441
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 91132.209145
+
+✖ failing tests:
+
+test at dist/test/merge-cli.test.js:230:1
+✖ Review client: exact diff pagination and challenge original view use frozen identities (797.19219ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  133481 !== 0
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/dist/test/merge-cli.test.js:286:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 133481,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist/test/pi-runtime.test.js:283:1
+✖ T106/TUI-019: running in a bare project needs no setup command and no hand-written config (2.06664ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      {
+        name: 'worker-1',
+        profile: 'resident'
+      },
+  +   {
+  +     name: 'worker-2',
+  +     profile: 'resident'
+  +   },
+  +   {
+  +     name: 'worker-3',
+  +     profile: 'resident'
+  +   }
+    ]
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/dist/test/pi-runtime.test.js:309:16)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { name: 'worker-1', profile: 'resident' }, { name: 'worker-2', profile: 'resident' }, { name: 'worker-3', profile: 'resident' } ],
+    expected: [ { name: 'worker-1', profile: 'resident' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at dist/test/society-control.test.js:86:1
+✖ DR27: failed stop still attempts all Residents; neither new-key open nor timeout means death (5.640685ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'succeeded'
+  - 'unknown'
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/dist/test/society-control.test.js:96:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'succeeded',
+    expected: 'unknown',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist/test/society-control.test.js:132:1
+✖ DR27: recovered opening requires current authority, whereas accepted closing finishes its safety fence (7.063009ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'succeeded'
+  - 'unknown'
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/dist/test/society-control.test.js:149:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'succeeded',
+    expected: 'unknown',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at packages/reconcile/test/recovery.test.mjs:2:1
+✖ installed recovery coordinator preserves live gates, identity and shared sweep ownership (12.715943ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'stop',
+  +   'stop'
+    ]
+  
+      at file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/reconcile/test/installed-runtime.mjs:29:28 {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'stop', 'stop' ],
+    expected: [ 'stop' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/broker-composition-policy.test.mjs:275:1
+✖ DR48 composition: cold restoration precedes SQLite and archival follows drain and Store.close (12.891254ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(calls.indexOf("Store.close") < calls.indexOf("archive-workspaces"))
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/test/broker-composition-policy.test.mjs:280:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/functional-script-owner.test.mjs:71:1
+✖ surface gate executes real tools, resumes committed selections and cleans up every opened session (1183.30695ms)
+  AssertionError [ERR_ASSERTION]: functional surface FAIL: AssertionError [ERR_ASSERTION]: every scripted boundary must execute
+  
+  2 !== 5
+  
+      at run (file:///tmp/oma-surface-owner-test-4qZOhZ/runtime/scripts/functional-surface.mjs:111:14)
+      at async file:///tmp/oma-surface-owner-test-4qZOhZ/runtime/scripts/functional-surface.mjs:130:5 {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 5,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+  Failed to load hashline store: Error: ENOENT: no such file or directory, mkdir '/tmp/oma-surface-owner-test-4qZOhZ/scratch/oma-functional-surface-f1zkeG/sessions/hashline'
+      at async mkdir (node:internal/fs/promises:1677:10)
+      at async openStore (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/tool-hashline/dist/vendor/pi-hashline-edit-pro/runtime/hash-store.js:209:5) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'mkdir',
+    path: '/tmp/oma-surface-owner-test-4qZOhZ/scratch/oma-functional-surface-f1zkeG/sessions/hashline'
+  }
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/test/functional-script-owner.test.mjs:73:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/functional-script-owner.test.mjs:92:1
+✖ surface gate reports an actual SDK extension error and shuts down before deleting its workspace (1180.295357ms)
+  AssertionError [ERR_ASSERTION]: the failure must originate in the real SDK event runner, not an import or startup seam
+      at TestContext.<anonymous> (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/test/functional-script-owner.test.mjs:96:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: "functional surface FAIL: AssertionError [ERR_ASSERTION]: every scripted boundary must execute\n\n2 !== 5\n\n    at run (file:///tmp/oma-surface-owner-test-1nqjIv/runtime/scripts/functional-surface.mjs:111:14)\n    at async file:///tmp/oma-surface-owner-test-1nqjIv/runtime/scripts/functional-surface.mjs:130:5 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 2,\n  expected: 5,\n  operator: 'strictEqual',\n  diff: 'simple'\n}\nFailed to load hashline store: Error: ENOENT: no such file or directory, mkdir '/tmp/oma-surface-owner-test-1nqjIv/scratch/oma-functional-surface-WMs0Gt/sessions/hashline'\n    at async mkdir (node:internal/fs/promises:1677:10)\n    at async openStore (file:///home/user/Documents/Codex/2026-10-30/swe-milestone-2/agents/oma-v2/packages/tool-hashline/dist/vendor/pi-hashline-edit-pro/runtime/hash-store.js:209:5) {\n  errno: -2,\n  code: 'ENOENT',\n  syscall: 'mkdir',\n  path: '/tmp/oma-surface-owner-test-1nqjIv/scratch/oma-functional-surface-WMs0Gt/sessions/hashline'\n}\n",
+    expected: /surface-owner-injected-tool-result-error/,
+    operator: 'match',
+    diff: 'simple'
+  }

@@ -55,11 +55,11 @@ if(process.argv[2]==='arrival-crash-worker'){
  finally{restore();store.close();}
  throw Error('worker must be killed at the real partial append');
 }else{
- test('DR46-F05: ordinary arrival publication records a complete line',async t=>{
+ test("001. Ordinary arrival publication records a complete line",async t=>{
    const f=world(t);assert.equal((await f.mail().send(auth,'normal',input)).state,'succeeded');
    completeArrival(f,message(f,'normal').plan.message.id);
  });
- test('native wake: materialized hints run after commit and retain the original receipt',async t=>{
+ test("002. Native wake: materialized hints run after commit and retain the original receipt",async t=>{
    const f=world(t), hints=[];
    const mail=createMailModule({stateRoot:f.root,society:'demo'},f.store,64,24,undefined,actor=>{
      assert.equal(f.store.inTransaction,false,'a wake cannot execute inside the publication transaction');
@@ -72,7 +72,7 @@ if(process.argv[2]==='arrival-crash-worker'){
    assert.deepEqual(await mail.send(auth,'wake-after-commit',input),first);
    assert.deepEqual(hints,['bob'],'a terminal same-key receipt creates no new delivery effect');
  });
- test('native wake: rollback emits no materialized hint and preserves the accepted plan',async t=>{
+ test("003. Native wake: rollback emits no materialized hint and preserves the accepted plan",async t=>{
    const f=world(t), restore=injectArrivalWrite(()=>0);
    try{assert.equal((await f.mail().send(auth,'rollback-hint',input)).state,'pending');}finally{restore();}
    const row=message(f,'rollback-hint'), before=row.planJson, hints=[], failure=Error('abort publication transaction');
@@ -87,7 +87,7 @@ if(process.argv[2]==='arrival-crash-worker'){
    ledger.transaction(tx=>tx.markMaterialized(row.plan.message.id,'bob'));
    assert.deepEqual(hints,['bob'],'re-confirming a materialized row cannot feed a recovery wake loop');
  });
- test('DR46-F05: short arrival writes persist every byte before materialized',async t=>{
+ test("004. Short arrival writes persist every byte before materialized",async t=>{
    const f=world(t);let calls=0;
    const restore=injectArrivalWrite((fd,bytes,offset,length)=>{calls++;return original(fd,bytes,offset,Math.min(7,length));});
    try{assert.equal((await f.mail().send(auth,'short',input)).state,'succeeded');}finally{restore();}
@@ -95,7 +95,7 @@ if(process.argv[2]==='arrival-crash-worker'){
    assert.equal(f.store.getDelivery(row.plan.message.id,'bob').materialized,1);
    completeArrival(f,row.plan.message.id);
  });
- test('DR46-F05: a stalled arrival append remains pending and recovery preserves accepted bytes',async t=>{
+ test("005. A stalled arrival append remains pending and recovery preserves accepted bytes",async t=>{
    const f=world(t);let calls=0;
    const restore=injectArrivalWrite(()=>{calls++;return 0;});
    try{assert.equal((await f.mail().send(auth,'stalled',input)).state,'pending');}finally{restore();}
@@ -109,7 +109,7 @@ if(process.argv[2]==='arrival-crash-worker'){
    assert.deepEqual(fs.readFileSync(f.mail().objectPath(id)),object);completeArrival(f,id);
    assert.deepEqual(await f.mail().reconcilePending(),{examined:0,repaired:0,remaining:0});
  });
- for(const phase of ['file','parent'])test(`DR46-F05: ${phase} fsync failure cannot mark an arrival materialized`,async t=>{
+ for(const phase of ['file','parent'])test(`006. Mail arrival durability: ${phase} fsync failure cannot mark an arrival materialized`,async t=>{
    const f=world(t),path=mailInboxArrivalPathAt(f.root,'bob');
    const originalFsync=fs.fsyncSync;let sawArrival=false,injected=0;
    fs.fsyncSync=function(fd){
@@ -132,7 +132,7 @@ if(process.argv[2]==='arrival-crash-worker'){
    assert.equal(message(f,phase).planJson,before.planJson);
    assert.deepEqual(fs.readFileSync(f.mail().objectPath(id)),object);completeArrival(f,id);
  });
- test('DR46-F05: SIGKILL during a real arrival append, retry and restart retain the accepted message',async t=>{
+ test("007. SIGKILL during a real arrival append, retry and restart retain the accepted message",async t=>{
    const f=world(t);f.suspend();
    const child=fork(new URL(import.meta.url),['arrival-crash-worker',f.root],{stdio:['ignore','ignore','pipe','ipc']});
    let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk;});

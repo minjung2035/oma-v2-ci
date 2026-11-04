@@ -21,7 +21,7 @@ import { assertSupportedIntegration, integrationPolicyFromConfig, snapshotIntegr
 import { lockSync } from "proper-lockfile";
 import { removeTree } from "./fixtures/cleanup.js";
 
-test("AV-01/P0-4: an inode-pin close failure releases the directory it opened", t => {
+test("001. An inode-pin close failure releases the directory it opened", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-walk-fd-"));
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });
   const before = fs.readdirSync("/proc/self/fd").length;
@@ -44,7 +44,7 @@ test("AV-01/P0-4: an inode-pin close failure releases the directory it opened", 
 
 
 
-test("AV-01/10: owned observations repair read/search bits without unsealing state", async t => {
+test("002. Owned observations repair read/search bits without unsealing state", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-quota-"));
   t.after(() => removeTree(root));
   mkdirSync(join(root, "opaque")); writeFileSync(join(root, "opaque", "file"), "owned");
@@ -58,7 +58,7 @@ test("AV-01/10: owned observations repair read/search bits without unsealing sta
   chmodSync(join(root, "opaque"), 0o700);
 });
 
-test("AV-02: stale Pi managers merge through OMA's lock and preserve trusted project settings", async t => {
+test("003. Stale Pi managers merge through OMA's lock and preserve trusted project settings", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-settings-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const agent = join(root, "engine"), cwd = join(root, "project");
@@ -96,7 +96,7 @@ test("AV-02: stale Pi managers merge through OMA's lock and preserve trusted pro
     "retry after the project publication changed a committed choice");
 });
 
-test("AV-04/06: retained-output limits and long timer intervals do not kill a successful command", async () => {
+test("004. Retained-output limits and long timer intervals do not kill a successful command", async () => {
   const result = await runProcess({ executable: process.execPath,
     argv: ["-e", "process.stdout.write(Buffer.alloc(1048577));process.stderr.write(Buffer.alloc(1048577));setTimeout(()=>process.exit(0),50)"],
     env: {}, timeoutMs: 0x80000000, stdoutBytes: 1024, stderrBytes: 1024,
@@ -106,7 +106,7 @@ test("AV-04/06: retained-output limits and long timer intervals do not kill a su
   assert.equal(result.stdoutTruncated, true); assert.equal(result.stderrTruncated, true);
 });
 
-test("AV-02: the bundled CLI preload uses the same interprocess settings lock", async t => {
+test("005. The bundled CLI preload uses the same interprocess settings lock", async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-repair-pi-lock-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   prepareEngineInteractiveSettings(engineSettingsFiles, root);

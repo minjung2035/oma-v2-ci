@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { changeLocality } from "../scripts/change-locality.mjs";
 
-test("DR40: Change locality measures actual Git files, includes pending work, and keeps ownership separate", t => {
+test("001. Change locality measures actual Git files, includes pending work, and keeps ownership separate", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-change-locality-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });

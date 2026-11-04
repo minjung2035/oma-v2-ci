@@ -26,6 +26,8 @@ const seed: HostConfig = defaultHostConfig({
   society: "crash", node: process.execPath, libdir: root,
   deploymentDigest: "c".repeat(64),
 });
+seed.maxWorkers = 16;
+seed.initialResidents = seed.initialResidents.slice(0, 1);
 writeFileSync(path, `${JSON.stringify(seed, null, 2)}\n`);
 
 checkpoint("before-write");

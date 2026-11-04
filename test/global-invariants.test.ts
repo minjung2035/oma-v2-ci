@@ -50,7 +50,7 @@ function mutateRawRowAfterClose(path: string, sql: string, parameters: (string |
 }
 
 for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox-b", "prepared", "cur"]) {
-  test(`R33 existing SIGKILL ${point}: allowed partial state and immutable settled recovery`, async () => {
+  test(`001. Existing SIGKILL ${point}: allowed partial state and immutable settled recovery`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-global-mail-"));
     let fixture = normal(root); let open = true;
     try {
@@ -72,7 +72,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
 }
 
 for (const point of ["submit-accepted", "submit-ref", "ctx-cas", "ctx-mail", "int-cas"]) {
-  test(`R33 existing SIGKILL ${point}: global Git/mail relations after repeated recovery`, async () => {
+  test(`002. Existing SIGKILL ${point}: global Git/mail relations after repeated recovery`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-global-git-")); let fixture = normal(root); let open = true;
     try {
       seedGit(root);
@@ -93,7 +93,7 @@ for (const point of ["submit-accepted", "submit-ref", "ctx-cas", "ctx-mail", "in
 }
 
 for (const corruption of ["missing-source", "extra-delivery", "duplicate-batch-link"] as const) {
-  test(`R33 checker negative control: ${corruption}`, async () => {
+  test(`003. Checker negative control: ${corruption}`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-invariant-mutation-")); let fixture = normal(root); let open = true;
     try {
       const receipt = await fixture.mail.send(gitAuth, "valid", { to: ["b"], subject: "valid", kind: "message", body: "frozen" });
@@ -120,7 +120,7 @@ for (const corruption of ["missing-source", "extra-delivery", "duplicate-batch-l
   });
 }
 
-test("R33 checker negative control: immutable published ref points to another valid commit", async () => {
+test("004. Checker negative control: immutable published ref points to another valid commit", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-ref-mutation-")); const fixture = normal(root);
   try {
     seedGit(root); const { git, paths } = gitFixture(root, fixture.store);

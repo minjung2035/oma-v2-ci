@@ -12,20 +12,24 @@ import { ReviewModule, type ReviewBounds, type ReviewEffects } from "@oma/review
 import { ReviewAuthorityReader } from "@oma/review/authority";
 import { gitLedger, gitMessaging } from "./git-ledger.js";
 
-type CandidateCheck = (candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void) => Promise<void>;
+type CandidateCheck = (candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void, attempt?: string) => Promise<void>;
 function composeGit(paths: GitPaths, store: Store, mail: MailModule,
   policy: IntegrationPolicy | null, reader: IntegrationPolicyReader | null, check: CandidateCheck | null, quarantine: QuarantineExecution | null) {
   store.bindRepositoryIdentity({ society: paths.society });
   const ledger = gitLedger(store);
-  const repository = new GitRepository(paths, { submissions: () => ledger.submissions() }, quarantine);
+  const repository = new GitRepository(paths, { submissions: () => ledger.submissions(), attachmentRoots: () => ledger.attachmentRoots?.() ?? [] }, quarantine);
   const authority = new ReviewAuthorityReader({
     attestationFacts: () => store.attestationFacts(),
     getOperation: (actor, key) => store.getOperation(actor, key),
     listAgents: () => store.listAgents(),
-  }, policy?.tiered?.highPeerFloor ?? 1);
+  }, policy?.tiered?.highPeerFloor ?? 1, policy?.maxWorkers ?? 1, (base, candidate) => repository.review.submitters(base, candidate));
   const git = new GitModule(ledger, gitMessaging(mail), repository, policy, reader, check, {
     assertApplicable: request => authority.assertApplicable(request),
   });
+  mail.bindSharedAttachments({ prepare: commits => git.sharedAttachments(commits),
+    observe: sources => git.observeSharedAttachments(sources), assertUnchanged: sources => git.assertSharedAttachments(sources),
+    stage: (...args) => git.stageMailAttachments(...args), finalize: plan => git.finalizeMailAttachments(plan),
+    complete: root => git.completeMailAttachments(root) });
   return { git, repository, authority };
 }
 export function createGitModule(paths: GitPaths, store: Store, mail: MailModule,
@@ -39,7 +43,7 @@ export function createGitServices(paths: GitPaths, store: Store, mail: MailModul
   bounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 }, quarantine: QuarantineExecution | null = null) {
   const { git, repository, authority } = composeGit(paths, store, mail, policy, reader, check, quarantine);
   const effects: ReviewEffects = {
-    ...repository.review, ...reviewRuntime(),
+    ...repository.review, ...reviewRuntime(), executionPhase: request => git.executionPhase(request),
     policy: () => git.boundPolicy(), currentPolicy: () => git.currentIntegrationPolicy(),
     applyMerge: operation => git.applyMerge(operation), cancelMerge: request => git.cancelMerge(request),
     withWriter: work => git.withProjectWriter(work),

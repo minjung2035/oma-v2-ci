@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { legacyFindings } from "../scripts/check-legacy.mjs";
 
-test("DR59: retired presentation and invocation channels cannot return under another owner", t => {
+test("001. Retired presentation and invocation channels cannot return under another owner", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-native-channel-removal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "apps/oma/src/runtime/example.ts");
@@ -19,7 +19,7 @@ test("DR59: retired presentation and invocation channels cannot return under ano
   assert.deepEqual(legacyFindings(root), []);
 });
 
-test("DR59: retired inference handoff is rejected without banning the active Principal channel", t => {
+test("002. Retired inference handoff is rejected without banning the active Principal channel", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-native-relay-removal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const relay = join(root, "apps/oma/src/runtime/inference-relay.ts");
@@ -33,7 +33,7 @@ test("DR59: retired inference handoff is rejected without banning the active Pri
   assert.deepEqual(legacyFindings(root), []);
 });
 
-test("NATIVE-010: the removed tool-runtime file implementation cannot return as a compatibility export", t => {
+test("003. The removed tool-runtime file implementation cannot return as a compatibility export", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-tool-files-removal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "packages/tool-runtime/src/contained-files.ts");
@@ -42,7 +42,7 @@ test("NATIVE-010: the removed tool-runtime file implementation cannot return as 
   assert.match(legacyFindings(root).join("\n"), /removed compatibility surface/);
 });
 
-test("completed removals reject old import facades and declarations while retaining same-build recovery", t => {
+test("004. Completed removals reject old import facades and declarations while retaining same-build recovery", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-legacy-removals-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (file, text) => {
@@ -58,7 +58,7 @@ test("completed removals reject old import facades and declarations while retain
   assert.match(legacyFindings(root).join("\n"), /removed declaration enforceQuota/);
 });
 
-test("DR46 current format: removed resource and attestation types cannot be reintroduced under another owner", t => {
+test("005. Current format: removed resource and attestation types cannot be reintroduced under another owner", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-removed-formats-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "packages/contracts/src"), { recursive: true });
@@ -67,7 +67,7 @@ test("DR46 current format: removed resource and attestation types cannot be rein
   { writeFileSync(target, declaration); assert.match(legacyFindings(root).join("\n"), /removed declaration/); }
 });
 
-test("DR46-F02: a tool cannot reintroduce a configurable vendor verification location", t => {
+test("006. A tool cannot reintroduce a configurable vendor verification location", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-vendor-override-removal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, "packages/tool-lsp/src/options.ts");
@@ -80,7 +80,7 @@ test("DR46-F02: a tool cannot reintroduce a configurable vendor verification loc
   assert.deepEqual(legacyFindings(root), []);
 });
 
-test("DR46: core extension compatibility entries and mirrored channel aliases stay removed", t => {
+test("007. Core extension compatibility entries and mirrored channel aliases stay removed", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-extension-owner-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const file of ["src/pi-extension.ts", "src/extension/entry.ts", "tsconfig.extension.json"]) {

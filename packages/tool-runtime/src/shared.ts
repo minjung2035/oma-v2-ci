@@ -1,9 +1,12 @@
 /** Helpers every part of the trusted extension uses. Like the rest of
  * `src/extension/`, this imports no OMA runtime module (PI-001). */
 
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Type, type TSchema, type Static } from "typebox";
+import { Compile } from "typebox/compile";
 import { createHash } from "node:crypto";
 import { logicalFromDisplay } from "@oma/domain/display-address";
-import { isValidActorName as validActorName, isValidRequestKey as validRequestKey } from "@oma/domain/identifiers";
+import { isValidActor as validStatusName, isValidActorName as validActorName, isValidRequestKey as validRequestKey } from "@oma/domain/identifiers";
 
 export function integerEnv(name: string): number | null {
   const value = Number(process.env[name]);
@@ -22,6 +25,15 @@ export function refused(what: string, value: unknown): never {
 export function actorNameOf(value: unknown, society: string | undefined, what: string): string {
   const logical: unknown = logicalFromDisplay(value, society) ?? value;
   return typeof logical === "string" && validActorName(logical) ? logical : refused(what, value);
+}
+/** The names a status roster carries are the Principal row's and managed
+ * Residents' (the registry admits no other), and `status.get`'s `next` cursor
+ * is exactly one of them. The roster tool's `agent` and `after` slots take that
+ * same grammar; this is not the worker-identity guard -- `actorNameOf` still
+ * refuses the Principal in every slot that names a controllable agent. */
+export function statusNameOf(value: unknown, society: string | undefined, what: string): string {
+  const logical: unknown = logicalFromDisplay(value, society) ?? value;
+  return typeof logical === "string" && validStatusName(logical) ? logical : refused(what, value);
 }
 /** What a tool knows of the call it serves: the engine's call id and, when
  * the engine gives it, the session the call is in. */
@@ -65,7 +77,7 @@ function answeredAlike(origin: ToolCallOrigin, branch: readonly unknown[]): numb
 
 /** What the model is told of `request` (P0V-110). */
 export const REQUEST_PARAMETER_HELP =
-  "Optional request key. Without one, calling again with the same arguments before you have seen a result is the same request, done once; give a new key to do the same thing again.";
+  "Optional idempotency key. Retain the returned key. For an accepted or unknown outcome, query oma_operation_status; replay only the original frozen request with the same key and inputs. Never change keys to escape uncertainty. If omitted, an identical call without a recorded result reuses its derived key; after a recorded result, another call gets a new key. A new key is for an intentionally new operation.";
 
 /** P0V-110 (seventh review F-07, P0-4, P0-5): the request key a tool call
  * is made under -- the model's, if it gives one, and otherwise one the call
@@ -85,4 +97,51 @@ export function requestKeyOf(value: unknown, origin: ToolCallOrigin): string {
     ? ["call", origin.id, origin.tool, withoutRequest(origin.params)]
     : ["session", manager.getSessionId(), origin.tool, withoutRequest(origin.params), answeredAlike(origin, manager.getBranch())];
   return `pi-${createHash("sha256").update(canonical(identity)).digest("hex").slice(0, 40)}`;
+}
+
+/** Plain JSON string enums survive the installed provider serializers. */
+export function stringEnum<const T extends readonly string[]>(values: T) {
+  return Type.Unsafe<T[number]>({ type: "string", enum: [...values] });
+}
+
+type InputSchema = TSchema & {
+  properties?: Record<string, TSchema>;
+  required?: string[];
+  items?: TSchema | TSchema[];
+  anyOf?: TSchema[];
+};
+
+/** Pi normalizes optional nulls, then coerces primitive values. Check raw
+ * arguments first so a required body:null never becomes the string "null".
+ * This schema is local validation only; provider conversion stays in Pi. */
+function rawInputSchema(schema: InputSchema): TSchema {
+  const result = { ...schema };
+  if (schema.properties) {
+    const required = new Set<string>(schema.required ?? []);
+    result.properties = Object.fromEntries(Object.entries(schema.properties as Record<string, TSchema>).map(([name, field]) => {
+      const child = rawInputSchema(field);
+      return [name, required.has(name) ? child : Type.Union([child, Type.Null()])];
+    }));
+  }
+  if (schema.items && !Array.isArray(schema.items)) result.items = rawInputSchema(schema.items as TSchema);
+  if (Array.isArray(schema.anyOf)) result.anyOf = schema.anyOf.map(rawInputSchema);
+  return result;
+}
+
+/** A single schema owns model guidance, non-coercing input and direct execution. */
+export function registerTypedTool<T extends TSchema>(pi: ExtensionAPI, tool: ToolDefinition<T>): void {
+  const parameters = { ...tool.parameters, additionalProperties: false };
+  const raw = Compile(rawInputSchema(parameters)), normalized = Compile(parameters);
+  const prepareArguments = (args: unknown): Static<T> => {
+    if (!raw.Check(args)) throw new Error(`Invalid arguments for ${tool.name}: ${JSON.stringify([...raw.Errors(args)])}`);
+    return args as Static<T>;
+  };
+  pi.registerTool({
+    ...tool, parameters, prepareArguments,
+    constrainedSampling: { type: "json_schema", strict: "prefer" },
+    async execute(id, args, signal, update, context) {
+      if (!normalized.Check(args)) throw new Error(`Invalid arguments for ${tool.name}: ${JSON.stringify([...normalized.Errors(args)])}`);
+      return tool.execute(id, args, signal, update, context);
+    },
+  });
 }

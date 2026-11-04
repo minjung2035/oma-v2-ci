@@ -10,7 +10,7 @@ import { prepareProjectDirectory } from "@oma/git/project-preparation";
 import { collectLeasedTree } from "@oma/storage/tree-lease";
 
 for (const point of ["prepared", "released", "collected"] as const) {
-  test(`DR27/P0-7: snapshot preparation SIGKILL after ${point} keeps ownership recoverable`, t => {
+  test(`001. Snapshot preparation SIGKILL after ${point} keeps ownership recoverable`, t => {
     const root = mkdtempSync(join(tmpdir(), "oma-preparation-crash-"));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const tree = join(root, "snapshot");
@@ -40,7 +40,7 @@ for (const point of ["prepared", "released", "collected"] as const) {
   });
 }
 
-test("DR27/P0-4: failed preparation handoff releases its lease and collects only its own tree", t => {
+test("002. Failed preparation handoff releases its lease and collects only its own tree", t => {
   const root = mkdtempSync(join(tmpdir(), "oma-preparation-handoff-"));
   const tree = join(root, "snapshot");
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); });

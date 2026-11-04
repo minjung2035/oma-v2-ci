@@ -58,7 +58,7 @@ function notRunLanes() {
   return loop === null ? [] : loop[1].trim().split(/\s+/);
 }
 
-test("T125: no lane is killed by the workflow before its own budget expires", () => {
+test("001. No lane is killed by the workflow before its own budget expires", () => {
   const observed = checks();
   assert.ok(observed.length > 0, "the workflow runs no checks");
   for (const { label, seconds } of observed) {
@@ -69,7 +69,7 @@ test("T125: no lane is killed by the workflow before its own budget expires", ()
   }
 });
 
-test("T125: every available lane runs or its actual files and required oracles run in the full native lane", () => {
+test("002. Every available lane runs or its actual files and required oracles run in the full native lane", () => {
   const run = new Set(checks().map(entry => entry.label));
   const recorded = notRunLanes();
   assert.ok(run.has("verify-all"), "full native qualification must execute");
@@ -84,7 +84,7 @@ test("T125: every available lane runs or its actual files and required oracles r
   assert.doesNotMatch(workflow, /systemd-lanes|OMA_TEST_SYSTEMD|vsock_loopback/);
 });
 
-test("T125: the job clock cannot fire before the checks it contains", () => {
+test("003. The job clock cannot fire before the checks it contains", () => {
   // Every check runs in sequence, so the job needs at least their sum. Without
   // this the per-check ceilings mean nothing: the outer clock kills the run
   // first and the evidence blames a check that was still inside its budget.
@@ -101,7 +101,7 @@ test("T125: the job clock cannot fire before the checks it contains", () => {
   }
 });
 
-test("T125: the runner installs what the containment tests need rather than skipping them", () => {
+test("004. The runner installs what the containment tests need rather than skipping them", () => {
   // Without bubblewrap the sandbox tests skip, the suite still exits zero, and
   // the run records a pass for work that never happened.
   assert.match(workflow, /bash scripts\/setup-native-linux-ci\.sh/);
@@ -112,7 +112,7 @@ test("T125: the runner installs what the containment tests need rather than skip
   assert.doesNotMatch(installer, /sysctl -w|apparmor_restrict_unprivileged_userns=0/);
 });
 
-test("T125: the line counter is the pinned release, verified before it runs", () => {
+test("005. The line counter is the pinned release, verified before it runs", () => {
   // The LOC gate compares every count against a fresh measurement, so the tool
   // doing the measuring is evidence too. A distribution package of another
   // version, or an unverified download, would make that comparison meaningless.
@@ -125,7 +125,7 @@ test("T125: the line counter is the pinned release, verified before it runs", ()
     "the inventory is checked before the tool it needs is installed");
 });
 
-test("T125: the pre-generation inventory check asserts committed source digests before generating CI measurements", () => {
+test("006. The pre-generation inventory check asserts committed source digests before generating CI measurements", () => {
   // Source digests are checked before generation; measuring LOC requires the
   // pinned tool separately and must not rewrite the committed source claim.
   assert.match(workflow, /npm run check:inventory > "\$EVIDENCE\/inventory-before\.log"/);
@@ -134,7 +134,7 @@ test("T125: the pre-generation inventory check asserts committed source digests 
   assert.ok(workflow.indexOf('npm run check:inventory >') < workflow.indexOf('run_check loc 900'));
 });
 
-test("T125: committed source artifacts cannot be regenerated into a passing claim; LOC is not a committed gate", () => {
+test("007. Committed source artifacts cannot be regenerated into a passing claim; LOC is not a committed gate", () => {
   // Recording rewritten source digests as an artifact and passing anyway would
   // hide a stale claim. LOC figures themselves are no longer commit inputs.
   const section = workflow.slice(workflow.indexOf("generated-inventory.patch"));
@@ -144,7 +144,7 @@ test("T125: committed source artifacts cannot be regenerated into a passing clai
   assert.match(section, /touch "\$EVIDENCE\/failed"/);
 });
 
-test("T125: a stale inventory observed before the generators run fails the workflow", () => {
+test("008. A stale inventory observed before the generators run fails the workflow", () => {
   // The generators rewrite the very files the pre-check looked at, so an
   // observation that only lands in a log would be erased by the next step.
   const section = workflow.slice(workflow.indexOf("check:inventory"));
@@ -153,13 +153,13 @@ test("T125: a stale inventory observed before the generators run fails the workf
     "a stale inventory is observed but does not fail the run");
 });
 
-test("T125: the evidence README never counts a lane that did not run as a pass", () => {
+test("009. The evidence README never counts a lane that did not run as a pass", () => {
   const readme = workflow.match(/Exit codes and lane result\.json files are authoritative\.[^']*/)?.[0] ?? "";
   for (const word of ["SETUP_FAILED", "skips", "NOT_RUN", "timeouts"])
     assert.ok(readme.includes(word), `the README does not exclude ${word}`);
 });
 
-test("T125: every branch that can become master is verified before it does", () => {
+test("010. Every branch that can become master is verified before it does", () => {
   // Verifying only the integration branch means master's own bytes, and every
   // proposal to change them, are never observed by CI at all.
   const pushed = branchesFor("push");
@@ -170,7 +170,7 @@ test("T125: every branch that can become master is verified before it does", () 
     "a proposal to change master is never verified as a proposal");
 });
 
-test("T125: the run verifies the commit under test, not the merge commit CI invented", () => {
+test("011. The run verifies the commit under test, not the merge commit CI invented", () => {
   // On a pull request `github.sha` names a merge commit this workflow made up.
   // It exists in no repository after the run, so a tree checked out from it --
   // and any evidence filed under it -- can never be compared with a commit
@@ -186,7 +186,7 @@ test("T125: the run verifies the commit under test, not the merge commit CI inve
     "the checkout and the claimed commit are chosen independently, so they can disagree");
 });
 
-test("T125: nothing is measured until the tree is the commit the evidence names", () => {
+test("012. Nothing is measured until the tree is the commit the evidence names", () => {
   const bind = step("Bind this run to the exact commit it verifies");
   assert.match(bind, /head="\$\(git rev-parse HEAD\)"/);
   assert.match(bind, /test "\$head" = "\$VERIFIED_SHA"/,
@@ -200,7 +200,7 @@ test("T125: nothing is measured until the tree is the commit the evidence names"
 });
 
 
-test("T125: evidence is filed under the commit that produced it", () => {
+test("013. Evidence is filed under the commit that produced it", () => {
   const names = [...workflow.matchAll(/^ {10}name: (oma-.*)$/gm)].map(([, name]) => name.trim());
   assert.ok(names.length >= 2, "the workflow uploads fewer artifacts than it has evidence");
   for (const name of names) {
@@ -210,7 +210,7 @@ test("T125: evidence is filed under the commit that produced it", () => {
   }
 });
 
-test("T125: a run that lost its binding cannot report success", () => {
+test("014. A run that lost its binding cannot report success", () => {
   // Unbound evidence is not evidence: a green result that names no commit is
   // exactly the reading error this whole file exists to prevent.
   const propagate = step("Propagate unsuccessful verification");

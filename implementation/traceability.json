@@ -198,8 +198,8 @@
   {
     "requirement": "M-001",
     "source": "docs/implementation-spec.md",
-    "digest": "cddf3cf8bdee41dd95bd469e7795c334919a239e8644b87c91508584c8741f37",
-    "normativeText": "**MUST [M-001]** application/extension/CLI/runner는 TypeScript로 작성하여 고정된 Node.js runtime에서 실행한다. Pi extension도 TypeScript다. Python supervisor, shell 업무 engine, 별도 Go/Rust broker로 대체하지 않는다. syscall에 필요한 최소 native leaf의 필요성·binding은 `S-01`로 검증한다.",
+    "digest": "c810c6b3a19e88cea619f1ba76ea6b103a7b2f85affa755ee16bb0419142aef0",
+    "normativeText": "**MUST [M-001]** application/extension/client/runner는 TypeScript로 작성하여 고정된 Node.js runtime에서 실행한다. Pi extension도 TypeScript다. Python supervisor, shell 업무 engine, 별도 Go/Rust broker로 대체하지 않는다. syscall에 필요한 최소 native leaf의 필요성·binding은 `S-01`로 검증한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -252,8 +252,10 @@
       "packages/storage/src/store.ts#Store.transaction"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/compliance.test.ts#COMP-005/006"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/compliance.test.ts#001. Structural evidence rejects stale, incomplete and duplicate records"
     ],
     "evidence": null,
     "status": "unverified",
@@ -277,8 +279,8 @@
   {
     "requirement": "ID-002",
     "source": "docs/implementation-spec.md",
-    "digest": "c7d1d822dec6fe6484a8f6ecffec2a12094f5c9a3423f9424663ce17e3e2009d",
-    "normativeText": "**MUST [ID-002]** operation/batch ID는 prefix `op-`/`b-`와 소문자 UUIDv4이고, message file ID는 `m-<operation UUID>-<ordinal>`이다. ordinal은 0부터이며 한 operation의 message plan에서 고정한다. Message-ID는 `<file-id@society.oma.invalid>`다. request key는 CLI 생성 UUID 또는 `--request`의 `[A-Za-z0-9._-]{1,96}`이고 actor 범위에서 유일하다. ID를 모델이 수동 생성할 필요는 없다.",
+    "digest": "a39ba75d00d78c11e151b099b42af29a4335f6defcabcf2f4364a3bea96e8d01",
+    "normativeText": "**MUST [ID-002]** operation/batch ID는 prefix `op-`/`b-`와 소문자 UUIDv4이고, message file ID는 `m-<operation UUID>-<ordinal>`이다. ordinal은 0부터이며 한 operation의 message plan에서 고정한다. Message-ID는 `<file-id@society.oma.invalid>`다. request key는 client 생성 UUID 또는 `request`의 `[A-Za-z0-9._-]{1,96}`이고 actor 범위에서 유일하다. ID를 모델이 수동 생성할 필요는 없다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -291,8 +293,8 @@
   {
     "requirement": "ID-003",
     "source": "docs/implementation-spec.md",
-    "digest": "223bc12a0380f126ed6e8480280f7460fe25d12002a00f475c8409a2aa6662cb",
-    "normativeText": "**MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 CLI가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.",
+    "digest": "db39cdabb368d1af5375838d5a3886d902b8b48c3d2ecdee93508bf643322b59",
+    "normativeText": "**MUST [ID-003]** Git OID는 repository의 object format에 맞는 full lowercase hex만 wire에서 받는다. symbolic revision은 client가 freeze한 뒤 전송한다. hash 길이를 SHA-1 40자로 고정하지 않는다. wire path는 `/` 구분 상대 경로이고 NUL, `.`/`..` component, 절대 경로를 거절한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -420,10 +422,15 @@
       "packages/domain/src/authority.ts#assertCurrentActor"
     ],
     "negativeTests": [
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: ancestry distinguishes",
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/r37-recovery-observation.test.ts#R37"
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#010. Real OS: ancestry distinguishes live siblings and retains identity across observed exit",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks"
     ],
     "evidence": null,
     "status": "unverified",
@@ -461,8 +468,8 @@
   {
     "requirement": "FS-003",
     "source": "docs/implementation-spec.md",
-    "digest": "86c0addd4dad4ef6742b87e504a8c9cf4bda179a65d992e5c1d3f7dae61a43fd",
-    "normativeText": "**MUST [FS-003]** CLI cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal CLI의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.",
+    "digest": "21de209854c6ac926ecb692ba165a5f06ff4d5a2bed2b7adafcc5ea712215b22",
+    "normativeText": "**MUST [FS-003]** client cache는 `/home/agent/.local/state/oma/requests/<key>.json`이며 freeze된 request, body/bundle digest, 마지막 receipt만 저장한다. broker 원본이 아니고 모델이 변조할 수 있다. broker는 항상 다시 검증한다. Principal client의 대응 cache는 자기 private scratch 안에 둔다. 여기서 별도 queue/자동 replay engine을 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/engine/src/principal-session.ts#principalEnvironment",
@@ -474,7 +481,8 @@
       "packages/engine/src/principal-session.ts#principalEnvironment"
     ],
     "negativeTests": [
-      "test/model-scope.test.ts#AV3"
+      "test/model-scope.test.ts#001. The Principal's model scope holds neither the Human's session history nor the engine's credentials",
+        "test/model-scope.test.ts#002. An engine whose workspace overlaps what the product keeps is refused before it starts"
     ],
     "evidence": null,
     "status": "unverified",
@@ -510,9 +518,12 @@
       "packages/native/src/files.ts#withinDirectory"
     ],
     "negativeTests": [
-      "test/held-parent.test.ts#AV5",
-      "test/untrusted-directories.test.ts#AV4",
-      "test/architecture-rule-modules.test.mjs#AV5"
+      "test/held-parent.test.ts#001. A spool whose staging path is replaced after sealing reads and removes only its own file",
+      "test/untrusted-directories.test.ts#001. A receipt's session is found beneath its directory in one resolution; a link at any component is never followed",
+        "test/untrusted-directories.test.ts#002. Once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it",
+      "test/architecture-rule-modules.test.mjs#022. The state-tree rule accepts effects through a held parent, a descriptor or a primitive",
+        "test/architecture-rule-modules.test.mjs#023. The state-tree rule rejects a mutation that names a path",
+        "test/architecture-rule-modules.test.mjs#024. The real tree changes the state tree only through held parents"
     ],
     "evidence": null,
     "status": "unverified",
@@ -732,8 +743,8 @@
   {
     "requirement": "IPC-005",
     "source": "docs/implementation-spec.md",
-    "digest": "764054ccfd4c4bbd642ed006fdfb0b1ed1a8c74c789cdc8285c810a5d16dcf6d",
-    "normativeText": "**MUST [IPC-005]** request hash는 method+normalized params+stream descriptor를 key 정렬한 canonical UTF-8 JSON의 SHA-256이다. 배열 순서는 의미 있는 경우 보존하고 to/prerequisite/path 집합은 dedupe+lexical sort한다. body bytes와 subject는 trim하지 않는다. CRLF body는 CLI가 LF로 정규화하고 이후 immutable하게 취급한다. request key, transport id, timestamp, actor supplied claim은 hash 입력이 아니다.",
+    "digest": "7f2dce97da5074362c2e79cdd8f816ffb6114b9433dc6b111c1d31eea25ccabd",
+    "normativeText": "**MUST [IPC-005]** request hash는 method+normalized params+stream descriptor를 key 정렬한 canonical UTF-8 JSON의 SHA-256이다. 배열 순서는 의미 있는 경우 보존하고 to/prerequisite/path 집합은 dedupe+lexical sort한다. body bytes와 subject는 trim하지 않는다. CRLF body는 client가 LF로 정규화하고 이후 immutable하게 취급한다. request key, transport id, timestamp, actor supplied claim은 hash 입력이 아니다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -746,8 +757,8 @@
   {
     "requirement": "IPC-006",
     "source": "docs/implementation-spec.md",
-    "digest": "27c7e235b48d7e36d9b0f001cb30ea6de07d0bc67917bc8b83c07e6db4532569",
-    "normativeText": "**MUST [IPC-006]** CLI는 effect 요청 이전에 private cache에 key·normalized payload·고정 OID·stream digest를 atomic write한다. 응답 유실 시 같은 key로 operation.get, 미접수면 동일 payload로 retry한다. 동일 actor/key·동일 hash는 기존 receipt, 다른 hash는 `REQUEST_KEY_REUSED`다. 같은 key의 동시 preaccept 파일이 여러 개 생겨도 DB unique winner의 plan만 공개한다.",
+    "digest": "0e53bd0f0834d52fa8cd2c98537cac189b1127720047318739579195b3e92cf1",
+    "normativeText": "**MUST [IPC-006]** client는 effect 요청 이전에 private cache에 key·normalized payload·고정 OID·stream digest를 atomic write한다. 응답 유실 시 같은 key로 operation.get, 미접수면 동일 payload로 retry한다. 동일 actor/key·동일 hash는 기존 receipt, 다른 hash는 `REQUEST_KEY_REUSED`다. 같은 key의 동시 preaccept 파일이 여러 개 생겨도 DB unique winner의 plan만 공개한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -760,8 +771,8 @@
   {
     "requirement": "IPC-007",
     "source": "docs/implementation-spec.md",
-    "digest": "3df9a5a097ad2a502ab63188aae2a3c550c5bcd3c381e2073f6242fe0eddd003",
-    "normativeText": "**MUST NOT [IPC-007]** timeout을 failed로 바꾸거나 새 key를 자동 만들어 동일 효과를 재실행한다. 새 shell invocation에 새 key가 생기는 것은 별도 요청이며 자연어 의미를 dedup하지 않는다. key가 다르면 같은 candidate라도 새 수신자/result mail을 만드는 정상 제출일 수 있다.",
+    "digest": "49ea4f2af72ca9895327169cc846e8fe2599598a227b650a953987230ceaac41",
+    "normativeText": "**MUST NOT [IPC-007]** timeout을 failed로 바꾸거나 새 key를 자동 만들어 동일 효과를 재실행한다. 새 tool 호출에 새 key가 생기는 것은 별도 요청이며 자연어 의미를 dedup하지 않는다. key가 다르면 같은 candidate라도 새 수신자/result mail을 만드는 정상 제출일 수 있다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -774,8 +785,8 @@
   {
     "requirement": "IPC-008",
     "source": "docs/implementation-spec.md",
-    "digest": "1619765e2b91397a8392809e809c48c43d249cea0eff864966ff535488651791",
-    "normativeText": "**MUST [IPC-008]** operation.get은 새로운 model-facing 명령을 만들지 않고 원래 command의 `--request <key>` 재호출/복구 안내 내부에서 사용한다. CLI가 freeze cache를 찾으면 현재 HEAD를 다시 해석하지 않는다. cache와 사용자 새 인자가 충돌하면 `REQUEST_KEY_REUSED`로 명확히 중단한다. unconfirmed key 복구 안내는 `/inbox.md`에 경로와 원래 command를 짧게 제공한다.",
+    "digest": "bbb856ff309d6fbb20793c7cde831c1f0d070bf0e4bff1ca04f3ecfcdb5e4190",
+    "normativeText": "**MUST [IPC-008]** `oma_operation_status`는 현재 actor의 원래 key로 operation.get을 조회한다. 원래 mutation 재호출은 같은 `request`와 frozen input을 사용한다. client가 freeze cache를 찾으면 현재 HEAD·body·brief·bundle을 다시 만들지 않는다. cache와 새 인자가 충돌하면 `REQUEST_KEY_REUSED`로 중단한다. unconfirmed 복구 안내는 tool 이름과 원래 request/key를 제공하며 shell 명령을 요구하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -788,8 +799,8 @@
   {
     "requirement": "IPC-009",
     "source": "docs/implementation-spec.md",
-    "digest": "8908503995422979730c5d4f33a7d02598462699e0d20d4e31555a186280525d",
-    "normativeText": "**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 일반 `oma` CLI에 내부 method 호출 escape hatch를 넣지 않는다.",
+    "digest": "8409b418c28026e5417f2367f29b9590958c72c42a3db418d59f422a139c6720",
+    "normativeText": "**MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 모델 tool 표면에 내부 method 호출 escape hatch를 넣지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -802,8 +813,8 @@
   {
     "requirement": "IPC-011",
     "source": "docs/implementation-spec.md",
-    "digest": "03a9f455a29062f68fd43f51003c0e1bedeb2a86baaf9fef152c3ca22dc9fe06",
-    "normativeText": "**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine, trusted extension→CLI로도 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.",
+    "digest": "311d93b9698569ba06cf86920b971f9c4fd78e8b79ab65c8f0f34659123bfdb6",
+    "normativeText": "**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. host-only channel은 host가 broker를 spawn할 때 연 socketpair(descriptor 3)이며, host는 그 peer로 식별되므로 secret이 필요 없다. broker는 이 channel이 있을 때만 principal endpoint를 열고, 두 endpoint가 listening된 뒤에 준비를 알린다. host는 자신의 자식인 engine을 등록하고, broker는 그 engine이 실제로 host의 자식인지 확인한 뒤 credential을 channel로 돌려준다. credential과 session handle은 파일에도, 어떤 프로세스의 환경에도, 명령행에도 두지 않는다 — 셋 다 같은 UID의 다른 프로세스가 읽을 수 있기 때문이다. host→engine에는 socketpair로만 전달하며, pipe와 달리 socket은 `/proc/<pid>/fd`로 다시 열 수 없다. attach는 credential과 handle에 더해 연결한 프로세스가 등록된 engine의 자손일 것을 요구하므로, credential을 얻었어도 engine이 시작하지 않은 프로세스는 Principal이 아니다. attach 이전 요청과 위조·이전 run의 credential은 `AUTH_FAILED`, 다른 session handle은 `ATTACH_CONFLICT`다. 재등록과 broker 재시작은 새 credential을 발급하고 이전 것은 무효다. 권한은 attach 시점에 받은 context가 아니라 현재 등록 세대에 대한 binding이며 모든 요청과 preflight에서 재확인한다. 자손 관계도 attach 때 한 번 보고 마는 것이 아니라 요청마다 `/proc`에서 다시 계산한다 — engine이 죽으면 그 자손은 init으로 reparent되어 더 이상 어떤 engine의 자손도 아니고, attach 때의 판정을 기억해 두면 죽은 engine이 남긴 프로세스가 Principal 권한을 계속 쓰게 된다. engine이 죽었음은 pid가 아니라 pid와 시작 시각의 쌍으로 판정하며, 그 사실이 확인되면 그 session 전체를 은퇴시킨다. 은퇴는 거절을 먼저 쓴 뒤에 일어나므로 요청자는 끊김이 아니라 `AUTH_FAILED`를 받는다. 재등록·broker 교체·endpoint 종료는 이전 세대에 attach된 연결을 그 자리에서 끊으므로, 이미 연결을 들고 있던 engine도 다음 요청을 통과시키지 못한다. host endpoint는 host임을 확인한 뒤 먼저 method 표면을 판정하고(서빙하지 않는 method는 `UNKNOWN_METHOD`), 그 다음에 이 broker의 Principal 등록 유무를 본다 — method의 존재 여부는 등록 여부에 의존하지 않으며 error class가 caller의 재시도를 결정하기 때문이다. host의 channel이 닫히면 broker는 스스로 멈춘다. ptrace가 같은 UID 사이에서 제한되지 않는 host(Yama scope 0)에서는 어떤 user-space 검사도 두 프로세스를 구별하지 못하며, 이는 host의 성질로 적어 둔다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/broker/src/principal-endpoint.ts#PrincipalEndpoint",
@@ -817,8 +828,58 @@
       "packages/broker/src/process-ancestry.ts#descendsFrom"
     ],
     "negativeTests": [
-      "test/principal-endpoint.test.ts#T114",
-      "test/principal-channel.test.ts#T114"
+      "test/principal-endpoint.test.ts#002. A broker no host started opens no Principal endpoint at all",
+        "test/principal-endpoint.test.ts#003. The host is told the broker is ready only once both endpoints are listening",
+        "test/principal-endpoint.test.ts#004. The broker accepts only the host's own child as the Principal's engine",
+        "test/principal-endpoint.test.ts#005. The credential is in no file and no environment -- read from outside, as an attacker would",
+        "test/principal-endpoint.test.ts#006. The endpoint refuses every request until the session attaches",
+        "test/principal-endpoint.test.ts#007. The audit's attack -- the right credential and handle from a process the engine did not start",
+        "test/principal-endpoint.test.ts#008. Another session's handle is a conflict, not a failed authentication",
+        "test/principal-endpoint.test.ts#009. The Principal typed host Client sends through its private endpoint and archives the exact body",
+        "test/principal-endpoint.test.ts#010. The engine attaches in-process; credentials never enter its environment or a CLI child",
+        "test/principal-endpoint.test.ts#011. A detached engine cannot invent a Principal grant from the environment",
+        "test/principal-endpoint.test.ts#012. A re-registered engine gets a new credential and the old one stops working",
+        "test/principal-endpoint.test.ts#013. A credential from an earlier broker authorises nothing in a later one",
+        "test/principal-endpoint.test.ts#014. Mail to the Principal is delivered into its live session and completed",
+        "test/principal-endpoint.test.ts#015. A turn that does not settle cleanly leaves the mail pending, and it is retried later",
+        "test/principal-endpoint.test.ts#016. Nothing the model runs can mark its own mail delivered",
+        "test/principal-endpoint.test.ts#017. Delivery waits for an idle session rather than landing inside a Human's turn",
+        "test/principal-endpoint.test.ts#019. The credential comparison is fixed-shape and does not stop early",
+        "test/principal-endpoint.test.ts#020. Provisioning creates the directories the Principal's engine and its session use",
+        "test/principal-endpoint.test.ts#021. A Human prompt claims the session before it is written, so delivery cannot slip in",
+        "test/principal-endpoint.test.ts#022. A Human prompt typed during a delivery waits in the host and is not folded into the delivery's run",
+        "test/principal-endpoint.test.ts#023. Every prompt typed while the session was spoken for runs, once each, in order",
+        "test/principal-endpoint.test.ts#024. A prompt the engine refuses gives the session back and is said on the screen",
+        "test/principal-endpoint.test.ts#025. A refused delivery command gives the session back and lets the waiting Human through",
+        "test/principal-endpoint.test.ts#026. A response for a prompt the session has moved on from changes nothing",
+        "test/principal-endpoint.test.ts#027. A prompt the transport cannot carry stops the screen saying the session is busy",
+        "test/principal-endpoint.test.ts#029. The waiting prompt that could not be sent is named, and the rest still go",
+        "test/principal-endpoint.test.ts#030. The busy report comes from the ownership itself, at every move of it",
+        "test/principal-endpoint.test.ts#034. A failed assistant message does not end the delivery -- the run settling does",
+        "test/principal-endpoint.test.ts#035. A run that settles on a failed assistant message is reported as the provider failing",
+        "test/principal-endpoint.test.ts#036. A delivery the engine never answers keeps the session",
+        "test/principal-endpoint.test.ts#037. The extension is ready for the next batch however a turn ended",
+        "test/principal-endpoint.test.ts#038. The Principal's session stays in its own private space",
+        "test/principal-endpoint.test.ts#039. The host is answered on its identity, not on a number another process may hold",
+        "test/principal-endpoint.test.ts#040. A method the host endpoint does not serve is an unknown method, not a refused host",
+        "test/principal-endpoint.test.ts#041. The host is served delivery only while this broker holds a registration for its engine",
+        "test/principal-endpoint.test.ts#042. A registration that ends closes delivery again, without anything telling the endpoint",
+        "test/principal-endpoint.test.ts#043. Stopping the broker releases the supervision channel it was given",
+        "test/principal-endpoint.test.ts#046. Re-registering the session revokes the connections the old one already had",
+        "test/principal-endpoint.test.ts#047. A registration the broker refuses leaves no attached Principal behind",
+        "test/principal-endpoint.test.ts#048. Closing the endpoint revokes the connections that are already attached",
+        "test/principal-endpoint.test.ts#049. Detaching gives up authority rather than parking it for later",
+        "test/principal-endpoint.test.ts#050. An engine that dies takes the authority of the processes it started with it",
+        "test/principal-endpoint.test.ts#051. Revocation reaches every attached connection, and only attached ones",
+      "test/principal-channel.test.ts#002. The extension's channel names are the protocol's",
+        "test/principal-channel.test.ts#003. The extension accepts exactly the credential lines the protocol decodes",
+        "test/principal-channel.test.ts#004. The protocol round-trips what it encodes and refuses what it cannot",
+        "test/principal-channel.test.ts#005. A reader splits, joins and stops at the first thing that is not a message",
+        "test/principal-channel.test.ts#006. The extension keeps the latest credential and drops it if the channel lies",
+        "test/principal-channel.test.ts#007. An engine started without the product's channel holds nothing",
+        "test/principal-channel.test.ts#008. A credential descriptor named in the environment is not the Client's credential",
+        "test/principal-channel.test.ts#009. A file input snapshot never returns more than its bound, even while the file grows",
+        "test/principal-channel.test.ts#010. The owned process output cap counts bytes, not decoded characters"
     ],
     "evidence": null,
     "status": "unverified",
@@ -898,8 +959,8 @@
   {
     "requirement": "MAIL-011",
     "source": "docs/implementation-spec.md",
-    "digest": "95ed2e037aa44fa4d5be0072acd65254f97eb3f06ea0038c43383d7b81109dd7",
-    "normativeText": "**MUST [MAIL-011]** mail kind는 `message/question/result/alert/context/approval_required/critical`의 closed union이다. normal 및 대문자 legacy 별칭은 wire 값으로 받지 않는다. approval_required는 `approvalFor: ExactCandidateIdentity`와 명시 principal 수신자를 필수로 받으며 published candidate와 형식을 검증한다. 다른 kind에서 approvalFor를 받지 않는다. policyRevision은 이 요청이 지목한 값이며 이 메일만으로 현재 정책 적합성·tier·peer quorum·Principal ACCEPT를 인증하지 않는다. approvalFor의 repo/targetRef는 project/refs/heads/main만 허용하고 expectedBase/candidate는 full OID다. policyRevision은 1–128 UTF-8 bytes의 printable 문자열이며 CR/LF/NUL/control 문자를 금지한다. metadata header는 검증한 email codec으로 round-trip하고 body에서 추출하지 않는다. approvalFor는 request_hash와 immutable message plan에 포함해 동일 key 재시도 때 바뀌지 않게 한다. CLI의 형식은 PR-005를 따른다.",
+    "digest": "1c0ca7837e8b361f9911b064ebfa74af0d7a98fdab2b9300e8a0981c747cdf80",
+    "normativeText": "**MUST [MAIL-011]** mail kind는 `message/question/result/alert/context/approval_required/critical`의 closed union이다. normal 및 대문자 legacy 별칭은 wire 값으로 받지 않는다. approval_required는 `approvalFor: ExactCandidateIdentity`와 명시 principal 수신자를 필수로 받으며 published candidate와 형식을 검증한다. 다른 kind에서 approvalFor를 받지 않는다. policyRevision은 이 요청이 지목한 값이며 이 메일만으로 현재 정책 적합성·tier·peer quorum·Principal ACCEPT를 인증하지 않는다. approvalFor의 repo/targetRef는 project/refs/heads/main만 허용하고 expectedBase/candidate는 full OID다. policyRevision은 1–128 UTF-8 bytes의 printable 문자열이며 CR/LF/NUL/control 문자를 금지한다. metadata header는 검증한 email codec으로 round-trip하고 body에서 추출하지 않는다. approvalFor는 request_hash와 immutable message plan에 포함해 동일 key 재시도 때 바뀌지 않게 한다. client의 형식은 PR-005를 따른다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -926,8 +987,8 @@
   {
     "requirement": "MAIL-005",
     "source": "docs/implementation-spec.md",
-    "digest": "d773c577a2c77de34a50e74480cccfc5f51da62c9177205ba13b1017d18ae378",
-    "normativeText": "**MUST [MAIL-005]** reply CLI는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID, References는 기존 ancestry+직전 ID이며 최대치 초과 시 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.",
+    "digest": "4c5c5695d14196fff6e83dc7a4459041efaba969bee993abe04dc9e9caad1db6",
+    "normativeText": "**MUST [MAIL-005]** reply client는 자기 sandbox에서 대상 eml을 파싱하여 message ID를 전송한다. broker는 accepted 원문을 다시 읽어 ancestry를 검증한다. direct 원문의 기본 Reply-To는 sender이고 list 원문의 기본은 원래 list 주소다. 여러 list에 보낸 원문은 list 주소 집합을 Reply-To로 사용한다. 명시 `to`가 있으면 이 기본값을 대체한다. In-Reply-To는 직전 Message-ID이고 References는 기존 ancestry+직전 ID를 제한 안에 보존하되 직전 ID를 항상 포함한다. References가 한 개만 허용되면 직전 ID를 유지하고, 두 개 이상이면 최초 root와 최신 suffix를 유지한다. header에 없는 authority를 추가하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1010,8 +1071,8 @@
   {
     "requirement": "BATCH-001; arch §§7,18",
     "source": "docs/implementation-spec.md",
-    "digest": "c55006c49f2f67da2bb19f24ecadf53815abdb2597b3fb34146f019b1e079f0c",
-    "normativeText": "**MUST [BATCH-001; arch §§7,18]** batch 선택 대상은 공개 가능한 parent effect의 materialized=1,presented=0인 자기 deliveries다. 이미 prepared batch에 묶인 ID를 새 batch로 복사하지 않는다. prepare transaction이 ID snapshot과 batch 연결을 먼저 commit하고 그 뒤 new→cur rename, directory fsync, inbox view atomic publish를 수행한다. snapshot을 진행 중 새 메일로 확장하지 않는다.",
+    "digest": "31f230bfecb179a288b8d8b25290ff46b550cab327e4b7b6d4209918fc7da35d",
+    "normativeText": "**MUST [BATCH-001; arch §§7,18]** batch 선택 대상은 공개 가능한 parent effect의 materialized=1,presented=0인 자기 deliveries다. 이미 prepared batch에 묶인 ID를 새 batch로 복사하지 않는다. 새 manifest는 최초 안내와 재안내의 view가 모두 설정 frame 안에 드는 ordered prefix로 정하고, 남은 deliveries는 다음 batch 대상으로 보존한다. prepare transaction이 ID snapshot과 batch 연결을 먼저 commit하고 그 뒤 new→cur rename, directory fsync, inbox view atomic publish를 수행한다. snapshot을 진행 중 새 메일로 확장하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1024,8 +1085,8 @@
   {
     "requirement": "BATCH-002",
     "source": "docs/implementation-spec.md",
-    "digest": "2729bd6e01fddffc47bf34019add0aa77547a415595ce580548084c4ee562fc0",
-    "normativeText": "**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공하고, 읽기 안내는 저장된 원문이 아니라 본문을 보낸 사람이 쓴 그대로 보여 주는 읽기 도구를 가리킨다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit은 원문 잘림을 뜻하지 않는다. 완료가 확인되지 않은 batch를 다시 전달할 때는 notice 첫 줄에 그 사실을 고정 문장 하나로 밝힌다(D01, [DR5·DR6](design-revisions.md)).",
+    "digest": "02bbc0ea5ae6d145b9aa67add6a2627ddc33194a9e0edd1bfd16bbc2a3aeb960",
+    "normativeText": "**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. frame이 부족하면 metadata 표시값을 명시적인 생략 표시로 줄이고 표시하지 못한 항목 수를 알린다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공하고, 읽기 안내는 저장된 원문이 아니라 본문을 보낸 사람이 쓴 그대로 보여 주는 읽기 도구를 가리킨다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit과 notice 생략은 원문이나 manifest의 잘림을 뜻하지 않는다. 완료가 확인되지 않은 batch를 다시 전달할 때는 notice 첫 줄에 그 사실을 고정 문장 하나로 밝힌다(D01, [DR5·DR6](design-revisions.md)).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1164,8 +1225,8 @@
   {
     "requirement": "RUN-003",
     "source": "docs/implementation-spec.md",
-    "digest": "6dbbea34ba29524882bede18733a73dff73108d56b6d6f0eb4009b138e6b8499",
-    "normativeText": "**MUST [RUN-003]** `oma agent continue --note`는 자기 앞으로 일반 message를 보내는 operation이다. continuation task entity는 없다. `oma agent wait`는 인증된 Resident 자신의 live incarnation에만 메모리 flag를 설정한다. `agent.wait {observe:true}`(`oma agent wait --observe true`)는 같은 run의 flag를 바꾸지 않고 조회한다. Principal·다른 incarnation·revoked run은 사용할 수 없다. 도구 결과가 session에 기록된 awaited `turn_end`에서 조회한 뒤 다음 모델 호출 없이 종료하며, 도구 실행이나 접수된 효과를 중간 취소하지 않는다. 조회 중에는 별도의 유한 통신 예산을 쓰고, 조회 실패는 wait 성공이나 배달 증거가 아닌 unconfirmed다. 정상 wait는 별도 control 통지이며 delivery receipt나 batch.complete를 만들지 않는다. pending mail과 prepared batch는 원본을 유지하고 재활성화 정책을 따른다. wait가 mail을 ACK하거나 desired=stopped로 바꾸지는 않으며, broker 재시작 또는 새 incarnation에 flag를 넘기지 않는다.",
+    "digest": "4c85e6f51056fa7d13a444eb50cf2b0f942d1d74140f52dc84c6759914dae4b7",
+    "normativeText": "**MUST [RUN-003]** `oma_agent_continue`는 자기 앞으로 일반 message를 보내는 operation이다. continuation task entity는 없다. `oma_agent_wait`는 인증된 Resident 자신의 live incarnation에만 메모리 flag를 설정한다. engine 내부 `agent.wait {observe:true}`는 같은 run의 flag를 바꾸지 않고 조회한다. Principal·다른 incarnation·revoked run은 사용할 수 없다. 도구 결과가 session에 기록된 awaited `turn_end`에서 조회한 뒤 다음 모델 호출 없이 종료하며, 도구 실행이나 접수된 효과를 중간 취소하지 않는다. 조회 중에는 별도의 유한 통신 예산을 쓰고, 조회 실패는 wait 성공이나 배달 증거가 아닌 unconfirmed다. 정상 wait는 별도 control 통지이며 delivery receipt나 batch.complete를 만들지 않는다. pending mail과 prepared batch는 원본을 유지하고 재활성화 정책을 따른다. wait가 mail을 ACK하거나 desired=stopped로 바꾸지는 않으며, broker 재시작 또는 새 incarnation에 flag를 넘기지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1210,8 +1271,68 @@
       "packages/storage/src/delivery-receipt.ts#publishDeliveryReceipt"
     ],
     "negativeTests": [
-      "test/principal-endpoint.test.ts#T114",
-      "test/oma-composition-policy.test.mjs#T119"
+      "test/principal-endpoint.test.ts#002. A broker no host started opens no Principal endpoint at all",
+        "test/principal-endpoint.test.ts#003. The host is told the broker is ready only once both endpoints are listening",
+        "test/principal-endpoint.test.ts#004. The broker accepts only the host's own child as the Principal's engine",
+        "test/principal-endpoint.test.ts#005. The credential is in no file and no environment -- read from outside, as an attacker would",
+        "test/principal-endpoint.test.ts#006. The endpoint refuses every request until the session attaches",
+        "test/principal-endpoint.test.ts#007. The audit's attack -- the right credential and handle from a process the engine did not start",
+        "test/principal-endpoint.test.ts#008. Another session's handle is a conflict, not a failed authentication",
+        "test/principal-endpoint.test.ts#009. The Principal typed host Client sends through its private endpoint and archives the exact body",
+        "test/principal-endpoint.test.ts#010. The engine attaches in-process; credentials never enter its environment or a CLI child",
+        "test/principal-endpoint.test.ts#011. A detached engine cannot invent a Principal grant from the environment",
+        "test/principal-endpoint.test.ts#012. A re-registered engine gets a new credential and the old one stops working",
+        "test/principal-endpoint.test.ts#013. A credential from an earlier broker authorises nothing in a later one",
+        "test/principal-endpoint.test.ts#014. Mail to the Principal is delivered into its live session and completed",
+        "test/principal-endpoint.test.ts#015. A turn that does not settle cleanly leaves the mail pending, and it is retried later",
+        "test/principal-endpoint.test.ts#016. Nothing the model runs can mark its own mail delivered",
+        "test/principal-endpoint.test.ts#017. Delivery waits for an idle session rather than landing inside a Human's turn",
+        "test/principal-endpoint.test.ts#019. The credential comparison is fixed-shape and does not stop early",
+        "test/principal-endpoint.test.ts#020. Provisioning creates the directories the Principal's engine and its session use",
+        "test/principal-endpoint.test.ts#021. A Human prompt claims the session before it is written, so delivery cannot slip in",
+        "test/principal-endpoint.test.ts#022. A Human prompt typed during a delivery waits in the host and is not folded into the delivery's run",
+        "test/principal-endpoint.test.ts#023. Every prompt typed while the session was spoken for runs, once each, in order",
+        "test/principal-endpoint.test.ts#024. A prompt the engine refuses gives the session back and is said on the screen",
+        "test/principal-endpoint.test.ts#025. A refused delivery command gives the session back and lets the waiting Human through",
+        "test/principal-endpoint.test.ts#026. A response for a prompt the session has moved on from changes nothing",
+        "test/principal-endpoint.test.ts#027. A prompt the transport cannot carry stops the screen saying the session is busy",
+        "test/principal-endpoint.test.ts#029. The waiting prompt that could not be sent is named, and the rest still go",
+        "test/principal-endpoint.test.ts#030. The busy report comes from the ownership itself, at every move of it",
+        "test/principal-endpoint.test.ts#034. A failed assistant message does not end the delivery -- the run settling does",
+        "test/principal-endpoint.test.ts#035. A run that settles on a failed assistant message is reported as the provider failing",
+        "test/principal-endpoint.test.ts#036. A delivery the engine never answers keeps the session",
+        "test/principal-endpoint.test.ts#037. The extension is ready for the next batch however a turn ended",
+        "test/principal-endpoint.test.ts#038. The Principal's session stays in its own private space",
+        "test/principal-endpoint.test.ts#039. The host is answered on its identity, not on a number another process may hold",
+        "test/principal-endpoint.test.ts#040. A method the host endpoint does not serve is an unknown method, not a refused host",
+        "test/principal-endpoint.test.ts#041. The host is served delivery only while this broker holds a registration for its engine",
+        "test/principal-endpoint.test.ts#042. A registration that ends closes delivery again, without anything telling the endpoint",
+        "test/principal-endpoint.test.ts#043. Stopping the broker releases the supervision channel it was given",
+        "test/principal-endpoint.test.ts#046. Re-registering the session revokes the connections the old one already had",
+        "test/principal-endpoint.test.ts#047. A registration the broker refuses leaves no attached Principal behind",
+        "test/principal-endpoint.test.ts#048. Closing the endpoint revokes the connections that are already attached",
+        "test/principal-endpoint.test.ts#049. Detaching gives up authority rather than parking it for later",
+        "test/principal-endpoint.test.ts#050. An engine that dies takes the authority of the processes it started with it",
+        "test/principal-endpoint.test.ts#051. Revocation reaches every attached connection, and only attached ones",
+      "test/oma-composition-policy.test.mjs#003. The lease permits private conversation while broker authority remains closed",
+        "test/oma-composition-policy.test.mjs#007. However many brokers become ready, the society gets one engine",
+        "test/oma-composition-policy.test.mjs#008. Each time a broker becomes ready the engine is registered and given its credential",
+        "test/oma-composition-policy.test.mjs#009. A refused registration grants nothing and delivers nothing",
+        "test/oma-composition-policy.test.mjs#010. Delivery closes when the broker that authorised it ends, and reopens only on a new registration",
+        "test/oma-composition-policy.test.mjs#011. A Control Panel over someone else's society cannot write to it",
+        "test/oma-composition-policy.test.mjs#012. An owner that has given the society back stops being able to write to it",
+        "test/oma-composition-policy.test.mjs#013. Everything started on the strength of the lease inherits it",
+        "test/oma-composition-policy.test.mjs#014. A society whose broker this host does not own gets a Control Panel, not a second engine",
+        "test/oma-composition-policy.test.mjs#015. A broker that could not be started leaves a Control Panel, not an unauthorised engine",
+        "test/oma-composition-policy.test.mjs#016. A society this process stops owning loses the engine that ownership paid for",
+        "test/oma-composition-policy.test.mjs#017. A process that cannot take the society lease writes nothing and starts no broker",
+        "test/oma-composition-policy.test.mjs#019. A broker that is already listening is found before this process writes anything",
+        "test/oma-composition-policy.test.mjs#020. Negative control: with no broker listening, the same run provisions and repairs",
+        "test/oma-composition-policy.test.mjs#024. Quitting gives the society back, and only once the engine is really gone",
+        "test/oma-composition-policy.test.mjs#025. Every signal that asks this process to end takes the same quitting path",
+        "test/oma-composition-policy.test.mjs#026. An engine that will not die does not keep the product from quitting",
+        "test/oma-composition-policy.test.mjs#027. A crash stops the broker and the engine this process started",
+        "test/oma-composition-policy.test.mjs#028. Delivery runs only once a broker is ready, and again as each turn settles"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1235,8 +1356,8 @@
   {
     "requirement": "PR-005",
     "source": "docs/implementation-spec.md",
-    "digest": "be9fdc582833502a74a727c60613eac02c82cc0e4d4d3d9cd516a905da929041",
-    "normativeText": "**MUST [PR-005]** typed Principal mail과 progressive packet은 확장 계약 SEM/PACK을 따른다. 기존 `oma send`의 `--kind approval_required`에 한해 `--candidate <published-oid> --expect <base-oid> --policy-revision <revision>`을 모두 요구하고 CLI가 `approvalFor={repo:project,targetRef:refs/heads/main,expectedBase,candidate,policyRevision}`을 만든다. 그 외 kind에서는 세 flag를 거절한다. 별도 decision/interrupt command 또는 DB를 추가하지 않는다. `critical`은 UI 인지 hint이고 followUp/tool 보존/예산 제한을 우회하지 않는다. `result`는 sender의 결과 보고이며 task/Human 전달 완료의 증거가 아니다. HIGH의 authoritative decision command/record는 여전히 S-08 gate다.",
+    "digest": "2170381c2c91a4c4132459e9adb22b64cc82dbc52820cee08fd7a52c3574d19d",
+    "normativeText": "**MUST [PR-005]** typed Principal mail과 progressive packet은 확장 계약 SEM/PACK을 따른다. `oma_mail_approval_notice`는 published candidate/base/policyRevision으로 고정 candidate tuple을 첨부하며 principal 수신자와 approval_required kind를 고정한다. 이 notice는 recorded vote·정족수·유효 HIGH 승인 요청을 만들지 않으며 HIGH approval 요청은 broker만 생성한다. `critical`은 UI 인지 hint이며 followUp/tool 보존을 우회하지 않는다. `result`는 발신자의 보고이지 task/Human 전달 완료의 증거가 아니다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1268,9 +1389,14 @@
       "packages/protocol/src/methods.ts#principalRequestAllowed"
     ],
     "negativeTests": [
-      "test/model-scope.test.ts#AV3",
-      "test/argument-boundary.test.ts#AV1",
-      "test/principal-stop-fence.test.ts#DR27",
+      "test/model-scope.test.ts#001. The Principal's model scope holds neither the Human's session history nor the engine's credentials",
+        "test/model-scope.test.ts#002. An engine whose workspace overlaps what the product keeps is refused before it starts",
+      "test/argument-boundary.test.ts#001. A value the model supplies cannot leave its slot through OMA's tools",
+      "test/principal-stop-fence.test.ts#001. A Principal stop survives Worker stop, restart and same-key replay; only an explicit resume releases it",
+        "test/principal-stop-fence.test.ts#002. Principal stop fence:",
+        "test/principal-stop-fence.test.ts#003. An unconfirmed physical stop is still an accepted stop fence",
+        "test/principal-stop-fence.test.ts#004. The Principal actor releases its safety stop but cannot orchestrate routine starts",
+        "test/principal-stop-fence.test.ts#005. Broad legacy grants cannot expose Principal routine RPCs; own receipts remain readable",
       "test/tool-surface.test.ts#DR27"
     ],
     "evidence": null,
@@ -1337,8 +1463,8 @@
   {
     "requirement": "GIT-005",
     "source": "docs/implementation-spec.md",
-    "digest": "1e9d608f8cbe01ccc3972ff59d0397163440806c5ba4a642a1ddf0c3fd3b9d0b",
-    "normativeText": "**MUST [GIT-005]** submit은 candidate를 처음 한 번 freeze한다. `.git` dirty 변경을 자동 commit/추가하지 않는다. CLI는 dirty 여부를 표시하되 지정 commit 제출은 허용한다. cache의 candidate/hash를 유지하고 HEAD 이동 뒤 같은 key로 다른 bytes를 보내지 않는다. export ref는 accepted 결과와 재시도에 필요하므로 terminal receipt 후 같은 C를 가리키는지 확인해서 제거할 수 있다.",
+    "digest": "958b9df3dde136af3eee17448d847b793808204fedf6e0c3037c772085a9ee00",
+    "normativeText": "**MUST [GIT-005]** submit은 candidate를 처음 한 번 freeze한다. `.git` dirty 변경을 자동 commit/추가하지 않는다. client는 dirty 여부를 표시하되 지정 commit 제출은 허용한다. cache의 candidate/hash를 유지하고 HEAD 이동 뒤 같은 key로 다른 bytes를 보내지 않는다. export ref는 accepted 결과와 재시도에 필요하므로 terminal receipt 후 같은 C를 가리키는지 확인해서 제거할 수 있다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1483,8 +1609,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/crash-boundaries.test.ts#T63",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1550,8 +1678,8 @@
   {
     "requirement": "CTX-001; arch §8.3",
     "source": "docs/implementation-spec.md",
-    "digest": "c35459261e2486a5a6bee795cb75fdd44e67085de235eb0e040c72fff2c8e020",
-    "normativeText": "**MUST [CTX-001; arch §8.3]** `oma context publish <directory> --expect <oid|none>`은 기존 문서 구조 `GOAL.md`, `RATIONALE.md`, `decisions/*.md`를 게시한다. GOAL은 필수 UTF-8 regular file이고 비어 있으면 거절한다. symlink/device/hardlink/절대 path/상위 이동을 거절한다. binary/비허용 path는 INVALID_REQUEST다.",
+    "digest": "2041fab4d5fa1cf4e50a675e214c6744b36cec3b4c4f91b3f57df5c7fd56e73c",
+    "normativeText": "**MUST [CTX-001; arch §8.3]** `oma_context_publish({directory, expectedRevision})`는 기존 문서 구조 `GOAL.md`, `RATIONALE.md`, `decisions/*.md`를 게시한다. 첫 게시의 `expectedRevision`은 null이다. GOAL은 필수 UTF-8 regular file이고 비어 있으면 거절한다. symlink/device/hardlink/절대 path/상위 이동을 거절한다. binary/비허용 path는 INVALID_REQUEST다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1564,8 +1692,8 @@
   {
     "requirement": "CTX-002",
     "source": "docs/implementation-spec.md",
-    "digest": "6b5bfb18a6c2a9bdb519aa39fc83449dd91e06fb41e55ecc5964c3b5464d5b34",
-    "normativeText": "**MUST [CTX-002]** CLI는 경로별 sorted manifest `{path,bytes,sha256}`와 그 순서대로 이어붙인 raw content stream을 만든다. descriptor.bytes는 각 bytes 합계다. broker는 staging에서 각 file 길이/hash를 확인한다. tar를 임의 host path에 추출하지 않는다. 파일별 mode는 고정 regular 0644이며 commit에는 실행 권한을 부여하지 않는다.",
+    "digest": "77ee4296b478dae251b937398cb6f10020bf648486063893f6b4d3dfd8d3595a",
+    "normativeText": "**MUST [CTX-002]** client는 경로별 sorted manifest `{path,bytes,sha256}`와 그 순서대로 이어붙인 raw content stream을 만든다. descriptor.bytes는 각 bytes 합계다. broker는 staging에서 각 file 길이/hash를 확인한다. tar를 임의 host path에 추출하지 않는다. 파일별 mode는 고정 regular 0644이며 commit에는 실행 권한을 부여하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1592,8 +1720,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T66"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1617,8 +1747,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T66"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1656,8 +1788,10 @@
       "packages/git/src/canonical-command.ts#compareAndSwapCanonicalRef"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T66"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#005. Primitive SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1758,8 +1892,8 @@
   {
     "requirement": "UNIT-006",
     "source": "docs/implementation-spec.md",
-    "digest": "8f951c1ebfb83f2deffe022614b4fda69e22f8f6684668afb79a3369c2d53a1e",
-    "normativeText": "**MUST [UNIT-006]** start-limit failure는 status에 노출하고 reconcile이 자동 reset-failed를 반복하지 않는다. 현재의 명시적 `failed/Result=start-limit-hit`만 start-limit 확정 근거다. 누적 `NRestarts`, 명령 출력에 등장하는 단어·unit 이름, 관측 timeout은 현재 StartLimitIntervalSec 안의 제한 도달 증거가 아니다. manager가 `exit-code`만 남기면 관측된 실패는 표시하되 제한 원인은 미확인이다. `startLimitStatus`의 null은 제한 없음 증명이 아니며, 뒤늦은 상태 조회가 끝나지 않은 start 명령의 unknown을 확정 실패로 바꾸지 않는다(DR27, P0-5). 명시적 `oma agent start <name>` 또는 host repair만 reset-failed를 수행할 수 있다. stopped actor의 new는 계속 저장하되 path/service를 켜지 않는다.",
+    "digest": "f707590bdaccf65163dcb3de4ea3737e3dcf5826669aacd46b709dc000c66e6d",
+    "normativeText": "**MUST [UNIT-006]** start-limit failure는 status에 노출하고 reconcile이 자동 reset-failed를 반복하지 않는다. 현재의 명시적 `failed/Result=start-limit-hit`만 start-limit 확정 근거다. 누적 `NRestarts`, 명령 출력에 등장하는 단어·unit 이름, 관측 timeout은 현재 StartLimitIntervalSec 안의 제한 도달 증거가 아니다. manager가 `exit-code`만 남기면 관측된 실패는 표시하되 제한 원인은 미확인이다. `startLimitStatus`의 null은 제한 없음 증명이 아니며, 뒤늦은 상태 조회가 끝나지 않은 start 명령의 unknown을 확정 실패로 바꾸지 않는다(DR27, P0-5). 명시적 `oma_agent_control`의 start 또는 host repair만 reset-failed를 수행할 수 있다. stopped actor의 new는 계속 저장하되 path/service를 켜지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus",
@@ -1769,7 +1903,7 @@
       "packages/process/src/resident-supervisor.ts#ResidentSupervisor.startLimitStatus"
     ],
     "negativeTests": [
-      "packages/process/test/resident-supervisor.test.mjs#start-limit observation",
+      "packages/process/test/resident-supervisor.test.mjs#006. Resident policy: start-limit observation never settles an unknown launch command",
       "test/status-observation.test.ts#UNIT-006"
     ],
     "evidence": null,
@@ -1780,8 +1914,8 @@
   {
     "requirement": "CREATE-001",
     "source": "docs/implementation-spec.md",
-    "digest": "6a44b205711fc50051a7df4c17dd29893b78c96113ac61b2c1bbaccbf4ee0d68",
-    "normativeText": "**MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, CLI가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 CLI 옵션·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.",
+    "digest": "0f00b4873edef5086180a504eace22900f9b94cb54839400e2e68faf3d33cd6d",
+    "normativeText": "**MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, client가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 tool 입력·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1794,8 +1928,8 @@
   {
     "requirement": "CREATE-002",
     "source": "docs/implementation-spec.md",
-    "digest": "d02c89b90bfe9b587df467031fc5ee2c736c7e1642a644a84db7f3226d9d46b6",
-    "normativeText": "**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.",
+    "digest": "020adbfd5a668b6593032a843705130e328ba51b9c30157b12a8ece04dfc96d9",
+    "normativeText": "**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile를 결정한다. modelProfile 참조는 선택한 자식 host profile에서 복사해 고정한다(DR46). 효과 없는 resource 필드는 삭제되었다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. client/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -1835,8 +1969,11 @@
       "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T39"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#007. Primitive SIGKILL at",
+        "test/crash-boundaries.test.ts#008. Primitive SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1887,8 +2024,11 @@
       "packages/lifecycle/src/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
-      "test/r37-preparation-boundaries.test.ts#R37",
-      "test/crash-boundaries.test.ts#T39"
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease",
+      "test/crash-boundaries.test.ts#007. Primitive SIGKILL at",
+        "test/crash-boundaries.test.ts#008. Primitive SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -1940,8 +2080,8 @@
   {
     "requirement": "LIFE-005",
     "source": "docs/implementation-spec.md",
-    "digest": "ec55937f64f802fcc1b935b81ef65a6b207b294681a141d90f215020c151f0ba",
-    "normativeText": "**MUST [LIFE-005]** retirement는 이름을 보존하는 host 명시 행위다. 기본 model CLI에 retirement/delete/purge를 추가하지 않는다. host 운영 UI/maintenance 구현 범위가 필요하면 기존 stopped→retired와 미래 routing 제외만 제공하고 repo/mail/session의 자동 삭제를 결합하지 않는다.",
+    "digest": "867045b87f416a1f6031f138982b28346baf00e3378a6c820e399aa54e5744db",
+    "normativeText": "**MUST [LIFE-005]** retirement는 이름을 보존하는 host 명시 행위다. 기본 model tool 표면에 retirement/delete/purge를 추가하지 않는다. host 운영 UI/maintenance 구현 범위가 필요하면 기존 stopped→retired와 미래 routing 제외만 제공하고 repo/mail/session의 자동 삭제를 결합하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2010,8 +2150,8 @@
   {
     "requirement": "SB-002-C",
     "source": "docs/implementation-spec.md",
-    "digest": "deb91ca25cca0c87fe8087581110cb5d471e027b01c48bdf62fb52b8cc2f35d1",
-    "normativeText": "**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 중첩된 host root는 가장 구체적인 mount를 선택하며 RO installation root가 RW session/home/workspace mount를 가리지 못한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).",
+    "digest": "d2ce73f519bc057e988598cb1fc27691bc06654c215b757ac8bc1668a1b4ee09",
+    "normativeText": "**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 중첩된 host root는 가장 구체적인 mount를 선택하며 RO installation root가 RW session/home/workspace mount를 가리지 못한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, tool 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 client는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](design-revisions.md)).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2094,8 +2234,8 @@
   {
     "requirement": "SB-006",
     "source": "docs/implementation-spec.md",
-    "digest": "f62672c90ff124adc0379a7a1b2481535cad151cfb56fe39b33cc58258cde812",
-    "normativeText": "**MUST [SB-006]** sandbox의 writable session/CLI files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.",
+    "digest": "5554321c3bc251a1e0b5b0d944069b46c0a278467eb89892cf1db133234fe5fe",
+    "normativeText": "**MUST [SB-006]** sandbox의 writable session/client files는 model-origin data다. 보안·effect completion의 증거는 trusted runner receipt와 broker ledger가 소유한다. 모델이 session JSON에 완료 문구를 써서 presented/approval을 위조할 수 없어야 한다. 이에 필요한 정확한 Pi receipt 검증은 S-03 gate다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt",
@@ -2105,8 +2245,18 @@
       "packages/storage/src/delivery-receipt.ts#observeDeliveryReceipt"
     ],
     "negativeTests": [
-      "test/untrusted-directories.test.ts#AV4",
-      "test/receipt-observation.test.ts#V06A"
+      "test/untrusted-directories.test.ts#001. A receipt's session is found beneath its directory in one resolution; a link at any component is never followed",
+        "test/untrusted-directories.test.ts#002. Once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it",
+      "test/receipt-observation.test.ts#001. A verified receipt completes the batch and the runner presents nothing again",
+        "test/receipt-observation.test.ts#003. An observed absent",
+        "test/receipt-observation.test.ts#004. Receipt observation:",
+        "test/receipt-observation.test.ts#005. Receipt observation:",
+        "test/receipt-observation.test.ts#006. The observer returns verified receipts it issued, and nothing else counts as one",
+        "test/receipt-observation.test.ts#007. Absence names which name is missing, under a runner root that exists",
+        "test/receipt-observation.test.ts#008. An observation that did not complete is unavailable, with its cause and the expected identity",
+        "test/receipt-observation.test.ts#009. Conflicting evidence says what differs, and a legacy incarnation is never accepted as current",
+        "test/receipt-observation.test.ts#010. A receipt directory that cannot be opened is unavailable, never absent",
+        "test/receipt-observation.test.ts#011. Live completion binds the current run's incarnation and the receipt's session"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2183,7 +2333,9 @@
       "apps/oma/src/runtime/inference-relay.ts#InferenceRelay"
     ],
     "negativeTests": [
-      "test/inference-relay.test.ts#AV2"
+      "test/inference-relay.test.ts#013. The key is written only into its declared slots; a placeholder anywhere else is refused",
+        "test/inference-relay.test.ts#014. A response that carries the key back is cut off before it reaches the sandbox",
+        "test/inference-relay.test.ts#015. A WebSocket upgrade keeps the same slots and is not compressed"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2263,20 +2415,20 @@
   {
     "requirement": "CLI-001; arch §§9,14,23.2",
     "source": "docs/implementation-spec.md",
-    "digest": "ccfd348904e54ea5c7fd3a43750132468ccdb70d0ef683e0317b0df82999ee54",
-    "normativeText": "**MUST [CLI-001; arch §§9,14,23.2]** base model-facing command allowlist는 다음과 같다. 이 표는 Resident rootfs 안의 `oma` 실행 파일만 규정하며, host의 동명 TUI 실행 파일은 TUI-002가 별도로 규정한다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력하며 TUI나 Control Panel을 노출하지 않는다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.",
+    "digest": "0023330f83316ece265cc1bef37eba5a0445251a9a64d984d511d63535ab062d",
+    "normativeText": "**MUST [CLI-001; arch §§9,14,23.2]** 모델용 OMA CLI를 배포·호출하지 않는다. typed tool 이름·역할별 core/optional 목록·closed 입력의 정본은 [모델 도구 표면 명세 §4](model-tool-surface-spec.md#4-전체-tool-목록과-노출)다. 사람용 `oma` 제품 진입점과 Git·빌드·테스트 bash는 유지한다. 임의 method/argv/raw JSON dispatcher나 host 제품 CLI fallback을 추가하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "apps/oma/src/cli/arguments.ts#parseArguments",
-    "entrypoint": "apps/oma/src/cli.ts#main",
+    "owner": "packages/extension/src/mail-tools.ts#registerOmaTools",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "apps/oma/src/cli.ts#main",
-      "apps/oma/src/cli/commands/send.ts#runSendCommand",
-      "apps/oma/src/cli/arguments.ts#parseArguments"
+      "packages/extension/src/index.ts#extension",
+      "packages/extension/src/mail-tools.ts#registerOmaTools",
+      "packages/client/src/index.ts#Client"
     ],
     "negativeTests": [
-      "test/argument-boundary.test.ts#AV1",
-      "test/f2-cli-request.test.ts#F2"
+      "test/surface-rules.test.mjs#008. Product-tool-separation and resident-product-surface: closures do not cross",
+      "test/tool-surface.test.ts#bad shapes and names"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2286,8 +2438,8 @@
   {
     "requirement": "CLI-002",
     "source": "docs/implementation-spec.md",
-    "digest": "b0eca456e0055b5162ec5749227795ee5e3b85127ca9d2eff1cf268e6ded558e",
-    "normativeText": "**MUST [CLI-002]** send/file/reply/summary 입력은 sandbox local 파일만 읽고 body bytes를 전송한다. host에 그 path를 읽으라고 RPC하지 않는다. summary/path를 생략하면 invent한 report 문서를 만들지 않는다. Git result는 즉시 사용할 published ref와 `git fetch origin <ref>`를 포함한다. 일반 성공 출력에 DB join·UUID 조합·state repair 단계를 요구하지 않는다.",
+    "digest": "3292d741c4aa0eac939d67053996d78c061a072eb4509c9b9ec3bf601eecfe31",
+    "normativeText": "**MUST [CLI-002]** client는 inline mail·brief·review body 및 context directory·Git revision을 기존 runtime 효과로 준비한다. 파일 경로를 broker에게 읽으라고 보내지 않는다. commit 후 `oma_merge_open`은 필요할 때만 기존 하위 candidate publication을 수행하고 uncommitted 변경 제외를 알린다. 별도 `oma_candidate_publish`는 공유용이지 merge의 선행 필수 단계가 아니다. 입력 shape 오류는 파일 생성·publication·transport 전에 거절한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2300,8 +2452,8 @@
   {
     "requirement": "CLI-003",
     "source": "docs/implementation-spec.md",
-    "digest": "70b05763af27b391eed0491dd65d990954eb52292cfeefbc39d3ef5f1545a030",
-    "normativeText": "**MUST [CLI-003]** CLI exit는 0=요청 접수 또는 읽기 성공, 2=검증/권한/확정 실패, 3=미접수 여부 또는 효과가 불명확한 통신/unknown, 4=지원 profile/SPIKE 미해결로 실행 불가다. pending을 0으로 반환할 때 첫 줄에 `접수됨 / 아직 완료되지 않음`과 same-key 재조회 안내를 표시한다. exit 0을 task 완료로 해석하지 않는다. JSON 출력 flag가 필요하면 기존 command의 공통 `--json`만 OPTIONAL로 제공하고 별도 command를 만들지 않는다.",
+    "digest": "b611a24a8679ae4865a6830eee75c7cf2272b91f71190ebd61eb704761f28f46",
+    "normativeText": "**MUST [CLI-003]** 결과 text는 실제 request key, receipt/state, 원래 error code/message/retry와 query pagination을 보존한다. accepted는 작업 완료가 아니며 unknown은 미접수 증거가 아니다. 복구는 원래 frozen input·key를 사용하며 새 key 자동 재실행을 금지한다. 큰 receipt는 client가 기존 operation.read로 회수한다. 로컬 오류를 가짜 broker receipt로 만들지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2314,8 +2466,8 @@
   {
     "requirement": "VIEW-001",
     "source": "docs/implementation-spec.md",
-    "digest": "a21279d98aba078df6ad864df041e17a182f2c302c73f812f7eb043ef7b548b3",
-    "normativeText": "**MUST [VIEW-001]** START는 identity/공유 GOAL·제약/자기 workspace/`/inbox.md`/주민·topic 목록 경로/send·submit·agent·status 사용만 기본 주입한다. 전체 schema·IPC·systemd·operation ledger를 prompt에 넣지 않는다. START와 inbox metadata는 숨은 system instruction authority가 아닌 trusted 안내와 untrusted peer metadata를 구분해 표시한다.",
+    "digest": "28763f0dc301c32cc7c9bdb7b374c3cfb934c0208991d8ee497761255944f96a",
+    "normativeText": "**MUST [VIEW-001]** START는 identity/공유 GOAL·제약/자기 workspace/`/inbox.md`/주민·topic 경로와 typed tool 환경을 안내한다. 도구 schema·CLI 사용법·IPC·systemd·operation ledger를 prompt에 복제하지 않는다. START와 inbox metadata는 trusted 안내와 untrusted peer metadata를 구분한다. role prompt는 독립 review·자기 투표 금지·LOW 제한·wait의 안전한 양보 의미를 소유한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2396,8 +2548,25 @@
       "packages/protocol/src/receipts.ts#receiptOfOperation"
     ],
     "negativeTests": [
-      "test/r37-async-process.test.ts#R37",
-      "test/r37-preparation-boundaries.test.ts#R37"
+      "test/r37-async-process.test.ts#001. Command argv, environment and input bytes are snapshotted before awaiting",
+        "test/r37-async-process.test.ts#002. Child preparation yields the event loop without claiming a latency improvement",
+        "test/r37-async-process.test.ts#003. Stdout overflow is bounded and cannot be a successful observation",
+        "test/r37-async-process.test.ts#004. Explicit diagnostic stderr discard still drains without unbounded retention",
+        "test/r37-async-process.test.ts#005. A command making progress is never cut by the silence window; one that says nothing stalls honestly",
+        "test/r37-async-process.test.ts#006. Output past the in-memory budget spills whole -- the file holds every byte, the head stays in the result",
+        "test/r37-async-process.test.ts#007. A spilled stream also keeps the silence window honest -- progress to the file is progress",
+        "test/r37-async-process.test.ts#008. The synchronous runner refuses a silence window it cannot observe, and spills descriptor-direct",
+        "test/r37-async-process.test.ts#009. A failed second spill open leaks no descriptor and keeps the open's own error",
+        "test/r37-async-process.test.ts#010. Identical stdout and stderr spill paths are refused -- the second O_TRUNC would erase the first stream",
+        "test/r37-async-process.test.ts#011. Timeout and abort never synthesize exit-zero success",
+        "test/r37-async-process.test.ts#012. Pre-abort returns without attempting even an unavailable executable",
+        "test/r37-async-process.test.ts#013. Native spawn failure and known nonzero exit remain different observations",
+        "test/r37-async-process.test.ts#014. Command validation rejects invalid budgets and NUL arguments before spawn",
+        "test/r37-async-process.test.ts#015. One preparation slot rejects concurrent work and releases after known exit",
+        "test/r37-async-process.test.ts#016. An uncertain native outcome keeps the preparation owner blocked",
+      "test/r37-preparation-boundaries.test.ts#001. Submit facade awaits quarantined preparation and retains accepted bundle after live revocation",
+        "test/r37-preparation-boundaries.test.ts#002. Context preparation boundary preserves",
+        "test/r37-preparation-boundaries.test.ts#003. Creation awaits a real private workspace before unit publication and rechecks the live lease"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2421,8 +2590,8 @@
   {
     "requirement": "REC-007",
     "source": "docs/implementation-spec.md",
-    "digest": "5e9835073d20df5b0edf05b71113127ad55511524358c47497a7c255beeeac8c",
-    "normativeText": "**MUST [REC-007]** society broker는 R 아래 고정 lock file에 process-lifetime OS advisory lock을 획득한 뒤 DB를 연다. lock 미획득 시 두 번째 writer를 시작하지 않는다. lock은 config 로드·SQLite·복구보다 먼저 잡고, 얻지 못한 broker는 '시작 실패'와 구별되는 자기 exit status로 끝난다 — host는 그 둘을 다르게 다루어야 하고(앞은 소유 포기, 뒤는 재시작), 같은 status로는 구별할 수 없기 때문이다. 소유는 broker에서 파생하지 않는다. host는 society의 **state tree**를 이름으로 삼는 자기 lease를 직접 잡고 자기 수명 내내 들고 있으며, 그 lease를 잡기 전에는 설정 생성·state 준비·broker 기동 어느 것도 하지 않는다. lease의 이름은 파일 경로가 아니라 abstract AF_UNIX namespace의 이름이며 `uid`와 state root에서 유도한다 — 경로로 이름 붙인 lock은 그 경로만큼만 배타적이어서, 같은 UID의 아무 프로세스나 그 경로를 unlink·rename하고 새 파일을 놓으면 옛 보유자는 옛 inode의 lock을 계속 쥔 채 새 `oma`가 정규 경로의 새 inode를 잡는다. 한 society에 소유자가 둘이 되고 서로를 볼 수 없으며, 잡은 뒤 경로를 다시 확인하는 것은 검사와 사용이 여전히 두 단계이므로 창을 좁힐 뿐이다 — 같은 UID에서 파일의 속성으로 경계를 주장하지 않는다는 FS-005의 규칙을 mode가 아니라 namespace에 적용한 것이다. abstract namespace에는 갈아치울 directory entry가 없고, 두 번째 bind는 `EADDRINUSE`로 거부되며, 이름은 마지막 descriptor가 닫힐 때 커널이 되돌려준다. lease가 run root가 아니라 state tree의 이름인 이유는 두 writer를 가지면 안 되는 것이 tree이기 때문이다: run root는 boot·session마다 달라지는 교체 가능한 좌표이므로, 하나의 state tree를 서로 다른 두 run root로 가리키면 lease 두 개가 각각 자유롭게 잡힌다. 이미 listening 중인 broker가 있으면 그것이 society의 쓰기를 소유한다 — systemd unit이든 손으로 띄운 것이든 host가 사라진 `oma`의 것이든. 그래서 소유의 질문은 양쪽에서 답한다. host 쪽에서는 소유를 잡은 직후, 설정을 쓰기 전에 그 broker를 먼저 찾는다. broker 쪽에서는, 제품이 시작하지 않은 broker가 society lease를 **자기가** 잡고 잡지 못하면 시작하지 않는다 — host의 확인과 그 뒤의 쓰기는 여전히 두 단계이므로, 그 사이에 올라오는 broker는 host의 probe로는 막을 수 없기 때문이다. 제품이 시작한 broker는 그 lease의 descriptor를 이미 물려받았으므로 이름을 다시 잡지 않으며, 자기가 소유자의 것임을 환경의 선언으로 안다. 선언이 있는데 그 descriptor가 lease가 아니면 시작 실패로 답한다 — 쥐지 않은 society를 쥐었다고 믿는 broker가 그대로 society를 서비스하게 되기 때문이다. `broker.lock`은 남는다: 그것이 답하는 것은 '이 프로세스가 society의 단일 SQLite writer인가'이고, lease가 답하는 것은 '이 society에 무엇이든 행위해도 되는가'다. 이 확인이 provision·repair 뒤에 오면 다른 broker가 이미 Resident의 sandbox를 짓고 있는 rootfs의 `/etc/passwd`·`/etc/group`·symlink를 고쳐 놓은 뒤에야 물러나게 된다. 물러날 때는 lease도 함께 내려놓는다 — 행동하지 않기로 한 society를 쥐고 있으면 다음 `oma`만 막는다. broker의 lock은 broker와 함께 죽으므로 재시작 back-off와 한도 소진 이후가 모두 소유의 공백이 되고, 그 공백에 다른 `oma`가 들어올 수 있기 때문이다. lease를 잡지 못함(다른 프로세스가 쥐고 있음)과 lease를 아예 잡을 수 없음(경로를 신뢰할 수 없다, 이름을 평가할 수 없다)은 다른 답이며, 뒤의 것을 앞의 것으로 보고하지 않는다. 경로에 대한 판단은 lease를 잡기 **전에** 끝난다: 신뢰할 수 없는 run root·state root를 가리킨 `oma`가 먼저 소유를 잡고 설정을 쓰고 provision과 repair까지 한 뒤에야 자기가 검사한 곳이 아님을 아는 순서는, 검사하지 않은 것과 같다. 소유가 확정되기 전에 도는 준비 단계는 이미 있는 것을 다시 쓰지 않는다. 같은 바이트를 다시 쓰는 것도 쓰기이며, 경쟁에서 진 프로세스는 소유자의 트리를 inode와 timestamp까지 그대로 둔 채 물러나야 한다. 그래서 준비와 수리는 두 개의 정책이다: 준비는 없는 것만 만들고 있으면서 다른 것은 손대지 않은 채 보고하며, 수리는 그 보고를 받아 되돌리되 lease 보유자만 실행한다. 준비가 만드는 repository는 같은 부모 아래 임시 이름으로 만든 뒤 rename으로 제자리에 놓는다 — 최종 경로에 직접 만들면 동시에 첫 시작하는 두 `oma`가 서로의 반쯤 만들어진 트리를 보고 실패하며, rename이 진 쪽은 이긴 쪽의 repository를 그대로 받아들인다. lease의 유효 범위는 이 프로세스의 수명이 아니라 **lease 덕분에 시작된 모든 프로세스의 수명**이다. 호출 순서로는 이것을 지킬 수 없다 — host가 SIGKILL로 죽으면 실행할 코드가 없고 커널은 lock을 즉시 놓는데 engine은 살아 있으며, `close()`는 죽음이 아니라 신호다. 그러므로 lease는 open file description이 드는 lock이어야 하고, engine·broker와 그것들이 시작한 모든 것이 그 descriptor를 상속해야 한다. 이름은 상속된 descriptor 중 마지막 하나가 닫힐 때 풀리므로 society는 그 전부가 죽기 전에는 다른 host에게 넘어가지 않는다. 상속은 engine에서 끝나지 않는다: engine 안의 trusted extension이 시작하는 model-facing CLI는 `<stateRoot>/principal/private`와 그 아래 request cache를 쓰는 writer이고, engine에 보낸 signal은 그 자식에게 가지 않으므로 host와 engine이 모두 죽은 뒤에도 자기 timeout 전부를 살아서 쓸 수 있다. 그래서 fence는 고정된 descriptor 번호로 내려가고 그 번호를 환경으로 **선언한다** — descriptor 번호는 비밀이 아니므로 선언해도 아무 권한을 주지 않지만, 선언이 없으면 자식은 자기 부모가 어떻게 spawn되었는지를 알아내야만 lease를 다시 물려줄 수 있다. 선언된 fence가 그 자리에 없거나 lease의 종류가 아니면 자식을 fence 없이 시작하지 않고 실패로 답한다. sandbox(bwrap) 안에서 도는 Resident는 이 규칙의 예외다: listening 이름을 confinement 안으로 넣으면 sandbox 안의 프로세스가 society 소유자를 묻는 probe에 답할 수 있게 되므로, 그 경계는 fence가 아니라 커널이 강제하는 descendant 종료(cgroup)로 닫아야 한다. 이 성질의 결과로 lease를 놓는 일은 너무 이를 수 없고 너무 늦을 수만 있으므로, 정상 종료는 engine의 실제 종료를 기다리되 상한을 두고, 상한을 넘겨 놓더라도 society는 여전히 아무에게도 넘어가지 않는다. 수리는 broker의 startup quiescence가 이전 Resident의 종료를 증명한 뒤, broker가 Resident를 깨울 수 있는 어떤 단계(recovery·listen·activate)보다도 먼저 성공해야 한다(DR16): 증명 전에 고치면 이전 broker가 멈추지 못한 Resident가 아직 돌거나 다시 시작해 sandbox를 짓는 rootfs를 고치게 되고, 늦으면 수리되지 않은 rootfs 위에서 Resident가 먼저 깨어난다. 수리에 실패하면 화면에 적는 것으로 끝내지 않는다: broker의 startup이 실패하므로 broker는 준비를 알리지 않고 Principal 권한도 부여하지 않는다. DR35의 private 대화 준비는 별개이며 Society 효과는 등록 전 실행되지 않는다. PID file 숫자를 singleton 증거로 사용하지 않는다. Node lock/peercredential binding은 S-01로 검증한다. bootstrap/maintenance도 기존 broker 경계를 우회하여 DB/Git를 동시에 쓰지 않는다.",
+    "digest": "2ca51b6c89d1210ba6b1f722f503f291ca03fdb608c270be502a5cf38c98166f",
+    "normativeText": "**MUST [REC-007]** society broker는 R 아래 고정 lock file에 process-lifetime OS advisory lock을 획득한 뒤 DB를 연다. lock 미획득 시 두 번째 writer를 시작하지 않는다. lock은 config 로드·SQLite·복구보다 먼저 잡고, 얻지 못한 broker는 '시작 실패'와 구별되는 자기 exit status로 끝난다 — host는 그 둘을 다르게 다루어야 하고(앞은 소유 포기, 뒤는 재시작), 같은 status로는 구별할 수 없기 때문이다. 소유는 broker에서 파생하지 않는다. host는 society의 **state tree**를 이름으로 삼는 자기 lease를 직접 잡고 자기 수명 내내 들고 있으며, 그 lease를 잡기 전에는 설정 생성·state 준비·broker 기동 어느 것도 하지 않는다. lease의 이름은 파일 경로가 아니라 abstract AF_UNIX namespace의 이름이며 `uid`와 state root에서 유도한다 — 경로로 이름 붙인 lock은 그 경로만큼만 배타적이어서, 같은 UID의 아무 프로세스나 그 경로를 unlink·rename하고 새 파일을 놓으면 옛 보유자는 옛 inode의 lock을 계속 쥔 채 새 `oma`가 정규 경로의 새 inode를 잡는다. 한 society에 소유자가 둘이 되고 서로를 볼 수 없으며, 잡은 뒤 경로를 다시 확인하는 것은 검사와 사용이 여전히 두 단계이므로 창을 좁힐 뿐이다 — 같은 UID에서 파일의 속성으로 경계를 주장하지 않는다는 FS-005의 규칙을 mode가 아니라 namespace에 적용한 것이다. abstract namespace에는 갈아치울 directory entry가 없고, 두 번째 bind는 `EADDRINUSE`로 거부되며, 이름은 마지막 descriptor가 닫힐 때 커널이 되돌려준다. lease가 run root가 아니라 state tree의 이름인 이유는 두 writer를 가지면 안 되는 것이 tree이기 때문이다: run root는 boot·session마다 달라지는 교체 가능한 좌표이므로, 하나의 state tree를 서로 다른 두 run root로 가리키면 lease 두 개가 각각 자유롭게 잡힌다. 이미 listening 중인 broker가 있으면 그것이 society의 쓰기를 소유한다 — systemd unit이든 손으로 띄운 것이든 host가 사라진 `oma`의 것이든. 그래서 소유의 질문은 양쪽에서 답한다. host 쪽에서는 소유를 잡은 직후, 설정을 쓰기 전에 그 broker를 먼저 찾는다. broker 쪽에서는, 제품이 시작하지 않은 broker가 society lease를 **자기가** 잡고 잡지 못하면 시작하지 않는다 — host의 확인과 그 뒤의 쓰기는 여전히 두 단계이므로, 그 사이에 올라오는 broker는 host의 probe로는 막을 수 없기 때문이다. 제품이 시작한 broker는 그 lease의 descriptor를 이미 물려받았으므로 이름을 다시 잡지 않으며, 자기가 소유자의 것임을 환경의 선언으로 안다. 선언이 있는데 그 descriptor가 lease가 아니면 시작 실패로 답한다 — 쥐지 않은 society를 쥐었다고 믿는 broker가 그대로 society를 서비스하게 되기 때문이다. `broker.lock`은 남는다: 그것이 답하는 것은 '이 프로세스가 society의 단일 SQLite writer인가'이고, lease가 답하는 것은 '이 society에 무엇이든 행위해도 되는가'다. 이 확인이 provision·repair 뒤에 오면 다른 broker가 이미 Resident의 sandbox를 짓고 있는 rootfs의 `/etc/passwd`·`/etc/group`·symlink를 고쳐 놓은 뒤에야 물러나게 된다. 물러날 때는 lease도 함께 내려놓는다 — 행동하지 않기로 한 society를 쥐고 있으면 다음 `oma`만 막는다. broker의 lock은 broker와 함께 죽으므로 재시작 back-off와 한도 소진 이후가 모두 소유의 공백이 되고, 그 공백에 다른 `oma`가 들어올 수 있기 때문이다. lease를 잡지 못함(다른 프로세스가 쥐고 있음)과 lease를 아예 잡을 수 없음(경로를 신뢰할 수 없다, 이름을 평가할 수 없다)은 다른 답이며, 뒤의 것을 앞의 것으로 보고하지 않는다. 경로에 대한 판단은 lease를 잡기 **전에** 끝난다: 신뢰할 수 없는 run root·state root를 가리킨 `oma`가 먼저 소유를 잡고 설정을 쓰고 provision과 repair까지 한 뒤에야 자기가 검사한 곳이 아님을 아는 순서는, 검사하지 않은 것과 같다. 소유가 확정되기 전에 도는 준비 단계는 이미 있는 것을 다시 쓰지 않는다. 같은 바이트를 다시 쓰는 것도 쓰기이며, 경쟁에서 진 프로세스는 소유자의 트리를 inode와 timestamp까지 그대로 둔 채 물러나야 한다. 그래서 준비와 수리는 두 개의 정책이다: 준비는 없는 것만 만들고 있으면서 다른 것은 손대지 않은 채 보고하며, 수리는 그 보고를 받아 되돌리되 lease 보유자만 실행한다. 준비가 만드는 repository는 같은 부모 아래 임시 이름으로 만든 뒤 rename으로 제자리에 놓는다 — 최종 경로에 직접 만들면 동시에 첫 시작하는 두 `oma`가 서로의 반쯤 만들어진 트리를 보고 실패하며, rename이 진 쪽은 이긴 쪽의 repository를 그대로 받아들인다. lease의 유효 범위는 이 프로세스의 수명이 아니라 **lease 덕분에 시작된 모든 프로세스의 수명**이다. 호출 순서로는 이것을 지킬 수 없다 — host가 SIGKILL로 죽으면 실행할 코드가 없고 커널은 lock을 즉시 놓는데 engine은 살아 있으며, `close()`는 죽음이 아니라 신호다. 그러므로 lease는 open file description이 드는 lock이어야 하고, engine·broker와 그것들이 시작한 모든 것이 그 descriptor를 상속해야 한다. 이름은 상속된 descriptor 중 마지막 하나가 닫힐 때 풀리므로 society는 그 전부가 죽기 전에는 다른 host에게 넘어가지 않는다. 상속은 engine에서 끝나지 않는다: engine 안의 typed client가 시작하는 runtime helper도 private state를 쓰는 writer일 수 있고, engine에 보낸 signal은 그 자식에게 가지 않으므로 host와 engine이 모두 죽은 뒤에도 살아서 쓸 수 있다. 그래서 fence는 고정된 descriptor 번호로 내려가고 그 번호를 환경으로 **선언한다** — descriptor 번호는 비밀이 아니므로 선언해도 아무 권한을 주지 않지만, 선언이 없으면 자식은 자기 부모가 어떻게 spawn되었는지를 알아내야만 lease를 다시 물려줄 수 있다. 선언된 fence가 그 자리에 없거나 lease의 종류가 아니면 자식을 fence 없이 시작하지 않고 실패로 답한다. sandbox(bwrap) 안에서 도는 Resident는 이 규칙의 예외다: listening 이름을 confinement 안으로 넣으면 sandbox 안의 프로세스가 society 소유자를 묻는 probe에 답할 수 있게 되므로, 그 경계는 fence가 아니라 커널이 강제하는 descendant 종료(cgroup)로 닫아야 한다. 이 성질의 결과로 lease를 놓는 일은 너무 이를 수 없고 너무 늦을 수만 있으므로, 정상 종료는 engine의 실제 종료를 기다리되 상한을 두고, 상한을 넘겨 놓더라도 society는 여전히 아무에게도 넘어가지 않는다. 수리는 broker의 startup quiescence가 이전 Resident의 종료를 증명한 뒤, broker가 Resident를 깨울 수 있는 어떤 단계(recovery·listen·activate)보다도 먼저 성공해야 한다(DR16): 증명 전에 고치면 이전 broker가 멈추지 못한 Resident가 아직 돌거나 다시 시작해 sandbox를 짓는 rootfs를 고치게 되고, 늦으면 수리되지 않은 rootfs 위에서 Resident가 먼저 깨어난다. 수리에 실패하면 화면에 적는 것으로 끝내지 않는다: broker의 startup이 실패하므로 broker는 준비를 알리지 않고 Principal 권한도 부여하지 않는다. DR35의 private 대화 준비는 별개이며 Society 효과는 등록 전 실행되지 않는다. PID file 숫자를 singleton 증거로 사용하지 않는다. Node lock/peercredential binding은 S-01로 검증한다. bootstrap/maintenance도 기존 broker 경계를 우회하여 DB/Git를 동시에 쓰지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2448,9 +2617,14 @@
       "packages/process/src/preparation.ts#PreparationExecutor"
     ],
     "negativeTests": [
-      "test/r29-reconcile-accounting.test.ts#R29",
-      "test/r37-recovery-observation.test.ts#R37",
-      "test/r37-shutdown-observation.test.ts#R37"
+      "test/r29-reconcile-accounting.test.ts#001. Concurrent sweeps join one Promise, examine distinct initial IDs and count terminal failures",
+        "test/r29-reconcile-accounting.test.ts#002. Already-terminal snapshot entries are excluded, not counted twice",
+        "test/r29-reconcile-accounting.test.ts#003. Pending/unknown reasons survive no-progress backoff and later retry",
+        "test/r29-reconcile-accounting.test.ts#004. A wall-budget boundary resumes from authoritative IDs, with no durable cursor",
+        "test/r29-reconcile-accounting.test.ts#005. Recursive self-await fails immediately; corruption never returns partial healthy counts",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks",
+      "test/r37-shutdown-observation.test.ts#001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy",
+        "test/r37-shutdown-observation.test.ts#002. Native preparation owns the shutdown barrier independently of a request Promise"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2473,9 +2647,14 @@
       "packages/process/src/preparation.ts#PreparationExecutor"
     ],
     "negativeTests": [
-      "test/r29-reconcile-accounting.test.ts#R29",
-      "test/r37-recovery-observation.test.ts#R37",
-      "test/r37-shutdown-observation.test.ts#R37"
+      "test/r29-reconcile-accounting.test.ts#001. Concurrent sweeps join one Promise, examine distinct initial IDs and count terminal failures",
+        "test/r29-reconcile-accounting.test.ts#002. Already-terminal snapshot entries are excluded, not counted twice",
+        "test/r29-reconcile-accounting.test.ts#003. Pending/unknown reasons survive no-progress backoff and later retry",
+        "test/r29-reconcile-accounting.test.ts#004. A wall-budget boundary resumes from authoritative IDs, with no durable cursor",
+        "test/r29-reconcile-accounting.test.ts#005. Recursive self-await fails immediately; corruption never returns partial healthy counts",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks",
+      "test/r37-shutdown-observation.test.ts#001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy",
+        "test/r37-shutdown-observation.test.ts#002. Native preparation owns the shutdown barrier independently of a request Promise"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2595,10 +2774,23 @@
       "packages/tui/src/session-mode.ts#chooseSessionMode"
     ],
     "negativeTests": [
-      "test/session-mode-selection.test.mjs#mode selector:",
-      "test/session-mode-pty.test.ts#session mode real PTY:",
-      "test/host-arguments.test.ts#session modes:",
-      "test/native-profile.test.mjs#native"
+      "test/session-mode-selection.test.mjs#001. Mode selector: non-TTY defaults without terminal or listeners",
+        "test/session-mode-selection.test.mjs#002. Mode selector:",
+        "test/session-mode-selection.test.mjs#003. Mode selector:",
+        "test/session-mode-selection.test.mjs#004. Mode selector: fragmented cursor key replaces timer and fences its stale callback",
+        "test/session-mode-selection.test.mjs#005. Mode selector: selection consumes no later key in the same read",
+        "test/session-mode-selection.test.mjs#006. Mode selector: cancellation owns even an already queued timer",
+        "test/session-mode-selection.test.mjs#007. Mode selector: pasted keystrokes never select a mode",
+        "test/session-mode-selection.test.mjs#008. Mode selector:",
+        "test/session-mode-selection.test.mjs#009. Mode selector: acquisition failure at",
+        "test/session-mode-selection.test.mjs#010. Mode selector: failed",
+        "test/session-mode-selection.test.mjs#011. Mode selector: resize write failure closes instead of escaping its listener",
+        "test/session-mode-selection.test.mjs#012. Mode selector: small screens retain both choices without wrapping",
+      "test/session-mode-pty.test.ts#001. Session mode real PTY:",
+      "test/host-arguments.test.ts#003. Session modes: only an explicit birth choice changes the default",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2621,9 +2813,29 @@
       "apps/oma/src/runtime/session-mode.ts#publishSessionBirth"
     ],
     "negativeTests": [
-      "test/session-mode-record.test.ts#session mode:",
-      "test/session-history.test.ts#Session history:",
-      "test/personal-host-composition.test.mjs#Personal host"
+      "test/session-mode-record.test.ts#001. Session mode:",
+        "test/session-mode-record.test.ts#002. Session mode: an existing conflicting fact is preserved byte-for-byte",
+        "test/session-mode-record.test.ts#003. Session mode:",
+        "test/session-mode-record.test.ts#004. Session mode: malformed/big bytes remain an error, not absence",
+        "test/session-mode-record.test.ts#005. Session mode: neither linked file nor linked parent imports outside metadata",
+        "test/session-mode-record.test.ts#006. Session mode: history lookup recognizes only exact owned layouts, not existence or authority",
+      "test/session-history.test.ts#001. Session history:",
+        "test/session-history.test.ts#002. Session history: engine-owned version",
+        "test/session-history.test.ts#003. Session history: header bound does not limit the engine-owned conversation",
+        "test/session-history.test.ts#004. Session history: missing, directory and symlink are not repaired or imported",
+        "test/session-history.test.ts#005. Session history:",
+        "test/session-history.test.ts#006. Session history: unsupported header version",
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2647,14 +2859,56 @@
       "packages/engine/src/personal.ts#main"
     ],
     "negativeTests": [
-      "test/personal-pty.test.ts#Personal installed PTY:",
-      "test/personal-models-composition.test.mjs#Personal models:",
-      "test/personal-session-ownership.test.mjs#Personal child:",
-      "test/session-process-owner.test.mjs#Human session process:",
-      "packages/engine/test/personal-engine-ownership.test.mjs#Personal engine:",
-      "test/personal-history-lifetime.test.ts#Personal history actual process:",
-      "test/host-arguments.test.ts#session modes:",
-      "test/native-profile.test.mjs#native"
+      "test/personal-pty.test.ts#001. Personal installed PTY:",
+      "test/personal-models-composition.test.mjs#001. Personal models: Linux never loads host Keychain or a second model runtime",
+        "test/personal-models-composition.test.mjs#002. Personal models: invalid host marker",
+        "test/personal-models-composition.test.mjs#003. Personal models: existing engine models and one Keychain writer owner, without model discovery network",
+        "test/personal-models-composition.test.mjs#004. Personal models:",
+        "test/personal-models-composition.test.mjs#005. Personal models: setup and cleanup failures both remain visible",
+      "test/personal-session-ownership.test.mjs#001. Personal child: a mode handoff has one valid target and waits for actual writer exit",
+        "test/personal-session-ownership.test.mjs#002. Personal child: common process owner receives saved cwd, history descriptor and clean environment",
+        "test/personal-session-ownership.test.mjs#003. Personal child:",
+        "test/personal-session-ownership.test.mjs#004. Personal child: close",
+        "test/personal-session-ownership.test.mjs#005. Personal child: only the first valid switch is accepted",
+        "test/personal-session-ownership.test.mjs#006. Personal child: a retired society field is no target and never both",
+        "test/personal-session-ownership.test.mjs#007. Personal child: all host-loss signals forward while the history writer is alive",
+        "test/personal-session-ownership.test.mjs#008. Personal child: signal",
+        "test/personal-session-ownership.test.mjs#009. Personal child: a signal never targets a child whose exit is already observed",
+        "test/personal-session-ownership.test.mjs#010. Personal child: partial",
+        "test/personal-session-ownership.test.mjs#011. Personal child:",
+        "test/personal-session-ownership.test.mjs#012. Personal child: contention refuses before any child exists",
+        "test/personal-session-ownership.test.mjs#013. Personal child: failed signal-listener return still attempts every listener and the lease",
+        "test/personal-session-ownership.test.mjs#014. Personal child: primary spawn and lease cleanup failures are both retained",
+        "test/personal-session-ownership.test.mjs#015. Personal child: Mac credential marker is owned by this launch, not inherited",
+      "test/session-process-owner.test.mjs#001. Human session process: terminal, history lock and IPC have fixed separate descriptors",
+        "test/session-process-owner.test.mjs#002. Human session process: invalid history descriptor",
+        "test/session-process-owner.test.mjs#003. Human session process: direct-spawn validation rejects",
+      "packages/engine/test/personal-engine-ownership.test.mjs#001. Personal engine: credential helper close is awaited before upstream direct exit and disposal runs once",
+        "packages/engine/test/personal-engine-ownership.test.mjs#002. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#003. Personal engine: exit-hint substitution forwards write callback, receiver and backpressure, then restores the writer",
+        "packages/engine/test/personal-engine-ownership.test.mjs#004. Personal engine: initialization and cleanup failures remain visible together",
+        "packages/engine/test/personal-engine-ownership.test.mjs#005. Personal engine: pending",
+        "packages/engine/test/personal-engine-ownership.test.mjs#006. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#007. Personal engine: explicit before-switch cancel=",
+        "packages/engine/test/personal-engine-ownership.test.mjs#008. Personal engine: an IPC send failure returns the transition slot for an explicit retry",
+        "packages/engine/test/personal-engine-ownership.test.mjs#009. Personal engine: an old resume selector cannot quit its replacement",
+        "packages/engine/test/personal-engine-ownership.test.mjs#010. Personal engine: reload uses a previously loaded cache owner before replacing its resource set",
+        "packages/engine/test/personal-engine-ownership.test.mjs#011. Personal engine: rejected reload returns its candidate and awaits helper close before fatal exit",
+        "packages/engine/test/personal-engine-ownership.test.mjs#012. Personal engine: extension replacement failure returns owners before upstream fatal exit",
+        "packages/engine/test/personal-engine-ownership.test.mjs#013. Personal engine: /society opens the mode choice only when requested and hands Society to the host",
+        "packages/engine/test/personal-engine-ownership.test.mjs#014. Personal engine:",
+        "packages/engine/test/personal-engine-ownership.test.mjs#015. Personal engine: Mac mode switch returns to the host Society route",
+        "packages/engine/test/personal-engine-ownership.test.mjs#016. Personal engine: a cancelled before-switch keeps the /society session Personal",
+        "packages/engine/test/personal-engine-ownership.test.mjs#017. Personal engine: a second /society while one is transitioning cannot double-enter",
+        "packages/engine/test/personal-engine-ownership.test.mjs#018. Personal engine: an IPC send failure on /society returns the transition slot for an explicit retry",
+        "packages/engine/test/personal-engine-ownership.test.mjs#019. Personal engine: module-hook cleanup failure still closes credentials and retains the startup failure",
+        "packages/engine/test/personal-engine-ownership.test.mjs#020. Personal engine: branding reads the installed package version rather than a second literal",
+      "test/personal-history-lifetime.test.ts#001. Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
+        "test/personal-history-lifetime.test.ts#002. Personal history actual process: inherited lock survives an exited parent until the fixture writer ends",
+      "test/host-arguments.test.ts#003. Session modes: only an explicit birth choice changes the default",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2678,9 +2932,33 @@
       "packages/storage/src/durable-fs.ts#replaceDerivedFile"
     ],
     "negativeTests": [
-      "test/personal-settings.test.ts#Personal",
-      "test/personal-host-composition.test.mjs#Personal host",
-      "test/user-files.test.mjs#shared metadata publication:"
+      "test/personal-settings.test.ts#003. Personal settings: explicit user extensions seed once and the Society core never follows",
+        "test/personal-settings.test.ts#004. Personal settings: a package command preserves the first-project seed and reconciles only existing choices",
+        "test/personal-settings.test.ts#005. Personal settings: first project choice is observed inside the one writer lock",
+        "test/personal-settings.test.ts#006. Personal settings: failed first project observation consumes no choice and returns the writer",
+        "test/personal-settings.test.ts#007. Personal settings: contention and malformed saved choices do not observe a first seed",
+        "test/personal-settings.test.ts#008. Personal settings: separate edits read current choices instead of overwriting a stale screen",
+        "test/personal-settings.test.ts#009. Personal settings: update preserves disabled entries and removal cannot resurrect them on restart",
+        "test/personal-settings.test.ts#010. Personal settings: missing assets are reported; changed pinned code is refused before loading",
+        "test/personal-settings.test.ts#011. Personal settings: linked, escaping and Society assets are not alternative selections",
+        "test/personal-settings.test.ts#012. Personal settings: an unreadable index does not mean every package was removed",
+        "test/personal-settings.test.ts#013. Personal settings: corrupt preference bytes are retained, never reset to defaults",
+        "test/personal-settings.test.ts#014. Personal settings: a contended writer changes nothing and releases after an exception",
+        "test/personal-settings.test.ts#015. A Personal extension may be an absolute local file, digest-pinned like every other entry",
+        "test/personal-settings.test.ts#017. The package resource lists survive a Personal settings round-trip and a no-change write",
+        "test/personal-settings.test.ts#018. Personal settings embed the whole index, so their bound tracks it -- a heavy index carries, and the refusal states the bound",
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine",
+      "test/user-files.test.mjs#011. Shared metadata publication:"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2705,9 +2983,25 @@
       "apps/oma/src/application/society-transition.ts#SocietyTransition.relaunch"
     ],
     "negativeTests": [
-      "test/personal-host-composition.test.mjs#Personal host",
-      "test/oma-composition-policy.test.mjs#MODE-005",
-      "test/personal-history-lifetime.test.ts#Personal"
+      "test/personal-host-composition.test.mjs#001. Personal host",
+        "test/personal-host-composition.test.mjs#002. Personal host",
+        "test/personal-host-composition.test.mjs#003. Personal host",
+        "test/personal-host-composition.test.mjs#004. Personal host",
+        "test/personal-host-composition.test.mjs#005. Personal host:",
+        "test/personal-host-composition.test.mjs#006. Personal host:",
+        "test/personal-host-composition.test.mjs#007. Personal host: an observed absent project seeds no extensions without provisioning",
+        "test/personal-host-composition.test.mjs#008. Personal host:",
+        "test/personal-host-composition.test.mjs#009. Personal host",
+        "test/personal-host-composition.test.mjs#010. Personal host: child-owner failure never authorizes a replacement",
+        "test/personal-host-composition.test.mjs#011. Personal host: Node without in-place restart refuses after writer return, not a second spawned engine",
+      "test/oma-composition-policy.test.mjs#050. Society resumes Personal in its saved cwd only after the outgoing writer dies",
+        "test/oma-composition-policy.test.mjs#051. New removes stale resume and binding intent instead of changing the old birth",
+        "test/oma-composition-policy.test.mjs#052. Failed resume admission leaves the current Society and its display alive",
+        "test/oma-composition-policy.test.mjs#053. Direct Society",
+        "test/oma-composition-policy.test.mjs#054. Shutdown fences a late resume",
+        "test/oma-composition-policy.test.mjs#055. One pending resume owns admission; duplicate switch cannot start a second teardown",
+      "test/personal-history-lifetime.test.ts#001. Personal history actual process: inherited inode, concurrent admission and next wait for writer close",
+        "test/personal-history-lifetime.test.ts#002. Personal history actual process: inherited lock survives an exited parent until the fixture writer ends"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2731,8 +3025,8 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T91",
-      "test/tui-boundary.test.ts#T95"
+      "test/surface-rules.test.mjs#006. Tui-view-boundary: the view sees only data, and only terminal owners draw through the seam",
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2742,8 +3036,8 @@
   {
     "requirement": "TUI-002; arch §23.2",
     "source": "docs/implementation-spec.md",
-    "digest": "397acd5f5ca18582d92a0320ab2f7ddec64b05cdde5f59ff6772d2cf1fb94ad4",
-    "normativeText": "**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. 분할 UTF-8의 deadline은 decoder가 스스로 관측 가능해야 한다. 포기한 미완 code point는 U+FFFD로 대체해 prompt에 넣지 않고 그것을 기다리던 decode state와 함께 버리며, terminal이 만든 U+FFFD도 key로 취급하지 않는다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. paste 경계 자체는 host terminal이 DEC 2004를 지킨다는 전제 위에 있으므로(clipboard 안의 `ESC[201~`를 그대로 흘리는 terminal은 그 전제를 깬다), TUI는 그 전제에만 기대지 않는다: paste end marker 뒤 같은 read에 남은 byte는 key로 해석하지 않고 그 paste의 내용으로 흡수하며, paste 종료 후 선언된 짧은 구간 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 처리한다. 이 구간은 선언된 한도이고, 그 안의 Enter를 제출로 인정하지 않는 것은 정상 동작이다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시·paste 경로는 Unicode Cc와 Cf 제어·서식 문자를 제거하되 정상 grapheme 구성을 위한 ZWNJ(U+200C)·ZWJ(U+200D)는 보존한다. paste의 TAB·LF는 편집용으로 보존하며 표시 경로의 TAB은 공백으로 바꾼다. bidi 제어는 표시 순서를 바꿀 수 없어야 하고, 폭 0의 정상 grapheme을 단지 폭이 없다는 이유로 버리지 않는다(DR19).",
+    "digest": "b7d30ae10bb20e607764d35a6cd0b59e064dca0aee12e1d11f2b256e896a7172",
+    "normativeText": "**MUST [TUI-002; arch §23.2]** host 설치 PATH의 `oma`는 Human 제품 진입점이며 유지한다. model-facing CLI는 제거하고 typed OMA tool로 대체한다. Human 제품 진입점을 Worker broker fallback으로 노출하지 않는다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. 분할 UTF-8의 deadline은 decoder가 스스로 관측 가능해야 한다. 포기한 미완 code point는 U+FFFD로 대체해 prompt에 넣지 않고 그것을 기다리던 decode state와 함께 버리며, terminal이 만든 U+FFFD도 key로 취급하지 않는다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. paste 경계 자체는 host terminal이 DEC 2004를 지킨다는 전제 위에 있으므로(clipboard 안의 `ESC[201~`를 그대로 흘리는 terminal은 그 전제를 깬다), TUI는 그 전제에만 기대지 않는다: paste end marker 뒤 같은 read에 남은 byte는 key로 해석하지 않고 그 paste의 내용으로 흡수하며, paste 종료 후 선언된 짧은 구간 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 처리한다. 이 구간은 선언된 한도이고, 그 안의 Enter를 제출로 인정하지 않는 것은 정상 동작이다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시·paste 경로는 Unicode Cc와 Cf 제어·서식 문자를 제거하되 정상 grapheme 구성을 위한 ZWNJ(U+200C)·ZWJ(U+200D)는 보존한다. paste의 TAB·LF는 편집용으로 보존하며 표시 경로의 TAB은 공백으로 바꾼다. bidi 제어는 표시 순서를 바꿀 수 없어야 하고, 폭 0의 정상 grapheme을 단지 폭이 없다는 이유로 버리지 않는다(DR19).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/tui/src/keys.ts#KeyDecoder",
@@ -2758,9 +3052,19 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-app.test.ts#TUI-002",
-      "test/tui-model.test.ts#key decoding",
-      "test/surface-process.test.ts#T112"
+      "test/tui-app.test.ts#015. And CSI tokens survive every terminal read boundary",
+        "test/tui-app.test.ts#016. Malformed and overlong terminal reports stay bounded and never become prompt text",
+        "test/tui-app.test.ts#017. A pasted block is one prompt boundary, not one prompt per line",
+        "test/tui-app.test.ts#018. A paste survives every terminal read boundary it can be split at",
+        "test/tui-app.test.ts#019. Pasted text carries line breaks and tabs, and no terminal instructions",
+        "test/tui-app.test.ts#021. A paste the terminal never ended is rejected whole, and the keyboard lives on",
+        "test/tui-app.test.ts#022. An unfinished terminal report gives up instead of eating the next key",
+        "test/tui-app.test.ts#027. An Enter arriving in the burst after a paste is that paste's newline, not a submission",
+        "test/tui-app.test.ts#028. A clipboard carrying its own end marker cannot submit the text in front of it",
+        "test/tui-app.test.ts#029. A code point the terminal split across reads has a deadline, and never becomes U+FFFD",
+      "test/tui-model.test.ts#014. Key decoding maps arrows, Ctrl+X and text without leaking escape sequences",
+      "test/surface-process.test.ts#002. The terminal owner takes and restores raw mode on a real TTY",
+        "test/surface-process.test.ts#003. A non-TTY stream never attempts raw mode"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2770,8 +3074,8 @@
   {
     "requirement": "TUI-003",
     "source": "docs/implementation-spec.md",
-    "digest": "530a02c05f7803523352d0581f354d217693020afb3cfeaaaedc17265a8637b7",
-    "normativeText": "**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.",
+    "digest": "7967108057f7edbed46a3fc589882a16828efc082e4f625bed35a3ad26b9b1bc",
+    "normativeText": "**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident tool 설명·도움말·오류에서 TUI나 Control Panel을 broker fallback으로 안내하지 않는다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "apps/oma/src/application/society-interaction.ts#SocietyInteraction",
@@ -2784,8 +3088,8 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T91",
-      "test/tui-boundary.test.ts#T95"
+      "test/surface-rules.test.mjs#006. Tui-view-boundary: the view sees only data, and only terminal owners draw through the seam",
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2808,7 +3112,25 @@
       "apps/oma/src/runtime/host-tenure.ts#HostTenure"
     ],
     "negativeTests": [
-      "test/oma-composition-policy.test.mjs#T119"
+      "test/oma-composition-policy.test.mjs#003. The lease permits private conversation while broker authority remains closed",
+        "test/oma-composition-policy.test.mjs#007. However many brokers become ready, the society gets one engine",
+        "test/oma-composition-policy.test.mjs#008. Each time a broker becomes ready the engine is registered and given its credential",
+        "test/oma-composition-policy.test.mjs#009. A refused registration grants nothing and delivers nothing",
+        "test/oma-composition-policy.test.mjs#010. Delivery closes when the broker that authorised it ends, and reopens only on a new registration",
+        "test/oma-composition-policy.test.mjs#011. A Control Panel over someone else's society cannot write to it",
+        "test/oma-composition-policy.test.mjs#012. An owner that has given the society back stops being able to write to it",
+        "test/oma-composition-policy.test.mjs#013. Everything started on the strength of the lease inherits it",
+        "test/oma-composition-policy.test.mjs#014. A society whose broker this host does not own gets a Control Panel, not a second engine",
+        "test/oma-composition-policy.test.mjs#015. A broker that could not be started leaves a Control Panel, not an unauthorised engine",
+        "test/oma-composition-policy.test.mjs#016. A society this process stops owning loses the engine that ownership paid for",
+        "test/oma-composition-policy.test.mjs#017. A process that cannot take the society lease writes nothing and starts no broker",
+        "test/oma-composition-policy.test.mjs#019. A broker that is already listening is found before this process writes anything",
+        "test/oma-composition-policy.test.mjs#020. Negative control: with no broker listening, the same run provisions and repairs",
+        "test/oma-composition-policy.test.mjs#024. Quitting gives the society back, and only once the engine is really gone",
+        "test/oma-composition-policy.test.mjs#025. Every signal that asks this process to end takes the same quitting path",
+        "test/oma-composition-policy.test.mjs#026. An engine that will not die does not keep the product from quitting",
+        "test/oma-composition-policy.test.mjs#027. A crash stops the broker and the engine this process started",
+        "test/oma-composition-policy.test.mjs#028. Delivery runs only once a broker is ready, and again as each turn settles"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2833,9 +3155,11 @@
       "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T93",
-      "test/tui-sources.test.ts#T94",
-      "test/tui-sources.test.ts#T96"
+      "test/tui-sources.test.ts#001. A Principal model change rewrites only its profile reference",
+        "test/tui-sources.test.ts#002. An undeclared model or profile name is refused, not coerced",
+      "test/tui-sources.test.ts#003. Writing settings replaces config.json atomically with a fresh policy revision",
+      "test/tui-sources.test.ts#004. Initial workers is bootstrap seed only and never touches the running quota",
+        "test/tui-sources.test.ts#005. Every exposed field declares an apply scope that matches its real effect"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2859,7 +3183,7 @@
       "packages/tui/src/model.ts#step"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T95"
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2884,9 +3208,11 @@
       "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T93",
-      "test/tui-sources.test.ts#T94",
-      "test/tui-sources.test.ts#T96"
+      "test/tui-sources.test.ts#001. A Principal model change rewrites only its profile reference",
+        "test/tui-sources.test.ts#002. An undeclared model or profile name is refused, not coerced",
+      "test/tui-sources.test.ts#003. Writing settings replaces config.json atomically with a fresh policy revision",
+      "test/tui-sources.test.ts#004. Initial workers is bootstrap seed only and never touches the running quota",
+        "test/tui-sources.test.ts#005. Every exposed field declares an apply scope that matches its real effect"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2911,9 +3237,11 @@
       "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T93",
-      "test/tui-sources.test.ts#T94",
-      "test/tui-sources.test.ts#T96"
+      "test/tui-sources.test.ts#001. A Principal model change rewrites only its profile reference",
+        "test/tui-sources.test.ts#002. An undeclared model or profile name is refused, not coerced",
+      "test/tui-sources.test.ts#003. Writing settings replaces config.json atomically with a fresh policy revision",
+      "test/tui-sources.test.ts#004. Initial workers is bootstrap seed only and never touches the running quota",
+        "test/tui-sources.test.ts#005. Every exposed field declares an apply scope that matches its real effect"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2938,9 +3266,11 @@
       "apps/oma/src/application/settings.ts#writeSettings"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T93",
-      "test/tui-sources.test.ts#T94",
-      "test/tui-sources.test.ts#T96"
+      "test/tui-sources.test.ts#001. A Principal model change rewrites only its profile reference",
+        "test/tui-sources.test.ts#002. An undeclared model or profile name is refused, not coerced",
+      "test/tui-sources.test.ts#003. Writing settings replaces config.json atomically with a fresh policy revision",
+      "test/tui-sources.test.ts#004. Initial workers is bootstrap seed only and never touches the running quota",
+        "test/tui-sources.test.ts#005. Every exposed field declares an apply scope that matches its real effect"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2965,8 +3295,9 @@
       "apps/oma/src/application/extensions.ts#toggleExtension"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T97",
-      "test/tui-model.test.ts#T97"
+      "test/tui-sources.test.ts#006. The core extension stays first and selection is confined to libdir",
+        "test/tui-sources.test.ts#007. An inline config exposes only the locked core and refuses edits",
+      "test/tui-model.test.ts#009. The locked core extension cannot be toggled, other rows can"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2990,8 +3321,9 @@
       "apps/oma/src/application/mail.ts#readMailbox"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T98",
-      "test/tui-boundary.test.ts#T95"
+      "test/tui-sources.test.ts#009. Unread comes from the mailbox position, and no read state is written",
+        "test/tui-sources.test.ts#014. The Dashboard keeps an unobserved value unknown instead of guessing",
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3015,7 +3347,8 @@
       "packages/tui/src/dashboard.ts#dashboardLines"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T98"
+      "test/tui-sources.test.ts#009. Unread comes from the mailbox position, and no read state is written",
+        "test/tui-sources.test.ts#014. The Dashboard keeps an unobserved value unknown instead of guessing"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3039,7 +3372,7 @@
       "packages/tui/src/view/screens.ts#render"
     ],
     "negativeTests": [
-      "test/tui-boundary.test.ts#T95"
+      "test/p2-wire-golden.test.mjs#002. Wire golden: closed public/internal vocabularies and canonical bytes stay v1"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3066,8 +3399,8 @@
       "packages/engine/src/pi-compat/prompt-editor.ts#ownedEditor"
     ],
     "negativeTests": [
-      "packages/engine/test/interactive-input.test.mjs#Open TUI",
-      "test/open-tui-pty.test.ts#Open TUI"
+      "packages/engine/test/interactive-input.test.mjs#001. Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA",
+      "test/open-tui-pty.test.ts#001. Open TUI: actual Principal tools, queued input, panel and"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3094,7 +3427,7 @@
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
-      "test/pi-runtime.test.ts#T106"
+      "test/pi-runtime.test.ts#016. Running in a bare project needs no setup command and no hand-written config"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3121,7 +3454,7 @@
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
-      "test/pi-runtime.test.ts#T106"
+      "test/pi-runtime.test.ts#016. Running in a bare project needs no setup command and no hand-written config"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3148,7 +3481,7 @@
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
-      "test/pi-runtime.test.ts#T106"
+      "test/pi-runtime.test.ts#016. Running in a bare project needs no setup command and no hand-written config"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3214,9 +3547,13 @@
       "packages/engine/src/principal-session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
-      "test/tui-app.test.ts#T120",
+      "test/tui-app.test.ts#012. An oversized paste is rejected as a whole instead of submitting its prefix",
+        "test/tui-app.test.ts#013. JSON escaping overflow rejects the whole prompt",
+        "test/tui-app.test.ts#020. A paste over the decoder's bound is refused whole, never as its prefix",
+        "test/tui-app.test.ts#026. Recovery from a refused paste never spends a character the Human typed",
       "test/tui-transcript.test.ts#T120",
-      "test/principal-endpoint.test.ts#T120"
+      "test/principal-endpoint.test.ts#031. The host never retains a Human prompt beyond its UTF-8 frame admission",
+        "test/principal-endpoint.test.ts#032. Only so many prompts wait, and the Human is told which one was not taken"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3257,7 +3594,7 @@
     ],
     "negativeTests": [
       "test/pi-runtime.test.ts#T105",
-      "test/pi-runtime.test.ts#T106"
+      "test/pi-runtime.test.ts#016. Running in a bare project needs no setup command and no hand-written config"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3281,31 +3618,24 @@
   {
     "requirement": "TSP-001; arch §23.10",
     "source": "docs/implementation-spec.md",
-    "digest": "c3db21dd8164f08c5ca5b8ae5b98c625b840324e3d3833d5d6dd280f7790a3aa",
-    "normativeText": "**MUST [TSP-001; arch §23.10]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.",
+    "digest": "e97fc8b8f4f028e5e3d99ac134cb887947f8ec2ef5013512caeb7fe6d739ca48",
+    "normativeText": "**MUST [TSP-001; arch §23.10]** 기본 Society registry는 역할별 명시적 core와 optional로 닫는다. exact 이름과 provenance admission을 검증하며 미분류 도구는 기본 DISABLED다. 누적 group/DAG와 group opener는 유지하지 않는다. 전체 목록과 수는 model-tool-surface-spec §4가 소유한다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
-    "entrypoint": "apps/oma/src/entry/runner.ts#main",
-    "callPath": [
-      "apps/oma/src/entry/runner.ts#main",
-      "packages/config/src/operations.ts#readConfigurationSource",
-      "packages/domain/src/tool-surface.ts#planToolSurface"
-    ],
-    "negativeTests": [
-      "test/tool-surface.test.ts#T99",
-      "test/tool-surface.test.ts#T100"
-    ],
+    "rationale": "MCS-S13/DR72 removes the old exact-selection execution. Original clause text and fingerprint remain historical; current collaboration group behavior is not evidence of this clause's no-group requirement. No replacement execution owner or completion evidence is inferred.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
     "evidence": null,
     "status": "unverified",
     "verification": "NOT_RUN",
-    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+    "invalidationReason": "retired exact-selection owner removed under MCS-S13/DR72; current collaboration behavior is not proof of this historical contract"
   },
   {
     "requirement": "TSP-002",
     "source": "docs/implementation-spec.md",
-    "digest": "1fc8379ced206d7b1e950bf40e80d88a0ed1107fa5c2864ce2db79b02ba285b4",
-    "normativeText": "**MUST [TSP-002]** 투영은 authored 설정 필드가 아니라 runtime plumbing이다. role 파일의 필드 집합은 닫혀 있으므로 `toolSurface` 키가 나타나는 role 파일은 `INVALID_REQUEST`로 config 로드를 실패시킨다(D23). 기존 닫힌 `HostConfig`, wire schema, ledger schema, DB entity를 확장하지 않는다. plan은 `OMA_TOOL_SURFACE` 환경 변수로만 sandbox에 도달하고, resident 안의 trusted extension이 session 시작 때 파싱해 malformed이면 fail closed한다(TSP-007).",
+    "digest": "cdfe89698644aa6f0e9840e9e496f67c8c1b47b82db407c176d773f767d7b3de",
+    "normativeText": "**MUST [TSP-002]** tool 표면은 authored role 설정 필드가 아니라 runtime plumbing이다. 기존 closed config·wire·ledger·DB entity를 늘리지 않는다. 전달 plan이 잘못되면 fail closed한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "packages/config/src/operations.ts#readConfigurationSource",
@@ -3315,8 +3645,8 @@
       "packages/config/src/operations.ts#readConfigurationSource"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T100",
-      "test/tool-surface.test.ts#T103"
+      "test/tool-surface.test.ts#002. A role file cannot declare a projection -- the field fails the load, whatever it holds",
+      "test/operations-config.test.ts#009. Runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3326,43 +3656,37 @@
   {
     "requirement": "TSP-003",
     "source": "docs/implementation-spec.md",
-    "digest": "77f30d2e5ae1bdcb2f7f7141c3a5e2d348cc15ae40a6f2b2b7eed80cdd5ecad5",
-    "normativeText": "**MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.",
+    "digest": "55ba0ac4ed1a049bf5a0eeffcd286356ce03a60d21d8fa2d4ec160ce577be96d",
+    "normativeText": "**MUST [TSP-003]** `toolset`은 현재 역할에서 admission을 통과한 optional 이름만 받는다. 중복·unknown·다른 역할·core 이름을 거절하며 빈 선택은 core만 남긴다. 카탈로그의 짧은 설명은 실제 tool metadata에서 파생한다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
-    "entrypoint": "apps/oma/src/entry/runner.ts#main",
-    "callPath": [
-      "apps/oma/src/entry/runner.ts#main",
-      "packages/config/src/operations.ts#readConfigurationSource",
-      "packages/domain/src/tool-surface.ts#planToolSurface"
-    ],
-    "negativeTests": [
-      "test/tool-surface.test.ts#T99",
-      "test/tool-surface.test.ts#T100"
-    ],
+    "rationale": "MCS-S13/DR72 removes toolset and its v2 builder rather than renaming the selector. Preserve this clause's historical text/fingerprint; cumulative groups do not implement exact-set reset. Current behavior is traced separately in docs/implementation/collaboration-v1-trace.md; this record remains unverified.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
     "evidence": null,
     "status": "unverified",
     "verification": "NOT_RUN",
-    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+    "invalidationReason": "retired exact-selection owner removed under MCS-S13/DR72; current collaboration behavior is not proof of this historical contract"
   },
   {
     "requirement": "TSP-004",
     "source": "docs/implementation-spec.md",
-    "digest": "96baf18ed9887d9b8367f198931a9afdb1f70e51e5c9a2349cb2034452d379dd",
-    "normativeText": "**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `packages/domain/src/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.",
+    "digest": "8218105986f42690c408289f04b2d607982f0c836e5148a1139c3a005aed515c",
+    "normativeText": "**MUST [TSP-004]** 검증된 registry·plan과 기존 runtime surface owner를 재사용한다. LSP/web/MCP의 내부 알고리즘이나 provider codec을 다시 만들지 않는다. Principal에 spawn 불가 LSP diagnostics/fix를 등록하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/domain/src/tool-surface.ts#planToolSurface",
-    "entrypoint": "apps/oma/src/entry/runner.ts#main",
+    "owner": "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+    "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
-      "apps/oma/src/entry/runner.ts#main",
-      "packages/config/src/operations.ts#readConfigurationSource",
-      "packages/domain/src/tool-surface.ts#planToolSurface"
+      "packages/extension/src/index.ts#extension",
+      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
+      "packages/domain/src/collaboration-surface.ts#requireCollaborationSurface",
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T99",
-      "test/tool-surface.test.ts#T100"
+      "test/tool-surface.test.ts#007. Malformed, impossible and shadowed current surfaces fail closed",
+      "packages/tool-lsp/test/bundle.test.mjs#046. A read-only role can inspect server availability without reaching a spawn-capable tool"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3372,19 +3696,20 @@
   {
     "requirement": "TSP-005",
     "source": "docs/implementation-spec.md",
-    "digest": "8ccbfd63f4fd98a8cf2da1c3a2524389b997e12023608616d41bc5e4fb0fb236",
-    "normativeText": "**MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.",
+    "digest": "c42dedbd2d5a0b034e5c116cda1f39967c013d705d7f91c5ff5657d2fbda2215",
+    "normativeText": "**MUST [TSP-005]** active set은 core와 선택된 optional의 정확한 합집합이다. OMA-owned 이름 전체를 always-visible로 취급하지 않는다. 선택은 권한 grant가 아니다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "rationale": "Current generic active-set invariant is owned by collaboration groups. MCS-S13/DR72 forbids reviving exact-set toolset or admitting old histories through this mapping. Original normative text/fingerprint remain; this locator is not completion or old-session migration evidence.",
+    "owner": "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups",
     "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
       "packages/extension/src/index.ts#extension",
       "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T101"
+      "test/tool-surface.test.ts#005. Only successful persisted group results restore; interrupted/failed calls and different branches remain separate",
+      "test/tool-surface.test.ts#010. Corrupt, partial or foreign committed exposure cannot be restored"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3394,45 +3719,36 @@
   {
     "requirement": "TSP-006",
     "source": "docs/implementation-spec.md",
-    "digest": "ff181e422d2263eb51122e46bf9fcc8b69b7feea4e11c5d9320c947c681e3315",
-    "normativeText": "**MUST [TSP-006]** group을 여는 것은 **활성화이며 실행이 아니다**. 직계 자식만 기존 활성 집합에 합집합으로 더하고, 같은 group을 다시 열어도 결과가 같아야 한다. 다른 extension이 활성화한 tool을 제거하지 않는다. OMA가 다른 extension의 tool handler를 대신 호출하거나 인자를 재해석하는 경로를 만들지 않는다. 드러난 tool은 Pi의 기존 pipeline이 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 보존된다.",
+    "digest": "0f2a0d9aa73b11c5ff1cec06dc286a3f4101a3732733b193033201e375232219",
+    "normativeText": "**MUST [TSP-006]** `toolset`은 sequential 선택 예약이며 실행 dispatcher가 아니다. 현재 tool batch와 결과 저장 후 turn_end에서 전체 optional 집합을 교체한다. 같은 turn의 마지막 유효 선택이 다음 요청에 적용된다. 이미 제출된 호출을 중간 비활성화하지 않는다. 선택한 도구는 다음 model request에서 원래 schema와 handler로 직접 호출한다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
-    "entrypoint": "packages/extension/src/index.ts#extension",
-    "callPath": [
-      "packages/extension/src/index.ts#extension",
-      "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
-      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
-    ],
-    "negativeTests": [
-      "test/tool-surface.test.ts#T102",
-      "test/tool-surface.test.ts#T103"
-    ],
+    "rationale": "MCS-S13/DR72 removes the exact-set toolset execution owner. This historical turn-end replacement contract is not reclassified as cumulative group opening. The original text/fingerprint remain; no replacement owner or runtime evidence is inferred.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
     "evidence": null,
     "status": "unverified",
     "verification": "NOT_RUN",
-    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+    "invalidationReason": "retired exact-selection owner removed under MCS-S13/DR72; current collaboration behavior is not proof of this historical contract"
   },
   {
     "requirement": "TSP-007",
     "source": "docs/implementation-spec.md",
-    "digest": "8c3431447f953a60d931355a61320026d794a4a5d0dae737199e7f8e8d3fafb6",
-    "normativeText": "**MUST [TSP-007]** sandbox가 받은 plan을 읽을 수 없거나 형식이 맞지 않으면 fail closed한다. 모르는 값은 무시하고 진행하는 것이 아니라 OMA 자신이 등록한 tool만 남긴다. 투영 적용 실패가 `DISABLED`로 의도한 tool을 노출시키는 결과로 이어져서는 안 된다.",
+    "digest": "c6c453f5efb637a8eb90c0d1d89cd868f842fef0005dc4bf643bdef720c68e56",
+    "normativeText": "**MUST [TSP-007]** 적용 전 이름을 검증하고 다음 provider request 전에 actual active set의 정확한 일치를 확인한다. 실패·registry 불일치를 성공으로 보고 계속하지 않는다. 검증된 extension 변경도 같은 owner와 안전 경계로 처리한다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools",
+    "rationale": "Current generic registry/name/provenance invariant is owned by collaboration groups. MCS-S13/DR72 removes the old expandedActiveTools selector. Preserve the original normative text/fingerprint; changed owner/test links invalidate evidence rather than certifying the retired implementation.",
+    "owner": "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups",
     "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
       "packages/extension/src/index.ts#extension",
       "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#parseSurfacePlan",
-      "packages/tool-runtime/src/tool-surface.ts#expandedActiveTools"
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T102",
-      "test/tool-surface.test.ts#T103"
+      "test/tool-surface.test.ts#009. An exposed definition cannot disappear or change after a safe boundary",
+      "test/tool-surface.test.ts#008. Late non-catalog registrations stay unavailable; provenance revocation closes the role surface"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3442,19 +3758,20 @@
   {
     "requirement": "TSP-008",
     "source": "docs/implementation-spec.md",
-    "digest": "8dcd592b436038c11f72e4e136c5f9eac2a5d0292e732af21209b4db2895311b",
-    "normativeText": "**MUST [TSP-008]** 투영은 OMA가 등록한 mail/status tool을 제거하지 못한다. role 선언이 그 이름을 disabled로 지정해도 활성 상태를 유지한다. 투영이 agent를 자기 협업 수단 없이 남기지 않는다.",
+    "digest": "7df81a87c82d5b84febbf43bcdf925abec4e665edf66c26f5bc69160d9967185",
+    "normativeText": "**MUST [TSP-008]** core는 제거할 수 없다. resume/fork/branch는 기존 Pi tool-definition/session 기록에서 같은 branch의 마지막 확정 loadout을 복원하며 pending 선택과 구분한다. 별도 DB·queue·일반 retry engine을 만들지 않는다.",
     "applicability": "unclassified",
-    "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "packages/tool-runtime/src/tool-surface.ts#initialActiveTools",
+    "rationale": "Current same-branch committed group restoration is owned by collaboration groups. MCS-S13/DR72 requires explicit refusal, not promotion, of retired histories. Preserve this clause's text/fingerprint; the new locator proves neither old loadout execution nor migration and remains unverified.",
+    "owner": "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups",
     "entrypoint": "packages/extension/src/index.ts#extension",
     "callPath": [
       "packages/extension/src/index.ts#extension",
       "packages/tool-runtime/src/tool-surface.ts#registerToolSurface",
-      "packages/tool-runtime/src/tool-surface.ts#initialActiveTools"
+      "packages/tool-runtime/src/collaboration-groups.ts#registerCollaborationGroups"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T101"
+      "test/tool-surface.test.ts#005. Only successful persisted group results restore; interrupted/failed calls and different branches remain separate",
+      "test/tool-surface.test.ts#010. Corrupt, partial or foreign committed exposure cannot be restored"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3489,8 +3806,8 @@
       "packages/config/src/operations.ts#readConfigurationSource"
     ],
     "negativeTests": [
-      "test/tool-surface.test.ts#T100",
-      "test/tool-surface.test.ts#T103"
+      "test/tool-surface.test.ts#002. A role file cannot declare a projection -- the field fails the load, whatever it holds",
+      "test/operations-config.test.ts#009. Runner entry refuses a missing or malformed OMA_TOOL_SURFACE_HEX before Pi runs"
     ],
     "evidence": null,
     "status": "unverified",
@@ -3667,7 +3984,8 @@
       "packages/process/src/preparation.ts#preparationShutdownBarrier"
     ],
     "negativeTests": [
-      "test/r37-shutdown-observation.test.ts#R37"
+      "test/r37-shutdown-observation.test.ts#001. Failure before configuration acquisition releases only the lock without requesting an unloaded grace policy",
+        "test/r37-shutdown-observation.test.ts#002. Native preparation owns the shutdown barrier independently of a request Promise"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4290,7 +4608,14 @@
       "scripts/traceability.mjs#inventoryAcceptance"
     ],
     "negativeTests": [
-      "test/traceability-policy.test.mjs#R39"
+      "test/traceability-policy.test.mjs#001. Same fingerprint and same links preserve the reviewed record exactly",
+        "test/traceability-policy.test.mjs#002. Moving an owner invalidates proof without rewriting a normative fingerprint",
+        "test/traceability-policy.test.mjs#003. Changing a clause never reuses the old clause's proof",
+        "test/traceability-policy.test.mjs#004. Unreviewed rules stay unlinked rather than receiving a guessed owner",
+        "test/traceability-policy.test.mjs#005. Duplicate, extra and malformed owner records are rejected",
+        "test/traceability-policy.test.mjs#006. Complete core and tiered matrices are separate scopes, not a replacement total",
+        "test/traceability-policy.test.mjs#007. Core success cannot hide missing target oracles or a missing core row",
+        "test/traceability-policy.test.mjs#008. Duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4439,8 +4764,15 @@
       "scripts/traceability.mjs#indexTrace"
     ],
     "negativeTests": [
-      "test/compliance.test.ts#COMP-005/006",
-      "test/traceability-policy.test.mjs#R39"
+      "test/compliance.test.ts#001. Structural evidence rejects stale, incomplete and duplicate records",
+      "test/traceability-policy.test.mjs#001. Same fingerprint and same links preserve the reviewed record exactly",
+        "test/traceability-policy.test.mjs#002. Moving an owner invalidates proof without rewriting a normative fingerprint",
+        "test/traceability-policy.test.mjs#003. Changing a clause never reuses the old clause's proof",
+        "test/traceability-policy.test.mjs#004. Unreviewed rules stay unlinked rather than receiving a guessed owner",
+        "test/traceability-policy.test.mjs#005. Duplicate, extra and malformed owner records are rejected",
+        "test/traceability-policy.test.mjs#006. Complete core and tiered matrices are separate scopes, not a replacement total",
+        "test/traceability-policy.test.mjs#007. Core success cannot hide missing target oracles or a missing core row",
+        "test/traceability-policy.test.mjs#008. Duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4463,8 +4795,15 @@
       "scripts/traceability.mjs#indexTrace"
     ],
     "negativeTests": [
-      "test/compliance.test.ts#COMP-005/006",
-      "test/traceability-policy.test.mjs#R39"
+      "test/compliance.test.ts#001. Structural evidence rejects stale, incomplete and duplicate records",
+      "test/traceability-policy.test.mjs#001. Same fingerprint and same links preserve the reviewed record exactly",
+        "test/traceability-policy.test.mjs#002. Moving an owner invalidates proof without rewriting a normative fingerprint",
+        "test/traceability-policy.test.mjs#003. Changing a clause never reuses the old clause's proof",
+        "test/traceability-policy.test.mjs#004. Unreviewed rules stay unlinked rather than receiving a guessed owner",
+        "test/traceability-policy.test.mjs#005. Duplicate, extra and malformed owner records are rejected",
+        "test/traceability-policy.test.mjs#006. Complete core and tiered matrices are separate scopes, not a replacement total",
+        "test/traceability-policy.test.mjs#007. Core success cannot hide missing target oracles or a missing core row",
+        "test/traceability-policy.test.mjs#008. Duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4964,15 +5303,20 @@
       "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel",
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
-      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
+      "test/native-primitives.test.mjs#007. The real kernel process substrate feeds the shared ancestry and reuse policy",
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#003. Real OS: an inherited descriptor keeps flock after the parent owner closes",
+      "test/native-os-contracts.test.mjs#004. Real OS: native root and file capabilities are closed across exec without explicit handoff",
+      "test/native-os-contracts.test.mjs#011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity",
+      "packages/platform-mac/test/seatbelt.test.mjs#002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view",
       "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
+      "packages/platform-mac/test/seatbelt.test.mjs#005. Seatbelt profile paths remain literals and aggregate profiles never enter argv"
     ],
     "evidence": null,
     "status": "unverified",
@@ -4996,15 +5340,20 @@
       "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel",
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
-      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
+      "test/native-primitives.test.mjs#007. The real kernel process substrate feeds the shared ancestry and reuse policy",
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#003. Real OS: an inherited descriptor keeps flock after the parent owner closes",
+      "test/native-os-contracts.test.mjs#004. Real OS: native root and file capabilities are closed across exec without explicit handoff",
+      "test/native-os-contracts.test.mjs#011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity",
+      "packages/platform-mac/test/seatbelt.test.mjs#002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view",
       "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
+      "packages/platform-mac/test/seatbelt.test.mjs#005. Seatbelt profile paths remain literals and aggregate profiles never enter argv"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5029,15 +5378,15 @@
       "packages/native/src/snapshot-reader.ts#SnapshotReader"
     ],
     "negativeTests": [
-      "test/native-primitives.test.mjs#directory effects",
-      "test/native-primitives.test.mjs#contained opens accept caller no-follow",
-      "test/native-primitives.test.mjs#entry metadata preserves",
-      "test/native-primitives.test.mjs#snapshot reader returns",
-      "test/user-files.test.mjs#shared metadata publication:",
+      "test/native-primitives.test.mjs#005. Directory effects remain on the held inode after a pathname replacement",
+      "test/native-primitives.test.mjs#002. Contained opens accept caller no-follow and reject intermediate and final symlinks",
+      "test/native-primitives.test.mjs#006. Entry metadata preserves nanoseconds and link identity without content access",
+      "test/native-primitives.test.mjs#001. Snapshot reader returns final symlink bytes while refusing linked parents",
+      "test/user-files.test.mjs#011. Shared metadata publication:",
       "test/durable-fs-faults.test.ts#P7",
-      "test/native-os-contracts.test.mjs#real OS: no-replace publication",
-      "test/native-os-contracts.test.mjs#real OS: permission failure",
-      "test/native-os-contracts.test.mjs#real OS: a concurrent directory-to-symlink"
+      "test/native-os-contracts.test.mjs#001. Real OS: no-replace publication has exactly one winner in cross-process races",
+      "test/native-os-contracts.test.mjs#008. Real OS: permission failure and a closed directory are errors, never empty observations",
+      "test/native-os-contracts.test.mjs#007. Real OS: a concurrent directory-to-symlink swap never writes outside the held root"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5061,9 +5410,12 @@
       "packages/storage/src/cache-trees.ts#digestCacheTrees"
     ],
     "negativeTests": [
-      "test/restic-tar.test.mjs#dump",
-      "test/session-storage.test.mjs#session storage restores",
-      "test/session-storage.test.mjs#corrupted backup data"
+      "test/restic-tar.test.mjs#001. Dump verification consumes arbitrary chunk boundaries, bytes, links and complete EOF",
+        "test/restic-tar.test.mjs#002. Dump truncation, duplicate entries, content mutation and invalid metadata refuse reclamation",
+        "test/restic-tar.test.mjs#005. Dump hardlinks reject self, forward and cyclic references without verified file data",
+        "test/restic-tar.test.mjs#006. Dump hardlink chains resolve to verified regular data, including empty files",
+      "test/session-storage.test.mjs#001. Session storage restores Git index, local refs, dirty/ignored files, modes, links and runner history",
+      "test/session-storage.test.mjs#006. Corrupted backup data never replaces a partial cold cache"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5087,15 +5439,20 @@
       "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel",
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
-      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
+      "test/native-primitives.test.mjs#007. The real kernel process substrate feeds the shared ancestry and reuse policy",
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#003. Real OS: an inherited descriptor keeps flock after the parent owner closes",
+      "test/native-os-contracts.test.mjs#004. Real OS: native root and file capabilities are closed across exec without explicit handoff",
+      "test/native-os-contracts.test.mjs#011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity",
+      "packages/platform-mac/test/seatbelt.test.mjs#002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view",
       "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
+      "packages/platform-mac/test/seatbelt.test.mjs#005. Seatbelt profile paths remain literals and aggregate profiles never enter argv"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5119,15 +5476,20 @@
       "packages/platform-mac/src/seatbelt.ts#seatbeltProfile"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native",
-      "test/native-primitives.test.mjs#the real kernel",
-      "test/process-probe.test.ts#descent refuses",
-      "test/native-os-contracts.test.mjs#real OS: an inherited descriptor",
-      "test/native-os-contracts.test.mjs#real OS: native root and file capabilities",
-      "test/native-os-contracts.test.mjs#real OS: peer UID",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt preparation refuses",
+      "test/native-profile.test.mjs#001. Native entry: public help needs no VM, manager, configuration or state creation",
+        "test/native-profile.test.mjs#002. Native entry: retired VM commands refuse before any filesystem effect",
+        "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
+      "test/native-primitives.test.mjs#007. The real kernel process substrate feeds the shared ancestry and reuse policy",
+      "test/process-probe.test.ts#005. Descent refuses a child that detached while its former parent PID was followed",
+        "test/process-probe.test.ts#006. Descent refuses an intermediate identity that changed after the first walk",
+        "test/process-probe.test.ts#007. Descent refuses a replaced ancestor before publishing the chain",
+        "test/process-probe.test.ts#008. Descent refuses a chain that became unobservable without reporting process death",
+      "test/native-os-contracts.test.mjs#003. Real OS: an inherited descriptor keeps flock after the parent owner closes",
+      "test/native-os-contracts.test.mjs#004. Real OS: native root and file capabilities are closed across exec without explicit handoff",
+      "test/native-os-contracts.test.mjs#011. Real OS: peer UID comes from the kernel and a closed endpoint grants no identity",
+      "packages/platform-mac/test/seatbelt.test.mjs#002. Seatbelt preparation refuses ambient loader credentials and roots outside the writable view",
       "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt policy confines",
-      "packages/platform-mac/test/seatbelt.test.mjs#Seatbelt profile paths remain"
+      "packages/platform-mac/test/seatbelt.test.mjs#005. Seatbelt profile paths remain literals and aggregate profiles never enter argv"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5157,14 +5519,14 @@
       "packages/tool-hashline/src/index.ts#registerHashlineTools"
     ],
     "negativeTests": [
-      "test/module-boundaries.test.mjs#DR41: module boundaries reject",
-      "test/module-boundaries.test.mjs#DR44: conversation and native lifecycle boundaries",
-      "test/native-path-view.test.mjs#PathView mounted:",
-      "test/native-path-view.test.mjs#PathView host:",
-      "test/native-path-view.test.mjs#PathView policy freezes",
-      "test/native-path-view.test.mjs#Mac PathView adapter requires",
-      "packages/tool-hashline/test/bundle.test.mjs#native logical inbox",
-      "test/resident-confinement.test.ts#PathView policy adapter keeps"
+      "test/module-boundaries.test.mjs#001. Module boundaries reject implementation imports including erased type edges",
+      "test/module-boundaries.test.mjs#002. Conversation and native lifecycle boundaries also reject erased, deferred and re-exported implementation imports",
+      "test/native-path-view.test.mjs#001. PathView mounted: one mapping covers paths, exact endpoints and session reversal",
+      "test/native-path-view.test.mjs#002. PathView host: one mapping covers paths, exact endpoints and session reversal",
+      "test/native-path-view.test.mjs#003. PathView policy freezes the session relation and admits no missing relay endpoint",
+      "test/native-path-view.test.mjs#004. Mac PathView adapter requires the decoded root-bound lease without changing physical paths",
+      "packages/tool-hashline/test/bundle.test.mjs#001. Native logical inbox uses the existing anchored read and preserves offset/limit without a root mount",
+      "test/resident-confinement.test.ts#017. PathView policy adapter keeps the issued spawn view for the returned session boundary"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5184,10 +5546,10 @@
       "scripts/check-modules.mjs#moduleFindings"
     ],
     "negativeTests": [
-      "test/workspace-boundaries.test.mjs#workspace guard accepts declared public imports",
-      "test/workspace-boundaries.test.mjs#workspace guard includes type-only cycles",
-      "test/isolated-declarations.test.mjs#foreign declaration errors",
-      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent"
+      "test/workspace-boundaries.test.mjs#001. Workspace guard accepts declared public imports and rejects transitive and private imports",
+      "test/workspace-boundaries.test.mjs#003. Workspace guard includes type-only cycles and createRequire aliases",
+      "test/isolated-declarations.test.mjs#001. Foreign declaration errors never exempt broken authored declarations or missing imports",
+      "test/workspace-boundaries.test.mjs#008. Tool-files is independent of the SDK and application owners; consumers use its public API"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5213,15 +5575,15 @@
       "packages/tool-files/src/descriptor-files.ts#openAt"
     ],
     "negativeTests": [
-      "packages/tool-files/test/files.test.mjs#real held descriptors survive",
-      "packages/tool-files/test/files.test.mjs#the actual snapshot is declared",
+      "packages/tool-files/test/files.test.mjs#002. Real held descriptors survive a root rename; links cannot carry a tool write",
+      "packages/tool-files/test/files.test.mjs#003. The actual snapshot is declared before creation and removed after callback failure",
       "packages/tool-files/test/files.test.mjs#unqualified descriptor access refuses",
-      "test/workspace-boundaries.test.mjs#NATIVE-008: tool-files is independent",
-      "test/contained-tools.test.ts#P0V-74 / R6-01: a write through a dangling link",
-      "test/legacy-removals.test.mjs#NATIVE-010: the removed tool-runtime",
-      "test/contained-tools.test.ts#G10-02 / P0: a hidden walker result bound",
-      "test/contained-tools.test.ts#G10-02: explicit fd limit zero",
-      "test/contained-tools.test.ts#G10-02: grep completion keeps"
+      "test/workspace-boundaries.test.mjs#008. Tool-files is independent of the SDK and application owners; consumers use its public API",
+      "test/contained-tools.test.ts#001. A write through a dangling link is refused and makes nothing outside the workspace",
+      "test/legacy-removals.test.mjs#003. The removed tool-runtime file implementation cannot return as a compatibility export",
+      "test/contained-tools.test.ts#017. A hidden walker result bound is not the answer -- find returns every path",
+      "test/contained-tools.test.ts#019. Explicit fd limit zero remains unlimited during complete rendering",
+      "test/contained-tools.test.ts#020. Grep completion keeps Pi's fractional limit and discards buffered excess"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5246,10 +5608,11 @@
       "packages/reconcile/src/index.ts#ReconcileModule.sweep"
     ],
     "negativeTests": [
-      "packages/process/test/coalesced-wake.test.mjs#hints during an active callback",
-      "packages/process/test/coalesced-wake.test.mjs#close leaves the active callback",
-      "test/mail-arrival-durability.test.mjs#native wake:",
-      "test/r37-recovery-observation.test.ts#R37: delayed recovery observation"
+      "packages/process/test/coalesced-wake.test.mjs#002. Hints during an active callback request exactly one fresh pass",
+      "packages/process/test/coalesced-wake.test.mjs#005. Close leaves the active callback owned until settlement and cancels its pending hint",
+      "test/mail-arrival-durability.test.mjs#002. Native wake: materialized hints run after commit and retain the original receipt",
+        "test/mail-arrival-durability.test.mjs#003. Native wake: rollback emits no materialized hint and preserves the accepted plan",
+      "test/r37-recovery-observation.test.ts#001. Delayed recovery observation rechecks"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5271,7 +5634,7 @@
       "packages/storage/src/execution-journal.ts#ExecutionJournal"
     ],
     "negativeTests": [
-      "test/native-process-scope.test.mjs#native scope: cancellation after witness publication"
+      "test/native-process-scope.test.mjs#003. Native scope: cancellation after witness publication cannot release the blocked init"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5294,7 +5657,7 @@
       "packages/native/src/pid-namespace.ts#pinNamespaceInit"
     ],
     "negativeTests": [
-      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL"
+      "test/native-process-scope.test.mjs#007. Native recovery: real owner SIGKILL at"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5318,15 +5681,18 @@
       "apps/oma/src/entry/broker.ts#main"
     ],
     "negativeTests": [
-      "packages/process/test/resident-supervisor.test.mjs#stop",
-      "test/native-git-execution.test.mjs#native quarantine",
-      "test/native-resident-runtime.test.mjs#Resident close",
-      "test/scenario-society.test.ts#NATIVE-SCN-01",
-      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-ISOLATION-01",
-      "test/native-resident-runtime.test.mjs#NATIVE-RESIDENT-STATUS-01",
-      "test/status-observation.test.ts#AV9",
-      "test/phase4.test.ts#T38",
-      "test/phase4.test.ts#V25A"
+      "packages/process/test/resident-supervisor.test.mjs#001. Resident policy: inactive status and completed stop commands cannot replace descendant death proof",
+        "packages/process/test/resident-supervisor.test.mjs#003. Resident policy: multiple stop failures retain every primary in their physical order",
+      "test/native-git-execution.test.mjs#007. Native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+        "test/native-git-execution.test.mjs#008. Native quarantine: explicit view preserves quoted Unicode and newline canonical paths with real prerequisites",
+        "test/native-git-execution.test.mjs#009. Native quarantine: a real live scope between phases retains staging and prevents promotion until scope death",
+      "test/native-resident-runtime.test.mjs#002. Resident close coalesces, joins every actual scope and permanently closes start admission",
+      "test/scenario-society.test.ts#012. Accepted creation starts its first real Resident without a manual activation",
+      "test/native-resident-runtime.test.mjs#006. Equal actor names in independent owners cannot reach each other’s actual scope",
+      "test/native-resident-runtime.test.mjs#004. An empty recovered slot never reports exit zero as an observed execution",
+      "test/status-observation.test.ts#003. Principal status never borrows a Resident's idle or exit-zero observation",
+      "test/phase4.test.ts#002. Stopped actor with an unconfirmed stale scope cannot start; incarnation unchanged",
+      "test/phase4.test.ts#013. Start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5357,12 +5723,12 @@
       "packages/platform-mac/src/audit-peer.ts#bindMachSender"
     ],
     "negativeTests": [
-      "test/native-credential-stream.test.mjs#credential stream: live connector",
-      "test/native-unix-message.test.mjs#recvmsg actual ABI",
-      "test/packet-stream.test.ts#packet stream refuses a foreign EOF",
-      "test/packet-stream.test.ts#packet write failure settles",
-      "test/packet-stream.test.ts#packet close waits for asynchronous resource return",
-      "test/packet-stream.test.ts#packet asynchronous cleanup rejection preserves",
+      "test/native-credential-stream.test.mjs#003. Credential stream: live connector and pre-existing sibling transfer, queued prefix=",
+      "test/native-unix-message.test.mjs#001. Recvmsg actual ABI and delivered forbidden SCM_RIGHTS return every duplicated descriptor",
+      "test/packet-stream.test.ts#002. Packet stream refuses a foreign EOF before delivering end",
+      "test/packet-stream.test.ts#004. Packet write failure settles its callback and preserves cleanup failure",
+      "test/packet-stream.test.ts#005. Packet close waits for asynchronous resource return before close",
+      "test/packet-stream.test.ts#007. Packet asynchronous cleanup rejection preserves the pending write error",
       "test/fixtures/darwin-mach-stream.mjs#handoff",
       "test/fixtures/darwin-mach-stream.mjs#stale",
       "test/fixtures/darwin-mach-stream.mjs#asyncAudit"
@@ -5387,7 +5753,8 @@
       "packages/protocol/src/persisted-formats.ts#classifyPersistedPlan"
     ],
     "negativeTests": [
-      "test/persisted-state-fuzz.test.ts#persisted"
+      "test/persisted-state-fuzz.test.ts#005. Fuzz persisted version classifier: unknown formats stay unknown and are never upgraded",
+        "test/persisted-state-fuzz.test.ts#007. Fuzz raw persisted row: a fuzzed plan_json leaves the database bytes untouched"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5409,7 +5776,8 @@
       "packages/process/src/resident-logs.ts#residentLogView"
     ],
     "negativeTests": [
-      "packages/process/test/resident-logs.test.mjs#Resident log view"
+      "packages/process/test/resident-logs.test.mjs#002. Resident log view joins UTF-8 only within the same invocation, incarnation and stream",
+        "packages/process/test/resident-logs.test.mjs#003. Resident log view bounds UTF-8 bytes and preserves incomplete observations"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5432,10 +5800,13 @@
       "packages/git/src/candidate-check.ts#executeCandidateCheck"
     ],
     "negativeTests": [
-      "test/native-git-execution.test.mjs#native candidate: revocation after exact checkout",
-      "test/candidate-checks.test.ts#INT-007/P0-1",
-      "test/candidate-checks.test.ts#INT-007/P0-5",
-      "test/r36-parser-fuzz.test.ts#R36"
+      "test/native-git-execution.test.mjs#005. Native candidate: revocation after exact checkout refuses the final exec gate",
+      "test/candidate-checks.test.ts#004. Current authority refusal prevents private gate release",
+      "test/candidate-checks.test.ts#005. Incomplete EOF stays poisoned and cannot later authorize exec",
+      "test/r36-parser-fuzz.test.ts#001. Parser corpus fixes independent golden outputs and fatal error behavior",
+        "test/r36-parser-fuzz.test.ts#002. Parser fuzz seed=",
+        "test/r36-parser-fuzz.test.ts#003. Durable decoders reject one-field mutations after a valid control",
+        "test/r36-parser-fuzz.test.ts#004. Parser mutation sentinel redetects duplicate-key acceptance from the saved corpus"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5460,11 +5831,13 @@
       "packages/broker/src/lifetime.ts#BrokerLifetime"
     ],
     "negativeTests": [
-      "test/native-profile.test.mjs#native Darwin",
+      "test/native-profile.test.mjs#003. Native Darwin: Society refuses before provisioning and preserves old bytes",
       "test/launch-location.test.ts#NATIVE-TOPO-01",
-      "test/native-process-scope.test.mjs#native recovery: real owner SIGKILL",
-      "test/rollover-settlement.test.ts#V07B",
-      "packages/broker/test/native-lifetime.test.mjs#native shutdown"
+      "test/native-process-scope.test.mjs#007. Native recovery: real owner SIGKILL at",
+      "test/rollover-settlement.test.ts#004. Unavailable or conflicting receipt evidence opens no run, keeps the evidence and changes no incarnation",
+        "test/rollover-settlement.test.ts#005. A failure at the incarnation commit leaves the settled batch settled and no live lease",
+      "packages/broker/test/native-lifetime.test.mjs#001. Native shutdown refusal retains Store and lock (synchronous=",
+        "packages/broker/test/native-lifetime.test.mjs#002. Native shutdown waits for scope proof before closing Store and lock"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5486,11 +5859,24 @@
       "packages/protocol/src/frame.ts#parseJsonObject"
     ],
     "negativeTests": [
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-02",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-03",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-04",
-      "packages/platform-mac/test/keychain-channel.test.mjs#NATIVE-KEYCHAIN-05",
-      "packages/platform-mac/test/keychain-client-ownership.test.mjs#Keychain client:"
+      "packages/platform-mac/test/keychain-channel.test.mjs#002. Real socket",
+      "packages/platform-mac/test/keychain-channel.test.mjs#003. Real socket",
+      "packages/platform-mac/test/keychain-channel.test.mjs#004. Real timeout ends correlation and rejects other pending work",
+      "packages/platform-mac/test/keychain-channel.test.mjs#005. Retired VM operations write no request and cannot reach the helper",
+      "packages/platform-mac/test/keychain-client-ownership.test.mjs#001. Keychain client: fixed installation path, no PATH lookup",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#002. Keychain client: only get/put requests; fragmented UTF-8 responses retain correlation",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#003. Keychain client:",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#004. Keychain client: invalid response",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#005. Keychain client: locked Keychain rejects without printing the helper response",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#006. Keychain client: oversized",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#007. Keychain client: several individually bounded responses in one read are accepted",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#008. Keychain client: oversized outgoing credential is refused before any write",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#009. Keychain client:",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#010. Keychain client: failed",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#011. Keychain client: synchronous spawn failure has no acquired child to abandon",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#012. Keychain client: fenced writer",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#013. Keychain client: a request the helper never answers ends within its deadline, and the untrusted channel with it",
+        "packages/platform-mac/test/keychain-client-ownership.test.mjs#014. Keychain client: a wedged close ends the child rather than waiting on it forever"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5516,9 +5902,12 @@
       "packages/broker/src/index.ts#Broker.drainAndClose"
     ],
     "negativeTests": [
-      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-01",
-      "test/status-responsiveness.test.ts#NATIVE-STATUS-PUBLICATION-02",
-      "test/status-responsiveness.test.ts#V23A"
+      "test/status-responsiveness.test.ts#005. Mutation hints share one active publication and one fresh follow-up",
+      "test/status-responsiveness.test.ts#006. Shutdown joins a held publication before Store close",
+      "test/status-responsiveness.test.ts#001. Concurrent status reads and mutations keep the broker responsive with bounded observation",
+        "test/status-responsiveness.test.ts#002. Status of a society with hundreds of pending messages is one bounded read",
+        "test/status-responsiveness.test.ts#003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands",
+        "test/status-responsiveness.test.ts#004. A failed observation is published as unknown with its time, not as an empty or idle society"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5542,9 +5931,12 @@
       "packages/broker/src/index.ts#Broker.drainAndClose"
     ],
     "negativeTests": [
-      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-01",
-      "test/status-responsiveness.test.ts#NATIVE-DISPATCH-YIELD-02",
-      "test/status-responsiveness.test.ts#V23A"
+      "test/status-responsiveness.test.ts#007. A completed mutation gives the event loop a turn before its reply",
+      "test/status-responsiveness.test.ts#008. Admission closing during the turn cannot reinterpret the accepted result",
+      "test/status-responsiveness.test.ts#001. Concurrent status reads and mutations keep the broker responsive with bounded observation",
+        "test/status-responsiveness.test.ts#002. Status of a society with hundreds of pending messages is one bounded read",
+        "test/status-responsiveness.test.ts#003. An observer that stops answering costs a bounded wait and an honest unknown, never a pile of commands",
+        "test/status-responsiveness.test.ts#004. A failed observation is published as unknown with its time, not as an empty or idle society"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5566,9 +5958,14 @@
       "apps/oma/src/application/exit.ts#fail"
     ],
     "negativeTests": [
-      "test/native-error-presentation.test.ts#Native errors",
-      "test/native-error-presentation.test.ts#Native CLI failure",
-      "test/session-history.test.ts#Session history"
+      "test/native-error-presentation.test.ts#001. Native errors retain paths, errno names, and authored non-English text",
+      "test/native-error-presentation.test.ts#003. Native CLI failure reaches stderr even with the obsolete environment present",
+      "test/session-history.test.ts#001. Session history:",
+        "test/session-history.test.ts#002. Session history: engine-owned version",
+        "test/session-history.test.ts#003. Session history: header bound does not limit the engine-owned conversation",
+        "test/session-history.test.ts#004. Session history: missing, directory and symlink are not repaired or imported",
+        "test/session-history.test.ts#005. Session history:",
+        "test/session-history.test.ts#006. Session history: unsupported header version"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5591,10 +5988,11 @@
       "packages/broker/src/peer-authenticator.ts#PeerAuthenticator.requireRunnerPeer"
     ],
     "negativeTests": [
-      "test/runner-channel.test.ts#Native runner rejects",
-      "test/runner-channel.test.ts#RUN-001",
-      "test/host-entry.test.ts#runner execution identity cannot be missing",
-      "test/launch-topology.test.ts#NATIVE-TOPO-02"
+      "test/runner-channel.test.ts#003. Native runner rejects missing or malformed explicit execution identity",
+      "test/runner-channel.test.ts#001. Broker EOF, malformed reply and local stop settle all pending calls",
+        "test/runner-channel.test.ts#002. A prepared handoff requires an explicitly configured Pi adapter",
+      "test/host-entry.test.ts#003. Runner execution identity cannot be missing, repeated or supplied by ambient state",
+      "test/launch-topology.test.ts#002. Actual broker entry starts its runner and recovers a witnessed scope after SIGKILL"
     ],
     "evidence": null,
     "status": "unverified",
@@ -5644,10 +6042,10 @@
       "packages/file-descriptors/src/index.ts#openAt"
     ],
     "negativeTests": [
-      "test/workspace-boundaries.test.mjs#NATIVE-025",
-      "test/surface-rules.test.mjs#NATIVE-025",
-      "test/native-os-contracts.test.mjs#real OS: directory cursors",
-      "packages/tool-files/test/files.test.mjs#snapshot walking excludes links"
+      "test/workspace-boundaries.test.mjs#009. Only the descriptor adapter reaches the standalone leaf; the leaf cannot borrow runtime owners",
+      "test/surface-rules.test.mjs#002. The descriptor leaf closure is traversed, not exempted by its public import",
+      "test/native-os-contracts.test.mjs#005. Real OS: directory cursors cover multiple buffers and leave no descriptor behind on repeated use",
+      "packages/tool-files/test/files.test.mjs#004. Snapshot walking excludes links and cleanup does not follow a planted directory link"
     ],
     "evidence": null,
     "status": "unverified",

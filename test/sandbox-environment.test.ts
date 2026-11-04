@@ -10,6 +10,8 @@ import { PiAdapter } from "@oma/engine/pi-adapter";
 import { planPiSpawn, type PiAdapterOptions } from "@oma/engine/pi-spawn-plan";
 import { RESIDENT_ENVIRONMENT, RESIDENT_PATHS } from "@oma/domain/resident-paths";
 import { residentArgv } from "@oma/platform-linux/sandbox";
+import { collaborationRecordRootPathAt } from "@oma/domain/paths";
+import { confinedPath, residentDirectoryPolicy } from "@oma/domain/resident-paths";
 import { hostSystemLayout, prepareResidentRootfs, residentRootfsPath } from "@oma/platform-linux/resident-rootfs";
 import { spawnSandboxed } from "@oma/platform-linux/worker-spawn";
 import { validateConfig } from "@oma/config";
@@ -34,7 +36,19 @@ const prefixOf = (node: string): string => dirname(dirname(node));
 const TOOLCHAIN = [["npm", "npm", "bin/npm-cli.js"], ["npx", "npm", "bin/npx-cli.js"], ["corepack", "corepack", "dist/corepack.js"]] as const;
 const FOUR_GIB = 4 * 1024 ** 3;
 const SUPPORT_PATHS = ["/etc/resolv.conf", "/etc/ssl/certs", "/etc/pki/ca-trust", "/etc/pki/tls/certs", "/etc/nsswitch.conf", "/etc/hosts", "/etc/localtime"];
-test("F36: optional system binds are closed, absence-gated, and include symlink targets", () => {
+for(const target of ["root","mount-file","mount-link"])test(`032. Rootfs refuses a foreign ${target} entry without unlinking it`,()=>{
+ const root=mkdtempSync(join(tmpdir(),"oma-rootfs-refuse-")),skeleton=join(root,"rootfs"),outside=join(root,"outside");writeFileSync(outside,"keep");
+ try{
+  if(target==="root")writeFileSync(skeleton,"keep root slot");
+  else{mkdirSync(skeleton);if(target==="mount-link")symlinkSync(outside,join(skeleton,"usr"));else writeFileSync(join(skeleton,"usr"),"keep mount slot");}
+  assert.throws(()=>prepareResidentRootfs(skeleton,{binds:["/usr"],links:[]},process.getuid!(),process.getgid!()));
+  assert.equal(readFileSync(outside,"utf8"),"keep");
+  if(target==="root")assert.equal(readFileSync(skeleton,"utf8"),"keep root slot");
+  else if(target==="mount-link")assert.equal(readlinkSync(join(skeleton,"usr")),outside);
+  else assert.equal(readFileSync(join(skeleton,"usr"),"utf8"),"keep mount slot");
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+test("001. Optional system binds are closed, absence-gated, and include symlink targets", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-system-layout-"));
     try {
         mkdirSync(join(root, "usr"));
@@ -58,7 +72,7 @@ test("F36: optional system binds are closed, absence-gated, and include symlink 
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("F34/F35: explicit entries cannot override the normalized base environment", () => {
+test("002. Explicit entries cannot override the normalized base environment", () => {
     const options = residentOptions("/state");
     const { host, lease, directories } = options.confinement;
     const argv = residentArgv(host, lease, directories, [], { HOME: "/host/home", PATH: "/host/bin", LANG: "host", USER: "root" });
@@ -67,7 +81,22 @@ test("F34/F35: explicit entries cannot override the normalized base environment"
     assert.throws(() => residentArgv(host, lease, directories, [], { HOME: "bad\0value" }), { code: "UNSUPPORTED_PROFILE" });
     assert.throws(() => residentArgv(host, lease, directories, ["/etc/shadow"]), { code: "UNSUPPORTED_PROFILE" });
 });
-test("U1: config validation and Resident plans reject missing confinement and host-root profiles", () => {
+
+test("003. Records mount recipe: only the authenticated actor root is bound read-only; legacy layout is unchanged", () => {
+    const { host, lease, directories } = residentOptions("/state").confinement;
+    const recordRoot = collaborationRecordRootPathAt("/state", "alice");
+    const selected = { ...host, recordRoot };
+    const root = residentDirectoryPolicy(selected, directories).find(entry => entry.name === "records")!;
+    assert.equal(root.path, recordRoot); assert.equal(root.view, "/oma"); assert.equal(root.writable, false); assert.equal(root.optional, false);
+    const argv = residentArgv(selected, lease, directories, []), at = argv.indexOf(recordRoot);
+    assert.deepEqual(argv.slice(at - 1, at + 2), ["--ro-bind", recordRoot, "/oma"]);
+    assert.equal(confinedPath(selected, directories, join(recordRoot, "mail/inbox.md")), "/oma/mail/inbox.md");
+    assert.equal(residentArgv(host, lease, directories, []).includes("/oma"), true);
+    for (const bad of ["/state", "/", collaborationRecordRootPathAt("/state", "bob"), collaborationRecordRootPathAt("/state", "principal")])
+        assert.throws(() => residentArgv({ ...host, recordRoot: bad }, lease, directories, []));
+    // This is a recipe/identity oracle, not evidence that a kernel mount ran.
+});
+test("004. Config validation and Resident plans reject missing confinement and host-root profiles", () => {
     const config = defaultHostConfig({ society: "demo", node: process.execPath, libdir: process.cwd(),  deploymentDigest: "a".repeat(64) });
     for (const rootfs of ["/", "relative", "/state/../rootfs", "/rootfs\0"])
         assert.throws(() => validateConfig({ ...config, installation: { ...config.installation, rootfs } }), { code: "INVALID_REQUEST" });
@@ -75,15 +104,17 @@ test("U1: config validation and Resident plans reject missing confinement and ho
     assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: undefined } as never), { code: "UNSUPPORTED_PROFILE" });
     assert.throws(() => planPiSpawn(residentEngineEffects.sandbox, { ...options, confinement: { ...options.confinement, host: { ...options.confinement.host, rootfs: "/" } as never } }), { code: "UNSUPPORTED_PROFILE" });
 });
-test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support files work without host env or network", RESIDENT_TEST_OPTIONS, async () => {
+test("005. Live: locale, identity, temp, user-local PATH and support files work without host env or network", RESIDENT_TEST_OPTIONS, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-env-live-"));
     let child: ReturnType<typeof spawnSandboxed> | undefined;
     try {
-        const options = residentOptions(root, process.cwd(), join(process.cwd(), "apps/oma/dist/cli.js"));
+        const options = residentOptions(root, process.cwd(), join(process.cwd(), "packages/extension/dist/index.js"));
         prepareResident(options);
         const bin = join(options.paths.agentHome, ".local/bin");
         mkdirSync(bin, { recursive: true });
         writeFileSync(join(bin, "local-probe"), "#!/bin/sh\nprintf local-ok\n", { mode: 0o700 });
+        mkdirSync(join(options.confinement.host.recordRoot!, "mail"), { recursive: true });
+        writeFileSync(join(options.confinement.host.recordRoot!, "mail/inbox.md"), "# Delivery index\nTyped tool archive view\n");
         const layout = hostSystemLayout();
         const targets = layout.binds.filter(path => SUPPORT_PATHS.includes(path));
         const before = targets.filter(path => statSync(path).isFile()).map(path => [path, readFileSync(path).toString("base64")] as const);
@@ -94,17 +125,21 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
             assert.equal(lstatSync(join(residentRootfsPath(options.confinement.host.stateRoot!), path)).isSymbolicLink(), false);
         }
         const body = `
+      import { createRequire } from 'node:module';
+      import { readBoundedWithin } from '${RESIDENT_PATHS.libdir}/packages/tool-files/dist/index.js';
+      const require = createRequire(import.meta.url);
       const fs = require('fs'), cp = require('child_process');
       const paths = ${JSON.stringify(targets)};
       const files = paths.map(path => { let writable = false; try { fs.accessSync(path, fs.constants.W_OK); writable = true; } catch {} return [path, writable]; });
-      console.log(JSON.stringify({ env: process.env, user: require('os').userInfo(), files,
+      const mail = readBoundedWithin('/oma', 'mail/inbox.md', 4096);
+      console.log(JSON.stringify({ env: process.env, user: require('os').userInfo(), files, mail: mail.toString("utf8"),
         locale: cp.execFileSync('/usr/bin/locale', ['charmap'], { encoding: 'utf8' }).trim(),
         local: cp.execFileSync('/bin/sh', ['-c', 'local-probe'], { encoding: 'utf8' }),
         routes: fs.readFileSync('/proc/net/route', 'utf8').trim().split('\\n').length,
         modes: ['XDG_DATA_HOME', 'XDG_RUNTIME_DIR'].map(key => fs.statSync(process.env[key]).mode & 511),
         tmp: (() => { fs.writeFileSync(process.env.TMPDIR + '/probe', 'temp'); return fs.readFileSync('/tmp/probe', 'utf8'); })() }));
     `;
-        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "-e", body], plan.env, plan.input, plan.cwd);
+        child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), RESIDENT_PATHS.node, "--input-type=module", "-e", body], plan.env, plan.input, plan.cwd);
         let out = "", err = "";
         child.stdout.on("data", chunk => { out += String(chunk); });
         child.stderr.on("data", chunk => { err += String(chunk); });
@@ -122,6 +157,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         assert.equal(report.user.shell, "/bin/sh");
         assert.equal(report.locale, "UTF-8");
         assert.equal(report.local, "local-ok");
+        assert.equal(report.mail, "# Delivery index\nTyped tool archive view\n");
         assert.equal(report.tmp, "temp");
         assert.deepEqual(report.modes, [0o700, 0o700]);
         assert.ok(report.routes > 1, "the sandbox shares the host network");
@@ -140,7 +176,7 @@ test("F34/F35/F36 live: locale, identity, temp, user-local PATH and support file
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("FI-1: a Resident's Git commits as its actor, and no Git flow waits on an editor or a prompt", () => {
+test("006. A Resident's Git commits as its actor, and no Git flow waits on an editor or a prompt", () => {
     // Static: no editor anywhere a merge, rebase or amend would look for one,
     // and Git never asks a terminal for credentials it cannot have.
     for (const [name, value] of [["GIT_EDITOR", ":"], ["EDITOR", ":"], ["VISUAL", ":"], ["GIT_TERMINAL_PROMPT", "0"]] as const)
@@ -151,7 +187,7 @@ test("FI-1: a Resident's Git commits as its actor, and no Git flow waits on an e
     for (const name of ["GIT_EDITOR", "EDITOR", "VISUAL", "GIT_TERMINAL_PROMPT"])
         assert.equal(env[name], (RESIDENT_ENVIRONMENT as Record<string, string>)[name], name);
 });
-test("FI-2: the pinned Node's npm, npx and corepack are mounted and linked beside it", () => {
+test("007. The pinned Node's npm, npx and corepack are mounted and linked beside it", () => {
     const root = mkdtempSync(join(tmpdir(), "oma-toolchain-"));
     try {
         const options = residentOptions(root);
@@ -188,7 +224,7 @@ test("FI-2: the pinned Node's npm, npx and corepack are mounted and linked besid
         rmSync(root, { recursive: true, force: true });
     }
 });
-test("FI-2: the toolchain contract -- this host's pinned Node ships the commands a Worker is promised", () => {
+test("008. The toolchain contract -- this host's pinned Node ships the commands a Worker is promised", () => {
     // The image-side half of the contract: the deployment's Node (here, the
     // Node running OMA) carries npm/npx/corepack in its own prefix, or the
     // operating system's /usr/bin does. A deployment that satisfies neither
@@ -199,11 +235,11 @@ test("FI-2: the toolchain contract -- this host's pinned Node ships the commands
 });
 
 
-test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx", RESIDENT_TEST_OPTIONS, async () => {
+test("009. Live: a Worker commits, amends, rebases and merges without -c flags or an editor, and runs npm/npx", RESIDENT_TEST_OPTIONS, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-dev-live-"));
     let child: ReturnType<typeof spawnSandboxed> | undefined;
     try {
-        const options = residentOptions(root, process.cwd(), join(process.cwd(), "apps/oma/dist/cli.js"));
+        const options = residentOptions(root, process.cwd(), join(process.cwd(), "packages/extension/dist/index.js"));
         prepareResident(options);
         const plan = new PiAdapter(residentEngineEffects, { ...options, profile: { ...options.profile } } as PiAdapterOptions).spawnPlan();
         // `timeout` bounds each step a missing editor would hang; 124 is that hang.
@@ -224,6 +260,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
             "out npmVersion \"$(timeout 60 npm --version 2>/dev/null)\"",
             "out npxVersion \"$(timeout 60 npx --version 2>/dev/null)\"",
             "out corepackVersion \"$(timeout 60 corepack --version 2>/dev/null)\"",
+            "oma status >/dev/null 2>&1; out modelCommand $?",
             "out cpus \"${OMA_CPUS-unset}\"",
         ].join("\n");
         child = spawnSandboxed([plan.command, ...plan.args.slice(0, plan.args.lastIndexOf("--") + 1), "/bin/sh", "-c", script], plan.env, plan.input, plan.cwd);
@@ -243,6 +280,7 @@ test("FI-1/2/5 live: a Worker commits, amends, rebases and merges without -c fla
         assert.match(report.npmVersion ?? "", /^\d+\.\d+\.\d+$/);
         assert.match(report.npxVersion ?? "", /^\d+\.\d+\.\d+$/);
         assert.match(report.corepackVersion ?? "", /^\d+\.\d+\.\d+$/);
+        assert.equal(report.modelCommand, "127", "the removed model command is not available");
         assert.equal(report.cpus, "unset");
     }
     finally {

@@ -35,7 +35,7 @@ const userVersion = (path: string): number => {
   finally { raw.close(); }
 };
 
-test("P8 version boundary: a fresh database is the current schema and an unknown version fails closed without migration", () => {
+test("001. Version boundary: a fresh database is the current schema and an unknown version fails closed without migration", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-format-version-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -54,7 +54,7 @@ test("P8 version boundary: a fresh database is the current schema and an unknown
   } finally { removeTree(root); }
 });
 
-test("P8 plan format: unknown shapes are classified unknown and never upgraded", () => {
+test("002. Plan format: unknown shapes are classified unknown and never upgraded", () => {
   assert.equal(PLAN_FORMAT_WRITTEN, "v3");
   assert.deepEqual(classifyPersistedPlan({ version: 3, intent: { kind: "mail.send" } }), { format: "v3" });
   assert.deepEqual(classifyPersistedPlan({ version: 2, intent: { kind: "mail.send" } }), { format: "v2" });
@@ -69,7 +69,7 @@ test("P8 plan format: unknown shapes are classified unknown and never upgraded",
   assert.equal(classifyPersistedPlan({ kind: "git.submit", bundle: {} }).format, "unknown");
 });
 
-test("P8 host-derived locators: a copied state root keeps readable bytes but not its evidence", () => {
+test("003. Host-derived locators: a copied state root keeps readable bytes but not its evidence", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-format-portable-"));
   const other = mkdtempSync(join(tmpdir(), "oma-format-other-"));
   try {
@@ -102,7 +102,7 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
     const findings = planPortability([{ kind: "git.submit", plan }, { kind: "mail.send", plan: { version: 2, intent: { kind: "mail.send" } } }]);
     assert.deepEqual(findings[0], { kind: "git.submit", fields: ["bundle.path"], portable: false });
     assert.deepEqual(findings[1], { kind: "mail.send", fields: [], portable: true });
-    assert.deepEqual([...HOST_DERIVED_PLAN_FIELDS].sort(), ["bundle.path", "stagingPath", "workspacePath"]);
+    assert.deepEqual([...HOST_DERIVED_PLAN_FIELDS].sort(), ["attachments.sources.local.bundle.path", "bundle.path", "source.publication.local.bundle.path", "stagingPath", "workspacePath"]);
     assert.ok(CURRENT_PLAN_FIELDS.some(field => field.class === "historical-result"));
 
     const persistedBefore = store.getOperationById(OP as never)!.planJson;
@@ -124,7 +124,7 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
   } finally { removeTree(root); removeTree(other); }
 });
 
-test("P8 rewrite prohibition: an accepted plan with an unusable locator stays byte-identical", () => {
+test("004. Rewrite prohibition: an accepted plan with an unusable locator stays byte-identical", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-format-rewrite-"));
   try {
     const path = join(root, "runtime.sqlite");
@@ -159,7 +159,7 @@ test("P8 rewrite prohibition: an accepted plan with an unusable locator stays by
   } finally { removeTree(root); }
 });
 
-test("P8 inventory: every classified field belongs to the closed persisted surface", () => {
+test("005. Inventory: every classified field belongs to the closed persisted surface", () => {
   const allowed = ["intrinsic-identity", "immutable-logical-fact", "derived-durable-identity",
     "host-derived-physical-locator", "reconstructable-presentation", "historical-result"];
   for (const field of CURRENT_PLAN_FIELDS) {

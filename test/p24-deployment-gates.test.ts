@@ -1,3 +1,4 @@
+import { newSessionBirth, publishSessionBirth } from "#oma-test/app/runtime/session-mode";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -30,57 +31,54 @@ import { copyInstalledProduct } from "./fixtures/installation.js";
 
 const project = fileURLToPath(new URL("../../", import.meta.url));
 function config(root: string): HostConfig {
-  return {
-    schemaVersion: 4,
-    society: "fixture",
-    installation: {
-        node: process.execPath,
-        libdir: root,
-        deploymentDigest: deploymentDigest(root),
-    },
-    modelProfiles: {
-        model: {
-            provider: "fixture",
-            model: "fixture",
-            inferenceTimeoutSeconds: 1,
-        },
-    },
-    agentProfiles: {
-        p: {
-            modelProfile: "model",
-            capabilities: [],
-            delegable: [],
-            childProfile: null,
-        },
-    },
-    principalProfile: "p",
-    initialResidents: [],
-    integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
-    limits: {
-        frameBytes: 262144,
-        mailBodyBytes: 262144,
-        subjectBytes: 512,
-        addresses: 64,
-        replyReferences: 64,
-        contextFiles: 256,
-        contextBytes: 8388608,
-        bundleBytes: 268435456,
-        logBytes: 1048576,
-        batchMaxMessages: 24,
-        idleStreamSeconds: 1,
-        receiptWaitSeconds: 1,
-    }
-};
+  return {schemaVersion: 4, maxWorkers: 6, society: "fixture",
+  installation: {
+      node: process.execPath,
+      libdir: root,
+      deploymentDigest: deploymentDigest(root),
+  },
+  modelProfiles: {
+      model: {
+          provider: "fixture",
+          model: "fixture",
+          inferenceTimeoutSeconds: 1,
+      },
+  },
+  agentProfiles: {
+      p: {
+          modelProfile: "model",
+          capabilities: [],
+          delegable: [],
+          childProfile: null,
+      },
+  },
+  principalProfile: "p",
+  initialResidents: [],
+  integration: { policyRevision: "fixture", protectedPaths: [], checks: [] },
+  limits: {
+      frameBytes: 262144,
+      mailBodyBytes: 262144,
+      subjectBytes: 512,
+      addresses: 64,
+      replyReferences: 64,
+      contextFiles: 256,
+      contextBytes: 8388608,
+      bundleBytes: 268435456,
+      logBytes: 1048576,
+      batchMaxMessages: 24,
+      idleStreamSeconds: 1,
+      receiptWaitSeconds: 1,
+  }};
 }
 
-test("P02: canonical deployment manifest pins every selected byte independent of root and traversal order", () => {
+test("001. Canonical deployment manifest pins every selected byte independent of root and traversal order", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-codec-"));
   const contents: Record<string, string> = {
     "apps/oma/dist/z.js": "z\n",
     "apps/oma/dist/nested/a.js": "a\n",
     "packages/contracts/dist/index.js": "export {};\n",
     "packages/platform-linux/dist/systemd/resident.path.in": "[Path]\n",
-    "packages/storage/dist/schema-v4.sql": "schema\n",
+    "packages/storage/dist/schema-v5.sql": "schema\n",
     // AV16: the sandbox's `oma` command is pinned with the rest.
     "apps/oma/dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
@@ -148,7 +146,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
   }
 });
 
-test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects", () => {
+test("002. Installed broker refuses deployment mismatch BEFORE SQLite or unit effects", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-entry-"));
   try {
     copyInstalledProduct(project, root);
@@ -157,6 +155,7 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
     const state = join(root, "data/oma/fixture");
     const runtime = join(root, "run/oma/fixture");
     mkdirSync(state, { recursive: true });
+    publishSessionBirth(state, newSessionBirth(state, "society", root, "collaboration-v1"));
     const run = () => {
       writeFileSync(configPath, JSON.stringify(cfg));
       const env: NodeJS.ProcessEnv = {
@@ -206,7 +205,7 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
   }
 });
 
-test("P05: symlinked host ancestors are explicitly unsupported, not store corruption", () => {
+test("003. Symlinked host ancestors are explicitly unsupported, not store corruption", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-host-layout-"));
   try {
     mkdirSync(join(root, "volume"));

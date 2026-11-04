@@ -89,13 +89,6 @@ for (const workspace of rebuilding) {
       process.exit(compiled.status || 1);
     }
   }
-  const command = workspace.manifest.oma?.modelCommand;
-  if (command !== undefined) {
-    if (workspace.manifest.name !== "@oma/app" || command !== "libexec/oma") throw new Error("unreviewed generated command owner");
-    const { modelCommandScript } = await import(new URL("../packages/domain/dist/resident-paths.js", import.meta.url));
-    const target = join(root, workspace.path, "dist", command);
-    mkdirSync(dirname(target), {recursive:true}); writeFileSync(target, modelCommandScript(), {mode:0o755}); chmodSync(target, 0o755);
-  }
   for (const file of Object.values(workspace.manifest.bin ?? {})) chmodSync(join(root, workspace.path, file), 0o755);
 }
 // Publish only after compilation and all build-owned writes have succeeded.

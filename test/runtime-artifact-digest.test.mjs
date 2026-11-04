@@ -21,7 +21,7 @@ function fixture(body) {
     body({ root, workspace, record, recordPath });
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
-test("NATIVE-ARTIFACT: runtime binding identifies actual JS, native assets, modes and incremental state", () => fixture(({ root }) => {
+test("001. Native artifact: runtime binding identifies actual JS, native assets, modes and incremental state", () => fixture(({ root }) => {
   const before = runtimeArtifactDigest(root); assert.deepEqual(before, runtimeArtifactDigest(root));
   assert.match(before.digest, /^[a-f0-9]{64}$/); assert.equal(before.files, 3); assert.equal(before.workspaces, 1);
 }));
@@ -40,7 +40,7 @@ for (const [name, mutate] of [
   ["removed workspace", ({ workspace }) => rmSync(workspace, { recursive: true })],
   ["extra recorded workspace", ({ record, recordPath }) => { record.workspaces["@oma/extra"] = {}; writeFileSync(recordPath, JSON.stringify(record)); }],
   ["new workspace", ({ root }) => { const directory = join(root, "packages/additional"); mkdirSync(directory); writeFileSync(join(directory, "package.json"), '{"name":"@oma/additional"}'); }],
-]) test(`NATIVE-ARTIFACT: runtime binding refuses ${name}`, () => fixture(context => {
+]) test(`002. Native artifact: runtime binding refuses ${name}`, () => fixture(context => {
   assert.doesNotThrow(() => runtimeArtifactDigest(context.root)); mutate(context);
   assert.throws(() => runtimeArtifactDigest(context.root));
 }));

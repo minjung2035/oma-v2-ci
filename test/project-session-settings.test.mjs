@@ -1,20 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { Script } from "node:vm";
 import ts from "typescript";
 
 function fixture() {
   let current = { config: { principalProfile: "one" }, workerProfile: "one" };
-  let project = { snapshot: "one" }, failed = false;
+  const snapshot = name => ({ name, sourceFiles: [{ path: "/project/settings", sha256: createHash("sha256").update(name).digest("hex") }] });
+  let project = { snapshot: snapshot("one") }, failed = false;
   const notices = [];
   const deps = {
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "digest" },
     "../runtime/packages/index.js": { readPackageIndex: () => [] },
-    "../runtime/user-files.js": { readUserFile: () => project.snapshot },
+    "../runtime/user-files.js": { readUserFile: () => project.snapshot.name },
+    "node:crypto": { createHash },
     "@oma/config/operations": { CONFIGURATION_DOCUMENT_BYTES: 1024 },
     "@oma/domain/errors": { exceptionText: error => error.message },
-    "./extensions.js": { readExtensions: source => { if (failed) throw new Error("extensions unreadable"); return { source }; } },
+    "./extensions.js": { readExtensions: source => { if (failed) throw new Error("extensions unreadable"); return { source: source.name }; } },
     "./settings.js": { projectSettingsPath: () => "/project/settings", readSettings: () => current,
       readSettingsForEditing: () => project, deriveSessionSettings: () => ({ settings: current, missing: [] }) },
     "./project-settings.js": { ensureProjectSettings: () => project },
@@ -27,10 +30,10 @@ function fixture() {
     require(name) { assert.ok(Object.hasOwn(deps, name)); return deps[name]; } });
   const view = new output.exports.ProjectSessionSettings({ dataRoot: "/state", project: "p", libdir: "/lib", configPath: "/config",
     packageStore: "/packages", externalConfig: false, own: () => ({}), owns: () => true, assertWritable() {}, notice: text => notices.push(text) });
-  return { view, notices, next() { current = { config: { principalProfile: "two" }, workerProfile: "two" }; project = { snapshot: "two" }; },
+  return { view, notices, next() { current = { config: { principalProfile: "two" }, workerProfile: "two" }; project = { snapshot: snapshot("two") }; },
     fail(value) { failed = value; } };
 }
-test("DR40: Settings read-back publishes the complete view only after extensions were observed", () => {
+test("001. Settings read-back publishes the complete view only after extensions were observed", () => {
   const f = fixture(), before = [f.view.settings, f.view.projectSettings, f.view.extensions, f.view.leftOut];
   f.next(); f.fail(true);
   assert.equal(f.view.readBack(), false);
@@ -39,11 +42,11 @@ test("DR40: Settings read-back publishes the complete view only after extensions
   f.fail(false);
   assert.equal(f.view.readBack(), true);
   assert.equal(f.view.settings.config.principalProfile, "two");
-  assert.equal(f.view.projectSettings.snapshot, "two");
+  assert.equal(f.view.projectSettings.snapshot.name, "two");
   assert.equal(f.view.extensions.source, "two");
   assert.equal(f.view.unread, null);
 });
-test("DR40: Failed derivation keeps the prior snapshot and reports the saved-next-start meaning once", () => {
+test("002. Failed derivation keeps the prior snapshot and reports the saved-next-start meaning once", () => {
   const f = fixture(), before = f.view.settings;
   f.next(); f.fail(true);
   assert.equal(f.view.rederive(), false); assert.equal(f.view.rederive(), false);

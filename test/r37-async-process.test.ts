@@ -18,7 +18,7 @@ function command(code: string, overrides: Partial<CommandSpec> = {}): CommandSpe
     timeoutMs: 2000, stdoutBytes: 1024, stderrBytes: 1024, ...overrides };
 }
 
-test("R37: command argv, environment and input bytes are snapshotted before awaiting", { timeout: 10000 }, async () => {
+test("001. Command argv, environment and input bytes are snapshotted before awaiting", { timeout: 10000 }, async () => {
   const argv = ["-e", "let x=[];process.stdin.on('data',b=>x.push(b));process.stdin.on('end',()=>process.stdout.write(process.env.TAG+':'+Buffer.concat(x)))"];
   const env = { TAG: "original" };
   const input = Buffer.from("body");
@@ -29,7 +29,7 @@ test("R37: command argv, environment and input bytes are snapshotted before awai
   assert.equal(result.stdout.toString(), "original:body");
 });
 
-test("R37: child preparation yields the event loop without claiming a latency improvement", { timeout: 10000 }, async () => {
+test("002. Child preparation yields the event loop without claiming a latency improvement", { timeout: 10000 }, async () => {
   const task = startProcess(command("setTimeout(()=>process.stdout.write('done'),200)"));
   let yielded = false;
   await new Promise<void>(resolve => setImmediate(() => { yielded = true; resolve(); }));
@@ -37,20 +37,20 @@ test("R37: child preparation yields the event loop without claiming a latency im
   assert.equal((await task.result).stdout.toString(), "done"); await task.closed;
 });
 
-test("R37: stdout overflow is bounded and cannot be a successful observation", { timeout: 10000 }, async () => {
+test("003. Stdout overflow is bounded and cannot be a successful observation", { timeout: 10000 }, async () => {
   const task = startProcess(command("process.stdout.write(Buffer.alloc(4096,65))", { stdoutBytes: 8 }));
   const result = await task.result; await task.closed;
   assert.equal(result.kind, "output-limited"); assert.equal(result.stdout.length, 8); assert.equal(result.stdoutTruncated, true);
 });
 
-test("R37: explicit diagnostic stderr discard still drains without unbounded retention", { timeout: 10000 }, async () => {
+test("004. Explicit diagnostic stderr discard still drains without unbounded retention", { timeout: 10000 }, async () => {
   const task = startProcess(command("process.stderr.write(Buffer.alloc(4096,66));process.stdout.write('ok')", { stderrBytes: 8, stderrOverflow: "discard" }));
   const result = await task.result; await task.closed;
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0);
   assert.equal(result.stderr.length, 8); assert.equal(result.stderrTruncated, true); assert.equal(result.stdout.toString(), "ok");
 });
 
-test("R37: a command making progress is never cut by the silence window; one that says nothing stalls honestly", { timeout: 10000 }, async () => {
+test("005. A command making progress is never cut by the silence window; one that says nothing stalls honestly", { timeout: 10000 }, async () => {
   // Progress resets the window: 4 chunks 120ms apart under a 300ms window
   // live; the same gap ending after the last byte ends the command stalled.
   const progress = await runProcess(command(
@@ -66,7 +66,7 @@ test("R37: a command making progress is never cut by the silence window; one tha
   assert.equal(stalled.stdout.toString(), "one");
 });
 
-test("R37: output past the in-memory budget spills whole -- the file holds every byte, the head stays in the result", { timeout: 10000 }, async t => {
+test("006. Output past the in-memory budget spills whole -- the file holds every byte, the head stays in the result", { timeout: 10000 }, async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-r37-spill-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const spool = join(dir, "stdout.bin");
@@ -81,7 +81,7 @@ test("R37: output past the in-memory budget spills whole -- the file holds every
   assert.ok(whole.every(byte => byte === 66), "the file holds the stream complete");
 });
 
-test("R37: a spilled stream also keeps the silence window honest -- progress to the file is progress", { timeout: 10000 }, async t => {
+test("007. A spilled stream also keeps the silence window honest -- progress to the file is progress", { timeout: 10000 }, async t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-r37-spill-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const spool = join(dir, "stdout.bin");
@@ -92,7 +92,7 @@ test("R37: a spilled stream also keeps the silence window honest -- progress to 
   assert.equal(readFileSync(spool).length, 4 * 4096);
 });
 
-test("R37: the synchronous runner refuses a silence window it cannot observe, and spills descriptor-direct", () => {
+test("008. The synchronous runner refuses a silence window it cannot observe, and spills descriptor-direct", () => {
   assert.throws(() => runProcessSync(command("", { silenceMs: 1000 })), TypeError);
   const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
   try {
@@ -105,7 +105,7 @@ test("R37: the synchronous runner refuses a silence window it cannot observe, an
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R37: a failed second spill open leaks no descriptor and keeps the open's own error", { skip: process.platform !== "linux", timeout: 10000 }, () => {
+test("009. A failed second spill open leaks no descriptor and keeps the open's own error", { skip: process.platform !== "linux", timeout: 10000 }, () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
   try {
     const spec = command("process.stdout.write('x')", {
@@ -124,7 +124,7 @@ test("R37: a failed second spill open leaks no descriptor and keeps the open's o
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R37: identical stdout and stderr spill paths are refused -- the second O_TRUNC would erase the first stream", t => {
+test("010. Identical stdout and stderr spill paths are refused -- the second O_TRUNC would erase the first stream", t => {
   const dir = mkdtempSync(join(tmpdir(), "oma-r37-spool-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const shared = join(dir, "shared.bin");
@@ -136,7 +136,7 @@ test("R37: identical stdout and stderr spill paths are refused -- the second O_T
     "the asynchronous runner shares the same spec validation");
 });
 
-test("R37: timeout and abort never synthesize exit-zero success", { timeout: 10000 }, async () => {
+test("011. Timeout and abort never synthesize exit-zero success", { timeout: 10000 }, async () => {
   const timed = startProcess(command("setInterval(()=>{},1000)", { timeoutMs: 100 }));
   const timedResult = await timed.result;
   assert.ok(timedResult.kind === "timed-out" || timedResult.kind === "unobserved"); await timed.closed;
@@ -147,26 +147,26 @@ test("R37: timeout and abort never synthesize exit-zero success", { timeout: 100
   assert.ok(abortedResult.kind === "aborted" || abortedResult.kind === "unobserved"); await aborted.closed;
 });
 
-test("R37: pre-abort returns without attempting even an unavailable executable", async () => {
+test("012. Pre-abort returns without attempting even an unavailable executable", async () => {
   const controller = new AbortController(); controller.abort();
   const task = startProcess(command("", { executable: "/nonexistent/oma-r37-no-executable" }), { signal: controller.signal });
   assert.equal((await task.result).kind, "aborted"); await task.closed;
 });
 
-test("R37: native spawn failure and known nonzero exit remain different observations", { timeout: 10000 }, async () => {
+test("013. Native spawn failure and known nonzero exit remain different observations", { timeout: 10000 }, async () => {
   const absent = await runProcess(command("", { executable: "/nonexistent/oma-r37-no-executable" }));
   assert.equal(absent.kind, "spawn-failed");
   const failed = await runProcess(command("process.exit(7)"));
   assert.equal(failed.kind, "exited"); assert.equal(failed.exitCode, 7);
 });
 
-test("R37: command validation rejects invalid budgets and NUL arguments before spawn", () => {
+test("014. Command validation rejects invalid budgets and NUL arguments before spawn", () => {
   assert.throws(() => startProcess(command("", { timeoutMs: 0 })), RangeError);
   assert.throws(() => startProcess(command("", { stdoutBytes: Number.MAX_SAFE_INTEGER, stderrBytes: 1 })), RangeError);
   assert.throws(() => startProcess(command("", { argv: ["bad\0argument"] })), TypeError);
 });
 
-test("R37: one preparation slot rejects concurrent work and releases after known exit", { skip: process.platform !== "linux", timeout: 10000 }, async () => {
+test("015. One preparation slot rejects concurrent work and releases after known exit", { skip: process.platform !== "linux", timeout: 10000 }, async () => {
   const executor = new PreparationExecutor();
   const first = executor.run(command("setTimeout(()=>process.stdout.write('first'),200)"));
   await assert.rejects(executor.run(command("process.stdout.write('second')")), { code: "REF_STATE_UNKNOWN" });
@@ -174,7 +174,7 @@ test("R37: one preparation slot rejects concurrent work and releases after known
   assert.equal((await executor.run(command("process.stdout.write('next')"))).stdout.toString(), "next");
 });
 
-test("R37: an uncertain native outcome keeps the preparation owner blocked", { skip: process.platform !== "linux", timeout: 10000 }, async () => {
+test("016. An uncertain native outcome keeps the preparation owner blocked", { skip: process.platform !== "linux", timeout: 10000 }, async () => {
   const executor = new PreparationExecutor(); const controller = new AbortController();
   const first = executor.run(command("setInterval(()=>{},1000)"), controller.signal);
   controller.abort();
@@ -184,7 +184,7 @@ test("R37: an uncertain native outcome keeps the preparation owner blocked", { s
 
 
 for (const slot of [5, 3]) {
-  test(`DR27/P0-4: sandbox descriptor ${slot} setup failure retains its original error and releases the child`, { timeout: 5000 }, async t => {
+  test(`017. Sandbox descriptor ${slot} setup failure retains its original error and releases the child`, { timeout: 5000 }, async t => {
     // Exercise the actual spawn/transfer owner with local pipes, not bubblewrap
     // or a manager. No deployment rootfs or provider is used here.
     const child = childProcess.spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"],
@@ -203,7 +203,7 @@ for (const slot of [5, 3]) {
   });
 }
 
-test("DR27/P0-4: failed stream return still attempts every other child resource", { timeout: 5000 }, async t => {
+test("018. Failed stream return still attempts every other child resource", { timeout: 5000 }, async t => {
   const child = childProcess.spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: ["pipe", "pipe", "pipe"] });
   const exited = once(child, "close");
   const problem = new Error("injected stream return failure");

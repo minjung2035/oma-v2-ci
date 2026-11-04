@@ -8,7 +8,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { TUI_PUBLIC_SUBPATHS } from "../scripts/architecture/rules/surface-rules.mjs";
 
-for (const name of ["tui", "extension"]) test(`DR41: independent ${name} artifact loads with its declared dependencies and public API`, async t => {
+for (const name of ["tui", "extension"]) test(`001. Independent ${name} artifact loads with its declared dependencies and public API`, async t => {
   const root = mkdtempSync(join(tmpdir(), "oma-module-build-")), output = join(root, name);
   t.after(() => rmSync(root, { recursive: true, force: true }));
   execFileSync(process.execPath, ["scripts/build-module.mjs", name, "--out", output], { encoding: "utf8" });

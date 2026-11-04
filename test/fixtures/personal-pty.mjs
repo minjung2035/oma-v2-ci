@@ -1,8 +1,8 @@
 import { encodePackageIndex } from "#oma-test/app/runtime/packages/index";
 // Installed oma, real bundled Pi/Open TUI and tools; only inference is scripted.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { appendFileSync, readlinkSync, mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { scriptedProvider, call, tools, text, failing, lastUserText, toolResults } from '../../dist/test/fixtures/scripted-provider.js';
@@ -12,8 +12,21 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { ensureProjectSettings } from "#oma-test/app/application/project-settings";
 import { readExtensions, toggleExtension } from "#oma-test/app/application/extensions";
 
-const [root, ending = 'tools', installRoot] = process.argv.slice(2);
+const [root, ending = 'tools', installRoot, outerNamespaces] = process.argv.slice(2);
 assert.ok(installRoot && isAbsolute(installRoot) && realpathSync(installRoot) === installRoot, 'an exact test-owned installation is required');
+let native;
+if (ending === 'tools') {
+  const outer = JSON.parse(outerNamespaces);
+  const namespaces = Object.fromEntries(['pid', 'mnt', 'net'].map(name => [name, readlinkSync(`/proc/self/ns/${name}`)]));
+  for (const name of ['pid', 'mnt', 'net']) assert.notEqual(namespaces[name], outer[name], `Personal test must own its ${name} namespace`);
+  let readonly;
+  assert.throws(() => appendFileSync(join(installRoot, '.personal-native-canary'), 'forbidden'), error => {
+    readonly = error.code; return error.code === 'EROFS';
+  });
+  const manager = spawnSync('/usr/bin/systemctl', ['--version'], { env: {}, encoding: 'utf8' });
+  assert.equal(manager.status, null); assert.equal(manager.error?.code, 'EACCES');
+  native = { namespaces, readonly, manager: manager.error.code };
+}
 const manifest = JSON.parse(readFileSync(join(installRoot, 'package.json'), 'utf8'));
 const commands = join(root, 'bin'); mkdirSync(commands);
 const command = join(commands, 'oma');
@@ -194,6 +207,6 @@ try {
   if (projectSeed) dataEntries.push('.projects');
   if (ending === 'society-bound') dataEntries.push(defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd))));
   assert.deepEqual(readdirSync(data).sort(), dataEntries.sort());
-  writeFileSync(join(root, 'facts.json'), JSON.stringify({ requests: provider.seen.length, births: births.length, names }));
+  writeFileSync(join(root, 'facts.json'), JSON.stringify({ requests: provider.seen.length, births: births.length, names, native }));
 } finally { await provider.close(); }
 process.exitCode = code ?? 1;
