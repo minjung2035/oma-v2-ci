@@ -1261,10 +1261,35 @@ Linux native-all은 **4769/4769 PASS·fail/cancel/skip/todo0·errors[]·sourceCh
 API SHA-256 `871ea53a0e29ff9ebba622771e0b67f539f9ca8da48ef9266f0d1f1a5f79254a`를 대조한
 `helper-delivery/linux-all-art-13324900868/all/result.json`에 보존했다. 새 scope adapter의 runtime PASS로 합산하지 않는다.
 
+### transient scope 첫 실제 Mac 관측과 journal 파일 검증 준비
+
+`cc2207da880` Native [41837425198](https://github.com/minjung2035/oma-v2-ci/actions/runs/41837425198)의
+Mac common ZIP `13326787971`·`13325464931`의 API SHA-256
+`7ebe5f643f13e20b13a936128f3672b15560c586ed39ed4f9cfdcd30bd15f071`·
+`7a0dab1ed3a1552fe1a725bd50c0d34c623662ce9eab54d82347fbd039ffdc1f`를 대조했다.
+새 raw producer의 실제1MiB stdin·전체 stdout spool·stderr·publish→authorize→retire/CID 정리는 양 OS에서 통과했다.
+권한 철회는 Mac15에서 통과했으나 Mac26에서는 publish 전 거절로 기대 trace를 충족하지 못했다.
+기존 테스트의 포괄적 `assert.rejects`가 실제 cause를 숨겼으므로 정확한 authority 오류의 동일성까지 검사하도록 강화했다.
+Seatbelt 통합은 두 OS 모두 테스트의 필수 HOME/TMPDIR 누락으로 생성 전 거절됐으며 runtime 성공으로 쓰지 않는다.
+테스트의 owned writable root와 명시적 환경 allowlist에 두 값을 추가했다. 이 수정 뒤 실제 Mac은 아직 NOT_RUN이다.
+common 전체는 Mac15 **311/312**, Mac26 **310/312**, skip/cancel0이며 packed26/27의 기존 Git preparation 거절은 남는다.
+원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/job-scope/`에 보존한다.
+
+같은 source의 gate ZIP `13327162494`·`13325958543`의 SHA-256
+`2abea55c850df59d8c93ed30331e5c975ba4110bf84bbd9385d531284ca82022`·
+`e83012ddaeb817234cebc54fce0fb999ae38a2ebe6b0210596e98c11e0ab212d`를 대조했다.
+120건 중 Mac15는111 OBSERVED/9 SETUP_FAILED, Mac26은114 OBSERVED/6 SETUP_FAILED다.
+worker6건은 기존 native-support의 product gate 거절이며 Mac15 Git setup3건은 selected Xcode가
+sandbox 밖 MobileDevice private framework를 요구해 실패했다. 이 입력에서 전체 gate PASS를 주장하지 않는다.
+
+새 `execution-journal-files`는 기존 version2 bytes의 실제 append/reopen·SIGKILL 뒤 opening/witness 보존·
+잘린 tail 거절을 두 OS의 공통 CI에 추가한다. legacy Darwin witness는 형식 데이터이며 live/recovery authority가 아니다.
+새 codec이나 기존 bytes migration은 없으며 Mac descriptor I/O 확인 뒤 durable producer를 연결한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `5aecdd6b1d9a451ad660a2fd126c1bc28881d4eabc67e27b73eb868456360c34` (15843 files).
+verification input digest `1e08862c6c537eeb825ffec1f32403ff8ecb6b960d5ea731001a364fe896651b` (15844 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

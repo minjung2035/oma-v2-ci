@@ -54,8 +54,11 @@ test("001. Actual Darwin producer joins shared capture, complete spooling and in
 test("002. Actual Darwin blocked workload refuses fresh authority before its first user instruction", { timeout: 30000 }, async t => {
   if (process.platform !== "darwin") return linuxRefusal();
   const f = owner(t), command = f.command(["-e", "require('node:fs').writeFileSync('entered','forbidden')"]);
+  const revoked = new Error("fixture authority revoked");
   await assert.rejects(f.runtime.run({ slot: "refused", launch: () => launchDarwinJobScope(command),
-    authorize() { f.trace.push("authorize"); throw new Error("fixture authority revoked"); } }));
+    authorize() { f.trace.push("authorize"); throw revoked; } }), error => {
+    assert.equal(error, revoked, "refusal must reach the final authority observation"); return true;
+  });
   assert.equal(existsSync(join(f.root, "entered")), false); assert.deepEqual(f.trace, ["publish", "authorize", "retire"]); assert.equal(f.rows.length, 0);
 });
 
@@ -63,10 +66,10 @@ test("003. Actual Darwin scope joins private Seatbelt setup EOF, final Node gate
   if (process.platform !== "darwin") return linuxRefusal();
   const f = owner(t), forbidden = join(f.root, "forbidden"); writeFileSync(forbidden, "HOST_CANARY");
   const target = { ...f.command(["-e", `const fs=require('node:fs');let code='unexpected';try{fs.writeFileSync('forbidden','bad')}catch(e){code=e.code}fs.writeFileSync('entered',String(fs.readFileSync(0).length));fs.writeFileSync(1,'ready');fs.writeFileSync(2,code)`]),
-    input: Buffer.alloc(1048601, 98) };
+    env: { HOME: f.root, TMPDIR: f.root }, input: Buffer.alloc(1048601, 98) };
   const policy = { readable: [], writable: [{ path: f.root, kind: "directory" }],
     denied: [{ path: forbidden, kind: "file" }], executable: [{ path: target.executable, kind: "file" }],
-    unixSockets: [], machServices: [], environmentKeys: [], suspendExec: false };
+    unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"], suspendExec: false };
   const result = await f.runtime.run({ slot: "sandbox", launch: () => launchSeatbeltJobScope(target, policy),
     prepared() { assert.equal(existsSync(join(f.root, "entered")), false); }, authorize() { f.trace.push("authorize"); } });
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0); assert.equal(result.stdout.toString(), "ready");
