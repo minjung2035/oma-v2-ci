@@ -68,6 +68,15 @@ export function currentDarwinBootId(): string {
   if (!BOOT.test(value)) unknown("Darwin kernel boot identity is malformed");
   return value;
 }
+/** Current controller's kernel token, not a claimed/received sender. It is
+ * public correlation data; only a genuine receive trailer proves a sender. */
+export function currentDarwinAuditToken(): readonly number[] {
+  const api = native(), token = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
+  if (api.taskInfo(api.task, 15 /* TASK_AUDIT_TOKEN */, token, count) !== 0 || count.readUInt32LE() !== 8 ||
+      token.readUInt32LE(20) !== process.pid || token.readUInt32LE(4) !== process.geteuid?.() || token.readUInt32LE(28) === 0)
+    unknown("Darwin controller kernel token is unavailable");
+  return Object.freeze(Array.from({ length: 8 }, (_, index) => token.readUInt32LE(index * 4)));
+}
 function coalition(pid: number): string | null {
   errno(0);
   const result = Buffer.alloc(40), size = native().info(pid, 20, 0n, result, result.length), saved = errno();

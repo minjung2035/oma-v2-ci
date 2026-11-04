@@ -1197,10 +1197,35 @@ cwd의 원래 경로를 다른 inode로 바꾼 뒤에도 held directory에서 �
 [fileport 전송 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_descrip.c#L390)는
 `DTYPE_VNODE`의 전송 가능성을 설명하지만 실제 directory handoff의 대체 근거로 쓰지 않는다.
 
+### Bundled helper의 실제 Mac 관측과 queue 재전달 수정 전 실패
+
+Native [41824850066](https://github.com/minjung2035/oma-v2-ci/actions/runs/41824850066), `ace1216238e`의
+production helper는 양 Mac 합계12 gate 중11회 OBSERVED다. private 설정·foreign CONFIG fileport 거절,
+production Seatbelt→Node stop, cwd 경로 교체 뒤 원래 held inode에서 상대 쓰기·replacement 효과 없음·Host cwd
+보존을 확인했다. Mac26 마지막 pipe gate는 READY 전에 전송 `again`을 `sent`로 단정한 fixture assertion으로
+실패했다. 진단 trace는 다섯 FD import까지이며 READY는 미관측이다. CID 소멸과 private 설정/프로파일/pipe
+핸들 반환은 확인했지만 이를 성공 실행으로 바꾸지 않는다. source binding15839개
+`3189100e6e802b4bb4557588a8a5a87dcd609efddf9741913a41fb3f11840ded`와 runtime은 전후 같다.
+
+Mac15 첫 bootstrap case는 gate6회와 별개로 최종 fixture cleanup에서 실패했다. label reuse의 새 CID actor가
+`release` 뒤 one-shot 자동 반환한 다음 `bootout`3이 보고됐다. 새 수정은 이 controlled replacement의 실제
+boot/CID empty와 현재 registration113을 모두 확인한 경우에만 자동 반환으로 기록한다. 제품 복구나
+일반 bootout 반례의 성공 조건은 바꾸지 않는다. queue retry는 기존 예산 안에서 `again`만 기다려 재전달하고,
+오류/초과는 그대로 거절한다. 별도 실제 Mach queue를 채워 fileport 재전달·실패한 SEND copy 반환 뒤 EPIPE를
+검사하는 permanent oracle을 common Mac CI에 추가했다. 이 새 반례의 실제 Mac 실행은 **NOT_RUN**이다.
+
+원시는 `job-helper/observed-helper-summary.json`과 artifact Mac15 `13319775290`·Mac26 `13317594284`다.
+API SHA-256은 각각 `6b2784218be4ad02d7d40b5de4e41ffb6f8717c59ec94e84b4edd7d938048bc8`·
+`a08417f0235c7d778deae528627ab6dfa0173dbfa59b2500f2bad37cb3ac3595`와 대조했다. 두 Mac common307/307·skip0,
+packed 각26/27의 Git preparation 실패도 보존했다. common artifact `13319506520`·`13319466622`는
+`e6682cec8cc091742986fb10c71c08d73228943fac9013fd9b83887529607a2e`·
+`130dad282634cda73812a4adc728f1336310b1ffa141046dae5fd84e89ebc55c`와 대조했고 입력/runtime은 전후 같다.
+로컬 retry 수정의 native/platform/parser121/121과 별도 parser/플랫폼 거절38/38이 통과했다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `3189100e6e802b4bb4557588a8a5a87dcd609efddf9741913a41fb3f11840ded` (15839 files).
+verification input digest `d360df303c1027ba2ad0d0396c0ef7ee73ece885d8dc9ff9014cc1ac2ad734cc` (15840 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

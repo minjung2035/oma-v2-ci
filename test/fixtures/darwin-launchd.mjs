@@ -19,7 +19,7 @@ import { bundledJobHelper, encodeDarwinJob } from "@oma/platform-mac/job-launch"
 import { runProcessSync, runProcess } from "@oma/process/run";
 import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
-  signalDarwinCoalitionMember, pinDarwinProcess } from "@oma/native/audit-session";
+  signalDarwinCoalitionMember, pinDarwinProcess, currentDarwinAuditToken } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { GIT_ENV } from "@oma/process/policies";
 import { controlPipe } from "@oma/native/control-socket";
@@ -94,8 +94,15 @@ function loadJob(name, executable, mode, hash, options = {}) {
   }
   return job;
 }
-function bootout(job) {
-  run("/bin/launchctl", ["bootout", job.target]); job.active = false;
+function bootout(job, cleanup = false) {
+  const result = run("/bin/launchctl", ["bootout", job.target], false);
+  if (result.exitCode !== 0 && cleanup && job.physicalIdentity &&
+      observeDarwinCoalitionPopulation(job.physicalIdentity) === "empty") {
+    const registration = run("/bin/launchctl", ["print", job.target], false);
+    assert.equal(registration.exitCode, 113, JSON.stringify(registration));
+    job.automaticRemoval = { identity: job.physicalIdentity, population: "empty", bootout: result, registration };
+  } else assert.equal(result.exitCode, 0, JSON.stringify(result));
+  job.active = false;
 }
 async function waitFor(check, timeout = 8000) {
   const end = performance.now() + timeout;
@@ -609,6 +616,8 @@ value.complete = true; save();
           await waitFor(() => existsSync(join(reused.directory, "other.json")));
           const replacement = remember(marker(reused.directory, "other"));
           assert.notEqual(replacement.resource, identity.coalitionId);
+          reused.physicalIdentity = identifyDarwinCoalition(replacement.pid);
+          assert.equal(reused.physicalIdentity?.coalitionId, replacement.resource);
           lifetime.labelReuse = { target: reused.target, replacement,
             oldPopulation: invoke("population", JSON.stringify(identity)),
             oldSignal: invoke("signal", JSON.stringify(identity), String(replacement.pid)),
@@ -732,6 +741,7 @@ value.complete = true; save();
               hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
             assert.equal(count.readUInt32LE(), 8);
             gate.expectedHostToken = Array.from({ length: 8 }, (_, index) => ownToken.readUInt32LE(index * 4));
+            assert.deepEqual(currentDarwinAuditToken(), gate.expectedHostToken);
             assert.equal(gate.expectedHostToken[5], process.pid);
             // A separate one-shot generation proves cancellation before the
             // first helper instruction, without using its saved PID to kill.
@@ -883,6 +893,14 @@ value.complete = true; save();
             }
             gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
             const one = Buffer.alloc(4); one.writeUInt32LE(1);
+            gate.deliveryBackpressure = 0;
+            const sendGate = async (id, right) => {
+              const end = performance.now() + 10000;
+              while (gateService.send(id, one, right) === "again") {
+                gate.deliveryBackpressure++;
+                assert.ok(performance.now() < end, "bounded private gate delivery"); await delay(2);
+              }
+            };
             const attack = id => attempt(`const s=lookupMachService(name),p=createMachEndpoint(),b=Buffer.alloc(4);b.writeUInt32LE(1);s.send(${id},b,${id === 0x4f4d4120 ? "p.send" : "undefined"});s.close();p.send.close();p.receive.close();console.log(JSON.stringify({pid:process.pid}));`);
             gate.beforeInitAttack = JSON.parse(attack(0x4f4d4120).stdout);
             const receiveGate = async id => {
@@ -897,7 +915,7 @@ value.complete = true; save();
               }
               throw new Error("Mach job gate response deadline");
             };
-            assert.equal(gateService.send(0x4f4d4120, one, gateControl.send), "sent");
+            await sendGate(0x4f4d4120, gateControl.send);
             const ack = await receiveGate(0x4f4d4121); gate.helperToken = [...ack.sender.token];
             assert.deepEqual(gate.helperToken, gate.initialImage.token);
             gate.identity = identifyDarwinCoalition(ack.sender.pid); assert.ok(gate.identity);
@@ -932,7 +950,7 @@ value.complete = true; save();
               } finally { closeSync(descriptor); }
             }
             for (const [index, file] of setupFiles.entries()) {
-              assert.equal(gateService.send(0x4f4d412a + index, one, file), "sent");
+              await sendGate(0x4f4d412a + index, file);
               file.close();
               // The decoder requires real EOF before it imports later
               // capabilities. Do not fill its finite Mach queue while the
@@ -942,8 +960,8 @@ value.complete = true; save();
             setupFiles.length = 0;
             gate.configurationChannel = { source: "production-encodeDarwinJob", framing: "OMAJOB1", bytes: configuration.length,
               sha256: createHash("sha256").update(configuration).digest("hex"), slots, imageStages: 2, heldCwd: true, privateTrace: true };
-            for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
-            assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
+            for (const [index, file] of gateFiles.entries()) await sendGate(0x4f4d4130 + index, file);
+            await sendGate(0x4f4d4122, gateSinkSend);
             const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
             assert.ok(gate.rejectedBeforeReady >= 2);
             await configurationClosed; assert.equal(configurationWriter.closed, true); gate.configurationHandlesReturned = true;
@@ -972,7 +990,7 @@ value.complete = true; save();
             gate.fileports.beforeRelease = pipeTransfer ? { stdout: "", stderr: "" } :
               { stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") };
             assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
-            assert.equal(gateService.send(0x4f4d4124, one), "sent");
+            await sendGate(0x4f4d4124);
             const final = await receiveGate(0x4f4d4128);
             await profileClosed; assert.equal(profileWriter.closed, true);
             Object.assign(gate.finalImage, { pid: final.bytes.readUInt32LE(8), stopStatus: final.bytes.readUInt32LE(12),
@@ -998,14 +1016,14 @@ value.complete = true; save();
             gate.finalImage.outputBeforeRelease = pipeTransfer ? { stdout: captured[0], stderr: captured[1] } :
               { stdout: statSync(filePaths.stdout).size, stderr: statSync(filePaths.stderr).size };
             assert.deepEqual(gate.finalImage.outputBeforeRelease, { stdout: 0, stderr: 0 });
-            assert.equal(gateService.send(0x4f4d4129, one), "sent");
+            await sendGate(0x4f4d4129);
             const fin = await receiveGate(0x4f4d4125);
             gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
             gate.finalImage.stateAfterFinish = finalPin.state(); assert.equal(gate.finalImage.stateAfterFinish, "exited");
             gate.finalImage.deadTerminate = finalPin.terminate(); assert.equal(gate.finalImage.deadTerminate, false);
             assert.equal(gate.targetImage.pid, gate.childPid);
             assert.equal(gate.finalImage.pid, gate.childPid); assert.ok(gate.rejectedAtFinish >= 3);
-            assert.equal(gateService.send(0x4f4d4126, one), "sent");
+            await sendGate(0x4f4d4126);
             await waitFor(() => {
               const result = usage(gate.identity.coalitionId);
               gate.after = result; return result.returnCode === -1 && result.errno === 3;
@@ -1439,7 +1457,7 @@ finally {
     try { writeFileSync(join(job.directory, "release"), "fixture cleanup only"); }
     catch (error) { faults.push(String(error)); }
     if (job.active) {
-      try { bootout(job); } catch (error) { faults.push(String(error)); }
+      try { bootout(job, true); } catch (error) { faults.push(String(error)); }
     }
   }
   if (actor !== undefined) {
@@ -1486,7 +1504,8 @@ finally {
     try {
       const output = name => existsSync(join(job.directory, name)) ?
         readFileSync(join(job.directory, name)).subarray(0, 65536).toString("utf8") : null;
-      observation.jobOutputs.push({ label: job.label, target: job.target, stdout: output("stdout"), stderr: output("stderr") });
+      observation.jobOutputs.push({ label: job.label, target: job.target, stdout: output("stdout"), stderr: output("stderr"),
+        ...(job.automaticRemoval === undefined ? {} : { automaticRemoval: job.automaticRemoval }) });
     } catch (error) { faults.push(String(error)); }
   }
   observation.cleanupFaults = faults;
