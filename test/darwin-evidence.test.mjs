@@ -48,6 +48,8 @@ const discoveryRound = (pid, closed) => ({ discovery: { hintOnly: true, resource
   controls: [memberControl(pid, true)], elapsedMs: 100,
   aggregate: closed ? { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 } : coalitionQuery("2", "1"),
   otherAggregate: coalitionQuery() });
+const launchctlRecord = (command, target) => ({ executable: "/bin/launchctl", argv: [command, target],
+  exitCode: 0, signal: null, stdout: "", stderr: "" });
 const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited: true,
   jobRegistrationsRemoved: true, cleanupFaults: [], actorSourceSha256: "c".repeat(64),
   domain: "gui/501",
@@ -59,10 +61,14 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
         attempts: [admissionAttempt("inherited", "0", true), admissionAttempt("explicit-own", "41", false),
           admissionAttempt("explicit-other", "42", false)] },
       seatbelt: { renderer: "production-seatbeltProfile", sha256: "d".repeat(64),
-        serviceTarget: "gui/501/org.oma.probe.test.service-target", positiveServiceControl: { pid: 107 },
+        serviceTarget: "gui/501/org.oma.probe.test.service-target",
+        positiveServiceTarget: "gui/501/org.oma.probe.test.service-positive", positiveServiceControl: { pid: 107 },
+        positiveServiceKickstart: launchctlRecord("kickstart", "gui/501/org.oma.probe.test.service-positive"),
+        positiveServiceAfter: launchctlRecord("print", "gui/501/org.oma.probe.test.service-positive"),
+        serviceBefore: launchctlRecord("print", "gui/501/org.oma.probe.test.service-target"),
         attempt: { sandboxApplied: true, target: "gui/501/org.oma.probe.test.service-target",
           spawnStatus: 0, childPid: 108, waitStatus: 256, joined: true, numericCleanupUsed: false },
-        serviceAfter: { exitCode: 0, signal: null }, guestEffect: null },
+        serviceAfter: launchctlRecord("print", "gui/501/org.oma.probe.test.service-target"), guestEffect: null },
       recovery: { context: "fresh-exec-no-profile-applied", tokenSource: "kernel-task-name-port",
         fixtureReleaseUsedBeforeObservation: false, wrongMember: memberControl(102, false),
         remainingMember: memberControl(101, true), afterAttempt: {
@@ -74,6 +80,102 @@ const launchdRecord = name => ({ fixtureOnly: true, controlledGenerationsExited:
       afterControlledExit: { controlledGenerationsExited: true,
         samples: [{ elapsedMs: 100, aggregate: { ...coalitionQuery("0", "0"), returnCode: -1, errno: 3 },
           otherAggregate: coalitionQuery() }] } } }) });
+const bootstrapRecord = () => {
+  const git = "/selected/usr/bin/git", digest = "a".repeat(40);
+  const command = (executable, argv, pid, stdout = "") => ({ executable, argv, pid, exitCode: 0, signal: null, stdout, stderr: "" });
+  const dns = { hostname: "example.com", addresses: [{ address: "192.0.2.1", family: 4 }] };
+  const unixSocketCanary = { directory: "/owned/unix", listed: "/owned/unix/allowed", unlisted: "/owned/unix/denied" };
+  const socket = allowed => ({ created: true, errno: 0, connectAttempted: true,
+    connectResult: allowed ? 0 : -1, connectErrno: allowed ? 0 : 1 });
+  const layout = { size: 48, pointerBytes: 8, intBytes: 4, flags: 0, family: 4, socktype: 8, protocol: 12, next: 40,
+    afUnspec: 0, afInet: 2, afInet6: 30, sockStream: 1 };
+  const resolverSymbols = { getaddrinfo: "getaddrinfo$DARWIN_EXTSN", freeaddrinfo: "freeaddrinfo" };
+  const nodeLibc = pid => ({ phase: "node-libc-resolver", pid, uid: 501, hostname: "example.com", layout, symbols: resolverSymbols,
+    hints: { flags: 0, family: 0, socktype: 1, protocol: 0 },
+    calls: [{ service: "443", result: 0, ipv4: 1, ipv6: 0 }, { service: null, result: 0, ipv4: 1, ipv6: 0 }] });
+  const nativeDns = (pid, bootstrap = 200, seed = 201, sandboxed = true) => ({ phase: "native-dns", pid, uid: 501,
+    hostname: "example.com", endpoint: "/var/run/mDNSResponder", ports: { bootstrap, registered: [seed] },
+    addrinfoLayout: layout, socket: socket(true), unixAllowlist: { listed: socket(true), unlisted: socket(!sandboxed) },
+    canonicalEndpoint: "/private/var/run/mDNSResponder", canonicalSocket: socket(true),
+    pathMetadata: { varAlias: { result: 0, errno: 0, kind: "symlink" },
+      dnsAlias: { result: 0, errno: 0, kind: "socket" }, dnsCanonical: { result: 0, errno: 0, kind: "socket" } },
+    dnssd: { createResult: 0 }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } });
+  const nativeResolvers = (base, firstPid, bootstrap = 200, seed = 201) =>
+    [["main", "443"], ["main", "none"], ["thread", "443"]].map(([context, service], index) => ({
+      command: command("/owned/bootstrap-exec", ["observe-resolver", `${base}.resolver-${context}-${service}.json`, context, service], firstPid + index),
+      observation: { phase: "native-resolver", pid: firstPid + index, uid: 501, hostname: "example.com",
+        context, service: service === "none" ? null : service, globalBootstrap: bootstrap,
+        ports: { bootstrap, registered: [seed] }, getaddrinfo: { result: 0, errno: 0, ipv4: 1, ipv6: 0 } } }));
+  const nativeSubset = pid => ({ phase: "native-subset-preflight", pid, uid: 501, euid: 501, globalBootstrap: 200,
+    namespaceInstalled: false, requestor: 300, subset: 301, unprivileged: 301, parent: 0,
+    before: { bootstrap: 200, registered: [201] }, after: { bootstrap: 200, registered: [201] },
+    operations: { allocate: 0, makeSend: 0, subset: 0, unprivileged: 0, parent: 1100,
+      releaseParent: null, releaseUnprivileged: 0, releaseSubset: 0, releaseRequestorSend: 0, releaseRequestorReceive: 0 } });
+  const variants = ["inherited", "bootstrap-only", "bootstrap-and-xpc"].map((name, index) => {
+    const attempt = kind => {
+      const pid = 120 + index * 3 + (kind === "direct" ? 0 : kind === "node" ? 1 : 2);
+      const target = `gui/501/org.oma.probe.test.${name}-${kind}`;
+      const seed = name === "bootstrap-and-xpc" ? 0 : 201;
+      const globalTarget = `gui/501/org.oma.probe.test.${name}-global`, globalBootstrap = name === "inherited" ? 200 : 0;
+      const ownPorts = { globalBootstrap, globalTypeStatus: globalBootstrap ? 0 : 15,
+        globalRights: globalBootstrap ? 0x10000 : null, taskBootstrapStatus: 0,
+        taskBootstrap: globalBootstrap, returnedSendStatus: globalBootstrap ? 0 : null };
+      return { target, command: command("/owned/bootstrap-exec",
+        [name, "/owned/profile", "/owned/ports", "/owned/work",
+          ...(kind === "direct" ? ["/bin/launchctl", "kickstart", target] : kind === "node" ?
+            ["/owned/node", "/owned/tools", target, "/owned/canary", "/owned/clang", git, "{}", "/owned/bootstrap-exec",
+              unixSocketCanary.listed, unixSocketCanary.unlisted, "/owned/report", globalTarget,
+              JSON.stringify(layout), JSON.stringify(resolverSymbols)] :
+            ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
+        ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
+          before: { bootstrap: 200, registered: [201] },
+          after: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
+          droppedSendRights: name === "inherited" ? [] : [200] }, guestEffect: null,
+        ...(kind === "node" ? { globalTarget, globalGuestEffect: null, tools: { pid, complete: true,
+          service: command("/bin/launchctl", ["kickstart", target], 150 + index),
+          git: command(git, ["hash-object"], 160 + index, `${digest}\n`),
+          compiler: command("/owned/clang", ["-fsyntax-only", "compile.c"], 170 + index), dns,
+          nativeDnsCommand: command("/owned/bootstrap-exec", ["observe-dns", "/owned/report.dns.json",
+            unixSocketCanary.listed, unixSocketCanary.unlisted], 180 + index),
+          nativeDns: nativeDns(180 + index, name === "inherited" ? 200 : 0, seed),
+          resolvers: nativeResolvers("/owned/report.dns.json", 230 + index * 3, name === "inherited" ? 200 : 0, seed),
+          nativeSubsetCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/report.subset.json"], 270 + index),
+          nativeSubset: nativeSubset(270 + index),
+          nativeLibcCold: { ...nodeLibc(pid), stage: "before-node-lookup", before: ownPorts, after: { ...ownPorts } },
+          nativeLibc: { ...nodeLibc(pid), stage: "after-node-lookup", before: ownPorts, after: { ...ownPorts } },
+          bootstrapGlobal: { phase: "node-bootstrap", pid, uid: 501, before: ownPorts, after: { ...ownPorts },
+            restore: { attempted: globalBootstrap !== 0, setStatus: globalBootstrap ? 0 : null, registerStatus: globalBootstrap ? 0 : null },
+            service: command("/bin/launchctl", ["kickstart", globalTarget], 250 + index) } } } : {}),
+        ...(kind === "restored" ? { restoration: { pid, uid: 501, phase: "restore-registered-seed", seed,
+          attempted: seed !== 0, setStatus: seed ? 0 : null,
+          before: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
+          after: { bootstrap: seed, registered: [seed] } } } : {}) };
+    };
+    return { name, profileSha256: "e".repeat(64), canaryPreserved: true,
+      direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
+  });
+  return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
+    cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
+    bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
+      positiveTarget: "gui/501/org.oma.probe.test.positive",
+      positiveKickstart: { ...launchctlRecord("kickstart", "gui/501/org.oma.probe.test.positive"), pid: 119 },
+      positiveControl: { pid: 118 }, developerTools: { git }, gitExpected: digest,
+      positiveGit: command(git, ["hash-object", "git-control.txt"], 116, `${digest}\n`),
+      hostDns: command("/owned/node", ["--input-type=module"], 117, JSON.stringify(dns)),
+      nativeDnsHostCommand: command("/owned/bootstrap-exec", ["observe-dns", "/owned/host-native-dns.json",
+        unixSocketCanary.listed, unixSocketCanary.unlisted], 115),
+      nativeDnsHost: nativeDns(115, 200, 201, false), unixSocketCanary,
+      nativeResolverHost: nativeResolvers("/owned/host-native-dns.json", 220),
+      nativeSubsetHostCommand: command("/owned/bootstrap-exec", ["observe-subset", "/owned/host-subset.json"], 269),
+      nativeSubsetHost: nativeSubset(269),
+      libcProbe: { entry: "/selected/darwin-libc.mjs", sourceSha256: "c".repeat(64) }, nativeLibcHost: nodeLibc(111),
+      resolverSymbols, resolverSymbolsCommand: command("/usr/bin/xcrun", ["nm", "-uj", "/owned/bootstrap-exec"], 268,
+        "_getaddrinfo$DARWIN_EXTSN\n_freeaddrinfo\n"),
+      ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
+        nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
+        nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
+};
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
@@ -106,6 +208,7 @@ const rows = () => darwinCasePlan().map(({ observation, ...planned }) => ({ ...p
   observations: { [observation]: planned.name === "file-descriptors" ? descriptorRecord() :
     planned.name === "seatbelt-kept-fds" ? keptDescriptorRecord() :
       planned.name === "seatbelt-signals" ? signalRecord() :
+        planned.name === "launchd-bootstrap" ? bootstrapRecord() :
         ["launchd-scope", "launchd-image"].includes(planned.name) ? launchdRecord(planned.name) :
           planned.name === "personal-entry" ? personalRecord() :
             planned.name === "suspended-image" ? suspendedRecord() :
@@ -219,11 +322,164 @@ test("005. Native darwin: launchd scope refuses ambiguous lookup, admission and 
     scope => { scope.seatbelt.attempt.target = "gui/501/foreign"; },
     scope => { scope.seatbelt.attempt.joined = false; },
     scope => { scope.seatbelt.positiveServiceControl.pid = 0; },
+    scope => { delete scope.seatbelt.positiveServiceTarget; },
+    scope => { scope.seatbelt.positiveServiceTarget = scope.seatbelt.serviceTarget; },
+    scope => { scope.seatbelt.positiveServiceTarget = "gui/502/foreign"; },
+    scope => { delete scope.seatbelt.positiveServiceKickstart; },
+    scope => { scope.seatbelt.positiveServiceKickstart.argv[1] = scope.seatbelt.serviceTarget; },
+    scope => { scope.seatbelt.positiveServiceKickstart.exitCode = 1; },
+    scope => { scope.seatbelt.positiveServiceAfter.argv[1] = scope.seatbelt.serviceTarget; },
+    scope => { delete scope.seatbelt.serviceBefore; },
+    scope => { scope.seatbelt.serviceBefore.argv[1] = scope.seatbelt.positiveServiceTarget; },
+    scope => { scope.seatbelt.serviceAfter.argv[1] = scope.seatbelt.positiveServiceTarget; },
     scope => { delete scope.seatbelt.guestEffect; },
   ]) {
     const bad = structuredClone(good); corrupt(bad.scope);
     assert.throws(() => validateDarwinObservation("launchd-scope", { launchdScope: bad }));
   }
+});
+
+test("013. Native darwin: bootstrap evidence retains rights, actual targets, compatibility failures and distinct controls", () => {
+  const good = bootstrapRecord();
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: good });
+  validateDarwinCaseSet(rows());
+  for (const corrupt of [
+    value => { value.bootstrap.variants.pop(); },
+    value => { value.bootstrap.variants[1].name = "inherited"; },
+    value => { value.bootstrap.variants[0].direct.target = value.bootstrap.positiveTarget; },
+    value => { value.bootstrap.positiveKickstart.argv[1] = value.bootstrap.variants[0].direct.target; },
+    value => { value.bootstrap.variants[0].direct.ports = null; value.bootstrap.variants[0].direct.command.exitCode = 2; },
+    value => { value.bootstrap.variants[1].direct.command.argv[6] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[2].direct.ports.sandboxApplied = false; },
+    value => { value.bootstrap.variants[2].direct.ports.pid += 1; },
+    value => { delete value.bootstrap.variants[2].direct.ports.after; },
+    value => { value.bootstrap.variants[2].node.tools = null; },
+    value => { value.bootstrap.variants[2].node.command.argv[6] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[2].node.tools.service.argv[1] = "gui/501/foreign"; },
+    value => { value.bootstrap.positiveGit.executable = "/usr/bin/git"; },
+    value => { value.bootstrap.positiveGit.exitCode = 1; },
+    value => { value.bootstrap.hostDns.stdout = JSON.stringify({ hostname: "example.com", error: { code: "ENOTFOUND" } }); },
+    value => { value.bootstrap.nativeDnsHost.dnssd.createResult = -65555; },
+    value => { value.bootstrap.nativeDnsHost.getaddrinfo.ipv4 = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns = null; },
+    value => { value.bootstrap.dnsEndpoint = "*"; },
+    value => { value.bootstrap.unixSocketCanary.unlisted = value.bootstrap.unixSocketCanary.listed; },
+    value => { value.bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult = -1; value.bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectErrno = 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDnsCommand.argv[3] = "/foreign/socket"; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns.pathMetadata.varAlias.result = -1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeDns.canonicalEndpoint = "/foreign/socket"; },
+    value => { delete value.bootstrap.variants[1].node.tools.resolvers; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].command.argv[2] = "thread"; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.service = "https"; },
+    value => { value.bootstrap.nativeResolverHost[0].observation.getaddrinfo.result = 8; },
+    value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.globalBootstrap = -1; },
+    value => { value.bootstrap.variants[1].node.globalTarget = value.bootstrap.variants[1].node.target; },
+    value => { value.bootstrap.variants[1].node.command.argv[15] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.service.argv[1] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.before.globalTypeStatus = 0; },
+    value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.restore.attempted = true; },
+    value => { value.bootstrap.variants[0].node.tools.bootstrapGlobal.before.taskBootstrapStatus = 5; },
+    value => { delete value.bootstrap.ffi.nativeRoot; },
+    value => { value.bootstrap.ffi.nativeRoot = "/"; },
+    value => { value.bootstrap.ffi.host.ffiPid += 1; },
+    value => { value.bootstrap.nativeDnsHost.addrinfoLayout.next = 1000; },
+    value => { value.bootstrap.nativeLibcHost.calls[0].result = 8; },
+    value => { value.bootstrap.nativeLibcHost.calls[1].ipv4 = 0; },
+    value => { value.bootstrap.variants[1].node.command.argv[16] = "{}"; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.uid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.hints.flags = 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.calls[1].service = "443"; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeLibc.after; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibcCold.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibcCold.stage = "after-node-lookup"; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeLibcCold.after; },
+    value => { value.bootstrap.variants[1].node.tools.nativeLibc.stage = "before-node-lookup"; },
+    value => { value.bootstrap.nativeLibcHost.unavailable = "host direct call not qualified"; },
+    value => { value.bootstrap.resolverSymbols.getaddrinfo = "getaddrinfo"; },
+    value => { value.bootstrap.resolverSymbolsCommand.argv[2] = "/foreign/executable"; },
+    value => { value.bootstrap.variants[1].node.command.argv[17] = "{}"; },
+    value => {
+      value.bootstrap.variants[1].node.tools.nativeLibc.unavailable = "after-snapshot unavailable";
+      value.bootstrap.variants[1].node.tools.nativeLibc.calls[0].result = "8";
+    },
+    value => { value.bootstrap.nativeSubsetHost.uid = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.pid += 1; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.euid = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubsetCommand.argv[1] = "/foreign/subset.json"; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.namespaceInstalled = true; },
+    value => { delete value.bootstrap.variants[1].node.tools.nativeSubset.operations.subset; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.operations.subset = 1100; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.operations.releaseParent = 0; },
+    value => { value.bootstrap.variants[1].node.tools.nativeSubset.parent = 222; },
+    value => { value.bootstrap.variants[0].restored.target = value.bootstrap.variants[0].direct.target; },
+    value => { value.bootstrap.variants[1].restored.restoration.pid += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.uid += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.seed += 1; },
+    value => { value.bootstrap.variants[1].restored.restoration.setStatus = 0x80000000; },
+    value => { value.bootstrap.variants[2].restored.restoration.setStatus = 0; },
+    value => { value.bootstrap.variants[1].restored.command.argv[9] = "gui/501/foreign"; },
+    value => { value.bootstrap.variants[1].node.tools.git.executable = "/usr/bin/git"; },
+    value => { delete value.bootstrap.variants[2].canaryPreserved; },
+  ]) {
+    const bad = structuredClone(good); corrupt(bad);
+    assert.throws(() => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: bad }));
+  }
+  const unknown = structuredClone(good);
+  unknown.bootstrap.variants[2].direct.command = { ...unknown.bootstrap.variants[2].direct.command,
+    exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unknown.bootstrap.variants[2].node.command = { ...unknown.bootstrap.variants[2].node.command, exitCode: 126 };
+  unknown.bootstrap.variants[2].node.tools = null;
+  unknown.bootstrap.variants[2].canaryPreserved = false;
+  unknown.bootstrap.variants[1].restored.command.exitCode = 126;
+  unknown.bootstrap.variants[1].restored.restoration.setStatus = -303;
+  unknown.bootstrap.variants[1].restored.restoration.after = unknown.bootstrap.variants[1].restored.restoration.before;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.socket.connectResult = -1;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.socket.connectErrno = 1;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.dnssd.createResult = -65555;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.getaddrinfo = { result: -2, errno: 1, ipv4: 0, ipv6: 0 };
+  unknown.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist.unlisted.connectResult = 0;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.unixAllowlist.unlisted.connectErrno = 0;
+  unknown.bootstrap.variants[1].node.tools.nativeDns.pathMetadata.varAlias = { result: -1, errno: 1, kind: null };
+  unknown.bootstrap.variants[0].node.tools.nativeDnsCommand = {
+    ...unknown.bootstrap.variants[0].node.tools.nativeDnsCommand, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unknown.bootstrap.variants[0].node.tools.nativeDns = null;
+  unknown.bootstrap.variants[1].node.tools.resolvers[0].observation.getaddrinfo = { result: 8, errno: 1, ipv4: 0, ipv6: 0 };
+  unknown.bootstrap.variants[1].node.tools.resolvers[1].command = {
+    ...unknown.bootstrap.variants[1].node.tools.resolvers[1].command, exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unknown.bootstrap.variants[1].node.tools.resolvers[1].observation = null;
+  unknown.bootstrap.variants[0].node.tools.bootstrapGlobal = {
+    phase: "node-bootstrap", pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501,
+    unavailable: "native observation unavailable", service: unknown.bootstrap.variants[0].node.tools.bootstrapGlobal.service };
+  const cached = unknown.bootstrap.variants[1].node.tools.bootstrapGlobal;
+  cached.before = { globalBootstrap: 222, globalTypeStatus: 0, globalRights: 0x10000,
+    taskBootstrapStatus: 0, taskBootstrap: 0, returnedSendStatus: null };
+  cached.restore = { attempted: true, setStatus: 0, registerStatus: 0 };
+  cached.after = { ...cached.before, taskBootstrap: 222, returnedSendStatus: 0 };
+  unknown.bootstrap.variants[1].node.tools.nativeLibc.before = { ...cached.before };
+  unknown.bootstrap.variants[1].node.tools.nativeLibc.calls[0] = { service: "443", result: 8, ipv4: 0, ipv6: 0 };
+  unknown.bootstrap.variants[0].node.tools.nativeLibc = { phase: "node-libc-resolver",
+    pid: unknown.bootstrap.variants[0].node.ports.pid, uid: 501, stage: "after-node-lookup", unavailable: "direct call not observed" };
+  unknown.bootstrap.variants[1].node.globalGuestEffect = { pid: 999, parent: 1, resource: "different-scope" };
+  const unavailableSubset = unknown.bootstrap.variants[1].node.tools.nativeSubset;
+  unavailableSubset.subset = unavailableSubset.unprivileged = 0;
+  Object.assign(unavailableSubset.operations, { subset: 1100, unprivileged: null, parent: null,
+    releaseUnprivileged: null, releaseSubset: null });
+  const recoveredParent = unknown.bootstrap.nativeSubsetHost;
+  recoveredParent.parent = 222;
+  Object.assign(recoveredParent.operations, { parent: 0, releaseParent: 0 });
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unknown });
+  const unavailableHost = structuredClone(unknown);
+  unavailableHost.bootstrap.nativeSubsetHostCommand = { ...unavailableHost.bootstrap.nativeSubsetHostCommand,
+    exitCode: null, signal: "SIGKILL", error: "ETIMEDOUT" };
+  unavailableHost.bootstrap.nativeSubsetHost = null;
+  validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unavailableHost });
 });
 
 test("006. Native darwin: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {

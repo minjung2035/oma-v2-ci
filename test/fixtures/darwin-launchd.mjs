@@ -3,35 +3,45 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { createServer } from "node:net";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
+import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
+import { runProcessSync } from "@oma/process/run";
+import { GIT_ENV } from "@oma/process/policies";
+import { observeNodeLibc } from "./darwin-libc.mjs";
 
 assert.equal(process.platform, "darwin", "launchd observations require the actual Darwin kernel");
 assert.ok(process.getuid() > 0, "launchd observations require an ordinary user");
 const mode = process.argv[2];
-assert.ok(["launchd-scope", "launchd-image"].includes(mode));
+assert.ok(["launchd-scope", "launchd-image", "launchd-bootstrap"].includes(mode));
 const root = realpathSync(process.cwd()), started = performance.now();
 // Plain user/UID bootstrap failed before spawning on both runners. Test a
 // distinct GUI session context; this does not qualify headless operation.
 const domain = `gui/${process.getuid()}`, prefix = `org.oma.probe.${randomUUID()}`;
 const commands = [], jobs = [], targets = [];
+const socketServers = [];
 const observation = { domain, commands, fixtureOnly: true };
-let cleaning = false, failure;
-function run(executable, argv, required = true) {
+let cleaning = false, failure, socketDirectory;
+function observe(executable, argv, maximum = 10000, environment = process.env) {
   const remaining = (cleaning ? 110000 : 80000) - (performance.now() - started);
   assert.ok(remaining > 0, "launchd fixture deadline");
-  const result = spawnSync(executable, argv, { cwd: root, encoding: "utf8",
-    timeout: Math.max(1, Math.min(10000, Math.floor(remaining))), killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
-  const record = { executable, argv, exitCode: result.status, signal: result.signal,
-    error: result.error?.message, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  const result = spawnSync(executable, argv, { cwd: root, env: environment, encoding: "utf8",
+    timeout: Math.max(1, Math.min(maximum, Math.floor(remaining))), killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
+  const record = { executable, argv, pid: result.pid, exitCode: result.status, signal: result.signal,
+    error: result.error?.message, errorCode: result.error?.code, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   commands.push(record);
-  assert.equal(result.error, undefined, JSON.stringify(record));
-  assert.equal(result.signal, null, JSON.stringify(record));
-  if (required) assert.equal(result.status, 0, JSON.stringify(record));
+  return record;
+}
+function run(executable, argv, required = true, environment = process.env) {
+  const record = observe(executable, argv, 10000, environment);
+  assert.equal(record.error, undefined, JSON.stringify(record));
+  assert.equal(record.signal, null, JSON.stringify(record));
+  if (required) assert.equal(record.exitCode, 0, JSON.stringify(record));
   return record;
 }
 const text = value => String(value).replace(/[&<>"']/g, character =>
@@ -146,7 +156,254 @@ try {
   observation.controllerChild = JSON.parse(run(actor, ["describe"]).stdout);
   observation.cdhashes = hashes;
   observation.executables = binaries.map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
-  if (mode === "launchd-image") {
+  if (mode === "launchd-bootstrap") {
+    const bootstrapSource = fileURLToPath(new URL("./darwin-bootstrap-exec.c", import.meta.url));
+    const launcher = join(root, "bootstrap-exec");
+    run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", bootstrapSource, "-lproc", "-lsandbox", "-o", launcher]);
+    const resolverSymbolsCommand = run("/usr/bin/xcrun", ["nm", "-uj", launcher]);
+    const imports = resolverSymbolsCommand.stdout.split(/\r?\n/).map(name => name.trim()), resolverSymbols = {};
+    for (const name of ["getaddrinfo", "freeaddrinfo"]) {
+      const matches = imports.filter(symbol => new RegExp(`^_${name}(?:\\$[A-Za-z0-9_]+)*$`).test(symbol));
+      assert.equal(matches.length, 1, JSON.stringify({ name, resolverSymbolsCommand }));
+      resolverSymbols[name] = matches[0].slice(1); // Mach-O's leading C underscore is not part of dlsym's name.
+    }
+    const compiler = realpathSync(run("/usr/bin/xcrun", ["--find", "clang"]).stdout.trim());
+    const sdk = realpathSync(run("/usr/bin/xcrun", ["--show-sdk-path"]).stdout.trim());
+    const selectorHome = join(root, "developer-observation"); mkdirSync(selectorHome, { mode: 0o700 });
+    const developerTools = await observeMacDeveloperTools(selectorHome, async command => {
+      const remaining = Math.floor(80000 - (performance.now() - started));
+      assert.ok(remaining > 0, "launchd selector fixture deadline");
+      const result = runProcessSync({ ...command, timeoutMs: Math.min(command.timeoutMs, remaining) });
+      commands.push({ executable: command.executable, argv: command.argv, ...result,
+        stdout: result.stdout.toString("utf8"), stderr: result.stderr.toString("utf8") });
+      return result;
+    });
+    assert.equal(process.env.DNSSD_UDS_PATH, undefined, "DNS endpoint override would change the observation");
+    const dnsEndpoint = "/var/run/mDNSResponder", dnsResolvedEndpoint = realpathSync(dnsEndpoint);
+    assert.ok(statSync(dnsResolvedEndpoint).isSocket(), "the declared DNS endpoint must be an actual socket");
+    socketDirectory = realpathSync(mkdtempSync("/tmp/oma-unix-"));
+    const unixSocketCanary = { directory: socketDirectory,
+      listed: join(socketDirectory, "allowed"), unlisted: join(socketDirectory, "denied") };
+    for (const path of [unixSocketCanary.listed, unixSocketCanary.unlisted]) {
+      assert.ok(Buffer.byteLength(path) < 104, "actual Unix endpoint fits sockaddr_un");
+      const server = createServer(socket => socket.destroy()); socketServers.push(server);
+      server.on("error", error => { failure ??= error; });
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(path, () => { server.off("error", reject); resolve(); });
+      });
+      assert.ok(statSync(path).isSocket(), "Unix allowlist control must be listening");
+    }
+    const hostDns = run(process.execPath, ["--input-type=module", "-e",
+      'import { lookup } from "node:dns/promises"; console.log(JSON.stringify({hostname:"example.com",addresses:await lookup("example.com",{all:true})}));']);
+    const gitControlPath = join(root, "git-control.txt");
+    const gitControlBytes = "BOOTSTRAP_NATIVE_OK\n"; writeFileSync(gitControlPath, gitControlBytes, { flag: "wx" });
+    const gitExpected = createHash("sha1").update(`blob ${Buffer.byteLength(gitControlBytes)}\0${gitControlBytes}`).digest("hex");
+    const gitEnvironment = JSON.stringify(GIT_ENV);
+    const positiveGit = run(developerTools.git, ["--no-replace-objects", "hash-object", "--no-filters", "--", gitControlPath],
+      true, { ...GIT_ENV, HOME: selectorHome, TMPDIR: selectorHome });
+    assert.equal(positiveGit.stdout, `${gitExpected}\n`);
+    const nativeDnsHostPath = join(root, "host-native-dns.json");
+    const nativeDnsHostCommand = run(launcher, ["observe-dns", nativeDnsHostPath, unixSocketCanary.listed, unixSocketCanary.unlisted]);
+    const nativeDnsHost = JSON.parse(readFileSync(nativeDnsHostPath, "utf8"));
+    assert.equal(nativeDnsHost.socket.connectResult, 0, JSON.stringify(nativeDnsHost));
+    assert.equal(nativeDnsHost.dnssd.createResult, 0, JSON.stringify(nativeDnsHost));
+    assert.equal(nativeDnsHost.getaddrinfo.result, 0, JSON.stringify(nativeDnsHost));
+    for (const socket of Object.values(nativeDnsHost.unixAllowlist))
+      assert.equal(socket.connectResult, 0, JSON.stringify(nativeDnsHost));
+    const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
+    const nativeResolverHost = resolverCases.map(([context, service]) => {
+      const path = `${nativeDnsHostPath}.resolver-${context}-${service}.json`;
+      const command = run(launcher, ["observe-resolver", path, context, service]);
+      const observation = JSON.parse(readFileSync(path, "utf8"));
+      assert.equal(observation.getaddrinfo.result, 0, JSON.stringify({ command, observation }));
+      assert.ok(observation.getaddrinfo.ipv4 + observation.getaddrinfo.ipv6 > 0);
+      return { command, observation };
+    });
+    const nativeSubsetHostPath = join(root, "host-subset.json");
+    const nativeSubsetHostCommand = observe(launcher, ["observe-subset", nativeSubsetHostPath], 5000);
+    const nativeSubsetHost = existsSync(nativeSubsetHostPath) ? JSON.parse(readFileSync(nativeSubsetHostPath, "utf8")) : null;
+    const koffiEntry = realpathSync(fileURLToPath(import.meta.resolve("koffi"))), koffiRoot = dirname(koffiEntry);
+    const nativeName = `@koromix/koffi-${process.platform}-${process.arch}`;
+    const nativeEntry = realpathSync(fileURLToPath(import.meta.resolve(nativeName))), nativeRoot = dirname(nativeEntry);
+    const { load: hostLoad, decode: hostDecode } = (await import(pathToFileURL(koffiEntry).href)).default;
+    const ffiPid = hostLoad(null).func("int getpid()")();
+    assert.equal(ffiPid, process.pid, "the exact selected FFI must load in the unsandboxed positive control");
+    const ffi = { entry: koffiEntry, root: koffiRoot, entrySha256: createHash("sha256").update(readFileSync(koffiEntry)).digest("hex"),
+      nativeName, nativeEntry, nativeRoot, nativeEntrySha256: createHash("sha256").update(readFileSync(nativeEntry)).digest("hex"),
+      host: { pid: process.pid, uid: process.getuid(), ffiPid } };
+    const libcEntry = realpathSync(fileURLToPath(new URL("./darwin-libc.mjs", import.meta.url)));
+    const libcProbe = { entry: libcEntry, sourceSha256: createHash("sha256").update(readFileSync(libcEntry)).digest("hex") };
+    const nativeLibcHost = observeNodeLibc(hostLoad(null), hostDecode, nativeDnsHost.addrinfoLayout, resolverSymbols);
+    assert.ok(nativeLibcHost.calls.every(call => call.result === 0 && call.ipv4 + call.ipv6 > 0), JSON.stringify(nativeLibcHost));
+    const script = join(root, "bootstrap-tools.mjs"), canary = join(root, "forbidden-canary");
+    writeFileSync(canary, "HOST_CANARY\n", { flag: "wx" });
+    writeFileSync(script, `
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { lookup } from "node:dns/promises";
+import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
+const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout, resolverSymbols] = process.argv.slice(2);
+const value = { pid: process.pid, complete: false };
+const save = () => writeFileSync(report, JSON.stringify(value));
+const command = (executable, argv, environment = process.env) => {
+  const child = spawnSync(executable, argv, { env: environment, encoding: "utf8", timeout: 5000, killSignal: "SIGKILL" });
+  return { executable, argv, pid: child.pid, exitCode: child.status, signal: child.signal,
+    error: child.error?.message, errorCode: child.error?.code, stdout: child.stdout ?? "", stderr: child.stderr ?? "" };
+};
+save();
+value.service = command("/bin/launchctl", ["kickstart", target]); save();
+try { writeFileSync("node-output.txt", "BOOTSTRAP_NATIVE_OK\\n"); value.write = "BOOTSTRAP_NATIVE_OK\\n"; }
+catch (error) { value.writeError = { code: error.code, message: error.message }; }
+try { writeFileSync(canary, "UNEXPECTED_WRITE\\n"); value.deniedWrite = "unexpected-success"; }
+catch (error) { value.deniedWrite = error.code; }
+save();
+value.git = command(git, ["--no-replace-objects", "hash-object", "--no-filters", "--", "node-output.txt"],
+  { ...JSON.parse(gitEnvironment), HOME: process.cwd(), TMPDIR: process.cwd() }); save();
+writeFileSync("compile.c", "int main(void) { return 0; }\\n");
+value.compiler = command(compiler, ["-fsyntax-only", "compile.c"]); save();
+const observeDns = async () => {
+  try { value.dns = { hostname: "example.com", addresses: await lookup("example.com", { all: true }) }; }
+  catch (error) { value.dns = { hostname: "example.com", error: { code: error.code, message: error.message } }; }
+  save();
+};
+const nativeDnsPath = report + ".dns.json";
+value.nativeDnsCommand = command(launcher, ["observe-dns", nativeDnsPath, listedSocket, unlistedSocket]);
+value.nativeDns = existsSync(nativeDnsPath) ? JSON.parse(readFileSync(nativeDnsPath, "utf8")) : null;
+value.resolvers = [];
+for (const [context, service] of ${JSON.stringify(resolverCases)}) {
+  const path = report + ".dns.json.resolver-" + context + "-" + service + ".json";
+  const result = command(launcher, ["observe-resolver", path, context, service]);
+  value.resolvers.push({ command: result, observation: existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null });
+  save();
+}
+const subsetPath = report + ".subset.json";
+value.nativeSubsetCommand = command(launcher, ["observe-subset", subsetPath]);
+value.nativeSubset = existsSync(subsetPath) ? JSON.parse(readFileSync(subsetPath, "utf8")) : null;
+save();
+value.bootstrapGlobal = { phase: "node-bootstrap", pid: process.pid, uid: process.getuid() };
+value.nativeLibcCold = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), stage: "before-node-lookup" };
+value.nativeLibc = { phase: "node-libc-resolver", pid: process.pid, uid: process.getuid(), stage: "after-node-lookup" };
+try {
+  const { load, decode } = (await import(${JSON.stringify(pathToFileURL(koffiEntry).href)})).default;
+  const library = load(null), task = decode.uint(library.symbol("mach_task_self_"));
+  const type = library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)");
+  const get = library.func("int task_get_special_port(unsigned int task, int flavor, void *result)");
+  const set = library.func("int task_set_special_port(unsigned int task, int flavor, unsigned int name)");
+  const register = library.func("int mach_ports_register(unsigned int task, const void *names, unsigned int count)");
+  const deallocate = library.func("int mach_port_deallocate(unsigned int task, unsigned int name)");
+  const snapshot = () => {
+    const globalBootstrap = decode.uint(library.symbol("bootstrap_port")), rights = Buffer.alloc(4), special = Buffer.alloc(4);
+    const globalTypeStatus = type(task, globalBootstrap, rights), taskBootstrapStatus = get(task, 4, special);
+    const taskBootstrap = taskBootstrapStatus === 0 ? special.readUInt32LE(0) : null;
+    // get_special_port returns one owned SEND reference, not the borrowed global.
+    const returnedSendStatus = taskBootstrapStatus === 0 && taskBootstrap > 0 && taskBootstrap < 0xffffffff
+      ? deallocate(task, taskBootstrap) : null;
+    return { globalBootstrap, globalTypeStatus, globalRights: globalTypeStatus === 0 ? rights.readUInt32LE(0) : null,
+      taskBootstrapStatus, taskBootstrap, returnedSendStatus };
+  };
+  const layout = JSON.parse(resolverLayout), symbols = JSON.parse(resolverSymbols);
+  const observeLibcStage = (key, stage) => {
+    try {
+      const before = snapshot(); value[key].before = before; save();
+      const result = observeNodeLibc(library, decode, layout, symbols);
+      result.stage = stage; result.before = before; value[key] = result; save();
+      result.after = snapshot();
+    } catch (error) { value[key].unavailable = String(error); }
+    save();
+  };
+  observeLibcStage("nativeLibcCold", "before-node-lookup");
+  await observeDns();
+  observeLibcStage("nativeLibc", "after-node-lookup");
+  const before = snapshot(), restore = { attempted: false, setStatus: null, registerStatus: null };
+  value.bootstrapGlobal.before = before;
+  value.bootstrapGlobal.restore = restore; save();
+  if (before.globalBootstrap > 0 && before.globalBootstrap < 0xffffffff &&
+      before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) {
+    restore.attempted = true;
+    restore.setStatus = set(task, 4, before.globalBootstrap);
+    if (restore.setStatus === 0) {
+      const names = Buffer.alloc(12); names.writeUInt32LE(before.globalBootstrap);
+      restore.registerStatus = register(task, names, 3);
+    }
+  }
+  value.bootstrapGlobal.after = snapshot();
+} catch (error) {
+  value.bootstrapGlobal.unavailable = String(error);
+  for (const key of ["nativeLibcCold", "nativeLibc"])
+    if (value[key].calls === undefined) value[key].unavailable = String(error);
+  if (value.dns === undefined) await observeDns();
+}
+save();
+// A separately registered fresh target tests actual service effect, not a
+// port name, successful setter or a previously started actor.
+value.bootstrapGlobal.service = command("/bin/launchctl", ["kickstart", globalTarget]);
+value.complete = true; save();
+`, { flag: "wx" });
+    const positive = loadJob("bootstrap-positive", actor, "once");
+    const positiveKickstart = run("/bin/launchctl", ["kickstart", positive.target]);
+    await waitFor(() => existsSync(join(positive.directory, "once.json")));
+    observation.bootstrap = { renderer: "production-seatbeltProfile",
+      sourceSha256: createHash("sha256").update(readFileSync(bootstrapSource)).digest("hex"),
+      executableSha256: createHash("sha256").update(readFileSync(launcher)).digest("hex"),
+      positiveTarget: positive.target, positiveKickstart, positiveControl: remember(marker(positive.directory, "once")),
+      compiler, sdk, developerTools, gitEnvironment: GIT_ENV, dnsEndpoint, dnsResolvedEndpoint, hostDns, positiveGit, gitExpected,
+      unixSocketCanary, nativeDnsHostCommand, nativeDnsHost, nativeResolverHost, nativeSubsetHostCommand, nativeSubsetHost,
+      libcProbe, nativeLibcHost, resolverSymbolsCommand, resolverSymbols, ffi, variants: [] };
+    const optionalJson = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+    for (const name of ["inherited", "bootstrap-only", "bootstrap-and-xpc"]) {
+      const directory = join(root, `work-${name}`); mkdirSync(directory, { mode: 0o700 });
+      const directTarget = loadJob(`${name}-direct`, actor, "once"), nodeTarget = loadJob(`${name}-node`, actor, "once");
+      const restoredTarget = loadJob(`${name}-restored`, actor, "once");
+      const globalTarget = loadJob(`${name}-global`, actor, "once");
+      const profile = seatbeltProfile({ readable: [
+        ...[actor, launcher, script, libcEntry, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
+        { path: developerTools.contents, kind: "directory" },
+        { path: unixSocketCanary.directory, kind: "directory" },
+        { path: dirname(dirname(compiler)), kind: "directory" }, { path: sdk, kind: "directory" }],
+        mapped: [{ path: koffiRoot, kind: "directory" }, { path: nativeRoot, kind: "directory" }],
+        writable: [{ path: directory, kind: "directory" }], denied: [],
+        executable: [actor, launcher, process.execPath, compiler, developerTools.git].map(path => ({ path, kind: "file" })),
+        unixSockets: [dnsEndpoint, ...(dnsResolvedEndpoint === dnsEndpoint ? [] : [dnsResolvedEndpoint]), unixSocketCanary.listed],
+        machServices: [], environmentKeys: [] });
+      const profilePath = join(directory, "profile.sb"); writeFileSync(profilePath, profile, { mode: 0o600 });
+      const directPorts = join(directory, "direct-ports.json"), nodePorts = join(directory, "node-ports.json");
+      const toolsReport = join(directory, "tools.json");
+      const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
+      const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
+        nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+        unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target,
+        JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
+      const tools = optionalJson(toolsReport);
+      const restoredPorts = join(directory, "restored-ports.json"), restorationReport = join(directory, "restoration.json");
+      const restored = observe(launcher, [name, profilePath, restoredPorts, directory, launcher,
+        "restore-registered-seed", restorationReport, "/bin/launchctl", "kickstart", restoredTarget.target], 5000);
+      for (const [job, result] of [[directTarget, direct], [nodeTarget, tools?.service], [restoredTarget, restored],
+        [globalTarget, tools?.bootstrapGlobal?.service]])
+        if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+          await waitFor(() => existsSync(join(job.directory, "once.json")));
+      const effect = job => existsSync(join(job.directory, "once.json")) ? remember(marker(job.directory, "once")) : null;
+      observation.bootstrap.variants.push({ name, profileSha256: createHash("sha256").update(profile).digest("hex"),
+        direct: { target: directTarget.target, command: direct, ports: optionalJson(directPorts), guestEffect: effect(directTarget) },
+        node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget),
+          globalTarget: globalTarget.target, globalGuestEffect: effect(globalTarget) },
+        restored: { target: restoredTarget.target, command: restored, ports: optionalJson(restoredPorts),
+          restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
+        canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+    }
+    const pids = observation.bootstrap.variants.flatMap(variant => [variant.node.tools?.nativeDnsCommand?.pid,
+      ...(variant.node.tools?.resolvers ?? []).map(record => record.command?.pid)])
+      .filter(pid => Number.isSafeInteger(pid) && pid > 0);
+    const diagnostics = { purpose: "read-only violations for owned DNS observers; not authority or death proof", pids };
+    if (pids.length && performance.now() - started < 73000) {
+      const selected = pids.map(pid =>
+        `(processIdentifier == ${pid} OR eventMessage CONTAINS "bootstrap-exec(${pid})")`).join(" OR ");
+      const predicate = `(subsystem == "com.apple.sandbox.reporting" OR subsystem == "com.apple.sandbox") AND (${selected})`;
+      try { diagnostics.command = observe("/usr/bin/log", ["show", "--style", "json", "--last", "2m", "--predicate", predicate], 5000); }
+      catch (error) { diagnostics.unavailable = String(error); }
+    } else diagnostics.notRun = "no owned observer PID or insufficient fixture budget";
+    observation.bootstrap.denialDiagnostics = diagnostics;
+  } else if (mode === "launchd-image") {
     assert.notEqual(hashes[0], hashes[1], "different controlled programs require different code hashes");
     const selected = join(root, "selected");
     copyFileSync(actor, selected);
@@ -174,12 +431,16 @@ try {
   } else {
     // No SpawnConstraint: independently qualify ordinary job provisioning.
     const scope = loadJob("scope", actor, "scope"), other = loadJob("other", actor, "hold");
-    const serviceTarget = loadJob("service-target", actor, "once");
-    run("/bin/launchctl", ["kickstart", serviceTarget.target]);
-    await waitFor(() => existsSync(join(serviceTarget.directory, "once.json")));
-    const servicePositive = remember(marker(serviceTarget.directory, "once"));
+    // Keep the host positive on a separate, otherwise equivalent job. Reusing
+    // it would mix launchd restart scheduling into the first-admission question.
+    const servicePositiveJob = loadJob("service-positive", actor, "once");
+    const positiveServiceKickstart = run("/bin/launchctl", ["kickstart", servicePositiveJob.target]);
+    await waitFor(() => existsSync(join(servicePositiveJob.directory, "once.json")));
+    const servicePositive = remember(marker(servicePositiveJob.directory, "once"));
     await waitFor(() => originalExited(servicePositive.identity));
-    unlinkSync(join(serviceTarget.directory, "once.json"));
+    const positiveServiceAfter = run("/bin/launchctl", ["print", servicePositiveJob.target], false);
+    const serviceTarget = loadJob("service-target", actor, "once");
+    const serviceBefore = run("/bin/launchctl", ["print", serviceTarget.target], false);
     const profile = seatbeltProfile({ readable: [{ path: actor, kind: "file" }],
       writable: [{ path: scope.directory, kind: "directory" }], denied: [],
       executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
@@ -194,7 +455,8 @@ try {
     observation.scope = { members, control, before: usage(members.leader.resource), otherBefore: usage(control.resource) };
     observation.scope.seatbelt = { renderer: "production-seatbeltProfile",
       sha256: createHash("sha256").update(profile).digest("hex"), serviceTarget: serviceTarget.target,
-      positiveServiceControl: servicePositive, attempt: marker(scope.directory, "service-admission"),
+      positiveServiceTarget: servicePositiveJob.target, positiveServiceKickstart, positiveServiceAfter,
+      positiveServiceControl: servicePositive, serviceBefore, attempt: marker(scope.directory, "service-admission"),
       serviceAfter: run("/bin/launchctl", ["print", serviceTarget.target], false),
       guestEffect: existsSync(join(serviceTarget.directory, "once.json")) ?
         remember(marker(serviceTarget.directory, "once")) : null };
@@ -251,12 +513,20 @@ finally {
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }
+  for (const server of socketServers) {
+    try { if (server.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+    catch (error) { faults.push(String(error)); }
+  }
+  if (socketDirectory !== undefined) {
+    try { rmSync(socketDirectory, { recursive: true, force: true }); }
+    catch (error) { faults.push(String(error)); }
+  }
   observation.jobOutputs = [];
   for (const job of jobs) {
     try {
       const output = name => existsSync(join(job.directory, name)) ?
         readFileSync(join(job.directory, name)).subarray(0, 65536).toString("utf8") : null;
-      observation.jobOutputs.push({ label: job.label, stdout: output("stdout"), stderr: output("stderr") });
+      observation.jobOutputs.push({ label: job.label, target: job.target, stdout: output("stdout"), stderr: output("stderr") });
     } catch (error) { faults.push(String(error)); }
   }
   observation.cleanupFaults = faults;
@@ -269,4 +539,5 @@ if (failure) {
     error => error ? reject(error) : resolve()));
   throw failure;
 }
-console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" : "launchdScope"]: observation }));
+console.log(JSON.stringify({ case: mode, [mode === "launchd-image" ? "launchdImage" :
+  mode === "launchd-bootstrap" ? "launchdBootstrap" : "launchdScope"]: observation }));

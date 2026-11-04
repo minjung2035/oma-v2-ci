@@ -26,7 +26,7 @@ npm run check:boundaries
 
 ## 병렬 실행과 시간
 
-실제 event-loop timing을 검사하는 두 파일은 먼저 단독 실행하고 나머지는 파일별 별도 프로세스로 병렬 실행한다. 기본 동시성은 `min(8, availableParallelism())`이며 `OMA_TEST_CONCURRENCY`로 조절한다. 이 개발 호스트에서는 기본값 4가 적용된다. 6개 실행은 시간이 조금 줄었지만 새로운 timing 실패가 생겨 채택하지 않았다. 측정값은 validation에 있다.
+실제 event-loop timing을 검사하는 세 파일은 먼저 단독 실행하고 나머지는 파일별 별도 프로세스로 병렬 실행한다. 기본 동시성은 `min(8, availableParallelism())`이며 `OMA_TEST_CONCURRENCY`로 조절한다. 이 개발 호스트에서는 기본값 4가 적용된다. 6개 실행은 시간이 조금 줄었지만 새로운 timing 실패가 생겨 채택하지 않았다. 측정값은 validation에 있다.
 
 `.scratch/local-test-durations.tsv`는 긴 파일을 먼저 시작하는 데 사용한다. 결과 캐시가 아니며 테스트를 생략하지 않는다. Node compile cache도 `.scratch/test-node-compile-cache`에 둔다. cache가 없는 파일도 실행 대상에 포함된다.
 

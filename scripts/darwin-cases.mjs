@@ -1,6 +1,7 @@
 /** Required real-Darwin observations. This manifest grants no kernel support;
  * missing, failed or unexecuted rows can never become completed observations. */
 import { validateDescriptorCapabilityObservation } from "./descriptor-capability-observation.mjs";
+import { isIP } from "node:net";
 export const DARWIN_CASE_REPETITIONS = 3;
 export const DARWIN_PROCESS_TIMEOUT_MS = 120000;
 const program = row => Object.freeze({ ...row, names: Object.freeze(row.names), link: Object.freeze(row.link ?? []) });
@@ -24,7 +25,7 @@ export const DARWIN_PROGRAMS = Object.freeze([
   program({ name: "worker", fixture: "darwin-worker.mjs", digest: "workerProbeDigest", compile: "check-worker", node: true,
     names: ["worker-bootstrap", "worker-tools"] }),
   program({ name: "launchd", fixture: "darwin-launchd.mjs", digest: "launchdProbeDigest", compile: "check-launchd", node: true,
-    names: ["launchd-scope", "launchd-image"] }),
+    names: ["launchd-scope", "launchd-image", "launchd-bootstrap"] }),
   program({ name: "personal", fixture: "darwin-personal.mjs", digest: "personalProbeDigest", compile: "check-personal", node: true,
     names: ["personal-entry"] }),
   program({ name: "suspended-image", fixture: "darwin-suspended-image.mjs", digest: "suspendedImageProbeDigest", compile: "check-suspended-image", node: true,
@@ -42,7 +43,8 @@ const observationKeys = Object.freeze({ process: "process", files: "files", auth
   "seatbelt-trusted-preload": "seatbeltFault", "seatbelt-stdin-profile": "seatbeltFault", "seatbelt-fd-close": "seatbeltFault", "seatbelt-ipc-denial": "seatbeltFault", "seatbelt-kept-fds": "seatbeltFault",
   "git-setup-candidate": "gitSetup", "git-setup-quarantine": "gitSetup",
   "worker-bootstrap": "worker", "worker-tools": "worker",
-  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "personal-entry": "personal", "suspended-image": "suspendedImage" });
+  "launchd-scope": "launchdScope", "launchd-image": "launchdImage", "launchd-bootstrap": "launchdBootstrap",
+  "personal-entry": "personal", "suspended-image": "suspendedImage" });
 export function darwinCasePlan() {
   return DARWIN_PROGRAMS.flatMap(program => Array.from({ length: DARWIN_CASE_REPETITIONS }, (_, iteration) =>
     program.names.map(name => {
@@ -106,12 +108,267 @@ export function validateDarwinObservation(name, observations) {
         value.nestedApplyReturnCode === 0 && value.nestedApplyErrno !== 0)
       throw new Error("signal identity observation lacks its inherited positive control or nested apply result");
   }
-  if (name === "launchd-scope" || name === "launchd-image") {
+  if (name === "launchd-scope" || name === "launchd-image" || name === "launchd-bootstrap") {
     if (value.fixtureOnly !== true || value.controlledGenerationsExited !== true ||
         value.jobRegistrationsRemoved !== true || !Array.isArray(value.cleanupFaults) || value.cleanupFaults.length !== 0)
       throw new Error("launchd observation lacks controlled generation and registration cleanup");
     if (typeof value.actorSourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.actorSourceSha256))
       throw new Error("launchd actor source identity is missing");
+    if (name === "launchd-bootstrap") {
+      const bootstrap = value.bootstrap, modes = ["inherited", "bootstrap-only", "bootstrap-and-xpc"];
+      const target = name => typeof name === "string" && name.startsWith(`${value.domain}/org.oma.probe.`);
+      const outcome = result => result && Number.isSafeInteger(result.pid) && result.pid >= 0 &&
+        (result.pid > 0 && Number.isSafeInteger(result.exitCode) && result.exitCode >= 0 && result.signal === null ||
+          result.pid > 0 && result.exitCode === null && typeof result.signal === "string" ||
+          result.exitCode === null && result.signal === null && typeof result.error === "string") &&
+        typeof result.stdout === "string" && typeof result.stderr === "string";
+      const portNumber = port => Number.isSafeInteger(port) && port >= 0 && port <= 0xffffffff;
+      const signed32 = number => Number.isSafeInteger(number) && number >= -0x80000000 && number <= 0x7fffffff;
+      const snapshot = record => record && portNumber(record.bootstrap) &&
+        Array.isArray(record.registered) && record.registered.length <= 3 && record.registered.every(portNumber);
+      const dns = record => record?.hostname === "example.com" &&
+        (Array.isArray(record.addresses) && record.addresses.length > 0 &&
+          record.addresses.every(row => [4, 6].includes(row.family) && isIP(row.address) === row.family) ||
+          typeof record.error?.code === "string");
+      const unix = bootstrap?.unixSocketCanary;
+      const unixSocket = record => record && typeof record.created === "boolean" &&
+        record.connectAttempted === record.created && [-1, 0].includes(record.connectResult) &&
+        (record.created || record.connectResult === -1) &&
+        [record.errno, record.connectErrno].every(number => Number.isSafeInteger(number) && number >= 0);
+      const pathObservation = record => record && [-1, 0].includes(record.result) &&
+        Number.isSafeInteger(record.errno) && record.errno >= 0 &&
+        (record.result === -1 ? record.kind === null : ["symlink", "socket", "directory", "other"].includes(record.kind));
+      const gai = record => signed32(record?.result) &&
+        [record.errno, record.ipv4, record.ipv6].every(number => Number.isSafeInteger(number) && number >= 0);
+      const layoutKeys = ["size", "pointerBytes", "intBytes", "flags", "family", "socktype", "protocol", "next",
+        "afUnspec", "afInet", "afInet6", "sockStream"];
+      const layout = bootstrap?.nativeDnsHost?.addrinfoLayout;
+      const abi = value => value && layoutKeys.every(key => Number.isSafeInteger(value[key])) &&
+        value.size >= 24 && value.size <= 256 && value.pointerBytes === 8 && value.intBytes === 4 &&
+        ["flags", "family", "socktype", "protocol"].every(key => value[key] >= 0 &&
+          value[key] % value.intBytes === 0 && value[key] + value.intBytes <= value.size &&
+          (value[key] + value.intBytes <= value.next || value[key] >= value.next + value.pointerBytes)) &&
+        new Set([value.flags, value.family, value.socktype, value.protocol]).size === 4 &&
+        value.next >= 0 && value.next % value.pointerBytes === 0 && value.next + value.pointerBytes <= value.size &&
+        [value.afUnspec, value.afInet, value.afInet6, value.sockStream].every(signed32) &&
+        value.afUnspec >= 0 && value.afInet > 0 && value.afInet6 > 0 && value.afInet !== value.afInet6 && value.sockStream > 0;
+      const sameLayout = value => abi(value) && abi(layout) && layoutKeys.every(key => value[key] === layout[key]);
+      const launcher = bootstrap?.variants?.[0]?.direct?.command?.executable;
+      const resolverSymbols = bootstrap?.resolverSymbols;
+      const imports = typeof bootstrap?.resolverSymbolsCommand?.stdout === "string"
+        ? bootstrap.resolverSymbolsCommand.stdout.split(/\r?\n/).map(name => name.trim()) : [];
+      const importsMatch = resolverSymbols && Object.keys(resolverSymbols).length === 2 &&
+        ["getaddrinfo", "freeaddrinfo"].every(name => {
+          const matches = imports.filter(symbol => new RegExp(`^_${name}(?:\\$[A-Za-z0-9_]+)*$`).test(symbol));
+          return matches.length === 1 && resolverSymbols[name] === matches[0].slice(1);
+        });
+      const sameSymbols = value => value && resolverSymbols && Object.keys(value).length === 2 &&
+        ["getaddrinfo", "freeaddrinfo"].every(name => value[name] === resolverSymbols[name]);
+      const nativeDns = (command, record) => outcome(command) && typeof launcher === "string" && launcher.startsWith("/") &&
+        command.executable === launcher && Array.isArray(command.argv) && command.argv.length === 4 &&
+        command.argv[0] === "observe-dns" && typeof command.argv[1] === "string" && command.argv[1].startsWith("/") &&
+        command.argv[2] === unix?.listed && command.argv[3] === unix?.unlisted &&
+        (record === null && (command.exitCode !== 0 || command.signal !== null) ||
+          record?.phase === "native-dns" && Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === command.pid &&
+          Number.isSafeInteger(record.uid) && record.uid > 0 && record.hostname === "example.com" &&
+          record.endpoint === "/var/run/mDNSResponder" && snapshot(record.ports) && sameLayout(record.addrinfoLayout) &&
+          record.canonicalEndpoint === bootstrap.dnsResolvedEndpoint &&
+          [record.socket, record.canonicalSocket, record.unixAllowlist?.listed, record.unixAllowlist?.unlisted].every(unixSocket) &&
+          [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
+          gai(record.getaddrinfo) && signed32(record.dnssd?.createResult));
+      const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
+      const nativeResolvers = (records, base, uid, positive = false) => Array.isArray(records) &&
+        records.length === resolverCases.length && records.every((entry, index) => {
+          const [context, service] = resolverCases[index], command = entry?.command, record = entry?.observation;
+          return outcome(command) && command.executable === launcher && Array.isArray(command.argv) &&
+            JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", `${base}.resolver-${context}-${service}.json`, context, service]) &&
+            (record === null && !positive && (command.exitCode !== 0 || command.signal !== null) ||
+              record?.phase === "native-resolver" && record.pid === command.pid && record.pid > 0 &&
+              Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid &&
+              record.hostname === "example.com" && record.context === context && record.service === (service === "none" ? null : service) &&
+              portNumber(record.globalBootstrap) && snapshot(record.ports) && gai(record.getaddrinfo) &&
+              (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
+                record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
+        });
+      const machStatus = number => signed32(number) && number >= 0;
+      const validName = name => portNumber(name) && name > 0 && name < 0xffffffff;
+      const subsetOperations = ["allocate", "makeSend", "subset", "unprivileged", "parent", "releaseParent",
+        "releaseUnprivileged", "releaseSubset", "releaseRequestorSend", "releaseRequestorReceive"];
+      const nativeSubset = (command, record, uid, path) => {
+        if (typeof path !== "string" || !path.startsWith("/") || path.includes("\0") ||
+            !outcome(command) || command.executable !== launcher ||
+            JSON.stringify(command.argv) !== JSON.stringify(["observe-subset", path])) return false;
+        if (record === null) return command.exitCode !== 0 || command.signal !== null;
+        const operations = record?.operations;
+        if (record?.phase !== "native-subset-preflight" || record.pid !== command.pid || record.pid <= 0 ||
+            record.uid !== uid || record.euid !== uid || record.namespaceInstalled !== false ||
+            !portNumber(record.globalBootstrap) || !snapshot(record.before) || !snapshot(record.after) ||
+            !operations || Object.keys(operations).length !== subsetOperations.length ||
+            !subsetOperations.every(key => operations[key] === null || signed32(operations[key])) ||
+            operations.allocate === null) return false;
+        for (const [index, key] of subsetOperations.slice(1, 5).entries())
+          if ((operations[key] !== null) !== (operations[subsetOperations[index]] === 0)) return false;
+        for (const [key, operation] of [["requestor", "allocate"], ["subset", "subset"],
+          ["unprivileged", "unprivileged"], ["parent", "parent"]])
+          if (!(operations[operation] === 0 ? validName(record[key]) : record[key] === 0)) return false;
+        for (const [release, acquired] of [["releaseParent", "parent"], ["releaseUnprivileged", "unprivileged"],
+          ["releaseSubset", "subset"], ["releaseRequestorSend", "makeSend"], ["releaseRequestorReceive", "allocate"]])
+          if ((operations[release] !== null) !== (operations[acquired] === 0)) return false;
+        return true;
+      };
+      const nodePorts = record => record && portNumber(record.globalBootstrap) && machStatus(record.globalTypeStatus) &&
+        (record.globalTypeStatus === 0 ? portNumber(record.globalRights) : record.globalRights === null) &&
+        machStatus(record.taskBootstrapStatus) &&
+        (record.taskBootstrapStatus === 0 ? portNumber(record.taskBootstrap) : record.taskBootstrap === null) &&
+        (record.taskBootstrapStatus === 0 && validName(record.taskBootstrap)
+          ? machStatus(record.returnedSendStatus) : record.returnedSendStatus === null);
+      const globalRestore = (record, before) => record && nodePorts(before) &&
+        record.attempted === (validName(before.globalBootstrap) && before.globalTypeStatus === 0 && (before.globalRights & 0x10000) !== 0) &&
+        (record.attempted ? machStatus(record.setStatus) &&
+          (record.setStatus === 0 ? machStatus(record.registerStatus) : record.registerStatus === null)
+          : record.setStatus === null && record.registerStatus === null);
+      const nodeGlobal = (record, pid, uid, selectedTarget) => record?.phase === "node-bootstrap" &&
+        Number.isSafeInteger(record.pid) && record.pid > 0 && record.pid === pid &&
+        Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid && outcome(record.service) &&
+        record.service.executable === "/bin/launchctl" &&
+        JSON.stringify(record.service.argv) === JSON.stringify(["kickstart", selectedTarget]) &&
+        (record.before === undefined || nodePorts(record.before)) &&
+        (record.after === undefined || nodePorts(record.after)) &&
+        (record.restore === undefined || globalRestore(record.restore, record.before)) &&
+        (typeof record.unavailable === "string" || nodePorts(record.before) && nodePorts(record.after) &&
+          globalRestore(record.restore, record.before));
+      const nodeLibc = (record, pid, uid, positive = false, stage) => {
+        if (record?.phase !== "node-libc-resolver" || record.stage !== stage || record.pid !== pid || !(pid > 0) ||
+            record.uid !== uid || !(uid > 0) || positive && record.unavailable !== undefined ||
+            record.before !== undefined && !nodePorts(record.before) ||
+            record.after !== undefined && !nodePorts(record.after)) return false;
+        if (stage !== undefined && typeof record.unavailable !== "string" &&
+            (!nodePorts(record.before) || !nodePorts(record.after))) return false;
+        if (record.calls === undefined) return typeof record.unavailable === "string" && !positive;
+        return record.hostname === "example.com" && sameLayout(record.layout) && sameSymbols(record.symbols) &&
+          record.hints?.flags === 0 && record.hints.family === layout.afUnspec &&
+          record.hints.socktype === layout.sockStream && record.hints.protocol === 0 &&
+          Array.isArray(record.calls) && record.calls.length === 2 && record.calls.every((call, index) =>
+            call?.service === (index === 0 ? "443" : null) && signed32(call.result) &&
+            [call.ipv4, call.ipv6].every(number => Number.isSafeInteger(number) && number >= 0) &&
+            (!positive || call.result === 0 && call.ipv4 + call.ipv6 > 0));
+      };
+      let hostDns;
+      try { hostDns = JSON.parse(bootstrap?.hostDns?.stdout ?? "null"); } catch { /* Refused below, never a DNS positive. */ }
+      if (bootstrap?.renderer !== "production-seatbeltProfile" ||
+          ![bootstrap.sourceSha256, bootstrap.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
+          !target(bootstrap.positiveTarget) || !outcome(bootstrap.positiveKickstart) ||
+          bootstrap.positiveKickstart.executable !== "/bin/launchctl" ||
+          JSON.stringify(bootstrap.positiveKickstart.argv) !== JSON.stringify(["kickstart", bootstrap.positiveTarget]) ||
+          bootstrap.positiveKickstart.exitCode !== 0 || !Number.isSafeInteger(bootstrap.positiveControl?.pid) ||
+          bootstrap.positiveControl.pid <= 1 || !Array.isArray(bootstrap.variants) || bootstrap.variants.length !== modes.length ||
+          bootstrap.variants[0]?.direct?.ports?.preExecObservation !== true ||
+          bootstrap.variants[0]?.node?.ports?.preExecObservation !== true ||
+          typeof bootstrap.developerTools?.git !== "string" || !bootstrap.developerTools.git.startsWith("/") ||
+          !outcome(bootstrap.positiveGit) || bootstrap.positiveGit.exitCode !== 0 ||
+          bootstrap.positiveGit.executable !== bootstrap.developerTools.git ||
+          typeof bootstrap.gitExpected !== "string" || !/^[0-9a-f]{40}$/.test(bootstrap.gitExpected) ||
+          bootstrap.positiveGit.stdout !== `${bootstrap.gitExpected}\n` ||
+          typeof bootstrap.ffi?.root !== "string" || !bootstrap.ffi.root.startsWith("/") || bootstrap.ffi.root === "/" ||
+          typeof bootstrap.ffi.entry !== "string" || !bootstrap.ffi.entry.startsWith(`${bootstrap.ffi.root}/`) ||
+          typeof bootstrap.ffi.entrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.entrySha256) ||
+          typeof bootstrap.ffi.nativeName !== "string" || !/^@koromix\/koffi-darwin-(?:arm64|x64)$/.test(bootstrap.ffi.nativeName) ||
+          typeof bootstrap.ffi.nativeRoot !== "string" || !bootstrap.ffi.nativeRoot.startsWith("/") || bootstrap.ffi.nativeRoot === "/" ||
+          typeof bootstrap.ffi.nativeEntry !== "string" || !bootstrap.ffi.nativeEntry.startsWith(`${bootstrap.ffi.nativeRoot}/`) ||
+          typeof bootstrap.ffi.nativeEntrySha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.ffi.nativeEntrySha256) ||
+          !Number.isSafeInteger(bootstrap.ffi.host?.pid) || bootstrap.ffi.host.pid <= 0 ||
+          bootstrap.ffi.host.ffiPid !== bootstrap.ffi.host.pid || bootstrap.ffi.host.uid !== bootstrap.nativeDnsHost?.uid ||
+          typeof bootstrap.libcProbe?.entry !== "string" || !bootstrap.libcProbe.entry.startsWith("/") ||
+          typeof bootstrap.libcProbe.sourceSha256 !== "string" || !/^[0-9a-f]{64}$/.test(bootstrap.libcProbe.sourceSha256) ||
+          !importsMatch || !outcome(bootstrap.resolverSymbolsCommand) || bootstrap.resolverSymbolsCommand.exitCode !== 0 ||
+          bootstrap.resolverSymbolsCommand.executable !== "/usr/bin/xcrun" ||
+          JSON.stringify(bootstrap.resolverSymbolsCommand.argv) !== JSON.stringify(["nm", "-uj", launcher]) ||
+          !nodeLibc(bootstrap.nativeLibcHost, bootstrap.ffi.host.pid, bootstrap.ffi.host.uid, true) ||
+          typeof unix?.directory !== "string" || !unix.directory.startsWith("/") || unix.directory.includes("\0") ||
+          unix.listed !== `${unix.directory}/allowed` || unix.unlisted !== `${unix.directory}/denied` ||
+          bootstrap.dnsEndpoint !== "/var/run/mDNSResponder" ||
+          typeof bootstrap.dnsResolvedEndpoint !== "string" || !bootstrap.dnsResolvedEndpoint.startsWith("/") ||
+          !outcome(bootstrap.hostDns) || bootstrap.hostDns.exitCode !== 0 ||
+          !dns(hostDns) || hostDns.error !== undefined ||
+          !nativeDns(bootstrap.nativeDnsHostCommand, bootstrap.nativeDnsHost) || bootstrap.nativeDnsHostCommand.exitCode !== 0 ||
+          bootstrap.nativeDnsHost?.socket.created !== true || bootstrap.nativeDnsHost.socket.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.canonicalSocket.created !== true || bootstrap.nativeDnsHost.canonicalSocket.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.unixAllowlist.listed.created !== true || bootstrap.nativeDnsHost.unixAllowlist.listed.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.unixAllowlist.unlisted.created !== true || bootstrap.nativeDnsHost.unixAllowlist.unlisted.connectResult !== 0 ||
+          bootstrap.nativeDnsHost.dnssd.createResult !== 0 || bootstrap.nativeDnsHost.getaddrinfo.result !== 0 ||
+          bootstrap.nativeDnsHost.getaddrinfo.ipv4 + bootstrap.nativeDnsHost.getaddrinfo.ipv6 <= 0 ||
+          !nativeResolvers(bootstrap.nativeResolverHost, bootstrap.nativeDnsHostCommand.argv[1], bootstrap.nativeDnsHost.uid, true) ||
+          !nativeSubset(bootstrap.nativeSubsetHostCommand, bootstrap.nativeSubsetHost, bootstrap.nativeDnsHost.uid,
+            bootstrap.nativeSubsetHostCommand?.argv?.[1]))
+        throw new Error("bootstrap observation lacks a production profile, source or actual independent host positive");
+      const targets = new Set([bootstrap.positiveTarget]);
+      for (const [index, variant] of bootstrap.variants.entries()) {
+        if (variant.name !== modes[index] || typeof variant.canaryPreserved !== "boolean" ||
+            typeof variant.profileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(variant.profileSha256))
+          throw new Error("bootstrap variants omit or relabel a rights/compatibility outcome");
+        for (const key of ["direct", "node", "restored"]) {
+          const attempt = variant[key], ports = attempt?.ports;
+          if (!target(attempt?.target) || targets.has(attempt.target) || !outcome(attempt.command) ||
+              !Array.isArray(attempt.command.argv) || attempt.command.argv[0] !== variant.name ||
+              !(attempt.guestEffect === null || Number.isSafeInteger(attempt.guestEffect?.pid) && attempt.guestEffect.pid > 1) ||
+              !(ports === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                ports?.mode === variant.name && ports.sandboxApplied === true && ports.preExecObservation === true &&
+                ports.pid === attempt.command.pid && Number.isSafeInteger(ports.uid) && ports.uid > 0 &&
+                snapshot(ports.before) && snapshot(ports.after) && Array.isArray(ports.droppedSendRights) &&
+                ports.droppedSendRights.every(portNumber)))
+            throw new Error("bootstrap attempt loses its actual sandbox, rights, command, target or exit outcome");
+          targets.add(attempt.target);
+          if (key === "node") {
+            if (!target(attempt.globalTarget) || targets.has(attempt.globalTarget) ||
+                !(attempt.globalGuestEffect === null || Number.isSafeInteger(attempt.globalGuestEffect?.pid) && attempt.globalGuestEffect.pid > 1))
+              throw new Error("Node global-bootstrap control is not a separate actual service target");
+            targets.add(attempt.globalTarget);
+          }
+          if (key === "direct" &&
+              JSON.stringify(attempt.command.argv.slice(4)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]))
+            throw new Error("direct bootstrap service outcome belongs to a different target");
+          if (key === "node" &&
+              (attempt.command.argv[6] !== attempt.target || attempt.command.argv[9] !== bootstrap.developerTools.git ||
+                attempt.command.argv[11] !== launcher ||
+                attempt.command.argv[12] !== unix.listed || attempt.command.argv[13] !== unix.unlisted ||
+                attempt.command.argv[16] !== JSON.stringify(layout) ||
+                attempt.command.argv[17] !== JSON.stringify(resolverSymbols) ||
+                attempt.command.argv[15] !== attempt.globalTarget ||
+                !(attempt.tools === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                  attempt.tools?.pid === ports?.pid && typeof attempt.tools?.complete === "boolean" &&
+                  (attempt.tools.service === undefined && attempt.tools.complete === false ||
+                    attempt.tools.service?.executable === "/bin/launchctl" &&
+                    JSON.stringify(attempt.tools.service.argv) === JSON.stringify(["kickstart", attempt.target])))))
+            throw new Error("bootstrap Node compatibility outcome is absent or belongs to a different process/target");
+          if (key === "node" && attempt.tools?.complete &&
+              (!outcome(attempt.tools.git) || attempt.tools.git.executable !== bootstrap.developerTools.git ||
+                !outcome(attempt.tools.compiler) || !dns(attempt.tools.dns) ||
+                !nativeDns(attempt.tools.nativeDnsCommand, attempt.tools.nativeDns) ||
+                attempt.tools.nativeDns !== null && attempt.tools.nativeDns.uid !== ports?.uid ||
+                !nativeResolvers(attempt.tools.resolvers, attempt.tools.nativeDnsCommand.argv[1], ports?.uid) ||
+                !nodeGlobal(attempt.tools.bootstrapGlobal, ports?.pid, ports?.uid, attempt.globalTarget) ||
+                !nativeSubset(attempt.tools.nativeSubsetCommand, attempt.tools.nativeSubset, ports?.uid,
+                  `${attempt.command.argv[14]}.subset.json`) ||
+                !nodeLibc(attempt.tools.nativeLibcCold, ports?.pid, ports?.uid, false, "before-node-lookup") ||
+                !nodeLibc(attempt.tools.nativeLibc, ports?.pid, ports?.uid, false, "after-node-lookup")))
+            throw new Error("completed Node observation omits actual selected Git, compiler or DNS outcomes");
+          if (key === "restored") {
+            const restoration = attempt.restoration;
+            if (JSON.stringify(attempt.command.argv.slice(5, 6)) !== JSON.stringify(["restore-registered-seed"]) ||
+                JSON.stringify(attempt.command.argv.slice(7)) !== JSON.stringify(["/bin/launchctl", "kickstart", attempt.target]) ||
+                !(restoration === null && (attempt.command.exitCode !== 0 || attempt.command.signal !== null) ||
+                  restoration?.phase === "restore-registered-seed" && Number.isSafeInteger(restoration.pid) &&
+                  restoration.pid > 0 && restoration.pid === ports?.pid && restoration.uid === ports?.uid &&
+                  portNumber(restoration.seed) && snapshot(restoration.before) && snapshot(restoration.after) &&
+                  restoration.seed === (restoration.before.registered[0] ?? 0) &&
+                  (restoration.attempted === true && restoration.seed > 0 && restoration.seed !== 0xffffffff &&
+                    signed32(restoration.setStatus) ||
+                    restoration.attempted === false && [0, 0xffffffff].includes(restoration.seed) && restoration.setStatus === null)))
+              throw new Error("registered-seed restoration loses its actual call, process, target or capability outcome");
+          }
+        }
+      }
+    }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||
         value.cdhashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash)) ||
@@ -190,11 +447,21 @@ export function validateDarwinObservation(name, observations) {
       validateMemberControl(recovery.wrongMember, scope.control.pid);
       validateMemberControl(recovery.remainingMember, scope.members?.detached?.pid);
       const seatbelt = scope.seatbelt, service = seatbelt?.attempt;
+      const launchctlResult = (result, command, target) => result?.executable === "/bin/launchctl" &&
+        Array.isArray(result.argv) && result.argv.length === 2 && result.argv[0] === command && result.argv[1] === target &&
+        Number.isSafeInteger(result.exitCode) && result.signal === null &&
+        typeof result.stdout === "string" && typeof result.stderr === "string";
       if (seatbelt?.renderer !== "production-seatbeltProfile" ||
           typeof seatbelt.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(seatbelt.sha256) ||
           scope.members?.detached?.sandboxed !== true || scope.late?.sandboxed !== true ||
           scope.discoveryRecovery?.afterSnapshot?.sandboxed !== true ||
           typeof seatbelt.serviceTarget !== "string" || !seatbelt.serviceTarget.startsWith(`${value.domain}/`) ||
+          typeof seatbelt.positiveServiceTarget !== "string" || !seatbelt.positiveServiceTarget.startsWith(`${value.domain}/`) ||
+          seatbelt.positiveServiceTarget === seatbelt.serviceTarget ||
+          !launchctlResult(seatbelt.positiveServiceKickstart, "kickstart", seatbelt.positiveServiceTarget) ||
+          seatbelt.positiveServiceKickstart.exitCode !== 0 ||
+          !launchctlResult(seatbelt.positiveServiceAfter, "print", seatbelt.positiveServiceTarget) ||
+          !launchctlResult(seatbelt.serviceBefore, "print", seatbelt.serviceTarget) ||
           !Number.isSafeInteger(seatbelt.positiveServiceControl?.pid) || seatbelt.positiveServiceControl.pid <= 1 ||
           service?.sandboxApplied !== true || service.target !== seatbelt.serviceTarget ||
           !Number.isSafeInteger(service.spawnStatus) || service.spawnStatus < 0 ||
@@ -202,7 +469,7 @@ export function validateDarwinObservation(name, observations) {
           typeof service.joined !== "boolean" || typeof service.numericCleanupUsed !== "boolean" ||
           (service.spawnStatus === 0 ? service.childPid <= 1 || !service.joined :
             service.childPid !== 0 || service.joined || service.waitStatus !== 0 || service.numericCleanupUsed) ||
-          !Number.isSafeInteger(seatbelt.serviceAfter?.exitCode) || seatbelt.serviceAfter.signal !== null ||
+          !launchctlResult(seatbelt.serviceAfter, "print", seatbelt.serviceTarget) ||
           !(seatbelt.guestEffect === null ||
             Number.isSafeInteger(seatbelt.guestEffect?.pid) && seatbelt.guestEffect.pid > 1))
         throw new Error("launchd scope lacks the actual production sandbox and controlled service-admission outcome");

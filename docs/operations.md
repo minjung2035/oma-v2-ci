@@ -57,7 +57,7 @@ history는 자동 변환하거나 삭제하지 않는다. 위 Linux 설치 안�
 
 ## 역할별 운영 설정
 
-모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 `agentProfile` 검증을 통과해야 한다. 현재 HostConfig schema 3에는 quota·실행 자원 필드가 없으며, 이전 필드를 넣으면 거절한다.
+모델·역할별 extension 목록·프롬프트를 broker/runner 코드와 분리한다. `resident`, `verifier`, `principal`은 **운영 프로필 이름**이며 새 권한 종류가 아니다. 권한·delegation은 `agentProfile` 검증을 통과해야 한다. 현재 HostConfig는 schema 4·5를 읽고 새 기본 설정은 schema 5로 작성한다. schema 5의 Worker 상한·resource profile·storage 설정은 해당 검증을 따르며, 과거 `quota` 형식을 자동 변환하지 않는다.
 
 ## 세션 모드
 
@@ -175,7 +175,7 @@ DR37/DR46에서 저장량·실행 자원·agent count quota를 제거했고, DR6
 
 ## 현재 실행 제한
 
-로딩 결과는 현재 closed `HostConfig` schema 4로 검증한다. 이전 설정과 journal 형식은 자동 변환하지 않으며 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
+로딩 결과는 closed `HostConfig` schema 4·5로 검증한다. 새 기본 설정은 schema 5이며, 이전 설정과 journal 형식을 자동 변환하지 않는다. 새 개발 상태 디렉터리를 사용한다. 이 설정 전환은 broker wire 형식과 별개다. Resident runner는 수락된 modelProfile 참조와 역할 prompt/extension snapshot을 고정된 native launch 입력으로 받는다. 역할의 참조 편집으로 기존 Agent의 수락 참조를 바꾸지 않는다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
 
 Worker는 bwrap 안의 shell과 자기 작업공간을 사용한다. Society Principal은 shell·직접 write/edit를 제외하고 읽기·메일·허용된 관리/승인 도구를 사용한다. Personal은 별도 Human 모드다. 실제 허용은 tool 이름 표시만이 아니라 역할·provenance·workspace·sandbox·broker capability로 검사한다. Society는 자동 발견 대신 선택·검증한 확장과 자원을 엔진에 전달한다. 추가 role extension은 trusted code이므로 배포 시 별도 검토한다.
 
@@ -284,7 +284,7 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 
 현재 실행 환경의 검증 범위와 미실행 항목은 [validation](implementation/validation.md)을 확인한다. 플랫폼의 요구 조건은 [Core 계약](implementation-spec.md)과 [macOS 계약](macos-platform.md)을 따른다. 이전 WP31 지원 조합·lockfile 수정 기록은 [과거 qualification 기록](archive/qualification-before-consolidation.md#운영-문서의-wp31-지원-checkpoint)에 보존했다.
 
-HostConfig schema 3·DB schema 4·설정 journal committed-v2를 유지한다. DR52의 새 create
+HostConfig schema 4·5를 읽으며 새 설정은 schema 5다. DB schema 4·설정 journal committed-v2를 유지한다. DR52의 새 create
 plan은 v3의 `execution: "native"`를 기록한다. 과거 v2 plan/terminal receipt는 원래 bytes와
 의미로 읽으며, unit 설치가 필요한 미완료 v2 intent를 native 완료로 정산하지 않는다.
 execution journal v1은 별도의 관측 기록이며 accepted plan이나 권한의 원본이 아니다.

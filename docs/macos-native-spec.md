@@ -71,8 +71,9 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 |---|---|---|
 | 일반 child + process group | 가장 단순한 실행·정상 cleanup; 기존 runtime 선례 | setsid/double-fork 후손이 생존하는 실제 반례 있음. best-effort 기능에는 사용 가능하나 complete-death 대체로는 배제 |
 | launchd job + audit session | OS가 시작한 job과 session 관측 | session join/재사용, all-owner-death 복구, launch handoff가 미해결. SessionCreate만으로 containment라고 쓰지 않음 |
-| launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | job별 분리·fork/setsid 상속·CID 소멸·fresh token 제어·late-fork 재탐색을 실제 확인. **bootout 단독은 detached 후손을 남겼다.** product owner crash·service admission·durable producer는 미해결 |
-| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | setsid뿐 아니라 setpgid·posix_spawn attributes·service를 통한 실행까지 필요. 정상 Node/Git/compiler 동작을 깨면 채택하지 않음 |
+| launchd job + resource coalition 관측 | kernel ID 소멸을 PID scan과 다른 종료 증거로 사용 가능 | 상속·CID 소멸·fresh token 제어·late-fork 재탐색은 확인. **bootout 단독은 detached 후손을 남겼고, 현 production Seatbelt에서도 기존 service가 다른 CID·unsandboxed로 실행됐다. 현 조합만으로 complete backend 채택은 배제** |
+| Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | inherited service는 실제 범위 밖 실행이다. null task/registered 분리 뒤 Node 자신의 task/global0·fresh service141은 확인했지만 native C resolver가 실패한다. 정상 도구·manual CLI와 양립한 complete backend는 미채택이며 CLI 이름 차단은 해법이 아님 |
+| unprivileged bootstrap subset | 별도 namespace에서 허용된 lookup을 보존할 가능성 | 실제 SDK15.5/26.5·ordinary UID501은 host/inherited부터 API125로 생성하지 못했다. unprivileged/parent·subset 안의 libc/manual CLI는 NOT_RUN. 이 환경의 후보로 미채택이며 모든 OS에서 불가능하다는 판정은 아님 |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
 
@@ -85,8 +86,20 @@ inherited spawn은 같은 CID였고 explicit own/다른 CID spawn은 EPERM이었
 결박한 SDK 제어, wrong-member 미호출, release 전 CID 소멸을 확인했다([기록](implementation/native-transition.md)).
 peer가 준 port를 kernel task라고 믿지 않는다. unprofiled controlled target의 결과를 role authority나 새 Seatbelt label 복구로 확대하지 않는다.
 `4d140a51d5`의 두 Mac 각3회에서는 CID만으로 첫 snapshot 뒤 생긴 후손을 다음 scan에서 찾아 제어하고 release 전 ID 소멸까지 확인했다. PID count를 bytes로 읽지 않고 scan은 hint로만 쓴다. empty/truncated scan·deadline은 death proof가 아니다.
-다음은 production Seatbelt label의 target·상속 후손 제어와 dormant owned job의 service-mediated 재실행 시도다.
-host의 실제 양성을 먼저 확보하고 거절·성공·불명과 원시 SDK/CLI 결과를 남긴다. 이 선행 시험을 다른 service 경로·실제 product owner crash·durable authority producer의 증명으로 대신하지 않는다.
+`836e2f5963`의 두 Mac 각3회에서 production Seatbelt target·상속 후손도 fresh controller로 제어하고 release 전 CID 소멸을 확인했다. 다만 service 호출은 fixture deadline으로 끝나 명시적 거절/허용을 판정하지 못했다.
+동일 job의 host 양성 후 재시작 대기가 섞였을 가능성은 `[INFERENCE]`다. 별도 `service-positive`와 fresh `service-target`으로 분리한 `2ef7fb517b`의 Native [40711228810](https://github.com/minjung2035/oma-v2-ci/actions/runs/40711228810)에서 양 Mac 각3회 모두 sandboxed launchctl exit0·numeric cleanup 없음, PID1 아래 다른 CID의 unsandboxed actor 실행을 확인했다([인계](archive/macos-native-2026-11-04/HANDOFF.md#4-가장-가까운-재개점-service-관측의-혼입-제거)). 이는 현 policy+coalition의 닫힌 범위 후보에 대한 반례이며 과거 timeout 원인 수리는 아니다. GUI UID501·SIP-disabled 범위를 넘겨 일반화하지 않는다.
+다음 최소 질문은 bootstrap/XPC 제어 권한을 exec 전에 분리할 수 있는지와 정상 도구·DNS의 양립 여부다. public API와 libxpc의 내부 port 전달 관례를 구분하고, 오래된 bootstrap proxy를 바로 제품에 이식하지 않는다. 다른 service 경로·실제 product owner crash·durable producer의 증명도 별도다. 실행 guard·Linux backend·기존 writer/receipt/recovery 계약은 유지한다.
+`launchd-bootstrap`의 첫 `41392d6624`는 unsafe/deprecated API로 compile 실패했다. SEND 참조만 반납하도록 교체한 `a4c398f89a`의 Native [40726395555](https://github.com/minjung2035/oma-v2-ci/actions/runs/40726395555)에서는 양 Mac 각3회 실제 compile·실행을 확인했다. inherited service12회는 성공, bootstrap만/모두 제거한24회는 CLI141·effect 미관측이고 Node·clang·자기 쓰기·금지 canary는18 variant 모두 기대대로다. 단, Git shim/ DNS는 상속 기준선부터 실패했으므로 권한 제거의 호환성 실패로 분류할 수 없다. selected Git·host DNS 양성과 registered seed 재취득 반례를 다음에 확인한다. backend·role authority·전체 service admission/death proof는 아직 채택하지 않는다. [Chromium V2 원본](https://chromium.googlesource.com/chromium/src/+/dc38dfd79ac22ae4d60fb49a78f63ab0920f958e/sandbox/mac/seatbelt_sandbox_design.md)의 proxy 제약과 public Mach API/libxpc 내부 관례 구분도 유지한다.
+
+후속 `4baca756363`의 Native [40735745482](https://github.com/minjung2035/oma-v2-ci/actions/runs/40735745482)에서 host selected Git·DNS 양성은 확인했다.
+그러나 sandboxed Git은 inherited부터 `/etc/gitconfig` EPERM·128, DNS도 exact socket 입력 뒤 ENOTFOUND였다. 정상 도구 양립은 아직 미충족이다.
+bootstrap-only는 registered seed 재조회·setter0·task bootstrap 복구6회를 관측했으나 launchctl141·effect 미관측이었다.
+task handle 복구를 service 실행 권한 복구/탈출로 확대하지 않는다. 모든 seed 제거 뒤에는 이 재취득 방법에서 seed0·setter 미호출이었다.
+기존 Git 환경 owner와 native DNS 진단으로 다음 원인을 분리하며 fixture용 광범위 권한·production 실행 허용으로 우회하지 않는다.
+현재 probe는 host/Node Git에 기존 `GIT_ENV`를 적용했고 native DNS 단계별 진단을 추가했다. local41/41과 Linux producer smoke는 통과했지만 이 변경의 Mac compile·Git 정상화·DNS 원인 분류는 NOT_RUN이다. Node resolver·production 정책과 실행 guard를 바꾸지 않았다.
+첫 진단 source `a399fb7fe58`는 Mac26에서 잘못 추가한 `-ldns_sd`가 없어 link 실패했다. Git 환경 효과·DNS API 실행은 미관측이며, default Libsystem의 `system_dnssd` 소유를 대조해 그 독립 flag만 제거했다. 수정 뒤 실제 실행과 취소된 Mac15 job의 대체 실행은 NOT_RUN이며 정상 기능이나 gate 완료로 쓰지 않는다.
+교체 뒤 `e9a939d619`의 Native [40748217460](https://github.com/minjung2035/oma-v2-ci/actions/runs/40748217460)에서는 양 Mac 실제 compile/link·각3회 관측을 확인했다. selected Git hash18회는 성공했으며 DNS는 socket 생성 성공 뒤 exact endpoint connect EPERM1로 분류됐다. 이 checkpoint에서는 Unix filter 번역 수정 전이었다.
+Linux의 실제 설치·추론/복구·전체 회귀·clean CI 마감 뒤 Mac을 재개했다([검증 owner](archive/macos-native-2026-11-04/implementation/validation.md#linux-eagain-수리-뒤-실제-재인수)). exact Unix·root alias·Node DNS와 실제 helper 경계를 확인했다. `de1624b9aa`는 같은 SDK import/layout의 Node 내부 libc가 controlled lookup 전후 모두 성공함을 확인했지만 Node-child C는 실패한다. 앞선 controlled lookup은 성공의 필수조건이 아니며 startup/image/task 생성 경로는 미분리다. 다음 동일 C의 direct-exec/child 비교는 NOT_RUN이다. public subset은 ordinary host에서도 생성하지 못했다. complete backend는 미채택이며 broad network/Mach·resolver fallback·exec guard 해제로 우회하지 않는다.
 
 `proc_signal_with_audittoken`은 SDK에 있으나 private/unstable이다. Mac15·26 각3회 ordinary-UID
 nonparent controller가 genuine kernel trailer token의 SIGKILL과 wrong-version ESRCH를 확인했다.
@@ -206,6 +219,11 @@ Mac CI는 의미 있는 변경 묶음에 실행한다. **push/workflow 조건을
 
 ## 13. 구현 순서와 완료 조건
 
+macOS 브랜치에서 기록한 Linux 인수검증과 후속 Mac 관측은 [병합 전 검증 원문](archive/macos-native-2026-11-04/implementation/validation.md)에 보존한다. 현재 병합본의 실행 결과는 [검증 상태](implementation/validation.md)가 소유한다. 아래 P0–P7는 제품 전체 순서이며 서로 다른 입력의 Linux 결과와 실제 Mac 관측을 구분한다.
+독립 설치본에서도 Principal·Worker·Personal의 기존 Codex 인증 `gpt-6-luna`·`medium` 실행을 확인했다.
+검증용 선택이며 제품 기본 정책 변경이 아니다. 실제 결과·오류·미실행 범위는 [검증 기록](implementation/validation.md)을 따른다.
+과거 첫 `ok:false`는 원인 미상 단일 CI 통합시험 실패다. 확정 Git 결함·Linux 완료의 필수 blocker·무해한 flake·수리 완료로 단정하지 않는다. 이력과 진단을 유지하고 재발·실사용 제출 실패·중복 효과·ref/receipt 불일치 시 즉시 승격한다.
+
 | 단계 | 작업 | 다음 단계 조건 |
 |---|---|---|
 | P0 | 목표·불변식·현재 source/WIP·실패·후보를 정리 | 원래 데이터/계약 보존, 후보와 결정이 분리됨 |
@@ -221,6 +239,6 @@ P1의 독립 후보는 필요한 순서로 검증하고, 이미 근거가 확보
 
 ## 14. 다음 모델 인계
 
-[HANDOFF](HANDOFF.md)의 현재 source·실패·재개점부터 확인한다. 긴 과거 조사와 중단 지시는 [개정 전 인계](archive/native-handoff-2026-10-28-pre-redesign.md)에 보존했다. 최신 사용자 지시는 **이 명세를 따라 구현을 재개하는 것**이다. 과거 paused/중단 문구를 현재 실행 금지로 읽지 않는다.
+[HANDOFF](HANDOFF.md)와 [현재 검증 상태](implementation/validation.md)를 확인한다. 작업 범위는 현재 사용자 요청이 정한다. Linux 결과는 verification 입력별로 구분하고 과거 단일 CI 실패는 원래 분류와 근거를 보존한다. macOS 브랜치의 조사·다음 작업 지시는 [병합 전 인계](archive/macos-native-2026-11-04/HANDOFF.md), 더 오래된 기록은 [개정 전 인계](archive/native-handoff-2026-10-28-pre-redesign.md)에 보존했다.
 
 재개 후 첫 행동은 새 framework 작성이 아니라 가장 가까운 실제 실패의 owner를 확인하는 것이다. 다음 결정이 필요한 경우 §3과 해당 후보 표를 갱신하고, 그 결정을 뒤집을 반례를 함께 제시한다. 소요시간은 확정 작업과 미결정 전제를 나눠 사용자에게 범위로 답한다. 견적을 맞추려고 기능·보장·시험을 줄이지 않는다.
