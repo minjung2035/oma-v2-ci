@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { closeSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { release, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -19,6 +19,11 @@ import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
 import { launchDarwinJobScope } from "@oma/platform-mac/job-scope";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
 import { watchDarwinProcess } from "@oma/native/process-event";
+
+function signOwnedFixture(executable) {
+  const signed = spawnSync("/usr/bin/codesign", ["--force", "--sign", "-", executable], { encoding: "utf8", timeout: 30000 });
+  assert.equal(signed.error, undefined); assert.equal(signed.signal, null); assert.equal(signed.status, 0, signed.stderr);
+}
 
 test("001. Actual inherited task-name source survives Seatbelt and Node; user ports and own-task names remain distinct", { timeout: 45000 }, async t => {
   if (process.platform !== "darwin") return assert.throws(pinInheritedDarwinPeer, { code: "UNSUPPORTED_PROFILE" });
@@ -37,7 +42,7 @@ test("001. Actual inherited task-name source survives Seatbelt and Node; user po
   });
   await once(unrelated, "spawn"); assert.ok(unrelated.pid > 1); assert.equal(unrelated.exitCode, null);
   const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror", fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
-  assert.equal(compile.status, 0, compile.stderr);
+  assert.equal(compile.status, 0, compile.stderr); signOwnedFixture(executable);
   const token = currentDarwinAuditToken(), host = identifyDarwinCoalition(process.pid);
   const node = realpathSync(process.execPath), libdir = realpathSync(fileURLToPath(new URL("../", import.meta.url)));
   const fixture = new URL("./fixtures/darwin-task-name-node.mjs", import.meta.url).href;
@@ -75,8 +80,10 @@ test("001. Actual inherited task-name source survives Seatbelt and Node; user po
   }
   assert.equal(rows[2].kind, "name"); assert.equal(rows[2].kobjectType, 20); assert.equal(rows[2].token[5], rows[2].pid);
   assert.equal(rows[2].hostCoalition, rows[2].ownCoalition, "a genuine own-task name cannot establish expected Broker identity");
-  // Public SDK IPC_OTYPE_UNKNOWN is ~0u; IPC_OTYPE_NONE (0) is distinct.
-  assert.deepEqual(rows[3], { kind: "rejected", kobjectStatus: 0, kobjectType: 0xffffffff, queryAttempted: false });
+  // The actual Darwin 24 user port reports NONE; Darwin 25 reports UNKNOWN.
+  // Neither is TASK_NAME, and neither may receive an audit-token MIG query.
+  assert.deepEqual(rows[3], { kind: "rejected", kobjectStatus: 0,
+    kobjectType: release().startsWith("24.") ? 0 : 0xffffffff, queryAttempted: false });
   assert.deepEqual(journal.entries(), []);
 });
 
@@ -99,7 +106,7 @@ for (const change of ["exec", "death"]) test(`002. Actual held source capability
   const lines = stream => { const reader = createInterface({ input: stream }); readers.push(reader); return reader; };
   const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror",
     fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
-  assert.equal(compile.status, 0, compile.stderr);
+  assert.equal(compile.status, 0, compile.stderr); signOwnedFixture(executable);
   const replacement = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');
     process.stdout.write(JSON.stringify(currentDarwinAuditToken())+'\\n');setInterval(()=>{},1000);`;
   const script = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');
@@ -147,7 +154,7 @@ for (const change of ["exec", "death"]) test(`003. Actual sandboxed source pin a
   });
   const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror",
     fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
-  assert.equal(compile.status, 0, compile.stderr);
+  assert.equal(compile.status, 0, compile.stderr); signOwnedFixture(executable);
   const replacement = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');process.stdout.write(JSON.stringify(currentDarwinAuditToken())+'\\n');setInterval(()=>{},1000);`;
   const script = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');process.send(currentDarwinAuditToken());
     process.once('message',()=>process.execve(process.execPath,[process.execPath,'--input-type=module','-e',${JSON.stringify(replacement)}],{}));`;

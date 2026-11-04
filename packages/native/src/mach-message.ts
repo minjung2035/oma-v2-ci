@@ -248,10 +248,22 @@ export function inheritedMachPeerEndpoint(): MachSendRight {
         if (!(decoded instanceof Uint32Array) || decoded.length !== length) throw new StoreError("AUTH_FAILED", "invalid inherited endpoint layout");
         names = Array.from(decoded);
       }
-      const name = names[2], bits = Buffer.alloc(4), type = Buffer.alloc(4), ignored = Buffer.alloc(8);
+      // Darwin 24 returns NONE (0) for an ordinary user port; Darwin 25
+      // returns UNKNOWN (~0u). Compare against a genuine locally allocated
+      // user endpoint, with a closed set of observed wire values. A copied
+      // JS shape or a task-name RPC cannot provide this reference.
+      const probe = createMachEndpoint(), reference = Buffer.alloc(4), ignored = Buffer.alloc(8);
+      const ordinary = withCleanup(() => {
+        const name = sendNames.get(probe.send)!();
+        success(api.kobject(api.task, name, reference, ignored), "observe local user endpoint type");
+        const value = reference.readUInt32LE();
+        if (value !== 0 && value !== 0xffffffff) throw new StoreError("AUTH_FAILED", "local user endpoint type is unsupported");
+        return value;
+      }, () => cleanupAll([() => probe.receive.close(), () => probe.send.close()]));
+      const name = names[2], bits = Buffer.alloc(4), type = Buffer.alloc(4);
       if (name === undefined || name === 0 || name === 0xffffffff || api.type(api.task, name, bits) !== 0 ||
           (bits.readUInt32LE() & 0x110000) !== 0x10000 /* SEND, no DEAD_NAME */ ||
-          api.kobject(api.task, name, type, ignored) !== 0 || type.readUInt32LE() !== 0xffffffff /* IPC_OTYPE_UNKNOWN */)
+          api.kobject(api.task, name, type, ignored) !== 0 || type.readUInt32LE() !== ordinary)
         throw new StoreError("AUTH_FAILED", "inherited peer endpoint is unavailable");
       success(api.refs(api.task, name, 0 /* SEND */, 1), "retain inherited peer endpoint");
       result = ownSend(name); return result;

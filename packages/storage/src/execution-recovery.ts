@@ -1,4 +1,4 @@
-/** Explicit Linux reboot recovery of unreadable/missing execution observations.
+/** Explicit host reboot recovery of unreadable/missing execution observations.
  * Preparation freezes the bytes and boot identity, then blocks every journal
  * opener/initializer. Only a different kernel boot can retire unknown scopes.
  * Accepted operations, identities, receipts and task state are never touched. */
@@ -7,9 +7,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { openAt, unlinkAt } from "@oma/file-descriptors";
 import { renameAt } from "@oma/native/posix-files";
-import { chmodPinned, pinBeneath, reopenPinned } from "@oma/native/files";
+import { chmodPinned, openRegularBeneath, pinBeneath, reopenPinned } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 import { linuxBootId, linuxHostId } from "@oma/native/pid-namespace";
+import { currentDarwinBootId, currentDarwinHostId } from "@oma/native/audit-session";
 import { withCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
@@ -18,19 +19,36 @@ import { publishNoReplace, replaceDerivedEntry } from "./durable-fs.js";
 import { EXECUTION_RECOVERY_FILE, executionJournalInitial } from "./execution-journal.js";
 
 interface Digest { readonly sha256: string; readonly size: number }
-export interface ExecutionRecoveryTicket { readonly version: 1; readonly owner: string; readonly bootId: string; readonly hostId: string; readonly original: Digest | null }
+/** v1 retains Linux host/boot meaning. v2 is Darwin gethostuuid/boot-session
+ * evidence. Neither OS can consume the other format; no old bytes migrate. */
+export interface ExecutionRecoveryTicket { readonly version: 1 | 2; readonly owner: string; readonly bootId: string; readonly hostId: string; readonly original: Digest | null }
 const JOURNAL = "scopes.jsonl", BOOT = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const missing = (error: unknown): boolean => (error as NodeJS.ErrnoException)?.code === "ENOENT";
 function corrupt(): never { throw new StoreError("STORE_CORRUPT", "execution recovery evidence is invalid or changed; retain the journal and its archive"); }
+function kernelIdentity(): { readonly version: 1 | 2; readonly bootId: string; readonly hostId: string; readonly name: string } {
+  if (process.platform === "linux") return { version: 1, bootId: linuxBootId(), hostId: linuxHostId(), name: "Linux" };
+  if (process.platform === "darwin") return { version: 2, bootId: currentDarwinBootId(), hostId: currentDarwinHostId(), name: "Darwin" };
+  throw new StoreError("UNSUPPORTED_PROFILE", "execution reboot recovery requires a supported host kernel");
+}
 function opened(parent: number, name: string, writable = false): number | null {
   let pin: number;
   try { pin = pinBeneath(parent, name); } catch (error) { if (missing(error)) return null; throw error; }
-  return withCleanup(() => {
-    const stat = fstatSync(pin);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== process.getuid?.()) corrupt();
-    if (writable) chmodPinned(pin, (stat.mode & 0o7777) | 0o600);
-    return reopenPinned(pin, (writable ? constants.O_RDWR : constants.O_RDONLY) | constants.O_NONBLOCK);
-  }, () => closeSync(pin));
+  let result: number | undefined;
+  try {
+    return withCleanup(() => {
+      const stat = fstatSync(pin, { bigint: true }), uid = process.getuid?.();
+      if (!stat.isFile() || stat.nlink !== 1n || uid === undefined || stat.uid !== BigInt(uid)) corrupt();
+      if (writable) chmodPinned(pin, Number(stat.mode & 0o7777n) | 0o600);
+      // Darwin's descriptor filesystem cannot upgrade an event-only pin to
+      // writable I/O. Acquire the requested regular-file capability beneath
+      // the held parent, then demand the pinned inode before reading/writing.
+      result = process.platform === "darwin" ? openRegularBeneath(parent, name, { writable }) :
+        reopenPinned(pin, (writable ? constants.O_RDWR : constants.O_RDONLY) | constants.O_NONBLOCK);
+      const observed = fstatSync(result, { bigint: true });
+      if (observed.dev !== stat.dev || observed.ino !== stat.ino || observed.nlink !== 1n || observed.uid !== stat.uid) corrupt();
+      return result;
+    }, () => closeSync(pin));
+  } catch (error) { return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); }); }
 }
 function digest(fd: number, copy?: number): Digest {
   const before = fstatSync(fd), hash = createHash("sha256"), chunk = Buffer.alloc(64 * 1024);
@@ -50,7 +68,7 @@ function digest(fd: number, copy?: number): Digest {
   return { sha256: hash.digest("hex"), size };
 }
 function same(left: Digest | null, right: Digest | null): boolean { return left === null ? right === null : right !== null && left.sha256 === right.sha256 && left.size === right.size; }
-function ticket(parent: number, owner: string, hostId: string): ExecutionRecoveryTicket | null {
+function ticket(parent: number, owner: string, hostId: string, version: 1 | 2): ExecutionRecoveryTicket | null {
   const fd = opened(parent, EXECUTION_RECOVERY_FILE); if (fd === null) return null;
   return withCleanup(() => {
     if (fstatSync(fd).size > 4096) corrupt();
@@ -59,7 +77,7 @@ function ticket(parent: number, owner: string, hostId: string): ExecutionRecover
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return corrupt();
     // SAFETY: closed key sets, root binding, boot identity and the complete digest are checked before use.
     const value = raw as ExecutionRecoveryTicket;
-    if (Object.keys(raw).sort().join() !== "bootId,hostId,original,owner,version" || value.version !== 1 || value.owner !== owner || value.hostId !== hostId || typeof value.bootId !== "string" || !BOOT.test(value.bootId)) corrupt();
+    if (Object.keys(raw).sort().join() !== "bootId,hostId,original,owner,version" || value.version !== version || value.owner !== owner || value.hostId !== hostId || typeof value.bootId !== "string" || !BOOT.test(value.bootId)) corrupt();
     const old = value.original;
     if (old !== null && (!old || Object.keys(old).sort().join() !== "sha256,size" || typeof old.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(old.sha256) || !Number.isSafeInteger(old.size) || old.size < 0)) corrupt();
     return value;
@@ -114,23 +132,23 @@ function owned<T>(stateRoot: string, use: (parent: number, journal: number | nul
   }, () => { try { if (journal !== null) closeSync(journal); } finally { closeSync(parent); } });
 }
 export function prepareExecutionRecovery(stateRoot: string): ExecutionRecoveryTicket {
-  const bootId = linuxBootId(), hostId = linuxHostId();
+  const { bootId, hostId, version } = kernelIdentity();
   return owned(stateRoot, (parent, journal, owner) => {
-    const original = journal === null ? null : digest(journal), existing = ticket(parent, owner, hostId);
+    const original = journal === null ? null : digest(journal), existing = ticket(parent, owner, hostId, version);
     if (existing) { if (!same(original, existing.original)) corrupt(); if (original) verifyArchive(parent, original); return existing; }
     if (original) { archive(parent, journal!, original); fsyncSync(journal!); }
-    const value: ExecutionRecoveryTicket = { version: 1, owner, bootId, hostId, original };
+    const value: ExecutionRecoveryTicket = { version, owner, bootId, hostId, original };
     publishNoReplace(join(owner, "execution", EXECUTION_RECOVERY_FILE), JSON.stringify(value) + "\n", 0o600);
-    const observed = ticket(parent, owner, hostId); if (!observed || observed.bootId !== bootId || !same(observed.original, original)) corrupt();
+    const observed = ticket(parent, owner, hostId, version); if (!observed || observed.bootId !== bootId || !same(observed.original, original)) corrupt();
     fsyncSync(parent); return observed;
   });
 }
 export function applyExecutionRecovery(stateRoot: string): { readonly archive: string | null } {
-  const bootId = linuxBootId(), hostId = linuxHostId();
+  const { bootId, hostId, version, name } = kernelIdentity();
   return owned(stateRoot, (parent, journal, owner) => {
-    const pending = ticket(parent, owner, hostId);
+    const pending = ticket(parent, owner, hostId, version);
     if (!pending) throw new StoreError("INVALID_REQUEST", "prepare execution recovery before rebooting this host");
-    if (pending.bootId === bootId) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution recovery requires a different Linux kernel boot; no scope death is proved yet");
+    if (pending.bootId === bootId) throw new StoreError("RUN_TERMINATION_UNKNOWN", `execution recovery requires a different ${name} kernel boot; no scope death is proved yet`);
     if (pending.original) verifyArchive(parent, pending.original);
     const current = journal === null ? null : digest(journal), initial = executionJournalInitial(owner);
     const reset = { sha256: createHash("sha256").update(initial).digest("hex"), size: Buffer.byteLength(initial) };

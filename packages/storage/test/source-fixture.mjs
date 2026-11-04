@@ -8,6 +8,7 @@ import * as files from '@oma/native/files';
 import * as cleanup from '@oma/native/cleanup';
 import * as linux from '@oma/native/linux';
 import * as namespace from '@oma/native/pid-namespace';
+import * as darwin from '@oma/native/audit-session';
 import * as errors from '@oma/domain/errors';
 import * as utf8 from '@oma/domain/utf8';
 import * as directory from '../dist/directory.js';
@@ -20,6 +21,7 @@ const dependencies = {
   'node:fs': fs, 'node:crypto': crypto, 'node:path': path,
   '@oma/file-descriptors': descriptors, '@oma/native/posix-files': posix, '@oma/native/files': files,
   '@oma/native/cleanup': cleanup, '@oma/native/linux': linux, '@oma/native/pid-namespace': namespace,
+  '@oma/native/audit-session': darwin,
   '@oma/domain/errors': errors, '@oma/domain/utf8': utf8,
   './directory.js': directory, './durable-fs.js': durable, './package-staging.js': staging, './execution-journal.js': journal,
 };

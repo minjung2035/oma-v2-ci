@@ -174,9 +174,15 @@ int main(int argc, char **argv) {
       proc_pidinfo(getpid(), 20, 0, own_coalitions, sizeof own_coalitions) == sizeof own_coalitions &&
       peer_coalitions[0] != 0 && own_coalitions[0] != 0 && peer_coalitions[0] != own_coalitions[0], "distinct positive peer coalition");
     peer_endpoint = receive(receiver, 0x4f4d412d /* PEER */, 1);
-    natural_t type = 0; mach_vm_address_t ignored = 0;
+    mach_port_t ordinary = MACH_PORT_NULL; natural_t reference = 0, type = 0; mach_vm_address_t ignored = 0;
+    mach_ok(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &ordinary), "local user endpoint allocation");
+    mach_ok(mach_port_insert_right(mach_task_self(), ordinary, ordinary, MACH_MSG_TYPE_MAKE_SEND), "local user endpoint send reference");
+    mach_ok(mach_port_kobject(mach_task_self(), ordinary, &reference, &ignored), "local user endpoint type");
+    require(reference == 0 || reference == UINT32_MAX, "supported user endpoint wire type");
+    mach_ok(mach_port_deallocate(mach_task_self(), ordinary), "local user endpoint send return");
+    mach_ok(mach_port_mod_refs(mach_task_self(), ordinary, MACH_PORT_RIGHT_RECEIVE, -1), "local user endpoint receive return");
     mach_ok(mach_port_kobject(mach_task_self(), peer_endpoint, &type, &ignored), "ordinary peer endpoint type");
-    require(type == UINT32_MAX && peer_endpoint != receiver && peer_endpoint != host &&
+    require(type == reference && peer_endpoint != receiver && peer_endpoint != host &&
       peer_endpoint != bootstrap_port && peer_endpoint != peer_name, "distinct user peer endpoint");
   }
   if (config.trace) {

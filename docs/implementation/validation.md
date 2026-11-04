@@ -1613,10 +1613,60 @@ CI의185ms를 재현하거나 설명하지 못했으며100ms 예산은 유지한
 private Runner/Worker topology, 설치 JS·dependency generation, Society lease·manual reboot recovery는 미완료이며
 G-AUTH/G-PROCESS/G-FILES OPEN·product BLOCKED·execution guard를 유지한다.
 
+### SOURCE42 actual gate와 후속 reboot/filesystem 연결
+
+source `9474dc01e4511fa3c69cb78b990e14029eaa58f9`, Native
+[41875073672](https://github.com/minjung2035/oma-v2-ci/actions/runs/41875073672)의 Mac26 arm64/SDK26.5 gate는
+120 executed /111 OBSERVED /9 SETUP_FAILED, product BLOCKED다. 입력15860개 digest
+`78e8f5d8d1bc458cf4038133fffbaea24d679d6391dcc91290089ba6418d1d52`와 runtime 산출물은 전후 동일했다.
+artifact13347411914 SHA-256 `43c86e54e21d4f0d4aa46a4b80398d433d940612487342b71f62b2131fe40d93`을 대조했다.
+새 실제 confined peer roundtrip3회 모두 destination unavailable로 실패하고 client result는 unobserved였다.
+원래 child stderr가 assertion에서 빠졌으므로 후속 fixture는 bounded stderr sink와 전체 result 진단을 보존한다.
+parallel promise의 rejection도 즉시 소유해 cleanup 전 unhandled rejection으로 종료하지 않는다.
+기존 stale sender/handoff는 각3회 OBSERVED다. 나머지6회 Worker는 기존 native-support guard의 명시적 거절이며 새 채널 성공이 아니다.
+
+보조 Intel26 common은331/344·13 FAIL이다. source41의 directory cursor·snapshot 등10개 ABI 실패는 모두 사라졌다.
+새13개는 기존 unsigned helper/C fixture11개와 같은 단계의 peer roundtrip/wrong-peer2개다.
+eager artifact13345968260 SHA-256 `2b24846793b876a8d97922e1388dc16f2c36db1859bc9a76a05b3e01f4d9de55`를 대조했다.
+후속 build는 선언된 owned helper만 compile 뒤 명시적 ad-hoc codesign하며 실패하면 build cache를 publish하지 않는다.
+test의 owned C source fixture도 서명한다. signature 검증 생략·unsigned 허용·entitlement 추가는 없다. 새 실제 Mac 실행은 NOT_RUN이다.
+
+뒤이어 판독한 Mac15 common은341/344·3 FAIL·skip/cancel0이다. artifact13347139178 SHA-256
+`4e6c233af4057e7ad1cee141cfe9f6e0496e9ad1cc8477374e60fd6152b62f96`를 대조했다. SDK typedef 수정 뒤
+native source·fresh-client exec/death와 독립 C 사실은 실제로 통과했고, fake-user-port 숫자 assertion만0 vs UINT32_MAX로 실패했다.
+Mac15의 ordinary user endpoint는0, Mac26은UINT32_MAX를 돌려준다. peer channel2개는 helper 종료로 실행 전제에 실패했다.
+후속 native getter/C helper는 genuine local receive/send endpoint를 직접 만들어 kobject 결과를 관측하고,
+관측된 닫힌 값 집합0/UINT32_MAX 안에서 inherited endpoint가 그 참조와 같은 타입인지 요구한다.
+TASK_NAME20만 audit-token MIG에 넣는 조건과 original full-token·CID·owned endpoint producer는 유지한다.
+이는 Mac15 helper의 잘못된 단일 상수 조건을 수리하는 입력이며 새 실제 실행은 NOT_RUN이다.
+
+frozen SOURCE41 local 전체 Linux 결과는4801/4802·fail1·cancel/skip/todo0이며 입력 sourceChanges[]다.
+유일한 실패는 위에서 수정한 current port fingerprint다. build/typecheck/architecture12개 command는0이고 tests만1이었다.
+`peer-membership/linux-local-all-41/result.json`을 판독했으며 이를 SOURCE42/후속 입력 전체 PASS로 옮기지 않는다.
+
+후속 storage manual recovery는 Darwin gethostuuid/boot-session 관측을 연결하고 v2 ticket을 쓴다.
+Linux v1 의미/bytes는 유지하며 양 OS는 다른 version을 거절한다. 자동 migration은 없다.
+Darwin의 writable journal/archival I/O는 held parent에서 요청한 regular-file access를 얻어 original event pin의
+dev/ino·single-link·owner를 I/O 전에 확인한다. read-only /dev/fd upgrade로 writable capability를 만들지 않는다.
+same-boot 거절·read-only corrupt/missing journal·원본 archive·다른 OS ticket·actual flock을 새 OS 회귀에 넣었다.
+controlled changed-boot는 state-transition 시험이며 실제 reboot를 했다는 주장이 아니다.
+product recovery CLI의 Linux guard는 qualified Society lease를 얻을 때까지 유지한다.
+
+application state-root policy도 실제 Darwin held fstatfs의 local/read-only/FSKit/name을 사용하도록 연결했다.
+Linux magic table은 Linux에만 적용한다. Darwin local namespace와 Linux NFS magic의 충돌을 별도 policy 회귀로 확인하며
+real NFS/FUSE mount를 실행했다고 쓰지 않는다. 새 실제 Mac state-root/recovery 실행은 NOT_RUN이다.
+최종 local build PASS, storage/recovery/filesystem40/40, actual Linux recovery CLI/DR18/journal16/16,
+build-stamp13/13, 전체 architecture·문서·명세 검사는 PASS다. review ledger 갱신은 authored approval가 아니다.
+
+Society lease와 installed JS/modules/library generation·Runner/Worker 연결은 계속 남아 있다.
+TCP port도 고정 XNU의 공통 SO_REUSEPORT setter와 IPv6 bind의 양쪽 reuse-bit 검사 때문에 raw FD 상속 lifetime 대체로 채택하지 않는다.
+SO_RESTRICTIONS는 입출력·cellular/expensive/constrained restriction의 trapdoor이며 일반 setsockopt를 봉쇄하지 않는다.
+이 판정은 source 검토이고 새 Mac TCP 실험은 아니다. G-PROCESS/G-FILES/G-AUTH OPEN과 실행 guard를 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `78e8f5d8d1bc458cf4038133fffbaea24d679d6391dcc91290089ba6418d1d52` (15860 files).
+verification input digest `9ef72c263b8f19b071402f66e4f59b05234ead632e55256b6fe7c2c0aa5feba0` (15862 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

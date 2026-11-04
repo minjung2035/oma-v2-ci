@@ -1,5 +1,7 @@
-import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
-import { lstatSync, realpathSync, statfsSync } from "node:fs";
+import { assertHostDirectoryLayout, darwinDirectoryFilesystem } from "@oma/native/directory-layout";
+import { closeSync, lstatSync, realpathSync, statfsSync } from "node:fs";
+import { openDirectory } from "@oma/native/files";
+import { withCleanup } from "@oma/native/cleanup";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { StoreError, unobserved } from "@oma/domain/errors";
@@ -88,14 +90,32 @@ export const NON_LOCAL_FILESYSTEMS: Readonly<Record<number, string>> = Object.fr
  * FS-005) on a local kernel file system (S-06). The file system is read at
  * the deepest part of the path that exists, since startup creates the rest
  * beneath it. */
-export function assertStateRoot(stateRoot: string, statfs: (path: string) => { type: number } = statfsSync): void {
+interface StateFilesystem {
+  readonly type: number;
+  readonly name?: string;
+  readonly local?: boolean;
+  readonly readOnly?: boolean;
+  readonly userSpace?: boolean;
+}
+function stateFilesystem(path: string): StateFilesystem {
+  if (process.platform !== "darwin") return statfsSync(path);
+  const fd = openDirectory(path);
+  return withCleanup(() => darwinDirectoryFilesystem(fd), () => closeSync(fd));
+}
+export function assertStateRoot(stateRoot: string, statfs: (path: string) => StateFilesystem = stateFilesystem): void {
   assertHostDirectoryLayout(stateRoot, true);
   let existing = stateRoot;
   while (lstatSync(existing, { throwIfNoEntry: false }) === undefined) existing = dirname(existing);
-  let type: number;
-  try { type = statfs(existing).type; }
+  let filesystem: StateFilesystem;
+  try { filesystem = statfs(existing); }
   catch (cause) { throw unobserved(cause, "the state root's file system") ?? new StoreError("UNSUPPORTED_PROFILE", "the state root's file system cannot be read", { cause }); }
-  const name = NON_LOCAL_FILESYSTEMS[type];
+  if (process.platform === "darwin") {
+    if (filesystem.local !== true || filesystem.readOnly !== false || filesystem.userSpace !== false ||
+        typeof filesystem.name !== "string" || /fuse/i.test(filesystem.name))
+      throw new StoreError("UNSUPPORTED_PROFILE", "the state root requires a writable local kernel file system; its observed filesystem is " + (filesystem.name ?? "unavailable"));
+    return;
+  }
+  const name = NON_LOCAL_FILESYSTEMS[filesystem.type];
   if (name !== undefined)
     throw new StoreError("UNSUPPORTED_PROFILE",
       `the state root is on a ${name} file system; a society's state must be on a local disk (its store and its locks are only sound there)`);

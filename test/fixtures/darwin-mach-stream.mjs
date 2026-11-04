@@ -124,7 +124,7 @@ async function roundtrip() {
   });
   await joined(child("child-no-source", path));
   const client = runConfined("child-roundtrip", path, peer);
-  await bounded(done.promise, "server byte stream close"); await client;
+  await Promise.all([bounded(done.promise, "server byte stream close"), client]);
   return { machStream: { sentBytes: expected.length, receivedBytes: observed.length, sha256: sha256(observed), sender,
     childJoined: true, authenticatedEof: true, resourcesReturned: true, inheritedPeer: true, noSourceRefused: true } };
 }
@@ -134,7 +134,7 @@ async function runConfined(role, path, peer) {
     const row = { slot, execution: "probe", witness: null }; rows.push(row);
     return { execution: row.execution, publish(witness) { row.witness = witness; }, retire() { rows.splice(rows.indexOf(row), 1); } };
   }, retire() { throw new Error("unexpected recovery"); } }, () => ({ kind: "unavailable" }));
-  let returned = false;
+  let returned = false, stderrLogged = 0;
   returns.push(async () => { await owner.drain(); if (returned) rmSync(root, { recursive: true }); });
   const node = realpathSync(process.execPath), library = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
   const result = await owner.run({ slot: "client", launch: () => launchSeatbeltJobScope({ executable: node,
@@ -143,9 +143,14 @@ async function runConfined(role, path, peer) {
     readable: [{ path: library, kind: "directory" }], mapped: [{ path: library, kind: "directory" }],
     writable: [{ path: root, kind: "directory" }], denied: [], executable: [{ path: node, kind: "file" }],
     unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"],
-  }, { peer }), authorize() {} });
+  }, { peer, stderrSink(bytes) {
+    const retained = bytes.subarray(0, Math.max(0, 16384 - stderrLogged)); stderrLogged += retained.length;
+    if (retained.length) process.stderr.write(retained);
+  } }), authorize() {} });
   returned = true;
-  assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
+  const diagnostic = JSON.stringify({ ...result, stdout: result.stdout.toString(), stderr: result.stderr.toString(),
+    ...(result.error === undefined ? {} : { error: String(result.error) }) });
+  assert.equal(result.kind, "exited", diagnostic); assert.equal(result.exitCode, 0, diagnostic);
   assert.deepEqual(rows, []); return result;
 }
 async function wrongPeer() {
@@ -153,7 +158,8 @@ async function wrongPeer() {
   const peer = peerFromMachReceiver(receiver); returns.push(() => peer.close());
   const impostor = child("child-impostor", unique()); const ready = await impostor.message("ready");
   const client = runConfined("child-refuse-peer", path, peer);
-  const request = await receive(receiver); assert.equal(request.id, OPEN); assert.equal(request.bytes.length, 48);
+  const request = await Promise.race([receive(receiver), client.then(() => { throw new Error("client ended before OPEN"); })]);
+  assert.equal(request.id, OPEN); assert.equal(request.bytes.length, 48);
   assert.ok(request.reply); returns.push(() => request.reply.close());
   const remote = lookupMachService(ready.name); returns.push(() => remote.close());
   await send(remote, HANDOFF, request.bytes, request.reply);

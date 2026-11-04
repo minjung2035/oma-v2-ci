@@ -88,6 +88,17 @@ for (const workspace of rebuilding) {
       if (compiled.error || compiled.signal) console.error(compiled.error?.message ?? compiled.signal);
       process.exit(compiled.status || 1);
     }
+    // arm64's linker supplies an ad-hoc signature by default; x86_64 does
+    // not. Every owned helper needs a CodeDirectory before the launch owner
+    // can select and verify its mapped generation on either architecture.
+    const signed = spawnSync("/usr/bin/codesign", ["--force", "--sign", "-",
+      join(root, workspace.path, "dist", executable.output)],
+    { cwd: root, stdio: "inherit", timeout: 30000, killSignal: "SIGKILL" });
+    if (signed.error || signed.signal || signed.status !== 0) {
+      console.error(`Darwin helper signing failed: ${workspace.manifest.name}/${executable.output}`);
+      if (signed.error || signed.signal) console.error(signed.error?.message ?? signed.signal);
+      process.exit(signed.status || 1);
+    }
   }
   for (const file of Object.values(workspace.manifest.bin ?? {})) chmodSync(join(root, workspace.path, file), 0o755);
 }

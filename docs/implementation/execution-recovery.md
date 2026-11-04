@@ -3,7 +3,9 @@
 이 절차는 원래 Linux 호스트의 기존 Society에서 execution observation journal이
 손상되었거나 없어져 정상 admission이 닫힌 경우를 위한 **Human 운영 명령**이다.
 accepted operation이나 receipt의 복구·승인 명령이 아니며 모델 도구로 제공되지 않는다.
-macOS 구현과 qualification은 이 변경의 범위가 아니다.
+아래 CLI 절차는 현재 Linux에만 열려 있다. Darwin storage primitive 연결과 ticket v2는
+구현했지만 실제 Mac 실행·Society lease·CLI qualification은 아직 완료하지 않았다.
+Mac에서 실행 guard를 우회하거나 Linux ticket을 편집해 적용하지 않는다.
 
 ## 안전 조건
 
@@ -58,6 +60,19 @@ macOS 구현과 qualification은 이 변경의 범위가 아니다.
 - 이 구현의 changed-boot 경로는 제어된 kernel-observation fixture로 시험했다.
   실제 CLI의 lock 거절·동일 boot 거절·accepted plan 보존도 시험했지만,
   개발 호스트 자체를 재부팅한 qualification은 수행하지 않았다.
+
+## Darwin 내부 연결 — 제품 CLI 미지원
+
+Darwin prepare/apply는 public gethostuuid의 host UUID와 kern.bootsessionuuid를 사용한다.
+Linux ticket v1은 기존 machine-id/boot-id 의미를 유지하고, 새 Darwin ticket v2는 같은
+닫힌 필드 집합에 Darwin host/boot 의미를 부여한다. 각 OS는 다른 version을 거절한다.
+기존 ticket·archive·accepted bytes를 변환하거나 migration하지 않는다.
+
+Darwin journal I/O는 held parent 아래에서 요청한 regular-file access를 취득하고
+원래 event pin의 dev/ino·single-link·owner와 일치하는지 I/O 전에 검사한다.
+descriptor filesystem의 read-only→write reopen을 recovery 권한으로 사용하지 않는다.
+같은 boot에서는 계속 unknown이며, 제어된 changed-boot 시험은 실제 reboot proof가 아니다.
+실제 Mac 결과와 남은 lease/CLI 조건은 [현재 검증 상태](validation.md)가 소유한다.
 
 구현과 최신 실행 범위는 [validation](validation.md),
 [구현 계약](architecture-improvements.md)에 기록한다.
