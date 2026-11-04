@@ -208,9 +208,23 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
     throw new StoreError("STORE_CORRUPT", "an owned directory's boundary must be its own ancestor");
   const created: string[] = [];
   let current = root;
-  let parent = openDirectory(root);
+  // An existing boundary can be acquired in one kernel beneath/no-link walk.
+  // Opening each ancestor for reading would require permission to list user
+  // directories that this operation only needs to search (notably Seatbelt).
+  const boundaryPath = join(boundary.root, ...boundary.components);
+  let heldBoundary: number | undefined;
+  try { heldBoundary = openDirectory(boundaryPath); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // Missing/owner-unreadable boundaries still need the existing creation or
+    // held-inode repair walk. Never retry a containment rejection this way.
+    if (code !== "ENOENT" && code !== "EACCES") throw error;
+  }
+  let parent = heldBoundary ?? openDirectory(root);
   try {
-    for (const [index, component] of components.entries()) {
+    if (heldBoundary !== undefined) { current = boundaryPath; repairOwnerBits(parent); }
+    for (let index = heldBoundary === undefined ? 0 : boundary.components.length; index < components.length; index++) {
+      const component = components[index]!;
       current = join(current, component);
       const owned = index >= boundary.components.length - 1;
       const make = (): number => {

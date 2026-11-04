@@ -246,10 +246,20 @@ static int observe_child_resolver(char **argv) {
   if (spawn_status == 0) {
     resolver_child = child;
     alarm(3);
+    siginfo_t terminal = {0};
+    int observed;
+    do { observed = waitid(P_PID, (id_t)child, &terminal, WEXITED | WNOWAIT); } while (observed < 0 && errno == EINTR);
+    require(observed == 0 && terminal.si_pid == child, "owned resolver child exit observation");
+    // Keep the PID unreaped until the alarm cannot address it. Blocking the
+    // signal also covers an already-pending alarm when the child just exited.
+    sigset_t alarm_set;
+    require(sigemptyset(&alarm_set) == 0 && sigaddset(&alarm_set, SIGALRM) == 0 &&
+      sigprocmask(SIG_BLOCK, &alarm_set, NULL) == 0, "resolver alarm disarm barrier");
+    alarm(0); resolver_child = 0;
     pid_t waited;
     do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
     require(waited == child, "owned resolver child join");
-    alarm(0); resolver_child = 0; joined = 1;
+    joined = 1;
   } else child = 0;
   struct snapshot after = snapshot();
   FILE *output = fopen(argv[2], "wx"); require(output != NULL, "exclusive child resolver report");
@@ -375,13 +385,17 @@ int main(int argc, char **argv) {
   }
   struct snapshot after = snapshot();
   struct coalition_ids coalition = {0};
+  audit_token_t own_token = {{0}};
+  mach_msg_type_number_t audit_count = TASK_AUDIT_TOKEN_COUNT;
+  kern_return_t audit_status = task_info(mach_task_self(), TASK_AUDIT_TOKEN, (task_info_t)&own_token, &audit_count);
   errno = 0;
   int bytes = proc_pidinfo(getpid(), 20, 0, &coalition, sizeof coalition);
   int saved = bytes == (int)sizeof coalition ? 0 : errno;
   FILE *output = fopen(argv[3], "wx"); require(output != NULL, "exclusive observation report");
   fprintf(output, "{\"mode\":\"%s\",\"pid\":%d,\"uid\":%u,\"sandboxApplied\":true,"
+    "\"auditTokenStatus\":%d,\"auditTokenCount\":%u,\"auditSession\":%u,\"auditPid\":%u,"
     "\"coalitionBytes\":%d,\"coalitionErrno\":%d,\"resource\":\"%" PRIu64 "\",\"before\":",
-    mode, getpid(), (unsigned)getuid(), bytes, saved, coalition.ids[0]);
+    mode, getpid(), (unsigned)getuid(), audit_status, audit_count, own_token.val[6], own_token.val[5], bytes, saved, coalition.ids[0]);
   print_snapshot(output, &before); fputs(",\"after\":", output); print_snapshot(output, &after);
   fputs(",\"droppedSendRights\":[", output);
   for (size_t i = 0; i < dropped_count; ++i) fprintf(output, "%s%u", i ? "," : "", dropped[i]);

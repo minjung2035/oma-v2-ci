@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 60,
-  "NOT_REVIEWED": 14308,
+  "CHANGED_WITHOUT_ORACLE": 31,
+  "NOT_REVIEWED": 14337,
   "REMOVED": 220
  },
  "lanes": {
@@ -312,7 +312,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/download-cache.ts",
@@ -382,7 +383,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/runner.ts",
@@ -415,12 +417,9 @@
   {
    "path": "apps/oma/src/ports/runtime.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
-   "oracles": [],
-   "sha256": "af92fe1bcd5b518431de62c1532569c2afe07bd89b6c36f34212131b729a12be"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "apps/oma/src/request-cache.ts",
@@ -885,9 +884,7 @@
    "path": "implementation/contracts.ts",
    "primary": "WP29",
    "status": "REMOVED",
-   "by": [
-    "DR34"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -901,67 +898,49 @@
    "path": "implementation/systemd/broker.service.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/principal-relay.service.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59",
-    "WP03"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/principal.path.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/reconcile.service.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59",
-    "WP03"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/reconcile.timer.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/resident.path.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "implementation/systemd/resident.service.in",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "P0V-59",
-    "WP03",
-    "WP25"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -1019,12 +998,9 @@
   {
    "path": "packages/broker/src/peer-authenticator.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "6adb23bbf249919a53ce9e8bb8f278007178d911b8cda84181695b3b1e580413"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/broker/src/peer-pin.ts",
@@ -1169,12 +1145,9 @@
   {
    "path": "packages/config/package.json",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "626920045d51d19b5d261268d6ad3fd6df42c35e3d70aee82caaf472ec3660fb"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/config/src/defaults.ts",
@@ -2242,12 +2215,9 @@
   {
    "path": "packages/file-descriptors/package.json",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "4ca67bcbe34c4bb5e5b9947bf391f4c891ee4d7b95bef1f3ee8e4fb8d73c481b"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/file-descriptors/src/index.ts",
@@ -2310,12 +2280,9 @@
   {
    "path": "packages/git/src/context-repository.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "4054e57ff452c605107388135e81c0cfa821032339ecbadd9b872ceab631020d"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/git/src/context.ts",
@@ -2390,12 +2357,9 @@
   {
    "path": "packages/git/src/project-preparation.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "27efdc1c04b21c9c010d5d9ba7ae4aa6bbce0e7b922b8cf208b67434fcc1150d"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/git/src/project-snapshot.ts",
@@ -2684,12 +2648,9 @@
   {
    "path": "packages/native/package.json",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "3a729c5de726cb8a8317338cd98dc9408e6ad6239d57cfa6b9ffbbdfc2068354"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/native/src/audit-origin.ts",
@@ -2701,12 +2662,9 @@
   {
    "path": "packages/native/src/audit-session.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "7c9d9881ea196c7b8b6121983d7868ff98c964d14337bf96aecea51a9dc5fc39"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/native/src/audit-token.ts",
@@ -2739,12 +2697,9 @@
   {
    "path": "packages/native/src/descriptor-path.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "ce6c96c0ebbcc5893844317d98a69647480cdf37faf45e09f99579c52dceaabf"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/native/src/directory-layout.ts",
@@ -2794,12 +2749,9 @@
   {
    "path": "packages/native/src/metadata/main.c",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
-   "oracles": [],
-   "sha256": "750dcd772325b0dcbe10e89f4373b5438f6fe121342360cbbe78983f95a7fd86"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/native/src/peer-uid.ts",
@@ -2821,12 +2773,9 @@
   {
    "path": "packages/native/src/posix-files.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "2b5a30519b75498f15c9eb2bd63838cc6d75c3f35436fbc0c326faac69d7341c"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/native/src/process-event.ts",
@@ -2963,22 +2912,16 @@
   {
    "path": "packages/platform-mac/package.json",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "8fd832d81b9c74b0a5eb181d13d1015d229be208cb4f041d72f0b91711f0403e"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/audit-peer.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "6cb3d00f17029b21df7846388646471f7729c390558d4faca4cde7e0ee67fd7c"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/developer-tools.ts",
@@ -2990,12 +2933,9 @@
   {
    "path": "packages/platform-mac/src/execution-launch.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "de497fdde10e5f2343b7977843cf1c463e3b6574289f53ca86fd1307468dbe0f"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/git-sandbox.ts",
@@ -3028,12 +2968,9 @@
   {
    "path": "packages/platform-mac/src/launchd-job.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "fadc6bfd830e3b3a1b2c45f96990b2ad8989c1d9008671393e0f059f1ccd3268"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/mach-address.ts",
@@ -3096,18 +3033,14 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "220dfd584a6f1956398c5696a2437d7c575cb72fcc4e0a7bfa9f3a9ed92a56ad"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/platform-mac/src/seatbelt/main.c",
@@ -3119,12 +3052,9 @@
   {
    "path": "packages/process/package.json",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "3b8becadd2c5aec03fb537e47f49f5da2381acc0b08b20b21d836f44d7d336d3"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/process/src/async.ts",
@@ -3157,12 +3087,9 @@
   {
    "path": "packages/process/src/execution-witness.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "fbb45a943306cb6c8750278d9094847ea1f2c2684a235d2ceb4671faa33e1419"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/process/src/fence.ts",
@@ -3663,12 +3590,9 @@
   {
    "path": "packages/storage/src/cache-trees.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "f835600e2df4f04b3bc41c6b3de4f35a959a18b7ed99021e4bc007ea2d8abbd4"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/context-files.ts",
@@ -3680,22 +3604,16 @@
   {
    "path": "packages/storage/src/context-snapshot.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "05a061c4bfe184083a94c341c3e4f9f3adef50bdcb31298bd336f637322a9eb6"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/context-stream.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "e9770ff10aa1c57e69991710b9f45e5a928f9192000737d41906b5d19322d1f4"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/delivery-receipt.ts",
@@ -3717,12 +3635,10 @@
   {
    "path": "packages/storage/src/directory.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "0ad0430a6dbdc0b61c4a8975d0e961f89a66b60b36031382d6ff965494c1da90"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/durable-fs.ts",
@@ -3755,12 +3671,9 @@
   {
    "path": "packages/storage/src/execution-staging.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "e84c0c852d6e1dd6b8ee108f9cc0611bae16c511ccd56e6cdc10b557df8be952"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/facets.ts",
@@ -3779,12 +3692,9 @@
   {
    "path": "packages/storage/src/immutable-file.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "2ae8c02c63327e54b2c29fef4d30b6043bef4f04b970f8405ea93706b04f87da"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/installation-surface.ts",
@@ -3810,12 +3720,9 @@
   {
    "path": "packages/storage/src/mailbox.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "77537a110cdefd87d50e13faa7fb266c771c50c09da221261aa8158e8f9e4f34"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/operation-journal.ts",
@@ -3848,12 +3755,9 @@
   {
    "path": "packages/storage/src/package-staging.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "7beb9432b5362a48329d79dbf86aac203ebe7a5e8bfe4e535896cd922b697a47"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/package-tar.ts",
@@ -3865,12 +3769,9 @@
   {
    "path": "packages/storage/src/preaccept-artifact.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "abee73f5b7c8aef562c22d4e76f124880ba7594c33e3c4912c8800548e157642"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/preaccept-collection.ts",
@@ -3949,12 +3850,9 @@
   {
    "path": "packages/storage/src/staged-tree.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "6d134d9e8a4e347c263a63df6788fd68ffb8271744d7b54d04b62e15f95fdd75"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/store-access.ts",
@@ -3994,12 +3892,9 @@
   {
    "path": "packages/storage/src/transport-spool.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
-   "oracles": [],
-   "sha256": "0771fcf0efcdee48bbb5d6b05b6158ba2d935950715124e790e32d4aaf393de4"
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "packages/storage/src/tree-lease.ts",
@@ -100866,117 +100761,35 @@
    "path": "src/authority.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "AV20",
-    "AV5",
-    "DR16",
-    "DR44",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-57",
-    "P0V-58",
-    "P0V-60",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP03",
-    "WP07",
-    "WP21",
-    "WP22",
-    "WP23",
-    "WP26"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/composition.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/connection.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/internal-dispatcher.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-57",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21",
-    "WP22"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -100990,112 +100803,63 @@
    "path": "src/broker/peer-authenticator.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "AV6",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-60"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/peer-pin.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "AV6"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/principal-endpoint.ts",
    "primary": "WP06",
    "status": "REMOVED",
-   "by": [
-    "AV6",
-    "P0V-31",
-    "P0V-32",
-    "P0V-33",
-    "P0V-37",
-    "P0V-45",
-    "P0V-47",
-    "P0V-48",
-    "P0V-60"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/process-ancestry.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "AV6"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/public-dispatcher.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "WP21",
-    "WP22",
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/replies.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/broker/transport-spool.ts",
    "primary": "WP22",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-65"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-62"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/arguments.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101109,18 +100873,14 @@
    "path": "src/cli/commands/agent.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/commands/context.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101134,110 +100894,70 @@
    "path": "src/cli/commands/logs.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/commands/routes.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/commands/send.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/commands/status.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/commands/submit.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/effects.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "AV8",
-    "P0V-63",
-    "P0V-78",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/effects/context.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-78"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/effects/mail.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV8",
-    "P0V-63"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/effects/submit.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-78"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/exit.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV22",
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-09",
-    "P0V-10",
-    "P0V-62",
-    "WP26"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101251,72 +100971,35 @@
    "path": "src/cli/request-service.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV22",
-    "P0V-111",
-    "P0V-112",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "WP26"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/cli/transport.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV8",
-    "MAC-650",
-    "P0V-25",
-    "P0V-27",
-    "P0V-35",
-    "P0V-78"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/config.ts",
    "primary": "WP11",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "DR34",
-    "P0V-08",
-    "WP11",
-    "WP12",
-    "WP14"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/config/defaults.ts",
    "primary": "WP16",
    "status": "REMOVED",
-   "by": [
-    "AV18",
-    "WP16"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/config/operations.ts",
    "primary": "WP12",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-86",
-    "WP12",
-    "WP14"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101337,9 +101020,7 @@
    "path": "src/diagnostics/integrity.ts",
    "primary": "WP23",
    "status": "REMOVED",
-   "by": [
-    "DR44"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101360,26 +101041,14 @@
    "path": "src/domain/admission.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-69",
-    "P0V-70",
-    "WP21",
-    "WP22"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/canonical-json.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-119"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101393,73 +101062,35 @@
    "path": "src/domain/child-policy.ts",
    "primary": "WP19",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/context-policy.ts",
    "primary": "WP18",
    "status": "REMOVED",
-   "by": [
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/deployment.ts",
    "primary": "WP31",
    "status": "REMOVED",
-   "by": [
-    "AV16"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/derived.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV3"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/errors.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-09",
-    "P0V-10",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-64",
-    "P0V-69",
-    "P0V-70",
-    "P0V-75",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101501,48 +101132,28 @@
    "path": "src/domain/mail-values.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/persisted-formats.ts",
    "primary": "WP04",
    "status": "REMOVED",
-   "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/request-identity.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "WP29"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/domain/resources.ts",
    "primary": "WP22",
    "status": "REMOVED",
-   "by": [
-    "WP25"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101556,12 +101167,7 @@
    "path": "src/domain/tool-surface.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101575,37 +101181,14 @@
    "path": "src/entry/broker.ts",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV20",
-    "AV27",
-    "AV28",
-    "AV31",
-    "AV5",
-    "DR13",
-    "DR16",
-    "DR18",
-    "P0V-08",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-58",
-    "WP03",
-    "WP21",
-    "WP22"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/entry/host.ts",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "WP03"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101619,69 +101202,21 @@
    "path": "src/entry/oma.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV3",
-    "AV5",
-    "AV7",
-    "DR13",
-    "DR16",
-    "DR17",
-    "DR18",
-    "MAC-022",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-12",
-    "P0V-18",
-    "P0V-24",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-58",
-    "P0V-81",
-    "WP03",
-    "WP08",
-    "WP09",
-    "WP10",
-    "WP12",
-    "WP13",
-    "WP15",
-    "WP16",
-    "WP28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/entry/runner.ts",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR17",
-    "DR18",
-    "DR34",
-    "P0V-64",
-    "P0V-81",
-    "WP03",
-    "WP25"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/extension/batch-view.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV15",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101695,75 +101230,35 @@
    "path": "src/extension/delivery.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/extension/inference-bridge.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/extension/mail-tools.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV15",
-    "AV2",
-    "AV23",
-    "AV26",
-    "AV29",
-    "AV30",
-    "AV5",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-110",
-    "P0V-14",
-    "P0V-15",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "P0V-78",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/extension/principal-channel.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/extension/shared.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV29",
-    "AV30",
-    "P0V-110"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101777,68 +101272,35 @@
    "path": "src/extension/workspace-guard.ts",
    "primary": "WP22",
    "status": "REMOVED",
-   "by": [
-    "AV13",
-    "AV25",
-    "DR13",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-14",
-    "P0V-15",
-    "P0V-74"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/frame.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-119",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR44",
-    "DR6",
-    "DR7",
-    "P0V-16",
-    "WP18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/canonical-command.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/context-mirror.ts",
    "primary": "WP18",
    "status": "REMOVED",
-   "by": [
-    "P0V-16"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101852,111 +101314,42 @@
    "path": "src/git/context-repository.ts",
    "primary": "WP18",
    "status": "REMOVED",
-   "by": [
-    "P0V-65",
-    "P0V-77",
-    "P0V-86",
-    "WP18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/context.ts",
    "primary": "WP18",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP17",
-    "WP18",
-    "WP20",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/integration-policy.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "DR18",
-    "DR3",
-    "DR8"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/integration.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR44",
-    "DR6",
-    "DR7",
-    "DR8",
-    "P0V-08",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21",
-    "WP24"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "DR18",
-    "DR44",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/paths.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -101970,39 +101363,14 @@
    "path": "src/git/quarantine.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR18",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-77"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/git/submit.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP17",
-    "WP20",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102023,15 +101391,7 @@
    "path": "src/leaf.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV6",
-    "P0V-103",
-    "P0V-104",
-    "P0V-105",
-    "P0V-106",
-    "P0V-117",
-    "P0V-118"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102045,68 +101405,28 @@
    "path": "src/lifecycle/actions.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/lifecycle/contracts.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/lifecycle/create-publication.ts",
    "primary": "WP19",
    "status": "REMOVED",
-   "by": [
-    "AV4"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/lifecycle/create.ts",
    "primary": "WP19",
    "status": "REMOVED",
-   "by": [
-    "AV4",
-    "DR1",
-    "DR13",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-09",
-    "P0V-10",
-    "P0V-26",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP17",
-    "WP19",
-    "WP20",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102120,43 +101440,21 @@
    "path": "src/lifecycle/registry-operations.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "DR18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/lifecycle/workspace.ts",
    "primary": "WP19",
    "status": "REMOVED",
-   "by": [
-    "AV27",
-    "AV28",
-    "AV4",
-    "P0V-77"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/mail.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "DR39",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP06",
-    "WP17",
-    "WP20",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102177,25 +101475,7 @@
    "path": "src/mail/batches.ts",
    "primary": "WP06",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV10",
-    "AV11",
-    "AV2",
-    "AV5",
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP06"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102209,29 +101489,14 @@
    "path": "src/mail/headers.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "P0V-117",
-    "P0V-118",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/mail/materializer.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "DR10",
-    "P0V-05",
-    "WP20"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102252,10 +101517,7 @@
    "path": "src/mail/serialize.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "P0V-117",
-    "P0V-118"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102269,13 +101531,7 @@
    "path": "src/pi-extension.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "DR34",
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-74"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102289,26 +101545,14 @@
    "path": "src/ports/runtime.ts",
    "primary": "WP29",
    "status": "REMOVED",
-   "by": [
-    "AV9",
-    "DR18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/process/async.ts",
    "primary": "WP10",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR18",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "MAC-022",
-    "P0V-102"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102322,31 +101566,21 @@
    "path": "src/process/policies.ts",
    "primary": "WP24",
    "status": "REMOVED",
-   "by": [
-    "P0V-120",
-    "P0V-121",
-    "P0V-122",
-    "P0V-77"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/process/preparation.ts",
    "primary": "WP17",
    "status": "REMOVED",
-   "by": [
-    "WP17"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/process/run.ts",
    "primary": "WP10",
    "status": "REMOVED",
-   "by": [
-    "P0V-77",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102381,14 +101615,7 @@
    "path": "src/protocol/jsonl.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "DR15",
-    "P0V-31",
-    "P0V-33",
-    "P0V-47",
-    "P0V-48",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102402,26 +101629,14 @@
    "path": "src/protocol/methods.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "DR15",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-32",
-    "P0V-37",
-    "P0V-45",
-    "WP21"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/protocol/operation-results.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "WP29"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102442,26 +101657,14 @@
    "path": "src/protocol/receipts.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/protocol/request-codec.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-119",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102482,69 +101685,28 @@
    "path": "src/protocol/status-view.ts",
    "primary": "WP23",
    "status": "REMOVED",
-   "by": [
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/reconcile.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "AV20",
-    "DR10",
-    "DR18",
-    "P0V-05",
-    "P0V-07",
-    "P0V-64",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP03",
-    "WP21",
-    "WP22"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/reconcile/operations.ts",
    "primary": "WP21",
    "status": "REMOVED",
-   "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/request-cache.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "P0V-111",
-    "P0V-112",
-    "P0V-59",
-    "P0V-71",
-    "WP26"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102558,355 +101720,161 @@
    "path": "src/runner.ts",
    "primary": "WP07",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV21",
-    "DR18",
-    "DR34",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP06",
-    "WP10"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/assets.ts",
    "primary": "WP31",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "DR18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "WP03"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/broker-lifetime.ts",
    "primary": "WP10",
    "status": "REMOVED",
-   "by": [
-    "AV31",
-    "DR17",
-    "P0V-81"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/broker-supervisor.ts",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "MAC-650",
-    "P0V-25",
-    "P0V-27",
-    "P0V-35",
-    "WP03"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/deployment-manifest.ts",
    "primary": "WP31",
    "status": "REMOVED",
-   "by": [
-    "AV16",
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/engine-auth.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "MAC-020",
-    "MAC-021",
-    "MAC-222",
-    "MAC-251",
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/extension-integrity.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/host-tenure.ts",
    "primary": "WP09",
    "status": "REMOVED",
-   "by": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "WP10"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/inference-relay.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "P0V-34",
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/pi-adapter.ts",
    "primary": "WP10",
    "status": "REMOVED",
-   "by": [
-    "AV17",
-    "AV24",
-    "DR13",
-    "DR18",
-    "MAC-205",
-    "P0V-102",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "WP10"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/pi-rpc.ts",
    "primary": "WP10",
    "status": "REMOVED",
-   "by": [
-    "DR15",
-    "P0V-25",
-    "P0V-27",
-    "P0V-31",
-    "P0V-33",
-    "P0V-35",
-    "P0V-47",
-    "P0V-48",
-    "WP09"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/pi-runtime.ts",
    "primary": "WP31",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "WP31"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/pi-spawn-plan.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV13",
-    "AV3",
-    "DR18",
-    "DR34",
-    "MAC-205",
-    "P0V-102",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-78",
-    "WP10",
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/principal-delivery.ts",
    "primary": "WP08",
    "status": "REMOVED",
-   "by": [
-    "DR9",
-    "MAC-650",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "WP05",
-    "WP08",
-    "WP09"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/process-lock.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/provision.ts",
    "primary": "WP16",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "AV5",
-    "DR13",
-    "DR18",
-    "P0V-12",
-    "P0V-16",
-    "P0V-18",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-77",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "WP16"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV19",
-    "AV2",
-    "AV5",
-    "DR13",
-    "DR18",
-    "DR34",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/run-registry.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "WP06",
-    "WP07"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/society-lease.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "DR18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/runtime/supervision-channel.ts",
    "primary": "WP03",
    "status": "REMOVED",
-   "by": [
-    "AV6"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/sandbox.ts",
    "primary": "WP27",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV16",
-    "AV17",
-    "AV27",
-    "AV28",
-    "DR18",
-    "DR27",
-    "DR34",
-    "MAC-205",
-    "MAC-240",
-    "P0V-102",
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/batch-view.ts",
    "primary": "WP06",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/contained-fs.ts",
    "primary": "WP05",
    "status": "REMOVED",
-   "by": [
-    "P0V-65"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102927,38 +101895,14 @@
    "path": "src/storage/context-stream.ts",
    "primary": "WP18",
    "status": "REMOVED",
-   "by": [
-    "AV5",
-    "P0V-65",
-    "P0V-77",
-    "WP18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/delivery-receipt.ts",
    "primary": "WP05",
    "status": "REMOVED",
-   "by": [
-    "AV4",
-    "DR11",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-107",
-    "P0V-111",
-    "P0V-112",
-    "P0V-13",
-    "P0V-65",
-    "P0V-96",
-    "P0V-97",
-    "WP05",
-    "WP06",
-    "WP27"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -102972,114 +101916,42 @@
    "path": "src/storage/directory.ts",
    "primary": "WP17",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/durable-fs.ts",
    "primary": "WP05",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "DR11",
-    "DR39",
-    "P0V-111",
-    "P0V-112",
-    "P0V-13",
-    "P0V-49",
-    "P0V-50",
-    "P0V-52",
-    "P0V-53",
-    "P0V-59",
-    "P0V-71",
-    "P0V-83",
-    "P0V-84",
-    "P0V-85",
-    "P0V-96",
-    "P0V-97"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/facets.ts",
    "primary": "WP29",
    "status": "REMOVED",
-   "by": [
-    "DR40",
-    "DR44",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/immutable-file.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "AV1",
-    "AV2",
-    "AV5",
-    "P0V-111",
-    "P0V-112",
-    "P0V-65",
-    "P0V-96",
-    "P0V-97",
-    "WP20"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/ledger-reader.ts",
    "primary": "WP04",
    "status": "REMOVED",
-   "by": [
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/operation-codec.ts",
    "primary": "WP29",
    "status": "REMOVED",
-   "by": [
-    "DR39"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103093,49 +101965,28 @@
    "path": "src/storage/operation-transitions.ts",
    "primary": "WP29",
    "status": "REMOVED",
-   "by": [
-    "DR44",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-30",
-    "P0V-56"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/paths.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "AV10",
-    "AV11",
-    "AV3",
-    "DR18"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/preaccept-artifact.ts",
    "primary": "WP17",
    "status": "REMOVED",
-   "by": [
-    "DR39",
-    "WP17",
-    "WP20"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/quota.ts",
    "primary": "WP22",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "WP21",
-    "WP22"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103156,128 +102007,49 @@
    "path": "src/storage/staged-tree.ts",
    "primary": "WP17",
    "status": "REMOVED",
-   "by": [
-    "P0V-111",
-    "P0V-112"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/submit-spool.ts",
    "primary": "WP20",
    "status": "REMOVED",
-   "by": [
-    "DR39",
-    "WP17"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/transaction.ts",
    "primary": "WP04",
    "status": "REMOVED",
-   "by": [
-    "DR40",
-    "DR44"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/storage/transitions.ts",
    "primary": "WP06",
    "status": "REMOVED",
-   "by": [
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-30",
-    "P0V-56"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/store.ts",
    "primary": "WP04",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "DR44",
-    "DR9",
-    "P0V-01",
-    "P0V-02",
-    "P0V-03",
-    "P0V-04",
-    "P0V-06",
-    "P0V-123",
-    "P0V-124",
-    "P0V-125",
-    "P0V-126",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-30",
-    "P0V-56",
-    "P0V-69",
-    "P0V-70",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP04",
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/app.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "DR13",
-    "DR18",
-    "DR25",
-    "MAC-022",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "WP15"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/dashboard.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "DR18",
-    "MAC-022",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-66",
-    "WP15"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103291,15 +102063,7 @@
    "path": "src/tui/keys.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "P0V-108",
-    "P0V-109",
-    "P0V-46",
-    "P0V-67",
-    "P0V-76",
-    "P0V-79",
-    "P0V-86"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103313,34 +102077,7 @@
    "path": "src/tui/model.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "DR1",
-    "DR13",
-    "DR25",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "P0V-28",
-    "P0V-29",
-    "P0V-36",
-    "P0V-38",
-    "P0V-39",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-51",
-    "P0V-66",
-    "WP14",
-    "WP15"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103354,12 +102091,7 @@
    "path": "src/tui/screen.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "DR17",
-    "P0V-79",
-    "P0V-81",
-    "WP28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103408,43 +102140,21 @@
    "path": "src/tui/view/dashboard.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-66",
-    "WP15",
-    "WP28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/view/index.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/view/labels.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "DR1",
-    "DR3",
-    "DR4",
-    "DR6",
-    "DR7"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103458,75 +102168,28 @@
    "path": "src/tui/view/notice.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "DR13",
-    "DR25",
-    "P0V-19",
-    "P0V-20",
-    "P0V-21",
-    "P0V-22",
-    "P0V-23",
-    "WP15"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/view/screens.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "AV7",
-    "P0V-36",
-    "P0V-40",
-    "P0V-41",
-    "P0V-42",
-    "P0V-43",
-    "P0V-66",
-    "P0V-68",
-    "WP14",
-    "WP15",
-    "WP28"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/tui/view/text.ts",
    "primary": "WP28",
    "status": "REMOVED",
-   "by": [
-    "P0V-108",
-    "P0V-109"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/units.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "AV12",
-    "AV9",
-    "DR13",
-    "P0V-100",
-    "P0V-101",
-    "P0V-11",
-    "P0V-26",
-    "P0V-59",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "P0V-98",
-    "P0V-99",
-    "WP03",
-    "WP23",
-    "WP25"
-   ],
+   "by": [],
    "oracles": []
   },
   {
@@ -103547,60 +102210,28 @@
    "path": "src/units/render.ts",
    "primary": "WP25",
    "status": "REMOVED",
-   "by": [
-    "P0V-113",
-    "P0V-114",
-    "P0V-115",
-    "P0V-116",
-    "WP03",
-    "WP25"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/validate.ts",
    "primary": "WP26",
    "status": "REMOVED",
-   "by": [
-    "DR15"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/views.ts",
    "primary": "WP23",
    "status": "REMOVED",
-   "by": [
-    "AV5",
-    "AV9",
-    "DR18",
-    "DR34",
-    "P0V-28",
-    "P0V-29",
-    "P0V-38",
-    "P0V-39",
-    "P0V-51",
-    "P0V-87",
-    "P0V-88",
-    "P0V-89",
-    "P0V-90",
-    "P0V-91",
-    "P0V-92",
-    "P0V-93",
-    "P0V-94",
-    "P0V-95",
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   },
   {
    "path": "src/views/pending-work.ts",
    "primary": "WP23",
    "status": "REMOVED",
-   "by": [
-    "DR18",
-    "WP23"
-   ],
+   "by": [],
    "oracles": []
   }
  ],

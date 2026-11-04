@@ -1,6 +1,6 @@
 /** Trusted sandbox setup; successful setup replaces this process with the check. */
 import { decodeCandidateInvocation, executeCandidateCheck } from "@oma/git/candidate-check";
-import { StoreError } from "@oma/domain/errors";
+import { StoreError, exceptionText } from "@oma/domain/errors";
 import { writeSync, readSync, closeSync } from "node:fs";
 import { closeOnExec } from "@oma/native/control-socket";
 closeOnExec(6);
@@ -19,6 +19,7 @@ try {
     status({ kind: "ready" });
   }, status);
 } catch (error) {
+  try { process.stderr.write(`candidate setup failed: ${exceptionText(error)}\n`); } catch { /* Keep the private failure outcome. */ }
   status({ kind: "failed", code: error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" ? "UNSUPPORTED_PROFILE" : "REF_STATE_UNKNOWN" });
   process.exitCode = 125;
 }

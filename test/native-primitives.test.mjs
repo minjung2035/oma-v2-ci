@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, openSync, readFileSync, writeFileSync, rmSync, renameSync, fchmodSync, fstatSync } from "node:fs";
+import { mkdtempSync, realpathSync, mkdirSync, closeSync, constants, openSync, readFileSync, writeFileSync, rmSync, renameSync, fchmodSync, fstatSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDirectory, openBeneath } from "@oma/native/files";
@@ -95,6 +95,22 @@ test("003. Owned directory creation retains readable inode authority and repairs
     () => { if (parent !== undefined) closeSync(parent); },
     () => rmSync(scratch, { recursive: true, force: true }),
   ]));
+});
+
+test("009. An owned directory uses searchable ancestors without listing or repairing them", t => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "oma-owned-search-")));
+  const ancestor = join(scratch, "search-only"), owned = join(ancestor, "owned"), child = join(owned, "new-child");
+  mkdirSync(ancestor); mkdirSync(owned);
+  writeFileSync(join(ancestor, "keep"), "ancestor bytes");
+  chmodSync(ancestor, 0o111);
+  t.after(() => { chmodSync(ancestor, 0o700); rmSync(scratch, { recursive: true, force: true }); });
+  let unexpected;
+  try { assert.throws(() => { unexpected = openDirectory(ancestor); }, { code: "EACCES" }); }
+  finally { if (unexpected !== undefined) closeSync(unexpected); }
+  assert.deepEqual(ensureOwnedDirectory(child, owned, 0o700), [child]);
+  assert.equal(statSync(ancestor).mode & 0o777, 0o111);
+  assert.equal(statSync(child).mode & 0o777, 0o700);
+  assert.equal(readFileSync(join(ancestor, "keep"), "utf8"), "ancestor bytes");
 });
 
 test("004. Immutable publication keeps checked source bytes across source-name substitution and refuses a conflicting destination", () => {

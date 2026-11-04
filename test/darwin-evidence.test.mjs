@@ -128,6 +128,7 @@ const bootstrapRecord = () => {
               JSON.stringify(layout), JSON.stringify(resolverSymbols)] :
             ["/owned/bootstrap-exec", "restore-registered-seed", "/owned/restoration", "/bin/launchctl", "kickstart", target])], pid),
         ports: { mode: name, pid, uid: 501, sandboxApplied: true, preExecObservation: true,
+          auditTokenStatus: 0, auditTokenCount: 8, auditSession: 1001, auditPid: pid,
           before: { bootstrap: 200, registered: [201] },
           after: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
           droppedSendRights: name === "inherited" ? [] : [200] }, guestEffect: null,
@@ -168,6 +169,22 @@ const bootstrapRecord = () => {
     return { name, profileSha256: "e".repeat(64), canaryPreserved: true, directResolvers, childResolvers,
       direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
   });
+  const baseline = variants[0].node, sessionPid = 900, sessionTarget = 'gui/501/org.oma.probe.test.session-service';
+  const sessionGlobal = 'gui/501/org.oma.probe.test.session-global', sessionReport = '/owned/work/session-tools.json';
+  const sessionTools = structuredClone(baseline.tools);
+  sessionTools.pid = sessionPid; sessionTools.service.argv[1] = sessionTarget;
+  for (const key of ['nativeLibcCold','nativeLibc','bootstrapGlobal']) sessionTools[key].pid = sessionPid;
+  sessionTools.bootstrapGlobal.service.argv[1] = sessionGlobal;
+  sessionTools.nativeDnsCommand.argv[1] = sessionReport + '.dns.json';
+  sessionTools.resolvers.forEach((entry,index) => { const [context,service] = [['main','443'],['main','none'],['thread','443']][index];
+    entry.command.argv[1] = `${sessionReport}.dns.json.resolver-${context}-${service}.json`; });
+  const sessionArgv = ['/owned/bootstrap-exec',...baseline.command.argv];
+  sessionArgv[3]='/owned/work/session-ports.json';sessionArgv[7]=sessionTarget;sessionArgv[15]=sessionReport;sessionArgv[16]=sessionGlobal;
+  const session = { sessionCreate: true, status: 'OBSERVED', jobTarget: 'gui/501/org.oma.probe.test.session-controller',
+    target: sessionTarget, globalTarget: sessionGlobal, argv: sessionArgv,
+    kickstart: command('/bin/launchctl',['kickstart','gui/501/org.oma.probe.test.session-controller'],899),
+    ports: {...structuredClone(baseline.ports),pid:sessionPid,auditPid:sessionPid,auditSession:2002}, tools:sessionTools,
+    guestEffect:null,globalGuestEffect:null,canaryPreserved:true };
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
@@ -188,7 +205,7 @@ const bootstrapRecord = () => {
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
-      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants } };
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
@@ -407,6 +424,15 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].childResolvers[0].parent.pid += 1; },
     value => { value.bootstrap.variants[1].childResolvers[0].command.argv[4] = "/foreign/image"; },
     value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
+    value => { delete value.bootstrap.session; },
+    value => { value.bootstrap.session.ports.auditSession = 1001; },
+    value => { value.bootstrap.session.ports.auditTokenStatus = 5; },
+    value => { value.bootstrap.session.ports.auditPid += 1; },
+    value => { value.bootstrap.session.tools.pid += 1; },
+    value => { value.bootstrap.session.kickstart.argv[1] = value.bootstrap.variants[0].node.target; },
+    value => { value.bootstrap.session.target = value.bootstrap.variants[0].node.target; },
+    value => { value.bootstrap.session.argv[4] = '/foreign/work'; },
+    value => { value.bootstrap.session.tools.service.argv[1] = value.bootstrap.variants[0].node.target; },
     value => { value.bootstrap.variants[1].node.globalTarget = value.bootstrap.variants[1].node.target; },
     value => { value.bootstrap.variants[1].node.command.argv[15] = "gui/501/foreign"; },
     value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.pid += 1; },
@@ -462,6 +488,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     assert.throws(() => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: bad }));
   }
   const unknown = structuredClone(good);
+  unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
   const spawnFailure = unknown.bootstrap.variants[1].childResolvers[0];
   Object.assign(spawnFailure.parent, { spawnStatus: 1, childPid: 0, joined: false, waitStatus: 0 });
   spawnFailure.observation = null;

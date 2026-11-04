@@ -414,6 +414,40 @@ export function validateDarwinObservation(name, observations) {
           }
         }
       }
+      const session = bootstrap.session, baseline = bootstrap.variants[0].node;
+      if (session?.sessionCreate !== true || !["OBSERVED", "SETUP_FAILED"].includes(session.status) ||
+          session.status === "SETUP_FAILED" && typeof session.error !== "string")
+        throw new Error("SessionCreate comparison has no actual outcome");
+      if (session.status === "OBSERVED") {
+        const ports = session.ports, tools = session.tools, expectedArgv = [launcher, ...baseline.command.argv];
+        expectedArgv[3] = `${baseline.command.argv[3]}/session-ports.json`;
+        expectedArgv[7] = session.target; expectedArgv[15] = `${baseline.command.argv[3]}/session-tools.json`;
+        expectedArgv[16] = session.globalTarget;
+        const audit = value => value?.auditTokenStatus === 0 && value.auditTokenCount === 8 &&
+          Number.isSafeInteger(value.auditSession) && value.auditSession > 0 && value.auditPid === value.pid;
+        for (const selected of [session.jobTarget, session.target, session.globalTarget]) {
+          if (!target(selected) || targets.has(selected)) throw new Error("SessionCreate comparison reuses a service target");
+          targets.add(selected);
+        }
+        if (!outcome(session.kickstart) || session.kickstart.exitCode !== 0 || session.kickstart.signal !== null ||
+            session.kickstart.executable !== "/bin/launchctl" ||
+            JSON.stringify(session.kickstart.argv) !== JSON.stringify(["kickstart", session.jobTarget]) ||
+            JSON.stringify(session.argv) !== JSON.stringify(expectedArgv) || ports?.mode !== "inherited" ||
+            ports.sandboxApplied !== true || ports.preExecObservation !== true || !Number.isSafeInteger(ports.pid) || ports.pid < 2 ||
+            !audit(ports) || !audit(baseline.ports) ||
+            ports.auditSession === baseline.ports.auditSession || ports.uid !== baseline.ports.uid ||
+            !snapshot(ports.before) || !snapshot(ports.after) || tools?.complete !== true || tools.pid !== ports.pid ||
+            !outcome(tools.service) || tools.service.executable !== "/bin/launchctl" ||
+            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", session.target]) || !dns(tools.dns) ||
+            !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
+            !nodeLibc(tools.nativeLibcCold, ports.pid, ports.uid, false, "before-node-lookup") ||
+            !nodeLibc(tools.nativeLibc, ports.pid, ports.uid, false, "after-node-lookup") ||
+            !nodeGlobal(tools.bootstrapGlobal, ports.pid, ports.uid, session.globalTarget) ||
+            typeof session.canaryPreserved !== "boolean" ||
+            ![session.guestEffect, session.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1))
+          throw new Error("SessionCreate comparison lacks a distinct kernel audit session, actual policy or service/DNS results");
+      }
     }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||

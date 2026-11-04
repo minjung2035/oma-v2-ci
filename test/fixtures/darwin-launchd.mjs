@@ -54,13 +54,14 @@ function xml(value) {
   if (typeof value === "object") return `<dict>${Object.entries(value).map(([key, entry]) => `<key>${text(key)}</key>${xml(entry)}`).join("")}</dict>`;
   return `<string>${text(value)}</string>`;
 }
-function loadJob(name, executable, mode, hash) {
+function loadJob(name, executable, mode, hash, options = {}) {
   const label = `${prefix}.${name}`, directory = join(root, name), path = join(root, `${label}.plist`);
   mkdirSync(directory, { mode: 0o700 });
-  const definition = { Label: label, Program: executable, ProgramArguments: [executable, mode, directory],
+  const definition = { Label: label, Program: executable, ProgramArguments: options.argv ?? [executable, mode, directory],
     WorkingDirectory: directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
     ExitTimeOut: 1, StandardOutPath: join(directory, "stdout"), StandardErrorPath: join(directory, "stderr"),
-    ...(hash === undefined ? {} : { SpawnConstraint: { cdhash: Buffer.from(hash, "hex") } }) };
+    ...(hash === undefined ? {} : { SpawnConstraint: { cdhash: Buffer.from(hash, "hex") } }),
+    ...(options.sessionCreate === true ? { SessionCreate: true } : {}) };
   writeFileSync(path, `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(definition)}</plist>`, { mode: 0o600 });
   // Submission failure can be ambiguous; cleanup still addresses our own label.
   const job = { label, target: `${domain}/${label}`, directory, active: true };
@@ -408,6 +409,29 @@ value.complete = true; save();
         restored: { target: restoredTarget.target, command: restored, ports: optionalJson(restoredPorts),
           restoration: optionalJson(restorationReport), guestEffect: effect(restoredTarget) },
         canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+      if (name === "inherited") {
+        const session = { sessionCreate: true, status: "SETUP_FAILED" };
+        observation.bootstrap.session = session;
+        try {
+          const service = loadJob("session-service", actor, "once"), global = loadJob("session-global", actor, "once");
+          const portsPath = join(directory, "session-ports.json"), report = join(directory, "session-tools.json");
+          const argv = [launcher, name, profilePath, portsPath, directory, process.execPath, script,
+            service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)];
+          const job = loadJob("session-controller", launcher, "", undefined, { sessionCreate: true, argv });
+          Object.assign(session, { jobTarget: job.target, target: service.target, globalTarget: global.target, argv,
+            kickstart: observe("/bin/launchctl", ["kickstart", job.target], 5000) });
+          if (session.kickstart.exitCode === 0 && session.kickstart.signal === null)
+            await waitFor(() => optionalJson(report)?.complete === true, 10000);
+          Object.assign(session, { ports: optionalJson(portsPath), tools: optionalJson(report) });
+          for (const [target, result] of [[service, session.tools?.service], [global, session.tools?.bootstrapGlobal?.service]])
+            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+              await waitFor(() => existsSync(join(target.directory, "once.json")));
+          Object.assign(session, { guestEffect: effect(service), globalGuestEffect: effect(global),
+            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n", status: "OBSERVED" });
+        } catch (error) { session.error = String(error); }
+      }
     }
     const pids = observation.bootstrap.variants.flatMap(variant => [
       ...variant.directResolvers.map(record => record.command?.pid),
