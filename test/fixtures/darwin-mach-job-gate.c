@@ -87,18 +87,35 @@ static mach_port_t receive(mach_port_t receiver, int id, int wants_right) {
   }
 }
 static int stopped_target(pid_t child, const char *stage) {
-  int stopped, stop_status;
-  do { stopped = waitpid(child, &stop_status, WUNTRACED); } while (stopped < 0 && errno == EINTR);
-  if (stopped == child && (WIFEXITED(stop_status) || WIFSIGNALED(stop_status))) child_pid = 0;
-  require(stopped == child && WIFSTOPPED(stop_status), "actual suspended target stop");
-  mach_port_t target_name = MACH_PORT_NULL; mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
-  mach_ok(task_name_for_pid(mach_task_self(), child, &target_name), "target task name capability");
-  mach_ok(task_info(target_name, TASK_AUDIT_TOKEN, (task_info_t)&target_token, &count), "actual target audit token");
-  mach_ok(mach_port_deallocate(mach_task_self(), target_name), "return target task name capability");
-  require(count == TASK_AUDIT_TOKEN_COUNT && audit_token_to_pid(target_token) == child &&
-    audit_token_to_euid(target_token) == getuid() && audit_token_to_pidversion(target_token) != 0, "suspended target generation");
-  fprintf(trace, "{\"phase\":\"suspended\",\"stage\":\"%s\",\"childPid\":%d,\"stopSignal\":%d}\n", stage, child, WSTOPSIG(stop_status));
-  return stop_status;
+  int previous = audit_token_to_pidversion(target_token);
+  for (;;) {
+    require(!expired && host_live(), "Host/deadline changed during suspended target observation");
+    siginfo_t event = {0};
+    int result = waitid(P_PID, (id_t)child, &event, WSTOPPED | WEXITED | WNOHANG | WNOWAIT);
+    if (result < 0 && errno == EINTR) continue;
+    require(result == 0, "observe unreaped target event");
+    if (event.si_pid == 0) { usleep(1000); continue; }
+    if (event.si_pid != child || event.si_code != CLD_STOPPED) {
+      fprintf(trace, "{\"phase\":\"terminal-before-stop\",\"stage\":\"%s\",\"pid\":%d,\"code\":%d,\"status\":%d}\n",
+        stage, event.si_pid, event.si_code, event.si_status);
+      require(0, "target ended before a suspended observation");
+    }
+    mach_port_t target_name = MACH_PORT_NULL; audit_token_t observed = {{0}};
+    mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
+    mach_ok(task_name_for_pid(mach_task_self(), child, &target_name), "target task name capability");
+    mach_ok(task_info(target_name, TASK_AUDIT_TOKEN, (task_info_t)&observed, &count), "actual target audit token");
+    mach_ok(mach_port_deallocate(mach_task_self(), target_name), "return target task name capability");
+    require(count == TASK_AUDIT_TOKEN_COUNT && audit_token_to_pid(observed) == child &&
+      audit_token_to_euid(observed) == getuid() && audit_token_to_pidversion(observed) != 0, "suspended target generation");
+    // WNOWAIT leaves P_LWAITED clear. SETEXEC's kernel stop does not clear
+    // that bit or promise a SIGCHLD wake. A new pidVersion distinguishes the
+    // next mapped image from an old, not-yet-resumed stop. No event is death.
+    if (audit_token_to_pidversion(observed) == previous) { usleep(1000); continue; }
+    target_token = observed;
+    fprintf(trace, "{\"phase\":\"suspended\",\"stage\":\"%s\",\"childPid\":%d,\"stopSignal\":%d,\"pidVersion\":%d}\n",
+      stage, child, event.si_status, audit_token_to_pidversion(observed));
+    return W_STOPCODE(event.si_status);
+  }
 }
 static void send_control(mach_port_t destination, int id, pid_t child, int status) {
   struct { mach_msg_header_t header; uint32_t words[12]; } message = {0};

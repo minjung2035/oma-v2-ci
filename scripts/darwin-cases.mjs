@@ -497,7 +497,8 @@ export function validateDarwinObservation(name, observations) {
         const gate = proxy[key], piped = key === "machPipeGate";
         const words = token => Array.isArray(token) && token.length === 8 && token.every(portNumber) && token[5] > 1 && token[7] !== 0;
         const image = record => words(record.token) && record.token[5] === gate.childPid && record.pid === gate.childPid &&
-          Number.isSafeInteger(record.stopStatus) && record.stopStatus >= 0 && record.stopStatus <= 0xffff && (record.stopStatus & 0xff) === 0x7f &&
+          Number.isSafeInteger(record.stopStatus) && record.stopStatus >= 0 && record.stopStatus <= 0xffff &&
+          (record.stopStatus & 0xff) === 0x7f && ((record.stopStatus >>> 8) & 0xff) !== 0x13 &&
           record.identity?.bootId === gate.identity?.bootId && record.identity?.coalitionId === gate.identity?.coalitionId &&
           record.origin?.kind === "matched" && record.otherOrigin?.kind === "unavailable" &&
           Number.isInteger(record.otherOrigin.osStatus) && record.otherOrigin.osStatus !== 0 &&
@@ -513,6 +514,10 @@ export function validateDarwinObservation(name, observations) {
             (![gate.sourceSha256, gate.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
               !words(gate.expectedHostToken) || gate.expectedHostToken[5] !== bootstrap.ffi.host.pid ||
               !words(gate.helperToken) || gate.helperToken[5] === gate.expectedHostToken[5] ||
+              gate.jobImplementationSha256 !== undefined &&
+                (!/^[0-9a-f]{64}$/.test(gate.jobImplementationSha256) ||
+                  ![gate.jobSubmission, gate.jobStart].every(result => result?.kind === "exited" && result.exitCode === 0 &&
+                    result.signal === null && result.errorCode === null)) ||
               gate.preemption?.taken !== false || gate.origin?.kind !== "matched" || gate.reportBeforeHostRelease !== false ||
               gate.expectedCdHashes !== undefined &&
                 (!Array.isArray(gate.expectedCdHashes) || !gate.expectedCdHashes.length ||
@@ -536,6 +541,7 @@ export function validateDarwinObservation(name, observations) {
                 !gate.trace.some(row => row.phase === "suspended" && row.childPid === gate.childPid &&
                   row.stopSignal === ((gate.targetImage.stopStatus >>> 8) & 0xff))) ||
               gate.finalImage !== undefined && (!image(gate.finalImage) || gate.finalImage.reportBeforeRelease !== false ||
+                gate.finalImage.token[7] === gate.targetImage?.token[7] ||
                 gate.finalImage.outputBeforeRelease?.stdout !== 0 || gate.finalImage.outputBeforeRelease?.stderr !== 0 ||
                 gate.beforeFinalReleaseAttack?.pid === gate.expectedHostToken[5] || gate.rejectedAtFinish < 3 ||
                 !gate.trace.some(row => row.phase === "suspended" && row.stage === "target" && row.childPid === gate.childPid &&

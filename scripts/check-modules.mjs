@@ -12,7 +12,7 @@ export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
   config: ["contracts", "domain", "protocol", "native", "file-descriptors", "storage"],
   git: ["contracts", "domain", "protocol", "process", "native", "file-descriptors", "storage", "tool-files"],
   app: ["broker","client","config","contracts","domain","engine","extension","file-descriptors","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],
-  "platform-mac": ["contracts", "domain", "protocol", "native", "process"],
+  "platform-mac": ["contracts", "domain", "protocol", "native", "file-descriptors", "process"],
   "platform-linux": ["contracts", "domain", "protocol", "native", "file-descriptors", "process", "storage"],
   engine: ["contracts", "domain", "protocol", "client", "process"],
   broker: ["contracts", "domain", "protocol", "native", "process"],

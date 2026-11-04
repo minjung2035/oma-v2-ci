@@ -13,6 +13,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
+import { submitLaunchdJob, startLaunchdJob } from "@oma/platform-mac/launchd-job";
 import { runProcessSync, runProcess } from "@oma/process/run";
 import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
@@ -72,12 +73,22 @@ function loadJob(name, executable, mode, hash, options = {}) {
     ...(options.background === true ? { LimitLoadToSessionType: "Background" } : {}),
     ...(options.launchOnlyOnce === true ? { LaunchOnlyOnce: true } : {}),
     ...(options.machServices === undefined ? {} : { MachServices: Object.fromEntries(options.machServices.map(name => [name, true])) }) };
-  writeFileSync(path, `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(definition)}</plist>`, { mode: 0o600 });
+
   // Submission failure can be ambiguous; cleanup still addresses our own label.
   const jobDomain = options.domain ?? domain;
   const job = { label, target: `${jobDomain}/${label}`, directory, active: true };
   jobs.push(job);
-  run("/bin/launchctl", ["bootstrap", jobDomain, path]);
+  if (options.nativeRegistration === true) {
+    assert.equal(jobDomain, `user/${process.getuid()}`);
+    assert.equal(options.background && options.sessionCreate && options.launchOnlyOnce, true);
+    job.nativeRegistration = submitLaunchdJob({ label, machServices: options.machServices,
+      command: { executable, argv: definition.ProgramArguments.slice(1), env: {}, cwd: directory,
+        timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 } }, 10000);
+    assert.equal(job.nativeRegistration.target, job.target);
+  } else {
+  writeFileSync(path, `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${xml(definition)}</plist>`, { mode: 0o600 });
+    run("/bin/launchctl", ["bootstrap", jobDomain, path]);
+  }
   return job;
 }
 function bootout(job) {
@@ -652,9 +663,9 @@ value.complete = true; save();
           const gate = { status: "SETUP_FAILED", fixtureOnly: true, protocol: 1,
             domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
           proxy[pipeTransfer ? "machPipeGate" : "machGate"] = gate;
-          let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl;
+          let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl, gateJob, gatePaths, gateTracePath;
           const gateFiles = [];
-          const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0];
+          const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0], pipeHeads = [Buffer.alloc(0), Buffer.alloc(0)];
           const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
           try {
             const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, `${gateTag}-helper`);
@@ -690,6 +701,7 @@ value.complete = true; save();
             const tracePath = join(root, `${gateTag}.jsonl`), portsPath = join(directory, `${gateTag}-ports.json`), report = join(directory, `${gateTag}-tools.json`);
             const filePaths = { input: join(directory, `${gateTag}-input`), stdout: join(directory, `${gateTag}-stdout`),
               stderr: join(directory, `${gateTag}-stderr`), private: join(directory, `${gateTag}-private`) };
+            gatePaths = filePaths; gateTracePath = tracePath;
             writeFileSync(filePaths.input, "MACH_INPUT\n", { flag: "wx" }); writeFileSync(filePaths.private, "MACH_PRIVATE\n", { flag: "wx" });
             gate.fileports = { transport: pipeTransfer ? "native-fileport-pipe" : "native-fileport", slots: [0, 1, 2, 7] };
             const sources = [[filePaths.input, "r"], [filePaths.stdout, "wx"], [filePaths.stderr, "wx"], [filePaths.private, "r"]];
@@ -707,6 +719,8 @@ value.complete = true; save();
                     const chunks = [];
                     for await (const chunk of reader) {
                       captured[index - 1] += chunk.length;
+                      if (pipeHeads[index - 1].length < 4096) pipeHeads[index - 1] = Buffer.concat([
+                        pipeHeads[index - 1], chunk.subarray(0, 4096 - pipeHeads[index - 1].length)]);
                       assert.ok(captured[index - 1] <= 2 * 1024 * 1024, "bounded pipe capture"); chunks.push(Buffer.from(chunk));
                     }
                     if (!reader.closed) await once(reader, "close");
@@ -721,12 +735,16 @@ value.complete = true; save();
               }
             }
             const job = loadJob(gateTag, executable, "unused", undefined, { domain: gate.domain, background: true,
-              sessionCreate: true, launchOnlyOnce: true, machServices: [serviceName],
+              sessionCreate: true, launchOnlyOnce: true, nativeRegistration: true, machServices: [serviceName],
               argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, "suspended-inherited", profilePath, portsPath,
                 directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
                 unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
                 JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), pipeTransfer ? "mach-fileports-pipe-v1" : "mach-fileports-v1"] });
+            gateJob = job;
             gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
+            const jobModule = fileURLToPath(import.meta.resolve("@oma/platform-mac/launchd-job"));
+            gate.jobImplementationSha256 = createHash("sha256").update(readFileSync(jobModule)).digest("hex");
+            gate.jobSubmission = job.nativeRegistration.submission;
             const nativeModule = import.meta.resolve("@oma/native/mach-message");
             const attempt = code => run(process.execPath, ["--input-type=module", "-e", `
   import {createMachEndpoint,listenMachService,lookupMachService} from ${JSON.stringify(nativeModule)};
@@ -734,7 +752,7 @@ value.complete = true; save();
   ${code}`]);
             gate.preemption = JSON.parse(attempt(`let taken=false,code=null;try{const r=listenMachService(name);taken=true;r.close();}catch(error){code=error.machCode??String(error);}console.log(JSON.stringify({pid:process.pid,taken,code}));`).stdout);
             assert.equal(gate.preemption.taken, false, "foreign process acquired the declared job receive right");
-            run("/bin/launchctl", ["kickstart", job.target]);
+            gate.jobStart = startLaunchdJob(job.nativeRegistration, 10000);
             gateService = lookupMachService(serviceName); gateControl = createMachEndpoint();
             const one = Buffer.alloc(4); one.writeUInt32LE(1);
             const attack = id => attempt(`const s=lookupMachService(name),p=createMachEndpoint(),b=Buffer.alloc(4);b.writeUInt32LE(1);s.send(${id},b,${id === 0x4f4d4120 ? "p.send" : "undefined"});s.close();p.send.close();p.receive.close();console.log(JSON.stringify({pid:process.pid}));`);
@@ -836,7 +854,13 @@ value.complete = true; save();
             assert.equal(gate.waitStatus, 0); assert.ok(gate.rejectedAtFinish >= 2);
             assert.equal(gate.receiveError, undefined); assert.ok(gate.discarded > 0);
             gate.status = "OBSERVED";
-          } catch (error) { gate.error = String(error); }
+          } catch (error) {
+            gate.error = String(error);
+            if (gate.targetImage?.pid) {
+              try { gate.targetAtFailure = inspect(gate.targetImage.pid); }
+              catch (inspection) { gate.failureInspectionError = String(inspection); }
+            }
+          }
           finally {
             clearInterval(gateSinkTimer);
             gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
@@ -862,6 +886,19 @@ value.complete = true; save();
               try { await waitFor(() => pipeReaders.every(reader => reader.closed)); gate.pipeHandlesReturned = true; }
               catch (error) { gate.pipeReturnError = String(error); }
             }
+            if (gateJob && gate.scopeGone === true && gateJob.active) {
+              gate.registrationAfterCleanup = run("/bin/launchctl", ["print", gateJob.target], false);
+              if (gate.registrationAfterCleanup.exitCode === 113) gateJob.active = false;
+            }
+            try {
+              const capture = path => existsSync(path) ? { bytes: statSync(path).size,
+                head: readFileSync(path).subarray(0, 4096).toString("utf8") } : null;
+              gate.diagnostics = pipeTransfer ? {
+                stdout: { bytes: captured[0], head: pipeHeads[0].toString("utf8") },
+                stderr: { bytes: captured[1], head: pipeHeads[1].toString("utf8") } } :
+                gatePaths ? { stdout: capture(gatePaths.stdout), stderr: capture(gatePaths.stderr) } : null;
+              if (gateTracePath && existsSync(gateTracePath)) gate.finalTrace = readFileSync(gateTracePath, "utf8").trim();
+            } catch (error) { gate.diagnosticError = String(error); }
           }
         }
         // WebKit's macOS profile filters bootstrap messages while retaining

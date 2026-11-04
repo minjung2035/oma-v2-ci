@@ -947,10 +947,44 @@ Mac26 ZIP `275acf654728c53ab94496cf609e9c473d380445b325aa6af406e2876c0de45a`와 
 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/suspended-gate/`에, 재판독은
 `/tmp/oma-macos-suspended-raw-replay.log`에 있다. 제품 BLOCKED·세 gate OPEN은 그대로다.
 
+### 두 번째 stop 미관측과 cleanup 실패 — source `d5535bb2b5b`
+
+Native [41804260281](https://github.com/minjung2035/oma-v2-ci/actions/runs/41804260281)의 양 Mac 각3회에서
+regular/pipe 두 단계 gate 모두 최종 Node stop 응답의10초 한도를 넘겨 SETUP_FAILED였다. 알려진 CID는
+production leaf cleanup으로 소멸했고 pipe handles도 반환됐다. 그러나 이미 자동 제거된 LaunchOnlyOnce job에
+후속 fixture bootout을 요청해 exit3 오류가 겹쳤고 stdout 대신 stderr의 observation에 원시가 남았다.
+최종 Node 실행 전 stop의 성공이나 실행 여부는 이 자료만으로 확정하지 않는다.
+
+입력15830개 `032c7c7d104721f274c15c181fb13041ae16e5256e7ef42ea82a771c88279e6a`와 runtime 산출물은 전후 같다.
+API SHA-256 대조한 Mac15 ZIP `c62bdd5c5782b9800cbf8a8e9309c9234ecee9487b284dab16bd8f4d1aee53e5`,
+Mac26 ZIP `a6e7fdf663493b3a3bc8f3c820109b06f0375e352d2f475f4c408c4990cdfe85`와 원시는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/final-target/`다. gate는 Mac26 111 OBSERVED/9 SETUP_FAILED,
+Mac15 108 OBSERVED/12 SETUP_FAILED이며 제품 BLOCKED다.
+
+### public one-shot constructor와 소비하지 않는 stop 관측 — 후속 입력 / Darwin NOT_RUN
+
+production `launchd-job.ts`를 고정 public launchctl의 user/UID Background/SessionCreate/LaunchOnlyOnce 제출·기동으로
+구현했다. 이전 launch_msg의 container/child 중복 free와 argv0 누락 경로를 제거했다. frozen argv/env와 XML text를
+보존하며 private channel로 전달하지 않는 input/capture 옵션은 거절한다. 독립 plist reader와 회귀47/47·workspace build는 PASS다.
+전용 temporary도 held parent FD 아래에서 mkdirAt/openAt/unlinkAt으로 생성·반납한다. raw path mutation을 거절한 최초 구조 검사6건을 보존하고 해당 경로를 수리했다.
+start는 이 process가 제출한 객체만 받고 label-based removal API는 없다. CLI 종료를 scope death로 해석하지 않는다.
+현재 Mach gate가 이 production constructor를 실제 사용하도록 연결했으며 이 입력의 실제 Mac은 NOT_RUN이다.
+
+고정 [kern_exec](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L2068)는
+START_SUSPENDED에서 SSTOP/task suspend를 설정하고, [wait 관측](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exit.c#L2792)은
+소비한 P_LWAITED 상태를 검사한다. 이를 직전 실패 원인으로 보는 것은 아직 추론이다. helper는 두 stop을
+waitid(WNOWAIT|WNOHANG)으로 소비하지 않고 관측하며 SETEXEC 뒤에는 새 kernel pidVersion까지 요구한다.
+no event·동일 이전 generation·deadline을 stop/death로 바꾸지 않는다. stop의 continued19도 거절한다.
+SDK object compile·MJS syntax·module 경계를 포함한62/62·전체 architecture는 PASS이며 실제 동작은 새 CI에서 확인한다.
+
+오류 시 target의 read-only 상태·bounded stdout/stderr head·stop trace를 보존한다. fixture는 known CID 소멸 뒤
+registration 조회도113일 때만 해당 one-shot label의 cleanup을 완료로 기록한다. 둘 중 하나만으로 끝났다고 하지 않는다.
+제품 실행 guard·durable producer/recovery와 G-AUTH/G-FILES의 미완료는 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `032c7c7d104721f274c15c181fb13041ae16e5256e7ef42ea82a771c88279e6a` (15830 files).
+verification input digest `3973a96158875fb125ccb91a8e1d818a8f5c70b8dd2dc5fdc9d8b0de5c576d40` (15831 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

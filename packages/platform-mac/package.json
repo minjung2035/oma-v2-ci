@@ -76,7 +76,8 @@
     "@oma/protocol": "0.1.0",
     "@oma/native": "0.1.0",
     "@oma/process": "0.1.0",
-    "koffi": "^3.2.1"
+    "koffi": "^3.2.1",
+    "@oma/file-descriptors": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

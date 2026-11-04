@@ -1,119 +1,113 @@
-/** Per-execution launchd user-job mechanics. Shared execution policy decides
- * when a scope is admitted, stopped or recovered; this module only provisions
- * and removes a kernel-owned process leader with a new audit session. */
-import { load } from "koffi";
+/** Ordinary user-domain one-shot registration mechanics. A successful CLI
+ * result confirms registration/start only. Kernel CID and authenticated helper
+ * messages, never a saved label or launchctl text, establish scope identity. */
+import { closeSync, constants, realpathSync, writeSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
-import type { CommandSpec } from "@oma/process/command";
+import { openDirectory } from "@oma/native/files";
+import { mkdirAt, openAt, unlinkAt } from "@oma/file-descriptors";
+import { snapshotCommand, type CommandSpec, type ProcessObservation } from "@oma/process/command";
+import { runProcessSync } from "@oma/process/run";
 
-interface LaunchCalls {
-  dictionary(type: number): unknown;
-  array(type: number): unknown;
-  string(value: string): unknown;
-  boolean(value: boolean): unknown;
-  integer(value: bigint): unknown;
-  machport(value: number): unknown;
-  insert(dictionary: unknown, value: unknown, key: string): boolean;
-  append(array: unknown, index: number, value: unknown): boolean;
-  count(array: unknown): number;
-  message(value: unknown): unknown;
-  type(value: unknown): number;
-  errno(value: unknown): number;
-  free(value: unknown): void;
-}
-let calls: LaunchCalls | undefined;
-function native(): LaunchCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
-    throw new StoreError("UNSUPPORTED_PROFILE", "launchd scopes require the Darwin 64-bit backend");
-  calls ??= (() => {
-    const library = load(null);
-    return { dictionary: library.func("void *launch_data_alloc(int)"),
-      array: library.func("void *launch_data_alloc(int)"),
-      string: library.func("void *launch_data_new_string(const char *)"),
-      boolean: library.func("void *launch_data_new_bool(bool)"),
-      integer: library.func("void *launch_data_new_integer(long long)"),
-      machport: library.func("void *launch_data_new_machport(unsigned int)"),
-      insert: library.func("bool launch_data_dict_insert(void *, void *, const char *)"),
-      append: library.func("bool launch_data_array_set_index(void *, size_t, void *)"),
-      count: library.func("size_t launch_data_array_get_count(void *)"),
-      message: library.func("void *launch_msg(void *)"), type: library.func("int launch_data_get_type(void *)"),
-      errno: library.func("int launch_data_get_errno(void *)"), free: library.func("void launch_data_free(void *)") };
-  })();
-  return calls;
-}
 export interface LaunchdJobDefinition {
   readonly label: string;
   readonly command: CommandSpec;
-  readonly sessionCreate: boolean;
-  readonly keepAlive: boolean;
-  readonly abandonProcessGroup: boolean;
   readonly machServices?: readonly string[];
 }
-function job(definition: LaunchdJobDefinition): unknown {
-  if (!/^com\.oma\.execution\.[0-9a-f-]{36}$/.test(definition.label)) throw new TypeError("invalid launchd execution label");
-  if (!definition.sessionCreate || definition.keepAlive || !definition.abandonProcessGroup || definition.command.timeoutMs !== null)
-    throw new StoreError("UNSUPPORTED_PROFILE", "an execution requires one unthrottled launchd session and one completion");
-  const api = native(), result = api.dictionary(1);
-  if (result === null) throw new Error("launchd dictionary allocation failed");
-  const owned = new Set<unknown>([result]);
-  try {
-    const put = (key: string, value: unknown): void => {
-      owned.add(value);
-      if (!api.insert(result, value, key)) throw new Error(`launchd field rejected: ${key}`);
-    };
-    put("Label", api.string(definition.label)); put("SessionCreate", api.boolean(true));
-    put("KeepAlive", api.boolean(false)); put("AbandonProcessGroup", api.boolean(true));
-    put("RunAtLoad", api.boolean(true)); put("Program", api.string(definition.command.executable));
-    put("StandardInPath", api.string("/dev/null")); put("StandardOutPath", api.string("/dev/null")); put("StandardErrorPath", api.string("/dev/null"));
-    const argv = api.array(2); owned.add(argv);
-    definition.command.argv.forEach((value, index) => {
-      const item = api.string(value); owned.add(item);
-      if (!api.append(argv, index, item)) throw new Error("launchd argument rejected");
-    });
-    put("ProgramArguments", argv);
-    const environment = api.dictionary(1); owned.add(environment);
-    const environmentEntries: [string, string][] = Object.entries(definition.command.env)
-      .filter((entry): entry is [string, string] => typeof entry[1] === "string");
-    for (const entry of environmentEntries) {
-      const key = entry[0], value = entry[1];
-      if (typeof value !== "string") continue;
-      const item = api.string(value); owned.add(item);
-      if (!api.insert(environment, item, key)) throw new Error("launchd environment rejected");
-    }
-    put("EnvironmentVariables", environment);
-    if (definition.command.cwd !== undefined) put("WorkingDirectory", api.string(definition.command.cwd));
-    if (definition.machServices !== undefined && definition.machServices.length > 0) {
-      const services = api.dictionary(1); owned.add(services);
-      for (const name of definition.machServices) if (!api.insert(services, api.dictionary(1), name)) throw new Error("launchd Mach service rejected");
-      put("MachServices", services);
-    }
-    const request = api.dictionary(1); owned.add(request);
-    if (!api.insert(request, result, "SubmitJob")) throw new Error("launchd submission assembly failed");
-    const response = api.message(request);
-    if (response === null) throw new Error("launchd submission was not answered");
-    if (api.type(response) !== 9 /* LAUNCH_DATA_ERRNO */ || api.errno(response) !== 0) {
-      api.free(response);
-      throw Object.assign(new Error("launchd execution job was refused"), { code: "BROKER_UNAVAILABLE" });
-    }
-    api.free(response);
-    return result;
-  } finally { cleanupAll([...owned].map(value => () => api.free(value))); }
+export interface LaunchdJobRegistration {
+  readonly domain: string;
+  readonly target: string;
+  readonly submission: ProcessObservation;
 }
-export function submitLaunchdJob(definition: LaunchdJobDefinition): void {
-  job(definition);
+const registrations = new WeakSet<LaunchdJobRegistration>();
+type Plist = string | boolean | readonly Plist[] | { readonly [key: string]: Plist };
+function name(value: string): void {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(value) || Buffer.byteLength(value) >= 128)
+    throw new TypeError("invalid one-shot job/service name");
 }
-export function removeLaunchdJob(label: string): void {
-  const api = native(), request = api.dictionary(1);
-  if (request === null) throw new Error("launchd removal allocation failed");
-  const jobLabel = api.string(label);
-  if (jobLabel === null || !api.insert(request, jobLabel, "RemoveJob")) {
-    if (jobLabel !== null) api.free(jobLabel); api.free(request);
-    throw new Error("launchd removal assembly failed");
-  }
-  const response = api.message(request); api.free(jobLabel); api.free(request);
-  if (response === null) throw new Error("launchd removal returned no observation");
-  try {
-    if (api.type(response) !== 9 || api.errno(response) !== 0)
-      throw Object.assign(new Error("launchd execution removal was not confirmed"), { code: "RUN_TERMINATION_UNKNOWN" });
-  } finally { api.free(response); }
+function text(value: string): string {
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff\ud800-\udfff]/u.test(value))
+    throw new TypeError("launchd value is not XML text");
+  return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character]!);
+}
+function plist(value: Plist): string {
+  if (typeof value === "string") return "<string>" + text(value) + "</string>";
+  if (typeof value === "boolean") return value ? "<true/>" : "<false/>";
+  if (Array.isArray(value)) return "<array>" + value.map(plist).join("") + "</array>";
+  return "<dict>" + Object.entries(value).map(([key, entry]) => "<key>" + text(key) + "</key>" + plist(entry)).join("") + "</dict>";
+}
+/** Pure setup bytes for the helper. Its workload/stdio arrives through private
+ * authenticated capabilities; this definition carries no actor authority. */
+export function renderLaunchdJob(definition: LaunchdJobDefinition): string {
+  name(definition.label);
+  const command = snapshotCommand(definition.command), services = [...(definition.machServices ?? [])];
+  if (!command.executable.startsWith("/") || command.cwd !== undefined && !command.cwd.startsWith("/") ||
+      command.timeoutMs !== null || command.input !== undefined || command.stdinFd !== undefined ||
+      command.stdoutBytes !== 0 || command.stderrBytes !== 0 ||
+      command.stdoutSpool !== undefined || command.stderrSpool !== undefined || command.silenceMs !== undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", "launchd helper requires an absolute command and private byte channels");
+  services.forEach(name);
+  if (new Set(services).size !== services.length) throw new TypeError("duplicate one-shot Mach service");
+  const environment = Object.create(null) as Record<string, string>;
+  for (const [key, value] of Object.entries(command.env)) if (value !== undefined) environment[key] = value;
+  const definitionBytes: Plist = { Label: definition.label, Program: command.executable,
+    ProgramArguments: [command.executable, ...command.argv], EnvironmentVariables: environment,
+    ...(command.cwd === undefined ? {} : { WorkingDirectory: command.cwd }),
+    RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
+    SessionCreate: true, LaunchOnlyOnce: true, LimitLoadToSessionType: "Background",
+    StandardInPath: "/dev/null", StandardOutPath: "/dev/null", StandardErrorPath: "/dev/null",
+    ...(services.length ? { MachServices: Object.fromEntries(services.map(service => [service, true])) } : {}) };
+  return '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">' + plist(definitionBytes) + "</plist>";
+}
+function domain(): string {
+  const uid = process.getuid?.();
+  if (process.platform !== "darwin" || uid === undefined || uid <= 0)
+    throw new StoreError("UNSUPPORTED_PROFILE", "one-shot launchd registration requires ordinary Darwin user ownership");
+  return "user/" + uid;
+}
+function launchctl(argv: readonly string[], budgetMs: number): ProcessObservation {
+  const result = runProcessSync({ executable: "/bin/launchctl", argv,
+    env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "C", LC_ALL: "C" },
+    timeoutMs: budgetMs, stdoutBytes: 65536, stderrBytes: 65536 });
+  if (result.kind !== "exited" || result.exitCode !== 0)
+    throw new StoreError("RUN_TERMINATION_UNKNOWN", "launchd setup was not confirmed", { cause: result });
+  return result;
+}
+/** A failed submission can leave an unknown registration. It is never proof
+ * of noncreation. Temporary definition cleanup does not remove a running job. */
+export function submitLaunchdJob(definition: LaunchdJobDefinition, budgetMs: number): LaunchdJobRegistration {
+  const ownerDomain = domain(), label = definition.label, bytes = renderLaunchdJob({ ...definition, label });
+  if (!Number.isSafeInteger(budgetMs) || budgetMs <= 0 || budgetMs > 0x7fffffff) throw new TypeError("invalid launchd setup budget");
+  const temporary = realpathSync(tmpdir()), parent = openDirectory(temporary), entry = "oma-launchd-" + randomUUID();
+  let directory: number | undefined, file: number | undefined, created = false, fileCreated = false;
+  const submission = withCleanup(() => {
+    mkdirAt(parent, entry, 0o700); created = true;
+    directory = openAt(parent, entry, constants.O_RDONLY | constants.O_DIRECTORY);
+    file = openAt(directory, "job.plist", constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600); fileCreated = true;
+    const content = Buffer.from(bytes);
+    for (let offset = 0; offset < content.length;) {
+      const count = writeSync(file, content, offset, content.length - offset);
+      if (count <= 0) throw new Error("launchd definition write made no progress"); offset += count;
+    }
+    const completed = file; file = undefined; closeSync(completed);
+    return launchctl(["bootstrap", ownerDomain, join(temporary, entry, "job.plist")], budgetMs);
+  }, () => cleanupAll([
+    () => { if (file !== undefined) { const fd = file; file = undefined; closeSync(fd); } },
+    () => { if (fileCreated && directory !== undefined) unlinkAt(directory, "job.plist"); },
+    () => { if (directory !== undefined) { const fd = directory; directory = undefined; closeSync(fd); } },
+    () => { if (created) unlinkAt(parent, entry, true); },
+    () => closeSync(parent),
+  ]));
+  const registration = Object.freeze({ domain: ownerDomain, target: ownerDomain + "/" + label, submission });
+  registrations.add(registration); return registration;
+}
+/** A registration submitted by this process can request startup; it grants no permission
+ * to release the helper's workload gate. Recovery never starts/stops by label. */
+export function startLaunchdJob(registration: LaunchdJobRegistration, budgetMs: number): ProcessObservation {
+  domain();
+  if (!registrations.has(registration)) throw new TypeError("launchd start requires this process's submitted registration");
+  return launchctl(["kickstart", registration.target], budgetMs);
 }

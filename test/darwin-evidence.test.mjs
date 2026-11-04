@@ -519,6 +519,7 @@ test("017. Native darwin: START_SUSPENDED status127 carries a zero stop signal",
   const validate = () => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: record });
   validate();
   gate.trace[0].stopSignal = 19; assert.throws(validate); gate.trace[0].stopSignal = 0;
+  gate.targetImage.stopStatus = 0x137f; gate.trace[0].stopSignal = 19; assert.throws(validate); gate.trace[0].stopSignal = 0;
   gate.targetImage.stopStatus = 0; assert.throws(validate); gate.targetImage.stopStatus = 127; validate();
 });
 

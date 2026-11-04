@@ -161,6 +161,8 @@ test("012. Linux: OS adapters use file APIs and named observations without borro
 
 test("013. Mac: native adapters cannot borrow SDK, application, ledger or Git workflow ownership", t => {
   const file = "packages/platform-mac/src/index.ts";
+  assert.deepEqual(inspect(t, { [file]: 'import type { Value } from "@oma/file-descriptors";' },
+    { "platform-mac": { dependencies: { "@oma/file-descriptors": "0.1.0" } } }), []);
   for (const name of ["@oma/config", "@oma/client", "@oma/storage", "@oma/review", "@oma/git"])
     assert.match(inspect(t, {[file]: `import type { Value } from "${name}";`},
       {"platform-mac": {dependencies: {[name]: "0.1.0"}}}).join("\n"), /forbidden dependency/);

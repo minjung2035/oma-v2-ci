@@ -1580,7 +1580,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "8fd832d81b9c74b0a5eb181d13d1015d229be208cb4f041d72f0b91711f0403e"
+      "sha256": "2e54dff6e66c09a6d87a52031ede87af9a1ffe97a69f59c267b9ab8aa76bbec0"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1592,7 +1592,7 @@
     },
     {
       "path": "packages/platform-mac/src/execution-launch.ts",
-      "sha256": "de497fdde10e5f2343b7977843cf1c463e3b6574289f53ca86fd1307468dbe0f"
+      "sha256": "de80384d43701c431bcddc0596755969efa928497d26bd9819f93c82ab6bc921"
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
@@ -1612,7 +1612,7 @@
     },
     {
       "path": "packages/platform-mac/src/launchd-job.ts",
-      "sha256": "fadc6bfd830e3b3a1b2c45f96990b2ad8989c1d9008671393e0f059f1ccd3268"
+      "sha256": "6fba99e555a4208f7d1da585469e5a29836bbe47c8ef0351a22e76f3f500ceef"
     },
     {
       "path": "packages/platform-mac/src/mach-address.ts",

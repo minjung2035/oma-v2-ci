@@ -140,6 +140,8 @@ G-AUTH는 실제 sender, 살아 있는 그 process, 현재 run 소속, 기대한
 
 path 문법·소유 경계·종류·hardlink·repair 정책·동일 bytes·publication·cleanup은 기존 TS owner가 맡는다. `entryAt(fd, name)` 문자열 API는 directory-relative 연산으로 교체한다. tool-files는 Node/Koffi 외 업무 의존성이 없는 `@oma/file-descriptors`를 private adapter로만 사용한다([DR62](design-revisions.md#dr62--파일-도구의-native-의존성은-독립-descriptor-leaf로-제한한다)). broad native module을 import 예외 처리하지 않고 leaf의 실제 transitive closure도 검사한다.
 
+Darwin job adapter도 private plist의 held-parent 생성·반납에 이 descriptor leaf를 사용한다. module DAG의 이 직접 edge만 추가하며 storage·Git·application 업무 owner 의존성은 허용하지 않는다.
+
 `DirHandle`, metadata observation, readable/writable FD, entry pin, independent cursor, executable selection은 다른 capability다. 모든 호출자에게 Linux O_PATH+proc-fd 형태를 강요하지 않는다. 각 caller가 실제로 필요한 capability를 확인하고 불필요한 reopen을 없앤다. Node FD read/write/hash/stream은 그대로 쓴다.
 
 | 문제 | 후보와 판정 |
