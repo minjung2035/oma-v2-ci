@@ -657,9 +657,9 @@ value.complete = true; save();
           const pipeReaders = [], drains = [], pipeDescriptors = new Set(), captured = [0, 0];
           const closePipe = fd => { if (pipeDescriptors.delete(fd)) closeSync(fd); };
           try {
-            const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, gateTag);
+            const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, `${gateTag}-helper`);
             gate.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
-            gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-o", executable]);
+            gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-lbsm", "-o", executable]);
             run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
             gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
             const cdhash = path => {
@@ -669,6 +669,8 @@ value.complete = true; save();
             };
             gate.expectedCdHashes = [cdhash(executable)]; gate.otherCdHashes = [cdhash(process.execPath)];
             assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
+            gate.targetImage = { expectedCdHashes: [cdhash(launcher)], otherCdHashes: [...gate.otherCdHashes] };
+            assert.notDeepEqual(gate.targetImage.expectedCdHashes, gate.targetImage.otherCdHashes);
             const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
             assert.equal(system.func("int task_info(unsigned int, int, void *, void *)")(
               hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
@@ -741,7 +743,7 @@ value.complete = true; save();
               while (performance.now() < end) {
                 const packet = gateControl.receive.receive();
                 if (packet.kind === "again") { await delay(2); continue; }
-                assert.equal(packet.id, id); assert.equal(packet.bytes.length, 16); assert.equal(packet.reply, null);
+                assert.equal(packet.id, id); assert.equal(packet.bytes.length, id === 0x4f4d4123 ? 48 : 16); assert.equal(packet.reply, null);
                 assert.equal(packet.bytes.readUInt32LE(0), 1);
                 if (gate.helperToken) assert.deepEqual(packet.sender.token, gate.helperToken);
                 return packet;
@@ -760,6 +762,18 @@ value.complete = true; save();
             for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
             assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
             const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
+            Object.assign(gate.targetImage, { pid: ready.bytes.readUInt32LE(8), stopStatus: ready.bytes.readUInt32LE(12),
+              token: Array.from({ length: 8 }, (_, index) => ready.bytes.readUInt32LE(16 + index * 4)) });
+            assert.equal(gate.targetImage.token[5], gate.targetImage.pid);
+            assert.equal(gate.targetImage.stopStatus & 0xff, 0x7f);
+            gate.targetImage.identity = identifyDarwinCoalition(gate.targetImage.pid);
+            assert.deepEqual(gate.targetImage.identity, gate.identity);
+            const targetOrigin = observeDarwinAuditOrigin(gate.targetImage.token, gate.targetImage.expectedCdHashes);
+            gate.targetImage.origin = await targetOrigin.result; await targetOrigin.returned;
+            assert.equal(gate.targetImage.origin.kind, "matched");
+            const targetOther = observeDarwinAuditOrigin(gate.targetImage.token, gate.targetImage.otherCdHashes);
+            gate.targetImage.otherOrigin = await targetOther.result; await targetOther.returned;
+            assert.equal(gate.targetImage.otherOrigin.kind, "unavailable");
             // READY acknowledges all imports. Keeping any SEND fileport copy
             // would retain the pipe's open description and prevent real EOF.
             for (const file of gateFiles.splice(0)) file.close();
@@ -773,6 +787,7 @@ value.complete = true; save();
             assert.equal(gateService.send(0x4f4d4124, one), "sent");
             const fin = await receiveGate(0x4f4d4125);
             gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
+            assert.equal(gate.targetImage.pid, gate.childPid);
             assert.equal(gateService.send(0x4f4d4126, one), "sent");
             await waitFor(() => {
               const result = usage(gate.identity.coalitionId);

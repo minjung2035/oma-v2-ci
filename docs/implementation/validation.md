@@ -884,10 +884,35 @@ Mac26 ZIP `857744d44a34dbe123e724860a5bacdaeecddfe68030dd5bbbb7fd3d70d9bb03`와 
 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/fileport/`다. 전체 gate 수와 제품 BLOCKED는 그대로다.
 이 source의 전달은 regular file이며 후속 pipe 입력과 혼합하지 않는다.
 
+### suspended main-image gate 조합 — 후속 입력 / Darwin NOT_RUN
+
+job helper는 target을 START_SUSPENDED/CLOEXEC_DEFAULT로 만들고 실제 WUNTRACED stop을 확인한 뒤
+SDK task-name capability에서 얻은 full audit token을 Host에 보고한다. Host는 같은 boot/CID와 선택한
+mapped main image의 CDHash 일치·다른 signed image 거절을 확인한 뒤 GO를 보낸다. helper는 그
+kernel token으로 SIGCONT하고 이후 실제 child terminal/join을 보고한다. 오류는 자신의 unreaped child를
+kill/join하며 저장 PID를 다시 취득하지 않는다. foreign frame도 원래 Host의 liveness를 먼저 확인한다.
+
+로컬 SDK object compile·parser/Seatbelt44/44·MJS syntax는 PASS다. 실제 Darwin 조합은 NOT_RUN이며
+첫 mapped image 뒤의 exec chain, script/library generation, 제품 journal producer와 scope/backend 연결은
+별도 미완료다. 현재 fixture의 profile pathname을 production private profile-channel로 승격하지 않는다.
+
+### pipe 첫 실제 실행의 setup 실패 — source `e4765402041`
+
+Native [41801898577](https://github.com/minjung2035/oma-v2-ci/actions/runs/41801898577)의 양 Mac 각3회 pipe 대조는
+helper 실행파일과 job 디렉터리에 같은 `mach-pipe-gate` 경로를 쓴 fixture 오류로 EEXIST·SETUP_FAILED였다.
+job 생성·target 실행·pipe handoff는 미실행이다. file-backed 반복도 같은 이름 충돌로 실패했다.
+reader handle 반환은 확인했으며 이 실패를 실제 pipe 호환성 관측이나 성공으로 바꾸지 않는다.
+후속 입력은 실행파일을 별도 `*-helper` 경로로 분리했다. 고친 뒤 실제 Mac은 아직 NOT_RUN이다.
+
+입력15830개 `629f7edea4d6ccd5a3c1db6a8c9125d31dbbb3390dc97f7d558bf43a4ee19f6a`와 runtime 산출물은 전후 같았다.
+API SHA-256 대조한 Mac26 ZIP `8dfb80f44ee5018c6ee629e92094d7c8bf5ed3ac21ca69e4f142fa0dc6754b35`,
+Mac15 ZIP `2cdf02753d20b6e9d5029adc65ed01f4646a354e17b0ffad81762497f7163e71`과 실제 실패는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/pipe/`에 있다. 제품 BLOCKED는 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `629f7edea4d6ccd5a3c1db6a8c9125d31dbbb3390dc97f7d558bf43a4ee19f6a` (15830 files).
+verification input digest `95df59f773ced795320a9c74b035986c56ae6b1581ef89179581f38f0e8ba1be` (15830 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

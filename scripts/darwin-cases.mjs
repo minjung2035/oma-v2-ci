@@ -524,6 +524,17 @@ export function validateDarwinObservation(name, observations) {
                   }) : gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n") ||
                 JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== "[0,1,2,7]" ||
                 gate.trace.some(row => row.phase === "fileport" && row.closeOnExec !== true)) ||
+              gate.targetImage !== undefined && (!words(gate.targetImage.token) ||
+                gate.targetImage.token[5] !== gate.childPid || gate.targetImage.pid !== gate.childPid ||
+                !Number.isSafeInteger(gate.targetImage.stopStatus) || (gate.targetImage.stopStatus & 0xff) !== 0x7f ||
+                gate.targetImage.identity?.bootId !== gate.identity?.bootId ||
+                gate.targetImage.identity?.coalitionId !== gate.identity?.coalitionId ||
+                gate.targetImage.origin?.kind !== "matched" || gate.targetImage.otherOrigin?.kind !== "unavailable" ||
+                !Number.isInteger(gate.targetImage.otherOrigin.osStatus) || gate.targetImage.otherOrigin.osStatus === 0 ||
+                ![gate.targetImage.expectedCdHashes, gate.targetImage.otherCdHashes].every(hashes =>
+                  Array.isArray(hashes) && hashes.length > 0 && hashes.every(hash => typeof hash === "string" && /^[0-9a-f]{40}$/.test(hash))) ||
+                gate.targetImage.expectedCdHashes.some(hash => gate.targetImage.otherCdHashes.includes(hash)) ||
+                !gate.trace.some(row => row.phase === "suspended" && row.childPid === gate.childPid && row.stopSignal > 0)) ||
               !Number.isSafeInteger(gate.rejectedAtFinish) || gate.rejectedAtFinish < 2 ||
               gate.beforeInitAttack?.pid === gate.expectedHostToken[5] || gate.beforeReleaseAttack?.pid === gate.expectedHostToken[5] ||
               gate.waitStatus !== 0 || gate.ports?.pid !== gate.childPid || gate.ports.sandboxApplied !== true ||

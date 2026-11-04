@@ -2,6 +2,7 @@
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <bsm/libbsm.h>
 #include <servers/bootstrap.h>
 #include <libproc.h>
 #include <spawn.h>
@@ -20,14 +21,26 @@ enum { INIT = 0x4f4d4120, ACK, SEED, READY, GO, FIN, CLOSED };
 static FILE *trace;
 static uint32_t expected[8], rejected;
 static volatile sig_atomic_t child_pid, expired;
+static audit_token_t target_token;
 extern char **environ;
 struct unique_process { uint8_t uuid[16]; uint64_t unique, parent; int32_t version, parent_version; uint64_t reserved[2]; };
 _Static_assert(sizeof(struct unique_process) == 56, "pinned read-only generation ABI");
+static void failed_child(void) {
+  alarm(0);
+  pid_t owned = (pid_t)child_pid; child_pid = 0;
+  if (owned > 0) {
+    // This remains our unreaped direct child. No saved PID is reacquired.
+    if (kill(owned, SIGKILL) < 0 && errno != ESRCH) perror("failed child kill");
+    int status, waited;
+    do { waited = waitpid(owned, &status, 0); } while (waited < 0 && errno == EINTR);
+    if (waited != owned) perror("failed child join");
+  }
+}
 static void require(int condition, const char *message) {
-  if (!condition) { perror(message); exit(2); }
+  if (!condition) { perror(message); failed_child(); exit(2); }
 }
 static void mach_ok(kern_return_t status, const char *message) {
-  if (status) { fprintf(stderr, "%s: %d\n", message, status); exit(2); }
+  if (status) { fprintf(stderr, "%s: %d\n", message, status); failed_child(); exit(2); }
 }
 static void deadline(int number) {
   (void)number; expired = 1;
@@ -53,13 +66,13 @@ static mach_port_t receive(mach_port_t receiver, int id, int wants_right) {
     mach_msg_audit_trailer_t *trailer = (mach_msg_audit_trailer_t *)(buffer.bytes + trailer_at);
     require(trailer->msgh_trailer_type == MACH_MSG_TRAILER_FORMAT_0 &&
       trailer->msgh_trailer_size == sizeof *trailer, "complete kernel audit trailer");
+    require(!expired && host_live(), "original Host generation is not live");
     if (memcmp(trailer->msgh_audit.val, expected, sizeof expected)) {
       ++rejected;
       fprintf(trace, "{\"phase\":\"rejected\",\"id\":%d,\"senderPid\":%u,\"senderVersion\":%u}\n",
         message->msgh_id, trailer->msgh_audit.val[5], trailer->msgh_audit.val[7]);
       mach_msg_destroy(message); continue;
     }
-    require(host_live(), "original Host generation is not live");
     uint32_t value = 0;
     if (message->msgh_size == sizeof *message + sizeof value) memcpy(&value, message + 1, sizeof value);
     int valid = message->msgh_id == id && message->msgh_size == sizeof *message + sizeof value && value == 1 &&
@@ -74,13 +87,15 @@ static mach_port_t receive(mach_port_t receiver, int id, int wants_right) {
   }
 }
 static void send_control(mach_port_t destination, int id, pid_t child, int status) {
-  struct { mach_msg_header_t header; uint32_t words[4]; } message = {0};
+  struct { mach_msg_header_t header; uint32_t words[12]; } message = {0};
   message.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
-  message.header.msgh_size = sizeof message; message.header.msgh_remote_port = destination; message.header.msgh_id = id;
+  message.header.msgh_size = sizeof message.header + (id == READY ? 12 : 4) * sizeof(uint32_t);
+  message.header.msgh_remote_port = destination; message.header.msgh_id = id;
   message.words[0] = 1; message.words[1] = rejected; message.words[2] = (uint32_t)child; message.words[3] = (uint32_t)status;
+  if (id == READY) memcpy(&message.words[4], &target_token, sizeof target_token);
   // Failure terminates this controlled helper; kernel process teardown owns
   // all of its references. No unknown send becomes a successful gate step.
-  mach_ok(mach_msg(&message.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof message, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL),
+  mach_ok(mach_msg(&message.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT, message.header.msgh_size, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL),
     "job control send");
 }
 int main(int argc, char **argv) {
@@ -114,16 +129,33 @@ int main(int argc, char **argv) {
   require(sink != receiver && sink != host && sink != bootstrap_port, "distinct bootstrap sink");
   mach_ok(task_set_bootstrap_port(mach_task_self(), sink), "job child bootstrap seed");
   mach_ok(mach_ports_register(mach_task_self(), &sink, 1), "job child registered seed");
-  send_control(host, READY, 0, 0);
-  (void)receive(receiver, GO, 0);
-  fprintf(trace, "{\"phase\":\"released\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
   struct sigaction action = {0}; action.sa_handler = deadline;
   require(sigemptyset(&action.sa_mask) == 0 && sigaction(SIGALRM, &action, NULL) == 0, "job deadline handler");
   pid_t child = 0;
-  int spawned = posix_spawn(&child, argv[11], &files, NULL, &argv[11], environ);
+  posix_spawnattr_t attributes;
+  require(posix_spawnattr_init(&attributes) == 0 &&
+    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_START_SUSPENDED | POSIX_SPAWN_CLOEXEC_DEFAULT) == 0, "suspended target attributes");
+  int spawned = posix_spawn(&child, argv[11], &files, &attributes, &argv[11], environ);
+  if (spawned == 0 && child > 0) child_pid = child;
+  require(posix_spawnattr_destroy(&attributes) == 0, "return target attributes");
   require(posix_spawn_file_actions_destroy(&files) == 0, "return file actions");
   for (int index = 0; index < 4; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
-  require(spawned == 0 && child > 0, "controlled job child spawn"); child_pid = child; alarm(30);
+  require(spawned == 0 && child > 0, "controlled job child spawn"); alarm(30);
+  int stopped, stop_status;
+  do { stopped = waitpid(child, &stop_status, WUNTRACED); } while (stopped < 0 && errno == EINTR);
+  if (stopped == child && (WIFEXITED(stop_status) || WIFSIGNALED(stop_status))) child_pid = 0;
+  require(stopped == child && WIFSTOPPED(stop_status), "actual suspended target stop");
+  mach_port_t target_name = MACH_PORT_NULL; mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
+  mach_ok(task_name_for_pid(mach_task_self(), child, &target_name), "target task name capability");
+  mach_ok(task_info(target_name, TASK_AUDIT_TOKEN, (task_info_t)&target_token, &count), "actual target audit token");
+  mach_ok(mach_port_deallocate(mach_task_self(), target_name), "return target task name capability");
+  require(count == TASK_AUDIT_TOKEN_COUNT && audit_token_to_pid(target_token) == child &&
+    audit_token_to_euid(target_token) == getuid() && audit_token_to_pidversion(target_token) != 0, "suspended target generation");
+  fprintf(trace, "{\"phase\":\"suspended\",\"childPid\":%d,\"stopSignal\":%d}\n", child, WSTOPSIG(stop_status));
+  send_control(host, READY, child, stop_status);
+  (void)receive(receiver, GO, 0);
+  require(proc_signal_with_audittoken(&target_token, SIGCONT) == 0, "release exact target generation");
+  fprintf(trace, "{\"phase\":\"released\",\"hostPid\":%u,\"hostVersion\":%u,\"rejected\":%u}\n", expected[5], expected[7], rejected);
   siginfo_t terminal = {0}; int waited;
   do { waited = waitid(P_PID, (id_t)child, &terminal, WEXITED | WNOWAIT); } while (waited < 0 && errno == EINTR);
   require(waited == 0 && terminal.si_pid == child, "job unreaped child terminal");
