@@ -177,11 +177,9 @@ export function validateDarwinObservation(name, observations) {
           [record.pathMetadata?.varAlias, record.pathMetadata?.dnsAlias, record.pathMetadata?.dnsCanonical].every(pathObservation) &&
           gai(record.getaddrinfo) && signed32(record.dnssd?.createResult));
       const resolverCases = [["main", "443"], ["main", "none"], ["thread", "443"]];
-      const nativeResolvers = (records, base, uid, positive = false) => Array.isArray(records) &&
-        records.length === resolverCases.length && records.every((entry, index) => {
-          const [context, service] = resolverCases[index], command = entry?.command, record = entry?.observation;
+      const nativeResolver = (command, record, path, context, service, uid, positive = false) => {
           return outcome(command) && command.executable === launcher && Array.isArray(command.argv) &&
-            JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", `${base}.resolver-${context}-${service}.json`, context, service]) &&
+            JSON.stringify(command.argv) === JSON.stringify(["observe-resolver", path, context, service]) &&
             (record === null && !positive && (command.exitCode !== 0 || command.signal !== null) ||
               record?.phase === "native-resolver" && record.pid === command.pid && record.pid > 0 &&
               Number.isSafeInteger(record.uid) && record.uid > 0 && record.uid === uid &&
@@ -189,6 +187,12 @@ export function validateDarwinObservation(name, observations) {
               portNumber(record.globalBootstrap) && snapshot(record.ports) && gai(record.getaddrinfo) &&
               (!positive || command.exitCode === 0 && command.signal === null && record.getaddrinfo.result === 0 &&
                 record.getaddrinfo.ipv4 + record.getaddrinfo.ipv6 > 0));
+      };
+      const nativeResolvers = (records, base, uid, positive = false) => Array.isArray(records) &&
+        records.length === resolverCases.length && records.every((entry, index) => {
+          const [context, service] = resolverCases[index];
+          return nativeResolver(entry?.command, entry?.observation,
+            `${base}.resolver-${context}-${service}.json`, context, service, uid, positive);
         });
       const machStatus = number => signed32(number) && number >= 0;
       const validName = name => portNumber(name) && name > 0 && name < 0xffffffff;
@@ -306,6 +310,24 @@ export function validateDarwinObservation(name, observations) {
         if (variant.name !== modes[index] || typeof variant.canaryPreserved !== "boolean" ||
             typeof variant.profileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(variant.profileSha256))
           throw new Error("bootstrap variants omit or relabel a rights/compatibility outcome");
+        const nodeCommand = variant.node?.command, directPids = new Set();
+        if (!Array.isArray(variant.directResolvers) || variant.directResolvers.length !== resolverCases.length ||
+            !variant.directResolvers.every((entry, resolverIndex) => {
+              const [context, service] = resolverCases[resolverIndex], command = entry?.command, ports = entry?.ports;
+              const directory = nodeCommand?.argv?.[3], path = `${directory}/direct.resolver-${context}-${service}.json`;
+              if (!outcome(command) || command.executable !== launcher ||
+                  JSON.stringify(command.argv) !== JSON.stringify([variant.name, nodeCommand?.argv?.[1],
+                    `${path}.ports.json`, directory, launcher, "observe-resolver", path, context, service]) ||
+                  directPids.has(command.pid) || command.pid === nodeCommand?.pid) return false;
+              directPids.add(command.pid);
+              if (ports === null) return entry.observation === null && (command.exitCode !== 0 || command.signal !== null);
+              return ports?.mode === variant.name && ports.sandboxApplied === true && ports.preExecObservation === true &&
+                ports.pid === command.pid && ports.uid === variant.node?.ports?.uid && ports.uid > 0 &&
+                snapshot(ports.before) && snapshot(ports.after) && Array.isArray(ports.droppedSendRights) &&
+                ports.droppedSendRights.every(portNumber) &&
+                nativeResolver({ ...command, argv: command.argv.slice(5) }, entry.observation,
+                  path, context, service, ports.uid);
+            })) throw new Error("direct C resolver comparison lacks the same image, sandbox, process or resolver inputs");
         for (const key of ["direct", "node", "restored"]) {
           const attempt = variant[key], ports = attempt?.ports;
           if (!target(attempt?.target) || targets.has(attempt.target) || !outcome(attempt.command) ||

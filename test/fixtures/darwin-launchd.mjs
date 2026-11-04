@@ -370,6 +370,16 @@ value.complete = true; save();
       const directPorts = join(directory, "direct-ports.json"), nodePorts = join(directory, "node-ports.json");
       const toolsReport = join(directory, "tools.json");
       const direct = observe(launcher, [name, profilePath, directPorts, directory, "/bin/launchctl", "kickstart", directTarget.target], 5000);
+      // Execute the identical C image in the pruned task, without Node's
+      // intervening child creation. Keep the label, cwd and resolver inputs
+      // identical to the existing Node-child observations.
+      const directResolvers = resolverCases.map(([context, service]) => {
+        const path = join(directory, `direct.resolver-${context}-${service}.json`);
+        const portsPath = `${path}.ports.json`;
+        const command = observe(launcher, [name, profilePath, portsPath, directory, launcher,
+          "observe-resolver", path, context, service], 5000);
+        return { command, ports: optionalJson(portsPath), observation: optionalJson(path) };
+      });
       const node = observe(launcher, [name, profilePath, nodePorts, directory, process.execPath, script,
         nodeTarget.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
         unixSocketCanary.listed, unixSocketCanary.unlisted, toolsReport, globalTarget.target,
@@ -384,6 +394,7 @@ value.complete = true; save();
           await waitFor(() => existsSync(join(job.directory, "once.json")));
       const effect = job => existsSync(join(job.directory, "once.json")) ? remember(marker(job.directory, "once")) : null;
       observation.bootstrap.variants.push({ name, profileSha256: createHash("sha256").update(profile).digest("hex"),
+        directResolvers,
         direct: { target: directTarget.target, command: direct, ports: optionalJson(directPorts), guestEffect: effect(directTarget) },
         node: { target: nodeTarget.target, command: node, ports: optionalJson(nodePorts), tools, guestEffect: effect(nodeTarget),
           globalTarget: globalTarget.target, globalGuestEffect: effect(globalTarget) },

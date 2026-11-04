@@ -151,7 +151,12 @@ const bootstrapRecord = () => {
           before: { bootstrap: name === "inherited" ? 200 : 0, registered: [seed] },
           after: { bootstrap: seed, registered: [seed] } } } : {}) };
     };
-    return { name, profileSha256: "e".repeat(64), canaryPreserved: true,
+    const directResolvers = nativeResolvers("/owned/work/direct", 300 + index * 3,
+      name === "inherited" ? 200 : 0, name === "bootstrap-and-xpc" ? 0 : 201).map(entry => ({
+        ...entry, command: { ...entry.command, argv: [name, "/owned/profile", `${entry.command.argv[1]}.ports.json`,
+          "/owned/work", "/owned/bootstrap-exec", ...entry.command.argv] },
+        ports: { ...attempt("node").ports, pid: entry.command.pid } }));
+    return { name, profileSha256: "e".repeat(64), canaryPreserved: true, directResolvers,
       direct: attempt("direct"), node: attempt("node"), restored: attempt("restored") };
   });
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
@@ -377,6 +382,15 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.service = "https"; },
     value => { value.bootstrap.nativeResolverHost[0].observation.getaddrinfo.result = 8; },
     value => { value.bootstrap.variants[1].node.tools.resolvers[0].observation.globalBootstrap = -1; },
+    value => { delete value.bootstrap.variants[1].directResolvers; },
+    value => { value.bootstrap.variants[1].directResolvers[0].observation.pid += 1; },
+    value => { value.bootstrap.variants[1].directResolvers[0].command.argv[4] = "/foreign/image"; },
+    value => { value.bootstrap.variants[1].directResolvers[0].command.argv[1] = "/foreign/profile"; },
+    value => { value.bootstrap.variants[1].directResolvers[0].command.argv[3] = "/foreign/cwd"; },
+    value => { value.bootstrap.variants[1].directResolvers[0].ports.sandboxApplied = false; },
+    value => { value.bootstrap.variants[1].directResolvers[0].ports.uid += 1; },
+    value => { value.bootstrap.variants[1].directResolvers[0].observation.context = "thread"; },
+    value => { value.bootstrap.variants[1].directResolvers[0].observation = null; },
     value => { value.bootstrap.variants[1].node.globalTarget = value.bootstrap.variants[1].node.target; },
     value => { value.bootstrap.variants[1].node.command.argv[15] = "gui/501/foreign"; },
     value => { value.bootstrap.variants[1].node.tools.bootstrapGlobal.pid += 1; },

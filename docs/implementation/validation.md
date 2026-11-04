@@ -1,5 +1,17 @@
 # 현재 검증 상태 — 2026-11-04 KST
 
+## macOS 구현 재개 — 직접 실행과 Node 자식의 libc 비교
+
+병합본 `e0cb4899ab3`에서 보관 인계의 다음 실험을 구현했다. `launchd-bootstrap`의 각 권한 variant에서
+기존과 동일한 C image를 pruning launcher task에 직접 exec하고, 기존 Node-child C의 main/service443,
+main/service 없음, thread/service443과 비교한다. Seatbelt policy·cwd·실행파일·호출 입력은 동일하며
+각 launch 전후 port와 실제 PID/UID·오류·주소 결과를 별도로 보존한다. validator는 다른 image/profile/cwd,
+누락된 결과, PID/UID 혼입을 거절하고 실제 실패도 결과로 보존한다. 제품 실행 guard와 세 gate는 유지한다.
+
+로컬 Node 26.0.0에서 전체 build, parser/Seatbelt **41 PASS / 0 FAIL / 0 SKIP**, 전체 architecture·transaction·
+durable boundary·문서·명세 inventory 검사가 통과했다. 이 변경의 실제 Darwin 실행은 CI 발행 전 **NOT_RUN**이다.
+로컬 원시는 `/tmp/oma-macos-direct-{build,architecture}.log`와 `/tmp/oma-macos-direct-focused.tap`이다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -192,6 +204,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a6b584d4cb039f6409e7998b8dbbdadb989c8e238e2c9fc89ba2dd50b75c8c59` (15825 files).
+verification input digest `3daac099ecd18fea2e7fa46f0290d33d41829926c7f21e2f20eb8921d01b2f58` (15825 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
