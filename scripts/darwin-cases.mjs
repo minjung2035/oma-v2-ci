@@ -482,6 +482,28 @@ export function validateDarwinObservation(name, observations) {
             sink.command?.argv?.[1] !== "--external-sink" || sink.command.argv[2] !== sink.serviceName))
           throw new Error("native discard comparison lacks its actual receiver, policy or completed tools");
       }
+      if (proxy.machGate !== undefined) {
+        const gate = proxy.machGate;
+        const words = token => Array.isArray(token) && token.length === 8 && token.every(portNumber) && token[5] > 1 && token[7] !== 0;
+        if (gate.fixtureOnly !== true || gate.protocol !== 1 || gate.domain !== `user/${baseline.ports.uid}` ||
+            gate.sessionType !== "Background" || gate.sessionCreate !== true || gate.launchOnlyOnce !== true ||
+            !["OBSERVED", "SETUP_FAILED"].includes(gate.status) || gate.status === "SETUP_FAILED" && typeof gate.error !== "string" ||
+            gate.identity !== undefined && gate.scopeGone !== true)
+          throw new Error("Mach job gate loses its constructor, outcome or independently observed cleanup");
+        if (gate.status === "OBSERVED" &&
+            (![gate.sourceSha256, gate.executableSha256].every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) ||
+              !words(gate.expectedHostToken) || gate.expectedHostToken[5] !== bootstrap.ffi.host.pid ||
+              !words(gate.helperToken) || gate.helperToken[5] === gate.expectedHostToken[5] ||
+              gate.preemption?.taken !== false || gate.origin?.kind !== "matched" || gate.reportBeforeHostRelease !== false ||
+              !Number.isSafeInteger(gate.rejectedAtFinish) || gate.rejectedAtFinish < 2 ||
+              gate.beforeInitAttack?.pid === gate.expectedHostToken[5] || gate.beforeReleaseAttack?.pid === gate.expectedHostToken[5] ||
+              gate.waitStatus !== 0 || gate.ports?.pid !== gate.childPid || gate.ports.sandboxApplied !== true ||
+              gate.ports.resource !== gate.identity?.coalitionId || gate.identity?.bootId !== value.boot?.stdout?.trim().toLowerCase() ||
+              gate.after?.returnCode !== -1 || gate.after.errno !== 3 || gate.registration?.exitCode !== 113 ||
+              gate.tools?.complete !== true || gate.profileSha256 !== proxy.profileSha256 || gate.receiveError !== undefined ||
+              !Number.isSafeInteger(gate.discarded) || gate.discarded <= 0 || gate.trace?.at(-1)?.joined !== true))
+          throw new Error("Mach job gate lacks genuine message origins, a closed gate or final CID return");
+      }
       for (const key of ["denial", "dropAll"]) if (proxy[key] !== undefined) {
         const denial = proxy[key];
         if (denial.fixtureOnly !== true || denial.denyAll !== true || !["OBSERVED", "SETUP_FAILED"].includes(denial.status) ||

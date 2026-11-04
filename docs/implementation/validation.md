@@ -793,10 +793,38 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 [당시 선택 실행과 미완료 범위](../archive/cleanup-2026-11-03/implementation/validation.md#collaboration-v1--원래-owner-교정과-현재-미완료)를 보관했다.
 
+### Native discard와 label-independent owner loss — source `8a881a63a74`
+
+Native [41796440616](https://github.com/minjung2035/oma-v2-ci/actions/runs/41796440616)의 양 Mac 각3회에서
+production Node discard receiver가 매회24개 메시지를 SDK destructor로 반환했다. 정상 도구·DNS·child join은
+유지했고 receiver 오류는 없었다. Background/SessionCreate/LaunchOnlyOnce owner를 fresh kernel-token으로
+SIGKILL한 뒤 detached·late-fork 후손을 production coalition leaf로 제어했다. explicit bootout 없이 CID ESRCH와
+다른 live CID의 조회 성공을 확인했고 registration/restart는113이었다. 같은 job label을 새 CID로 재사용해도
+이전 identity의 signal은 false였고 새 generation은 살아 있었다. label 문자열은 recovery authority가 아니다.
+
+입력15829개 `f0af51ee141ea67bbad6e4e39229dd9d97beed79b1549c8b96c94a603d661a6e`와 runtime 산출물은 전후 동일했다.
+API SHA-256 대조한 Mac15 ZIP `1ef1b7c7364438e3f7ca3540ee7a4effe948814d854f61ae3e081e95d42bf79e`,
+Mac26 ZIP `e2ccfb16e5e7c8096a640558a5d17823fee3aea202b3034bcabf8d9c5b772454`와 결과는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/native-discard/`에 있다. 이 controlled 관측은
+제품의 helper code identity·stdio/FD handoff·durable recovery·전체 권한 경로 검증을 대체하지 않는다.
+제품 guard와 G-PROCESS/G-FILES/G-AUTH OPEN은 유지한다.
+
+### 다음 입력 — declared MachServices의 Host gate
+
+ordinary user-domain Background/SessionCreate/LaunchOnlyOnce job에 declared MachService를 두고, helper가
+모든8개 kernel audit-token word와 살아 있는 원래 Host generation을 매 control frame마다 대조한다.
+별도 process의 service check-in 선점, INIT 위조, GO 위조를 실제 시험하며 Host GO 전에는 target을 생성하지 않는다.
+Host가 넘긴 discard SEND capability를 task/registered seed로 설정하고 기존 production Seatbelt/도구 입력을 실행한다.
+실패해도 관측한 CID의 종료를 확인해야 fixture cleanup을 완료로 기록한다. 이 입력의 실제 Darwin은 발행 전 NOT_RUN이다.
+
+로컬 SDK object compile·MJS syntax·parser/Seatbelt43/43·전체 architecture 검사는 PASS다. Host의 helper-origin
+검사는 현재 유효한 서명과 kernel generation을 확인하며 expected helper code requirement를 선택한 검증은 아니다.
+이 프로토콜 prototype을 G-AUTH 완료나 production execution backend로 승격하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `f0af51ee141ea67bbad6e4e39229dd9d97beed79b1549c8b96c94a603d661a6e` (15829 files).
+verification input digest `864c6c0239e8aeb3b2bab266ea5fdc03867fe4b008e20f1bce13ed6c6ed952c5` (15830 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
