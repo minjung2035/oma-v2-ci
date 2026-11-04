@@ -46,7 +46,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     if (beneath(host.stateRoot!, root) || beneath(root, host.stateRoot!) || writable.some(entry => beneath(root, entry.path) || beneath(entry.path, root)))
       throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker installation roots overlap private state");
   const base = { ...residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home }, developerBins),
-    GIT_EXEC_PATH: tools.execPath };
+    GIT_EXEC_PATH: tools.execPath, DEVELOPER_DIR: tools.developer };
   const allowed = new Set([...Object.keys(base), ...ENGINE_KEYS]);
   for (const [key, value] of Object.entries(environment))
     if (!allowed.has(key) || typeof value !== "string" || value.includes("\0"))

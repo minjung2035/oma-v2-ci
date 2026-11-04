@@ -35,7 +35,9 @@ export function candidateSeatbelt(host: MacGitSandboxHost, viewInput: CandidateE
       under(temporary, view.workspace) || under(view.workspace, temporary) || under(temporary, view.project) || under(view.project, temporary)) refuse();
   const roots = installation(host, view.project, [view.workspace, temporary]);
   const env = { ...integrationCheckEnvironment(check, temporary, `${dirname(host.node)}:${dirname(view.git)}:/usr/bin:/bin`),
-    TMPDIR: temporary, GIT_EXEC_PATH: roots.tools.execPath };
+    // Apple development shims use this observed installation instead of
+    // reopening the mutable global xcode-select link outside the policy.
+    TMPDIR: temporary, GIT_EXEC_PATH: roots.tools.execPath, DEVELOPER_DIR: roots.tools.developer };
   return prepareSeatbelt({ executable: host.node, argv: [join(host.libdir, "apps/oma/dist/entry/candidate-check.js"),
     JSON.stringify({ candidate, argv: check.argv, view })], cwd: view.workspace, env, timeoutMs: null,
     stdoutBytes: 1024 * 1024, stdoutOverflow: "discard", stderrBytes: 1024 * 1024, stderrOverflow: "discard" }, {

@@ -222,6 +222,18 @@ const bootstrapRecord = () => {
     command:command(signed,onlyArgv,onlyPid),
     ports:{...structuredClone(baseline.ports),pid:onlyPid,mode:'app-only',profileSource:'code-signature',sandboxApplied:false},
     tools:onlyTools,guestEffect:null,globalGuestEffect:null,canaryPreserved:true};
+  const filterPid=940,filterTarget='gui/501/org.oma.probe.test.filter-service',filterGlobal='gui/501/org.oma.probe.test.filter-global';
+  const filterTools=structuredClone(appTools);filterTools.pid=filterPid;filterTools.service.argv[1]=filterTarget;
+  filterTools.bootstrapGlobal.pid=filterPid;filterTools.bootstrapGlobal.service.argv[1]=filterGlobal;
+  const filterArgv=[...baseline.command.argv];filterArgv[1]='/owned/work/message-filter.sb';
+  filterArgv[6]=filterTarget;filterArgv[15]=filterGlobal;
+  const messageFilter={status:'OBSERVED',fixtureOnly:true,sourceRevision:'adc20e859dbd1652b5542788d3d641960dce85e5',
+    messageNumbers:[204,207,301,711,800,804],profileSha256:'f'.repeat(64),
+    profileSuffix:'(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number 204 207 301 711 800 804))))\n',
+    command:command('/owned/bootstrap-exec',filterArgv,filterPid),
+    target:filterTarget,globalTarget:filterGlobal,effectDirectory:'/owned/work/filter-service',globalEffectDirectory:'/owned/work/filter-global',
+    ports:{...structuredClone(baseline.ports),pid:filterPid},tools:filterTools,
+    guestEffect:null,globalGuestEffect:null,canaryPreserved:true};
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
@@ -242,7 +254,7 @@ const bootstrapRecord = () => {
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
-      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox } };
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox, messageFilter } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
@@ -463,6 +475,12 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
     value => { delete value.bootstrap.session; },
     value => { delete value.bootstrap.appSandbox; },
+    value => { delete value.bootstrap.messageFilter; },
+    value => { value.bootstrap.messageFilter.messageNumbers.push(999); },
+    value => { value.bootstrap.messageFilter.profileSuffix = '(allow mach-bootstrap)'; },
+    value => { value.bootstrap.messageFilter.tools.service.argv[1] = value.bootstrap.variants[0].node.target; },
+    value => { value.bootstrap.messageFilter.ports.sandboxApplied = false; },
+    value => { value.bootstrap.messageFilter.ports.pid += 1; },
     value => { delete value.bootstrap.appSandbox.reverse; },
     value => { delete value.bootstrap.appSandbox.only; },
     value => { value.bootstrap.appSandbox.only.customPolicyApplied = true; },
@@ -542,6 +560,8 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     assert.throws(() => validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: bad }));
   }
   const unknown = structuredClone(good);
+  unknown.bootstrap.messageFilter={fixtureOnly:true,sourceRevision:'adc20e859dbd1652b5542788d3d641960dce85e5',
+    messageNumbers:[204,207,301,711,800,804],status:'SETUP_FAILED',error:'actual filter compilation or child execution failed'};
   unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
   unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed',
     reverse:{status:'SETUP_FAILED',error:'initial controls not reached'},

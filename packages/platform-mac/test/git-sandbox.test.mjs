@@ -12,13 +12,14 @@ const host={node:'/opt/pinned-node/bin/node',libdir:'/opt/oma installation',tool
 const root='/private/var/oma/staging/한 글자 "\\line\nstage',project='/private/var/oma/repos/project.git';
 const candidate='a'.repeat(40),view={git:tools.git,project,workspace:root+'/workspace'};
 const check=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', protectedPaths: [], checks: [{id:'exact',argv:['node','literal "\\$()\narg'],
-  env:{HOME:'/human',PATH:'/human/bin',GIT_CONFIG_GLOBAL:'/human/gitconfig',CHECK:'literal'}}]}).checks[0];
+  env:{HOME:'/human',PATH:'/human/bin',DEVELOPER_DIR:'/human/Xcode.app',GIT_CONFIG_GLOBAL:'/human/gitconfig',CHECK:'literal'}}]}).checks[0];
 test("001. Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks",()=>{
   const recipe=candidateSeatbelt(host,view,root+'/tmp',candidate,check),env=recipe.command.env;
   assert.deepEqual(recipe.command.argv.slice(0,2),['--profile-stdin','--keep-fds=6,8,9']);
   assert.deepEqual(recipe.privateInputs,[]);assert.ok(recipe.command.input instanceof Uint8Array);
   assert.deepEqual(JSON.parse(recipe.command.argv.at(-1)),{candidate,argv:check.argv,view});
   assert.equal(env.HOME,root+'/tmp');assert.equal(env.GIT_CONFIG_GLOBAL,'/dev/null');assert.equal(env.GIT_EXEC_PATH,tools.execPath);
+  assert.equal(env.DEVELOPER_DIR,tools.developer);
   assert.equal(env.PATH,'/opt/pinned-node/bin:'+developer+'/usr/bin:/usr/bin:/bin');assert.equal(env.CHECK,'literal');
   assert.ok(recipe.profile.includes(`(allow file-read* (subpath ${JSON.stringify(tools.contents)}))`));
   assert.ok(recipe.profile.includes(`(allow file-map-executable (subpath ${JSON.stringify(tools.contents)}))`));

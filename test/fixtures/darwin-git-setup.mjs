@@ -70,7 +70,7 @@ await withAsyncCleanup(async()=>{
      const run=(file,args)=>{const r=spawnSync(file,args,{env:process.env,encoding:'utf8',timeout:20000,maxBuffer:65536,killSignal:'SIGKILL'});
        assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,0,r.stderr);return r.stdout;};
      assert.equal(run('./executable-check.sh',[]),'script-check\\n');writeFileSync('native-check.c','int main(void){return 0;}');
-     run('/usr/bin/cc',['native-check.c','-o','native-check']);run('./native-check',[]);console.log('exact-check');`,project],env:{}}]}).checks[0];
+     run('/usr/bin/cc',['native-check.c','-o','native-check']);run('./native-check',[]);console.log('exact-check');`,project],env:{DEVELOPER_DIR:'/must-not-use'}}]}).checks[0];
   const recipe=candidateSeatbelt(host,{git:tools.git,project,workspace},checkTmp,base,check);
   const sequence=new CandidateSetupStatus(()=>{gateReleases++;assert.equal(writeSync(releaseWrite,Buffer.from([1])),1);closeSync(releaseWrite);releaseWrite=undefined;});
   reader=createReadStream('',{fd:status.read,autoClose:true});

@@ -52,11 +52,12 @@ test("002. Mac Worker recipe refuses forged leases and every substituted actor d
 test("003. Mac Worker recipe fixes owned environment and refuses ambient secrets and preload substitution", () => {
   const { host, lease, directories } = context();
   const recipe = residentSeatbelt(host, lease, directories, tools, { HOME: '/human', TMPDIR: '/human', PATH: '/host/bin', GIT_EXEC_PATH: '/human/helpers',
-    OMA_NODE: '/host/node', OMA_ACTOR: 'mallory', OMA_FRAME_BYTES: '1' });
+    DEVELOPER_DIR: '/human/Xcode.app', OMA_NODE: '/host/node', OMA_ACTOR: 'mallory', OMA_FRAME_BYTES: '1' });
   assert.equal(recipe.command.env.HOME, directories.home); assert.equal(recipe.command.env.TMPDIR, directories.home);
   assert.equal(recipe.command.env.OMA_NODE, host.node); assert.equal(recipe.command.env.OMA_ACTOR, lease.actor);
   assert.equal(recipe.command.env.OMA_FRAME_BYTES, '65536');
   assert.equal(recipe.command.env.GIT_EXEC_PATH, tools.execPath);
+  assert.equal(recipe.command.env.DEVELOPER_DIR, tools.developer);
   assert.ok(recipe.command.env.PATH.split(':').includes(`${developer}/usr/bin`));
   for (const key of ['OMA_CLI', 'AWS_SECRET_ACCESS_KEY', 'ANTHROPIC_API_KEY', 'SSH_AUTH_SOCK', 'DYLD_INSERT_LIBRARIES', 'NODE_PATH'])
     assert.throws(() => residentSeatbelt(host, lease, directories, tools, { [key]: 'ambient secret' }), { code: 'UNSUPPORTED_PROFILE' }, key);

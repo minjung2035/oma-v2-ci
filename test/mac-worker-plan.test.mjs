@@ -28,6 +28,7 @@ test("001. Mac Worker shared Pi plan retains physical session, package, relay an
   assert.equal(plan.env.OMA_BATCH_VIEW,dirs.view);assert.equal(plan.env.OMA_AGENT_HOME,dirs.home);
   assert.equal(plan.env.OMA_INFERENCE_KEY,'relay-placeholder');assert.equal(plan.env.OMA_TOOL_SCOPE,'sandbox');
   assert.equal(plan.env.GIT_EXEC_PATH,tools.execPath);
+  assert.equal(plan.env.DEVELOPER_DIR,tools.developer);
   assert.ok(plan.env.PATH.split(':').includes(`${developer}/usr/bin`));
   assert.ok(plan.env.PATH.split(':').includes(`${developer}/Toolchains/XcodeDefault.xctoolchain/usr/bin`));
   assert.equal(plan.privateInputs.length,1);assert.equal(plan.privateInputs[0].fd,3);
@@ -44,6 +45,7 @@ test("002. Mac Worker App port refuses missing tools and snapshots the observed 
   assert.throws(()=>planPiSpawn(macResidentSandbox(undefined),options),{code:'UNSUPPORTED_PROFILE'});
   const changing={...tools},sandbox=macResidentSandbox(changing);changing.git='/human/git';changing.execPath='/human/helpers';
   const plan=planPiSpawn(sandbox,options);assert.equal(plan.env.GIT_EXEC_PATH,tools.execPath);
+  assert.equal(plan.env.DEVELOPER_DIR,tools.developer);
   assert.ok(!Buffer.from(plan.privateInputs[0].bytes).subarray(16).toString().includes('/human/'));
 });
 test("003. Mac Worker App port refuses selected developer roots overlapping writable actor state",()=>{

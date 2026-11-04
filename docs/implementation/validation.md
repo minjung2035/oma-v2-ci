@@ -202,7 +202,13 @@ Mac26 gate ZIP `4fe547ee5a37f7bd200f376aff3185737e7fecf0d0d0e4eecffb8a81d104406e
 Mac15 gate ZIP `355594ae9a380c10f58bc52d516addd094720c9e9be6777b322b0aa3b64d5cba`다.
 Ubuntu native-runtime job은 전체 PASS다. 새 CI 위임 installer·actual controller 쓰기 preflight도 성공했고
 Architecture [41775147818](https://github.com/minjung2035/oma-v2-ci/actions/runs/41775147818)의 두 full lane이
-실제 실행 중이다. pending lane을 완료로 세지 않는다.
+실제 실행 중이었다. 후속 SHA-256 대조 artifact에서 native-all **4744/4744 PASS·skip0·errors[]**,
+13 command exit0·sourceChanges=[]를 확인했다. baseline의 fast1154·durable937·property42·stress16·platform79도
+모두 PASS·skip0·errors[]·각 command exit0다. 이전 CI의 controller skip와 stale Restic required-name 실패가
+같은 oracle을 실제 실행한 이 입력에서 해소됐다. ZIP SHA-256은 native-all
+`41a30fda8f91586f7c74054b7055d8e6deec25352ce5cb621fed70eb0d9c31a2`, baseline
+`3dd815777da6d734636b5c21c4739e57d4f59a9f0473f7afce82799343a8e867`이다.
+원시는 `app-reverse/arch-*`와 `ci-qualification-summary.json`에 보존한다.
 
 ### 여섯 번째 입력 — 명시적 lease FD exec 상속·단일 App Sandbox 대조
 
@@ -220,6 +226,43 @@ closure를 채택하지 않는다. 여섯 번째 입력의 actual Mac은 발행 
 여섯 번째 입력의 전체 build·관련 descriptor/Git/private gate/recipe/parser87개는 PASS·skip0다.
 원시는 `/tmp/oma-macos-sixth-{build,focused,early,architecture}.log` 또는 `.tap`이다. arm64 SDK object
 compile도 성공했지만 actual Apple compiler·kernel proof와 구분한다.
+
+### 여섯 번째 실제 결과 — source `7c7a3da6acf`
+
+Native [41778257534](https://github.com/minjung2035/oma-v2-ci/actions/runs/41778257534)의 양 Mac 공통
+**289/289 PASS·skip0**, 독립 설치26/27 PASS다. candidate는 private status/gate를 닫고 lease FD9의
+실제 dev/ino를 유지했으며 자기 script 실행까지 통과했다. 다음 `/usr/bin/cc`는 global
+`/var/select/developer_dir` metadata를 읽으려다 EPERM으로 실패했다. quarantine은 계속 verify→import를
+완료했다. 각 gate는111 OBSERVED /9 SETUP_FAILED /120 executed, productQualification BLOCKED다.
+
+표준 App Sandbox 단독은 두 OS 각3회 실제 Node/Git/compiler/DNS가 성공했으나 fresh service와
+복구한 global bootstrap을 통한 service가 모두 exit0으로 **다른 resource coalition**의 actor를 실행했다.
+관측 파일은 client의 writable root 안에 두었고 canary는 보존됐다. 두 stacking 순서의 실패도 유지한다.
+따라서 App Sandbox 단독도 이 실행 범위를 닫는 backend로 채택하지 않는다. GUI UID501·SIP-disabled
+관측이며 headless·SIP-enabled 환경의 일반적 불가능 판정은 아니다.
+
+입력15827개 `6c3b79bfc5b90ab13016fcf4f4b550ed464e54806736833fe85f7a0d94ed0357`와 runtime 산출물은
+전후 동일하다. API SHA-256 대조한 원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/app-only/`다.
+Mac26 gate ZIP `31e0ba79b582531ac67ec29034b0bd0ec43be17fc9f8d49c16e92772bb1ad2b9`,
+Mac15 gate ZIP `8697cca0dcf17d7bb010fa7d628a397805397aa7cf429939e19ddca4111bd3c3`이며
+`observed-summary.json`에6회 실제 service/client CID와 정상 도구 결과를 보존했다.
+
+### 일곱 번째 입력 — selected developer shim·bootstrap message filter 대조
+
+candidate와 Worker의 `DEVELOPER_DIR`은 관측한 read-only developer root로 지정한다.
+[Apple의 CLI 설정](https://developer.apple.com/documentation/xcode/configuring-command-line-tools-settings)에
+따라 `/usr/bin/cc` shim이 global 선택 링크를 다시 읽지 않고 같은 설치를 사용하게 한다.
+기존 canonical project·다른 actor·설치본 write 권한은 추가하지 않는다. 실제 candidate fixture에는 다른
+DEVELOPER_DIR을 입력하여 host가 관측한 선택이 우선하고 실제 native output까지 실행되는지 확인한다.
+
+[WebKit macOS 원본 adc20e859d](https://github.com/WebKit/WebKit/blob/adc20e859dbd1652b5542788d3d641960dce85e5/Source/WebKit/WebProcess/com.apple.WebProcess.sb.in#L1351)의
+`mach-bootstrap`/`apply-message-filter`와 message-number204·207·301·711·800·804를 별도 fixture에서
+비교한다. 기존 production policy에 이 suffix만 추가하고 inherited ports·동일 Node/Git/compiler/DNS를
+유지한다. 별도 fresh service의 실제 명령과 effect CID를 기록한다. compile/launch 실패도 보존하고
+메시지 번호나 WebKit의 Apple 환경을 OMA 지원 근거로 승격하지 않는다. 제품 renderer와 실행 guard는
+변경하지 않았다. actual Mac에서 일반 UID로 적용·정상 도구·service 차단이 함께 되는지는 **NOT_RUN**이다.
+로컬 build·관련 parser/Worker/installation grammar/Seatbelt/recipe60/60 PASS·skip0와 전체 architecture 검사가
+통과했다. 구조 자료를 갱신했고 과거 review의 재승인은 하지 않았다.
 
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
@@ -413,6 +456,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6c3b79bfc5b90ab13016fcf4f4b550ed464e54806736833fe85f7a0d94ed0357` (15827 files).
+verification input digest `b809c26b4f15d884ee40c2962d44912a316425dd6ab67fa5bcf3a8c40d25cfbf` (15827 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
