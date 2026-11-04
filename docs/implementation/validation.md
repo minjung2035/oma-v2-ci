@@ -1286,10 +1286,27 @@ sandbox 밖 MobileDevice private framework를 요구해 실패했다. 이 입력
 잘린 tail 거절을 두 OS의 공통 CI에 추가한다. legacy Darwin witness는 형식 데이터이며 live/recovery authority가 아니다.
 새 codec이나 기존 bytes migration은 없으며 Mac descriptor I/O 확인 뒤 durable producer를 연결한다.
 
+### society lease 후보의 실제 반례 준비 — Mac NOT_RUN
+
+기존 Linux abstract AF_UNIX lease는 마지막 상속 FD가 닫힐 때까지 같은 이름을 배타 소유한다.
+Mac에서 pathname flock으로 바꾸면 같은 UID의 unlink/rename 반례를 되살리므로 대안으로 채택하지 않는다.
+다른 후보는 ordinary user launchd의 managed Mach receive queue에 OWNER 메시지를 소비하지 않고 두는 것이다.
+고정 [XNU mach_port_peek 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/mach_port.c#L928)은
+queued message의 kernel audit trailer를 비소비 조회하며, 고정 [launchd backup-port 구현](https://github.com/apple-oss-distributions/launchd/blob/d448a1c8f70a61202f8705f94337f686b87c30c4/src/core.c#L7403)은
+helper death 뒤 receive right를 회수하는 경로를 가진다. 선언/source만으로 재시작 후 queue 보존을 보장하지 않는다.
+
+새 controlled probe는 genuine Host 메시지를 남긴 keeper를 fresh kernel token으로 종료한 뒤 두 번째 keeper가
+같은 실제 audit trailer를 보는지 검사한다. 이어 별도 launchctl 프로세스의 같은 UID bootout 뒤 동일 service name을
+다른 job이 다시 등록하고, 여전히 살아 있는 두 번째 Node sender가 새 claim을 enqueue하는지 검사한다.
+원래 Host도 계속 살아 있으므로 이름 재사용이 가능하면 society lease 후보는 **REJECTED**다. probe 성공은 제품 성공이 아니다.
+probe는 privileged service나 business runtime이 아니며 제품 lease/launch guard를 바꾸지 않는다.
+SDK26.5 arm64 `-Wall -Wextra -Werror` object compile과 Linux의 명시적 Darwin primitive 거절만 확인했다.
+실제 Mac queue 보존·same-UID 철회 반례는 아직 **NOT_RUN**이며 새 format/caller에는 연결하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `1e08862c6c537eeb825ffec1f32403ff8ecb6b960d5ea731001a364fe896651b` (15844 files).
+verification input digest `5c67183a2c95e73aa7d95a3be319735e8bddc5ee6d1cb50e2c17068850cdf7b4` (15846 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
