@@ -5,6 +5,8 @@ import type { ProcessObservation } from "./command.js";
 export interface ExecutionProcessPin {
   readonly pid: number; readonly uid: number; readonly gid: number;
   alive(): boolean;
+  /** Optional genuine kernel membership observation, never role authority. */
+  inScope?(identity: unknown): boolean;
   close(): void;
 }
 export interface BlockedExecution<Witness> {

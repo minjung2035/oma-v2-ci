@@ -3,10 +3,11 @@
  * are trusted probe processes; joining them proves only their own exit.
  */
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { fork, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { closeSync, fstatSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -337,7 +338,10 @@ async function runChild() {
     // private-profile Worker spawn. No second launchd job or public lookup.
     const node = realpathSync(process.execPath), library = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
     const root = realpathSync(process.cwd()), inherited = pinInheritedDarwinPeer(); returns.push(() => inherited.close());
-    const recipe = prepareSeatbelt({ executable: node, argv: [self, "child-roundtrip", process.argv[3], "report"],
+    const global = join(root, ".node_modules/oma-worker-global-escape"); mkdirSync(global, { recursive: true });
+    writeFileSync(join(global, "index.js"), 'module.exports="must-not-load"');
+    assert.equal(createRequire(import.meta.url)("oma-worker-global-escape"), "must-not-load", "ordinary Runner supplies the positive global-loader control");
+    const recipe = prepareSeatbelt({ executable: node, argv: ["--no-global-search-paths", self, "child-roundtrip", process.argv[3], "report"],
       env: { HOME: root, TMPDIR: root }, cwd: root, timeoutMs: 20000, stdoutBytes: 8192, stderrBytes: 16384 }, {
       readable: [{ path: library, kind: "directory" }], mapped: [{ path: library, kind: "directory" }],
       writable: [{ path: root, kind: "directory" }], denied: [], executable: [{ path: node, kind: "file" }],
@@ -354,7 +358,8 @@ async function runChild() {
     const report = JSON.parse(Buffer.concat(output));
     assert.deepEqual(report.peer, inherited.token);
     assert.equal(inherited.alive(), true); assert.notEqual(report.pid, process.pid);
-    console.log(JSON.stringify({ runnerPid: process.pid, workerPid: report.pid, originalPeer: true })); return;
+    assert.equal(report.globalSearchRefused, true);
+    console.log(JSON.stringify({ runnerPid: process.pid, workerPid: report.pid, originalPeer: true, globalSearchRefused: true })); return;
   }
   if (mode === "child-roundtrip") {
     const { socket, ready } = dialMachChannel(process.argv[3], 15), received = [], ended = deferred(), closed = deferred();
@@ -367,7 +372,10 @@ async function runChild() {
     assert.deepEqual(Buffer.concat(received), expected); assert.equal(socket.resourcesReturned, true);
     if (process.argv[4] === "report") {
       const inherited = pinInheritedDarwinPeer(); returns.push(() => inherited.close());
-      console.log(JSON.stringify({ pid: process.pid, peer: inherited.token }));
+      assert.ok(process.execArgv.includes("--no-global-search-paths"));
+      assert.equal(readFileSync(join(process.env.HOME, ".node_modules/oma-worker-global-escape/index.js"), "utf8"), 'module.exports="must-not-load"');
+      assert.throws(() => createRequire(import.meta.url)("oma-worker-global-escape"), { code: "MODULE_NOT_FOUND" });
+      console.log(JSON.stringify({ pid: process.pid, peer: inherited.token, globalSearchRefused: true }));
     }
     return;
   }

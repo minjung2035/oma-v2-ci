@@ -2133,7 +2133,7 @@
       ]
     },
     {
-      "owner": "apps/oma/src/runtime/mac-runtime-generation.ts#createMacRuntimeGeneration",
+      "owner": "apps/oma/src/runtime/mac-runtime-generation.ts#runtimeGenerationSteps",
       "fact": "Only this producer's unaccepted private runtime copy is collected. A logical close attempt while its actual Darwin scope is still held refuses without unsealing; after the common owner confirms complete scope death and closes native resources, collection and repeated close leave the source deployment digest unchanged. This is logical retry evidence only; it does not qualify process SIGKILL, fresh-Host orphan collection, accepted-state recovery or filesystem power loss.",
       "tests": [
         {

@@ -31,7 +31,7 @@ function context() {
 test("001. Mac Worker command keeps literal argv, physical cwd and owned environment", () => {
   const { host, lease, directories } = context(), endpoints = { inference: '/private/var/relay.sock', egress: '/private/var/egress.sock' };
   const recipe = residentSeatbelt(host, lease, directories, tools, {}, endpoints), env = recipe.command.env;
-  assert.deepEqual(recipe.command.argv, [host.node, host.pi, ...host.piModeArgs]);
+  assert.deepEqual(recipe.command.argv, [host.node, "--no-global-search-paths", host.pi, ...host.piModeArgs]);
   assert.equal(recipe.command.cwd, directories.workspace);
   assert.equal(env.HOME, directories.home); assert.equal(env.TMPDIR, directories.home);
   assert.equal(env.OMA_NODE, host.node); assert.equal(env.OMA_CLI, undefined);

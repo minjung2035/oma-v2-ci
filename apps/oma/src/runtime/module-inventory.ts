@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { directoryNames } from "@oma/file-descriptors";
 import { openBeneath, pinBeneath } from "@oma/native/files";
 import { statAt, readlinkBytesAt } from "@oma/native/posix-files";
-import { withCleanup } from "@oma/native/cleanup";
+import { withCleanup, withIteratorCleanup, completeIterator } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
@@ -44,9 +44,11 @@ interface Callbacks {
 /** Shares the deployment owner's held root, byte/entry budget and file
  * hashing. Links are pinned separately from files and must resolve directly
  * to included regular bytes/directories, never outside the installation. */
-export function inventoryRuntimeModules(root: string, held: number, lock: unknown, callbacks: Callbacks): {
-  readonly links: readonly DeploymentLink[]; readonly directories: readonly string[];
-} {
+interface ModuleInventory { readonly links: readonly DeploymentLink[]; readonly directories: readonly string[] }
+export function inventoryRuntimeModules(root: string, held: number, lock: unknown, callbacks: Callbacks): ModuleInventory {
+  return completeIterator(inventoryRuntimeModuleSteps(root, held, lock, callbacks));
+}
+export function* inventoryRuntimeModuleSteps(root: string, held: number, lock: unknown, callbacks: Callbacks): Generator<void, ModuleInventory, void> {
   const links: DeploymentLink[] = [], directories = new Set<string>(), regular = new Set<string>();
   const metadata = (path: string) => {
     const parent = openBeneath(held, dirname(path), constants.O_RDONLY | constants.O_DIRECTORY);
@@ -63,10 +65,10 @@ export function inventoryRuntimeModules(root: string, held: number, lock: unknow
     workspace.root + "/node_modules", dirname(workspace.root) + "/node_modules",
   ]))) if (present(path)) roots.push(path);
   const selected = [...new Set(roots)].sort().filter(path => !roots.some(parent => path !== parent && path.startsWith(parent + "/")));
-  const walk = (parent: number, name: string, path: string, depth: number): void => {
+  const walk = function* (parent: number, name: string, path: string, depth: number): Generator<void, void, void> {
     if (depth > 32) fail();
     const entry = statAt(parent, name);
-    if (entry.isFile()) { regular.add(path); callbacks.file(parent, name, path); return; }
+    if (entry.isFile()) { regular.add(path); callbacks.file(parent, name, path); yield; return; }
     callbacks.entry();
     if (entry.isSymbolicLink()) {
       const text = decodeUtf8(readlinkBytesAt(parent, name));
@@ -76,14 +78,14 @@ export function inventoryRuntimeModules(root: string, held: number, lock: unknow
     }
     if (!entry.isDirectory()) fail();
     const directory = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
-    withCleanup(() => {
-      directories.add(path); if (name === "node_modules") callbacks.directory(path);
-      for (const child of directoryNames(directory)) walk(directory, child, path + "/" + child, depth + 1);
+    yield* withIteratorCleanup(function* () {
+      directories.add(path); if (name === "node_modules") callbacks.directory(path); yield;
+      for (const child of directoryNames(directory)) yield* walk(directory, child, path + "/" + child, depth + 1);
     }, () => closeSync(directory));
   };
   for (const path of selected) {
     const parent = openBeneath(held, dirname(path), constants.O_RDONLY | constants.O_DIRECTORY);
-    withCleanup(() => walk(parent, basename(path), path, 0), () => closeSync(parent));
+    yield* withIteratorCleanup(() => walk(parent, basename(path), path, 0), () => closeSync(parent));
   }
   for (const link of links) {
     // The contained no-link target pin also rejects link chains and loops.
@@ -94,6 +96,7 @@ export function inventoryRuntimeModules(root: string, held: number, lock: unknow
       if (!directory && !stat.isFile() || !(directory ? directories.has(link.target) : regular.has(link.target)) &&
           !callbacks.bound(link.target, directory)) fail();
     }, () => closeSync(target));
+    yield;
   }
   links.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   return Object.freeze({ links: Object.freeze(links), directories: Object.freeze([...directories].sort()) });

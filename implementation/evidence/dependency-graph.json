@@ -2859,7 +2859,7 @@
   }
  ],
  "files": 573,
- "runtimeEdges": 2323,
+ "runtimeEdges": 2324,
  "typeOnlyEdges": 983,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 636,
@@ -2867,7 +2867,7 @@
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 406,
   "L3-workflow -> L3-workflow": 94,
-  "L4-orchestration -> L1-kernel": 521,
+  "L4-orchestration -> L1-kernel": 522,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 216,
@@ -2900,7 +2900,7 @@
  "fanIn": {
   "packages/domain/src/errors.ts": 293,
   "packages/domain/src/identifiers.ts": 94,
-  "packages/native/src/cleanup.ts": 57,
+  "packages/native/src/cleanup.ts": 58,
   "packages/storage/src/directory.ts": 55,
   "packages/native/src/files.ts": 53,
   "packages/domain/src/canonical-json.ts": 49,
@@ -2957,7 +2957,7 @@
   "node:stream": 14,
   "node:stream/promises": 2,
   "node:string_decoder": 1,
-  "node:timers/promises": 9,
+  "node:timers/promises": 10,
   "node:url": 17,
   "node:util": 10,
   "node:zlib": 1,

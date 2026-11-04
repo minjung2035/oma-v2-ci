@@ -42,7 +42,7 @@ for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer", "mach-str
       assert.equal(value.machStream.inheritedPeer, true); assert.equal(value.machStream.noSourceRefused, true);
       assert.equal(value.machStream.authenticatedEof, true); assert.equal(value.machStream.resourcesReturned, true);
       if (name === "mach-stream-descendant" || name === "mach-stream-reserved") {
-        assert.equal(value.machStream.descendant.sameCoalition, true); assert.equal(value.machStream.descendant.originalPeer, true);
+        assert.equal(value.machStream.descendant.sameCoalition, true); assert.equal(value.machStream.descendant.globalSearchRefused, true); assert.equal(value.machStream.descendant.originalPeer, true);
         assert.equal(value.machStream.descendant.workerPid, value.machStream.sender);
         assert.notEqual(value.machStream.descendant.runnerPid, value.machStream.sender);
       }

@@ -26,6 +26,7 @@ import { captureDarwinJobPeer, type DarwinJobPeer } from "./darwin-job-peer.js";
 export interface DarwinJobProcessPin {
   readonly pid: number; readonly uid: number; readonly gid: number;
   alive(): boolean;
+  inScope(identity: unknown): boolean;
   close(): void;
 }
 export interface DarwinJobImageDigests {
@@ -249,10 +250,17 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
         if (!ready || stopping || returned || problem || !target)
           throw problem ?? unknown("selected job child is not available");
         const pin = retainDarwinProcessPin(target);
-        return Object.freeze({ pid: pin.pid, uid: pin.token[1]!, gid: pin.token[2]!,
-          alive: () => {
-            const state = pin.state();
-            return (state === "live" || state === "stopped") && observeDarwinCoalitionPopulation(identity) === "populated";
+        const alive = (): boolean => {
+          const state = pin.state();
+          return (state === "live" || state === "stopped") && observeDarwinCoalitionPopulation(identity) === "populated";
+        };
+        return Object.freeze({ pid: pin.pid, uid: pin.token[1]!, gid: pin.token[2]!, alive,
+          inScope(current: unknown): boolean {
+            if (!alive() || current === null || typeof current !== "object" || Array.isArray(current) ||
+                Object.keys(current).sort().join() !== "bootId,coalitionId,kind") return false;
+            return "kind" in current && "bootId" in current && "coalitionId" in current &&
+              current.kind === pin.identity.kind && current.bootId === pin.identity.bootId &&
+              current.coalitionId === pin.identity.coalitionId && alive();
           }, close: () => pin.close() });
       },
       get prepared() {

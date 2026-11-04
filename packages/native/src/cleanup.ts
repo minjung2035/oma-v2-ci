@@ -36,3 +36,21 @@ export async function withAsyncCleanup<T>(run: () => Promise<T>, cleanup: () => 
     }
   }
 }
+
+/** Iteration retains its owner across yields, including cancellation. */
+export function* withIteratorCleanup<T>(run: () => Generator<void, T, void>, cleanup: () => void): Generator<void, T, void> {
+  let failed = false, primary: unknown;
+  try { return yield* run(); }
+  catch (error) { failed = true; primary = error; throw error; }
+  finally {
+    try { cleanup(); }
+    catch (error) {
+      if (failed) throw new AggregateError([primary, error], "Owned effect and cleanup failed");
+      throw error;
+    }
+  }
+}
+/** Synchronous consumers drive the same producer without scheduling yields. */
+export function completeIterator<T>(steps: Generator<void, T, void>): T {
+  for (;;) { const step = steps.next(); if (step.done) return step.value; }
+}

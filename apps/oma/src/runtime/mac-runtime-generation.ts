@@ -1,5 +1,6 @@
 /** Private installed-byte generation. Scope retirement, rather than child EOF
  * or a caller-supplied death predicate, controls when its flags may be cleared. */
+import { setImmediate } from "node:timers/promises";
 import { closeSync, constants, fchmodSync, fstatSync, fsyncSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -15,10 +16,10 @@ import { symlinkAt } from "@oma/native/posix-files";
 import { mkdirAt, reopenDirectory } from "@oma/file-descriptors";
 import { copyDescriptorToEntry } from "@oma/storage/file-digest";
 import { removeOwnedTreeAt } from "@oma/storage/directory";
-import { cleanupAll, withCleanup } from "@oma/native/cleanup";
+import { cleanupAll, withCleanup, completeIterator, withIteratorCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { isDeploymentDigest } from "@oma/domain/deployment";
-import { deploymentManifest } from "./deployment-manifest.js";
+import { deploymentManifestSteps } from "./deployment-manifest.js";
 
 type Identity = { readonly dev: bigint; readonly ino: bigint };
 type Entry = Identity & { readonly path: string; readonly directory: boolean };
@@ -29,6 +30,7 @@ export interface MacRuntimeGeneration {
   launchNode(source: CommandSpec, options?: DarwinJobScopeOptions, policy?: SeatbeltPolicy): Promise<BlockedExecution<DarwinCoalitionIdentity>>;
   /** Refuses while any acquired or uncertain scope still holds this tree. */
   close(): void;
+  closeAsync(): Promise<void>;
 }
 function refused(message: string, cause?: unknown): never { throw new StoreError("UNSUPPORTED_PROFILE", message, { cause }); }
 function canonical(path: string): boolean {
@@ -39,22 +41,41 @@ function digest(value: unknown): string { return createHash("sha256").update(JSO
 /** The caller supplies an already owned private parent, outside Actor writable
  * roots. No configured digest or accepted state is rewritten. This producer
  * is not yet the startup/recovery collector for orphaned generations. */
-export function createMacRuntimeGeneration(sourceInstallation: {
-  readonly libdir: string; readonly node: string; readonly deploymentDigest: string;
-}, parent: string): MacRuntimeGeneration {
+type SourceInstallation = { readonly libdir: string; readonly node: string; readonly deploymentDigest: string };
+export function createMacRuntimeGeneration(sourceInstallation: SourceInstallation, parent: string): MacRuntimeGeneration {
+  return completeIterator(runtimeGenerationSteps(sourceInstallation, parent));
+}
+/** The same physical producer yields between inventory/copy/seal operations.
+ * Cancellation is delivered once; cleanup must finish even after that signal. */
+async function scheduled<T>(steps: Generator<void, T, void>, signal?: AbortSignal): Promise<T> {
+  let interrupted = false, turn = performance.now();
+  for (;;) {
+    let step: IteratorResult<void, T>;
+    if (signal?.aborted && !interrupted) {
+      interrupted = true;
+      step = steps.throw(new StoreError("CANCELLED_BEFORE_COMMIT", "runtime generation preparation was cancelled"));
+    } else step = steps.next();
+    if (step.done) return step.value;
+    if (performance.now() - turn >= 8) { await setImmediate(); turn = performance.now(); }
+  }
+}
+export function prepareMacRuntimeGeneration(sourceInstallation: SourceInstallation, parent: string, signal?: AbortSignal): Promise<MacRuntimeGeneration> {
+  return scheduled(runtimeGenerationSteps(sourceInstallation, parent), signal);
+}
+function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent: string): Generator<void, MacRuntimeGeneration, void> {
   if (process.platform !== "darwin") refused("private immutable runtime generations require Darwin");
   const installation = Object.freeze({ ...sourceInstallation });
   if (!isDeploymentDigest(installation.deploymentDigest) || resolve(parent) !== parent || resolve(installation.libdir) !== installation.libdir ||
       resolve(installation.node) !== installation.node)
     refused("runtime generation requires canonical roots and a trusted digest");
   for (const path of [parent, installation.libdir, dirname(installation.node)]) assertHostDirectoryLayout(path);
-  const manifest = deploymentManifest(installation.libdir);
+  const manifest = yield* deploymentManifestSteps(installation.libdir);
   if (digest(manifest) !== installation.deploymentDigest) refused("runtime generation source differs from deploymentDigest");
   const paths = [...manifest.files.map(file => file.path), ...manifest.directories, ...manifest.links.map(link => link.path)];
   if (paths.some(path => !canonical(path))) refused("runtime generation contains a noncanonical entry");
   const parentFd = openDirectory(parent), name = ".oma-runtime-" + randomUUID(), root = join(parent, name), entries: Entry[] = [];
   let sourceFd: number | undefined, held: number | undefined, created = false, closed = false, active = 0, uncertain = false;
-  let parentOpen = true, returnFailure: unknown;
+  let parentOpen = true, returnFailure: unknown, retiring = false, closeTask: Promise<void> | undefined;
   const closeSource = (): void => { if (sourceFd !== undefined) { const fd = sourceFd; sourceFd = undefined; closeSync(fd); } };
   const closeRoot = (): void => { if (held !== undefined) { const fd = held; held = undefined; closeSync(fd); } };
   const closeParent = (): void => { if (parentOpen) { parentOpen = false; closeSync(parentFd); } };
@@ -65,21 +86,50 @@ export function createMacRuntimeGeneration(sourceInstallation: {
   const record = (path: string, directory: boolean): void => {
     const fd = heldEntry(path, directory); withCleanup(() => entries.push({ path, directory, ...identity(fd) }), () => closeSync(fd));
   };
-  const cleanup = (): void => {
-    const failures: unknown[] = [];
-    for (const entry of entries) try {
-      const fd = heldEntry(entry.path, entry.directory);
-      withCleanup(() => {
-        if (!same(fd, entry)) throw new Error("runtime generation entry changed before return");
-        if (darwinOwnedEntryFlags(fd) & 2) setDarwinUserImmutable(fd, false);
-      }, () => closeSync(fd));
-    } catch (error) { failures.push(error); }
+  // Hold each directory once. Reopening every full relative path for every
+  // entry made deep installed closures spend their budget on repeated walks.
+  const flagSteps = function* (seal: boolean): Generator<void, void, void> {
+    const children = new Map<string, Entry[]>(), failures: unknown[] = [];
+    for (const entry of entries) if (entry.path !== ".") {
+      const parent = dirname(entry.path), list = children.get(parent) ?? [];
+      list.push(entry); children.set(parent, list);
+    }
+    const change = (fd: number, entry: Entry): void => {
+      if (!same(fd, entry)) throw new Error("runtime generation entry changed before flag transition");
+      if (seal || darwinOwnedEntryFlags(fd) & 2) setDarwinUserImmutable(fd, seal);
+      if (seal && entry.directory) fsyncSync(fd);
+    };
+    const walk = function* (entry: Entry, fd: number): Generator<void, void, void> {
+      if (!seal) {
+        try { change(fd, entry); } catch (error) { failures.push(error); }
+        yield;
+      }
+      for (const child of children.get(entry.path) ?? []) {
+        try {
+          const opened = child.directory ? openBeneath(fd, basename(child.path), constants.O_RDONLY | constants.O_DIRECTORY) : openRegularBeneath(fd, basename(child.path));
+          yield* withIteratorCleanup(function* () {
+            if (child.directory) yield* walk(child, opened);
+            else { change(opened, child); yield; }
+          }, () => closeSync(opened));
+        } catch (error) { if (seal) throw error; failures.push(error); }
+      }
+      if (seal) { change(fd, entry); yield; }
+    };
+    if (entries[0] !== undefined) yield* walk(entries[0], held!);
     if (failures.length) throw new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation flags could not be returned", { cause: new AggregateError(failures) });
+  };
+  const cleanupSteps = function* (): Generator<void, void, void> {
+    yield* flagSteps(false);
     if (created) {
       const actual = openBeneath(parentFd, name, constants.O_RDONLY | constants.O_DIRECTORY);
       withCleanup(() => { if (!same(actual, identity(held!))) throw new Error("runtime generation root changed"); }, () => closeSync(actual));
       removeOwnedTreeAt(parentFd, name); created = false;
     }
+  };
+  const cleanup = (): void => completeIterator(cleanupSteps());
+  const finishReturn = (): void => {
+    closed = true;
+    try { cleanupAll([closeRoot, closeParent]); } catch (error) { returnFailure = error; throw error; }
   };
   try {
     const owner = fstatSync(parentFd);
@@ -92,6 +142,7 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     for (const path of [...directories].sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))) {
       const fd = dirname(path) === "." ? held : heldEntry(dirname(path), true);
       withCleanup(() => mkdirAt(fd!, basename(path), 0o700), () => { if (fd !== held) closeSync(fd!); }); record(path, true);
+      yield;
     }
     const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }): { readonly bytes: number; readonly sha256: string } => {
       const parent = dirname(path) === "." ? held! : heldEntry(dirname(path), true);
@@ -106,12 +157,14 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     };
     for (const file of manifest.files) {
       const fd = openRegularBeneath(sourceFd, file.path); withCleanup(() => copy(fd, file.path, file), () => closeSync(fd));
+      yield;
     }
     closeSource();
     for (const link of manifest.links) {
       const fd = dirname(link.path) === "." ? held : heldEntry(dirname(link.path), true);
       withCleanup(() => symlinkAt(relative(dirname(join(root, link.path)), join(root, link.target)), fd!, basename(link.path)),
         () => { if (fd !== held) closeSync(fd!); });
+      yield;
     }
     mkdirAt(held, ".oma-node-bin", 0o700); record(".oma-node-bin", true);
     const node = join(root, ".oma-node-bin/node"), nodeParent = openDirectory(dirname(installation.node));
@@ -131,18 +184,16 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     };
     const helperDigest = trustedAsset("packages/native/dist/job-helper/oma-job-helper"),
       seatbeltDigest = trustedAsset("packages/native/dist/seatbelt/oma-seatbelt");
-    if (digest(deploymentManifest(root)) !== installation.deploymentDigest) refused("private runtime inventory differs after copy");
-    for (const entry of [...entries].reverse()) {
-      const fd = heldEntry(entry.path, entry.directory);
-      withCleanup(() => { setDarwinUserImmutable(fd, true); if (entry.directory) fsyncSync(fd); }, () => closeSync(fd));
-    }
+    if (digest(yield* deploymentManifestSteps(root)) !== installation.deploymentDigest) refused("private runtime inventory differs after copy");
+    yield* flagSteps(true);
+    fsyncSync(parentFd);
     const installedEntries = new Set(manifest.files.filter(file => /\.(?:js|mjs|cjs)$/.test(file.path)).map(file => join(installation.libdir, file.path)));
     const privateEntries = new Set([...installedEntries].map(path => join(root, relative(installation.libdir, path))));
     return Object.freeze({ root, node,
       async launchNode(input: CommandSpec, options: DarwinJobScopeOptions = {}, policy?: SeatbeltPolicy) {
         let source: CommandSpec;
         try { source = snapshotCommand(input); } catch (error) { throw new ExecutionNotStarted(error); }
-        if (closed || uncertain) throw new ExecutionNotStarted(new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation is unavailable"));
+        if (closed || retiring || uncertain) throw new ExecutionNotStarted(new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation is unavailable"));
         if (source.executable !== installation.node || !installedEntries.has(source.argv[0] ?? "") ||
             Object.keys(source.env).some(key => source.env[key] !== undefined && /^(?:DYLD_|LD_|NODE_OPTIONS$|NODE_PATH$)/.test(key)))
           throw new ExecutionNotStarted(new StoreError("UNSUPPORTED_PROFILE", "runtime generation requires a selected installed Node entry and clean loader environment"));
@@ -172,13 +223,24 @@ export function createMacRuntimeGeneration(sourceInstallation: {
         if (returnFailure !== undefined) throw returnFailure;
         if (closed) return;
         if (active !== 0 || uncertain) throw new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation still has live or unconfirmed scopes");
-        cleanup(); closed = true;
-        try { cleanupAll([closeRoot, closeParent]); } catch (error) { returnFailure = error; throw error; }
+        if (retiring) throw new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation return is already pending");
+        cleanup(); finishReturn();
+      },
+      closeAsync() {
+        if (returnFailure !== undefined) return Promise.reject(returnFailure);
+        if (closed) return Promise.resolve();
+        if (closeTask !== undefined) return closeTask;
+        if (active !== 0 || uncertain) return Promise.reject(new StoreError("RUN_TERMINATION_UNKNOWN", "runtime generation still has live or unconfirmed scopes"));
+        retiring = true;
+        closeTask = scheduled(cleanupSteps()).then(finishReturn);
+        void closeTask.catch(() => {}); return closeTask;
       },
     });
   } catch (error) {
-    return withCleanup(() => { throw error; }, () => cleanupAll([
-      () => { if (held !== undefined) cleanup(); }, closeSource, closeRoot, closeParent,
-    ]));
+    const failures: unknown[] = [error];
+    try { if (held !== undefined) yield* cleanupSteps(); } catch (cleanup) { failures.push(cleanup); }
+    try { cleanupAll([closeSource, closeRoot, closeParent]); } catch (cleanup) { failures.push(cleanup); }
+    if (failures.length > 1) throw new AggregateError(failures, "Owned effect and cleanup failed");
+    throw error;
   }
 }

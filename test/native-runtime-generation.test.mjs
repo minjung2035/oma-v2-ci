@@ -2,11 +2,11 @@
  * independent of product Actor admission and startup/orphan recovery. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync, symlinkSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createMacRuntimeGeneration } from "#oma-test/app/runtime/mac-runtime-generation";
+import { createMacRuntimeGeneration, prepareMacRuntimeGeneration } from "#oma-test/app/runtime/mac-runtime-generation";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
 import { bundledJobHelper } from "@oma/platform-mac/job-launch";
@@ -23,8 +23,8 @@ test("001. Actual installed generation seals dependencies and private Node until
   let previous = performance.now();
   const phase = name => { const now = performance.now(); t.diagnostic(JSON.stringify({ phase: name, elapsedMs: now - previous })); previous = now; };
   mkdirSync(work, { mode: 0o700 });
-  let generation, owner, pin; const rows = [];
-  t.after(async () => { await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
+  let generation, owner, pin, heartbeat; let ticks = 0; const rows = [];
+  t.after(async () => { clearInterval(heartbeat); await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
   copyInstalledProduct(realpathSync(fileURLToPath(new URL("../", import.meta.url))), source);
   phase("fixture-installation");
   const entry = join(source, "apps/oma/dist/generation-probe.mjs");
@@ -53,7 +53,9 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   writeFileSync(join(fallback, "index.js"), 'module.exports="forbidden"');
   const installation = { libdir: source, node: realpathSync(process.execPath), deploymentDigest: deploymentDigest(source) };
   phase("source-digest");
-  generation = createMacRuntimeGeneration(installation, root);
+  heartbeat = setInterval(() => ticks++, 1);
+  generation = await prepareMacRuntimeGeneration(installation, root);
+  assert.ok(ticks > 0, "preparation must service the event loop while building the actual whole installation");
   phase("generation-construction");
   const command = { executable: installation.node, argv: [entry], env: { HOME: work, TMPDIR: work, PATH: dirname(generation.node) + ":/usr/bin:/bin" }, cwd: work,
     timeoutMs: 30000, stdoutBytes: 4096, stderrBytes: 8192 };
@@ -76,6 +78,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   const result = await owner.run({ slot: "generation", async launch() {
     const scope = selectedScope = await generation.launchNode(command, { imageDigests: { helper: "0".repeat(64), images: [] } }, policy);
     try { generation.close(); } catch (error) { prematureReturn = error; }
+    await assert.rejects(generation.closeAsync(), { code: "RUN_TERMINATION_UNKNOWN" });
     return scope;
   }, authorize() { pin = selectedScope.pinChild(); assert.equal(pin.alive(), true); } });
   phase("scope-execution-and-return");
@@ -85,7 +88,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   assert.equal(pin.alive(), false); pin.close();
   assert.equal(existsSync(join(work, "control")), true); assert.equal(existsSync(join(work, "code-alias")), false);
   assert.deepEqual(rows, []); assert.equal(deploymentDigest(source), installation.deploymentDigest);
-  generation.close(); assert.equal(existsSync(generation.root), false);
+  const beforeClose = ticks; await generation.closeAsync(); assert.ok(ticks > beforeClose); assert.equal(existsSync(generation.root), false);
   phase("generation-collection");
   generation.close(); assert.equal(existsSync(generation.root), false);
   assert.equal(deploymentDigest(source), installation.deploymentDigest);
@@ -112,6 +115,14 @@ for (const mismatch of ['helper','seatbelt']) test(`002. Generation refuses the 
  const entry=join(source,'apps/oma/dist/binding-probe.mjs');writeFileSync(entry,"throw Error('must not execute')");
  const installation={libdir:source,node:realpathSync(process.execPath),deploymentDigest:deploymentDigest(source)};
  if(process.platform!=='darwin')return assert.throws(()=>createMacRuntimeGeneration(installation,root),{code:'UNSUPPORTED_PROFILE'});
+ if(mismatch==='helper'){
+  const cancellation=new AbortController();let observedPartial=false;
+  const watch=setInterval(()=>{if(readdirSync(root).some(name=>name.startsWith('.oma-runtime-'))){observedPartial=true;cancellation.abort();}},1);
+  try{await assert.rejects(prepareMacRuntimeGeneration(installation,root,cancellation.signal),{code:'CANCELLED_BEFORE_COMMIT'});}
+  finally{clearInterval(watch);}
+  assert.equal(observedPartial,true);assert.deepEqual(readdirSync(root).filter(name=>name.startsWith('.oma-runtime-')),[]);
+  assert.equal(deploymentDigest(source),installation.deploymentDigest);
+ }
  generation=createMacRuntimeGeneration(installation,root);
  owner=new ExecutionCoordinator({entries:()=>rows.map(row=>({...row})),reserve(slot){const row={slot,execution:'binding',witness:null};rows.push(row);
   return {execution:row.execution,publish(witness){row.witness=witness;},retire(){rows.splice(rows.indexOf(row),1);}};},retire(){throw Error('unexpected recovery');}},()=>({kind:'unavailable'}));

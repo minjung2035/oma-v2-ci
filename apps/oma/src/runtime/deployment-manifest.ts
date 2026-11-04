@@ -10,8 +10,9 @@ import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/file
 import { directoryNames } from "@oma/file-descriptors";
 import { statAt } from "@oma/native/posix-files";
 import { assertWorkspaceResolution } from "./assets.js";
+import { completeIterator } from "@oma/native/cleanup";
 import { decodeUtf8 } from "@oma/domain/utf8";
-import { inventoryRuntimeModules, type DeploymentLink } from "./module-inventory.js";
+import { inventoryRuntimeModuleSteps, type DeploymentLink } from "./module-inventory.js";
 
 // The entry bound is sized for the compiled tree plus the vendored
 // extension payloads it ships: a vendored bundle is a full dependency
@@ -32,6 +33,9 @@ export interface DeploymentManifest {
 }
 
 export function deploymentManifest(root: string): DeploymentManifest {
+  return completeIterator(deploymentManifestSteps(root));
+}
+export function* deploymentManifestSteps(root: string): Generator<void, DeploymentManifest, void> {
   const files: DeploymentFile[] = [];
   const moduleDirectories: string[] = [];
   const directories = new Set<string>();
@@ -99,7 +103,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
       closeSync(fd);
     }
   };
-  const tree = (parent: number, name: string, path: string, depth = 0): void => {
+  const tree = function* (parent: number, name: string, path: string, depth = 0): Generator<void, void, void> {
     directories.add(path);
     if (name === "node_modules") moduleDirectories.push(join(root, path));
     if (++entries > MAX_ENTRIES || depth > 32)
@@ -111,8 +115,8 @@ export function deploymentManifest(root: string): DeploymentManifest {
     try {
       for (const name of directoryNames(fd)) {
         const child = statAt(fd, name);
-        if (child.isDirectory()) tree(fd, name, `${path}/${name}`, depth + 1);
-        else if (child.isFile()) file(fd, name, `${path}/${name}`);
+        if (child.isDirectory()) yield* tree(fd, name, `${path}/${name}`, depth + 1);
+        else if (child.isFile()) { file(fd, name, `${path}/${name}`); yield; }
         else throw new StoreError("UNSUPPORTED_PROFILE", "deployment contains a linked or special entry");
       }
     } finally {
@@ -127,15 +131,15 @@ export function deploymentManifest(root: string): DeploymentManifest {
     const roots = [...new Set([DEPLOYMENT_LAYOUT.compiledRoot, dirname(DEPLOYMENT_LAYOUT.contract),
       ...DEPLOYMENT_LAYOUT.workspaces.map(workspace => `${workspace.root}/dist`)])];
     for (const path of roots.filter(path => !roots.some(parent => path.startsWith(`${parent}/`))))
-      tree(rootFd, path, path);
+      yield* tree(rootFd, path, path);
     for (const path of [
       DEPLOYMENT_LAYOUT.schema,
       "package.json",
       "package-lock.json",
       ...DEPLOYMENT_LAYOUT.workspaces.map(workspace => `${workspace.root}/package.json`),
     ])
-      if (!files.some(entry => entry.path === path)) file(rootFd, path, path);
-    const modules = inventoryRuntimeModules(root, rootFd, lock, {
+      if (!files.some(entry => entry.path === path)) { file(rootFd, path, path); yield; }
+    const modules = yield* inventoryRuntimeModuleSteps(root, rootFd, lock, {
       entry() { if (++entries > MAX_ENTRIES) throw new StoreError("UNSUPPORTED_PROFILE", "deployment inventory exceeds bound"); },
       file, directory: path => moduleDirectories.push(join(root, path)),
       bound: (path, directory) => directory ? DEPLOYMENT_LAYOUT.workspaces.some(workspace => workspace.root === path) ||
@@ -146,6 +150,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     return Object.freeze({ version: 2, files: Object.freeze(files), directories: Object.freeze([...directories].sort()), links: modules.links });
   } catch (cause) {
+    if (cause instanceof StoreError && cause.code === "CANCELLED_BEFORE_COMMIT") throw cause;
     throw unobserved(cause, "the deployment inventory") ?? new StoreError(
       "UNSUPPORTED_PROFILE",
       "deployment inventory could not be verified",

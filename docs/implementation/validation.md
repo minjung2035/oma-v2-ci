@@ -2388,10 +2388,74 @@ review 상태는 CHANGED_WITHOUT_ORACLE29·NOT_REVIEWED14362·REMOVED220이며 �
 SOURCE54 owned-root 고정 production의 전체 module/architecture/graph/durable boundary/문서/spec gate가 PASS다.
 최종 변경은 이 결과 기록과 구조 input binding이며, SOURCE54 실제 Mac의 새 Resident 통합 결과는 아직 회수 전이다.
 
+### Generation 준비의 이벤트 처리·부분 반납과 Runner membership (SOURCE55)
+
+SOURCE54 `f9e1dafe51ec78cc7d2a71f2ef5aa93e6b8900db`는 Native
+[41932357288](https://github.com/minjung2035/oma-v2-ci/actions/runs/41932357288), Architecture
+[41932357293](https://github.com/minjung2035/oma-v2-ci/actions/runs/41932357293)에 발행했다.
+canonical15890/`1b8360db8f154f8c6793c90423c0c9ee4ccbc1e07463e6e8b7e8b2a9d17696c3`다.
+ARM shared ZIP13373000996 SHA-256
+`5d92235bebe05a21beca11e4b301d4921f47e4bccce31dc897351363336a9aeb`를 대조했다.
+387 tests/386 PASS/1 FAIL·cancel/skip/todo0이고 canonical은 위 값으로 전후 같다.
+runtime15526/27/`5f52b416781387bed316b3c86bfabca71859870543c92809d21ae74182efb04f`도 전후 같다.
+실패1건은 새 Resident fixture에서 실제 `darwin-resource-coalition` witness를 옛 audit-session으로 잘못 분기하여
+Linux pinNamespaceRunner를 호출한 것이다. 이 실패를 준비·PID hint의 일시 오류나 product PASS로 바꾸지 않는다.
+
+SOURCE55는 해당 분기를 현재 witness로 고치고 legacy/다른 physical witness를 Linux로 cast하지 않는다.
+coalition witness에는 PID/pidVersion이 없으므로 scopeRoot는 null을 유지하고 scopeIdentity만 전달한다.
+개인 채널의 BoundPeer에는 실제 independently retained child pin의 optional physical inScope 관측을 전달한다.
+Native는 자기 genuine pin의 full generation/watch·boot/CID를 현재 kernel에서 재검사하고,
+선택된 scope의 exact kind/boot/CID가 맞으며 여전히 살아 있는 경우에만 membership을 반환한다.
+공통 owner가 보유한 slot이나 caller의 PID/boolean을 membership으로 바꾸지 않는다.
+Broker의 current Actor/Run/spec/capability 검사는 그대로다. 새 시험은 다른 boot/CID와 exec/stop 뒤 거절을 요구한다.
+이 수정 후 실제 Mac App fixture는 아직 NOT_RUN이다.
+
+설치 inventory와 generation 생산자는 같은 generator 절차를 synchronous/async driver가 소비한다.
+파일·디렉터리의 inventory/복사/봉인 사이에 이벤트 처리를 재개하며, abort는 한 번만 generator에 전달한다.
+그 뒤 부분 generation의 정리와 descriptor 반환이 끝날 때까지 driver를 계속 진행한다.
+Broker는 pending preparation을 명시적으로 보유하고 shutdown이 이를 합류한 뒤 native owner와 generation을 반납한다.
+async close를 시작하면 generation의 새 launch를 닫고, active/unknown scope에서는 여전히 반환을 거절한다.
+이 단계는 crash 뒤 orphan adoption/collection이 아니다.
+
+실제 SOURCE53 Intel whole-generation 시험은 265656ms였고 설정 timeout240초보다 길었다.
+동기 constructor/cleanup의 긴 구간을 실제 240초 충족 증거로 쓰지 않는다.
+SOURCE55는 봉인/해제 때 각 파일의 긴 전체 상대 경로를 반복 재개방하는 대신 부모 directory descriptor를 유지한다.
+각 entry의 원래 dev/ino, Native 소유·single-link·ABI/flags 전후 검사와 directory flush는 유지한다.
+root parent도 봉인 완료 뒤 flush한다. 기존 timeout240초는 늘리지 않는다.
+개별 Native copy/fsync와 마지막 removeOwnedTreeAt는 동기 작업이므로 모든 I/O의 8ms 상한을 증명한 것은 아니다.
+실제 latency/Host-loss·orphan qualification은 추가 검증이 필요하다.
+
+Worker의 직접 private-profile Node argv에도 --no-global-search-paths를 넣는다.
+fixture는 일반 Runner에서 HOME의 실제 global module을 읽어 양성 대조하고,
+직접 Seatbelt Worker에서는 같은 bytes의 읽기는 가능하지만 require는 MODULE_NOT_FOUND여야 한다.
+original Host/full CID·양방향 bytes/EOF·같은 Node image 검사는 유지한다.
+Linux Node26의 별도 실제 대조도 flag 없음→module 값, flag 있음→MODULE_NOT_FOUND를 확인했다.
+새 Darwin loader/준비 abort/heartbeat·collect 경로는 아직 NOT_RUN이며 product guard는 유지한다.
+
+첫 cooperative build와 관련29/29는 PASS였고, 실제 Intel 소요시간 확인 뒤 directory walk를 보강했다.
+SOURCE54 실패 회수 뒤 witness/membership 수정까지 최종 build가 PASS다.
+고정 관련59/59가 PASS이며 Linux에서는 실제 iterator/FD 반납·inventory/정책·backend refusal을 확인했다.
+Mac 전용 가지의 Linux 통과를 실제 Mac positive로 기록하지 않는다.
+첫 Linux scope harness는 Node 실행 경로 오타로 child test 전 실패했으며 수정 실행을 별도로 기록한다.
+세 product gate OPEN·native-support/default blocked launch·미완료 Society lease/orphan/full CLI/reboot는 유지한다.
+
+SOURCE55 고정 production의 실제 Linux/compiled Runner 선택33/33은 실행 경로를 고친 별도 harness에서 PASS다.
+고정 review 상태는 CHANGED_WITHOUT_ORACLE30·NOT_REVIEWED14361·REMOVED220이며 승인을 생성하지 않았다.
+전체 architecture를 이 input에 결박하여 실행한다.
+
+SOURCE55 첫 architecture는 collection 함수가 generator 본문으로 이동했는데 boundary registry가 옛 wrapper 이름을 가리켜 실패했다.
+registry owner만 runtimeGenerationSteps로 갱신하고 기존 logical 시험·fact·injection 강도는 그대로 유지했다.
+이를 SIGKILL/orphan/power-loss 증거로 올리지 않는다. 이 metadata 수정 뒤 input을 다시 결박한다.
+
+SOURCE55 최종 고정 production의 build·선택59/59·실제 Linux/compiled Runner33/33·독립 packed27/27이 PASS다.
+module/architecture/graph/transactions는 PASS이며, boundary owner metadata를 고친 뒤 boundary/문서/spec도 PASS다.
+실제 whole-generation fixture는 같은 live scope에서 sync/async close 양쪽 거절을 요구하도록 확장했다.
+이 추가 assertion과 결과 기록 뒤 구조 input을 다시 결박한다. 새 Mac positive는 아직 NOT_RUN이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `1b8360db8f154f8c6793c90423c0c9ee4ccbc1e07463e6e8b7e8b2a9d17696c3` (15890 files).
+verification input digest `57e3ab09a30a7304db5a93e02475e9414a85defb403110d8469c5139475bc947` (15890 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

@@ -9,7 +9,7 @@ import type { BoundPeer } from "@oma/broker/ports";
 import { SharedPeerPin } from "@oma/broker/peer-pin";
 import { ResidentRuntime } from "@oma/process/resident-runtime";
 import { controlSocketPair } from "@oma/native/control-socket";
-import { pinNamespaceRunner, type NamespaceInitIdentity } from "@oma/native/pid-namespace";
+import { pinNamespaceRunner } from "@oma/native/pid-namespace";
 import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { cleanupAll } from "@oma/native/cleanup";
 import { runnerScope } from "@oma/platform-linux/runner-scope";
@@ -115,17 +115,19 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
         const inherited = child; child = undefined; closeSync(inherited);
         const witness = ticket.witness;
         const pin = await acquireExecutionChild(ticket, () => {
-          if (witness.kind === "darwin-audit-session") {
+          if (witness.kind === "darwin-resource-coalition") {
             if (ticket!.pinChild === undefined) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Darwin Resident has no independently held child pin");
             return { kind: "ready", pin: ticket!.pinChild() };
           }
-          try { return { kind: "ready", pin: pinNamespaceRunner(witness as NamespaceInitIdentity) }; }
+          if (witness.kind !== "linux-namespace") throw new StoreError("RUN_TERMINATION_UNKNOWN", "Resident producer returned an unsupported physical witness");
+          try { return { kind: "ready", pin: pinNamespaceRunner(witness) }; }
           catch (error) { if ((error as NodeJS.ErrnoException).code === "EAGAIN") return { kind: "waiting" }; throw error; }
         }, signal, config.limits.receiptWaitSeconds * 1000);
         const owner = new SharedPeerPin(() => pin.alive(), () => pin.close());
         const peer: BoundPeer = Object.freeze({ pid: pin.pid, uid: pin.uid, gid: pin.gid,
           sameSender: () => false, // This private channel never accepts an observed-message transport.
           inheritedRunner: Object.freeze({ actor, invocationId: ticket.execution.replaceAll("-", "") }),
+          ...(pin.inScope === undefined ? {} : { inScope: (identity: unknown) => owner.alive() && pin.inScope!(identity) && owner.alive() }),
           alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() });
         const connection = { socket, peer }; channels.set(actor, connection);
         socket.once("close", () => {

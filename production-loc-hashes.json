@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "aa965600ce8805515675b0b139a294a17896f79a14eb64fe732564f47e150821"
+      "sha256": "994e219c14fad551a170e5e520373f3fc3916eeebd12f94963ad47a16c59e837"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -272,7 +272,7 @@
     },
     {
       "path": "apps/oma/src/runtime/deployment-manifest.ts",
-      "sha256": "13263deba34df83b6d0983c00b95c0e219cc881ca141af19e373864f815ef094"
+      "sha256": "21213fb55f3583ef91cc6397a1a93d0b812c3f2249ac5b173b5d193d9b5d616b"
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
@@ -340,15 +340,15 @@
     },
     {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "0e51d8271c3cda758f131910289c603ef22d65aba1fa61c454fb13dbbb472e57"
+      "sha256": "bab4ba294f46db9d6c4674f1414f0f881979edef0d511383c89cc04736c28165"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
-      "sha256": "a7ba4b30aab7a9bbc8f20adccb668b05c0236f6d66854de1c1688d634758ddee"
+      "sha256": "2f1ca96401954508d4e5d0fb167fa38326a76e121b4cf57c9d7bc49da03d16de"
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "c337d2591aa2a83b6d40b01a70d058d331096d2f2c38849f1578f79325c27a9e"
+      "sha256": "fa3b8e5c4930c52b8ea57e1a3911c604df9fc413a70102c86d440ea35e748fb6"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -1464,7 +1464,7 @@
     },
     {
       "path": "packages/native/src/cleanup.ts",
-      "sha256": "23a154ccf635b62e97a401746f2d191af0010acbe5a369ef2d8bd79a2f6524cc"
+      "sha256": "cc33d2814e093663311099522266d53da71c6eab44726fbe1b2784ea025938a8"
     },
     {
       "path": "packages/native/src/control-socket.ts",
@@ -1480,7 +1480,7 @@
     },
     {
       "path": "packages/native/src/darwin-job-control.ts",
-      "sha256": "f6f14306aadf1ad2b59297f6706f3fc7b624ad158380f29d5063bf6d007310a2"
+      "sha256": "b28d1efb49017424aebd39a2b8736e3128d6fc299a89a9c8106a45d52c0e6248"
     },
     {
       "path": "packages/native/src/darwin-job-launch.ts",
@@ -1728,7 +1728,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "42718bb624a29b8124728370d5094b16ee0f18f842d2d31300fedd384dd674f9"
+      "sha256": "69acc6335d0ef30976667be1001af8c0378a7c3b649f87b4530d3cf8a66de66b"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
@@ -1764,7 +1764,7 @@
     },
     {
       "path": "packages/process/src/execution-scope.ts",
-      "sha256": "65d9b425ed69fda576b9fbe48c41e6dfa865439272397e74751314d10c526970"
+      "sha256": "911f9b9f2686870a085f2f444a0387e5698fbef9774825931eb03c74d0bf467b"
     },
     {
       "path": "packages/process/src/execution-witness.ts",

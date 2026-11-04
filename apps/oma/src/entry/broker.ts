@@ -7,7 +7,7 @@ import { createMailModule } from "../broker/mail-composition.js";
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { createHash } from "node:crypto";
 import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
-import { createMacRuntimeGeneration, type MacRuntimeGeneration } from "../runtime/mac-runtime-generation.js";
+import { prepareMacRuntimeGeneration, type MacRuntimeGeneration } from "../runtime/mac-runtime-generation.js";
 import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
@@ -138,6 +138,7 @@ async function main(): Promise<void> {
     let executions: ExecutionRuntime | null = null;
     let residents: NativeResidents | null = null;
     let runtimeGeneration: MacRuntimeGeneration | undefined;
+    let runtimePreparation: Promise<MacRuntimeGeneration> | null = null;
     let storageResidents: readonly StorageResident[] | null = null;
     let freshVerifiedMain: string | undefined;
     let principalHost: ReturnType<typeof openSupervisionChannel>;
@@ -153,6 +154,8 @@ async function main(): Promise<void> {
                 await storagePreparation.catch(() => { });
             if (toolPreparation !== null)
                 await toolPreparation.catch(() => { });
+            if (runtimePreparation !== null)
+                await runtimePreparation.catch(() => {});
             await lifetime.shutdown();
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
                 try { await sessionStorage.close(storageResidents, storageCloseMode); }
@@ -205,12 +208,14 @@ async function main(): Promise<void> {
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
         executions = new ExecutionRuntime(stateRoot, process.platform === "darwin" ? launchDarwinJobScope : undefined);
         const nativeOwner = executions;
-        lifetime.retainNative(() => withAsyncCleanup(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()), () => runtimeGeneration?.close()));
+        lifetime.retainNative(() => withAsyncCleanup(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()), () => runtimeGeneration?.closeAsync()));
         await executions.recover();
         if (process.platform === "darwin") {
             const cache = join(dirname(stateRoot), ".runtime-" + createHash("sha256").update(stateRoot).digest("hex"));
             ensureOwnedUserDirectory(cache, cache);
-            runtimeGeneration = createMacRuntimeGeneration(cfg.installation, cache);
+            runtimePreparation = prepareMacRuntimeGeneration(cfg.installation, cache, preparationAbort.signal);
+            runtimeGeneration = await runtimePreparation;
+            if (stopping !== null) { await stopping; return; }
         }
         if (cfg.resources !== undefined) {
             const resources = executions.configureResources(cfg.resources, stateRoot);

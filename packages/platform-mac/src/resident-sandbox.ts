@@ -60,7 +60,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker requires its exact trusted client preload");
   const env = { ...environment, ...base, NODE_OPTIONS: nodeOptions, OMA_ACTOR: lease.actor,
     OMA_FRAME_BYTES: String(host.limits!.frameBytes), OMA_BATCH_MAX_MESSAGES: String(host.limits!.batchMaxMessages) };
-  return prepareSeatbelt({ executable: host.node, argv: [host.pi, ...host.piModeArgs], cwd: directories.workspace, env,
+  return prepareSeatbelt({ executable: host.node, argv: ["--no-global-search-paths", host.pi, ...host.piModeArgs], cwd: directories.workspace, env,
     timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }, {
     readable, writable,
     denied: (host.hidden ?? []).map(entry => ({ path: join(host.libdir, entry.path), kind: entry.kind === "dir" ? "directory" : "file" })),

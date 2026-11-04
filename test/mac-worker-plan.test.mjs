@@ -20,7 +20,7 @@ function fixture(){
 }
 test("001. Mac Worker shared Pi plan retains physical session, package, relay and egress paths without a model CLI",()=>{
   const {options}=fixture(),sandbox=macResidentSandbox(tools),plan=planPiSpawn(sandbox,options),dirs=options.confinement.directories;
-  assert.equal(plan.args[1],options.confinement.host.pi);
+  assert.equal(plan.args[1],"--no-global-search-paths");assert.equal(plan.args[2],options.confinement.host.pi);
   assert.equal(plan.args[plan.args.indexOf('--session-dir')+1],dirs.sessions);
   assert.equal(plan.args[plan.args.indexOf('-e')+1],options.paths.coreExtension);
   assert.equal(plan.env.OMA_CLI,undefined);

@@ -118,6 +118,9 @@ test("005. A selected stopped child yields an independent generation pin that ex
     return scope;
   }, authorize() {
     pin = scope.pinChild(); assert.equal(pin.alive(), true);
+    assert.equal(pin.inScope(scope.witness), true);
+    assert.equal(pin.inScope({ ...scope.witness, coalitionId: String(BigInt(scope.witness.coalitionId) + 1n) }), false);
+    assert.equal(pin.inScope({ ...scope.witness, bootId: "00000000-0000-4000-8000-000000000000" }), false);
     const independent = scope.pinChild(); independent.close(); assert.equal(pin.alive(), true);
   } });
   assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
@@ -144,7 +147,7 @@ test("006. Exec at the same PID and coalition revokes the retained selected chil
   await waitFile("started"); assert.equal(Number(readFileSync(join(f.root, "started"))), pin.pid);
   assert.equal(pin.alive(), true); writeFileSync(join(f.root, "replace"), "go"); await waitFile("replaced");
   assert.equal(Number(readFileSync(join(f.root, "replaced"))), pin.pid, "exec retains the same numeric PID");
-  assert.equal(ticket.population(), "populated"); assert.equal(pin.alive(), false);
+  assert.equal(ticket.population(), "populated"); assert.equal(pin.alive(), false); assert.equal(pin.inScope(ticket.witness), false);
   assert.throws(() => ticket.pinChild(), { code: "RUN_TERMINATION_UNKNOWN" });
   await ticket.stop(); await ticket.completion; assert.deepEqual(f.rows, []);
 });

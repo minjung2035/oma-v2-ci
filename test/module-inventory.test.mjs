@@ -2,11 +2,11 @@
  * these do not qualify immutable execution or a native scope. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDirectory, openRegularBeneath } from "@oma/native/files";
-import { productionModuleRoots, inventoryRuntimeModules } from "#oma-test/app/runtime/module-inventory";
+import { productionModuleRoots, inventoryRuntimeModules, inventoryRuntimeModuleSteps } from "#oma-test/app/runtime/module-inventory";
 import { deploymentManifest } from "#oma-test/app/runtime/deployment-manifest";
 import { fileURLToPath } from "node:url";
 
@@ -51,6 +51,14 @@ test("002. Actual contained traversal pins nested code, native bytes, direct bin
   for (const [path, bytes] of Object.entries(content)) assert.deepEqual(files.get(path), Buffer.from(bytes));
   assert.deepEqual(result.links, [{ path: "node_modules/pkg/node_modules/.bin/helper", target: "node_modules/pkg/node_modules/helper/bin.js" }]);
   assert.ok(result.directories.includes("node_modules/pkg/empty")); assert.deepEqual(namespaces, ["node_modules/pkg/node_modules"]);
+  for (const ending of ["return", "cancel"]) {
+    const descriptors = () => readdirSync("/dev/fd").sort();
+    const before = descriptors(), steps = inventoryRuntimeModuleSteps(root, held, lock, callbacks);
+    assert.equal(steps.next().done, false, "actual parent and child directory handles stay owned across a yield");
+    if (ending === "return") steps.return(undefined);
+    else { const primary = new Error("cancel traversal"); assert.throws(() => steps.throw(primary), error => error === primary); }
+    assert.deepEqual(descriptors(), before, "iterator termination must return every acquired directory handle");
+  }
   symlinkSync("../../../../../outside", join(root, "node_modules/pkg/node_modules/.bin/escape"));
   assert.throws(() => inventoryRuntimeModules(root, held, lock, callbacks), { code: "UNSUPPORTED_PROFILE" });
 });
