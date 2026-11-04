@@ -5,38 +5,16 @@ import type { ProcessObservation } from "./command.js";
 import { StoreError } from "@oma/domain/errors";
 import { canonicalJson } from "@oma/domain/canonical-json";
 import { setTimeout } from "node:timers/promises";
-import { retainNativeExecution } from "./preparation.js";
+import { retainNativeExecution } from "./preparation-lifetime.js";
 import { withCleanup, withAsyncCleanup } from "@oma/native/cleanup";
 
-/** A transient physical child observation, independently owned by its caller.
- * This contains no Actor identity, role, accepted plan or durable receipt. */
-export interface ExecutionProcessPin {
-  readonly pid: number; readonly uid: number; readonly gid: number;
-  alive(): boolean;
-  close(): void;
-}
-export interface BlockedExecution<Witness> {
-  readonly pinChild?: () => ExecutionProcessPin;
-  readonly witness: Witness;
-  /** Trusted setup may continue after the kernel witness is published. No
-   * arbitrary workload is released until this and a fresh authority check. */
-  readonly prepared?: Promise<void>;
-  /** Leader or supervisor termination before capture/FD drain. This requests
-   * settlement; it never proves the scope empty or its resources returned. */
-  readonly terminal?: Promise<void>;
-  readonly result: Promise<ProcessObservation>;
-  readonly closed: Promise<void>;
-  population(): "populated" | "empty" | "unknown";
-  release(): void;
-  terminate(): void;
-  close(): void;
-}
+import type { BlockedExecution, ExecutionProcessPin, RecoveryScope } from "./execution-scope.js";
+export type { BlockedExecution, ExecutionProcessPin, RecoveryScope } from "./execution-scope.js";
 export interface ExecutionReservation<Witness> { readonly execution: string; publish(witness: Witness): void; retire(): void }
 /** Backend evidence that child creation did not succeed. This is narrower
  * than a failed, cancelled or closed launcher whose descendants are unknown. */
-export class ExecutionNotStarted extends Error {
-  constructor(cause: unknown) { super("execution scope was not created", { cause }); }
-}
+import { ExecutionNotStarted } from "@oma/domain/process-command";
+export { ExecutionNotStarted } from "@oma/domain/process-command";
 export interface ExecutionJournalPort<Witness> {
   entries(): readonly { readonly slot: string; readonly execution: string; readonly witness: Witness | null }[];
   reserve(slot: string): ExecutionReservation<Witness>;
@@ -82,12 +60,6 @@ export async function acquireExecutionChild<Pin extends { close(): void }>(ticke
   }
 }
 type Observation<Witness> = { readonly kind: "running"; readonly identity: Witness } | { readonly kind: "exited" | "unavailable" };
-export interface RecoveryScope<Witness> {
-  readonly identity: Witness;
-  population(): "populated" | "empty" | "unknown";
-  terminate(): void;
-  close(): void;
-}
 interface Owned<Witness> {
   readonly reservation: ExecutionReservation<Witness>;
   scope: BlockedExecution<Witness> | null;

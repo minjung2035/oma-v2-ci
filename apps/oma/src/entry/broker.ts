@@ -19,6 +19,7 @@ import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "@oma/git";
 import { CandidateChecks } from "../runtime/candidate-checks.js";
 import { quarantineExecution } from "../runtime/quarantine-execution.js";
+import { launchDarwinJobScope } from "@oma/platform-mac/job-scope";
 import { ExecutionRuntime } from "../runtime/execution-runtime.js";
 import { prepareResidentTools } from "../runtime/resident-tools.js";
 import type { MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
@@ -198,7 +199,7 @@ async function main(): Promise<void> {
         // No schema search, path flattening or cross-installation fallback.
         assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH });
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
-        executions = new ExecutionRuntime(stateRoot);
+        executions = new ExecutionRuntime(stateRoot, process.platform === "darwin" ? launchDarwinJobScope : undefined);
         const nativeOwner = executions;
         lifetime.retainNative(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()));
         await executions.recover();

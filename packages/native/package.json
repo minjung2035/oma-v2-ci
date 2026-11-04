@@ -83,6 +83,34 @@
     "./audit-origin": {
       "types": "./dist/audit-origin.d.ts",
       "default": "./dist/audit-origin.js"
+    },
+    "./darwin-job-control": {
+      "types": "./dist/darwin-job-control.d.ts",
+      "default": "./dist/darwin-job-control.js"
+    },
+    "./darwin-job-launch": {
+      "types": "./dist/darwin-job-launch.d.ts",
+      "default": "./dist/darwin-job-launch.js"
+    },
+    "./darwin-launchd-job": {
+      "types": "./dist/darwin-launchd-job.d.ts",
+      "default": "./dist/darwin-launchd-job.js"
+    },
+    "./darwin-macho-image": {
+      "types": "./dist/darwin-macho-image.d.ts",
+      "default": "./dist/darwin-macho-image.js"
+    },
+    "./mach-poll": {
+      "types": "./dist/mach-poll.d.ts",
+      "default": "./dist/mach-poll.js"
+    },
+    "./darwin-job-peer": {
+      "types": "./dist/darwin-job-peer.d.ts",
+      "default": "./dist/darwin-job-peer.js"
+    },
+    "./darwin-job-assets": {
+      "types": "./dist/darwin-job-assets.d.ts",
+      "default": "./dist/darwin-job-assets.js"
     }
   },
   "scripts": {
@@ -92,7 +120,8 @@
   },
   "dependencies": {
     "@oma/domain": "0.1.0",
-    "koffi": "^3.2.1"
+    "koffi": "^3.2.1",
+    "@oma/file-descriptors": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
@@ -100,10 +129,16 @@
   },
   "oma": {
     "assets": [
-      "metadata/main.c"
+      "metadata/main.c",
+      "seatbelt/main.c",
+      "seatbelt/launch-fds.h",
+      "job-helper/main.c",
+      "job-helper/config.h"
     ],
     "darwinExecutables": [
-      "metadata/oma-file-metadata"
+      "metadata/oma-file-metadata",
+      "seatbelt/oma-seatbelt",
+      "job-helper/oma-job-helper"
     ],
     "isolationSmoke": "test/installed-runtime.mjs"
   }

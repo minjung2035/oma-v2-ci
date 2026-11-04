@@ -101,17 +101,11 @@
   },
   "oma": {
     "assets": [
-      "seatbelt/main.c",
-      "seatbelt/launch-fds.h",
-      "job-helper/main.c",
-      "job-helper/config.h",
       "keychain/main.swift",
       "keychain/oma-keychain.entitlements"
     ],
     "isolationSmoke": "test/installed-runtime.mjs",
     "darwinExecutables": [
-      "seatbelt/oma-seatbelt",
-      "job-helper/oma-job-helper",
       "keychain/oma-keychain"
     ]
   }

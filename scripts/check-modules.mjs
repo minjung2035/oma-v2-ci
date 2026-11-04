@@ -7,8 +7,10 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { darwinExecutables } from "./workspace-executables.mjs";
 
+// Native launchd registration reuses the existing descriptor leaf; that leaf
+// still depends only on koffi and cannot import Native or business owners.
 export const ALLOWED_WORKSPACE_DEPENDENCIES = Object.freeze({
-  contracts: [], domain: ["contracts"], native: ["contracts", "domain"], process: ["contracts", "domain", "native"], protocol: ["contracts", "domain"],
+  contracts: [], domain: ["contracts"], native: ["contracts", "domain", "file-descriptors"], process: ["contracts", "domain", "native"], protocol: ["contracts", "domain"],
   config: ["contracts", "domain", "protocol", "native", "file-descriptors", "storage"],
   git: ["contracts", "domain", "protocol", "process", "native", "file-descriptors", "storage", "tool-files"],
   app: ["broker","client","config","contracts","domain","engine","extension","file-descriptors","git","lifecycle","mail","native","platform-linux","platform-mac","process","protocol","reconcile","review","storage","tool-files","tool-hashline","tool-lsp","tool-mcp","tool-runtime","tool-web","tui"],

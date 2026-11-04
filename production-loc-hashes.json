@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "28322c75d15d66af533cf752e7a8076e59e2ad6a329876a784dec3cdc34edbb3",
+  "manifest": "a94b3c3bf667a0127f17e7baabc6d166617d2d8b55e845f0e6c98a8699bc5a4e",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "cfa82116946c738f3976309e1a06834d71903befd68c4bff3c762d9419d71f9d"
+      "sha256": "9d1d25ae1ec181a748c63504c638c8109edb2dd91d2eceb61491ecab61821562"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "e225e06f977f2d35b01c5ead542d908268923385e3d0c3c7e438a5c411e5cbfd"
+      "sha256": "f7118a1efce28d07bded65ebd4296cf735610f44e27c09954924323635f6d120"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -708,7 +708,7 @@
     },
     {
       "path": "packages/domain/package.json",
-      "sha256": "79b6df7d309a256af00106e5efa588baf4237eb1058ec107c393fd9875428915"
+      "sha256": "ac741e4668aeb43a2fbca025d76a3533131946be28d2a899cfd2151c2ed2354e"
     },
     {
       "path": "packages/domain/src/actor-address.ts",
@@ -865,6 +865,10 @@
     {
       "path": "packages/domain/src/paths.ts",
       "sha256": "8c8af0de90dd29d48c0686ed1fdb38bad28a24affbc6665e6d500cef7dddf89d"
+    },
+    {
+      "path": "packages/domain/src/process-command.ts",
+      "sha256": "c08e4baa015a0a6c13e8ad7425c5266ed8ecd7a64caacc1aaf53d94c3e877485"
     },
     {
       "path": "packages/domain/src/protocol-limits.ts",
@@ -1444,7 +1448,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "53ef524e86f0faa5be38ac27bac5233013fa20cca3519d1e9c1d948b67f82c42"
+      "sha256": "3067eea24e39a3e110e17d5b535f3ef6e0e3cd3edce356ad8c735cab178a07c6"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1471,6 +1475,30 @@
       "sha256": "466dc48588c823f81b9e515756dfb025396ec47fc63f8ed136920d25049d1939"
     },
     {
+      "path": "packages/native/src/darwin-job-assets.ts",
+      "sha256": "2a33af3a03a89bf08bc7152742ada1856a5e910b92ef888f68695ae14a3fa4d4"
+    },
+    {
+      "path": "packages/native/src/darwin-job-control.ts",
+      "sha256": "667646244ae8abcd963ad7821ea1ccd9cdd2d803093ed1f1da8e382168e41a57"
+    },
+    {
+      "path": "packages/native/src/darwin-job-launch.ts",
+      "sha256": "fa3c02a5ff15f6ea6dfe2bd8a0fe99a31f6956bf7ca314f5f7b0bfe0991f034d"
+    },
+    {
+      "path": "packages/native/src/darwin-job-peer.ts",
+      "sha256": "e35ad6d9582d30f23997610a4c459c82305434ec01c9283099f4c11cb02c666f"
+    },
+    {
+      "path": "packages/native/src/darwin-launchd-job.ts",
+      "sha256": "4297fe0314863c514d5a40020c5746cd7d3971427a4c445f21e2eaeb69878823"
+    },
+    {
+      "path": "packages/native/src/darwin-macho-image.ts",
+      "sha256": "2104a0af71477e702fa2dbf6e3e629b3855277c0620a13759da99b36f1b0a1e0"
+    },
+    {
       "path": "packages/native/src/darwin-metadata.ts",
       "sha256": "5c1844bca226513ba71b8d2f076ac4e92e6dba9cbf568661e6dfe801621d7c07"
     },
@@ -1491,12 +1519,24 @@
       "sha256": "5054c3b769002f950bcd4c5e0e7a2338646a545165e1b9a1b75407a24a18fa18"
     },
     {
+      "path": "packages/native/src/job-helper/config.h",
+      "sha256": "8cbb8ab392b1145d411c969c9c018e56a00c1ae8e327f5eddaaaf8f181046888"
+    },
+    {
+      "path": "packages/native/src/job-helper/main.c",
+      "sha256": "ae622ac110ce06a8966cc973fb1394162891184fb52c93d0c292e00e75826387"
+    },
+    {
       "path": "packages/native/src/linux.ts",
       "sha256": "71291ca4f9bde276948f820805bf0e66824a0a82c769de618c69f9fe0cfbe6be"
     },
     {
       "path": "packages/native/src/mach-message.ts",
       "sha256": "cdb05f65b288bce5815b5ae11a33ef015b596f99ce5da0c45df7dba537798004"
+    },
+    {
+      "path": "packages/native/src/mach-poll.ts",
+      "sha256": "108a0a8596707b8d09c711ceea3b8f6765e8273b2ba7dae2e6705d36400c3b8f"
     },
     {
       "path": "packages/native/src/metadata-observation.ts",
@@ -1529,6 +1569,14 @@
     {
       "path": "packages/native/src/process-observation.ts",
       "sha256": "0f690d888f2daa5a69502f34914b9a81c66543e1860acc538335fce5a84ce979"
+    },
+    {
+      "path": "packages/native/src/seatbelt/launch-fds.h",
+      "sha256": "a7fbfe42d04ce8654ebb90686ee6a6f366f23f54b92c88bb3ab70fdc6ebc99de"
+    },
+    {
+      "path": "packages/native/src/seatbelt/main.c",
+      "sha256": "8879a715a46a4e1f81b658bb2a81a101833eed0c06095e9360f4973c44d366cc"
     },
     {
       "path": "packages/native/src/snapshot-reader.ts",
@@ -1592,7 +1640,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "48632a71ffb84ee3e51eb5e1ce11c20408ffd068f4a1d969a852054798e552e7"
+      "sha256": "3b0c45783bd4b69af05638e37aec7fb3013279d7af35e0345deff8d20ae76aa1"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1612,19 +1660,11 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "7e53a06ed179767b4087632a332ec24777bba88784636e8a30938d80e670cff8"
-    },
-    {
-      "path": "packages/platform-mac/src/job-helper/config.h",
-      "sha256": "8cbb8ab392b1145d411c969c9c018e56a00c1ae8e327f5eddaaaf8f181046888"
-    },
-    {
-      "path": "packages/platform-mac/src/job-helper/main.c",
-      "sha256": "ae622ac110ce06a8966cc973fb1394162891184fb52c93d0c292e00e75826387"
+      "sha256": "36401f1d290dceae62a554f2f1e9a3119b1051ee2c34c50172f2901470f9d3b8"
     },
     {
       "path": "packages/platform-mac/src/job-launch.ts",
-      "sha256": "f76dc886e10dc184c161473c4c822e81800693a1df141b087e86655b37cc5da7"
+      "sha256": "d557a0af493f6741d334320f536f403c43faf06978318682e7ea433343b80f15"
     },
     {
       "path": "packages/platform-mac/src/job-recovery.ts",
@@ -1632,7 +1672,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-scope.ts",
-      "sha256": "281f179ec53c3cf8d244863c188b427aece336797a36ced09d47f1fa46a3b2a3"
+      "sha256": "95e52aa339cfc4391337523a4722ccb8860d2993f8414cdfffd40c7f2c4e6091"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1648,7 +1688,7 @@
     },
     {
       "path": "packages/platform-mac/src/launchd-job.ts",
-      "sha256": "24e965c547be0cf483b8cacd68428e92fbba69bc7165b9ab697112f801d288f5"
+      "sha256": "2ba7398e0cc99ecd9d6f711a5c16fb96002113136fd3b2cbe4fed9589a93576c"
     },
     {
       "path": "packages/platform-mac/src/mach-address.ts",
@@ -1656,11 +1696,11 @@
     },
     {
       "path": "packages/platform-mac/src/mach-peer-source.ts",
-      "sha256": "ea52df9694da20796c164235a54a416289a64d0ea5a8526fd4413ff0cc882828"
+      "sha256": "edce79e489281b0c23ff0917aa97ab78c34f8cbef3e1c162c0d55ff79e6cd832"
     },
     {
       "path": "packages/platform-mac/src/mach-poll.ts",
-      "sha256": "108a0a8596707b8d09c711ceea3b8f6765e8273b2ba7dae2e6705d36400c3b8f"
+      "sha256": "16daa5b58d965698de15d55d4d1cf48e67bd652cfa502b56c0592bb6c0ba5015"
     },
     {
       "path": "packages/platform-mac/src/mach-stream.ts",
@@ -1672,7 +1712,7 @@
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",
-      "sha256": "2104a0af71477e702fa2dbf6e3e629b3855277c0620a13759da99b36f1b0a1e0"
+      "sha256": "f693b6b8bb807d808345156940811726c7f7c153c262f823847f521c97d128f2"
     },
     {
       "path": "packages/platform-mac/src/native-assets.ts",
@@ -1692,19 +1732,11 @@
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
-      "sha256": "62502ba30bcb2e3a04d9e8d4d1db6007c31b893a15b4395a4de42b18c65165f1"
-    },
-    {
-      "path": "packages/platform-mac/src/seatbelt/launch-fds.h",
-      "sha256": "a7fbfe42d04ce8654ebb90686ee6a6f366f23f54b92c88bb3ab70fdc6ebc99de"
-    },
-    {
-      "path": "packages/platform-mac/src/seatbelt/main.c",
-      "sha256": "8879a715a46a4e1f81b658bb2a81a101833eed0c06095e9360f4973c44d366cc"
+      "sha256": "bc2c8e367005cc41894a83f03196b0430199501db7d0af7649d20b25765016eb"
     },
     {
       "path": "packages/process/package.json",
-      "sha256": "3b8becadd2c5aec03fb537e47f49f5da2381acc0b08b20b21d836f44d7d336d3"
+      "sha256": "8e4a403dce25cce9c685c35fad69ece8d599d6511b7b0dacee53c608c4c7a945"
     },
     {
       "path": "packages/process/src/async.ts",
@@ -1716,11 +1748,23 @@
     },
     {
       "path": "packages/process/src/command.ts",
-      "sha256": "784093152c0985787bf1a0b973ae10486bad48e65fe352d351e0254e6f94ccd5"
+      "sha256": "ae04b0c936bca234925c615d2a74ca5f80cd7a0964f6981e8b41c24bcd4f8aa7"
+    },
+    {
+      "path": "packages/process/src/darwin-execution.ts",
+      "sha256": "8079db84fb0781101486f3c7b7a8da7ebb9105d3c80ee46997ad77d77b6832b1"
+    },
+    {
+      "path": "packages/process/src/darwin-preparation.ts",
+      "sha256": "13d1c4e8016751eb912caaa42783c4e20df4385aeb3142a9c49295408d4eac97"
     },
     {
       "path": "packages/process/src/deadline.ts",
       "sha256": "8fd7efad16f3518ada16c7fe3860da55c58c191f992cf1b3790e58564097fa23"
+    },
+    {
+      "path": "packages/process/src/execution-scope.ts",
+      "sha256": "65d9b425ed69fda576b9fbe48c41e6dfa865439272397e74751314d10c526970"
     },
     {
       "path": "packages/process/src/execution-witness.ts",
@@ -1740,7 +1784,7 @@
     },
     {
       "path": "packages/process/src/owned-execution.ts",
-      "sha256": "928ce354e7f24dc79d67d6049b0498781ed684a17ca0f91e17dc03df66d146cd"
+      "sha256": "040bfe0be785901a4229f3eea61223de212bf9b1fd7fdc3d04a5536ccb7ae0ae"
     },
     {
       "path": "packages/process/src/packet-stream.ts",
@@ -1751,8 +1795,12 @@
       "sha256": "e088fe6f7f6eebbf124ca29e8d2dc5d861a4976f7faaf5db7639bca7e640ece1"
     },
     {
+      "path": "packages/process/src/preparation-lifetime.ts",
+      "sha256": "db811d456fc636fec1914bbc272fd6357a15f763f7eb0f0f848ebc110357b09b"
+    },
+    {
       "path": "packages/process/src/preparation.ts",
-      "sha256": "e89591913ae5035ff170f24f047b40b8a7e16cbdcb3a4615fba84fd8eeb3d571"
+      "sha256": "3130a01d0248255fcd26f5373bdc931990309a9a5fdfbafcb199257469656cd0"
     },
     {
       "path": "packages/process/src/replace.ts",
@@ -1780,7 +1828,7 @@
     },
     {
       "path": "packages/process/src/run.ts",
-      "sha256": "d8d379873be0b4c0aa47bb530410828be2d179b02dac147eb7dd5c50f50dbb14"
+      "sha256": "b1e194fcac68a283335431026fa90ab81337fc9a51942ca3e0064351175c0e5f"
     },
     {
       "path": "packages/process/src/writer.ts",

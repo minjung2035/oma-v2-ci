@@ -20,7 +20,7 @@ import { launchDarwinJobScope, launchSeatbeltJobScope, peerFromMachReceiver } fr
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { spawnWithPrivateInputs } from "@oma/process/async";
 import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
-import { identifyDarwinCoalition, pinInheritedDarwinPeer } from "@oma/native/audit-session";
+import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
 
 assert.equal(process.platform, "darwin", "this probe requires an actual Darwin kernel");
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104, DATA = 0x4f4d4102, HANDOFF = 0x4f4d4110;
@@ -114,9 +114,10 @@ function claim(socket, transport) {
   return pin;
 }
 async function roundtrip(descendant = false) {
-  const path = address(), expected = payload(), done = deferred(); let sender, observed;
+  const path = address(), expected = payload(), done = deferred(); let sender, observed, scopeIdentity, memberObserved = false;
   const { peer } = await listener(path, (socket, transport) => {
     const pin = claim(socket, transport); sender = pin.pid;
+    if (descendant) { assert.ok(scopeIdentity); assert.equal(pin.inScope(scopeIdentity), true); memberObserved = true; }
     const bytes = [];
     socket.on("data", chunk => bytes.push(chunk)); socket.on("error", done.reject);
     socket.on("end", () => {
@@ -126,18 +127,18 @@ async function roundtrip(descendant = false) {
     socket.on("close", () => { try { assert.equal(socket.resourcesReturned, true); done.resolve(); } catch (error) { done.reject(error); } });
   });
   await joined(child("child-no-source", path));
-  const client = runConfined(descendant ? "child-runner" : "child-roundtrip", path, peer);
+  const client = runConfined(descendant ? "child-runner" : "child-roundtrip", path, peer, identity => { scopeIdentity = identity; });
   const [, result] = await Promise.all([bounded(done.promise, "server byte stream close"), client]);
   const report = descendant ? JSON.parse(result.stdout) : undefined;
   if (report) {
     assert.equal(report.workerPid, sender); assert.notEqual(report.runnerPid, sender);
-    assert.equal(report.sameCoalition, true); assert.equal(report.originalPeer, true);
+    assert.equal(memberObserved, true); assert.equal(report.originalPeer, true);
   }
   return { machStream: { sentBytes: expected.length, receivedBytes: observed.length, sha256: sha256(observed), sender,
     childJoined: true, authenticatedEof: true, resourcesReturned: true, inheritedPeer: true, noSourceRefused: true,
-    ...(report === undefined ? {} : { descendant: report }) } };
+    ...(report === undefined ? {} : { descendant: { ...report, sameCoalition: memberObserved } }) } };
 }
-async function runConfined(role, path, peer) {
+async function runConfined(role, path, peer, scopeSeen = () => {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-mach-client-"))), rows = [];
   const owner = new ExecutionCoordinator({ entries: () => rows.map(row => ({ ...row })), reserve(slot) {
     const row = { slot, execution: "probe", witness: null }; rows.push(row);
@@ -155,7 +156,7 @@ async function runConfined(role, path, peer) {
   const result = await owner.run({ slot: "client", launch: () => launch({ peer, stderrSink(bytes) {
     const retained = bytes.subarray(0, Math.max(0, 16384 - stderrLogged)); stderrLogged += retained.length;
     if (retained.length) process.stderr.write(retained);
-  } }), authorize() {} });
+  } }), authorize() {}, prepared(_execution, witness) { scopeSeen(witness); } });
   returned = true;
   const diagnostic = JSON.stringify({ ...result, stdout: result.stdout.toString(), stderr: result.stderr.toString(),
     ...(result.error === undefined ? {} : { error: String(result.error) }) });
@@ -295,7 +296,6 @@ async function runChild() {
     // private-profile Worker spawn. No second launchd job or public lookup.
     const node = realpathSync(process.execPath), library = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
     const root = realpathSync(process.cwd()), inherited = pinInheritedDarwinPeer(); returns.push(() => inherited.close());
-    const coalition = identifyDarwinCoalition(process.pid); assert.ok(coalition);
     const recipe = prepareSeatbelt({ executable: node, argv: [self, "child-roundtrip", process.argv[3], "report"],
       env: { HOME: root, TMPDIR: root }, cwd: root, timeoutMs: 20000, stdoutBytes: 8192, stderrBytes: 16384 }, {
       readable: [{ path: library, kind: "directory" }], mapped: [{ path: library, kind: "directory" }],
@@ -311,9 +311,9 @@ async function runChild() {
     child.stdin.end(); const status = await bounded(closed, "direct Worker return");
     assert.deepEqual(status, { code: 0, signal: null }, Buffer.concat(errors).toString());
     const report = JSON.parse(Buffer.concat(output));
-    assert.deepEqual(report.coalition, coalition); assert.deepEqual(report.peer, inherited.token);
+    assert.deepEqual(report.peer, inherited.token);
     assert.equal(inherited.alive(), true); assert.notEqual(report.pid, process.pid);
-    console.log(JSON.stringify({ runnerPid: process.pid, workerPid: report.pid, sameCoalition: true, originalPeer: true })); return;
+    console.log(JSON.stringify({ runnerPid: process.pid, workerPid: report.pid, originalPeer: true })); return;
   }
   if (mode === "child-roundtrip") {
     const { socket, ready } = dialMachChannel(process.argv[3], 15), received = [], ended = deferred(), closed = deferred();
@@ -326,7 +326,7 @@ async function runChild() {
     assert.deepEqual(Buffer.concat(received), expected); assert.equal(socket.resourcesReturned, true);
     if (process.argv[4] === "report") {
       const inherited = pinInheritedDarwinPeer(); returns.push(() => inherited.close());
-      console.log(JSON.stringify({ pid: process.pid, coalition: identifyDarwinCoalition(process.pid), peer: inherited.token }));
+      console.log(JSON.stringify({ pid: process.pid, peer: inherited.token }));
     }
     return;
   }

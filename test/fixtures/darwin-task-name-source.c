@@ -11,7 +11,7 @@
 #include <spawn.h>
 #include <unistd.h>
 #define main oma_seatbelt_entry
-#include "../../packages/platform-mac/src/seatbelt/main.c"
+#include "../../packages/native/src/seatbelt/main.c"
 #undef main
 
 /* The kobject RPC uses natural_t on both SDKs. SDK 15 does not publish SDK

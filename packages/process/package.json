@@ -87,6 +87,14 @@
     "./replace": {
       "types": "./dist/replace.d.ts",
       "default": "./dist/replace.js"
+    },
+    "./execution-scope": {
+      "types": "./dist/execution-scope.d.ts",
+      "default": "./dist/execution-scope.js"
+    },
+    "./darwin-execution": {
+      "types": "./dist/darwin-execution.d.ts",
+      "default": "./dist/darwin-execution.js"
     }
   },
   "scripts": {

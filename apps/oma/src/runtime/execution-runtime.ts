@@ -1,8 +1,9 @@
 /** Application composition only: common execution policy + storage recovery
  * observations + the selected kernel/sandbox primitives. No command replay.
  */
+import { randomUUID } from "node:crypto";
 import { WorkloadBudget } from "@oma/platform-linux/workload-budget";
-import { configurePreparationPlacement, preparationShutdownBarrier } from "@oma/process/preparation";
+import { configurePreparationPlacement, configurePreparationExecution, preparationShutdownBarrier } from "@oma/process/preparation";
 import type { WorkloadResourceProfile } from "@oma/contracts/host";
 import { ExecutionCoordinator, ExecutionNotStarted, type BlockedExecution, type RecoveryScope } from "@oma/process/owned-execution";
 import type { CommandSpec } from "@oma/process/command";
@@ -13,7 +14,7 @@ import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { launchBlockedDarwin } from "@oma/platform-mac/execution-launch";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
 import { EXECUTION_JOURNAL_VERSION, DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
-import { withAsyncCleanup } from "@oma/native/cleanup";
+import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 
 type Observation = { readonly kind: "running"; readonly identity: ExecutionWitness } | { readonly kind: "exited" | "unavailable" };
@@ -47,6 +48,7 @@ export async function recoverExecutionState(stateRoot: string, fresh: boolean): 
 export class ExecutionRuntime {
   private workload: WorkloadBudget | undefined;
   private releasePlacement: (() => void) | undefined;
+  private releasePreparation: (() => void) | undefined;
   configureResources(profile: WorkloadResourceProfile, identity: string) {
     if (this.workload) throw new StoreError("INTERNAL_ERROR", "workload profile is already bound");
     this.workload = new WorkloadBudget(profile, identity);
@@ -56,7 +58,9 @@ export class ExecutionRuntime {
   private async launch(command: CommandSpec, options: Record<string, unknown>) {
     const budget = this.workload, lease = budget?.acquire();
     try {
-      const scope = await this.selected.launch(budget?.command(command) ?? command, { ...options, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
+      const files = process.platform === "darwin" && options.files === undefined && Array.isArray(options.inheritedFds)
+        ? { files: options.inheritedFds.map((fd: number, index: number) => ({ target: index + 6, fd })) } : {};
+      const scope = await this.selected.launch(budget?.command(command) ?? command, { ...options, ...files, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
       // Preserve lazy setup: spreading scope would invoke its getter before
       // the common owner has published the acquired kernel witness.
       const wrapped: BlockedExecution<ExecutionWitness> = { witness: scope.witness, closed: scope.closed,
@@ -75,9 +79,19 @@ export class ExecutionRuntime {
   private readonly journal: ExecutionJournal;
   private readonly selected = backend();
   private readonly owner: ExecutionCoordinator<ExecutionWitness>;
-  constructor(stateRoot: string) {
+  constructor(stateRoot: string, physicalLaunch?: Backend["launch"]) {
+    if (physicalLaunch !== undefined) {
+      if (process.platform !== "darwin") throw new StoreError("UNSUPPORTED_PROFILE", "explicit Darwin capture requires the Darwin backend");
+      this.selected.launch = physicalLaunch;
+    }
     this.journal = ExecutionJournal.open(stateRoot, this.selected.journalVersion);
     this.owner = new ExecutionCoordinator(this.journal, this.selected.observe, this.selected.acquire);
+    try { if (physicalLaunch !== undefined) this.releasePreparation = configurePreparationExecution({ run: (command, signal, files, sinks) =>
+      this.owner.run({ slot: "preparation:" + randomUUID(), launch: () => this.launch(command, { ...sinks,
+        files: files.map((fd, index) => ({ target: index + 3, fd })), ...(signal === undefined ? {} : { signal }) }),
+        authorize() { if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation authority was cancelled"); },
+        ...(signal === undefined ? {} : { signal }) }) }); }
+    catch (error) { withCleanup(() => { throw error; }, () => this.journal.close()); }
   }
   recover(): Promise<void> { return this.owner.recover(); }
   run(slot: string, command: CommandSpec, signal: AbortSignal | undefined, authorize: () => void, inheritedFds: readonly number[] = [],
@@ -100,5 +114,5 @@ export class ExecutionRuntime {
    * accepted concurrent import owns the slot (busy), or nothing is proven
    * (unknown); only "dead" frees the slot for a new pick-up. */
   slotState(slot: string): "dead" | "busy" | "unknown" { return this.owner.slotState(slot); }
-  async close(): Promise<void> { await this.owner.drain(); await preparationShutdownBarrier(); this.releasePlacement?.(); this.workload?.close(); this.journal.close(); }
+  async close(): Promise<void> { await this.owner.drain(); await preparationShutdownBarrier(); this.releasePreparation?.(); this.releasePlacement?.(); this.workload?.close(); this.journal.close(); }
 }

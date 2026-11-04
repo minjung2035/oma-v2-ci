@@ -2054,10 +2054,97 @@ ARM runtime ZIP13363930529 SHA-256
 `81d29e426efff7f43d8c08e507d0b9c83dd10b9304de05f6d4023863b1021c49`도 회수했다.
 독립 packed 설치의 @oma/git은 기존 PreparationExecutor Linux guard로 실패하며 미완료로 유지한다.
 
+### SOURCE49 실제 자식 pin 결과와 Mac preparation 연결 (SOURCE50)
+
+SOURCE49 `4470da78dd79a658ef277a91d45fe93ba08e3e8f` Native
+[41912881708](https://github.com/minjung2035/oma-v2-ci/actions/runs/41912881708)의
+ARM shared ZIP13362669838 SHA-256
+`147e35d8c75130613c8a0af85c6ce4db25fe0a8a62fde0764364dbd6c6a2521e`,
+Intel shared ZIP13363522050 SHA-256
+`abc6b53c05bf1842ab4b4fcc1b160e23b198695a42da192d12e243706d27fa97`를 대조했다.
+양쪽369개 중368 PASS/1 FAIL·cancel/skip/todo0다. canonical15874/
+`8d4ae9f663e403fb88e6a46d688921bbc9d772c9c0793ac09e524eebf44b7f02`는 양쪽 전후 같다.
+runtime15502/27 전후도 ARM
+`8518e396ae4ec460008493b67467499d3665134ff8094d97a13f39f982894013`, Intel
+`4a01829bd8a31976466fd20fd20c737cc28c7fdb8e3933d59ce0722053476695`로 각각 같다.
+
+선택한 자식의 독립 pin·실제 pid/euid/egid·준비 전/회수 뒤 취득 거절·같은 PID/CID의 exec revoke가
+양 Mac에서 PASS다. 전체 private generation과 실제 private Node pin의 일치·최종 revoke도 양쪽 PASS다.
+SOURCE48의 다른 두 초기 readiness 거절은 이 실행에서 재발하지 않았다. 모든 환경의 경합 제거를 선언하지 않는다.
+새 descendant case는 Worker의 byte stream/EOF 뒤 diagnostic의 currentDarwinBootId 호출이
+Seatbelt에서 거절돼 실패했다. 상속의 전체 시험을 성공으로 계산하지 않는다.
+SOURCE50은 Worker의 boot sysctl grant를 추가하지 않고 Host가 가진 실제 transport pin의
+inScope(이미 영속화한 outer witness)로 소속을 검증한다. 원래 Host full8 token은 계속 대조한다.
+
+ARM gate ZIP13362689885 SHA-256
+`62bb41880eb52f9e115c5e02a01be5e0011fb8a713a150a6bf3f4d3a1f2d6c62`는
+120 executed/114 OBSERVED/6 Worker SETUP_FAILED다. canonical/runtime 전후는 위 ARM 값과 같다.
+G-PROCESS/G-FILES/G-AUTH는 OPEN, productQualification은 BLOCKED다.
+
+SOURCE50은 command 값·검증·ExecutionNotStarted를 순수 Domain 계약으로 옮기고 기존 Process export를
+유지한다. launchd 등록·CDHash/선택한 task·CID·fileport·peer source 제어는 Native가 맡으며,
+기존 bounded Process launchctl 실행을 주입한다. helper/Seatbelt C와 header4개는 SOURCE49와 byte-identical이다.
+physical capture는 Process의 한 구현으로 옮기고 PlatformMac은 Seatbelt recipe와 기존 public entry를 유지한다.
+Process→PlatformMac→Process cycle이나 별도 Git 업무 runtime을 추가하지 않는다.
+
+standalone PreparationExecutor의 Darwin 실행은 공통 execution owner의 transient scope를 사용한다.
+이 메모리 journal 자체를 durable startup recovery라고 부르지 않는다.
+Application은 명시적으로 선택한 실제 capture와 기존 ExecutionRuntime journal을 연결한다.
+준비 작업도 opening→실제 CID→witness 영속화→setup→현재 취소 검사→release→complete death/FD drain→retire를 따른다.
+준비의 inherited FD는 기존 계약처럼3부터 전달하고 Runner 채널의6부터 전달하는 계약은 구분한다.
+provider 입력을 먼저 복사하고 active/unknown 차단·fresh reverifyStale·shutdown barrier를 유지한다.
+unknown 물리 scope는 공통 owner의 journal/반납 증거가 계속 막는다.
+기본 launchBlockedDarwin과 제품 native-support guard는 그대로이며 새 CLI/env 우회 옵션은 없다.
+
+새 실제 Mac 시험은 standalone FD3/capture, application의 실제 journal 기록과 취소 뒤 CID 소멸,
+별도 Host SIGKILL 뒤 fresh-controller recovery를 요구한다. 이 입력의 실제 Mac 실행은 NOT_RUN이다.
+제품의 Runner/Worker 조립, 전체 Society lease·orphan generation 선택/회수, 나머지 checks/quarantine·resource 경로와
+전체 CLI/release qualification은 아직 미완료다. 새 Mac preparation의 독립 packed Git도 CI에서 재확인해야 한다.
+
+SOURCE50 build·delegated Linux 선택57/57·fail/cancel/skip/todo0와 architecture rule0 findings를 확인했다.
+선택 실행의 실제 Linux scope/Resident와 controlled port lifecycle을 Mac-specific refusal과 구분한다.
+선택한 provider의 입력 snapshot·중복/active 거절·no-child 반납·unknown 차단/새 quiescence 뒤 재개를 검사했다.
+새 source inventory14391개는 현재 목록이며 LOC/runtime 승인이나 과거 review의 재승인이 아니다.
+
+SOURCE48 full Linux Architecture
+[41910174358](https://github.com/minjung2035/oma-v2-ci/actions/runs/41910174358)의
+artifact13365005395 SHA-256
+`c79d95b6d59f80d3695577918de977da80efd75c8d290c162616c5adcf422eb4`도 대조했다.
+source `a9baabe42323474ea7a41833991b6f73ff04b889`, before/after15874/
+`92c8d4fb535051f12d09cb9f388be121c0fc22f078c842dfc16d46a00dfa742a`가 같다.
+all4822/4822·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
+이 결과는 SOURCE50의 전체 회귀나 Mac product qualification이 아니다.
+
+private generation 조립 때 Host의 helper 선택도 trusted installation manifest에 결박해야 한다.
+현재 Host가 import한 helper getter의 original installation과 private payload 선택을 섞지 않는 것이 남은 조건이다.
+Runner가 읽는 config의 installation 경로·Node toolchain·preload와 실제 private generation의 연결도 미완료다.
+이 조건을 단순한 Node main-image/pin PASS로 대체하지 않는다.
+
+SOURCE50 첫 독립 설치는26/27 PASS·PlatformMac1 FAIL이었다. source 자산이 Native로 이동했는데
+installed runtime smoke가 옛 PlatformMac/seatbelt/main.c를 직접 읽어 ENOENT였다.
+같은 자산의 Native public owner 경로로 수리하고 원래 내용 검사를 유지했다.
+첫 architecture의 module gate도 Native→file-descriptors2건을 거절했다.
+launchd 등록은 기존 descriptor leaf의 mkdir/open/unlink만 재사용하므로 이 정확한 하향 의존을 선언했다.
+leaf의 koffi-only 제약과 Native의 business owner 금지는 유지하며 관련40/40·module gate0 findings를 확인했다.
+후속 빌드는27/27 재컴파일해 성공했다. 이 빌드와 겹친 설치 재시험은 tarball export 누락으로 실패했으며
+고정 산출물의 결과로 사용하지 않는다. 완료 빌드 뒤 별도 설치 검증을 다시 시작했다.
+
+고정된 빌드 뒤 재실행한 Linux 독립 설치는27/27 PASS다. PlatformMac smoke도 Native 소유 자산의
+기존 내용 검사를 통과했다. 동시에 돌던 빌드의 중간 산출물 실패와 구분한다.
+전체 architecture에서는 program URL·Mach-O hash의 Native3개를 pure value/wire owner로 분류한 오류도 발견했다.
+이들은 실제 프로그램 선택과 code identity를 다루는 K2 mechanism으로 소유권을 정정했다.
+갱신한 graph와 architecture gate는0 findings다. business authority·하위 leaf 제약·과거 review 승인은 바꾸지 않았다.
+최종 검사 규칙까지 고정한 다음 빌드와 독립 설치를 순서대로 다시 실행한다.
+
+SOURCE50 최종 고정 입력에서 build→독립 설치를 순서대로 마쳤다. Linux packed27/27 PASS이며
+동시에 읽히던 빌드 산출물의 앞선 실패와 구분한다. 전체 architecture·durable boundaries·문서·spec gate도 PASS다.
+이후 변경은 이 결과 기록과 구조 input binding뿐이며 production/compiled bytes는 바꾸지 않았다.
+Mac preparation·수정한 descendant case·새 Host-crash 연결의 실제 실행은 발행 뒤 별도 회수한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `8d4ae9f663e403fb88e6a46d688921bbc9d772c9c0793ac09e524eebf44b7f02` (15874 files).
+verification input digest `7ebaa66f0718296f682b27ffe47e5503718289199c1a6c06a56b74f83a4bc417` (15888 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

@@ -4,7 +4,9 @@
  * SBPL syntax: Chromium's Mac sandbox and sandbox-runtime 98a401. */
 import { snapshotCommand, type CommandSpec } from "@oma/process/command";
 import { StoreError } from "@oma/domain/errors";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
+import { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
+export { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
 import { dirname } from "node:path";
 
 export interface SeatbeltPath { readonly path: string; readonly kind: "file" | "directory" }
@@ -170,9 +172,6 @@ function commandFor(source: CommandSpec, policy: SeatbeltPolicy, launcher: strin
     argv: [...(stdin ? ["--profile-stdin"] : []), ...(descriptors.length ? [`--keep-fds=${descriptors.join(",")}`] : []),
       ...(policy.suspendExec === true ? ["--start-suspended"] : []),
       command.executable, ...command.argv] };
-}
-export function bundledSeatbeltHelper(): string {
-  return fileURLToPath(new URL("./seatbelt/oma-seatbelt", import.meta.url));
 }
 /** A recipe grants no authority and starts no process. The existing process
  * owner consumes these private inputs only within its independently acquired

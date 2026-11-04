@@ -1,9 +1,9 @@
 /** Reviewed native build recipes. Manifests select only their own executable;
  * source assets, package URL checks and compilation use this same ownership. */
 const recipes = [
-  { owner: "@oma/platform-mac", source: "seatbelt/main.c", output: "seatbelt/oma-seatbelt",
+  { owner: "@oma/native", source: "seatbelt/main.c", output: "seatbelt/oma-seatbelt",
     compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: ["-lsandbox", "-lproc"] },
-  { owner: "@oma/platform-mac", source: "job-helper/main.c", output: "job-helper/oma-job-helper",
+  { owner: "@oma/native", source: "job-helper/main.c", output: "job-helper/oma-job-helper",
     compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: ["-lproc", "-lbsm"] },
   { owner: "@oma/native", source: "metadata/main.c", output: "metadata/oma-file-metadata",
     compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: [] },

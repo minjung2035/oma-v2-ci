@@ -231,6 +231,10 @@
     "./check-pipeline": {
       "types": "./dist/check-pipeline.d.ts",
       "default": "./dist/check-pipeline.js"
+    },
+    "./process-command": {
+      "types": "./dist/process-command.d.ts",
+      "default": "./dist/process-command.js"
     }
   },
   "scripts": {

@@ -38,7 +38,7 @@ const recipe = prepareSeatbelt({ executable: "/pinned/node", argv: ["a literal a
   executable: [{ path: "/pinned/node", kind: "file" }], unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR"] });
 assert.ok(recipe.command.executable.endsWith("/seatbelt/oma-seatbelt"));
 assert.deepEqual(recipe.command.argv.slice(-2), ["/pinned/node", "a literal argument"]);
-const launcher = readFileSync(new URL("./seatbelt/main.c", import.meta.resolve("@oma/platform-mac/seatbelt")), "utf8");
+const launcher = readFileSync(new URL("./seatbelt/main.c", import.meta.resolve("@oma/native/darwin-job-assets")), "utf8");
 assert.ok(launcher.includes("sandbox_init(profile"));
 const { observeDarwinJobScope, acquireDarwinJobScope } = await import("@oma/platform-mac/job-recovery");
 const legacy = { kind: "darwin-audit-session", auditSession: 1, coalitionId: "2", pid: 3, pidVersion: 4 };

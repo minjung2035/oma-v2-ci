@@ -210,6 +210,7 @@
   "packages/domain/src/mail-values.ts",
   "packages/domain/src/package-policy.ts",
   "packages/domain/src/paths.ts",
+  "packages/domain/src/process-command.ts",
   "packages/domain/src/protocol-limits.ts",
   "packages/domain/src/recovery-policy.ts",
   "packages/domain/src/request-identity.ts",
@@ -353,6 +354,12 @@
   "packages/native/src/cleanup.ts",
   "packages/native/src/control-socket.ts",
   "packages/native/src/darwin-file-flags.ts",
+  "packages/native/src/darwin-job-assets.ts",
+  "packages/native/src/darwin-job-control.ts",
+  "packages/native/src/darwin-job-launch.ts",
+  "packages/native/src/darwin-job-peer.ts",
+  "packages/native/src/darwin-launchd-job.ts",
+  "packages/native/src/darwin-macho-image.ts",
   "packages/native/src/darwin-metadata.ts",
   "packages/native/src/descriptor-path.ts",
   "packages/native/src/directory-layout.ts",
@@ -360,6 +367,7 @@
   "packages/native/src/identity.ts",
   "packages/native/src/linux.ts",
   "packages/native/src/mach-message.ts",
+  "packages/native/src/mach-poll.ts",
   "packages/native/src/metadata-observation.ts",
   "packages/native/src/peer-uid.ts",
   "packages/native/src/pid-namespace.ts",
@@ -405,7 +413,10 @@
   "packages/process/src/async.ts",
   "packages/process/src/coalesced-wake.ts",
   "packages/process/src/command.ts",
+  "packages/process/src/darwin-execution.ts",
+  "packages/process/src/darwin-preparation.ts",
   "packages/process/src/deadline.ts",
+  "packages/process/src/execution-scope.ts",
   "packages/process/src/execution-witness.ts",
   "packages/process/src/fence.ts",
   "packages/process/src/host-loss.ts",
@@ -413,6 +424,7 @@
   "packages/process/src/owned-execution.ts",
   "packages/process/src/packet-stream.ts",
   "packages/process/src/policies.ts",
+  "packages/process/src/preparation-lifetime.ts",
   "packages/process/src/preparation.ts",
   "packages/process/src/replace.ts",
   "packages/process/src/resident-logs.ts",
@@ -597,6 +609,7 @@
      "packages/domain/src/mail-values.ts",
      "packages/domain/src/package-policy.ts",
      "packages/domain/src/paths.ts",
+     "packages/domain/src/process-command.ts",
      "packages/domain/src/protocol-limits.ts",
      "packages/domain/src/recovery-policy.ts",
      "packages/domain/src/request-identity.ts",
@@ -640,6 +653,7 @@
      "packages/mail/src/facts.ts",
      "packages/mail/src/headers.ts",
      "packages/native/src/metadata-observation.ts",
+     "packages/process/src/execution-scope.ts",
      "packages/process/src/execution-witness.ts",
      "packages/protocol/src/ask-user-question.ts",
      "packages/protocol/src/batch-view.ts",
@@ -700,6 +714,12 @@
      "packages/native/src/cleanup.ts",
      "packages/native/src/control-socket.ts",
      "packages/native/src/darwin-file-flags.ts",
+     "packages/native/src/darwin-job-assets.ts",
+     "packages/native/src/darwin-job-control.ts",
+     "packages/native/src/darwin-job-launch.ts",
+     "packages/native/src/darwin-job-peer.ts",
+     "packages/native/src/darwin-launchd-job.ts",
+     "packages/native/src/darwin-macho-image.ts",
      "packages/native/src/darwin-metadata.ts",
      "packages/native/src/descriptor-path.ts",
      "packages/native/src/directory-layout.ts",
@@ -707,6 +727,7 @@
      "packages/native/src/identity.ts",
      "packages/native/src/linux.ts",
      "packages/native/src/mach-message.ts",
+     "packages/native/src/mach-poll.ts",
      "packages/native/src/peer-uid.ts",
      "packages/native/src/pid-namespace.ts",
      "packages/native/src/posix-files.ts",
@@ -717,6 +738,8 @@
      "packages/native/src/unix-message.ts",
      "packages/process/src/async.ts",
      "packages/process/src/coalesced-wake.ts",
+     "packages/process/src/darwin-execution.ts",
+     "packages/process/src/darwin-preparation.ts",
      "packages/process/src/deadline.ts",
      "packages/process/src/fence.ts",
      "packages/process/src/host-loss.ts",
@@ -724,6 +747,7 @@
      "packages/process/src/owned-execution.ts",
      "packages/process/src/packet-stream.ts",
      "packages/process/src/policies.ts",
+     "packages/process/src/preparation-lifetime.ts",
      "packages/process/src/preparation.ts",
      "packages/process/src/replace.ts",
      "packages/process/src/resident-logs.ts",
@@ -792,12 +816,12 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 36,
+   "K0-values -> K0-values": 37,
    "K1-codecs -> K0-values": 92,
    "K1-codecs -> K1-codecs": 58,
-   "K2-mechanisms -> K0-values": 145,
+   "K2-mechanisms -> K0-values": 161,
    "K2-mechanisms -> K1-codecs": 24,
-   "K2-mechanisms -> K2-mechanisms": 212,
+   "K2-mechanisms -> K2-mechanisms": 241,
    "K3-ledger -> K0-values": 23,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 1,
@@ -805,12 +829,12 @@
   },
   "typeOnlyEdgeMatrix": {
    "K0-values -> K0-values": 2,
-   "K1-codecs -> K0-values": 3,
+   "K1-codecs -> K0-values": 4,
    "K1-codecs -> K1-codecs": 4,
    "K1-codecs -> K3-ledger": 1,
-   "K2-mechanisms -> K0-values": 4,
-   "K2-mechanisms -> K1-codecs": 4,
-   "K2-mechanisms -> K2-mechanisms": 7,
+   "K2-mechanisms -> K0-values": 5,
+   "K2-mechanisms -> K1-codecs": 7,
+   "K2-mechanisms -> K2-mechanisms": 11,
    "K2-mechanisms -> K3-ledger": 1,
    "K3-ledger -> K0-values": 2,
    "K3-ledger -> K1-codecs": 2,
@@ -1423,6 +1447,51 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/native/src/darwin-job-control.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-job-control.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-job-control.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-job-launch.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-job-launch.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-job-peer.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-launchd-job.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-launchd-job.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-macho-image.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/native/src/darwin-metadata.ts",
     "to": "packages/native/src/metadata-observation.ts",
     "kind": "runtime"
@@ -1503,6 +1572,36 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/process/src/darwin-execution.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/darwin-execution.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/darwin-execution.ts",
+    "to": "packages/process/src/execution-scope.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/darwin-preparation.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/darwin-preparation.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/execution-scope.ts",
+    "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
     "from": "packages/process/src/host-loss.ts",
     "to": "packages/domain/src/host-signals.ts",
     "kind": "runtime"
@@ -1529,7 +1628,27 @@
    },
    {
     "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/domain/src/process-command.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
     "to": "packages/process/src/command.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/process/src/execution-scope.ts",
+    "kind": "type"
+   },
+   {
+    "from": "packages/process/src/owned-execution.ts",
+    "to": "packages/process/src/execution-scope.ts",
     "kind": "type"
    },
    {
@@ -1543,8 +1662,18 @@
     "kind": "runtime"
    },
    {
+    "from": "packages/process/src/preparation-lifetime.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "packages/process/src/preparation.ts",
     "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/process/src/preparation.ts",
+    "to": "packages/domain/src/process-command.ts",
     "kind": "runtime"
    },
    {
@@ -2659,7 +2788,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 203
+   "files": 215
   },
   {
    "index": 2,
@@ -2729,23 +2858,23 @@
    "files": 73
   }
  ],
- "files": 561,
- "runtimeEdges": 2293,
- "typeOnlyEdges": 970,
+ "files": 573,
+ "runtimeEdges": 2320,
+ "typeOnlyEdges": 981,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 590,
+  "L1-kernel -> L1-kernel": 636,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 406,
   "L3-workflow -> L3-workflow": 94,
-  "L4-orchestration -> L1-kernel": 534,
+  "L4-orchestration -> L1-kernel": 520,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 222,
+  "L4-orchestration -> L4-orchestration": 216,
   "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,
-  "L5-entry -> L4-orchestration": 100,
+  "L5-entry -> L4-orchestration": 101,
   "L5-entry -> L5-entry": 78
  },
  "upwardTypeOnlyEdges": [
@@ -2769,7 +2898,7 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 291,
+  "packages/domain/src/errors.ts": 293,
   "packages/domain/src/identifiers.ts": 94,
   "packages/native/src/cleanup.ts": 57,
   "packages/storage/src/directory.ts": 55,
@@ -2786,7 +2915,7 @@
   "packages/domain/src/resident-paths.ts": 21
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 41,
+  "apps/oma/src/entry/broker.ts": 42,
   "packages/mail/src/index.ts": 24,
   "apps/oma/src/entry/oma-society.ts": 23,
   "apps/oma/src/runtime/host-invocations.ts": 23,
@@ -2811,7 +2940,7 @@
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,
-  "node:crypto": 61,
+  "node:crypto": 63,
   "node:dns": 1,
   "node:events": 3,
   "node:fs": 136,
@@ -2829,7 +2958,7 @@
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 9,
-  "node:url": 15,
+  "node:url": 16,
   "node:util": 10,
   "node:zlib": 1,
   "nodemailer": 1,

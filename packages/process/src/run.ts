@@ -1,6 +1,6 @@
 // Mechanism only: callers decide whether a known nonzero exit is a domain fact.
 // A timeout/signal/spawn failure is never represented as an empty successful read.
-import { acquirePreparationPlacement } from "./preparation.js";
+import { acquirePreparationPlacement } from "./preparation-lifetime.js";
 import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
 import { closeSync, constants, openSync } from "node:fs";
 import { performance } from "node:perf_hooks";

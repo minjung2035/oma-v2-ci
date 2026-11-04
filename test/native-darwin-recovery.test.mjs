@@ -61,7 +61,7 @@ async function died(t, point) {
   return { root, initial, pins, file: join(root, "execution/scopes.jsonl") };
 }
 
-for (const point of ["witness", "released", "released-seatbelt"]) test(`003. Actual new Darwin controller retires ${point} Host crash only after complete CID death`, { timeout: 45000 }, async t => {
+for (const point of ["witness", "released", "released-seatbelt", "released-preparation"]) test(`003. Actual new Darwin controller retires ${point} Host crash only after complete CID death`, { timeout: 45000 }, async t => {
   if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
   const f = await died(t, point), journal = ExecutionJournal.open(f.root, DARWIN_EXECUTION_JOURNAL_VERSION);
   try {

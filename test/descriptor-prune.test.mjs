@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 test("001. Descriptor keep-list grammar rejects reserved, unordered and overflowing channels",()=>{
   const root=mkdtempSync(join(tmpdir(),'oma-kept-fds-'));
   try {
-    const header=fileURLToPath(new URL('../packages/platform-mac/src/seatbelt/',import.meta.url));
+    const header=fileURLToPath(new URL('../packages/native/src/seatbelt/',import.meta.url));
     const fixture=fileURLToPath(new URL('./fixtures/descriptor-policy-parse.c',import.meta.url));
     const binary=join(root,'parse');
     const compiled=spawnSync(process.platform==='darwin'?'/usr/bin/xcrun':'/usr/bin/cc',

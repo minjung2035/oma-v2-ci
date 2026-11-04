@@ -1,37 +1,12 @@
+import { ExecutionNotStarted } from "@oma/domain/process-command";
+import { runDarwinPreparation } from "./darwin-preparation.js";
 import { StoreError } from "@oma/domain/errors";
 import { startProcess, type AsyncProcessOptions } from "./async.js";
 import { snapshotCommand, type CommandSpec, type ProcessObservation } from "./command.js";
 
-// Process-lifetime accounting only: no new queue, sidecar, worker DB or daemon.
-// Completed tasks are removed. An executor whose last run did not reach a
-// complete observation stays in `unprovenPreparations` -- the shutdown
-// barrier's evidence that descendant quiescence was never proven -- until its
-// owner re-observes the prepared state quiescent (reverifyStale), which is
-// the authoritative startup recovery in this process's lifetime.
-export interface PreparationPlacement { placementFd: number; close(): void }
-let placementFactory: (() => PreparationPlacement | undefined) | undefined;
-/** Installed by one broker lifetime, never inferred from inherited environment. */
-export function configurePreparationPlacement(factory: () => PreparationPlacement | undefined): () => void {
-  if (placementFactory !== undefined) throw new StoreError("INTERNAL_ERROR", "preparation workload owner is already configured");
-  placementFactory = factory;
-  return () => { if (placementFactory === factory) placementFactory = undefined; };
-}
-export function acquirePreparationPlacement(): PreparationPlacement | undefined { return placementFactory?.(); }
-const nativeClosures = new Set<Promise<void>>();
-/** A direct execution owner resolves only after its independent scope proof
- * and cleanup. A rejected closure stays a shutdown fence for this process. */
-export function retainNativeExecution(closure: Promise<void>): void {
-  nativeClosures.add(closure);
-  void closure.then(() => nativeClosures.delete(closure), () => { /* retain the failed ownership proof */ });
-}
-const unprovenPreparations = new Set<PreparationExecutor>();
-export async function preparationShutdownBarrier(): Promise<void> {
-  if (unprovenPreparations.size > 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation quiescence is unproven; retain writer resources for process termination");
-  while (nativeClosures.size > 0) {
-    await Promise.all([...nativeClosures]);
-    if (unprovenPreparations.size > 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "native preparation became uncertain during shutdown");
-  }
-}
+import { nativeClosures, unprovenPreparations, acquirePreparationPlacement } from "./preparation-lifetime.js";
+export { configurePreparationPlacement, acquirePreparationPlacement, preparationShutdownBarrier, retainNativeExecution,
+  type PreparationPlacement } from "./preparation-lifetime.js";
 
 /** The answer an owner asks a preparation executor to give for the state its
  * last run left behind -- the tree the run was preparing, observed fresh. */
@@ -45,6 +20,19 @@ export type PreparationQuiescence = "quiescent" | "active" | "unknown";
  * run proceed. What it must never do is treat the unproven run as complete;
  * the flag clears on the observation, never on the attempt.
  */
+export interface PreparationExecutionPort {
+  run(command: CommandSpec, signal: AbortSignal | undefined, inheritedFds: readonly number[],
+    sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink">): Promise<ProcessObservation>;
+}
+let preparationExecution: PreparationExecutionPort | undefined;
+/** A trusted application lifetime may bind preparation to its durable scope
+ * journal. No environment, model input or hidden fallback selects this port. */
+export function configurePreparationExecution(port: PreparationExecutionPort): () => void {
+  if (preparationExecution !== undefined) throw new StoreError("INTERNAL_ERROR", "preparation execution owner is already configured");
+  if (typeof port?.run !== "function") throw new TypeError("preparation execution requires an owner");
+  const captured = Object.freeze({ run: port.run.bind(port) }); preparationExecution = captured;
+  return () => { if (preparationExecution === captured) preparationExecution = undefined; };
+}
 export class PreparationExecutor {
   private active = false;
   private uncertain = false;
@@ -64,12 +52,27 @@ export class PreparationExecutor {
     return observed;
   }
   async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = [], sinks: Pick<AsyncProcessOptions, "stdoutSink" | "stderrSink"> = {}): Promise<ProcessObservation> {
-    const command = snapshotCommand(source);
+    const command = snapshotCommand(source), files = Object.freeze([...inheritedFds]), capture = Object.freeze({ ...sinks });
+    if (files.some(fd => !Number.isSafeInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");
-    if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "preparation requires the existing Linux process model");
+    if (process.platform !== "linux" && process.platform !== "darwin")
+      throw new StoreError("UNSUPPORTED_PROFILE", "preparation requires a supported native process model");
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation was cancelled before child creation");
     this.active = true;
     try {
+      const selected = preparationExecution;
+      if (selected !== undefined || process.platform === "darwin") {
+        const run = Promise.resolve().then(() => selected === undefined ? runDarwinPreparation(command, signal, files, capture) : selected.run(command, signal, files, capture));
+        const closure = run.then(observation => {
+          if (observation.kind !== "exited") { this.uncertain = true; unprovenPreparations.add(this); }
+        }, error => {
+          if (error instanceof ExecutionNotStarted) return;
+          this.uncertain = true; unprovenPreparations.add(this); throw error;
+        });
+        nativeClosures.add(closure);
+        void closure.then(() => nativeClosures.delete(closure), () => { nativeClosures.delete(closure); });
+        return await run;
+      }
       const placement = acquirePreparationPlacement();
       let task: ReturnType<typeof startProcess>;
       try { task = startProcess(command, { ...(placement === undefined ? {} : { placementFd: placement.placementFd }), ...sinks, processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) }); }

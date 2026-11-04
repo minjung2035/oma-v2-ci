@@ -60,6 +60,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/domain/src/utf8.ts",
       "packages/domain/src/unseen-text.ts",
       "packages/process/src/command.ts",
+      "packages/domain/src/process-command.ts",
       "packages/domain/src/resident-paths.ts",
       "packages/domain/src/paths.ts",
     ],
@@ -68,6 +69,7 @@ export const KERNEL_ZONES = Object.freeze([
     name: "K1-codecs",
     files: [
       "packages/native/src/metadata-observation.ts",
+      "packages/process/src/execution-scope.ts",
       "packages/protocol/src/client-codecs.ts",
       "apps/oma/src/runtime/request-cache-codec.ts",
       "apps/oma/src/runtime/invocation-codec.ts",
@@ -157,7 +159,17 @@ export const KERNEL_ZONES = Object.freeze([
       // DR36: cancellable native timer scheduling is an execution mechanism.
       "packages/process/src/deadline.ts",
       "packages/process/src/policies.ts",
-      "packages/process/src/preparation.ts",
+      "packages/process/src/preparation-lifetime.ts",
+      "packages/process/src/darwin-execution.ts",
+      // Package-owned program locations, helper setup and Mach-O signing
+      // hashes are physical native mechanisms, not pure value/wire owners.
+      "packages/native/src/darwin-job-assets.ts",
+      "packages/native/src/darwin-job-launch.ts",
+      "packages/native/src/darwin-macho-image.ts",
+      "packages/native/src/darwin-job-control.ts",
+      "packages/native/src/darwin-job-peer.ts",
+      "packages/native/src/darwin-launchd-job.ts",
+      "packages/native/src/mach-poll.ts",
       "packages/process/src/run.ts",
       "packages/protocol/src/alarm.ts",
       "packages/client/src/channel.ts",
@@ -192,6 +204,8 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/process/src/replace.ts",
       "packages/storage/src/resident-logs.ts",
       "packages/process/src/owned-execution.ts",
+      "packages/process/src/preparation.ts",
+      "packages/process/src/darwin-preparation.ts",
       "packages/process/src/restic.ts",
       "packages/storage/src/package-staging.ts",
       "packages/storage/src/package-tar.ts",
