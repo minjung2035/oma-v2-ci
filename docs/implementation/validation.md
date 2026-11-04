@@ -2302,10 +2302,96 @@ Linux19에는 Mac backend refusal이 포함되므로 추가 Darwin reservation �
 review 상태는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14359·REMOVED220이며 승인을 생성하지 않았다.
 최종 시험/이 문서 변경 뒤 구조 input을 다시 결박한다.
 
+### Private generation과 공통 Resident 실행 조립 (SOURCE54)
+
+SOURCE53 `bcbd5c281cbb5dd7c0b9282a8e66855cda1002f1`는 Native
+[41928606381](https://github.com/minjung2035/oma-v2-ci/actions/runs/41928606381), Architecture
+[41928606378](https://github.com/minjung2035/oma-v2-ci/actions/runs/41928606378)에 발행했다.
+canonical15889/`caf7a1c2d204c4027a3c6c242a4658f359fed2185d3b9a2fdea7338b51975d01`다.
+이 단락 작성 시 SOURCE53 실제 추가 case는 회수 전이다.
+SOURCE52 Intel/Mac15와 나머지 pending jobs는 다음 Native 입력 발행으로 취소되었으며 PASS로 기록하지 않는다.
+
+SOURCE54는 App의 동일 Mach transport를 Resident 준비와 Broker listener에 결박한다.
+Resident는 현재 incarnation의 다음 endpoint를 물리적으로 확보하되 ledger의 incarnation이나 Run authority를 바꾸지 않는다.
+공통 ExecutionRuntime의 journal·준비 뒤 재인가·취소·complete scope 반납을 유지하며,
+명시적인 trusted Darwin launch만 private generation으로 전달한다. Linux는 기존 namespace producer를 사용한다.
+Darwin Runner 개인 채널은 execution ticket의 실제 독립 child pin으로 묶고, 숫자 PID나 채널의 자기 주장을 pin으로 바꾸지 않는다.
+준비 참조는 완전한 실행 반납 뒤 닫고, 인수된 receive right의 종료는 Broker listener가 소유한다.
+
+Broker는 기존 scope recovery 뒤 stateRoot의 sibling private cache에 새 generation을 만든다.
+Resident와 native owner drain 뒤에만 generation을 반납하며, 기존 unknown/active scope 거절을 유지한다.
+실행 중 Runner는 자신의 실제 entry URL과 process.execPath로 private 설치/Node를 선택하여
+Pi·core extension·client preload를 mutable original installation으로 되돌리지 않는다.
+config의 deploymentDigest·accepted plan·persisted journal 형식은 바꾸지 않는다.
+
+Node를 private copy로 옮겨도 선택된 원래 distribution의 npm/npx/corepack 기능은 유지해야 한다.
+이를 위해 transient SandboxHost/RunnerConfinement의 toolchainNode로 선택된 tool source를 전달한다.
+Worker PATH는 private Node, 선택된 distribution bin, actor local bin 순서를 유지한다.
+Mac policy는 package-manager 세 command의 literal과 선택된 module roots만 허용하며 bin 전체의 read/exec root를 추가하지 않는다.
+이 도구 입력은 model IPC/config 확장이 아니고 trusted Runner/preload의 library generation을 original root로 바꾸지 않는다.
+공통 설치 grammar와 Mac의 state/writable overlap 거절을 적용한다. Linux의 동일 transient 값은 기존 mount adapter가 소비한다.
+
+새 실제 Darwin 통합 fixture는 작은 27-workspace 설치와 실제 Native helper bytes를 고정하고,
+App NativeResidents/ExecutionRuntime/Store/journal/control pair 및 private Node를 사용한다.
+receiver는 시험 프로그램이며 product Runner/Worker가 아니다. 실제 PID/UID·FD6·private entry/Node,
+받은 profile/model·journal execution과 binding, 선행 endpoint의 listener 인수,
+stop 뒤 실제 pin revoke·빈 journal 및 incarnation 미변경을 요구한다.
+실제 Mac 결과는 NOT_RUN이다. 이 시험을 whole product Actor/Run admission 증명으로 올리지 않는다.
+
+아직 generation 제작/수집은 동기 I/O이며 시작 중 Host-loss 처리와 orphan cache 수집은 미완료다.
+Society lease·실제 product Worker admission·resource profile·전체 CLI/reboot qualification도 미완료다.
+native-support/default blocked launch와 G-PROCESS/G-FILES/G-AUTH OPEN을 유지하며 timeout이나 기능 계약을 완화하지 않는다.
+
+SOURCE54 첫 build는 별도 GitSandboxHost에 없는 toolchainNode를 참조하여 TS2339로 실패했다.
+그 불필요한 Git adapter 변경을 반납한 뒤 재build는 PASS였고, 이후 PATH 우선순위 보강의 최종 build를 별도로 실행한다.
+첫 선택 시험14건 중 import 이름 오류1건을 보존하며 수정 후14/14가 PASS다.
+실제 Linux namespace/control/Resident/log 선택15/15도 PASS다.
+최종 build 뒤 다시 고정한 검증 결과는 후속 단락에 기록한다.
+
+SOURCE53 ARM 실제 shared ZIP13370234610 SHA-256
+`b5a693acea995a2a6352a182084cbe3a50e44007435f1cb5f571c8103d21ba06`를 대조했다.
+385/385 PASS·fail/cancel/skip/todo0이며 canonical15889/caf7a1c2d204c4027a3c6c242a4658f359fed2185d3b9a2fdea7338b51975d01,
+runtime15526/27/`1646f78a9d4ff48dcb7e274839abf8925cfbbf275acfaa923f391a3a9bce8e2f`가 전후 같다.
+실제 pre-listener capability 전달·잘못된 목적 OPEN 거절·인수 후 준비 참조 종료·listener revoke,
+Runner→직접 Seatbelt Worker의 original Host/full CID·393217-byte 양방향/EOF와
+보정된 primitive 세 image-digest mismatch 및 matched positive가 모두 PASS다.
+이는 SOURCE54 새 Resident 조립의 실제 PASS나 Society lease의 완료가 아니다.
+
+SOURCE54 최종 production의 고정 build는 PASS다. 관련 policy/path19/19,
+실제 Linux namespace/Resident/control/log 및 compiled Runner/environment 선택38/38이 PASS다.
+최초 선택15개와 최종38개를 중복 합산하지 않는다. 새 Mac 통합 fixture의 Linux 결과는 backend refusal만 뜻한다.
+required path의 기존 거절을 보존하며 optional toolchain 값만 확장했고,
+이 최종 production 뒤 graph/LOC/review/독립 설치/architecture를 고정하여 검증한다.
+
+SOURCE53 Intel shared ZIP13369574410 SHA-256
+`ba3e6676e9d517cb7e2e0a440179640147a3121151bebeb711078a1c8d9902d2`도 대조했다.
+385/385 PASS·fail/cancel/skip/todo0이며 source bcbd5c281cbb5dd7c0b9282a8e66855cda1002f1,
+canonical15889/caf7a1c2d204c4027a3c6c242a4658f359fed2185d3b9a2fdea7338b51975d01,
+runtime15526/27/`829e14112da54561ec66ccb03b7e1aee43b5f8a3d18b635096824d0c38ad1a7f`가 전후 같다.
+ARM primary와 Intel supplemental에서 SOURCE53 reservation/mismatch/whole-generation component가 통과한 것이며,
+SOURCE54의 새 App Resident fixture나 product qualification으로 옮겨 쓰지 않는다.
+
+Society lease 후보 검토에서 [고정 XNU kern_guarded.c](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_guarded.c)의
+change_fdguard_np를 확인했다. 이 구현은 guard를 붙일 때 FD_CLOEXEC를 강제하고 GUARD_CLOSE에 FD_CLOFORK도 강제한다.
+따라서 이 guard를 그대로 기존 exec/fork 상속 lease로 사용할 수 있다고 가정하지 않는다.
+이는 source 검토이며 실제 OS guard 시험이나 lease 구현 완료가 아니다. private selector/다른 lease 후보를 자동 채택하지 않는다.
+Worker의 직접 Node recipe에 global module search를 끄는 추가 초기 argv 적용과 실제 loader 거절 검증도 아직 남아 있다.
+
+SOURCE54 첫 최종 architecture는 실행 중인 entry의 설치 root를 asset URL처럼 표현하여 module ownership 검사에서 실패했다.
+소유 asset 선언이나 검사를 완화하지 않고, 고정된 entry 배치의 dirname/resolve로 실행 root를 구하도록 고쳤다.
+이 한 App 변경 뒤 build·선택 검사·구조 metadata·독립 설치를 새로 고정하며 앞 입력의 PASS를 승계하지 않는다.
+
+SOURCE54 owned-root 수정 뒤 고정 build·관련 policy/path19/19·실제 Linux/compiled Runner 선택38/38·독립 packed27/27이 PASS다.
+review 상태는 CHANGED_WITHOUT_ORACLE29·NOT_REVIEWED14362·REMOVED220이며 승인을 생성하지 않았다.
+전체 architecture를 이 고정 입력에 다시 결박하여 실행한다.
+
+SOURCE54 owned-root 고정 production의 전체 module/architecture/graph/durable boundary/문서/spec gate가 PASS다.
+최종 변경은 이 결과 기록과 구조 input binding이며, SOURCE54 실제 Mac의 새 Resident 통합 결과는 아직 회수 전이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `caf7a1c2d204c4027a3c6c242a4658f359fed2185d3b9a2fdea7338b51975d01` (15889 files).
+verification input digest `1b8360db8f154f8c6793c90423c0c9ee4ccbc1e07463e6e8b7e8b2a9d17696c3` (15890 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

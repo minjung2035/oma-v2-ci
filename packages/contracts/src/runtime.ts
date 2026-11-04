@@ -98,6 +98,8 @@ export interface SandboxHost {
   recordRoot?: string;
   /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
+  /** Selected distribution supplying package-manager tools when Node itself is a private copy. */
+  toolchainNode?: string;
   /** TUI-003: installation-relative entries hidden from model code. The
    * platform applies its own read-only mask or denial mechanism. */
   hidden?: readonly { readonly path: string; readonly kind: "dir" | "file" }[];

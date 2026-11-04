@@ -5,6 +5,9 @@ import { createLifecycleModule } from "../broker/lifecycle-composition.js";
 import { createGitServices } from "../broker/git-composition.js";
 import { createMailModule } from "../broker/mail-composition.js";
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
+import { createHash } from "node:crypto";
+import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
+import { createMacRuntimeGeneration, type MacRuntimeGeneration } from "../runtime/mac-runtime-generation.js";
 import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
@@ -134,6 +137,7 @@ async function main(): Promise<void> {
     let storageCloseMode: "keep-hot" | "on-close" = "keep-hot";
     let executions: ExecutionRuntime | null = null;
     let residents: NativeResidents | null = null;
+    let runtimeGeneration: MacRuntimeGeneration | undefined;
     let storageResidents: readonly StorageResident[] | null = null;
     let freshVerifiedMain: string | undefined;
     let principalHost: ReturnType<typeof openSupervisionChannel>;
@@ -201,8 +205,13 @@ async function main(): Promise<void> {
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
         executions = new ExecutionRuntime(stateRoot, process.platform === "darwin" ? launchDarwinJobScope : undefined);
         const nativeOwner = executions;
-        lifetime.retainNative(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()));
+        lifetime.retainNative(() => withAsyncCleanup(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()), () => runtimeGeneration?.close()));
         await executions.recover();
+        if (process.platform === "darwin") {
+            const cache = join(dirname(stateRoot), ".runtime-" + createHash("sha256").update(stateRoot).digest("hex"));
+            ensureOwnedUserDirectory(cache, cache);
+            runtimeGeneration = createMacRuntimeGeneration(cfg.installation, cache);
+        }
         if (cfg.resources !== undefined) {
             const resources = executions.configureResources(cfg.resources, stateRoot);
             console.error(JSON.stringify({ event: "workload.resources", observedAtMs: Date.now(), ...resources }));
@@ -254,9 +263,11 @@ async function main(): Promise<void> {
         lifetime.retainStore(() => store.close());
         const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
             cfg.limits, () => broker.hintWork());
+        const transport = process.platform === "darwin" ? createMachBrokerTransport(cfg.limits.idleStreamSeconds) : undefined;
         const units = createNativeResidents(store, executions, location, cfg,
             (socket, peer) => broker.attachRunner(socket, peer), () => broker.hintWork(), (actor, invocation) => broker.residentIncarnation(actor, invocation),
-            { ...(developerTools === undefined ? {} : { developerTools }) });
+            { ...(developerTools === undefined ? {} : { developerTools }),
+                ...(transport === undefined || runtimeGeneration === undefined ? {} : { darwin: { launchNode: runtimeGeneration.launchNode, reservePeer: transport.reservePeer } }) });
         residents = units;
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
@@ -293,7 +304,7 @@ async function main(): Promise<void> {
                 await reconcile.quiesceForShutdown();
                 storageResidents = store.listAgents().filter(agent => agent.role === "resident")
                     .map(agent => ({ name: agent.name, incarnation: agent.incarnation }));
-            } }, limits: cfg.limits, lock: lock, principalHost: principalHost });
+            } }, limits: cfg.limits, lock: lock, principalHost: principalHost, ...(transport === undefined ? {} : { transport }) });
         lifetime.attach(broker);
         const validateStoredProfiles = () => {
             for (const agent of store.listAgents()) {

@@ -65,7 +65,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--ro-bind", h.node, RESIDENT_PATHS.node,
     // FI-2: the pinned Node's npm/npx/corepack, from its own prefix when it
     // ships them there; the rootfs links them beside the Node.
-    ...nodeToolchainMounts(h.node).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
+    ...nodeToolchainMounts(h.toolchainNode ?? h.node).flatMap(([source, target]) => ["--ro-bind-try", source, target]),
     "--proc", "/proc", "--dev", "/dev",
     ...(h.tmpfsMaxBytes === undefined ? [] : ["--size", String(h.tmpfsMaxBytes)]), "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,

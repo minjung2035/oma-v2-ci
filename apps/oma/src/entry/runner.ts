@@ -1,6 +1,7 @@
 // RUN-001/UNIT-003: one bound runner identity with trusted Pi RPC delivery.
 // The broker supplies explicit launch identity and profile; this process never reads SQLite.
-import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
 import { assertNativeRuntime } from "../runtime/native-support.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "@oma/config";
@@ -51,6 +52,13 @@ try { assertNativeRuntime(); }
 catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); process.exit(4); }
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
+// The Host selected and pinned this immutable entry and Node before release.
+// Configuration remains the original deployment selection; execution paths
+// follow the actual private image rather than returning to the mutable source.
+const runtimeInstallation = process.platform === "darwin" ? {
+  libdir: realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../..")),
+  node: realpathSync(process.execPath),
+} : cfg.installation;
 // Private Broker input, decoded once. It is never role configuration or a
 // Worker environment entry; no ambient/unprepared Mac toolchain fallback.
 const developerTools = process.platform === "darwin" ? decodeMacDeveloperToolsHex(process.env.OMA_DEVELOPER_TOOLS_HEX) : undefined;
@@ -95,7 +103,7 @@ const profile = Object.freeze({ name: profileName, modelProfile: modelName, mode
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.
 const piRuntime = resolvePiRuntime({
-  stateRoot, libdir: cfg.installation.libdir, override: process.env.OMA_PI_COMMAND,
+  stateRoot, libdir: runtimeInstallation.libdir, node: runtimeInstallation.node, override: process.env.OMA_PI_COMMAND,
 });
 // A confined Resident runs the shipped engine entry: piArgs[0] is the bundle
 // the mount plan translates. An OMA_PI_COMMAND override resolves to a bare
@@ -119,18 +127,19 @@ const tmpfs = process.env.OMA_TMPFS_MAX_BYTES;
 if (tmpfs !== undefined && (!/^[1-9][0-9]*$/.test(tmpfs) || !Number.isSafeInteger(Number(tmpfs)))) throw new Error("invalid broker tmpfs bound");
 const confinement = {
   ...(tmpfs === undefined ? {} : { tmpfsMaxBytes: Number(tmpfs) }),
-  libdir: cfg.installation.libdir,
+  libdir: runtimeInstallation.libdir,
   // DR25: the installed packages a role's extensions may name, mounted at the
   // directory the loader pinned them in.
   ...(packages === undefined ? {} : { packages }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
-  node: realpathSync(cfg.installation.node),
+  node: realpathSync(runtimeInstallation.node),
+  ...(process.platform === "darwin" ? { toolchainNode: realpathSync(cfg.installation.node) } : {}),
 };
 const runner = new RunnerModule({ runRoot, stateRoot, society,
   piCommand: piRuntime.executable,
   piArgs: piRuntime.args,
   piAgentDir: piRuntime.agentDir,
-  coreExtension: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.extension),
+  coreExtension: join(runtimeInstallation.libdir, DEPLOYMENT_LAYOUT.extension),
   ...(packages === undefined ? {} : { packages }),
   confinement }, agent, invocationId, cfg.limits, profile, control, engineEffects);
 let stopping = false;

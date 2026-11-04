@@ -66,6 +66,7 @@ export interface RunnerConfinement {
   readonly packages?: string | undefined;
   /** Host path of the pinned Node, bound read-only into the sandbox. */
   readonly node: string;
+  readonly toolchainNode?: string;
 }
 export interface RunnerPaths {
   readonly runRoot: string;
@@ -312,6 +313,7 @@ export class RunnerModule {
       ...(declared.packages === undefined ? {} : { packages: declared.packages }),
       ...(collaboration ? { recordRoot: collaborationRecordRootPathAt(this.paths.stateRoot!, this.agent) } : {}),
       node: declared.node,
+      ...(declared.toolchainNode === undefined ? {} : { toolchainNode: declared.toolchainNode }),
       hidden: productSurfaceMasks(declared.libdir),
       pi: entry,
       // The adapter replaces this with the engine flags it composes.

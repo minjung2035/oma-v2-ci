@@ -13,6 +13,9 @@ import { pinNamespaceRunner, type NamespaceInitIdentity } from "@oma/native/pid-
 import type { ExecutionWitness } from "@oma/process/execution-witness";
 import { cleanupAll } from "@oma/native/cleanup";
 import { runnerScope } from "@oma/platform-linux/runner-scope";
+import { actorSocketPathAt } from "@oma/domain/paths";
+import type { MacRuntimeGeneration } from "./mac-runtime-generation.js";
+import type { DarwinJobPeer } from "@oma/native/darwin-job-peer";
 import { resolvedSpecOf } from "@oma/domain/agent-spec";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionRuntime } from "./execution-runtime.js";
@@ -29,7 +32,10 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
   location: { stateRoot: string; runRoot: string; society: string; configPath: string }, config: HostConfig,
   attach: (socket: Socket, peer: BoundPeer) => void, hint: () => void,
   liveIncarnation: (actor: string, invocationId: string) => number | null,
-  launch: { readonly environment?: Readonly<NodeJS.ProcessEnv>; readonly toolSurface?: string; readonly developerTools?: MacDeveloperTools } = {}) {
+  launch: { readonly environment?: Readonly<NodeJS.ProcessEnv>; readonly toolSurface?: string; readonly developerTools?: MacDeveloperTools; readonly darwin?: {
+    launchNode: MacRuntimeGeneration["launchNode"];
+    reservePeer(path: string): { readonly peer: DarwinJobPeer; close(): void };
+  } } = {}) {
   // The application owns the host launch environment and internal surface.
   // Freeze them for this owner, including automatically created Residents;
   // ambient changes during another launch cannot supply different bytes.
@@ -37,6 +43,11 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
   requireCollaborationSociety(readSessionBirth(location.stateRoot), location.society);
   const toolSurface = launch.toolSurface ?? JSON.stringify(collaborationSurface("resident"));
   requireCollaborationSurface(toolSurface, "resident");
+  const darwin = launch.darwin === undefined ? undefined : Object.freeze({ ...launch.darwin });
+  if (process.platform === "darwin" && darwin === undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin Residents require a private runtime and reserved Run endpoint");
+  if (process.platform !== "darwin" && darwin !== undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", "non-Darwin Residents cannot select a Darwin runtime");
   const developerTools = launch.developerTools;
   const developerToolsHex = developerTools === undefined ? undefined : encodeMacDeveloperTools(developerTools);
   const logs = new ResidentLogStore(location.stateRoot);
@@ -63,7 +74,14 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
       let ticket: Awaited<ReturnType<ExecutionRuntime["begin"]>> | undefined;
       let log: ReturnType<ResidentLogStore["open"]> | undefined;
       let sinks: ReturnType<typeof residentLogSinks> | undefined;
+      let reservation: ReturnType<NonNullable<typeof darwin>["reservePeer"]> | undefined;
       try {
+        if (process.platform === "darwin") {
+          const incarnation = incarnationOf(actor);
+          if (incarnation === null || !Number.isSafeInteger(incarnation) || incarnation < 0 || !Number.isSafeInteger(incarnation + 1))
+            throw new StoreError("AUTH_FAILED", "Resident has no current incarnation for endpoint preparation");
+          reservation = darwin!.reservePeer(actorSocketPathAt(location.runRoot, actor, incarnation + 1));
+        }
         socket = new Socket({ fd: parent, readable: true, writable: true }); parent = undefined;
         socket.pause(); socket.on("error", () => {});
         ticket = await executions.begin(`resident:${actor}`, execution => {
@@ -81,20 +99,26 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
           // Runner decodes it before constructing its Worker effects.
           if (developerToolsHex === undefined) delete env.OMA_DEVELOPER_TOOLS_HEX;
           else env.OMA_DEVELOPER_TOOLS_HEX = developerToolsHex;
-          return runnerScope({ executable: config.installation.node,
+          const command = { executable: config.installation.node,
             argv: [join(config.installation.libdir, "apps/oma/dist/entry/runner.js"), "--society", location.society,
               "--agent", actor, "--execution", execution, "--config", location.configPath, "--state-root", location.stateRoot, "--run-root", location.runRoot],
             env, timeoutMs: null, stdoutBytes: config.limits.logBytes, stderrBytes: config.limits.logBytes,
-            stdoutOverflow: "discard", stderrOverflow: "discard" });
+            stdoutOverflow: "discard" as const, stderrOverflow: "discard" as const };
+          return process.platform === "darwin" ? command : runnerScope(command);
         }, signal, authorize, prepared, [child], {
           stdoutSink: bytes => sinks!.stdoutSink(bytes), stderrSink: bytes => sinks!.stderrSink(bytes),
-        });
-        const fullCompletion = ticket.completion.then(result => { log!.close(); return result; }, error => withCleanup(() => { throw error; }, () => log!.close()));
+        }, reservation === undefined ? undefined : (command, options) => darwin!.launchNode(command, { ...options, peer: reservation!.peer }));
+        const release = () => cleanupAll([() => log!.close(), () => reservation?.close()]);
+        const fullCompletion = ticket.completion.then(result => withCleanup(() => result, release), error => withCleanup(() => { throw error; }, release));
         void fullCompletion.catch(() => {});
         ticket = Object.freeze({ ...ticket, completion: fullCompletion });
         const inherited = child; child = undefined; closeSync(inherited);
         const witness = ticket.witness;
         const pin = await acquireExecutionChild(ticket, () => {
+          if (witness.kind === "darwin-audit-session") {
+            if (ticket!.pinChild === undefined) throw new StoreError("RUN_TERMINATION_UNKNOWN", "Darwin Resident has no independently held child pin");
+            return { kind: "ready", pin: ticket!.pinChild() };
+          }
           try { return { kind: "ready", pin: pinNamespaceRunner(witness as NamespaceInitIdentity) }; }
           catch (error) { if ((error as NodeJS.ErrnoException).code === "EAGAIN") return { kind: "waiting" }; throw error; }
         }, signal, config.limits.receiptWaitSeconds * 1000);
@@ -116,7 +140,7 @@ export function createNativeResidents(store: Store, executions: ExecutionRuntime
         if (ticket !== undefined) try { await ticket.stop(); } catch (cleanup) { failures.push(cleanup); }
         try { cleanupAll([() => { if (parent !== undefined) closeSync(parent); }, () => { if (child !== undefined) closeSync(child); }]); }
         catch (cleanup) { failures.push(cleanup); }
-        try { log?.close(); } catch (cleanup) { failures.push(cleanup); }
+        try { cleanupAll([() => log?.close(), () => reservation?.close()]); } catch (cleanup) { failures.push(cleanup); }
         if (failures.length > 1) throw new AggregateError(failures, "Resident launch and cleanup failed");
         throw error;
       }

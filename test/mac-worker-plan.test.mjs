@@ -3,6 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {DEPLOYMENT_LAYOUT} from '@oma/domain/deployment';
 import {residentOptions} from '../dist/test/fixtures/resident.js';
 import {planPiSpawn} from '@oma/engine/pi-spawn-plan';
 import {describeMacDeveloperTools} from '@oma/protocol/mac-developer-tools';
@@ -59,4 +61,19 @@ if(process.platform==='linux')test("004. Linux Worker composition refuses a Mac 
 if(process.platform==='darwin')test("005. Mac Worker product composition refuses spawn while native gates remain open",()=>{
   assert.throws(()=>residentEngineEffects.sandbox.spawn({command:'/must-not-execute',args:[],cwd:'/tmp',env:{},
     privateInputs:[{fd:3,bytes:Buffer.from('not an approved live scope')}]}),{code:'UNSUPPORTED_PROFILE'});
+});
+
+test("003. Private Node keeps the selected distribution's package managers and fixed preload",()=>{
+  const {options}=fixture(),host=options.confinement.host;
+  host.node='/private/oma-runtime/.oma-node-bin/node';host.toolchainNode='/opt/selected-node/bin/node';
+  const plan=planPiSpawn(macResidentSandbox(tools),options),profile=Buffer.from(plan.privateInputs[0].bytes).subarray(16).toString();
+  const path=plan.env.PATH.split(':');assert.equal(path[0],'/private/oma-runtime/.oma-node-bin');
+  assert.equal(path[1],'/opt/selected-node/bin');assert.ok(path.indexOf(options.confinement.directories.home+'/.local/bin')>1);
+  for(const tool of ['npm','npx','corepack'])assert.ok(profile.includes(JSON.stringify('/opt/selected-node/bin/'+tool)));
+  assert.ok(profile.includes(JSON.stringify('/opt/selected-node/lib/node_modules/npm')));
+  assert.ok(!profile.includes('(subpath "/opt/selected-node/bin")'));
+  assert.equal(plan.env.NODE_OPTIONS,`--import=${pathToFileURL(join(host.libdir,DEPLOYMENT_LAYOUT.clientPreload)).href}`);
+  host.toolchainNode=join(host.stateRoot,'agents','alice','home','bin','node');
+  assert.throws(()=>planPiSpawn(macResidentSandbox(tools),options),{code:'UNSUPPORTED_PROFILE'});
+  host.toolchainNode='relative-node';assert.throws(()=>planPiSpawn(macResidentSandbox(tools),options),{code:'UNSUPPORTED_PROFILE'});
 });

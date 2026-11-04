@@ -55,12 +55,12 @@ export class ExecutionRuntime {
     this.releasePlacement = configurePreparationPlacement(() => this.workload?.acquire());
     return this.workload.observation;
   }
-  private async launch(command: CommandSpec, options: Record<string, unknown>) {
+  private async launch(command: CommandSpec, options: Record<string, unknown>, physicalLaunch = this.selected.launch) {
     const budget = this.workload, lease = budget?.acquire();
     try {
       const files = process.platform === "darwin" && options.files === undefined && Array.isArray(options.inheritedFds)
         ? { files: options.inheritedFds.map((fd: number, index: number) => ({ target: index + 6, fd })) } : {};
-      const scope = await this.selected.launch(budget?.command(command) ?? command, { ...options, ...files, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
+      const scope = await physicalLaunch(budget?.command(command) ?? command, { ...options, ...files, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
       // Preserve lazy setup: spreading scope would invoke its getter before
       // the common owner has published the acquired kernel witness.
       const wrapped: BlockedExecution<ExecutionWitness> = { witness: scope.witness, closed: scope.closed,
@@ -102,11 +102,13 @@ export class ExecutionRuntime {
   }
   begin(slot: string, command: (execution: string) => CommandSpec, signal: AbortSignal, authorize: () => void,
     prepared: (execution: string, witness: ExecutionWitness) => void, inheritedFds: readonly number[] = [],
-    output: { stdoutSink?: (bytes: Uint8Array) => void; stderrSink?: (bytes: Uint8Array) => void } = {}) {
+    output: { stdoutSink?: (bytes: Uint8Array) => void; stderrSink?: (bytes: Uint8Array) => void } = {}, physicalLaunch?: Backend["launch"]) {
+    if (physicalLaunch !== undefined && process.platform !== "darwin")
+      throw new StoreError("UNSUPPORTED_PROFILE", "explicit Resident launch requires the Darwin backend");
     return this.owner.begin({ slot, launch: execution => {
       let spec: CommandSpec;
       try { spec = command(execution); } catch (error) { throw new ExecutionNotStarted(error); }
-      return this.launch(spec, { signal, inheritedFds, ...output });
+      return this.launch(spec, { signal, inheritedFds, ...output }, physicalLaunch);
     }, authorize, prepared, signal });
   }
   confirmDead(slot: string): boolean { return this.owner.confirmDead(slot); }

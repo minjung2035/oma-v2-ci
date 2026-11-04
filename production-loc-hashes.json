@@ -72,7 +72,7 @@
     },
     {
       "path": "apps/oma/src/broker/broker-composition.ts",
-      "sha256": "1c4ef4a8e9e03f93117143633a8cbc5c2b29fdfc2b61c95d9e69028044f3c6c4"
+      "sha256": "377166dc6ad72b917a3afaeb7fb33b05c1809e770ae4a41c45062c0b38065e4e"
     },
     {
       "path": "apps/oma/src/broker/composition.ts",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "9d1d25ae1ec181a748c63504c638c8109edb2dd91d2eceb61491ecab61821562"
+      "sha256": "aa965600ce8805515675b0b139a294a17896f79a14eb64fe732564f47e150821"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -208,7 +208,7 @@
     },
     {
       "path": "apps/oma/src/entry/runner.ts",
-      "sha256": "7d137ef0aed50ba2d57c1e063cdf253fc9f80b59f036f209149eb8cf8146c7b5"
+      "sha256": "1a4b9b5e3fc8244d747d4665481e3f207316204c6ad918b74de087a78ed78104"
     },
     {
       "path": "apps/oma/src/platform/package-files.ts",
@@ -232,7 +232,7 @@
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "de45dd99903183c9aa647bc46e221b30165ae9cc724e2bd7f9c9d2d8ccc32945"
+      "sha256": "6d4411d501213e4f2442bbeeee096e7c9d137ce07e5197057ba44408af845fea"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",
@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "03bb98a8097dc73ceb1c5b6f2084300bac87c45c7e480e945acfe405b0e56eb5"
+      "sha256": "c3f082267d96aff071de86438c52919bd966c74d3deda863bf968f1771dce19b"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -348,7 +348,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-residents.ts",
-      "sha256": "9413cd76e2917fa9be4f21ea85c819861d909adfb11e3b2ac6d554b5d71c3f0d"
+      "sha256": "c337d2591aa2a83b6d40b01a70d058d331096d2f2c38849f1578f79325c27a9e"
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
@@ -696,7 +696,7 @@
     },
     {
       "path": "packages/contracts/src/runtime.ts",
-      "sha256": "18b558e1a227bd532502dedbd2880aece930c2d312805f3fc3a6bc90e84b05e3"
+      "sha256": "17407c800a9bb99502b35543fad497f427084518f185d693bec04ecddfd6b7c8"
     },
     {
       "path": "packages/contracts/src/stream.ts",
@@ -884,7 +884,7 @@
     },
     {
       "path": "packages/domain/src/resident-paths.ts",
-      "sha256": "e71cd2848c5824d454ec5943eecda6ac38d4853278abfd5a3662c13f919324c2"
+      "sha256": "71ce0d132148885562e9d0e39088b18f8021eb5b007d2719e806e85a74e83336"
     },
     {
       "path": "packages/domain/src/review-bounds.ts",
@@ -1628,7 +1628,7 @@
     },
     {
       "path": "packages/platform-linux/src/sandbox.ts",
-      "sha256": "78a9ff89feec42e38bd38890f1336ceef5b48c33bb89734bb9400bbce2a1ad6f"
+      "sha256": "c8baf62e6a7119c026f43e71fceeb32eff5f6aa7519fadc08a436abb3c6d04eb"
     },
     {
       "path": "packages/platform-linux/src/worker-spawn.ts",
@@ -1728,7 +1728,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "497012f5883c24e8275cee07d9ea3529352b57ba6f09dfc1f2233bc472c260b5"
+      "sha256": "42718bb624a29b8124728370d5094b16ee0f18f842d2d31300fedd384dd674f9"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
@@ -1952,7 +1952,7 @@
     },
     {
       "path": "packages/protocol/src/resident-context.ts",
-      "sha256": "f77652e0623574a620f6061404a39318ca1422c88bbde00263dddfbab4b36bd1"
+      "sha256": "578e9f5cb071fce7374e981d4055163c56e566d84532a84faf7d89079085fddb"
     },
     {
       "path": "packages/protocol/src/response-codec.ts",

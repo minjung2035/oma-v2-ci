@@ -2859,22 +2859,22 @@
   }
  ],
  "files": 573,
- "runtimeEdges": 2320,
- "typeOnlyEdges": 981,
+ "runtimeEdges": 2323,
+ "typeOnlyEdges": 983,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 636,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 406,
   "L3-workflow -> L3-workflow": 94,
-  "L4-orchestration -> L1-kernel": 520,
+  "L4-orchestration -> L1-kernel": 521,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 216,
   "L5-entry -> L1-kernel": 153,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,
-  "L5-entry -> L4-orchestration": 101,
+  "L5-entry -> L4-orchestration": 103,
   "L5-entry -> L5-entry": 78
  },
  "upwardTypeOnlyEdges": [
@@ -2905,7 +2905,7 @@
   "packages/native/src/files.ts": 53,
   "packages/domain/src/canonical-json.ts": 49,
   "packages/storage/src/durable-fs.ts": 43,
-  "packages/domain/src/paths.ts": 41,
+  "packages/domain/src/paths.ts": 42,
   "packages/domain/src/utf8.ts": 32,
   "packages/file-descriptors/src/index.ts": 31,
   "packages/domain/src/derived.ts": 27,
@@ -2915,7 +2915,7 @@
   "packages/domain/src/resident-paths.ts": 21
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 42,
+  "apps/oma/src/entry/broker.ts": 44,
   "packages/mail/src/index.ts": 24,
   "apps/oma/src/entry/oma-society.ts": 23,
   "apps/oma/src/runtime/host-invocations.ts": 23,
@@ -2926,10 +2926,10 @@
   "apps/oma/src/runner.ts": 18,
   "apps/oma/src/views.ts": 18,
   "packages/git/src/context-repository.ts": 18,
+  "apps/oma/src/runtime/native-residents.ts": 17,
   "apps/oma/src/runtime/provision.ts": 17,
   "packages/engine/src/interactive.ts": 17,
-  "packages/extension/src/index.ts": 17,
-  "apps/oma/src/runtime/native-residents.ts": 16
+  "packages/extension/src/index.ts": 17
  },
  "external": {
   "@earendil-works/pi-ai": 2,
@@ -2940,7 +2940,7 @@
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,
-  "node:crypto": 64,
+  "node:crypto": 65,
   "node:dns": 1,
   "node:events": 3,
   "node:fs": 137,
@@ -2958,7 +2958,7 @@
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 9,
-  "node:url": 16,
+  "node:url": 17,
   "node:util": 10,
   "node:zlib": 1,
   "nodemailer": 1,

@@ -42,6 +42,7 @@ export function brokerLedger(store: Store): BrokerLedger {
     }),
   } satisfies BrokerLedger);
 }
+type BrokerTransport = Pick<BrokerEffects, "pinPeer" | "assertEndpoint" | "openListener" | "peerStream" | "prepareEndpoint">;
 export interface BrokerComposition {
   store: Store; mail: MailModule; units: BrokerExecution; views: ViewsModule;
   lifecycle: LifecycleModule; git: GitModule | null; reviews: PublicReviewPort | null;
@@ -50,6 +51,8 @@ export interface BrokerComposition {
   /** Already held before configuration/Store/recovery; its outer lifetime releases it. */
   lock: ProcessLock;
   principalHost?: PrincipalHostChannel | undefined;
+  /** One physical transport owns pre-launch reservations and later listeners. */
+  transport?: BrokerTransport;
   /** Trusted startup policy only, not a model/engine argument or an effect ledger. */
   collaborationFreshMutations?: "closed";
 }
@@ -85,7 +88,7 @@ export function createBroker(input: BrokerComposition): Broker {
     }
     return batch;
   };
-  const transport: Pick<BrokerEffects, "pinPeer" | "assertEndpoint" | "openListener" | "peerStream" | "prepareEndpoint"> = process.platform === "darwin"
+  const transport: BrokerTransport = input.transport ?? (process.platform === "darwin"
     ? createMachBrokerTransport(limits.idleStreamSeconds)
     : {
       pinPeer: stream => pinLinuxPeer(linuxSocket(stream)),
@@ -100,7 +103,7 @@ export function createBroker(input: BrokerComposition): Broker {
       },
       peerStream: (stream, authorize) => credentialStream(linuxSocket(stream), authorize),
       prepareEndpoint: clearSocketName,
-    };
+    });
   const dependencies: BrokerDependencies = {
     acquireRunScope: scope => units.pin(scope),
     ledger: brokerLedger(store),

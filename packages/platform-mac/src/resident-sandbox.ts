@@ -1,12 +1,12 @@
 /** Worker-specific recipe. Shared TS owns actor/root/access/environment
  * policy; Seatbelt applies it without creating a mount or process namespace.
  * A recipe establishes no kernel scope or execution/file binding proof. */
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { SandboxHost, SandboxDirectories, SandboxEndpoints } from "@oma/contracts/runtime";
 import { StoreError } from "@oma/domain/errors";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
-import { residentDirectoryPolicy, residentEnvironment, nodeToolchainMounts } from "@oma/domain/resident-paths";
+import { residentDirectoryPolicy, residentEnvironment, nodeToolchainMounts, RESIDENT_NODE_TOOLCHAIN } from "@oma/domain/resident-paths";
 import { assertResidentContext, assertSandboxInstallation } from "@oma/protocol/resident-context";
 import { trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-lease";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
@@ -37,17 +37,19 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
   const roots = residentDirectoryPolicy(host, directories);
   const readable = roots.filter(root => !root.writable).map(root => directory(root.path));
   const writable = roots.filter(root => root.writable).map(root => directory(root.path));
-  const toolchain = nodeToolchainMounts(host.node).map(([source]) => directory(source));
+  const toolNode = host.toolchainNode ?? host.node;
+  const toolchain = nodeToolchainMounts(toolNode).map(([source]) => directory(source));
+  const toolCommands = RESIDENT_NODE_TOOLCHAIN.map(tool => ({ path: join(dirname(toolNode), tool.command), kind: "file" as const }));
   const frameworks = developerToolSystemFrameworks(tools).map(directory);
-  readable.push(...toolchain, directory(tools.contents), ...frameworks);
+  readable.push(...toolchain, ...toolCommands, directory(tools.contents), ...frameworks);
   readable.push(...DEVELOPER_TOOL_SUPPORT_FILES.map(path => ({ path, kind: "file" as const })));
   // A broad installation/package root must never expose the complete state
   // or overlap a writable actor root. These are lexical recipe checks; actual
   // aliases/renames still require G-FILES and cannot be certified by this map.
-  for (const root of [host.libdir, host.packages, tools.contents, ...toolchain.map(entry => entry.path), ...frameworks.map(entry => entry.path)].filter((value): value is string => value !== undefined))
+  for (const root of [host.libdir, host.packages, tools.contents, ...toolchain.map(entry => entry.path), ...toolCommands.map(entry => entry.path), ...frameworks.map(entry => entry.path)].filter((value): value is string => value !== undefined))
     if (beneath(host.stateRoot!, root) || beneath(root, host.stateRoot!) || writable.some(entry => beneath(root, entry.path) || beneath(entry.path, root)))
       throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker installation roots overlap private state");
-  const base = { ...residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home }, developerBins),
+  const base = { ...residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home, toolchainNode: toolNode }, developerBins),
     GIT_EXEC_PATH: tools.execPath, DEVELOPER_DIR: tools.developer };
   const allowed = new Set([...Object.keys(base), ...ENGINE_KEYS]);
   for (const [key, value] of Object.entries(environment))
@@ -63,7 +65,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     readable, writable,
     denied: (host.hidden ?? []).map(entry => ({ path: join(host.libdir, entry.path), kind: entry.kind === "dir" ? "directory" : "file" })),
     executable: [{ path: host.node, kind: "file" }, directory(host.libdir),
-      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain, ...writable,
+      ...(host.packages === undefined ? [] : [directory(host.packages)]), ...toolchain, ...toolCommands, ...writable,
       { path: tools.git, kind: "file" }, directory(tools.execPath), ...developerBins.map(directory)],
     mapped: [directory(tools.contents), ...frameworks],
     unixSockets: [endpoints.inference, endpoints.egress].filter((value): value is string => value !== undefined),

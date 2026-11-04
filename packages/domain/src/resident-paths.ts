@@ -80,13 +80,15 @@ export const RESIDENT_EGRESS_PORT = 8318;
 
 /** One environment policy for mounted and host layouts. Callers supply only
  * trusted paths in that layout, and platform grammars apply it after extras. */
-export function residentEnvironment(paths: { readonly libdir: string; readonly node: string; readonly home: string; readonly temporary: string },
+export function residentEnvironment(paths: { readonly libdir: string; readonly node: string; readonly home: string; readonly temporary: string; readonly toolchainNode?: string },
   toolDirectories: readonly string[] = []) {
-  if (Object.values(paths).some(path => !trustedResidentPath(path)) || paths.libdir.includes("\\"))
+  if ([paths.libdir, paths.node, paths.home, paths.temporary].some(path => !trustedResidentPath(path)) ||
+      paths.toolchainNode !== undefined && !trustedResidentPath(paths.toolchainNode) || paths.libdir.includes("\\"))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident environment requires normalized view paths");
   if (!Array.isArray(toolDirectories))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident tool directories require a closed list");
-  const search = [dirnameOf(paths.node), `${paths.home}/.local/bin`,
+  const search = [dirnameOf(paths.node),
+    ...(paths.toolchainNode === undefined || paths.toolchainNode === paths.node ? [] : [dirnameOf(paths.toolchainNode)]), `${paths.home}/.local/bin`,
     ...toolDirectories, "/usr/bin", "/bin"];
   if (search.some(value => !trustedResidentPath(value) || value.includes(":")))
     throw new StoreError("UNSUPPORTED_PROFILE", "resident PATH requires representable absolute directories");

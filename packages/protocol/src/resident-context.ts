@@ -17,6 +17,7 @@ export function assertSandboxInstallation(host: SandboxHost): void {
     throw new StoreError("UNSUPPORTED_PROFILE", "common Worker installation cannot select Linux roots or mounts");
   if (!trustedAbsolutePath(host.libdir) || !trustedAbsolutePath(host.node) || !trustedAbsolutePath(host.pi) ||
       host.libdir.includes("\\") || host.pi.includes("\\") ||
+      host.toolchainNode !== undefined && !trustedAbsolutePath(host.toolchainNode) ||
       host.packages !== undefined && !trustedAbsolutePath(host.packages) ||
       host.recordRoot !== undefined && !trustedAbsolutePath(host.recordRoot))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
