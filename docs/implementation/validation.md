@@ -1222,10 +1222,49 @@ packed 각26/27의 Git preparation 실패도 보존했다. common artifact `1331
 `130dad282634cda73812a4adc728f1336310b1ffa141046dae5fd84e89ebc55c`와 대조했고 입력/runtime은 전후 같다.
 로컬 retry 수정의 native/platform/parser121/121과 별도 parser/플랫폼 거절38/38이 통과했다.
 
+### Helper delivery 수정의 실제 Mac 관측
+
+Native [41828317248](https://github.com/minjung2035/oma-v2-ci/actions/runs/41828317248), `8a2c2b59e50`의
+Mac15·26 regular/pipe 각3회, 합계12 gate가 모두 OBSERVED다. 이 실행의 자연 backpressure counter는
+모두0이며 이전 실패를 자연 재현했다고 쓰지 않는다. 별도 permanent oracle은 두 OS에서 실제 Mach queue를
+채워 fileport send를3회 `again`으로 만든 뒤 성공 재전달·같은 pipe bytes·모든 reader reference 반환 뒤 EPIPE를
+확인했다. common 각308/308·skip0이며 packed는 기존 Git preparation 차단으로 각26/27이다.
+
+원시는 `helper-delivery/`다. gate artifact Mac15 `13322020601`·Mac26 `13322275847`의 API SHA-256
+`b1baa99e91e0da49eecb1f85b15b4cf0d54d38bb50f4f783b5e68002d9161297`·
+`5b421a224d28adaabddcd8519cdca42a2283923c6c526d67004d9f0d45bc085e`, common `13322446455`·`13323036069`의
+`d84e9151a80f0af4eee1b3c00ed745b08eb10fc41d7614eb1951653a537d8899`·
+`eed0618c78e26ee3aab7b5518be732508d3c90f47c65b0f5bb45b0da21457137`를 대조했다. common 입력/runtime은 전후 같다.
+source의 입력은15840개 `d360df303c1027ba2ad0d0396c0ef7ee73ece885d8dc9ff9014cc1ac2ad734cc`이며 제품 gate는 OPEN이다.
+
+### 공통 owner에 연결한 transient Darwin scope — 실제 Mac 실행 전
+
+`launchDarwinJobScope`는 같은 `observeProcessIO`의 input/capture/spool/sink/timeout/abort/EOF owner와
+production job helper의 실제 terminal/close를 연결한다. helper의 selected stopped main image를 먼저
+확인해 transient boot/CID를 반환하고, 공유 owner가 witness를 publish한 뒤 lazy prepared로 private 설정과
+다음 image stage를 준비한다. 최종 gate는 공유 owner의 fresh authority 관측 뒤에만 연다. 멤버 제어는 fresh
+kernel token이며 CID population·leader terminal·stdio EOF·native callback/설정 pipe 반환을 각각 기다린다.
+이 transient producer는 installed script/library·expected Broker/role을 보증하거나 새 durable witness를 기록하지 않는다.
+
+파일은 기존 descriptor leaf로 regular type-before-I/O와 held cwd를 얻는다. 실제 anonymous pipe를 libuv
+Socket으로 감싸 큰 stdin·private setup·stdout/stderr가 threadpool을 서로 막지 않게 한다. Linux의 별도 실제
+pipe 실행에서 입력3개 합계3145749 bytes와 독립 output2개, 다섯 handle close를 확인했다. 이는 Mach 증명이 아니다.
+Mac용 세 permanent scenario는 공통 coordinator의 memory journal에서 전체 spool/CID 정리, fresh authority 거절,
+production Seatbelt private EOF→Node stop/출력/금지 canary를 검사한다. raw scope는 단일 최종 image만 선택한다.
+Seatbelt scope는 adapter가 직접 recipe와 두 번째 stop을 강제하고 준비 단계의 DYLD/LD loader override를
+job 생성 전에 거절한다. caller가 `suspendExec:false`를 줘도 최종 gate는 보존한다. 현재 build와 관련 local113/113는
+통과했으며 이 세 실제 Mac scenario는 **NOT_RUN**이다. Linux에서는 세 scenario의 platform refusal만 실행했다.
+legacy launch/recovery guard·durable journal codec과 Linux backend는 그대로이며, 실제 producer/recovery proof 뒤에 연결한다.
+현재 adapter의 독립 packed 설치27/27과 전체 구조 검사도 통과했다. 외부 선언 diagnostics44와 ledger 미검토는 유지한다.
+별도 `8a2c2b59e50` Architecture [41828317180](https://github.com/minjung2035/oma-v2-ci/actions/runs/41828317180)의
+Linux native-all은 **4769/4769 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges=[]**, 13 command code0다.
+API SHA-256 `871ea53a0e29ff9ebba622771e0b67f539f9ca8da48ef9266f0d1f1a5f79254a`를 대조한
+`helper-delivery/linux-all-art-13324900868/all/result.json`에 보존했다. 새 scope adapter의 runtime PASS로 합산하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `d360df303c1027ba2ad0d0396c0ef7ee73ece885d8dc9ff9014cc1ac2ad734cc` (15840 files).
+verification input digest `5aecdd6b1d9a451ad660a2fd126c1bc28881d4eabc67e27b73eb868456360c34` (15843 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

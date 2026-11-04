@@ -3,7 +3,7 @@
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
   "CHANGED_WITHOUT_ORACLE": 32,
-  "NOT_REVIEWED": 14340,
+  "NOT_REVIEWED": 14342,
   "REMOVED": 220
  },
  "lanes": {
@@ -2662,8 +2662,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/audit-token.ts",
@@ -2913,7 +2912,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/audit-peer.ts",
@@ -2944,6 +2944,14 @@
    "oracles": []
   },
   {
+   "path": "packages/platform-mac/src/job-control.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
    "path": "packages/platform-mac/src/job-helper/config.h",
    "primary": null,
    "status": "NOT_REVIEWED",
@@ -2963,6 +2971,14 @@
    "status": "NOT_REVIEWED",
    "by": [],
    "oracles": []
+  },
+  {
+   "path": "packages/platform-mac/src/job-scope.ts",
+   "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/platform-mac/src/keychain-client.ts",

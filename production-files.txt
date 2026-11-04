@@ -397,9 +397,11 @@ packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/developer-tools.ts
 packages/platform-mac/src/execution-launch.ts
 packages/platform-mac/src/git-sandbox.ts
+packages/platform-mac/src/job-control.ts
 packages/platform-mac/src/job-helper/config.h
 packages/platform-mac/src/job-helper/main.c
 packages/platform-mac/src/job-launch.ts
+packages/platform-mac/src/job-scope.ts
 packages/platform-mac/src/keychain-client.ts
 packages/platform-mac/src/keychain/main.swift
 packages/platform-mac/src/keychain/oma-keychain.entitlements

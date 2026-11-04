@@ -68,6 +68,10 @@
       "types": "./dist/job-launch.d.ts",
       "default": "./dist/job-launch.js"
     },
+    "./job-scope": {
+      "types": "./dist/job-scope.d.ts",
+      "default": "./dist/job-scope.js"
+    },
     "./resident-sandbox": {
       "types": "./dist/resident-sandbox.d.ts",
       "default": "./dist/resident-sandbox.js"
