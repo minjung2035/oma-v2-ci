@@ -56,7 +56,7 @@ function xml(value) {
   return `<string>${text(value)}</string>`;
 }
 function loadJob(name, executable, mode, hash, options = {}) {
-  const label = `${prefix}.${name}`, directory = join(root, name), path = join(root, `${label}.plist`);
+  const label = `${prefix}.${name}`, directory = join(options.directoryRoot ?? root, name), path = join(root, `${label}.plist`);
   mkdirSync(directory, { mode: 0o700 });
   const definition = { Label: label, Program: executable, ProgramArguments: options.argv ?? [executable, mode, directory],
     WorkingDirectory: directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
@@ -437,7 +437,8 @@ value.complete = true; save();
         // bootstrap and the same custom policy and ordinary tools. No private
         // entitlement, root helper or replacement resolver is introduced.
         const app = { status: "SETUP_FAILED", fixtureOnly: true, mechanism: "standard-app-sandbox",
-          reverse: { status: "SETUP_FAILED", error: "signing or initial controls not reached" } };
+          reverse: { status: "SETUP_FAILED", error: "signing or initial controls not reached" },
+          only: { status: "SETUP_FAILED", error: "signing or initial controls not reached", customPolicyApplied: false } };
         observation.bootstrap.appSandbox = app;
         try {
           const identifier = `${prefix}.sandbox`, bundle = join(root, "SandboxProbe.app");
@@ -483,6 +484,31 @@ value.complete = true; save();
               await waitFor(() => existsSync(join(target.directory, "once.json")));
           Object.assign(app, { guestEffect: effect(service), globalGuestEffect: effect(global),
             canaryPreserved: readFileSync(appSandboxCanary, "utf8") === "OWNED_APP_SANDBOX_CANARY\n" });
+          // Isolate the OS App Sandbox from the failed custom-policy stack.
+          // This comparison makes no purpose-specific file/IPC policy claim.
+          const only = { status: "SETUP_FAILED", customPolicyApplied: false }; app.only = only;
+          try {
+            // Keep the controlled effect within the client's writable root,
+            // so inherited sandbox restrictions cannot hide an outside-CID
+            // producer by preventing its observation file alone.
+            const service = loadJob("app-only-service", actor, "once", undefined, { directoryRoot: directory });
+            const global = loadJob("app-only-global", actor, "once", undefined, { directoryRoot: directory });
+            const portsPath = join(directory, "app-only-ports.json"), report = join(directory, "app-only-tools.json");
+            const command = observe(signed, ["app-only", profilePath, portsPath, directory, process.execPath, script,
+              service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+              unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
+            Object.assign(only, { command, target: service.target, globalTarget: global.target,
+              effectDirectory: service.directory, globalEffectDirectory: global.directory,
+              ports: optionalJson(portsPath), tools: optionalJson(report) });
+            for (const [target, result] of [[service, only.tools?.service], [global, only.tools?.bootstrapGlobal?.service]])
+              if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+                await waitFor(() => existsSync(join(target.directory, "once.json")));
+            Object.assign(only, { guestEffect: effect(service), globalGuestEffect: effect(global),
+              canaryPreserved: readFileSync(appSandboxCanary, "utf8") === "OWNED_APP_SANDBOX_CANARY\n" });
+            assert.equal(only.tools?.complete, true, `App Sandbox-only child incomplete: ${command.stderr}`);
+            only.status = "OBSERVED";
+          } catch (error) { only.error = String(error); }
           const reverse = { status: "SETUP_FAILED" }; app.reverse = reverse;
           try {
             // Apply the custom policy in the unsigned task, then exec the

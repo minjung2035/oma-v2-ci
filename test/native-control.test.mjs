@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { closeSync, readSync, writeSync } from 'node:fs';
 import { Socket } from 'node:net';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { load } from 'koffi';
 import { controlPipe, controlSocketPair, closeOnExec } from '@oma/native/control-socket';
@@ -49,4 +49,24 @@ test("003. POSIX CLOEXEC: direct exec replacement cannot retain a marked capabil
       { stdio: ['ignore', 'ignore', 'inherit', pair.write] });
   } finally { closeSync(pair.read); closeSync(pair.write); }
   const [code, signal] = await once(child, 'close'); assert.equal(code, 0); assert.equal(signal, null);
+});
+
+test("004. Explicit exec inheritance retains only the selected pipe capability", { timeout: 15000 }, () => {
+  const pipe = controlPipe(); let writer = pipe.write;
+  try {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import {load} from 'koffi';import assert from 'node:assert/strict';
+      import {closeOnExec,inheritOnExec} from '@oma/native/control-socket';
+      const fcntl=load(null).func('int fcntl(int,int,...)');
+      assert.equal(fcntl(3,0,'int',200),200);assert.equal(fcntl(3,0,'int',201),201);
+      closeOnExec(200);closeOnExec(201);inheritOnExec(200);
+      process.execve(process.execPath,[process.execPath,'--input-type=module','-e',
+        "import {writeSync,fstatSync} from 'node:fs';import assert from 'node:assert/strict';"+
+        "assert.throws(()=>fstatSync(201),{code:'EBADF'});writeSync(200,'retained');"],process.env);`],
+      { stdio: ['ignore', 'ignore', 'pipe', pipe.write], timeout: 10000, killSignal: 'SIGKILL' });
+    assert.equal(child.error, undefined); assert.equal(child.status, 0, child.stderr.toString()); assert.equal(child.signal, null);
+    const fd=writer;writer=undefined;closeSync(fd);
+    const bytes=Buffer.alloc(32),count=readSync(pipe.read,bytes);assert.equal(bytes.subarray(0,count).toString(),'retained');
+    assert.equal(readSync(pipe.read,bytes),0,'all selected child references returned after exec and exit');
+  } finally { if(writer!==undefined)closeSync(writer);closeSync(pipe.read); }
 });

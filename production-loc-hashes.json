@@ -164,7 +164,7 @@
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
-      "sha256": "dfd2ce87fde25f513f77cf9725ff4181961e246016c9e8dbc3b9e30d6d664854"
+      "sha256": "2befd59c71ad961fb7a626d83799309af5f9c795870578096d6078c941d052b0"
     },
     {
       "path": "apps/oma/src/entry/download-cache.ts",
@@ -1456,7 +1456,7 @@
     },
     {
       "path": "packages/native/src/control-socket.ts",
-      "sha256": "e2fc19c145d7e0b6d6f69ec07c276843e48b04f81249d926a5019f88c70068ff"
+      "sha256": "0c0f2e208046cd1584ac4733879a122c12fc2b7304844be090537eec2009a79a"
     },
     {
       "path": "packages/native/src/darwin-metadata.ts",

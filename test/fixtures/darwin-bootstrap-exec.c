@@ -375,7 +375,8 @@ int main(int argc, char **argv) {
   require(argc >= 6, "mode profile report cwd executable [args]");
   if (strcmp(argv[1], "restore-registered-seed") == 0) return restore_registered(argv);
   const char *mode = argv[1];
-  int inherited_profile = strcmp(mode, "inherited-profile") == 0;
+  int code_signature_profile = strcmp(mode, "app-only") == 0;
+  int inherited_profile = code_signature_profile || strcmp(mode, "inherited-profile") == 0;
   int clear_bootstrap = !inherited_profile && strcmp(mode, "inherited") != 0;
   int clear_registered = strcmp(mode, "bootstrap-and-xpc") == 0;
   require(!clear_bootstrap || clear_registered || strcmp(mode, "bootstrap-only") == 0, "closed experiment mode");
@@ -408,10 +409,11 @@ int main(int argc, char **argv) {
   int bytes = proc_pidinfo(getpid(), 20, 0, &coalition, sizeof coalition);
   int saved = bytes == (int)sizeof coalition ? 0 : errno;
   FILE *output = fopen(argv[3], "wx"); require(output != NULL, "exclusive observation report");
-  fprintf(output, "{\"mode\":\"%s\",\"pid\":%d,\"uid\":%u,\"sandboxApplied\":true,\"profileSource\":\"%s\","
+  fprintf(output, "{\"mode\":\"%s\",\"pid\":%d,\"uid\":%u,\"sandboxApplied\":%s,\"profileSource\":\"%s\","
     "\"auditTokenStatus\":%d,\"auditTokenCount\":%u,\"auditSession\":%u,\"auditPid\":%u,"
     "\"coalitionBytes\":%d,\"coalitionErrno\":%d,\"resource\":\"%" PRIu64 "\",\"before\":",
-    mode, getpid(), (unsigned)getuid(), inherited_profile ? "exec-inherited" : "applied-here",
+    mode, getpid(), (unsigned)getuid(), code_signature_profile ? "false" : "true",
+    code_signature_profile ? "code-signature" : inherited_profile ? "exec-inherited" : "applied-here",
     audit_status, audit_count, own_token.val[6], own_token.val[5], bytes, saved, coalition.ids[0]);
   print_snapshot(output, &before); fputs(",\"after\":", output); print_snapshot(output, &after);
   fputs(",\"droppedSendRights\":[", output);

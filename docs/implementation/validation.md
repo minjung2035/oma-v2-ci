@@ -182,6 +182,45 @@ CI·actual Mac·전체 Linux 결과는 발행 전 NOT_RUN이며 제품 backend·
 다섯 번째 입력의 전체 build·parser/정책/실제 search-only Git49개·실제 Linux Git/private gate와 관련 선택94개는
 모두 PASS·skip0다. 원시는 `/tmp/oma-macos-fifth-{build,parser,focused,architecture}.log` 또는 `.tap`이다.
 
+### 다섯 번째 입력의 전체 결과 — source `81eb5a178ed`
+
+Linux 전체는 **4744/4744 PASS·fail/skip/cancel/todo0**다. Node26.0.0·UID1000·pinned bwrap private
+overlay·delegated scope에서 원래 runner와 기본 동시성4를 유지했다. serial44·parallel4700,1164.803초이며
+입력15827개 `48e665fe5b4be1867d96f465e056f71e54259f4fada24e9538339270921d6e5c`는 전후 동일·changed=[]다.
+원시는 `/tmp/oma-macos-fifth-linux-20261104/`의 full-run.json·원시 TAP·per-file manifests다.
+
+Native [41775147845](https://github.com/minjung2035/oma-v2-ci/actions/runs/41775147845)의 양 Mac 공통
+**288/288 PASS·skip0**, 독립 설치26/27 PASS다. quarantine은 양 OS 각3회 **verify→import 전체 경로를
+완료**했고 canonical refs·accepted bundle bytes/cursor 보존을 확인했다. candidate도 준비·최종 gate release1을
+지나 실제 최종 명령에 도달했으나 lease FD9의 identity 보존 단언에서 실패했다. Worker6건은 native guard다.
+각 gate는111 OBSERVED /9 SETUP_FAILED /120 executed이며 제품은 여전히 BLOCKED다.
+
+두 OS 각3회 custom-first→signed App Sandbox는 SIGABRT·inner report 없음·Node/tools 미실행이었다.
+App-first의 sandbox_init EPERM도 그대로다. 이 순서들을 usable policy intersection으로 채택하지 않는다.
+API SHA-256 대조한 원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/app-reverse/`다.
+Mac26 gate ZIP `4fe547ee5a37f7bd200f376aff3185737e7fecf0d0d0e4eecffb8a81d104406e`,
+Mac15 gate ZIP `355594ae9a380c10f58bc52d516addd094720c9e9be6777b322b0aa3b64d5cba`다.
+Ubuntu native-runtime job은 전체 PASS다. 새 CI 위임 installer·actual controller 쓰기 preflight도 성공했고
+Architecture [41775147818](https://github.com/minjung2035/oma-v2-ci/actions/runs/41775147818)의 두 full lane이
+실제 실행 중이다. pending lane을 완료로 세지 않는다.
+
+### 여섯 번째 입력 — 명시적 lease FD exec 상속·단일 App Sandbox 대조
+
+Node26 실제 exec 대조에서 inherited FD는 CLOEXEC1로 시작해 사라졌고 선택 FD 하나만0으로 복구하면
+같은 dev/ino가 유지됐다(`/tmp/oma-macos-fd-exec-20261104/result.json`). native control leaf에 명시적
+`inheritOnExec`을 추가하고 Darwin candidate의 기존 slot9 lease만 최종 준비 callback에서 지정한다.
+status6은 CLOEXEC, gate8은 닫힘을 유지한다. Linux의 bwrap 슬롯은 별도이므로 이 지정을 적용하지 않는다.
+실제 Node→Node exec·pipe byte/EOF 회귀에서 지정 FD200만 유지되고 private FD201은 EBADF였다.
+기존 close-on-exec·duplex/pipe·parser와 합쳐37/37 PASS·skip0다.
+
+다음 대조는 **App Sandbox 단독**의 동일 Node/Git/compiler/C DNS와 fresh GUI service 호출이다.
+custom policy를 적용했다고 주장하지 않고 source/validator에 그 제한을 명시한다. standalone 서명·canary
+대조는 유지하고 기존 두 stacking 실패도 보존한다. 이 대조만으로 전체 파일/IPC 정책이나 제품 scope
+closure를 채택하지 않는다. 여섯 번째 입력의 actual Mac은 발행 전 NOT_RUN이다.
+여섯 번째 입력의 전체 build·관련 descriptor/Git/private gate/recipe/parser87개는 PASS·skip0다.
+원시는 `/tmp/oma-macos-sixth-{build,focused,early,architecture}.log` 또는 `.tap`이다. arm64 SDK object
+compile도 성공했지만 actual Apple compiler·kernel proof와 구분한다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -374,6 +413,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `48e665fe5b4be1867d96f465e056f71e54259f4fada24e9538339270921d6e5c` (15827 files).
+verification input digest `6c3b79bfc5b90ab13016fcf4f4b550ed464e54806736833fe85f7a0d94ed0357` (15827 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

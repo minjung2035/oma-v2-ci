@@ -510,6 +510,33 @@ export function validateDarwinObservation(name, observations) {
           targets.add(selected);
         }
       }
+      const only = app.only;
+      if (only?.customPolicyApplied !== false || !["OBSERVED", "SETUP_FAILED"].includes(only.status) ||
+          only.status === "SETUP_FAILED" && typeof only.error !== "string")
+        throw new Error("App Sandbox-only comparison loses its explicit policy limit or actual outcome");
+      if (only.status === "OBSERVED") {
+        const command = only.command, ports = only.ports, tools = only.tools;
+        if (!outcome(command) || command.executable !== app.signed || command.argv[0] !== "app-only" ||
+            command.argv[4] !== baseline.command.argv[4] || command.argv[6] !== only.target || command.argv[15] !== only.globalTarget ||
+            only.effectDirectory !== `${command.argv[3]}/app-only-service` ||
+            only.globalEffectDirectory !== `${command.argv[3]}/app-only-global` ||
+            ports?.pid !== command.pid || ports.mode !== "app-only" || ports.profileSource !== "code-signature" ||
+            ports.sandboxApplied !== false || ports.preExecObservation !== true || ports.uid !== baseline.ports.uid ||
+            !snapshot(ports.before) || !snapshot(ports.after) || tools?.complete !== true || tools.pid !== ports.pid ||
+            !dns(tools.dns) || !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
+            !outcome(tools.git) || !outcome(tools.compiler) || !outcome(tools.service) ||
+            tools.service.executable !== "/bin/launchctl" ||
+            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", only.target]) ||
+            !nodeGlobal(tools.bootstrapGlobal, tools.pid, ports.uid, only.globalTarget) ||
+            ![only.guestEffect, only.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1) ||
+            typeof only.canaryPreserved !== "boolean")
+          throw new Error("App Sandbox-only comparison lacks the signed image, actual tools or distinct service results");
+        for (const selected of [only.target, only.globalTarget]) {
+          if (!target(selected) || targets.has(selected)) throw new Error("App Sandbox-only comparison reuses a service target");
+          targets.add(selected);
+        }
+      }
     }
     if (name === "launchd-image" && (value.matchingA?.variant !== 1 || value.matchingB?.variant !== 2 ||
         !Array.isArray(value.cdhashes) || value.cdhashes.length !== 2 ||

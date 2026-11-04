@@ -17,13 +17,17 @@ function failed(): never {
   const code = getSystemErrorName(-errno());
   throw Object.assign(new Error(`control socket operation failed: ${code}`), { code });
 }
-export function closeOnExec(fd: number): void {
+function setCloseOnExec(fd: number, enabled: boolean): void {
   posix();
-  if (!Number.isSafeInteger(fd) || fd < 0) throw new TypeError("invalid control descriptor");
+  if (!Number.isSafeInteger(fd) || fd < 0 || fd > 0x7fffffff) throw new TypeError("invalid control descriptor");
   control ??= load(null).func("int fcntl(int fd, int command, ...)");
   const flags = control(fd, 1 /* F_GETFD */);
-  if (flags < 0 || control(fd, 2 /* F_SETFD */, "int", flags | 1 /* FD_CLOEXEC */) < 0) failed();
+  if (flags < 0 || control(fd, 2 /* F_SETFD */, "int", enabled ? flags | 1 : flags & ~1 /* FD_CLOEXEC */) < 0) failed();
 }
+export function closeOnExec(fd: number): void { setCloseOnExec(fd, true); }
+/** Only an explicitly transferred cooperation descriptor may cross the next
+ * exec. Other private channels retain their own close-on-exec flags. */
+export function inheritOnExec(fd: number): void { setCloseOnExec(fd, false); }
 export function controlSocketPair(): { readonly parent: number; readonly child: number } {
   posix(); pair ??= load(null).func("int socketpair(int domain, int type, int protocol, void *fds)");
   const descriptors = Buffer.alloc(8);

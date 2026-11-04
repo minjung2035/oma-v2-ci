@@ -2,7 +2,7 @@
 import { decodeCandidateInvocation, executeCandidateCheck } from "@oma/git/candidate-check";
 import { StoreError, exceptionText } from "@oma/domain/errors";
 import { writeSync, readSync, closeSync } from "node:fs";
-import { closeOnExec } from "@oma/native/control-socket";
+import { closeOnExec, inheritOnExec } from "@oma/native/control-socket";
 closeOnExec(6);
 function status(value: object): void {
   const bytes = Buffer.from(JSON.stringify(value) + "\n");
@@ -11,6 +11,11 @@ function status(value: object): void {
 try {
   if (process.argv.length !== 3) throw new StoreError("INVALID_REQUEST", "candidate check requires its closed invocation");
   process.exitCode = await executeCandidateCheck(decodeCandidateInvocation(JSON.parse(process.argv[2]!)), () => {
+    // The Darwin recipe explicitly transfers only its staging lease in slot
+    // 9. Node startup marks inherited descriptors CLOEXEC again; restore this
+    // one cooperation hold before the final exec. Linux consumes different
+    // slots in bwrap and has no staging lease in this position.
+    if (process.platform === "darwin") inheritOnExec(9);
     status({ kind: "prepared" });
     const release = Buffer.alloc(1);
     if (readSync(8, release) !== 1 || release[0] !== 1)
