@@ -1,7 +1,9 @@
 /* Controlled bootstrap Mach compatibility experiment, not a production server.
  * 0x400000cf/236 bytes was observed on both target SDK/OS pairs. Its private
  * wire ABI and the proposed SDK-style reply are not qualified by declarations.
- * Only fixed OS service ports can be returned; no request is ever forwarded.
+ * The default reply experiment returns only fixed OS service ports. Discard
+ * modes return none; external mode seeds a host-selected discard service.
+ * No request is ever forwarded by this supervisor.
  * The name scan grants no caller identity, role or arbitrary-descendant proof. */
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
@@ -159,7 +161,8 @@ static void deadline(int signal_number) {
 int main(int argc, char **argv) {
   require(getuid() > 0 && argc >= 4, "ordinary UID: trace executable [arguments]");
   deny_all = strcmp(argv[2], "--deny-all") == 0 ? 1 : strcmp(argv[2], "--drop-all") == 0 ? 2 : 0;
-  int executable_index = deny_all ? 3 : 2;
+  int external = strcmp(argv[2], "--external-sink") == 0;
+  int executable_index = external ? 4 : deny_all ? 3 : 2;
   require(argc > executable_index, "proxy target executable");
   trace = fopen(argv[1], "wx"); require(trace != NULL, "exclusive proxy trace");
   require(fcntl(fileno(trace), F_SETFD, FD_CLOEXEC) == 0, "private trace close on exec");
@@ -170,24 +173,35 @@ int main(int argc, char **argv) {
   mach_port_t warmed = MACH_PORT_NULL;
   int warm_status = bootstrap_look_up(original, "com.apple.logd", &warmed);
   fprintf(trace, "{\"phase\":\"host-lookup\",\"status\":%d}\n", warm_status);
-  mach_success(mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE, &endpoint), "proxy receive right");
-  mach_success(mach_port_insert_right(task, endpoint, endpoint, MACH_MSG_TYPE_MAKE_SEND), "proxy send right");
-  fprintf(trace, "{\"phase\":\"ready\",\"pid\":%d,\"uid\":%u,\"original\":%u,\"proxy\":%u,\"privateAbi\":true,\"denyAll\":%s}\n",
-    getpid(), (unsigned)getuid(), original, endpoint, deny_all ? "true" : "false");
-  sigset_t alarms; require(sigemptyset(&alarms) == 0 && sigaddset(&alarms, SIGALRM) == 0 &&
-    sigprocmask(SIG_BLOCK, &alarms, NULL) == 0, "proxy alarm mask");
+  if (external) {
+    mach_success(bootstrap_look_up(original, argv[3], &endpoint), "external discard service lookup");
+    require(MACH_PORT_VALID(endpoint) && endpoint != original, "distinct external sink capability");
+  } else {
+    mach_success(mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE, &endpoint), "proxy receive right");
+    mach_success(mach_port_insert_right(task, endpoint, endpoint, MACH_MSG_TYPE_MAKE_SEND), "proxy send right");
+  }
+  fprintf(trace, "{\"phase\":\"ready\",\"pid\":%d,\"uid\":%u,\"original\":%u,\"proxy\":%u,\"privateAbi\":%s,\"denyAll\":%s,\"externalSink\":%s}\n",
+    getpid(), (unsigned)getuid(), original, endpoint, external ? "false" : "true", deny_all ? "true" : "false", external ? "true" : "false");
+  sigset_t alarms, original_signals; require(sigemptyset(&alarms) == 0 && sigaddset(&alarms, SIGALRM) == 0 &&
+    sigprocmask(SIG_BLOCK, &alarms, &original_signals) == 0, "proxy alarm mask");
   struct sigaction action = {0}; action.sa_handler = deadline;
   require(sigemptyset(&action.sa_mask) == 0 && sigaction(SIGALRM, &action, NULL) == 0, "proxy alarm handler");
-  pthread_t server; require(pthread_create(&server, NULL, serve, NULL) == 0, "proxy receiver thread");
+  pthread_t server;
+  if (!external) require(pthread_create(&server, NULL, serve, NULL) == 0, "proxy receiver thread");
+  posix_spawnattr_t attributes;
+  require(posix_spawnattr_init(&attributes) == 0, "child spawn attributes");
+  require(posix_spawnattr_setsigmask(&attributes, &original_signals) == 0 &&
+    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSIGMASK) == 0, "restore child signal mask");
   mach_success(task_set_bootstrap_port(task, endpoint), "child bootstrap seed");
   mach_success(mach_ports_register(task, &endpoint, 1), "child registered seed");
   pid_t child = 0;
-  int spawned = posix_spawn(&child, argv[executable_index], NULL, NULL, &argv[executable_index], environ);
+  int spawned = posix_spawn(&child, argv[executable_index], NULL, &attributes, &argv[executable_index], environ);
+  int attributes_destroyed = posix_spawnattr_destroy(&attributes);
   kern_return_t restored = task_set_bootstrap_port(task, original), registered_again = mach_ports_register(task, registered, count);
   flockfile(trace); fprintf(trace, "{\"phase\":\"spawn\",\"status\":%d,\"childPid\":%d,\"restored\":%d,\"registered\":%d}\n",
     spawned, child, restored, registered_again); funlockfile(trace);
   require(spawned == 0 && child > 0, "controlled proxy child spawn"); child_pid = child;
-  if (restored != KERN_SUCCESS || registered_again != KERN_SUCCESS) (void)kill(child, SIGKILL);
+  if (restored != KERN_SUCCESS || registered_again != KERN_SUCCESS || attributes_destroyed != 0) (void)kill(child, SIGKILL);
   require(pthread_sigmask(SIG_UNBLOCK, &alarms, NULL) == 0, "proxy child deadline");
   alarm(30);
   siginfo_t terminal = {0}; int waited;
@@ -197,8 +211,10 @@ int main(int argc, char **argv) {
   int result; do { waited = waitpid(child, &result, 0); } while (waited < 0 && errno == EINTR);
   require(waited == child, "proxy child join");
   atomic_store(&stopping, 1);
-  require(pthread_join(server, NULL) == 0, "proxy receiver join");
-  mach_success(mach_port_mod_refs(task, endpoint, MACH_PORT_RIGHT_RECEIVE, -1), "close proxy receive right");
+  if (!external) {
+    require(pthread_join(server, NULL) == 0, "proxy receiver join");
+    mach_success(mach_port_mod_refs(task, endpoint, MACH_PORT_RIGHT_RECEIVE, -1), "close proxy receive right");
+  }
   mach_success(mach_port_deallocate(task, endpoint), "return proxy send reference");
   fprintf(trace, "{\"phase\":\"terminal\",\"childPid\":%d,\"waitStatus\":%d,\"timedOut\":%s,\"joined\":true}\n",
     child, result, expired ? "true" : "false");

@@ -573,6 +573,38 @@ job_useless는 시작한 only-once job의 종료를 제거 조건으로 사용�
 이 옵션이 실제 CID를 반납하면 저장 label을 신호 권한으로 삼지 않는 조합의 다음 후보가 된다.
 성공 전 제품 constructor·journal 형식·scope 판정을 변경하지 않는다.
 
+### LaunchOnlyOnce의 실제 결과 — source `b61f2011b04`
+
+Native [41794135599](https://github.com/minjung2035/oma-v2-ci/actions/runs/41794135599)의 양 OS 각3회에서
+Background/SessionCreate/LaunchOnlyOnce controlled actor 종료 뒤 explicit bootout 없이 CID ESRCH·별도
+live CID 조회0을 확인했다. production leaf는 모두 empty였고 print/restart는 모두113이었다.
+이것은 once program의 실제 제거 관측이다. detached 후손·owner SIGKILL·label 재사용과의 조합은 다음 입력이며
+stored label을 복구 신호 권한으로 사용하는 producer를 만들지 않는다.
+
+입력15829개 `11636e71e4b180701d5f3bb5bf680cef7ddee08c11dfa879e61820c39b7c6b07`와 runtime은 양 OS
+전후 동일했다. gate는 Mac26 114/120·Mac15 111/120 OBSERVED·product BLOCKED다. SHA-256 확인한
+`one-shot/`의 Mac26 ZIP은 `be21ffeef11fe907eb63b2286e05ba94b93a7b6799e52029becc7c4359d03cd9`,
+Mac15 ZIP은 `50ef4b0cf1eb17274de956a58a4534a902b324353a022e550c565cb53c155fcf`다.
+
+### 다음 입력 — native discard receiver·one-shot owner loss·label 재사용
+
+`@oma/native/mach-message`에 reply/forwarding/이름 해석 없이 받은 message를 SDK destructor로 반환하는
+discard service leaf를 추가했다. [고정 XNU copyout](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/ipc_kmsg.c#L4240)의
+BODY_ERROR도 전달된 자원을 반환하고 endpoint를 닫는다. oversized/기타 오류 역시 endpoint 종료와 오류로
+남긴다. 이 함수는 sender·role·scope death를 부여하지 않는다. 실제 Node host가 endpoint를 소유하고
+별도 C supervisor가 그 send right만 fresh child에 지정하는 비동기 대조를 추가했다. Host의 bootstrap은
+바꾸지 않는다. source/executable/runtime binding·정상 도구·DNS·fresh service·unreaped-child join을 보존한다.
+
+lifetime job에는 LaunchOnlyOnce를 조합하고 bootout 대신 fresh kernel token으로 실제 proxy owner를
+종료한다. late/post-snapshot fork 제어 후 CID를 확인하고, 동일 label의 새 controlled live job을 등록해
+옛 boot/CID의 population/effect가 새 generation을 제어하지 않는지 조회한다. 원래 scope의 커널 조회와
+새 live PID의 정확한 generation 관측을 registration 진단과 분리한다.
+
+fixture supervisor의 deadline용 SIGALRM mask가 target에 상속되던 설정도 수정했다. spawn attribute로
+원래 mask를 복원하고 C client의 실제 mask bit를 별도 기록한다. 이 입력의 actual Mac은 **NOT_RUN**이며
+제품 backend·legacy journal 거절·실행 guard는 유지한다. 로컬 C 두 image의 SDK object compile과
+Node 문법·parser/Seatbelt43/43·skip0는 PASS다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -765,6 +797,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `11636e71e4b180701d5f3bb5bf680cef7ddee08c11dfa879e61820c39b7c6b07` (15829 files).
+verification input digest `f0af51ee141ea67bbad6e4e39229dd9d97beed79b1549c8b96c94a603d661a6e` (15829 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

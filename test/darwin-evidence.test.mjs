@@ -184,7 +184,7 @@ const bootstrapRecord = () => {
   const baseline = variants[0].node, sessionPid = 900, sessionTarget = 'gui/501/org.oma.probe.test.session-service';
   baseline.tools.nativeLookupCommand = command('/owned/bootstrap-exec', ['observe-logd-lookup', '/owned/lookup.json'], 9802);
   baseline.tools.nativeLookup = { phase: 'public-bootstrap-lookup', pid: 9802, uid: 501, name: 'com.apple.logd',
-    status: 0, port: 444, typeStatus: 0, rights: 65536, releaseStatus: 0,
+    status: 0, port: 444, typeStatus: 0, rights: 65536, releaseStatus: 0, alarmBlocked: false,
     hostLaunchctl: { status: 5, port: 0, releaseStatus: -1, hostReleaseStatus: 0 } };
   const sessionGlobal = 'gui/501/org.oma.probe.test.session-global', sessionReport = '/owned/work/session-tools.json';
   const sessionTools = structuredClone(baseline.tools);
@@ -561,6 +561,8 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
       command: value.bootstrap.lookupProxy.command, trace: [], error: 'no join' }; },
     value => { value.bootstrap.lookupProxy.dropAll = { status: 'SETUP_FAILED', fixtureOnly: true, denyAll: true, dropAll: true,
       command: value.bootstrap.lookupProxy.command, trace: [], error: 'no join' }; },
+    value => { value.bootstrap.lookupProxy.nativeSink = { status: 'SETUP_FAILED', fixtureOnly: true, receiver: 'production-node-discard',
+      result: { kind: 'signalled' }, trace: [], error: 'no join' }; },
     value => { value.bootstrap.lookupProxy.trace.at(-1).joined = false; },
     value => { const proxy=value.bootstrap.lookupProxy;proxy.status='SETUP_FAILED';proxy.error='private ABI failed';proxy.trace.at(-1).joined=false; },
     value => { value.bootstrap.lookupProxy.trace[1].childPid += 1; },

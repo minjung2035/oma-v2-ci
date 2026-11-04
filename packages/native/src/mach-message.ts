@@ -1,6 +1,7 @@
 /** Darwin Mach message mechanics and kernel audit facts only. Framing, live
  * process pinning, scope membership and authority belong to shared TS owners.
- * Source-reviewed against XNU f6217f89 and Chromium 655c7be0; Darwin NOT_RUN.
+ * Source-reviewed against XNU f6217f89 and Chromium 655c7be0. Kernel
+ * observations do not establish product authority or complete scope death.
  */
 import { decode, load } from "koffi";
 import { StoreError } from "@oma/domain/errors";
@@ -211,6 +212,33 @@ export function listenMachService(name: string): MachReceiveRight {
   service(name); const native = mach(), output = Buffer.alloc(4);
   success(native.checkIn(native.bootstrap, name, output), "check in Mach service");
   return ownReceive(port(output.readUInt32LE(0)));
+}
+/** A receive-only sink for bootstrap isolation experiments. It grants no
+ * sender, role or request authority and never constructs a reply. */
+export function listenMachDiscardService(name: string): { discard(): boolean; close(): void } {
+  service(name); const native = mach(), output = Buffer.alloc(4);
+  success(native.checkIn(native.bootstrap, name, output), "check in Mach discard service");
+  const namePort = port(output.readUInt32LE(0)), receiver = ownReceive(namePort);
+  let closed = false;
+  const close = (): void => { closed = true; receiver.close(); };
+  return Object.freeze({ close,
+    discard(): boolean {
+      if (closed) throw new Error("Mach discard owner is closed");
+      const message = Buffer.alloc(HEADER_BYTES + INLINE_BYTES + AUDIT_TRAILER_BYTES + 4);
+      const result = native.message(message, 2 /* RCV_MSG */ | 0x100 /* TIMEOUT */ | 0x400 /* INTERRUPT */ | 4 /* LARGE */,
+        0, message.length, namePort, 0, 0);
+      if (result === RECEIVE_TIMEOUT || result === RECEIVE_INTERRUPTED) return false;
+      const base = result & ~0x3e00 /* MACH_MSG resource error bits */;
+      // BODY_ERROR delivers the converted header and whatever body resources
+      // fitted. XNU mach_msg.c returns those to userspace; the SDK must free
+      // them even though the receive operation was not completely successful.
+      if (result === 0 || base === 0x1000400c /* BODY_ERROR */) native.destroy(message);
+      if (result !== 0) return withCleanup(() => {
+        throw Object.assign(new Error(`Mach discard receive failed (${result}); endpoint closed`), { machCode: result });
+      }, close);
+      return true;
+    },
+  });
 }
 export function lookupMachService(name: string): MachSendRight {
   service(name); const native = mach(), output = Buffer.alloc(4);

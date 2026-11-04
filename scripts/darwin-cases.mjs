@@ -454,7 +454,33 @@ export function validateDarwinObservation(name, observations) {
                 round.controls.some((control, index) => !response(control, "signal") || control.targetPid !== round.discovery.result[index] || typeof control.result !== "boolean")) ||
               lifetime.after?.returnCode !== -1 || lifetime.after.errno !== 3 || lifetime.otherAfter?.returnCode !== 0)
             throw new Error("production-native lifetime loses boot binding, exact hints/effects or independent scope observations");
+          if (lifetime.launchOnlyOnce === true) {
+            const reused = lifetime.labelReuse, current = reused?.replacementAfter;
+            if (lifetime.explicitBootoutBeforeObservation !== false || !response(lifetime.ownerSignal, "signal") ||
+                lifetime.ownerSignal.targetPid !== lifetime.proxyIdentity?.pid || lifetime.ownerSignal.result !== true ||
+                lifetime.removedRegistration?.exitCode !== 113 || lifetime.restart?.exitCode !== 113 ||
+                reused?.target !== lifetime.target || reused.replacement?.resource === identity.coalitionId ||
+                !response(reused.oldPopulation, "population") || reused.oldPopulation.result !== "empty" ||
+                !response(reused.oldSignal, "signal") || reused.oldSignal.targetPid !== reused.replacement?.pid || reused.oldSignal.result !== false ||
+                reused.oldReference?.errno !== 3 || reused.replacementReference?.returnCode !== 0 ||
+                current?.uniqueBytes !== 56 || current.unique !== reused.replacement.identity?.unique ||
+                current.version !== reused.replacement.identity?.version || current.bsdBytes !== 136 || current.status === 5)
+              throw new Error("one-shot lifetime loses exact owner control or confuses a reused label with its old CID");
+          }
         }
+      }
+      if (proxy.nativeSink !== undefined) {
+        const sink = proxy.nativeSink;
+        if (sink.fixtureOnly !== true || sink.receiver !== "production-node-discard" ||
+            !["OBSERVED", "SETUP_FAILED"].includes(sink.status) || sink.status === "SETUP_FAILED" && typeof sink.error !== "string" ||
+            sink.result !== undefined && !(sink.trace?.at(-1)?.phase === "terminal" && sink.trace.at(-1).joined === true))
+          throw new Error("native discard comparison cannot hide its controlled-child cleanup");
+        if (sink.status === "OBSERVED" && (sink.result?.kind !== "exited" || sink.result.exitCode !== 0 ||
+            sink.profileSha256 !== proxy.profileSha256 || !Number.isSafeInteger(sink.discarded) || sink.discarded <= 0 ||
+            sink.receiveError !== undefined || sink.trace.find(entry => entry.phase === "ready")?.externalSink !== true ||
+            sink.tools?.complete !== true || sink.tools.pid !== sink.ports?.pid || sink.ports.sandboxApplied !== true ||
+            sink.command?.argv?.[1] !== "--external-sink" || sink.command.argv[2] !== sink.serviceName))
+          throw new Error("native discard comparison lacks its actual receiver, policy or completed tools");
       }
       for (const key of ["denial", "dropAll"]) if (proxy[key] !== undefined) {
         const denial = proxy[key];
@@ -480,6 +506,7 @@ export function validateDarwinObservation(name, observations) {
         if (!outcome(command) || command.executable !== launcher || command.argv[0] !== "observe-logd-lookup" ||
             !(lookup === undefined && (command.exitCode !== 0 || command.signal !== null || command.error !== undefined) ||
               lookup?.phase === "public-bootstrap-lookup" && lookup.name === "com.apple.logd" && lookup.pid === command.pid &&
+              typeof lookup.alarmBlocked === "boolean" &&
               lookup.uid === baseline.ports.uid && signed32(lookup.status) && portNumber(lookup.port) &&
               signed32(lookup.typeStatus) && portNumber(lookup.rights) && signed32(lookup.releaseStatus) &&
               signed32(lookup.hostLaunchctl?.status) && portNumber(lookup.hostLaunchctl.port) &&

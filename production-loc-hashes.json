@@ -1484,7 +1484,7 @@
     },
     {
       "path": "packages/native/src/mach-message.ts",
-      "sha256": "0e14ecda4f07c1cf5e3a34aff9a5a3e4329c417a3443f6438e955e658653b70a"
+      "sha256": "5e71fe29166a4b31588c4f1e82c8476981547222dc802a04fe722f63c100c5cd"
     },
     {
       "path": "packages/native/src/metadata-observation.ts",

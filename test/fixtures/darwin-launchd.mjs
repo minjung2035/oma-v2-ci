@@ -12,7 +12,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
-import { runProcessSync } from "@oma/process/run";
+import { runProcessSync, runProcess } from "@oma/process/run";
+import { listenMachDiscardService } from "@oma/native/mach-message";
 import { GIT_ENV } from "@oma/process/policies";
 import { observeNodeLibc } from "./darwin-libc.mjs";
 
@@ -56,7 +57,7 @@ function xml(value) {
   return `<string>${text(value)}</string>`;
 }
 function loadJob(name, executable, mode, hash, options = {}) {
-  const label = `${prefix}.${name}`, directory = join(options.directoryRoot ?? root, name), path = join(root, `${label}.plist`);
+  const label = options.label ?? `${prefix}.${name}`, directory = join(options.directoryRoot ?? root, name), path = join(root, `${label}.plist`);
   mkdirSync(directory, { mode: 0o700 });
   const definition = { Label: label, Program: executable, ProgramArguments: options.argv ?? [executable, mode, directory],
     WorkingDirectory: directory, RunAtLoad: false, KeepAlive: false, AbandonProcessGroup: false,
@@ -473,7 +474,8 @@ value.complete = true; save();
         // recovery primitive. These are controlled actors, never an app gate.
         const lifetime = { status: "SETUP_FAILED", fixtureOnly: true,
           tokenSource: "kernel-task-name-port", fixtureReleaseUsedBeforeObservation: false, controlBackend: "production-native",
-          launchDomain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, guiAbsent: false };
+          launchDomain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, guiAbsent: false,
+          launchOnlyOnce: true, explicitBootoutBeforeObservation: false };
         proxy.lifetime = lifetime;
         try {
           assert.equal(proxy.status, "OBSERVED", "lookup compatibility prerequisite");
@@ -484,7 +486,7 @@ value.complete = true; save();
             denied: [], executable: [{ path: actor, kind: "file" }], unixSockets: [], machServices: [], environmentKeys: [] });
           writeFileSync(profilePath, scopeProfile, { mode: 0o600 });
           const scope = loadJob("proxy-lifetime", executable, "unused", undefined, {
-            domain: lifetime.launchDomain, background: true, sessionCreate: true,
+            domain: lifetime.launchDomain, background: true, sessionCreate: true, launchOnlyOnce: true,
             argv: [executable, tracePath, launcher, "inherited", profilePath, portsPath, directory,
               actor, "scope-inherited-profile", directory] });
           const other = loadJob("proxy-lifetime-other", actor, "hold");
@@ -522,7 +524,8 @@ value.complete = true; save();
           const emptyIdentity = { ...identity, coalitionId: observation.bootstrap.positiveControl.resource };
           lifetime.loadedEmptyJob = { reference: usage(emptyIdentity.coalitionId),
             native: invoke("population", JSON.stringify(emptyIdentity)) };
-          bootout(scope);
+          lifetime.ownerSignal = invoke("signal", JSON.stringify(identity), String(proxyIdentity.pid));
+          assert.equal(lifetime.ownerSignal.result, true, "exact-token proxy owner termination");
           writeFileSync(join(directory, "ping"), "after proxy owner removal");
           await waitFor(() => existsSync(join(directory, "late.json")));
           lifetime.late = remember(marker(directory, "late"));
@@ -543,6 +546,30 @@ value.complete = true; save();
           assert.equal(lifetime.otherAfter.returnCode, 0);
           if (lifetime.loadedEmptyJob.reference.returnCode === 0)
             assert.equal(lifetime.loadedEmptyJob.native.result, "populated", "equal task counters cannot prove resource removal");
+          lifetime.removedRegistration = run("/bin/launchctl", ["print", scope.target], false);
+          lifetime.restart = run("/bin/launchctl", ["kickstart", scope.target], false);
+          assert.equal(lifetime.removedRegistration.exitCode, 113);
+          assert.equal(lifetime.restart.exitCode, 113);
+          scope.active = false; // Metadata cleanup only; CID already returned ESRCH.
+          const reused = loadJob("proxy-label-reuse", actor, "hold", undefined,
+            { label: scope.label, domain: lifetime.launchDomain, background: true, sessionCreate: true, launchOnlyOnce: true });
+          run("/bin/launchctl", ["kickstart", reused.target]);
+          await waitFor(() => existsSync(join(reused.directory, "other.json")));
+          const replacement = remember(marker(reused.directory, "other"));
+          assert.notEqual(replacement.resource, identity.coalitionId);
+          lifetime.labelReuse = { target: reused.target, replacement,
+            oldPopulation: invoke("population", JSON.stringify(identity)),
+            oldSignal: invoke("signal", JSON.stringify(identity), String(replacement.pid)),
+            oldReference: usage(identity.coalitionId), replacementReference: usage(replacement.resource) };
+          lifetime.labelReuse.replacementAfter = inspect(replacement.pid);
+          assert.equal(lifetime.labelReuse.oldPopulation.result, "empty");
+          assert.equal(lifetime.labelReuse.oldSignal.result, false);
+          assert.equal(lifetime.labelReuse.replacementReference.returnCode, 0);
+          assert.equal(lifetime.labelReuse.replacementAfter.uniqueBytes, 56);
+          assert.equal(lifetime.labelReuse.replacementAfter.unique, replacement.identity.unique);
+          assert.equal(lifetime.labelReuse.replacementAfter.version, replacement.identity.version);
+          assert.equal(lifetime.labelReuse.replacementAfter.bsdBytes, 136);
+          assert.notEqual(lifetime.labelReuse.replacementAfter.status, 5);
           lifetime.status = "OBSERVED";
         } catch (error) { lifetime.error = String(error); }
         // Does compatibility require returning any OS port at all? Keep the
@@ -572,6 +599,43 @@ value.complete = true; save();
             denial.status = "OBSERVED";
           } catch (error) { denial.error = String(error); }
         }
+        const nativeSink = { status: "SETUP_FAILED", fixtureOnly: true, receiver: "production-node-discard" };
+        proxy.nativeSink = nativeSink;
+        let sink, sinkTimer;
+        try {
+          const serviceName = `${prefix}.native-discard`;
+          sink = listenMachDiscardService(serviceName);
+          nativeSink.serviceName = serviceName; nativeSink.discarded = 0;
+          sinkTimer = setInterval(() => {
+            try { for (let count = 0; count < 64 && sink.discard(); ++count) nativeSink.discarded++; }
+            catch (error) { nativeSink.receiveError = String(error); clearInterval(sinkTimer); }
+          }, 1);
+          const service = loadJob("native-sink-service", actor, "once", undefined, { directoryRoot: directory });
+          const global = loadJob("native-sink-global", actor, "once", undefined, { directoryRoot: directory });
+          const executable = join(root, "bootstrap-proxy"), tracePath = join(root, "native-sink.jsonl");
+          const portsPath = join(directory, "native-sink-ports.json"), report = join(directory, "native-sink-tools.json");
+          const argv = [tracePath, "--external-sink", serviceName, launcher, name, profilePath, portsPath, directory,
+            process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)];
+          nativeSink.command = { executable, argv };
+          const result = await runProcess({ executable, argv, cwd: root, env: process.env, timeoutMs: 35000,
+            stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024 });
+          nativeSink.result = { ...result, stdout: result.stdout.toString("utf8"), stderr: result.stderr.toString("utf8") };
+          Object.assign(nativeSink, { profileSha256: createHash("sha256").update(profile).digest("hex"),
+            trace: existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [],
+            target: service.target, globalTarget: global.target, ports: optionalJson(portsPath), tools: optionalJson(report) });
+          for (const [target, outcome] of [[service, nativeSink.tools?.service], [global, nativeSink.tools?.bootstrapGlobal?.service]])
+            if (outcome?.exitCode === 0 && outcome.signal === null && outcome.error === undefined)
+              await waitFor(() => existsSync(join(target.directory, "once.json")));
+          Object.assign(nativeSink, { guestEffect: effect(service), globalGuestEffect: effect(global),
+            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+          assert.equal(nativeSink.tools?.complete, true); assert.equal(nativeSink.receiveError, undefined);
+          assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0);
+          assert.ok(nativeSink.discarded > 0);
+          assert.equal(nativeSink.trace.at(-1)?.joined, true); nativeSink.status = "OBSERVED";
+        } catch (error) { nativeSink.error = String(error); }
+        finally { clearInterval(sinkTimer); sink?.close(); }
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
@@ -923,6 +987,9 @@ finally {
       if (proxy?.dropAll?.command !== undefined)
         assert.ok(proxy.dropAll.trace?.at(-1)?.phase === "terminal" && proxy.dropAll.trace.at(-1).joined === true,
           "drop-all proxy command ended without observing its controlled child return");
+      if (proxy?.nativeSink?.result !== undefined)
+        assert.ok(proxy.nativeSink.trace?.at(-1)?.phase === "terminal" && proxy.nativeSink.trace.at(-1).joined === true,
+          "native sink comparison cannot hide an unjoined controlled child");
       observation.controlledGenerationsExited = true;
     } catch (error) { faults.push(String(error)); }
   }

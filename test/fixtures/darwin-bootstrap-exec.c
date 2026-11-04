@@ -133,12 +133,14 @@ static int observe_logd_lookup(const char *report_path) {
   int host_status = host_get_special_port(host, HOST_LOCAL_NODE, HOST_LAUNCHCTL_PORT, &host_control);
   int control_release = MACH_PORT_VALID(host_control) ? mach_port_deallocate(mach_task_self(), host_control) : -1;
   int host_release = mach_port_deallocate(mach_task_self(), host);
+  sigset_t signals; require(sigprocmask(SIG_BLOCK, NULL, &signals) == 0, "public lookup signal mask");
+  int alarm_blocked = sigismember(&signals, SIGALRM); require(alarm_blocked >= 0, "public lookup alarm membership");
   FILE *output = fopen(report_path, "wx"); require(output != NULL, "exclusive bootstrap lookup report");
   fprintf(output, "{\"phase\":\"public-bootstrap-lookup\",\"pid\":%d,\"uid\":%u,\"name\":\"com.apple.logd\","
     "\"status\":%d,\"port\":%u,\"typeStatus\":%d,\"rights\":%u,\"releaseStatus\":%d,"
-    "\"hostLaunchctl\":{\"status\":%d,\"port\":%u,\"releaseStatus\":%d,\"hostReleaseStatus\":%d}}\n",
+    "\"hostLaunchctl\":{\"status\":%d,\"port\":%u,\"releaseStatus\":%d,\"hostReleaseStatus\":%d},\"alarmBlocked\":%s}\n",
     getpid(), (unsigned)getuid(), status, destination, type_status, rights, release_status,
-    host_status, host_control, control_release, host_release);
+    host_status, host_control, control_release, host_release, alarm_blocked ? "true" : "false");
   require(fclose(output) == 0, "complete public lookup report"); return 0;
 }
 static int observe_dns(const char *report_path, const char *listed, const char *unlisted) {
