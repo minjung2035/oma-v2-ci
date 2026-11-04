@@ -3,12 +3,14 @@
  * are trusted probe processes; joining them proves only their own exit.
  */
 import assert from "node:assert/strict";
-import { fork } from "node:child_process";
+import { fork, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
+import { closeSync, fstatSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { createMachEndpoint, listenMachService, lookupMachService } from "@oma/native/mach-message";
+import { createMachEndpoint, createMachFilePort, openMachFilePort, listenMachService, lookupMachService } from "@oma/native/mach-message";
 import { cleanupAll, withAsyncCleanup } from "@oma/native/cleanup";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { bindMachSender } from "@oma/platform-mac/audit-peer";
@@ -147,6 +149,35 @@ async function asyncAudit() {
   assert.equal(settled, false, "the native callback must be asynchronous");
   assert.deepEqual(await bounded(observation.result, "actual Security validation"), { kind: "matched" });
   await bounded(observation.returned, "actual CF return");
+  const cdhash = path => {
+    const result = spawnSync("/usr/bin/codesign", ["--display", "--verbose=4", path], { encoding: "utf8", timeout: 10000 });
+    assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
+    const hash = /^CDHash=([0-9a-f]{40})$/m.exec(result.stderr)?.[1]; assert.ok(hash, result.stderr); return hash;
+  };
+  const ownHash = cdhash(process.execPath), otherHash = cdhash("/bin/sh"); assert.notEqual(ownHash, otherHash);
+  const hashes = [ownHash], selected = observeDarwinAuditOrigin(message.sender.token, hashes);
+  returns.push(() => selected.returned); hashes[0] = otherHash;
+  assert.deepEqual(await bounded(selected.result, "selected main image"), { kind: "matched" });
+  await bounded(selected.returned, "selected requirement CF return");
+  const wrong = observeDarwinAuditOrigin(message.sender.token, [otherHash]); returns.push(() => wrong.returned);
+  const refused = await bounded(wrong.result, "different signed image");
+  assert.equal(refused.kind, "unavailable"); assert.notEqual(refused.osStatus, 0);
+  await bounded(wrong.returned, "mismatched requirement CF return");
+  const path = join(process.cwd(), `fileport-${randomBytes(12).toString("hex")}`);
+  writeFileSync(path, "FILEPORT_BYTES\n", { flag: "wx", mode: 0o600 }); returns.push(() => unlinkSync(path));
+  const source = openSync(path, "r"), expected = fstatSync(source); let file;
+  try { file = createMachFilePort(source); } finally { closeSync(source); }
+  returns.push(() => file.close());
+  await send(endpoint.send, HANDOFF, Buffer.alloc(4), file);
+  const transferred = await receive(endpoint.receive); assert.ok(transferred.reply); returns.push(() => transferred.reply.close());
+  const fd = openMachFilePort(transferred.reply);
+  try {
+    const actual = fstatSync(fd); assert.equal(actual.dev, expected.dev); assert.equal(actual.ino, expected.ino);
+    assert.equal(readFileSync(fd, "utf8"), "FILEPORT_BYTES\n");
+  } finally { closeSync(fd); }
+  const shared = openMachFilePort(file);
+  try { assert.equal(readFileSync(shared, "utf8"), ""); } finally { closeSync(shared); }
+  assert.throws(() => openMachFilePort(endpoint.send), /file descriptor/);
   const cancelled = bindMachSender(message.sender); returns.push(() => cancelled.close());
   const closing = cancelled.close(); let returned = false; void closing.then(() => { returned = true; }, () => {});
   assert.equal(returned, false); assert.throws(() => cancelled.take(), { code: "AUTH_FAILED" });
@@ -158,7 +189,10 @@ async function asyncAudit() {
   assert.throws(() => acquired.take(), { code: "AUTH_FAILED" });
   await acquired.close(); assert.equal(pin.alive(), true, "a transferred pin has its own resource owner");
   pin.close(); assert.equal(pin.alive(), false);
-  return { machAsyncAudit: { sender: process.pid, matched: true, callbackAsynchronous: true, cancelledBindingRefused: true, claimedPinRetainedUntilExplicitClose: true, nativeCompletionJoined: true } };
+  return { machAsyncAudit: { sender: process.pid, matched: true, callbackAsynchronous: true, cancelledBindingRefused: true,
+    claimedPinRetainedUntilExplicitClose: true, nativeCompletionJoined: true,
+    selectedImage: { ownHash, otherHash, requirementFrozenBeforeAwait: true, matched: true, mismatch: refused },
+    fileport: { sourceClosedBeforeSend: true, sameInode: true, exactBytes: true, sharedCursor: true, ordinaryPortRefused: true } } };
 }
 async function handoff() {
   const path = address(), holder = child("child-holder", unique()), ready = await holder.message("ready");

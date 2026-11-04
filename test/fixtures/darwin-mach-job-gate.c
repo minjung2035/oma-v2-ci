@@ -7,6 +7,7 @@
 #include <spawn.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/fileport.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
@@ -95,6 +96,20 @@ int main(int argc, char **argv) {
   mach_port_t receiver = MACH_PORT_NULL;
   mach_ok(bootstrap_check_in(bootstrap_port, argv[1], &receiver), "check in declared job service");
   mach_port_t host = receive(receiver, INIT, 1); send_control(host, ACK, 0, 0);
+  const int slots[] = { 0, 1, 2, 7 }; int descriptors[4];
+  posix_spawn_file_actions_t files;
+  require(posix_spawn_file_actions_init(&files) == 0, "target file actions");
+  for (int index = 0; index < 4; ++index) {
+    mach_port_t file = receive(receiver, 0x4f4d4130 + index, 1);
+    int received = fileport_makefd(file); require(received >= 0, "import Host fileport");
+    mach_ok(mach_port_deallocate(mach_task_self(), file), "return imported fileport SEND reference");
+    int flags = fcntl(received, F_GETFD);
+    require(flags >= 0 && (flags & FD_CLOEXEC) != 0, "import is close on exec");
+    descriptors[index] = fcntl(received, F_DUPFD_CLOEXEC, 64);
+    require(descriptors[index] >= 64 && close(received) == 0, "retain non-overlapping file action source");
+    require(posix_spawn_file_actions_adddup2(&files, descriptors[index], slots[index]) == 0, "exact target FD slot");
+    fprintf(trace, "{\"phase\":\"fileport\",\"slot\":%d,\"closeOnExec\":true}\n", slots[index]);
+  }
   mach_port_t sink = receive(receiver, SEED, 1);
   require(sink != receiver && sink != host && sink != bootstrap_port, "distinct bootstrap sink");
   mach_ok(task_set_bootstrap_port(mach_task_self(), sink), "job child bootstrap seed");
@@ -105,7 +120,9 @@ int main(int argc, char **argv) {
   struct sigaction action = {0}; action.sa_handler = deadline;
   require(sigemptyset(&action.sa_mask) == 0 && sigaction(SIGALRM, &action, NULL) == 0, "job deadline handler");
   pid_t child = 0;
-  int spawned = posix_spawn(&child, argv[11], NULL, NULL, &argv[11], environ);
+  int spawned = posix_spawn(&child, argv[11], &files, NULL, &argv[11], environ);
+  require(posix_spawn_file_actions_destroy(&files) == 0, "return file actions");
+  for (int index = 0; index < 4; ++index) require(close(descriptors[index]) == 0, "return helper FD source");
   require(spawned == 0 && child > 0, "controlled job child spawn"); child_pid = child; alarm(30);
   siginfo_t terminal = {0}; int waited;
   do { waited = waitid(P_PID, (id_t)child, &terminal, WEXITED | WNOWAIT); } while (waited < 0 && errno == EINTR);

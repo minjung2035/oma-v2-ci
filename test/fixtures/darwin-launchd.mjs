@@ -3,7 +3,7 @@
  * sender authentication, and their absence is never a process-death proof. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,7 +13,7 @@ import { createServer } from "node:net";
 import { seatbeltProfile } from "@oma/platform-mac/seatbelt";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { runProcessSync, runProcess } from "@oma/process/run";
-import { createMachEndpoint, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
+import { createMachEndpoint, createMachFilePort, listenMachDiscardService, lookupMachService } from "@oma/native/mach-message";
 import { identifyDarwinCoalition, observeDarwinCoalitionPopulation, darwinCoalitionMemberHints,
   signalDarwinCoalitionMember } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
@@ -274,6 +274,10 @@ import { lookup } from "node:dns/promises";
 import { observeNodeLibc } from ${JSON.stringify(pathToFileURL(libcEntry).href)};
 const [target, canary, compiler, git, gitEnvironment, launcher, listedSocket, unlistedSocket, report, globalTarget, resolverLayout, resolverSymbols] = process.argv.slice(2);
 const value = { pid: process.pid, complete: false };
+if (process.argv.at(-1) === "mach-fileports-v1") {
+  value.fileports = { input: readFileSync(0, "utf8"), private: readFileSync(7, "utf8") };
+  writeFileSync(1, "MACH_STDOUT\\n"); writeFileSync(2, "MACH_STDERR\\n");
+}
 const save = () => writeFileSync(report, JSON.stringify(value));
 const command = (executable, argv, environment = process.env) => {
   const child = spawnSync(executable, argv, { env: environment, encoding: "utf8", timeout: 5000, killSignal: "SIGKILL" });
@@ -644,12 +648,20 @@ value.complete = true; save();
           domain: `user/${process.getuid()}`, sessionType: "Background", sessionCreate: true, launchOnlyOnce: true };
         proxy.machGate = gate;
         let gateSink, gateSinkTimer, gateSinkSend, gateService, gateControl;
+        const gateFiles = [];
         try {
           const source = fileURLToPath(new URL("./darwin-mach-job-gate.c", import.meta.url)), executable = join(root, "mach-job-gate");
           gate.sourceSha256 = createHash("sha256").update(readFileSync(source)).digest("hex");
           gate.compilation = run("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-lproc", "-o", executable]);
           run("/usr/bin/codesign", ["--force", "--sign", "-", executable]);
           gate.executableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
+          const cdhash = path => {
+            const signature = run("/usr/bin/codesign", ["--display", "--verbose=4", path]);
+            const hash = /^CDHash=([0-9a-f]{40})$/m.exec(signature.stderr)?.[1];
+            assert.ok(hash, JSON.stringify(signature)); return hash;
+          };
+          gate.expectedCdHashes = [cdhash(executable)]; gate.otherCdHashes = [cdhash(process.execPath)];
+          assert.notDeepEqual(gate.expectedCdHashes, gate.otherCdHashes);
           const system = hostLoad(null), ownToken = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
           assert.equal(system.func("int task_info(unsigned int, int, void *, void *)")(
             hostDecode.uint(system.symbol("mach_task_self_")), 15, ownToken, count), 0);
@@ -666,12 +678,21 @@ value.complete = true; save();
           const service = loadJob("mach-gate-service", actor, "once", undefined, { directoryRoot: directory });
           const global = loadJob("mach-gate-global", actor, "once", undefined, { directoryRoot: directory });
           const tracePath = join(root, "mach-job-gate.jsonl"), portsPath = join(directory, "mach-gate-ports.json"), report = join(directory, "mach-gate-tools.json");
+          const filePaths = { input: join(directory, "mach-input"), stdout: join(directory, "mach-stdout"),
+            stderr: join(directory, "mach-stderr"), private: join(directory, "mach-private") };
+          writeFileSync(filePaths.input, "MACH_INPUT\n", { flag: "wx" }); writeFileSync(filePaths.private, "MACH_PRIVATE\n", { flag: "wx" });
+          gate.fileports = { transport: "native-fileport", slots: [0, 1, 2, 7] };
+          for (const [path, mode] of [[filePaths.input, "r"], [filePaths.stdout, "wx"], [filePaths.stderr, "wx"], [filePaths.private, "r"]]) {
+            const borrowed = openSync(path, mode, 0o600);
+            try { gateFiles.push(createMachFilePort(borrowed)); }
+            finally { closeSync(borrowed); }
+          }
           const job = loadJob("mach-gate", executable, "unused", undefined, { domain: gate.domain, background: true,
             sessionCreate: true, launchOnlyOnce: true, machServices: [serviceName],
             argv: [executable, serviceName, tracePath, ...gate.expectedHostToken.map(String), launcher, name, profilePath, portsPath,
               directory, process.execPath, script, service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
               unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
-              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)] });
+              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols), "mach-fileports-v1"] });
           gate.target = job.target; gate.serviceName = serviceName; gate.serviceTarget = service.target; gate.globalTarget = global.target;
           const nativeModule = import.meta.resolve("@oma/native/mach-message");
           const attempt = code => run(process.execPath, ["--input-type=module", "-e", `
@@ -702,13 +723,18 @@ ${code}`]);
           gate.identity = identifyDarwinCoalition(ack.sender.pid); assert.ok(gate.identity);
           assert.notEqual(gate.identity.coalitionId, identifyDarwinCoalition(process.pid)?.coalitionId,
             "job gate must have a distinct kernel coalition");
-          const origin = observeDarwinAuditOrigin(ack.sender.token);
+          const origin = observeDarwinAuditOrigin(ack.sender.token, gate.expectedCdHashes);
           gate.origin = await origin.result; await origin.returned; assert.equal(gate.origin.kind, "matched");
+          const other = observeDarwinAuditOrigin(ack.sender.token, gate.otherCdHashes);
+          gate.otherOrigin = await other.result; await other.returned; assert.equal(gate.otherOrigin.kind, "unavailable");
+          for (const [index, file] of gateFiles.entries()) assert.equal(gateService.send(0x4f4d4130 + index, one, file), "sent");
           assert.equal(gateService.send(0x4f4d4122, one, gateSinkSend), "sent");
           const ready = await receiveGate(0x4f4d4123); gate.rejectedBeforeReady = ready.bytes.readUInt32LE(4);
           gate.beforeReleaseAttack = JSON.parse(attack(0x4f4d4124).stdout);
           gate.reportBeforeHostRelease = existsSync(portsPath);
           assert.equal(gate.reportBeforeHostRelease, false);
+          gate.fileports.beforeRelease = { stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") };
+          assert.deepEqual(gate.fileports.beforeRelease, { stdout: "", stderr: "" });
           assert.equal(gateService.send(0x4f4d4124, one), "sent");
           const fin = await receiveGate(0x4f4d4125);
           gate.rejectedAtFinish = fin.bytes.readUInt32LE(4); gate.childPid = fin.bytes.readUInt32LE(8); gate.waitStatus = fin.bytes.readUInt32LE(12);
@@ -723,6 +749,10 @@ ${code}`]);
             trace: readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line)),
             ports: optionalJson(portsPath), tools: optionalJson(report), guestEffect: effect(service), globalGuestEffect: effect(global) });
           assert.equal(gate.tools?.complete, true); assert.equal(gate.ports?.pid, gate.childPid);
+          Object.assign(gate.fileports, { child: gate.tools.fileports,
+            stdout: readFileSync(filePaths.stdout, "utf8"), stderr: readFileSync(filePaths.stderr, "utf8") });
+          assert.deepEqual(gate.fileports.child, { input: "MACH_INPUT\n", private: "MACH_PRIVATE\n" });
+          assert.equal(gate.fileports.stdout, "MACH_STDOUT\n"); assert.equal(gate.fileports.stderr, "MACH_STDERR\n");
           assert.equal(gate.waitStatus, 0); assert.ok(gate.rejectedAtFinish >= 2);
           assert.equal(gate.receiveError, undefined); assert.ok(gate.discarded > 0);
           gate.status = "OBSERVED";
@@ -730,6 +760,7 @@ ${code}`]);
         finally {
           clearInterval(gateSinkTimer);
           gateService?.close(); gateSinkSend?.close(); gateControl?.send.close(); gateControl?.receive.close(); gateSink?.close();
+          for (const file of gateFiles) file.close();
           if (gate.identity) {
             gate.cleanupRounds = [];
             const end = performance.now() + 8000;

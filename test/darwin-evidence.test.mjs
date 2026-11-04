@@ -9,6 +9,15 @@ import { fileURLToPath } from "node:url";
 import { DARWIN_PROGRAMS, darwinCasePlan, validateDarwinObservation, validateDarwinCaseSet } from "../scripts/darwin-cases.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+test("016. Native darwin: selected audit image requires a different signed negative control", () => {
+  const good = { ownHash: "a".repeat(40), otherHash: "b".repeat(40), requirementFrozenBeforeAwait: true,
+    matched: true, mismatch: { kind: "unavailable", osStatus: -67050 } };
+  const validate = selectedImage => validateDarwinObservation("mach-audit-async", { machAsyncAudit: { selectedImage } });
+  validate(good);
+  for (const patch of [{ otherHash: good.ownHash }, { requirementFrozenBeforeAwait: false },
+    { mismatch: { kind: "matched" } }, { mismatch: { kind: "unavailable", osStatus: 0 } }])
+    assert.throws(() => validate({ ...good, ...patch }));
+});
 // Record grammar only: these are parser inputs, never kernel observations.
 const descriptorRecord = () => ({ platform: "darwin",
   devFd: { attempted: true, openReturn: -1, openErrno: 13, sameInode: null, closeOnExec: null,

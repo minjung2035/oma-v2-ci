@@ -1440,7 +1440,7 @@
     },
     {
       "path": "packages/native/src/audit-origin.ts",
-      "sha256": "703cd41d965487f6f9f3ae01ce0318aed4bb8cbeb693305c18606d54e24c827c"
+      "sha256": "a6fd258eca0f451bd20a76cd1d51faa85673923221d26d98173fecdb77190e60"
     },
     {
       "path": "packages/native/src/audit-session.ts",
@@ -1484,7 +1484,7 @@
     },
     {
       "path": "packages/native/src/mach-message.ts",
-      "sha256": "5e71fe29166a4b31588c4f1e82c8476981547222dc802a04fe722f63c100c5cd"
+      "sha256": "6111c0d23fcc7ebbf71e636c0edd7542cf7ddb9ee44f3e49c872ec8e78b59311"
     },
     {
       "path": "packages/native/src/metadata-observation.ts",

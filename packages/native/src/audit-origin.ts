@@ -1,6 +1,7 @@
 /** Public Security.framework audit-token observation. No PID-only fallback,
- * signing-identity allowlist, role policy or authorization grant lives here.
- * Source: Apple Security db15acbe, SecCode.h/cskernel.cpp/csprocess.cpp. NOT_RUN.
+ * role policy or authorization grant lives here. An optional caller-selected
+ * CDHash requirement observes a particular main image, never its libraries
+ * or scripts. Source: Apple Security db15acbe, SecCode.h/cskernel.cpp/csprocess.cpp.
  */
 import { decode, load, type KoffiFunc } from "koffi";
 import { StoreError } from "@oma/domain/errors";
@@ -13,8 +14,10 @@ interface AuditCalls {
   data(allocator: null, bytes: Buffer, length: number): Handle;
   dictionary(allocator: null, capacity: number, keys: Handle, values: Handle): Handle;
   set(dictionary: Handle, key: Handle, value: Handle): void;
+  text(allocator: null, value: string, encoding: number): Handle;
+  requirement(text: Handle, flags: number, result: Buffer): number;
   guest: KoffiFunc<(host: null, attributes: Handle, flags: number, result: Buffer) => number>;
-  validate: KoffiFunc<(code: Handle, flags: number, requirement: null) => number>;
+  validate: KoffiFunc<(code: Handle, flags: number, requirement: Handle) => number>;
   release(value: Handle): void;
 }
 let calls: AuditCalls | undefined;
@@ -31,6 +34,8 @@ function native(): AuditCalls {
     data: foundation.func("void *CFDataCreate(void *allocator, const void *bytes, long length)"),
     dictionary: foundation.func("void *CFDictionaryCreateMutable(void *allocator, long capacity, const void *keys, const void *values)"),
     set: foundation.func("void CFDictionarySetValue(void *dictionary, const void *key, const void *value)"),
+    text: foundation.func("void *CFStringCreateWithCString(void *allocator, const char *value, unsigned int encoding)"),
+    requirement: security.func("int SecRequirementCreateWithString(void *text, unsigned int flags, void *result)"),
     guest: security.func("int SecCodeCopyGuestWithAttributes(void *host, void *attributes, unsigned int flags, void *result)"),
     validate: security.func("int SecCodeCheckValidity(void *code, unsigned int flags, void *requirement)"),
     release: foundation.func("void CFRelease(void *value)"),
@@ -51,15 +56,28 @@ export interface AuditOriginOperation {
  * does not distinguish a dead/reused PID, unsigned code, permission or I/O.
  * It never grants authority or proves a whole execution scope has died.
  */
-export function observeDarwinAuditOrigin(token: readonly number[]): AuditOriginOperation {
+export function observeDarwinAuditOrigin(token: readonly number[], expectedCdHashes?: readonly string[]): AuditOriginOperation {
   const { pid } = decodeDarwinAuditToken(token);
   if (pid < 2 || pid > 0x7fffffff) throw new TypeError("invalid kernel audit process");
+  if (expectedCdHashes !== undefined && (!Array.isArray(expectedCdHashes) || expectedCdHashes.length < 1 ||
+      expectedCdHashes.length > 16 || expectedCdHashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{40}$/.test(hash))))
+    throw new TypeError("expected Darwin main image requires one to sixteen canonical CDHashes");
+  // Freeze the selected requirement before any asynchronous native operation.
+  const expression = expectedCdHashes?.map(hash => `cdhash H"${hash}"`).join(" or ");
   const system = native(), bytes = Buffer.alloc(32);
   token.forEach((word, index) => bytes.writeUInt32LE(word, index * 4));
-  let data: Handle, attributes: Handle, code: Handle;
+  let data: Handle, attributes: Handle, code: Handle, requirementText: Handle, requirement: Handle = null;
   let returned!: () => void, failedReturn!: (error: unknown) => void;
   const completion = new Promise<void>((yes, no) => { returned = yes; failedReturn = no; });
   const result = withAsyncCleanup<AuditOriginObservation>(async () => {
+    if (expression !== undefined) {
+      requirementText = system.text(null, expression, 0x08000100 /* UTF-8 */);
+      if (requirementText == null) throw new Error("code requirement string allocation failed");
+      const output = Buffer.alloc(8), status = system.requirement(requirementText, 0, output);
+      if (status !== 0) throw new Error(`selected code requirement compilation failed (${status})`);
+      requirement = decode(output, "void *");
+      if (requirement == null) throw new Error("Security returned no compiled code requirement");
+    }
     data = system.data(null, bytes, bytes.length);
     if (data == null) throw new Error("audit-token data allocation failed");
     attributes = system.dictionary(null, 1, system.keyCallbacks, system.valueCallbacks);
@@ -78,12 +96,12 @@ export function observeDarwinAuditOrigin(token: readonly number[]): AuditOriginO
     // audit token internally (csops_audittoken), with no network work. Copying
     // a SecCode alone does not perform the necessary kernel validation.
     const validated = await new Promise<number>((resolve, reject) => {
-      system.validate.async(code, 0x20000000 /* kSecCSNoNetworkAccess */, null, (error, status) => error ? reject(error) : resolve(status));
+      system.validate.async(code, 0x20000000 /* kSecCSNoNetworkAccess */, requirement, (error, status) => error ? reject(error) : resolve(status));
     });
     return validated === 0 ? { kind: "matched" } : { kind: "unavailable", osStatus: validated };
   }, () => {
     try {
-      cleanupAll([code, attributes, data].filter(value => value != null).map(value => () => system.release(value)));
+      cleanupAll([code, attributes, data, requirement, requirementText].filter(value => value != null).map(value => () => system.release(value)));
       returned();
     } catch (error) { failedReturn(error); throw error; }
   });

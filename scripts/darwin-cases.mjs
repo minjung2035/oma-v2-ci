@@ -60,6 +60,16 @@ export function validateDarwinObservation(name, observations) {
   const value = observations[expected.observation];
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0)
     throw new Error("probe observation is empty or malformed");
+  if (name === "mach-audit-async" && value.selectedImage !== undefined) {
+    const image = value.selectedImage;
+    if (![image.ownHash, image.otherHash].every(hash => typeof hash === "string" && /^[0-9a-f]{40}$/.test(hash)) ||
+        image.ownHash === image.otherHash || image.requirementFrozenBeforeAwait !== true || image.matched !== true ||
+        image.mismatch?.kind !== "unavailable" || !Number.isInteger(image.mismatch.osStatus) || image.mismatch.osStatus === 0)
+      throw new Error("audit main-image comparison loses its selected identity, frozen requirement or signed negative control");
+  }
+  if (name === "mach-audit-async" && value.fileport !== undefined)
+    for (const key of ["sourceClosedBeforeSend", "sameInode", "exactBytes", "sharedCursor", "ordinaryPortRefused"])
+      if (value.fileport[key] !== true) throw new Error(`fileport handoff loses its actual descriptor control: ${key}`);
   if (name === "file-descriptors") {
     validateDescriptorCapabilityObservation(value);
     if (value.platform !== "darwin") throw new Error("descriptor observation did not run on Darwin");
@@ -495,6 +505,19 @@ export function validateDarwinObservation(name, observations) {
               !words(gate.expectedHostToken) || gate.expectedHostToken[5] !== bootstrap.ffi.host.pid ||
               !words(gate.helperToken) || gate.helperToken[5] === gate.expectedHostToken[5] ||
               gate.preemption?.taken !== false || gate.origin?.kind !== "matched" || gate.reportBeforeHostRelease !== false ||
+              gate.expectedCdHashes !== undefined &&
+                (!Array.isArray(gate.expectedCdHashes) || !gate.expectedCdHashes.length ||
+                  gate.expectedCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash)) ||
+                  gate.otherOrigin?.kind !== "unavailable" || !Number.isInteger(gate.otherOrigin.osStatus) || gate.otherOrigin.osStatus === 0 ||
+                  !Array.isArray(gate.otherCdHashes) || !gate.otherCdHashes.length ||
+                  gate.otherCdHashes.some(hash => !/^[0-9a-f]{40}$/.test(hash) || gate.expectedCdHashes.includes(hash))) ||
+              gate.fileports !== undefined && (gate.fileports.transport !== "native-fileport" ||
+                JSON.stringify(gate.fileports.slots) !== "[0,1,2,7]" ||
+                gate.fileports.beforeRelease?.stdout !== "" || gate.fileports.beforeRelease?.stderr !== "" ||
+                gate.fileports.child?.input !== "MACH_INPUT\n" || gate.fileports.child?.private !== "MACH_PRIVATE\n" ||
+                gate.fileports.stdout !== "MACH_STDOUT\n" || gate.fileports.stderr !== "MACH_STDERR\n" ||
+                JSON.stringify(gate.trace?.filter(row => row.phase === "fileport").map(row => row.slot)) !== "[0,1,2,7]" ||
+                gate.trace.some(row => row.phase === "fileport" && row.closeOnExec !== true)) ||
               !Number.isSafeInteger(gate.rejectedAtFinish) || gate.rejectedAtFinish < 2 ||
               gate.beforeInitAttack?.pid === gate.expectedHostToken[5] || gate.beforeReleaseAttack?.pid === gate.expectedHostToken[5] ||
               gate.waitStatus !== 0 || gate.ports?.pid !== gate.childPid || gate.ports.sandboxApplied !== true ||

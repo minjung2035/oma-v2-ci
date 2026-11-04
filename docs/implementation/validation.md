@@ -821,10 +821,47 @@ Host가 넘긴 discard SEND capability를 task/registered seed로 설정하고 �
 검사는 현재 유효한 서명과 kernel generation을 확인하며 expected helper code requirement를 선택한 검증은 아니다.
 이 프로토콜 prototype을 G-AUTH 완료나 production execution backend로 승격하지 않는다.
 
+### 선택한 main image의 audit 관측과 수신 오류 정리 — 실제 Mac 전
+
+`observeDarwinAuditOrigin`은 선택한 canonical CDHash 목록을 선택적으로 받고, await 전에 고정한
+Security requirement를 genuine audit token의 dynamic code에 적용한다. 선택값이 없을 때의 기존 의미는 유지한다.
+새 실제 fixture는 같은 Node의 일치·별도 signed shell의 불일치·호출 뒤 목록 변경 무효화를 확인하고 모든 CF 반환을 join한다.
+Mach job gate도 별도 helper CDHash와 Node의 거절 대조를 사용한다. 이 입력의 Darwin 실행은 NOT_RUN이며
+expected Broker의 출처·현재 role/run 권한이나 script/library generation을 이 primitive로 증명하지 않는다.
+
+일반 Mach receiver도 BODY_ERROR에서 userspace에 전달된 부분 body를 SDK destructor로 반환하고 endpoint를 닫는다.
+다른 receive 오류도 해당 stream을 닫아 불명확한 상태에서 계속 진행하지 않는다. 기존 discard receiver와 같은
+고정 XNU resource-ownership 규칙이다. 로컬 build·parser/Seatbelt 검증과 실제 Mac 결과는 입력별로 구분한다.
+
+### declared MachServices의 실제 Host gate — source `1d3e9114753`
+
+Native [41799482260](https://github.com/minjung2035/oma-v2-ci/actions/runs/41799482260)의 양 Mac 각3회 모두
+선점 check-in1100·위조 INIT/GO의 genuine kernel sender 거절2건·Host release 전 target 미생성·Host GO 뒤
+정상 Node/Git/compiler/DNS·child join·CID ESRCH·registration113을 관측했다. 매회38개 bootstrap 메시지를
+Node discard receiver가 반환했다. GUI 없이 시작한 runner의 증명이나 전체 G-AUTH 완료는 아니다.
+
+입력15830개 `864c6c0239e8aeb3b2bab266ea5fdc03867fe4b008e20f1bce13ed6c6ed952c5`와 runtime 산출물은 전후 같았다.
+API SHA-256 대조한 Mac15 ZIP `dd9134c8541cfce07f24029227f5e28ed2fbaee0bb59aba18b48292c062b123d`,
+Mac26 ZIP `6906b75ff06325a0f4e64878c041572f82041b3421a630da622a3c3b1f7c0b3d`와 결과는
+`/home/dev/oma-audit-artifacts/macos-native-2026-11-04/mach-job-gate/`다. 전체 gate는 Mac26 114 OBSERVED/6 SETUP_FAILED,
+Mac15 111 OBSERVED/9 SETUP_FAILED이며 productQualification은 BLOCKED다.
+
+### fileport를 통한 private FD 전달 — 실제 Mac 전
+
+native leaf는 borrowed FD를 owned fileport SEND로 만들고, borrowed fileport에서 새 CLOEXEC FD를 취득한다.
+[고정 XNU header](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/fileport.h)의
+10.7+ interface다. 같은 open file description과 cursor를 공유하므로 독립 reopen이나 role authority가 아니다.
+Mach fixture는 source FD를 닫은 뒤 SEND 전달·같은 inode/bytes/cursor·일반 Mach port의 import 거절을 시험한다.
+Host gate는 stdio0/1/2와 private7을 전송하고 helper가 CLOEXEC import 후 겹치지 않는 source FD에서 정확한
+posix_spawn slot으로 연결한다. release 전 output 없음과 child의 입력/private bytes·분리된 stdout/stderr를 대조한다.
+
+현재 C SDK object compile·workspace build·MJS syntax·parser/Seatbelt44/44·전체 architecture는 PASS이며 실제 Darwin fileport handoff는 NOT_RUN이다.
+이 대조는 regular-file stdio이며 pipe streaming/backpressure·전체 process owner와 durable recovery 연결은 남아 있다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `864c6c0239e8aeb3b2bab266ea5fdc03867fe4b008e20f1bce13ed6c6ed952c5` (15830 files).
+verification input digest `d236558d4f02c74727503c7839bafefc4dda126700d6b5c73d83e5b3e4d697fd` (15830 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

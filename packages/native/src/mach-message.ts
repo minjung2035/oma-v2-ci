@@ -20,6 +20,8 @@ interface MachCalls {
   type(task: number, name: number, result: Buffer): number;
   checkIn(bootstrap: number, name: string, result: Buffer): number;
   lookup(bootstrap: number, name: string, result: Buffer): number;
+  fileport(fd: number, result: Buffer): number;
+  fileDescriptor(port: number): number;
   message(bytes: Buffer, options: number, sendBytes: number, receiveBytes: number,
     receivePort: number, timeoutMs: number, notify: number): number;
   destroy(bytes: Buffer): void;
@@ -40,6 +42,8 @@ function mach(): MachCalls {
     type: library.func("int mach_port_type(unsigned int task, unsigned int name, void *result)"),
     checkIn: library.func("int bootstrap_check_in(unsigned int bootstrap, const char *name, void *result)"),
     lookup: library.func("int bootstrap_look_up(unsigned int bootstrap, const char *name, void *result)"),
+    fileport: library.func("int fileport_makeport(int fd, void *result)"),
+    fileDescriptor: library.func("int fileport_makefd(unsigned int port)"),
     message: library.func("int mach_msg(void *message, unsigned int options, unsigned int sendBytes, unsigned int receiveBytes, unsigned int receivePort, unsigned int timeoutMs, unsigned int notify)"),
     destroy: library.func("void mach_msg_destroy(void *message)"),
   };
@@ -158,9 +162,17 @@ function ownReceive(name: number): MachReceiveRight {
         2 /* RCV_MSG */ | 0x100 /* RCV_TIMEOUT */ | 0x400 /* RCV_INTERRUPT */ | 4 /* RCV_LARGE */ | (3 << 24) /* AUDIT trailer */,
         0, message.length, name, 0, 0);
       if (result === RECEIVE_TIMEOUT || result === RECEIVE_INTERRUPTED) return { kind: "again" };
-      if (result === RECEIVE_TOO_LARGE)
-        return withCleanup(() => { throw new Error("Mach message exceeds the inline receive window; endpoint closed"); }, close);
-      success(result, "Mach receive");
+      if (result !== 0) {
+        // BODY_ERROR copies a partially converted message to userspace. Its
+        // delivered rights/OOL memory still belong to the receiver. Other
+        // receive errors leave resource disposal to the kernel. Poison this
+        // endpoint after either error rather than resume an uncertain stream.
+        if ((result & ~0x3e00) === 0x1000400c /* BODY_ERROR */) native.destroy(message);
+        return withCleanup(() => {
+          if (result === RECEIVE_TOO_LARGE) throw new Error("Mach message exceeds the inline receive window; endpoint closed");
+          throw Object.assign(new Error(`Mach receive failed (${result}); endpoint closed`), { machCode: result });
+        }, close);
+      }
       // Even rejected messages may carry rights/OOL memory. The SDK's
       // destructor returns those; it does not destroy msgh_local_port.
       let reply: MachSendRight | null = null;
@@ -244,4 +256,23 @@ export function lookupMachService(name: string): MachSendRight {
   service(name); const native = mach(), output = Buffer.alloc(4);
   success(native.lookup(native.bootstrap, name, output), "look up Mach service");
   return ownSend(port(output.readUInt32LE(0)));
+}
+/** Export a borrowed FD as an owned, transferable fileport SEND reference.
+ * This shares the same open file description (including its cursor); it is
+ * neither an independent pathname reopen nor authority to an actor role. */
+export function createMachFilePort(fd: number): MachSendRight {
+  if (!Number.isSafeInteger(fd) || fd < 0 || fd > 0x7fffffff) throw new TypeError("invalid borrowed file descriptor");
+  const native = mach(), output = Buffer.alloc(4);
+  if (native.fileport(fd, output) !== 0) throw new Error("Darwin fileport creation failed");
+  return ownSend(port(output.readUInt32LE(0)));
+}
+/** Duplicate a borrowed fileport reference into a new caller-owned FD.
+ * Darwin creates it with FD_CLOEXEC. The reference stays owned by its caller;
+ * a control message's sender must be authenticated before importing it. */
+export function openMachFilePort(right: MachSendRight): number {
+  const name = sendNames.get(right)?.();
+  if (name === undefined) throw new TypeError("fileport must be an open native Mach send owner");
+  const fd = mach().fileDescriptor(name);
+  if (fd < 0) throw new Error("Darwin fileport did not produce a file descriptor");
+  return fd;
 }
