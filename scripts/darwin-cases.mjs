@@ -415,35 +415,40 @@ export function validateDarwinObservation(name, observations) {
         }
       }
       const session = bootstrap.session, baseline = bootstrap.variants[0].node;
-      const messageFilter = bootstrap.messageFilter;
-      if (messageFilter?.fixtureOnly !== true || messageFilter.sourceRevision !== "adc20e859dbd1652b5542788d3d641960dce85e5" ||
-          JSON.stringify(messageFilter.messageNumbers) !== "[204,207,301,711,800,804]" ||
-          !["OBSERVED", "SETUP_FAILED"].includes(messageFilter.status) ||
-          messageFilter.status === "SETUP_FAILED" && typeof messageFilter.error !== "string")
-        throw new Error("bootstrap message filter loses its source, exact experiment or actual outcome");
-      if (messageFilter.status === "OBSERVED") {
-        const { command, ports, tools } = messageFilter;
-        const suffix = "(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number 204 207 301 711 800 804))))\n";
-        if (messageFilter.profileSuffix !== suffix || !/^[0-9a-f]{64}$/.test(messageFilter.profileSha256) ||
-            !outcome(command) || command.executable !== launcher || command.argv[0] !== "inherited" ||
-            command.argv[4] !== baseline.command.argv[4] || command.argv[6] !== messageFilter.target ||
-            command.argv[15] !== messageFilter.globalTarget || ports?.pid !== command.pid || ports.mode !== "inherited" ||
-            ports.sandboxApplied !== true || ports.uid !== baseline.ports.uid || !snapshot(ports.before) || !snapshot(ports.after) ||
-            messageFilter.effectDirectory !== `${command.argv[3]}/filter-service` ||
-            messageFilter.globalEffectDirectory !== `${command.argv[3]}/filter-global` ||
-            tools?.complete !== true || tools.pid !== ports.pid || !dns(tools.dns) ||
-            !outcome(tools.git) || !outcome(tools.compiler) || !outcome(tools.service) ||
-            tools.service.executable !== "/bin/launchctl" ||
-            JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", messageFilter.target]) ||
-            !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
-            !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
-            !nodeGlobal(tools.bootstrapGlobal, ports.pid, ports.uid, messageFilter.globalTarget) ||
-            typeof messageFilter.canaryPreserved !== "boolean" ||
-            ![messageFilter.guestEffect, messageFilter.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1))
-          throw new Error("bootstrap message filter lacks the applied profile, actual tools or distinct service results");
-        for (const selected of [messageFilter.target, messageFilter.globalTarget]) {
-          if (!target(selected) || targets.has(selected)) throw new Error("bootstrap message filter reuses a service target");
-          targets.add(selected);
+      for (const [key, stem, suffix, revision, numbers] of [
+        ["messageFilter", "filter", "(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number 204 207 301 711 800 804))))\n",
+          "adc20e859dbd1652b5542788d3d641960dce85e5", "[204,207,301,711,800,804]"],
+        ["denyBootstrap", "deny-bootstrap", "(deny mach-bootstrap)\n", null, "[]"],
+      ]) {
+        const messageFilter = bootstrap[key];
+        if (messageFilter?.fixtureOnly !== true || messageFilter.sourceRevision !== revision ||
+            JSON.stringify(messageFilter.messageNumbers) !== numbers ||
+            !["OBSERVED", "SETUP_FAILED"].includes(messageFilter.status) ||
+            messageFilter.status === "SETUP_FAILED" && typeof messageFilter.error !== "string")
+          throw new Error("bootstrap message filter loses its source, exact experiment or actual outcome");
+        if (messageFilter.status === "OBSERVED") {
+          const { command, ports, tools } = messageFilter;
+          if (messageFilter.profileSuffix !== suffix || !/^[0-9a-f]{64}$/.test(messageFilter.profileSha256) ||
+              !outcome(command) || command.executable !== launcher || command.argv[0] !== "inherited" ||
+              command.argv[4] !== baseline.command.argv[4] || command.argv[6] !== messageFilter.target ||
+              command.argv[15] !== messageFilter.globalTarget || ports?.pid !== command.pid || ports.mode !== "inherited" ||
+              ports.sandboxApplied !== true || ports.uid !== baseline.ports.uid || !snapshot(ports.before) || !snapshot(ports.after) ||
+              messageFilter.effectDirectory !== `${command.argv[3]}/${stem}-service` ||
+              messageFilter.globalEffectDirectory !== `${command.argv[3]}/${stem}-global` ||
+              tools?.complete !== true || tools.pid !== ports.pid || !dns(tools.dns) ||
+              !outcome(tools.git) || !outcome(tools.compiler) || !outcome(tools.service) ||
+              tools.service.executable !== "/bin/launchctl" ||
+              JSON.stringify(tools.service.argv) !== JSON.stringify(["kickstart", messageFilter.target]) ||
+              !nativeDns(tools.nativeDnsCommand, tools.nativeDns) ||
+              !nativeResolvers(tools.resolvers, tools.nativeDnsCommand.argv[1], ports.uid) ||
+              !nodeGlobal(tools.bootstrapGlobal, ports.pid, ports.uid, messageFilter.globalTarget) ||
+              typeof messageFilter.canaryPreserved !== "boolean" ||
+              ![messageFilter.guestEffect, messageFilter.globalGuestEffect].every(effect => effect === null || Number.isSafeInteger(effect?.pid) && effect.pid > 1))
+            throw new Error("bootstrap message filter lacks the applied profile, actual tools or distinct service results");
+          for (const selected of [messageFilter.target, messageFilter.globalTarget]) {
+            if (!target(selected) || targets.has(selected)) throw new Error("bootstrap message filter reuses a service target");
+            targets.add(selected);
+          }
         }
       }
       if (session?.sessionCreate !== true || !["OBSERVED", "SETUP_FAILED"].includes(session.status) ||

@@ -10,7 +10,7 @@ import { GIT_ENV } from "@oma/process/policies";
 import { decodeCandidateExecutionView, decodeQuarantineExecutionView, type CandidateExecutionView, type QuarantineExecutionView } from "@oma/protocol/git-execution-view";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
-import { developerToolDirectories } from "./developer-tools.js";
+import { developerToolDirectories, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 
 export interface MacGitSandboxHost { readonly node: string; readonly libdir: string; readonly tools: MacDeveloperTools }
@@ -41,7 +41,8 @@ export function candidateSeatbelt(host: MacGitSandboxHost, viewInput: CandidateE
   return prepareSeatbelt({ executable: host.node, argv: [join(host.libdir, "apps/oma/dist/entry/candidate-check.js"),
     JSON.stringify({ candidate, argv: check.argv, view })], cwd: view.workspace, env, timeoutMs: null,
     stdoutBytes: 1024 * 1024, stdoutOverflow: "discard", stderrBytes: 1024 * 1024, stderrOverflow: "discard" }, {
-    readable: [...roots.readable, dir(view.project)], writable: [dir(view.workspace), dir(temporary)], denied: [],
+    readable: [...roots.readable, ...DEVELOPER_TOOL_SUPPORT_FILES.map(file), dir(view.project)],
+    writable: [dir(view.workspace), dir(temporary)], denied: [],
     // Checks may execute their own scripts, native addons and build outputs,
     // just as the writable tmpfs view permits on Linux. Developer binaries
     // stay beneath the exact selected installation; frameworks remain map-only.

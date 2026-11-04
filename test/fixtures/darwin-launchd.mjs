@@ -415,32 +415,38 @@ value.complete = true; save();
         // WebKit's macOS profile filters bootstrap messages while retaining
         // the task port. Compare that mechanism without changing production
         // policy, pruning ports or assuming Apple-only availability.
-        const filter = { status: "SETUP_FAILED", fixtureOnly: true,
-          sourceRevision: "adc20e859dbd1652b5542788d3d641960dce85e5", messageNumbers: [204, 207, 301, 711, 800, 804] };
-        observation.bootstrap.messageFilter = filter;
-        try {
-          const suffix = `(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number ${filter.messageNumbers.join(" ")}))))\n`;
-          const filtered = profile + suffix, path = join(directory, "message-filter.sb");
-          writeFileSync(path, filtered, { mode: 0o600 });
-          const service = loadJob("filter-service", actor, "once", undefined, { directoryRoot: directory });
-          const global = loadJob("filter-global", actor, "once", undefined, { directoryRoot: directory });
-          const portsPath = join(directory, "filter-ports.json"), report = join(directory, "filter-tools.json");
-          const command = observe(launcher, [name, path, portsPath, directory, process.execPath, script,
-            service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
-            unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
-            JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
-          Object.assign(filter, { profileSuffix: suffix, profileSha256: createHash("sha256").update(filtered).digest("hex"),
-            command, target: service.target, globalTarget: global.target,
-            effectDirectory: service.directory, globalEffectDirectory: global.directory,
-            ports: optionalJson(portsPath), tools: optionalJson(report) });
-          for (const [target, result] of [[service, filter.tools?.service], [global, filter.tools?.bootstrapGlobal?.service]])
-            if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
-              await waitFor(() => existsSync(join(target.directory, "once.json")));
-          Object.assign(filter, { guestEffect: effect(service), globalGuestEffect: effect(global),
-            canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
-          assert.equal(filter.tools?.complete, true, `bootstrap message filter incomplete: ${command.stderr}`);
-          filter.status = "OBSERVED";
-        } catch (error) { filter.error = String(error); }
+        for (const [key, stem, suffix, sourceRevision, messageNumbers] of [
+          ["messageFilter", "filter", "(allow mach-bootstrap (apply-message-filter (deny mach-message-send) (allow mach-message-send (message-number 204 207 301 711 800 804))))\n",
+            "adc20e859dbd1652b5542788d3d641960dce85e5", [204, 207, 301, 711, 800, 804]],
+          // Unlike a private-entitled message filter, this tests a plain
+          // denial of the operation with the same exact lookup policy.
+          ["denyBootstrap", "deny-bootstrap", "(deny mach-bootstrap)\n", null, []],
+        ]) {
+          const filter = { status: "SETUP_FAILED", fixtureOnly: true, sourceRevision, messageNumbers };
+          observation.bootstrap[key] = filter;
+          try {
+            const filtered = profile + suffix, path = join(directory, `${stem}.sb`);
+            writeFileSync(path, filtered, { mode: 0o600 });
+            const service = loadJob(`${stem}-service`, actor, "once", undefined, { directoryRoot: directory });
+            const global = loadJob(`${stem}-global`, actor, "once", undefined, { directoryRoot: directory });
+            const portsPath = join(directory, `${stem}-ports.json`), report = join(directory, `${stem}-tools.json`);
+            const command = observe(launcher, [name, path, portsPath, directory, process.execPath, script,
+              service.target, canary, compiler, developerTools.git, gitEnvironment, launcher,
+              unixSocketCanary.listed, unixSocketCanary.unlisted, report, global.target,
+              JSON.stringify(nativeDnsHost.addrinfoLayout), JSON.stringify(resolverSymbols)]);
+            Object.assign(filter, { profileSuffix: suffix, profileSha256: createHash("sha256").update(filtered).digest("hex"),
+              command, target: service.target, globalTarget: global.target,
+              effectDirectory: service.directory, globalEffectDirectory: global.directory,
+              ports: optionalJson(portsPath), tools: optionalJson(report) });
+            for (const [target, result] of [[service, filter.tools?.service], [global, filter.tools?.bootstrapGlobal?.service]])
+              if (result?.exitCode === 0 && result.signal === null && result.error === undefined)
+                await waitFor(() => existsSync(join(target.directory, "once.json")));
+            Object.assign(filter, { guestEffect: effect(service), globalGuestEffect: effect(global),
+              canaryPreserved: readFileSync(canary, "utf8") === "HOST_CANARY\n" });
+            assert.equal(filter.tools?.complete, true, `bootstrap message filter incomplete: ${command.stderr}`);
+            filter.status = "OBSERVED";
+          } catch (error) { filter.error = String(error); }
+        }
         const session = { sessionCreate: true, status: "SETUP_FAILED" };
         observation.bootstrap.session = session;
         try {

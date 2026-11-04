@@ -234,6 +234,14 @@ const bootstrapRecord = () => {
     target:filterTarget,globalTarget:filterGlobal,effectDirectory:'/owned/work/filter-service',globalEffectDirectory:'/owned/work/filter-global',
     ports:{...structuredClone(baseline.ports),pid:filterPid},tools:filterTools,
     guestEffect:null,globalGuestEffect:null,canaryPreserved:true};
+  const denyBootstrap=structuredClone(messageFilter),denyPid=950;
+  Object.assign(denyBootstrap,{sourceRevision:null,messageNumbers:[],profileSuffix:'(deny mach-bootstrap)\n',
+    effectDirectory:'/owned/work/deny-bootstrap-service',globalEffectDirectory:'/owned/work/deny-bootstrap-global',
+    target:'gui/501/org.oma.probe.test.deny-service',globalTarget:'gui/501/org.oma.probe.test.deny-global'});
+  denyBootstrap.command.pid=denyPid;denyBootstrap.ports.pid=denyPid;denyBootstrap.tools.pid=denyPid;
+  denyBootstrap.command.argv[6]=denyBootstrap.target;denyBootstrap.command.argv[15]=denyBootstrap.globalTarget;
+  denyBootstrap.tools.service.argv[1]=denyBootstrap.target;denyBootstrap.tools.bootstrapGlobal.pid=denyPid;
+  denyBootstrap.tools.bootstrapGlobal.service.argv[1]=denyBootstrap.globalTarget;
   return { fixtureOnly: true, controlledGenerationsExited: true, jobRegistrationsRemoved: true,
     cleanupFaults: [], actorSourceSha256: "c".repeat(64), domain: "gui/501",
     bootstrap: { renderer: "production-seatbeltProfile", sourceSha256: "d".repeat(64), executableSha256: "e".repeat(64),
@@ -254,7 +262,7 @@ const bootstrapRecord = () => {
       ffi: { root: "/selected/koffi", entry: "/selected/koffi/index.js", entrySha256: "f".repeat(64),
         nativeName: "@koromix/koffi-darwin-arm64", nativeRoot: "/selected/koffi-native",
         nativeEntry: "/selected/koffi-native/index.js", nativeEntrySha256: "b".repeat(64), host: { pid: 111, uid: 501, ffiPid: 111 } },
-      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox, messageFilter } };
+      dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox, messageFilter, denyBootstrap } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
   noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
@@ -475,6 +483,9 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
     value => { value.bootstrap.variants[1].childResolvers[0].observation = null; },
     value => { delete value.bootstrap.session; },
     value => { delete value.bootstrap.appSandbox; },
+    value => { delete value.bootstrap.denyBootstrap; },
+    value => { value.bootstrap.denyBootstrap.profileSuffix = '(allow mach-bootstrap)'; },
+    value => { value.bootstrap.denyBootstrap.tools.pid += 1; },
     value => { delete value.bootstrap.messageFilter; },
     value => { value.bootstrap.messageFilter.messageNumbers.push(999); },
     value => { value.bootstrap.messageFilter.profileSuffix = '(allow mach-bootstrap)'; },
@@ -562,6 +573,7 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
   const unknown = structuredClone(good);
   unknown.bootstrap.messageFilter={fixtureOnly:true,sourceRevision:'adc20e859dbd1652b5542788d3d641960dce85e5',
     messageNumbers:[204,207,301,711,800,804],status:'SETUP_FAILED',error:'actual filter compilation or child execution failed'};
+  unknown.bootstrap.denyBootstrap={fixtureOnly:true,sourceRevision:null,messageNumbers:[],status:'SETUP_FAILED',error:'plain denial did not reach ordinary tools'};
   unknown.bootstrap.session = {sessionCreate:true,status:'SETUP_FAILED',error:'actual job submission or completion not observed'};
   unknown.bootstrap.appSandbox = {fixtureOnly:true,mechanism:'standard-app-sandbox',status:'SETUP_FAILED',error:'signed child startup was not observed',
     reverse:{status:'SETUP_FAILED',error:'initial controls not reached'},

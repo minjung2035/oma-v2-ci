@@ -12,7 +12,7 @@ import { trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-l
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 import { machRendezvousName } from "./mach-address.js";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
-import { developerToolDirectories } from "./developer-tools.js";
+import { developerToolDirectories, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
 
 const ENGINE_KEYS = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
   "OMA_ACTOR", "OMA_SOCIETY", "OMA_SOCKET", "OMA_BATCH_VIEW", "OMA_FRAME_BYTES", "OMA_BATCH_MAX_MESSAGES",
@@ -39,6 +39,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
   const writable = roots.filter(root => root.writable).map(root => directory(root.path));
   const toolchain = nodeToolchainMounts(host.node).map(([source]) => directory(source));
   readable.push(...toolchain, directory(tools.contents));
+  readable.push(...DEVELOPER_TOOL_SUPPORT_FILES.map(path => ({ path, kind: "file" as const })));
   // A broad installation/package root must never expose the complete state
   // or overlap a writable actor root. These are lexical recipe checks; actual
   // aliases/renames still require G-FILES and cannot be certified by this map.

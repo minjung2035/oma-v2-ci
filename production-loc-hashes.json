@@ -1588,7 +1588,7 @@
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
-      "sha256": "a8b3f8c015c0854856533335218718edd7b98816c5453df1cbc940b53dacb47c"
+      "sha256": "96c6ac9cdb7e1e3c9e28f6fae3a1fe3c344f4b246ffea2383c173e6655b9a249"
     },
     {
       "path": "packages/platform-mac/src/execution-launch.ts",
@@ -1596,7 +1596,7 @@
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
-      "sha256": "b1f24089f75767686efdb21214ab63e8de57ead0736de67b5363f98afa4d84aa"
+      "sha256": "8053c4e7cb6bf1fc5d9939cba42258a8990de86a247f0ae0da35a7aefc91293c"
     },
     {
       "path": "packages/platform-mac/src/keychain-client.ts",
@@ -1644,7 +1644,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "02fde5b678ad4ef2df9075d8470d41f2b515a95f9c35bc0a8077b0cf0f9c3607"
+      "sha256": "e21c770732ba16e56f02d37d33e3f168af48f3e7b6181f0ebd1fb3bdd486388a"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",

@@ -2,12 +2,12 @@
  * direct-child closure is not an arbitrary-descendant or actor-auth proof.
  * An unavailable shared file primitive remains an explicit failed attempt. */
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,readFileSync,realpathSync,openSync,closeSync,readSync,createReadStream,writeSync,fstatSync,constants} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,realpathSync,openSync,closeSync,existsSync,readSync,createReadStream,writeSync,fstatSync,constants} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {candidateSeatbelt,quarantineSeatbelt} from '@oma/platform-mac/git-sandbox';
-import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
+import {observeMacDeveloperTools,DEVELOPER_TOOL_SUPPORT_FILES} from '@oma/platform-mac/developer-tools';
 import {runProcessSync,decodeProcessText} from '@oma/process/run';
 import {startProcess} from '@oma/process/async';
 import {GIT_ENV} from '@oma/process/policies';
@@ -30,6 +30,9 @@ const tools=await observeMacDeveloperTools(temporary,async command=>runProcessSy
 const host={node:realpathSync(process.execPath),libdir:realpathSync(fileURLToPath(new URL('../../',import.meta.url))),tools};
 const ownerEnv={...GIT_ENV,HOME:temporary,TMPDIR:temporary,GIT_AUTHOR_NAME:'Fixture',GIT_AUTHOR_EMAIL:'fixture@example.invalid',
   GIT_COMMITTER_NAME:'Fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid'};
+const developerSupport=DEVELOPER_TOOL_SUPPORT_FILES.filter(existsSync).map(path=>({path,
+  sha256:createHash('sha256').update(readFileSync(path)).digest('hex')}));
+
 function git(cwd,args,success=true){
   const result=runProcessSync({executable:tools.git,argv:args,cwd,env:ownerEnv,timeoutMs:20000,stdoutBytes:65536,stderrBytes:65536});
   assert.equal(result.kind,'exited',JSON.stringify(result));assert.equal(result.signal,null);assert.equal(result.stdoutTruncated,false);
@@ -58,8 +61,12 @@ let statusWrite=status.write,releaseWrite=release.write,releaseRead=release.read
 let gateReleases=0;
 await withAsyncCleanup(async()=>{
   const check=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'fixture',protectedPaths:[],checks:[{id:'exact',argv:[host.node,'--input-type=module','-e',
-    `import assert from 'node:assert/strict';import {readFileSync,writeFileSync,fstatSync} from 'node:fs';import {spawnSync} from 'node:child_process';
+    `import assert from 'node:assert/strict';import {readFileSync,writeFileSync,fstatSync,openSync,closeSync} from 'node:fs';import {spawnSync} from 'node:child_process';
      assert.equal(readFileSync('exact.txt','utf8'),'committed\\r\\n$literal\\n');assert.equal(readFileSync(0,'utf8'),'');
+     for(const {path,sha256} of ${JSON.stringify(developerSupport)}){
+       const {createHash}=await import('node:crypto');assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'),sha256);
+       assert.throws(()=>{const fd=openSync(path,'r+');closeSync(fd);},e=>['EPERM','EACCES'].includes(e.code));
+     }
      const expected=${JSON.stringify(channels)};
      const same=(fd,id)=>{try{const s=fstatSync(fd,{bigint:true});return String(s.dev)===id[0]&&String(s.ino)===id[1];}
        catch(e){assert.equal(e.code,'EBADF');return false;}};
@@ -132,4 +139,5 @@ await withAsyncCleanup(async()=>{
 },()=>cleanupAll([()=>closeSync(input),()=>closeSync(rootFd),()=>closeSync(projectFd),()=>closeSync(empty),()=>lease.release()]));
 observation={thinBundle:true,verificationBeforeImport:true,canonicalRefsPreserved:true,acceptedBytesPreserved:true,acceptedCursorPreserved:true,directChildrenClosed:true};
 }
-console.log(JSON.stringify({case:mode,gitSetup:{selectedDeveloperTools:tools,...observation}}));
+for(const {path,sha256} of developerSupport)assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'),sha256);
+console.log(JSON.stringify({case:mode,gitSetup:{selectedDeveloperTools:tools,developerSupport,...observation}}));

@@ -264,6 +264,41 @@ DEVELOPER_DIR을 입력하여 host가 관측한 선택이 우선하고 실제 na
 로컬 build·관련 parser/Worker/installation grammar/Seatbelt/recipe60/60 PASS·skip0와 전체 architecture 검사가
 통과했다. 구조 자료를 갱신했고 과거 review의 재승인은 하지 않았다.
 
+### 일곱 번째 실제 결과 — source `09c904b6cee`
+
+Native [41779520021](https://github.com/minjung2035/oma-v2-ci/actions/runs/41779520021)의 양 Mac 공통
+**289/289 PASS·skip0**, 독립 설치26/27 PASS다. candidate는 global developer link 오류를 지나갔으나
+실제 `/usr/bin/cc`가 license 미동의 메시지·exit69를 반환했다. host Xcode의 동의 상태를 바꾸지 않았으며
+이 메시지만으로 실제 미동의나 특정 denied file을 확정하지 않는다. quarantine과 기존 guard는 유지한다.
+
+message filter suffix는 두 OS 각3회 모두 실제 `sandbox_init` EPERM·exit2였고 ports/report·Node/tools
+실행에 도달하지 못했다. 이를 service 차단 성공으로 계산하지 않는다. 같은 revision의
+[entitlement 처리](https://github.com/WebKit/WebKit/blob/adc20e859dbd1652b5542788d3d641960dce85e5/Source/WebKit/Scripts/process-entitlements.sh)는
+`com.apple.private.security.message-filter`를 restricted 분기에서 추가한다. OMA는 이 entitlement를
+추가하지 않았다. 이 후보는 현재 일반 권한 backend로 미채택이다.
+
+입력15827개 `b809c26b4f15d884ee40c2962d44912a316425dd6ab67fa5bcf3a8c40d25cfbf`·runtime 산출물은
+전후 동일하다. 각 gate111 OBSERVED /9 SETUP_FAILED /120 executed·productQualification BLOCKED다.
+API SHA-256 대조 원시는 `/home/dev/oma-audit-artifacts/macos-native-2026-11-04/bootstrap-filter/`다.
+Mac26 gate ZIP `1e078902ad62a609a1eefa114660d32e96b0013f69ce90f57fa3994f9ea29d6f`,
+Mac15 gate ZIP `bfd9eec93a715547dee631e01ae5ac48c870ecc0e9ce9a61438d695492ee9109`와
+`observed-filter-summary.json`에 실제6회 EPERM을 보존했다.
+
+### 여덟 번째 입력 — Xcode 상태의 좁은 read와 plain bootstrap deny
+
+candidate·Worker의 개발 도구 정책에 `/Library/Preferences/com.apple.dt.Xcode.plist` 하나의 read만
+추가하여 shim의 기존 machine license 상태 조회를 비교한다. 전체 Preferences·사용자 Xcode 설정·
+write 권한은 추가하지 않는다. 실제 fixture는 host의 해당 file bytes SHA-256을 관측하고 child의 read와
+대조하며, truncate 없는 r+ open의 거절과 실행 전후 같은 hash를 확인한다. license accept나 sudo를
+호출하지 않는다. 이 파일이 이전 exit69의 원인인지는 실제 compile 대조 전 **추정**이다.
+
+private message filter와 별도로 production policy에 `(deny mach-bootstrap)`만 붙인 대조를 추가한다.
+같은 inherited ports·exact mach lookup·일반 Node/Git/compiler/DNS와 fresh service 두 개를 기록한다.
+포트 제거의 DNS 반례나 private filtering EPERM과 다른 질문이며 실패를 성공으로 바꾸지 않는다.
+이 입력의 actual Mac은 **NOT_RUN**, 제품 renderer·실행 guard는 유지한다.
+전체 build·관련60/60·skip0·생성 candidate ES module 문법·전체 architecture 검사가 통과했다.
+원시는 `/tmp/oma-macos-eighth-{final-build,final-focused,architecture}.log` 또는 `.tap`이다.
+
 병합 전 경계 테스트 강화 수정본의 Linux 전체 테스트는 **4,732 PASS / 0 FAIL / 0 SKIP / 0 cancel / 0 todo**였다. 경계 테스트 85개와 catalog frame 계산·hardlink/unlink 재검증 수정을 포함한다. 기존 시간 민감 검색 시험은 시간 값·완료 단언을 유지한 채 단독 실행으로 격리했다. 세부 판정과 범위는 [재감사 보고서](../module-reaudit-2026-11-04.md)에 기록한다. 이 Linux 결과는 macOS 지원·실제 외부 모델 qualification·실서비스 cutover 완료를 뜻하지 않는다. 과거 작업자의 부분 PASS와 재개 지시는 [보관 원문](../archive/cleanup-2026-11-03/implementation/validation.md)에 분리했다.
 
 ## macOS 브랜치 병합 검증
@@ -456,6 +491,6 @@ spec 작성 당시의 진행 기록은 [정리 전 원문](../archive/cleanup-20
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `b809c26b4f15d884ee40c2962d44912a316425dd6ab67fa5bcf3a8c40d25cfbf` (15827 files).
+verification input digest `7c8bd2f784d767b2db6b125a52ed601aebcb807de48ae128e57c6629f26bb57f` (15827 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

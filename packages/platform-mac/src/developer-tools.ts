@@ -9,6 +9,9 @@ import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 import { GIT_ENV } from "@oma/process/policies";
 import { openDirectory } from "@oma/native/files";
 import { describeMacDeveloperTools, macGitLocation, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
+// Apple development shims read the machine's existing license status. This
+// grants no preference directory, human Xcode settings or license writes.
+export const DEVELOPER_TOOL_SUPPORT_FILES = ["/Library/Preferences/com.apple.dt.Xcode.plist"] as const;
 function refuse(): never { throw new StoreError("UNSUPPORTED_PROFILE", "Mac developer tools could not be observed unambiguously"); }
 function path(value: unknown): value is string {
   return trustedAbsolutePath(value) && !/[\r\n]/.test(value as string) && !(value as string).endsWith("/") &&

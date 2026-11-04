@@ -75,7 +75,7 @@ Linux의 실제 namespace-init/pidfd 경로는 보존한다. Darwin에 같은 �
 | Seatbelt로 이탈/새 생성 경로 제한 | 집합을 닫을 수 있다면 group 종료 활용 가능 | inherited service는 실제 범위 밖 실행이다. null task/registered 분리 뒤 Node 자신의 task/global0·fresh service141은 확인했지만 일반 C fork/posix_spawn 후손24회도 libc DNS에 실패했다. 이 제거 방식은 정상 도구 호환 backend로 미채택이며 CLI 이름 차단은 해법이 아님 |
 | unprivileged bootstrap subset | 별도 namespace에서 허용된 lookup을 보존할 가능성 | 실제 SDK15.5/26.5·ordinary UID501은 host/inherited부터 API125로 생성하지 못했다. unprivileged/parent·subset 안의 libc/manual CLI는 NOT_RUN. 이 환경의 후보로 미채택이며 모든 OS에서 불가능하다는 판정은 아님 |
 | [표준 App Sandbox](https://developer.apple.com/documentation/security/protecting-user-data-with-app-sandbox) | OS가 서비스 권한을 제한하면서 inherited bootstrap·일반 도구를 보존할 가능성 | 양 Mac 각3회 standalone canary EPERM은 확인했으나 App-first custom init은 EPERM·exit2, 반대 순서는 SIGABRT였다. stacking 후보는 미채택. App 단독은 정상 tools/DNS를 보존했으나 두 OS 각3회 fresh service가 다른 coalition에서 실행됐다. 이 후보만으로 closure 채택은 배제 |
-| bootstrap message filter | 포트를 유지하며 허용된 lookup과 service-control 메시지를 분리할 가능성 | WebKit macOS의 고정 revision 규칙을 production policy에 추가하는 fixture만 구현. 일반 UID의 적용·Node/Git/compiler/DNS·fresh service 결과는 NOT_RUN이며 제품 미채택 |
+| bootstrap message filter | 포트를 유지하며 허용된 lookup과 service-control 메시지를 분리할 가능성 | WebKit 규칙은 양 Mac 각3회 init EPERM·도구 미실행이며 같은 source는 private message-filter entitlement를 restricted 분기에서 추가한다. 기본 후보 미채택. 별도 plain `(deny mach-bootstrap)`의 일반 도구·service 대조는 NOT_RUN |
 | broker-mediated spawn / 실행별 쓰기 영역 | 후손 전부 죽음과 특정 데이터의 writer exclusion을 분리할 가능성 | **설계 후보**. 임의 도구 호환성·기존 workspace/receipt/재전달/회수 의미를 먼저 대조. 권한 revoke만으로 writer exclusion이라 하지 않음 |
 | macOS 27 ES descendant client | 기존·미래 descendant subtree의 auth/notify | OS 상향과 Apple entitlement 승인 필요. 현재 기본 범위 밖이며 owner-loss·종료 보장도 별도 검증 |
 
