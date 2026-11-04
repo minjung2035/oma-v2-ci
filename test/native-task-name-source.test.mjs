@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { Socket } from "node:net";
+import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
 import { controlPipe } from "@oma/native/control-socket";
 import { currentDarwinAuditToken, identifyDarwinCoalition } from "@oma/native/audit-session";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
@@ -16,6 +18,7 @@ import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
 import { launchDarwinJobScope } from "@oma/platform-mac/job-scope";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
+import { watchDarwinProcess } from "@oma/native/process-event";
 
 test("001. Actual inherited task-name source survives Seatbelt and Node; user ports and own-task names remain distinct", { timeout: 45000 }, async t => {
   if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
@@ -62,10 +65,61 @@ test("001. Actual inherited task-name source survives Seatbelt and Node; user po
     assert.deepEqual(row.token, token); assert.notEqual(row.bootstrapStatus, 0); assert.notEqual(row.registeredPortsStatus, 0);
     assert.notEqual(row.dyldInfoStatus, 0); assert.notEqual(row.unrelatedNameStatus, 0);
     assert.equal(row.ownCoalitionBytes, 40);
-    if (row.hostCoalitionBytes === 40) { assert.equal(row.hostCoalition, host.coalitionId); assert.notEqual(row.hostCoalition, row.ownCoalition); }
+    assert.equal(row.hostCoalitionBytes, 40, "expected-peer admission needs a positively observed source coalition");
+    assert.equal(row.hostCoalition, host.coalitionId); assert.notEqual(row.hostCoalition, row.ownCoalition);
   }
   assert.equal(rows[2].kind, "name"); assert.equal(rows[2].kobjectType, 20); assert.equal(rows[2].token[5], rows[2].pid);
   assert.equal(rows[2].hostCoalition, rows[2].ownCoalition, "a genuine own-task name cannot establish expected Broker identity");
-  assert.deepEqual(rows[3], { kind: "rejected", kobjectStatus: 0, kobjectType: 0, queryAttempted: false });
+  // Public SDK IPC_OTYPE_UNKNOWN is ~0u; IPC_OTYPE_NONE (0) is distinct.
+  assert.deepEqual(rows[3], { kind: "rejected", kobjectStatus: 0, kobjectType: 0xffffffff, queryAttempted: false });
   assert.deepEqual(journal.entries(), []);
+});
+
+for (const change of ["exec", "death"]) test(`002. Actual held source capability cannot hide Host ${change} from fresh generation and the original watch`, { timeout: 30000 }, async t => {
+  if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-source-revoke-"))), executable = join(root, "source");
+  const children = [], readers = []; let watch;
+  t.after(async () => {
+    try {
+      for (const { child } of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      await Promise.all(children.map(({ closed }) => closed));
+    } finally { try { watch?.close(); } finally { for (const reader of readers) reader.close(); rmSync(root, { recursive: true }); } }
+  });
+  const owned = (file, argv, stdio) => {
+    const child = spawn(file, argv, { stdio }); let stderr = "";
+    child.stderr.on("data", bytes => { stderr += bytes; });
+    const closed = new Promise((yes, no) => { child.once("error", no); child.once("close", (code, signal) => yes({ code, signal, stderr })); });
+    void closed.catch(() => {}); children.push({ child, closed }); return { child, closed };
+  };
+  const lines = stream => { const reader = createInterface({ input: stream }); readers.push(reader); return reader; };
+  const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror",
+    fileURLToPath(new URL("./fixtures/darwin-task-name-source.c", import.meta.url)), "-lproc", "-o", executable], { encoding: "utf8", timeout: 30000 });
+  assert.equal(compile.status, 0, compile.stderr);
+  const replacement = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');
+    process.stdout.write(JSON.stringify(currentDarwinAuditToken())+'\\n');setInterval(()=>{},1000);`;
+  const script = `const {currentDarwinAuditToken}=await import('@oma/native/audit-session');
+    process.send(currentDarwinAuditToken());process.once('message',()=>process.execve(process.execPath,
+      [process.execPath,'--input-type=module','-e',${JSON.stringify(replacement)}],{}));`;
+  const source = owned(process.execPath, ["--input-type=module", "-e", script], ["ignore", "pipe", "pipe", "ipc"]);
+  const sourceLines = lines(source.child.stdout), [original] = await once(source.child, "message");
+  assert.equal(original[5], source.child.pid); watch = watchDarwinProcess(source.child.pid);
+  const held = owned(executable, ["--hold", String(source.child.pid)], ["pipe", "pipe", "pipe"]);
+  const observations = lines(held.child.stdout), [beforeLine] = await once(observations, "line"), before = JSON.parse(beforeLine);
+  assert.equal(before.kobjectStatus, 0); assert.equal(before.kobjectType, 20); assert.equal(before.auditStatus, 0);
+  assert.deepEqual(before.token, original); assert.equal(before.generationBytes, 56); assert.equal(before.pidVersion, original[7]);
+  let replacementToken;
+  if (change === "exec") {
+    const changed = once(sourceLines, "line"); source.child.send("exec"); replacementToken = JSON.parse((await changed)[0]);
+    assert.equal(replacementToken[5], original[5]); assert.notEqual(replacementToken[7], original[7]);
+  } else { source.child.kill("SIGKILL"); const closed = await source.closed; assert.equal(closed.signal, "SIGKILL"); }
+  const deadline = performance.now() + 5000;
+  while (watch.state() === "live" && performance.now() < deadline) await delay(5);
+  assert.equal(watch.state(), change === "exec" ? "changed" : "exited");
+  const afterLine = once(observations, "line"); held.child.stdin.end(Buffer.from([1]));
+  const after = JSON.parse((await afterLine)[0]), returned = await held.closed;
+  assert.equal(returned.code, 0, returned.stderr); assert.equal(returned.signal, null);
+  if (change === "exec") { assert.equal(after.generationBytes, 56); assert.equal(after.pidVersion, replacementToken[7]); }
+  assert.equal(after.generationBytes === 56 && after.pidVersion === original[7], false,
+    "the old capability must never substitute for a fresh matching kernel generation");
+  t.diagnostic(JSON.stringify({ change, before, after }));
 });

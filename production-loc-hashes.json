@@ -1444,7 +1444,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "578bf4e43433b2fa9b0b53f3e13f0434dc3f65be7d308f446016a10f92b1b8d3"
+      "sha256": "00d97ca4d0bca6992d74ddf5a4b64a566b2b9098326523d174bc1137326d0330"
     },
     {
       "path": "packages/native/src/audit-token.ts",

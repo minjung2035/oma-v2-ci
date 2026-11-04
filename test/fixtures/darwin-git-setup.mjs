@@ -2,7 +2,7 @@
  * direct-child closure is not an arbitrary-descendant or actor-auth proof.
  * An unavailable shared file primitive remains an explicit failed attempt. */
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,readFileSync,realpathSync,openSync,closeSync,existsSync,readSync,createReadStream,writeSync,fstatSync,constants} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,realpathSync,openSync,closeSync,existsSync,readSync,createReadStream,writeSync,fstatSync,lstatSync,statSync,constants} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
@@ -32,6 +32,15 @@ const ownerEnv={...GIT_ENV,HOME:temporary,TMPDIR:temporary,GIT_AUTHOR_NAME:'Fixt
   GIT_COMMITTER_NAME:'Fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid'};
 const developerSupport=DEVELOPER_TOOL_SUPPORT_FILES.filter(existsSync).map(path=>({path,
   sha256:createHash('sha256').update(readFileSync(path)).digest('hex')}));
+// Observe physical aliases before the failing tool runs. This grants no new
+// path and does not turn missing/denied framework metadata into a PASS.
+const developerFrameworks=['/System/Library/PrivateFrameworks/MobileDevice.framework',
+  '/System/Library/PrivateFrameworks/MobileDevice.framework/Versions/A/MobileDevice'].map(path=>{
+  try {const link=lstatSync(path),canonical=realpathSync(path),held=statSync(canonical);
+    return {path,canonical,symlink:link.isSymbolicLink(),uid:held.uid,mode:held.mode};}
+  catch(error){return {path,error:error.code};}
+});
+console.error(JSON.stringify({developerFrameworks}));
 
 function git(cwd,args,success=true){
   const result=runProcessSync({executable:tools.git,argv:args,cwd,env:ownerEnv,timeoutMs:20000,stdoutBytes:65536,stderrBytes:65536});

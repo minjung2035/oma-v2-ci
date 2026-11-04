@@ -27,6 +27,7 @@ interface ProcCalls {
   info(pid: number, flavor: number, arg: bigint, buffer: Buffer, bytes: number): number;
   usage(id: bigint, buffer: Buffer, bytes: number): number;
   sysctl(name: string, output: Buffer, bytes: Buffer, input: null, inputBytes: number): number;
+  hostUuid(output: Buffer, timeout: Buffer): number;
   taskName(task: number, pid: number, output: Buffer): number;
   taskInfo(task: number, flavor: number, output: Buffer, count: Buffer): number;
   deallocate(task: number, port: number): number;
@@ -43,6 +44,7 @@ function native(): ProcCalls {
       info: proc.func("int proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, int bytes)"),
       usage: library.func("int coalition_info_resource_usage(uint64_t id, void *buffer, size_t bytes)"),
       sysctl: library.func("int sysctlbyname(const char *name, void *output, void *bytes, const void *input, size_t inputBytes)"),
+      hostUuid: library.func("int gethostuuid(void *output, const void *timeout)"),
       taskName: library.func("int task_name_for_pid(unsigned int task, int pid, void *output)"),
       taskInfo: library.func("int task_info(unsigned int task, int flavor, void *output, void *count)"),
       deallocate: library.func("int mach_port_deallocate(unsigned int task, unsigned int port)"),
@@ -67,6 +69,16 @@ export function currentDarwinBootId(): string {
   const value = output.subarray(0, 36).toString("ascii").toLowerCase();
   if (!BOOT.test(value)) unknown("Darwin kernel boot identity is malformed");
   return value;
+}
+/** Public host identity, distinct from this kernel boot. Intended for explicit
+ * reboot recovery, never process/peer authority. Failure has no generated-ID
+ * fallback. OMA does not register a gethostuuid replacement callback. */
+export function currentDarwinHostId(): string {
+  const output = Buffer.alloc(16), timeout = Buffer.alloc(16);
+  timeout.writeBigInt64LE(1n); // Darwin 64-bit timespec: one-second maximum wait.
+  if (native().hostUuid(output, timeout) !== 0 || output.every(byte => byte === 0))
+    unknown("Darwin host identity is unavailable");
+  return output.toString("hex");
 }
 /** Current controller's kernel token, not a claimed/received sender. It is
  * public correlation data; only a genuine receive trailer proves a sender. */

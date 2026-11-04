@@ -22,6 +22,20 @@ static void return_ports(mach_port_array_t ports, mach_msg_type_number_t count) 
     if (MACH_PORT_VALID(ports[i])) checked(mach_port_deallocate(mach_task_self(), ports[i]) == KERN_SUCCESS, "return port");
   if (count) checked(vm_deallocate(mach_task_self(), (vm_address_t)ports, count * sizeof(*ports)) == KERN_SUCCESS, "return port array");
 }
+static void record_name(mach_port_t source, pid_t pid) {
+  ipc_info_object_type_t type = IPC_OTYPE_UNKNOWN; mach_vm_address_t ignored = 0;
+  kern_return_t kind = mach_port_kobject(mach_task_self(), source, &type, &ignored);
+  audit_token_t token = {{0}}; mach_msg_type_number_t words = TASK_AUDIT_TOKEN_COUNT;
+  kern_return_t audit = kind == KERN_SUCCESS && type == IPC_OTYPE_TASK_NAME ?
+    task_info(source, TASK_AUDIT_TOKEN, (task_info_t)&token, &words) : KERN_INVALID_RIGHT;
+  unsigned char generation[56] = {0}; errno = 0;
+  int bytes = proc_pidinfo(pid, 17, 0, generation, sizeof generation), saved = errno;
+  uint32_t version = 0; if (bytes == sizeof generation) memcpy(&version, generation + 32, sizeof version);
+  printf("{\"kobjectStatus\":%d,\"kobjectType\":%u,\"auditStatus\":%d,\"auditWords\":%u,\"generationBytes\":%d,\"generationErrno\":%d,\"pidVersion\":%u,\"token\":[",
+    kind, type, audit, words, bytes, saved, version);
+  for (unsigned i = 0; i < 8; ++i) printf("%s%u", i ? "," : "", token.val[i]);
+  printf("]}\n"); fflush(stdout);
+}
 static void probe(pid_t unrelated, int forged) {
   mach_port_array_t ports = NULL; mach_msg_type_number_t count = 0;
   checked(mach_ports_lookup(mach_task_self(), &ports, &count) == KERN_SUCCESS && count >= 2, "inherited source ports");
@@ -67,6 +81,15 @@ static void probe(pid_t unrelated, int forged) {
   return_ports(ports, count); fflush(stdout);
 }
 int main(int argc, char **argv) {
+  if (argc == 3 && !strcmp(argv[1], "--hold")) {
+    pid_t pid = (pid_t)atoi(argv[2]); mach_port_t source = MACH_PORT_NULL;
+    checked(pid > 1 && task_name_for_pid(mach_task_self(), pid, &source) == KERN_SUCCESS, "held source name");
+    record_name(source, pid);
+    char release; ssize_t bytes; do { bytes = read(STDIN_FILENO, &release, 1); } while (bytes < 0 && errno == EINTR);
+    checked(bytes == 1, "held source observation release");
+    record_name(source, pid);
+    checked(mach_port_deallocate(mach_task_self(), source) == KERN_SUCCESS, "return held source"); return 0;
+  }
   if (argc >= 3 && (!strcmp(argv[1], "--query") || !strcmp(argv[1], "--forged") || !strcmp(argv[1], "--self"))) {
     probe((pid_t)atoi(argv[2]), !strcmp(argv[1], "--forged") ? 1 : !strcmp(argv[1], "--self") ? 2 : 0); return 0;
   }

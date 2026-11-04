@@ -6,13 +6,13 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fork } from "node:child_process";
+import { fork, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
-import { currentDarwinAuditToken, identifyDarwinCoalition, pinDarwinProcess } from "@oma/native/audit-session";
+import { currentDarwinAuditToken, currentDarwinHostId, identifyDarwinCoalition, pinDarwinProcess } from "@oma/native/audit-session";
 import { ExecutionRuntime, recoverExecutionState } from "#oma-test/app/runtime/execution-runtime";
 
 const legacy = { kind: "darwin-audit-session", auditSession: 1, coalitionId: "2", pid: 3, pidVersion: 4 };
@@ -104,5 +104,20 @@ test("005. Actual application guard retires positive noncreation and preserves u
   for (let attempt = 0; attempt < 2; ++attempt) {
     await assert.rejects(runtime.run("candidate", command, undefined, () => {}), { code: "UNSUPPORTED_PROFILE" });
     assert.deepEqual(ExecutionJournal.inspect(root), []); assert.equal(existsSync(join(root, "entered")), false);
+  }
+});
+
+test("006. Actual Darwin host identity agrees with independent C processes without a generated fallback", t => {
+  if (process.platform !== "darwin") return assert.throws(currentDarwinHostId, { code: "UNSUPPORTED_PROFILE" });
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-host-identity-"))), executable = join(root, "identity");
+  t.after(() => rmSync(root, { recursive: true }));
+  const compile = spawnSync("/usr/bin/clang", ["-Wall", "-Wextra", "-Werror",
+    fileURLToPath(new URL("./fixtures/darwin-host-identity.c", import.meta.url)), "-o", executable], { encoding: "utf8", timeout: 30000 });
+  assert.equal(compile.status, 0, compile.stderr);
+  const host = currentDarwinHostId(); assert.match(host, /^[0-9a-f]{32}$/); assert.notEqual(host, "0".repeat(32));
+  assert.equal(currentDarwinHostId(), host);
+  for (let attempt = 0; attempt < 2; ++attempt) {
+    const result = spawnSync(executable, [], { encoding: "utf8", timeout: 5000 });
+    assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout, host + "\n");
   }
 });

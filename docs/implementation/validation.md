@@ -1437,10 +1437,54 @@ Host CID 조회가 실패한 것을 outside-scope proof로 바꾸지 않는다. 
 SDK26.5 arm64 `-Wall -Wextra -Werror` object compile만 확인했으며 실제 sandbox/Node 상속·거절은 NOT_RUN이다.
 이 후보는 Host death/exec에 따른 revoke와 다른 scope capability 전달도 별도 검증해야 하므로 아직 채택하지 않는다.
 
+### task-name 후보의 첫 실제 Mac26 관측과 strict 상수 수정
+
+Source `d7c8bd14e572` Native [41854973526](https://github.com/minjung2035/oma-v2-ci/actions/runs/41854973526)의
+Mac26 eager ZIP `13337093635` SHA-256 `770ee00de7608f95cad13ac7ee2bcadf7d813bb3a2bf06c10129cc6a30cc23f1`를
+대조·판독했다. common은 **333/334 PASS·1 FAIL·skip/cancel/todo0**이며 source/runtime 전후가 각각 동일하다.
+실패는 마지막 fake user-port 단언에서 IPC_OTYPE_NONE0을 잘못 기대한 것이다. 실제 raw는 public
+[IPC_OTYPE_UNKNOWN=~0u](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/mach_debug/ipc_info.h)4294967295,
+queryAttempted=false였다. 성공으로 재분류하지 않고 exact 기대값을 SDK 상수로 수정했다.
+
+실제 앞선 두 row는 Seatbelt/Node 뒤 task-name20·audit8 words·원래 Host token 일치, Host bootstrap/
+registered ports/DYLD info 각각 KERN_INVALID_ARGUMENT4, unrelated name 획득5였다. Host PID의 CID 조회도
+실제40 bytes·errno0·CID849로 성공했고 자기 CID1067과 달랐다. own-task name20 counterexample의 CID는1067이었다.
+따라서 다음 검사는 Host CID 조회의 성공까지 필수로 요구한다. 조회 거절을 outside proof로 바꾸는 대안은 없다.
+application guard와 `recoverExecutionState`의 Seatbelt Host-crash 연결도 이 Mac26 source에서 통과했다.
+Mac15 common과 Mac26 gate는 cancelled이며 해당 OS/범위의 실행 근거로 쓰지 않는다.
+
+후속 후보에는 독립 Host의 exec/death 동안 원래 task-name right를 실제 유지한 뒤 kernel generation을
+재조회하고, 그 전에 등록한 watch의 changed/exited를 대조하는 검사를 추가했다. capability 조회만으로
+stale process를 현재 Broker로 승인하지 않는다. 이 추가 검사·상수 수정은 실제 Mac NOT_RUN이며 production 인증은 아직 미연결이다.
+
+### 수동 reboot recovery의 host identity 준비 — 실제 Mac 미실행
+
+`currentDarwinHostId`는 SDK의 public `gethostuuid`를 1초 timespec으로 호출하고, 실패·zero UUID를
+`RUN_TERMINATION_UNKNOWN`으로 보존한다. 생성 UUID·PID·pathname을 host identity로 대체하지 않는다.
+[고정 Libsystem wrapper](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/libsyscall/wrappers/gethostuuid.c)는
+EPERM 때 등록 callback을 허용한다. OMA는 그 callback을 등록하지 않으며 entitlement가 필요한 private bypass도 호출하지 않는다.
+독립 C 프로그램 두 번의 결과와 FFI 결과를 실제 Mac에서 대조할 검사를 추가했다. SDK26.5 arm64
+`-Wall -Wextra -Werror` object compile·workspace build·관련 local46/46은 통과했다. Linux의 새 Mac 검사는
+platform refusal이며 실제 host identity·reboot는 NOT_RUN이다. 수동 복구 CLI의 Linux guard와 Society lease 조건은 유지한다.
+
+Mac15 candidate의 MobileDevice.framework 오류는 이미 읽기 허용된 `/System/Library`를 지목한다.
+gate fixture는 해당 framework와 binary의 실제 canonical path·symlink·UID/mode 또는 조회 오류를 기록한다.
+권한·정책·성공 기대값은 변경하지 않았다. alias 원인은 아직 미확정이며 새 관측은 NOT_RUN이다.
+
+### source 39c533683f3의 Linux 전체 회귀 실패 보존
+
+Architecture [41847948809](https://github.com/minjung2035/oma-v2-ci/actions/runs/41847948809)의 native-all ZIP
+`13335119096` SHA-256 `5635bccd4f280a10f6a4122ba6c2b834d46f98741798e27e04aa45525a438414`를 대조·판독했다.
+all은 **4791/4792 PASS·1 FAIL·skip/cancel/todo0**, sourceChanges[]다. 실패는 status responsiveness001의
+mixed event-loop lag323ms가 기존100ms 기준을 넘은 것이다. read lag6ms·write max331ms·inFlight1이었다.
+원인과 source 변경의 인과관계는 미확정이다. 별도 로컬 단독 실행은 같은 기준으로 mixed52ms·write76ms·1/1 PASS였으며,
+이것을 원래 CI 실패 수리나 전체 회귀 PASS로 바꾸지 않는다. 원시는 `coalition-recovery/linux-all-art-13335119096/`와
+`/tmp/oma-macos-linux-status-isolated.tap`다. 최신 전체 PASS 근거는 별도 source의 결과로 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `5421f4d5c053f6299476960fd0a7b29e055ddb4f4cd54488c4f464196dd4ad66` (15852 files).
+verification input digest `23be85b77dddf45a7ea72d03064f66ecd7be8f9b2e6da76361c8a9aaee4293c9` (15853 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
