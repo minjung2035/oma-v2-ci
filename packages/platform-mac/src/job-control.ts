@@ -10,7 +10,7 @@ import { runProcessSync } from "@oma/process/run";
 import { ExecutionNotStarted } from "@oma/process/owned-execution";
 import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { currentDarwinAuditToken, pinDarwinProcess, observeDarwinCoalitionPopulation,
+import { currentDarwinAuditToken, pinDarwinProcess, reacquireChangedDarwinProcess, observeDarwinCoalitionPopulation,
   darwinCoalitionMemberHints, signalDarwinCoalitionMember, type DarwinCoalitionIdentity, type DarwinProcessPin } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { controlPipe } from "@oma/native/control-socket";
@@ -54,12 +54,17 @@ function selected(path: string): readonly string[] {
     return machoImageCdHashes(bytes, process.arch === "arm64" ? "arm64" : "x64");
   }, () => closeSync(fd));
 }
-async function image(pin: DarwinProcessPin, hashes: readonly string[]): Promise<void> {
+async function image(pin: DarwinProcessPin, hashes: readonly string[], retry = true): Promise<DarwinProcessPin> {
   const operation = observeDarwinAuditOrigin(pin.token, hashes);
-  await withAsyncCleanup(async () => {
-    if ((await operation.result).kind !== "matched" || pin.state() !== "stopped")
-      throw unknown("stopped job image did not match the selected generation");
-  }, () => operation.returned);
+  const kind = await withAsyncCleanup(async () => (await operation.result).kind, () => operation.returned), state = pin.state();
+  if (kind === "matched" && state === "changed" && retry) {
+    let replacement: DarwinProcessPin | undefined;
+    try { replacement = reacquireChangedDarwinProcess(pin); return await image(replacement, hashes, false); }
+    catch (error) { return withCleanup(() => { throw error; }, () => replacement?.close()); }
+  }
+  if (kind !== "matched" || state !== "stopped")
+    throw unknown(`stopped job image did not match the selected generation: origin=${kind}, process=${state}`);
+  return pin;
 }
 /** Borrows all input FDs during acquisition, then owns fileport copies until
  * READY. No channel or pathname grants workload/actor authority. The returned
@@ -99,7 +104,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       if (matches.length === 1) { root = pinDarwinProcess(Number(matches[0]?.[1])); pins.push(root); break; }
       await delay(5);
     }
-    await image(root, helperHashes); rootAccepted = true;
+    const original = root; root = await image(root, helperHashes); if (root !== original) pins.push(root); rootAccepted = true;
     const controller = root, identity = controller.identity, service = lookupMachService(serviceName); owners.push(() => service.close());
     let pending: { id: number; yes(message: Data): void; no(error: unknown): void } | undefined;
     let problem: Error | undefined, prepared: Promise<void> | undefined, ready = false, released = false, returned = false, stopping = false, ownerStopped = false;
@@ -178,7 +183,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       if (pin.identity.bootId !== identity.bootId || pin.identity.coalitionId !== identity.coalitionId ||
           !pin.token.every((word, index) => word === actual[index])) throw unknown("job target kernel generation did not agree");
       const expected = hashes[stage]; if (expected === undefined) throw unknown("job image stage is unavailable");
-      await image(pin, expected); target = pin;
+      const selectedPin = await image(pin, expected); if (selectedPin !== pin) pins.push(selectedPin); target = selectedPin;
     };
     const prepare = async (): Promise<void> => {
       if (stopping) throw unknown("job setup was stopped");

@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "bb56325da43300167e9d864f56a1506a50733b5648371fa796925e3070e35e5e",
+  "manifest": "28322c75d15d66af533cf752e7a8076e59e2ad6a329876a784dec3cdc34edbb3",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -337,6 +337,10 @@
     {
       "path": "apps/oma/src/runtime/locked-files.ts",
       "sha256": "fe264f9978524f9525e2601c86603223ade9aa317f665fc52054c84a086ac2a1"
+    },
+    {
+      "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
+      "sha256": "3511728efa631601c96b7f8ca9cc66fea644fabf685c5df40a3b8153baeb9060"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -1448,7 +1452,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "4348db4bac5911fb789c2c5253413e192e038b825d477b56c4de7169843f2339"
+      "sha256": "8ae2cd7d66c2632f1982a7cface062f242b3e23403e281beb4b28da5c4da6ae1"
     },
     {
       "path": "packages/native/src/audit-token.ts",
@@ -1608,7 +1612,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "d4d3b92da6416a0805a41be6a96052e3d593d0897b9d818ce2ab9376b80d140c"
+      "sha256": "458a08f80c980df165da4d93545861d4a5e668f0f2ba4b73aa00d4e098f4469d"
     },
     {
       "path": "packages/platform-mac/src/job-helper/config.h",

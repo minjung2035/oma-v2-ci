@@ -266,11 +266,31 @@ export interface DarwinProcessPin {
   close(): void;
 }
 export function pinDarwinProcess(pid: number): DarwinProcessPin {
+  return acquireDarwinProcess(pid, true);
+}
+interface DarwinAcquisition {
+  readonly uniqueId: bigint;
+  readonly pidVersion: number;
+  readonly token: Buffer;
+  readonly identity: DarwinCoalitionIdentity;
+}
+const darwinAcquisitions = new WeakMap<DarwinProcessPin, DarwinAcquisition>();
+/** Replaces an EXEC-revoked watch with a new watch for exactly the original
+ * kernel generation. Caller-shaped pins, unknown/dead/closed pins and any
+ * changed kernel fact are refused. This grants no actor or image authority. */
+export function reacquireChangedDarwinProcess(pin: DarwinProcessPin): DarwinProcessPin {
+  const expected = darwinAcquisitions.get(pin);
+  if (expected === undefined || pin.state() !== "changed") unknown("Darwin process has no replaceable changed-watch acquisition");
+  return acquireDarwinProcess(pin.pid, false, expected);
+}
+function acquireDarwinProcess(pid: number, retry: boolean, expected?: DarwinAcquisition): DarwinProcessPin {
   validPid(pid);
   const api = native(), bootId = currentDarwinBootId(), before = Buffer.alloc(56);
   if (api.info(pid, 17, 0n, before, before.length) !== before.length ||
       before.readBigUInt64LE(16) === 0n || before.readUInt32LE(32) === 0)
     unknown("Darwin process generation is unavailable");
+  if (expected !== undefined && (before.readBigUInt64LE(16) !== expected.uniqueId || before.readUInt32LE(32) !== expected.pidVersion))
+    unknown("Darwin process generation changed before acquisition could restart");
   // Register before acquiring the task token. An exec between the first
   // generation read and registration is rejected by the second read below.
   const watch = watchDarwinProcess(pid), port = Buffer.alloc(4);
@@ -299,6 +319,8 @@ export function pinDarwinProcess(pid: number): DarwinProcessPin {
     if (coalitionId === null || coalition(process.pid) === coalitionId)
       unknown("Darwin process must belong to a distinct resource coalition");
     const identity: DarwinCoalitionIdentity = Object.freeze({ kind: "darwin-resource-coalition", bootId, coalitionId });
+    if (expected !== undefined && (!token.equals(expected.token) || bootId !== expected.identity.bootId || coalitionId !== expected.identity.coalitionId))
+      unknown("Darwin process kernel identity changed before acquisition could restart");
     let status: DarwinProcessState = "live";
     const state = (): DarwinProcessState => {
       if (closed) return "unknown";
@@ -334,6 +356,18 @@ export function pinDarwinProcess(pid: number): DarwinProcessPin {
       } catch { return status = "unknown"; }
     };
     const initialState = state();
+    if (initialState === "changed" && retry) {
+      // An initial EXEC event may arrive after the generation read. Never
+      // revive this watcher or accept another generation: acquire one fresh
+      // watch only if every original kernel fact still agrees. Any real exec,
+      // PID reuse, CID change or second event remains a refusal.
+      let replacement: DarwinProcessPin | undefined;
+      try {
+        replacement = acquireDarwinProcess(pid, false, { uniqueId: before.readBigUInt64LE(16),
+          pidVersion: before.readUInt32LE(32), token, identity });
+        close(); return replacement;
+      } catch (error) { return withCleanup(() => { throw error; }, () => replacement?.close()); }
+    }
     if (initialState !== "live" && initialState !== "stopped")
       unknown(`Darwin process pin acquisition is ${initialState}`);
     const signal = (number: 9 | 19): boolean => {
@@ -346,8 +380,10 @@ export function pinDarwinProcess(pid: number): DarwinProcessPin {
       if (result === 3) { status = "changed"; return false; }
       unknown("Darwin pinned process control was refused");
     };
-    return Object.freeze({ pid, identity,
+    const pin = Object.freeze({ pid, identity,
       token: Object.freeze(Array.from({ length: 8 }, (_, index) => token.readUInt32LE(index * 4))),
       state, resume: () => signal(19), terminate: () => signal(9), close });
+    darwinAcquisitions.set(pin, { uniqueId: before.readBigUInt64LE(16), pidVersion: before.readUInt32LE(32), token, identity });
+    return pin;
   } catch (error) { return withCleanup(() => { throw error; }, close); }
 }

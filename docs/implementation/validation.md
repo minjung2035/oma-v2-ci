@@ -1839,10 +1839,99 @@ fast1189/1189, durable937/937, property42/42, stress16/16, platform79/79·모두
 이는 SOURCE44 회귀 결과다. SOURCE45의 v2 runtime inventory나 SOURCE46 FD API의 전체 Linux PASS로 옮겨 쓰지 않는다.
 이전 V23 간헐 lag 실패의 원인 수리·threshold 완화를 뜻하지도 않는다.
 
+### SOURCE46 실제 flags/socket 결과와 private generation 후보 (SOURCE47)
+
+SOURCE46 `b29dea0f6b10b7980c72f3251e52955818ac9cab` Native
+[41895403310](https://github.com/minjung2035/oma-v2-ci/actions/runs/41895403310)의
+Intel common359/359·fail/cancel/skip/todo0, ARM common356/359·fail3·cancel/skip/todo0이다.
+ARM ZIP13355349575 SHA-256
+`c2d9aced4692afe2da5efe93eac3f1056687153c337d56ae539232ffee75391b`,
+Intel ZIP13356686381 SHA-256
+`ff2dff2e70e9ecae3f343409a4be06ee6bf1a7f672acc90ef11e5a07f32e1646`를 대조했다.
+양쪽 canonical 전후15871/
+`7e987e0ecc3d22babb34dac83d4146fb106de4dfc9c410a577832d7af2b27937`가 같다.
+runtime15500 files/27 workspaces도 각각 전후 동일하며 ARM은
+`02ee4714d2173ec739e2ffeeaf8062420852b28e47d6a88549d86b6aba09c620`, Intel은
+`32f3c9a6340b36b41949712a5a658e1762b2758bae0291da63f993d96897e1b3`다.
+
+새 restricted+shutdown 조합은 양 Mac에서 UID501·16 option mutation 거절·16 competing bind 실패,
+connect/connectx 두 reconnect 거절·마지막 FD 반납 뒤 bind 성공을 관측했다.
+shutdown-only 후보의 반례와 구분한다. private selector의 배포 적합성·전체 Society identity와
+상속/위조·fork/exec·owner SIGKILL·recovery는 아직 미충족이며 product lease로 채택하지 않는다.
+Intel의 FD flags API + independent Actor C fixture도 PASS다.
+ARM flags fixture는 host seal/read 검사 뒤 scope 실행에서 RUN_TERMINATION_UNKNOWN으로 끝났다.
+ARM의 다른 두 실패도 실제 producer의 spool/CID join과 source-pin exec 시험의 scope 실행이다.
+일반 TAP error block은 nested cause를 생략하므로 이 결과만으로 원인을 단정하지 않는다.
+새 reporter는 원본 TAP 사건과 verdict를 보존하면서 nested error를 diagnostic으로 추가한다.
+고의 nested-failure local probe에서 원인이 보존되고 exit1이 유지됨을 확인했다.
+
+SOURCE47 private generation 후보는 configured digest와 대조한 v2 manifest의 각 파일을 held source에서
+새 owned single-link inode로 복사하고 개별 hash와 전체 재구성 digest를 다시 확인한다.
+contained link/empty directory와 별도 Node 복사도 포함하며 모든 파일·디렉터리를 UF_IMMUTABLE로 잠근다.
+Node는 선택한 installed JS entry와 --no-global-search-paths로만 시작하고 loader injection 환경을 거절한다.
+Actor writable root와 겹치면 시작 전 거절하며 source config/accepted state를 변환하지 않는다.
+private parent는 모든 Actor writable root 밖의 owned0700 directory여야 한다.
+
+새 소유자는 실제 Darwin scope를 직접 취득하고 보유 수를 늘린다.
+기존 scope.close의 실제 complete-death/resource-return 검사가 성공한 경우에만 그 보유를 반납한다.
+생성 시도 뒤 unknown은 보유를 남기며, 보유가 있거나 unknown이면 generation.close는 unseal/삭제를 거절한다.
+EOF·직접 child exit·caller death predicate로 회수하지 않는다. construction failure는 자신이 만든 복사만 회수한다.
+전체 설치+별도 Node의 실제 Seatbelt 실행, native dependency import, file/dir/Node unseal·쓰기/alias 거절,
+읽을 수 있는 fake HOME global module의 fallback 거절, live-scope 회수 거절과 최종 회수를 시험하도록 연결했다.
+local build와 관련8/8은 PASS지만 Mac-specific 실행은 Linux refusal이다. 이 새 producer의 실제 Mac은 NOT_RUN이다.
+startup의 generation 선택·orphan recovery/collector·Runner/Worker 조립은 아직 미완료이며 제품 guard는 유지한다.
+
+SOURCE46 ARM gate ZIP13356841771 SHA-256
+`332a59b87fe5bd23337a713eb2c1c1d5ba16dcce266e38d48b4f501e6971c8cc`를 대조했다.
+120 executed/113 OBSERVED/7 SETUP_FAILED이며 canonical/runtime 전후는 위 SOURCE46 ARM 값과 같다.
+Worker guard6 외 roundtrip iteration0 하나가 실패했다. 펼친 cause는 initial pin acquisition changed다.
+SOURCE47은 이 관측에 대해 원래 unique ID·PID version·full8 token·boot·CID가 모두 동일할 때에만
+새 watcher를 한 번 취득한다. 실제 exec/재사용/CID 변경, unknown/dead/closed 또는 재차 변경은 거절한다.
+기존 watcher를 live로 되돌리거나 caller의 PID/token 객체를 받지 않는다.
+image 확인 중 changed가 생긴 경우도 genuine factory pin의 private WeakMap 근거로만 새 pin을 얻고,
+선택한 CDHash와 stopped 상태를 다시 확인한다. origin mismatch/unknown은 재시도하지 않는다.
+이후 기존 journal witness→setup→current authority→release 순서는 유지한다.
+새 경합 대응과 image diagnostic의 실제 Mac 재검증은 NOT_RUN이다.
+
+SOURCE46 Mac15 gate ZIP13356702363 SHA-256
+`270a999e694ade7c5d746bfc69410a46254d1fa15c897045cc2d1a38aa8ccf01`도 대조했다.
+Darwin24.6 arm64/SDK15.5에서120 executed/113 OBSERVED/7 SETUP_FAILED다.
+Git/compiler candidate3회는 모두 OBSERVED로 canonical MobileDevice alias 수정의 양성을 확인했다.
+Worker guard6 외 roundtrip iteration0의 stopped-image 확인이 실패했다. 원인이 ARM26과 같다고 단정하지 않는다.
+새 진단은 origin kind와 process state를 구분한다. canonical 전후는 위 SOURCE46과 같고
+runtime15500/27 전후는 `20b0a8713bd1ac9826d4382da3e2853cb4da2416d2d3e5f621d3ca06fe5f8e23`로 같다.
+
+새 generation은 source/parent/Node parent의 모든 directory component를 검사해 symlink ancestor를 거절한다.
+별도 Node는 node basename을 보존하는 private bin에 복사하며 generation의 다른 payload와 함께 잠근다.
+실제 시험은 그 PATH의 node 명령으로 시작한 자식까지 같은 scope에서 종료하는 것도 요구한다.
+caller-shaped changed-pin 객체는 원래 kernel factory로 오인되지 않는 local negative control을 추가했다.
+제품 Runner/Worker·Node toolchain 선택과 orphan collector의 연결은 별도 미완료다.
+
+SOURCE47의 preload도 같은 generation에 포함된 JS entry만 허용한다.
+source installation의 mutable entry를 preload로 다시 넣거나 Node loader 환경을 주입하는 입력은 시작 전에 거절한다.
+잘못된 argv·loader env·writable overlap·outside preload 시험도 공통 owner의 opening/retire로 감싸며,
+회귀로 scope가 생성되더라도 release 전 authority 거절과 actual drain을 거치도록 했다.
+
+SOURCE45의 새 v2 inventory를 포함한 full Linux CI도 도착했다. Architecture
+[41891828585](https://github.com/minjung2035/oma-v2-ci/actions/runs/41891828585)의
+artifact13357036323 SHA-256
+`9bf2cef4df667ffaf17104a08f28ea1b3819e6142b1581aeeb7248f6a63c9fcc`를 대조했다.
+source `941dd9006885bfaa7693e5e10feadb8cfe5387d1`, before/after15868/
+`a4f4fc41fdc4d10c6702ac4371ad7290fd9222b4e63278750728aae293014418`가 같다.
+all4817/4817·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
+SOURCE46/47 실행이나 이전 V23 간헐 lag 원인의 수리로 옮겨 쓰지 않는다.
+
+SOURCE47 최종 회수는 storage.removeOwnedEntryAt의 held-parent 삭제를 사용한다.
+확보한 generation parent/entry를 재검사하고 그 FD에서만 회수하며 rmSync 경로 삭제를 사용하지 않는다.
+이 수정 뒤 build·focused22/22·파일 효과 rule gate를 통과했다. 실제 Mac 통합 실행은 아직 NOT_RUN이다.
+고정 XNU의 [exec identity 갱신](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c#L7096)도 대조했다.
+각 exec는 직전과 다른 PID version을 설정하므로 새 pin이 원래 full token/PID version과 같은지 검증하는 조건을 완화하지 않는다.
+Original expected-peer watcher의 exec revoke는 재취득 대상이 아니며 그대로 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7e987e0ecc3d22babb34dac83d4146fb106de4dfc9c410a577832d7af2b27937` (15871 files).
+verification input digest `6ad85f25ac53c498c60d3278b982eee1f512f57fd9db3aea424f7e7af587fd85` (15874 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

@@ -4,8 +4,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
+import { pinInheritedDarwinPeer, reacquireChangedDarwinProcess } from "@oma/native/audit-session";
 import { inheritedMachPeerEndpoint } from "@oma/native/mach-message";
+
+test("000. Caller-shaped process facts cannot request a changed-watch replacement", () => {
+  let called = false;
+  assert.throws(() => reacquireChangedDarwinProcess({ pid: process.pid, token: [], identity: {},
+    state() { called = true; return "changed"; }, close() {} }), { code: "RUN_TERMINATION_UNKNOWN" });
+  assert.equal(called, false);
+});
 
 for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer"])
   test(`001. Actual inherited peer channel: ${name}`, { timeout: 90000 }, t => {
