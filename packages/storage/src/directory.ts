@@ -299,23 +299,26 @@ export function removeOwnedTree(path: string): void {
   let parent: number;
   try { parent = openDirectory(dirname(path)); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
-  try {
-    if (!statAt(parent, basename(path), { throwIfNoEntry: false })) return;
-    const walk = (directory: number): void => {
-      for (const name of directoryNames(directory)) {
-        const stat = statAt(directory, name);
-        if (stat.isDirectory()) {
-          const child = openOwnedDirectory(directory, name);
-          try { walk(child); } finally { closeSync(child); }
-          unlinkAt(directory, name, true);
-        } else unlinkAt(directory, name);
-      }
-      fsyncSync(directory);
-    };
-    const root = openOwnedDirectory(parent, basename(path));
-    try { walk(root); } finally { closeSync(root); }
-    unlinkAt(parent, basename(path), true); fsyncSync(parent);
-  } finally { closeSync(parent); }
+  try { removeOwnedTreeAt(parent, basename(path)); } finally { closeSync(parent); }
+}
+/** The same caller-owned temporary-tree collection through a held parent.
+ * Flush each completed directory, then the removed root's parent. */
+export function removeOwnedTreeAt(parent: number, name: string): void {
+  if (!statAt(parent, name, { throwIfNoEntry: false })) return;
+  const walk = (directory: number): void => {
+    for (const childName of directoryNames(directory)) {
+      const stat = statAt(directory, childName);
+      if (stat.isDirectory()) {
+        const child = openOwnedDirectory(directory, childName);
+        try { walk(child); } finally { closeSync(child); }
+        unlinkAt(directory, childName, true);
+      } else unlinkAt(directory, childName);
+    }
+    fsyncSync(directory);
+  };
+  const root = openOwnedDirectory(parent, name);
+  try { walk(root); } finally { closeSync(root); }
+  unlinkAt(parent, name, true); fsyncSync(parent);
 }
 /** DR24: a session's own tree, removed when the session ended having said
  * nothing: its rootfs holds links and its run root sockets, which are unlinked

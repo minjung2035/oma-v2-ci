@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pinInheritedDarwinPeer, reacquireChangedDarwinProcess } from "@oma/native/audit-session";
+import { pinInheritedDarwinPeer, reacquireChangedDarwinProcess, darwinProcessStopHint } from "@oma/native/audit-session";
 import { inheritedMachPeerEndpoint } from "@oma/native/mach-message";
 
 test("000. Caller-shaped process facts cannot request a changed-watch replacement", () => {
@@ -12,6 +12,11 @@ test("000. Caller-shaped process facts cannot request a changed-watch replacemen
   assert.throws(() => reacquireChangedDarwinProcess({ pid: process.pid, token: [], identity: {},
     state() { called = true; return "changed"; }, close() {} }), { code: "RUN_TERMINATION_UNKNOWN" });
   assert.equal(called, false);
+});
+test("000. Readiness observes the actual caller without providing process authority", () => {
+  if (process.platform !== "darwin") return assert.throws(() => darwinProcessStopHint(process.pid), { code: "UNSUPPORTED_PROFILE" });
+  assert.equal(darwinProcessStopHint(process.pid), "running");
+  assert.throws(() => darwinProcessStopHint(0), TypeError);
 });
 
 for (const name of ["mach-stream-roundtrip", "mach-stream-wrong-peer"])

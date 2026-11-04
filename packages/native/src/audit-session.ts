@@ -265,6 +265,18 @@ export interface DarwinProcessPin {
   terminate(): boolean;
   close(): void;
 }
+/** A launcher's PID hint may exist before exec has reached START_SUSPENDED.
+ * Readiness never proves a generation, selected image, role or scope death. */
+export function darwinProcessStopHint(pid: number): "stopped" | "running" | "exited" | "unavailable" {
+  validPid(pid);
+  const api = native(), bytes = Buffer.alloc(136);
+  errno(0);
+  const count = api.info(pid, 3 /* PROC_PIDTBSDINFO */, 0n, bytes, bytes.length), saved = errno();
+  if (count === 0 && saved === 3) return "exited";
+  if (count !== bytes.length || bytes.readUInt32LE(12) !== pid) return "unavailable";
+  const state = bytes.readUInt32LE(4);
+  return state === 4 ? "stopped" : state >= 1 && state <= 3 ? "running" : state === 5 ? "exited" : "unavailable";
+}
 export function pinDarwinProcess(pid: number): DarwinProcessPin {
   return acquireDarwinProcess(pid, true);
 }
@@ -307,8 +319,9 @@ function acquireDarwinProcess(pid: number, retry: boolean, expected?: DarwinAcqu
     } catch (error) { closeFailure = error; throw error; }
   };
   try {
-    if (api.taskName(api.task, pid, port) !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff)
-      unknown("Darwin process task-name capability is unavailable");
+    const acquired = api.taskName(api.task, pid, port);
+    if (acquired !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff)
+      unknown(`Darwin process task-name capability is unavailable: kernel=${acquired}`);
     ownsPort = true;
     const token = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
     if (api.taskInfo(port.readUInt32LE(), 15, token, count) !== 0 || count.readUInt32LE() !== 8 ||

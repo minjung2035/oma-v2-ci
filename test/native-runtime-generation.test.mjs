@@ -17,10 +17,13 @@ test("001. Actual installed generation seals dependencies and private Node until
       { code: "UNSUPPORTED_PROFILE" }); return;
   }
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-runtime-generation-"))), source = join(root, "source"), work = join(root, "work");
+  let previous = performance.now();
+  const phase = name => { const now = performance.now(); t.diagnostic(JSON.stringify({ phase: name, elapsedMs: now - previous })); previous = now; };
   mkdirSync(work, { mode: 0o700 });
   let generation, owner; const rows = [];
   t.after(async () => { await owner?.drain(); generation?.close(); rmSync(root, { recursive: true }); });
   copyInstalledProduct(realpathSync(fileURLToPath(new URL("../", import.meta.url))), source);
+  phase("fixture-installation");
   const entry = join(source, "apps/oma/dist/generation-probe.mjs");
   writeFileSync(entry, `import assert from 'node:assert/strict';
 import {closeSync,openSync,readFileSync,linkSync,writeFileSync} from 'node:fs';
@@ -46,7 +49,9 @@ console.log(JSON.stringify({sealedEntries:paths.length,globalFallbackRefused:tru
   const fallback = join(work, ".node_modules/oma-generation-escape"); mkdirSync(fallback, { recursive: true });
   writeFileSync(join(fallback, "index.js"), 'module.exports="forbidden"');
   const installation = { libdir: source, node: realpathSync(process.execPath), deploymentDigest: deploymentDigest(source) };
+  phase("source-digest");
   generation = createMacRuntimeGeneration(installation, root);
+  phase("generation-construction");
   const command = { executable: installation.node, argv: [entry], env: { HOME: work, TMPDIR: work, PATH: dirname(generation.node) + ":/usr/bin:/bin" }, cwd: work,
     timeoutMs: 30000, stdoutBytes: 4096, stderrBytes: 8192 };
   const policy = { readable: [], writable: [{ path: work, kind: "directory" }], denied: [], executable: [],
@@ -70,12 +75,14 @@ console.log(JSON.stringify({sealedEntries:paths.length,globalFallbackRefused:tru
     try { generation.close(); } catch (error) { prematureReturn = error; }
     return scope;
   }, authorize() {} });
+  phase("scope-execution-and-return");
   assert.equal(prematureReturn?.code, "RUN_TERMINATION_UNKNOWN");
   assert.equal(result.kind, "exited", result.stderr.toString()); assert.equal(result.exitCode, 0, result.stderr.toString());
   assert.deepEqual(JSON.parse(result.stdout), { sealedEntries: 4, globalFallbackRefused: true, privateDependency: true, privateNodeCommand: true, control: true });
   assert.equal(existsSync(join(work, "control")), true); assert.equal(existsSync(join(work, "code-alias")), false);
   assert.deepEqual(rows, []); assert.equal(deploymentDigest(source), installation.deploymentDigest);
   generation.close(); assert.equal(existsSync(generation.root), false);
+  phase("generation-collection");
   generation.close(); assert.equal(existsSync(generation.root), false);
   assert.equal(deploymentDigest(source), installation.deploymentDigest);
 });

@@ -29,7 +29,7 @@ export const PRIMITIVES = Object.freeze({
   publishImmutableEntry: "file-publication", publishMailArchive: "file-publication", freezeMailObject: "file-publication",
   commitManagedGeneration: "config-commit", commitInlineConfiguration: "config-commit", createInlineConfiguration: "config-commit",
   authorizeCanonicalNoop: "git-cas", compareAndSwapCanonicalRef: "git-cas", createCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
-  removeOwnedTree: "collection", removeOwnedEntryAt: "collection", removeOwnedFile: "collection", collectLeasedTree: "collection",
+  removeOwnedTree: "collection", removeOwnedTreeAt: "collection", removeOwnedEntryAt: "collection", removeOwnedFile: "collection", collectLeasedTree: "collection",
 });
 /** The primitives' own modules: their internal calls are the mechanism, not boundaries. */
 export const PRIMITIVE_MODULES = Object.freeze([

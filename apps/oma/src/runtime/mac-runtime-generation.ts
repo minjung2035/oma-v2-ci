@@ -1,6 +1,6 @@
 /** Private installed-byte generation. Scope retirement, rather than child EOF
  * or a caller-supplied death predicate, controls when its flags may be cleared. */
-import { closeSync, constants, fchmodSync, fstatSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { snapshotCommand, type CommandSpec } from "@oma/process/command";
@@ -14,7 +14,7 @@ import { setDarwinUserImmutable, darwinOwnedEntryFlags } from "@oma/native/darwi
 import { symlinkAt } from "@oma/native/posix-files";
 import { mkdirAt, reopenDirectory } from "@oma/file-descriptors";
 import { copyDescriptorToEntry } from "@oma/storage/file-digest";
-import { removeOwnedEntryAt } from "@oma/storage/directory";
+import { removeOwnedTreeAt } from "@oma/storage/directory";
 import { cleanupAll, withCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { isDeploymentDigest } from "@oma/domain/deployment";
@@ -78,7 +78,7 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     if (created) {
       const actual = openBeneath(parentFd, name, constants.O_RDONLY | constants.O_DIRECTORY);
       withCleanup(() => { if (!same(actual, identity(held!))) throw new Error("runtime generation root changed"); }, () => closeSync(actual));
-      removeOwnedEntryAt(parentFd, name); created = false;
+      removeOwnedTreeAt(parentFd, name); created = false;
     }
   };
   try {
@@ -96,7 +96,7 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }): void => {
       const parent = dirname(path) === "." ? held! : heldEntry(dirname(path), true);
       withCleanup(() => {
-        const result = copyDescriptorToEntry(source, parent, basename(path)); record(path, false);
+        const result = copyDescriptorToEntry(source, parent, basename(path), { flushParent: false }); record(path, false);
         if (expected !== undefined && (result.bytes !== expected.bytes || result.sha256 !== expected.sha256))
           refused("copied runtime byte differs from its trusted inventory");
         const fd = openRegularBeneath(parent, basename(path));
@@ -125,7 +125,8 @@ export function createMacRuntimeGeneration(sourceInstallation: {
     }, () => closeSync(nodeParent));
     if (digest(deploymentManifest(root)) !== installation.deploymentDigest) refused("private runtime inventory differs after copy");
     for (const entry of [...entries].reverse()) {
-      const fd = heldEntry(entry.path, entry.directory); withCleanup(() => setDarwinUserImmutable(fd, true), () => closeSync(fd));
+      const fd = heldEntry(entry.path, entry.directory);
+      withCleanup(() => { setDarwinUserImmutable(fd, true); if (entry.directory) fsyncSync(fd); }, () => closeSync(fd));
     }
     const installedEntries = new Set(manifest.files.filter(file => /\.(?:js|mjs|cjs)$/.test(file.path)).map(file => join(installation.libdir, file.path)));
     const privateEntries = new Set([...installedEntries].map(path => join(root, relative(installation.libdir, path))));

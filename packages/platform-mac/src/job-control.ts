@@ -10,7 +10,7 @@ import { runProcessSync } from "@oma/process/run";
 import { ExecutionNotStarted } from "@oma/process/owned-execution";
 import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
-import { currentDarwinAuditToken, pinDarwinProcess, reacquireChangedDarwinProcess, observeDarwinCoalitionPopulation,
+import { currentDarwinAuditToken, darwinProcessStopHint, pinDarwinProcess, reacquireChangedDarwinProcess, observeDarwinCoalitionPopulation,
   darwinCoalitionMemberHints, signalDarwinCoalitionMember, type DarwinCoalitionIdentity, type DarwinProcessPin } from "@oma/native/audit-session";
 import { observeDarwinAuditOrigin } from "@oma/native/audit-origin";
 import { controlPipe } from "@oma/native/control-socket";
@@ -101,7 +101,11 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
         env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "C", LC_ALL: "C" }, timeoutMs: 1000, stdoutBytes: 65536, stderrBytes: 65536 });
       if (observation.kind !== "exited" || observation.exitCode !== 0) throw unknown("job PID hint is unavailable", observation);
       const matches = [...observation.stdout.toString().matchAll(/^\s*pid = ([1-9][0-9]*)\s*$/gm)];
-      if (matches.length === 1) { root = pinDarwinProcess(Number(matches[0]?.[1])); pins.push(root); break; }
+      if (matches.length === 1) {
+        const pid = Number(matches[0]?.[1]), readiness = darwinProcessStopHint(pid);
+        if (readiness === "stopped") { root = pinDarwinProcess(pid); pins.push(root); break; }
+        if (readiness !== "running") throw unknown("initial job image readiness is unobserved");
+      }
       await delay(5);
     }
     const original = root; root = await image(root, helperHashes); if (root !== original) pins.push(root); rootAccepted = true;

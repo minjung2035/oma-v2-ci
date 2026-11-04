@@ -34,8 +34,10 @@ export function fileDigest(path: string): { readonly stat: Stats; readonly sha25
  * never replaces another entry. The caller's leased staging owns a partial
  * copy on failure; this helper never unlinks an accepted source or grants a
  * same-UID immutable-content/exact-reopen guarantee. */
-export function copyDescriptorToEntry(source: number, parent: number, name: string): { readonly bytes: number; readonly sha256: string } {
+export function copyDescriptorToEntry(source: number, parent: number, name: string,
+  options: { readonly flushParent?: boolean } = {}): { readonly bytes: number; readonly sha256: string } {
   if (!name || name.includes("/") || name === "." || name === ".." || name.includes("\0")) throw new TypeError("copy requires one destination entry name");
+  if (options.flushParent !== undefined && typeof options.flushParent !== "boolean") throw new TypeError("invalid copy parent flush policy");
   // Refuse a FIFO/device before creating even a disposable output.
   const original = fstatSync(source);
   if (!original.isFile() || !Number.isSafeInteger(original.size) || original.size < 0) throw new Error("copy source is not a safely addressable regular file");
@@ -52,7 +54,10 @@ export function copyDescriptorToEntry(source: number, parent: number, name: stri
     if (copied.stat.size !== original.size || copied.stat.dev !== original.dev || copied.stat.ino !== original.ino ||
         copied.stat.mtimeMs !== original.mtimeMs || copied.stat.ctimeMs !== original.ctimeMs || sealed.sha256 !== copied.sha256 ||
         sealed.stat.size !== copied.stat.size || sealed.stat.nlink !== 1) throw new Error("disposable copy differs from its held source");
-    fchmodSync(fd, 0o444); fsyncSync(fd); fsyncSync(parent);
+    fchmodSync(fd, 0o444); fsyncSync(fd);
+    // A private tree producer may flush each directory once after finishing
+    // all of its entries. File data is always flushed before this returns.
+    if (options.flushParent !== false) fsyncSync(parent);
     return Object.freeze({ bytes: copied.stat.size, sha256: copied.sha256 });
   }, () => closeSync(fd));
 }

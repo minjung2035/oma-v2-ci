@@ -340,7 +340,7 @@
     },
     {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "3511728efa631601c96b7f8ca9cc66fea644fabf685c5df40a3b8153baeb9060"
+      "sha256": "3ce188ed3f17ae26bb53c4547b369f6ec1e33b3a9ba4e80761d1215ce3d0a303"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -1452,7 +1452,7 @@
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "8ae2cd7d66c2632f1982a7cface062f242b3e23403e281beb4b28da5c4da6ae1"
+      "sha256": "e11b93e6497fb8cc23491550720923b96ac67b7ab7c29f0465cd45a254710be2"
     },
     {
       "path": "packages/native/src/audit-token.ts",
@@ -1612,7 +1612,7 @@
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
-      "sha256": "458a08f80c980df165da4d93545861d4a5e668f0f2ba4b73aa00d4e098f4469d"
+      "sha256": "90b72505a6c0fc077590b116621415238aaad1e3148348d87cc2e562534aec50"
     },
     {
       "path": "packages/platform-mac/src/job-helper/config.h",
@@ -2032,7 +2032,7 @@
     },
     {
       "path": "packages/storage/src/directory.ts",
-      "sha256": "1d7c6fcdab509c4cbaa9600f4a7cd724819d6d205925a4d9e96ec769b50fc2e6"
+      "sha256": "9fac9faecef62ad9fa0a7c2fe52ceb8f6e469d09c1caf3e130cd555330d3590b"
     },
     {
       "path": "packages/storage/src/durable-fs.ts",
@@ -2056,7 +2056,7 @@
     },
     {
       "path": "packages/storage/src/file-digest.ts",
-      "sha256": "f099568ca4c804dce0ea4e33e8739769d4ce6d9a2761278d0bceefc1d6b09b59"
+      "sha256": "4b92aca1cf9ccea5d00d285135d00db1dda359619bc616dee6a58c8799a2c3cf"
     },
     {
       "path": "packages/storage/src/immutable-file.ts",

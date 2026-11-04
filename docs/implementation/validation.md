@@ -1928,10 +1928,55 @@ SOURCE47 최종 회수는 storage.removeOwnedEntryAt의 held-parent 삭제를 �
 각 exec는 직전과 다른 PID version을 설정하므로 새 pin이 원래 full token/PID version과 같은지 검증하는 조건을 완화하지 않는다.
 Original expected-peer watcher의 exec revoke는 재취득 대상이 아니며 그대로 유지한다.
 
+### SOURCE47 실제 generation 결과와 시작 준비·flush 수정 (SOURCE48)
+
+SOURCE47 `eccc2228ac304eb2e95b96fdb811e199e20b6773` Native
+[41905019192](https://github.com/minjung2035/oma-v2-ci/actions/runs/41905019192)의
+ARM common ZIP13360591227 SHA-256
+`1c5e7509aef6c29ba4e73e226e091ec8e9f0c7610793613d6e6da3734ea66d5c`,
+Intel common ZIP13359869446 SHA-256
+`1347389a65d5bf3db89964885e3df34431bf088bebe6ec3623994ec646d51450`를 대조했다.
+canonical15874/`6ad85f25ac53c498c60d3278b982eee1f512f57fd9db3aea424f7e7af587fd85`는
+양쪽 전후 동일하다. runtime15502/27 전후도 ARM
+`d78d8c2768d4ef1b6290804e917524ab166fd7a15ef3ba5749c7f67235403e48`, Intel
+`f27b9d9ea1b95a65cca17f972d0fe84234a1db77f202c3c4290f402c41bfa0a9`로 각각 같다.
+
+ARM은361개 중359 PASS/2 FAIL이다. 전체 private generation 시험은196784ms에 PASS했다.
+실제 설치 payload·별도 Node·Koffi import·private PATH child·읽을 수 있는 HOME fallback 거절,
+Actor의 file/dir/Node unseal·쓰기·hardlink 거절과 scope 종료 뒤 최종 회수를 확인했다.
+이것은 startup orphan recovery나 실제 Runner/Worker 조립의 증명이 아니다.
+남은 두 실패는 Mach roundtrip/wrong-peer의 초기 job 취득이다. 펼친 원인은 각각 task-name 취득 불가,
+origin=unavailable/process=changed다. ARM gate ZIP13360382956 SHA-256
+`b76c1a93ea58ba7f52fd14455dd68727b03cf03177d942c0edd2cff22c8613dc`는
+120 executed/113 OBSERVED/7 SETUP_FAILED이며 roundtrip iteration2와 기존 Worker guard6이 남았다.
+
+Intel은360 PASS/0 FAIL/1 cancelled다. 전체 generation 시험이240000ms 제한에 걸렸으며
+cleanup을 포함한 case 시간은466819ms다. 성공으로 계산하지 않는다.
+SOURCE48은 파일마다 반복하던 parent fsync를 completed-directory 단위로 묶는다.
+각 파일 데이터 fsync는 유지하고 모든 directory를 최종 flush한다. 회수도 기존 owned-tree walk를
+held-parent surface로 추출해 directory당 한 번 flush한다. path wrapper의 기존 의미는 유지한다.
+시험에는 construction/execution/collection phase 시간을 추가하고 원래240초 제한은 유지한다.
+held-parent rename·외부 symlink·반복 회수와 batch-copy byte 검사를 실제 Linux에서 통과했다.
+
+초기 launchctl PID는 START_SUSPENDED exec 준비보다 먼저 나타날 수 있다.
+SOURCE48은 BSD stopped 관측 뒤에만 첫 pin 취득을 시도한다. 이 readiness hint는 generation·image·role·
+complete-death 증거가 아니며 기존 full token/PID version/unique ID/CID·selected image 검사를 유지한다.
+task-name 취득 실패의 kernel return도 보존한다. 변경 뒤 build와 focused16/16·directory11/11은 PASS다.
+Mac-specific branches의 로컬 결과는 Linux refusal이며 SOURCE48의 실제 Mac 재검증은 NOT_RUN이다.
+
+SOURCE46의 full Linux Architecture
+[41895403297](https://github.com/minjung2035/oma-v2-ci/actions/runs/41895403297)도 회수했다.
+artifact13359150033 SHA-256
+`9d21b5af1c31d72daf73bcc0ee070cbcbb2fea17ef420d131340ea4deda20308`를 대조했다.
+source `b29dea0f6b10b7980c72f3251e52955818ac9cab`, before/after15871/
+`7e987e0ecc3d22babb34dac83d4146fb106de4dfc9c410a577832d7af2b27937`가 같다.
+all4817/4817·fail/cancel/skip/todo0, sourceChanges[],13 command code0/signal-null/timedOut-false다.
+이 기록은 SOURCE48 runtime qualification이나 이전 V23 간헐 lag 원인의 설명이 아니다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6ad85f25ac53c498c60d3278b982eee1f512f57fd9db3aea424f7e7af587fd85` (15874 files).
+verification input digest `92c8d4fb535051f12d09cb9f388be121c0fc22f078c842dfc16d46a00dfa742a` (15874 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
