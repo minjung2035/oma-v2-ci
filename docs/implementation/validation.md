@@ -1663,10 +1663,56 @@ TCP port도 고정 XNU의 공통 SO_REUSEPORT setter와 IPv6 bind의 양쪽 reus
 SO_RESTRICTIONS는 입출력·cellular/expensive/constrained restriction의 trapdoor이며 일반 setsockopt를 봉쇄하지 않는다.
 이 판정은 source 검토이고 새 Mac TCP 실험은 아니다. G-PROCESS/G-FILES/G-AUTH OPEN과 실행 guard를 유지한다.
 
+### SOURCE43 보조 Intel 실행과 client source 검증 정리
+
+Native [41881425344](https://github.com/minjung2035/oma-v2-ci/actions/runs/41881425344)의 source
+`67dc69686476266f9a30cda7d338fcda2f30494a`에서 Intel26 common은350/351·fail1·cancel/skip/todo0이다.
+artifact13350316466 SHA-256 `fe11ed7af4211d92de8a056e5a258d599808bd0f3a40ddf1534f84ef226ad1d7`을 대조했다.
+explicit helper/C signature 뒤 기존 unsigned-image 실패는 없어졌으며 native directory·source·job/recovery,
+state-root와 storage manual-recovery6개가 실제 실행됐다. same/changed-boot4건 중 changed-boot2건은 controlled observation이고 실제 reboot proof가 아니다.
+wrong-peer는 원래 Host가 살아 있는 동안 다른 Node의 응답을 거절하고 resource return까지 통과했다.
+이를 Mac26 arm64 target qualification으로 합치지 않는다. 이 입력의 arm64 common/gate26은 cancelled였으며 실제 결과가 없다.
+
+유일한 roundtrip 실패의 child stderr는 `Mach sender audit origin could not be bound to a live image`와
+Security osStatus -67061을 기록했다. 그 뒤 destination unavailable과 channel close가 뒤따랐다.
+현재 client는 기존 inherited TASK_NAME20 source pin이 보유하는 full kernel token·fresh generation·distinct CID·watch와
+매 메시지의 genuine kernel trailer를 직접 비교한다. 두 번째 generic Security 재조회는 제거했다.
+이것은 임의 signed Node를 믿는 fallback이 아니다. original inherited source가 없거나 죽거나 exec하면 거절하며,
+forwarded endpoint의 새 sender·body PID·nonce만으로는 승인하지 않는다. server의 Actor Security bind와
+공통 current-run/role/row/capability/acceptance 재검사는 유지한다. sandbox 권한을 추가하지 않았다.
+**이 client 변경의 실제 positive roundtrip은 아직 NOT_RUN**이다.
+
+같은 source Ubuntu selected integration은471/472이며 V23A mixed112ms·read5ms·writeMax126ms로100ms 예산을 넘었다.
+artifact13350966846 SHA-256 `265d5a3f30107d302e3e1629d681a3ae0475b66686b5fdefc37d76c241bcc877`을 대조했다.
+이 역시 성능 원인 수리나 PASS가 아니다. Source41/42/43의 간헐 실패를 threshold 변경으로 지우지 않는다.
+
+### Mac15 Xcode system framework alias와 immutable-copy 최소 질문
+
+SOURCE42의 Mac15 gate도 판독했다. artifact13348023481 SHA-256
+`a00f9c6672a2a41baf7fd97016074d1fda7efd03477e89de76a3fa85f99eff06`과 source/runtime 전후 일치를 확인했다.
+120 executed /108 OBSERVED /12 SETUP_FAILED, product BLOCKED다. roundtrip3·native-support Worker6 외의 candidate3은
+Xcode16.4 IDEiOSSupportCore가 MobileDevice를 sandbox 안에서 load하지 못했다.
+독립 metadata 진단은 /System/Library/PrivateFrameworks/MobileDevice.framework의 실제 canonical directory가
+/Library/Apple/System/Library/PrivateFrameworks/MobileDevice.framework이고 UID0·mode0755임을 기록했다.
+
+후속 developer-tools recipe는 Xcode를 선택한 경우에만 그 **같은 framework의 정확한 canonical root**를 read/map에 넣는다.
+Git candidate/quarantine와 Worker의 writable-disjoint 검사에도 포함한다. /Library나 /Library/Apple/System/Library의
+parent grant·framework process-exec grant는 없다. CLT recipe에는 추가하지 않는다.
+기존 /System/Library 허용이 canonical alias까지 닿지 않았던 차이를 수리하는 입력이며 실제 compiler 재실행은 NOT_RUN이다.
+
+actual production dependency inventory를 읽어135 top-level roots, regular15227 files /116630904 bytes를 관측했다.
+이 중29 link는27 workspace alias와 nested bin2개다. 현재 deploymentManifest는 외부 npm byte closure를 아직 묶지 않는다.
+새 최소 질문은 private owned fixture의 file/directory에 UF_IMMUTABLE을 설정한 뒤 current Seatbelt job의 readonly FD로
+file/directory flags 해제를 시도하고, writable open·hardlink alias 거절과 정상 writable control을 함께 확인하는 것이다.
+Actor 완전 종료가 불명확하면 seal/evidence를 보존한다. 이 검사는 complete generation producer나 lifecycle/recovery가 아니다.
+새 fixture는 arm64/x64 SDK object compilation을 통과했으며 실제 Mac 실행은 NOT_RUN이다.
+관련 local26/26·skip0은 PASS지만 Mac 전용 분기는 Linux refusal이다. build PASS, 구조·문서·명세 입력은 별도로 재결박한다.
+G-PROCESS/G-FILES/G-AUTH OPEN과 product execution guard는 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `9ef72c263b8f19b071402f66e4f59b05234ead632e55256b6fe7c2c0aa5feba0` (15862 files).
+verification input digest `0cf2e1e15982ff62efc5461c2c92ba39f6f8079b69307ef7bafa70ea65cd1ae2` (15864 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

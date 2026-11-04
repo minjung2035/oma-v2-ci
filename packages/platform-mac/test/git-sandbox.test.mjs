@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {describeMacDeveloperTools} from '@oma/protocol/mac-developer-tools';
-import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
+import {developerToolSystemFrameworks,observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
 import {candidateSeatbelt,quarantineSeatbelt} from '@oma/platform-mac/git-sandbox';
 import {snapshotIntegrationPolicy} from '@oma/domain/integration-policy';
 import {exportRefForRequestKey} from '@oma/domain/derived';
@@ -22,6 +22,14 @@ test("001. Mac setup describes the selected exact developer bundle without grant
   assert.equal(env.DEVELOPER_DIR,tools.developer);
   assert.equal(env.PATH,'/opt/pinned-node/bin:'+developer+'/usr/bin:/usr/bin:/bin');assert.equal(env.CHECK,'literal');
   assert.ok(recipe.profile.includes(`(allow file-read* (subpath ${JSON.stringify(tools.contents)}))`));
+  const framework='/Library/Apple/System/Library/PrivateFrameworks/MobileDevice.framework';
+  assert.deepEqual(developerToolSystemFrameworks(tools),[framework]);
+  assert.ok(recipe.profile.includes(`(allow file-read* (subpath ${JSON.stringify(framework)}))`));
+  assert.ok(recipe.profile.includes(`(allow file-map-executable (subpath ${JSON.stringify(framework)}))`));
+  assert.ok(!recipe.profile.includes(`(allow process-exec* (subpath ${JSON.stringify(framework)}))`));
+  assert.ok(!recipe.profile.includes('(subpath "/Library/Apple/System/Library")'));
+  const clt='/Library/Developer/CommandLineTools';
+  assert.deepEqual(developerToolSystemFrameworks(describeMacDeveloperTools(clt,clt+'/usr/bin/git',clt+'/usr/libexec/git-core')),[]);
   assert.ok(recipe.profile.includes(`(allow file-map-executable (subpath ${JSON.stringify(tools.contents)}))`));
   assert.ok(!recipe.profile.includes(`(allow process-exec* (subpath ${JSON.stringify(tools.contents)}))`));
   for(const path of [view.workspace,root+'/tmp',developer+'/usr/bin',developer+'/Toolchains/XcodeDefault.xctoolchain/usr/bin'])

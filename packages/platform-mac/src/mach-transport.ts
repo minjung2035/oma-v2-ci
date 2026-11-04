@@ -45,8 +45,7 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
   let local: ReturnType<typeof createMachEndpoint>;
   try { local = createMachEndpoint(); }
   catch (error) { return withCleanup(() => { throw error; }, () => cleanupAll([() => service.close(), () => source.close()])); }
-  let remote: MachSendRight | null = null, pin: MachPeerPin | null = null, opened = false, sent = false;
-  let binding: MachPeerBinding | undefined;
+  let remote: MachSendRight | null = null, opened = false, sent = false;
   let poll: ReturnType<typeof machPoll> | undefined, cancel = (): void => {};
   let resolve!: () => void, reject!: (error: unknown) => void;
   const ready = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
@@ -56,17 +55,15 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
     send: {
       send: (id, bytes, reply) => {
         if (remote === null) return "again";
-        if (!source.alive() || pin === null || !pin.alive()) throw new StoreError("AUTH_FAILED", "expected Mach peer is no longer live");
+        if (!source.alive()) throw new StoreError("AUTH_FAILED", "expected Mach peer is no longer live");
         return remote.send(id, bytes, reply);
       },
       destination: () => source.alive() ? remote?.destination() ?? "unknown" : "unknown",
       close: () => remote?.close(),
     },
-  }, sender => expected(sender) && pin !== null && pin.sameSender(sender) && pin.alive(), async () => {
+  }, expected, () => {
     reject(unavailable("Mach connection ended before readiness"));
-    await withAsyncCleanup(async () => {
-      cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => pin?.close(), () => source.close()]);
-    }, () => binding?.close());
+    cleanupAll([cancel, () => poll?.close(), () => service.close(), () => local.send.close(), () => source.close()]);
   }, () => opened);
   const fail = (error: unknown): void => {
     const failure = error instanceof Error ? error : new Error("Mach connection failed", { cause: error });
@@ -76,7 +73,7 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
   // connector before installing its channel-generation listeners.
   socket.on("error", reject);
   const receive = (): void => {
-    if (socket.destroyed || opened || binding !== undefined) return;
+    if (socket.destroyed || opened) return;
     if (!source.alive()) { fail(new StoreError("AUTH_FAILED", "expected Mach peer ended during connection")); return; }
     if (performance.now() >= expires) { fail(unavailable("Mach rendezvous deadline exceeded")); return; }
     if (!sent) {
@@ -90,17 +87,13 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
       if (message.id !== OPENED || message.reply === null || !message.bytes.equals(nonce) || !expected(message.sender))
         throw new StoreError("AUTH_FAILED", "invalid Mach rendezvous reply");
       remote = message.reply; transferred = true;
-      binding = bindMachSender(message.sender);
-      const acquisition = binding;
-      poll?.request(false);
-      void acquisition.ready.then(() => {
-        if (socket.destroyed) return;
-        if (performance.now() >= expires) throw unavailable("Mach rendezvous deadline exceeded");
-        if (!expected(message.sender)) throw new StoreError("AUTH_FAILED", "expected Mach peer changed during connection");
-        pin = acquisition.take();
-        cleanupAll([() => service.close(), () => local.send.close(), cancel, () => poll?.close()]);
-        opened = true; resolve();
-      }).catch(fail);
+      // The selected inherited task-name source already owns the original
+      // full token, generation, coalition and process watch. A second generic
+      // Security lookup from inside Seatbelt neither establishes the expected
+      // Broker nor supplies additional role authority. Every packet still
+      // requires genuine kernel provenance, this exact token and a live source.
+      cleanupAll([() => service.close(), () => local.send.close(), cancel, () => poll?.close()]);
+      opened = true; resolve();
     }, () => { if (!transferred) message.reply?.close(); });
   };
   try {

@@ -10,7 +10,7 @@ import { GIT_ENV } from "@oma/process/policies";
 import { decodeCandidateExecutionView, decodeQuarantineExecutionView, type CandidateExecutionView, type QuarantineExecutionView } from "@oma/protocol/git-execution-view";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
-import { developerToolDirectories, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
+import { developerToolDirectories, developerToolSystemFrameworks, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 
 export interface MacGitSandboxHost { readonly node: string; readonly libdir: string; readonly tools: MacDeveloperTools }
@@ -22,12 +22,13 @@ function installation(host: MacGitSandboxHost, project: string, writable: readon
   if (![host.node, host.libdir, project, ...writable].every(value => trustedAbsolutePath(value) && !value.endsWith("/")) || host.libdir.includes("\\")) refuse();
   const tools = decodeMacDeveloperTools(host.tools);
   const modules = nodeToolchainMounts(host.node).map(([source]) => dir(source));
-  const trusted = [host.libdir, tools.contents, ...modules.map(entry => entry.path)];
+  const frameworks = developerToolSystemFrameworks(tools).map(dir);
+  const trusted = [host.libdir, tools.contents, ...modules.map(entry => entry.path), ...frameworks.map(entry => entry.path)];
   for (const root of [...trusted, host.node]) {
     if (under(project, root) || under(root, project) || writable.some(value => under(value, root) || under(root, value))) refuse();
   }
-  return { tools, readable: [dir(host.libdir), dir(tools.contents), ...modules],
-    executable: [file(host.node), file(tools.git), dir(tools.execPath), ...modules], mapped: [dir(host.libdir), dir(tools.contents)] };
+  return { tools, readable: [dir(host.libdir), dir(tools.contents), ...modules, ...frameworks],
+    executable: [file(host.node), file(tools.git), dir(tools.execPath), ...modules], mapped: [dir(host.libdir), dir(tools.contents), ...frameworks] };
 }
 export function candidateSeatbelt(host: MacGitSandboxHost, viewInput: CandidateExecutionView, temporary: string, candidate: string, check: FrozenCheck) {
   const view = decodeCandidateExecutionView(viewInput);

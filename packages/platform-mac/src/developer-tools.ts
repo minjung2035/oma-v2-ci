@@ -24,6 +24,15 @@ export function developerToolDirectories(tools: MacDeveloperTools): readonly str
   if (selected.contents !== tools.contents) refuse();
   return [selected.developer + "/usr/bin", selected.developer + "/Toolchains/XcodeDefault.xctoolchain/usr/bin"];
 }
+/** Xcode 16's system MobileDevice alias resolves outside /System/Library on
+ * Mac15. Preserve the same Apple framework's read/map access at its observed
+ * canonical location; this grants no library parent or process execution. */
+export function developerToolSystemFrameworks(tools: MacDeveloperTools): readonly string[] {
+  const selected = describeMacDeveloperTools(tools.developer, tools.git, tools.execPath);
+  if (selected.contents !== tools.contents) refuse();
+  return selected.contents === selected.developer ? [] :
+    ["/Library/Apple/System/Library/PrivateFrameworks/MobileDevice.framework"];
+}
 /** The caller owns this disposable HOME/TMPDIR for the entire observation.
  * Failure never substitutes /usr/bin/git or an unchecked lexical realpath.
  * Compare warren c1a6aa32: its exact Xcode Contents grant fixes the shim's

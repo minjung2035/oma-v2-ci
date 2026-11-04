@@ -1588,7 +1588,7 @@
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
-      "sha256": "96c6ac9cdb7e1e3c9e28f6fae3a1fe3c344f4b246ffea2383c173e6655b9a249"
+      "sha256": "3debbe8c9706d985335a1421dc2b32db14e31fda2997745bc75925b2303303d7"
     },
     {
       "path": "packages/platform-mac/src/execution-launch.ts",
@@ -1596,7 +1596,7 @@
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
-      "sha256": "8053c4e7cb6bf1fc5d9939cba42258a8990de86a247f0ae0da35a7aefc91293c"
+      "sha256": "71824512531d011bee5cd8b75b8f46641338728fa441c60ebb66de8cff762e45"
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",
@@ -1656,7 +1656,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "5645d628759c5e0cb91021ba575cabcd04e76c240cde85b8089ac834b7633ecf"
+      "sha256": "abc4167a3ec1b9e503e574308d43ef277d872904ac0870aaf8c22fdfcf61bb45"
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",
@@ -1676,7 +1676,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "e21c770732ba16e56f02d37d33e3f168af48f3e7b6181f0ebd1fb3bdd486388a"
+      "sha256": "497012f5883c24e8275cee07d9ea3529352b57ba6f09dfc1f2233bc472c260b5"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
