@@ -6,6 +6,7 @@
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <mach/mig_errors.h>
 #include <servers/bootstrap.h>
 #include <bsm/audit.h>
 #include <dlfcn.h>
@@ -75,9 +76,50 @@ static int allowed_name(const char *name) {
   return name && (!strcmp(name, "com.apple.logd") || !strcmp(name, "com.apple.system.logger") ||
     !strcmp(name, "com.apple.system.opendirectoryd.libinfo"));
 }
+static int deny_mig(mach_msg_size_t size) {
+  if (size < sizeof(mach_msg_header_t) || size > 65536) return 0;
+  mach_msg_size_t capacity = ((size + 3) & ~3U) + sizeof(mach_msg_audit_trailer_t);
+  mach_msg_header_t *request = calloc(1, capacity);
+  if (!request) return 0;
+  kern_return_t received = mach_msg(request, MACH_RCV_MSG | MACH_RCV_TIMEOUT |
+    MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) | MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+    0, capacity, endpoint, 0, MACH_PORT_NULL);
+  if (received != KERN_SUCCESS) { free(request); return 0; }
+  mach_msg_type_name_t disposition = MACH_MSGH_BITS_REMOTE(request->msgh_bits);
+  kern_return_t sent = KERN_SUCCESS;
+  if (MACH_PORT_VALID(request->msgh_remote_port) &&
+      (disposition == MACH_MSG_TYPE_MOVE_SEND_ONCE || disposition == MACH_MSG_TYPE_MOVE_SEND)) {
+    mig_reply_error_t reply = {0};
+    reply.Head.msgh_bits = MACH_MSGH_BITS(disposition, 0);
+    reply.Head.msgh_size = sizeof reply; reply.Head.msgh_remote_port = request->msgh_remote_port;
+    request->msgh_remote_port = MACH_PORT_NULL; /* Transfer the one received reply reference. */
+    reply.Head.msgh_id = request->msgh_id + 100; reply.NDR = NDR_record;
+    reply.RetCode = BOOTSTRAP_NOT_PRIVILEGED;
+    sent = mach_msg(&reply.Head, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof reply, 0, MACH_PORT_NULL, 0, MACH_PORT_NULL);
+    if (sent != KERN_SUCCESS) mach_msg_destroy(&reply.Head);
+  }
+  flockfile(trace); fprintf(trace, "{\"phase\":\"mig-denied\",\"id\":%d,\"size\":%u,\"replyStatus\":%d}\n",
+    request->msgh_id, request->msgh_size, sent); funlockfile(trace);
+  mach_msg_destroy(request); free(request); return 1;
+}
 static void *serve(void *unused) {
   (void)unused;
   while (!atomic_load(&stopping)) {
+    mach_port_seqno_t sequence = 0; mach_msg_size_t size = 0; mach_msg_id_t id = 0;
+    mach_msg_audit_trailer_t trailer = {0}; mach_msg_type_number_t trailer_size = sizeof trailer;
+    kern_return_t peek = mach_port_peek(mach_task_self(), endpoint,
+      MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) | MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+      &sequence, &size, &id, (mach_msg_trailer_info_t)&trailer, &trailer_size);
+    if (peek == KERN_FAILURE) { usleep(1000); continue; }
+    flockfile(trace);
+    fprintf(trace, "{\"phase\":\"mach-peek\",\"status\":%d,\"id\":%d,\"size\":%u,\"senderPid\":%u}\n",
+      peek, id, size, trailer.msgh_audit.val[5]);
+    funlockfile(trace);
+    if (peek != KERN_SUCCESS) break;
+    /* The historical launchd MIG subsystem starts at 400. Deny that known
+     * range explicitly; record other IDs before trying the private decoder.
+     * This is a compatibility experiment, not a complete wire classifier. */
+    if (id >= 400 && id < 500) { if (!deny_mig(size)) break; continue; }
     object request = NULL;
     int status = receive_request(endpoint, &request);
     if (status || !request) {
@@ -184,8 +226,8 @@ int main(int argc, char **argv) {
   int result; do { waited = waitpid(child, &result, 0); } while (waited < 0 && errno == EINTR);
   require(waited == child, "proxy child join");
   atomic_store(&stopping, 1);
-  mach_success(mach_port_mod_refs(task, endpoint, MACH_PORT_RIGHT_RECEIVE, -1), "close proxy receive right");
   require(pthread_join(server, NULL) == 0, "proxy receiver join");
+  mach_success(mach_port_mod_refs(task, endpoint, MACH_PORT_RIGHT_RECEIVE, -1), "close proxy receive right");
   mach_success(mach_port_deallocate(task, endpoint), "return proxy send reference");
   fprintf(trace, "{\"phase\":\"terminal\",\"childPid\":%d,\"waitStatus\":%d,\"timedOut\":%s,\"joined\":true}\n",
     child, result, expired ? "true" : "false");
