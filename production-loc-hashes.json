@@ -1708,7 +1708,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "abc4167a3ec1b9e503e574308d43ef277d872904ac0870aaf8c22fdfcf61bb45"
+      "sha256": "dc4f51e0398df659cdd702ba8979a9d668c4d99f86f6f3739962c16e8d8c2138"
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",

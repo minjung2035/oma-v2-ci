@@ -2258,10 +2258,54 @@ SOURCE52 최종 고정 production의 build·관련12/12·Linux 독립 packed27/2
 구조 review 상태는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14359·REMOVED220이며 새 승인을 생성하지 않았다.
 실제 Mac SOURCE52 검증은 별도 CI 결과로 기록한다.
 
+### Run endpoint의 선행 확보와 listener 인수 (SOURCE53)
+
+SOURCE52 `f6bbfd97a32706fdf983526d6a325f450f063095`는 work branch에 발행했다.
+canonical15889/`7f8a7eb0d56ba20dfea350e93da9dfba7e89c9efb767750e0af2bcaff2023579`다.
+
+SOURCE53은 동일 Mach transport가 미래 Actor/Run rendezvous의 실제 receive right를 미리 확보하고,
+나중에 Broker listener가 그 right를 한 번 인수할 수 있게 한다. reservation은 실제 Host audit source와
+그 endpoint의 send capability만 제공한다. Actor/incarnation을 확정하거나 역할·요청 authority를 만들지 않는다.
+기존 48-byte OPEN의 정확한 목적 hash와 kernel sender·live pin 검사는 유지한다.
+동일 endpoint의 중복 소유는 거절하며 인수 전 종료는 receive right를 닫는다.
+인수 후에는 listener가 receive right를 소유하고, 준비용 참조를 닫아도 live listener를 닫지 않는다.
+listener 종료는 아직 남아 있는 준비용 send 참조에도 endpoint를 폐기하며, resource return 실패는 sticky하다.
+
+실제 Darwin fixture는 listener가 생기기 전 잘못된 목적의 OPEN을 queue하고, 선행 capability를
+trusted Runner에 전달한 뒤 listener가 인수하도록 구성한다. 실제 scope가 준비되면 reservation을 닫고,
+직접 Seatbelt Worker의 original Host/full scope membership·393217-byte 양방향/EOF·반납을 검사한다.
+이 추가 실제 Mac case는 아직 NOT_RUN이다. Linux 결과는 backend refusal과 공통 입력 검사만 뜻한다.
+이 변경만으로 product Runner assembly·current Actor admission이 완료되었다고 판단하지 않는다.
+
+SOURCE51 Intel shared ZIP13368921623 SHA-256
+`c72a16159f7d3b7fdab4c2e25bbcf93821f4c2ee2d53aee735c79b9ab072a0e8`를 대조했다.
+380/380 PASS·fail/cancel/skip/todo0이며 canonical15889/d85e277c069b01e1e39bb82d8fed4d7ea36f62677e70a7e02f5bf24a521514a8,
+runtime15526/27/`d706e825dce4e6cf249d1dbe0831530aee8a58b78628661a9d2965bd2ab2e02a`가 전후 같다.
+SOURCE51 ARM full runtime ZIP13369106305 SHA-256
+`73b211508c2ca42cc5bc7411301ada4a862dadf2ac4f61951b6c6c8071f9f97f`는 실제 Darwin packed27/27 PASS다.
+이 ZIP의 canonical 및 runtime 전후는 위 SOURCE51 ARM shared 값과 같다.
+제품 BLOCKED와 G-PROCESS/G-FILES/G-AUTH OPEN은 유지한다.
+
+SOURCE52 ARM 실제 shared ZIP13370780158 SHA-256
+`f2ee82fcca1413532a164f56e8405e61f9961b57d3a98d5fb094cfcd6db9ffef`를 대조했다.
+383 tests/382 PASS/1 FAIL·cancel/skip/todo0다. source f6bbfd97a32706fdf983526d6a325f450f063095,
+canonical15889/7f8a7eb0d56ba20dfea350e93da9dfba7e89c9efb767750e0af2bcaff2023579,
+runtime15526/27/`3a2ce1de64736fb8e629275803e9da790bf8e1e11698330d058c923b9f970f38`가 전후 같다.
+전체 generation과 helper/Seatbelt 각각의 trusted-manifest 불일치 거절은 PASS다.
+실패1건은 primitive digest test의 HOME/TMPDIR가 explicit writable root 안에 없어서 양성 recipe도 거절된 것이다.
+이전 negative의 같은 code만 보는 assertion도 잘못된 정책 거절을 구분하지 못했다.
+SOURCE53은 시험의 private temporary만 writable에 넣고, 세 negative 모두 정확한 image-digest mismatch 메시지를 요구한다.
+실행 권한·제품 정책을 완화하지 않았으며 이 fixture의 실제 수정 후 재시험은 NOT_RUN이다.
+
+SOURCE53 고정 production build·관련19/19·Linux 독립 packed27/27과 전체 architecture/module/durable boundary/문서/spec gate가 PASS다.
+Linux19에는 Mac backend refusal이 포함되므로 추가 Darwin reservation 및 보정된 digest 양성의 실제 PASS로 쓰지 않는다.
+review 상태는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14359·REMOVED220이며 승인을 생성하지 않았다.
+최종 시험/이 문서 변경 뒤 구조 input을 다시 결박한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7f8a7eb0d56ba20dfea350e93da9dfba7e89c9efb767750e0af2bcaff2023579` (15889 files).
+verification input digest `caf7a1c2d204c4027a3c6c242a4658f359fed2185d3b9a2fdea7338b51975d01` (15889 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

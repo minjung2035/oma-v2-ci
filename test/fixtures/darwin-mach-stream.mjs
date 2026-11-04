@@ -20,6 +20,7 @@ import { launchDarwinJobScope, launchSeatbeltJobScope, peerFromMachReceiver } fr
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { spawnWithPrivateInputs } from "@oma/process/async";
 import { prepareSeatbelt } from "@oma/platform-mac/seatbelt";
+import { captureDarwinJobPeer } from "@oma/native/darwin-job-peer";
 import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
 
 assert.equal(process.platform, "darwin", "this probe requires an actual Darwin kernel");
@@ -93,14 +94,14 @@ async function cleanup() {
   for (const release of returns.reverse()) { try { await release(); } catch (error) { failures.push(error); } }
   if (failures.length) throw new AggregateError(failures, "Darwin probe resource return failed");
 }
-async function listener(path, accept) {
-  const transport = createMachBrokerTransport(15), faults = [];
+async function listener(path, accept, transport = createMachBrokerTransport(15)) {
+  const faults = [];
   const { listener } = transport.openListener(socket => accept(socket, transport), 16);
   listener.on("error", error => faults.push(error));
   returns.push(async () => { await bounded(new Promise((resolve, reject) => { try { listener.close(resolve); } catch (error) { reject(error); } }), "listener close"); assert.deepEqual(faults, []); });
   const ready = once(listener, "listening"); listener.listen(path); await bounded(ready, "listener readiness");
   const peer = listener.peerSource(); returns.push(() => peer.close());
-  return { transport, peer };
+  return { transport, peer, listener };
 }
 function claim(socket, transport) {
   const pin = transport.pinPeer(socket); assert.ok(pin);
@@ -113,9 +114,26 @@ function claim(socket, transport) {
   });
   return pin;
 }
-async function roundtrip(descendant = false) {
+async function roundtrip(descendant = false, reserved = false) {
   const path = address(), expected = payload(), done = deferred(); let sender, observed, scopeIdentity, memberObserved = false;
-  const { peer } = await listener(path, (socket, transport) => {
+  const selected = createMachBrokerTransport(15);
+  const reservation = reserved ? selected.reservePeer(path) : undefined;
+  let wrong;
+  if (reservation) {
+    returns.push(() => reservation.close());
+    assert.throws(() => selected.reservePeer(path), { code: "BROKER_UNAVAILABLE" });
+    // Queue an OPEN for another purpose before there is any listener. It
+    // cannot acquire a stream when the actual Run later adopts the receiver.
+    wrong = createMachEndpoint(); returns.push(() => cleanupAll([() => wrong.receive.close(), () => wrong.send.close()]));
+    const captured = captureDarwinJobPeer(reservation.peer);
+    try { await send(captured.endpoint, OPEN, Buffer.alloc(48), wrong.send); }
+    finally { captured.endpoint.close(); }
+    const unused = selected.reservePeer(address()); unused.close(); unused.close();
+    assert.throws(() => captureDarwinJobPeer(unused.peer), { code: "AUTH_FAILED" });
+  }
+  let accepted = 0;
+  const accept = (socket, transport) => {
+    accepted++;
     const pin = claim(socket, transport); sender = pin.pid;
     if (descendant) { assert.ok(scopeIdentity); assert.equal(pin.inScope(scopeIdentity), true); memberObserved = true; }
     const bytes = [];
@@ -125,17 +143,40 @@ async function roundtrip(descendant = false) {
       catch (error) { done.reject(error); socket.destroy(error); }
     });
     socket.on("close", () => { try { assert.equal(socket.resourcesReturned, true); done.resolve(); } catch (error) { done.reject(error); } });
-  });
+  };
   await joined(child("child-no-source", path));
-  const client = runConfined(descendant ? "child-runner" : "child-roundtrip", path, peer, identity => { scopeIdentity = identity; });
+  let client, adopted;
+  if (reservation) {
+    const captured = deferred();
+    client = runConfined(descendant ? "child-runner" : "child-roundtrip", path, reservation.peer, identity => {
+      scopeIdentity = identity; captured.resolve();
+    });
+    void client.catch(captured.reject);
+    await bounded(captured.promise, "trusted scope before listener adoption");
+    adopted = await listener(path, accept, selected);
+    // The helper already captured the original pre-listener capability.
+    // Dropping its preparation owner leaves the adopted listener live.
+    reservation.close();
+  } else {
+    const { peer } = await listener(path, accept, selected);
+    client = runConfined(descendant ? "child-runner" : "child-roundtrip", path, peer, identity => { scopeIdentity = identity; });
+  }
   const [, result] = await Promise.all([bounded(done.promise, "server byte stream close"), client]);
+  assert.equal(accepted, 1);
+  if (wrong) assert.equal(wrong.receive.receive().kind, "again");
+  if (adopted) {
+    await bounded(new Promise((resolve, reject) => {
+      try { adopted.listener.close(resolve); } catch (error) { reject(error); }
+    }), "adopted listener revocation");
+    assert.throws(() => captureDarwinJobPeer(adopted.peer), { code: "AUTH_FAILED" });
+  }
   const report = descendant ? JSON.parse(result.stdout) : undefined;
   if (report) {
     assert.equal(report.workerPid, sender); assert.notEqual(report.runnerPid, sender);
     assert.equal(memberObserved, true); assert.equal(report.originalPeer, true);
   }
   return { machStream: { sentBytes: expected.length, receivedBytes: observed.length, sha256: sha256(observed), sender,
-    childJoined: true, authenticatedEof: true, resourcesReturned: true, inheritedPeer: true, noSourceRefused: true,
+    reservedEndpoint: reserved, wrongPurposeRefused: reserved, listenerRevoked: reserved, childJoined: true, authenticatedEof: true, resourcesReturned: true, inheritedPeer: true, noSourceRefused: true,
     ...(report === undefined ? {} : { descendant: { ...report, sameCoalition: memberObserved } }) } };
 }
 async function runConfined(role, path, peer, scopeSeen = () => {}) {
@@ -358,6 +399,7 @@ try {
     if (mode?.startsWith("child-")) { await runChild(); return null; }
     if (mode === "mach-stream-roundtrip") return roundtrip();
     if (mode === "mach-stream-descendant") return roundtrip(true);
+    if (mode === "mach-stream-reserved") return roundtrip(true, true);
     if (mode === "mach-stream-wrong-peer") return wrongPeer();
     if (mode === "mach-stream-stale") return stale();
     if (mode === "mach-stream-handoff") return handoff();

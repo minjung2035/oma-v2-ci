@@ -110,6 +110,7 @@ interface Pending {
 }
 class MachListener extends EventEmitter {
   private receiver: MachReceiveRight | null = null;
+  private releaseReceiver: (() => void) | null = null;
   private purpose: Buffer | null = null;
   private poll: ReturnType<typeof machPoll> | null = null;
   private readonly pending = new Set<Pending>();
@@ -122,12 +123,14 @@ class MachListener extends EventEmitter {
   private closeFailure: unknown;
   constructor(private readonly seconds: number, private readonly maximum: number | undefined,
     private readonly accept: (endpoints: { receive: MachReceiveRight; send: MachSendRight }, pin: MachPeerPin) => PacketStream<MachAuditSender>,
-    private readonly serve: (socket: Duplex) => void) { super(); duration(seconds); }
+    private readonly serve: (socket: Duplex) => void,
+    private readonly acquire: (name: string) => { readonly receiver: MachReceiveRight; close(): void }) { super(); duration(seconds); }
   listen(path: string): this {
     if (this.started || this.closing) throw unavailable("Mach listener cannot bind twice");
     this.started = true;
     try {
-      this.receiver = listenMachService(machRendezvousName(path));
+      const endpoint = this.acquire(machRendezvousName(path));
+      this.receiver = endpoint.receiver; this.releaseReceiver = () => endpoint.close();
       this.purpose = createHash("sha256").update(machRendezvousName(path)).digest();
       this.poll = machPoll(() => this.tick(), error => {
         this.poll?.close();
@@ -242,7 +245,7 @@ class MachListener extends EventEmitter {
     if (callback) this.waiters.push(callback);
     if (!this.closing) {
       this.closing = true;
-      try { cleanupAll([() => this.poll?.close(), () => this.receiver?.close(), ...[...this.pending].map(ticket => () => this.discard(ticket))]); }
+      try { cleanupAll([() => this.poll?.close(), () => this.releaseReceiver?.(), ...[...this.pending].map(ticket => () => this.discard(ticket))]); }
       catch (error) { this.closeFailure ??= error; }
     }
     if (this.closeFailure !== undefined) throw this.closeFailure;
@@ -261,7 +264,50 @@ class MachListener extends EventEmitter {
 export function createMachBrokerTransport(handshakeSeconds: number) {
   duration(handshakeSeconds);
   const peers = new WeakMap<Duplex, { readonly pin: MachPeerPin; taken: boolean; authorize: ((sender: unknown) => boolean) | null }>();
+  interface Endpoint {
+    readonly receiver: MachReceiveRight;
+    state: "reserved" | "listening" | "closed";
+    failure?: unknown;
+  }
+  const endpoints = new Map<string, Endpoint>();
+  const release = (name: string, endpoint: Endpoint): void => {
+    if (endpoint.failure !== undefined) throw endpoint.failure;
+    if (endpoint.state === "closed") return;
+    endpoint.state = "closed";
+    try { endpoint.receiver.close(); }
+    catch (error) { endpoint.failure = error; throw error; }
+    if (endpoints.get(name) === endpoint) endpoints.delete(name);
+  };
+  const acquire = (name: string) => {
+    let endpoint = endpoints.get(name);
+    if (endpoint !== undefined && endpoint.state !== "reserved") throw unavailable("Mach endpoint already has an owner");
+    if (endpoint === undefined) {
+      endpoint = { receiver: listenMachService(name), state: "listening" };
+      endpoints.set(name, endpoint);
+    } else endpoint.state = "listening";
+    const selected = endpoint;
+    return { receiver: selected.receiver, close: () => release(name, selected) };
+  };
   return {
+    /** Reserve the exact future listener before starting its trusted Runner.
+     * This transfers only an endpoint capability; Broker still admits the
+     * current Actor/Run when it adopts the listener. */
+    reservePeer(path: string): { readonly peer: DarwinJobPeer; close(): void } {
+      const name = machRendezvousName(path);
+      if (endpoints.has(name)) throw unavailable("Mach endpoint already has an owner");
+      const endpoint: Endpoint = { receiver: listenMachService(name), state: "reserved" };
+      endpoints.set(name, endpoint);
+      let peer: DarwinJobPeer;
+      try { peer = peerFromMachReceiver(endpoint.receiver); }
+      catch (error) { return withCleanup(() => { throw error; }, () => release(name, endpoint)); }
+      let closed = false, failure: unknown;
+      return Object.freeze({ peer, close(): void {
+        if (failure !== undefined) throw failure;
+        if (closed) return; closed = true;
+        try { cleanupAll([() => peer.close(), () => { if (endpoint.state === "reserved") release(name, endpoint); }]); }
+        catch (error) { failure = error; throw error; }
+      } });
+    },
     pinPeer(stream: Duplex): MachPeerPin | null {
       const peer = peers.get(stream);
       if (peer === undefined || peer.taken) return null;
@@ -276,7 +322,7 @@ export function createMachBrokerTransport(handshakeSeconds: number) {
         const stream = machStream(endpoints, sender => peer.authorize?.(sender) ?? false, () => { if (!peer.taken) pin.close(); });
         stream.on("error", () => {});
         peers.set(stream, peer); return stream;
-      }, serve);
+      }, serve, acquire);
       return { listener, prepare(): void {} };
     },
     peerStream(stream: Duplex, authorize: (sender: unknown) => boolean): Duplex {
