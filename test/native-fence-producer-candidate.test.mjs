@@ -37,7 +37,7 @@ test('001. Actual fixed producer binds a new socket, authenticates its instance 
  const control=controlSocketPair();pairs.push(control);handles.add(control.parent);handles.add(control.child);
  ExecutionJournal.initialize(root);runtime=new ExecutionRuntime(root,launchDarwinJobScope);await runtime.recover();
  const identity=randomBytes(32),command={executable,argv:[identity.toString('hex'),'0'],env:{PATH:'/usr/bin:/bin'},timeoutMs:30000,stdoutBytes:8192,stderrBytes:8192};
- let terminal;completed=runtime.run('preparation',command,t.signal,()=>{},[control.child],undefined,undefined,(source,options)=>launchDarwinJobScope(source,{...options,peer}));void completed.then(result=>{terminal={kind:result.kind,exitCode:result.exitCode,stderr:result.stderr.toString()};},error=>{terminal={error:String(error)};});
+ let terminal;completed=runtime.run('preparation',command,t.signal,()=>{},[],undefined,undefined,(source,options)=>launchDarwinJobScope(source,{...options,files:[{target:3,fd:control.child}],peer}));void completed.then(result=>{terminal={kind:result.kind,exitCode:result.exitCode,stderr:result.stderr.toString()};},error=>{terminal={error:String(error)};});
  const message=await packet(endpoint.receive,()=>terminal);if(message.reply)rights.push(message.reply);assert.equal(message.id,0x4f4d4170);assert.equal(message.sender.uid,process.getuid());assert.equal(message.bytes.length,64);assert.ok(message.reply);
  const selectedOrigin=await origin(message,hashes);
  t.diagnostic(JSON.stringify({phase:'fence-producer-origin',selectedOrigin,unconstrainedOrigin:await origin(message),expectedCdHashes:hashes,sender:message.sender,terminal:terminal??null}));

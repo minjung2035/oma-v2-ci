@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `14b33bf4e38374c1b9bf198ad5e1cd1be1b70bb7c6cac32e98f4b8344ac0a901` (15919 files).
+verification input digest `04262556f8e49d3c89f1aff70f799bf32c042777ef9e1595208ac63fdc2b60eb` (15921 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3428,3 +3428,42 @@ fresh27/27 packed installation(App 포함)·installed runtime·declaration 및 f
 production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
 원시는 `/tmp/oma-source72-{build,package-isolation,review,architecture}.log`다. 초기 build와 test-forwarding 전 build도 별도 보존했다.
 새 review root consumer와 producer origin 진단의 실제 Mac 결과는 NOT_RUN이다. 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+### SOURCE73 producer의 명시 FD 배선과 SQLite 공개 VFS 후보
+
+SOURCE72 `679911bcc09ebc4a5be3de3dd689a837126d2edf` / local checkpoint `c5ba53e8f0f271970c1d45fd3d3661a21949ed8c`,
+Native42002668261·Architecture42002668265를 발행했다. canonical15919/`14b33bf4e38374c1b9bf198ad5e1cd1be1b70bb7c6cac32e98f4b8344ac0a901`다.
+Mac15 shared ZIP13402889567 SHA-256 `732daab0e9b2de9db7531a18135d6969faa57c34b6b2e36eb7fecabf1e057b6d`를 대조했다.
+위 canonical과 runtime15532/27/`adf176d1285869bd5f59fc5f2c9e2d2b0a27f58b9da88ef9a5d2ad88c9fa1be6` 전후 동일이다.
+main429/428 PASS/1 FAIL·기타0, generation3/3 PASS·기타0이다. 새 review directory4건도 실제 통과했다.
+
+producer의 expected/unconstrained audit-origin은 모두 unavailable/OSStatus100003이었고 직후 fresh process pin도 generation unavailable로 거절했다.
+원인은 C가 자기 생존 채널을 FD3으로 읽는데 App ExecutionRuntime의 일반 inheritedFds는 target6부터 배치하는 fixture 배선 오류다.
+FD3에 있던 새 UDP socket을 닫은 뒤 생존 채널도 없는 상태가 됐다. SOURCE73은 fixed fixture의 explicit files target3을 선택한다.
+producer image/CDHash matched·fresh alive·socket instance·independent alias·Node replay·producer-live last-close 조건은 유지한다.
+기존 unavailable을 matched/dead/held로 바꾸거나 deadline을 넓히지 않는다. 수정 뒤 actual Mac 결과는 NOT_RUN이다.
+
+SQLite는 [Node26의 공개 URI open](https://github.com/nodejs/node/blob/v26.0.0/src/node_sqlite.cc)과
+[SQLite 공개 loadable VFS extension](https://www.sqlite.org/loadext.html#persistent_loadable_extensions)을 쓰는 test-only 후보를 추가했다.
+기존 default VFS를 복제하고 xFullPathname에서 descriptor-directory spelling을 보존한다. 새 DB engine·업무 SQL·privileged service는 넣지 않는다.
+고정 test-owned extension은 in-memory loader에만 명시적으로 로드하며 main DB의 extension loading은 기본 비활성으로 유지한다.
+공개 sqlite3_api_routines table로 Node가 이미 내장한 engine의 VFS를 등록한다. OS SQLite library나 Node private symbol을 링크하지 않는다.
+OS SDK header의 extension wrapper macro 대신 host가 전달한 공개 function table을 직접 사용한다.
+실제 Linux Node26/SQLite3.51.3에서 loader를 닫은 뒤에도 새 VFS가 동작했고, directory rename/replacement 후 row1/2와
+DB/WAL/SHM이 held original에만 생긴 것을 확인했다(`/tmp/oma-source73-sqlite-linux-prototype.log`).
+이는 Mac의 /dev/fd directory traversal이나 Store 전체의 root 결박 증거가 아니다.
+새 Mac fixture는 default와 candidate의 실제 canary·DB open·WAL·replacement 결과를 관측하고 REJECTED/UNSAFE_SPLIT/ORIGINAL_ONLY_OBSERVED를 구분한다.
+어떤 결과도 단독 product/G-FILES PASS로 채택하지 않는다. 양 SDK object compile·Linux NOT_RUN 경로는 PASS, actual Mac은 NOT_RUN이다.
+
+workflow는 main 시험 직후 별도 native-main artifact에 source/runtime 전후 binding과 원시 TAP을 먼저 보존한다.
+기존 generation 실행·두 oracle 묶음의 성공 조건·최종 native-shared binding·deadline/job/matrix 상한은 유지한다.
+main artifact를 cold-generation 완료 근거로 쓰지 않는다. production은 SOURCE72와 같으며 새 build/pack 실행으로 합산하지 않는다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE72 Intel shared ZIP13403118850 SHA-256 `aa0c6211994def0628a5355a59fc07e5a5671cc12f5dab24900216ff9dee6c30`도 대조했다.
+같은 canonical15919와 runtime15532/27/`b505525cd1e2081bf497e0956547c751b878850ecf9626979e2cdbdbf877286c` 전후 동일,
+main429/428 PASS/1 FAIL·기타0, generation3/3 PASS·기타0이다. review directory4건도 실제 PASS다.
+producer의 두 origin도100003, 이후 process pin unavailable이었다. 임시 setup failure를 candidate instance/last-close 판정으로 쓰지 않는다.
+SOURCE73 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+새 Mac SQLite namespace와 corrected producer lifetime의 실제 결과는 여전히 NOT_RUN이다.
+원시는 `/tmp/oma-source73-{architecture,sqlite-arm,sqlite-intel,candidates-linux}.log`와 실제 Linux prototype log다.
