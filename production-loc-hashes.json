@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "f40a7124c6699f498c62e35a637ba728121473cae06d48d933232c2d5b845e8b"
+      "sha256": "cd4895c6f0af1ff8ad784709bebe1431647e91014c9ea7287024e5c470e2be94"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -440,7 +440,7 @@
     },
     {
       "path": "apps/oma/src/runtime/society-lease.ts",
-      "sha256": "237a43fdbc803b0396a5501e10b4a5cb058332bc756c35ae73e12e8b49fd5dc2"
+      "sha256": "f179ff51532d1c52cef4de20196aab8027cf00895ddb4860111d303ce4316532"
     },
     {
       "path": "apps/oma/src/runtime/society-preparation.ts",
@@ -1520,7 +1520,7 @@
     },
     {
       "path": "packages/native/src/darwin-society-fence.ts",
-      "sha256": "828e3b87799488305567f006bac2f693d07c08cb22712731845390dac8c48cb2"
+      "sha256": "c198f69ce9755cd6cbbd5ccd28650e2154cc2c79b9dc4ea9af13536e5519b7da"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
@@ -1616,15 +1616,15 @@
     },
     {
       "path": "packages/native/src/society-fence/control.c",
-      "sha256": "9e62e1c7c61626e3f45b6717fc2bc3ec8c05ebecb69c4e9258051997f4020a89"
+      "sha256": "d895cc77b6bd420d9edfc0f62b281aef588735174e4205a39076906da4a7500d"
     },
     {
       "path": "packages/native/src/society-fence/producer.c",
-      "sha256": "b0a0f6c7fc904969a5c5b15fc8d5ef83d32db986e78fc8d413200221d0b0e0c2"
+      "sha256": "3b1ee13df13276a2d2ed0daf349ad0beff5534e583f9cce7a20c887e5f6c0820"
     },
     {
       "path": "packages/native/src/society-fence/protocol.h",
-      "sha256": "0773685dc09701a2decd51535b1e27132cf94902fd765b26a8a5e0223d7b142b"
+      "sha256": "8e6d49861098e27d09f5faacaa169197276355936b856a1bedd90b342c5be1c7"
     },
     {
       "path": "packages/native/src/sqlite-root.ts",

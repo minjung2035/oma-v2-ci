@@ -57,7 +57,8 @@ import { abstractNameHeld, abstractNameHolder, holdAbstractName } from "@oma/nat
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/async";
 import { assertStateRoot } from "./assets.js";
 import { StoreError } from "@oma/domain/errors";
-import { holdDarwinSocietyFence, identifyDarwinSocietyFence } from "@oma/native/darwin-society-fence";
+import { holdDarwinSocietyFence, identifyDarwinSocietyFence, retainDarwinSocietyScope } from "@oma/native/darwin-society-fence";
+import type { DarwinCoalitionIdentity } from "@oma/native/audit-session";
 import { runProcessSync } from "@oma/process/run";
 
 const runDarwinFence = (executable: string, argv: readonly string[], fd?: number) => runProcessSync({
@@ -106,6 +107,10 @@ export function societyLeaseName(stateRoot: string): string {
   assertStateRoot(stateRoot);
   const uid = process.geteuid?.() ?? -1;
   return SOCIETY_LEASE_PREFIX + createHash("sha256").update(`${uid}\n${stateRoot}`).digest("hex");
+}
+/** Physical retention only, before any paid scope is released. */
+export function retainSocietyScope(stateRoot: string, fence: number, scope: DarwinCoalitionIdentity): void {
+  retainDarwinSocietyScope(fence, societyLeaseName(stateRoot), scope, runDarwinFence);
 }
 
 /** Takes the society for this process, or answers null when another process

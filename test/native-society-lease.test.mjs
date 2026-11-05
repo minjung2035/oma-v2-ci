@@ -26,6 +26,7 @@ import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
 import {observeDarwinCoalitionPopulation,pinDarwinProcess} from '@oma/native/audit-session';
 import {inspect} from 'node:util';
 import {acquireDarwinJobScope} from '@oma/platform-mac/job-recovery';
+import {lookupMachService} from '@oma/native/mach-message';
 import {pinDarwinPrivateParent} from '@oma/native/private-parent';
 const runFence=(executable,argv,fd)=>runProcessSync({executable,argv,env:{PATH:'/usr/bin:/bin'},timeoutMs:15000,stdoutBytes:16384,stderrBytes:16384},undefined,fd===undefined?[]:[fd],{killSignal:'SIGTERM'});
 
@@ -114,11 +115,11 @@ async function paidSocietyScope(t,closeDescriptors=false){
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-paid-society-'))),state=join(base,'state'),controller=new AbortController();
  const previous=process.env[SOCIETY_FENCE_ENV],restore=()=>{if(previous===undefined)delete process.env[SOCIETY_FENCE_ENV];else process.env[SOCIETY_FENCE_ENV]=previous;};
- let held,next,runtime,running;
+ let held,next,runtime,running,creatorPin;
  t.after(async()=>{
   restore();controller.abort();await running?.catch(()=>{});let safe=runtime===undefined;const failures=[];
   try{await runtime?.close();safe=true;}catch(error){failures.push(error);}
-  for(const lease of[held,next])try{lease?.release();}catch(error){failures.push(error);}
+  for(const lease of[held,next])try{lease?.release();}catch(error){failures.push(error);}creatorPin?.close();
   if(safe)rmSync(base,{recursive:true});else t.diagnostic('Retained unconfirmed paid Society scope: '+base);
   if(failures.length)throw new AggregateError(failures,'paid Society scope cleanup remains unknown');
  });
@@ -135,10 +136,12 @@ async function paidSocietyScope(t,closeDescriptors=false){
  await Promise.race([entered,running.then(result=>{throw new Error('paid scope ended before descendant readiness: '+JSON.stringify({...result,stdout:result.stdout.toString(),stderr:result.stderr.toString()}));})]);
  restore();const rows=ExecutionJournal.inspect(state);assert.equal(rows.length,1);const identity=rows[0].witness;
  assert.equal(identity.kind,'darwin-resource-coalition');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
+ const creator=authenticatedCreator(state);creatorPin=watchDarwinProcess(creator.creatorPid);assert.deepEqual(authenticatedCreator(state),creator);
  const released=held;held=undefined;released.release();if(closeDescriptors)boundResource(state);refused(state);
  assert.equal(observeDarwinCoalitionPopulation(identity),'populated','scope must still be live while takeover is refused');
  controller.abort();const result=await running;assert.equal(result.kind,'aborted');
  assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
+ await exited(creatorPin);
  next=tryHoldSociety(state);assert.notEqual(next,null,'only complete scope death and descriptor drain return the Society');
 }
 test('006. A paid Darwin execution scope holds the Society until complete scope death and descriptor drain',{timeout:45000},t=>paidSocietyScope(t));
@@ -201,18 +204,18 @@ test('009. A paid scope cannot return its Society by closing every workload and 
 test('010. A paid detached descendant still excludes a new Host after its execution owner dies and its Host ends',{timeout:45000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-society-owner-death-'))),state=join(base,'state');
- let tenure,next,owner,closed,scope,identity,parent,descendant,initialized=false,recovered=false;
+ let tenure,next,owner,closed,scope,identity,parent,descendant,creatorPin,initialized=false,recovered=false;
  t.after(async()=>{
   const failures=[];
   if(owner?.exitCode===null&&owner.signalCode===null)owner.kill('SIGKILL');try{await closed;}catch(error){failures.push(error);}
   try{
    if(scope){const limit=performance.now()+10000;while(scope.population()!=='empty'){
     if(scope.population()==='unknown'||performance.now()>=limit)throw new Error('retained owner-death scope remains unconfirmed');scope.terminate();await delay(10);
-   }scope.close();}
+   }scope.close();if(creatorPin&&!tenure?.held)await exited(creatorPin);}
    if(initialized){if(identity&&observeDarwinCoalitionPopulation(identity)!=='empty')throw new Error('old owner-death scope is not independently empty');
     const current=tenure?.held?tenure:(next=HostTenure.take(state));assert.notEqual(current,null);current.assertOwned('owner-death journal recovery');await recoverExecutionState(state,false);assert.deepEqual(ExecutionJournal.inspect(state),[]);recovered=true;}
   }catch(error){failures.push(error);}
-  for(const pin of[parent,descendant])try{pin?.close();}catch(error){failures.push(error);}
+  for(const pin of[parent,descendant,creatorPin])try{pin?.close();}catch(error){failures.push(error);}
   for(const held of[next,tenure])try{await held?.end();}catch(error){failures.push(error);}
   if(!initialized||recovered)rmSync(base,{recursive:true});else t.diagnostic('Retained owner-death Society evidence: '+base);
   if(failures.length)throw new AggregateError(failures,'owner-death cleanup remains unknown');
@@ -225,8 +228,13 @@ test('010. A paid detached descendant still excludes a new Host after its execut
  parent=pinDarwinProcess(Number(readFileSync(join(state,'workload.pid'),'utf8')));descendant=pinDarwinProcess(Number(readFileSync(join(state,'descendant.pid'),'utf8')));
  for(const pin of[parent,descendant]){assert.equal(pin.state(),'live');assert.deepEqual(pin.identity,identity);}
  tenure.assertOwned('retain physical recovery capability');scope=acquireDarwinJobScope(identity);assert.deepEqual(scope.identity,identity);
+ const creator=authenticatedCreator(state);creatorPin=watchDarwinProcess(creator.creatorPid);assert.deepEqual(authenticatedCreator(state),creator);
  owner.kill('SIGKILL');assert.deepEqual(await closed,{code:null,signal:'SIGKILL'},stderr);await exited(parent);
  assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
  await tenure.end();boundResource(state);refused(state);
+ assert.equal(creatorPin.state(),'live','the fixed creator retains its independent scope copy after Host release');
+ const service=lookupMachService('org.oma.society-fence.'+societyLeaseName(state).slice('\0oma.society.'.length));
+ try{assert.equal(service.send(0x4f4d5371,Buffer.alloc(1024)),'sent');assert.equal(service.send(0x4f4d5374,Buffer.alloc(1)),'sent');}finally{service.close();}
+ assert.deepEqual(authenticatedCreator(state),creator,'oversized or malformed public traffic cannot kill the remaining scope holder');boundResource(state);
  assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');assert.equal(ExecutionJournal.inspect(state).length,1);
 });

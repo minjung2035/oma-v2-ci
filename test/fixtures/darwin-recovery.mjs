@@ -30,7 +30,10 @@ const source = `const {spawn}=require('node:child_process');${closedFence ? "req
 const command = { executable: realpathSync(process.execPath), argv: ["-e", source], env: { HOME: root, TMPDIR: root }, cwd: root,
   timeoutMs: 20000, stdoutBytes: 0, stderrBytes: 128 };
 let preparationFailure;
-if (point === "released-preparation") {
+if (fenced) {
+  const runtime = new ExecutionRuntime(root, launchDarwinJobScope); await runtime.recover();
+  await runtime.begin("candidate", () => command, new AbortController().signal, () => {}, () => {});
+} else if (point === "released-preparation") {
   const runtime = new ExecutionRuntime(root, launchDarwinJobScope);
   const run = new PreparationExecutor().run(command); void run.catch(error => { preparationFailure = error; });
 } else await controlledOwner().begin({ slot: "candidate", launch: () => point === "released-seatbelt" ? launchSeatbeltJobScope(command, {

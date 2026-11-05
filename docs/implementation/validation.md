@@ -1,7 +1,7 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE102의 Society 기본 소유권·scope/recovery·private Host 감독은 ARM·Intel 각8 PASS다. 양쪽009 close-all FAIL을 SOURCE103에서 수리했고 Intel9/9 PASS를 확인했다. 새 수리의 ARM 및 실행 owner 사망 결합은 아직 NOT_RUN이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+SOURCE104에서 Society 기본 소유권·scope/recovery·private Host 감독·workload FD close는 ARM·Intel 각9 PASS다. 실행 owner 사망과 Host 종료가 겹친010은 양쪽 모두 FAIL이며 SOURCE105 수리의 실제 Mac은 아직 NOT_RUN이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `21cb07bcc000ab65df4e40693a6aef4dbb23f473b0b13c8feb2782dbe3ede998` (15948 files).
+verification input digest `261b72b26629508491a8de2383f04fd082879bc943a8370545cb2d726108a64c` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4546,3 +4546,31 @@ SOURCE104는 production 변경 없는 test-only checkpoint다. 새010에서 Host
 그 Host tenure도 종료한 뒤 실제 binding과 새 Host 인수 거절을 요구한다. 정상 owner 참조 수리가 owner 자신의 사망까지 해결했다고 가정하지 않는다.
 시험 cleanup은 미리 보유한 physical capability로 old CID를 종료하고, 독립 empty 뒤 새 tenure/journal exclusive owner 아래서만 기존 journal을 retire한다. unknown은 원시를 보존한다.
 010 actual Mac은 NOT_RUN이다. 기존 recovery mode·guard·시간 제한·scope empty predicate는 유지한다.
+
+
+### SOURCE104 actual ARM/Intel9 PASS·owner 사망010 FAIL과 SOURCE105 scope keeper
+
+SOURCE104 `96b1da5fd0e031919d76330529669d288aa515ae`, Native42084117405·Architecture42084117295다.
+canonical15948/`21cb07bcc000ab65df4e40693a6aef4dbb23f473b0b13c8feb2782dbe3ede998`다.
+ARM Society ZIP13441404137 SHA-256 `3aa22f235f612ff77078cfc6c6bef3a5ec0ae6d910319f67b42946e535aaa944`,
+Intel Society ZIP13443046254 SHA-256 `9b04210b1a0cb5b068fa13237f2dc2f872ee826754a36cabadd902acf0772ff6`를 대조했다.
+각 source/input/runtime Society 전후 동일, runtime15551은 ARM `67fdc9045658a73b31f429ccdee21befd1e6c425f0eeb4cf332d1b609bbb0a4c`,
+Intel `31b2ecedeae4f17e1e85707971cab9f655c9c7bf1767619d9e1330b67dbe90b3`다.
+양쪽9 PASS/1 FAIL·기타0다. 009의 실제 bind 거절/종료 뒤 재취득은 두 architecture에서 통과했다.
+010은 owner SIGKILL·direct workload 원래 pin exit·살아 있는 detached descendant·Host tenure 종료 뒤 실제 bind가0으로 성공해 실패했다.
+이 원시 반례를 unknown/성공으로 바꾸지 않는다. 실행 owner 자신의 fileport 참조만으로 owner 사망 뒤까지 보장한다는 후보를 배제한다.
+
+SOURCE105는 gate 전 실제 App ExecutionRuntime의 paid witness를 fixed creator에 등록한다.
+caller는 전체 Society identity·실제 socket/generation의 보유를 증명하고 creator는 같은 boot/CID의 성공한 kernel lookup을 별도로 확인한다.
+creator는 Host용 copy와 enrolled scopes용 copy를 나눠 보유한다. Host EOF/정상 반환은 자기 copy만 닫아 acknowledgement하며, scopes는 kernel ID ESRCH가 확인될 때만 반납한다. unknown은 계속 보유한다.
+scope 등록은 이미 fence를 보유한 caller의 exclusion 연장일 뿐 Actor role·process signal·receipt·FD를 부여하지 않는다. 전달받은 proof FD를 fence로 채택하지 않고 자기 새 socket을 복제한다.
+이름 lookup의 nonce relay만으로 FD를 보내지 않는다. 고정 creator의 kernel-authenticated response가 보내준 실제 enrollment endpoint를 취득한 뒤 그 endpoint에만 fileport proof를 보낸다.
+공개 identity discovery는 fence FD를 내주지 않는다. reply endpoint의 send right는 Actor authority가 아니다.
+
+fenced crash fixture의007/010은 이제 실제 App ExecutionRuntime을 사용하며 기존 opening/witness/다른 recovery mode는 유지한다.
+006/009와010은 고정 creator의 fresh 인증 뒤 원래 process watch를 등록·재대조하고, old CID empty 뒤 그 creator의 최종 참조 반환도 확인한 다음 새 tenure를 취득한다.
+010에는 oversized/malformed public traffic 뒤 같은 creator 생존·같은 실제 binding 확인도 추가했다.
+수신 오류로 live scope copy를 반환하지 않는다. oversized 수신의 discard와 body-error resource 반환은 [고정 XNU mach_msg.c](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/mach_msg.c)의 receive-results/error 경로를 대조했다. 이는 source 검토이며 actual Mac proof가 아니다.
+취소된 CI가 always 조건으로 cold generation을 새로 시작하던 조건은 !cancelled로 고쳤다. 일반 실패 뒤 검증·240000ms 제한·raw artifact 보존은 유지한다.
+SOURCE105 local build·선택92/92 PASS, producer C의 ARM/Intel SDK -Wall/-Wextra/-Werror object compile은 PASS다. Darwin cases는 Linux에서 명시적 NOT_RUN이다.
+INTERMEDIATE checkpoint이며 actual Mac controller compile·10/10·최종 packed/review/전체 제품 인수는 NOT_RUN이다. 세 gate와 기본 guard는 유지한다.

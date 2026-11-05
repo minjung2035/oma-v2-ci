@@ -135,10 +135,11 @@ jobs:
           retention-days: 14
       - name: Qualify the whole installed generation without parallel fixture IO
         id: generation_runtime
-        if: ${{ always() && steps.native_build.outcome == 'success' && steps.shared_runtime.outcome != 'skipped' }}
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' && steps.shared_runtime.outcome != 'skipped' }}
         run: |
           # One cold generation, with its existing 240s deadline. It runs once
           # after the other fixture processes have returned, including failures.
+          # A superseded run preserves its artifacts without starting new IO.
           if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/native-runtime-generation.test.mjs > .scratch/native-runtime/generation-tests.log 2>&1; then cat .scratch/native-runtime/generation-tests.log; exit 1; fi
       - name: Require completed runtime oracles on the actual OS
         if: ${{ always() && steps.native_build.outcome == 'success' }}

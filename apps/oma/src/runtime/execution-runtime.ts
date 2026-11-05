@@ -16,6 +16,8 @@ import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/
 import { EXECUTION_JOURNAL_VERSION, DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
+import { inheritedFence } from "@oma/process/fence";
+import { retainSocietyScope } from "./society-lease.js";
 
 type Observation = { readonly kind: "running"; readonly identity: ExecutionWitness } | { readonly kind: "exited" | "unavailable" };
 interface Backend {
@@ -89,6 +91,7 @@ export class ExecutionRuntime {
     try { this.assertAdmission(); } catch (error) { throw new ExecutionNotStarted(error); }
     const budget = this.workload, lease = budget?.acquire();
     try {
+      const fence = process.platform === "darwin" ? inheritedFence() : undefined;
       const files = process.platform === "darwin" && options.files === undefined && Array.isArray(options.inheritedFds)
         ? { files: options.inheritedFds.map((fd: number, index: number) => ({ target: index + 6, fd })) } : {};
       const scope = await physicalLaunch(budget?.command(command) ?? command, { ...options, ...files, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
@@ -99,8 +102,18 @@ export class ExecutionRuntime {
         population: () => scope.population(), release: () => scope.release(), terminate: () => scope.terminate(),
         result: scope.result.then(result => ({ ...result, ...(lease === undefined ? {} : { resources: { ...lease.events(), scope: lease.path } }) })),
         close: () => { scope.close(); lease?.close(); } };
-      for (const key of ["prepared", "terminal"] as const) if (key in scope)
-        Object.defineProperty(wrapped, key, { enumerable: true, get: () => scope[key] });
+      if ("terminal" in scope) Object.defineProperty(wrapped, "terminal", { enumerable: true, get: () => scope.terminal });
+      if ("prepared" in scope || fence !== undefined) {
+        let ready: Promise<void> | undefined;
+        Object.defineProperty(wrapped, "prepared", { enumerable: true, get: () => {
+          if (fence === undefined) return scope.prepared;
+          ready ??= Promise.resolve(scope.prepared).then(() => {
+            if (scope.witness.kind !== "darwin-resource-coalition") throw new StoreError("RUN_TERMINATION_UNKNOWN", "paid Darwin scope has no kernel coalition witness");
+            retainSocietyScope(this.stateRoot, fence, scope.witness);
+          });
+          void ready.catch(() => {}); return ready;
+        } });
+      }
       return wrapped;
     } catch (error) {
       if (lease !== undefined) try { lease.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "workload launch remains owned"); }
@@ -110,7 +123,7 @@ export class ExecutionRuntime {
   private readonly journal: ExecutionJournal;
   private readonly selected = backend();
   private readonly owner: ExecutionCoordinator<ExecutionWitness>;
-  constructor(stateRoot: string, physicalLaunch?: Backend["launch"]) {
+  constructor(private readonly stateRoot: string, physicalLaunch?: Backend["launch"]) {
     if (physicalLaunch !== undefined) {
       if (process.platform !== "darwin") throw new StoreError("UNSUPPORTED_PROFILE", "explicit Darwin capture requires the Darwin backend");
       this.selected.launch = physicalLaunch;

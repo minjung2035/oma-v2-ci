@@ -8,6 +8,7 @@ import { closeOnExec, controlSocketPair } from "./control-socket.js";
 import { machoImageCdHashes } from "./darwin-macho-image.js";
 import { StoreError } from "@oma/domain/errors";
 import { cleanupAll, withCleanup } from "./cleanup.js";
+import type { DarwinCoalitionIdentity } from "./audit-session.js";
 
 function identity(name: string): string {
   const matched = /^\0oma\.society\.([a-f0-9]{64})$/.exec(name);
@@ -81,4 +82,16 @@ export function identifyDarwinSocietyFence(fd: number, name: string, run: Darwin
   const result = invoke(run, image.control, ["identify", tag, image.hash, String(darwinSocietyFencePort(name))], fd);
   if (result.kind !== "matched" && result.kind !== "other") throw new StoreError("BROKER_UNAVAILABLE", "Inherited fence observation was not confirmed");
   return { kind: result.kind };
+}
+/** A holder may only extend exclusion: the fixed creator independently keeps
+ * its own socket until this exact boot/CID disappears. This grants no role,
+ * process control, receipt or descriptor to the caller. */
+export function retainDarwinSocietyScope(fd: number, name: string, scope: DarwinCoalitionIdentity, run: DarwinSocietyFenceRunner): void {
+  const tag = identity(name), image = assets();
+  if (!Number.isSafeInteger(fd) || fd < 0 || !fstatSync(fd).isSocket() || scope.kind !== "darwin-resource-coalition" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(scope.bootId) ||
+      !/^[1-9][0-9]{0,19}$/.test(scope.coalitionId) || BigInt(scope.coalitionId) > 0xffffffffffffffffn)
+    throw new TypeError("invalid Society scope retention capability");
+  if (invoke(run, image.control, ["enroll", tag, image.hash, String(darwinSocietyFencePort(name)), scope.bootId, scope.coalitionId], fd).kind !== "retained")
+    throw new StoreError("BROKER_UNAVAILABLE", "Society scope retention was not confirmed");
 }

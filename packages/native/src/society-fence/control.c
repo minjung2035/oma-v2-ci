@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/event.h>
+#include <sys/fileport.h>
 #include <netinet/in.h>
 #include <libproc.h>
 #include <spawn.h>
@@ -51,7 +52,7 @@ static void tag_bytes(const char *tag,uint8_t output[32]){
   require(strlen(tag)==64 && strspn(tag,"0123456789abcdef")==64,"full fence tag");
   for(unsigned i=0;i<32;i++){unsigned value;require(sscanf(tag+2*i,"%2x",&value)==1,"fence tag byte");output[i]=(uint8_t)value;}
 }
-static struct oma_fence_publication discover(const char *tag,const char *hash,unsigned port,audit_token_t *creator){
+static struct oma_fence_publication discover_service(const char *tag,const char *hash,unsigned port,audit_token_t *creator,mach_port_t *retained_service){
   mach_port_t service=MACH_PORT_NULL,reply=MACH_PORT_NULL;
   char name[128];snprintf(name,sizeof name,"org.oma.society-fence.%s",tag);
   kernel(bootstrap_look_up(bootstrap_port,name,&service),"fence creator lookup");
@@ -72,9 +73,68 @@ static struct oma_fence_publication discover(const char *tag,const char *hash,un
     answer->publication.socket && answer->publication.generation,"fence reply identity");
   require(signed_creator(trailer->msgh_audit,hash),"fence creator mapped image");
   if(creator)*creator=trailer->msgh_audit;
-  kernel(mach_port_deallocate(mach_task_self(),service),"creator lookup return");
+  if(retained_service)*retained_service=service;
+  else kernel(mach_port_deallocate(mach_task_self(),service),"creator lookup return");
   kernel(mach_port_mod_refs(mach_task_self(),reply,MACH_PORT_RIGHT_RECEIVE,-1),"private reply return");
   return answer->publication;
+}
+static struct oma_fence_publication discover(const char *tag,const char *hash,unsigned port,audit_token_t *creator){
+  return discover_service(tag,hash,port,creator,NULL);
+}
+static mach_port_t creator_channel(mach_port_t lookup,const struct oma_fence_publication *publication,audit_token_t original,const char *hash){
+  mach_port_t reply=MACH_PORT_NULL;kernel(mach_port_allocate(mach_task_self(),MACH_PORT_RIGHT_RECEIVE,&reply),"scope endpoint reply");
+  struct{mach_msg_header_t head;uint8_t nonce[16];} request={0};arc4random_buf(request.nonce,16);
+  request.head=(mach_msg_header_t){.msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND,MACH_MSG_TYPE_MAKE_SEND),.msgh_size=sizeof request,
+    .msgh_remote_port=lookup,.msgh_local_port=reply,.msgh_id=OMA_FENCE_CHANNEL};
+  kernel(mach_msg(&request.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof request,0,MACH_PORT_NULL,1000,MACH_PORT_NULL),"scope endpoint request");
+  union{uint64_t align;unsigned char bytes[512];} received={0};mach_msg_header_t *head=(mach_msg_header_t *)received.bytes;
+  kernel(mach_msg(head,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+    0,sizeof received,reply,3000,MACH_PORT_NULL),"scope endpoint response");
+  require(head->msgh_id==OMA_FENCE_CHANNEL_REPLY && head->msgh_size==sizeof(struct oma_fence_channel_answer) && (head->msgh_bits&MACH_MSGH_BITS_COMPLEX),"scope endpoint layout");
+  struct oma_fence_channel_answer *answer=(struct oma_fence_channel_answer *)received.bytes;
+  mach_msg_audit_trailer_t *trailer=(mach_msg_audit_trailer_t *)(received.bytes+((head->msgh_size+3)&~3));
+  require(answer->body.msgh_descriptor_count==1 && answer->endpoint.type==MACH_MSG_PORT_DESCRIPTOR &&
+    answer->endpoint.disposition==MACH_MSG_TYPE_PORT_SEND && MACH_PORT_VALID(answer->endpoint.name) &&
+    trailer->msgh_trailer_type==MACH_MSG_TRAILER_FORMAT_0 && trailer->msgh_trailer_size>=sizeof *trailer &&
+    !memcmp(&trailer->msgh_audit,&original,sizeof original) && signed_creator(trailer->msgh_audit,hash) && !memcmp(answer->nonce,request.nonce,16) &&
+    !memcmp(answer->publication.identity,publication->identity,32) && answer->publication.socket==publication->socket &&
+    answer->publication.generation==publication->generation && answer->publication.port==publication->port,"scope endpoint from fixed creator");
+  mach_port_t endpoint=answer->endpoint.name;answer->endpoint.name=MACH_PORT_NULL;mach_msg_destroy(head);
+  kernel(mach_port_mod_refs(mach_task_self(),reply,MACH_PORT_RIGHT_RECEIVE,-1),"scope endpoint reply return");return endpoint;
+}
+static void enroll_scope(const char *tag,const char *hash,unsigned port,const char *boot,const char *coalition_text){
+  require(strlen(boot)==36 && strspn(boot,"0123456789abcdef-")==36,"scope boot identity");
+  char *end=NULL;errno=0;unsigned long long coalition=strtoull(coalition_text,&end,10);
+  require(!errno && *coalition_text>='1' && *coalition_text<='9' && !*end && coalition>0,"scope resource identity");
+  audit_token_t original={0};mach_port_t service=MACH_PORT_NULL,reply=MACH_PORT_NULL,proof=MACH_PORT_NULL;
+  struct oma_fence_publication publication=discover_service(tag,hash,port,&original,&service);
+  struct socket_fdinfo info={0};require(proc_pidfdinfo(getpid(),3,PROC_PIDFDSOCKETINFO,&info,sizeof info)==sizeof info &&
+    info.psi.soi_so==publication.socket && info.psi.soi_proto.pri_in.insi_gencnt==publication.generation,"scope actual held fence");
+  /* Even a lookup proxy can relay a valid nonce reply. Receive the endpoint
+   * itself from the fixed creator's kernel-authenticated response before
+   * exporting proof; possession of the lookup result is insufficient. */
+  mach_port_t endpoint=creator_channel(service,&publication,original,hash);
+  kernel(mach_port_deallocate(mach_task_self(),service),"scope lookup return");service=endpoint;
+  require(fileport_makeport(3,&proof)==0,"scope proof fileport");
+  kernel(mach_port_allocate(mach_task_self(),MACH_PORT_RIGHT_RECEIVE,&reply),"scope reply right");
+  struct oma_fence_enrollment request={0};arc4random_buf(request.nonce,16);request.coalition=coalition;memcpy(request.boot,boot,36);
+  request.head=(mach_msg_header_t){.msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND,MACH_MSG_TYPE_MAKE_SEND)|MACH_MSGH_BITS_COMPLEX,
+    .msgh_size=sizeof request,.msgh_remote_port=service,.msgh_local_port=reply,.msgh_id=OMA_FENCE_ENROLL};
+  request.body.msgh_descriptor_count=1;request.proof.name=proof;request.proof.disposition=MACH_MSG_TYPE_COPY_SEND;request.proof.type=MACH_MSG_PORT_DESCRIPTOR;
+  kernel(mach_msg(&request.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof request,0,MACH_PORT_NULL,1000,MACH_PORT_NULL),"scope enrollment request");
+  kernel(mach_port_deallocate(mach_task_self(),proof),"scope local proof return");
+  union{uint64_t align;unsigned char bytes[512];} received={0};mach_msg_header_t *head=(mach_msg_header_t *)received.bytes;
+  kernel(mach_msg(head,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+    0,sizeof received,reply,3000,MACH_PORT_NULL),"scope enrollment reply");
+  require(head->msgh_id==OMA_FENCE_ENROLLED && head->msgh_size==sizeof(struct oma_fence_answer) && !(head->msgh_bits&MACH_MSGH_BITS_COMPLEX),"scope reply layout");
+  struct oma_fence_answer *answer=(struct oma_fence_answer *)received.bytes;
+  mach_msg_audit_trailer_t *trailer=(mach_msg_audit_trailer_t *)(received.bytes+((head->msgh_size+3)&~3));
+  require(trailer->msgh_trailer_type==MACH_MSG_TRAILER_FORMAT_0 && trailer->msgh_trailer_size>=sizeof *trailer &&
+    !memcmp(&trailer->msgh_audit,&original,sizeof original) && !memcmp(answer->nonce,request.nonce,16) &&
+    !memcmp(answer->publication.identity,publication.identity,32) && answer->publication.port==publication.port &&
+    answer->publication.socket==publication.socket && answer->publication.generation==publication.generation && signed_creator(trailer->msgh_audit,hash),"scope retained by original creator");
+  kernel(mach_port_mod_refs(mach_task_self(),reply,MACH_PORT_RIGHT_RECEIVE,-1),"scope reply return");
+  kernel(mach_port_deallocate(mach_task_self(),service),"scope service return");
 }
 static unsigned parse_port(const char *text){char *end=NULL;errno=0;unsigned long value=strtoul(text,&end,10);require(!errno && *text && !*end && value>=1024 && value<=49151,"fence port");return(unsigned)value;}
 static void deadline(int fd){struct timeval timeout={.tv_sec=3};require(setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout)==0,"private receive deadline");}
@@ -137,6 +197,9 @@ int main(int argc,char **argv){
   if(getuid()==0 || argc<2)return 64;
   atexit(cleanup);signal(SIGALRM,expired);signal(SIGTERM,expired);signal(SIGINT,expired);alarm(20);
   if(!strcmp(argv[1],"acquire") && argc==6 && !strcmp(argv[4],OMA_FENCE_EXPECTED_HASH))return acquire(argv[2],argv[3],argv[4],argv[5]);
+  if(!strcmp(argv[1],"enroll") && argc==7 && !strcmp(argv[3],OMA_FENCE_EXPECTED_HASH)){
+    enroll_scope(argv[2],argv[3],parse_port(argv[4]),argv[5],argv[6]);puts("{\"kind\":\"retained\"}");return 0;
+  }
   if((!strcmp(argv[1],"identify") || !strcmp(argv[1],"holder")) && argc==5 && !strcmp(argv[3],OMA_FENCE_EXPECTED_HASH)){
     unsigned port=parse_port(argv[4]);struct socket_fdinfo info={0};
     int identify=!strcmp(argv[1],"identify");
