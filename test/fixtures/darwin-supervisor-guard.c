@@ -21,7 +21,8 @@ static int join_child(pid_t child) {
   require(result == child, "join own child"); return status;
 }
 int main(int argc, char **argv) {
-  require(argc == 2 && (!strcmp(argv[1], "ordinary") || !strcmp(argv[1], "guard")), "mode");
+  require((argc == 2 || (argc == 3 && !strcmp(argv[2], "mach-only"))) &&
+    (!strcmp(argv[1], "ordinary") || !strcmp(argv[1], "guard")), "mode");
   setvbuf(stdout, NULL, _IONBF, 0); alarm(15);
   mach_port_t before = MACH_PORT_NULL, after = MACH_PORT_NULL;
   kern_return_t got_before = task_get_task_access_port(mach_task_self(), &before), set = KERN_NOT_SUPPORTED;
@@ -59,6 +60,11 @@ int main(int argc, char **argv) {
     _exit(0);
   }
   int mach_status = join_child(attacker); require(WIFEXITED(mach_status) && WEXITSTATUS(mach_status) == 0, "Mach observer exit");
+  if (argc == 3) {
+    printf("{\"kind\":\"joined\",\"attachAttempted\":false,\"attachExit\":0,\"attachSignal\":0,\"canaryIntact\":%s}\n",
+      canary == UINT64_C(0x6f6d612d70726f62) ? "true" : "false");
+    return 0;
+  }
   attacker = fork(); require(attacker >= 0, "fork own attach observer");
   if (!attacker) {
     errno = 0; int attached = ptrace(PT_ATTACHEXC, own, 0, 0), attached_errno = errno, detached = -2;

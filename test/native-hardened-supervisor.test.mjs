@@ -41,8 +41,14 @@ test('001. Actual hardened signing matrix compares an own debuggable target with
   run('/usr/bin/codesign',['--force','--sign','-','--options','runtime','--entitlements',entitlementFile,target]);
   const signing=run('/usr/bin/codesign',['--display','--verbose=4',target]);
   for(const mode of ['ordinary','guard']){
-   const result=await runtime.run('preparation',{executable:target,argv:[mode],cwd:root,env:{HOME:root,TMPDIR:root,PATH:'/usr/bin:/bin'},
-    timeoutMs:20000,stdoutBytes:16384,stderrBytes:16384},t.signal,()=>{});
+   // Trace attachment changes the target's parent/wait relationship. The
+   // existing attach fixture records that operation separately; this matrix
+   // must first answer the independent Mach-memory question.
+   const chunks=[];let result;
+   try{result=await runtime.run('preparation',{executable:target,argv:[mode,'mach-only'],cwd:root,env:{HOME:root,TMPDIR:root,PATH:'/usr/bin:/bin'},
+    timeoutMs:20000,stdoutBytes:16384,stderrBytes:16384},t.signal,()=>{},[],undefined,undefined,
+    (command,options)=>launchDarwinJobScope(command,{...options,stdoutSink:bytes=>chunks.push(Buffer.from(bytes))}));}
+   finally{t.diagnostic(JSON.stringify({name,mode,streamedStdout:Buffer.concat(chunks).toString()}));}
    t.diagnostic(JSON.stringify({name,mode,kind:result.kind,exitCode:result.exitCode,signal:result.signal,
     stdout:result.stdout.toString(),stderr:result.stderr.toString()}));
    assert.equal(result.kind,'exited',result.stderr.toString());assert.equal(result.exitCode,0,result.stderr.toString());

@@ -2772,10 +2772,53 @@ SOURCE59 최종 전체 architecture·transaction·durable boundary·document·sp
 source production·verifier를 이 검사 동안 고정했다. 문서 결과 기록 뒤 구조 binding과 document/spec/binding case만 다시 확인한다.
 G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
 
+
+### SOURCE59 실제 Actor/Run·private Git 성공과 남은 supervisor 대조
+
+SOURCE59 `29c76d30476c7985b0c7d405ac6008a55f87fd99`, Native41950684422/Architecture41950684469를 발행했다.
+Intel26 shared ZIP13381241074 SHA-256 `c72b14086ce356e0eba91f07e3cb590d2a6ee96f6047055b3960d8263e254fd8`,
+ARM26 shared ZIP13381635167 SHA-256 `2c5112612b3efccf6a52c37d51aad924b50616935d9745579685f95b32ec41d9`를 대조했다.
+양쪽404/403 PASS/1 FAIL·cancel/skip/todo0다. canonical15902/`b0b83441cd79445e710714190ac9635651632da61ab7b6b50d7b5333832be2c1`가 전후 같다.
+각 runtime15528/27/Intel `e58bd08b46e36e8ecde980ab32ffbf1da4ab4ea35f5cbe91ef1d4cdbbef413ec`,
+ARM `c5a44a12c2ef912f5c34e3df400f403d214a5fe51b9d608c18b0c4a52ee6e2b9`도 전후 같다.
+
+실제 Store/Broker/NativeResidents/Runtime 조합은 양 Mac에서 current Run commit·직접 kernel Actor 승인,
+wrong actor/invocation·같은 Host capability를 받은 다른 CID 거절, desired=stopped 뒤 기존 live Actor의 STALE_RUN,
+전체 scope death·빈 journal·incarnation 미증가를 모두 통과했다. Intel4352ms다.
+이는 controlled protocol driver이며 product entry/Pi·전체 immutable 외부 imports qualification이 아니다.
+전체 private generation도 Intel166849ms/ARM190339ms로 원래240초 예산 안에서 PASS다.
+private Git candidate 성공/최종 권한 철회·quarantine verify-before-import·accepted cursor/bytes 보존·canonical refs 보존,
+빈 lockfile cache helper의 private 재구축/재검증 hit와 마지막 immutable generation 회수까지 실제 통과했다.
+private Git 구간은 Intel10113ms/ARM18769ms다. 전체 CLI·실제 npm pipeline 실행 성공으로 확대하지 않는다.
+SOURCE57 Intel 복구 실패와 SOURCE58 Mac15 preparation 실패는 원인 미확정 추적을 유지한다.
+
+남은 실패1개는 새 hardened signing matrix의 job helper가 terminal 응답 전에 끝난 것이다.
+baseline debuggable case가 조기 종료해 Mach memory 양성 대조와 protected case 결과는 아직 미관측이다.
+원래 Node는 양 아키텍처에서 runtime flag와 get-task-allow=true를 함께 갖고 있었다.
+hardened bit만 보고 외부 task control/read 차단을 주장할 수 없다. production 서명·guard는 그대로다.
+ptrace attach는 target의 tracing/parent-wait 관계를 바꿀 수 있으며 helper는 direct unreaped child terminal을 요구한다.
+이것이 이번 종료의 원인이라는 것은 아직 추정이다. 다음 SOURCE60은 같은 C의 Mach-only 가지로 먼저 control/read/inspect를 분리하고,
+원래 attach 실험은 그대로 별도 실행한다. scope/terminal 판정을 완화하지 않는다. 실패 전 streamed stdout도 진단으로 보존한다.
+
+SOURCE60에는 own IPv6 multicast socket의 실제 name 유지·독립 name 양성·same name 경쟁·source filter metadata·
+shutdown/reconnect·dup/last close를 관측하는 작은 후보도 추가한다. multicast는 node-local/lo0이며 payload packet을 보내지 않는다.
+public shutdown-only와 명시적 private SO_RESTRICTIONS 조합을 비교하며 public SDK 기능과 private selector를 혼동하지 않는다.
+일반 C header/object compile은 arm64/x64 PASS지만 실제 Mac kernel 결과와 Society lease 채택은 NOT_RUN이다.
+probe의 관측 시험 PASS는 후보의 보안 성공이 아니다. 전체 Society identity·권한·fork/exec·owner crash 검증도 남는다.
+새 C guard의 첫 cross compile은 SDK include 누락/SDK system-header nullability로 실패했고, 실제 SDK를 system include로 지정한
+최종 arm64/x64 object compile은 PASS다. 실제 Mac clang -Wall/-Wextra/-Werror 조건은 유지한다.
+SOURCE60은 시험·CI·기록만 바꾸며 production bytes/manifest/dependency/패키지는 SOURCE59와 같다.
+따라서 production build/packed27 결과를 새로 실행한 것으로 세지 않는다. 새 Mac 가지와 전체 CI는 별도 검증한다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
+
+SOURCE60 로컬 새 시험3/3의 Linux NOT_RUN/refusal 가지와 최종 SDK arm64/x64 C object compile을 통과했다.
+전체 architecture·transaction·durable boundary·document·spec inventory도 exit0이다.
+새 관측 입력은 실제 Mac 실행 전까지 NOT_RUN이며 production gate를 완료로 바꾸지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `b0b83441cd79445e710714190ac9635651632da61ab7b6b50d7b5333832be2c1` (15902 files).
+verification input digest `453aff5376b9848e8bc37cec4a95fc72d9e13a17b023a783f46ae869547343a1` (15904 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
