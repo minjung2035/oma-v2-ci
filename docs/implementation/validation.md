@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `3e6b27e40d2e2f6aee3092bbb0b8affecfe92196d58ffc4920d5132bd41ed4f5` (15946 files).
+verification input digest `38503f316586a9e279cfa9c71d998e30f5c0c723398d6524ba237677934f4cfd` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4355,3 +4355,18 @@ SOURCE94는 release 직전에 기존 nonce/fixed-image discovery로 creator를 �
 그 뒤 private request를 보내며, 실패하면 같은 등록의 exit event/status를 남긴다. PID로 신호를 보내거나 전체 scope 사망으로 해석하지 않는다.
 이 입력은 원인 귀속용 중간 checkpoint다. 최종 review 재결박·fresh27/27·전체 architecture는 아직 미실행/미완료이며,
 앞선 source의 통과를 이 입력의 완료 근거로 전용하지 않는다. 실제 정상 반환과 전체 제품은 여전히 BLOCKED다.
+
+### SOURCE94 actual ARM 종료 상태와 SOURCE95 half-close handback
+
+SOURCE94 `c7c99cf1dda88ef65e20ed8bce9abc2d658e7875`, Native42064703097·Architecture42064703560이다.
+canonical15946/`3e6b27e40d2e2f6aee3092bbb0b8affecfe92196d58ffc4920d5132bd41ed4f5`다.
+ARM Society ZIP13432976831 SHA-256 `626fe93c5114c406a8ec5190ce3b26cb6873b8b7f2a0fecd78aab592189b0398`를 대조했다.
+동일 source/input/runtime Society 전후 동일, runtime15549/27 `c6c5f8e38af9154d9204e4e775e5544235bef948d4f1569b0616b1f29978f7e6`다.
+3 PASS /2 FAIL·기타0이며001/004의 accepted0/EOF 뒤 등록한 원래 creator의 EXIT|EXITSTATUS event는 각각 status0이다.
+release 직전 두 번의 fresh nonce/fixed-image token은 같았다. 이 실패를 SIGKILL/EXC_GUARD라고 주장하지 않는다.
+
+SOURCE95는 private owner 송신 half-close를 반환 요청으로 삼는다. creator는 원래 owner EOF 경로에서 자신의 socket copy를 close하고 C를 응답한다.
+Host는 C를 실제로 받은 뒤 자신의 socket copy를 반환한다. EOF 자체를 성공 acknowledgement로 삼지 않는다.
+Host 강제 종료로 응답을 받을 peer도 없으면 creator는 이미 자신의 socket을 반환한 뒤 EPIPE를 정리한다.
+실제 Mac 수정 결과는 NOT_RUN이며 이 입력도 최종 review/독립 설치/전체 architecture 마감 전의 중간 checkpoint다.
+세 gate OPEN·제품 BLOCKED이며 이전 source 통과를 전용하지 않는다.

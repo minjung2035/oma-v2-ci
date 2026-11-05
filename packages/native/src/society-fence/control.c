@@ -152,12 +152,10 @@ int main(int argc,char **argv){
     EV_SET(&change,before.val[5],EVFILT_PROC,EV_ADD|EV_ENABLE|EV_CLEAR,NOTE_EXIT|NOTE_EXITSTATUS,0,NULL);
     require(kevent(queue,&change,1,NULL,0,&zero)==0,"creator return exit registration");
     (void)discover(argv[2],argv[3],port,&after);require(!memcmp(&before,&after,sizeof before),"creator return generation");
-    deadline(3);char request='R',answer=0;errno=0;require(write(3,&request,1)==1,"creator return request");
+    deadline(3);char answer=0;errno=0;require(shutdown(3,SHUT_WR)==0,"creator owner send return");
     errno=0;ssize_t received=read(3,&answer,1);
-    int accepted=received==1 && answer=='R';
-    if(accepted){errno=0;received=read(3,&answer,1);}
     if(received!=1 || answer!='C'){
-      int saved=errno;fprintf(stderr,"creator return acknowledgement: accepted=%d bytes=%zd first=%u errno=%d\n",accepted,received,(unsigned char)answer,saved);
+      int saved=errno;fprintf(stderr,"creator return acknowledgement: bytes=%zd first=%u errno=%d\n",received,(unsigned char)answer,saved);
       if(received==1 && answer=='E'){char reason[256]={0};ssize_t bytes=read(3,reason,sizeof reason-1);if(bytes>0)fprintf(stderr,"creator failure: %.*s",(int)bytes,reason);}
       struct kevent ended={0};struct timespec bound={.tv_sec=1};errno=0;int events=kevent(queue,NULL,0,&ended,1,&bound);
       fprintf(stderr,"creator return event: count=%d pid=%lu filter=%d flags=%u notes=%u status=%ld errno=%d\n",events,(unsigned long)ended.ident,ended.filter,ended.flags,ended.fflags,(long)ended.data,errno);
