@@ -164,7 +164,7 @@
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
-      "sha256": "2befd59c71ad961fb7a626d83799309af5f9c795870578096d6078c941d052b0"
+      "sha256": "81f2da5366c4a18fe7cc71db4ef0524a4cd61dfd9e249b23ba7f0b45c9e5a747"
     },
     {
       "path": "apps/oma/src/entry/download-cache.ts",
@@ -1228,7 +1228,7 @@
     },
     {
       "path": "packages/git/src/candidate-check.ts",
-      "sha256": "a2c2fdddc749bc533970699de034454e0fd8964c5f4014713b4059d96c1ad2f6"
+      "sha256": "846d63c698aea9e09d56577d606079ae94b9c4cb461b830353257af3820c78e5"
     },
     {
       "path": "packages/git/src/canonical-command.ts",
@@ -1524,7 +1524,7 @@
     },
     {
       "path": "packages/native/src/files.ts",
-      "sha256": "5ecbf03c3a6a049e8812dfca00836a61cc383dd08593ae77fb01f63b991bfb7e"
+      "sha256": "0b81feb80daedb013e9c1e3120f27880da0c57b2911cbc1c335ab6ed74cd26a6"
     },
     {
       "path": "packages/native/src/identity.ts",
@@ -1668,7 +1668,7 @@
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",
-      "sha256": "bad883c71d9817a615ffd297710b92edfd7eb61fb9e2750ccd79253af370f3ea"
+      "sha256": "0a12e7e7b674561255b86583aa8bcb8c8304891fedc1f6a7f6514cedb7257134"
     },
     {
       "path": "packages/platform-mac/src/job-control.ts",

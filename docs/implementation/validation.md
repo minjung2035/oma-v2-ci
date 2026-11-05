@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a9c639e732b40edf01e2c967cea0511d027f003e1c00c2d92035756dfc430ae9` (15910 files).
+verification input digest `103754bcbb2ce00a99529e8ac8a72d644da68acab5870587c795dbcf44ebc4ef` (15912 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3051,3 +3051,48 @@ SOURCE64 최종 full architecture·transaction·durable boundary·document·spec
 독립 alias 추가 fixture의 arm64/x64 SDK compile·Linux NOT_RUN 가지도 PASS다.
 production·public API·package bytes는 SOURCE63과 같아 build/packed 설치 결과를 새 runtime 관측으로 바꾸지 않는다.
 새 alias 실험과 Mac15 보호/pipeline/root-FD 경로의 실제 결과는 아직 NOT_RUN이다.
+
+
+### SOURCE64 Mac15 실제408/408와SOURCE65 canonical checkout 결박
+
+SOURCE64 `6f30ace077f63719c89cb9f6db3d1447d38271c5` / local checkpoint `bf3af99f33b8ff58ecd33dd3cc22e3ba2544eb97`,
+Native41983813879·Architecture41983813748를 발행했다.canonical15910/`a9c639e732b40edf01e2c967cea0511d027f003e1c00c2d92035756dfc430ae9`다.
+Mac15 shared ZIP13394673803 SHA-256 `e551c66f7be4ab24c6a74825cf1150be67f0ee9a2b28561e5c1115810abec6c4`를 대조했다.
+408/408 PASS·fail/cancel/skip/todo0, 위 source/canonical과 runtime15532/27/`029748bf3f35fd5b472c095dccfd562fe963df225818b3a6f7795c58cf0befb6`가 shared 전후 같다.
+보호 Node producer/self guard·JIT/FFI·원본 memory 양성/보호 음성과 whole private generation의 pipeline·receipt·권한 철회·quarantine, raw/Seatbelt directory-FD original-only 효과가 최소 OS에서도 실행됐다.
+서명1641ms·generation79904ms·private Git13304ms·collection9805ms이며 기존 budget을 유지했다.
+
+독립 alias는 specific bind·reuse on/off·connect/shutdown/disconnect를 모두 성공해 같은 ANY address/port·state48을 만들었다.
+원본 socket generation5364와 alias5384/opaque handle은 서로 달랐다. 그러나 specific bind 상태에서 full identity source-filter 복사는 EINVAL22였고
+마지막 read도 EINVAL·sameSources=false였다. 주소/port/state만 검사하는 claim은 불충분하며 이 결과를 완전한 metadata 위조 성공이나 불가능으로 단정하지 않는다.
+후속 fixture는 live disconnect로 ANY를 만든 뒤 metadata 복사를 다시 시도하고 reconnect→freeze한다. 이 추가 순서는 Mac NOT_RUN이다.
+
+SOURCE65는 단일 disposable candidate entry가 실제 slot7 canonical FD로 cwd를 선택한다.
+Native enterDirectory는 fstat-directory→fchdir 후 같은`.`에서 Node cwd cache를 갱신한다. Broker/동시 host의 cwd는 바꾸지 않는다.
+entry는 cwd 선택 직후 자기 inherited FD7 copy를 닫고, shared Git owner에는 trusted local `.` reference만 넘긴다.
+wire/model invocation grammar는 바꾸지 않는다. canonical observation과 fetch source는 그 cwd 기준이며
+fetch target은 private workspace의 .git이다. -C로 source의 의미를 바꾸지 않는다. Linux mounted source 경로도 같은 shared fetch를 사용한다.
+Mac recipe는 setup에 FD7을 명시 전달하며 final check에는 canonical inode가 그 slot으로 남지 않았음을 whole-generation fixture가 확인한다.
+
+별도 child의 초기 cwd cache를 채운 뒤 directory 이름을 교체하고 FD로 진입→local FD close→원래 canary/cwd 확인,
+실제 shared candidate의 canonical 이름을 빈 다른 repo로 교체한 뒤 original commit checkout을 각각 Linux에서 통과했다.
+host cwd는 전후 보존했다. 관련 local11/11·실제 namespace pipeline5/5도 PASS다. 새 App entry·Mac FD7·업무 경로의 실제 Mac 실행은 아직 NOT_RUN이다.
+FD7 close 보완 전 시작했던 package/review 검사는 소유 프로세스를 중단했고 최종 bytes로 다시 실행한다.
+SOURCE65는 candidate canonical read/fetch 연결이며 quarantine·accepted canonical write·private workspace 전체 root 결박 완료가 아니다.
+Society lease·남은 Git owner·전체 product Runner/Worker·CLI/reboot/release와 세 gate OPEN·product BLOCKED를 유지한다.
+
+SOURCE64 Intel26 shared ZIP13394923604 SHA-256 `d2d5b3d26b554002d1869225c2a02eb358eb93141b29a24927e1e803c57b0c5b`를 대조했다.
+408/408 PASS·기타0이며 같은 source/canonical15910과 runtime15532/27/`3904c175fe577711ba4c0905897c609b8bf7b056b71ea3d81a960f5d25e83492`가 전후 같다.
+Intel에서는 alias-copy-full-identity와 alias-read-full-identity가 모두0이고 mode1/count4/sameSources=true였다.
+reuse on/off·freeze·disconnect도 성공하여 독립 socket이 같은 ANY address/port/state48·전체 metadata를 복제했다.
+socket opaque handle과 generation은 달랐다. 따라서 current flags/name/source-filter만 검사하는 inherited claim은 반례가 있어 REJECTED다.
+Mac15의 EINVAL 관측을 모든 지원 OS의 위조 방지로 일반화하지 않는다.
+진짜 bind를 수행한 producer와 그 instance를 결박하는 별도 근거가 없이는 이 후보를 Society lease로 채택하지 않는다.
+후속 ANY-reset 순서 관측도 이 반례를 지우거나 기존 실패를 PASS로 바꾸는 재시도가 아니다.
+
+SOURCE65 FD7 close를 포함한 최종 source 고정 뒤 단일 build·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사도 exit0다.
+관련 local11/11·실제 namespace pipeline5/5·새 두 held-root child 시험은 PASS이며 별도 namespace/Actor/CLI 증거로 승계하지 않는다.
+production14394, review CHANGED_WITHOUT_ORACLE30 / NOT_REVIEWED14364 / REMOVED220이다.
+원시는 `/tmp/oma-source65-{build-closed-fd,package-isolation-closed-fd,selected-closed-fd,linux-pipeline-closed-fd,root-closed-fd,review-closed-fd,architecture}.log`다.
+SOURCE65의 실제 Mac candidate canonical FD 업무 연결과 추가 alias 순서는 NOT_RUN이다. product BLOCKED·세 gate OPEN·기본 실행 guard를 유지한다.

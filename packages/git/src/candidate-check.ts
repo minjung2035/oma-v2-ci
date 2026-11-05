@@ -85,9 +85,13 @@ export function decodeCandidateInvocation(value: unknown): CandidateInvocation {
   return Object.freeze({ ...(raw.downloadCache === undefined ? {} : { downloadCache: raw.downloadCache as { key: string; files: string[] } }), ...(raw.pipeline === undefined ? {} : { pipeline: frozenPipeline(raw.pipeline as CheckPipeline), pipelineView: pipelineView! }), candidate: raw.candidate as string, argv: Object.freeze([...raw.argv]) as readonly string[],
     view: decodeCandidateExecutionView(raw.view) });
 }
-export async function executeCandidateCheck(input: CandidateInvocation, beforeExec: () => void, status?: (frame: PipelineFrame) => void): Promise<number> {
+export async function executeCandidateCheck(input: CandidateInvocation, beforeExec: () => void, status?: (frame: PipelineFrame) => void,
+  projectReference?: string): Promise<number> {
   input = decodeCandidateInvocation(input);
-  const { project, workspace, git: executable } = input.view;
+  const { workspace, git: executable } = input.view;
+  // Selected by the trusted setup entry after acquiring its physical cwd,
+  // never by a decoded invocation/model field. Linux keeps its mounted view.
+  const project = projectReference ?? input.view.project;
   const observer = createCanonicalObserver(executable);
   requireNoGitlinks(observed(observer.gitlinks(project, input.candidate), "candidate gitlinks"));
   const format = observed(observer.objectFormat(project), "candidate object format");
@@ -98,7 +102,9 @@ export async function executeCandidateCheck(input: CandidateInvocation, beforeEx
     if (result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("REF_STATE_UNKNOWN", "exact check checkout was not observed");
   };
   await git(["init", "-q", `--object-format=${format}`, workspace]);
-  await git(["-C", workspace, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance", project, input.candidate]);
+  // Keep the source relative to the canonical cwd while writing the private
+  // checkout's object database. -C would reinterpret that source there.
+  await git(["--git-dir", join(workspace, ".git"), "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance", project, input.candidate]);
   ensureOwnedDirectory(join(workspace, ".git/info"), workspace, 0o700);
   // Unaccepted setup bytes belong to this disposable workspace. Its owner
   // supplies the root; setup must not open/flush ancestors outside its view.

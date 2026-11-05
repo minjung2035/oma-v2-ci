@@ -1,7 +1,7 @@
 /** Actual App Git owners, one immutable generation and actual journal scopes.
  * Called inside the whole-generation qualification to avoid a second cold copy. */
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,readFileSync,openSync,closeSync,readSync,readdirSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,openSync,closeSync,readSync,readdirSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {ExecutionJournal} from '@oma/storage/execution-journal';
@@ -65,9 +65,12 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
    return last?.entry===originals[0].path&&row?.witness?.kind==='darwin-resource-coalition'&&
     row.witness.bootId===last.witness.bootId&&row.witness.coalitionId===last.witness.coalitionId;
   };
+  const projectStat=statSync(project,{bigint:true}),projectIdentity={dev:String(projectStat.dev),ino:String(projectStat.ino)};
   const exact=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'private-runtime',protectedPaths:[],checks:[{id:'exact',env:{},
    argv:[installation.node,'-e',`const a=require('node:assert/strict'),f=require('node:fs');
     a.equal(f.readFileSync('exact.txt','utf8'),'private generation checkout\\r\\n');
+    try{const s=f.fstatSync(7,{bigint:true});a.notDeepEqual({dev:String(s.dev),ino:String(s.ino)},${JSON.stringify(projectIdentity)});}
+    catch(error){if(error.code!=='EBADF')throw error;}
     a.throws(()=>f.readFileSync(${JSON.stringify(originals[0].path)}),e=>['EPERM','EACCES'].includes(e.code));
     process.stdout.write('private-check');`]}]}).checks[0];
   let authorized=0;await checks.run(base,exact,signal,()=>{if(currentCandidate())authorized++;});

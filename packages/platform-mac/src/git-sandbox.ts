@@ -68,7 +68,7 @@ export function candidateSeatbeltPlan(host: MacGitSandboxHost, viewInput: Candid
     executable: [...roots.executable, dir(view.workspace), dir(temporary),
       ...developerToolDirectories(roots.tools).map(dir)],
     mapped: roots.mapped, unixSockets: [], machServices: [], environmentKeys: Object.keys(env),
-    profileInput: "stdin", preserveFds: [6, 8, 9, ...(downloads === undefined ? [] : [10])],
+    profileInput: "stdin", preserveFds: [6, 7, 8, 9, ...(downloads === undefined ? [] : [10])],
   } };
 }
 export function quarantineSeatbelt(host: MacGitSandboxHost, input: { readonly phase: "verify" | "import"; readonly candidate: string;

@@ -66,6 +66,20 @@ function checked(result: number): number {
     { code },
   );
 }
+let changeDirectory: ((fd: number) => number) | undefined;
+/** Changes this process's cwd to a borrowed directory capability. Only a
+ * dedicated terminal setup/exec owner may use this process-global effect;
+ * concurrent application hosts must keep using child directory controls. */
+export function enterDirectory(fd: number): void {
+  if (!["linux", "darwin"].includes(process.platform))
+    throw new StoreError("UNSUPPORTED_PROFILE", "descriptor cwd requires a POSIX backend");
+  if (!Number.isSafeInteger(fd) || fd < 0 || !fstatSync(fd).isDirectory()) throw new TypeError("cwd requires a held directory");
+  changeDirectory ??= load(null).func("int fchdir(int fd)");
+  checked(changeDirectory(fd));
+  // Refresh Node's cwd cache relative to that same held directory; there is
+  // no absolute-path reopen or pathname fallback here.
+  process.chdir(".");
+}
 function relativeName(path: string): void {
   if (
     !path ||

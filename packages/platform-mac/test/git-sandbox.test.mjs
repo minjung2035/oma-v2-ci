@@ -19,7 +19,7 @@ test("001. Mac setup describes the selected exact developer bundle without grant
   const plan=candidateSeatbeltPlan(host,view,root+'/tmp',candidate,check);
   assert.equal(plan.command.executable,host.node);assert.equal(plan.command.argv[0],host.libdir+'/apps/oma/dist/entry/candidate-check.js');
   assert.deepEqual(prepareSeatbelt(plan.command,plan.policy),recipe);
-  assert.deepEqual(recipe.command.argv.slice(0,2),['--profile-stdin','--keep-fds=6,8,9']);
+  assert.deepEqual(recipe.command.argv.slice(0,2),['--profile-stdin','--keep-fds=6,7,8,9']);
   assert.deepEqual(recipe.privateInputs,[]);assert.ok(recipe.command.input instanceof Uint8Array);
   assert.deepEqual(JSON.parse(recipe.command.argv.at(-1)),{candidate,argv:check.argv,view});
   assert.equal(env.HOME,root+'/tmp');assert.equal(env.GIT_CONFIG_GLOBAL,'/dev/null');assert.equal(env.GIT_EXEC_PATH,tools.execPath);
@@ -90,7 +90,7 @@ test("005. Mac pipeline keeps the staging lease in slot9 and gives downloads a s
   assert.doesNotThrow(()=>prepareSeatbelt(plan.command,plan.policy));
   const input=JSON.parse(plan.command.argv.at(-1));
   assert.equal(input.pipelineView.downloads,downloadCache.root);assert.deepEqual(input.downloadCache,{key:downloadCache.key,files:downloadCache.files});
-  assert.deepEqual(plan.policy.preserveFds,[6,8,9,10]);
+  assert.deepEqual(plan.policy.preserveFds,[6,7,8,9,10]);
   assert.ok(plan.policy.readable.some(entry=>entry.path===downloadCache.root));
   for(const permission of ['writable','executable','mapped'])assert.ok(!plan.policy[permission]?.some(entry=>entry.path===downloadCache.root));
   for(const path of [root+'/tmp',view.workspace,project,'/private/var/oma'])

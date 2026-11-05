@@ -96,9 +96,12 @@ int main(void) {
       result("alias-join-same-group", setsockopt(forged, IPPROTO_IPV6, MCAST_JOIN_GROUP, &membership, sizeof membership));
       result("alias-copy-full-identity", setsourcefilter(forged, loopback, (struct sockaddr *)&group, sizeof group, MCAST_INCLUDE, 4, sources));
       result("alias-connect", connect(forged, (struct sockaddr *)&peer, sizeof peer));
+      result("alias-live-disconnectx", disconnectx(forged, SAE_ASSOCID_ANY, SAE_CONNID_ANY));
+      result("alias-copy-identity-after-wildcard-reset", setsourcefilter(forged, loopback, (struct sockaddr *)&group, sizeof group, MCAST_INCLUDE, 4, sources));
       int zero = 0;
       result("alias-reuseaddr-off", setsockopt(forged, SOL_SOCKET, SO_REUSEADDR, &zero, sizeof zero));
       result("alias-reuseport-off", setsockopt(forged, SOL_SOCKET, SO_REUSEPORT, &zero, sizeof zero));
+      result("alias-connect-before-freeze", connect(forged, (struct sockaddr *)&peer, sizeof peer));
       result("alias-deny-out", setsockopt(forged, SOL_SOCKET, 0x1081, &deny, sizeof deny));
       result("alias-shutdown", shutdown(forged, SHUT_RDWR));
       result("alias-disconnectx", disconnectx(forged, SAE_ASSOCID_ANY, SAE_CONNID_ANY));
