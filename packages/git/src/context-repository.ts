@@ -2,7 +2,7 @@ import { mkdirAt } from "@oma/file-descriptors";
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */
-import { constants, closeSync, fchmodSync, fstatSync, lstatSync, readlinkSync } from "node:fs";
+import { constants, closeSync, fchmodSync, fstatSync, lstatSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry, Oid } from "@oma/contracts";
 import type { OperationOf, ValidatedPlan } from "@oma/protocol/operation-codec";
@@ -12,7 +12,7 @@ import { contextRevisionLinkFor } from "@oma/domain/derived";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { readContextEntry, assertContextDirectory } from "@oma/storage/context-files";
-import { contextStagingPathAt, contextRevisionPathAt } from "@oma/domain/paths";
+import { contextStagingPathAt } from "@oma/domain/paths";
 import { TreeLease, treeQuiescence } from "@oma/storage/tree-lease";
 import { ensureOwnedDurableDirectory, fsyncDir, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 import { openBeneath, openDirectory, closeEvery } from "@oma/native/files";
@@ -27,6 +27,7 @@ import { consumeContextPublication } from "./context-publication.js";
 import type { ContextPublicationEvidence } from "@oma/contracts/publication";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { bindCanonicalCommand, canonicalDirectory, type CanonicalExecution } from "./canonical-command.js";
+import { readlinkAt, statAt } from "@oma/native/posix-files";
 
 const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid",
@@ -295,19 +296,41 @@ export class ContextRepository {
         this.writeEntry(work, entry, this.blob(oid, entry));
       }
     }
-    publishContextRevision(this.paths.worldDir, plan.candidate, plan.entries, work);
+    let world = canonicalDirectory(this.paths.worldDir, this.execution);
+    if (world === undefined && this.execution !== undefined) {
+      ensureOwnedDurableDirectory(this.paths.worldDir, this.paths.stateRoot, 0o755);
+      world = canonicalDirectory(this.paths.worldDir, this.execution);
+    }
+    const source = openDirectory(work);
+    try { publishContextRevision(this.paths.worldDir, plan.candidate, plan.entries, source,
+      world === undefined ? {} : { directoryFd: world }); }
+    finally { closeSync(source); }
   }
   snapshotReady(plan: ValidatedPlan<"context.publish">): boolean {
-    const link = join(this.paths.worldDir, "context", "current");
-    const observed = lstatSync(link, { throwIfNoEntry: false });
-    if (!observed) return false;
-    if (!observed.isSymbolicLink() || readlinkSync(link) !== contextRevisionLinkFor(plan.candidate))
-      throw new StoreError("STORE_CORRUPT", "context current pointer does not name the completed canonical revision");
-    const root = contextRevisionPathAt(this.paths.worldDir, plan.candidate);
-    if (!lstatSync(root, { throwIfNoEntry: false })) return false;
-    this.verifyCandidate(plan.candidate, plan.entries, plan.base);
-    if (plan.goalMail) this.assertGoalOnly(plan.candidate, plan.base, true);
-    verifyContextRevision(root, plan.entries, true);
-    return true;
+    let world = canonicalDirectory(this.paths.worldDir, this.execution);
+    const borrowed = world !== undefined;
+    if (world === undefined) {
+      try { world = openDirectory(this.paths.worldDir); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+    }
+    try {
+      let context: number;
+      try { context = openBeneath(world, "context", constants.O_RDONLY | constants.O_DIRECTORY); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+      try {
+        const current = statAt(context, "current", { throwIfNoEntry: false });
+        if (!current) return false;
+        if (!current.isSymbolicLink() || readlinkAt(context, "current") !== contextRevisionLinkFor(plan.candidate))
+          throw new StoreError("STORE_CORRUPT", "context current pointer does not name the completed canonical revision");
+        let revision: number;
+        try { revision = openBeneath(context, `revisions/${plan.candidate}`, constants.O_RDONLY | constants.O_DIRECTORY); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+        try {
+          this.verifyCandidate(plan.candidate, plan.entries, plan.base);
+          if (plan.goalMail) this.assertGoalOnly(plan.candidate, plan.base, true);
+          verifyContextRevision(revision, plan.entries, true); return true;
+        } finally { closeSync(revision); }
+      } finally { closeSync(context); }
+    } finally { if (!borrowed) closeSync(world); }
   }
 }

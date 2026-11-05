@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "b31fe06b3c6c782099497f4554b456a4b60c3803245987e78f67d09f53d42f45"
+      "sha256": "10e7a0a2c9bd1a197e755f9191a7c645efe0f8b2b05473e528fcf86cd5c6d46f"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -1232,7 +1232,7 @@
     },
     {
       "path": "packages/git/src/canonical-command.ts",
-      "sha256": "1a0c22969c27e8d6bae679d0ea735b0edadcb46b8a4c51de3183ee8c4e8ddaf7"
+      "sha256": "561836ff7ce9e989a430f5fad5ead41db7007065cec54e2d48fa7af04e7d6c85"
     },
     {
       "path": "packages/git/src/canonical-directory.ts",
@@ -1252,7 +1252,7 @@
     },
     {
       "path": "packages/git/src/context-repository.ts",
-      "sha256": "39faf2c737392624f4cdcce79352b12cb0ad56056f60fbbdf552db558684db09"
+      "sha256": "991a09c91c73c360514cce7553d3f2939276d2bd8087eccee5028211d81cdd71"
     },
     {
       "path": "packages/git/src/context.ts",
@@ -2092,7 +2092,7 @@
     },
     {
       "path": "packages/storage/src/context-snapshot.ts",
-      "sha256": "05a061c4bfe184083a94c341c3e4f9f3adef50bdcb31298bd336f637322a9eb6"
+      "sha256": "282d45f2bb460c582c39101270e8e3265b8af1978d20bd83191046498e92366a"
     },
     {
       "path": "packages/storage/src/context-stream.ts",
@@ -2224,7 +2224,7 @@
     },
     {
       "path": "packages/storage/src/staged-tree.ts",
-      "sha256": "6d134d9e8a4e347c263a63df6788fd68ffb8271744d7b54d04b62e15f95fdd75"
+      "sha256": "e6f333514a012dbb2d0a92d547713bd2898b36d0166bb5bf547d13fbf030969b"
     },
     {
       "path": "packages/storage/src/store-access.ts",

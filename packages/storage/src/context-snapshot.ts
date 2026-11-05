@@ -3,7 +3,7 @@
  * source/commit-work and an existing revision are never removed or regenerated.
  * Context files use fixed 0644; mail's immutable-file 0444 policy is separate.
  */
-import { constants, closeSync, fchmodSync, fstatSync, lstatSync } from "node:fs";
+import { constants, closeSync, fchmodSync, fstatSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry } from "@oma/contracts";
 import { generateOperationId } from "@oma/native/identity";
@@ -11,14 +11,13 @@ import { isValidFullOid } from "@oma/domain/identifiers";
 import { contextRevisionLinkFor } from "@oma/domain/derived";
 import { contextEntriesCheck } from "@oma/domain/context-policy";
 import { StoreError } from "@oma/domain/errors";
-import { contextRevisionPathAt } from "@oma/domain/paths";
-import { assertContextDirectory, readContextEntry } from "./context-files.js";
-import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "./durable-fs.js";
-import { publishStagedDirectory, replaceDerivedSymlink } from "./staged-tree.js";
-import { openBeneath, openDirectory } from "@oma/native/files";
-import { removeOwnedFile, removeOwnedTree } from "./directory.js";
+import { readContextEntry } from "./context-files.js";
+import { ensureOwnedDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedEntry } from "./durable-fs.js";
+import { publishStagedDirectoryAt, replaceDerivedSymlinkAt } from "./staged-tree.js";
+import { closeEvery, openBeneath, openDirectory } from "@oma/native/files";
+import { openOwnedDirectory, removeOwnedTreeAt } from "./directory.js";
 import { withCleanup } from "@oma/native/cleanup";
-import { directoryNames } from "@oma/file-descriptors";
+import { directoryNames, mkdirAt, unlinkAt } from "@oma/file-descriptors";
 import { statAt } from "@oma/native/posix-files";
 import { TreeLease, leasePathOf } from "./tree-lease.js";
 
@@ -53,64 +52,75 @@ export function verifyContextRevision(root: string | number, entries: readonly C
     });
   } finally { if (typeof root === "string") closeSync(directory); }
 }
-function sealRevision(root: string, entries: readonly ContextEntry[]): void {
-  const directory = openDirectory(root);
-  try {
-    verifyContextRevision(directory, entries);
-    // Metadata effects act on the exact file descriptor whose bytes were checked.
-    for (const entry of entries) readContextEntry(directory, entry, fd => fchmodSync(fd, 0o644));
-    if (entries.some(entry => entry.path.startsWith("decisions/"))) {
-      const decisions = openBeneath(directory, "decisions", constants.O_RDONLY | constants.O_DIRECTORY);
-      try { fchmodSync(decisions, 0o555); } finally { closeSync(decisions); }
-    }
-    fchmodSync(directory, 0o555);
-    fsyncTree(directory, "context-single-link");
-    verifyContextRevision(directory, entries, true);
-  } finally { closeSync(directory); }
+function sealRevision(directory: number, entries: readonly ContextEntry[]): void {
+  verifyContextRevision(directory, entries);
+  // Metadata effects act on the exact file descriptor whose bytes were checked.
+  for (const entry of entries) readContextEntry(directory, entry, fd => fchmodSync(fd, 0o644));
+  if (entries.some(entry => entry.path.startsWith("decisions/"))) {
+    const decisions = openBeneath(directory, "decisions", constants.O_RDONLY | constants.O_DIRECTORY);
+    try { fchmodSync(decisions, 0o555); } finally { closeSync(decisions); }
+  }
+  fchmodSync(directory, 0o555);
+  fsyncTree(directory, "context-single-link");
+  verifyContextRevision(directory, entries, true);
 }
 
 /** Mechanism only. The context coordinator must validate the accepted plan and
  * fresh canonical-ref evidence before calling this trusted-root materializer.
  */
 export function publishContextRevision(
-  worldDir: string, candidate: string, entries: readonly ContextEntry[], source: string,
+  worldDir: string, candidate: string, entries: readonly ContextEntry[], source: string | number,
+  control: { readonly directoryFd?: number } = {},
 ): void {
   const invalid = contextEntriesCheck(entries, { requireSorted: true });
   if (invalid || !isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", invalid ?? "invalid context revision");
-  assertContextDirectory(source);
-  const revisions = join(worldDir, "context", "revisions");
-  ensureOwnedDurableDirectory(revisions, worldDir, 0o755);
-  const destination = contextRevisionPathAt(worldDir, candidate);
-  if (!lstatSync(destination, { throwIfNoEntry: false })) {
-    const temporary = join(revisions, `.prepare-${candidate}-${generateOperationId()}`);
-    // AV-20261003-19 (P0-4): the temporary is lease-owned from creation, so a
-    // publication interrupted between creation and the atomic rename leaves a
-    // residue whose quiescence startup recovery can prove -- not an ownerless
-    // tree with no recoverable ownership.
-    const lease = TreeLease.take(temporary);
-    // Everything after `take` is inside the same release-on-failure guard:
-    // a failure while the tree is being made must not strand the lease fd
-    // or leave its ".lease" reading active until process exit (AV-18 shape).
-    // withCleanup owns the shape: a cleanup failure beside an in-flight
-    // publish failure is retained beside it (P0-4), never substituted for it,
-    // and the release still runs exactly once.
-    withCleanup(() => {
-      ensureOwnedDurableDirectory(temporary, worldDir, 0o755);
-      for (const entry of entries) {
-        const bytes = readContextEntry(source, entry);
-        const target = join(temporary, entry.path);
-        ensureOwnedDurableDirectory(dirname(target), worldDir, 0o755);
-        writeExclusiveFsyncedFile(target, bytes, 0o644);
-      }
-      sealRevision(temporary, entries);
-      publishStagedDirectory(temporary, destination, root => verifyContextRevision(root, entries, true), "context-single-link");
-    }, () => withCleanup(() => {
-      // Any residue this leaves -- tree, lease or both -- is named for the
-      // startup collector, which removes it once the lease proves quiescence.
-      removeOwnedTree(temporary);
-      removeOwnedFile(leasePathOf(temporary));
-    }, () => lease.release()));
-  }
-  sealRevision(destination, entries);
-  replaceDerivedSymlink(join(worldDir, "context", "current"), contextRevisionLinkFor(candidate));
+  let world: number | undefined, context: number | undefined, revisions: number | undefined, sourceDirectory: number | undefined;
+  const ensure = (parent: number, name: string, label: string): number => {
+    try { mkdirAt(parent, name, 0o755); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    const child = openOwnedDirectory(parent, name);
+    try { fsyncHeldDir(child, label); fsyncHeldDir(parent, dirname(label)); return child; }
+    catch (error) { return withCleanup(() => { throw error; }, () => closeSync(child)); }
+  };
+  return withCleanup(() => {
+    sourceDirectory = typeof source === "number" ? source : openDirectory(source);
+    if (!fstatSync(sourceDirectory).isDirectory()) throw new StoreError("STORE_CORRUPT", "context source is not a directory");
+    if (control.directoryFd === undefined) ensureOwnedDurableDirectory(worldDir, worldDir, 0o755);
+    world = control.directoryFd ?? openDirectory(worldDir);
+    if (!fstatSync(world).isDirectory()) throw new StoreError("STORE_CORRUPT", "context publication root is not a directory");
+    context = ensure(world, "context", join(worldDir, "context"));
+    revisions = ensure(context, "revisions", join(worldDir, "context", "revisions"));
+    let present = true;
+    try { statAt(revisions, candidate); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; present = false; }
+    if (!present) {
+      const name = `.prepare-${candidate}-${generateOperationId()}`, temporary = join(worldDir, "context", "revisions", name);
+      const lease = TreeLease.take(temporary, false, { directoryFd: revisions });
+      withCleanup(() => {
+        mkdirAt(revisions!, name, 0o755);
+        const tree = openBeneath(revisions!, name, constants.O_RDONLY | constants.O_DIRECTORY);
+        withCleanup(() => {
+          for (const entry of entries) {
+            const bytes = readContextEntry(sourceDirectory!, entry);
+            let parent = tree;
+            if (entry.path.startsWith("decisions/")) parent = ensure(tree, "decisions", join(temporary, "decisions"));
+            withCleanup(() => writeExclusiveFsyncedEntry(parent, entry.path.split("/").at(-1)!, join(temporary, entry.path), bytes, 0o644),
+              () => { if (parent !== tree) closeSync(parent); });
+          }
+          sealRevision(tree, entries);
+          publishStagedDirectoryAt(revisions!, name, revisions!, candidate,
+            root => verifyContextRevision(root, entries, true), "context-single-link");
+        }, () => closeSync(tree));
+      }, () => withCleanup(() => {
+        removeOwnedTreeAt(revisions!, name);
+        try { unlinkAt(revisions!, leasePathOf(name)); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        fsyncHeldDir(revisions!, join(worldDir, "context", "revisions"));
+      }, () => lease.release()));
+    }
+    const destination = openBeneath(revisions, candidate, constants.O_RDONLY | constants.O_DIRECTORY);
+    withCleanup(() => sealRevision(destination, entries), () => closeSync(destination));
+    replaceDerivedSymlinkAt(context, "current", join(worldDir, "context", "current"), contextRevisionLinkFor(candidate));
+  }, () => closeEvery(revisions, context, typeof source === "string" ? sourceDirectory : undefined,
+    control.directoryFd === undefined ? world : undefined));
 }

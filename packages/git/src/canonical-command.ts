@@ -17,7 +17,8 @@ export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 *
 export interface CanonicalExecution {
   readonly executable: string;
   readonly directories: ReadonlyMap<string, number>;
-  /** Trusted lifetime owner may retain a repository created after composition.
+  /** Trusted lifetime owner may retain a repository or derived publication root
+   * created after composition. Only declared repository operands bind Git.
    * The returned cursor stays owned through native and logical shutdown. */
   readonly directory?: (repository: string) => number | undefined;
 }

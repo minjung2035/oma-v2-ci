@@ -4,19 +4,13 @@ import { renameAt, symlinkAt, statAt } from "@oma/native/posix-files";
  * The caller serializes publication in a trusted root and validates artifact
  * identity. These syscalls do not establish a new kernel no-replace guarantee.
  */
-import { lstatSync } from "node:fs";
+import { closeSync, constants, fstatSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute } from "node:path";
 import { StoreError } from "@oma/domain/errors";
-import { fsyncDir, fsyncHeldDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
+import { fsyncHeldDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
 import { assertDirectory } from "./directory.js";
-import { withinDirectory } from "@oma/native/files";
-
-function requireDirectory(path: string): void {
-  assertDirectory(path);
-  const stat = lstatSync(path);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new StoreError("STORE_CORRUPT", `non-directory staged tree: ${path}`);
-}
+import { openBeneath, withinDirectory } from "@oma/native/files";
 
 /** Caller prepares file contents and proves artifact identity. An existing
  * destination is verified and flushed first: staging and its parent may already
@@ -37,46 +31,16 @@ export function publishStagedDirectory(
 ): "published" | "existing" {
   if (staging === destination) throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
   assertDirectory(dirname(destination));
-  const existing = (): "existing" => {
-    requireDirectory(destination);
-    verify(destination);
-    fsyncTree(destination, policy);
-    fsyncDir(dirname(destination));
-    return "existing";
-  };
-  let present = true;
-  try { withinDirectory(destination, (parent, name) => statAt(parent, name)); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    present = false;
-  }
-  if (present) return existing();
-  assertDirectory(dirname(staging));
-  requireDirectory(staging);
-  verify(staging);
-  fsyncTree(staging, policy);
-  // Both ends of the rename are addressed through descriptors this call holds.
-  // Naming them by path again would mean the directory just verified and the
-  // directory published into need not be the same one: at this UID a component
-  // of either path can be replaced between the check and the rename, and the
-  // accepted tree would land outside the state tree under a name the product
-  // then reports as published.
-  const moved = withinDirectory(staging, (from, fromName) =>
-    withinDirectory(destination, (to, toName) => {
-      try { renameAt(from, fromName, to, toName); }
-      catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
-        return false;
-      }
-      fsyncHeldDir(to, dirname(destination));
-      if (dirname(staging) !== dirname(destination)) fsyncHeldDir(from, dirname(staging));
-      return true;
-    }));
-  if (!moved) return existing();
-  requireDirectory(destination);
-  verify(destination);
-  return "published";
+  return withinDirectory(destination, (to, toName) => {
+    let present = true;
+    try { statAt(to, toName); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; present = false; }
+    // Replay still works after staging and its parent have been collected.
+    if (present) return existingStagedDirectory(to, toName, () => verify(destination), policy);
+    assertDirectory(dirname(staging));
+    return withinDirectory(staging, (from, fromName) => publishStagedDirectoryAt(from, fromName, to, toName,
+      (_root, phase) => verify(phase === "staging" ? staging : destination), policy));
+  });
 }
 
 /** Mutable current link: one owned link -> rename -> parent fsync. No target
@@ -85,33 +49,78 @@ export function publishStagedDirectory(
  */
 export function replaceDerivedSymlink(path: string, target: string): void {
   assertDirectory(dirname(path));
+  withinDirectory(path, (parent, name) => replaceDerivedSymlinkAt(parent, name, path, target));
+}
+
+/** The same derived-link operation in an already held publication directory. */
+export function replaceDerivedSymlinkAt(parent: number, name: string, path: string, target: string): void {
+  if (!name || name === "." || name === ".." || name.includes("/") || name.includes("\0"))
+    throw new StoreError("STORE_CORRUPT", "derived link requires one entry name");
   if (isAbsolute(target) || target.includes("\0") || target.split("/").some(part => part === "" || part === "." || part === ".."))
     throw new StoreError("STORE_CORRUPT", "derived link target must remain relative and contained");
   // Same rule as the derived file: the parent is resolved once and the link is
   // created, renamed and cleaned up through that descriptor only.
-  withinDirectory(path, (parent, name) => {
-    // P0V-111 (G01r2-02): a link cannot carry a lock, so the proof that a
-    // leftover link temporary of this name is dead is who writes it: this
-    // synchronous call is its only writer, and the caller serializes
-    // publication in its root (above). What a killed one left is removed
-    // before the next link is made; a file, or another name's, is not.
-    for (const entry of directoryNames(parent)) {
-      if (!entry.startsWith(`.${name}.`) || !/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/.test(entry)) continue;
-      try { if (statAt(parent, entry).isSymbolicLink()) unlinkAt(parent, entry); }
+  // P0V-111 (G01r2-02): a link cannot carry a lock, so the proof that a
+  // leftover link temporary of this name is dead is who writes it: this
+  // synchronous call is its only writer, and the caller serializes
+  // publication in its root (above). What a killed one left is removed
+  // before the next link is made; a file, or another name's, is not.
+  for (const entry of directoryNames(parent)) {
+    if (!entry.startsWith(`.${name}.`) || !/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/.test(entry)) continue;
+    try { if (statAt(parent, entry).isSymbolicLink()) unlinkAt(parent, entry); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  const temporaryName = `.${name}.${randomUUID()}.tmp`;
+  symlinkAt(target, parent, temporaryName);
+  let owned = true;
+  try {
+    renameAt(parent, temporaryName, parent, name); owned = false;
+    fsyncHeldDir(parent, dirname(path));
+  } finally {
+    if (owned) {
+      try { unlinkAt(parent, temporaryName); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-    }
-    const temporaryName = `.${name}.${randomUUID()}.tmp`;
-    symlinkAt(target, parent, temporaryName);
-    let owned = true;
-    try {
-      renameAt(parent, temporaryName, parent, name); owned = false;
       fsyncHeldDir(parent, dirname(path));
-    } finally {
-      if (owned) {
-        try { unlinkAt(parent, temporaryName); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-        fsyncHeldDir(parent, dirname(path));
-      }
     }
-  });
+  }
+}
+
+/** Staging and destination are leaves of retained directories. Verification
+ * and both persistence barriers consume the opened tree, never its old path. */
+export function publishStagedDirectoryAt(from: number, staging: string, to: number, destination: string,
+    verify: (root: number, phase: "staging" | "destination") => void, policy: TreeFlushPolicy = "regular-files"): "published" | "existing" {
+  for (const name of [staging, destination]) if (!name || name === "." || name === ".." || name.includes("/") || name.includes("\0"))
+    throw new StoreError("STORE_CORRUPT", "staged publication requires one entry name");
+  const sourceParent = fstatSync(from), destinationParent = fstatSync(to);
+  if (sourceParent.dev === destinationParent.dev && sourceParent.ino === destinationParent.ino && staging === destination)
+    throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
+  const existing = (): "existing" => existingStagedDirectory(to, destination,
+    root => verify(root, "destination"), policy);
+  try { statAt(to, destination); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; else return publish(); }
+  return existing();
+  function publish(): "published" | "existing" {
+    const root = openBeneath(from, staging, constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      verify(root, "staging"); fsyncTree(root, policy);
+      try { renameAt(from, staging, to, destination); }
+      catch (error) { if (!["EEXIST", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; return existing(); }
+      fsyncHeldDir(to, destination);
+      if (sourceParent.dev !== destinationParent.dev || sourceParent.ino !== destinationParent.ino) fsyncHeldDir(from, staging);
+      const published = openBeneath(to, destination, constants.O_RDONLY | constants.O_DIRECTORY);
+      try {
+        const expected = fstatSync(root), actual = fstatSync(published);
+        if (actual.dev !== expected.dev || actual.ino !== expected.ino) throw new StoreError("STORE_CORRUPT", "published staged directory changed");
+        verify(published, "destination");
+      } finally { closeSync(published); }
+      return "published";
+    } finally { closeSync(root); }
+  }
+}
+
+function existingStagedDirectory(parent: number, name: string, verify: (root: number) => void,
+    policy: TreeFlushPolicy): "existing" {
+  const root = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
+  try { verify(root); fsyncTree(root, policy); fsyncHeldDir(parent, name); return "existing"; }
+  finally { closeSync(root); }
 }

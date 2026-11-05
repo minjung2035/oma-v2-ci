@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
   require(ptrace(PT_DENY_ATTACH, 0, NULL, 0) == 0, "deny tracing");
   mach_port_t destination = MACH_PORT_NULL;
   mach_port_t discovery = MACH_PORT_NULL;
+  mach_port_t restored_bootstrap = MACH_PORT_NULL;
   if (argc == 4) {
     kernel(task_get_bootstrap_port(mach_task_self(), &destination), "private spawn peer");
 
@@ -97,10 +98,12 @@ int main(int argc, char **argv) {
     kernel(mach_msg(head, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof returned, reply, 5000, MACH_PORT_NULL), "receive bootstrap capability");
     require(head->msgh_id == 0x4f4d4174 && head->msgh_size == sizeof request && !(head->msgh_bits & MACH_MSGH_BITS_COMPLEX) &&
       MACH_PORT_VALID(head->msgh_remote_port) && !memcmp(returned.bytes + sizeof *head, request.nonce, 16), "bootstrap capability response");
+    restored_bootstrap = head->msgh_remote_port;
+    kernel(task_set_bootstrap_port(mach_task_self(), restored_bootstrap), "fixed producer bootstrap restore");
+    bootstrap_port = restored_bootstrap;
     char name[128]; snprintf(name, sizeof name, "org.oma.direct-fence.%s", argv[1]);
     /* Dynamic check-in remains an observation, not the declared service contract. */
-    kernel(bootstrap_check_in(head->msgh_remote_port, name, &discovery), "dynamic discovery candidate");
-    kernel(mach_port_deallocate(mach_task_self(), head->msgh_remote_port), "borrowed bootstrap return");
+    kernel(bootstrap_check_in(restored_bootstrap, name, &discovery), "dynamic discovery candidate");
     kernel(mach_port_mod_refs(mach_task_self(), reply, MACH_PORT_RIGHT_RECEIVE, -1), "private reply return");
     struct publication acknowledged = message;
     acknowledged.head = (mach_msg_header_t){ .msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0), .msgh_size=sizeof acknowledged,
@@ -135,5 +138,7 @@ int main(int argc, char **argv) {
   char ignored; ssize_t received;
   do { received = read(3, &ignored, 1); } while (received > 0 || (received < 0 && errno == EINTR));
   require(received == 0, "lifetime pipe EOF");
+  /* The process owns its restored bootstrap through all libSystem activity.
+   * Kernel task termination returns that reference with the other globals. */
   return 0;
 }

@@ -357,13 +357,14 @@ test("009. A cleanup failure while a context revision publish is already failing
       }
       originalFlush(fd);
     };
-    fs.openSync = ((...args: Parameters<typeof fs.openSync>) => {
-      // Refuse opening the held parent for removal of the lease. Its name
-      // remains for recovery, while the lease's existing FD must still close.
-      if (String(args[0]) === "/" && (new Error().stack ?? "").includes("removeOwnedFile"))
+    const publishFlush = fs.fsyncSync;
+    fs.fsyncSync = (fd: number): void => {
+      // Cleanup now holds its parent throughout removal. Fail its actual
+      // persistence barrier instead of depending on a pathname reopen.
+      if (injected && (new Error().stack ?? "").includes("removeOwnedTreeAt"))
         throw Object.assign(new Error("injected lease cleanup failure"), { code: "EIO" });
-      return originalOpen(...args);
-    }) as typeof fs.openSync;
+      publishFlush(fd);
+    };
     syncBuiltinESMExports();
     let failure: unknown = null;
     try { publishContextRevision(worldDir, candidate, entries, source); }

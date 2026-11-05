@@ -827,7 +827,7 @@
    "K0-values -> K0-values": 37,
    "K1-codecs -> K0-values": 92,
    "K1-codecs -> K1-codecs": 58,
-   "K2-mechanisms -> K0-values": 163,
+   "K2-mechanisms -> K0-values": 162,
    "K2-mechanisms -> K1-codecs": 24,
    "K2-mechanisms -> K2-mechanisms": 245,
    "K3-ledger -> K0-values": 23,
@@ -2105,11 +2105,6 @@
     "kind": "runtime"
    },
    {
-    "from": "packages/storage/src/context-snapshot.ts",
-    "to": "packages/domain/src/paths.ts",
-    "kind": "runtime"
-   },
-   {
     "from": "packages/storage/src/context-stream.ts",
     "to": "packages/domain/src/context-policy.ts",
     "kind": "runtime"
@@ -2905,10 +2900,10 @@
  "runtimeEdges": 2376,
  "typeOnlyEdges": 993,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 649,
+  "L1-kernel -> L1-kernel": 648,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
-  "L3-workflow -> L1-kernel": 419,
+  "L3-workflow -> L1-kernel": 420,
   "L3-workflow -> L3-workflow": 99,
   "L4-orchestration -> L1-kernel": 537,
   "L4-orchestration -> L2-facts": 3,
@@ -2947,14 +2942,14 @@
   "packages/native/src/files.ts": 59,
   "packages/storage/src/directory.ts": 56,
   "packages/domain/src/canonical-json.ts": 49,
-  "packages/domain/src/paths.ts": 42,
   "packages/storage/src/durable-fs.ts": 42,
+  "packages/domain/src/paths.ts": 41,
   "packages/file-descriptors/src/index.ts": 37,
   "packages/domain/src/utf8.ts": 33,
   "packages/domain/src/derived.ts": 27,
+  "packages/native/src/posix-files.ts": 24,
   "packages/domain/src/deployment.ts": 23,
   "packages/domain/src/request-identity.ts": 23,
-  "packages/native/src/posix-files.ts": 23,
   "packages/domain/src/authority.ts": 22
  },
  "fanOut": {
@@ -2963,9 +2958,9 @@
   "apps/oma/src/entry/oma-society.ts": 23,
   "apps/oma/src/runtime/host-invocations.ts": 23,
   "apps/oma/src/runtime/client-runtime.ts": 22,
+  "packages/git/src/context-repository.ts": 20,
   "apps/oma/src/broker/invocation-sources.ts": 19,
   "packages/broker/src/index.ts": 19,
-  "packages/git/src/context-repository.ts": 19,
   "apps/oma/src/application/society-bootstrap.ts": 18,
   "apps/oma/src/runner.ts": 18,
   "apps/oma/src/views.ts": 18,

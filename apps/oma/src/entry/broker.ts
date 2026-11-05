@@ -79,6 +79,7 @@ const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
     let canonicalDirectory: number | undefined;
     let contextDirectory: number | undefined;
+    let worldDirectory: number | undefined;
     // DR72: standalone startup must refuse before run-root/lock creation,
     // Store open, workspace restore, execution recovery or provisioning.
     requireCollaborationSociety(readSessionBirth(stateRoot), society);
@@ -162,7 +163,8 @@ async function main(): Promise<void> {
             if (runtimePreparation !== null)
                 await runtimePreparation.catch(() => {});
             await lifetime.shutdown();
-            cleanupAll([() => { const fd = contextDirectory; contextDirectory = undefined; if (fd !== undefined) closeSync(fd); },
+            cleanupAll([() => { const fd = worldDirectory; worldDirectory = undefined; if (fd !== undefined) closeSync(fd); },
+                () => { const fd = contextDirectory; contextDirectory = undefined; if (fd !== undefined) closeSync(fd); },
                 () => { const fd = canonicalDirectory; canonicalDirectory = undefined; if (fd !== undefined) closeSync(fd); }]);
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
                 try { await sessionStorage.close(storageResidents, storageCloseMode); }
@@ -300,6 +302,11 @@ async function main(): Promise<void> {
         const canonicalExecution = developerTools === undefined || canonicalDirectory === undefined ? undefined :
             { executable: developerTools.git, directories: new Map([[gitPaths.projectGit, canonicalDirectory]]),
                 directory(repository: string): number | undefined {
+                    if (repository === gitPaths.worldDir) {
+                        if (worldDirectory !== undefined) return worldDirectory;
+                        try { return worldDirectory = openDirectory(gitPaths.worldDir); }
+                        catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+                    }
                     if (repository !== gitPaths.contextGit) return undefined;
                     if (contextDirectory !== undefined) return contextDirectory;
                     try { return contextDirectory = openDirectory(gitPaths.contextGit); }

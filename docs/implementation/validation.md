@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0e9505333c5c15118862accfadb20bacd370fcbe1b37d73e013155c48328981a` (15936 files).
+verification input digest `7b972d78f2efc5073f4e567f763d80ac892e5a75b546b607e7fcd8103c9cd26e` (15937 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3919,3 +3919,69 @@ SOURCE81 Mac15 shared ZIP13414034487 SHA-256 `31e8c774f3dcf9ed80269c9bfa2b11a229
 SOURCE82 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
 원시는 `/tmp/oma-source82-build.log`·`/tmp/oma-source82-package-isolation.log`·`/tmp/oma-source82-review.log`·`/tmp/oma-source82-architecture.log`다.
 CI YAML/21개 bash run block도 문법 통과했다. 새 상속3건과 ack demultiplex는 actual Mac NOT_RUN이다.
+
+### SOURCE83 context snapshot의 retained root 게시와 조회
+
+SOURCE82 `c5c6bbcf79d9797a7f3be1c05a2f86e23357b4b4` / local checkpoint `ac1e2a768778a00666883102ce21f260be609a8e`,
+Native42029186323을 발행했다. Mac15 main ZIP13415098178 SHA-256 `11d380615bd91da682e850eb75af8224072be6824dcd1a9357073ca632d86f33`,
+shared ZIP13416465865 SHA-256 `34d1c7c225380387961a51268da4da24517df31bd4022fe37d9c45d5739a05c9`,
+Intel shared ZIP13415833051 SHA-256 `b43b7ddc6623218da494800c0ab14ec36560d5b248776794222dd0a8151455f5`를 대조했다.
+canonical15936/`0e9505333c5c15118862accfadb20bacd370fcbe1b37d73e013155c48328981a` 및 runtime15540/27이 각 전후 동일이다.
+Mac15 runtime은 `960976880f770d2b119c71e4e58ef89ab4c9c009b93bbfbda89321b580a252aa`,
+Intel runtime은 `b833c9409c9975c42399575acf749ad52cb37dfd416a5b3af0a5cc35eaf2e95b`다.
+양쪽 main456/455 PASS/1 FAIL·generation3/3 PASS·기타0다. 실제 cooperation socket 상속3건은 모두 통과했다.
+부모 copy 반환 뒤 ordinary/occupied FD4/explicit same FD의 실제 통신·마지막 close EOF·CID/journal 반납을 확인했다.
+이것을 Society identity/current Host role의 인증으로 확대하지 않는다.
+
+단일 failure는 discovery 후보다. Mac15는 비-ack id1073742030/size240/bits2147488018을 기록했고,
+producer의 dynamic discovery candidate=5 뒤 controller의 ack receive가268451843으로 종료됐다.
+ack demultiplex로 원래 형식 단언 실패와 실제 check-in 실패를 분리했지만 후보가 통과한 것은 아니다.
+SOURCE83의 test-only 후속은 전달받은 normal bootstrap을 고정 producer 자신의 TASK_BOOTSTRAP_PORT와 bootstrap_port global에 복구한다.
+이 right는 해당 C process의 libSystem 수명까지 보유하고 kernel task 종료로 반환한다. client에게는 tag/instance만 답한다.
+이는 TASK_HOST_PORT/TASK_KERNEL_PORT 교체나 Actor의 bootstrap 복구가 아니며 실행 guard를 바꾸지 않는다.
+수리 효과·원인 확정·headless/release 조건은 실제 Mac NOT_RUN이다. producer 양 SDK object compile은 exit0다.
+원시는 `/tmp/oma-source83-producer-{arm,intel}.log`다.
+
+SOURCE83은 context snapshot의 world/source directory를 한 번 보유하고 context/revisions·temporary lease·entry write·seal·
+publish·current link의 효과를 같은 cursor 아래에서 수행한다. raw pathname은 labels와 default 초기 capture에만 사용한다.
+기존 string entry도 같은 descriptor publication primitive를 호출한다. legacy existing replay는 staging parent가 없어도 유지한다.
+기존 rename의 serialized/trusted-root 조건을 kernel의 새 no-replace 보장으로 승격하지 않는다.
+readiness 조회도 같은 world root에서 current target과 revision bytes/modes를 검증하며 같은 canonical candidate/goal-only owner를 사용한다.
+App은 알려진 world label만 resolver로 보유하고 native/logical shutdown 뒤 context/project cursor와 함께 반납한다.
+새 모델 field/argv grammar·accepted manifest/OID/receipt·mode 정책·SQLite schema 변경은 없다.
+전체 StateRoot capture·private commit-work/source fetch·Views/진단/다른 writer의 pathname 경로는 여전히 남아 있다.
+
+SHA1/SHA256 × bound/on-demand에서 source/world 이름을 함께 교체한 뒤 원본 bytes·decision subtree·current link·
+readiness·동일 revision replay와 replacement sentinels 보존을 확인했다.
+초기 새 시험은 잘못된 facade method를 호출해4건 실패했고, 정정 후 본문은 통과했으나 readonly revision cleanup이4건 실패했다.
+fixture는 기존 removeOwnedTree cleanup으로 고쳤다. 원시는 `/tmp/oma-source83-snapshot-directory.log`·`/tmp/oma-source83-context-after-adapter.log`다.
+기존 cleanup failure 주입은 제거된 pathname reopen 대신 실제 removeOwnedTreeAt의 fsync에 EIO를 주입하도록 바꿨다.
+primary EMFILE/cleanup EIO·원래 순서·lease 반환/후속 quiescence 단언은 유지했다.
+초기42/41 PASS/1 FAIL은 `/tmp/oma-source83-context-initial.log`, 수정 후46/46은 `/tmp/oma-source83-context-final.log`다.
+최종 context 수락/복구/preaccept/조립 포함133/133 PASS·기타0는 `/tmp/oma-source83-context-regression.log`에 있다.
+시험은 checkout .git을 read-only bind했고 index diff는 비어 있다(`/tmp/oma-source83-checkout-index.patch`).
+최종 production build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata는 exit0다. 최종 full architecture·transaction·durable boundary·document·spec inventory도 exit0다.
+새 snapshot consumer와 bootstrap restore 후보의 actual Mac은 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard·death predicate·예산을 유지한다.
+
+SOURCE80 Architecture42026054889 native-all ZIP13415621795 SHA-256 `6fe90c9ef5bd42e306ea9d65272b3c15e0b88b5f2931713c37e05fa5733c7353`를 대조했다.
+같은 canonical15935/`4bd527ae72680e7352c1bc4628c10daabadd0a9a934e0ee8a385a5598cf32888`의 전후 동일,
+빈 checkout index·sourceChanges[]·build/typecheck/구조 및 tests13 command code0·signal null을 확인했다.
+전체 all4915/4915 PASS·fail/cancel/skip/todo0·errors[]다. 조립 fixture 정정 뒤 전체 Linux 통과 근거다.
+SOURCE82 Darwin 상속 변경이나 SOURCE83 shared snapshot 변경의 전체 Linux 결과로 옮겨 적지 않는다.
+
+SOURCE82 ARM26 main ZIP13416158065 SHA-256 `30fb3172617a4ea54e70500408da6407881418f40d48a6ccf112018f00e8ffdf`도 대조했다.
+같은 canonical15936 및 runtime15540/27 `59fa0333ce2d789e7b71ddf399d57b723e2afdd6e907609f09a03b9d45bf4247`가 main 전후 동일이다.
+main456/455 PASS/1 FAIL·기타0며 실제 cooperation socket3건은 모두 통과했다. 같은 discovery candidate=5·ack timeout을 보존했다.
+Mac15 full ZIP13415663019 SHA-256 `dffe840dda0376aa69e92ea7488d88657d930d9683e65d79d5edd02f8b1e84ba`는
+같은 source/input/runtime의 최종 동일 및27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+main의 단일 실패를 package 성공으로 덮지 않는다.
+SOURCE83 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source83-build-final.log`·`/tmp/oma-source83-package-isolation.log`·`/tmp/oma-source83-review.log`다.
+
+SOURCE83의 첫 full architecture는 context-snapshot.ts/staged-tree.ts의 stale owned-state exemption2건을 거절했다.
+경로 기반 fs 관측을 제거해 필요 없어진 기존 예외 두 항목을 삭제했다. 새 예외나 owner allowlist는 추가하지 않았다.
+원시는 `/tmp/oma-source83-architecture-before-exemption-removal.log`다.
+규칙 정리 뒤 production-loc-hashes.json bytes는 동일하고 dependency evidence를 다시 생성했다.
+최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source83-architecture-final.log`).
+이는 구조 판정이며 새 snapshot/restore 후보의 actual Mac 실행을 대체하지 않는다.
