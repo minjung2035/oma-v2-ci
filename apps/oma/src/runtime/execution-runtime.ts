@@ -127,9 +127,11 @@ export class ExecutionRuntime {
   }
   recover(): Promise<void> { return this.owner.recover(); }
   run(slot: string, command: CommandSpec, signal: AbortSignal | undefined, authorize: () => void, inheritedFds: readonly number[] = [],
-    stderrFd?: number, prepared?: () => void) {
+    stderrFd?: number, prepared?: () => void, physicalLaunch?: Backend["launch"]) {
+    if (physicalLaunch !== undefined && process.platform !== "darwin")
+      throw new StoreError("UNSUPPORTED_PROFILE", "explicit execution launch requires the Darwin backend");
     return this.admit(() => this.owner.run({ slot, launch: () => this.launch(command, { inheritedFds,
-      ...(stderrFd === undefined ? {} : { stderrFd }), ...(signal === undefined ? {} : { signal }) }), authorize,
+      ...(stderrFd === undefined ? {} : { stderrFd }), ...(signal === undefined ? {} : { signal }) }, physicalLaunch), authorize,
       ...(signal === undefined ? {} : { signal }), ...(prepared === undefined ? {} : { prepared }) }));
   }
   begin(slot: string, command: (execution: string) => CommandSpec, signal: AbortSignal, authorize: () => void,

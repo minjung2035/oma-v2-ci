@@ -14,7 +14,7 @@ import { ExecutionStaging, type ExecutionStage } from "@oma/storage/execution-st
 import { CandidateSetupStatus } from "@oma/git/candidate-check";
 import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 import { candidateSandbox } from "@oma/platform-linux/candidate-sandbox";
-import { candidateSeatbelt } from "@oma/platform-mac/git-sandbox";
+import { candidateSeatbeltPlan } from "@oma/platform-mac/git-sandbox";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { StoreError } from "@oma/domain/errors";
 import type { GitPaths } from "@oma/git/paths";
@@ -23,16 +23,20 @@ import { createCanonicalObserver } from "@oma/git/canonical-command";
 import { observed, requireNoGitlinks } from "@oma/domain/git-facts";
 import { type GitObserver } from "@oma/git/observe";
 import { deadline as scheduleDeadline } from "@oma/process/deadline";
+import type { ExecutionRuntime } from "./execution-runtime.js";
+import type { MacRuntimeGeneration } from "./mac-runtime-generation.js";
 
 
 export class CandidateChecks {
   private readonly staging: ExecutionStaging | null;
   constructor(private readonly paths: GitPaths,
-    private readonly execute: (command: CommandSpec, signal: AbortSignal, authorize: () => void, inheritedFds: readonly number[], prepared: () => void) => Promise<ProcessObservation>,
+    private readonly execute: (command: CommandSpec, signal: AbortSignal, authorize: () => void, inheritedFds: readonly number[], prepared: () => void,
+      physicalLaunch?: Parameters<ExecutionRuntime["run"]>[7]) => Promise<ProcessObservation>,
     private readonly observations: Pick<GitObserver, "gitlinks"> = createCanonicalObserver(),
     private readonly ownerSignal?: AbortSignal,
     private readonly confirmDead?: () => boolean,
-    private readonly resources?: import("@oma/contracts/host").WorkloadResourceProfile) { this.staging = confirmDead === undefined ? null : new ExecutionStaging(paths.stateRoot, "candidate", confirmDead); }
+    private readonly resources?: import("@oma/contracts/host").WorkloadResourceProfile,
+    private readonly darwinLaunch?: MacRuntimeGeneration["launchNode"]) { this.staging = confirmDead === undefined ? null : new ExecutionStaging(paths.stateRoot, "candidate", confirmDead); }
   async run(candidate: string, check: FrozenCheck, cancellationSignal: AbortSignal | undefined, authorize: () => void, attempt: string | null = null): Promise<void> {
     if (this.ownerSignal?.aborted) throw new StoreError("REF_STATE_UNKNOWN", "check owner is stopping");
     if (cancellationSignal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before checks");
@@ -43,6 +47,7 @@ export class CandidateChecks {
     const signal = AbortSignal.any([deadline.signal, ...(cancellationSignal === undefined ? [] : [cancellationSignal])]);
     try {
       if (process.platform === "darwin") {
+        if (this.darwinLaunch === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Darwin candidates require their private runtime");
         if (this.staging === null) throw new StoreError("UNSUPPORTED_PROFILE", "candidate staging requires its execution-scope owner");
         await this.staging.run(stage => this.runPrepared(candidate, check, signal, authorize, recorder, stage));
       } else await this.runPrepared(candidate, check, signal, authorize, recorder);
@@ -94,18 +99,21 @@ export class CandidateChecks {
       if (!this.paths.checkNode || !this.paths.checkAssetsDir)
         throw new StoreError("UNSUPPORTED_PROFILE", "candidate sandbox installation is incomplete");
       let command: CommandSpec;
+      let physicalLaunch: Parameters<ExecutionRuntime["run"]>[7];
       if (process.platform === "darwin") {
         if (stage === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "candidate has no owned physical staging");
         const tools = await observeMacDeveloperTools(stage.temporary,
           command => this.execute(command, signal, authorize, [stage.leaseFd], () => {}));
-        command = candidateSeatbelt({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools },
-          { git: tools.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check).command;
+        const plan = candidateSeatbeltPlan({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools },
+          { git: tools.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check);
+        command = plan.command;
+        physicalLaunch = (source, options) => this.darwinLaunch!(source, options, plan.policy);
       } else command = candidateSandbox({ rootfs: residentRootfsPath(this.paths.stateRoot), node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, ...(cache === null ? {} : { downloadCache: { key: cache.key, files: cache.files } }) }, candidate, check);
       let observation: ProcessObservation;
       let initialRefusal: { error: unknown } | undefined;
       try { observation = await this.execute(command, signal, () => {
         try { authorize(); } catch (error) { initialRefusal = { error }; throw error; }
-      }, [write!, project, releaseRead, ...(cacheFd === undefined ? [] : [cacheFd]), ...(stage === undefined ? [] : [stage.leaseFd])], () => cleanupAll([closeWriter, closeReleaseRead])); }
+      }, [write!, project, releaseRead, ...(cacheFd === undefined ? [] : [cacheFd]), ...(stage === undefined ? [] : [stage.leaseFd])], () => cleanupAll([closeWriter, closeReleaseRead]), physicalLaunch); }
       catch (error) {
         if (initialRefusal?.error === error) throw error;
         if (setupFailure !== undefined) throw new AggregateError([setupFailure.error, error], "candidate setup and execution cleanup failed");

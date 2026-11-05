@@ -40,8 +40,8 @@ function canonical(path: string): boolean {
 }
 function digest(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 /** The caller supplies an already owned private parent, outside Actor writable
- * roots. No configured digest or accepted state is rewritten. This producer
- * is not yet the startup/recovery collector for orphaned generations. */
+ * roots. No configured digest or accepted state is rewritten. Startup recovery
+ * uses the separate held-directory artifact collector before this producer. */
 type SourceInstallation = { readonly libdir: string; readonly node: string; readonly deploymentDigest: string };
 export function createMacRuntimeGeneration(sourceInstallation: SourceInstallation, parent: string): MacRuntimeGeneration {
   return completeIterator(runtimeGenerationSteps(sourceInstallation, parent));
@@ -223,10 +223,16 @@ function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent:
         active++;
         try {
           const command = { ...source, executable: node, argv: ["--no-global-search-paths", join(root, relative(installation.libdir, source.argv[0]!)), ...source.argv.slice(1)] };
+          const privatePath = (entry: SeatbeltPolicy["readable"][number]) => ({ ...entry,
+            path: entry.path === installation.libdir || entry.path.startsWith(installation.libdir + "/")
+              // Preserve spelling so Seatbelt validation still rejects ..,
+              // duplicate separators and other noncanonical policy inputs.
+              ? root + entry.path.slice(installation.libdir.length) : entry.path });
           const physicalPolicy = policy === undefined ? undefined : { ...policy,
-            readable: [...policy.readable, { path: root, kind: "directory" as const }],
-            mapped: [...(policy.mapped ?? []), { path: root, kind: "directory" as const }],
-            executable: [...policy.executable, { path: node, kind: "file" as const }] };
+            readable: [...policy.readable.map(privatePath), { path: root, kind: "directory" as const }],
+            mapped: [...(policy.mapped ?? []).map(privatePath), { path: root, kind: "directory" as const }],
+            executable: [...policy.executable.map(privatePath), { path: node, kind: "file" as const }],
+            denied: policy.denied.map(privatePath) };
           const launchOptions = { ...options, imageDigests: Object.freeze({ helper: helperDigest,
             images: Object.freeze(physicalPolicy === undefined ? [nodeDigest] : [seatbeltDigest, nodeDigest]) }) };
           const scope = physicalPolicy === undefined ? await launchDarwinJobScope(command, launchOptions) : await launchSeatbeltJobScope(command, physicalPolicy, launchOptions);

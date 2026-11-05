@@ -4,21 +4,24 @@ import type { GitPaths } from "@oma/git/paths";
 import type { QuarantineExecution } from "@oma/git/quarantine";
 import type { CommandSpec } from "@oma/process/command";
 import { gitSandbox } from "@oma/platform-linux/git-sandbox";
-import { quarantineSeatbelt } from "@oma/platform-mac/git-sandbox";
+import { quarantineSeatbeltPlan } from "@oma/platform-mac/git-sandbox";
 import { observeMacDeveloperTools } from "@oma/platform-mac/developer-tools";
 import { copyDescriptorToEntry } from "@oma/storage/file-digest";
 import { mkdirAt } from "@oma/file-descriptors";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionRuntime } from "./execution-runtime.js";
-export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntime): QuarantineExecution {
+import type { MacRuntimeGeneration } from "./mac-runtime-generation.js";
+export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntime, darwinLaunch?: MacRuntimeGeneration["launchNode"]): QuarantineExecution {
   return Object.freeze<QuarantineExecution>({ slotState: () => executions.slotState("quarantine"),
     execute: async (request, authorize) => {
       if (!paths.checkNode || !paths.checkAssetsDir)
         throw new StoreError("UNSUPPORTED_PROFILE", "quarantine installation is incomplete");
       const input = { phase: request.phase, candidate: request.candidate, exportRef: request.exportRef, prerequisites: request.prerequisites };
       let command: CommandSpec;
+      let physicalLaunch: Parameters<ExecutionRuntime["run"]>[7];
       if (process.platform === "darwin") {
+        if (darwinLaunch === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Darwin quarantine requires its private runtime");
         // The existing importer owns this lease, held root and phase order.
         // Copies are outside every writable verify/import subtree; accepted
         // source bytes/cursor stay with their existing immutable owner.
@@ -30,11 +33,13 @@ export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntim
         mkdirAt(request.rootFd, `${request.phase}-tmp`, 0o700);
         const tools = await observeMacDeveloperTools(temporary,
           command => executions.run("quarantine", command, paths.ownerSignal, authorize, [request.leaseFd]));
-        command = quarantineSeatbelt({ node: paths.checkNode, libdir: paths.checkAssetsDir, tools }, input,
-          { git: tools.git, project: paths.projectGit, root: request.root, bundle: join(request.root, "input.bundle"), temporary }).command;
+        const plan = quarantineSeatbeltPlan({ node: paths.checkNode, libdir: paths.checkAssetsDir, tools }, input,
+          { git: tools.git, project: paths.projectGit, root: request.root, bundle: join(request.root, "input.bundle"), temporary });
+        command = plan.command;
+        physicalLaunch = (source, options) => darwinLaunch(source, options, plan.policy);
       } else command = gitSandbox({ rootfs: residentRootfsPath(paths.stateRoot), node: paths.checkNode, libdir: paths.checkAssetsDir }, input);
       return executions.run("quarantine", command, paths.ownerSignal, authorize,
-        [request.bundleFd, request.leaseFd, request.rootFd, request.projectFd], request.stderrFd);
+        [request.bundleFd, request.leaseFd, request.rootFd, request.projectFd], request.stderrFd, undefined, physicalLaunch);
     },
   });
 }

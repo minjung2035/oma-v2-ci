@@ -2533,10 +2533,86 @@ pinned cloc2.08의 전체14392 files 측정과 독립 재측정이 일치했고 
 이 결과 기록 뒤 input을 다시 결박하고 문서/spec와 binding case를 확인한다.
 새 Mac preparing/running SIGKILL 회수·live/foreign refusal·Intel latency의 실제 결과는 아직 NOT_RUN이다.
 
+### Git 검사·반입의 private Node generation 결박 (SOURCE57)
+
+SOURCE56 `2544ed0d05ddb084fcf7ccc08b15ecce34d41431`는 Native
+[41941968241](https://github.com/minjung2035/oma-v2-ci/actions/runs/41941968241), Architecture
+[41941968211](https://github.com/minjung2035/oma-v2-ci/actions/runs/41941968211)에 발행했다.
+canonical15895/`83e067cf501abe835a9b60088c7d2a3706904f497d920a260c98aa1704355b65`다.
+ARM shared ZIP13377300567 SHA-256
+`55f76ef29925e524240ae4dbc785d9a57b0ae5a4bdd3bbf7d51185dd69b28a4b`와
+Intel shared ZIP13377096894 SHA-256
+`14263fdf7f7e23330c6e2b53388ffc3f8f9d7bc9b30af4de4cc188f2aa2fbab9`를 대조했다.
+각397/397 PASS·fail/cancel/skip/todo0이며 위 canonical이 각 전후 같다.
+runtime15528/27은 ARM `2dc008eb06e93bc70164d367a427a6cdb482a98f5745e629341bc54867c91103`,
+Intel `f4931ab64c3aa559d347960b03a619c8403ec76206b75e83fe0f5e1078db2bd1`가 각 전후 같다.
+whole-generation은 ARM101421ms·Intel171910ms로 기존240초 제한 안에 실제 반환했다.
+Intel constructor124555ms이며 이는 startup reuse/latency 전체 qualification이 아니다.
+
+두 실제 Mac에서 preparing/running producer SIGKILL 뒤 fresh ExecutionRuntime이 journal scope를 복구하고
+완전한 CID 사망과 빈 journal을 확인한 다음 disposable tree를 회수했다.
+live retained generation과 외부 추가 파일은 봉인을 해제하지 않고 거절했다.
+복구 창 중 run/begin/bound preparation 거절, effect 실패의 지속 fencing,
+effect 전 shutdown의 무효과·실제 journal 반납도 PASS다.
+이 결과를 실제 OS reboot·전원 손실이나 전체 Society lease 증명으로 올리지 않는다.
+
+SOURCE57는 Mac Git adapter의 원래 Node command/policy 설명과 direct Seatbelt observation recipe를 분리한다.
+App CandidateChecks와 quarantine owner는 Broker가 보유한 같은 generation launch를 공통 ExecutionRuntime.run에 전달한다.
+공통 journal·opening/witness·trusted setup·현재 권한 재검사·release·취소·전체 scope 반납 절차는 바꾸지 않는다.
+명시적인 physical launch는 Darwin에서만 허용하고, Mac App Git owner에 private runtime이 없으면 실행을 거절한다.
+accepted candidate·ref·prerequisite·bundle capability/cursor·pipeline DTO·receipt 형식은 바꾸지 않는다.
+
+generation capture는 policy의 original installation 아래 readonly/mapped/executable/denied 경로도
+private copy의 같은 상대 경로로 옮긴다. 원본 설치 전체를 읽는 권한을 덧붙여 mutable library fallback을 열지 않는다.
+선택된 외부 toolchain·Git·developer paths와 check의 자기 script/native build 허용은 기존 설명을 유지한다.
+초기 실행 Node와 설치 entry는 계속 immutable copy와 trusted helper image digest에 결박한다.
+
+whole-generation 시험은 같은 private copy를 재사용하여 App의 실제 CandidateChecks와 QuarantineImporter를 실행하도록 확장했다.
+generation 제작 뒤 원본 candidate-check/quarantine entry bytes를 실패 프로그램으로 바꾸고,
+private scope의 exact checkout·원본 설치 읽기 거절·checkout 뒤 현재 권한 철회,
+thin bundle verify-before-import·canonical refs 불변·원본 bundle bytes/cursor와 빈 journal·staging을 요구한다.
+정리는 실제 owner drain 뒤 mutable fixture source를 복원한다. 이 새 Mac 가지는 아직 NOT_RUN이다.
+별도 cold copy나 timeout 확대는 추가하지 않았으며 기존 whole-generation240초 안에서 실행한다.
+
+Mac candidate 설명이 pipeline을 버리고 placeholder argv만 전달하는 누락도 고쳤다.
+이제 기존 closed pipeline payload를 그대로 전달한다. Native의 pipeline supervisor 보호는 아직 Linux 전용이므로
+Mac pipeline은 해당 보호가 실제 구현·검증되기 전 완료가 아니다. 임의 성공이나 보호 생략으로 처리하지 않는다.
+캐시·physical tmp/npm 경로의 Linux 전제도 남아 있고 이 단락은 pipeline 전체 기능의 PASS가 아니다.
+Society lease·전체 product Actor/Run admission·resource profile·전체 CLI/reboot·cache adoption은 미완료다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED와 native-support/default launch guard를 유지한다.
+
+SOURCE57 첫 고정 build는 PASS였고 이후 pipeline 전달 한 파일을 보강한 최종 build도 PASS다.
+보강 전 관련24/24와 실제 Linux candidate/quarantine/maintenance/staging17/17이 PASS다.
+Linux에서 Mac 전용 whole-generation 가지는 backend refusal만 의미한다. 최종 pure-plan 선택은 별도로 실행한다.
+
+최종 plan/조립/refusal25/25가 PASS다. 경로 재결박은 상대 suffix의 원래 spelling을 보존하여
+..·중복 separator를 정규화해 허용하지 않도록 보강했고 같은25/25를 다시 확인했다.
+이 한 App 변경 뒤 App build·graph/source digests를 새로 고정했다. 바뀌지 않은 library payload의 독립 packed27/27은 PASS다.
+review는 CHANGED_WITHOUT_ORACLE30·NOT_REVIEWED14362·REMOVED220이며 generation 파일은 hash 승인이 없는 NOT_REVIEWED 상태다.
+이 상태를 승인으로 바꾸지 않는다. 전체 architecture는 보강한 production에서 PASS였고,
+아래 관측 fixture/workflow를 추가한 최종 입력에도 다시 결박한다.
+
+pipeline supervisor 후보는 [고정 XNU ptrace](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/mach_process.c),
+[task access 검사](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_proc.c),
+[special-port 설정](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/ipc_tt.c)을 분리해 검토했다.
+PT_DENY_ATTACH 성공만으로 Mach control/read access 거절을 가정하지 않는다. task access port는 기존 valid port의 덮어쓰기를 거절한다.
+새 controlled C fixture는 ordinary/guard/Seatbelt guard의 실제 자기 supervisor와 직접 child만 대상으로
+task control·SDK selector read/inspect·canary memory read·attach/detach와 실제 join을 각각 기록한다.
+공통 execution owner가 모든 fixture scope를 반납하며 이 관측 시험은 어떤 결과도 production 보호 채택으로 바꾸지 않는다.
+첫 cross object compile은 SDK include 경로, 다음은 SDK에 없는 read/inspect wrapper 선언 때문에 실패했다.
+SDK selectors를 명시한 observation-only 호출로 고친 arm64 object compile은 PASS다. 실제 Mac 실행은 NOT_RUN이다.
+Linux의 새 case1/1은 명시적 Darwin backend refusal만 의미한다. restricted entitlement·privileged service는 추가하지 않았다.
+
+SOURCE57 최종 production의 build·관련25/25·실제 Linux 관련17/17·독립 library packed27/27이 PASS다.
+관측 fixture/workflow를 포함한 전체 module/architecture/graph/transactions/boundaries/문서/spec도 PASS다.
+supervisor 후보의 SDK arm64/Intel object compile과 Linux backend refusal은 PASS이며 실제 Mac guard 관측은 아직 NOT_RUN이다.
+private Git 새 가지와 supervisor 후보를 실제 Mac qualification으로 승계하지 않는다.
+이 결과 기록 뒤 구조 input을 재결박하고 문서/spec와 binding case를 확인한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `83e067cf501abe835a9b60088c7d2a3706904f497d920a260c98aa1704355b65` (15895 files).
+verification input digest `2005bbd0d112427f204910e20ede2a4077d9f2b7fd050c0cdeef95b803c18b4d` (15898 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

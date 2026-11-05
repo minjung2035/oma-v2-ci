@@ -284,10 +284,10 @@ async function main(): Promise<void> {
             ownerSignal: preparationAbort.signal,
             checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
         const executionOwner = executions;
-        const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared), undefined, preparationAbort.signal,
-            () => executionOwner.confirmDead("candidate"), cfg.resources);
+        const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared, physicalLaunch) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared, physicalLaunch), undefined, preparationAbort.signal,
+            () => executionOwner.confirmDead("candidate"), cfg.resources, runtimeGeneration?.launchNode);
         const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize, attempt) => checks.run(candidate, check, cancellation, authorize, attempt), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
-            bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner));
+            bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner, runtimeGeneration?.launchNode));
         const hasGoal = (): boolean => git.hasCommittedContext();
         const activationAllowed = (): boolean => {
             lifecycle.assertActiveCapacity();

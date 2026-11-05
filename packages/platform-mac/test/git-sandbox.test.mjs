@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {describeMacDeveloperTools} from '@oma/protocol/mac-developer-tools';
 import {developerToolSystemFrameworks,observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
-import {candidateSeatbelt,quarantineSeatbelt} from '@oma/platform-mac/git-sandbox';
+import {candidateSeatbelt,quarantineSeatbelt,candidateSeatbeltPlan,quarantineSeatbeltPlan} from '@oma/platform-mac/git-sandbox';
+import {prepareSeatbelt} from '@oma/platform-mac/seatbelt';
 import {snapshotIntegrationPolicy} from '@oma/domain/integration-policy';
 import {exportRefForRequestKey} from '@oma/domain/derived';
 const developer='/Applications/Xcode beta.app/Contents/Developer';
@@ -15,6 +16,9 @@ const check=snapshotIntegrationPolicy({maxWorkers: 6, policyRevision: 'test', pr
   env:{HOME:'/human',PATH:'/human/bin',DEVELOPER_DIR:'/human/Xcode.app',GIT_CONFIG_GLOBAL:'/human/gitconfig',CHECK:'literal'}}]}).checks[0];
 test("001. Mac setup describes the selected exact developer bundle without granting its parent or exec over frameworks",()=>{
   const recipe=candidateSeatbelt(host,view,root+'/tmp',candidate,check),env=recipe.command.env;
+  const plan=candidateSeatbeltPlan(host,view,root+'/tmp',candidate,check);
+  assert.equal(plan.command.executable,host.node);assert.equal(plan.command.argv[0],host.libdir+'/apps/oma/dist/entry/candidate-check.js');
+  assert.deepEqual(prepareSeatbelt(plan.command,plan.policy),recipe);
   assert.deepEqual(recipe.command.argv.slice(0,2),['--profile-stdin','--keep-fds=6,8,9']);
   assert.deepEqual(recipe.privateInputs,[]);assert.ok(recipe.command.input instanceof Uint8Array);
   assert.deepEqual(JSON.parse(recipe.command.argv.at(-1)),{candidate,argv:check.argv,view});
@@ -42,6 +46,9 @@ test("002. Mac quarantine separates readonly accepted input, writable verify rep
   for(const phase of ['verify','import']){
     const view={git:tools.git,project,root,bundle:root+'/input.bundle',temporary:root+'/'+phase+'-tmp'};
     const recipe=quarantineSeatbelt(host,{...base,phase},view);
+    const plan=quarantineSeatbeltPlan(host,{...base,phase},view);
+    assert.equal(plan.command.executable,host.node);assert.equal(plan.command.argv[0],host.libdir+'/apps/oma/dist/entry/quarantine.js');
+    assert.deepEqual(prepareSeatbelt(plan.command,plan.policy),recipe);
     assert.equal(recipe.command.argv[1],'--keep-fds=7');assert.equal(recipe.command.cwd,view.temporary);
     assert.deepEqual(JSON.parse(recipe.command.argv.at(-1)),{...base,phase,view});
     for(const path of [root,view.bundle])assert.ok(!recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(path)}))`));
@@ -60,4 +67,12 @@ test("003. Mac setup refuses overlapping staging, widened toolchains and loader 
     [developer,tools.git,'/human/helpers'],[developer+'\n',tools.git,tools.execPath]])assert.throws(()=>describeMacDeveloperTools(...input),{code:'UNSUPPORTED_PROFILE'});
   const clt='/Library/Developer/CommandLineTools';assert.equal(describeMacDeveloperTools(clt,clt+'/usr/bin/git',clt+'/usr/libexec/git-core').contents,clt);
   if(process.platform!=='darwin')await assert.rejects(observeMacDeveloperTools('/tmp',async()=>{throw new Error('no fake Darwin command may execute');}),{code:'UNSUPPORTED_PROFILE'});
+});
+test("004. Mac setup forwards the exact pipeline instead of executing only its placeholder argv",()=>{
+  const pipeline={version:2,setupSteps:[],checkSteps:[{id:'real',argv:['/bin/false'],cwd:'.',env:{}}],
+    env:{},toolchainDigest:'b'.repeat(64),cachePolicy:{kind:'off'}};
+  const selected=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'pipeline',protectedPaths:[],
+    checks:[{id:'pipeline:v2',argv:['oma-pipeline-v2'],env:{},pipeline}]}).checks[0];
+  const plan=candidateSeatbeltPlan(host,view,root+'/tmp',candidate,selected);
+  assert.deepEqual(JSON.parse(plan.command.argv.at(-1)),{candidate,argv:selected.argv,pipeline,view});
 });

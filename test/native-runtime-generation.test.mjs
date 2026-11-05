@@ -13,6 +13,7 @@ import { bundledJobHelper } from "@oma/platform-mac/job-launch";
 import { bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { copyInstalledProduct } from "../dist/test/fixtures/installation.js";
+import { verifyDarwinGitRuntime } from "./fixtures/darwin-private-git.mjs";
 
 test("001. Actual installed generation seals dependencies and private Node until its complete scope returns", { timeout: 240000 }, async t => {
   if (process.platform !== "darwin") {
@@ -44,6 +45,7 @@ for(const path of paths){const fd=openSync(path,'r');try{
 assert.throws(()=>openSync(paths[2],'r+'),{code:'EPERM'});
 assert.throws(()=>linkSync(paths[2],process.env.HOME+'/code-alias'),{code:'EPERM'});
 const require=createRequire(import.meta.url);assert.ok(require.resolve('koffi').startsWith(root));
+assert.throws(()=>readFileSync(${JSON.stringify(entry)},'utf8'),e=>['EPERM','EACCES'].includes(e.code));
 assert.equal(readFileSync(process.env.HOME+'/.node_modules/oma-generation-escape/index.js','utf8'),'module.exports="forbidden"');
 assert.throws(()=>require('oma-generation-escape'),{code:'MODULE_NOT_FOUND'});
 const child=spawnSync('node',['--no-global-search-paths','--version'],{encoding:'utf8'});
@@ -62,7 +64,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   phase("generation-construction");
   const command = { executable: installation.node, argv: [entry], env: { HOME: work, TMPDIR: work, PATH: dirname(generation.node) + ":/usr/bin:/bin" }, cwd: work,
     timeoutMs: 30000, stdoutBytes: 4096, stderrBytes: 8192 };
-  const policy = { readable: [], writable: [{ path: work, kind: "directory" }], denied: [], executable: [],
+  const policy = { readable: [{ path: source, kind: "directory" }], writable: [{ path: work, kind: "directory" }], denied: [], executable: [],
     unixSockets: [], machServices: [], environmentKeys: ["HOME", "TMPDIR", "PATH"] };
   owner = new ExecutionCoordinator({ entries: () => rows.map(row => ({ ...row })), reserve(slot) {
     const row = { slot, execution: "probe", witness: null }; rows.push(row);
@@ -77,6 +79,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
     await refuse(invalid, policy);
   await refuse(command, { ...policy, writable: [{ path: root, kind: "directory" }] });
   await refuse(command, { ...policy, readable: [{ path: source, kind: "directory" }], nodePreload: entry });
+  await refuse(command, { ...policy, readable: [{ path: source + "/../work", kind: "directory" }] });
   let prematureReturn, selectedScope;
   const result = await owner.run({ slot: "generation", signal: t.signal, async launch() {
     const scope = selectedScope = await generation.launchNode(command, { imageDigests: { helper: "0".repeat(64), images: [] } }, policy);
@@ -91,6 +94,8 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   assert.equal(pin.alive(), false); pin.close();
   assert.equal(existsSync(join(work, "control")), true); assert.equal(existsSync(join(work, "code-alias")), false);
   assert.deepEqual(rows, []); assert.equal(deploymentDigest(source), installation.deploymentDigest);
+  await verifyDarwinGitRuntime(generation, installation, join(work, "git"), t.signal);
+  phase("private-git-candidate-and-quarantine");
   const beforeClose = ticks; await generation.closeAsync(); assert.ok(ticks > beforeClose); assert.equal(existsSync(generation.root), false);
   phase("generation-collection");
   generation.close(); assert.equal(existsSync(generation.root), false);
