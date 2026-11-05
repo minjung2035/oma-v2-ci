@@ -1,4 +1,20 @@
-# 현재 검증 상태 — 2026-11-04 KST
+# 현재 검증 상태 — 2026-11-05 KST
+
+제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
+SOURCE77의 세 Mac 공통451/451·실행 세대3/3·독립 설치27/27을 각각 확인했다.
+SOURCE78 직접 fixed producer는 Mac15/Intel 공통 각452/452 안에서 실제 통과했으나 전체 Society lease로 채택하지 않았다.
+SOURCE79 canonical context persistence barrier는 로컬 회귀39/39까지 확인했고 actual Mac은 NOT_RUN이다.
+각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
+
+| 남은 제품 작업 | 닫히지 않은 범위 |
+|---|---|
+| Society lease | full state identity·collision/discovery·상속 FD4 provenance·Host/producer crash·현재 Host role의 제품 연결 |
+| G-FILES | 전체 StateRoot capture·private work/source fetch·context snapshot/초기 parent durability·남은 외부 writer/진단 경로 |
+| G-PROCESS | 이전 populated-scope termination unknown의 원인·실제 제품 Runner/Worker/Pi·manual CLI scope 연결 |
+| G-AUTH/복구 | 제품 Host/Broker/engine의 current capability와 restart/reboot/sleep·release Keychain/SIP 검증 |
+| 최종 인수 | 위 변경을 포함한 실제 Society/Personal·Git/도구/Restic 및 전체 Linux 회귀·새 설치 시나리오 |
+
+아래 초기 관측과 실패는 역사적 기록이며 최신 제품 완료 선언이 아니다.
 
 ## macOS 구현 재개 — 직접 실행과 Node 자식의 libc 비교
 
@@ -2867,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6e9cb8a21e6060fd70aa5f1938e770a46d34f1a55f28a3e81c0b5ada5f4ed194` (15935 files).
+verification input digest `224b71c5fdfd5f6b548fbc3e486e02be4e0b7d69151cb15b2fcee2f8b39e30b1` (15935 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3747,3 +3763,43 @@ SOURCE78의 production 변경은 없으므로 SOURCE77 build/packed 결과를 �
 
 SOURCE78 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source78-architecture-final.log`).
 CI YAML과21개 shell run block의 문법도 통과했다. production source/asset 변경은 없으며 native 실행 판정은 위 NOT_RUN을 유지한다.
+
+### SOURCE79 canonical context의 같은 capability에 대한 persistence barrier
+
+SOURCE78 `ae7df96c68ef6f4700533a5aa81d11151a1a4d5d` / local checkpoint `2c9e820aa7d867da8a6dd449fe5dba50939ddd2e`,
+Native42022826081을 발행했다. canonical15935/`6e9cb8a21e6060fd70aa5f1938e770a46d34f1a55f28a3e81c0b5ada5f4ed194`다.
+새 direct producer 후보의 actual Mac compile/link/runtime는 아직 NOT_RUN이다.
+
+SOURCE77 Intel full ZIP13412231782 SHA-256 `45207ca7e53ecb69122b2af4b2e6baf1063b96f59c406cef3939aeccf890f915`,
+ARM26 full ZIP13411893494 SHA-256 `4890c10df2635d943631a5b8c1ae65c45ad30f85fc1a4880e0a2cdde7090ee91`도 대조했다.
+같은 SOURCE77 canonical/runtime의 최종 동일과 각27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+SOURCE77 세 Mac의 common451/451·generation3/3·packed27/27을 각각 보존했으며 이전 unknown의 원인 수리로 읽지 않는다.
+
+SOURCE79는 ContextRepository의 canonical object import 뒤 동기화를 Git이 사용하는 같은 directory cursor에 연결한다.
+objects 하위 directory를 held root에서 열고 기존 fsyncTree·fsyncHeldDir을 사용한다.
+기본 unbound 호출의 기존 경로는 유지한다. 새로운 URI/argv 문법·deadline·accepted OID/receipt 변경은 없다.
+prepare 전에 기존 context 이름을 일반 파일로 교체해도 원본에 candidate를 준비·관측·CAS하고 replacement bytes를 보존한다.
+이전 pathname barrier만 되돌린 원형은 새 반례에서 실제 STORE_CORRUPT로 실패했고(`/tmp/oma-source79-context-before.log`),
+수정 후 새6/6·기존 context 수락/복구/파일 identity/내구성 포함39/39 PASS·기타0다(`/tmp/oma-source79-context-regression.log`).
+원형은 load hook으로 해당 compiled method만 이전 두 pathname 호출로 바꿨으며 product source/default backend를 변경하지 않았다.
+시험은 checkout .git을 read-only bind했다. 이 변경은 private work/source fetch·초기 parent 생성/동기화·snapshot·전체 StateRoot capture를 완성하지 않는다.
+production build·fresh27/27 packed installation(App 실제 installed runtime 포함)·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+새 canonical barrier의 actual Mac consumer는 아직 NOT_RUN이다. 세 gate OPEN·product BLOCKED와 실행 guard를 유지한다.
+
+SOURCE78 Mac15 main ZIP13412447709 SHA-256 `d4110e50620e682c4852016578bb1c0d17e7b11e72cf8a7ad55adcb57f24de23`를 대조했다.
+같은 canonical15935와 runtime15540/27 `53d8db97a88434fece36a55d81b5aed7c6704199bb3b1060bcae74f37abea0bd`가 main 전후 동일이다.
+main452/452 PASS·기타0다. 새 direct controller는 actual clang/link·hardened signing 뒤 wrong CDHash에서
+Security copy0/parse0/check-67050·released=false·childReaped=true, expected CDHash에서 copy0/parse0/check0을 기록했다.
+kernel sender/token·full tag·socket instance와 creator 생존 중 last-close 해제도 실제 통과했다.
+Mac15의 headless 로그인/reboot/owner-loss나 제품 lease 채택으로 확대하지 않는다. 다른 Mac과 isolated generation/packed는 아직 진행 중이다.
+
+SOURCE78 Mac15 shared ZIP13412991528 SHA-256 `0e3f13a1d67758f14138304bfc918759a795a7bcc4ba3cc39d1924540137325e`의
+같은 canonical/runtime shared 전후 동일과 main452/452·generation3/3 PASS·기타0를 확인했다.
+Intel main ZIP13411784963 SHA-256 `ee7ba1f4470e33f4ff08f68e3025a04ea644917c4300c8b6ae77811adf747303`도
+같은 canonical15935 및 Intel runtime15540/27 `64a7992317b6c436327d94b25420d3d2e6e78f39a6e56dcb613b11c6f27a2fbd`의 main 전후 동일,
+main452/452 PASS·기타0다. direct producer의 wrong/expected CDHash Security 결과와 last-close는 Intel에서도 실제 통과했다.
+이로써 direct 후보의 공개 spawn/Security 경로는 두 architecture에서 관측했지만 headless/owner-loss/제품 lease는 미완료다.
+
+SOURCE79 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source79-build.log`·`/tmp/oma-source79-package-isolation.log`·`/tmp/oma-source79-review.log`·`/tmp/oma-source79-architecture.log`다.
+빈 index diff는 `/tmp/oma-source79-checkout-index.patch`에 보존했다. 위 로컬 barrier 수정의 actual Mac 결과는 아직 NOT_RUN이다.

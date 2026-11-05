@@ -14,7 +14,7 @@ import { sha256Hex } from "@oma/domain/canonical-json";
 import { readContextEntry, assertContextDirectory } from "@oma/storage/context-files";
 import { contextStagingPathAt, contextRevisionPathAt } from "@oma/domain/paths";
 import { TreeLease, treeQuiescence } from "@oma/storage/tree-lease";
-import { ensureOwnedDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
+import { ensureOwnedDurableDirectory, fsyncDir, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "@oma/storage/durable-fs";
 import { openBeneath, openDirectory, closeEvery } from "@oma/native/files";
 import { publishContextRevision, verifyContextRevision } from "@oma/storage/context-snapshot";
 import { runProcessSync, type ProcessObservation } from "@oma/process/run";
@@ -115,12 +115,24 @@ export class ContextRepository {
     writeExclusiveFsyncedFile(path, bytes, 0o644, undefined, fd => fchmodSync(fd, 0o644));
     fsyncDir(dirname(path));
   }
+  /** The persistence barrier must address the same repository as Git, even
+   * after its old name has been replaced. The lifetime owner retains the root. */
+  private flushObjects(): void {
+    const root = canonicalDirectory(this.paths.contextGit, this.execution);
+    if (root === undefined) {
+      fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
+      return;
+    }
+    const objects = openBeneath(root, "objects", constants.O_RDONLY | constants.O_DIRECTORY);
+    try { fsyncTree(objects); fsyncHeldDir(root, this.paths.contextGit); }
+    finally { closeSync(objects); }
+  }
   private importCandidate(work: string, candidate: Oid): void {
     assertContextDirectory(work); assertContextDirectory(join(work, ".git"));
     if (present(this.observer.ref(join(work, ".git"), "HEAD"), "frozen context HEAD") !== candidate)
       throw new StoreError("STORE_CORRUPT", "staged context HEAD differs from accepted candidate");
     this.success(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", "--no-auto-maintenance", work, candidate]);
-    fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
+    this.flushObjects();
   }
 
   /** A tree no native preparation started on has no native user. Otherwise the
@@ -192,7 +204,7 @@ export class ContextRepository {
       const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
       fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
       await this.prepareSuccess(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", "--no-auto-maintenance", work, candidate], GIT_ENV);
-      fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
+      this.flushObjects();
       // A successful worker exit is insufficient: canonical object/manifest
       // observation remains authoritative. Main is not written by this worker.
       this.verifyCandidate(candidate, entries, expected);

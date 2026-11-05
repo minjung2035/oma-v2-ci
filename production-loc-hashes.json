@@ -1252,7 +1252,7 @@
     },
     {
       "path": "packages/git/src/context-repository.ts",
-      "sha256": "d1235435eff5532b320c028f61ba6356c2dc2c2c0a1ed7d3e270f602fd51d831"
+      "sha256": "39faf2c737392624f4cdcce79352b12cb0ad56056f60fbbdf552db558684db09"
     },
     {
       "path": "packages/git/src/context.ts",
