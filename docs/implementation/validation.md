@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `daf595fd03d8a8d934ad848c17438e37c3471a0b2716d7a3a1787ca10fc345eb` (15946 files).
+verification input digest `40ac9f9d01381229b3ca3150d2e5da2852a99333f7359cedc022f7a826173976` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4433,3 +4433,14 @@ SOURCE98 최종 build·fresh27/27 packed installation(App 실제 installed runti
 production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
 원시는 `/tmp/oma-source98-build-final.log`·`/tmp/oma-source98-package-isolation-final.log`·`/tmp/oma-source98-review-final.log`·`/tmp/oma-source98-architecture-final.log`다.
 이 local 마감은 기본 소유권5건의 SOURCE97 실제 결과나 새006 scope의 미실행 여부를 다른 source로 바꾸지 않는다.
+
+### SOURCE98 actual ARM fixture slot 거절과 SOURCE99 수정
+
+SOURCE98 `61decacabd0d6d759c98e150d70d4a47989862ee`, Native42073419187·Architecture42073419324이다.
+canonical15946/`daf595fd03d8a8d934ad848c17438e37c3471a0b2716d7a3a1787ca10fc345eb`다.
+ARM Society ZIP13435919229 SHA-256 `f4120d0d2c85f54929310d8f9c9c8ede8ab405724255e408cedadf3eb1c23222`를 대조했다.
+같은 source/input/runtime Society 전후 동일, runtime15549/27은 SOURCE97 ARM과 같은 `b5526e604a8989ed97a4d9607438cbceb9ffebae52f7e280ca2925ef8a23df15`다.
+실제6건은5 PASS /1 FAIL·기타0다. 기존001~005는 다시 통과했고006은 journal reserve의 `invalid execution slot`에서 거절됐다.
+시험이 임의 slot `society-paid`를 사용한 fixture 오류다. 실제 scope 시작/종료의 실패나 인수로 확대하지 않는다.
+SOURCE99는 원래 product slot인 `preparation`을 쓰며 journal 계약/검사와 원래 namespace·scope 단언은 유지한다.
+production 변경이 없는 시험 수정이다. 새006의 실제 Mac은 여전히 NOT_RUN이다.

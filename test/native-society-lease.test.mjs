@@ -112,7 +112,7 @@ test('006. A paid Darwin execution scope holds the Society until complete scope 
  const workload=`const fs=require('node:fs'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:['ignore',1,2,'ignore',fd],env:process.env});setInterval(()=>{},1000);`;
  let output='',ready;const entered=new Promise(resolve=>{ready=resolve;});
  process.env[SOCIETY_FENCE_ENV]=String(held.fence);
- running=runtime.run('society-paid',{executable:realpathSync(process.execPath),argv:['-e',workload],env:{HOME:base,TMPDIR:base,PATH:'/usr/bin:/bin'},
+ running=runtime.run('preparation',{executable:realpathSync(process.execPath),argv:['-e',workload],env:{HOME:base,TMPDIR:base,PATH:'/usr/bin:/bin'},
   cwd:base,timeoutMs:15000,stdoutBytes:4096,stderrBytes:16384},controller.signal,()=>{},[],undefined,undefined,
   (source,options)=>launchDarwinJobScope(source,{...options,stdoutSink:bytes=>{output+=Buffer.from(bytes).toString();if(output.includes('society-descendant-ready\n'))ready();}}));
  void running.catch(error=>t.diagnostic('Original paid Society scope failure: '+inspect(error,{depth:null,maxStringLength:8192,maxArrayLength:128})));
@@ -122,6 +122,6 @@ test('006. A paid Darwin execution scope holds the Society until complete scope 
  const released=held;held=undefined;released.release();refused(state);
  assert.equal(observeDarwinCoalitionPopulation(identity),'populated','scope must still be live while takeover is refused');
  controller.abort();const result=await running;assert.equal(result.kind,'aborted');
- assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('society-paid'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
+ assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
  next=tryHoldSociety(state);assert.notEqual(next,null,'only complete scope death and descriptor drain return the Society');
 });
