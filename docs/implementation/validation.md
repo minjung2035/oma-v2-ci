@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `1e0aaccedfdd63967fe5daedefe1a6535b51177a73288d0429f16c06dedf425c` (15937 files).
+verification input digest `dbfffb1ef8ece91f0d8efd6eba39bfb445ac4e013725a8f65b6827bda8b1a951` (15937 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4044,3 +4044,14 @@ SOURCE84 ARM26 full ZIP13418523600 SHA-256 `032702a324c4a99a706451da1b6905f02660
 main의 discovery1 FAIL은 그대로 남는다. ARM26 gate ZIP13418308618 SHA-256
 `07347f353705489d1eecc62ec4a78684bc5563f44f1a1fac1d8991ce430ff2d3`는120 executed/111 OBSERVED·SETUP_FAILED·product BLOCKED다.
 이 gate 결과를 main/package 성공이나 제품 gate 통과로 바꾸지 않는다.
+
+### SOURCE86 gate fixture의 실제 canonical FD 전달 정정
+
+SOURCE84 gate의 git-setup-candidate3건은 `candidate setup failed: cwd requires a held directory`로 실패했다.
+trusted candidate entry는 Darwin slot7에서 canonical project directory를 받지만, 독립 gate fixture가 이 자리에 `/dev/null`을 전달했다.
+fixture는 실제 canonical project를 openDirectory로 열어 slot7로 넘기고 direct child 종료 뒤 반환하도록 정정했다.
+status6·release8·lease9 및 private channel identity/exec 전 거절·정확한 checkout·canonical write denial의 기존 assertion은 유지한다.
+workspace FD나 임의 pathname cwd로 대체하지 않는다. production entry/recipe는 변경하지 않았다.
+worker-bootstrap/tools6건은 실제 Pi의 client-preload가 기존 G-PROCESS/G-FILES/G-AUTH guard에서 거절한 결과다.
+그 guard를 제거하거나 이 관측을 Pi 실행 성공으로 바꾸지 않는다.
+SOURCE85는 이 입력의 부모로 포함하며 별도 CI를 발행하지 않는다. 새 직접 전달/discovery와 정정된 gate fixture의 actual Mac은 NOT_RUN이다.

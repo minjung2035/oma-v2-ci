@@ -63,7 +63,7 @@ const base=git(source,['rev-parse','HEAD']);git(root,['clone','-q','--bare',sour
 if(mode==='git-setup-candidate'){
 const stage=join(root,'한 글자 "\\line\ncheck'),checkLease=TreeLease.take(stage,true);mkdirSync(stage);
 const workspace=join(stage,'workspace'),checkTmp=join(stage,'tmp');mkdirSync(workspace);mkdirSync(checkTmp);
-const status=controlPipe(),release=controlPipe(),spare=openSync('/dev/null',constants.O_RDONLY);
+const status=controlPipe(),release=controlPipe(),spare=openSync('/dev/null',constants.O_RDONLY),projectFd=openDirectory(project);
 const identity=fd=>{const stat=fstatSync(fd,{bigint:true});return [String(stat.dev),String(stat.ino)];};
 const channels=[identity(status.write),identity(release.read),identity(checkLease.descriptor)];
 let statusWrite=status.write,releaseWrite=release.write,releaseRead=release.read,task,reader;
@@ -91,7 +91,7 @@ await withAsyncCleanup(async()=>{
   const sequence=new CandidateSetupStatus(()=>{gateReleases++;assert.equal(writeSync(releaseWrite,Buffer.from([1])),1);closeSync(releaseWrite);releaseWrite=undefined;});
   reader=createReadStream('',{fd:status.read,autoClose:true});
   const evidence=(async()=>{for await(const bytes of reader)sequence.write(bytes);return sequence.finish();})();
-  task=startProcess({...recipe.command,timeoutMs:30000},{inheritedFds:[spare,spare,spare,statusWrite,spare,releaseRead,checkLease.descriptor]});
+  task=startProcess({...recipe.command,timeoutMs:30000},{inheritedFds:[spare,spare,spare,statusWrite,projectFd,releaseRead,checkLease.descriptor]});
   // Hold a parent reference to each observed channel through target close.
   // XNU pipe_stat hashes the pipe address: after its final close the inode
   // number can be recycled quickly. A naked saved dev/inode is insufficient.
@@ -106,7 +106,7 @@ await withAsyncCleanup(async()=>{
   task?.cancel();await task?.closed;
   reader?.destroy();if(reader&&!reader.closed)await new Promise(resolve=>reader.once('close',resolve));
   cleanupAll([()=>{if(statusWrite!==undefined)closeSync(statusWrite);},()=>{if(!reader)closeSync(status.read);},
-    ()=>{if(releaseWrite!==undefined)closeSync(releaseWrite);},()=>{if(releaseRead!==undefined)closeSync(releaseRead);},()=>checkLease.release(),()=>closeSync(spare)]);
+    ()=>{if(releaseWrite!==undefined)closeSync(releaseWrite);},()=>{if(releaseRead!==undefined)closeSync(releaseRead);},()=>checkLease.release(),()=>closeSync(spare),()=>closeSync(projectFd)]);
 });
 observation={exactCheckout:true,privateExecGate:true,canonicalWriteDenied:true,statusClosedOnExec:true,
   ownScriptExecuted:true,nativeBuildOutputExecuted:true,directChildrenClosed:true};
