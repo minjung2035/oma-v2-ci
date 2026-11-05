@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `041547c3b8940f5711140cd2e302f39d3c57c8594227f657149d9652a3674ebe` (15937 files).
+verification input digest `1e0aaccedfdd63967fe5daedefe1a6535b51177a73288d0429f16c06dedf425c` (15937 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4011,3 +4011,36 @@ SOURCE84 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED1
 원시는 `/tmp/oma-source84-build.log`·`/tmp/oma-source84-package-isolation.log`·`/tmp/oma-source84-review.log`·`/tmp/oma-source84-architecture.log`다.
 CI YAML/21개 bash block의 문법은 통과했다. owned-state 예외 두 개는 삭제된 상태이며 새 예외를 추가하지 않았다.
 새 snapshot/mode repair·bootstrap restore 후보의 actual Mac은 아직 NOT_RUN이다.
+
+### SOURCE85 정상 bootstrap 상속과 직접 socketpair 전달 후보
+
+SOURCE84 발행 source `834f6ddbabc9996f8dcf82e336f4495235f1ac69` / tree `3750281372fed35bd3a99f9b2f62de686a353ccb`,
+Native42035564086·Architecture42035564102의 canonical15937/`041547c3b8940f5711140cd2e302f39d3c57c8594227f657149d9652a3674ebe`를 확인했다.
+ARM26 main ZIP13417323949 SHA-256 `8b804b335819aeb5e2d328f21295e76f198949aa276ba22cb48e8d911457d2f5` 및
+shared ZIP13418253114 SHA-256 `d1c8ae247cdfe1b9a9913e883ce6a94f6faaf1c07fe19b7fbd54d17df05d3d20`를 대조했다.
+같은 source/input 및 runtime `e61fab460bf03009ba4cc0acda9a0aa6662814f2c22a397491902c4f7d522225`의 main/shared 전후 동일을 확인했다.
+snapshot의 SHA1/SHA256 × bound/on-demand4건(원본·목적지 교체, mode000, replay/readiness)은 모두 통과했다.
+generation3/3 PASS·기타0다. main은460/459 PASS/1 FAIL·기타0다.
+실패는 discovery candidate=5·ack receive268451843으로 이전과 동일하다. producer가 task/global bootstrap을 되돌리는 수정도 해결하지 못했다.
+관측된 non-ack header1073742030/240bytes의 내부 원인을 확정하지 않는다.
+Intel26 main ZIP13418930953 SHA-256 `48cb8a5648b42459de4858daa0dc0f5580b441cdf04cac4293c7574232531d6f`도 대조했다.
+같은 canonical/input 및 runtime `615cab3164a9ea06d4d0844c3642c83568a11c14fec8d35c9994833cf4df0c93`의 main 전후 동일,
+main460/459 PASS/1 FAIL·기타0를 확인했다. Mac15 및 나머지 검증은 이 기록 시점에 미판독이다.
+
+다음 시험 후보는 discovery 모드에서 정상 task bootstrap을 처음부터 상속한다.
+직접 생성한 unreaped child의 suspended image/audit token/CDHash를 먼저 검증하는 조건은 유지한다.
+최초 fresh socket은 private socketpair의 SCM_RIGHTS로 전달하고, 부모는 받은 FD의 실제 socket/generation을 비교한다.
+이 첫 전달의 provenance는 부모만 가진 socketpair와 직접 검증한 child이며 Mach trailer라고 표현하지 않는다.
+별도 bootstrap lookup 후 nonce 응답에는 여전히 실제 kernel audit trailer·전체 tag·socket/generation 검증을 요구한다.
+기존 bootstrap-peer 모드와 잘못된 CDHash의 release 전 거절·정상 creator가 살아 있는 동안의 last-close 검증도 유지한다.
+실패한 bootstrap restore 경로를 반복하지 않으며 root/privileged entitlement·새 OS floor를 추가하지 않는다.
+이는 test fixture 변경뿐이다. production Society backend·guard·death predicate·기존 timeout은 유지한다.
+producer의 ARM/Intel SDK object compile은 exit0다(`/tmp/oma-source85-producer-arm.log`·`/tmp/oma-source85-producer-intel.log`).
+Linux fixture2건은 명시적 NOT_RUN이며 실제 Darwin 성공 근거가 아니다(`/tmp/oma-source85-candidate-linux.log`).
+새 직접 전달/discovery 후보의 actual Mac은 NOT_RUN이다. 세 gate OPEN·제품 BLOCKED와 남은 제품 작업을 유지한다.
+
+SOURCE84 ARM26 full ZIP13418523600 SHA-256 `032702a324c4a99a706451da1b6905f02660c7d5f48cf8f870ea7f26344aecf5`를 대조했다.
+같은 source/canonical/runtime의 최종 전후 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+main의 discovery1 FAIL은 그대로 남는다. ARM26 gate ZIP13418308618 SHA-256
+`07347f353705489d1eecc62ec4a78684bc5563f44f1a1fac1d8991ce430ff2d3`는120 executed/111 OBSERVED·SETUP_FAILED·product BLOCKED다.
+이 gate 결과를 main/package 성공이나 제품 gate 통과로 바꾸지 않는다.

@@ -42,11 +42,10 @@ int main(int argc, char **argv) {
   require(ptrace(PT_DENY_ATTACH, 0, NULL, 0) == 0, "deny tracing");
   mach_port_t destination = MACH_PORT_NULL;
   mach_port_t discovery = MACH_PORT_NULL;
-  mach_port_t restored_bootstrap = MACH_PORT_NULL;
-  if (argc == 4) {
+  if (argc == 4 && !discovery_peer) {
     kernel(task_get_bootstrap_port(mach_task_self(), &destination), "private spawn peer");
 
-  } else {
+  } else if (!discovery_peer) {
   mach_port_array_t inherited = NULL; mach_msg_type_number_t count = 0;
   kernel(mach_ports_lookup(mach_task_self(), &inherited, &count), "peer lookup");
   if (count != 3 || !MACH_PORT_VALID(inherited[2])) return 65;
@@ -78,39 +77,32 @@ int main(int argc, char **argv) {
   message.generation_offset = offsetof(struct socket_fdinfo, psi.soi_proto.pri_in.insi_gencnt);
   message.socket = info.psi.soi_so; message.generation = info.psi.soi_proto.pri_in.insi_gencnt;
   require(message.socket && message.generation, "nonzero socket instance");
-  mach_port_t file = MACH_PORT_NULL;
-  require(fileport_makeport(fd, &file) == 0, "fileport");
-  require(close(fd) == 0, "drop original socket");
-  message.head.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MOVE_SEND);
-  message.head.msgh_size = sizeof message; message.head.msgh_remote_port = destination;
-  message.head.msgh_local_port = file; message.head.msgh_id = 0x4f4d4170;
-  kernel(mach_msg(&message.head, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof message, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL), "publish created instance");
   if (discovery_peer) {
-    mach_port_t reply = MACH_PORT_NULL;
-    kernel(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &reply), "private reply receive");
-    struct { mach_msg_header_t head; uint8_t nonce[16]; } request = {0};
-    arc4random_buf(request.nonce, sizeof request.nonce);
-    request.head = (mach_msg_header_t){ .msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND),
-      .msgh_size=sizeof request, .msgh_remote_port=destination, .msgh_local_port=reply, .msgh_id=0x4f4d4173 };
-    kernel(mach_msg(&request.head, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof request, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL), "request bootstrap capability");
-    union { uint64_t align; unsigned char bytes[256]; } returned = {0};
-    mach_msg_header_t *head = (mach_msg_header_t *)returned.bytes;
-    kernel(mach_msg(head, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof returned, reply, 5000, MACH_PORT_NULL), "receive bootstrap capability");
-    require(head->msgh_id == 0x4f4d4174 && head->msgh_size == sizeof request && !(head->msgh_bits & MACH_MSGH_BITS_COMPLEX) &&
-      MACH_PORT_VALID(head->msgh_remote_port) && !memcmp(returned.bytes + sizeof *head, request.nonce, 16), "bootstrap capability response");
-    restored_bootstrap = head->msgh_remote_port;
-    kernel(task_set_bootstrap_port(mach_task_self(), restored_bootstrap), "fixed producer bootstrap restore");
-    bootstrap_port = restored_bootstrap;
+    /* Direct parent owns the other socketpair endpoint and authenticates this
+     * unreaped, suspended image before releasing it. Normal task bootstrap is
+     * inherited unchanged, including libSystem's process-initialization state. */
+    union { struct cmsghdr align; unsigned char bytes[CMSG_SPACE(sizeof(int))]; } control = {0};
+    struct iovec body = { .iov_base=&message, .iov_len=sizeof message };
+    struct msghdr publication = { .msg_iov=&body, .msg_iovlen=1, .msg_control=control.bytes, .msg_controllen=sizeof control };
+    struct cmsghdr *right = CMSG_FIRSTHDR(&publication);
+    right->cmsg_level=SOL_SOCKET; right->cmsg_type=SCM_RIGHTS; right->cmsg_len=CMSG_LEN(sizeof(int));
+    memcpy(CMSG_DATA(right), &fd, sizeof fd);
+    require(sendmsg(3, &publication, 0) == sizeof message, "publish direct socket instance");
+    require(close(fd) == 0, "drop original direct socket");
     char name[128]; snprintf(name, sizeof name, "org.oma.direct-fence.%s", argv[1]);
     /* Dynamic check-in remains an observation, not the declared service contract. */
-    kernel(bootstrap_check_in(restored_bootstrap, name, &discovery), "dynamic discovery candidate");
-    kernel(mach_port_mod_refs(mach_task_self(), reply, MACH_PORT_RIGHT_RECEIVE, -1), "private reply return");
-    struct publication acknowledged = message;
-    acknowledged.head = (mach_msg_header_t){ .msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0), .msgh_size=sizeof acknowledged,
-      .msgh_remote_port=destination, .msgh_id=0x4f4d4175 };
-    kernel(mach_msg(&acknowledged.head, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof acknowledged, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL), "discovery acknowledgement");
+    kernel(bootstrap_check_in(bootstrap_port, name, &discovery), "dynamic discovery candidate");
+    char ready = 'R'; require(write(3, &ready, 1) == 1, "discovery readiness");
+  } else {
+    mach_port_t file = MACH_PORT_NULL;
+    require(fileport_makeport(fd, &file) == 0, "fileport");
+    require(close(fd) == 0, "drop original socket");
+    message.head.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MOVE_SEND);
+    message.head.msgh_size = sizeof message; message.head.msgh_remote_port = destination;
+    message.head.msgh_local_port = file; message.head.msgh_id = 0x4f4d4170;
+    kernel(mach_msg(&message.head, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof message, 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL), "publish created instance");
+    kernel(mach_port_deallocate(mach_task_self(), destination), "peer release");
   }
-  kernel(mach_port_deallocate(mach_task_self(), destination), "peer release");
   if (discovery_peer) {
     int flags = fcntl(3, F_GETFL); require(flags >= 0 && fcntl(3, F_SETFL, flags | O_NONBLOCK) == 0, "nonblocking owner lifetime");
     for (;;) {
@@ -138,7 +130,5 @@ int main(int argc, char **argv) {
   char ignored; ssize_t received;
   do { received = read(3, &ignored, 1); } while (received > 0 || (received < 0 && errno == EINTR));
   require(received == 0, "lifetime pipe EOF");
-  /* The process owns its restored bootstrap through all libSystem activity.
-   * Kernel task termination returns that reference with the other globals. */
   return 0;
 }

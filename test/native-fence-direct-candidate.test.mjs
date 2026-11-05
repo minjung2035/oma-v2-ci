@@ -27,7 +27,7 @@ test('001. Direct suspended fixed producer authenticates before release and publ
  assert.deepEqual(JSON.parse(refused.stdout),{matched:false,released:false,childReaped:true});
  t.diagnostic(JSON.stringify({phase:'direct-producer-refusal',peer,security:refused.stderr.trim()}));
  const accepted=run(controller,[producer,randomBytes(32).toString('hex'),hashes[0],...mode]);
- assert.deepEqual(JSON.parse(accepted.stdout),{matched:true,released:true,kernelSender:true,instanceMatched:true,creatorLiveAcrossLastClose:true,childReaped:true,...(peer==='bootstrap-discovery'?{discoveryAuthenticated:true}:{})});
+ assert.deepEqual(JSON.parse(accepted.stdout),{matched:true,released:true,kernelSender:true,instanceMatched:true,creatorLiveAcrossLastClose:true,childReaped:true,...(peer==='bootstrap-discovery'?{discoveryAuthenticated:true,directChannel:true}:{})});
  t.diagnostic(JSON.stringify({phase:'direct-producer-accepted',peer,security:accepted.stderr.trim(),productionAdopted:false,ownerLossQualified:false}));
  }
 });
