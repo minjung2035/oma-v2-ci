@@ -12,7 +12,7 @@ import { describeMacDeveloperTools, macGitLocation, type MacDeveloperTools } fro
 // Apple development shims read the machine's existing license status. This
 // grants no preference directory, human Xcode settings or license writes.
 export const DEVELOPER_TOOL_SUPPORT_FILES = ["/Library/Preferences/com.apple.dt.Xcode.plist"] as const;
-function refuse(): never { throw new StoreError("UNSUPPORTED_PROFILE", "Mac developer tools could not be observed unambiguously"); }
+function refuse(cause?: unknown): never { throw new StoreError("UNSUPPORTED_PROFILE", "Mac developer tools could not be observed unambiguously", { cause }); }
 function path(value: unknown): value is string {
   return trustedAbsolutePath(value) && !/[\r\n]/.test(value as string) && !(value as string).endsWith("/") &&
     Buffer.from(value as string).toString("utf8") === value;
@@ -41,7 +41,7 @@ export async function observeMacDeveloperTools(temporary: string,
   execute: (command: CommandSpec) => Promise<ProcessObservation>): Promise<MacDeveloperTools> {
   if (process.platform !== "darwin" || !path(temporary)) refuse();
   // The caller's OMA-owned temporary is resolved with the contained directory
-  // primitive. Raw realpath is reserved for the external toolchain outputs;
+  // primitive. Raw realpath is reserved for the selected external toolchain;
   // neither observation claims to bind the later pathname-based exec/cwd.
   closeSync(openDirectory(temporary));
   const observe = async (executable: string, argv: readonly string[]): Promise<string> => {
@@ -50,7 +50,10 @@ export async function observeMacDeveloperTools(temporary: string,
     // and race collection of its HOME/TMPDIR. There is no unowned fallback.
     const result = await execute({ executable, argv, cwd: temporary,
       env: { ...GIT_ENV, HOME: temporary, TMPDIR: temporary }, timeoutMs: 10000, stdoutBytes: 8192, stderrBytes: 8192 });
-    if (result.kind !== "exited" || result.exitCode !== 0 || result.stdoutTruncated || result.stderrTruncated) refuse();
+    if (result.kind !== "exited" || result.exitCode !== 0 || result.stdoutTruncated || result.stderrTruncated)
+      refuse({ executable, argv: [...argv], kind: result.kind, exitCode: result.exitCode, signal: result.signal,
+        errorCode: result.errorCode, elapsedMs: result.elapsedMs, stdoutTruncated: result.stdoutTruncated, stderrTruncated: result.stderrTruncated,
+        stdout: result.stdout.subarray(0, 8192).toString("utf8"), stderr: result.stderr.subarray(0, 8192).toString("utf8") });
     const output = decodeProcessText(result.stdout);
     if (!output.endsWith("\n") || !path(output.slice(0, -1))) refuse();
     const selected = output.slice(0, -1), canonical = realpathSync(selected);
@@ -58,7 +61,12 @@ export async function observeMacDeveloperTools(temporary: string,
     return canonical;
   };
   const developer = await observe("/usr/bin/xcode-select", ["-p"]);
-  const git = await observe("/usr/bin/xcrun", ["--find", "git"]);
+  // Select within the developer installation that the owned xcode-select
+  // invocation actually observed. xcrun is a separate service-using launcher;
+  // it need not run merely to locate this installation's fixed Git entry.
+  // Realpath, closed bundle grammar and an actual scoped Git --exec-path
+  // observation still have to succeed. There is no /usr/bin/git fallback.
+  const git = realpathSync(developer + "/usr/bin/git");
   macGitLocation(developer, git); // Validate the observed location before executing it.
   return describeMacDeveloperTools(developer, git, await observe(git, ["--exec-path"]));
 }

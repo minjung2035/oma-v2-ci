@@ -75,9 +75,22 @@ for (const point of ["witness", "released", "released-seatbelt", "released-prepa
       descendant = pinDarwinProcess(pid); f.pins.push(descendant);
       assert.equal(descendant.state(), "live"); assert.deepEqual(descendant.identity, row.witness);
     }
-    if (point === "released-seatbelt") {
-      journal.close(); await recoverExecutionState(f.root, false);
-    } else await new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope).recover();
+    try {
+      if (point === "released-seatbelt") {
+        journal.close(); await recoverExecutionState(f.root, false);
+      } else await new ExecutionCoordinator(journal, observeDarwinJobScope, acquireDarwinJobScope).recover();
+    } catch (error) {
+      // Keep the first failed recovery. The reporter's inspect depth can hide
+      // the native leaf under the coordinator's two aggregate owners.
+      const causes = (error, depth = 0) => error === null || typeof error !== "object" ? error : depth > 16 ? "cause depth exceeded" : {
+        name: error.name, code: error.code, message: error.message,
+        ...(error.cause === undefined ? {} : { cause: causes(error.cause, depth + 1) }),
+        ...(error instanceof AggregateError ? { errors: error.errors.map(value => causes(value, depth + 1)) } : {}),
+      };
+      t.diagnostic(JSON.stringify({ point, witness: row.witness, observedAfterFailure: observeDarwinJobScope(row.witness),
+        retainedRows: ExecutionJournal.inspect(f.root).length, recoveryFailure: causes(error) }));
+      throw error;
+    }
     assert.deepEqual(ExecutionJournal.inspect(f.root), []); assert.equal(observeDarwinJobScope(row.witness).kind, "exited");
     if (descendant) assert.equal(descendant.state(), "exited");
     assert.deepEqual(readFileSync(f.file).subarray(0, before.length), before, "old frames remain byte-identical");

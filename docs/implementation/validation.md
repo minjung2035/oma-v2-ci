@@ -2587,7 +2587,8 @@ Linux에서 Mac 전용 whole-generation 가지는 backend refusal만 의미한�
 
 최종 plan/조립/refusal25/25가 PASS다. 경로 재결박은 상대 suffix의 원래 spelling을 보존하여
 ..·중복 separator를 정규화해 허용하지 않도록 보강했고 같은25/25를 다시 확인했다.
-이 한 App 변경 뒤 App build·graph/source digests를 새로 고정했다. 바뀌지 않은 library payload의 독립 packed27/27은 PASS다.
+이 한 App 변경 뒤 App build·graph/source digests를 새로 고정했다. 앞선 독립 packed27/27은 경로 spelling 보강 전 입력이다.
+바뀌지 않은 library26개의 관측과 구분하며, App 보강 뒤 같은 명령을 재실행하지 않은 그 로컬 결과를 최종 packed27/27로 승계하지 않는다.
 review는 CHANGED_WITHOUT_ORACLE30·NOT_REVIEWED14362·REMOVED220이며 generation 파일은 hash 승인이 없는 NOT_REVIEWED 상태다.
 이 상태를 승인으로 바꾸지 않는다. 전체 architecture는 보강한 production에서 PASS였고,
 아래 관측 fixture/workflow를 추가한 최종 입력에도 다시 결박한다.
@@ -2603,16 +2604,85 @@ task control·SDK selector read/inspect·canary memory read·attach/detach와 �
 SDK selectors를 명시한 observation-only 호출로 고친 arm64 object compile은 PASS다. 실제 Mac 실행은 NOT_RUN이다.
 Linux의 새 case1/1은 명시적 Darwin backend refusal만 의미한다. restricted entitlement·privileged service는 추가하지 않았다.
 
-SOURCE57 최종 production의 build·관련25/25·실제 Linux 관련17/17·독립 library packed27/27이 PASS다.
+SOURCE57 최종 production의 build·관련25/25·실제 Linux 관련17/17이 PASS다. 선행 packed27의 App 입력 한계는 위와 같다.
 관측 fixture/workflow를 포함한 전체 module/architecture/graph/transactions/boundaries/문서/spec도 PASS다.
 supervisor 후보의 SDK arm64/Intel object compile과 Linux backend refusal은 PASS이며 실제 Mac guard 관측은 아직 NOT_RUN이다.
 private Git 새 가지와 supervisor 후보를 실제 Mac qualification으로 승계하지 않는다.
 이 결과 기록 뒤 구조 input을 재결박하고 문서/spec와 binding case를 확인한다.
 
+### Owned developer 조회와 실제 Broker Actor/Run 관측 (SOURCE58)
+
+SOURCE57 `18bbdf64401f71c10b0c263f454e4c2b4f8819ac`는 Native
+[41944488047](https://github.com/minjung2035/oma-v2-ci/actions/runs/41944488047), Architecture
+[41944487994](https://github.com/minjung2035/oma-v2-ci/actions/runs/41944487994)에 발행했다.
+canonical15898/`2005bbd0d112427f204910e20ede2a4077d9f2b7fd050c0cdeef95b803c18b4d`다.
+ARM shared ZIP13378602804 SHA-256 `a9f53b79525cb757fbec7cb608843d5b0f176c0f008f3e91febac0ba1a60a9ae`를 대조했다.
+399 tests/398 PASS/1 FAIL·cancel/skip/todo0이며 canonical은 위 값으로 전후 같다.
+runtime15528/27/`f5031e46e08a447a16bd5a369543dbdaf489d2d4742521c4c957787f97ffbfad`도 전후 같다.
+whole-generation은168419ms 뒤 새 private Git fixture의 developer 관측에서 실패했다.
+xcode-select -p의 실제 경로 관측은 반환했고 그 다음 owned xcrun --find git이
+성공한 exited/non-truncated 결과를 내지 못해 기존 UNSUPPORTED_PROFILE로 거절했다.
+그 입력은 원래 exit/signal/stderr를 cause에 남기지 않아 더 세부 원인은 미확정이다.
+private Git 완료나 whole-generation PASS로 기록하지 않는다. 선행 immutable Node scope의 원본 설치 읽기 거절은 실행됐지만 전체 새 case는 FAIL다.
+
+supervisor 관측 자체는 실제 ARM에서 실행됐다. 기존 task access port가 이미 valid여서
+새 dead port 설정은 KERN_NO_ACCESS8로 거절됐다. PT_DENY_ATTACH는0, attach child는SIGSEGV11이었다.
+Mach control/read/inspect는 ordinary 대조에서도 거절됐으므로 추가 보호의 양성 대조가 아니다.
+이 조합을 production pipeline 보호로 채택하지 않는다. 기존 Linux 보호와 Mac 거절은 유지한다.
+
+SOURCE58는 실제 scoped xcode-select가 선택한 developer installation의 고정 usr/bin/git을 realpath로 확인하고,
+기존 closed bundle grammar를 적용한 뒤 같은 owned scope에서 Git --exec-path를 관측한다.
+추가 service-using locator인 xcrun을 Git 선택에 사용하지 않는다. unchecked /usr/bin/git·host spawn fallback이나 timeout 확대는 없다.
+실패하면 bounded 실제 command/argv·kind·exit/signal·truncation·stdout/stderr를 cause에 보존하며 공개 error vocabulary는 바꾸지 않는다.
+새 작은 Mac 시험은 이 App bootstrap owner·actual journal·staging 반납을 직접 확인하고,
+xcrun의 종전 미관측 종료값을 별도의 diagnostic으로 회수한다. 그 진단은 production tool 선택이나 death proof의 대체가 아니다.
+
+다른 새 시험은 실제 Store/Mail/Lifecycle/Views/Broker·NativeResidents·Mach transport·ExecutionRuntime을 조립한다.
+controller가 body PID나 사망 boolean을 공급하지 않는다. 실제 inherited FD6의 잘못된 actor/invocation을 거절한 뒤
+current Run의 incarnation commit과 직접 Seatbelt Actor의 실제 kernel sender/full CID를 요구한다.
+같은 Host의 genuine endpoint capability를 받은 다른 coalition은 role을 얻지 못해야 한다.
+같은 live Actor가 기존 연결에서 desired=stopped 뒤 STALE_RUN을 받으며 아직 kernel member임도 독립 pin으로 확인한다.
+마지막에는 실제 scope/journal 반납과 incarnation 미증가를 확인한다.
+프로그램은 controlled protocol driver이며 product entry/Pi가 아니다. 작은 generation 밖의 실제 test library imports도 사용하므로
+이를 전체 immutable-library 또는 product Runner/Worker qualification으로 올리지 않는다. 새 Mac 가지는 아직 NOT_RUN이다.
+
+최종 production build와 관련13/13은 로컬에서 PASS다. Linux 새 Mac case는 명시적 backend refusal만 의미한다.
+Society lease·전체 product Actor/Run 연결·Mac pipeline supervisor/cache/tmp·resource profile·전체 CLI/reboot/adoption은 미완료다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
+
+SOURCE57 Intel shared ZIP13377803175 SHA-256 `a70283782bb49ec4aa5ed47c9b145b45bd721bf637758a43f2de7d8c9b9a8070`도 대조했다.
+399 tests/396 PASS/3 FAIL·cancel/skip/todo0이며 위 canonical이 전후 같다.
+runtime15528/27/`496618e115390b2273bf23160c7e1fead89f63ba9ba0bfec0878242286524618`도 전후 같다.
+실패는 같은 xcrun 조회, released-preparation Host-loss recovery의 RUN_TERMINATION_UNKNOWN,
+새 supervisor fixture의 unsigned Intel executable 거절이다. 전체 generation은194412ms에 developer 조회에서 실패했다.
+마지막은 owned fixture를 ad-hoc sign하여 기존 exact-image gate를 그대로 충족하도록 고쳤다. production image 검사는 완화하지 않는다.
+복구 실패는 얕은 reporter가 native aggregate leaf를 생략해 원인 미확정이다.
+새 시험 입력은 첫 실패·retained journal·fresh scope 관측과 전체 cause chain을 남기고 동일 오류를 그대로 다시 던진다.
+retry·journal retire·unknown의 dead 변환을 추가하지 않으며 이 실패는 미해결 추적으로 남긴다.
+
+SOURCE56 전체 Linux Native artifact ZIP13378597865 SHA-256
+`a0eabff5997e3bc67af0608199d5eab79372b9e56ce36be68945f85ab06fcff0`는4855/4855 PASS·fail/cancel/skip/todo0·errors[]다.
+source2544ed0d05ddb084fcf7ccc08b15ecce34d41431의15895 per-file hashes가 전후 동일하고 sourceChanges[]다.
+baseline ZIP13378627914 SHA-256 `29005759ee634bf28f40df4f0dc7abff04dc7ecc7d4a933d8becbb6e5f6f57b0`도 대조했다.
+provenance는 같은 source/canonical15895/83e067cf501abe835a9b60088c7d2a3706904f497d920a260c98aa1704355b65이며
+inventory/LOC/typecheck/build/package/architecture/spec/test/fast/durable/property/stress/platform 명령의 exit가 모두0이다.
+fast1200·durable937·property42·stress16·platform80이 각각 PASS다. kernel/crash는 별도 standalone NOT_RUN이며 native-all 실행 파일/required name 범위로만 기록한다.
+이는 SOURCE55의20개 실패와 LOC 측정 실패를 고친 SOURCE56 결과다. SOURCE57/58의 새 Mac/Actor 입력으로 옮겨 쓰지 않는다.
+
+
+SOURCE58의 frozen production 입력은 로컬 build와 새 Mac case의 Linux refusal 포함13/13,
+복구·supervisor의 Linux refusal10/10을 통과했다. 생성 Actor/Runner fixture 문법 검사도 통과했다.
+새로 수행한 packed isolation은 @oma/app을 포함한27개 workspace 전부 설치·public entry·authored declaration 검사를 통과했다.
+이 결과는 Mac 실행 증거가 아니며 새 private Git/Actor 양성 경로는 Mac CI 전까지 NOT_RUN이다.
+현재 production inventory14392, review ledger는 CHANGED_WITHOUT_ORACLE32/NOT_REVIEWED14360/REMOVED220이다.
+
+SOURCE58 전체 architecture·transaction·durable boundary·document·spec inventory 검사가 모두 exit0으로 끝났다.
+구조 검사 PASS는 Mac runtime 또는 product gate 완료를 뜻하지 않는다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `2005bbd0d112427f204910e20ede2a4077d9f2b7fd050c0cdeef95b803c18b4d` (15898 files).
+verification input digest `a9a66b2c84db32054e8fd686cb238847d50236f3e9d7e9d6ce8e507487f5789c` (15901 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

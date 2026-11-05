@@ -20,6 +20,10 @@ test('001. Actual Darwin supervisor candidate records task access and attach att
  t.after(async()=>{await owner.drain();rmSync(root,{recursive:true});});
  const compile=spawnSync('/usr/bin/clang',['-Wall','-Wextra','-Werror',fileURLToPath(new URL('./fixtures/darwin-supervisor-guard.c',import.meta.url)),'-o',executable],{encoding:'utf8',timeout:30000});
  assert.equal(compile.error,undefined);assert.equal(compile.signal,null);assert.equal(compile.status,0,compile.stderr);
+ // arm64 clang emits an ad-hoc signature; Intel clang may emit none. This
+ // owned fixture needs a CodeDirectory for the unchanged image capture gate.
+ const signed=spawnSync('/usr/bin/codesign',['--force','--sign','-',executable],{encoding:'utf8',timeout:10000});
+ assert.equal(signed.error,undefined);assert.equal(signed.signal,null);assert.equal(signed.status,0,signed.stderr);
  const observations=[];
  for(const [mode,seatbelt]of[['ordinary',false],['guard',false],['guard',true]]){
   const command={executable,argv:[mode],cwd:root,env:{HOME:root,TMPDIR:root,PATH:'/usr/bin:/bin'},timeoutMs:20000,stdoutBytes:16384,stderrBytes:16384};

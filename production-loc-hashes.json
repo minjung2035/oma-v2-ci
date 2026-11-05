@@ -1652,7 +1652,7 @@
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
-      "sha256": "3debbe8c9706d985335a1421dc2b32db14e31fda2997745bc75925b2303303d7"
+      "sha256": "e7d815cfb8e9bba05cd70eb13f9146bf9afa250e4f2bb8b9f05b296c3891cebd"
     },
     {
       "path": "packages/platform-mac/src/execution-launch.ts",
