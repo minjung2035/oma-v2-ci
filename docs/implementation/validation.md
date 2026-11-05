@@ -1,14 +1,14 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE106에서 Society 기본 소유권·scope/recovery·private Host 감독·FD close·실행 owner 사망 결합은 ARM10/10 PASS다. Intel의 같은 입력과 standalone explicit fence 연결은 아직 NOT_RUN이다. 이전010의 양쪽 실패는 아래 원시로 보존한다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD close·실행 owner 사망 결합은 ARM·Intel 각10/10 PASS다. SOURCE107 explicit fence까지 ARM11/11 PASS다. Intel11개 본문은 PASS지만002 cleanup의 중복 stream write로 suite가 실패했고 SOURCE108은 이 hook만 수리한다. 이전 실패 원시는 보존한다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
 | 남은 제품 작업 | 닫히지 않은 범위 |
 |---|---|
-| Society 실행 결합 | 실제 Broker/Engine·paid scope의 fence 보유/전체 사망 연결·현재 Host role의 제품 연결 |
+| Society 실행 결합 | Principal/Engine의 실제 physical scope·현재 Host RPC/role과 전체 CLI 경로 인수 |
 | G-FILES | 전체 제품 경로의 StateRoot capture·private work/source fetch·남은 외부 writer/진단 결박과 수명 인수 |
 | G-PROCESS | 이전 populated-scope termination unknown의 원인·실제 제품 Runner/Worker/Pi·manual CLI scope 연결 |
 | G-AUTH/복구 | 제품 Host/Broker/engine의 current capability와 restart/reboot/sleep·release Keychain/SIP 검증 |
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c60d0bac5726b8beda1698d081c9ecc08c4b038c7ca0e16497e623c2be354c9c` (15948 files).
+verification input digest `815f9abccc916e3bc468bc56ae71bfea6b3c74e02d259f49956fd88d95620024` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4606,3 +4606,26 @@ App owner는 직접 전달받은 cooperation FD를 우선 선택하고, Process�
 새011은 env marker를 지우고 실제 held fence를 constructor로만 전달해 child/descendant FD close·binding 유지·전체 종료 뒤 반환까지 요구한다.
 Linux에는 explicit Darwin capability를 주지 않으며 기존 inherited branch와 입력/권한 검사·guard는 유지한다.
 SOURCE107 build 및 실제011은 검증 중이다. SOURCE106 local packed/review 작업 도중 후속 source107 수정/build가 시작되어, 그 실행을 source107의 fresh27/정확한 최종 검토 근거로 사용하지 않는다. 최종 입력에서 다시 확인해야 한다.
+
+
+### SOURCE106 actual Intel10/10와 SOURCE107 ARM11/11·Intel hook failure
+
+SOURCE106 Intel Society ZIP13443998466 SHA-256 `4392cc6de4302f799b1a190a376be57db28370e19a1c8a1252ca7e3f0ba4194b`를 대조했다.
+같은 source `2825999ea5e53b21e63f07226be8680796efe1e2`/canonical15948 `9dceb881347288e456154c1e9fbebb23c7dd434cbec502de6069c638f15d2d8c`,
+runtime15551/`b99c044add879f22f9388314912f2ef8f50fb593dd3397db98e5a79a7b514fea`가 Society 전후 동일이다. Intel도10/10 PASS·기타0다.
+
+SOURCE107 `015b43d538663305417bbe0fb83fa70ed5c07de5`, Native42090462370·Architecture42090462175다.
+canonical15948/`c60d0bac5726b8beda1698d081c9ecc08c4b038c7ca0e16497e623c2be354c9c`다.
+ARM Society ZIP13444926967 SHA-256 `fe19a961e1a7e4c38a6b818ca4ccf931521d9cd18b33bae9a3f35af14429e513`,
+Intel Society ZIP13444389165 SHA-256 `f2adca89ee730396fa90a8451f8407a8be514e6ebf965e564e7027be339cf937`를 대조했다.
+각 source/input/runtime Society 전후 동일, runtime15551은 ARM `30b63f27b41c98432934eb8b5d806151b2f6bd4d6ae430dafb0bc33bd031a6e6`,
+Intel `a00b05e0b7eb5fcb522396dc357e3d4b528b214926e5234a5387ddd09a1e5abf`다.
+ARM11/11 PASS·기타0다. Intel011까지 본문11개는 PASS지만002 after hook이 이미 body에서 종료한 stream에 finish를 다시 써 ERR_STREAM_WRITE_AFTER_END를 만들었다.
+따라서 Intel suite는11 PASS/1 FAIL·기타0로 보존한다. SOURCE108은 writableEnded/destroyed를 확인해 cleanup이 두 번째 payload를 쓰지 않게 한 test-only 수리다.
+기존 Host SIGKILL·원래 process pin exit·인수 거절/재취득 조건·기한은 유지한다. SOURCE108 실제 clean suite는 NOT_RUN이다.
+
+SOURCE107 고정 production 입력에서 build·선택93/93 PASS, fresh packed27/27·실제 설치 App runtime PASS를 완료했다.
+새 코드 변경 없이 그 입력의 ledger를 --invalidate-stale로 갱신하고 전체 architecture/transaction/durable/document/spec0 findings를 확인했다.
+ledger는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14372·REMOVED220/production14404다. 검토 생성으로 과거 authored review를 재승인하지 않는다.
+SOURCE108의 production bytes는 SOURCE107과 같다. fixture/doc/ledger binding 변경을 새 전체 runtime proof로 재해석하지 않는다.
+다음 제품 연결 지점은 Host의 자기 Broker RPC expected-peer 경로다. 현재 inherited-only Mach dialer에는 직접 시작한 자식을 expected peer로 취득하는 Host 경로가 없다. 기본 guard/세 gate는 계속 유지한다.

@@ -514,7 +514,7 @@
     "DR62"
    ],
    "oracles": [],
-   "sha256": "f40a7124c6699f498c62e35a637ba728121473cae06d48d933232c2d5b845e8b"
+   "sha256": "18e5c5052011c2c62059046a3f9f3599e9ebe7a070351a5efa2b1a40b78bfb2d"
   },
   {
    "path": "apps/oma/src/runtime/extension-integrity.ts",

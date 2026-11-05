@@ -63,7 +63,7 @@ test('001. Product Darwin lease rejects a second fresh Host before state effects
 test('002. Product fence survives Host SIGKILL and rejects takeover until the inherited child exits',{timeout:45000},async t=>{
  if(!darwin(t))return;const f=fixture(t),pair=controlSocketPair();const wire=new Socket({fd:pair.parent,readable:true,writable:true}),lines=createInterface({input:wire});
  let host,pin,hostClosed,nextLease;
- t.after(async()=>{try{if(host?.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');wire.end('finish\n');await hostClosed;}finally{pin?.close();lines.close();wire.destroy();try{nextLease?.release();}catch{}}});
+ t.after(async()=>{try{if(host?.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');if(!wire.writableEnded&&!wire.destroyed)wire.end('finish\n');await hostClosed;}finally{pin?.close();lines.close();wire.destroy();try{nextLease?.release();}catch{}}});
  const childScript=`import {Socket} from 'node:net';import {inheritedFence} from ${JSON.stringify(leaseModule)};const wire=new Socket({fd:3,readable:true,writable:true});wire.on('end',()=>process.exit(0));wire.on('error',()=>process.exit(0));wire.on('data',()=>process.exit(0));wire.write(JSON.stringify({pid:process.pid,kind:inheritedFence(4,${JSON.stringify(f.state)}).kind})+'\\n');`;
  const hostScript=`import {spawn} from 'node:child_process';import {closeSync} from 'node:fs';import {tryHoldSociety} from ${JSON.stringify(leaseModule)};
  const held=tryHoldSociety(${JSON.stringify(f.state)});if(!held)throw Error('initial Host did not acquire');
