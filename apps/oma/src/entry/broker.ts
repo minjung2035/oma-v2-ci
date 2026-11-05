@@ -31,6 +31,7 @@ import type { MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { observeProjectBinding, repairSociety } from "../runtime/provision.js";
 import { prepareSociety } from "../runtime/society-preparation.js";
 import { openDirectory } from "@oma/native/files";
+import { openOwnedDirectoryPath } from "@oma/storage/directory";
 import { closeSync, realpathSync } from "node:fs";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "@oma/domain/integration-policy";
 import { ReconcileModule } from "@oma/reconcile";
@@ -304,7 +305,7 @@ async function main(): Promise<void> {
                 directory(repository: string): number | undefined {
                     if (repository === gitPaths.worldDir) {
                         if (worldDirectory !== undefined) return worldDirectory;
-                        try { return worldDirectory = openDirectory(gitPaths.worldDir); }
+                        try { return worldDirectory = openOwnedDirectoryPath(gitPaths.worldDir); }
                         catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
                     }
                     if (repository !== gitPaths.contextGit) return undefined;

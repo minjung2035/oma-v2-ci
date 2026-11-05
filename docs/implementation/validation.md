@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7b972d78f2efc5073f4e567f763d80ac892e5a75b546b607e7fcd8103c9cd26e` (15937 files).
+verification input digest `041547c3b8940f5711140cd2e302f39d3c57c8594227f657149d9652a3674ebe` (15937 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3985,3 +3985,29 @@ SOURCE83의 첫 full architecture는 context-snapshot.ts/staged-tree.ts의 stale
 규칙 정리 뒤 production-loc-hashes.json bytes는 동일하고 dependency evidence를 다시 생성했다.
 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source83-architecture-final.log`).
 이는 구조 판정이며 새 snapshot/restore 후보의 actual Mac 실행을 대체하지 않는다.
+
+### SOURCE84 retained world의 owner-bit 복구
+
+SOURCE83 local checkpoint `0769502fa9e36f85e2cd2211f35acaa128a90f2f` / tree `c2c4b949c6da405fd5b1f6d15d1a3a229a0a404c`의
+canonical15937/`7b972d78f2efc5073f4e567f763d80ac892e5a75b546b607e7fcd8103c9cd26e`에 위 검증을 결박했다.
+별도 SOURCE83 CI는 발행하지 않았으며 다음 source에 포함한다.
+
+추가 검토에서 retained world가 capture 뒤 mode000이 되면 새 publication이 owned-state repair를 빠뜨리는 반례를 확인했다.
+같은 새4건에 root의 mode000을 주입한 이전 compiled source는4/4 EACCES로 실패했다(`/tmp/oma-source84-mode-before-build.log`).
+SOURCE84는 publication의 같은 world FD에서 owner bits를 복구하고, App의 최초 world capture에는 기존 openOwnedDirectoryPath를 쓴다.
+기존 pin/repair/reopen owner를 재사용하고 별도 pathname chmod/open fallback은 추가하지 않는다.
+controlled Linux 조립에는 새 Storage directory port도 호출 시 거절하는 명시적 대역으로 등록했다.
+수리 후 새4건+조립18건22/22 PASS는 `/tmp/oma-source84-mode-after-build.log`, context/preaccept/수락/복구 포함133/133 PASS·기타0는
+`/tmp/oma-source84-context-regression.log`에 있다. 새 반례는 원본/root 교체·sentinel 보존·owner bits·revision replay·readiness를 함께 검증한다.
+모든 regression은 checkout .git을 read-only bind했다.
+
+다음 Native CI의 공통 matrix는 목표 Mac26 ARM·Intel26·Mac15·Linux 순으로 실행한다.
+실행 OS/시험 범위·기존 common max-parallel2·각 timeout은 유지하며 시험을 생략하지 않는다.
+최종 production build는 exit0다(`/tmp/oma-source84-build.log`). mode 수정 뒤 fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+새 snapshot consumer/mode repair와 bootstrap restore 후보의 actual Mac은 아직 NOT_RUN이다.
+Society 전체 lease·전체 StateRoot capture/다른 writer·제품 Runner/Worker/Pi·복구/release와 세 gate는 여전히 미완료다.
+
+SOURCE84 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source84-build.log`·`/tmp/oma-source84-package-isolation.log`·`/tmp/oma-source84-review.log`·`/tmp/oma-source84-architecture.log`다.
+CI YAML/21개 bash block의 문법은 통과했다. owned-state 예외 두 개는 삭제된 상태이며 새 예외를 추가하지 않았다.
+새 snapshot/mode repair·bootstrap restore 후보의 actual Mac은 아직 NOT_RUN이다.

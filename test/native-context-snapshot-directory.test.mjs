@@ -1,7 +1,7 @@
 /** Context revision writes and readiness share one retained world directory. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {closeSync,mkdirSync,mkdtempSync,openSync,readFileSync,readdirSync,readlinkSync,realpathSync,renameSync,writeFileSync} from 'node:fs';
+import {closeSync,fchmodSync,fstatSync,mkdirSync,mkdtempSync,openSync,readFileSync,readdirSync,readlinkSync,realpathSync,renameSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -30,7 +30,9 @@ for(const format of ['sha1','sha256'])for(const binding of ['bound','retained-on
  const repository=new GitRepository({stateRoot:root,projectGit:join(root,'project.git'),contextGit:context,worldDir:world,society:'demo'},{submissions:()=>[]},null,execution);
  renameSync(world,world+'-moved');mkdirSync(world);writeFileSync(join(world,'sentinel'),'world replacement');
  renameSync(source,source+'-moved');mkdirSync(source);writeFileSync(join(source,'GOAL.md'),'source replacement');
+ fchmodSync(worldFd,0);
  publishContextRevision(world,candidate,entries,sourceFd,{directoryFd:worldFd});
+ assert.equal(fstatSync(worldFd).mode&0o700,0o700);
  const revision=join(world+'-moved','context','revisions',candidate);
  for(const [path,bytes] of documents)assert.equal(readFileSync(join(revision,path),'utf8'),bytes);
  assert.equal(readlinkSync(join(world+'-moved','context','current')),`revisions/${candidate}`);

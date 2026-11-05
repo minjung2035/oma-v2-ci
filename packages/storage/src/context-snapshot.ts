@@ -87,7 +87,9 @@ export function publishContextRevision(
     if (!fstatSync(sourceDirectory).isDirectory()) throw new StoreError("STORE_CORRUPT", "context source is not a directory");
     if (control.directoryFd === undefined) ensureOwnedDurableDirectory(worldDir, worldDir, 0o755);
     world = control.directoryFd ?? openDirectory(worldDir);
-    if (!fstatSync(world).isDirectory()) throw new StoreError("STORE_CORRUPT", "context publication root is not a directory");
+    const root = fstatSync(world);
+    if (!root.isDirectory()) throw new StoreError("STORE_CORRUPT", "context publication root is not a directory");
+    if ((root.mode & 0o700) !== 0o700) fchmodSync(world, (root.mode & 0o7777) | 0o700);
     context = ensure(world, "context", join(worldDir, "context"));
     revisions = ensure(context, "revisions", join(worldDir, "context", "revisions"));
     let present = true;

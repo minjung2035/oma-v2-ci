@@ -46,6 +46,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "../runtime/mac-protected-node.js": { withProtectedMacNode() { throw new Error("Linux composition cannot prepare a protected Darwin Node"); } },
         "../runtime/mac-runtime-artifact.js": { collectRuntimeArtifacts() { throw new Error("Linux composition cannot collect Darwin artifacts"); } },
         "@oma/native/files": { openDirectory() { throw new Error("controlled Linux composition cannot open native directories"); } },
+        "@oma/storage/directory": { openOwnedDirectoryPath() { throw new Error("controlled Linux composition cannot capture a Darwin world root"); } },
         "@oma/native/cleanup": cleanupMeaning,
         // Explicit isolated current birth; shape/binding is not peer authentication.
         "../runtime/session-mode.js": {
