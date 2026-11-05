@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c6af49dc63a0bdb0426592a3504061ad78864377b24f89745c7323e2c3717054` (15933 files).
+verification input digest `6e9cb8a21e6060fd70aa5f1938e770a46d34f1a55f28a3e81c0b5ada5f4ed194` (15935 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3710,3 +3710,40 @@ ARM26 full ZIP13409639114 SHA-256 `898482e79c1b7f5ac06288e6fba06d3bc7419981848c9
 이로써 SOURCE76 새 Store primitive/consumer와 패키지는 세 Mac에서 관측했다. Mac15 generation unknown은 그대로 미해결이다.
 SOURCE77 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source77-architecture.log`).
 새 context 및 generation 실패 진단의 actual Mac은 아직 NOT_RUN이다.
+
+### SOURCE78 state 쓰기 전 직접 fixed producer 후보
+
+SOURCE77 `32b25265b584babd7ae7785cbbb819910870c159` / local checkpoint `97bd3be915b4e2cedbda4adc4f6c81a8dade5878`,
+Native42019573196의 canonical15933/`c6af49dc63a0bdb0426592a3504061ad78864377b24f89745c7323e2c3717054`를 대조했다.
+Mac15 shared ZIP13410813462 SHA-256 `d32394b8195c730c1d49a9f9dd78f0d18a49c944821bcf2e01475564156d83bc`,
+Intel shared ZIP13410958669 SHA-256 `feb5f22a1de0bfab4e144f3d2bc9b51a66914837b13e8254179403d6b610b117`는
+main 각451/451·generation 각3/3 PASS·기타0다. 새 context5건도 실제 통과했다.
+각 runtime15540/27의 digest는 `53d8db97a88434fece36a55d81b5aed7c6704199bb3b1060bcae74f37abea0bd`,
+`64a7992317b6c436327d94b25420d3d2e6e78f39a6e56dcb613b11c6f27a2fbd`이며 shared 전후 동일이다.
+Mac15 full ZIP13412200710 SHA-256 `ac32dca4578b76b6cbe0a16985ff49f7f3d7c3c4e7a36d5f6cfdce3cda81c59f`는
+같은 source/input/runtime의 최종 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+이 성공으로 SOURCE76 및 이전 populated-scope termination unknown을 해결했다고 판정하지 않는다.
+
+SOURCE78은 launchd job/ExecutionJournal 없이 public posix_spawn으로 고정 C producer를 직접 실행하는 test-only 후보를 추가했다.
+START_SUSPENDED·CLOEXEC_DEFAULT·명시적 FD3 lifetime pipe·private bootstrap special port를 사용한다.
+부모는 unreaped direct child의 kernel audit token으로 Security dynamic guest를 조회하고 expected CDHash를 검증한 뒤에만 release한다.
+잘못된 CDHash는 release 전에 거절하고 같은 소유 direct child를 회수한다.
+실행 뒤 실제 Mach audit trailer·전체 tag·socket opaque/generation·held bind 충돌·producer 생존 중 last-close 해제를 검사한다.
+기존 launchd producer 모드는 유지하며 bootstrap-peer 명시 모드만 추가한다.
+이는 pathname lock이나 frozen socket metadata 단독을 Society ownership으로 채택한 변경이 아니다.
+Society 전체 identity/discovery/collision, inherited FD4의 provenance, owner SIGKILL과 suspended child cleanup 및 제품 recovery는 미해결이다.
+production lease/backend·실행 guard·death predicate·예산은 바꾸지 않았다.
+
+로컬 SDK snapshot에는 CoreFoundation/Security framework headers가 없어 direct controller object compile이 준비 단계에서 거절됐다.
+없는 framework 경로를 추가한 재시도도 같은 준비 실패이며 실제 Mac compile/link/runtime는 NOT_RUN이다.
+이 후보의 Linux 경로는 NOT_RUN 진단만 제공한다. 새 primitive를 제품 완료 근거로 승격하지 않는다.
+
+SOURCE77 ARM26 shared ZIP13411762722 SHA-256 `ea7062b3f7c7aaad21040e7f765539793da0a7576899d6f5cddf006014e7d450`도 대조했다.
+같은 canonical15933·runtime15540/27 `1e787a450a548a50264071ba8d520d9e19c953df1a958fe33c605065aad8f0d9`의 shared 전후 동일,
+main451/451·generation3/3 PASS·기타0다. SOURCE77 새 context5건이 세 Mac에서 실제 통과했다.
+Intel/ARM26 독립 설치는 아직 진행 중이다. SOURCE78 producer 변경의 양 SDK object compile은 exit0이며
+Linux 두 시험은 모두 Darwin NOT_RUN 진단이다(`/tmp/oma-source78-fence-linux.log`).
+SOURCE78의 production 변경은 없으므로 SOURCE77 build/packed 결과를 새 primitive 실행 증거로 사용하지 않는다.
+
+SOURCE78 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source78-architecture-final.log`).
+CI YAML과21개 shell run block의 문법도 통과했다. production source/asset 변경은 없으며 native 실행 판정은 위 NOT_RUN을 유지한다.

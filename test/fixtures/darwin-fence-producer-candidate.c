@@ -3,6 +3,7 @@
  * a caller's socket or claims that matching socket metadata proves creation. */
 #define _DARWIN_C_SOURCE 1
 #include <mach/mach.h>
+#include <mach/task_special_ports.h>
 #include <sys/socket.h>
 #include <sys/proc_info.h>
 #include <sys/ptrace.h>
@@ -26,7 +27,7 @@ static void kernel(kern_return_t status, const char *operation) {
 struct publication { mach_msg_header_t head; uint8_t identity[32]; uint64_t socket, generation; uint32_t port; uint32_t info_size, socket_offset, generation_offset; };
 _Static_assert(sizeof(struct publication) == 88, "fixed publication layout");
 int main(int argc, char **argv) {
-  if (argc != 3 || getuid() == 0 || strlen(argv[1]) != 64) return 64;
+  if ((argc != 3 && (argc != 4 || strcmp(argv[3], "bootstrap-peer"))) || getuid() == 0 || strlen(argv[1]) != 64) return 64;
   struct publication message = {0};
   for (unsigned i = 0; i < 32; ++i) {
     unsigned value; char pair[3] = { argv[1][2*i], argv[1][2*i+1], 0 };
@@ -36,13 +37,18 @@ int main(int argc, char **argv) {
   char *end = NULL; errno = 0; unsigned long port = strtoul(argv[2], &end, 10);
   if (errno || !*argv[2] || *end || port > 65535) return 64;
   require(ptrace(PT_DENY_ATTACH, 0, NULL, 0) == 0, "deny tracing");
+  mach_port_t destination = MACH_PORT_NULL;
+  if (argc == 4) {
+    kernel(task_get_bootstrap_port(mach_task_self(), &destination), "private spawn peer");
+  } else {
   mach_port_array_t inherited = NULL; mach_msg_type_number_t count = 0;
   kernel(mach_ports_lookup(mach_task_self(), &inherited, &count), "peer lookup");
   if (count != 3 || !MACH_PORT_VALID(inherited[2])) return 65;
-  mach_port_t destination = inherited[2];
+  destination = inherited[2];
   for (unsigned i = 0; i < 2; ++i) if (MACH_PORT_VALID(inherited[i]))
     kernel(mach_port_deallocate(mach_task_self(), inherited[i]), "unused inherited capability");
   kernel(vm_deallocate(mach_task_self(), (vm_address_t)inherited, count * sizeof(*inherited)), "peer array");
+  }
   int fd = socket(AF_INET6, SOCK_DGRAM, 0), one = 1;
   require(fd >= 0, "socket");
   require(setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof one) == 0, "v6-only");
