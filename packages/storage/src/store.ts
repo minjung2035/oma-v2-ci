@@ -2,8 +2,13 @@
 // No Git/process/filesystem effects or await inside transactions (M-004).
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, lstatSync, openSync, closeSync, fsyncSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, lstatSync, openSync, closeSync, fsyncSync, fstatSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { reopenDirectory } from "@oma/file-descriptors";
+import { bundledSqliteRootLibrary } from "@oma/native/sqlite-root";
+import { statAt } from "@oma/native/posix-files";
+import { openRegularBeneath } from "@oma/native/files";
+import { withCleanup } from "@oma/native/cleanup";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Actor, MessageId, OperationId, RequestKey } from "@oma/contracts/identity";
 import type { ErrorCode } from "@oma/contracts/errors";
@@ -33,6 +38,52 @@ import { observeStoreFailure } from "@oma/domain/admission";
 export type { Transaction, StoreReads, StoreWrites } from "./transaction.js";
 
 export const SCHEMA_PATH = fileURLToPath(new URL("./schema-v5.sql", import.meta.url));
+export interface SqliteRoot {
+  /** Private physical SQLite address, never a durable or model reference. */
+  address(name: string): string;
+  /** All databases using this root must first close successfully. */
+  close(): void;
+}
+export function createDarwinSqliteRoot(directoryFd: number): SqliteRoot {
+  const library = bundledSqliteRootLibrary();
+  if (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || !fstatSync(directoryFd).isDirectory())
+    throw new TypeError("SQLite root requires a held directory");
+  const loader = new DatabaseSync(":memory:", { allowExtension: true });
+  try {
+    if (process.versions.node !== "26.0.0" || process.versions.sqlite !== "3.51.3")
+      throw new StoreError("UNSUPPORTED_PROFILE", "SQLite root adapter requires the qualified Node/SQLite generation");
+    loader.loadExtension(library);
+    const prefix = loader.prepare("SELECT oma_root_bind(?) AS root").get(directoryFd)?.root;
+    if (typeof prefix !== "string" || !/^\/\.oma-sqlite\/[0-9a-f]{32}\/$/.test(prefix))
+      throw new StoreError("UNSUPPORTED_PROFILE", "SQLite root adapter returned no private address");
+    const vfs = "oma-root-" + prefix.slice("/.oma-sqlite/".length, -1);
+    let closed = false, returnFailure: unknown;
+    return Object.freeze({
+      address(name: string): string {
+        if (returnFailure !== undefined) throw returnFailure;
+        if (closed) throw new StoreError("INTERNAL_ERROR", "SQLite root is closed");
+        if (!name || name.includes("/") || name.includes("\0") || name === "." || name === "..")
+          throw new TypeError("SQLite root address requires one leaf name");
+        return `file:${prefix}${encodeURIComponent(name)}?vfs=${vfs}`;
+      },
+      close(): void {
+        if (returnFailure !== undefined) throw returnFailure;
+        if (closed) return;
+        try { loader.prepare("SELECT oma_root_unbind(?)").get(prefix); }
+        catch (error) {
+          const failure = new StoreError("REF_STATE_UNKNOWN", "SQLite root return is unconfirmed", { cause: error });
+          // A live file owner can return later. A failed descriptor return is
+          // preserved and never retried against a possibly reused number.
+          if (sqlitePrimaryCode(error) !== 5) returnFailure = failure;
+          throw failure;
+        }
+        closed = true;
+        try { loader.close(); } catch (error) { returnFailure = error; throw error; }
+      },
+    });
+  } catch (error) { return withCleanup(() => { throw error; }, () => loader.close()); }
+}
+
 /** SQLITE_BUSY or SQLITE_LOCKED, read from SQLite's result code rather than
  * from its message (P0V-69). */
 export function isBusyError(error: unknown): boolean {
@@ -44,13 +95,14 @@ export function isBusyError(error: unknown): boolean {
  * single-writer fence; this observation is not a substitute for that authority.
  * Never ignore a WAL or journal by unconditionally declaring a file immutable.
  */
-function preflightDatabase(path: string): void {
+function preflightDatabase(path: string, directory?: number, root?: SqliteRoot): void {
   if (path === ":memory:") return;
   if (path.startsWith("file:"))
     throw new StoreError("STORE_CORRUPT", "Store requires a filesystem path, not a SQLite URI");
   const suffixes = ["", "-wal", "-shm", "-journal"] as const;
   const identities = (): (string | null)[] => suffixes.map(suffix => {
-    const stat = lstatSync(path + suffix, { bigint: true, throwIfNoEntry: false });
+    const stat = directory === undefined ? lstatSync(path + suffix, { bigint: true, throwIfNoEntry: false })
+      : statAt(directory, basename(path) + suffix, { bigint: true, throwIfNoEntry: false });
     if (!stat) return null;
     if (!stat.isFile() || stat.nlink !== 1n)
       throw new StoreError("STORE_CORRUPT", "database and sidecars must be unaliased regular files");
@@ -64,7 +116,7 @@ function preflightDatabase(path: string): void {
   }
   if (before[3] !== null)
     throw new StoreError("BROKER_UNAVAILABLE", "journal recovery cannot precede schema compatibility; evidence preserved");
-  const uri = pathToFileURL(path);
+  const uri = root === undefined ? pathToFileURL(path) : new URL(root.address(basename(path)));
   uri.searchParams.set("mode", "ro");
   if (before[1] === null && before[2] === null) {
     // Under the startup writer fence, absent sidecars mean there is no pending
@@ -94,6 +146,24 @@ function preflightDatabase(path: string): void {
   if (failed) throw failure;
   if (identities().some((identity, index) => identity !== before[index]))
     throw new StoreError("BROKER_UNAVAILABLE", "database identity changed during schema preflight; writer setup refused");
+}
+
+/** Trusted physical composition only. The logical Store path and all durable
+ * record/reference grammars remain filesystem labels. */
+export interface StoreDirectoryControl { readonly directoryFd?: number }
+function openStoreDatabase(path: string, control: StoreDirectoryControl): { db: DatabaseSync; root?: SqliteRoot; directory?: number } {
+  if (control.directoryFd === undefined) { preflightDatabase(path); return { db: new DatabaseSync(path) }; }
+  if (path === ":memory:" || path.startsWith("file:"))
+    throw new StoreError("STORE_CORRUPT", "a rooted Store requires a logical filesystem path");
+  const directory = reopenDirectory(control.directoryFd);
+  let root: SqliteRoot | undefined;
+  try {
+    root = createDarwinSqliteRoot(directory);
+    preflightDatabase(path, directory, root);
+    return { db: new DatabaseSync(root.address(basename(path)), { allowExtension: false }), root, directory };
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { root?.close(); closeSync(directory); });
+  }
 }
 
 /** Administrator-only read connection. No Store construction, migration, WAL
@@ -169,6 +239,10 @@ export class Store implements StoreQueries, StoreWrites {
   readonly deliveries = this.readViews.deliveries;
   readonly batches = this.readViews.batches;
   private readonly db: DatabaseSync;
+  private readonly sqliteRoot: SqliteRoot | undefined;
+  private sqliteDirectory: number | undefined;
+  private sqliteClosed = false;
+  private sqliteReturnFailure: unknown;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
   private readonly journal: OperationJournal;
@@ -181,12 +255,12 @@ export class Store implements StoreQueries, StoreWrites {
    * lands (MAX(?, created_at_ms)); what the time is, is read here only. */
   private readonly now: () => number;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null,
-    now: () => number = () => Date.now()) {
+    now: () => number = () => Date.now(), directoryControl: StoreDirectoryControl = {}) {
     this.now = now;
     this.repositoryIdentity = null;
     if (identity !== null) this.bindRepositoryIdentity(identity);
-    preflightDatabase(path);
-    this.db = new DatabaseSync(path);
+    const connection = openStoreDatabase(path, directoryControl);
+    this.db = connection.db; this.sqliteRoot = connection.root; this.sqliteDirectory = connection.directory;
     // Until construction returns, this scope owns the native connection. The
     // broker lifetime cannot retain a Store whose constructor threw.
     try {
@@ -205,7 +279,7 @@ export class Store implements StoreQueries, StoreWrites {
         new OperationTransitions(statements, this.reader, this.transactions, operation => this.planContext(operation), this.now),
         this.transactions);
     } catch (error) {
-      try { this.db.close(); }
+      try { this.closeDatabase(); }
       catch (closeError) { throw new AggregateError([error, closeError], "Store initialization and close failed"); }
       throw error;
     }
@@ -223,7 +297,16 @@ export class Store implements StoreQueries, StoreWrites {
     // A failed rollback may leave a native transaction to abandon on close.
     // Only a still-running callback prevents its owner from closing the handle.
     if (this.transactions.active) throw new StoreError("INTERNAL_ERROR", "cannot close a live transaction");
-    this.db.close();
+    this.closeDatabase();
+  }
+  private closeDatabase(): void {
+    if (this.sqliteRoot === undefined) { this.db.close(); return; }
+    if (this.sqliteReturnFailure !== undefined) throw this.sqliteReturnFailure;
+    if (!this.sqliteClosed) { this.db.close(); this.sqliteClosed = true; }
+    this.sqliteRoot.close();
+    const directory = this.sqliteDirectory; this.sqliteDirectory = undefined;
+    if (directory !== undefined) try { closeSync(directory); }
+    catch (error) { this.sqliteReturnFailure = error; throw error; }
   }
   private assertAvailable(): void {
     if (this.unavailable !== null) throw this.unavailable;
@@ -243,9 +326,14 @@ export class Store implements StoreQueries, StoreWrites {
       // WAL) before installing the reader gate; accepted bytes are untouched.
       if (this.path !== ":memory:") {
         const backup = `${this.path}.before-v5-${randomUUID()}.sqlite`;
-        this.db.prepare("VACUUM INTO ?").run(backup);
-        for (const path of [backup, dirname(backup)]) {
-          const fd = openSync(path, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
+        this.db.prepare("VACUUM INTO ?").run(this.sqliteRoot?.address(basename(backup)) ?? backup);
+        if (this.sqliteDirectory === undefined) {
+          for (const path of [backup, dirname(backup)]) {
+            const fd = openSync(path, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
+          }
+        } else {
+          const fd = openRegularBeneath(this.sqliteDirectory, basename(backup));
+          withCleanup(() => fsyncSync(fd), () => closeSync(fd)); fsyncSync(this.sqliteDirectory);
         }
       }
       this.db.exec("BEGIN IMMEDIATE; PRAGMA user_version = 5; COMMIT");

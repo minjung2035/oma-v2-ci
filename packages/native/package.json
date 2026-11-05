@@ -8,6 +8,10 @@
     "dist"
   ],
   "exports": {
+    "./sqlite-root": {
+      "types": "./dist/sqlite-root.d.ts",
+      "default": "./dist/sqlite-root.js"
+    },
     "./cleanup": {
       "types": "./dist/cleanup.d.ts",
       "default": "./dist/cleanup.js"
@@ -129,6 +133,7 @@
   },
   "oma": {
     "assets": [
+      "sqlite-root/main.c",
       "metadata/main.c",
       "seatbelt/main.c",
       "seatbelt/launch-fds.h",
@@ -136,6 +141,7 @@
       "job-helper/config.h"
     ],
     "darwinExecutables": [
+      "sqlite-root/oma-sqlite-root.dylib",
       "metadata/oma-file-metadata",
       "seatbelt/oma-seatbelt",
       "job-helper/oma-job-helper"

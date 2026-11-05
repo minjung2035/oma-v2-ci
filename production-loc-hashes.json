@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "3c30a0fbef0431455a7c4a3382ade14097c088874c6687ad1a907f632a6a73e2",
+  "manifest": "b0c36fe5e44b51a9b2212d15cc734fc50b690f1befa56c57bd6a39b98ea1b94a",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "9eac8f3025a5fda07cd239b265352e39f85f582a0f8e5dbe02d7213f41cb1c53"
+      "sha256": "2a030d6274c75017661f5a90d06b3eb3000ee4f7eca3bf8385c0b1bdf08e4fbf"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -1344,7 +1344,7 @@
     },
     {
       "path": "packages/git/src/review-record.ts",
-      "sha256": "00128828ed20b05c593b34f62b707f8406b1d705747aaf5763fea9c2be82f919"
+      "sha256": "38372a5002e4d0d5b6976dd181f371e29d06b7dc019be26c2bb536b6b9853161"
     },
     {
       "path": "packages/git/src/submit.ts",
@@ -1464,7 +1464,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "3067eea24e39a3e110e17d5b535f3ef6e0e3cd3edce356ad8c735cab178a07c6"
+      "sha256": "cce8406cf3699e4d1db4e9f19be0218321b19052905529c72e4e9d7591e512d5"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1601,6 +1601,14 @@
     {
       "path": "packages/native/src/snapshot-reader.ts",
       "sha256": "e6f6775e75e9d02e28003e904edc72ced772f8de10e3e9a0e5e8aed8303a9906"
+    },
+    {
+      "path": "packages/native/src/sqlite-root.ts",
+      "sha256": "7ea0c2ca209b36316d27efb2f1f9829867a55d81b3f45a8e86edf97733b8d086"
+    },
+    {
+      "path": "packages/native/src/sqlite-root/main.c",
+      "sha256": "5587e3a2a304f57c20b6d44ff02905c94d1342ed6b90aa9edde581834db88bcd"
     },
     {
       "path": "packages/native/src/unix-message.ts",
@@ -2064,7 +2072,7 @@
     },
     {
       "path": "packages/storage/package.json",
-      "sha256": "6eb7f730a50e6c40acf282ecbdb7cd0e87a24b322f670ebd84af7864d4cd5f0c"
+      "sha256": "628bd1044ea6420a0a55579d85920c8b719c3fba1dc9f60451376b67f5ab54b9"
     },
     {
       "path": "packages/storage/src/arrival-journal.ts",
@@ -2224,7 +2232,7 @@
     },
     {
       "path": "packages/storage/src/store.ts",
-      "sha256": "8556b47c8355c0f33a93f2d36ecdb4cafb661de47de48543a1e7e418648daad5"
+      "sha256": "c8e9ca33dd7c723c5481bc71d848a5da73b5341f1fbdb1a76ce615033ced19f6"
     },
     {
       "path": "packages/storage/src/submit-spool.ts",

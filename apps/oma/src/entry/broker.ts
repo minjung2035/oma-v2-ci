@@ -15,7 +15,7 @@ import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
 import { MailModule } from "@oma/mail";
 import { createNativeResidents, type NativeResidents } from "../runtime/native-residents.js";
-import { withAsyncCleanup } from "@oma/native/cleanup";
+import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "@oma/lifecycle";
 import { Broker } from "@oma/broker";
@@ -273,8 +273,13 @@ async function main(): Promise<void> {
         }
         const integrationPolicy = integrationPolicyFromConfig(cfg);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
-        const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
-        lifetime.retainStore(() => store.close());
+        const storeDirectory = process.platform === "darwin" ? openDirectory(stateRoot) : undefined;
+        const openStore = () => {
+            const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society }, undefined,
+                storeDirectory === undefined ? {} : { directoryFd: storeDirectory });
+            lifetime.retainStore(() => store.close()); return store;
+        };
+        const store = storeDirectory === undefined ? openStore() : withCleanup(openStore, () => closeSync(storeDirectory));
         const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
             cfg.limits, () => broker.hintWork());
         const transport = process.platform === "darwin" ? createMachBrokerTransport(cfg.limits.idleStreamSeconds) : undefined;

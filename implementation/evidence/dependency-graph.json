@@ -381,6 +381,7 @@
   "packages/native/src/process-lock.ts",
   "packages/native/src/process-observation.ts",
   "packages/native/src/snapshot-reader.ts",
+  "packages/native/src/sqlite-root.ts",
   "packages/native/src/unix-message.ts",
   "packages/platform-linux/src/bubblewrap-arguments.ts",
   "packages/platform-linux/src/candidate-sandbox.ts",
@@ -741,6 +742,7 @@
      "packages/native/src/process-lock.ts",
      "packages/native/src/process-observation.ts",
      "packages/native/src/snapshot-reader.ts",
+     "packages/native/src/sqlite-root.ts",
      "packages/native/src/unix-message.ts",
      "packages/process/src/async.ts",
      "packages/process/src/coalesced-wake.ts",
@@ -825,12 +827,12 @@
    "K0-values -> K0-values": 37,
    "K1-codecs -> K0-values": 92,
    "K1-codecs -> K1-codecs": 58,
-   "K2-mechanisms -> K0-values": 162,
+   "K2-mechanisms -> K0-values": 163,
    "K2-mechanisms -> K1-codecs": 24,
    "K2-mechanisms -> K2-mechanisms": 244,
    "K3-ledger -> K0-values": 23,
    "K3-ledger -> K1-codecs": 12,
-   "K3-ledger -> K2-mechanisms": 1,
+   "K3-ledger -> K2-mechanisms": 6,
    "K3-ledger -> K3-ledger": 13
   },
   "typeOnlyEdgeMatrix": {
@@ -1564,6 +1566,11 @@
    },
    {
     "from": "packages/native/src/snapshot-reader.ts",
+    "to": "packages/domain/src/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/sqlite-root.ts",
     "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
@@ -2449,6 +2456,31 @@
    },
    {
     "from": "packages/storage/src/store.ts",
+    "to": "packages/file-descriptors/src/index.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/native/src/cleanup.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/native/src/files.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/native/src/posix-files.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
+    "to": "packages/native/src/sqlite-root.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/storage/src/store.ts",
     "to": "packages/protocol/src/persisted-formats.ts",
     "kind": "runtime"
    },
@@ -2799,7 +2831,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 216
+   "files": 217
   },
   {
    "index": 2,
@@ -2869,11 +2901,11 @@
    "files": 73
   }
  ],
- "files": 578,
- "runtimeEdges": 2368,
+ "files": 579,
+ "runtimeEdges": 2374,
  "typeOnlyEdges": 993,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 642,
+  "L1-kernel -> L1-kernel": 648,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 419,
@@ -2909,21 +2941,21 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 298,
+  "packages/domain/src/errors.ts": 299,
   "packages/domain/src/identifiers.ts": 94,
-  "packages/native/src/cleanup.ts": 67,
-  "packages/native/src/files.ts": 58,
+  "packages/native/src/cleanup.ts": 68,
+  "packages/native/src/files.ts": 59,
   "packages/storage/src/directory.ts": 56,
   "packages/domain/src/canonical-json.ts": 49,
   "packages/domain/src/paths.ts": 42,
   "packages/storage/src/durable-fs.ts": 42,
-  "packages/file-descriptors/src/index.ts": 36,
+  "packages/file-descriptors/src/index.ts": 37,
   "packages/domain/src/utf8.ts": 33,
   "packages/domain/src/derived.ts": 27,
   "packages/domain/src/deployment.ts": 23,
   "packages/domain/src/request-identity.ts": 23,
-  "packages/domain/src/authority.ts": 22,
-  "packages/native/src/posix-files.ts": 22
+  "packages/native/src/posix-files.ts": 23,
+  "packages/domain/src/authority.ts": 22
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 47,
@@ -2937,10 +2969,10 @@
   "apps/oma/src/runner.ts": 18,
   "apps/oma/src/views.ts": 18,
   "packages/git/src/context-repository.ts": 18,
+  "packages/storage/src/store.ts": 18,
   "apps/oma/src/runtime/native-residents.ts": 17,
   "apps/oma/src/runtime/provision.ts": 17,
-  "packages/engine/src/interactive.ts": 17,
-  "packages/extension/src/index.ts": 17
+  "packages/engine/src/interactive.ts": 17
  },
  "external": {
   "@earendil-works/pi-ai": 2,
@@ -2969,7 +3001,7 @@
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 11,
-  "node:url": 17,
+  "node:url": 18,
   "node:util": 10,
   "node:zlib": 1,
   "nodemailer": 1,

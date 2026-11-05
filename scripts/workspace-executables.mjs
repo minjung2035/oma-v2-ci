@@ -1,6 +1,8 @@
 /** Reviewed native build recipes. Manifests select only their own executable;
  * source assets, package URL checks and compilation use this same ownership. */
 const recipes = [
+  { owner: "@oma/native", source: "sqlite-root/main.c", output: "sqlite-root/oma-sqlite-root.dylib",
+    compilerArguments: ["clang", "-dynamiclib", "-fPIC", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: [] },
   { owner: "@oma/native", source: "seatbelt/main.c", output: "seatbelt/oma-seatbelt",
     compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: ["-lsandbox", "-lproc"] },
   { owner: "@oma/native", source: "job-helper/main.c", output: "job-helper/oma-job-helper",

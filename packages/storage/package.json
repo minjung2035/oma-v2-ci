@@ -191,6 +191,7 @@
     "typescript": "5.9.3"
   },
   "oma": {
+    "isolationSmoke": "test/installed-runtime.mjs",
     "assets": [
       "schema-v4.sql",
       "schema-v5.sql"

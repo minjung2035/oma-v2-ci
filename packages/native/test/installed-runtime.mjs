@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openDirectory } from "@oma/native/files";
 import { assertNoUnpreservedMetadataAt } from "@oma/native/posix-files";
+import { bundledSqliteRootLibrary } from "@oma/native/sqlite-root";
 if (process.platform === "darwin") {
   const helper = statSync(new URL("./metadata/oma-file-metadata", import.meta.resolve("@oma/native/posix-files")));
   assert.ok(helper.isFile()); assert.ok((helper.mode & 0o111) !== 0);
@@ -13,6 +14,11 @@ const directory = realpathSync(mkdtempSync(join(tmpdir(), "oma-installed-native-
 try {
   writeFileSync(join(directory, "empty"), "installed");
   const fd = openDirectory(directory);
-  try { assertNoUnpreservedMetadataAt(fd, "empty"); }
+  try {
+    assertNoUnpreservedMetadataAt(fd, "empty");
+    if (process.platform === "darwin") {
+      assert.ok(statSync(bundledSqliteRootLibrary()).isFile());
+    }
+  }
   finally { closeSync(fd); }
 } finally { rmSync(directory, { recursive: true, force: true }); }

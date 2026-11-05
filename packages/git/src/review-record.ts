@@ -1,7 +1,7 @@
 /** Observational exports from recorded full OIDs. No refs, accepted plans,
  * caller repositories or current HEAD are opened or changed by this owner. */
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, openSync, readSync } from "node:fs";
+import { closeSync, constants, openSync, readSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewRecordFile, ReviewSourceLeaf, ReviewSourcePath, ReviewSourceRecord } from "@oma/contracts/files";
@@ -74,7 +74,7 @@ export function withReviewSourceRecord(repository: string, base: string, candida
   const width = objectFormat === "sha1" ? 40 : 64;
   if (base.length !== width || candidate.length !== width)
     throw new StoreError("INVALID_OID", "recorded source differs from the canonical object format");
-  const scratch = join(tmpdir(), `oma-review-record-${randomUUID()}`);
+  const scratch = join(realpathSync(tmpdir()), `oma-review-record-${randomUUID()}`);
   withinDirectory(scratch, (parent, name) => {
     mkdirAt(parent, name, 0o700);
     let active = true, ordinal = 0;

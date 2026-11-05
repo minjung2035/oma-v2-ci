@@ -398,6 +398,8 @@ packages/native/src/process-observation.ts
 packages/native/src/seatbelt/launch-fds.h
 packages/native/src/seatbelt/main.c
 packages/native/src/snapshot-reader.ts
+packages/native/src/sqlite-root.ts
+packages/native/src/sqlite-root/main.c
 packages/native/src/unix-message.ts
 packages/platform-linux/package.json
 packages/platform-linux/src/bubblewrap-arguments.ts

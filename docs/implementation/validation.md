@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `bd3571c3139a5b99971020f01f14da001229e4117b3c2d988f7eccb153b65051` (15925 files).
+verification input digest `fede45e1dd29deda3dc77b5b3eaed09af7caa350a8642306a906261e052b2045` (15932 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3560,3 +3560,103 @@ SOURCE75 full architecture·transaction·durable boundary·document·spec invent
 SOURCE74 Mac15 full ZIP13406740322 SHA-256 `e4e496fcc4da21c3d54083d72bc77c7d1c314ad8f3862a2d6f3cd219121d2930`의
 27/27 packed installation(App installed runtime 포함)과 최종 canonical/runtime 동일도 대조했다.
 SOURCE75 actual Mac consumer 시험과 전체 product gate는 완료하지 않았다.
+
+### SOURCE76 실제 Store의 held SQLite root와 review scratch 별칭
+
+SOURCE75 `aaf227c72801dc916ef040fa84e3dcecf12e1df5` / local checkpoint `f550d18144f5b0679927cc459a6ef00a8500137f`,
+Native42009716372·Architecture42009716496를 발행했다. canonical15925/`bd3571c3139a5b99971020f01f14da001229e4117b3c2d988f7eccb153b65051`다.
+Mac15 shared ZIP13406154977 SHA-256 `f592348549b5d1319263bfde4af086ff8c149415702b1db0bfd71ae7882792b9`,
+Intel shared ZIP13406409393 SHA-256 `11ca62fa6028919d865d253a1deea9b5bbd00497bf736aacee3cd7ab976f36a6`,
+ARM26 shared ZIP13407307701 SHA-256 `6a7c34ffd1255665b3f52631c50816ad90947fb2689f060b1309441957a64bb5`를 대조했다.
+각 canonical과 runtime15536/27은 shared 전후 동일이다. runtime digest는 각각
+`c9ec2e96dec268e672ec92627cb1d1adadff24272fda2db022808bb55815c9d8`,
+`6437713ec915aa084fb8b66140fa757934df66974982576177eea05e834294fd`,
+`d85d80573633bcb4d9aa2d04172b2419b6f097f14f734e267cf7f999650806cc`다.
+세 main437/435 PASS/2 FAIL·기타0, 세 isolated generation3/3 PASS·기타0다.
+새 integration root6건·creator-instance/alias/last-close·public SQLite syscall 후보는 세 Mac 모두 PASS다.
+실패2건은 review source-record scratch의 tmpdir /var 별칭이 no-symlink parent open에 거절된 것이다.
+SOURCE76은 OS tmpdir를 realpath로 정규화한 뒤 기존 held no-link open을 유지한다. fallback/Host cwd 변경을 하지 않는다.
+이 수정의 실제 Mac 결과는 아직 NOT_RUN이다.
+
+SOURCE75 Mac15 full ZIP13406424943 SHA-256 `53e2ab6411a8c21df5b46325edd6cb2f2737d5fc3e0bf9faede251fbd06ee3cc`,
+Intel full ZIP13407463067 SHA-256 `98327b23e5879573acc7870a1531ee6e09e6a0d596e6a135a9c1c0220fa53000`의
+27/27 packed installation(App installed runtime 포함)·최종 input/runtime 동일도 대조했다. main 실패를 전체 PASS로 바꾸지 않는다.
+
+SOURCE76은 @oma/native의 C Unix POSIX VFS adapter·Storage 소유 SQLite root loader·Store의 trusted directory control을 연결한다.
+Node26.0.0/내장 SQLite3.51.3과 공개 VFS v3 hooks를 요구한다. 실제 양 Mac SOURCE74 environment도 이 version이었다.
+OS SQLite·새 engine·private SQLite/Node 구조를 링크하지 않고 public file methods로 기존 read/write/lock/WAL/SHM을 위임한다.
+고정 extension은 private memory loader에만 로드하고 실제 Store DB의 extension loading은 비활성이다.
+package-owned C source/서명 dylib의 build recipe·export·설치 smoke를 함께 등록했다.
+OS와 engine의 다른 generation에는 경로 fallback 없이 거절한다. 기존 Linux의 기본 Store 경로는 유지한다.
+
+각 native root는 directory FD를 복제한다. private virtual prefix의 실제 open/stat/unlink/directory flush만
+동일 held parent로 처리하며 unbound prefix는 거절한다. 원래 default VFS의 다른 경로는 기존 OS 호출을 쓴다.
+공개 sqlite3_file wrapper가 파일 수명을 세고 생성한 temporary filename을 소유한다.
+SQLite의 NULL-name temp open과 FCNTL_TEMPFILENAME도 해당 root로 연결한다.
+반납은 실제 DB close 뒤에 수행하며 파일 사용 중이면 거절한다. 관측된 close 실패는 보존하고 숫자 FD를 다시 닫지 않는다.
+스키마 사전 검사·sidecar identity·readonly preflight·기존 v4→v5 backup/flush도 같은 held directory를 쓴다.
+스키마/accepted bytes/거래 의미를 바꾸지 않는다. App Broker는 State directory를 전달하고 lifetime에 Store를 먼저 등록한다.
+
+초기 multi-root 원형은 서로 다른 두 root에서 성공했지만 같은 inode를 두 root로 열면 첫 root의 반환 뒤
+SQLite가 inode별로 공유하는 WAL namespace를 잃어 마지막 close 후 -shm만 남았다.
+실제 반례는 `/tmp/oma-source76-same-root-initial.log`다. 같은 inode의 binding은 이제 하나의 VFS namespace를 참조 계수로 보유한다.
+등록/반납을 직렬화하되 file/syscall 관측 mutex를 SQLite VFS registry 호출에 걸쳐 보유하지 않는다.
+마지막 binding과 file owner가 반납된 뒤에만 namespace/FD를 반납한다.
+수정 후 첫 connection close·다른 connection의 계속된 write·마지막 close 뒤 DB만 남는 것을 확인했다.
+원시는 `/tmp/oma-source76-same-root-final.log`·`/tmp/oma-source76-root-linux-shared-final.log`다.
+
+초기 production build·27/27 packed install·review 생성은 shared-root 수정 전에 완료했고
+`/tmp/oma-source76-package-isolation-before-shared-root.log`·`/tmp/oma-source76-review-before-shared-root.log`로 보존했다.
+수정된 production을 다시 build하고 새 독립 설치·review 검사를 시작했다. 이 둘의 결과를 아직 합산하지 않는다.
+양 SDK object compile은 수정 뒤 exit0다(`/tmp/oma-source76-sqlite-{aarch64,x86_64}-final.log`).
+최종 Linux regression79/79 PASS·기타0이며 Darwin-only consumer는 NOT_RUN 진단과 구분한다.
+원시는 `/tmp/oma-source76-linux-regression-final.log`, 빈 `/tmp/oma-source76-checkout-index-final.patch`다. checkout .git은 read-only였다.
+
+Linux 호환 원형은 같은 C source의 Unix VFS와 실제 compiled Store를 사용하되 test loader에서 OS 선택 부분만 치환했다.
+초기 prototype의 module hook을 static import 뒤에 설치한 setup 실패도 별도 보존했다.
+최종 Store5건은 경로 교체·transaction/rollback·reopen·v4 backup·지원하지 않는 version 보존·hardlink 거절을 확인했다.
+원시는 `/tmp/oma-source76-store-linux-prototype-final.log`다. 이 원형을 실제 Mac 또는 기본 Linux backend 결과로 쓰지 않는다.
+Mac fixture는 실제 Store5건·shared/different roots·WAL·temp table·마지막 반환을 시험한다.
+SQLite temp 시험은 격리된 worker에 production Seatbelt renderer를 적용하고 root 밖 쓰기 거절을 대조한 뒤 실행한다.
+Mac actual 새 adapter 결과는 NOT_RUN이며 G-FILES의 context/private workspace·다른 writer·전체 product 검증도 남아 있다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE75 ARM26 full ZIP13407209209 SHA-256 `2d8a97bf5a7ecc90646b9e838ec8aeb928af819be4665364e14e3ae90dab66f3`도 대조했다.
+같은 canonical15925·ARM runtime15536/27의 최종 동일과27/27 packed installation(App installed runtime 포함)을 확인했다.
+세 Mac의 main 실패2건은 그대로 보존한다.
+
+SOURCE76 shared-root 수정 뒤 최종 production build와 fresh27/27 packed installation(App installed runtime 포함)은 exit0다.
+production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source76-build-final.log`·`/tmp/oma-source76-package-isolation.log`·`/tmp/oma-source76-review.log`다.
+같은 최종 C로 Store 호환 원형5/5도 다시 실행했다. actual Mac 새 consumer와 실행 guard는 아직 변경하지 않는다.
+
+초기 full architecture는 Native TS loader의 raw SQLite owner 위반과 미분류 kernel zone 두 건을 거절했다.
+원시는 `/tmp/oma-source76-architecture-before-sqlite-owner.log`다. SQLite owner allowlist를 넓히지 않는다.
+memory loader/DB 수명은 기존 concrete SQLite owner인 Storage store.ts로 옮겼다.
+Native TS는 C image의 package-owned URL만 제공하고 기존 K2-mechanisms의 파일 primitive 구역에 등록했다.
+설치된 실제 SQL/close 시험은 Storage smoke로 옮기고 Native smoke는 image 존재와 metadata primitive를 확인한다.
+owner 변경 전27/27·review 원시는 `/tmp/oma-source76-package-isolation-before-sqlite-owner.log`·`/tmp/oma-source76-review-before-sqlite-owner.log`다.
+변경 뒤 실제 compiled Storage와 같은 C의 Linux 호환 원형6/6 PASS를 확인했다(`/tmp/oma-source76-sqlite-owner-linux-prototypes.log`).
+그 원형은 native image 선택 port만 Linux build로 치환했고 실제 Mac Seatbelt 단계는 실행하지 않았다.
+첫 직접 architecture 재검사는 owner/zone 위반이 없었지만 갱신 전 dependency evidence를 거절했다.
+원시는 `/tmp/oma-source76-architecture-owner-only.log`이며 구조 생성 뒤의 최종 전체 검사를 별도로 수행한다.
+
+기존 cold-generation timeout의 후속 후보로 public fclonefileat의 held-source/parent 복제 시험을 추가했다.
+[고정 XNU 구현](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_syscalls.c)은
+readable source FD를 취득하고 기존 destination은 덮어쓰지 않는 clone 내부 경로를 호출한다.
+새 fixture는 source rename/unlink/immutable·destination parent 교체·독립 inode·source 후속 변경·두 번째 게시 충돌과 flags를 관측한다.
+이는 private runtime producer나 shared copy helper에 아직 연결하지 않은 test-only 후보다.
+양 SDK object compile·Linux NOT_RUN 경로는 exit0이며 실제 Mac과 시간 개선은 NOT_RUN이다.
+원시는 `/tmp/oma-source76-clone-{aarch64,x86_64}.log`·`/tmp/oma-source76-clone-linux.log`다.
+
+SOURCE76 SQLite owner 이동 뒤 production build·fresh27/27 packed installation(App installed runtime 포함)은 exit0다.
+Storage의 installed runtime smoke도 Linux에서 실제 새 DB/schema와 read owner를 실행했다.
+최종 production14398, review CHANGED_WITHOUT_ORACLE31 / NOT_REVIEWED14367 / REMOVED220이다.
+원시는 `/tmp/oma-source76-build-owner.log`·`/tmp/oma-source76-package-isolation.log`·`/tmp/oma-source76-review.log`다.
+owner 이동 뒤 regression79/79 PASS·기타0와 빈 index diff를 확인했다(`/tmp/oma-source76-linux-regression-owner.log`·`/tmp/oma-source76-checkout-index-owner.patch`).
+Mac의 새 Storage smoke·Store root·shared-root Seatbelt·clone fixture는 NOT_RUN이다.
+
+SOURCE76 owner·zone·dependency evidence를 고친 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+원시는 `/tmp/oma-source76-architecture.log`다. owner/zone 예외나 SQLite allowlist 확대를 하지 않았다.
+기존 K2 구역에 native image path leaf만 등록했으며 SQLite connection은 기존 K3 Store owner에 남긴다.
+최종 canonical input을 다시 결박하고 Mac 새 consumer 실행 전의 NOT_RUN·세 gate OPEN·product BLOCKED를 유지한다.
