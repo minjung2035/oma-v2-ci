@@ -16,8 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-static void require(int okay,const char *label){if(!okay){perror(label);exit(70);}}
-static void kernel(kern_return_t result,const char *label){if(result){fprintf(stderr,"%s=%d\n",label,result);exit(71);}}
+static void require(int okay,const char *label){if(!okay){int error=errno;dprintf(3,"E%s: errno=%d\n",label,error);errno=error;perror(label);exit(70);}}
+static void kernel(kern_return_t result,const char *label){if(result){dprintf(3,"E%s: kernel=%d\n",label,result);fprintf(stderr,"%s=%d\n",label,result);exit(71);}}
 int main(int argc,char **argv){
   if(argc!=3 || getuid()==0 || strlen(argv[1])!=64)return 64;
   struct oma_fence_publication publication={0};

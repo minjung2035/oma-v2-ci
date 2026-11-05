@@ -110,7 +110,7 @@ jobs:
           retention-days: 14
       - name: Qualify the whole installed generation without parallel fixture IO
         id: generation_runtime
-        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        if: ${{ always() && steps.native_build.outcome == 'success' && steps.shared_runtime.outcome != 'skipped' }}
         run: |
           # One cold generation, with its existing 240s deadline. It runs once
           # after the other fixture processes have returned, including failures.
@@ -160,7 +160,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Verify independent Darwin package installations
-        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' && steps.society_runtime.outcome == 'success' }}
         timeout-minutes: 15
         run: |
           if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi

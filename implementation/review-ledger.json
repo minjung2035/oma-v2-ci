@@ -810,8 +810,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runtime/society-preparation.ts",
@@ -2698,8 +2697,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/audit-origin.ts",
@@ -2797,8 +2795,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/darwin-supervisor.ts",
@@ -2958,8 +2955,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/society-fence/control.c",
@@ -2982,8 +2978,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/native/src/sqlite-root.ts",
@@ -3437,8 +3432,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/process/src/writer.ts",
