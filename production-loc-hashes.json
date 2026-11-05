@@ -2092,7 +2092,7 @@
     },
     {
       "path": "packages/storage/src/context-snapshot.ts",
-      "sha256": "7f146eebf94acbae79fe5bc8a1c3e54c6ae384b62c9b182cba0de9ce0907d276"
+      "sha256": "3a0cdc53e1deaaa99a93b5582b1896e10b149facd5715ea37d8924dd1ada9d3a"
     },
     {
       "path": "packages/storage/src/context-stream.ts",
@@ -2224,7 +2224,7 @@
     },
     {
       "path": "packages/storage/src/staged-tree.ts",
-      "sha256": "e6f333514a012dbb2d0a92d547713bd2898b36d0166bb5bf547d13fbf030969b"
+      "sha256": "b858ae572e5284d28836ea9901d9da4e8543bc2d3f0ad6f7810fb0f925b79a25"
     },
     {
       "path": "packages/storage/src/store-access.ts",

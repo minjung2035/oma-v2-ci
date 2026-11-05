@@ -105,14 +105,16 @@ export function publishStagedDirectoryAt(from: number, staging: string, to: numb
       verify(root, "staging"); fsyncTree(root, policy);
       try { renameAt(from, staging, to, destination); }
       catch (error) { if (!["EEXIST", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; return existing(); }
-      fsyncHeldDir(to, destination);
-      if (sourceParent.dev !== destinationParent.dev || sourceParent.ino !== destinationParent.ino) fsyncHeldDir(from, staging);
       const published = openBeneath(to, destination, constants.O_RDONLY | constants.O_DIRECTORY);
       try {
         const expected = fstatSync(root), actual = fstatSync(published);
         if (actual.dev !== expected.dev || actual.ino !== expected.ino) throw new StoreError("STORE_CORRUPT", "published staged directory changed");
         verify(published, "destination");
       } finally { closeSync(published); }
+      // A destination verifier may finish its owned metadata transition. Its
+      // successful completion precedes the publication's parent barriers.
+      fsyncHeldDir(to, destination);
+      if (sourceParent.dev !== destinationParent.dev || sourceParent.ino !== destinationParent.ino) fsyncHeldDir(from, staging);
       return "published";
     } finally { closeSync(root); }
   }

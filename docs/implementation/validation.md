@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `b228805eff452513f3315e56baecab3b097049b611e950ba420381b20234a842` (15938 files).
+verification input digest `e1c3a625e65086604695a76932d8280e42262770662b090670f793fbfa58fabf` (15938 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4105,3 +4105,43 @@ production14398, review CHANGED_WITHOUT_ORACLE30 / NOT_REVIEWED14368 / REMOVED22
 원시는 `/tmp/oma-source87-architecture.log`이며 정정 뒤 boundary4/4 PASS는 `/tmp/oma-source87-boundary-regression-final.log`다.
 workflow YAML 및 기존21개 bash block 문법은 통과했다.
 정정 후 full architecture·transaction·durable boundary·document·spec inventory도 exit0다(`/tmp/oma-source87-architecture-final.log`).
+
+### SOURCE88 snapshot의 이동과 최종 seal을 구분
+
+SOURCE87 local checkpoint `fee7d25a85a762a479b9a8778b7233cb96ec6d62` / tree `13b396137febe91c675b6ea41776eccea49b1d45`의
+canonical15938/`b228805eff452513f3315e56baecab3b097049b611e950ba420381b20234a842`에 위 local 검증을 결박했다.
+별도 SOURCE87 CI는 발행하지 않으며 다음 source에 포함한다.
+
+Mac15 snapshot4건의 실제 rename EACCES를 보존한 뒤, owned temporary의 이동 권한과 완료된 revision mode를 분리했다.
+Apple [XNU rename authorization](https://github.com/apple-oss-distributions/xnu/blob/xnu-11417.140.69/bsd/vfs/vfs_subr.c)은
+directory source에 DELETE와 ADD_SUBDIRECTORY를 함께 확인한다. 이 코드는 거절의 설명 후보이며 Mac26과의 모든 실행 차이를 입증하지는 않는다.
+새 temporary는 전체 bytes/목록·nlink·파일0644·decisions0555를 먼저 검증/flush하되 root만0755로 유지한다.
+rename 뒤 같은 inode의 destination에서 bytes를 다시 검증하고 root0555를 확정/flush한 다음 parent durability barrier를 완료한다.
+current link는 이 완료 이후에만 게시한다. 기본 verifyContextRevision(...,true)의 공개 계약은 여전히 최종 root0555만 허용한다.
+임시0755 상태를 완료 revision이나 receipt로 인정하지 않는다. 디스크 형식·최종 modes·accepted plan/OID·source bytes는 바꾸지 않는다.
+게시 후 seal 전 중단은 canonical 이름의 pending bytes를 남길 수 있다. 재개는 같은 inode/bytes를 검증해 seal을 마치며,
+변조된 bytes는 거절하고 덮어쓰거나 current를 게시하지 않는다. 새 fault2건이 두 경우를 검증한다.
+shared staged publisher는 destination 검증/metadata completion 뒤 부모들을 flush하도록 정렬했다.
+전체 publication/중단/복구/재시도/Views/status/조립/snapshot 회귀75/75 PASS·기타0다(`/tmp/oma-source88-publication-regression.log`).
+checkout .git은 read-only bind했으며 index diff는 비어 있다(`/tmp/oma-source88-checkout-index.patch`).
+Mac15 기존4건의 성공을 미리 선언하지 않는다. 새 이동/seal의 actual Mac은 NOT_RUN이다.
+Society 전체 단일 소유권·최초 StateRoot/나머지 writer·실제 Worker/Pi·복구/release 및 세 gate OPEN·제품 BLOCKED는 유지한다.
+
+SOURCE88 context 수락/복구/preaccept 전체94/94 PASS·기타0도 확인했다(`/tmp/oma-source88-context-regression.log`).
+SOURCE86 ARM shared ZIP13418659409 SHA-256 `72466a9abd82ea89f763d169df9e1d1d47856eaf3436f3e1476e14f8f63b2cc7`,
+Intel shared ZIP13420485947 SHA-256 `f27a4b2a440b460a17cb220af5ded41d67850ae2c4cb1057e5334ec802a3f4f6`를 대조했다.
+각각 위와 같은 SOURCE86 canonical/runtime가 shared 전후 동일이며 generation3/3 PASS·기타0다.
+SOURCE84 Intel240초 timeout 및 기존 intermittent termination-unknown의 실제 원인 수리 근거로 옮겨 적지 않는다.
+SOURCE86 ARM full ZIP13419383069 SHA-256 `ec4ca3259ba896443a864fcb4798a9aa1db3e1f1601c11636ff13b2942458ecb`도 대조했다.
+같은 source/input/runtime의 최종 전후 동일, main460/460·generation3/3·27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+한정된 common-runtime 결과이며 별도 product gate의 Worker/Pi6건 실패와 나머지 구현 공백은 유지한다.
+SOURCE86 Mac15 gate ZIP13420022355 SHA-256 `5f9a8a0e8217d097726ba8fad90e3df237b9e9f9bd57338bd057316c2ba42faa`도 대조했다.
+같은 source/input 전후 동일,120 executed/114 OBSERVED다. Git candidate3건도 OBSERVED이며 Worker/Pi6건은 기존 guard의 SETUP_FAILED다.
+
+SOURCE88 최종 production build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata는 exit0다.
+production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source88-build-final.log`·`/tmp/oma-source88-package-isolation.log`·`/tmp/oma-source88-review.log`다.
+새 snapshot의 actual Mac은 아직 NOT_RUN이며 SOURCE86의 main/package 결과로 대체하지 않는다.
+최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source88-architecture.log`).
+검증 중 기록을 추가하기 전의 provisional binding013은 예상대로 digest 차이를 거절했다.
+마지막 기록 bytes를 다시 결박한 뒤013을 통과시킨다. 이 구조 identity 갱신은 runtime 성공을 생성하지 않는다.

@@ -105,3 +105,41 @@ for (const phase of ["file-before-rename", "directory-after-rename"] as const) {
     } finally { t.mock.restoreAll(); syncBuiltinESMExports(); cleanup(root); }
   });
 }
+
+for (const changed of [false, true]) test(`005. Context after rename and before final seal retains pending bytes and refuses changed=${changed}`, t => {
+  const f = fixture(), fs = createRequire(import.meta.url)("node:fs") as typeof import("node:fs");
+  const original = fs.fchmodSync;
+  let injected = false;
+  t.mock.method(fs, "fchmodSync", (fd: number, mode: number): void => {
+    const held = fs.fstatSync(fd), named = fs.lstatSync(f.target, { throwIfNoEntry: false });
+    if (!injected && mode === 0o555 && named && held.isDirectory() && held.dev === named.dev && held.ino === named.ino) {
+      injected = true;
+      throw Object.assign(new Error("final context seal interrupted"), { code: "EIO" });
+    }
+    original(fd, mode);
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => publishContextRevision(f.world, revision, entries, f.source), { code: "EIO" });
+    assert.equal(injected, true);
+    assert.equal(existsSync(join(f.world, "context", "current")), false);
+    assert.equal(lstatSync(f.target).mode & 0o777, 0o755);
+    assert.throws(() => verifyContextRevision(f.target, entries, true), corrupt);
+    const inode = lstatSync(f.target).ino;
+    t.mock.restoreAll(); syncBuiltinESMExports();
+    if (changed) {
+      writeFileSync(join(f.target, "GOAL.md"), "changed\n");
+      assert.throws(() => publishContextRevision(f.world, revision, entries, f.source), corrupt);
+      assert.equal(readFileSync(join(f.target, "GOAL.md"), "utf8"), "changed\n");
+      assert.equal(existsSync(join(f.world, "context", "current")), false);
+    } else {
+      publishContextRevision(f.world, revision, entries, f.source);
+      assert.equal(lstatSync(f.target).mode & 0o777, 0o555);
+      assert.equal(readFileSync(join(f.target, "GOAL.md"), "utf8"), goal);
+      assert.doesNotThrow(() => verifyContextRevision(f.target, entries, true));
+      assert.equal(readlinkSync(join(f.world, "context", "current")), `revisions/${revision}`);
+    }
+    assert.equal(lstatSync(f.target).ino, inode, "replay never replaces an existing revision");
+    assert.equal(readFileSync(join(f.source, "GOAL.md"), "utf8"), goal);
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); cleanup(f.root); }
+});

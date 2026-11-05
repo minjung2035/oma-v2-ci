@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 30,
-  "NOT_REVIEWED": 14368,
+  "CHANGED_WITHOUT_ORACLE": 32,
+  "NOT_REVIEWED": 14366,
   "REMOVED": 220
  },
  "lanes": {
@@ -305,8 +305,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/entry/candidate-check.ts",
@@ -837,10 +836,12 @@
   {
    "path": "apps/oma/src/views.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR63"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "f6ae92a7852e8c14c266abafc2264727bbdd72ca3c1a1576bcb3cb135c922cad"
   },
   {
    "path": "apps/oma/src/views/collaboration-history.ts",
@@ -3813,7 +3814,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/context-stream.ts",
@@ -3852,10 +3854,12 @@
   {
    "path": "packages/storage/src/durable-fs.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "01832635969ec873b8bcaa5e6778d1edb451541dcae9ee14036c6b54b97a8c3f"
   },
   {
    "path": "packages/storage/src/execution-journal.ts",
@@ -4059,7 +4063,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/store-access.ts",
