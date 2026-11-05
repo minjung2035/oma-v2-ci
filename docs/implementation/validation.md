@@ -1,7 +1,7 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE104에서 Society 기본 소유권·scope/recovery·private Host 감독·workload FD close는 ARM·Intel 각9 PASS다. 실행 owner 사망과 Host 종료가 겹친010은 양쪽 모두 FAIL이며 SOURCE105 수리의 실제 Mac은 아직 NOT_RUN이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+SOURCE106에서 Society 기본 소유권·scope/recovery·private Host 감독·FD close·실행 owner 사망 결합은 ARM10/10 PASS다. Intel의 같은 입력과 standalone explicit fence 연결은 아직 NOT_RUN이다. 이전010의 양쪽 실패는 아래 원시로 보존한다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `9dceb881347288e456154c1e9fbebb23c7dd434cbec502de6069c638f15d2d8c` (15948 files).
+verification input digest `c60d0bac5726b8beda1698d081c9ecc08c4b038c7ca0e16497e623c2be354c9c` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4588,3 +4588,21 @@ actual Apple compiler/build27/27은 PASS이며 Society9 PASS/1 FAIL·기타0다.
 SOURCE106은 이를 정렬된4-byte malformed enrollment로 바꾼 test-only 수정이다. oversized1024-byte 요청과 실제 binding/원래 creator 유지·완전 scope death 뒤 재취득 oracle는 그대로다.
 production은 SOURCE105와 같으며 실제010 전체 PASS는 여전히 NOT_RUN이다. 최초 실패와 이전010 binding 해제 반례를 보존한다.
 SOURCE105 local 전체 architecture/transaction/durable/document/spec 검사는0 findings로 PASS다. 이 구조 결과를 actual scope/Actor 인수로 계산하지 않는다.
+
+
+### SOURCE106 actual ARM10/10와 SOURCE107 standalone explicit fence 연결
+
+SOURCE106 `2825999ea5e53b21e63f07226be8680796efe1e2`, Native42089321249·Architecture42089321114다.
+canonical15948/`9dceb881347288e456154c1e9fbebb23c7dd434cbec502de6069c638f15d2d8c`다.
+ARM Society ZIP13443319792 SHA-256 `6e073fb2bc9b2994268f90106ecaa2a23da2308307d2a762c304725bf0f27aa0`를 대조했다.
+같은 source/input/runtime Society 전후 동일, runtime15551/`d2d8d12a4c0b8b79f7f6262f11a6969047889035115b7c3d7bab83da42e06782`다.
+10/10 PASS·fail/cancel/skip/todo0다. 010은 실제 App Runtime·kernel pins 아래 owner SIGKILL/Host 종료 뒤 계속 살아 있는 후손과 실제 binding 유지·인수 거절을 확인했다.
+1024-byte oversized/정렬된 malformed public traffic 뒤 같은 original creator와 binding이 남았고, old CID empty·creator 최종 exit 뒤 새 tenure의 journal recovery/재취득도 통과했다.
+이 controlled 조립을 actual 전체 Broker CLI/Principal/Actor current authority 인수로 확대하지 않는다.
+
+SOURCE107은 standalone Broker의 claim.fence를 ExecutionRuntime에 명시적으로 전달한다.
+App owner는 직접 전달받은 cooperation FD를 우선 선택하고, Process는 그 socket을 실제 child slot에 배치·retained fileport로 보유한다.
+상속 env marker가 없는 standalone owner도 gate 전에 같은 creator enrollment를 수행한다. fd 번호/env는 역할 권한이 아니며 실제 Society socket 검증은 기존 native control이 맡는다.
+새011은 env marker를 지우고 실제 held fence를 constructor로만 전달해 child/descendant FD close·binding 유지·전체 종료 뒤 반환까지 요구한다.
+Linux에는 explicit Darwin capability를 주지 않으며 기존 inherited branch와 입력/권한 검사·guard는 유지한다.
+SOURCE107 build 및 실제011은 검증 중이다. SOURCE106 local packed/review 작업 도중 후속 source107 수정/build가 시작되어, 그 실행을 source107의 fresh27/정확한 최종 검토 근거로 사용하지 않는다. 최종 입력에서 다시 확인해야 한다.

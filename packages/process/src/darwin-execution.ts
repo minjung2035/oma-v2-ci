@@ -1,7 +1,7 @@
 /** Physical Darwin capture consumes native generation and fileport facts.
  * Shared execution owners still publish, authorize, release and retire. */
 import { Socket } from "node:net";
-import { closeSync } from "node:fs";
+import { closeSync, fstatSync } from "node:fs";
 import { constants } from "node:os";
 import { snapshotCommand, ExecutionNotStarted, type CommandSpec } from "@oma/domain/process-command";
 import { observeProcessIO, type ProcessIO, type ProcessIOOptions } from "./async.js";
@@ -17,6 +17,8 @@ import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./fence.js"
 import type { DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export { inheritedDarwinJobPeer, peerFromMachReceiver, type DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export interface DarwinJobScopeOptions extends ProcessIOOptions {
+  /** Explicitly borrowed by a standalone execution owner. Not role evidence. */
+  readonly cooperationFd?: number;
   /** Borrowed exact directory; no pathname reopen or /dev/fd traversal. */
   readonly directoryFd?: number;
   /** Trusted producer selection, checked against held main-image bytes before creation. */
@@ -85,8 +87,10 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
     // follows the actual handoff rather than replacing another capability.
     // This transports an already-held socket; it does not identify a lease
     // or authorize a Host/Broker role.
-    const fence = inheritedFence();
+    const fence = options.cooperationFd === undefined ? inheritedFence() : options.cooperationFd;
     if (fence !== undefined) {
+      if (!Number.isSafeInteger(fence) || fence < 0 || !fstatSync(fence).isSocket())
+        throw new StoreError("UNSUPPORTED_PROFILE", "Darwin cooperation descriptor is not an open socket");
       let target = extra.find(file => file.fd === fence)?.target;
       if (target === undefined) {
         target = SOCIETY_FENCE_FD;

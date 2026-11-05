@@ -218,7 +218,8 @@ async function main(): Promise<void> {
         // No schema search, path flattening or cross-installation fallback.
         assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH });
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
-        executions = new ExecutionRuntime(stateRoot, process.platform === "darwin" ? launchDarwinJobScope : undefined);
+        executions = new ExecutionRuntime(stateRoot, process.platform === "darwin" ? launchDarwinJobScope : undefined,
+            process.platform === "darwin" ? claim.fence : undefined);
         const nativeOwner = executions;
         lifetime.retainNative(() => withAsyncCleanup(() => withAsyncCleanup(async () => { await residents?.close(); }, () => nativeOwner.close()), () => runtimeGeneration?.closeAsync()));
         await executions.recover();

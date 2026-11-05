@@ -111,7 +111,7 @@ test('005. An inherited holder cannot free the exclusion resource by mutating it
  refused(f.state);assert.equal(inheritedFence(held.fence,f.state).kind,'society');assert.equal(existsSync(f.state),false);
 });
 
-async function paidSocietyScope(t,closeDescriptors=false){
+async function paidSocietyScope(t,closeDescriptors=false,explicitFence=false){
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-paid-society-'))),state=join(base,'state'),controller=new AbortController();
  const previous=process.env[SOCIETY_FENCE_ENV],restore=()=>{if(previous===undefined)delete process.env[SOCIETY_FENCE_ENV];else process.env[SOCIETY_FENCE_ENV]=previous;};
@@ -124,11 +124,11 @@ async function paidSocietyScope(t,closeDescriptors=false){
   if(failures.length)throw new AggregateError(failures,'paid Society scope cleanup remains unknown');
  });
  held=tryHoldSociety(state);assert.notEqual(held,null);assert.equal(existsSync(state),false);
- ExecutionJournal.initialize(state);runtime=new ExecutionRuntime(state,launchDarwinJobScope);await runtime.recover();
+ ExecutionJournal.initialize(state);runtime=new ExecutionRuntime(state,launchDarwinJobScope,explicitFence?held.fence:undefined);await runtime.recover();
  const descendant=`const fs=require('node:fs'),assert=require('node:assert/strict');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);${closeDescriptors?'fs.closeSync(fd);':''}process.stdout.write('society-descendant-ready'+String.fromCharCode(10));setInterval(()=>{},1000);`;
  const workload=`const fs=require('node:fs'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:['ignore',1,2,'ignore',fd],env:process.env});${closeDescriptors?'fs.closeSync(fd);':''}setInterval(()=>{},1000);`;
  let output='',ready;const entered=new Promise(resolve=>{ready=resolve;});
- process.env[SOCIETY_FENCE_ENV]=String(held.fence);
+ if(explicitFence)delete process.env[SOCIETY_FENCE_ENV];else process.env[SOCIETY_FENCE_ENV]=String(held.fence);
  running=runtime.run('preparation',{executable:realpathSync(process.execPath),argv:['-e',workload],env:{HOME:base,TMPDIR:base,PATH:'/usr/bin:/bin'},
   cwd:base,timeoutMs:15000,stdoutBytes:4096,stderrBytes:16384},controller.signal,()=>{},[],undefined,undefined,
   (source,options)=>launchDarwinJobScope(source,{...options,stdoutSink:bytes=>{output+=Buffer.from(bytes).toString();if(output.includes('society-descendant-ready\n'))ready();}}));
@@ -238,3 +238,5 @@ test('010. A paid detached descendant still excludes a new Host after its execut
  assert.deepEqual(authenticatedCreator(state),creator,'oversized or malformed public traffic cannot kill the remaining scope holder');boundResource(state);
  assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');assert.equal(ExecutionJournal.inspect(state).length,1);
 });
+
+test('011. An explicit standalone execution owner retains its Society without an inherited environment marker',{timeout:45000},t=>paidSocietyScope(t,true,true));

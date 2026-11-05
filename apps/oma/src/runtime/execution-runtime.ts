@@ -91,10 +91,11 @@ export class ExecutionRuntime {
     try { this.assertAdmission(); } catch (error) { throw new ExecutionNotStarted(error); }
     const budget = this.workload, lease = budget?.acquire();
     try {
-      const fence = process.platform === "darwin" ? inheritedFence() : undefined;
+      const fence = process.platform === "darwin" ? this.fence ?? inheritedFence() : undefined;
       const files = process.platform === "darwin" && options.files === undefined && Array.isArray(options.inheritedFds)
         ? { files: options.inheritedFds.map((fd: number, index: number) => ({ target: index + 6, fd })) } : {};
-      const scope = await physicalLaunch(budget?.command(command) ?? command, { ...options, ...files, ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
+      const scope = await physicalLaunch(budget?.command(command) ?? command, { ...options, ...files,
+        ...(fence === undefined ? {} : { cooperationFd: fence }), ...(lease === undefined ? {} : { placementFd: lease.placementFd }) });
       // Preserve lazy setup: spreading scope would invoke its getter before
       // the common owner has published the acquired kernel witness.
       const wrapped: BlockedExecution<ExecutionWitness> = { witness: scope.witness, closed: scope.closed,
@@ -123,7 +124,8 @@ export class ExecutionRuntime {
   private readonly journal: ExecutionJournal;
   private readonly selected = backend();
   private readonly owner: ExecutionCoordinator<ExecutionWitness>;
-  constructor(private readonly stateRoot: string, physicalLaunch?: Backend["launch"]) {
+  constructor(private readonly stateRoot: string, physicalLaunch?: Backend["launch"], private readonly fence?: number) {
+    if (fence !== undefined && process.platform !== "darwin") throw new StoreError("UNSUPPORTED_PROFILE", "explicit cooperation capture requires the Darwin backend");
     if (physicalLaunch !== undefined) {
       if (process.platform !== "darwin") throw new StoreError("UNSUPPORTED_PROFILE", "explicit Darwin capture requires the Darwin backend");
       this.selected.launch = physicalLaunch;
