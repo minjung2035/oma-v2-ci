@@ -1,8 +1,8 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE99의 제품 shared Society lease와 실제 paid execution scope는 ARM·Intel에서 각각6/6 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
-실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다. Host tenure를 유지한 실행 owner crash/recovery 결합은 다음007 case로 확인하며 아직 NOT_RUN이다.
+SOURCE100의 제품 shared Society lease·실제 paid execution scope·Host tenure crash/recovery는 ARM·Intel에서 각각7/7 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `f1ec7faa50972a2e054d8ce699992478ab4295d2a22d3062da2d68265fa6801e` (15946 files).
+verification input digest `dc7635b269b6d6a1a37cb94b50fbe2db2ecd77c88878a65b613c83cbbeb2c842` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4461,3 +4461,27 @@ SOURCE100의007은 실제 HostTenure와 claimSocietyFence를 사용하는 contro
 Host tenure가 살아 있는 동안 실행 owner가 SIGKILL된 뒤 실제 detached descendant가 같은 journal CID에서 살아 있음을 새 pin으로 확인한다.
 다른 Host 인수 거절, 같은 tenure의 공통 recovery로 kernel empty/원래 pin exit/빈 journal/기존 frame 보존, tenure 종료 뒤 재획득을 요구한다.
 007 actual Mac은 NOT_RUN이며 이 controlled 조립을 전체 Broker CLI/Actor current authority 완료로 확대하지 않는다.
+
+
+### SOURCE100 actual ARM/Intel7/7와 SOURCE101 private Host 감독 연결
+
+SOURCE100 `5f9edc2e881c64ea024e888795c4beea72eb93ac`, Native42077657954·Architecture42077658291이다.
+canonical15946/`f1ec7faa50972a2e054d8ce699992478ab4295d2a22d3062da2d68265fa6801e`다.
+ARM Society ZIP13440022728 SHA-256 `7383772fffb9d5a96e7a92f620fc53a4081d824a4abc9314ee314f3a81e8c183`,
+Intel Society ZIP13439981535 SHA-256 `53ddf7c1fecfa3a63392e53cf81a9fb04d3305ceecdef7b85dbe3a5aea2a0586`를 대조했다.
+각 source/input/runtime 전후 동일, runtime15549는 ARM `b5526e604a8989ed97a4d9607438cbceb9ffebae52f7e280ca2925ef8a23df15`,
+Intel `507d858597e39eee52b1b0fbd897b1c8f466404f2eefad28addde11ee7ab9972`다.
+양쪽7/7 PASS·fail/cancel/skip/todo0다. 007에서 실제 Host tenure 아래 fenced owner SIGKILL·살아 있는 detached descendant·인수 거절·공통 journal recovery와 기존 frame 보존 뒤 전체 kernel empty/빈 journal/재획득을 확인했다.
+이 controlled 조립은 전체 Broker CLI·Actor role 인수가 아니다.
+
+SOURCE101은 실제 Broker 감독 채널이 Darwin에서도 Linux SO_PEERCRED를 호출하던 미연결을 수리한다.
+Darwin에만 private inherited endpoint의 getpeereid/전체 LOCAL_PEERTOKEN을 실제 부모와 결박하며, process watch 등록 뒤 token을 다시 확인한다.
+Host exec/death·부모 변경·관측 불명은 권한을 철회한다. 매 송수신과 queued registration 전달 전에 살아 있는 원래 부모를 다시 확인한다.
+이 endpoint 관측은 공개 socket의 message sender 인증으로 사용하지 않는다. 부모 endpoint를 전달하지 않는 기존 private channel 계약이 전제다.
+새008은 실제 HostTenure→spawnSupervisedService→claimSocietyFence→openSupervisionChannel을 사용해 private session 왕복과 Host SIGKILL 뒤 Broker 종료/재취득을 확인한다.
+SOURCE101은 INTERMEDIATE checkpoint다. 실제 Mac008·최종 review invalidation/fresh27/전체 인수는 NOT_RUN이며 제품 guard와 세 gate는 유지한다.
+
+SOURCE100 Intel 공통 ZIP13440052374 SHA-256 `da0bcc774083018d0e3665194457c257299831581f9948182906e82c8ef11b4a`도 대조했다.
+같은 source/canonical/runtime의 main 전후 동일이며465/465 PASS·fail/cancel/skip/todo0다. 전체 gate·전체 제품 인수와 구분한다.
+SOURCE101 local build·workspace boundary·문서/spec 검사와 감독/tenure/조립 회귀77/77 PASS다.
+그 중 Darwin8개는 Linux에서 명시적 NOT_RUN이며 실제 Mac 실행으로 계산하지 않는다.

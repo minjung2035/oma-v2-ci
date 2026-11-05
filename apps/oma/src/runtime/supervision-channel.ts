@@ -17,6 +17,8 @@
 import { fstatSync } from "node:fs";
 import { Socket } from "node:net";
 import { peerCred } from "@oma/native/linux";
+import { pinDarwinPrivateParent } from "@oma/native/private-parent";
+import { cleanupAll } from "@oma/native/cleanup";
 import { processIdentity } from "@oma/broker/process-ancestry";
 import { HostChannelReader, encodeHostMessage } from "@oma/protocol/host-channel";
 import type { PrincipalHostChannel } from "@oma/broker/principal-endpoint";
@@ -37,29 +39,44 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
   try { kind = fstatSync(options.fd); }
   catch { log("a host channel is declared but none is attached; no principal endpoint is opened"); return undefined; }
   if (!kind.isSocket()) { log("the host channel is not a socket; no principal endpoint is opened"); return undefined; }
-  const credentials = peerCred(options.fd);
-  if (credentials === null || credentials.uid !== (process.getuid?.() ?? -1)) {
+  // This endpoint is given directly to the trusted Broker, never forwarded.
+  // Darwin's endpoint token is not a general per-message sender proof. Bind
+  // it to this process's actual parent and withdraw on exec/death/uncertainty.
+  const parent = process.platform === "darwin" ? pinDarwinPrivateParent(options.fd) : undefined;
+  const credentials = process.platform === "darwin" ? undefined : peerCred(options.fd);
+  if (process.platform === "darwin" ? parent === null : credentials == null || credentials.uid !== (process.getuid?.() ?? -1)) {
     log("the host channel's peer is not this user; no principal endpoint is opened");
     return undefined;
   }
   // Pinned with its start time: the pid on its own is reused, and this identity
   // is what the delivery endpoint answers to.
-  const host = processIdentity(credentials.pid);
+  const host = parent?.identity ?? (credentials == null ? null : processIdentity(credentials.pid));
   if (host === null) {
+    parent?.close();
     log("the host channel's peer is not observed running; no principal endpoint is opened");
     return undefined;
   }
 
-  const socket = new Socket({ fd: options.fd, readable: true, writable: true });
+  let socket: Socket;
+  try { socket = new Socket({ fd: options.fd, readable: true, writable: true }); }
+  catch (error) { parent?.close(); throw error; }
   let gone = false;
+  let watch: ReturnType<typeof setInterval> | undefined;
+  const returnParent = (): void => { clearInterval(watch); parent?.close(); };
   const hostGone = (reason: string): void => {
     if (gone) return;
     gone = true;
-    options.onHostGone(reason);
+    cleanupAll([returnParent, () => socket.destroy(), () => options.onHostGone(reason)]);
+  };
+  const live = (): boolean => {
+    if (gone) return false;
+    if (parent != null && !parent.alive()) { hostGone("the host identity changed or could not be observed"); return false; }
+    return true;
   };
   const listeners: ((sessionHandle: string, pid: number) => void)[] = [];
   const queued: { sessionHandle: string; pid: number }[] = [];
   const reader = new HostChannelReader(message => {
+    if (!live()) return;
     if (message.kind !== "session") { socket.destroy(); hostGone("the host sent a message only a broker sends"); return; }
     if (listeners.length === 0) { queued.push(message); return; }
     for (const listener of listeners) listener(message.sessionHandle, message.pid);
@@ -68,9 +85,10 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
   socket.once("end", () => hostGone("the host closed the supervision channel"));
   socket.once("close", () => hostGone("the host is gone"));
   socket.on("error", () => hostGone("the supervision channel failed"));
+  if (parent != null) { watch = setInterval(() => { live(); }, 25); watch.unref(); }
 
   const send = (text: string): void => {
-    if (gone || socket.destroyed) return;
+    if (!live() || socket.destroyed) return;
     socket.write(text);
   };
   return Object.freeze({
@@ -80,12 +98,13 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
       send(encodeHostMessage({ kind: "credential", credential, sessionHandle })),
     refuse: (sessionHandle: string) => send(encodeHostMessage({ kind: "refused", sessionHandle })),
     onSession: (listener: (sessionHandle: string, pid: number) => void) => {
+      if (!live()) { queued.length = 0; return; }
       listeners.push(listener);
-      for (const message of queued.splice(0)) listener(message.sessionHandle, message.pid);
+      for (const message of queued.splice(0)) { if (!live()) return; listener(message.sessionHandle, message.pid); }
     },
     // The broker owns this descriptor for its lifetime; closing it is part of
     // stopping, so a broker told to stop on its own does not keep running for
     // a channel nobody is reading.
-    close: () => { gone = true; socket.destroy(); },
+    close: () => { gone = true; cleanupAll([returnParent, () => socket.destroy()]); },
   });
 }

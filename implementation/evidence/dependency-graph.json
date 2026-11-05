@@ -378,6 +378,7 @@
   "packages/native/src/peer-uid.ts",
   "packages/native/src/pid-namespace.ts",
   "packages/native/src/posix-files.ts",
+  "packages/native/src/private-parent.ts",
   "packages/native/src/process-event.ts",
   "packages/native/src/process-lock.ts",
   "packages/native/src/process-observation.ts",
@@ -740,6 +741,7 @@
      "packages/native/src/peer-uid.ts",
      "packages/native/src/pid-namespace.ts",
      "packages/native/src/posix-files.ts",
+     "packages/native/src/private-parent.ts",
      "packages/native/src/process-event.ts",
      "packages/native/src/process-lock.ts",
      "packages/native/src/process-observation.ts",
@@ -831,7 +833,7 @@
    "K1-codecs -> K1-codecs": 58,
    "K2-mechanisms -> K0-values": 163,
    "K2-mechanisms -> K1-codecs": 24,
-   "K2-mechanisms -> K2-mechanisms": 251,
+   "K2-mechanisms -> K2-mechanisms": 255,
    "K3-ledger -> K0-values": 23,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 6,
@@ -2833,7 +2835,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 218
+   "files": 219
   },
   {
    "index": 2,
@@ -2903,16 +2905,16 @@
    "files": 73
   }
  ],
- "files": 580,
- "runtimeEdges": 2387,
+ "files": 581,
+ "runtimeEdges": 2393,
  "typeOnlyEdges": 993,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 655,
+  "L1-kernel -> L1-kernel": 659,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 421,
   "L3-workflow -> L3-workflow": 99,
-  "L4-orchestration -> L1-kernel": 539,
+  "L4-orchestration -> L1-kernel": 541,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 217,
@@ -2945,7 +2947,7 @@
  "fanIn": {
   "packages/domain/src/errors.ts": 300,
   "packages/domain/src/identifiers.ts": 94,
-  "packages/native/src/cleanup.ts": 70,
+  "packages/native/src/cleanup.ts": 72,
   "packages/native/src/files.ts": 60,
   "packages/storage/src/directory.ts": 57,
   "packages/domain/src/canonical-json.ts": 49,
@@ -2981,7 +2983,7 @@
   "@earendil-works/pi-coding-agent": 51,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 19,
+  "koffi": 20,
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,

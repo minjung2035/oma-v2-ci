@@ -25,6 +25,7 @@ import {HostTenure} from '#oma-test/app/runtime/host-tenure';
 import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
 import {observeDarwinCoalitionPopulation,pinDarwinProcess} from '@oma/native/audit-session';
 import {inspect} from 'node:util';
+import {pinDarwinPrivateParent} from '@oma/native/private-parent';
 const runFence=(executable,argv,fd)=>runProcessSync({executable,argv,env:{PATH:'/usr/bin:/bin'},timeoutMs:15000,stdoutBytes:16384,stderrBytes:16384},undefined,fd===undefined?[]:[fd],{killSignal:'SIGTERM'});
 
 const leaseModule=fileURLToPath(new URL(import.meta.resolve('#oma-test/app/runtime/society-lease')));
@@ -155,4 +156,25 @@ test('007. A live Host tenure keeps the Society through its fenced execution own
  assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(pin.state(),'exited');assert.deepEqual(ExecutionJournal.inspect(state),[]);recovered=true;
  assert.deepEqual(readFileSync(join(state,'execution/scopes.jsonl')).subarray(0,before.length),before,'recovery preserves the original journal frames');
  const ended=tenure;tenure=undefined;await ended.end();tenure=HostTenure.take(state);assert.notEqual(tenure,null,'only the completed Host tenure and recovered scope permit a new owner');
+});
+
+test('008. The product private supervision channel binds the actual Host and ends its fenced Broker after Host SIGKILL',{timeout:45000},async t=>{
+ if(!darwin(t))return;
+ const fake=controlSocketPair();try{assert.equal(pinDarwinPrivateParent(fake.parent),null,'a same-user socket owned by this process is not its parent');}finally{closeSync(fake.parent);closeSync(fake.child);}
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-private-supervision-'))),f={base,state:join(base,'state')};ExecutionJournal.initialize(f.state);
+ const host=fork(fileURLToPath(new URL('./fixtures/darwin-supervision.mjs',import.meta.url)),[f.state,'host'],{stdio:['ignore','ignore','pipe','ipc'],env:closedEnv()});
+ let stderr='',pin,next;host.stderr.on('data',bytes=>{stderr+=bytes;});
+ const closed=new Promise((yes,no)=>{host.once('error',no);host.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
+ t.after(async()=>{
+  if(host.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');await closed;
+  const limit=performance.now()+16000;while(pin?.state()==='live'&&performance.now()<limit)await delay(10);
+  const ended=pin?.state()==='exited';pin?.close();next?.release();
+  if(ended)rmSync(base,{recursive:true});else t.diagnostic('Retained unconfirmed private supervision: '+base);
+ });
+ const [ready]=await Promise.race([once(host,'message'),closed.then(status=>{throw new Error('Host/Broker supervision failed before readiness: '+JSON.stringify(status)+' '+stderr);})]);
+ assert.equal(ready.kind,'ready');assert.equal(ready.host,host.pid);assert.ok(ready.broker>1);
+ pin=watchDarwinProcess(ready.broker);assert.equal(pin.state(),'live');refused(f.state);
+ host.kill('SIGKILL');assert.deepEqual(await closed,{code:null,signal:'SIGKILL'},stderr);await exited(pin);
+ const ended=JSON.parse(readFileSync(join(f.state,'broker-ended.json'),'utf8'));assert.equal(ended.pid,ready.broker);assert.match(ended.reason,/host/);
+ next=tryHoldSociety(f.state);assert.notEqual(next,null,'the ended private Broker returns its inherited Society fence');
 });

@@ -28,6 +28,10 @@
       "types": "./dist/peer-uid.d.ts",
       "default": "./dist/peer-uid.js"
     },
+    "./private-parent": {
+      "types": "./dist/private-parent.d.ts",
+      "default": "./dist/private-parent.js"
+    },
     "./identity": {
       "types": "./dist/identity.d.ts",
       "default": "./dist/identity.js"

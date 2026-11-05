@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "add12f759d0dae498cd909fd879e75cb8a9d084b89f7f930b7b224a7ef81ed44",
+  "manifest": "acfa264bc27ac5bcb8c659ceef02fc756ad74552df091851e37acc273c156672",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -448,7 +448,7 @@
     },
     {
       "path": "apps/oma/src/runtime/supervision-channel.ts",
-      "sha256": "dd811e4e91dd1c9678881615b239bae14df4372d260143b6e55eeee7b4c118e8"
+      "sha256": "ef6b0c1440954cd4174e37c542c94173c0eceab5993b1d08acc764429468851f"
     },
     {
       "path": "apps/oma/src/runtime/user-files.ts",
@@ -1464,7 +1464,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "a9cc22808a4a47fb71a1555d45bf2d38a97702511571776ab6abde37570427b3"
+      "sha256": "4b98e4997cb03748510f70ca7c4c2105bdcf79d885d0159eec6f04657f9692bf"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1581,6 +1581,10 @@
     {
       "path": "packages/native/src/posix-files.ts",
       "sha256": "2b5a30519b75498f15c9eb2bd63838cc6d75c3f35436fbc0c326faac69d7341c"
+    },
+    {
+      "path": "packages/native/src/private-parent.ts",
+      "sha256": "8bd6845d64e76c23ad4315b12bf3e6189304cfe24fb480a5521d9ca664dba83d"
     },
     {
       "path": "packages/native/src/process-event.ts",

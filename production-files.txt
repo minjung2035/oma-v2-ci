@@ -393,6 +393,7 @@ packages/native/src/metadata/main.c
 packages/native/src/peer-uid.ts
 packages/native/src/pid-namespace.ts
 packages/native/src/posix-files.ts
+packages/native/src/private-parent.ts
 packages/native/src/process-event.ts
 packages/native/src/process-lock.ts
 packages/native/src/process-observation.ts
