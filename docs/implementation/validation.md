@@ -1,8 +1,8 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE97의 제품 shared Society lease는 ARM·Intel에서 각각5/5 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
-같은 ARM 입력의 공통 회귀도465/465 PASS다. 실제 paid execution scope/whole-scope death와의 결합은 SOURCE98의 새006 case로 확인 중이며 아직 NOT_RUN이다.
+SOURCE99의 제품 shared Society lease와 실제 paid execution scope는 ARM·Intel에서 각각6/6 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다. Host tenure를 유지한 실행 owner crash/recovery 결합은 다음007 case로 확인하며 아직 NOT_RUN이다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `40ac9f9d01381229b3ca3150d2e5da2852a99333f7359cedc022f7a826173976` (15946 files).
+verification input digest `f1ec7faa50972a2e054d8ce699992478ab4295d2a22d3062da2d68265fa6801e` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4444,3 +4444,20 @@ ARM Society ZIP13435919229 SHA-256 `f4120d0d2c85f54929310d8f9c9c8ede8ab405724255
 시험이 임의 slot `society-paid`를 사용한 fixture 오류다. 실제 scope 시작/종료의 실패나 인수로 확대하지 않는다.
 SOURCE99는 원래 product slot인 `preparation`을 쓰며 journal 계약/검사와 원래 namespace·scope 단언은 유지한다.
 production 변경이 없는 시험 수정이다. 새006의 실제 Mac은 여전히 NOT_RUN이다.
+
+### SOURCE99 actual ARM/Intel6/6와 SOURCE100 Host tenure crash/recovery
+
+SOURCE99 `ccddec2fca47501eb10871e4a72973a653dabfc4`, Native42074422688·Architecture42074422588이다.
+canonical15946/`40ac9f9d01381229b3ca3150d2e5da2852a99333f7359cedc022f7a826173976`다.
+ARM Society ZIP13437364607 SHA-256 `5394c563f1836ca6b722eacf30baf843fb8925ca46d38a67a136e4ad379bd1e1`,
+Intel Society ZIP13437769232 SHA-256 `bd4782ba652061e259224f5b7a2056e5a18ca0a98eb3a3b226866934ea543fbd`를 대조했다.
+각 source/input/runtime Society 전후 동일이며 runtime15549/27은 ARM `b5526e604a8989ed97a4d9607438cbceb9ffebae52f7e280ca2925ef8a23df15`,
+Intel `507d858597e39eee52b1b0fbd897b1c8f466404f2eefad28addde11ee7ab9972`다.
+양쪽6/6 PASS·fail/cancel/skip/todo0다. 새006에서 실제 journaled resource coalition의 direct workload와 detached descendant가 FD를 유지했다.
+Host/creator의 자기 copy 반환 뒤 populated scope의 takeover 거절, 공통 owner 취소 뒤 독립 kernel empty·FD/output drain·빈 journal·재획득을 확인했다.
+
+SOURCE100의007은 실제 HostTenure와 claimSocietyFence를 사용하는 controlled execution owner를 결합한다.
+기존 Host-crash recovery fixture에 fenced mode만 추가하며 나머지 기존 mode는 유지한다.
+Host tenure가 살아 있는 동안 실행 owner가 SIGKILL된 뒤 실제 detached descendant가 같은 journal CID에서 살아 있음을 새 pin으로 확인한다.
+다른 Host 인수 거절, 같은 tenure의 공통 recovery로 kernel empty/원래 pin exit/빈 journal/기존 frame 보존, tenure 종료 뒤 재획득을 요구한다.
+007 actual Mac은 NOT_RUN이며 이 controlled 조립을 전체 Broker CLI/Actor current authority 완료로 확대하지 않는다.

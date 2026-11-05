@@ -5,7 +5,7 @@ import {closeSync,existsSync,fstatSync,mkdtempSync,readFileSync,realpathSync,rmS
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {spawn,spawnSync} from 'node:child_process';
+import {spawn,spawnSync,fork} from 'node:child_process';
 import {Socket} from 'node:net';
 import {createInterface} from 'node:readline';
 import {once} from 'node:events';
@@ -20,9 +20,10 @@ import {machoImageCdHashes} from '@oma/native/darwin-macho-image';
 import {SOCIETY_FENCE_ENV} from '@oma/process/async';
 import {runProcessSync} from '@oma/process/run';
 import {ExecutionJournal} from '@oma/storage/execution-journal';
-import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
+import {ExecutionRuntime,recoverExecutionState} from '#oma-test/app/runtime/execution-runtime';
+import {HostTenure} from '#oma-test/app/runtime/host-tenure';
 import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
-import {observeDarwinCoalitionPopulation} from '@oma/native/audit-session';
+import {observeDarwinCoalitionPopulation,pinDarwinProcess} from '@oma/native/audit-session';
 import {inspect} from 'node:util';
 const runFence=(executable,argv,fd)=>runProcessSync({executable,argv,env:{PATH:'/usr/bin:/bin'},timeoutMs:15000,stdoutBytes:16384,stderrBytes:16384},undefined,fd===undefined?[]:[fd],{killSignal:'SIGTERM'});
 
@@ -124,4 +125,34 @@ test('006. A paid Darwin execution scope holds the Society until complete scope 
  controller.abort();const result=await running;assert.equal(result.kind,'aborted');
  assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
  next=tryHoldSociety(state);assert.notEqual(next,null,'only complete scope death and descriptor drain return the Society');
+});
+
+test('007. A live Host tenure keeps the Society through its fenced execution owner crash and journal recovery',{timeout:45000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-society-recovery-'))),state=join(base,'state');
+ let tenure,other,owner,closed,pin,identity,initialized=false,recovered=false;
+ t.after(async()=>{
+  const failures=[];
+  if(owner?.exitCode===null&&owner.signalCode===null)owner.kill('SIGKILL');try{await closed;}catch(error){failures.push(error);}
+  if(initialized&&!recovered&&tenure?.held)try{tenure.assertOwned('Society crash recovery');await recoverExecutionState(state,false);if(identity&&observeDarwinCoalitionPopulation(identity)!=='empty')throw new Error('original fenced scope remains unconfirmed');recovered=true;}catch(error){failures.push(error);}
+  try{pin?.close();}catch(error){failures.push(error);}
+  for(const held of[other,tenure])try{await held?.end();}catch(error){failures.push(error);}
+  if(!initialized||recovered)rmSync(base,{recursive:true});else t.diagnostic('Retained unconfirmed fenced recovery: '+base);
+  if(failures.length)throw new AggregateError(failures,'fenced recovery cleanup remains unknown');
+ });
+ tenure=HostTenure.take(state);assert.notEqual(tenure,null);ExecutionJournal.initialize(state);initialized=true;
+ owner=fork(fileURLToPath(new URL('./fixtures/darwin-recovery.mjs',import.meta.url)),[state,'released-society'],
+  {stdio:['ignore','ignore','pipe','ipc',tenure.fence],env:{...closedEnv(),[SOCIETY_FENCE_ENV]:'4'}});
+ let stderr='';owner.stderr.on('data',bytes=>{stderr+=bytes;});
+ closed=new Promise((yes,no)=>{owner.once('error',no);owner.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
+ assert.deepEqual(await closed,{code:null,signal:'SIGKILL'},stderr);
+ const rows=ExecutionJournal.inspect(state);assert.equal(rows.length,1);identity=rows[0].witness;
+ assert.equal(identity.kind,'darwin-resource-coalition');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
+ pin=pinDarwinProcess(Number(readFileSync(join(state,'descendant.pid'),'utf8')));assert.equal(pin.state(),'live');assert.deepEqual(pin.identity,identity);
+ other=HostTenure.take(state);assert.equal(other,null,'a dead broker owner cannot create a gap in the live Host tenure');
+ const before=readFileSync(join(state,'execution/scopes.jsonl'));tenure.assertOwned('Society crash recovery');
+ try{await recoverExecutionState(state,false);}catch(error){t.diagnostic('Original fenced recovery failure: '+JSON.stringify({identity,rows:ExecutionJournal.inspect(state).length})+' '+inspect(error,{depth:null,maxStringLength:8192,maxArrayLength:128}));throw error;}
+ assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(pin.state(),'exited');assert.deepEqual(ExecutionJournal.inspect(state),[]);recovered=true;
+ assert.deepEqual(readFileSync(join(state,'execution/scopes.jsonl')).subarray(0,before.length),before,'recovery preserves the original journal frames');
+ const ended=tenure;tenure=undefined;await ended.end();tenure=HostTenure.take(state);assert.notEqual(tenure,null,'only the completed Host tenure and recovered scope permit a new owner');
 });
