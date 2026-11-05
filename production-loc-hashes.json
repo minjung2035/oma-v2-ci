@@ -1520,7 +1520,7 @@
     },
     {
       "path": "packages/native/src/darwin-society-fence.ts",
-      "sha256": "4ec7764db795faf4342ecf56a39681d2021f744bc67cdb2a4b4e976d89c87167"
+      "sha256": "79ea1d730c3b4187e41dd46b21f66ff187a4c56583ba73178c418f1cf80e35a9"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
@@ -1612,7 +1612,7 @@
     },
     {
       "path": "packages/native/src/society-fence/control.c",
-      "sha256": "3fdcd78b8baf6dda18c671b7c6a6ee4d72458f01b8a18c2c94e08b219241290f"
+      "sha256": "c09fc194cac1099c7abfff6a7f094b24c631bc07524f9c5ce8783bc08f6039df"
     },
     {
       "path": "packages/native/src/society-fence/producer.c",

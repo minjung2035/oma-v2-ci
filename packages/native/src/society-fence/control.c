@@ -9,6 +9,7 @@
 #include <sys/proc_info.h>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/event.h>
 #include <netinet/in.h>
 #include <libproc.h>
 #include <spawn.h>
@@ -143,7 +144,14 @@ int main(int argc,char **argv){
       token.val[0],token.val[1],token.val[2],token.val[3],token.val[4],token.val[5],token.val[6],token.val[7]);
     else puts("{\"kind\":\"other\"}");return 0;
   }
-  if(!strcmp(argv[1],"release") && argc==2){
+  if(!strcmp(argv[1],"release") && argc==5 && !strcmp(argv[3],OMA_FENCE_EXPECTED_HASH)){
+    audit_token_t before={0},after={0};unsigned port=parse_port(argv[4]);
+    (void)discover(argv[2],argv[3],port,&before);
+    int queue=kqueue();require(queue>=0,"creator return event queue");
+    struct kevent change={0};struct timespec zero={0};
+    EV_SET(&change,before.val[5],EVFILT_PROC,EV_ADD|EV_ENABLE|EV_CLEAR,NOTE_EXIT|NOTE_EXITSTATUS,0,NULL);
+    require(kevent(queue,&change,1,NULL,0,&zero)==0,"creator return exit registration");
+    (void)discover(argv[2],argv[3],port,&after);require(!memcmp(&before,&after,sizeof before),"creator return generation");
     deadline(3);char request='R',answer=0;errno=0;require(write(3,&request,1)==1,"creator return request");
     errno=0;ssize_t received=read(3,&answer,1);
     int accepted=received==1 && answer=='R';
@@ -151,8 +159,11 @@ int main(int argc,char **argv){
     if(received!=1 || answer!='C'){
       int saved=errno;fprintf(stderr,"creator return acknowledgement: accepted=%d bytes=%zd first=%u errno=%d\n",accepted,received,(unsigned char)answer,saved);
       if(received==1 && answer=='E'){char reason[256]={0};ssize_t bytes=read(3,reason,sizeof reason-1);if(bytes>0)fprintf(stderr,"creator failure: %.*s",(int)bytes,reason);}
+      struct kevent ended={0};struct timespec bound={.tv_sec=1};errno=0;int events=kevent(queue,NULL,0,&ended,1,&bound);
+      fprintf(stderr,"creator return event: count=%d pid=%lu filter=%d flags=%u notes=%u status=%ld errno=%d\n",events,(unsigned long)ended.ident,ended.filter,ended.flags,ended.fflags,(long)ended.data,errno);
       exit(70);
     }
+    require(close(queue)==0,"creator return event queue close");
     puts("{\"kind\":\"released\"}");return 0;
   }
   return 64;

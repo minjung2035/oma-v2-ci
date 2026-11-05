@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `112b511754b3ac9e670a021496fc40a77b488600a0fe69324adb5cbc74b5f08d` (15946 files).
+verification input digest `3e6b27e40d2e2f6aee3092bbb0b8affecfe92196d58ffc4920d5132bd41ed4f5` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4340,3 +4340,18 @@ controller의 마지막 diagnostics 수정 뒤 assets를 다시 빌드했고 sou
 SOURCE93 최종 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
 production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
 원시는 `/tmp/oma-source93-build-frozen.log`·`/tmp/oma-source93-package-isolation-final.log`·`/tmp/oma-source93-review-final.log`·`/tmp/oma-source93-architecture-final.log`다.
+
+### SOURCE93 actual Intel 요청 수신 전 EOF와 SOURCE94 귀속
+
+SOURCE93 `178ce8cfeb1e243a9e95d04a39165c3c810560d0`, Native42062996187·Architecture42062996285이다.
+canonical15946/`112b511754b3ac9e670a021496fc40a77b488600a0fe69324adb5cbc74b5f08d`다.
+Intel Society ZIP13430959759 SHA-256 `ebe517de73526fc3931f37f5d293d2fbc08bd12528a64ffb3b35f0e1dfe3691f`를 대조했다.
+동일 source/input/runtime의 Society 전후 동일, runtime15549/27 `3ff9ee68cd123ff5deb41412b7b712734fee61650fe44f918b8273e45b0aad5e`다.
+3 PASS /2 FAIL·기타0이며001/004는 `accepted=0 bytes=0 first=0 errno=0`다.
+Host socket을 유지해도 creator의 요청 수신 응답부터 없었다. 반환 순서 변경이 해결했다고 판정하지 않는다.
+같은 runner의 crash report6건도 모두 Spotlight/iconservicesagent/dock이며 creator 종료 원인을 설명하지 않는다.
+
+SOURCE94는 release 직전에 기존 nonce/fixed-image discovery로 creator를 확인하고 kernel EXIT/EXITSTATUS event를 등록한 뒤 같은 token을 다시 확인한다.
+그 뒤 private request를 보내며, 실패하면 같은 등록의 exit event/status를 남긴다. PID로 신호를 보내거나 전체 scope 사망으로 해석하지 않는다.
+이 입력은 원인 귀속용 중간 checkpoint다. 최종 review 재결박·fresh27/27·전체 architecture는 아직 미실행/미완료이며,
+앞선 source의 통과를 이 입력의 완료 근거로 전용하지 않는다. 실제 정상 반환과 전체 제품은 여전히 BLOCKED다.
