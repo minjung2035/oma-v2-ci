@@ -81,6 +81,7 @@ async function main(): Promise<void> {
     let canonicalDirectory: number | undefined;
     let contextDirectory: number | undefined;
     let worldDirectory: number | undefined;
+    let stateDirectory: number | undefined;
     // DR72: standalone startup must refuse before run-root/lock creation,
     // Store open, workspace restore, execution recovery or provisioning.
     requireCollaborationSociety(readSessionBirth(stateRoot), society);
@@ -166,7 +167,8 @@ async function main(): Promise<void> {
             await lifetime.shutdown();
             cleanupAll([() => { const fd = worldDirectory; worldDirectory = undefined; if (fd !== undefined) closeSync(fd); },
                 () => { const fd = contextDirectory; contextDirectory = undefined; if (fd !== undefined) closeSync(fd); },
-                () => { const fd = canonicalDirectory; canonicalDirectory = undefined; if (fd !== undefined) closeSync(fd); }]);
+                () => { const fd = canonicalDirectory; canonicalDirectory = undefined; if (fd !== undefined) closeSync(fd); },
+                () => { const fd = stateDirectory; stateDirectory = undefined; if (fd !== undefined) closeSync(fd); }]);
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
                 try { await sessionStorage.close(storageResidents, storageCloseMode); }
                 catch (error) { console.error("Session workspace reclamation did not finish; recovery data retained:", error instanceof Error ? error.message : String(error)); }
@@ -278,13 +280,13 @@ async function main(): Promise<void> {
         }
         const integrationPolicy = integrationPolicyFromConfig(cfg);
         assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
-        const storeDirectory = process.platform === "darwin" ? openDirectory(stateRoot) : undefined;
+        const storeDirectory = process.platform === "darwin" ? stateDirectory = openDirectory(stateRoot) : undefined;
         const openStore = () => {
             const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society }, undefined,
                 storeDirectory === undefined ? {} : { directoryFd: storeDirectory });
             lifetime.retainStore(() => store.close()); return store;
         };
-        const store = storeDirectory === undefined ? openStore() : withCleanup(openStore, () => closeSync(storeDirectory));
+        const store = openStore();
         const mail = createMailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages,
             cfg.limits, () => broker.hintWork());
         const transport = process.platform === "darwin" ? createMachBrokerTransport(cfg.limits.idleStreamSeconds) : undefined;
@@ -313,7 +315,8 @@ async function main(): Promise<void> {
                     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
                 } };
         const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface,
-            canonicalExecution === undefined ? {} : { worldDirectory: () => canonicalExecution.directory(gitPaths.worldDir) });
+            { ...(canonicalExecution === undefined ? {} : { worldDirectory: () => canonicalExecution.directory(gitPaths.worldDir) }),
+                ...(stateDirectory === undefined ? {} : { stateDirectory: () => stateDirectory }) });
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared, physicalLaunch) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared, physicalLaunch), undefined, preparationAbort.signal,
             () => executionOwner.confirmDead("candidate"), cfg.resources, runtimeGeneration?.launchNode);

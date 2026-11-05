@@ -8,7 +8,7 @@ import { Store } from "@oma/storage";
 import { publishMailNoticeView } from "./views/mail-notices.js";
 import { replaceDerivedFile as writeAtomic, replaceDerivedFileAt } from "@oma/storage/durable-fs";
 import { ensureOwnedDirectory, openOwnedDirectoryPath } from "@oma/storage/directory";
-import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "@oma/protocol/status-view";
+import { NO_UNIT_REASON, encodeStatusView, statusViewPath, STATUS_VIEW_FILE } from "@oma/protocol/status-view";
 import { publishBatchView } from "@oma/storage/batch-view";
 import { operationMessage } from "@oma/mail/materializer";
 import { PRINCIPAL_MAIL_FILENAME, mailAudienceDisplayPath } from "@oma/domain/derived";
@@ -103,7 +103,7 @@ export class ViewsModule {
   constructor(private readonly store: Store, private readonly stateRoot: string,
     private readonly society: string, private readonly principalProfile: string,
     private readonly viewLimits?: BatchViewLimits, private readonly workerSurface: "legacy" | "collaboration-v1" = "legacy",
-    private readonly directories: { readonly worldDirectory?: () => number | undefined } = {}) {
+    private readonly directories: { readonly worldDirectory?: () => number | undefined; readonly stateDirectory?: () => number | undefined } = {}) {
     if (workerSurface !== "legacy" && workerSurface !== "collaboration-v1")
       throw new StoreError("UNSUPPORTED_PROFILE", "unknown world navigation surface");
   }
@@ -317,8 +317,16 @@ export class ViewsModule {
    * observed, and a unit the snapshot does not hold is unknown.
    */
   publishStatus(snapshot: StatusSnapshot, agents: readonly AgentStatus[]): void {
-    writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs: snapshot.observedAtMs, agents }), 0o600);
-    publishMailNoticeView(this.store, this.stateRoot);
+    const root = this.directories.stateDirectory?.();
+    const path = statusViewPath(this.stateRoot), bytes = encodeStatusView(this.society, { observedAtMs: snapshot.observedAtMs, agents });
+    if (root === undefined) writeAtomic(path, bytes, 0o600);
+    else {
+      const stat = fstatSync(root);
+      if (!stat.isDirectory()) throw new StoreError("STORE_CORRUPT", "status view requires a state directory");
+      if ((stat.mode & 0o700) !== 0o700) fchmodSync(root, (stat.mode & 0o7777) | 0o700);
+      replaceDerivedFileAt(root, STATUS_VIEW_FILE, path, bytes, 0o600);
+    }
+    publishMailNoticeView(this.store, this.stateRoot, root === undefined ? {} : { directoryFd: root });
   }
   /** WP23: every agent's status for one observation, projected once -- when
    * the first answer for it is due, after every caller waiting on it asked --

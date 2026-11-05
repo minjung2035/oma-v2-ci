@@ -31,16 +31,20 @@ export function publishStagedDirectory(
 ): "published" | "existing" {
   if (staging === destination) throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
   assertDirectory(dirname(destination));
-  return withinDirectory(destination, (to, toName) => {
-    let present = true;
-    try { statAt(to, toName); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; present = false; }
-    // Replay still works after staging and its parent have been collected.
-    if (present) return existingStagedDirectory(to, toName, () => verify(destination), policy);
-    assertDirectory(dirname(staging));
-    return withinDirectory(staging, (from, fromName) => publishStagedDirectoryAt(from, fromName, to, toName,
-      (_root, phase) => verify(phase === "staging" ? staging : destination), policy));
-  });
+  let present = true;
+  try { withinDirectory(destination, (parent, name) => statAt(parent, name)); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; present = false; }
+  if (present) return withinDirectory(destination, (parent, name) =>
+    existingStagedDirectory(parent, name, () => verify(destination), policy));
+  // A pathname verifier cannot consume the retained descriptor. Preserve its
+  // existing contract: inspect staging before acquiring the publication parents,
+  // so a replaced destination path is refused before consuming the staged tree.
+  // Native capability consumers use publishStagedDirectoryAt directly.
+  assertDirectory(staging);
+  verify(staging);
+  return withinDirectory(staging, (from, fromName) => withinDirectory(destination, (to, toName) =>
+    publishStagedDirectoryAt(from, fromName, to, toName,
+      (_root, phase) => { if (phase === "destination") verify(destination); }, policy)));
 }
 
 /** Mutable current link: one owned link -> rename -> parent fsync. No target

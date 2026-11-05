@@ -121,7 +121,6 @@ export const OWNED_STATE_EXEMPTIONS = Object.freeze({
   "packages/tool-files/src/descriptor-files.ts": "SDK-free held-descriptor owner for workspace, private snapshots and actor result roots; no-follow opens refuse aliasing and errors, with per-level held parents. PI-001 excludes a storage dependency; no caller path is silently repaired",
   "packages/git/src/host-project.ts": "MacGit.run creates its own output-spool scratch with mkdtemp under the OS temp directory and removes that same scratch after the bounded Git command; metadata-only reads inspect the Human repository, never repair or rewrite its ancestors",
   "packages/storage/src/mail-notices.ts": "read-only Human observation of a bounded broker projection; no-follow descriptor reads report missing, malformed or unreadable metadata explicitly and never repair state without broker ownership",
-  "packages/storage/src/published-mail.ts": "read-only publication-link inventory for Human mail and broker projection; metadata probes reject links, report unreadable directories and never turn observation into permission repair",
 
   "packages/config/src/operations.ts": "the Human-authored configuration closure and explicitly selected extension assets: canonical-path and content checks refuse unreadable inputs, never repair or rewrite the Human's source",
   "apps/oma/src/entry/personal-host.ts": "read-only birth/config metadata and the Human's actual cwd; the host owns no project permission repair and a failed probe refuses the launch",

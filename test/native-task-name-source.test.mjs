@@ -1,6 +1,7 @@
 /** Physical expected-peer source candidate; no product authority is granted. */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { inspect } from "node:util";
 import { closeSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { release, tmpdir } from "node:os";
@@ -179,7 +180,7 @@ for (const change of ["exec", "death"]) test(`003. Actual sandboxed source pin a
   const running = owner.run({ slot: "candidate", authorize() {}, launch: async () => {
     try { return await launchDarwinJobScope({ ...recipe.command, executable, argv: [...token.map(String), ...recipe.command.argv] }, { files: [{ target: 3, fd: read }] }); }
     finally { closeSync(read); read = undefined; }
-  } }).then(result => { finished = result; return result; }, error => { failure = error; throw error; }); void running.catch(() => {});
+  } }).then(result => { finished = result; return result; }, error => { failure = error; t.diagnostic("Original source-revocation execution failure: " + inspect(error, { depth: null, maxArrayLength: 128, maxStringLength: 8192 })); throw error; }); void running.catch(() => {});
   const deadline = performance.now() + 10000, ready = join(root, "source-ready.json");
   while (!existsSync(ready) && finished === undefined && failure === undefined && performance.now() < deadline) await delay(5);
   if (failure) throw failure;

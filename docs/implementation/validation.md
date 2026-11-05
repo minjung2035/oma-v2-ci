@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `e1c3a625e65086604695a76932d8280e42262770662b090670f793fbfa58fabf` (15938 files).
+verification input digest `2507e3c58c3fef269f3e0133e6a09b01d07897300191f778fb8d6cbbab57913a` (15939 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4145,3 +4145,67 @@ production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED22
 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source88-architecture.log`).
 검증 중 기록을 추가하기 전의 provisional binding013은 예상대로 digest 차이를 거절했다.
 마지막 기록 bytes를 다시 결박한 뒤013을 통과시킨다. 이 구조 identity 갱신은 runtime 성공을 생성하지 않는다.
+
+### SOURCE89 Store와 status/mail projection의 retained state root 공유
+
+SOURCE88 발행 source `26cf8cb971e3e71e2ba42d2e922fd9d2c742477c` / tree `eacdec5e92957613844c15593d2fe7943988a181`,
+Native42040455587·Architecture42040455661의 canonical15938/`e1c3a625e65086604695a76932d8280e42262770662b090670f793fbfa58fabf`를 확인했다.
+ARM26 main ZIP13421041793 SHA-256 `735de4f67de2fa350b10352f1d5b53630f4ddcf13ddca842654adbb2e0974fc4`,
+shared ZIP13423020168 SHA-256 `9366454e5af9a74447b580f4833696551cd0200afa8b9eee88ed7877bdf8c023`를 대조했다.
+같은 source/input 및 runtime15540/27 `ba71fe65e25dcd12b79dcc9d24b6f8fae0178d7833e6d3f44d62282c15f40fee`가 main/shared 전후 동일이다.
+main463/462 PASS/1 FAIL·기타0며 world3건과 snapshot4건은 모두 통과했다. generation3/3 PASS·기타0다.
+실패는 native-task-name-source의 Host death case003이며 RUN_TERMINATION_UNKNOWN/populated scope termination failed다.
+원래 test-process 밖의 error serialization에서 더 안쪽 AggregateError가 손실될 수 있어 다음 fixture는 원래 프로세스에서 full inspect 문자열도 남긴다.
+이는 진단 변경이다. 종료 predicate·kill/retry·45초 fixture budget·journal retention을 바꾸거나 unknown을 사망으로 바꾸지 않는다.
+Intel26 main ZIP13423000239 SHA-256 `62aac9ae9c4a878500fe6cb0ed082b4858b1a29dbdfb7116e8a7cc228c5c011f`도 대조했다.
+같은 source/input 및 runtime15540/27 `12fe7fe46a643a05d56b2830e54b906b03f3a6a6b2d301b28285d621c47f00b5`의 main 전후 동일,
+main463/463 PASS·기타0다. ARM의 실패를 Intel 통과로 덮지 않으며 Mac15의 새 seal 성공은 아직 미판독이다.
+
+큰 private file에 fclonefileat을 적용하는 prototype은 채택하지 않았다.
+이 API는 생성된 destination FD를 원자적으로 반환하지 않아 clone과 후속 open 사이의 entry 교체를 배제하지 못한다.
+새 inode의 nlink1/UID/원본과 다름만으로는 그 inode가 방금 만든 clone인지 증명하지 못하며, UF_IMMUTABLE을 지우는 metadata 효과에는 부족하다.
+이 판단은 코드 검토이며 실제 OS 반례를 새로 실행했다고 기록하지 않는다. private prototype은 `/tmp/oma-source89-clone-provenance-rejected.patch`에 보존하고 production3개 파일을 해당 HEAD bytes로 복원했다.
+복원 build는 exit0다(`/tmp/oma-source89-restore-build.log`). 기존 검증 copy·copy cursor·generation budget은 유지한다.
+
+새 production은 Broker가 Store 개설 시 잡은 state directory를 lifetime shutdown/Store close 뒤까지 보유하고,
+Views status.json 및 mail-notices.json 게시에 같은 FD를 빌려준다. 권한 복구는 그 inode에서만 한다.
+publishedMailEntries도 같은 borrowed root의 beneath directory와 statAt을 쓰며, 기본 호출도 한 번 연 root에서 관측한다.
+정렬/중복 제거/행 제한·ledger requester provenance는 유지한다. mail 경로가 symlink/관측 실패이면 이전 notice를 빈 성공 목록으로 덮지 않는다.
+root 교체·mode000·원본 projection 및 replacement sentinel 보존·unsafe mail traversal·잘못된 capability2건을 추가했다.
+status/Views/mail/조립 포함33/33 PASS·기타0는 `/tmp/oma-source89-state-view-regression.log`다.
+경로 fs 관측이 사라진 published-mail.ts의 기존 owned-state exemption은 삭제했다. 새 예외나 allowlist를 추가하지 않았다.
+최초 StateRoot capture/다른 writer·Human reader의 전체 root 결박·전체 G-FILES 통과를 주장하지 않는다.
+
+SOURCE84 Architecture42035564102 native-all ZIP13420780702 SHA-256 `46f3a618e5c6b7051bec96fdf89fea02bbbc757855c16afec89dc72f57463bb0`도 대조했다.
+같은 source/canonical15937의 전후 동일·빈 checkout index·sourceChanges[]와 build/typecheck/구조12 command code0·signal null이다.
+all4922/4921 PASS/1 FAIL·기타0다. 실패는 same-uid-namespace004의 legacy pathname verifier가 destination 교체를 거절하지 않은 회귀다.
+새 path adapter는 staging pathname verifier를 먼저 실행하고 publication 부모를 그 뒤 취득하는 기존 계약을 복구했다.
+FD verifier를 소비하는 native snapshot은 publishStagedDirectoryAt을 직접 사용한다. 경로 verifier를 held FD 검증으로 간주하지 않는다.
+기존 거절 assertion과 staging/attack directory 보존 assertion을 유지했다. legacy retry 및 status/mail/조립 포함42/42 PASS·기타0다(`/tmp/oma-source89-compatibility-regression.log`).
+checkout .git은 read-only bind했다. 모든 path 기반 workspace 소비자의 G-FILES 완료나 SOURCE89 전체 Linux 성공으로 확대하지 않는다.
+이 실제 회귀 수정 뒤 최종 production 입력으로 build/metadata/독립 설치를 다시 수행한다. 앞선 진행 중 검사는 최종 입력 근거로 사용하지 않는다.
+세 gate OPEN·제품 BLOCKED·Society 전체 lease/제품 Runner/Worker/Pi/복구/release의 남은 작업을 유지한다.
+
+SOURCE88 Mac15 main ZIP13423411568 SHA-256 `6598240763d510226220f280fe2df5d9bd65330222c64b331ba9a14d3241c6e2`를 대조했다.
+같은 source/canonical 및 runtime15540/27 `ac7df51d94c120582610054680de5cba93adaefbb463c3dcc1d3fde71a292987`가 main 전후 동일이다.
+main463/463 PASS·기타0다. 실제 snapshot4건의 이전 rename EACCES를 새 이동/seal 순서가 해결했고, world3건과 direct discovery도 통과했다.
+final root0555/파일0644·원본 source/world 교체·mode000·동일 revision replay/readiness assertion을 완화하지 않았다.
+SOURCE88 Intel shared ZIP13423395903 SHA-256 `2ade5a22c15531ddd91da92311cd2ecffae2422148d2f80e4a39296434d72aac`도 대조했다.
+같은 canonical/runtime의 shared 전후 동일 및 generation3/3 PASS·기타0다.
+ARM full ZIP13422641515 SHA-256 `b9d3b8861079b147d6beb2b292ef6d51dc685d53f172e4aaff2d8b369146361e`는
+같은 source/input/runtime의 최종 전후 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다. Host death의 main1 FAIL은 그대로 보존한다.
+
+SOURCE89 compatibility 수정 뒤 전체 publication/중단/복구/Views/mail/조립/namespace 거절84/84 PASS·기타0다(`/tmp/oma-source89-publication-regression-final.log`).
+별도 native diagnostics Linux8건은 Darwin 동작을 실행하지 않았으며 실제 Mac 근거가 아니다(`/tmp/oma-source89-native-diagnostics-linux.log`).
+기존 generation fixture는 다음 실제 실행에서만 fstat/read/write/fsync/fchmod의 횟수·시간/bytes를 원본 함수 호출 그대로 집계한다.
+측정 뒤 원래 함수를 복구하며 원래240초 timeout·copy/hash/fsync/immutable owner를 유지한다. 지연 원인이나 성능 개선을 미리 주장하지 않는다.
+CI YAML 및21개 bash block의 문법은 통과했다.
+
+SOURCE88 Mac15 shared ZIP13423171940 SHA-256 `94b0cec600bc442998583326e7199583f5d11a8450c54cf25f6065371e747b2c`도 대조했다.
+같은 source/input/runtime의 shared 전후 동일 및 generation3/3 PASS·기타0다. ARM main의 종료 불확정은 그대로 남아 있다.
+SOURCE89 compatibility 수정 뒤 최종 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata는 exit0다.
+production14398, review CHANGED_WITHOUT_ORACLE31 / NOT_REVIEWED14367 / REMOVED220이다.
+원시는 `/tmp/oma-source89-build-final2.log`·`/tmp/oma-source89-package-isolation-final.log`·`/tmp/oma-source89-review-final.log`다.
+앞선 수정 진행 중의 metadata/packed 실행은 이 최종 입력 검증으로 간주하지 않았다.
+최종 full architecture·transaction·durable boundary·document·spec inventory도 exit0다(`/tmp/oma-source89-architecture-final.log`).
+이 변경은 local checkpoint로 보존하며, 새 state projection/legacy adapter의 actual Mac은 아직 NOT_RUN이다.
