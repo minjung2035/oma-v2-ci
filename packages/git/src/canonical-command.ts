@@ -17,6 +17,12 @@ export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 *
 export interface CanonicalExecution {
   readonly executable: string;
   readonly directories: ReadonlyMap<string, number>;
+  /** Trusted lifetime owner may retain a repository created after composition.
+   * The returned cursor stays owned through native and logical shutdown. */
+  readonly directory?: (repository: string) => number | undefined;
+}
+export function canonicalDirectory(repository: string, execution?: CanonicalExecution): number | undefined {
+  return execution?.directories.get(repository) ?? execution?.directory?.(repository);
 }
 export function bindCanonicalCommand(spec: CommandSpec, execution?: CanonicalExecution): { readonly command: CommandSpec; readonly directoryFd?: number } {
   if (execution === undefined) return { command: spec };
@@ -27,7 +33,7 @@ export function bindCanonicalCommand(spec: CommandSpec, execution?: CanonicalExe
   const at = spec.argv[0] === "--git-dir" ? 0 : CANONICAL_SAFE_ARGS.length;
   if (spec.argv[at] !== "--git-dir" || (at !== 0 && !CANONICAL_SAFE_ARGS.every((value, index) => spec.argv[index] === value)))
     throw new StoreError("INTERNAL_ERROR", "canonical command has no fixed repository operand");
-  const directoryFd = execution.directories.get(spec.argv[at + 1]!);
+  const directoryFd = canonicalDirectory(spec.argv[at + 1]!, execution);
   const argv = [...spec.argv];
   if (directoryFd !== undefined) argv[at + 1] = ".";
   return { command: { ...spec, executable: execution.executable, argv }, ...(directoryFd === undefined ? {} : { directoryFd }) };

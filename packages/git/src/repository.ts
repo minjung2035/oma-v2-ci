@@ -46,7 +46,7 @@ export class GitRepository implements GitRepositoryPort {
     this.observations = createCanonicalObserver(canonicalExecution?.executable, canonicalExecution);
     this.provenance = new ProvenanceIndex({refs:()=>canonicalPublishedRefs(paths.projectGit, canonicalExecution),graph:tips=>canonicalCommitGraph(paths.projectGit,tips,canonicalExecution),range:(base,candidate)=>canonicalCommitRange(paths.projectGit,base,candidate,canonicalExecution)});
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate), quarantine);
-    this.contextRepository = new ContextRepository(paths, this.observations);
+    this.contextRepository = new ContextRepository(paths, this.observations, canonicalExecution);
     this.submissionPublication = new GitPublicationObserver(this.observations, paths.projectGit);
     this.contextPublication = new ContextPublicationObserver(this.observations, paths.contextGit);
     const facts = {

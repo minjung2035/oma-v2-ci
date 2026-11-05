@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `fede45e1dd29deda3dc77b5b3eaed09af7caa350a8642306a906261e052b2045` (15932 files).
+verification input digest `c6af49dc63a0bdb0426592a3504061ad78864377b24f89745c7323e2c3717054` (15933 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3660,3 +3660,53 @@ SOURCE76 owner·zone·dependency evidence를 고친 최종 full architecture·tr
 원시는 `/tmp/oma-source76-architecture.log`다. owner/zone 예외나 SQLite allowlist 확대를 하지 않았다.
 기존 K2 구역에 native image path leaf만 등록했으며 SQLite connection은 기존 K3 Store owner에 남긴다.
 최종 canonical input을 다시 결박하고 Mac 새 consumer 실행 전의 NOT_RUN·세 gate OPEN·product BLOCKED를 유지한다.
+
+### SOURCE77 context canonical commands와 원본 process의 generation 실패 진단
+
+SOURCE76 `1372b7484080d3895b2b23f18a9e84f541bbf2e3` / local checkpoint `c9bc8e2de834de96a70f5b05a1106f195d7e7bde`,
+Native42015564532·Architecture42015564414를 발행했다. canonical15932/`fede45e1dd29deda3dc77b5b3eaed09af7caa350a8642306a906261e052b2045`다.
+Mac15 shared ZIP13408549322 SHA-256 `c4170869817a3caceb4765e00e0c9ae2e72eace5cd3e1a2e937b5fa04c8a1cee`,
+Intel shared ZIP13408874467 SHA-256 `5a76f806c403fcb2f04b4e1e04aec27cbcab322719c7ab864e361f3428a53c11`,
+ARM26 shared ZIP13410406259 SHA-256 `53ee3828ae76be6bb9d65613b82e2b341c7fdc786f42a63907887db69fb86d70`를 대조했다.
+세 canonical과 runtime15540/27은 shared 전후 동일이다. runtime digest는 각각
+`604f51a37129d697a365ca27065fea0742c269896d5e2c302bbf9364a5f3aa21`,
+`4b7274a7a24f80f3731ff25da11609207abba1ee0252e593dfdc8b636c78a7da`,
+`17a6b838bc2ddf5815711b8a9e697dd3a0a684a3f4b38f6a9fb6330a66b5a909`다.
+세 main446/446 PASS·기타0다. 실제 Store5건·shared/different SQLite roots·Seatbelt temp SQL·review scratch 수정과 clone 후보3건이 모두 통과했다.
+cloned target의 immutable flags도 source를 따라2가 됐고 보통 source 두 건은0이었다. copy producer에 아직 채택하지 않는다.
+
+Intel·ARM26 isolated generation은 각3/3 PASS·기타0다. Mac15는3/2 PASS/1 FAIL·기타0이며 generation001이89396.294625ms에
+RUN_TERMINATION_UNKNOWN / populated scope termination failed를 기록했다. construction56946ms 뒤 scope 실행/반납 단계에서 실패했다.
+이는 Store failure나240000ms timeout이 아니다. native terminal/death predicate·예산을 바꾸지 않는다.
+SOURCE77은 whole-generation fixture의 바깥 catch에서 원래 process의 모든 중첩 cause·selected population·journal을 기록한다.
+기존 private-Git catch보다 앞선 main scope/보호 Node 준비 실패도 포함한다. 진단 실패는 primary error를 대체하지 않는다.
+Source76 실패를 이후 성공으로 삭제하지 않으며 원인은 아직 미확정이다.
+
+Mac15 full ZIP13409601706 SHA-256 `529db16ce6bbd3f935a7f706208dd6746db40d09775cf0ba8c5afd22b8d84b93`의
+27/27 packed installation(Storage 실제 installed runtime와 App 포함)·최종 input/runtime 동일도 대조했다.
+Mac15의 generation failure를 full package 성공으로 덮지 않는다.
+
+SOURCE77은 CanonicalExecution의 trusted lifetime resolver로 첫 사용/생성 뒤 context directory cursor를 보유한다.
+App의 resolver는 고정 contextGit label만 허용하고 같은 cursor를 재사용하며 native/logical shutdown 확인 뒤 project cursor와 함께 반납한다.
+Canonical command의 고정 --git-dir operand만 같은 resolver를 사용한다. argv 전체 탐색·Model FD grammar·process-global cwd는 추가하지 않는다.
+ContextRepository의 current/object format·tree/blob/parent 검증·canonical command/preparation target도 같은 cursor를 사용한다.
+private working Git에는 기존 held cwd와 selected developer Git을 쓴다. 기본 Linux 조립·accepted OID/manifest/CAS 의미는 유지한다.
+private staging/snapshot·두 저장소 사이 pathname fetch·초기 parent durability와 전체 StateRoot capture 등 나머지 G-FILES는 남아 있다.
+
+실제 Git의 SHA1/SHA256과 사전 binding/첫 사용 retaining에서 canonical name을 교체한 뒤 원본 current·GOAL-only·accepted blob/parent 검증·CAS를 확인했다.
+replacement refs와 Host cwd는 보존됐으며 처음 만든 context도 preparation 전에 cursor가 보유되고 이후 교체를 견뎠다.
+최종 새5건은 `/tmp/oma-source77-context-final.log`, 기존 context 수락/복구·preaccept·root 회귀75/75 PASS는
+`/tmp/oma-source77-linux-regression.log`, 빈 index diff는 `/tmp/oma-source77-checkout-index.patch`다.
+최초 regression command는 존재하지 않는 compiled 파일을 사전 확인에서 거절해 실행하지 않았다. 파일 목록을 실제 확인한 뒤 위75건을 실행했다.
+시험은 checkout .git을 read-only bind했고 production build·fresh27/27 packed installation(App 포함)은 exit0다.
+production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source77-build-initial.log`·`/tmp/oma-source77-package-isolation.log`·`/tmp/oma-source77-review.log`다.
+새 context consumer와 generation full-cause 진단의 actual Mac 결과는 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE76 Intel full ZIP13409618055 SHA-256 `092a5e517901194272557bf22f73153969cd68806aa3ed4d1ffa08c7c8784c29`,
+ARM26 full ZIP13409639114 SHA-256 `898482e79c1b7f5ac06288e6fba06d3bc7419981848c97e8237f6470bf366042`도 대조했다.
+각27/27 packed installation(Storage 실제 installed runtime와 App 포함)·최종 canonical/runtime 동일을 확인했다.
+이로써 SOURCE76 새 Store primitive/consumer와 패키지는 세 Mac에서 관측했다. Mac15 generation unknown은 그대로 미해결이다.
+SOURCE77 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source77-architecture.log`).
+새 context 및 generation 실패 진단의 actual Mac은 아직 NOT_RUN이다.

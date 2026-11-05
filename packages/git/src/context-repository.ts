@@ -2,7 +2,7 @@ import { mkdirAt } from "@oma/file-descriptors";
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */
-import { constants, closeSync, fchmodSync, lstatSync, readlinkSync } from "node:fs";
+import { constants, closeSync, fchmodSync, fstatSync, lstatSync, readlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry, Oid } from "@oma/contracts";
 import type { OperationOf, ValidatedPlan } from "@oma/protocol/operation-codec";
@@ -26,6 +26,7 @@ import { type GitObserver } from "./observe.js";
 import { consumeContextPublication } from "./context-publication.js";
 import type { ContextPublicationEvidence } from "@oma/contracts/publication";
 import { decodeUtf8 } from "@oma/domain/utf8";
+import { bindCanonicalCommand, canonicalDirectory, type CanonicalExecution } from "./canonical-command.js";
 
 const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid",
@@ -52,11 +53,13 @@ export class ContextRepository {
   private preparing = false;
   /** The staged tree whose candidate preparation last started native work. */
   private preparedTree: string | null = null;
-  constructor(paths: Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">, private readonly observer: GitObserver) {
+  constructor(paths: Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">, private readonly observer: GitObserver,
+      private readonly execution?: CanonicalExecution) {
     this.paths = Object.freeze({ stateRoot: paths.stateRoot, contextGit: paths.contextGit, worldDir: paths.worldDir });
   }
   private command(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = GIT_ENV, stdoutBytes = 4 * 1024 * 1024): ProcessObservation {
-    return runProcessSync({ executable: "/usr/bin/git", argv, env, timeoutMs: 120000, stdoutBytes, stderrBytes: 4 * 1024 * 1024 });
+    const physical = bindCanonicalCommand({ executable: "/usr/bin/git", argv, env, timeoutMs: 120000, stdoutBytes, stderrBytes: 4 * 1024 * 1024 }, this.execution);
+    return runProcessSync(physical.command, undefined, [], physical.directoryFd === undefined ? {} : { directoryFd: physical.directoryFd });
   }
   private success(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = GIT_ENV, stdoutBytes = 4 * 1024 * 1024): Buffer {
     const result = this.command(argv, env, stdoutBytes);
@@ -67,13 +70,20 @@ export class ContextRepository {
   private prepareCommand(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<ProcessObservation> {
     // A working plumbing child is never silent for two minutes; the ceiling
     // only ends a command that never stops producing output.
-    return this.preparation.run({ executable: "/usr/bin/git", argv, env, timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
-      stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 });
+    const physical = bindCanonicalCommand({ executable: "/usr/bin/git", argv, env, timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
+      stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, this.execution);
+    return this.preparation.run(physical.command, undefined, [], {}, physical.directoryFd === undefined ? {} : { directoryFd: physical.directoryFd });
   }
   private async prepareSuccess(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<Buffer> {
     return requirePreparedSuccess(await this.prepareCommand(argv, env), "context preparation");
   }
   private exists(): boolean {
+    const directory = canonicalDirectory(this.paths.contextGit, this.execution);
+    if (directory !== undefined) {
+      const stat = fstatSync(directory);
+      if (!stat.isDirectory() || stat.nlink < 1) throw new StoreError("REF_STATE_UNKNOWN", "held context repository is unavailable");
+      return true;
+    }
     const stat = lstatSync(this.paths.contextGit, { throwIfNoEntry: false });
     if (!stat) return false;
     assertContextDirectory(this.paths.contextGit);
@@ -154,7 +164,7 @@ export class ContextRepository {
       fsyncDir(staging);
       const directory = workFd;
       const run = (argv: readonly string[], input?: Uint8Array) => this.preparation.run({
-        executable: "/usr/bin/git", argv: ["-C", ".", ...argv], env: CONTEXT_ENV,
+        executable: this.execution?.executable ?? "/usr/bin/git", argv: ["-C", ".", ...argv], env: CONTEXT_ENV,
         ...(input === undefined ? {} : { input }), timeoutMs: 24 * 3600 * 1000, silenceMs: 120000,
         stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
       }, undefined, [directory, held.descriptor], {}, { directoryFd: directory });

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { createMacRuntimeGeneration, prepareMacRuntimeGeneration } from "#oma-test/app/runtime/mac-runtime-generation";
 import { deploymentDigest } from "#oma-test/app/runtime/deployment-manifest";
 import { DEPLOYMENT_LAYOUT } from "@oma/domain/deployment";
@@ -29,10 +30,11 @@ test("001. Actual installed generation seals dependencies and private Node until
   let previous = performance.now();
   const phase = name => { const now = performance.now(); t.diagnostic(JSON.stringify({ phase: name, elapsedMs: now - previous })); previous = now; };
   mkdirSync(work, { mode: 0o700 });
-  let generation, owner, pin, heartbeat, preparing; const stopPreparation = new AbortController(); let ticks = 0; const rows = [];
+  let generation, owner, pin, heartbeat, preparing, selectedScope; const stopPreparation = new AbortController(); let ticks = 0; const rows = [];
   t.after(async () => { clearInterval(heartbeat); stopPreparation.abort();
     if (preparing) await preparing.then(value => { generation ??= value; }, error => { if (error?.code !== "CANCELLED_BEFORE_COMMIT") throw error; });
     await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
+  try {
   copyInstalledProduct(realpathSync(fileURLToPath(new URL("../", import.meta.url))), source);
   phase("fixture-installation");
   const entry = join(source, "apps/oma/dist/generation-probe.mjs");
@@ -93,7 +95,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   await refuse(command, { ...policy, writable: [{ path: root, kind: "directory" }] });
   await refuse(command, { ...policy, readable: [{ path: source, kind: "directory" }], nodePreload: entry });
   await refuse(command, { ...policy, readable: [{ path: source + "/../work", kind: "directory" }] });
-  let prematureReturn, selectedScope;
+  let prematureReturn;
   const result = await owner.run({ slot: "generation", signal: t.signal, async launch() {
     const scope = selectedScope = await generation.launchNode(command, { imageDigests: { helper: "0".repeat(64), images: [] } }, policy);
     try { generation.close(); } catch (error) { prematureReturn = error; }
@@ -113,6 +115,15 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   phase("generation-collection");
   generation.close(); assert.equal(existsSync(generation.root), false);
   assert.equal(deploymentDigest(source), installation.deploymentDigest);
+  } catch (error) {
+    const observation = read => { try { return read(); } catch (failure) { return { unobserved: inspect(failure, { depth: null }) }; } };
+    // Serialize here, before the test worker's Error clone truncates nested
+    // AggregateError members. An observation never replaces the failure.
+    t.diagnostic(JSON.stringify({ phase: "whole-generation-failure", error: inspect(error, { depth: null, maxArrayLength: null }),
+      population: observation(() => selectedScope?.population()), journal: rows,
+      preparationJournal: observation(() => ExecutionJournal.inspect(root)) }));
+    throw error;
+  }
 });
 
 for (const mismatch of ['helper','seatbelt']) test(`002. Generation refuses the Host ${mismatch} image when its bytes differ from the trusted installation`, {timeout:60000}, async t=>{
