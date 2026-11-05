@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6de5feca6f0ca1479d5d13b27999b19b13d2825895ac3fb50d9828b35872db88` (15910 files).
+verification input digest `a9c639e732b40edf01e2c967cea0511d027f003e1c00c2d92035756dfc430ae9` (15910 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -2995,3 +2995,59 @@ source 고정 뒤 새27/27 packed installation(App 포함)·installed runtime·d
 production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220을 유지한다.
 로컬 원시는 `/tmp/oma-source63-{build-final,package-isolation,architecture-final,selected,linux-pipeline,review}.log`다.
 새 Mac pipeline/root-FD composition·wildcard/filter 관측은 아직 NOT_RUN이며 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+
+### SOURCE63 재발행과 SOURCE61 전체 Linux 회수
+
+SOURCE63 `70fa609a5e777b41ab6113d0c75b583f9d5355c3` / local checkpoint `96ba504e794697f44ab4ddc38ce3ab70156e77e1`,
+Native41982432919·Architecture41982432949를 발행했다. canonical15910/`6de5feca6f0ca1479d5d13b27999b19b13d2825895ac3fb50d9828b35872db88`다.
+직전 local27/27(App 포함)·전체 구조·문서·spec·binding013은 PASS이고 새 Mac 실행은 진행 중이다.
+SOURCE62 Mac15 공통 job은 queued 상태에서 새 source 발행에 의해 cancelled됐으므로 여전히 NOT_RUN이다.
+
+SOURCE61 Architecture41978047040 전체 완료 artifact 두 개를 SHA-256 대조했다.
+Native-all ZIP13394272784/`42d59aa34b2253c5136dd099a1c0d59620d60f82e25c7cfe4e69fd63d7ec6cbd`는
+4866/4866 PASS·fail/cancel/skip/todo0·errors[]·sourceChanges[]다. sourceHead40b203과
+canonical15906/`51054476befe2a4fdf11fecdaf240e3f83d163737a3a7900e186d187efbddb2e`의 전후 동일성을 확인했다.
+Baseline ZIP13393524578/`f162ab932e5ccec10ce11bf6dc4a9a7edd14fc88834639ead018fef9d3c5e575`도 같은 provenance이고
+inventory·LOC·typecheck·build·storage·package·architecture·spec·test·fast/durable/property/stress/platform의15개 exit가 모두0이다.
+각 lane은1203/937/42/16/80개 PASS·기타0이며 standalone kernel/crash는 NOT_RUN이다.
+이는 SOURCE61 Linux 근거이며 SOURCE62/63 변경 보호/경로/환경의 전체 runtime PASS로 재사용하지 않는다.
+
+
+### SOURCE63 양 Mac408/408·실제 보호 pipeline/root FD 성공
+
+ARM26 shared ZIP13395010930 SHA-256 `a50af05209fff74b9c7633a7599b8047878c302c90642bdf6dc44422a5f2e3d7`와
+Intel26 shared ZIP13395021457 SHA-256 `7df3e794187fef31530b978c2e8bd7568f2be6ff81c4e62457dc34deb34084b3`를 대조했다.
+각408/408 PASS·fail/cancel/skip/todo0이며 sourceHead70fa609와 canonical15910/`6de5feca6f0ca1479d5d13b27999b19b13d2825895ac3fb50d9828b35872db88`가 전후 같다.
+ARM runtime15532/27/`061925eb4bb8e2aad0307072d0de2e3558b09d06756566a41ac648a801393f62`,
+Intel runtime15532/27/`3904c175fe577711ba4c0905897c609b8bf7b056b71ea3d81a960f5d25e83492`도 전후 같다.
+
+원본 debuggable Node 거절·protected self guard·JIT/FFI·own debugger child Mach 음성, journaled protected-Node producer를 양쪽에서 통과했다.
+whole immutable generation은 기존240s budget 안에서 실제 Seatbelt guard와 CandidateChecks pipeline setup→check·tracked delta·private receipt,
+mutable 원본 entry 거절·권한 철회·quarantine verify/import·accepted bundle cursor/bytes 보존·현재 canonical ref 보존과 scope/journal 반납까지 완료했다.
+ARM의 signing preparation1972ms·generation71864ms·private Git13513ms·collection11042ms,
+Intel의 signing3612ms·generation129045ms·private Git12300ms·collection16737ms였다.
+실제 지연의 주 구간은 서명보다 generation copy/seal이며 이를 다음 release latency 근거로 보존한다.
+
+raw/Seatbelt 두 Git 모두 다른 declared cwd보다 original directory FD를 사용했다. setup 뒤 original rename·replacement 삽입에도
+held original에만 blob을 기록했고 replacement에는 없었다. 각 scope와 journal을 반납했다.
+이제 FD-relative Git capability의 실제 조합 근거가 있지만 기존 candidate/quarantine business argv 전체는 아직 absolute project/root 경로를 사용한다.
+그 owner까지의 결박 완료로 올리지 않는다.
+
+wildcard/filter의 freeze·256-bit metadata 보존·dup/last-close와 public 자기 socket generation 관측도 양쪽에서 실행됐다.
+기존 specific bind(reuse4조합)는 새 wildcard bind를 EADDRINUSE48로 막았지만, 반대 순서에서는
+wildcard holder 옆의 loopback-specific contender가 매 phase 성공했다. wildcard contender는4회 모두 거절됐다.
+따라서 현재 상태 확인만으로 genuine wildcard producer를 증명하지 못하며 Society lease 채택은 보류한다.
+SOURCE64는 독립 specific socket이 같은 metadata를 복사하고 reuse를 끈 뒤 freeze/disconnect로
+같은 ANY address/port/state를 만들 수 있는지 비교한다. SDK arm64/x64 object compile은 PASS이며 실제 위조 시도는 아직 NOT_RUN이다.
+
+Mac15 common이 package job 뒤에서 연속 취소돼 새 보호 경로의 최소 OS 근거가 없다.
+후속 matrix는 Mac15→Intel26→ARM26→Ubuntu 순서로 요청하며 max-parallel2·job 수·실패/timeout 기준을 유지한다.
+SOURCE64는 production bytes를 바꾸지 않는 시험/실행 순서 변경이다.
+Society strong lease·외부 Git business root 결박·전체 product Runner/Worker·CLI/reboot/release qualification은 남는다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE64 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+독립 alias 추가 fixture의 arm64/x64 SDK compile·Linux NOT_RUN 가지도 PASS다.
+production·public API·package bytes는 SOURCE63과 같아 build/packed 설치 결과를 새 runtime 관측으로 바꾸지 않는다.
+새 alias 실험과 Mac15 보호/pipeline/root-FD 경로의 실제 결과는 아직 NOT_RUN이다.

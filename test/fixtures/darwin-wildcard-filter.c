@@ -82,6 +82,35 @@ int main(void) {
   result("mutate-reuseaddr", setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one));
   result("mutate-reuseport", setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof one));
   result("reconnect", connect(fd, (struct sockaddr *)&peer, sizeof peer)); own_phase(fd, &address, "after-reconnect-attempt");
+  /* A specific-address bind succeeded beside the wildcard holder. Test
+   * whether that independent file description can copy all observable tag
+   * and frozen-state fields. Never mistake duplicate state for provenance. */
+  int forged = socket(AF_INET6, SOCK_DGRAM, 0);
+  if (forged >= 0) {
+    result("alias-v6-only", setsockopt(forged, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof one));
+    result("alias-reuseaddr-on", setsockopt(forged, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one));
+    result("alias-reuseport-on", setsockopt(forged, SOL_SOCKET, SO_REUSEPORT, &one, sizeof one));
+    struct sockaddr_in6 specific = address; specific.sin6_addr = in6addr_loopback;
+    int alias_bound = bind(forged, (struct sockaddr *)&specific, sizeof specific); result("alias-specific-bind", alias_bound);
+    if (!alias_bound) {
+      result("alias-join-same-group", setsockopt(forged, IPPROTO_IPV6, MCAST_JOIN_GROUP, &membership, sizeof membership));
+      result("alias-copy-full-identity", setsourcefilter(forged, loopback, (struct sockaddr *)&group, sizeof group, MCAST_INCLUDE, 4, sources));
+      result("alias-connect", connect(forged, (struct sockaddr *)&peer, sizeof peer));
+      int zero = 0;
+      result("alias-reuseaddr-off", setsockopt(forged, SOL_SOCKET, SO_REUSEADDR, &zero, sizeof zero));
+      result("alias-reuseport-off", setsockopt(forged, SOL_SOCKET, SO_REUSEPORT, &zero, sizeof zero));
+      result("alias-deny-out", setsockopt(forged, SOL_SOCKET, 0x1081, &deny, sizeof deny));
+      result("alias-shutdown", shutdown(forged, SHUT_RDWR));
+      result("alias-disconnectx", disconnectx(forged, SAE_ASSOCID_ANY, SAE_CONNID_ANY));
+      own_phase(forged, &address, "independent-alias");
+      mode = 0; count = 4; memset(observed, 0, sizeof observed);
+      metadata = getsourcefilter(forged, loopback, (struct sockaddr *)&group, sizeof group, &mode, &count, observed);
+      result("alias-read-full-identity", metadata);
+      printf("{\"kind\":\"alias-identity\",\"mode\":%u,\"count\":%u,\"sameSources\":%s}\n", mode, count,
+        !metadata && count == 4 && !memcmp(sources, observed, sizeof sources) ? "true" : "false");
+    }
+    result("independent-alias-close", close(forged));
+  }
   int alias = dup(fd); result("duplicate", alias); result("close-original", close(fd));
   if (alias >= 0) { own_phase(alias, &address, "duplicate-only"); result("last-close", close(alias)); }
   contender(&address, "after-last-close-positive"); puts("{\"kind\":\"complete\",\"setup\":true}"); return 0;

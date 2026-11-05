@@ -18,12 +18,12 @@ jobs:
   common-runtime:
     strategy:
       fail-fast: false
-      # Intel supplies supplemental observations while the hosted arm64 pool
-      # queues. Keep the original arm64 qualification and limit parallel work.
+      # Qualify the minimum OS before package jobs can keep it queued behind
+      # supplemental images. Keep the existing two-job concurrency bound.
       max-parallel: 2
       matrix:
         # This work branch qualifies on Darwin; other manual runs default to Linux.
-        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["macos-26-intel", "macos-26", "ubuntu-24.04", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
+        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["macos-15", "macos-26-intel", "macos-26", "ubuntu-24.04"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
