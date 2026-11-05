@@ -1,15 +1,15 @@
-# 현재 검증 상태 — 2026-11-05 KST
+# 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE77의 세 Mac 공통451/451·실행 세대3/3·독립 설치27/27을 각각 확인했다.
-SOURCE78 직접 fixed producer는 세 Mac 공통 각452/452 안에서 실제 통과했으나 전체 Society lease로 채택하지 않았다.
-SOURCE80의 canonical context persistence barrier는 Mac15 새6건·공통453/453·실행 세대3/3을 확인했다. 다른 Mac의 새 barrier는 아직 NOT_RUN이다.
+SOURCE97의 제품 shared Society lease는 ARM·Intel에서 각각5/5 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+같은 ARM 입력의 공통 회귀도465/465 PASS다. 실제 paid execution scope/whole-scope death와의 결합은 SOURCE98의 새006 case로 확인 중이며 아직 NOT_RUN이다.
+이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
 | 남은 제품 작업 | 닫히지 않은 범위 |
 |---|---|
-| Society lease | full state identity·collision/discovery·상속 FD4 provenance·Host/producer crash·현재 Host role의 제품 연결 |
-| G-FILES | 전체 StateRoot capture·private work/source fetch·context snapshot/초기 parent durability·남은 외부 writer/진단 경로 |
+| Society 실행 결합 | 실제 Broker/Engine·paid scope의 fence 보유/전체 사망 연결·현재 Host role의 제품 연결 |
+| G-FILES | 전체 제품 경로의 StateRoot capture·private work/source fetch·남은 외부 writer/진단 결박과 수명 인수 |
 | G-PROCESS | 이전 populated-scope termination unknown의 원인·실제 제품 Runner/Worker/Pi·manual CLI scope 연결 |
 | G-AUTH/복구 | 제품 Host/Broker/engine의 current capability와 restart/reboot/sleep·release Keychain/SIP 검증 |
 | 최종 인수 | 위 변경을 포함한 실제 Society/Personal·Git/도구/Restic 및 전체 Linux 회귀·새 설치 시나리오 |
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `41b05918fc216373f063480366576cd0e9181e2c3c9aae5bb7dcdcd5e8866dd1` (15946 files).
+verification input digest `daf595fd03d8a8d934ad848c17438e37c3471a0b2716d7a3a1787ca10fc345eb` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4402,3 +4402,34 @@ Host에 SCM으로 전달하는 것은 실제 새 IPv6 fence FD 하나뿐이며 p
 Host 채널은 actual fence 인식 뒤 child copy만 반환하고 parent를 creator의 EOF/ack 수명으로 유지한다.
 정상 반환의 양성 응답, Host/creator 사망 거절, full identity/collision/mutation 조건은 유지한다.
 수정의 actual Mac은 아직 NOT_RUN이다. 최종 review/독립 설치/전체 architecture 마감도 아직 미완료이며 세 gate OPEN·제품 BLOCKED다.
+
+### SOURCE97 actual ARM Society5/5
+
+SOURCE97 `600c46c51c420cd065ae85dcc061ef25a70f711f`, Native42070866793·Architecture42070866838이다.
+canonical15946/`41b05918fc216373f063480366576cd0e9181e2c3c9aae5bb7dcdcd5e8866dd1`다.
+ARM Society ZIP13436536981 SHA-256 `2bad8474a0d25e2daed8f2ee02247fdb333bd264cc3c770f2e0c60fae367a108`를 대조했다.
+source/input/runtime의 Society 전후 동일, runtime15549/27 `b5526e604a8989ed97a4d9607438cbceb9ffebae52f7e280ca2925ef8a23df15`다.
+제품 shared lease5/5 PASS·fail/cancel/skip/todo0다. 정상 release/즉시 reacquire001과 충돌 뒤 반환/인수004가 이번에 통과했다.
+Host SIGKILL 뒤 controlled child가 유지하는 실제 FD/마지막 반환002, creator 강제 종료 뒤 점유 unknown 거절003, socket 변조005도 통과했다.
+이는 controlled child 및 shared API의 실제 보장이다. 실제 Broker/Engine·모든 paid scope·Actor의 FD4 close/helper 사망 결합을 완료했다고 쓰지 않는다.
+독립 설치/최종 review/전체 architecture 마감을 진행하며 G-PROCESS/G-FILES/G-AUTH와 제품 guard는 유지한다.
+
+SOURCE97 Intel Society ZIP13435439246 SHA-256 `fdb12b0d4523e2c0cc6122c8ce8c7a26c3fb4fb29929d346582aa393a18bba5f`도 대조했다.
+같은 source/canonical의 Society 전후 동일, runtime15549/27 `507d858597e39eee52b1b0fbd897b1c8f466404f2eefad28addde11ee7ab9972`다.
+Intel도5/5 PASS·fail/cancel/skip/todo0다. ARM과 Intel에서 기존001/004의 정상 반환 실패가 해소됐다.
+
+SOURCE98에는 같은 실제 fence를 shared ExecutionRuntime/ExecutionJournal/launchDarwinJobScope에 전달하는6번째 시험을 추가했다.
+controlled direct workload와 detached descendant가 실제 resource coalition 안에서 FD4를 보유한다.
+Host의 자기 copy와 creator copy를 정상 반환해도 populated scope가 남아 있으면 takeover를 거절해야 한다.
+공통 owner의 취소 뒤에는 독립 kernel empty·FD/output drain·빈 journal을 확인한 뒤에만 재획득을 요구한다.
+이 새6번째 case의 actual Mac은 아직 NOT_RUN이며 전체 Broker/Engine/Actor authority 완료로 확대하지 않는다.
+
+SOURCE97 ARM main ZIP13437256735 SHA-256 `1806ed4b194e95831dd9fae6114c29526b3a0c282255fa4fb021a59edde46959`도 대조했다.
+같은 source/canonical/runtime의 main 전후 동일 및465/465 PASS·fail/cancel/skip/todo0다.
+SOURCE88의 Host death termination unknown 원인이 수리됐다는 판정은 아니다. 기존 실패 근거를 보존한다.
+SOURCE98 Linux lease/runner/stdin46/46 PASS·기타0다(`/tmp/oma-source98-core-final.log`). 실제 새 Darwin scope006은 NOT_RUN이다.
+
+SOURCE98 최종 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
+production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
+원시는 `/tmp/oma-source98-build-final.log`·`/tmp/oma-source98-package-isolation-final.log`·`/tmp/oma-source98-review-final.log`·`/tmp/oma-source98-architecture-final.log`다.
+이 local 마감은 기본 소유권5건의 SOURCE97 실제 결과나 새006 scope의 미실행 여부를 다른 source로 바꾸지 않는다.

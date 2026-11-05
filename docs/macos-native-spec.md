@@ -166,6 +166,8 @@ Society·broker·tree-reader lock은 서로 다른 수명이다. held directory/
 
 Darwin Society adapter의 전체 identity는 기존 UID/state-root SHA-256이다. 고정 creator가 새 no-reuse IPv6 wildcard socket을 만들고, 상속 FD의 실제 socket/generation을 nonce 응답의 kernel sender·고정 mapped image·전체 identity와 함께 확인한다. 공개 검색은 FD를 주지 않는다. creator의 copy와 실행 범위별 신뢰 owner의 copy는 서로 다른 수명이며, 각 funded scope의 전체 사망까지 copy가 남는다는 통합 검증이 필요하다.
 
+Host가 처음 만든 private owner socketpair는 계속 같은 endpoint로 유지하며 creator에 직접 상속한다. 초기 setup stream과 구분하고, SCM_RIGHTS handoff는 새 fence FD 하나만 전달한다. 정상 반환은 creator가 자기 fence copy를 닫은 뒤 보낸 private acknowledgement를 실제로 받은 다음 Host copy를 반환한다.
+
 UDP port는 전체 identity가 아니라 유한한 exclusion 자원이다. adapter는 1024..49151의 결정적 index 하나만 사용한다. 다른 identity나 비제품 socket이 같은 port를 점유하면 unavailable로 거절하며, 다른 Society의 소유권이나 빈 상태로 판정하거나 대체 port를 찾지 않는다. 이 자원 충돌 제약을 256-bit kernel namespace와 같다고 설명하지 않는다. 실제 채택 판정은 [validation](implementation/validation.md)이 소유한다.
 
 외부 source와 이번 호출이 `O_EXCL`로 만든 비공개 temporary를 구분한다. 후자는 held parent의 `linkat`로 같은 leased inode를 no-replace 공개한다. 이 이름은 해당 writer 소유이며 collector는 live flock을 존중해야 한다.

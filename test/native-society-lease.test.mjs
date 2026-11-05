@@ -19,6 +19,11 @@ import {load} from 'koffi';
 import {machoImageCdHashes} from '@oma/native/darwin-macho-image';
 import {SOCIETY_FENCE_ENV} from '@oma/process/async';
 import {runProcessSync} from '@oma/process/run';
+import {ExecutionJournal} from '@oma/storage/execution-journal';
+import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
+import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
+import {observeDarwinCoalitionPopulation} from '@oma/native/audit-session';
+import {inspect} from 'node:util';
 const runFence=(executable,argv,fd)=>runProcessSync({executable,argv,env:{PATH:'/usr/bin:/bin'},timeoutMs:15000,stdoutBytes:16384,stderrBytes:16384},undefined,fd===undefined?[]:[fd],{killSignal:'SIGTERM'});
 
 const leaseModule=fileURLToPath(new URL(import.meta.resolve('#oma-test/app/runtime/society-lease')));
@@ -87,4 +92,36 @@ test('005. An inherited holder cannot free the exclusion resource by mutating it
  const result=spawnSync(program,[],{stdio:['ignore','pipe','pipe',held.fence],encoding:'utf8',timeout:10000});
  assert.equal(result.error,undefined);assert.equal(result.signal,null,result.stderr);assert.equal(result.status,0,result.stderr);t.diagnostic(result.stdout);
  refused(f.state);assert.equal(inheritedFence(held.fence,f.state).kind,'society');assert.equal(existsSync(f.state),false);
+});
+
+test('006. A paid Darwin execution scope holds the Society until complete scope death and descriptor drain',{timeout:45000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-paid-society-'))),state=join(base,'state'),controller=new AbortController();
+ const previous=process.env[SOCIETY_FENCE_ENV],restore=()=>{if(previous===undefined)delete process.env[SOCIETY_FENCE_ENV];else process.env[SOCIETY_FENCE_ENV]=previous;};
+ let held,next,runtime,running;
+ t.after(async()=>{
+  restore();controller.abort();await running?.catch(()=>{});let safe=runtime===undefined;const failures=[];
+  try{await runtime?.close();safe=true;}catch(error){failures.push(error);}
+  for(const lease of[held,next])try{lease?.release();}catch(error){failures.push(error);}
+  if(safe)rmSync(base,{recursive:true});else t.diagnostic('Retained unconfirmed paid Society scope: '+base);
+  if(failures.length)throw new AggregateError(failures,'paid Society scope cleanup remains unknown');
+ });
+ held=tryHoldSociety(state);assert.notEqual(held,null);assert.equal(existsSync(state),false);
+ ExecutionJournal.initialize(state);runtime=new ExecutionRuntime(state,launchDarwinJobScope);await runtime.recover();
+ const descendant=`const fs=require('node:fs'),assert=require('node:assert/strict');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);process.stdout.write('society-descendant-ready'+String.fromCharCode(10));setInterval(()=>{},1000);`;
+ const workload=`const fs=require('node:fs'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:['ignore',1,2,'ignore',fd],env:process.env});setInterval(()=>{},1000);`;
+ let output='',ready;const entered=new Promise(resolve=>{ready=resolve;});
+ process.env[SOCIETY_FENCE_ENV]=String(held.fence);
+ running=runtime.run('society-paid',{executable:realpathSync(process.execPath),argv:['-e',workload],env:{HOME:base,TMPDIR:base,PATH:'/usr/bin:/bin'},
+  cwd:base,timeoutMs:15000,stdoutBytes:4096,stderrBytes:16384},controller.signal,()=>{},[],undefined,undefined,
+  (source,options)=>launchDarwinJobScope(source,{...options,stdoutSink:bytes=>{output+=Buffer.from(bytes).toString();if(output.includes('society-descendant-ready\n'))ready();}}));
+ void running.catch(error=>t.diagnostic('Original paid Society scope failure: '+inspect(error,{depth:null,maxStringLength:8192,maxArrayLength:128})));
+ await Promise.race([entered,running.then(result=>{throw new Error('paid scope ended before descendant readiness: '+JSON.stringify({...result,stdout:result.stdout.toString(),stderr:result.stderr.toString()}));})]);
+ restore();const rows=ExecutionJournal.inspect(state);assert.equal(rows.length,1);const identity=rows[0].witness;
+ assert.equal(identity.kind,'darwin-resource-coalition');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
+ const released=held;held=undefined;released.release();refused(state);
+ assert.equal(observeDarwinCoalitionPopulation(identity),'populated','scope must still be live while takeover is refused');
+ controller.abort();const result=await running;assert.equal(result.kind,'aborted');
+ assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('society-paid'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
+ next=tryHoldSociety(state);assert.notEqual(next,null,'only complete scope death and descriptor drain return the Society');
 });
