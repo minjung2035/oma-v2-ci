@@ -152,10 +152,18 @@ int main(int argc,char **argv){
     EV_SET(&change,before.val[5],EVFILT_PROC,EV_ADD|EV_ENABLE|EV_CLEAR,NOTE_EXIT|NOTE_EXITSTATUS,0,NULL);
     require(kevent(queue,&change,1,NULL,0,&zero)==0,"creator return exit registration");
     (void)discover(argv[2],argv[3],port,&after);require(!memcmp(&before,&after,sizeof before),"creator return generation");
+    struct socket_fdinfo owner_before={0},creator_before={0},owner_after={0};
+    int owner_bytes=proc_pidfdinfo(getpid(),3,PROC_PIDFDSOCKETINFO,&owner_before,sizeof owner_before);
+    int creator_bytes=proc_pidfdinfo((pid_t)before.val[5],3,PROC_PIDFDSOCKETINFO,&creator_before,sizeof creator_before);
     deadline(3);char answer=0;errno=0;require(shutdown(3,SHUT_WR)==0,"creator owner send return");
     errno=0;ssize_t received=read(3,&answer,1);
     if(received!=1 || answer!='C'){
       int saved=errno;fprintf(stderr,"creator return acknowledgement: bytes=%zd first=%u errno=%d\n",received,(unsigned char)answer,saved);
+      int after_bytes=proc_pidfdinfo(getpid(),3,PROC_PIDFDSOCKETINFO,&owner_after,sizeof owner_after);
+      fprintf(stderr,"creator owner sockets: hostBytes=%d creatorBytes=%d afterBytes=%d host=%llu peer=%llu creator=%llu creatorPeer=%llu hostState=%u creatorState=%u afterState=%u\n",
+        owner_bytes,creator_bytes,after_bytes,(unsigned long long)owner_before.psi.soi_so,(unsigned long long)owner_before.psi.soi_proto.pri_un.unsi_conn_so,
+        (unsigned long long)creator_before.psi.soi_so,(unsigned long long)creator_before.psi.soi_proto.pri_un.unsi_conn_so,
+        (unsigned short)owner_before.psi.soi_state,(unsigned short)creator_before.psi.soi_state,(unsigned short)owner_after.psi.soi_state);
       if(received==1 && answer=='E'){char reason[256]={0};ssize_t bytes=read(3,reason,sizeof reason-1);if(bytes>0)fprintf(stderr,"creator failure: %.*s",(int)bytes,reason);}
       struct kevent ended={0};struct timespec bound={.tv_sec=1};errno=0;int events=kevent(queue,NULL,0,&ended,1,&bound);
       fprintf(stderr,"creator return event: count=%d pid=%lu filter=%d flags=%u notes=%u status=%ld errno=%d\n",events,(unsigned long)ended.ident,ended.filter,ended.flags,ended.fflags,(long)ended.data,errno);

@@ -1612,11 +1612,11 @@
     },
     {
       "path": "packages/native/src/society-fence/control.c",
-      "sha256": "e95b8ac171d8a3cdefa7911e54c40adc34efe993179580c9cea4aa0c060ccc78"
+      "sha256": "36b3e8c8c208854c22db7f3b210f4f3052290b0612f91938fdc9f97ac9f07035"
     },
     {
       "path": "packages/native/src/society-fence/producer.c",
-      "sha256": "2428d2bd4b62aa2ff9f8ccf5529a7d566ef3409fae2a86c7c5af605515df982b"
+      "sha256": "7113cf86b5693bcdda458a69933cce998798627741f4b8c14020bf8785447623"
     },
     {
       "path": "packages/native/src/society-fence/protocol.h",

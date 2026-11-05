@@ -99,7 +99,7 @@ int main(int argc,char **argv){
    * private socket-return acknowledgement can be delivered. */
   require(close(fd)==0,"creator fence return");
   char closed='C';ssize_t returned=write(3,&closed,1);
-  if(returned<0 && errno==EPIPE)return 0; /* Host ended; our own copy is already returned. */
+  if(returned<0 && errno==EPIPE)return 10; /* Diagnostic: own copy returned, acknowledgement peer absent. */
   require(returned==1,"fence return acknowledgement");
   return 0;
 }

@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `38503f316586a9e279cfa9c71d998e30f5c0c723398d6524ba237677934f4cfd` (15946 files).
+verification input digest `682dd45af9150872a81a177503c984b939236d933cd994987761959d91674c13` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4370,3 +4370,16 @@ Host는 C를 실제로 받은 뒤 자신의 socket copy를 반환한다. EOF 자
 Host 강제 종료로 응답을 받을 peer도 없으면 creator는 이미 자신의 socket을 반환한 뒤 EPIPE를 정리한다.
 실제 Mac 수정 결과는 NOT_RUN이며 이 입력도 최종 review/독립 설치/전체 architecture 마감 전의 중간 checkpoint다.
 세 gate OPEN·제품 BLOCKED이며 이전 source 통과를 전용하지 않는다.
+
+### SOURCE95 actual ARM 응답 EOF 보존과 SOURCE96 endpoint 귀속
+
+SOURCE95 `4f09fcedd64399525eb06cb27a721ae32656ec50`, Native42066135767·Architecture42066135786이다.
+canonical15946/`38503f316586a9e279cfa9c71d998e30f5c0c723398d6524ba237677934f4cfd`다.
+ARM Society ZIP13433122982 SHA-256 `4f57a8adb245c27dd5cf70194ed70fab7cfbfe9db7ad2dc952dc05e347ad5252`를 대조했다.
+동일 source/input/runtime Society 전후 동일, runtime15549/27 `5de90f17a045e9ca6df982a3269d9b97cc513bc3ae75176577896b63947856d3`다.
+여전히3 PASS /2 FAIL·기타0이며001/004는 ack EOF 뒤 원래 creator의 kernel exit status0이다.
+half-close 변경도 성공한 해결책으로 판정하지 않는다. status0만으로 C의 실제 송신 여부는 구분되지 않았다.
+
+SOURCE96은 실패 때 해제 직전의 Host/creator private socket opaque identity·connected peer·kernel state와 해제 뒤 Host state를 기록한다.
+creator가 자기 copy를 닫은 뒤 acknowledgement EPIPE를 받은 경로는 diagnostic exit10으로 구분한다.
+이 exit status 자체를 제품 성공이나 전체 scope 사망으로 해석하지 않는다. 최종 review/독립 설치/전체 architecture는 계속 미완료다.
