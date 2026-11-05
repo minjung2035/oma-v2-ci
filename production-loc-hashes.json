@@ -2260,7 +2260,7 @@
     },
     {
       "path": "packages/tool-files/src/results.ts",
-      "sha256": "8096a5eddf6bb9f08b169b5920a6b5f2dfc96390123d4f86372cde79ea6a2c31"
+      "sha256": "05db703ed738b4d3ee931876bfa99a147170f321c0b1b6ff13ad3d0dfea854e6"
     },
     {
       "path": "packages/tool-hashline/package.json",

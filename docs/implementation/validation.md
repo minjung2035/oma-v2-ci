@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4c5a23aa2962bd10b9c301d0cb9f2acff0e4308f80dc9431cf30388b39070ec1` (15917 files).
+verification input digest `a276281b26cb095fac63eaa0aaf5e6422e1fb1105b79f4799a6b35885719d08b` (15918 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3316,3 +3316,57 @@ workflow YAML·모든 bash run block과 실제 oracle script의 success/success�
 같은 실제 검사를 production TAP reporter로 출력한 뒤 대조를 마쳤고 최초 오류는 `/tmp/oma-source70-workflow-first-evaluation.log`에 보존했다.
 최종 구조 원시는 `/tmp/oma-source70-architecture-final.log`, oracle 원시는 `/tmp/oma-source70-workflow-check/`다.
 새 실제 Mac compatibility/creator-instance/isolated-generation 결과는 여전히 NOT_RUN이다.
+
+### SOURCE70 발행과 SOURCE71 result directory 수명
+
+SOURCE70 `67dae60fea3bcd4d752417a0dd0c4d430f7089f3` / local checkpoint `c7f20d093ba5f8e7c6edda7ecb5bcb69d14e46f5`,
+Native41995942396·Architecture41995942217를 발행했다. canonical15917/`4c5a23aa2962bd10b9c301d0cb9f2acff0e4308f80dc9431cf30388b39070ec1`다.
+SOURCE69 test-only checkpoint `6cba878a1298ca81f1ffd6a84f6a5f1f6940359c`와 같은 tree의 remote parent
+`67ce0442aea1a7fbcd29bae6c4ceba5858bbfa42`를 보존해 함께 발행했다. SOURCE69만 별도 CI 실행한 것으로 합산하지 않는다.
+새 actual Mac 결과는 아직 NOT_RUN이다.
+
+SOURCE71은 result writer의 directory descriptor를 최초 open부터 finish/close까지 소유한다.
+마지막 parent flush를 위해 문자열 root를 다시 열지 않으며, 실제 file과 held parent를 flush한 뒤 두 descriptor를 모두 반납한다.
+file/root가 제거된 상태는 성공 reference로 바꾸지 않는다. close 실패도 cached failure로 보존하며 같은 숫자 FD를 다시 close하지 않는다.
+trusted caller는 createResult/readResult의 별도 ResultDirectoryControl로 이미 열린 root를 전달할 수 있다.
+writer는 자기 directory cursor를 따로 소유하고 caller의 descriptor는 닫지 않는다. model path/reference grammar에는 FD를 넣지 않는다.
+이 port는 아직 ReviewArtifacts/context/private workspace 전체 consumer로 연결하지 않았으며 전체 G-FILES 보장이 아니다.
+
+source 고정 뒤 단일 production build는10/27 recompile과 root build를 마쳤다.
+초기 edit script가 쓰기 전에 실패해 실행된 unchanged build는 `/tmp/oma-source71-pre-edit-build.log`로 구분했다.
+실제 수정 build는 `/tmp/oma-source71-build.log`다. 새4건과 기존 file I/O28건은32/32 PASS다.
+실제 rename 후 parent 이름이 없는 finish·이름 교체 후 original-only writer/read·bad FD의 pathname fallback 거절·
+file/parent unlink 뒤 publication 거절을 관측했다. Host cwd와 borrowed root는 보존했다.
+원시는 `/tmp/oma-source71-results.log`다. 새 port의 Mac 실행과 business consumer 전체 연결은 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+추가 기존 result snapshot/range/race 검사를 포함한11/11도 PASS다(`/tmp/oma-source71-result-regression.log`).
+SOURCE70 Mac15 shared ZIP13400129339 SHA-256 `c136471ce5efaa566b1475636cf519324d90da359fbcda707683fe80bc189a31`를 대조했다.
+위 canonical15917과 runtime15532/27/`b53632285e44f738409ea25b234b53f9023979eca87578514a8c0123162d294f` 전후 동일이다.
+분리한 main421/420 PASS/1 FAIL·기타0, generation3/3 PASS·기타0이다. 실제 shared FAIL/generation PASS 판정도 보존됐다.
+actual Git은2.39.5 Apple Git-154이며 canonical root/CAS 두 format와 추가 revert6건 모두 통과했다.
+generation은108223ms, construction55603ms·private Git14193ms로 기존240s 안에 끝났다.
+이 격리 환경 성공을 SOURCE67/68의 병렬 환경 timeout에 대한 production 성능 수정으로 승격하지 않는다.
+
+유일한 main 실패는 새 producer의 빈 entitlements 입력이 plist wrapper 없이 작성돼 codesign이 invalid blob length로 거절한 fixture 오류다.
+C compile은 성공했지만 producer execution·Mach provenance·socket/last-close 후보는 아직 NOT_RUN이다.
+SOURCE71 fixture는 별도 entitlement 입력 없이 기존 protected C 대조와 같은 `codesign --options runtime` 서명을 사용한다.
+디버깅·loader 예외를 추가하지 않으며 고정 signed image CDHash/audit-origin requirement도 유지한다.
+이 수정의 실제 Mac 결과는 NOT_RUN이다. 최초 실패를 PASS로 덮지 않는다.
+
+SOURCE70 Intel shared ZIP13400781590 SHA-256 `2726ff00871b899ce3da5d9decb3fede45f74e89f36a2a0da1956d517307fde8`도 대조했다.
+같은 canonical15917과 runtime15532/27/`43ad611ee0ec7b2afaea4e26c6fa4eb73bd0d3a427451bfa8e18793c46f6326e` 전후 동일이다.
+main421/420 PASS/1 FAIL·기타0이며 동일한 malformed empty-entitlements 서명 실패다. actual Git2.50.1 Apple Git-155에서 canonical8건도 PASS다.
+generation3/2 PASS/1 FAIL·기타0이다. construction136245ms·initial private scope947ms를 완료했지만
+후속 verifyDarwinGitRuntime의 effect/cleanup이 모두 RUN_TERMINATION_UNKNOWN 계열로 실패(duration184910ms)했다.
+240s timeout과는 다른 실패이며 생성 성공이나 다른 OS의 성공으로 scope death를 대체하지 않는다.
+현재 cause가 원본 process의 기존 pipeline catch보다 이른 discovery/cache 단계에서 발생해 깊은 leaf는 아직 확인되지 않았다.
+SOURCE71 fixture는 전체 effect/cleanup catch에서 원본 nested errors와 journal 전체의 fresh CID population을 진단하고 같은 예외를 다시 던진다.
+진단 오류는 primary failure를 대체하지 않으며 capability release·signal·death predicate·deadline을 바꾸지 않는다.
+SOURCE65 Mac15 unknown과 같은 원인이라고 단정하지 않는다. SOURCE71 diagnostic syntax와 Linux refusal3건은 PASS이며 새 실제 Mac 결과는 NOT_RUN이다.
+
+SOURCE71 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+source 고정 뒤 단일 production build·fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+구조 원시는 `/tmp/oma-source71-{build,package-isolation,review,architecture}.log`다.
+새 result directory port·producer signing·expanded owned-failure 진단의 실제 Mac 결과는 여전히 NOT_RUN이며 세 gate OPEN·product BLOCKED를 유지한다.

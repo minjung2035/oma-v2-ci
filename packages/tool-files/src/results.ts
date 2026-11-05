@@ -2,7 +2,7 @@
  * model source-write authority is never used to retain or read a result. */
 import { closeSync, constants, fstatSync, fsyncSync, readSync, writeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { openAt, openRoot } from "./descriptor-files.js";
+import { openAt, openRoot, reopenDirectory } from "./descriptor-files.js";
 import { join } from "node:path";
 import { isUtf8 } from "node:buffer";
 import { WorkspaceRefusal } from "./errors.js";
@@ -16,15 +16,35 @@ export function utf8Prefix(bytes: Buffer, limit: number): Buffer {
   while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end--;
   return bytes.subarray(0, end);
 }
+/** Trusted physical controls; model paths and result references never carry FDs. */
+export interface ResultDirectoryControl { readonly directoryFd?: number }
+function resultRoot(root: string, controls: ResultDirectoryControl): number {
+  return controls.directoryFd === undefined ? openRoot(root) : reopenDirectory(controls.directoryFd);
+}
 /** Caller creates and owns the root as part of session storage. O_EXCL and
- * descriptor-relative creation prevent an existing name becoming a writer. */
-export function createResult(root: string, id: string = randomUUID()) {
+ * descriptor-relative creation prevent an existing name becoming a writer.
+ * The owned directory stays held through the final publication flush. */
+export function createResult(root: string, id: string = randomUUID(), controls: ResultDirectoryControl = {}) {
   if (!/^[a-f0-9-]{36}$/.test(id)) throw new WorkspaceRefusal("invalid result id");
-  const parent = openRoot(root);
+  const parent = resultRoot(root, controls);
   let fd: number;
   try { fd = openAt(parent, `${id}.result`, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
-  finally { closeSync(parent); }
-  const hash = createHash("sha256"); let bytes = 0, closed = false;
+  catch (cause) {
+    try { closeSync(parent); } catch (cleanup) { throw new AggregateError([cause, cleanup], "result creation and directory return failed"); }
+    throw cause;
+  }
+  const hash = createHash("sha256"); let bytes = 0, closed = false, returnFailure: unknown;
+  const release = (): void => {
+    if (returnFailure !== undefined) throw returnFailure;
+    if (closed) return;
+    closed = true;
+    const failures: unknown[] = [];
+    for (const held of [fd, parent]) try { closeSync(held); } catch (error) { failures.push(error); }
+    if (failures.length) {
+      returnFailure = failures.length === 1 ? failures[0] : new AggregateError(failures, "result descriptors were not returned");
+      throw returnFailure;
+    }
+  };
   return {
     path: join(root, `${id}.result`),
     append(chunk: Buffer): void {
@@ -37,12 +57,20 @@ export function createResult(root: string, id: string = randomUUID()) {
     },
     finish(): ResultReference {
       if (closed) throw new WorkspaceRefusal("result writer is closed");
-      try { fsyncSync(fd); } finally { closeSync(fd); closed = true; }
-      const sha256 = hash.digest("hex");
-      const dir = openRoot(root); try { fsyncSync(dir); } finally { closeSync(dir); }
-      return { reference: `oma-result:${id}:${sha256}`, bytes, sha256 };
+      const failures: unknown[] = [];
+      let result: ResultReference | undefined;
+      try {
+        if (fstatSync(fd).nlink !== 1 || fstatSync(parent).nlink < 1)
+          throw new WorkspaceRefusal("result publication or its held directory was removed");
+        fsyncSync(fd); fsyncSync(parent);
+        const sha256 = hash.digest("hex");
+        result = { reference: `oma-result:${id}:${sha256}`, bytes, sha256 };
+      } catch (error) { failures.push(error); }
+      try { release(); } catch (error) { failures.push(error); }
+      if (failures.length) throw failures.length === 1 ? failures[0] : new AggregateError(failures, "result completion failed");
+      return result!;
     },
-    close(): void { if (!closed) { closed = true; closeSync(fd); } },
+    close(): void { release(); },
   };
 }
 export interface ResultRange { byteOffset?: number; byteLimit?: number; line?: number; encoding?: "base64" }
@@ -52,7 +80,7 @@ export interface ResultRange { byteOffset?: number; byteLimit?: number; line?: n
  * page and the reported digest always describe one validated snapshot: a
  * writer that mutates the same inode after the pass cannot substitute page
  * bytes under a digest it never had. */
-export function readResult(root: string, reference: string, range: ResultRange = {}) {
+export function readResult(root: string, reference: string, range: ResultRange = {}, controls: ResultDirectoryControl = {}) {
   const match = referencePattern.exec(reference);
   if (!match) throw new WorkspaceRefusal("invalid result reference");
   const limit = range.byteLimit ?? RESULT_PAGE_BYTES;
@@ -60,7 +88,7 @@ export function readResult(root: string, reference: string, range: ResultRange =
       !Number.isSafeInteger(range.byteOffset ?? 0) || (range.byteOffset ?? 0) < 0 ||
       range.line !== undefined && (!Number.isSafeInteger(range.line) || range.line < 1 || range.byteOffset !== undefined))
     throw new WorkspaceRefusal("invalid result byte or line range");
-  const parent = openRoot(root); let fd: number;
+  const parent = resultRoot(root, controls); let fd: number;
   try { fd = openAt(parent, `${match[1]}.result`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   finally { closeSync(parent); }
   try {

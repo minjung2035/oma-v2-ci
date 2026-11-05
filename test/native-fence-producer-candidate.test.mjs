@@ -2,7 +2,7 @@
  * Namespace discovery, hostile keeper replacement and recovery remain open. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,realpathSync,readFileSync,writeFileSync,rmSync,closeSync} from 'node:fs';
+import {mkdtempSync,realpathSync,readFileSync,rmSync,closeSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -25,14 +25,13 @@ async function origin(message,hashes){const operation=observeDarwinAuditOrigin(m
 
 test('001. Actual fixed producer binds a new socket, authenticates its instance and retains no last-close reference',{timeout:90000},async t=>{
  if(process.platform!=='darwin'){t.diagnostic('NOT_RUN: Darwin fixed fence producer candidate');return;}
- const root=realpathSync(mkdtempSync(join(tmpdir(),'oma-fence-producer-'))),executable=join(root,'producer'),entitlements=join(root,'producer.plist');
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'oma-fence-producer-'))),executable=join(root,'producer');
  const run=(program,args)=>{const r=spawnSync(program,args,{encoding:'utf8',timeout:30000});assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,0,r.stderr);return r;};
  const handles=new Set(),pairs=[],rights=[];let runtime,completed;
  t.after(async()=>{for(const p of pairs){for(const fd of[p.parent,p.child])if(handles.delete(fd))closeSync(fd);}if(completed)await completed.catch(()=>{});if(runtime)await runtime.close();for(const r of rights)r.close();for(const fd of handles)closeSync(fd);rmSync(root,{recursive:true});});
  run('/usr/bin/clang',['-Wall','-Wextra','-Werror',fileURLToPath(new URL('./fixtures/darwin-fence-producer-candidate.c',import.meta.url)),'-o',executable]);
- // An explicitly empty dictionary grants no debugging or loader exception.
- writeFileSync(entitlements,'<?xml version="1.0"?><plist version="1.0"><dict/>');
- run('/usr/bin/codesign',['--force','--sign','-','--options','runtime','--entitlements',entitlements,executable]);run('/usr/bin/codesign',['--verify','--strict',executable]);
+ // No entitlements grants no debugging or loader exception.
+ run('/usr/bin/codesign',['--force','--sign','-','--options','runtime',executable]);run('/usr/bin/codesign',['--verify','--strict',executable]);
  const hashes=machoImageCdHashes(readFileSync(executable),process.arch==='arm64'?'arm64':'x64'),endpoint=createMachEndpoint();rights.push(endpoint.send,endpoint.receive);
  const peer=peerFromMachReceiver(endpoint.receive);rights.push(peer);
  const control=controlSocketPair();pairs.push(control);handles.add(control.parent);handles.add(control.child);

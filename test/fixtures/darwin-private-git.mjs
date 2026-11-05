@@ -133,5 +133,16 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
   await withAsyncCleanup(()=>runtime.close(),()=>cleanupAll([
    ()=>{if(bundleFd!==undefined)closeSync(bundleFd);},...originals.map(file=>()=>writeFileSync(file.path,file.bytes)),
   ]));
+ }).catch(error=>{
+  // Capture the complete cause tree in its original process, including tool
+  // discovery/cache preparation and cleanup, before test-worker serialization.
+  try{console.error(inspect(error,{depth:null,maxArrayLength:128,maxStringLength:8192}));}catch{/* retain the primary failure */}
+  try{
+   const journal=ExecutionJournal.inspect(root);
+   console.error(JSON.stringify({phase:'private-git-owned-failure',journal,
+    populations:journal.map(row=>({slot:row.slot,witness:row.witness,
+     population:row.witness?.kind==='darwin-resource-coalition'?observeDarwinCoalitionPopulation(row.witness):'not-acquired'}))}));
+  }catch(diagnostic){try{console.error(inspect(diagnostic,{depth:null}));}catch{/* retain the primary failure */}}
+  throw error;
  });
 }
