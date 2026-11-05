@@ -146,8 +146,10 @@ int main(int argc,char **argv){
   if(!strcmp(argv[1],"release") && argc==2){
     deadline(3);char request='R',answer=0;errno=0;require(write(3,&request,1)==1,"creator return request");
     errno=0;ssize_t received=read(3,&answer,1);
+    int accepted=received==1 && answer=='R';
+    if(accepted){errno=0;received=read(3,&answer,1);}
     if(received!=1 || answer!='C'){
-      int saved=errno;fprintf(stderr,"creator return acknowledgement: bytes=%zd first=%u errno=%d\n",received,(unsigned char)answer,saved);
+      int saved=errno;fprintf(stderr,"creator return acknowledgement: accepted=%d bytes=%zd first=%u errno=%d\n",accepted,received,(unsigned char)answer,saved);
       if(received==1 && answer=='E'){char reason[256]={0};ssize_t bytes=read(3,reason,sizeof reason-1);if(bytes>0)fprintf(stderr,"creator failure: %.*s",(int)bytes,reason);}
       exit(70);
     }

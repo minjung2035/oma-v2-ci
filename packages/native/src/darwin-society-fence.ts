@@ -69,8 +69,8 @@ export function holdDarwinSocietyFence(name: string, run: DarwinSocietyFenceRunn
     const held = fence, lifetime = owner; fence = undefined; owner = undefined; let released = false;
     return { kind: "held", fd: held, release() {
       if (released) return; released = true;
-      try { closeSync(held); invoke(run, image.control, ["release"], lifetime); }
-      finally { closeSync(lifetime); }
+      try { invoke(run, image.control, ["release"], lifetime); }
+      finally { cleanupAll([() => closeSync(held), () => closeSync(lifetime)]); }
     } };
   }, () => cleanupAll([() => { if (fence !== undefined) closeSync(fence); }, () => { if (owner !== undefined) closeSync(owner); },
     () => { if (parent !== undefined) closeSync(parent); }, () => { if (child !== undefined) closeSync(child); }]));

@@ -1520,7 +1520,7 @@
     },
     {
       "path": "packages/native/src/darwin-society-fence.ts",
-      "sha256": "a37f43d1594dd6fff7eab87f68b96cc84728334b906ef146231720b7029f4863"
+      "sha256": "4ec7764db795faf4342ecf56a39681d2021f744bc67cdb2a4b4e976d89c87167"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
@@ -1612,11 +1612,11 @@
     },
     {
       "path": "packages/native/src/society-fence/control.c",
-      "sha256": "70de29d1e8905c51e9c68689093421e0843fa9b7e108f6ce0f4e916273b58872"
+      "sha256": "3fdcd78b8baf6dda18c671b7c6a6ee4d72458f01b8a18c2c94e08b219241290f"
     },
     {
       "path": "packages/native/src/society-fence/producer.c",
-      "sha256": "e689f77968f1f12bde17cf420b6a02ec09394bd1e996b25a82581e4dc89bb880"
+      "sha256": "b7de49b9ccb76b8d5c9222bc9961b7a5ba4004643506a707e8fd173787a7eab8"
     },
     {
       "path": "packages/native/src/society-fence/protocol.h",

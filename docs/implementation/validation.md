@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c6d087088458c036e62838a8989c1d1d760bdf7542077669f5c3d020537494e4` (15946 files).
+verification input digest `112b511754b3ac9e670a021496fc40a77b488600a0fe69324adb5cbc74b5f08d` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4315,3 +4315,28 @@ Society artifact에는 같은 runner의 설치 시작 뒤 생성된 crash report
 SOURCE92 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
 production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
 원시는 `/tmp/oma-source92-build-final.log`·`/tmp/oma-source92-package-isolation-final.log`·`/tmp/oma-source92-review-final.log`·`/tmp/oma-source92-architecture-final.log`다.
+
+### SOURCE92 actual ARM/Intel 정상 반환 실패 보존
+
+SOURCE92 `bb31535b5dfd04bb003d85f9be2131ffbc765577`, Native42060873558·Architecture42060873612이다.
+canonical15946/`c6d087088458c036e62838a8989c1d1d760bdf7542077669f5c3d020537494e4`다.
+ARM Society ZIP13431897722 SHA-256 `ad537ce733e0d5098c24d1a174153889556901750200ec0f5e7dc0edcf459de4`,
+Intel Society ZIP13432606640 SHA-256 `889f20cf8cba6e156de90699a79f3b6ac6f722eaaf55d74bbc09a24ec2b14d29`를 대조했다.
+각 source/input/runtime Society 전후 동일이다. runtime15549/27은 ARM `d2959c42d51c144cfd2b38023dd7e58936b9d70bb56cd6ae1962e498cb95f623`,
+Intel `7008012fc88631b6ac25ff8e679c4e8aafd1b7352ddf55a028158e01746aa581`다.
+양쪽 모두3 PASS /2 FAIL·기타0다. 002/003/005가 통과했고001/004의 ack EOF는 그대로다.
+명시적 discovery receive 반환 제거는 이 실패를 고치지 않았다. ARM crash report manifest는 비었고,
+Intel의3건은 Spotlight/iconservicesagent/dock의 report로 creator의 종료 원인 근거가 아니다.
+
+SOURCE93은 Host socket을 creator의 반환 acknowledgement까지 유지하고, 그 뒤 Host의 socket/owner endpoint를 모두 cleanup한다.
+creator 요청 수신 acknowledgement와 socket copy 반환 acknowledgement를 구분해, 다음 실패에서는 요청 수신 여부도 보존한다.
+직접 원인이나 수정 성공을 미리 주장하지 않는다. 세 gate OPEN·제품 BLOCKED다.
+
+SOURCE93 Linux lease/runner/stdin45/45 PASS·기타0다(`/tmp/oma-source93-core-regression-final.log`).
+Darwin release는 여기서 NOT_RUN이다. SDK producer ARM/Intel object compile은 통과했다.
+controller의 마지막 diagnostics 수정 뒤 assets를 다시 빌드했고 source/dist 일치와 현재 production source digest를 확인했다.
+이전 진행 중 build는 최종 packed installation의 입력으로 쓰지 않는다(`/tmp/oma-source93-build-frozen.log`).
+
+SOURCE93 최종 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
+production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
+원시는 `/tmp/oma-source93-build-frozen.log`·`/tmp/oma-source93-package-isolation-final.log`·`/tmp/oma-source93-review-final.log`·`/tmp/oma-source93-architecture-final.log`다.

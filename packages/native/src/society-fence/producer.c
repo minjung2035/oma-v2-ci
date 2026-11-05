@@ -77,7 +77,7 @@ int main(int argc,char **argv){
   for(;;){
     char byte=0;ssize_t owner=read(3,&byte,1);
     if(owner==0)break;
-    if(owner==1){require(byte=='R',"private release frame");released=1;break;}
+    if(owner==1){require(byte=='R',"private release frame");char accepted='R';require(write(3,&accepted,1)==1,"release request acknowledgement");released=1;break;}
     if(owner<0 && errno!=EINTR && errno!=EAGAIN)require(0,"owner lifetime");
     union{uint64_t align;unsigned char bytes[512];} incoming={0};mach_msg_header_t *request=(mach_msg_header_t *)incoming.bytes;
     mach_msg_return_t received=mach_msg(request,MACH_RCV_MSG|MACH_RCV_TIMEOUT,0,sizeof incoming,discovery,10,MACH_PORT_NULL);
