@@ -218,6 +218,22 @@ test("005. The pinned tool re-measures real source and catches a forged count", 
   } finally { f.close(); }
 });
 
+test("005. Pinned cloc counts comment-like JavaScript strings completely on repeated measurements", () => {
+  const f = fixture();
+  try {
+    f.put("implementation/cloc-systemd.lang", readFileSync(new URL("../implementation/cloc-systemd.lang", import.meta.url)));
+    // The actual source that produced exit 0 / code 0 with an adaptive alarm
+    // in CI. Measure its bytes without importing or executing the vendor test.
+    const file = "apps/oma/src/xss.js";
+    f.put(file, readFileSync(new URL("../packages/tool-web/src/vendor/pi-web-access/node_modules/@mixmark-io/domino/test/xss.js", import.meta.url)));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const report = measureWithCloc(f.root, [file]);
+      assert.ok(report !== null, "pinned cloc is required");
+      assert.deepEqual(report[file], { blank: 58, comment: 24, code: 279, language: "JavaScript" });
+    }
+  } finally { f.close(); }
+});
+
 test("006. The verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
     "apps", "packages", "test", "scripts", "implementation", "docs", ".github/workflows", ".gitignore", "README.md",

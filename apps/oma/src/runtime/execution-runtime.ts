@@ -46,6 +46,36 @@ export async function recoverExecutionState(stateRoot: string, fresh: boolean): 
   await withAsyncCleanup(() => new ExecutionCoordinator(journal, selected.observe, selected.acquire).recover(), () => journal.close());
 }
 export class ExecutionRuntime {
+  private admissions = 0;
+  private maintenance: Promise<unknown> | undefined;
+  private maintaining = false;
+  private closing = false;
+  private maintenanceFailed = false;
+  private maintenanceFailure: unknown;
+  private assertAdmission(): void {
+    if (this.maintaining || this.closing || this.maintenanceFailed) throw new StoreError("BROKER_UNAVAILABLE", "execution admission is closed for recovery or shutdown");
+  }
+  private async admit<T>(work: () => Promise<T>): Promise<T> {
+    this.assertAdmission(); this.admissions++;
+    try { return await work(); } finally { this.admissions--; }
+  }
+  /** Recovery does not itself stop current owners. Hold admission closed and
+   * require the actual journal to be empty before touching disposable assets. */
+  recoverAndMaintain<T>(work: () => Promise<T>): Promise<T> {
+    this.assertAdmission();
+    if (this.admissions !== 0) throw new StoreError("RUN_TERMINATION_UNKNOWN", "execution admission is still in progress");
+    this.maintaining = true;
+    let entered = false;
+    const task = Promise.resolve().then(async () => {
+      await this.owner.recover();
+      if (this.closing) throw new StoreError("CANCELLED_BEFORE_COMMIT", "runtime maintenance was cancelled before effects");
+      if (this.journal.entries().length !== 0)
+        throw new StoreError("RUN_TERMINATION_UNKNOWN", "runtime maintenance has no quiescent execution owner");
+      entered = true; return work();
+    }).catch(error => { if (entered) { this.maintenanceFailed = true; this.maintenanceFailure = error; } throw error; });
+    const owned = task.finally(() => { if (this.maintenance === owned) { this.maintenance = undefined; this.maintaining = false; } });
+    this.maintenance = owned; return owned;
+  }
   private workload: WorkloadBudget | undefined;
   private releasePlacement: (() => void) | undefined;
   private releasePreparation: (() => void) | undefined;
@@ -56,6 +86,7 @@ export class ExecutionRuntime {
     return this.workload.observation;
   }
   private async launch(command: CommandSpec, options: Record<string, unknown>, physicalLaunch = this.selected.launch) {
+    try { this.assertAdmission(); } catch (error) { throw new ExecutionNotStarted(error); }
     const budget = this.workload, lease = budget?.acquire();
     try {
       const files = process.platform === "darwin" && options.files === undefined && Array.isArray(options.inheritedFds)
@@ -86,35 +117,46 @@ export class ExecutionRuntime {
     }
     this.journal = ExecutionJournal.open(stateRoot, this.selected.journalVersion);
     this.owner = new ExecutionCoordinator(this.journal, this.selected.observe, this.selected.acquire);
-    try { if (physicalLaunch !== undefined) this.releasePreparation = configurePreparationExecution({ run: (command, signal, files, sinks, controls) =>
-      this.owner.run({ slot: "preparation:" + randomUUID(), launch: () => this.launch(command, { ...sinks,
+    try { if (physicalLaunch !== undefined) this.releasePreparation = configurePreparationExecution({ run: (command, signal, files, sinks, controls) => {
+      try { this.assertAdmission(); } catch (error) { throw new ExecutionNotStarted(error); }
+      return this.admit(() => this.owner.run({ slot: "preparation:" + randomUUID(), launch: () => this.launch(command, { ...sinks,
         files: files.map((fd, index) => ({ target: index + 3, fd })), ...(controls?.directoryFd === undefined ? {} : { directoryFd: controls.directoryFd }), ...(signal === undefined ? {} : { signal }) }),
         authorize() { if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation authority was cancelled"); },
-        ...(signal === undefined ? {} : { signal }) }) }); }
+        ...(signal === undefined ? {} : { signal }) })); } }); }
     catch (error) { withCleanup(() => { throw error; }, () => this.journal.close()); }
   }
   recover(): Promise<void> { return this.owner.recover(); }
   run(slot: string, command: CommandSpec, signal: AbortSignal | undefined, authorize: () => void, inheritedFds: readonly number[] = [],
     stderrFd?: number, prepared?: () => void) {
-    return this.owner.run({ slot, launch: () => this.launch(command, { inheritedFds,
+    return this.admit(() => this.owner.run({ slot, launch: () => this.launch(command, { inheritedFds,
       ...(stderrFd === undefined ? {} : { stderrFd }), ...(signal === undefined ? {} : { signal }) }), authorize,
-      ...(signal === undefined ? {} : { signal }), ...(prepared === undefined ? {} : { prepared }) });
+      ...(signal === undefined ? {} : { signal }), ...(prepared === undefined ? {} : { prepared }) }));
   }
   begin(slot: string, command: (execution: string) => CommandSpec, signal: AbortSignal, authorize: () => void,
     prepared: (execution: string, witness: ExecutionWitness) => void, inheritedFds: readonly number[] = [],
     output: { stdoutSink?: (bytes: Uint8Array) => void; stderrSink?: (bytes: Uint8Array) => void } = {}, physicalLaunch?: Backend["launch"]) {
     if (physicalLaunch !== undefined && process.platform !== "darwin")
       throw new StoreError("UNSUPPORTED_PROFILE", "explicit Resident launch requires the Darwin backend");
-    return this.owner.begin({ slot, launch: execution => {
+    return this.admit(() => this.owner.begin({ slot, launch: execution => {
       let spec: CommandSpec;
       try { spec = command(execution); } catch (error) { throw new ExecutionNotStarted(error); }
       return this.launch(spec, { signal, inheritedFds, ...output }, physicalLaunch);
-    }, authorize, prepared, signal });
+    }, authorize, prepared, signal }));
   }
   confirmDead(slot: string): boolean { return this.owner.confirmDead(slot); }
   /** AUD-19: the tri-state death observation the Git importer needs: an
    * accepted concurrent import owns the slot (busy), or nothing is proven
    * (unknown); only "dead" frees the slot for a new pick-up. */
   slotState(slot: string): "dead" | "busy" | "unknown" { return this.owner.slotState(slot); }
-  async close(): Promise<void> { await this.owner.drain(); await preparationShutdownBarrier(); this.releasePreparation?.(); this.releasePlacement?.(); this.workload?.close(); this.journal.close(); }
+  async close(): Promise<void> {
+    this.closing = true;
+    let failed = this.maintenanceFailed, failure: unknown = this.maintenanceFailure;
+    try { await this.maintenance; } catch (error) {
+      if (!(error instanceof StoreError && error.code === "CANCELLED_BEFORE_COMMIT")) { failed = true; failure = error; }
+    }
+    if (failed && failure instanceof StoreError && failure.code === "CANCELLED_BEFORE_COMMIT") failed = false;
+    await withAsyncCleanup(async () => { if (failed) throw failure; }, async () => {
+      await this.owner.drain(); await preparationShutdownBarrier(); this.releasePreparation?.(); this.releasePlacement?.(); this.workload?.close(); this.journal.close();
+    });
+  }
 }

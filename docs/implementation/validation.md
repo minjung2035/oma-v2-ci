@@ -2452,10 +2452,91 @@ module/architecture/graph/transactions는 PASS이며, boundary owner metadata를
 실제 whole-generation fixture는 같은 live scope에서 sync/async close 양쪽 거절을 요구하도록 확장했다.
 이 추가 assertion과 결과 기록 뒤 구조 input을 다시 결박한다. 새 Mac positive는 아직 NOT_RUN이다.
 
+### 복구가 확인된 창에서의 disposable generation 회수 (SOURCE56)
+
+SOURCE55 `d2b1e01b91d51262484faa088298989163f60282`는 Native
+[41935406131](https://github.com/minjung2035/oma-v2-ci/actions/runs/41935406131), Architecture
+[41935406099](https://github.com/minjung2035/oma-v2-ci/actions/runs/41935406099)에 발행했다.
+canonical15890/`57e3ab09a30a7304db5a93e02475e9414a85defb403110d8469c5139475bc947`다.
+ARM shared ZIP13373662313 SHA-256
+`971b963fd2c8a80298fd6c1ab82fb63beecf758d34891d3abe07d9923ce7edb4`를 대조했다.
+389/389 PASS·fail/cancel/skip/todo0이며 위 canonical이 전후 같다.
+runtime15526/27/`3b304def2369de403118f71ee7dfef844db7825f7e356dc8aead72f8d06ccc79`도 전후 같다.
+실제 private Node App Resident의 FD6·독립 child pin·현재 coalition membership, 다른 boot/CID와 stop 뒤 거절,
+선행 endpoint 예약과 직접 Worker의 original Host/full CID·양방향 bytes/EOF,
+일반 Runner의 global module 양성 대조와 직접 Worker의 loader 거절이 PASS다.
+async generation의 heartbeat·부분 준비 취소·active scope의 sync/async close 거절·helper digest도 PASS다.
+이는 전체 product Worker admission이나 Society lease 완료가 아니다.
+
+Intel shared ZIP13373659045 SHA-256
+`4cb3220c3488fbcb350e7fba97c7b346ff52dc11528cb2b0bb34bfacf0a4e725`를 대조했다.
+389 tests/388 PASS/0 FAIL/1 CANCELLED이며 cancel은 whole-generation의 기존 timeout240초다.
+canonical은 위 SOURCE55 값, runtime15526/27/`00a9fe99e487e290a1791f2ea2f4190d66f0d80f7db6dcbeeb2ebee34655df34`가 전후 같다.
+이를 전체 PASS나 timeout 충족으로 기록하지 않는다. ARM whole-generation은122773ms였고,
+Intel은 fixture31947ms·source hash8845ms 뒤 constructor가 timeout 안에 반환하지 못했다.
+
+SOURCE56는 같은 ExecutionRuntime의 admission을 닫은 상태에서 실제 journal recovery를 수행하고,
+current owner를 포함하여 journal이 비었음을 확인한 뒤에만 disposable 파일 회수 callback에 들어간다.
+준비/실행 admission이 진행 중이면 진입을 거절하고, 회수 중 run/begin 및 bound preparation을 거절한다.
+effect 실패는 이후 admission을 계속 닫으며 shutdown은 진행 중 회수에 합류한 뒤 실제 journal을 반납한다.
+effect 전 shutdown은 CANCELLED_BEFORE_COMMIT으로 끝나고 파일 callback은 실행하지 않는다.
+현재 owner를 건너뛰는 recover() 반환만으로 사망·quiescence를 가정하지 않는다.
+
+generation은 payload 복사 전에 opening 이름 아래 private owner marker를 flush하고 exclusive final 이름으로 발행한다.
+marker는 실제 parent/root dev·ino·UID와 configured deploymentDigest 및 허용 경로/종류에 결박된다.
+회수는 이 marker가 있는 인식된 이름만 대상으로 삼고, held live producer와 다른 inode·링크·추가 파일을 거절한다.
+전체 tree를 검사한 뒤 같은 inode를 다시 확인하며 UF_IMMUTABLE만 해제하고 descriptor 기준으로 반납한다.
+opening 이름에는 marker 또는 빈 디렉터리만 허용한다. marker 없는 옛 final generation은 자동 삭제하지 않는다.
+Broker는 실제 recovery 창에서 이 작업을 수행한 뒤 새 generation을 준비한다.
+source deployment나 accepted plan·journal schema는 바꾸지 않는다. startup adoption/reuse는 구현하지 않았다.
+
+Intel의 반복 경로 재개방 비용을 줄이기 위해 복사를 parent directory별로 묶고 held source/target descriptor를 유지한다.
+파일별 이중 hash·source 전후 검사·fsync·fresh single-link copy·mode·전체 inventory 검증·Native flag 검사는 유지한다.
+timeout240초를 늘리지 않았다. 시험의 pending constructor도 abort/join한 뒤 cleanup하여 timeout과 정리가 경합하지 않게 한다.
+이 최적화와 실제 SIGKILL preparing/running producer 회수의 Mac 결과는 아직 NOT_RUN이다.
+새 durable boundary 등록은 static owner/injection 연결이며 실제 Mac SIGKILL·power-loss의 PASS가 아니다.
+
+고정 production build는 PASS다. 관련14/14와 실제 Linux namespace/compiled Runner·maintenance36/36이 PASS다.
+Linux 관련14개 중 Mac 전용 가지는 backend refusal만 확인한다. portable marker 시험은 실제 FD와 복제된 claim 거절을 사용한다.
+처음 maintenance 시험은 잘못된 test journal version으로 1/2였고 protocol 상수로 수정한 2/2와 최종3/3을 별도로 확인했다.
+첫 boundary 검사는 새 collect owner 미등록으로 실패했으며 owner/fact를 등록한 static 검사는 PASS다.
+현재 G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED와 native-support/default launch guard를 유지한다.
+Society lease·전체 product Actor/Run admission·자원 profile·전체 CLI·실제 reboot/sleep/power-loss qualification은 미완료다.
+private cache의 전체 alias/다른 Society writable 배제와 startup reuse/latency qualification도 남아 있다.
+
+SOURCE55 전체 Linux artifact ZIP13375775154 SHA-256
+`3b887760701c4347b6e59870355a37af80d9e8016c185408ec7d983a490e721f`는4846 tests/4826 PASS/20 FAIL·cancel/skip/todo0다.
+baseline ZIP13376206127 SHA-256 `26d2ed14fd0bc1dc2c1fc1b3c069a1e03101c89af7bd1baf61eb852d9c9b0739`도 대조했다.
+baseline의 loc/test/fast/durable는 실패, property/stress/platform은 PASS다. 전체 성공으로 합성하지 않는다.
+실패에는 새 Broker import를 빠뜨린 controlled Linux composition dependency 목록,
+Native로 옮긴 Seatbelt 자산의 옛 owner 기대값, optional transient SandboxHost.toolchainNode의 옛 fingerprint,
+PreparationExecutor의 directoryFd controls를 버린 EML 추적 시험 wrapper가 있다.
+SOURCE56는 해당 시험 owner/인자만 현 계약에 맞추고 public/durable DTO·실제 격리 조건·기대 거절을 완화하지 않는다.
+composition/workspace33/33과 architecture mutation 포함 선택40/40을 각각 확인했으며 중복 합산하지 않는다.
+EML wrapper의 수정 전 로컬 재현은 실제 cwd의 Git HEAD/index를 context fixture로 바꾸었다.
+그 commit648ddff97006d9d7759b4fda8c5b6212df3e677e는 별도 checkpoint에 보존하고,
+metadata backup 후 원래 SOURCE55 ref/index를 복구했다. 작업 파일은 반납/덮어쓰기하지 않았다.
+수정한 wrapper는 모든 원래 controls를 전달하며 별도 build 뒤 실제 시험을 다시 실행한다.
+
+LOC 실패는 pinned cloc의 adaptive filter alarm이 같은 xss.js를 exit0/code0의 불완전한 row로 내보낸 뒤
+재측정 결과와 달라진 것이다. 실제 bytes의 alarm 없는 대조는 blank58/comment24/code279다.
+측정 producer는 per-filter alarm을 끄고 기존 전체600초 제한을 유지하며 cloc error 진단도 명시적으로 거절한다.
+이는 runtime/generation timeout240초 변경이 아니다. 실제 pinned cloc의 해당 bytes 반복 측정 회귀는 PASS다.
+첫 inventory 선택은14/15였고 유일한 실패는 아직 갱신하지 않은 구조 input binding이었다.
+review 상태는 CHANGED_WITHOUT_ORACLE31·NOT_REVIEWED14361·REMOVED220이며 승인을 생성하지 않았다.
+고정 production의 독립 packed 설치27/27은 PASS다. 최종 input binding 뒤 전체 구조 검사를 실행한다.
+
+SOURCE56 최종 test build는 PASS다. directory controls를 보존한 실제 EML8/8이 PASS이며
+로컬 실행 전후 Git HEAD/index의 bytes identity가 같다. 구조 binding 뒤 inventory15/15도 PASS다.
+고정 production의 전체 module/legacy/inventory/rule/architecture/transaction/boundary/문서/spec gate가 PASS다.
+pinned cloc2.08의 전체14392 files 측정과 독립 재측정이 일치했고 code1458907은 이 입력의 정보성 수치다.
+이 결과 기록 뒤 input을 다시 결박하고 문서/spec와 binding case를 확인한다.
+새 Mac preparing/running SIGKILL 회수·live/foreign refusal·Intel latency의 실제 결과는 아직 NOT_RUN이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `57e3ab09a30a7304db5a93e02475e9414a85defb403110d8469c5139475bc947` (15890 files).
+verification input digest `83e067cf501abe835a9b60088c7d2a3706904f497d920a260c98aa1704355b65` (15895 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

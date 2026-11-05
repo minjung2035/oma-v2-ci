@@ -23,8 +23,10 @@ test("001. Actual installed generation seals dependencies and private Node until
   let previous = performance.now();
   const phase = name => { const now = performance.now(); t.diagnostic(JSON.stringify({ phase: name, elapsedMs: now - previous })); previous = now; };
   mkdirSync(work, { mode: 0o700 });
-  let generation, owner, pin, heartbeat; let ticks = 0; const rows = [];
-  t.after(async () => { clearInterval(heartbeat); await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
+  let generation, owner, pin, heartbeat, preparing; const stopPreparation = new AbortController(); let ticks = 0; const rows = [];
+  t.after(async () => { clearInterval(heartbeat); stopPreparation.abort();
+    if (preparing) await preparing.then(value => { generation ??= value; }, error => { if (error?.code !== "CANCELLED_BEFORE_COMMIT") throw error; });
+    await owner?.drain(); pin?.close(); generation?.close(); rmSync(root, { recursive: true }); });
   copyInstalledProduct(realpathSync(fileURLToPath(new URL("../", import.meta.url))), source);
   phase("fixture-installation");
   const entry = join(source, "apps/oma/dist/generation-probe.mjs");
@@ -54,7 +56,8 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   const installation = { libdir: source, node: realpathSync(process.execPath), deploymentDigest: deploymentDigest(source) };
   phase("source-digest");
   heartbeat = setInterval(() => ticks++, 1);
-  generation = await prepareMacRuntimeGeneration(installation, root);
+  preparing = prepareMacRuntimeGeneration(installation, root, AbortSignal.any([stopPreparation.signal, t.signal]));
+  generation = await preparing;
   assert.ok(ticks > 0, "preparation must service the event loop while building the actual whole installation");
   phase("generation-construction");
   const command = { executable: installation.node, argv: [entry], env: { HOME: work, TMPDIR: work, PATH: dirname(generation.node) + ":/usr/bin:/bin" }, cwd: work,
@@ -75,7 +78,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   await refuse(command, { ...policy, writable: [{ path: root, kind: "directory" }] });
   await refuse(command, { ...policy, readable: [{ path: source, kind: "directory" }], nodePreload: entry });
   let prematureReturn, selectedScope;
-  const result = await owner.run({ slot: "generation", async launch() {
+  const result = await owner.run({ slot: "generation", signal: t.signal, async launch() {
     const scope = selectedScope = await generation.launchNode(command, { imageDigests: { helper: "0".repeat(64), images: [] } }, policy);
     try { generation.close(); } catch (error) { prematureReturn = error; }
     await assert.rejects(generation.closeAsync(), { code: "RUN_TERMINATION_UNKNOWN" });

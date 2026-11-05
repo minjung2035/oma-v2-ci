@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "a94b3c3bf667a0127f17e7baabc6d166617d2d8b55e845f0e6c98a8699bc5a4e",
+  "manifest": "db415c2ba3a855d528def6fe8914cd4f89872e5f2d21483f245262512992de40",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "994e219c14fad551a170e5e520373f3fc3916eeebd12f94963ad47a16c59e837"
+      "sha256": "fb226169dc8fe224af4ea24beb09c36970e2e17107e6a8532190181f683fb077"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "c3f082267d96aff071de86438c52919bd966c74d3deda863bf968f1771dce19b"
+      "sha256": "96063bc9c96a35d27c88d47afc66029139e2ba5d78fa5f276ccf7126d981c893"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -339,8 +339,12 @@
       "sha256": "fe264f9978524f9525e2601c86603223ade9aa317f665fc52054c84a086ac2a1"
     },
     {
+      "path": "apps/oma/src/runtime/mac-runtime-artifact.ts",
+      "sha256": "70165e1f2b537151205b3c2c0ffe07a386332c421c840fbf35b39160acd71cc1"
+    },
+    {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "bab4ba294f46db9d6c4674f1414f0f881979edef0d511383c89cc04736c28165"
+      "sha256": "5055d45878fb4705cad55a4924940938fde12b0cd6e8a3d7c7d6195beb7417b0"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",

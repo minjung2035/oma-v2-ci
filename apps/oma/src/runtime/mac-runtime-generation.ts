@@ -13,12 +13,13 @@ import { openBeneath, openDirectory, openRegularBeneath } from "@oma/native/file
 import { assertHostDirectoryLayout } from "@oma/native/directory-layout";
 import { setDarwinUserImmutable, darwinOwnedEntryFlags } from "@oma/native/darwin-file-flags";
 import { symlinkAt } from "@oma/native/posix-files";
-import { mkdirAt, reopenDirectory } from "@oma/file-descriptors";
+import { mkdirAt, reopenDirectory, renameExclusiveAt } from "@oma/file-descriptors";
 import { copyDescriptorToEntry } from "@oma/storage/file-digest";
 import { removeOwnedTreeAt } from "@oma/storage/directory";
 import { cleanupAll, withCleanup, completeIterator, withIteratorCleanup } from "@oma/native/cleanup";
 import { StoreError } from "@oma/domain/errors";
 import { isDeploymentDigest } from "@oma/domain/deployment";
+import { GENERATION_OWNER, writeRuntimeArtifactOwner, retainRuntimeArtifact } from "./mac-runtime-artifact.js";
 import { deploymentManifestSteps } from "./deployment-manifest.js";
 
 type Identity = { readonly dev: bigint; readonly ino: bigint };
@@ -63,7 +64,7 @@ export function prepareMacRuntimeGeneration(sourceInstallation: SourceInstallati
   return scheduled(runtimeGenerationSteps(sourceInstallation, parent), signal);
 }
 function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent: string): Generator<void, MacRuntimeGeneration, void> {
-  if (process.platform !== "darwin") refused("private immutable runtime generations require Darwin");
+  if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0) refused("private immutable runtime generations require an ordinary Darwin owner");
   const installation = Object.freeze({ ...sourceInstallation });
   if (!isDeploymentDigest(installation.deploymentDigest) || resolve(parent) !== parent || resolve(installation.libdir) !== installation.libdir ||
       resolve(installation.node) !== installation.node)
@@ -76,6 +77,7 @@ function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent:
   const parentFd = openDirectory(parent), name = ".oma-runtime-" + randomUUID(), root = join(parent, name), entries: Entry[] = [];
   let sourceFd: number | undefined, held: number | undefined, created = false, closed = false, active = 0, uncertain = false;
   let parentOpen = true, returnFailure: unknown, retiring = false, closeTask: Promise<void> | undefined;
+  let entryName = name.replace(".oma-runtime-", ".oma-runtime-opening-"), releaseArtifact: (() => void) | undefined;
   const closeSource = (): void => { if (sourceFd !== undefined) { const fd = sourceFd; sourceFd = undefined; closeSync(fd); } };
   const closeRoot = (): void => { if (held !== undefined) { const fd = held; held = undefined; closeSync(fd); } };
   const closeParent = (): void => { if (parentOpen) { parentOpen = false; closeSync(parentFd); } };
@@ -121,43 +123,60 @@ function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent:
   const cleanupSteps = function* (): Generator<void, void, void> {
     yield* flagSteps(false);
     if (created) {
-      const actual = openBeneath(parentFd, name, constants.O_RDONLY | constants.O_DIRECTORY);
+      const actual = openBeneath(parentFd, entryName, constants.O_RDONLY | constants.O_DIRECTORY);
       withCleanup(() => { if (!same(actual, identity(held!))) throw new Error("runtime generation root changed"); }, () => closeSync(actual));
-      removeOwnedTreeAt(parentFd, name); created = false;
+      removeOwnedTreeAt(parentFd, entryName); created = false;
     }
   };
   const cleanup = (): void => completeIterator(cleanupSteps());
   const finishReturn = (): void => {
     closed = true;
-    try { cleanupAll([closeRoot, closeParent]); } catch (error) { returnFailure = error; throw error; }
+    try { cleanupAll([closeRoot, closeParent]); releaseArtifact?.(); } catch (error) { returnFailure = error; throw error; }
   };
   try {
     const owner = fstatSync(parentFd);
     if (owner.uid !== process.getuid?.() || (owner.mode & 0o077) !== 0) refused("runtime generation parent must be private and owned");
     sourceFd = openDirectory(installation.libdir);
-    mkdirAt(parentFd, name, 0o700); created = true;
-    held = openBeneath(parentFd, name, constants.O_RDONLY | constants.O_DIRECTORY); record(".", true);
+    mkdirAt(parentFd, entryName, 0o700); created = true;
+    held = openBeneath(parentFd, entryName, constants.O_RDONLY | constants.O_DIRECTORY); record(".", true);
+    releaseArtifact = retainRuntimeArtifact(held);
     const directories = new Set(manifest.directories);
     for (const path of paths) for (let part = dirname(path); part !== "."; part = dirname(part)) directories.add(part);
+    writeRuntimeArtifactOwner(parentFd, held, name, installation.deploymentDigest, {
+      files: [...manifest.files.map(file => file.path), ".oma-node-bin/node", GENERATION_OWNER],
+      directories: [...directories, ".oma-node-bin"], links: manifest.links,
+    });
+    record(GENERATION_OWNER, false);
+    renameExclusiveAt(parentFd, entryName, parentFd, name); entryName = name; fsyncSync(parentFd);
     for (const path of [...directories].sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))) {
       const fd = dirname(path) === "." ? held : heldEntry(dirname(path), true);
       withCleanup(() => mkdirAt(fd!, basename(path), 0o700), () => { if (fd !== held) closeSync(fd!); }); record(path, true);
       yield;
     }
-    const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }): { readonly bytes: number; readonly sha256: string } => {
-      const parent = dirname(path) === "." ? held! : heldEntry(dirname(path), true);
+    const copy = (source: number, path: string, expected?: { readonly bytes: number; readonly sha256: string }, targetParent?: number): { readonly bytes: number; readonly sha256: string } => {
+      const parent = targetParent ?? (dirname(path) === "." ? held! : heldEntry(dirname(path), true));
       return withCleanup(() => {
-        const result = copyDescriptorToEntry(source, parent, basename(path), { flushParent: false }); record(path, false);
+        const result = copyDescriptorToEntry(source, parent, basename(path), { flushParent: false });
         if (expected !== undefined && (result.bytes !== expected.bytes || result.sha256 !== expected.sha256))
           refused("copied runtime byte differs from its trusted inventory");
         const fd = openRegularBeneath(parent, basename(path));
-        withCleanup(() => fchmodSync(fd, 0o400 | (fstatSync(source).mode & 0o111 ? 0o100 : 0)), () => closeSync(fd));
+        withCleanup(() => { entries.push({ path, directory: false, ...identity(fd) }); fchmodSync(fd, 0o400 | (fstatSync(source).mode & 0o111 ? 0o100 : 0)); }, () => closeSync(fd));
         return result;
-      }, () => { if (parent !== held) closeSync(parent); });
+      }, () => { if (targetParent === undefined && parent !== held) closeSync(parent); });
     };
-    for (const file of manifest.files) {
-      const fd = openRegularBeneath(sourceFd, file.path); withCleanup(() => copy(fd, file.path, file), () => closeSync(fd));
-      yield;
+    const groups = new Map<string, typeof manifest.files[number][]>();
+    for (const file of manifest.files) { const directory = dirname(file.path), group = groups.get(directory) ?? []; group.push(file); groups.set(directory, group); }
+    for (const [directory, files] of groups) {
+      const from = directory === "." ? sourceFd : openBeneath(sourceFd, directory, constants.O_RDONLY | constants.O_DIRECTORY);
+      yield* withIteratorCleanup(function* () {
+        const to = directory === "." ? held! : heldEntry(directory, true);
+        yield* withIteratorCleanup(function* () {
+          for (const file of files) {
+            const fd = openRegularBeneath(from, basename(file.path));
+            withCleanup(() => copy(fd, file.path, file, to), () => closeSync(fd)); yield;
+          }
+        }, () => { if (to !== held) closeSync(to); });
+      }, () => { if (from !== sourceFd) closeSync(from); });
     }
     closeSource();
     for (const link of manifest.links) {
@@ -241,6 +260,6 @@ function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent:
     try { if (held !== undefined) yield* cleanupSteps(); } catch (cleanup) { failures.push(cleanup); }
     try { cleanupAll([closeSource, closeRoot, closeParent]); } catch (cleanup) { failures.push(cleanup); }
     if (failures.length > 1) throw new AggregateError(failures, "Owned effect and cleanup failed");
-    throw error;
+    releaseArtifact?.(); throw error;
   }
 }

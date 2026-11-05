@@ -2142,6 +2142,27 @@
           "injection": "logical"
         }
       ]
+    },
+    {
+      "owner": "apps/oma/src/runtime/mac-runtime-artifact.ts#collect",
+      "fact": "Only producer-marked unaccepted runtime artifacts may be collected, inside the application's recovered execution window with admission closed. Controlled preparing/running producer SIGKILL cases require fresh actual journal recovery and complete CID removal before unsealing. Live producers and unrecognized entries refuse without touching their bytes. Registration describes injection code; actual Darwin qualification belongs to docs/implementation/validation.md, and Linux runs only metadata/refusal branches. This is not accepted-state or filesystem power-loss qualification.",
+      "tests": [
+        {
+          "file": "test/native-runtime-artifact.test.mjs",
+          "title": "002. Fresh Darwin recovery drains a killed",
+          "injection": "sigkill"
+        },
+        {
+          "file": "test/native-runtime-artifact.test.mjs",
+          "title": "003. Darwin collection refuses a still-retained generation",
+          "injection": "logical"
+        },
+        {
+          "file": "test/native-runtime-artifact.test.mjs",
+          "title": "004. Darwin collection inspects every entry before unsealing",
+          "injection": "logical"
+        }
+      ]
     }
   ]
 }

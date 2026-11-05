@@ -132,11 +132,14 @@ test("010. A local compiled module URL resolves only to an authored executable m
 });
 
 test("011. Native generated asset ownership accepts only reviewed owner, output and declared source", t => {
-  for (const [owner, directory, output, extension] of [["platform-mac", "seatbelt", "oma-seatbelt", "c"], ["native", "metadata", "oma-file-metadata", "c"], ["platform-mac", "keychain", "oma-keychain", "swift"]]) {
+  for (const [owner, directory, output, extension] of [["native", "seatbelt", "oma-seatbelt", "c"], ["native", "job-helper", "oma-job-helper", "c"], ["native", "metadata", "oma-file-metadata", "c"], ["platform-mac", "keychain", "oma-keychain", "swift"]]) {
     const manifest = { oma: { assets: [`${directory}/main.${extension}`], darwinExecutables: [`${directory}/${output}`] } };
     const source = `new URL("./${directory}/${output}", import.meta.url);`;
     const files = { [`packages/${owner}/src/index.ts`]: source, [`packages/${owner}/src/${directory}/main.${extension}`]: "// native build input" };
     assert.deepEqual(inspect(t, files, { [owner]: manifest }), []);
+    if (owner === "native") assert.match(inspect(t, { "packages/platform-mac/src/index.ts": source,
+      [`packages/platform-mac/src/${directory}/main.${extension}`]: "// native build input" },
+      { "platform-mac": manifest }).join("\n"), /unowned or missing package asset/);
     assert.match(inspect(t, { "packages/domain/src/index.ts": source, [`packages/domain/src/${directory}/main.${extension}`]: "// native build input" },
       { domain: manifest }).join("\n"), /unowned or missing package asset/);
     assert.match(inspect(t, { [`packages/${owner}/src/index.ts`]: source }, { [owner]: manifest }).join("\n"), /unowned or missing package asset/);

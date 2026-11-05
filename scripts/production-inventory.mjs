@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { lstatSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -171,8 +171,16 @@ export function measureWithCloc(root, files, cloc = "cloc") {
     const out = join(scratch, "loc.json");
     const ignored = join(scratch, "ignored.json");
     writeFileSync(list, `${files.join("\n")}\n`);
-    execFileSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness",
-      "--read-lang-def=implementation/cloc-systemd.lang", "--force-lang=OMA systemd,conf", `--ignored=${ignored}`, "--json", `--out=${out}`], { cwd: root, stdio: "ignore", timeout: 600000, killSignal: "SIGKILL" });
+    // cloc's adaptive per-filter alarm can return exit 0 with a partial row
+    // (even code=0) for valid JavaScript containing comment-like strings.
+    // Keep the whole measurement bounded, but never publish a timed-out row.
+    const counted = spawnSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness", "--timeout=0",
+      "--read-lang-def=implementation/cloc-systemd.lang", "--force-lang=OMA systemd,conf", `--ignored=${ignored}`, "--json", `--out=${out}`],
+      { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 600000, killSignal: "SIGKILL" });
+    if (counted.error || counted.signal || counted.status !== 0)
+      throw new Error("cloc measurement did not complete", { cause: counted.error ?? counted.signal ?? counted.status });
+    const diagnostic = counted.stdout + "\n" + counted.stderr;
+    if (/\b[1-9][0-9]* errors?\s*:/i.test(diagnostic)) throw new Error("cloc reported an incomplete measurement");
     const report = JSON.parse(readFileSync(out, "utf8"));
     report.nonCode = {};
     for (const entry of JSON.parse(readFileSync(ignored, "utf8"))) {

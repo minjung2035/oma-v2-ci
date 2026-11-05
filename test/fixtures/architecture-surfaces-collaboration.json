@@ -1,6 +1,6 @@
 {
   "schema": 4,
-  "note": "collaboration-v1 / DR72 current consumer interfaces. The DR49–69 native snapshot remains in architecture-surfaces-native.json. This fixture records the explicit original-invocation, accepted publication/review and role-record ports; it is a source contract, not authored approval or runtime/platform/provider qualification. 2026-11-04 reviewed delta: internal prepare forwards the actual response budget and completion accepts compact identity while retaining canonical receipt proof; no model/public mutation method was added. MAC current-scope binding adds optional physical inScope observation to PinnedPeerIdentity and optional spawn-witness scopeIdentity to BrokerUnits. Only those two dispatch fingerprints change; these mechanisms grant no Actor/run authority and this snapshot is not runtime qualification or authored approval.",
+  "note": "collaboration-v1 / DR72 current consumer interfaces. The DR49–69 native snapshot remains in architecture-surfaces-native.json. This fixture records the explicit original-invocation, accepted publication/review and role-record ports; it is a source contract, not authored approval or runtime/platform/provider qualification. 2026-11-04 reviewed delta: internal prepare forwards the actual response budget and completion accepts compact identity while retaining canonical receipt proof; no model/public mutation method was added. MAC current-scope binding adds optional physical inScope observation to PinnedPeerIdentity and optional spawn-witness scopeIdentity to BrokerUnits. Only those two dispatch fingerprints change; these mechanisms grant no Actor/run authority and this snapshot is not runtime qualification or authored approval. MAC private Node generation adds only optional transient SandboxHost.toolchainNode to retain the selected npm/npx/corepack source. This updates that single dispatch fingerprint, with no public/durable DTO change or authored approval.",
   "dispatch": {
     "packages/broker/src/ports.ts": {
       "PeerIdentity": {
@@ -159,7 +159,7 @@
       },
       "SandboxHost": {
         "exported": true,
-        "sha256": "8c46403448366d1ce2b2e4e974103f22cf55fce3e6602cebf4d3a7df058bdf81"
+        "sha256": "ff5a5e6e017a3d693dd9de9b9b32a0ccee083288336cf5bcd1e36b408714e97f"
       },
       "DeliveryBoundary": {
         "exported": true,

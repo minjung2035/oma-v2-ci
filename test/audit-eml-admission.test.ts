@@ -219,8 +219,8 @@ test("004. EML admission: context preparation disables autonomous maintenance be
     const trace = join(f.root, "git-trace.jsonl");
     const run = PreparationExecutor.prototype.run;
     t.mock.method(PreparationExecutor.prototype, "run", function(this: PreparationExecutor, ...args: Parameters<PreparationExecutor["run"]>) {
-      const [spec, spawn, fds] = args;
-      return run.call(this, { ...spec, env: { ...spec.env, GIT_TRACE2_EVENT: trace } }, spawn, fds);
+      const [spec, ...controls] = args;
+      return run.call(this, { ...spec, env: { ...spec.env, GIT_TRACE2_EVENT: trace } }, ...controls);
     });
     assert.equal((await contextFixture(f.git)).state, "succeeded");
     const expected = gitCommand(f.root, ["--git-dir", f.paths.contextGit, "rev-parse", "refs/heads/main"]);

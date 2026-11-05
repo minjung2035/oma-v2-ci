@@ -7,6 +7,7 @@ import { createMailModule } from "../broker/mail-composition.js";
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { createHash } from "node:crypto";
 import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
+import { collectRuntimeArtifacts } from "../runtime/mac-runtime-artifact.js";
 import { prepareMacRuntimeGeneration, type MacRuntimeGeneration } from "../runtime/mac-runtime-generation.js";
 import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
@@ -213,6 +214,8 @@ async function main(): Promise<void> {
         if (process.platform === "darwin") {
             const cache = join(dirname(stateRoot), ".runtime-" + createHash("sha256").update(stateRoot).digest("hex"));
             ensureOwnedUserDirectory(cache, cache);
+            await executions.recoverAndMaintain(() => collectRuntimeArtifacts(cache, preparationAbort.signal));
+            if (stopping !== null) { await stopping; return; }
             runtimePreparation = prepareMacRuntimeGeneration(cfg.installation, cache, preparationAbort.signal);
             runtimeGeneration = await runtimePreparation;
             if (stopping !== null) { await stopping; return; }

@@ -7,6 +7,7 @@ import { newSessionBirth, requireCollaborationSociety } from "#oma-test/app/runt
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { Script } from "node:vm";
 import { spawn } from "node:child_process";
@@ -36,6 +37,13 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     const config = { society: "fixture", installation: { node: "node", libdir: "/lib",  deploymentDigest: "a".repeat(64) },
         integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
     const modules = {
+        "node:crypto": { createHash },
+        // These Darwin dependencies may be loaded on Linux, but must never
+        // perform physical setup in this controlled Linux composition test.
+        "@oma/platform-mac/mach-transport": { createMachBrokerTransport() { throw new Error("Linux composition cannot create a Mach transport"); } },
+        "@oma/platform-mac/job-scope": { launchDarwinJobScope() { throw new Error("composition policy cannot launch a native scope"); } },
+        "../runtime/mac-runtime-generation.js": { prepareMacRuntimeGeneration() { throw new Error("Linux composition cannot prepare a Darwin generation"); } },
+        "../runtime/mac-runtime-artifact.js": { collectRuntimeArtifacts() { throw new Error("Linux composition cannot collect Darwin artifacts"); } },
         "@oma/native/cleanup": cleanupMeaning,
         // Explicit isolated current birth; shape/binding is not peer authentication.
         "../runtime/session-mode.js": {
