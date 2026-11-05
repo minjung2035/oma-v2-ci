@@ -43,7 +43,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         "@oma/platform-mac/mach-transport": { createMachBrokerTransport() { throw new Error("Linux composition cannot create a Mach transport"); } },
         "@oma/platform-mac/job-scope": { launchDarwinJobScope() { throw new Error("composition policy cannot launch a native scope"); } },
         "../runtime/mac-runtime-generation.js": { prepareMacRuntimeGeneration() { throw new Error("Linux composition cannot prepare a Darwin generation"); } },
+        "../runtime/mac-protected-node.js": { withProtectedMacNode() { throw new Error("Linux composition cannot prepare a protected Darwin Node"); } },
         "../runtime/mac-runtime-artifact.js": { collectRuntimeArtifacts() { throw new Error("Linux composition cannot collect Darwin artifacts"); } },
+        "@oma/native/files": { openDirectory() { throw new Error("controlled Linux composition cannot open native directories"); } },
         "@oma/native/cleanup": cleanupMeaning,
         // Explicit isolated current birth; shape/binding is not peer authentication.
         "../runtime/session-mode.js": {

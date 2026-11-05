@@ -2,7 +2,7 @@
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
 SOURCE77의 세 Mac 공통451/451·실행 세대3/3·독립 설치27/27을 각각 확인했다.
-SOURCE78 직접 fixed producer는 Mac15/Intel 공통 각452/452 안에서 실제 통과했으나 전체 Society lease로 채택하지 않았다.
+SOURCE78 직접 fixed producer는 세 Mac 공통 각452/452 안에서 실제 통과했으나 전체 Society lease로 채택하지 않았다.
 SOURCE79 canonical context persistence barrier는 로컬 회귀39/39까지 확인했고 actual Mac은 NOT_RUN이다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `224b71c5fdfd5f6b548fbc3e486e02be4e0b7d69151cb15b2fcee2f8b39e30b1` (15935 files).
+verification input digest `4bd527ae72680e7352c1bc4628c10daabadd0a9a934e0ee8a385a5598cf32888` (15935 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3803,3 +3803,42 @@ main452/452 PASS·기타0다. direct producer의 wrong/expected CDHash Security 
 SOURCE79 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
 원시는 `/tmp/oma-source79-build.log`·`/tmp/oma-source79-package-isolation.log`·`/tmp/oma-source79-review.log`·`/tmp/oma-source79-architecture.log`다.
 빈 index diff는 `/tmp/oma-source79-checkout-index.patch`에 보존했다. 위 로컬 barrier 수정의 actual Mac 결과는 아직 NOT_RUN이다.
+
+### SOURCE80 discovery candidate와 Linux 조립 fixture 정정
+
+SOURCE79 local checkpoint `3807fcf64bda1bcb4f9a609228c0b834e4b0e606`의 canonical15935/
+`224b71c5fdfd5f6b548fbc3e486e02be4e0b7d69151cb15b2fcee2f8b39e30b1`에 로컬39/39·fresh27/27·전체 구조 검증을 결박했다.
+해당 production barrier를 다음 test-only 변경과 함께 발행한다. 별도 SOURCE79 actual Mac 실행을 합성하지 않는다.
+
+SOURCE78 Intel shared ZIP13413061853 SHA-256 `0e7bcaf33aac19d3dce5c573e87f3ad1a3cf9bd199d870df507de12dca5cc466`는
+같은 canonical15935/Intel runtime의 shared 전후 동일과 main452/452·generation3/3 PASS·기타0다.
+Mac15 full ZIP13413725388 SHA-256 `d565f262b161ccf6bb9f4426c993407c42bc65ee4ad8ee192438c42f421a1232`도 대조했다.
+같은 source/input/runtime의 최종 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+
+SOURCE77 Architecture42019573172 native-all ZIP13412823840 SHA-256 `ba19a00f4481008e1851101273633ab3d85e814fd6fe4ccf436846310cd256e1`는
+canonical15933의 전후 동일·빈 checkout index 및 build/typecheck/구조12 command code0지만 전체 시험은4913/4896 PASS/17 FAIL·기타0다.
+실패17건 모두 broker-composition-policy의 uncontrolled dependency: mac-protected-node에서 조립 본문 전에 실패했다.
+이는 전체 Linux PASS가 아니다. Native directory port도 같은 fixture에서 명시되지 않은 새 import였다.
+SOURCE80은 Linux 조립에서 호출되면 반드시 실패하는 두 명시적 대역을 추가했다.
+기존18건의 host loss·startup 순서·lease 거절·storage 복구 단언은 그대로18/18 PASS·기타0다(`/tmp/oma-source80-broker-composition.log`).
+해당 fixture 결과를 실제 macOS 보호 Node/FD 실행으로 승격하지 않으며 새 전체 Linux 실행도 아직 NOT_RUN이다.
+
+SOURCE80의 host-peer 후속 원형은 TASK_HOST_PORT에 private publication endpoint를 넣어 원래 bootstrap을 유지하려 했다.
+그러나 [고정 XNU task_set_special_port](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/ipc_tt.c)의
+TASK_HOST_PORT/TASK_KERNEL_PORT guard는 CSR_ALLOW_KERNEL_DEBUGGER가 허용된 경우에만 이 교체를 허용한다.
+[실제 spawn 호출 경로](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/kern_exec.c)도
+같은 task_set_special_port를 호출한다. 공개 setter라는 사실만으로 SIP-enabled 지원 조건을 만족하지 않는다.
+이 후보를 배제하고 own test-only 원형 세 파일을 원래 SOURCE78 구현으로 되돌렸다.
+원형은 `/tmp/oma-source80-host-peer-rejected.patch`와 SDK compile 원시에만 보존했다. 실제 Mac 재실행이나 production 채택은 하지 않는다.
+TASK_HOST_PORT를 사용하지 않는 기존 bootstrap-peer 직접 producer의 실제 긍정/부정 근거는 유지한다.
+Society discovery·full identity/port collision·namespace withdrawal·Host/producer SIGKILL·상속 FD4/current Host role은 여전히 미완료다.
+production source/asset는 SOURCE79와 동일하며 기존 build/pack을 새로운 primitive의 실제 실행 증거로 사용하지 않는다.
+세 gate OPEN·product BLOCKED·기본 실행 guard·death predicate·예산을 유지한다.
+
+SOURCE78 ARM26 main ZIP13412998719 SHA-256 `b2fe7b0db24b497e14c27919f02a2baecd38b1123a51cdc87f642353084cddef`도 대조했다.
+같은 canonical15935와 runtime15540/27 `1e787a450a548a50264071ba8d520d9e19c953df1a958fe33c605065aad8f0d9`가 main 전후 동일이다.
+main452/452 PASS·기타0이며 direct producer의 wrong/expected CDHash 및 creator-live last-close가 ARM26에서도 실제 통과했다.
+Intel full ZIP13413182751 SHA-256 `4b7072a2ab64aef3b7a9a76dadebd22ee378c8513ffcc8d08ae6e2593793c6c5`도
+같은 canonical/Intel runtime의 최종 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
+SOURCE80 rejected host-peer 원형을 제거한 뒤 full architecture·transaction·durable boundary·document·spec inventory는 exit0다
+(`/tmp/oma-source80-architecture-final.log`). product source/asset는 검증한 SOURCE79와 동일하다.
