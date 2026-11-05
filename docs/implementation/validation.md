@@ -1,7 +1,7 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE102의 제품 shared Society lease·paid execution scope·Host tenure crash/recovery·private Host 감독은 ARM·Intel에서 각8 PASS다. 새009 close-all 반례는 양쪽 모두 FAIL이며 아직 수리 확인 전이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+SOURCE102의 Society 기본 소유권·scope/recovery·private Host 감독은 ARM·Intel 각8 PASS다. 양쪽009 close-all FAIL을 SOURCE103에서 수리했고 Intel9/9 PASS를 확인했다. 새 수리의 ARM 및 실행 owner 사망 결합은 아직 NOT_RUN이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0640eff9b38017701fc6f3826364209ce12eb98db5fe3d4b4c1032eee8e396ee` (15948 files).
+verification input digest `21cb07bcc000ab65df4e40693a6aef4dbb23f473b0b13c8feb2782dbe3ede998` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4530,3 +4530,19 @@ setup/종료 요청만으로 그 참조를 닫지 않으며, 정상 close는 공
 생성 시도 이후 취득 실패에서 scope empty가 증명되지 않으면 참조 반환도 거절한다. stdio/config fileport의 기존 반환은 유지해 EOF drain을 막지 않는다.
 009에는 실제 wildcard socket bind가 EADDRINUSE인지 별도 확인을 추가해 discovery의 일시 unknown만으로 PASS하지 못하게 한다.
 INTERMEDIATE checkpoint이며 새9/9 actual Mac·후속 packed/review/전체 인수는 NOT_RUN이다. Runtime owner 자신까지 사망한 결합은 별도 범위이며 이 정상 scope owner 참조 수리로 해결했다고 쓰지 않는다.
+
+
+### SOURCE103 actual Intel9/9와 SOURCE104 실행 owner 사망 결합
+
+SOURCE103 `c6d7aaabcb886ebfe3f1a37be93f341b04e024aa`, Native42082946202·Architecture42082946035다.
+canonical15948/`0640eff9b38017701fc6f3826364209ce12eb98db5fe3d4b4c1032eee8e396ee`다.
+Intel Society ZIP13440499674 SHA-256 `056be6045a3d9d589e7d963d4cf860c98eec230210caf892c4beca653a9dd6d4`를 대조했다.
+같은 source/input/runtime Society 전후 동일, runtime15551/`31b2ecedeae4f17e1e85707971cab9f655c9c7bf1767619d9e1330b67dbe90b3`다.
+9/9 PASS·fail/cancel/skip/todo0다. 009에서 Host/creator 자기 copy 반환과 workload/후손 FD close 뒤에도 실제 wildcard bind EADDRINUSE와 새 Host 거절을 확인했다.
+독립 kernel empty·FD/output drain·journal retire 뒤 즉시 재획득도 통과했다. 아직 ARM의 새 수리 인수는 NOT_RUN이다.
+
+SOURCE104는 production 변경 없는 test-only checkpoint다. 새010에서 Host tenure 아래 controlled owner를 실행하고 FD를 닫은 detached descendant와 direct workload를 각각 새 kernel pin으로 결박한다.
+현재 tenure 아래 전체 witness가 같은 physical cleanup capability를 미리 취득한다. 실행 owner SIGKILL 뒤 direct workload의 원래 pin exit·detached descendant live/같은 CID populated를 확인한다.
+그 Host tenure도 종료한 뒤 실제 binding과 새 Host 인수 거절을 요구한다. 정상 owner 참조 수리가 owner 자신의 사망까지 해결했다고 가정하지 않는다.
+시험 cleanup은 미리 보유한 physical capability로 old CID를 종료하고, 독립 empty 뒤 새 tenure/journal exclusive owner 아래서만 기존 journal을 retire한다. unknown은 원시를 보존한다.
+010 actual Mac은 NOT_RUN이다. 기존 recovery mode·guard·시간 제한·scope empty predicate는 유지한다.

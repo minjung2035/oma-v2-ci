@@ -25,6 +25,7 @@ import {HostTenure} from '#oma-test/app/runtime/host-tenure';
 import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
 import {observeDarwinCoalitionPopulation,pinDarwinProcess} from '@oma/native/audit-session';
 import {inspect} from 'node:util';
+import {acquireDarwinJobScope} from '@oma/platform-mac/job-recovery';
 import {pinDarwinPrivateParent} from '@oma/native/private-parent';
 const runFence=(executable,argv,fd)=>runProcessSync({executable,argv,env:{PATH:'/usr/bin:/bin'},timeoutMs:15000,stdoutBytes:16384,stderrBytes:16384},undefined,fd===undefined?[]:[fd],{killSignal:'SIGTERM'});
 
@@ -196,3 +197,36 @@ test('008. The product private supervision channel binds the actual Host and end
 });
 
 test('009. A paid scope cannot return its Society by closing every workload and descendant fence descriptor',{timeout:45000},t=>paidSocietyScope(t,true));
+
+test('010. A paid detached descendant still excludes a new Host after its execution owner dies and its Host ends',{timeout:45000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-society-owner-death-'))),state=join(base,'state');
+ let tenure,next,owner,closed,scope,identity,parent,descendant,initialized=false,recovered=false;
+ t.after(async()=>{
+  const failures=[];
+  if(owner?.exitCode===null&&owner.signalCode===null)owner.kill('SIGKILL');try{await closed;}catch(error){failures.push(error);}
+  try{
+   if(scope){const limit=performance.now()+10000;while(scope.population()!=='empty'){
+    if(scope.population()==='unknown'||performance.now()>=limit)throw new Error('retained owner-death scope remains unconfirmed');scope.terminate();await delay(10);
+   }scope.close();}
+   if(initialized){if(identity&&observeDarwinCoalitionPopulation(identity)!=='empty')throw new Error('old owner-death scope is not independently empty');
+    const current=tenure?.held?tenure:(next=HostTenure.take(state));assert.notEqual(current,null);current.assertOwned('owner-death journal recovery');await recoverExecutionState(state,false);assert.deepEqual(ExecutionJournal.inspect(state),[]);recovered=true;}
+  }catch(error){failures.push(error);}
+  for(const pin of[parent,descendant])try{pin?.close();}catch(error){failures.push(error);}
+  for(const held of[next,tenure])try{await held?.end();}catch(error){failures.push(error);}
+  if(!initialized||recovered)rmSync(base,{recursive:true});else t.diagnostic('Retained owner-death Society evidence: '+base);
+  if(failures.length)throw new AggregateError(failures,'owner-death cleanup remains unknown');
+ });
+ tenure=HostTenure.take(state);assert.notEqual(tenure,null);ExecutionJournal.initialize(state);initialized=true;
+ owner=fork(fileURLToPath(new URL('./fixtures/darwin-recovery.mjs',import.meta.url)),[state,'released-society-closed'],{stdio:['ignore','ignore','pipe','ipc',tenure.fence],env:{...closedEnv(),[SOCIETY_FENCE_ENV]:'4'}});
+ let stderr='';owner.stderr.on('data',bytes=>{stderr+=bytes;});closed=new Promise((yes,no)=>{owner.once('error',no);owner.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
+ const [ready]=await Promise.race([once(owner,'message'),closed.then(status=>{throw new Error('fenced owner ended before readiness: '+JSON.stringify(status)+' '+stderr);})]);assert.equal(ready.kind,'closed-fence-ready');
+ const rows=ExecutionJournal.inspect(state);assert.equal(rows.length,1);identity=rows[0].witness;assert.equal(identity.kind,'darwin-resource-coalition');
+ parent=pinDarwinProcess(Number(readFileSync(join(state,'workload.pid'),'utf8')));descendant=pinDarwinProcess(Number(readFileSync(join(state,'descendant.pid'),'utf8')));
+ for(const pin of[parent,descendant]){assert.equal(pin.state(),'live');assert.deepEqual(pin.identity,identity);}
+ tenure.assertOwned('retain physical recovery capability');scope=acquireDarwinJobScope(identity);assert.deepEqual(scope.identity,identity);
+ owner.kill('SIGKILL');assert.deepEqual(await closed,{code:null,signal:'SIGKILL'},stderr);await exited(parent);
+ assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
+ await tenure.end();boundResource(state);refused(state);
+ assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');assert.equal(ExecutionJournal.inspect(state).length,1);
+});
