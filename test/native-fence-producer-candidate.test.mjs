@@ -20,7 +20,7 @@ import {ExecutionJournal} from '@oma/storage/execution-journal';
 import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
 import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
 
-async function packet(receiver){const end=performance.now()+15000;for(;;){const m=receiver.receive();if(m.kind==='data')return m;assert.ok(performance.now()<end,'producer publication');await delay(10);}}
+async function packet(receiver,terminal=()=>undefined){const end=performance.now()+15000;for(;;){const m=receiver.receive();if(m.kind==='data')return m;const ended=terminal();if(ended!==undefined)throw new Error('producer returned before publication: '+JSON.stringify(ended));assert.ok(performance.now()<end,'producer publication');await delay(10);}}
 async function origin(message,hashes){const operation=observeDarwinAuditOrigin(message.sender.token,hashes);try{return await operation.result;}finally{await operation.returned;}}
 
 test('001. Actual fixed producer binds a new socket, authenticates its instance and retains no last-close reference',{timeout:90000},async t=>{
@@ -38,13 +38,12 @@ test('001. Actual fixed producer binds a new socket, authenticates its instance 
  const control=controlSocketPair();pairs.push(control);handles.add(control.parent);handles.add(control.child);
  ExecutionJournal.initialize(root);runtime=new ExecutionRuntime(root,launchDarwinJobScope);await runtime.recover();
  const identity=randomBytes(32),command={executable,argv:[identity.toString('hex'),'0'],env:{PATH:'/usr/bin:/bin'},timeoutMs:30000,stdoutBytes:8192,stderrBytes:8192};
- completed=runtime.run('preparation',command,t.signal,()=>{},[control.child],undefined,undefined,(source,options)=>launchDarwinJobScope(source,{...options,peer}));void completed.catch(()=>{});
- const message=await packet(endpoint.receive);assert.equal(message.id,0x4f4d4170);assert.equal(message.sender.uid,process.getuid());assert.equal(message.bytes.length,64);assert.ok(message.reply);
+ let terminal;completed=runtime.run('preparation',command,t.signal,()=>{},[control.child],undefined,undefined,(source,options)=>launchDarwinJobScope(source,{...options,peer}));void completed.then(result=>{terminal={kind:result.kind,exitCode:result.exitCode,stderr:result.stderr.toString()};},error=>{terminal={error:String(error)};});
+ const message=await packet(endpoint.receive,()=>terminal);if(message.reply)rights.push(message.reply);assert.equal(message.id,0x4f4d4170);assert.equal(message.sender.uid,process.getuid());assert.equal(message.bytes.length,64);assert.ok(message.reply);
  assert.equal((await origin(message,hashes)).kind,'matched');assert.equal((await origin(message,['0'.repeat(40)])).kind,'unavailable');
  assert.deepEqual(message.bytes.subarray(0,32),identity);
  const producer=pinDarwinProcess(message.sender.pid);rights.push(producer);assert.deepEqual(producer.token,message.sender.token);assert.equal(producer.state(),'live');
  const fd=openMachFilePort(message.reply);handles.add(fd);message.reply.close();
- rights.push(message.reply);
  const native=load(null),inspect=load("/usr/lib/libproc.dylib").func('int proc_pidfdinfo(int pid, int fd, int flavor, void *result, int size)'),socket=native.func('int socket(int domain, int type, int protocol)'),bind=native.func('int bind(int fd, const void *address, unsigned int length)'),option=native.func('int setsockopt(int fd, int level, int option, const void *value, unsigned int length)'),connect=native.func('int connect(int fd, const void *address, unsigned int length)'),shutdown=native.func('int shutdown(int fd, int how)'),disconnect=native.func('int disconnectx(int fd, unsigned int association, unsigned int connection)'),dup=native.func('int dup(int fd)');
  const size=message.bytes.readUInt32LE(52),socketOffset=message.bytes.readUInt32LE(56),generationOffset=message.bytes.readUInt32LE(60);assert.ok(size>0&&size<=4096&&socketOffset+8<=size&&generationOffset+8<=size);
  const observed=held=>{const bytes=Buffer.alloc(size);assert.equal(inspect(process.pid,held,3,bytes,size),size);return{socket:bytes.readBigUInt64LE(socketOffset),generation:bytes.readBigUInt64LE(generationOffset)};};

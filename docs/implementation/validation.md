@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `24d8a47531858cf21884afc19e7017762ab294cae06d1856b7ee23ce24c0227a` (15917 files).
+verification input digest `4c5a23aa2962bd10b9c301d0cb9f2acff0e4308f80dc9431cf30388b39070ec1` (15917 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3262,3 +3262,57 @@ SOURCE69 full architecture·transaction·durable boundary·document·spec invent
 고정 publication C layout은88 bytes로 SDK compile-time 검증하며 생존 상태는 실제 audit-token과 일치하는 kernel process pin으로
 last-close 대조 전후에 확인한다. producer exit와 동기화해 last-close를 성공시킨 것으로 간주하지 않는다.
 새 실제 Mac candidate 결과는 여전히 NOT_RUN이다. 구조 검증 원시는 `/tmp/oma-source69-architecture.log`다.
+
+### SOURCE68 Mac15 canonical revert 실패와 SOURCE70 공통 Git 호환 수정
+
+SOURCE68 Mac15 shared ZIP13399780576 SHA-256 `a2b4f787130d07d4691d6d4b0358f3f8b23eca16191557c8bf0165e222c7ead8`를 대조했다.
+canonical15915/`978a35c1a24332290616c747c29f2bf3e85086476db811358e6bc5e5ebecb7fa`와
+runtime15532/27/`1ccd272f6d89738291fac367873ccf7c2c0bcb4f9078593c5e148c74416c7bdc` 전후 동일이다.
+417/415 PASS/2 FAIL·기타0이다. 두 SHA format의 actual Host canonical 관측·CAS·no-op·graph·range는 통과한 뒤
+기존 canonicalRevertCommit merge-tree가 exit129/REF_STATE_UNKNOWN으로 실패했다. whole protected generation/pipeline은 PASS다.
+기존 원시가 merge-tree stderr를 노출하지 않아 정확한 rejected option은 아직 확정하지 않는다.
+[Git2.39 command grammar](https://git-scm.com/docs/git-merge-tree/2.39.0)에는 explicit `--merge-base`가 없고
+[2.43 grammar](https://git-scm.com/docs/git-merge-tree/2.43.0)에는 존재하는 차이를 확인했다.
+기본 Git의 이 옵션 지원 차이는 실패 원인 후보이며 새 actual Mac 결과로 확인한다.
+
+SOURCE70은 explicit option 대신 current/base 두 tree를 같은 recorded applied candidate의 단일 자식 commit으로 만들어 병합한다.
+따라서 고정 merge base를 선택하며 temporary ref·worktree·canonical main 변경은 만들지 않는다.
+합성 commit의 identity/date는 고정이고, 최종 revert commit의 단일 parent는 실제 main이며 기존 message/author 계약을 유지한다.
+원래 merge-tree tree/conflict parsing·bounded stdout spool·no-op 거절과 held canonical execution을 유지한다.
+Git version branch·실패 뒤 다른 의미의 재시도·새 Git 설치·check skip은 추가하지 않는다.
+
+source 고정 뒤 단일 build와 local canonical/observation20/20 PASS다.
+추가 SHA1/SHA256 시나리오는 다른 파일의 후속 작업 보존·같은 파일 충돌 거절·이미 되돌린 main 거절과 canonical refs 무변경을 확인한다.
+Mac compatibility 수정의 실제 결과는 NOT_RUN이다. SDK producer candidate는 여전히 미채택이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지하며 SOURCE67 Intel timeout와 SOURCE65 Mac15 cleanup unknown도 미해결로 보존한다.
+
+추가 실제 Linux namespace merge/review·tiered integration·publication47/47도 PASS다.
+공식 Git2.39.5 source tar SHA-256 `c58da92c378df4a986ca33266897a7397e86c22ee266a284d8c2432c39066b59`를
+별도 `/tmp/oma-source70-git239/`에 빌드해 기존 executable/install을 바꾸지 않고 fixture namespace에만 매핑했다.
+그 실제 구버전은 기존 `--merge-base` syntax를 unknown option/exit129로 거절하고, 수정한 actual canonical8/8을 통과했다.
+이는 Mac15의 정확한 Git version/option 거절을 직접 관측한 것으로 승격하지 않는다. 새 fixture가 actual Git version도 기록한다.
+원시는 `/tmp/oma-source70-{canonical,linux-regression,git239-build,git239-old-syntax,git239-canonical}.log`다.
+producer fixture는 publication 전 terminal result를 진단하고 받은 fileport를 검증 실패 경로에서도 반납하도록 정리했다.
+
+SOURCE68 Intel shared ZIP13399148871 SHA-256 `4ced377c28b43c50c51a8960eb95eb620f33c8aee455e9480bcd1dd0a8bab0a0`도 대조했다.
+같은 canonical15915와 runtime15532/27/`6a5fa21cc20553dd19d76fd7063630b2a118d82d3ade5a0649bff072fb6871b5` 전후 동일,
+417 tests /416 PASS /1 cancelled·fail0·skip0·todo0이다. Host canonical 두 format는 이 환경에서 모두 PASS다.
+whole-generation은 다시 기존240000ms 초과(duration266668ms)이며 installation28988ms·source5681ms·protected Node5604ms 뒤
+generation 완료 phase에 이르지 못했다. 앞선 SOURCE67 timeout을 재실행으로 PASS 처리하지 않는다.
+
+SOURCE70 workflow는 whole-generation fixture를 나머지 test process가 반환한 뒤 정확히 한 번 실행하도록 분리한다.
+동일 test3건·240s deadline·25분 job 상한·matrix max-parallel2·production 동작은 유지한다.
+다른 fixture I/O와의 경합은 아직 원인 후보이며, 격리 실행의 성공으로 기존 병렬 환경 실패를 고쳤다고 하지 않는다.
+main tests.log와 generation-tests.log를 각각 evaluateExecution하며 generation3개의 정확한 이름을 모두 요구한다.
+어느 쪽 실패도 common-runtime 실패로 유지하고 두 원시 log·각 totals와 최종 source/runtime bytes binding을 보존한다.
+기존 Mac oracle도 그대로 요구한다. Linux의 동일3개 refusal/NOT_RUN 경로와 oracle evaluator는 PASS이며 실제 Mac 격리 결과는 NOT_RUN이다.
+
+SOURCE70 최종 단일 build·fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사는 exit0다.
+최종 full architecture·transaction·durable boundary·document·spec inventory도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+workflow YAML·모든 bash run block과 실제 oracle script의 success/success·failure/success·success/failure 대조를 확인했다.
+각 step의 실제 outcome을 evaluator exitCode에 전달하며 어느 실행 단계의 실패도 성공 TAP로 덮지 않는다.
+첫 rehearsal은 TAP가 아닌 local spec reporter log를 주어 evaluator가 올바르게 거절했다.
+같은 실제 검사를 production TAP reporter로 출력한 뒤 대조를 마쳤고 최초 오류는 `/tmp/oma-source70-workflow-first-evaluation.log`에 보존했다.
+최종 구조 원시는 `/tmp/oma-source70-architecture-final.log`, oracle 원시는 `/tmp/oma-source70-workflow-check/`다.
+새 실제 Mac compatibility/creator-instance/isolated-generation 결과는 여전히 NOT_RUN이다.

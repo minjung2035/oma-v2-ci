@@ -1232,7 +1232,7 @@
     },
     {
       "path": "packages/git/src/canonical-command.ts",
-      "sha256": "e491471fe399cdbebc863862aa4a2d3e2054dcb133de5e0b77fd155ece6048ae"
+      "sha256": "3be21083afbc50e5b82a28f3a4750b7bbce40af2c8760ea57e75950bfa9e0907"
     },
     {
       "path": "packages/git/src/canonical-health.ts",

@@ -120,14 +120,11 @@ export const CANONICAL_SAFE_ARGS: readonly string[] = ["--no-pager", "-c", "core
   "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "diff.external=",
   "-c", "protocol.allow=never"];
 
-/** mail-v1 §7: the broker prepares a revert of an applied merge on canonical
- * main. `git merge-tree --write-tree --merge-base=<applied candidate> <main>
- * <target base>` merges the pre-merge base into main relative to the merge's
- * candidate: its tree is main with the merge's diff reversed. Exit 1 reports
- * conflicts (the conflicted paths follow the tree line with --name-only);
- * exit 0 whose tree equals main's own means the merged change is no longer
- * present. The revert commit's parent is main; author/committer is the OMA
- * identity, argv-only, no hooks or external merge drivers. */
+/** mail-v1 §7: reverse an applied merge relative to its recorded candidate.
+ * Two private commit objects have the desired current/base trees and the same
+ * single parent (the applied candidate), making that exact commit their merge
+ * base on Git versions without merge-tree --merge-base. No temporary ref or
+ * worktree is published. The final revert's only parent remains actual main. */
 export function canonicalRevertCommit(repository: string, input: {
   readonly mergeBase: string; readonly main: string; readonly base: string;
   readonly message: string; readonly society: string;
@@ -137,10 +134,27 @@ export function canonicalRevertCommit(repository: string, input: {
   // needs -- the tree line and up to 64 conflict paths -- is read back.
   const dir = mkdtempSync(join(tmpdir(), "oma-merge-tree-"));
   try {
+    const plumbing = (argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = GIT_ENV): string => {
+      const result = execute({ executable: GIT_BIN, argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, ...argv],
+        env, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 8192 }, execution);
+      if (result.kind !== "exited" || result.exitCode !== 0)
+        throw new StoreError("REF_STATE_UNKNOWN", `canonical revert plumbing is ${result.kind}`);
+      const oid = result.stdout.toString("utf8").trim();
+      if (!isValidFullOid(oid)) throw new StoreError("REF_STATE_UNKNOWN", "canonical revert plumbing wrote no object id");
+      return oid;
+    };
+    const currentTree = plumbing(["rev-parse", `${gitOidArgument(input.main)}^{tree}`]);
+    const baseTree = plumbing(["rev-parse", `${gitOidArgument(input.base)}^{tree}`]);
+    const syntheticEnv = { ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "revert@oma.invalid",
+      GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "revert@oma.invalid",
+      GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z" };
+    const view = (tree: string, label: string): string => plumbing(["commit-tree", gitOidArgument(tree),
+      "-p", gitOidArgument(input.mergeBase), "-m", label], syntheticEnv);
+    const currentView = view(currentTree, "OMA revert current view"), baseView = view(baseTree, "OMA revert base view");
     const merge = execute({ executable: GIT_BIN,
       argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "merge-tree", "--write-tree", "--name-only",
         "--no-messages",
-        `--merge-base=${gitOidArgument(input.mergeBase)}`, gitOidArgument(input.main), gitOidArgument(input.base)],
+        currentView, baseView],
       env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout,
       stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192, stdoutSpool: join(dir, "stdout") }, execution);
     if (merge.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge-tree timed out");
@@ -154,12 +168,7 @@ export function canonicalRevertCommit(repository: string, input: {
         { details: { paths: lines.slice(1, 65), artifact: "none" } });
     const tree = lines[0] ?? "";
     if (!isValidFullOid(tree)) throw new StoreError("REF_STATE_UNKNOWN", "merge-tree wrote no tree");
-    const mainTree = execute({ executable: GIT_BIN,
-      argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "rev-parse", `${gitOidArgument(input.main)}^{tree}`],
-      env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 256 }, execution);
-    if (mainTree.kind !== "exited" || mainTree.exitCode !== 0)
-      throw new StoreError("REF_STATE_UNKNOWN", "canonical main tree is not observable");
-    if (mainTree.stdout.toString("utf8").trim() === tree)
+    if (currentTree === tree)
       throw new StoreError("INVALID_REQUEST", "the merged change is no longer present on main");
     const commit = execute({ executable: GIT_BIN,
       argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "commit-tree", gitOidArgument(tree),

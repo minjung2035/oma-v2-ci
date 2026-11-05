@@ -16,6 +16,7 @@ for(const format of['sha1','sha256'])test(`001. Host canonical ${format} observa
   GIT_AUTHOR_NAME:'Fixture',GIT_AUTHOR_EMAIL:'fixture@example.invalid',GIT_COMMITTER_NAME:'Fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid'};
  const git=(repository,args,input)=>{const r=spawnSync('/usr/bin/git',['--git-dir',repository,...args],{env,input,encoding:'utf8',timeout:5000});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
  for(const p of[project,replacement])git(p,['init','-q','--bare','--object-format='+format]);
+ t.diagnostic('actual Git: '+git(project,['--version']));
  const baseTree=git(project,['mktree'],''),base=git(project,['commit-tree',baseTree,'-m','base']);
  const blob=git(project,['hash-object','-w','--stdin'],'candidate bytes'),tree=git(project,['mktree'],`100644 blob ${blob}\tfile\n`),candidate=git(project,['commit-tree',tree,'-p',base,'-m','candidate']);
  git(project,['update-ref','refs/heads/main',base]);
@@ -42,4 +43,20 @@ for(const format of['sha1','sha256'])test(`001. Host canonical ${format} observa
  assert.equal(git(project,['for-each-ref']), '');
  assert.equal(createCanonicalObserver().ref(project,'refs/heads/main').kind,'absent');
  assert.equal(process.cwd(),cwd);
+});
+
+for(const format of['sha1','sha256'])for(const scenario of['independent','conflict','already-reverted'])test(`002. Canonical ${format} revert preserves its recorded base with ${scenario} main`,t=>{
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'oma-revert-base-'))),repository=join(root,'project.git');t.after(()=>rmSync(root,{recursive:true}));
+ const env={PATH:'/usr/bin:/bin',HOME:root,TMPDIR:root,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_AUTHOR_NAME:'Fixture',GIT_AUTHOR_EMAIL:'fixture@example.invalid',GIT_COMMITTER_NAME:'Fixture',GIT_COMMITTER_EMAIL:'fixture@example.invalid'};
+ const git=(args,input)=>{const r=spawnSync('/usr/bin/git',['--git-dir',repository,...args],{env,input,encoding:'utf8',timeout:5000});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
+ git(['init','-q','--bare','--object-format='+format]);
+ const tree=entries=>git(['mktree'],Object.entries(entries).map(([name,content])=>`100644 blob ${git(['hash-object','-w','--stdin'],content)}\t${name}\n`).join(''));
+ const commit=(value,parent,label)=>git(['commit-tree',value,...(parent?['-p',parent]:[]),'-m',label]);
+ const base=commit(tree({file:'old\n'}),undefined,'base'),applied=commit(tree({file:'applied\n'}),base,'applied');
+ const entries={file:scenario==='conflict'?'later conflict\n':scenario==='already-reverted'?'old\n':'applied\n',other:'independent later work\n'},main=commit(tree(entries),applied,'later main');
+ git(['update-ref','refs/heads/main',main]);const before=git(['show-ref']),input={mergeBase:applied,main,base,message:'revert applied',society:'demo'};
+ if(scenario==='conflict')assert.throws(()=>canonicalRevertCommit(repository,input),error=>error.code==='REVERT_CONFLICT'&&error.details.paths.includes('file'));
+ else if(scenario==='already-reverted')assert.throws(()=>canonicalRevertCommit(repository,input),error=>error.code==='INVALID_REQUEST');
+ else{const result=canonicalRevertCommit(repository,input);assert.equal(git(['rev-parse',result+'^{tree}']),tree({file:'old\n',other:entries.other}));assert.equal(git(['rev-list','--parents','-n','1',result]),result+' '+main);}
+ assert.equal(git(['show-ref']),before);
 });
