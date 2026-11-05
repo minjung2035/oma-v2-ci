@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4bd527ae72680e7352c1bc4628c10daabadd0a9a934e0ee8a385a5598cf32888` (15935 files).
+verification input digest `41ccb8b27f8b0cbb3e0b1daa63c21535798ead9fba7b843751dd2b948fabe351` (15935 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3842,3 +3842,35 @@ Intel full ZIP13413182751 SHA-256 `4b7072a2ab64aef3b7a9a76dadebd22ee378c8513ffcc
 같은 canonical/Intel runtime의 최종 동일과27/27 packed installation(App 실제 installed runtime 포함)을 확인했다.
 SOURCE80 rejected host-peer 원형을 제거한 뒤 full architecture·transaction·durable boundary·document·spec inventory는 exit0다
 (`/tmp/oma-source80-architecture-final.log`). product source/asset는 검증한 SOURCE79와 동일하다.
+
+### SOURCE81 private bootstrap-peer를 통한 capability 전달 후보
+
+SOURCE79 production commit `0463517f34bb99df919293776dcba475579d471d`를 ancestor로 포함한 SOURCE80
+`6dee428740f9e09437196e5165cb5931c53b6bb7` / local checkpoint `ab7ad79c4a139ae14800a11e53a4622371c9c6fd`를 발행했다.
+SOURCE80 canonical15935/`4bd527ae72680e7352c1bc4628c10daabadd0a9a934e0ee8a385a5598cf32888`다.
+별도 SOURCE79 CI를 실행하지 않았고 SOURCE80의 새 actual Mac/Linux 결과는 아직 NOT_RUN이다.
+
+SOURCE78 ARM26 shared ZIP13412974584 SHA-256 `39ba1740947b0d5271c465d543b11c44800864b229a342de0e85a11454054382`는
+같은 canonical15935/ARM runtime의 shared 전후 동일과 main452/452·generation3/3 PASS·기타0다.
+이로써 기존 bootstrap-peer 후보와 isolated generation을 세 Mac에서 각각 관측했다.
+이후 SOURCE80 발행 전에 shared artifact를 보존했다. SOURCE78 ARM26 packed는 진행 중이었으며 그 결과를 합성하지 않는다.
+
+SOURCE81은 배제한 TASK_HOST_PORT 대신 기존 private bootstrap-peer로 capability를 전달하는 test-only 후속 mode다.
+fixed producer가 먼저 자기 새 socket을 publish하고, 부모가 기존 CDHash·kernel token·full tag·socket instance를 검증한다.
+그 후 producer 자신의 private reply receiver와 fresh nonce 요청에만 부모가 보유한 normal bootstrap SEND reference를 전달한다.
+producer는 이 right를 bootstrap_check_in의 명시적 operand로 한 번 쓰고 반납한다.
+TASK_HOST_PORT/TASK_KERNEL_PORT/exception/access port나 task/global bootstrap setter는 사용하지 않는다.
+새 dynamic service의 ack와 nonce 조회 reply도 같은 kernel sender token·full tag·socket instance에 대조한다.
+조회 body는 creator metadata뿐이며 socket FD·bootstrap right·제품 권한을 client에게 전달하지 않는다.
+기존 bootstrap-peer/launchd producer mode와 producer-live last-close 검사는 유지한다.
+
+이는 undeclared dynamic-name check-in 계약이나 namespace ownership을 채택한 변경이 아니다.
+서비스 철회·충돌·owner SIGKILL/suspended child·상속 FD4/current Host role의 제품 결박 및 headless/release 조건은 남아 있다.
+producer 양 SDK object compile·JS syntax는 exit0, Linux 두 시험은 Darwin NOT_RUN 진단이다.
+controller의 CoreFoundation/Security headers는 로컬 SDK snapshot에 없어 actual compile/link는 여전히 Mac CI에서만 확인한다.
+원시는 `/tmp/oma-source81-producer-{arm,intel}.log`·`/tmp/oma-source81-fence-linux.log`다.
+새 bootstrap 전달/dynamic discovery의 actual Mac runtime는 아직 NOT_RUN이며 production source/asset는 SOURCE79와 같다.
+세 gate OPEN·product BLOCKED·기본 실행 guard·death predicate·예산을 유지한다.
+
+SOURCE81 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source81-architecture.log`).
+새 bootstrap 전달/dynamic service는 actual Mac NOT_RUN이고 production build/pack은 SOURCE79의 동일한 bytes에 대한 기존 결과다.

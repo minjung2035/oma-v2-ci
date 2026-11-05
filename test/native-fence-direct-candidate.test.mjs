@@ -21,10 +21,13 @@ test('001. Direct suspended fixed producer authenticates before release and publ
  // The producer receives no entitlement or loader/debug exception.
  for(const image of[producer,controller]){run('/usr/bin/codesign',['--force','--sign','-','--options','runtime',image]);run('/usr/bin/codesign',['--verify','--strict',image]);}
  const hashes=machoImageCdHashes(readFileSync(producer),process.arch==='arm64'?'arm64':'x64');assert.equal(hashes.length,1);
- const refused=run(controller,[producer,randomBytes(32).toString('hex'),'0'.repeat(40)]);
+ for(const peer of ['bootstrap-peer','bootstrap-discovery']){
+ const mode=peer==='bootstrap-discovery'?[peer]:[];
+ const refused=run(controller,[producer,randomBytes(32).toString('hex'),'0'.repeat(40),...mode]);
  assert.deepEqual(JSON.parse(refused.stdout),{matched:false,released:false,childReaped:true});
- t.diagnostic(JSON.stringify({phase:'direct-producer-refusal',security:refused.stderr.trim()}));
- const accepted=run(controller,[producer,randomBytes(32).toString('hex'),hashes[0]]);
- assert.deepEqual(JSON.parse(accepted.stdout),{matched:true,released:true,kernelSender:true,instanceMatched:true,creatorLiveAcrossLastClose:true,childReaped:true});
- t.diagnostic(JSON.stringify({phase:'direct-producer-accepted',security:accepted.stderr.trim(),productionAdopted:false,ownerLossQualified:false}));
+ t.diagnostic(JSON.stringify({phase:'direct-producer-refusal',peer,security:refused.stderr.trim()}));
+ const accepted=run(controller,[producer,randomBytes(32).toString('hex'),hashes[0],...mode]);
+ assert.deepEqual(JSON.parse(accepted.stdout),{matched:true,released:true,kernelSender:true,instanceMatched:true,creatorLiveAcrossLastClose:true,childReaped:true,...(peer==='bootstrap-discovery'?{discoveryAuthenticated:true}:{})});
+ t.diagnostic(JSON.stringify({phase:'direct-producer-accepted',peer,security:accepted.stderr.trim(),productionAdopted:false,ownerLossQualified:false}));
+ }
 });

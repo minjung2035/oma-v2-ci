@@ -4,6 +4,7 @@
 #include <Security/Security.h>
 #include <mach/mach.h>
 #include <mach/task_special_ports.h>
+#include <bootstrap.h>
 #include <sys/proc_info.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -54,16 +55,17 @@ static int bound(uint16_t port){
   int result=bind(fd,(struct sockaddr *)&address,sizeof address),error=errno;require(close(fd)==0,"contender close");return result==0?0:error;
 }
 int main(int argc,char **argv){
-  if(argc!=4 || getuid()==0 || strlen(argv[2])!=64 || strlen(argv[3])!=40)return 64;
+  int discovery_peer=argc==5 && !strcmp(argv[4],"bootstrap-discovery");
+  if((argc!=4 && !discovery_peer) || getuid()==0 || strlen(argv[2])!=64 || strlen(argv[3])!=40)return 64;
   atexit(cleanup);signal(SIGALRM,interrupted);signal(SIGTERM,interrupted);signal(SIGINT,interrupted);alarm(20);
   mach_port_t endpoint=MACH_PORT_NULL;mach_ok(mach_port_allocate(mach_task_self(),MACH_PORT_RIGHT_RECEIVE,&endpoint),"receive right");mach_ok(mach_port_insert_right(mach_task_self(),endpoint,endpoint,MACH_MSG_TYPE_MAKE_SEND),"peer send right");
   int lifetime[2];require(pipe(lifetime)==0,"lifetime pipe");posix_spawnattr_t attributes;posix_spawn_file_actions_t actions;
   require(posix_spawnattr_init(&attributes)==0 && posix_spawn_file_actions_init(&actions)==0,"spawn setup");
   require(posix_spawnattr_setflags(&attributes,POSIX_SPAWN_START_SUSPENDED|POSIX_SPAWN_CLOEXEC_DEFAULT)==0,"spawn flags");
-  require(posix_spawnattr_setspecialport_np(&attributes,endpoint,TASK_BOOTSTRAP_PORT)==0,"private child bootstrap peer");
+  require(posix_spawnattr_setspecialport_np(&attributes,endpoint,TASK_BOOTSTRAP_PORT)==0,"private child special-port peer");
   require(posix_spawn_file_actions_adddup2(&actions,lifetime[0],3)==0,"lifetime handoff");
   require(posix_spawn_file_actions_addopen(&actions,0,"/dev/null",O_RDONLY,0)==0 && posix_spawn_file_actions_addopen(&actions,1,"/dev/null",O_WRONLY,0)==0 && posix_spawn_file_actions_adddup2(&actions,2,2)==0,"private stdio");
-  char *arguments[]={argv[1],argv[2],"0","bootstrap-peer",NULL},*environment[]={"PATH=/usr/bin:/bin",NULL};pid_t launched=0;
+  char *arguments[]={argv[1],argv[2],"0",discovery_peer?"bootstrap-discovery":"bootstrap-peer",NULL},*environment[]={"PATH=/usr/bin:/bin",NULL};pid_t launched=0;
   require(posix_spawn(&launched,argv[1],&actions,&attributes,arguments,environment)==0,"direct spawn");child=launched;
   require(posix_spawn_file_actions_destroy(&actions)==0 && posix_spawnattr_destroy(&attributes)==0,"spawn setup return");require(close(lifetime[0])==0,"parent read return");
   int status=0,result=0;for(unsigned i=0;i<5000 && !expired;i++){result=observe(WUNTRACED,&status);if(result!=0)break;usleep(1000);}require(result==launched && WIFSTOPPED(status),"suspended direct child");
@@ -83,8 +85,36 @@ int main(int argc,char **argv){
   for(unsigned i=0;i<32;i++){unsigned byte;require(sscanf(argv[2]+2*i,"%2x",&byte)==1 && packet.identity[i]==byte,"full tag");}
   int socket_fd=fileport_makefd(packet.head.msgh_remote_port);require(socket_fd>=0,"received socket");mach_ok(mach_port_deallocate(mach_task_self(),packet.head.msgh_remote_port),"received fileport return");
   struct socket_fdinfo info={0};require(proc_pidfdinfo(getpid(),socket_fd,PROC_PIDFDSOCKETINFO,&info,sizeof info)==sizeof info && info.psi.soi_so==packet.socket && info.psi.soi_proto.pri_in.insi_gencnt==packet.generation,"kernel socket instance");
+  if(discovery_peer){
+    memset(&message,0,sizeof message);mach_msg_header_t *request=(mach_msg_header_t *)message.bytes;
+    mach_ok(mach_msg(request,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),0,sizeof message,endpoint,5000,MACH_PORT_NULL),"bootstrap capability request");
+    require(request->msgh_id==0x4f4d4173 && request->msgh_size==sizeof(mach_msg_header_t)+16 && !(request->msgh_bits&MACH_MSGH_BITS_COMPLEX) && MACH_PORT_VALID(request->msgh_remote_port),"bootstrap request layout");
+    mach_msg_audit_trailer_t *request_trailer=(mach_msg_audit_trailer_t *)(message.bytes+((request->msgh_size+3)&~3));
+    require(request_trailer->msgh_trailer_size>=sizeof *request_trailer && !memcmp(&request_trailer->msgh_audit,&token,sizeof token),"bootstrap request kernel sender");
+    struct {mach_msg_header_t head;uint8_t nonce[16];} returned={0};memcpy(returned.nonce,message.bytes+sizeof *request,16);
+    returned.head=(mach_msg_header_t){.msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_MOVE_SEND,MACH_MSG_TYPE_COPY_SEND),.msgh_size=sizeof returned,.msgh_remote_port=request->msgh_remote_port,.msgh_local_port=bootstrap_port,.msgh_id=0x4f4d4174};
+    mach_ok(mach_msg(&returned.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof returned,0,MACH_PORT_NULL,1000,MACH_PORT_NULL),"return normal bootstrap capability");
+    memset(&message,0,sizeof message);mach_msg_header_t *ack=(mach_msg_header_t *)message.bytes;
+    mach_ok(mach_msg(ack,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),0,sizeof message,endpoint,5000,MACH_PORT_NULL),"discovery acknowledgement");
+    require(ack->msgh_id==0x4f4d4175 && ack->msgh_size==sizeof packet,"discovery acknowledgement layout");
+    mach_msg_audit_trailer_t *ack_trailer=(mach_msg_audit_trailer_t *)(message.bytes+((ack->msgh_size+3)&~3));
+    struct publication *ack_body=(struct publication *)ack;
+    require(ack_trailer->msgh_trailer_size>=sizeof *ack_trailer && !memcmp(&ack_trailer->msgh_audit,&token,sizeof token) && !memcmp(ack_body->identity,packet.identity,32) && ack_body->socket==packet.socket && ack_body->generation==packet.generation,"discovery acknowledgement identity");
+    char name[128];snprintf(name,sizeof name,"org.oma.direct-fence.%s",argv[2]);mach_port_t service=MACH_PORT_NULL;
+    mach_ok(bootstrap_look_up(bootstrap_port,name,&service),"normal-bootstrap discovery");
+    struct {mach_msg_header_t head;uint8_t nonce[16];} challenge={0};arc4random_buf(challenge.nonce,sizeof challenge.nonce);
+    challenge.head=(mach_msg_header_t){.msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND,MACH_MSG_TYPE_MAKE_SEND),.msgh_size=sizeof challenge,.msgh_remote_port=service,.msgh_local_port=endpoint,.msgh_id=0x4f4d4171};
+    mach_ok(mach_msg(&challenge.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof challenge,0,MACH_PORT_NULL,1000,MACH_PORT_NULL),"fresh discovery challenge");
+    memset(&message,0,sizeof message);mach_msg_header_t *head=(mach_msg_header_t *)message.bytes;
+    mach_ok(mach_msg(head,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),0,sizeof message,endpoint,5000,MACH_PORT_NULL),"discovery response");
+    require(head->msgh_id==0x4f4d4172 && head->msgh_size==sizeof packet,"discovery response layout");
+    struct publication *response=(struct publication *)head;mach_msg_audit_trailer_t *trailer=(mach_msg_audit_trailer_t *)(message.bytes+((head->msgh_size+3)&~3));
+    require(trailer->msgh_trailer_size>=sizeof *trailer && !memcmp(&trailer->msgh_audit,&token,sizeof token),"discovery kernel sender");
+    require(!memcmp(response->identity,packet.identity,32) && response->socket==packet.socket && response->generation==packet.generation && !memcmp(&response->port,challenge.nonce,16),"fresh discovery instance");
+    mach_ok(mach_port_deallocate(mach_task_self(),service),"discovery send return");
+  }
   require(observe(0,&status)==0 && bound((uint16_t)packet.port)==EADDRINUSE,"creator-live held binding");require(close(socket_fd)==0,"last socket return");require(bound((uint16_t)packet.port)==0 && observe(0,&status)==0,"creator-live last close");
   require(close(lifetime[1])==0,"lifetime EOF");while(child>0 && !expired){(void)observe(0,&status);usleep(1000);}require(child==0 && WIFEXITED(status) && WEXITSTATUS(status)==0,"direct producer return");
   mach_ok(mach_port_deallocate(mach_task_self(),task),"child task return");mach_ok(mach_port_deallocate(mach_task_self(),endpoint),"peer send return");mach_ok(mach_port_mod_refs(mach_task_self(),endpoint,MACH_PORT_RIGHT_RECEIVE,-1),"peer receive return");
-  printf("{\"matched\":true,\"released\":true,\"kernelSender\":true,\"instanceMatched\":true,\"creatorLiveAcrossLastClose\":true,\"childReaped\":true}\n");return 0;
+  printf("{\"matched\":true,\"released\":true,\"kernelSender\":true,\"instanceMatched\":true,\"creatorLiveAcrossLastClose\":true,\"childReaped\":true%s}\n",discovery_peer?",\"discoveryAuthenticated\":true":"");return 0;
 }
