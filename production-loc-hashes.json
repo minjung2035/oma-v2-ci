@@ -1616,7 +1616,7 @@
     },
     {
       "path": "packages/native/src/society-fence/producer.c",
-      "sha256": "3e9704ddaa412d6c7ad22369e504577ce4266428aec9611daf7b6bd24a8eca12"
+      "sha256": "e689f77968f1f12bde17cf420b6a02ec09394bd1e996b25a82581e4dc89bb880"
     },
     {
       "path": "packages/native/src/society-fence/protocol.h",

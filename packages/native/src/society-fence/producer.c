@@ -94,7 +94,9 @@ int main(int argc,char **argv){
     mach_msg_return_t sent=mach_msg(&answer.publication.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof answer,0,MACH_PORT_NULL,1000,MACH_PORT_NULL);
     if(sent!=MACH_MSG_SUCCESS){mach_msg_destroy(&answer.publication.head);}
   }
-  kernel(mach_port_mod_refs(mach_task_self(),discovery,MACH_PORT_RIGHT_RECEIVE,-1),"discovery return");
+  /* This fixed process ends here. Its discovery receive right is returned by
+   * task teardown; do not revoke a bootstrap-owned receive right before the
+   * private socket-return acknowledgement can be delivered. */
   require(close(fd)==0,"creator fence return");
   if(released){char closed='C';require(write(3,&closed,1)==1,"fence return acknowledgement");}
   return 0;

@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `329326c55159824099face0d234ffa11c989fe6281bbe6ee9882e39e86c668e4` (15946 files).
+verification input digest `c6d087088458c036e62838a8989c1d1d760bdf7542077669f5c3d020537494e4` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4285,3 +4285,33 @@ Society 실패 자체와 전후 입력은 즉시 보존하며 성공으로 바�
 SOURCE91 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
 production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
 원시는 `/tmp/oma-source91-build-final.log`·`/tmp/oma-source91-package-isolation-final.log`·`/tmp/oma-source91-review-final.log`·`/tmp/oma-source91-architecture-final.log`다.
+
+### SOURCE91 actual Intel3/5와 SOURCE92 정상 반환 순서
+
+SOURCE91 `949fe64044dc364915f87dc3a7a7470a9fd9601f`, Native42058618115·Architecture42058618116이다.
+canonical15946/`329326c55159824099face0d234ffa11c989fe6281bbe6ee9882e39e86c668e4`다.
+Intel Society ZIP13431560287 SHA-256 `7902e4ba5d42d8713dcd7f4ee2c5dce63fc8818212ea809df7b732c80740c324`를 대조했다.
+동일 source/input/runtime Society 전후 동일, runtime15549/27 `10217a686ef89059a1b606f6b8be89ab3d2db1ee1f0b78f00afba088b9ba9ade`다.
+5건 중3 PASS /2 FAIL·기타0다. Host SIGKILL 뒤 controlled child의 점유 유지/마지막 반환002,
+creator 강제 종료 뒤 아직 열린 socket의 unknown 거절003, shared socket 변조005가 통과했다.
+이는 실제 Broker/Engine의 전체 paid scope나 Actor의 FD4 close/helper 동시 사망 인수가 아니다.
+001/004의 정상 반환은 request write 뒤 `acknowledgement: bytes=0 first=0 errno=0`로 실패했다.
+이전 `Operation not permitted`는 실패 syscall의 errno라고 판정하지 않는다. creator의 private 실패 frame도 도착하지 않았다.
+
+SOURCE92는 creator 종료 경로에서 bootstrap receive right를 먼저 명시적으로 revoke하지 않는다.
+자신의 socket copy를 close한 뒤 private acknowledgement를 보내고 프로세스 종료로 자신의 Mach rights를 반환한다.
+앞선 EOF의 정확한 exit signal/원인은 관측되지 않았으므로 kernel guard exception으로 확정하지 않는다.
+반환 순서 수정의 actual Mac 결과는 아직 NOT_RUN이며 기존 실패·세 gate OPEN·제품 BLOCKED를 유지한다.
+
+SOURCE91 Mac15 Society ZIP13432290176 SHA-256 `28586ff88a6f00ab15adf5ca06994baa0afe3cc63086a8cad01b7cd2b8c2e5b6`도 대조했다.
+동일 canonical/source의 Society 전후 동일, runtime15549/27 `34a86ee000b0b523416d41d455fde726ffe2c8567c1e4f6cd58abcae9e3f90ce`다.
+Intel과 같은3 PASS /2 FAIL·기타0이며001/004는 같은 ack EOF다. Mac26 ARM 결과로 전용하지 않는다.
+SOURCE92 수정 뒤 Linux lease/runner/stdin45/45 PASS·기타0다(`/tmp/oma-source92-core-regression-final.log`).
+SDK producer ARM/Intel object compile도 통과했으나 실제 수정된 정상 release는 이 Linux/SDK 검사에서 NOT_RUN이다.
+CI는 common runtime/Society 결과 뒤에 broad Darwin gate를 실행하도록 순서만 정했다.
+gate 자체의 실행·guard·실패 판정·deadline은 유지하며, 앞선 runtime 실패에도 취소되지 않았다면 gate를 실행한다.
+Society artifact에는 같은 runner의 설치 시작 뒤 생성된 crash report도 보존한다. report 부재를 정상 종료 근거로 쓰지 않는다.
+
+SOURCE92 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture/transaction/durable boundary/document/spec는 exit0다.
+production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
+원시는 `/tmp/oma-source92-build-final.log`·`/tmp/oma-source92-package-isolation-final.log`·`/tmp/oma-source92-review-final.log`·`/tmp/oma-source92-architecture-final.log`다.

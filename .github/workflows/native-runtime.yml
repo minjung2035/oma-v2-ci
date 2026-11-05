@@ -56,6 +56,30 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/native-society-lease.test.mjs > .scratch/native-runtime/society-lease-tests.log 2>&1; then cat .scratch/native-runtime/society-lease-tests.log; exit 1; fi
+      - name: Preserve Society creator crash reports
+        if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        run: |
+          node --input-type=module <<'JS'
+          import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+          import { homedir } from "node:os";
+          import { join } from "node:path";
+          const destination = ".scratch/native-runtime/crash-reports";
+          mkdirSync(destination, { recursive: true });
+          const since = statSync(".scratch/native-runtime/install.log").mtimeMs, copied = [];
+          for (const [label, directory] of [["user", join(homedir(), "Library/Logs/DiagnosticReports")], ["system", "/Library/Logs/DiagnosticReports"]]) {
+            let entries;
+            try { entries = readdirSync(directory, { withFileTypes: true }); }
+            catch (error) { if (error.code === "ENOENT") continue; throw error; }
+            for (const entry of entries) {
+              if (!entry.isFile() || !/\.(ips|crash)$/.test(entry.name)) continue;
+              const source = join(directory, entry.name);
+              if (statSync(source).mtimeMs < since) continue;
+              const name = `${label}-${entry.name}`;
+              copyFileSync(source, join(destination, name)); copied.push(name);
+            }
+          }
+          writeFileSync(join(destination, "manifest.json"), JSON.stringify({ copied }));
+          JS
       - name: Bind Society ownership observations immediately
         if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         run: |
@@ -71,6 +95,7 @@ jobs:
           path: |
             .scratch/native-runtime/build.log
             .scratch/native-runtime/society-lease-tests.log
+            .scratch/native-runtime/crash-reports
             .scratch/native-runtime/source-head.txt
             .scratch/native-runtime/environment.json
             .scratch/native-runtime/verification-input.json
@@ -204,7 +229,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   darwin-gates:
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin }}
+    needs: common-runtime
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) }}
     strategy:
       fail-fast: false
       max-parallel: 1
