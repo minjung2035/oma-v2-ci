@@ -74,14 +74,14 @@ test('001. Actual Darwin Broker admits the current Run and kernel Actor, refuses
  // Actor role to an independently launched coalition.
  const peer=listeners.at(-1).peerSource();let foreign;
  try{
-  foreign=await runtime.run('foreign-authority',{executable:installation.node,argv:['--no-global-search-paths','--input-type=module','-e',worker,
+  foreign=await runtime.run('preparation',{executable:installation.node,argv:['--no-global-search-paths','--input-type=module','-e',worker,
    JSON.stringify({foreign:true,path:report.lease.socketHostPath,home,stateRoot:root,limits:cfg.limits})],
    cwd:home,env:{HOME:home,TMPDIR:home},timeoutMs:15000,stdoutBytes:8192,stderrBytes:16384},t.signal,()=>{},[],undefined,undefined,
    (command,options)=>launchDarwinJobScope(command,{...options,peer}));
  }finally{peer.close();}
  assert.equal(foreign.kind,'exited');assert.equal(foreign.exitCode,0,foreign.stderr.toString());
  const rejected=JSON.parse(foreign.stdout);assert.equal(rejected.refused,true);assert.notEqual(rejected.pid,positive.pid);
- assert.equal(runtime.confirmDead('foreign-authority'),true);assert.equal(accepted.inScope(witness),true);
+ assert.equal(runtime.confirmDead('preparation'),true);assert.equal(accepted.inScope(witness),true);
 
  store.transaction(tx=>tx.updateAgent({name:'alice',desired:'stopped'}));writeFileSync(join(home,'revoke'),'go');
  const stale=await until(()=>json(join(home,'stale.json')),t.signal);assert.equal(stale.pid,positive.pid);assert.equal(stale.stale.error.code,'STALE_RUN');

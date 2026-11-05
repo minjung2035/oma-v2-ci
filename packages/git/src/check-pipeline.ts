@@ -9,6 +9,7 @@ import { StoreError } from "@oma/domain/errors";
 import { runProcess } from "@oma/process/async";
 import { GIT_ENV } from "@oma/process/policies";
 import { protectPipelineSupervisor } from "@oma/native/control-socket";
+import { decodePipelineExecutionView, type PipelineExecutionView } from "@oma/protocol/git-execution-view";
 export type PipelineFrame =
   | { kind: "step-start"; index: number; id: string; phase: "setup" | "check"; startedAt: string }
   | { kind: "step-output"; index: number; stream: "stdout" | "stderr"; data: string }
@@ -16,18 +17,20 @@ export type PipelineFrame =
   | { kind: "tracked-output"; data: string }
   | { kind: "pipeline-end"; passed: boolean; timedOut: boolean; tracked: { kind: "observed"; bytes: number; sha256: string } | { kind: "unknown" } };
 export async function executePipeline(pipeline: CheckPipeline, workspace: string, git: string, candidate: string,
-  authorize: () => void, status: (frame: PipelineFrame) => void, downloads?: { key: string; files: readonly string[] }): Promise<number> {
+  authorize: () => void, status: (frame: PipelineFrame) => void, view: PipelineExecutionView, downloads?: { key: string; files: readonly string[] }): Promise<number> {
+  view = decodePipelineExecutionView(view);
+  if ((downloads === undefined) !== (view.downloads === undefined)) throw new StoreError("INVALID_REQUEST", "pipeline download view differs from its cache input");
   protectPipelineSupervisor(); authorize();
   const root = realpathSync(workspace), steps = [...pipeline.setupSteps, ...pipeline.checkSteps];
-  const privateCache = "/tmp/oma-npm-cache";
+  const privateCache = join(view.temporary, "oma-npm-cache");
   if (downloads !== undefined) {
     try {
       // Use npm's installed cache implementation, not a second cache format.
       // Local tarball `npm cache add` need not retain download content; populate
       // cacache explicitly and let npm verify the lockfile integrity on read.
-      const requireNpm = createRequire("/opt/oma-node/lib/node_modules/npm/package.json");
+      const requireNpm = createRequire(view.npm);
       const cacache = requireNpm("cacache") as { put: { stream(root: string, key: string, options: object): import("node:stream").Writable } };
-      for (const file of downloads.files) await streamPipeline(createReadStream(`/tmp/oma-downloads/${file}`),
+      for (const file of downloads.files) await streamPipeline(createReadStream(join(view.downloads!, file)),
         cacache.put.stream(`${privateCache}/_cacache`, `oma-public-download:${file}`, { algorithms: ["sha512"] }));
     } catch { /* A miss does not skip or fail the explicit setup. */ }
   }
@@ -49,7 +52,7 @@ export async function executePipeline(pipeline: CheckPipeline, workspace: string
     const local = relative(root, cwd);
     if (local === ".." || local.startsWith("../") || isAbsolute(local)) throw new StoreError("UNSUPPORTED_PROFILE", "pipeline step cwd escapes its workspace");
     const result = await runProcess({ executable: step.argv[0]!, argv: step.argv.slice(1), cwd,
-      env: { ...process.env, ...(downloads === undefined ? {} : { npm_config_cache: privateCache }), ...pipeline.env, ...step.env, HOME: process.env.HOME, TMPDIR: "/tmp" }, timeoutMs: step.deadlineMs ?? null,
+      env: { ...process.env, ...(downloads === undefined ? {} : { npm_config_cache: privateCache }), ...pipeline.env, ...step.env, HOME: process.env.HOME, TMPDIR: view.temporary }, timeoutMs: step.deadlineMs ?? null,
       stdoutBytes: 0, stdoutOverflow: "discard", stderrBytes: 0, stderrOverflow: "discard" },
     { stdoutSink: emit("stdout"), stderrSink: emit("stderr"), processGroup: true });
     status({ kind: "step-end", index, outcome: result.kind, exitCode: result.exitCode, signal: result.signal, elapsedMs: result.elapsedMs });

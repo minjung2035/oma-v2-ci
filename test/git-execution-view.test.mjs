@@ -1,7 +1,7 @@
 /** Closed description policy; actual kernel execution is tested separately. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeCandidateExecutionView, decodeQuarantineExecutionView } from '@oma/protocol/git-execution-view';
+import { decodeCandidateExecutionView, decodePipelineExecutionView, decodeQuarantineExecutionView } from '@oma/protocol/git-execution-view';
 import { decodeCandidateInvocation } from '@oma/git/candidate-check';
 import { decodeQuarantineInput } from '@oma/git/quarantine-worker';
 
@@ -18,6 +18,22 @@ test("001. Git execution views preserve literal physical paths and snapshot all 
     for (const bad of [null, [], { ...expected, authority: true }, Object.fromEntries(Object.entries(expected).slice(1))])
       assert.throws(() => decode(bad), { code:'INVALID_REQUEST' });
   }
+});
+test("004. Pipeline physical views keep mutable cache apart from verified downloads and reject an open payload",()=>{
+  const pipeline={version:2,setupSteps:[],checkSteps:[{id:'check',argv:['node','-e','0'],cwd:'.',env:{}}],env:{},toolchainDigest:'b'.repeat(64),cachePolicy:{kind:'off'}};
+  const input={candidate:'a'.repeat(40),argv:['oma-pipeline-v2'],view:candidateView(),pipeline,
+    pipelineView:{temporary:'/tmp',npm:'/opt/oma-node/lib/node_modules/npm/package.json'}};
+  assert.deepEqual(decodeCandidateInvocation(input),input);
+  const mounted={...input.pipelineView,downloads:'/tmp/oma-downloads'};
+  assert.deepEqual(decodePipelineExecutionView(mounted),mounted);
+  const cached={...input,pipelineView:mounted,downloadCache:{key:'c'.repeat(64),files:[]}};
+  assert.deepEqual(decodeCandidateInvocation(cached),cached);
+  const {pipelineView,...missing}=input;
+  for(const bad of [missing,{...input,downloadCache:cached.downloadCache},{...input,pipelineView:mounted},
+    {...input,pipelineView:{...pipelineView,authority:true}},{...input,pipelineView:{...pipelineView,npm:'/human/npm'}},
+    {...cached,pipelineView:{...mounted,downloads:'/tmp/oma-npm-cache/content'}},
+    {...cached,pipelineView:{...mounted,temporary:'/opt/oma-node'}}])
+    assert.throws(()=>decodeCandidateInvocation(bad),{code:'INVALID_REQUEST'});
 });
 test("002. Git execution views refuse repository/workspace overlap and writable bundle aliases", () => {
   for (const workspace of ['/private/var', candidateView().project, candidateView().project+'/inside'])

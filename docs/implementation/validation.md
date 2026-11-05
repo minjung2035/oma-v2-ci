@@ -2679,10 +2679,103 @@ SOURCE58의 frozen production 입력은 로컬 build와 새 Mac case의 Linux re
 SOURCE58 전체 architecture·transaction·durable boundary·document·spec inventory 검사가 모두 exit0으로 끝났다.
 구조 검사 PASS는 Mac runtime 또는 product gate 완료를 뜻하지 않는다.
 
+
+### SOURCE58 실제 Mac 결과와 다음 수정 입력
+
+SOURCE58 `7ee69448905d09fd9bd50f90894863125cafa4ce`, Native41947439003/Architecture41947438987을 발행했다.
+ARM shared ZIP13378964074 SHA-256 `6a3098401522a113d3f813c946dbf888cb877b80bc6928299bedf540b4350521`를 대조했다.
+canonical15901/`a9a66b2c84db32054e8fd686cb238847d50236f3e9d7e9d6ce8e507487f5789c`와
+runtime15528/27/`b91880620236b99c88c14c07896d1a1195fa4a31dd07c9fa3afd0d2c906491c6`가 각각 전후 같다.
+401 tests/399 PASS/2 FAIL·cancel/skip/todo0다. 작은 실제 developer tool owner 시험은 PASS다.
+선택된 Developer 안의 Git과 execPath, scope death·빈 journal/staging을 실제 확인했다.
+종전 xcrun은 같은 pruned scope에서10013ms 뒤 timed-out이며 xcodebuild의 file-event/cache 진단을 남겼다.
+이 관측은 xcrun을 추가 locator로 쓰지 않는 변경을 지지하며, timeout 확대나 host fallback의 근거가 아니다.
+
+새 Broker 시험은 실제 current Run/Actor 양성·wrong actor/invocation 거절·genuine pin/CID 확인까지 통과한 뒤
+외부 coalition 시험에 쓴 미등록 slot 문자열을 journal이 거절했다. 시험은 FAIL이며 전체 Actor/Run qualification이 아니다.
+다음 입력은 기존 preparation slot을 사용한다. persisted journal grammar를 늘리지 않는다.
+전체 generation 시험은215299ms에 quarantine의 physical launch 입력 거절로 실패했다.
+앞선 실제 private candidate 성공·최종 권한 철회 경로를 지나갔으나 verify/import·전체 generation PASS가 아니다.
+QuarantineImporter는 원래 stderr FD를 공급하는데 Mac command는 동시에 stderr capture64KiB를 요구했다.
+Darwin capture는 이 중복을 거절하므로 caller가 명시적으로 FD 출력을 선택하도록 수리한다. validator는 유지한다.
+
+Intel26 job126983266508은 checkout의 github.com DNS 실패3회 뒤 exit128로 끝났다.
+코드/build/tests는 NOT_RUN이며 그 source의 복구 실패 수리 증거로 쓰지 않는다.
+개별 재실행 요청은 실행 중 workflow라는 GitHub403으로 거절됐다. workflow 종료 또는 새 입력에서 실제 재검증이 필요하다.
+ARM gate ZIP13378489936 SHA-256 `2458b36fb68581db60550a869273556e8d67e424e44c1e0d011286a165993fec`도 대조했다.
+120실행/114 OBSERVED/6 SETUP_FAILED이며 미완료6개는 Worker bootstrap/tools 각3회다.
+실제 product preload의 native-support guard가 거절했다. 이 실패를 양성 또는 guard 제거의 근거로 쓰지 않는다.
+세 gate OPEN·product BLOCKED를 유지한다.
+
+다음 SOURCE59는 pipeline의 trusted physical view를 양 OS adapter에서 공급한다.
+공통 실행 코드의 Linux tmp/npm/download 주소를 제거하고, Mac downloads는 별도 readonly path와 FD10을 사용한다.
+Mac staging lease는 cache 유무와 관계없이 FD9다. 캐시 준비도 실제 선택 Git과 owned temporary를 쓰며,
+Node download helper는 같은 private generation capture를 사용한다. 기존 authorize/journal/death owner를 우회하지 않는다.
+Mac supervisor protection은 여전히 미완료이고 protectPipelineSupervisor의 거절을 유지한다.
+Apple [hardened runtime](https://developer.apple.com/documentation/security/hardened-runtime)와
+[debugging entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.debugger)에 따라
+시험이 소유한 debuggable/protected C image와 후손의 control/read/inspect·canary read·attach 결과를 비교하는 후보를 추가했다.
+모든 probe는 실제 journal scope로 종료·반납한다. 새로운 production entitlement·서명 변경은 없으며 후보 미채택이다.
+로컬 문법/NOT_RUN 가지는 통과했고 실제 Mac 양성 대조는 아직 NOT_RUN이다.
+
+SOURCE59 첫 frozen build와 관련20/20, 실제 Linux pipeline5/5는 PASS다.
+후자는 cache restore/offline install·private receipt·tracked delta·step timeout/전체 scope death·fresh retry를 포함한다.
+이후 quarantine caller 수리는 별도 frozen build/검사를 요구한다. 기존 결과를 새 App bytes의 pack/build 증거로 재사용하지 않는다.
+
+
+SOURCE58 Mac15 ARM shared ZIP13380700080 SHA-256 `7fcb6818fbf76edd45e1a943bd6254f7eaf6589c345c7c8d6f04c6c181bbcb20`도 대조했다.
+401/398 PASS/3 FAIL·cancel/skip/todo0다. 같은 canonical15901/a9a66b2c와
+runtime15528/27/`8a462ad2a11318549c68b4f5f779404fef0c47dfd0e4411e3f399c04d4de6e88`가 각각 전후 같다.
+위 두 실패 외에 held-directory preparation의 scope cleanup이 RUN_TERMINATION_UNKNOWN으로 실패했다.
+얕은 TAP 보조 출력이 native AggregateError leaf를 여전히 생략했다. 다음 입력은 diagnostic inspect depth를 제한하지 않고
+배열128/문자열8192 한도로 cause를 보존한다. 원래 event/result·unknown 유지와 journal retire 조건은 바꾸지 않는다.
+Mac15의 새 실패와 SOURCE57 Intel의 복구 실패를 원인 확인 없이 같은 결함으로 확정하지 않는다.
+
+SOURCE59 quarantine stderr 수리 뒤 frozen build는 PASS, 관련11/11과 실제 Linux Git9/9도 PASS다.
+Git9개에는 실제 verify-before-import·canonical refs 보존·candidate 불일치 거절·quoted Unicode/newline view와
+phase 사이 live scope의 staging 보존이 포함된다. 앞선 pipeline5개와 달리 이9개는 최종 App bytes로 실행했다.
+
+
+SOURCE57 Architecture41944487994도 baseline/native-all 모두 success로 끝났다.
+전체 Linux ZIP13380301329 SHA-256 `c4dd26b29a6447bafc879c9f1c2db4b7003b67cbf3a5dbd5437f7c01b4cfd448`는
+4857/4857 PASS·fail/cancel/skip/todo0·errors[]다. source15898 per-file identity가 전후 같고 sourceChanges[]다.
+baseline ZIP13378744570 SHA-256 `6b0cc9d8a656fe64a8980cb1ceb429d86a85c9cd87254e72def55fc061c720d7`도 대조했다.
+provenance의 source18bbdf64401f71c10b0c263f454e4c2b4f8819ac·15898/2005bbd0d112427f204910e20ede2a4077d9f2b7fd050c0cdeef95b803c18b4d가 맞고
+inventory/LOC/typecheck/build/storage/package/architecture/spec/test/fast/durable/property/stress/platform exit가 모두0이다.
+kernel/crash는 별도 standalone NOT_RUN이며 full native-all 범위와 구분한다. 새 SOURCE59 입력의 runtime PASS로 재사용하지 않는다.
+
+SOURCE59 최종 production inventory14392, review는 CHANGED_WITHOUT_ORACLE30/NOT_REVIEWED14362/REMOVED220이다.
+전체 generation의 Mac Git 시험에도 빈 lockfile의 cache helper 재구축→실제 재검증 hit 경로를 추가했다.
+original download-cache entry를 throw로 바꾼 동안 같은 private generation의 helper를 실행하고 실제 journal/scope 반납을 요구한다.
+빈 download 집합이므로 HTTPS·npm 설치의 Mac 성공을 주장하지 않는다. Mac pipeline의 supervisor 거절도 그대로다.
+이 fixture의 문법과 generation Linux refusal3/3은 PASS며 새 Mac 경로는 아직 NOT_RUN이다.
+
+
+SOURCE59 최종 build 뒤 fresh packed isolation은 @oma/app 포함27/27 PASS다.
+첫 architecture 시도는 module guard의 고정 Linux npm require 문자열 때문에 실패했다.
+기존 npm-owned cacache 예외를 OS private view의 실제 canonical load call에 결박하도록 고쳤다.
+파일에 loader 문자열이 있다는 이유로 다른 require까지 허용하지 않는다. decoder 생략·ambient loader·view 재할당·
+다른 callsite/consumer·다른 외부 package는 거절한다. Workspace boundary 전체16/16과 실제 module checker가 PASS다.
+production bytes는 이 verifier 수리 중 바뀌지 않았으며, 전체 architecture는 새 verifier로 다시 검사한다.
+
+SOURCE59 구조 gate는0 findings로 통과했다. 마지막 module guard 수리는 shadow loader/decoder도 거절하며
+최종 guard 회귀16/16과 실제 checker가 PASS다. 새 verifier 입력의 최종 전체 구조 검사를 수행한다.
+
+
+SOURCE58의 Mac packed 결과도 회수했다. ARM26 ZIP13379943093 SHA-256
+`19f7e39d7b893ce5bbbf5d02a4b386cdee23d66fe6ded6590b6dec24f94421f9`, ARM15 ZIP13379368854 SHA-256
+`4a333100402d5af8121db88e7ecc1dfc255c29795c1a80589421308922283c78`를 대조했다.
+양 OS 모두 App 포함27/27 packed install·public entry·authored declaration PASS이며 위 source/canonical/runtime identity가 최종 전후도 같다.
+shared runtime의 ARM26 두 실패·ARM15 세 실패는 그대로 남으며 pack PASS가 전체 CI 또는 product qualification이 아니다.
+
+SOURCE59 최종 전체 architecture·transaction·durable boundary·document·spec inventory가 모두 exit0으로 끝났다.
+source production·verifier를 이 검사 동안 고정했다. 문서 결과 기록 뒤 구조 binding과 document/spec/binding case만 다시 확인한다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a9a66b2c84db32054e8fd686cb238847d50236f3e9d7e9d6ce8e507487f5789c` (15901 files).
+verification input digest `b0b83441cd79445e710714190ac9635651632da61ab7b6b50d7b5333832be2c1` (15902 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.

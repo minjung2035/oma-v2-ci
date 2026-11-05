@@ -74,5 +74,21 @@ test("004. Mac setup forwards the exact pipeline instead of executing only its p
   const selected=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'pipeline',protectedPaths:[],
     checks:[{id:'pipeline:v2',argv:['oma-pipeline-v2'],env:{},pipeline}]}).checks[0];
   const plan=candidateSeatbeltPlan(host,view,root+'/tmp',candidate,selected);
-  assert.deepEqual(JSON.parse(plan.command.argv.at(-1)),{candidate,argv:selected.argv,pipeline,view});
+  assert.deepEqual(JSON.parse(plan.command.argv.at(-1)),{candidate,argv:selected.argv,pipeline,
+    pipelineView:{temporary:root+'/tmp',npm:'/opt/pinned-node/lib/node_modules/npm/package.json'},view});
+});
+test("005. Mac pipeline keeps the staging lease in slot9 and gives downloads a separate readonly path and slot10",()=>{
+  const pipeline={version:2,setupSteps:[],checkSteps:[{id:'real',argv:['/bin/false'],cwd:'.',env:{}}],
+    env:{},toolchainDigest:'b'.repeat(64),cachePolicy:{kind:'npm-downloads',trustScope:'test',lockfile:'package-lock.json'}};
+  const selected=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'pipeline',protectedPaths:[],
+    checks:[{id:'pipeline:v2',argv:['oma-pipeline-v2'],env:{},pipeline}]}).checks[0];
+  const downloadCache={root:'/private/var/oma/downloads/cache',key:'c'.repeat(64),files:['12345678-1234-1234-1234-123456789abc.result']};
+  const plan=candidateSeatbeltPlan({...host,downloadCache},view,root+'/tmp',candidate,selected);
+  const input=JSON.parse(plan.command.argv.at(-1));
+  assert.equal(input.pipelineView.downloads,downloadCache.root);assert.deepEqual(input.downloadCache,{key:downloadCache.key,files:downloadCache.files});
+  assert.deepEqual(plan.policy.preserveFds,[6,8,9,10]);
+  assert.ok(plan.policy.readable.some(entry=>entry.path===downloadCache.root));
+  for(const permission of ['writable','executable','mapped'])assert.ok(!plan.policy[permission]?.some(entry=>entry.path===downloadCache.root));
+  for(const path of [root+'/tmp',view.workspace,project,'/private/var/oma'])
+    assert.throws(()=>candidateSeatbeltPlan({...host,downloadCache:{...downloadCache,root:path}},view,root+'/tmp',candidate,selected));
 });

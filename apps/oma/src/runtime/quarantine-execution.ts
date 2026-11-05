@@ -35,7 +35,10 @@ export function quarantineExecution(paths: GitPaths, executions: ExecutionRuntim
           command => executions.run("quarantine", command, paths.ownerSignal, authorize, [request.leaseFd]));
         const plan = quarantineSeatbeltPlan({ node: paths.checkNode, libdir: paths.checkAssetsDir, tools }, input,
           { git: tools.git, project: paths.projectGit, root: request.root, bundle: join(request.root, "input.bundle"), temporary });
-        command = plan.command;
+        // QuarantineImporter owns the exact diagnostic file. Darwin capture
+        // accepts one stderr destination, so do not also request an in-memory
+        // capture when that file descriptor is transferred to the scope.
+        command = { ...plan.command, stderrBytes: 0 };
         physicalLaunch = (source, options) => darwinLaunch(source, options, plan.policy);
       } else command = gitSandbox({ rootfs: residentRootfsPath(paths.stateRoot), node: paths.checkNode, libdir: paths.checkAssetsDir }, input);
       return executions.run("quarantine", command, paths.ownerSignal, authorize,

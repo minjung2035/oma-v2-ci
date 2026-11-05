@@ -133,7 +133,7 @@ function scanReferences(source, reference, asset = () => {}, computed = () => {}
     if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         ts.isIdentifier(node.expression) && requires.has(node.expression.text))) {
       const specifier = node.arguments[0];
-      if (specifier && ts.isStringLiteralLike(specifier)) reference(specifier.text, true);
+      if (specifier && ts.isStringLiteralLike(specifier)) reference(specifier.text, true, node);
       else computed();
     }
     if (ts.isCallExpression(node) && node.expression.getText(source) === "import.meta.resolve" &&
@@ -141,6 +141,42 @@ function scanReferences(source, reference, asset = () => {}, computed = () => {}
     ts.forEachChild(node, visit);
   };
   visit(source);
+}
+/** The one external npm cache implementation is selected by a closed private
+ * OS view. Recognize the actual call and its validated local binding, rather
+ * than granting every import in a file that happens to contain a loader. */
+function selectedNpmCacheCall(call) {
+  if (!call || !ts.isCallExpression(call) || !ts.isIdentifier(call.expression) || call.expression.text !== "requireNpm") return false;
+  let fn = call.parent;
+  while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+  if (!fn || !ts.isFunctionDeclaration(fn) || fn.name?.text !== "executePipeline" || !fn.body) return false;
+  const source = fn.getSourceFile();
+  if (fn.parameters.some(parameter => ["createRequire", "decodePipelineExecutionView"].includes(parameter.name.getText(source)))) return false;
+  const imports = (module, name) => source.statements.some(statement => ts.isImportDeclaration(statement) &&
+    ts.isStringLiteralLike(statement.moduleSpecifier) && statement.moduleSpecifier.text === module &&
+    statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings) &&
+    statement.importClause.namedBindings.elements.some(item => !item.propertyName && !item.isTypeOnly && item.name.text === name));
+  if (!imports("node:module", "createRequire") || !imports("@oma/protocol/git-execution-view", "decodePipelineExecutionView")) return false;
+  const first = fn.body.statements[0], validation = first && ts.isExpressionStatement(first) ? first.expression : null;
+  if (!validation || !ts.isBinaryExpression(validation) || validation.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+      validation.left.getText(source) !== "view" || !ts.isCallExpression(validation.right) ||
+      validation.right.expression.getText(source) !== "decodePipelineExecutionView" || validation.right.arguments.length !== 1 ||
+      validation.right.arguments[0].getText(source) !== "view") return false;
+  const loaders = []; let unsafe = false;
+  const visit = node => {
+    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name &&
+        ["view", "createRequire", "decodePipelineExecutionView"].includes(node.name.text)) unsafe = true;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      if (["view", "createRequire", "decodePipelineExecutionView"].includes(node.name.text)) unsafe = true;
+      if (node.name.text === "requireNpm") loaders.push(node);
+    }
+    if (ts.isBinaryExpression(node) && node !== validation && ts.isIdentifier(node.left) && node.left.text === "view" &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) unsafe = true;
+    ts.forEachChild(node, visit);
+  }; visit(fn.body);
+  const loader = loaders[0], init = loader?.initializer;
+  return !unsafe && loaders.length === 1 && (loader.parent.flags & ts.NodeFlags.Const) !== 0 && !!init && ts.isCallExpression(init) &&
+    init.expression.getText(source) === "createRequire" && init.arguments.length === 1 && init.arguments[0].getText(source) === "view.npm";
 }
 export function moduleFindings(root = process.cwd()) {
   root = resolve(root);
@@ -180,7 +216,7 @@ export function moduleFindings(root = process.cwd()) {
       const file = workspaceExportSource(workspace, subpath);
       if (subpath.includes("*") || !file || !existsSync(resolve(root, file))) report(path, `invalid public export ${subpath}`);
     }
-    const inspect = (file, specifier, runtime, test = false) => {
+    const inspect = (file, specifier, runtime, test = false, call) => {
       if (specifier.startsWith("#oma-test/")) {
         report(slash(relative(root, file)), `private App test import outside root integration tests: ${specifier}`);
         return;
@@ -219,8 +255,7 @@ export function moduleFindings(root = process.cwd()) {
       // toolchain, not to the host package's node_modules. No arbitrary loader
       // or external dependency receives this exception.
       const npmCacheImport = slash(relative(root,file)) === "packages/git/src/check-pipeline.ts" && specifier === "cacache" && runtime &&
-        /const requireNpm = createRequire\("\/opt\/oma-node\/lib\/node_modules\/npm\/package\.json"\);/.test(readFileSync(file,"utf8")) &&
-        /const cacache = requireNpm\("cacache"\)/.test(readFileSync(file,"utf8"));
+        !test && selectedNpmCacheCall(call);
       if (!npmCacheImport && name !== manifest.name && !Object.hasOwn(manifest.dependencies ?? {}, name) && !((test || runtime === false) && Object.hasOwn(manifest.devDependencies ?? {}, name)))
         report(slash(relative(root, file)), `undeclared ${runtime ? "runtime" : "type"} dependency ${specifier}`);
       if (name.startsWith("@oma/")) {
@@ -237,7 +272,7 @@ export function moduleFindings(root = process.cwd()) {
       const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
       if (scope === "src" && manifest.name === "@oma/engine" && /^packages\/engine\/src\/(?:interactive(?:-[a-z]+)?|personal)\.ts$/.test(slash(relative(root, file))))
         for (const finding of interactiveHostFindings(source)) report(slash(relative(root, file)), finding);
-      scanReferences(source, (specifier, runtime) => inspect(file, specifier, runtime, scope === "test"), value => {
+      scanReferences(source, (specifier, runtime, call) => inspect(file, specifier, runtime, scope === "test", call), value => {
         if (scope === "src" && value !== "./") {
           const asset = resolve(dirname(file), value);
           const sourceRoot = resolve(root, path, "src");

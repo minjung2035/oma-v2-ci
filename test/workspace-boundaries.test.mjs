@@ -59,6 +59,26 @@ test("003. Workspace guard includes type-only cycles and createRequire aliases",
   assert.match(inspect(t, { "packages/client/src/index.ts":
     'import { createRequire as loader } from "node:module"; const load = loader(import.meta.url); load("hidden");' }).join("\n"), /undeclared runtime dependency hidden/);
 });
+test("017. Only the pipeline's decoded OS toolchain view may load npm's own cache implementation",t=>{
+  const file="packages/git/src/check-pipeline.ts",codec="packages/protocol/src/git-execution-view.ts";
+  const manifests={git:{dependencies:{"@oma/protocol":"0.1.0"}},protocol:{exports:{
+    ".":{types:"./dist/index.d.ts",default:"./dist/index.js"},
+    "./git-execution-view":{types:"./dist/git-execution-view.d.ts",default:"./dist/git-execution-view.js"}}}};
+  const source='import {createRequire} from "node:module";\nimport {decodePipelineExecutionView} from "@oma/protocol/git-execution-view";\n'+
+    'export function executePipeline(view: unknown) { view = decodePipelineExecutionView(view);\n'+
+    'const requireNpm = createRequire(view.npm); const cacache = requireNpm("cacache"); }';
+  const findings=(text,path=file)=>inspect(t,{[codec]:'export const decodePipelineExecutionView=(value:unknown)=>value;',[path]:text},manifests);
+  assert.deepEqual(findings(source),[]);
+  for(const changed of [source.replace('view = decodePipelineExecutionView(view);',''),
+    source.replace('createRequire(view.npm)','createRequire(import.meta.url)'),
+    source.replace('const requireNpm','view = attacker; const requireNpm'),
+    source.replace('view: unknown','view: unknown, createRequire: Function'),
+    source.replace('const requireNpm','function decodePipelineExecutionView(value) { return value; } const requireNpm'),
+    source+'\nconst other=createRequire(import.meta.url);other("cacache");',
+    source.replace('requireNpm("cacache")','requireNpm("hidden")')])
+    assert.match(findings(changed).join('\n'),/undeclared runtime dependency (?:cacache|hidden)/);
+  assert.match(findings(source,"packages/git/src/other.ts").join('\n'),/undeclared runtime dependency cacache/);
+});
 test("004. Workspace guard refuses effectful UI imports and unowned runtime assets", t => {
   assert.match(inspect(t, { "packages/tui/src/index.ts": 'import "node:sqlite";' }).join("\n"), /effectful builtin forbidden/);
   assert.match(inspect(t, { "packages/protocol/src/index.ts": 'import "node:net";' }).join("\n"), /effectful builtin forbidden/);

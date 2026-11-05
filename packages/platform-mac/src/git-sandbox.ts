@@ -7,14 +7,15 @@ import { isValidFullOid } from "@oma/domain/identifiers";
 import { integrationCheckEnvironment, type FrozenCheck } from "@oma/domain/integration-policy";
 import { nodeToolchainMounts } from "@oma/domain/resident-paths";
 import { GIT_ENV } from "@oma/process/policies";
-import { decodeCandidateExecutionView, decodeQuarantineExecutionView, type CandidateExecutionView, type QuarantineExecutionView } from "@oma/protocol/git-execution-view";
+import { decodeCandidateExecutionView, decodePipelineExecutionView, decodeQuarantineExecutionView, type CandidateExecutionView, type QuarantineExecutionView } from "@oma/protocol/git-execution-view";
 import { trustedAbsolutePath } from "@oma/protocol/run-lease";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { developerToolDirectories, developerToolSystemFrameworks, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
 import { prepareSeatbelt, type SeatbeltPath, type SeatbeltPolicy } from "./seatbelt.js";
 import type { CommandSpec } from "@oma/process/command";
 
-export interface MacGitSandboxHost { readonly node: string; readonly libdir: string; readonly tools: MacDeveloperTools }
+export interface MacGitSandboxHost { readonly node: string; readonly libdir: string; readonly tools: MacDeveloperTools;
+  readonly downloadCache?: { readonly root: string; readonly key: string; readonly files: readonly string[] } }
 const dir = (path: string): SeatbeltPath => ({ path, kind: "directory" });
 const file = (path: string): SeatbeltPath => ({ path, kind: "file" });
 const under = (value: string, root: string): boolean => value === root || value.startsWith(`${root}/`);
@@ -43,14 +44,23 @@ export function candidateSeatbeltPlan(host: MacGitSandboxHost, viewInput: Candid
   if (!isValidFullOid(candidate) || view.git !== host.tools.git || !trustedAbsolutePath(temporary) ||
       under(temporary, view.workspace) || under(view.workspace, temporary) || under(temporary, view.project) || under(view.project, temporary)) refuse();
   const roots = installation(host, view.project, [view.workspace, temporary]);
+  const downloads = host.downloadCache;
+  if (downloads !== undefined && (check.pipeline === undefined || !trustedAbsolutePath(downloads.root) ||
+      [view.project, view.workspace, temporary, ...roots.readable.map(entry => entry.path)].some(path => under(path, downloads.root) || under(downloads.root, path)))) refuse();
+  const npm = nodeToolchainMounts(host.node).find(([, target]) => target.endsWith("/npm"));
+  if (check.pipeline !== undefined && npm === undefined) refuse();
+  const pipelineView = check.pipeline === undefined ? undefined : decodePipelineExecutionView({ temporary,
+    npm: join(npm![0], "package.json"),
+    ...(downloads === undefined ? {} : { downloads: downloads.root }) });
   const env = { ...integrationCheckEnvironment(check, temporary, `${dirname(host.node)}:${dirname(view.git)}:/usr/bin:/bin`),
     // Apple development shims use this observed installation instead of
     // reopening the mutable global xcode-select link outside the policy.
     TMPDIR: temporary, GIT_EXEC_PATH: roots.tools.execPath, DEVELOPER_DIR: roots.tools.developer };
   return { command: { executable: host.node, argv: [join(host.libdir, "apps/oma/dist/entry/candidate-check.js"),
-    JSON.stringify({ candidate, argv: check.argv, ...(check.pipeline === undefined ? {} : { pipeline: check.pipeline }), view })], cwd: view.workspace, env, timeoutMs: null,
+    JSON.stringify({ candidate, argv: check.argv, ...(check.pipeline === undefined ? {} : { pipeline: check.pipeline, pipelineView }),
+      ...(downloads === undefined ? {} : { downloadCache: { key: downloads.key, files: downloads.files } }), view })], cwd: view.workspace, env, timeoutMs: null,
     stdoutBytes: 1024 * 1024, stdoutOverflow: "discard", stderrBytes: 1024 * 1024, stderrOverflow: "discard" }, policy: {
-    readable: [...roots.readable, ...DEVELOPER_TOOL_SUPPORT_FILES.map(file), dir(view.project)],
+    readable: [...roots.readable, ...DEVELOPER_TOOL_SUPPORT_FILES.map(file), dir(view.project), ...(downloads === undefined ? [] : [dir(downloads.root)])],
     writable: [dir(view.workspace), dir(temporary)], denied: [],
     // Checks may execute their own scripts, native addons and build outputs,
     // just as the writable tmpfs view permits on Linux. Developer binaries
@@ -58,7 +68,7 @@ export function candidateSeatbeltPlan(host: MacGitSandboxHost, viewInput: Candid
     executable: [...roots.executable, dir(view.workspace), dir(temporary),
       ...developerToolDirectories(roots.tools).map(dir)],
     mapped: roots.mapped, unixSockets: [], machServices: [], environmentKeys: Object.keys(env),
-    profileInput: "stdin", preserveFds: [6, 8, 9],
+    profileInput: "stdin", preserveFds: [6, 8, 9, ...(downloads === undefined ? [] : [10])],
   } };
 }
 export function quarantineSeatbelt(host: MacGitSandboxHost, input: { readonly phase: "verify" | "import"; readonly candidate: string;

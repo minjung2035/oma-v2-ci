@@ -31,7 +31,8 @@ export function candidateSandbox(host: CandidateSandboxHost, candidate: string, 
     "--tmpfs", "/workspace", "--tmpfs", "/tmp",
     ...(host.downloadCache === undefined ? [] : ["--ro-bind-fd", "9", "/tmp/oma-downloads"]), "--clearenv",
     ...Object.entries(environment).flatMap(([key, value]) => ["--setenv", key, value]),
-    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv, ...(host.downloadCache === undefined ? {} : { downloadCache: host.downloadCache }), ...(check.pipeline === undefined ? {} : { pipeline: check.pipeline }),
+    "--", RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/apps/oma/dist/entry/candidate-check.js`, JSON.stringify({ candidate, argv: check.argv, ...(host.downloadCache === undefined ? {} : { downloadCache: host.downloadCache }), ...(check.pipeline === undefined ? {} : { pipeline: check.pipeline,
+      pipelineView: { temporary: "/tmp", npm: `${RESIDENT_PATHS.nodeModules}/npm/package.json`, ...(host.downloadCache === undefined ? {} : { downloads: "/tmp/oma-downloads" }) } }),
       view: { git: "/usr/bin/git", project: RESIDENT_PATHS.projectGit, workspace: RESIDENT_PATHS.workspace } })];
   return {
     executable: sandbox[0]!, argv: sandbox.slice(1),

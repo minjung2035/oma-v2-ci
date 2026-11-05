@@ -9,7 +9,7 @@ export default async function* nativeTap(source) {
       if (event.type === "test:fail" && event.data?.details?.error !== undefined)
         yield { type: "test:diagnostic", data: { nesting: event.data.nesting ?? 0,
           message: "Native failure causes: " + inspect(event.data.details.error, {
-            depth: 12, maxArrayLength: 24, maxStringLength: 4000, breakLength: 120,
+            depth: null, maxArrayLength: 128, maxStringLength: 8192, breakLength: 120,
           }) } };
     }
   }

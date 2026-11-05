@@ -8,12 +8,16 @@ import { GIT_ENV } from "@oma/process/policies";
 import { nodeToolchainMounts } from "@oma/domain/resident-paths";
 import type { GitPaths } from "@oma/git/paths";
 import type { CheckPipeline } from "@oma/contracts/integration";
+import type { CommandSpec, ProcessObservation } from "@oma/process/command";
 export interface PreparedPipelineCache { root: string; key: string; files: string[]; state: "hit" | "rebuilt" }
-export async function preparePipelineCache(paths: GitPaths, candidate: string, pipeline: CheckPipeline, signal: AbortSignal): Promise<PreparedPipelineCache | null> {
+export async function preparePipelineCache(paths: GitPaths, candidate: string, pipeline: CheckPipeline, signal: AbortSignal,
+  execution?: { readonly git: string; readonly environment: Readonly<Record<string, string>>;
+    run(command: CommandSpec, signal: AbortSignal): Promise<ProcessObservation> }): Promise<PreparedPipelineCache | null> {
   if (pipeline.cachePolicy.kind === "off" || !paths.checkNode || !paths.checkAssetsDir) return null;
   const executor = new PreparationExecutor();
-  const result = await executor.run({ executable: GIT_BIN, argv: [...CANONICAL_SAFE_ARGS, "--git-dir", paths.projectGit, "show", `${candidate}:${pipeline.cachePolicy.lockfile}`],
-    env: GIT_ENV, timeoutMs: null, stdoutBytes: 16 * 1024 * 1024, stderrBytes: 8192, stderrOverflow: "discard" }, signal);
+  const run = execution === undefined ? (command: CommandSpec, signal: AbortSignal) => executor.run(command, signal) : execution.run.bind(execution);
+  const result = await run({ executable: execution?.git ?? GIT_BIN, argv: [...CANONICAL_SAFE_ARGS, "--git-dir", paths.projectGit, "show", `${candidate}:${pipeline.cachePolicy.lockfile}`],
+    env: { ...GIT_ENV, ...execution?.environment }, timeoutMs: null, stdoutBytes: 16 * 1024 * 1024, stderrBytes: 8192, stderrOverflow: "discard" }, signal);
   if (result.kind !== "exited") throw new StoreError("RUN_TERMINATION_UNKNOWN", "cache preparation scope is unconfirmed");
   if (result.exitCode !== 0) return null;
   let downloads: ReturnType<typeof publicDownloads>, packageManager: string;
@@ -26,8 +30,8 @@ export async function preparePipelineCache(paths: GitPaths, candidate: string, p
   const key = downloadCacheKey(paths.projectGit, pipeline, result.stdout, packageManager), root = ensureDownloadCache(paths.stateRoot, key);
   const before = readDownloadCache(root, key, downloads); let manifest = before;
   if (manifest === null) {
-    const fill = await executor.run({ executable: paths.checkNode, argv: [join(paths.checkAssetsDir, "apps/oma/dist/entry/download-cache.js")],
-      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" }, input: JSON.stringify({ root, key, lockfile: result.stdout.toString("base64") }),
+    const fill = await run({ executable: paths.checkNode, argv: [join(paths.checkAssetsDir, "apps/oma/dist/entry/download-cache.js")],
+      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C", ...execution?.environment }, input: JSON.stringify({ root, key, lockfile: result.stdout.toString("base64") }),
       timeoutMs: null, stdoutBytes: 0, stdoutOverflow: "discard", stderrBytes: 8192, stderrOverflow: "discard" }, signal);
     if (fill.kind !== "exited") throw new StoreError("RUN_TERMINATION_UNKNOWN", "cache download helper scope is unconfirmed");
     if (fill.exitCode !== 0) return null;

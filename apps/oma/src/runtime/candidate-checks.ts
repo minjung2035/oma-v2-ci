@@ -75,7 +75,14 @@ export class CandidateChecks {
     const closeReleaseRead = (): void => { const fd = releaseRead; releaseRead = undefined; if (fd !== undefined) closeSync(fd); };
     const closeReleaseWrite = (): void => { const fd = releaseWrite; releaseWrite = undefined; if (fd !== undefined) closeSync(fd); };
     return withAsyncCleanup(async () => {
-      const cache = check.pipeline === undefined ? null : await preparePipelineCache(this.paths, candidate, check.pipeline, signal);
+      if (process.platform === "darwin" && stage === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "candidate has no owned physical staging");
+      const tools = process.platform !== "darwin" ? undefined : await observeMacDeveloperTools(stage!.temporary,
+        command => this.execute(command, signal, authorize, [stage!.leaseFd], () => {}));
+      const cache = check.pipeline === undefined ? null : await preparePipelineCache(this.paths, candidate, check.pipeline, signal,
+        tools === undefined ? undefined : { git: tools.git, environment: { HOME: stage!.temporary, TMPDIR: stage!.temporary,
+          DEVELOPER_DIR: tools.developer, GIT_EXEC_PATH: tools.execPath },
+          run: (command, cancellation) => this.execute(command, cancellation, authorize, [stage!.leaseFd], () => {},
+            command.executable === this.paths.checkNode ? (source, options) => this.darwinLaunch!(source, options) : undefined) });
       if (cache !== null) cacheFd = openOwnedDirectoryPath(cache.root);
       recorder?.cache(cache === null ? { state: "off-or-miss" } : { state: cache.state, key: cache.key, files: cache.files.length });
       project = openOwnedDirectoryPath(this.paths.projectGit);
@@ -102,10 +109,9 @@ export class CandidateChecks {
       let physicalLaunch: Parameters<ExecutionRuntime["run"]>[7];
       if (process.platform === "darwin") {
         if (stage === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "candidate has no owned physical staging");
-        const tools = await observeMacDeveloperTools(stage.temporary,
-          command => this.execute(command, signal, authorize, [stage.leaseFd], () => {}));
-        const plan = candidateSeatbeltPlan({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools },
-          { git: tools.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check);
+        const plan = candidateSeatbeltPlan({ node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, tools: tools!,
+          ...(cache === null ? {} : { downloadCache: cache }) },
+          { git: tools!.git, project: this.paths.projectGit, workspace: stage.workspace }, stage.temporary, candidate, check);
         command = plan.command;
         physicalLaunch = (source, options) => this.darwinLaunch!(source, options, plan.policy);
       } else command = candidateSandbox({ rootfs: residentRootfsPath(this.paths.stateRoot), node: this.paths.checkNode, libdir: this.paths.checkAssetsDir, ...(cache === null ? {} : { downloadCache: { key: cache.key, files: cache.files } }) }, candidate, check);
@@ -113,7 +119,7 @@ export class CandidateChecks {
       let initialRefusal: { error: unknown } | undefined;
       try { observation = await this.execute(command, signal, () => {
         try { authorize(); } catch (error) { initialRefusal = { error }; throw error; }
-      }, [write!, project, releaseRead, ...(cacheFd === undefined ? [] : [cacheFd]), ...(stage === undefined ? [] : [stage.leaseFd])], () => cleanupAll([closeWriter, closeReleaseRead]), physicalLaunch); }
+      }, [write!, project, releaseRead, ...(stage === undefined ? [] : [stage.leaseFd]), ...(cacheFd === undefined ? [] : [cacheFd])], () => cleanupAll([closeWriter, closeReleaseRead]), physicalLaunch); }
       catch (error) {
         if (initialRefusal?.error === error) throw error;
         if (setupFailure !== undefined) throw new AggregateError([setupFailure.error, error], "candidate setup and execution cleanup failed");

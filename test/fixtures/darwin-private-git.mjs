@@ -13,6 +13,8 @@ import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
 import {CandidateChecks} from '#oma-test/app/runtime/candidate-checks';
 import {quarantineExecution} from '#oma-test/app/runtime/quarantine-execution';
 import {withAsyncCleanup,cleanupAll} from '@oma/native/cleanup';
+import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
+import {preparePipelineCache} from '#oma-test/app/runtime/pipeline-cache';
 
 export async function verifyDarwinGitRuntime(generation,installation,root,signal){
  assert.equal(process.platform,'darwin');mkdirSync(root,{mode:0o700});
@@ -23,15 +25,17 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
  const git=(cwd,...argv)=>{const r=spawnSync('/usr/bin/git',argv,{cwd,env,encoding:'utf8',timeout:10000});
   assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
  git(source,'init','-q');writeFileSync(join(source,'exact.txt'),'private generation checkout\r\n');
+ writeFileSync(join(source,'package-lock.json'),JSON.stringify({lockfileVersion:3,packages:{}}));
  git(source,'add','.');git(source,'commit','-qm','base');const base=git(source,'rev-parse','HEAD');
  git(root,'clone','-q','--bare',source,project);const before=git(root,'--git-dir',project,'show-ref');
  const paths={stateRoot:root,projectGit:project,contextGit:join(root,'context.git'),worldDir:join(root,'world'),society:'demo',
   checkNode:installation.node,checkAssetsDir:installation.libdir,ownerSignal:signal};
  ExecutionJournal.initialize(root);const runtime=new ExecutionRuntime(root,launchDarwinJobScope);
- const originals=['candidate-check.js','quarantine.js'].map(name=>{const path=join(installation.libdir,'apps/oma/dist/entry',name);return{path,bytes:readFileSync(path)};});
+ const originals=['candidate-check.js','quarantine.js','download-cache.js'].map(name=>{const path=join(installation.libdir,'apps/oma/dist/entry',name);return{path,bytes:readFileSync(path)};});
  const launches=[],results=[];
  const launch=async(command,options,policy)=>{
-  assert.ok(originals.some(file=>file.path===command.argv[0]));assert.ok(policy);
+  assert.ok(originals.some(file=>file.path===command.argv[0]));
+  assert.equal(policy!==undefined,command.argv[0]!==originals[2].path);
   const scope=await generation.launchNode(command,options,policy);
   launches.push({entry:command.argv[0],witness:scope.witness});return scope;
  };
@@ -39,6 +43,18 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
  await withAsyncCleanup(async()=>{
   await runtime.recover();
   for(const file of originals)writeFileSync(file.path,"throw new Error('mutable original installation was executed');\n");
+  const temporary=join(root,'cache-home');mkdirSync(temporary,{mode:0o700});
+  const tools=await observeMacDeveloperTools(temporary,command=>runtime.run('preparation',command,signal,()=>{}));
+  const cachePipeline={version:2,setupSteps:[],checkSteps:[{id:'unused',argv:['/bin/false'],cwd:'.',env:{}}],env:{},
+   toolchainDigest:'b'.repeat(64),cachePolicy:{kind:'npm-downloads',trustScope:'private-runtime',lockfile:'package-lock.json'}};
+  const cacheExecution={git:tools.git,environment:{HOME:temporary,TMPDIR:temporary,DEVELOPER_DIR:tools.developer,GIT_EXEC_PATH:tools.execPath},
+   run:(command,cancel)=>runtime.run('preparation',command,cancel,()=>{},[],undefined,undefined,
+    command.executable===installation.node?(source,options)=>launch(source,options):undefined)};
+  const rebuilt=await preparePipelineCache(paths,base,cachePipeline,signal,cacheExecution);
+  assert.equal(rebuilt?.state,'rebuilt');assert.deepEqual(rebuilt.files,[]);
+  const hit=await preparePipelineCache(paths,base,cachePipeline,signal,cacheExecution);
+  assert.equal(hit?.state,'hit');assert.equal(hit.root,rebuilt.root);assert.equal(launches.length,1);
+  assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
   const checks=new CandidateChecks(paths,async(command,cancel,authorize,fds,prepared,physical)=>{
    const result=await runtime.run('candidate',command,cancel,authorize,fds,undefined,prepared,physical);
    results.push(result);return result;
@@ -80,7 +96,7 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
   const next=Buffer.alloc(1);assert.equal(readSync(bundleFd,next),1);assert.equal(next[0],bytes[5]);
   assert.deepEqual(readFileSync(bundle),bytes);assert.deepEqual(ExecutionJournal.inspect(root),[]);
   assert.equal(runtime.confirmDead('quarantine'),true);assert.deepEqual(readdirSync(join(root,'staging')),[]);
-  assert.equal(launches.length,4);assert.ok(launches.every(row=>row.witness.kind==='darwin-resource-coalition'));
+  assert.equal(launches.length,5);assert.ok(launches.every(row=>row.witness.kind==='darwin-resource-coalition'));
  },async()=>{
   await withAsyncCleanup(()=>runtime.close(),()=>cleanupAll([
    ()=>{if(bundleFd!==undefined)closeSync(bundleFd);},...originals.map(file=>()=>writeFileSync(file.path,file.bytes)),

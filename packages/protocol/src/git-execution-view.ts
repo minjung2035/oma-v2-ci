@@ -6,6 +6,9 @@ import { trustedAbsolutePath } from "./run-lease.js";
 export interface CandidateExecutionView {
   readonly git: string; readonly project: string; readonly workspace: string;
 }
+export interface PipelineExecutionView {
+  readonly temporary: string; readonly npm: string; readonly downloads?: string;
+}
 export interface QuarantineExecutionView {
   readonly git: string; readonly project: string; readonly root: string; readonly bundle: string; readonly temporary: string;
 }
@@ -22,6 +25,16 @@ const under = (value: string, root: string): boolean => {
 };
 function separate(left: string, right: string): void { if (under(left, right) || under(right, left)) refuse(); }
 function refuse(): never { throw new StoreError("INVALID_REQUEST", "Git execution view differs from its closed path grammar"); }
+export function decodePipelineExecutionView(value: unknown): PipelineExecutionView {
+  const downloads = !!value && typeof value === "object" && Object.hasOwn(value, "downloads");
+  const row = fields(value, downloads ? ["temporary", "npm", "downloads"] : ["temporary", "npm"]);
+  if (!row.npm!.endsWith("/package.json")) refuse();
+  separate(row.temporary!, row.npm!);
+  // Linux places a read-only download mount inside its private tmpfs. The
+  // mutable npm cache still has to be separate from those verified inputs.
+  if (downloads) { separate(row.temporary!.replace(/\/$/, "") + "/oma-npm-cache", row.downloads!); separate(row.npm!, row.downloads!); }
+  return Object.freeze({ temporary: row.temporary!, npm: row.npm!, ...(downloads ? { downloads: row.downloads! } : {}) });
+}
 export function decodeCandidateExecutionView(value: unknown): CandidateExecutionView {
   const row = fields(value, ["git", "project", "workspace"]);
   separate(row.project!, row.workspace!);
