@@ -16,6 +16,8 @@ import {withAsyncCleanup,cleanupAll} from '@oma/native/cleanup';
 import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
 import {preparePipelineCache} from '#oma-test/app/runtime/pipeline-cache';
 import {readResult} from '@oma/tool-files';
+import {inspect} from 'node:util';
+import {observeDarwinCoalitionPopulation} from '@oma/native/audit-session';
 
 export async function verifyDarwinGitRuntime(generation,installation,root,signal){
  assert.equal(process.platform,'darwin');mkdirSync(root,{mode:0o700});
@@ -38,6 +40,11 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
   assert.ok(originals.some(file=>file.path===command.argv[0]));
   assert.equal(policy!==undefined,command.argv[0]!==originals[2].path);
   const scope=await generation.launchNode(command,options,policy);
+  if(command.argv[0]===originals[0].path)void scope.result.then(result=>{
+   try{console.error(JSON.stringify({phase:'private-candidate-terminal',pipeline:JSON.parse(command.argv[1]).pipeline!==undefined,
+    witness:scope.witness,kind:result.kind,exitCode:result.exitCode,signal:result.signal,
+    stdout:result.stdout.toString().slice(0,8192),stderr:result.stderr.toString().slice(0,8192)}));}catch{/* diagnostics do not change the owned outcome */}
+  },error=>{try{console.error(inspect(error,{depth:null,maxArrayLength:128,maxStringLength:8192}));}catch{/* keep the original rejection */}});
   launches.push({entry:command.argv[0],witness:scope.witness});return scope;
  };
  let bundleFd;
@@ -83,7 +90,15 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
     checkSteps:[step('check',`require('node:assert/strict').equal(require('node:fs').readFileSync('node_modules/proof','utf8'),'installed');process.stdout.write('protected pipeline check');`)]}
   }]}).checks[0];
   try{await checks.run(base,pipeline,signal,()=>{},'protected-pipeline');}
-  catch(error){console.error(JSON.stringify({phase:'protected-pipeline',stderr:results.at(-1)?.stderr.toString().slice(0,8192)}));throw error;}
+  catch(error){
+   try{console.error(JSON.stringify({phase:'protected-pipeline',stderr:results.at(-1)?.stderr.toString().slice(0,8192),
+     journal:ExecutionJournal.inspect(root),lastWitness:launches.at(-1)?.witness,
+     population:launches.at(-1)?.witness?observeDarwinCoalitionPopulation(launches.at(-1).witness):'not-acquired'}));}
+   catch(diagnostic){console.error(inspect(diagnostic,{depth:null}));}
+   // Log before the test-worker Error serializer drops nested AggregateError
+   // entries. The primary exception and cleanup outcome remain unchanged.
+   console.error(inspect(error,{depth:null,maxArrayLength:128,maxStringLength:8192}));throw error;
+  }
   const receiptDirectory=join(root,'checks',readdirSync(join(root,'checks'))[0]),receipt=JSON.parse(readFileSync(join(receiptDirectory,'receipt.json'),'utf8'));
   assert.equal(receipt.status,'succeeded');assert.equal(receipt.scopeConfirmedDead,true);assert.equal(receipt.steps.length,4);
   assert.ok(receipt.tracked.bytes>0);assert.match(readResult(receiptDirectory,receipt.tracked.reference).text,/generated/);

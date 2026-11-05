@@ -608,7 +608,7 @@
     },
     {
       "owner": "packages/git/src/quarantine.ts#QuarantineImporter.runBundle",
-      "fact": "after the original native import scope settles, actual SIGKILL after quarantine-tree removal/parent flush or after lease removal/parent flush preserves the accepted Mail root, original bundle/message bytes, input/plan hashes and exact source/ref relationships across two Store reopens and same-key retries in SHA-1 and SHA-256. A tree-only interruption retains its earlier lease bytes without a fresh import acquiring that collection owner. This tests settled collection, unlike the earlier pre-cleanup submit-import callback; it is not filesystem power-loss or macOS/kernel containment qualification",
+      "fact": "after the original native import scope settles, actual SIGKILL after quarantine-tree removal/parent flush or after lease removal/parent flush preserves the accepted Mail root, original bundle/message bytes, input/plan hashes and exact source/ref relationships across two Store reopens and same-key retries in SHA-1 and SHA-256. A tree-only interruption retains its earlier lease bytes without a fresh import acquiring that collection owner. The actual two-phase import oracle also preserves accepted bundle bytes and canonical refs and rejects a mismatched candidate. This tests settled collection, unlike the earlier pre-cleanup submit-import callback; it is not filesystem power-loss or macOS/kernel containment qualification",
       "tests": [
         {
           "file": "test/collaboration-attachment-boundaries.test.ts",
@@ -618,6 +618,11 @@
             "quarantine-tree-flush",
             "quarantine-collection-flush"
           ]
+        },
+        {
+          "file": "test/native-git-execution.test.mjs",
+          "title": "007. Native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
+          "injection": "logical"
         }
       ]
     },
@@ -2041,17 +2046,6 @@
           "file": "test/native-git-execution.test.mjs",
           "title": "003. Native candidate: SIGKILL after exact checkout preserves canonical refs and permits a fresh retry",
           "injection": "sigkill"
-        }
-      ]
-    },
-    {
-      "owner": "packages/git/src/quarantine-worker.ts#executeQuarantinePhase",
-      "fact": "the disposable verifier alternates; repeated verified imports preserve accepted bundle bytes and canonical refs",
-      "tests": [
-        {
-          "file": "test/native-git-execution.test.mjs",
-          "title": "007. Native quarantine: actual verify then import preserves canonical refs and rejects a mismatched candidate",
-          "injection": "logical"
         }
       ]
     },

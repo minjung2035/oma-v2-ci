@@ -49,7 +49,7 @@ test("002. Mac quarantine separates readonly accepted input, writable verify rep
     const plan=quarantineSeatbeltPlan(host,{...base,phase},view);
     assert.equal(plan.command.executable,host.node);assert.equal(plan.command.argv[0],host.libdir+'/apps/oma/dist/entry/quarantine.js');
     assert.deepEqual(prepareSeatbelt(plan.command,plan.policy),recipe);
-    assert.equal(recipe.command.argv[1],'--keep-fds=7');assert.equal(recipe.command.cwd,view.temporary);
+    assert.equal(recipe.command.argv[1],'--keep-fds=7,9');assert.equal(recipe.command.cwd,view.temporary);
     assert.deepEqual(JSON.parse(recipe.command.argv.at(-1)),{...base,phase,view});
     for(const path of [root,view.bundle])assert.ok(!recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(path)}))`));
     assert.equal(recipe.profile.includes(`(allow file-write* (subpath ${JSON.stringify(project)}))`),phase==='import');

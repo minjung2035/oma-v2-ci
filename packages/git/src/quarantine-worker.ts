@@ -3,8 +3,6 @@
  * second fixed invocation after the verifier's whole scope ended. */
 import { join } from "node:path";
 import { ensureOwnedDirectory } from "@oma/storage/directory";
-import { replaceDerivedEntry } from "@oma/storage/durable-fs";
-import { withinDirectory } from "@oma/native/files";
 import { runProcess } from "@oma/process/async";
 import { GIT_ENV } from "@oma/process/policies";
 import { decodeProcessText } from "@oma/process/run";
@@ -40,24 +38,12 @@ async function git(view: QuarantineExecutionView, repository: string, argv: read
   if (parse && result.stdoutTruncated) throw new StoreError(code, "quarantine Git answer exceeds its closed representation");
   return parse ? decodeProcessText(result.stdout) : "";
 }
-/** Git alternates accept C-quoted byte paths, not JSON unicode escapes or a
- * raw newline-delimited host name. Emit octal UTF-8 bytes for all controls and
- * non-ASCII, preserving every path byte without a second entry or truncation.
- * See Git v2.47.3 parse_alt_odb_entry/unquote_c_style. */
-function alternateObjectDirectory(path: string): string {
-  let quoted = '"';
-  for (const byte of Buffer.from(path)) {
-    if (byte === 0x22 || byte === 0x5c) quoted += `\\${String.fromCharCode(byte)}`;
-    else if (byte < 0x20 || byte >= 0x7f) quoted += `\\${byte.toString(8).padStart(3, "0")}`;
-    else quoted += String.fromCharCode(byte);
-  }
-  return quoted + '"\n';
-}
-export async function executeQuarantinePhase(input: QuarantineInput): Promise<void> {
+export async function executeQuarantinePhase(input: QuarantineInput, projectReference?: string): Promise<void> {
   // The entry validates again inside the view. It never trusts inherited
   // environment, host path strings, shell expansion, hooks or filters.
   input = decodeQuarantineInput(input);
-  const { project: PROJECT, root: ROOT, bundle: BUNDLE, temporary } = input.view, REPO = join(ROOT, "repo");
+  const { root: ROOT, bundle: BUNDLE, temporary } = input.view, REPO = join(ROOT, "repo");
+  const PROJECT = projectReference ?? input.view.project;
   const command = (repository: string, argv: readonly string[], code: ErrorCode, parse = false) => git(input.view, repository, argv, code, parse);
   if (input.phase === "import") {
     await command(PROJECT, ["fetch", "--progress", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance", "--refmap=", REPO, "refs/oma/input"], "INTERNAL_ERROR");
@@ -68,12 +54,17 @@ export async function executeQuarantinePhase(input: QuarantineInput): Promise<vo
   if ((format !== "sha1" && format !== "sha256") || input.candidate.length !== (format === "sha1" ? 40 : 64))
     throw new StoreError("BUNDLE_INVALID", "bundle object format differs from the canonical repository");
   await command(REPO, ["init", "-q", "--bare", `--object-format=${format}`], "UNSUPPORTED_PROFILE");
-  ensureOwnedDirectory(join(REPO, "objects", "info"), ROOT, 0o700);
-  // This disposable verifier's derived alternate is not accepted evidence.
-  // Retain the parent for replacement and flush only this owned directory.
-  const alternates = join(REPO, "objects", "info", "alternates");
-  withinDirectory(alternates, (parent, name) => replaceDerivedEntry(parent, name, alternates,
-    alternateObjectDirectory(join(PROJECT, "objects")), 0o600));
+  // Materialize prerequisite graphs in the private object database. An
+  // absolute alternates path would reopen a replaceable canonical name.
+  // One validated OID per invocation avoids a new argv-size admission limit.
+  for (const prerequisite of input.prerequisites) {
+    try { await command(REPO, ["fetch", "-q", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance", PROJECT, prerequisite], "PREREQUISITE_MISSING"); }
+    catch (error) {
+      if (!(error instanceof StoreError) || error.code !== "PREREQUISITE_MISSING") throw error;
+      await command(PROJECT, ["fsck", "--strict", "--no-reflogs", "--progress"], "REF_STATE_UNKNOWN");
+      throw error;
+    }
+  }
   await command(REPO, ["bundle", "verify", BUNDLE], "BUNDLE_INVALID");
   const heads = (await command(REPO, ["bundle", "list-heads", BUNDLE], "BUNDLE_INVALID", true)).trimEnd().split("\n");
   if (heads.length !== 1 || heads[0] !== `${input.candidate} ${input.exportRef}`)
@@ -83,6 +74,9 @@ export async function executeQuarantinePhase(input: QuarantineInput): Promise<vo
     throw new StoreError("BUNDLE_INVALID", "quarantined candidate differs from the accepted OID");
   if ((await command(REPO, ["cat-file", "-t", "refs/oma/input"], "BUNDLE_INVALID", true)) !== "commit\n")
     throw new StoreError("BUNDLE_INVALID", "bundle candidate must name a commit object without peeling a tag");
+  // The old full fsck included the canonical alternates database. Keep that
+  // corruption observation even though its objects are now private copies.
+  await command(PROJECT, ["fsck", "--strict", "--no-reflogs", "--progress"], "REF_STATE_UNKNOWN");
   try { await command(REPO, ["fsck", "--strict", "--no-reflogs", "--progress"], "BUNDLE_INVALID"); }
   catch (error) {
     if (!(error instanceof StoreError) || error.code !== "BUNDLE_INVALID") throw error;

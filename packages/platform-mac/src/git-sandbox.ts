@@ -89,6 +89,6 @@ export function quarantineSeatbeltPlan(host: MacGitSandboxHost, input: { readonl
     cwd: view.temporary, env, timeoutMs: null, stdoutBytes: 256, stderrBytes: 64 * 1024, stderrOverflow: "discard" }, policy: {
     readable: [...roots.readable, dir(view.root), ...(input.phase === "verify" ? [dir(view.project)] : [])],
     writable: writable.map(dir), denied: [], executable: roots.executable, mapped: roots.mapped,
-    unixSockets: [], machServices: [], environmentKeys: Object.keys(env), profileInput: "stdin", preserveFds: [7],
+    unixSockets: [], machServices: [], environmentKeys: Object.keys(env), profileInput: "stdin", preserveFds: [7, 9],
   } };
 }

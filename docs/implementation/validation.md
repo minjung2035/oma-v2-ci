@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `103754bcbb2ce00a99529e8ac8a72d644da68acab5870587c795dbcf44ebc4ef` (15912 files).
+verification input digest `8d4766ae990f67ebbb7c0ad08c9e152114c618423fcb0a8c154a78c330411593` (15913 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3096,3 +3096,49 @@ fresh27/27 packed installation(App 포함)·installed runtime·declaration 검�
 production14394, review CHANGED_WITHOUT_ORACLE30 / NOT_REVIEWED14364 / REMOVED220이다.
 원시는 `/tmp/oma-source65-{build-closed-fd,package-isolation-closed-fd,selected-closed-fd,linux-pipeline-closed-fd,root-closed-fd,review-closed-fd,architecture}.log`다.
 SOURCE65의 실제 Mac candidate canonical FD 업무 연결과 추가 alias 순서는 NOT_RUN이다. product BLOCKED·세 gate OPEN·기본 실행 guard를 유지한다.
+
+
+### SOURCE65 실제 candidate 연결·Mac15 정리 실패와 SOURCE66 quarantine 연결
+
+SOURCE65 `3810b2384faf427684128d7cc0cb29e835a92ba6` / local checkpoint `78b80ef79465de99684563504d26fcaac7aeeae0`,
+Native41985659622·Architecture41985659569를 발행했다. canonical15912/`103754bcbb2ce00a99529e8ac8a72d644da68acab5870587c795dbcf44ebc4ef`다.
+Mac15 shared ZIP13396007656 SHA-256 `9b6d798467ec1a043206fc88746414e97970435c8e47c2c83f7188e3ba92d1d5`,
+Intel26 shared ZIP13395664596 SHA-256 `1c67e9ea1290e1b06a9c4b5a48cbecfa2510766dcb3fb472f3b9fde36777f8d6`를 대조했다.
+양쪽 input은 위 canonical 전후 동일, runtime은 각각15532/27/`6374c4bc9436c187439823b05ab910643c571e499be1d51ef93a50fb62100152`와
+15532/27/`26aaabc425895ead19dac9e6c1abfc78850d739b88db09243dd3f9e6c35cbc3d` 전후 동일이다.
+
+Intel410/410 PASS·기타0이며 실제 App candidate FD7 cwd/close·private check/pipeline·권한 철회·quarantine와 전 scope/journal return을 완료했다.
+Mac15는410/409 PASS/1 FAIL·기타0다. dedicated held cwd·shared candidate replacement와 초기 실제 candidate/check·FD7 non-inheritance는 통과했지만,
+whole-generation의 후속 protected pipeline에서 RUN_TERMINATION_UNKNOWN(populated scope termination failed)이 발생했다.
+duration108442ms·서명1276ms·generation65749ms이며 기존240s deadline을 넓히지 않는다.
+원본 nested AggregateError entries가 test-worker Error 직렬화 뒤 보이지 않아 현재 원인은 미확정이다.
+이전 SOURCE58 Mac15 unknown과 같은 원인이라고 단정하거나 재실행 성공으로 덮지 않는다.
+SOURCE66 fixture는 예외가 발생한 원본 process 안에서 full inspect·현재 journal·마지막 CID·fresh population을 진단하고 원래 예외를 그대로 다시 던진다.
+새 진단이 실패해도 primary failure를 대체하지 않는다.
+
+SOURCE65 Mac15의 추가 live ANY-reset 후 source-filter 복사도 EINVAL22였다. Intel SOURCE64의 완전한 독립 metadata 위조 반례는 그대로 유효하며 plain frozen-state claim은 REJECTED다.
+
+SOURCE66은 trusted quarantine entry에 실제 canonical FD9을 전달하고 단일 setup cwd로 진입한 뒤 자기 descriptor copy를 닫는다.
+verify의 canonical read와 import의 canonical write는 trusted local`.` reference를 사용하며 wire/model grammar는 그대로다.
+private verifier는 pathname alternates 대신 검증된 prerequisite OID graph를 private repo에 fetch한다.
+canonical 이름을 reopen하는 alternates를 제거했으며 OID별 호출로 새 argv-size quota를 만들지 않는다.
+기존 full fsck가 alternates canonical DB도 검사하던 보장을 유지하기 위해 bundle/ref/type 검증 뒤 canonical fsck와 private fsck를 각각 수행한다.
+private repo의 자기 prerequisite copies는 accepted state가 아니며 기존 lease·verify→complete-scope-death→현재 권한→import 순서와 actual CID/journal owner를 유지한다.
+
+Linux에서 canonical 이름을 빈 repo로 교체한 뒤 verify의 canonical 무변경·import의 held original-only object promotion·canonical refs/accepted bytes/host cwd 보존을 통과했다.
+별도 unrelated canonical object corruption도 REF_STATE_UNKNOWN으로 거절했다.
+첫 fault fixture는 Git의0444 object를 수정하려다 EACCES로 실패했고, 자기 테스트 object만 chmod한 뒤 실제 corruption을 주입하도록 고쳤다.
+초기 실패 원시를 `/tmp/oma-source66-selected.log`에 보존했고 늦은 cleanup hook도 setup 직후 등록하도록 고쳤다.
+최종 관련10/10 및 실제 namespace Git9+pipeline5=14/14가 PASS다.
+새 Mac quarantine FD9/graph copy와 cleanup 원인 진단의 실제 결과는 아직 NOT_RUN이며 private workspace/root 전체 결박은 미완료다.
+Society lease·남은 Git root·전체 Runner/Worker·CLI/reboot/release와 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE66 첫 durable-boundaries 검사는 제거한 alternates publication의 오래된 owner 등록1건으로 실패했다.
+더 이상 해당 publication이 없는 worker owner를 제거하고 기존 logical import oracle을 실제 QuarantineImporter.runBundle 경계로 옮겨 보존했다.
+테스트·허용 실패·살아 있는 accepted import 경계는 제거하지 않았다. 최종 strongest boundary는 sigkill80 / in-process-fault31 / logical21이며0 findings다.
+SOURCE66 최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+source 고정 뒤 단일 build·fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+원시는 `/tmp/oma-source66-{build,selected-final,linux-git-pipeline,package-isolation,architecture-final,review,boundaries-final}.log`다.
+새 Mac quarantine FD9·private prerequisite graph와 Mac15 cleanup 원인 진단은 아직 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.

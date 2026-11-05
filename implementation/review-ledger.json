@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 30,
-  "NOT_REVIEWED": 14364,
+  "CHANGED_WITHOUT_ORACLE": 32,
+  "NOT_REVIEWED": 14362,
   "REMOVED": 220
  },
  "lanes": {
@@ -312,8 +312,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/entry/download-cache.ts",
@@ -383,7 +382,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/entry/runner.ts",
@@ -2276,10 +2276,12 @@
   {
    "path": "packages/git/src/candidate-check.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR49"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "846d63c698aea9e09d56577d606079ae94b9c4cb461b830353257af3820c78e5"
   },
   {
    "path": "packages/git/src/canonical-command.ts",
@@ -2419,7 +2421,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/git/src/quarantine.ts",
@@ -2799,10 +2802,12 @@
   {
    "path": "packages/native/src/files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "0b81feb80daedb013e9c1e3120f27880da0c57b2911cbc1c335ab6ed74cd26a6"
   },
   {
    "path": "packages/native/src/identity.ts",
