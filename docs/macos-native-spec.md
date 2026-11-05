@@ -164,6 +164,10 @@ mode-000 등 안전하게 취득·수리할 수 없는 entry는 unknown으로 �
 
 Society·broker·tree-reader lock은 서로 다른 수명이다. held directory/inode의 실제 flock 계약을 검증하며 TTL·heartbeat·PID 파일로 ownership을 대체하지 않는다. `temp → write-all → file flush → verify → no-replace publish/derived replace → parent flush`를 유지한다. 같은 이름/다른 bytes는 충돌이다. SQLite/Git 등 외부 writer도 같은 root capability에 연결해야 한다.
 
+Darwin Society adapter의 전체 identity는 기존 UID/state-root SHA-256이다. 고정 creator가 새 no-reuse IPv6 wildcard socket을 만들고, 상속 FD의 실제 socket/generation을 nonce 응답의 kernel sender·고정 mapped image·전체 identity와 함께 확인한다. 공개 검색은 FD를 주지 않는다. creator의 copy와 실행 범위별 신뢰 owner의 copy는 서로 다른 수명이며, 각 funded scope의 전체 사망까지 copy가 남는다는 통합 검증이 필요하다.
+
+UDP port는 전체 identity가 아니라 유한한 exclusion 자원이다. adapter는 1024..49151의 결정적 index 하나만 사용한다. 다른 identity나 비제품 socket이 같은 port를 점유하면 unavailable로 거절하며, 다른 Society의 소유권이나 빈 상태로 판정하거나 대체 port를 찾지 않는다. 이 자원 충돌 제약을 256-bit kernel namespace와 같다고 설명하지 않는다. 실제 채택 판정은 [validation](implementation/validation.md)이 소유한다.
+
 외부 source와 이번 호출이 `O_EXCL`로 만든 비공개 temporary를 구분한다. 후자는 held parent의 `linkat`로 같은 leased inode를 no-replace 공개한다. 이 이름은 해당 writer 소유이며 collector는 live flock을 존중해야 한다.
 외부 source의 FD hardlink가 없거나 cross-device면, 이미 확인한 held-source bytes를 목적지의 비공개 leased temporary에 복사·hash 검증한 뒤 공개한다. 기존 destination은 덮어쓰지 않고 bytes를 검증하며 cleanup identity는 실제 공개한 inode다. source와의 inode 공유 자체는 영속 계약이 아니다.
 

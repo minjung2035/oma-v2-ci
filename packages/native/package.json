@@ -115,6 +115,10 @@
     "./darwin-job-assets": {
       "types": "./dist/darwin-job-assets.d.ts",
       "default": "./dist/darwin-job-assets.js"
+    },
+    "./darwin-society-fence": {
+      "types": "./dist/darwin-society-fence.d.ts",
+      "default": "./dist/darwin-society-fence.js"
     }
   },
   "scripts": {
@@ -138,13 +142,20 @@
       "seatbelt/main.c",
       "seatbelt/launch-fds.h",
       "job-helper/main.c",
-      "job-helper/config.h"
+      "job-helper/config.h",
+      "society-fence/protocol.h",
+      "society-fence/producer.c",
+      "society-fence/control.c",
+      "society-fence/bridge.c"
     ],
     "darwinExecutables": [
       "sqlite-root/oma-sqlite-root.dylib",
       "metadata/oma-file-metadata",
       "seatbelt/oma-seatbelt",
-      "job-helper/oma-job-helper"
+      "job-helper/oma-job-helper",
+      "society-fence/oma-society-fence-producer",
+      "society-fence/oma-society-fence-control",
+      "society-fence/oma-society-fence-bridge.dylib"
     ],
     "isolationSmoke": "test/installed-runtime.mjs"
   }

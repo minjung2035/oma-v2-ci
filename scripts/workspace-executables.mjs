@@ -3,6 +3,12 @@
 const recipes = [
   { owner: "@oma/native", source: "sqlite-root/main.c", output: "sqlite-root/oma-sqlite-root.dylib",
     compilerArguments: ["clang", "-dynamiclib", "-fPIC", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: [] },
+  { owner: "@oma/native", source: "society-fence/producer.c", output: "society-fence/oma-society-fence-producer",
+    compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: [], signingArguments: ["--options", "runtime"] },
+  { owner: "@oma/native", source: "society-fence/control.c", output: "society-fence/oma-society-fence-control",
+    compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: ["-framework", "CoreFoundation", "-framework", "Security", "-lproc"], signingArguments: ["--options", "runtime"], fixedCodeDirectory: "society-fence/oma-society-fence-producer" },
+  { owner: "@oma/native", source: "society-fence/bridge.c", output: "society-fence/oma-society-fence-bridge.dylib",
+    compilerArguments: ["clang", "-dynamiclib", "-fPIC", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: [] },
   { owner: "@oma/native", source: "seatbelt/main.c", output: "seatbelt/oma-seatbelt",
     compilerArguments: ["clang", "-Wall", "-Wextra", "-Werror", "-O2"], linkArguments: ["-lsandbox", "-lproc"] },
   { owner: "@oma/native", source: "job-helper/main.c", output: "job-helper/oma-job-helper",

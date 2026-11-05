@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "b0c36fe5e44b51a9b2212d15cc734fc50b690f1befa56c57bd6a39b98ea1b94a",
+  "manifest": "add12f759d0dae498cd909fd879e75cb8a9d084b89f7f930b7b224a7ef81ed44",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -440,7 +440,7 @@
     },
     {
       "path": "apps/oma/src/runtime/society-lease.ts",
-      "sha256": "66a0a18ef44d3c9fa087d6d3dca1ac7f4f2b64db666d0143390fbb62f486b4a5"
+      "sha256": "237a43fdbc803b0396a5501e10b4a5cb058332bc756c35ae73e12e8b49fd5dc2"
     },
     {
       "path": "apps/oma/src/runtime/society-preparation.ts",
@@ -1464,7 +1464,7 @@
     },
     {
       "path": "packages/native/package.json",
-      "sha256": "cce8406cf3699e4d1db4e9f19be0218321b19052905529c72e4e9d7591e512d5"
+      "sha256": "a9cc22808a4a47fb71a1555d45bf2d38a97702511571776ab6abde37570427b3"
     },
     {
       "path": "packages/native/src/audit-origin.ts",
@@ -1517,6 +1517,10 @@
     {
       "path": "packages/native/src/darwin-metadata.ts",
       "sha256": "5c1844bca226513ba71b8d2f076ac4e92e6dba9cbf568661e6dfe801621d7c07"
+    },
+    {
+      "path": "packages/native/src/darwin-society-fence.ts",
+      "sha256": "a37f43d1594dd6fff7eab87f68b96cc84728334b906ef146231720b7029f4863"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
@@ -1601,6 +1605,22 @@
     {
       "path": "packages/native/src/snapshot-reader.ts",
       "sha256": "e6f6775e75e9d02e28003e904edc72ced772f8de10e3e9a0e5e8aed8303a9906"
+    },
+    {
+      "path": "packages/native/src/society-fence/bridge.c",
+      "sha256": "9222b66b9497b93a00a0d5581ef5b4ac4195e843208db135d443bcecb397de87"
+    },
+    {
+      "path": "packages/native/src/society-fence/control.c",
+      "sha256": "8ab667ed67aad62b51452afda38008059bbc478f2dc8eb04fdca46ce550b6659"
+    },
+    {
+      "path": "packages/native/src/society-fence/producer.c",
+      "sha256": "12a3b7e4fe11befd0331c7d9bbae891ec1e5a89e026269e0c0b5e95180cf8f17"
+    },
+    {
+      "path": "packages/native/src/society-fence/protocol.h",
+      "sha256": "0773685dc09701a2decd51535b1e27132cf94902fd765b26a8a5e0223d7b142b"
     },
     {
       "path": "packages/native/src/sqlite-root.ts",
@@ -1856,7 +1876,7 @@
     },
     {
       "path": "packages/process/src/run.ts",
-      "sha256": "505a2e35a049b2cee15848a4a93e04784ecf21d362785eacae53d8b4da5d5ef5"
+      "sha256": "8a6a80d32202c216236858a00e195b20cc53ad5e267987efd61ade81b071b497"
     },
     {
       "path": "packages/process/src/writer.ts",

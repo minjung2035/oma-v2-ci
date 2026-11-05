@@ -51,6 +51,34 @@ jobs:
       - name: Bind the actual workspace runtime outputs
         run: |
           node --input-type=module -e 'import {runtimeArtifactDigest} from "./scripts/runtime-artifact-digest.mjs"; console.log(JSON.stringify(runtimeArtifactDigest()))' > .scratch/native-runtime/runtime-artifacts.json
+      - name: Qualify product Society ownership before the broad runtime suite
+        id: society_runtime
+        if: runner.os == 'macOS'
+        run: |
+          if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/native-society-lease.test.mjs > .scratch/native-runtime/society-lease-tests.log 2>&1; then cat .scratch/native-runtime/society-lease-tests.log; exit 1; fi
+      - name: Bind Society ownership observations immediately
+        if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        run: |
+          node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > .scratch/native-runtime/verification-input-after-society.json
+          cmp .scratch/native-runtime/verification-input.json .scratch/native-runtime/verification-input-after-society.json
+          node --input-type=module -e 'import {runtimeArtifactDigest} from "./scripts/runtime-artifact-digest.mjs"; console.log(JSON.stringify(runtimeArtifactDigest()))' > .scratch/native-runtime/runtime-artifacts-after-society.json
+          cmp .scratch/native-runtime/runtime-artifacts.json .scratch/native-runtime/runtime-artifacts-after-society.json
+      - name: Preserve Society ownership and native build results immediately
+        if: ${{ always() && runner.os == 'macOS' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: native-society-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            .scratch/native-runtime/build.log
+            .scratch/native-runtime/society-lease-tests.log
+            .scratch/native-runtime/source-head.txt
+            .scratch/native-runtime/environment.json
+            .scratch/native-runtime/verification-input.json
+            .scratch/native-runtime/verification-input-after-society.json
+            .scratch/native-runtime/runtime-artifacts.json
+            .scratch/native-runtime/runtime-artifacts-after-society.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Run shared production primitives and streaming verification
         id: shared_runtime
         run: |

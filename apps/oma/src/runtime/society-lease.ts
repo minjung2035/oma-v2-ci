@@ -57,6 +57,12 @@ import { abstractNameHeld, abstractNameHolder, holdAbstractName } from "@oma/nat
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "@oma/process/async";
 import { assertStateRoot } from "./assets.js";
 import { StoreError } from "@oma/domain/errors";
+import { holdDarwinSocietyFence, identifyDarwinSocietyFence } from "@oma/native/darwin-society-fence";
+import { runProcessSync } from "@oma/process/run";
+
+const runDarwinFence = (executable: string, argv: readonly string[], fd?: number) => runProcessSync({
+  executable, argv, env: { PATH: "/usr/bin:/bin" }, timeoutMs: 15000, stdoutBytes: 16384, stderrBytes: 16384,
+}, undefined, fd === undefined ? [] : [fd], { killSignal: "SIGTERM" });
 
 /** The abstract-namespace prefix every society lease is taken under. The rest
  * of the name is a digest, so a state path is not published to every process
@@ -113,6 +119,10 @@ export function societyLeaseName(stateRoot: string): string {
  * it tried. */
 export function tryHoldSociety(stateRoot: string): SocietyLease | null {
   const name = societyLeaseName(stateRoot);
+  if (process.platform === "darwin") {
+    const held = holdDarwinSocietyFence(name, runDarwinFence);
+    return held.kind === "busy" ? null : { name, fence: held.fd, release: held.release };
+  }
   for (let attempt = 0; attempt < ACQUIRE_ATTEMPTS; attempt += 1) {
     const held = holdAbstractName(name);
     if (held.kind === "held") return leaseOf(name, held.fd);
@@ -179,6 +189,10 @@ export type InheritedFence =
  */
 export function inheritedFence(descriptor: number, stateRoot: string): InheritedFence {
   const expected = societyLeaseName(stateRoot);
+  if (process.platform === "darwin") {
+    return identifyDarwinSocietyFence(descriptor, expected, runDarwinFence).kind === "matched"
+      ? { kind: "society" } : { kind: "not-a-lease", why: "descriptor differs from the authenticated Society socket instance" };
+  }
   const held = abstractNameHeld(descriptor);
   if (held.kind === "unreadable") return held;
   if (held.kind === "other") return { kind: "not-a-lease", why: held.why };

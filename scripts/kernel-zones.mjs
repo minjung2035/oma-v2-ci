@@ -181,6 +181,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/storage/src/published-mail.ts",
       "packages/native/src/directory-layout.ts",
       "packages/native/src/sqlite-root.ts",
+      "packages/native/src/darwin-society-fence.ts",
       "packages/process/src/writer.ts",
       "packages/native/src/files.ts",
       "packages/native/src/posix-files.ts",

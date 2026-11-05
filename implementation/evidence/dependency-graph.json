@@ -365,6 +365,7 @@
   "packages/native/src/darwin-launchd-job.ts",
   "packages/native/src/darwin-macho-image.ts",
   "packages/native/src/darwin-metadata.ts",
+  "packages/native/src/darwin-society-fence.ts",
   "packages/native/src/darwin-supervisor.ts",
   "packages/native/src/descriptor-path.ts",
   "packages/native/src/directory-layout.ts",
@@ -727,6 +728,7 @@
      "packages/native/src/darwin-launchd-job.ts",
      "packages/native/src/darwin-macho-image.ts",
      "packages/native/src/darwin-metadata.ts",
+     "packages/native/src/darwin-society-fence.ts",
      "packages/native/src/darwin-supervisor.ts",
      "packages/native/src/descriptor-path.ts",
      "packages/native/src/directory-layout.ts",
@@ -827,9 +829,9 @@
    "K0-values -> K0-values": 37,
    "K1-codecs -> K0-values": 92,
    "K1-codecs -> K1-codecs": 58,
-   "K2-mechanisms -> K0-values": 162,
+   "K2-mechanisms -> K0-values": 163,
    "K2-mechanisms -> K1-codecs": 24,
-   "K2-mechanisms -> K2-mechanisms": 248,
+   "K2-mechanisms -> K2-mechanisms": 251,
    "K3-ledger -> K0-values": 23,
    "K3-ledger -> K1-codecs": 12,
    "K3-ledger -> K2-mechanisms": 6,
@@ -1502,6 +1504,11 @@
    {
     "from": "packages/native/src/darwin-metadata.ts",
     "to": "packages/native/src/metadata-observation.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "packages/native/src/darwin-society-fence.ts",
+    "to": "packages/domain/src/errors.ts",
     "kind": "runtime"
    },
    {
@@ -2826,7 +2833,7 @@
     "packages/domain/src/resident-paths.ts",
     "packages/storage/src/store.ts"
    ],
-   "files": 217
+   "files": 218
   },
   {
    "index": 2,
@@ -2896,16 +2903,16 @@
    "files": 73
   }
  ],
- "files": 579,
- "runtimeEdges": 2381,
+ "files": 580,
+ "runtimeEdges": 2387,
  "typeOnlyEdges": 993,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 651,
+  "L1-kernel -> L1-kernel": 655,
   "L2-facts -> L1-kernel": 46,
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 421,
   "L3-workflow -> L3-workflow": 99,
-  "L4-orchestration -> L1-kernel": 537,
+  "L4-orchestration -> L1-kernel": 539,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 217,
@@ -2936,9 +2943,9 @@
  "runtimeCycles": [],
  "unionCycles": [],
  "fanIn": {
-  "packages/domain/src/errors.ts": 299,
+  "packages/domain/src/errors.ts": 300,
   "packages/domain/src/identifiers.ts": 94,
-  "packages/native/src/cleanup.ts": 69,
+  "packages/native/src/cleanup.ts": 70,
   "packages/native/src/files.ts": 60,
   "packages/storage/src/directory.ts": 57,
   "packages/domain/src/canonical-json.ts": 49,
@@ -2974,14 +2981,14 @@
   "@earendil-works/pi-coding-agent": 51,
   "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js": 1,
   "@earendil-works/pi-tui": 11,
-  "koffi": 18,
+  "koffi": 19,
   "node:async_hooks": 5,
   "node:buffer": 4,
   "node:child_process": 6,
   "node:crypto": 65,
   "node:dns": 1,
   "node:events": 3,
-  "node:fs": 146,
+  "node:fs": 147,
   "node:fs/promises": 2,
   "node:http": 2,
   "node:https": 1,
@@ -2996,7 +3003,7 @@
   "node:stream/promises": 2,
   "node:string_decoder": 1,
   "node:timers/promises": 11,
-  "node:url": 18,
+  "node:url": 19,
   "node:util": 10,
   "node:zlib": 1,
   "nodemailer": 1,

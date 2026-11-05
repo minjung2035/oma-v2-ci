@@ -18,7 +18,7 @@ export interface NativeSyncResult {
   readonly stdout: unknown; readonly stderr: unknown; readonly error?: Error;
 }
 export type SyncInvoker = (command: string, argv: string[], options: SpawnSyncOptionsWithBufferEncoding) => NativeSyncResult;
-export interface SyncDirectoryControl { readonly directoryFd?: number }
+export interface SyncDirectoryControl { readonly directoryFd?: number; readonly killSignal?: "SIGKILL" | "SIGTERM" }
 function bytes(value: unknown): Buffer | null {
   if (value === null || value === undefined) return Buffer.alloc(0);
   if (Buffer.isBuffer(value)) return value;
@@ -38,6 +38,8 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
 export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = [],
   controls: SyncDirectoryControl = {}): ProcessObservation {
   validateCommand(spec);
+  if (controls.killSignal !== undefined && controls.killSignal !== "SIGKILL" && controls.killSignal !== "SIGTERM")
+    throw new TypeError("invalid trusted synchronous termination signal");
   const directoryFd = controls.directoryFd;
   if (directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || spec.cwd !== undefined ||
       inheritedFds.length !== 0 || !spec.executable.startsWith("/") || !fstatSync(directoryFd).isDirectory() ||
@@ -98,7 +100,7 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
       // The output encoding "buffer" is not a valid Buffer.from string encoding.
       // Encode stdin first so native spawnSync never applies it to a string.
       input: spec.input === undefined ? undefined : Buffer.from(spec.input),
-      encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
+      encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: controls.killSignal ?? "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
       maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: [...stdio, ...(placement === undefined ? [] : [placement.placementFd])] as SpawnSyncOptionsWithBufferEncoding["stdio"],
     });

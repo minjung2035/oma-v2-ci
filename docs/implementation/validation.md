@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `2507e3c58c3fef269f3e0133e6a09b01d07897300191f778fb8d6cbbab57913a` (15939 files).
+verification input digest `ca711c17251832eb029a307c4026398173b48412a1a61ecefdd7b193a352c732` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4209,3 +4209,55 @@ production14398, review CHANGED_WITHOUT_ORACLE31 / NOT_REVIEWED14367 / REMOVED22
 앞선 수정 진행 중의 metadata/packed 실행은 이 최종 입력 검증으로 간주하지 않았다.
 최종 full architecture·transaction·durable boundary·document·spec inventory도 exit0다(`/tmp/oma-source89-architecture-final.log`).
 이 변경은 local checkpoint로 보존하며, 새 state projection/legacy adapter의 actual Mac은 아직 NOT_RUN이다.
+
+### SOURCE90 제품 Society lease의 Darwin adapter
+
+사용자는 주변 수정·실험·CI 반복에도 제품 차단점이 그대로인 진행을 지적했다.
+SOURCE89는 local checkpoint `4ae60f57c5688a64a316f4560f7e2f7a4f014516` / tree `eba6c10b0c868cde564b76bc82eab8c03d3eff10`,
+canonical15939/`2507e3c58c3fef269f3e0133e6a09b01d07897300191f778fb8d6cbbab57913a`로 보존했다.
+별도 SOURCE89 CI는 발행하지 않는다. 이후 작업은 Society 단일 소유권의 구현·Host 사망/상속 마지막 close 검증에 한정한다.
+
+새 adapter를 shared tryHoldSociety/inheritedFence에 연결했다. Linux name/hold/recognition은 기존 경로를 유지한다.
+Native는 고정 creator/control/SCM bridge만 소유하고 subprocess는 기존 Process owner의 trusted callback을 쓴다.
+초기 raw child_process import는 architecture가 거절했다(`/tmp/oma-source90-architecture-initial.log`). 새 예외 등록 없이 Process owner로 이관했다.
+SIGTERM을 받는 짧은 controller는 자신이 만든 unreaped child만 제어한다. spawn/PID 기록 사이와 wait/reap 중에는 cleanup signal을 막으며,
+해제 후에는 PID reuse 전에 owner 변수를 비운다. timeout의 기본 SIGKILL은 유지하고 이 trusted setup만 SIGTERM으로 자신의 stopped child를 정리한다.
+
+creator는 no-reuse wildcard socket을 새로 만들고 outbound 제한/shutdown/disconnect를 적용한다. 기존 FD를 adopt하거나 다른 program을 실행하지 않는다.
+control은 START_SUSPENDED 상태의 실제 child token/고정 CodeDirectory를 검증한 후에만 release한다.
+creator는 hardened runtime/no entitlement로 서명하며 control에는 그 build의 producer CodeDirectory를 compile-time 상수로 넣는다.
+private socketpair로 최초 fence와 별도 owner endpoint만 인계한다. 공개 bootstrap discovery는 FD를 주지 않는다.
+fresh nonce/kernel audit sender·고정 creator image·전체 identity·actual socket/generation을 함께 확인한다.
+creator는 한 funded holder로 socket copy를 보유한다. 정상 release는 그 copy 반환 acknowledgement 뒤 완료하고,
+Host EOF에는 자신의 copy를 반환한다. 나머지 상속 copy가 살아 있으면 kernel bind는 계속 점유돼야 한다.
+creator 사망으로 discovery가 사라진 점유 socket은 unknown/unavailable로 거절하며 새 claim을 허가하지 않는다.
+
+전체 identity는 기존 UID/stateRoot SHA-256이다. 1024..49151 port index는 유한한 exclusion 자원이며 전체 identity 자체가 아니다.
+서로 다른 full identity가 같은 index를 쓰거나 비제품 socket이 점유하면 unavailable로 거절한다. 다른 Society의 owner/busy로 오인하거나 대체 port로 우회하지 않는다.
+이 제약은 spec에 명시했고 충돌 반례도 시험한다. 256-bit kernel namespace와 같은 자원/가용성 의미라고 주장하지 않는다.
+
+제품 shared API의 second fresh Host 거절/쓰기 전 stateRoot 부재, Host SIGKILL 후 child FD 유지/마지막 반환,
+creator 사망 후 점유 유지, full identity 충돌, shared socket의 bind/connect/reuse/restriction 변조5건을 추가했다.
+아직 모두 actual Mac NOT_RUN이다. controlled child 시험은 실제 Broker/Engine 및 모든 paid scope의 통합 사망 검증을 대체하지 않는다.
+프로세스별 협조 FD만으로 전체 scope 사망을 선언하거나 G-PROCESS/G-FILES/G-AUTH guard를 제거하지 않는다.
+최초 Linux lease/core31건은 pass였으나 Darwin 분기는 명시적 NOT_RUN이다(`/tmp/oma-source90-lease-linux-initial.log`).
+callback 이관 후 TypeScript는 nullable cleanup FD 두 곳을 거절했고, 실제 owned channel 상수를 반환하도록 수정했다.
+이전 build의 core40건을 최종 source 근거로 사용하지 않는다. 수정 build/architecture gate는 exit0다(`/tmp/oma-source90-build-core-fixed.log`·`/tmp/oma-source90-architecture-core-fixed.log`).
+수정 뒤 Linux lease/runner/stdin44/44 PASS·기타0는 `/tmp/oma-source90-core-regression-fixed.log`다. 새 mutation case는 이 결과 이후 추가했다.
+SDK의 producer/bridge ARM/Intel object compile과 mutation fixture ARM object compile은 syntax/mechanic 준비일 뿐 actual Mac signing/IPC/ownership 근거가 아니다.
+CoreFoundation/Security controller의 실제 compile·전체 새로운 lease 시험은 Mac CI에서 확인한다.
+세 gate OPEN·제품 BLOCKED·나머지 제품 차단점은 유지한다.
+
+SOURCE90 최종 Linux lease/runner/stdin 회귀는45/45 PASS·기타0다(`/tmp/oma-source90-core-regression-final.log`).
+새5건의 Darwin 동작은 명시적 NOT_RUN이며 Linux pass 수를 Mac 소유권 근거로 쓰지 않는다.
+ARM/Intel producer·bridge SDK object compile도 통과했다. 전체 module 검사는 build script의 내부 dist import를 거절했고,
+같은 기존 공개 `@oma/native/darwin-macho-image` entry로 수정했다. 예외 추가 없이 module 검사를 다시 통과했다.
+
+공개 import 수정 뒤 build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata는 exit0다.
+production14403, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14371 / REMOVED220이다.
+원시는 `/tmp/oma-source90-build-final.log`·`/tmp/oma-source90-package-isolation-frozen.log`·`/tmp/oma-source90-review-final.log`다.
+CI는 새로운 Society5건을 broad runtime보다 먼저 한 번 실행하고, 동일 source/input/runtime의 전후 binding과 결과를 즉시 별도 artifact로 보존한다.
+이 순서 변경은 timeout/관측 조건/실패 판정을 바꾸지 않는다. 실제 Mac signing/ownership 결과는 아직 NOT_RUN이다.
+
+최종 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source90-architecture-final.log`).
+검증 입력 binding013도1/1 PASS다. source별 Mac 결과가 도착하기 전까지 실제 소유권 채택 판정을 올리지 않는다.

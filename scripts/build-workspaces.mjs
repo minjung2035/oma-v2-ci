@@ -80,7 +80,15 @@ if (rebuilding.length) {
 for (const workspace of rebuilding) {
   const executables = darwinExecutables(workspace.manifest);
   if (process.platform === "darwin") for (const executable of executables) {
+    const fixedCodeArguments = [];
+    if (executable.fixedCodeDirectory !== undefined) {
+      const { machoImageCdHashes } = await import("@oma/native/darwin-macho-image");
+      const selected = machoImageCdHashes(readFileSync(join(root, workspace.path, "dist", executable.fixedCodeDirectory)), process.arch === "arm64" ? "arm64" : "x64");
+      if (selected.length !== 1) throw new Error("fixed native creator requires one CodeDirectory");
+      fixedCodeArguments.push(`-DOMA_FENCE_EXPECTED_HASH="${selected[0]}"`);
+    }
     const compiled = spawnSync("/usr/bin/xcrun", [...executable.compilerArguments,
+      ...fixedCodeArguments,
       join(root, workspace.path, "dist", executable.source), ...executable.linkArguments,
       "-o", join(root, workspace.path, "dist", executable.output)],
     { cwd: root, stdio: "inherit", timeout: 120000, killSignal: "SIGKILL" });
@@ -92,6 +100,7 @@ for (const workspace of rebuilding) {
     // not. Every owned helper needs a CodeDirectory before the launch owner
     // can select and verify its mapped generation on either architecture.
     const signed = spawnSync("/usr/bin/codesign", ["--force", "--sign", "-",
+      ...(executable.signingArguments ?? []),
       join(root, workspace.path, "dist", executable.output)],
     { cwd: root, stdio: "inherit", timeout: 30000, killSignal: "SIGKILL" });
     if (signed.error || signed.signal || signed.status !== 0) {

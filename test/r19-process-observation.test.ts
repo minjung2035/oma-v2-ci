@@ -18,6 +18,19 @@ const native = (changes: Partial<NativeSyncResult> = {}): NativeSyncResult => ({
 const errorWithCode = (code: string) => Object.assign(new Error(code), { code });
 const matches = (code: string) => (error: unknown) => error instanceof StoreError && error.code === code;
 
+test("020. Trusted setup can receive SIGTERM while default synchronous termination remains SIGKILL", () => {
+  let calls = 0;
+  const invoke: SyncInvoker = (_command, _argv, options) => {
+    calls++;
+    assert.equal(options.killSignal, calls === 1 ? "SIGKILL" : "SIGTERM");
+    return native();
+  };
+  assert.equal(runProcessSync(spec, invoke).kind, "exited");
+  assert.equal(runProcessSync(spec, invoke, [], { killSignal: "SIGTERM" }).kind, "exited");
+  assert.throws(() => runProcessSync(spec, invoke, [], { killSignal: "SIGUSR1" as "SIGTERM" }), /termination signal/);
+  assert.equal(calls, 2, "invalid control must refuse before creating a child");
+});
+
 // These tests exercise the process boundary, not Git or cgroup safety proofs.
 // They are authored here but have not been executed in the refactoring session.
 test("001. Argv, environment, cwd and finite native limits are explicit and copied", () => {
