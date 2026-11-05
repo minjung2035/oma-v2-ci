@@ -5,6 +5,7 @@ import { errno, load } from "koffi";
 import { getSystemErrorName } from "node:util";
 import { cleanupAll, withCleanup } from "./cleanup.js";
 import { StoreError } from "@oma/domain/errors";
+import { protectDarwinSupervisor } from "./darwin-supervisor.js";
 
 let pair: ((domain: number, type: number, protocol: number, fds: Buffer) => number) | undefined;
 let control: ((fd: number, command: number, ...args: unknown[]) => number) | undefined;
@@ -49,6 +50,7 @@ export function controlPipe(): { readonly read: number; readonly write: number }
 /** A trusted pipeline supervisor retains a private status descriptor while
  * children run. Same-uid descendants must not open its /proc FDs or memory. */
 export function protectPipelineSupervisor(): void {
+  if (process.platform === "darwin") { protectDarwinSupervisor(); return; }
   if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "pipeline supervisor protection requires Linux");
   const prctl = load(null).func("int prctl(int option, unsigned long a2, unsigned long a3, unsigned long a4, unsigned long a5)");
   if (prctl(4 /* PR_SET_DUMPABLE */, 0, 0, 0, 0) !== 0 || prctl(3 /* PR_GET_DUMPABLE */, 0, 0, 0, 0) !== 0) failed();

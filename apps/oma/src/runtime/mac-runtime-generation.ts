@@ -21,6 +21,7 @@ import { StoreError } from "@oma/domain/errors";
 import { isDeploymentDigest } from "@oma/domain/deployment";
 import { GENERATION_OWNER, writeRuntimeArtifactOwner, retainRuntimeArtifact } from "./mac-runtime-artifact.js";
 import { deploymentManifestSteps } from "./deployment-manifest.js";
+import type { ProtectedMacNode } from "./mac-protected-node.js";
 
 type Identity = { readonly dev: bigint; readonly ino: bigint };
 type Entry = Identity & { readonly path: string; readonly directory: boolean };
@@ -60,10 +61,11 @@ async function scheduled<T>(steps: Generator<void, T, void>, signal?: AbortSigna
     if (performance.now() - turn >= 8) { await setImmediate(); turn = performance.now(); }
   }
 }
-export function prepareMacRuntimeGeneration(sourceInstallation: SourceInstallation, parent: string, signal?: AbortSignal): Promise<MacRuntimeGeneration> {
-  return scheduled(runtimeGenerationSteps(sourceInstallation, parent), signal);
+export function prepareMacRuntimeGeneration(sourceInstallation: SourceInstallation, parent: string, signal?: AbortSignal,
+  protectedNode?: ProtectedMacNode): Promise<MacRuntimeGeneration> {
+  return scheduled(runtimeGenerationSteps(sourceInstallation, parent, protectedNode), signal);
 }
-function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent: string): Generator<void, MacRuntimeGeneration, void> {
+function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent: string, protectedNode?: ProtectedMacNode): Generator<void, MacRuntimeGeneration, void> {
   if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0) refused("private immutable runtime generations require an ordinary Darwin owner");
   const installation = Object.freeze({ ...sourceInstallation });
   if (!isDeploymentDigest(installation.deploymentDigest) || resolve(parent) !== parent || resolve(installation.libdir) !== installation.libdir ||
@@ -186,16 +188,19 @@ function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent:
       yield;
     }
     mkdirAt(held, ".oma-node-bin", 0o700); record(".oma-node-bin", true);
-    const node = join(root, ".oma-node-bin/node"), nodeParent = openDirectory(dirname(installation.node));
+    const node = join(root, ".oma-node-bin/node");
     // Node source ownership is independent of the disposable output ownership.
-    const nodeDigest = withCleanup(() => {
-      const nodeSource = openRegularBeneath(nodeParent, basename(installation.node));
+    const nodeDigest = protectedNode === undefined ? (() => {
+      const nodeParent = openDirectory(dirname(installation.node));
       return withCleanup(() => {
-        const stat = fstatSync(nodeSource);
-        if (stat.size < 1 || stat.size > 268435456 || !(stat.mode & 0o111)) refused("selected Node is not a bounded executable");
-        return copy(nodeSource, ".oma-node-bin/node").sha256;
-      }, () => closeSync(nodeSource));
-    }, () => closeSync(nodeParent));
+        const nodeSource = openRegularBeneath(nodeParent, basename(installation.node));
+        return withCleanup(() => {
+          const stat = fstatSync(nodeSource);
+          if (stat.size < 1 || stat.size > 268435456 || !(stat.mode & 0o111)) refused("selected Node is not a bounded executable");
+          return copy(nodeSource, ".oma-node-bin/node").sha256;
+        }, () => closeSync(nodeSource));
+      }, () => closeSync(nodeParent));
+    })() : copy(protectedNode.fd, ".oma-node-bin/node", protectedNode).sha256;
     const trustedAsset = (path: string): string => {
       const entry = manifest.files.find(file => file.path === path);
       if (entry === undefined) refused("runtime generation has no trusted native helper");

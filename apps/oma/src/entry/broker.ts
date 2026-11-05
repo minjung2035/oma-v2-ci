@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { createMachBrokerTransport } from "@oma/platform-mac/mach-transport";
 import { collectRuntimeArtifacts } from "../runtime/mac-runtime-artifact.js";
 import { prepareMacRuntimeGeneration, type MacRuntimeGeneration } from "../runtime/mac-runtime-generation.js";
+import { withProtectedMacNode } from "../runtime/mac-protected-node.js";
 import { dirname, join } from "node:path";
 import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 import { Store, SCHEMA_PATH } from "@oma/storage";
@@ -216,7 +217,9 @@ async function main(): Promise<void> {
             ensureOwnedUserDirectory(cache, cache);
             await executions.recoverAndMaintain(() => collectRuntimeArtifacts(cache, preparationAbort.signal));
             if (stopping !== null) { await stopping; return; }
-            runtimePreparation = prepareMacRuntimeGeneration(cfg.installation, cache, preparationAbort.signal);
+            runtimePreparation = withProtectedMacNode(cfg.installation.node, stateRoot, nativeOwner, preparationAbort.signal,
+                () => { if (preparationAbort.signal.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "runtime preparation was cancelled"); },
+                node => prepareMacRuntimeGeneration(cfg.installation, cache, preparationAbort.signal, node));
             runtimeGeneration = await runtimePreparation;
             if (stopping !== null) { await stopping; return; }
         }

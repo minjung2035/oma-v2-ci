@@ -15,6 +15,7 @@ import {quarantineExecution} from '#oma-test/app/runtime/quarantine-execution';
 import {withAsyncCleanup,cleanupAll} from '@oma/native/cleanup';
 import {observeMacDeveloperTools} from '@oma/platform-mac/developer-tools';
 import {preparePipelineCache} from '#oma-test/app/runtime/pipeline-cache';
+import {readResult} from '@oma/tool-files';
 
 export async function verifyDarwinGitRuntime(generation,installation,root,signal){
  assert.equal(process.platform,'darwin');mkdirSync(root,{mode:0o700});
@@ -72,6 +73,19 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
   let authorized=0;await checks.run(base,exact,signal,()=>{if(currentCandidate())authorized++;});
   assert.equal(authorized,2);assert.equal(results.at(-1).stdout.toString(),'private-check');
   assert.equal(runtime.confirmDead('candidate'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
+  const step=(id,script)=>({id,argv:[installation.node,'-e',script],cwd:'.',env:{}});
+  const pipeline=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'protected-pipeline',protectedPaths:[],checks:[{
+   id:'protected-pipeline',argv:['oma-pipeline-v2'],env:{},pipeline:{version:2,toolchainDigest:'a'.repeat(64),env:{},cachePolicy:{kind:'off'},
+    setupSteps:[step('setup',`const f=require('node:fs');f.mkdirSync('node_modules');f.writeFileSync('node_modules/proof','installed');f.writeFileSync('exact.txt','generated');`)],
+    checkSteps:[step('check',`require('node:assert/strict').equal(require('node:fs').readFileSync('node_modules/proof','utf8'),'installed');process.stdout.write('protected pipeline check');`)]}
+  }]}).checks[0];
+  try{await checks.run(base,pipeline,signal,()=>{},'protected-pipeline');}
+  catch(error){console.error(JSON.stringify({phase:'protected-pipeline',stderr:results.at(-1)?.stderr.toString().slice(0,8192)}));throw error;}
+  const receiptDirectory=join(root,'checks',readdirSync(join(root,'checks'))[0]),receipt=JSON.parse(readFileSync(join(receiptDirectory,'receipt.json'),'utf8'));
+  assert.equal(receipt.status,'succeeded');assert.equal(receipt.scopeConfirmedDead,true);assert.equal(receipt.steps.length,4);
+  assert.ok(receipt.tracked.bytes>0);assert.match(readResult(receiptDirectory,receipt.tracked.reference).text,/generated/);
+  assert.equal(readResult(receiptDirectory,receipt.steps[3].stdout.reference).text,'protected pipeline check');
+  assert.equal(runtime.confirmDead('candidate'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
   const refused=new Error('revoked after immutable checkout');authorized=0;
   await assert.rejects(checks.run(base,exact,signal,()=>{if(currentCandidate()&&++authorized===2)throw refused;}),e=>e===refused);
   assert.equal(authorized,2);assert.equal(runtime.confirmDead('candidate'),true);
@@ -96,7 +110,7 @@ export async function verifyDarwinGitRuntime(generation,installation,root,signal
   const next=Buffer.alloc(1);assert.equal(readSync(bundleFd,next),1);assert.equal(next[0],bytes[5]);
   assert.deepEqual(readFileSync(bundle),bytes);assert.deepEqual(ExecutionJournal.inspect(root),[]);
   assert.equal(runtime.confirmDead('quarantine'),true);assert.deepEqual(readdirSync(join(root,'staging')),[]);
-  assert.equal(launches.length,5);assert.ok(launches.every(row=>row.witness.kind==='darwin-resource-coalition'));
+  assert.equal(launches.length,6);assert.ok(launches.every(row=>row.witness.kind==='darwin-resource-coalition'));
  },async()=>{
   await withAsyncCleanup(()=>runtime.close(),()=>cleanupAll([
    ()=>{if(bundleFd!==undefined)closeSync(bundleFd);},...originals.map(file=>()=>writeFileSync(file.path,file.bytes)),

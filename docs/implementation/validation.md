@@ -2867,6 +2867,66 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `51054476befe2a4fdf11fecdaf240e3f83d163737a3a7900e186d187efbddb2e` (15906 files).
+verification input digest `7c312743714222734a31c6929aafab43020ce7f1ade8ac6daf4647474545202c` (15908 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
+
+
+### SOURCE61 실제 protected Node 양성/음성 대조와 SOURCE62 통합
+
+SOURCE61 `40b203cdb6b5e22be2beefbbf1ce161adba43d5d`, Native41978047096의 ARM26 shared ZIP13393240513
+SHA-256 `f2f118ab0d80fe682a4d7f00c8ed29eaba159948a4511e6e71fc528a36c7cf21`와 Intel26 shared ZIP13393261091
+SHA-256 `16a088f3e16412bbea0f2eb6238bb5eff924face44369bcadf9479f67d03539a`를 대조했다.
+양쪽407/406 PASS/1 FAIL, cancel/skip/todo0이다. canonical15906/`51054476befe2a4fdf11fecdaf240e3f83d163737a3a7900e186d187efbddb2e`가 전후 같다.
+ARM runtime15528/27/`c5a44a12c2ef912f5c34e3df400f403d214a5fe51b9d608c18b0c4a52ee6e2b9`,
+Intel runtime15528/27/`e58bd08b46e36e8ecde980ab32ffbf1da4ab4ea35f5cbe91ef1d4cdbbef413ec`도 전후 같다.
+
+실제 선택 Node의 own copy를 runtime 서명하고 get-task-allow만 제외한 두 아키텍처 모두 JIT sum4999950000·Koffi getpid 호출을 통과했다.
+원본 Node의 직접 debugger child는 Mach control/read/inspect0·8-byte canary read=true였고,
+보호 copy에서는 control5·read/inspect-1 errno1·memory17·0byte·canary=false였다.
+원본 Node hash는 전후 보존했고 모든 scope/journal을 실제 반납했다.
+이 시험은 원본 설치 바깥 library import를 사용한 작은 후보이며 전체 immutable generation의 Node 보호 완료로 읽지 않는다.
+
+남은 FAIL은 Git `hash-object`가 GIT_TRACE_SETUP event를 내보내지 않아 입력 gate를 열지 못한 시험 동기화 오류다.
+scope는 기존10s deadline에 timed-out으로 끝났으며 kernel FD 결박의 실패/성공으로 분류하지 않는다.
+SOURCE62는 setup trace를 실제 내보내는 `unpack-objects`에 미리 만든61-byte pack을 전달한다.
+Linux 대조에서는 setup 뒤 rename/replacement를 조율했고 held original에만 blob이 기록됐다.
+이 대조는 Mac 결과가 아니며 deadline을 늘리지 않았다.
+
+SOURCE62는 `withProtectedMacNode`에서 선택 Node를 leased owned staging에 FD-copy하고 journaled codesign scope로 서명/검증한다.
+완료 후 가진 FD·bytes·SHA-256을 generation producer에 넘겨 복사를 검증한 뒤 기존 immutable seal을 적용한다.
+원본 설치와 deploymentDigest를 다시 쓰지 않는다. Broker는 이 producer를 사용하며 signing scope의 실제 종료 전 staging을 정리하지 않는다.
+Mac `protectPipelineSupervisor`는 public Security.framework의 self code dynamic validation·runtime flag·현재 valid/undebugged status·get-task-allow 부재를 확인하고 PT_DENY_ATTACH를 적용한다.
+원본 debuggable Node는 계속 거절한다. static metadata만으로 성공 처리하거나 이 관측을 Actor role/scope death로 사용하지 않는다.
+근거 API는 [Apple SecCode 공개 header](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_codesigning/lib/SecCode.h)와
+[CSCommon 공개 flags](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_codesigning/lib/CSCommon.h)다.
+새 small Node 시험은 실제 guard와 journaled producer를 함께 부르고, 기존 whole-generation 시험은 같은 protected producer와 Seatbelt 내부 guard를 사용한다.
+이 새 생산자/guard/whole-generation의 실제 Mac 관측은 아직 NOT_RUN이다.
+Society lease·외부 Git root 결박 생산자·전체 product Runner/Worker·CLI/reboot/release qualification은 남는다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
+
+SOURCE62 whole-generation fixture는 실제 CandidateChecks의 pipeline setup→check·tracked delta·Broker-owned receipt까지 추가한다.
+이는 기존240s budget 안에서 같은 generation을 재사용하며, Mac에서는 아직 NOT_RUN이다.
+small producer fixture는 서명 release 전 권한 철회 후 consumer 미호출·실제 scope death·빈 journal도 확인하도록 했다.
+초기 로컬 build를 중첩 실행해 compiler input/output 오류가 발생했다. 중복 소유 프로세스를 중단한 뒤 source를 고정하고
+최종 단일 build23/27 recompiled·전체 build exit0를 확인했다(`/tmp/oma-source62-build-repaired.log`).
+최종 Linux selected14/14(해당 Darwin 경로는 refusal/NOT_RUN)와 실제 namespace pipeline5/5가 통과했다.
+workspace module boundary도0 finding PASS다. 이 결과를 Mac 생산자 통과로 승계하지 않는다.
+
+SOURCE60 뒤늦게 회수한 Mac15 shared ZIP13382404640 SHA-256 `229366c291793e45d1f8a58c321f5849d2eee32fc70b83c6a1b8044e7e9e4f07`도405/405 PASS·기타0이다.
+같은 source/canonical15904와 runtime15528/27/`4dd76a32b9bde95192645db028f670d87cd5ef10173482ec7019abbdec81894b`가 shared 전후 같다.
+SOURCE58 Mac15의 RUN_TERMINATION_UNKNOWN은 이 입력에서 재현되지 않았으나 원인을 고쳤다는 주장은 하지 않는다.
+SOURCE60 full ZIP은 ARM26 13382681388/`d6af021ee85566ba7b49743554bb29e54af7b62cc067a4c12c382402bf0ec360`,
+Intel26 13382698236/`9b31dac850e28cf41ec222c2939d3f3bf1457430a26a47ce8aee1537f5fac046`,
+ARM15 13382882924/`ea08c0dfa8266651661b4c31f0914ee650ded415ca1686cfcfc19fdff4432316`를 SHA-256 대조했다.
+각27/27 packed installation(App 포함) PASS, 각 source/canonical/runtime은 shared 및 최종 전후 모두 같다.
+이를 SOURCE62 변경 App/native package의 독립 설치 근거로 재사용하지 않는다.
+
+SOURCE62 첫 architecture 검사는 새 native self-protection leaf의 semantic zone 누락1건으로 실패했다.
+현재 process 보호 관측/효과만 맡는 leaf를 K2-mechanisms에 명시하고 graph를 다시 생성했다.
+
+SOURCE62 최종 전체 architecture·transaction·durable boundary·document·spec inventory는 exit0이다.
+최종 production14394, review 상태 CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+최종 단일 build 뒤 새27/27 packed installation(App 포함)과 installed runtime·declaration 검사는 exit0다.
+로컬 원시는 `/tmp/oma-source62-{build-repaired,package-isolation,architecture-final,selected-final,linux-pipeline,review}.log`에 보존했다.
+이 구조/로컬 회귀 결과로 새 Darwin 실행을 PASS 처리하지 않는다. 세 gate OPEN·product BLOCKED를 유지한다.

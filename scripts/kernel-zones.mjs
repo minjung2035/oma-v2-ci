@@ -188,6 +188,7 @@ export const KERNEL_ZONES = Object.freeze([
       "packages/native/src/process-observation.ts",
       "packages/native/src/pid-namespace.ts",
       "packages/native/src/control-socket.ts",
+      "packages/native/src/darwin-supervisor.ts",
       "packages/native/src/descriptor-path.ts",
       "packages/native/src/unix-message.ts",
       "packages/native/src/mach-message.ts",

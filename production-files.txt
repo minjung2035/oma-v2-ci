@@ -82,6 +82,7 @@ apps/oma/src/runtime/input-effects/submit.ts
 apps/oma/src/runtime/invocation-codec.ts
 apps/oma/src/runtime/keychain-credentials.ts
 apps/oma/src/runtime/locked-files.ts
+apps/oma/src/runtime/mac-protected-node.ts
 apps/oma/src/runtime/mac-runtime-artifact.ts
 apps/oma/src/runtime/mac-runtime-generation.ts
 apps/oma/src/runtime/module-inventory.ts
@@ -374,6 +375,7 @@ packages/native/src/darwin-job-peer.ts
 packages/native/src/darwin-launchd-job.ts
 packages/native/src/darwin-macho-image.ts
 packages/native/src/darwin-metadata.ts
+packages/native/src/darwin-supervisor.ts
 packages/native/src/descriptor-path.ts
 packages/native/src/directory-layout.ts
 packages/native/src/files.ts

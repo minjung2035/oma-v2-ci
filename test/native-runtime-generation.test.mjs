@@ -14,6 +14,11 @@ import { bundledSeatbeltHelper } from "@oma/platform-mac/seatbelt";
 import { ExecutionCoordinator } from "@oma/process/owned-execution";
 import { copyInstalledProduct } from "../dist/test/fixtures/installation.js";
 import { verifyDarwinGitRuntime } from "./fixtures/darwin-private-git.mjs";
+import { ExecutionJournal } from "@oma/storage/execution-journal";
+import { launchDarwinJobScope } from "@oma/platform-mac/job-scope";
+import { withAsyncCleanup } from "@oma/native/cleanup";
+import { ExecutionRuntime } from "#oma-test/app/runtime/execution-runtime";
+import { withProtectedMacNode } from "#oma-test/app/runtime/mac-protected-node";
 
 test("001. Actual installed generation seals dependencies and private Node until its complete scope returns", { timeout: 240000 }, async t => {
   if (process.platform !== "darwin") {
@@ -37,6 +42,8 @@ import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {darwinOwnedEntryFlags,setDarwinUserImmutable} from '@oma/native/darwin-file-flags';
+import {protectPipelineSupervisor} from '@oma/native/control-socket';
+protectPipelineSupervisor();
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const paths=[process.execPath,root+'packages/native/dist/darwin-file-flags.js',root+'node_modules/koffi/index.js',root];
 for(const path of paths){const fd=openSync(path,'r');try{
@@ -58,7 +65,13 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   const installation = { libdir: source, node: realpathSync(process.execPath), deploymentDigest: deploymentDigest(source) };
   phase("source-digest");
   heartbeat = setInterval(() => ticks++, 1);
-  preparing = prepareMacRuntimeGeneration(installation, root, AbortSignal.any([stopPreparation.signal, t.signal]));
+  ExecutionJournal.initialize(root);const preparationOwner=new ExecutionRuntime(root,launchDarwinJobScope);
+  const preparationSignal=AbortSignal.any([stopPreparation.signal,t.signal]);
+  preparing = withAsyncCleanup(async()=>{
+    await preparationOwner.recover();
+    return withProtectedMacNode(installation.node,root,preparationOwner,preparationSignal,()=>{},
+      node=>prepareMacRuntimeGeneration(installation,root,preparationSignal,node));
+  },()=>preparationOwner.close());
   generation = await preparing;
   assert.ok(ticks > 0, "preparation must service the event loop while building the actual whole installation");
   phase("generation-construction");

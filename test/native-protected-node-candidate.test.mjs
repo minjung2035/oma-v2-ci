@@ -11,6 +11,8 @@ import {fileDigest} from '@oma/storage/file-digest';
 import {ExecutionJournal} from '@oma/storage/execution-journal';
 import {launchDarwinJobScope} from '@oma/platform-mac/job-scope';
 import {ExecutionRuntime} from '#oma-test/app/runtime/execution-runtime';
+import {withProtectedMacNode} from '#oma-test/app/runtime/mac-protected-node';
+import {StoreError} from '@oma/domain/errors';
 
 test('001. Actual own protected Node retains JIT and native FFI while its own debugger child tests task memory',{timeout:90000},async t=>{
  if(process.platform!=='darwin'){t.diagnostic('NOT_RUN: Darwin protected Node candidate');return;}
@@ -29,12 +31,14 @@ test('001. Actual own protected Node retains JIT and native FFI while its own de
  run('/usr/bin/codesign',['--force','--sign','-','--options','runtime','--entitlements',debuggerEntitlements,probe]);
  const script=`import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
 import {address,load} from ${JSON.stringify(import.meta.resolve('koffi'))};
+import {protectPipelineSupervisor} from ${JSON.stringify(import.meta.resolve('@oma/native/control-socket'))};
+let protection;try{protectPipelineSupervisor();protection='protected';}catch(error){assert.equal(error.code,'UNSUPPORTED_PROFILE');protection='refused';}
 const canary=Buffer.alloc(8);canary.writeBigUInt64LE(0x6f6d612d70726f62n);let sum=0;for(let n=0;n<100000;n++)sum+=n;
 assert.equal(sum,4999950000);assert.equal(load(null).func('int getpid()')(),process.pid);
 const r=spawnSync(process.argv[1],['own-parent',String(address(canary))],{encoding:'utf8',timeout:10000});
 assert.equal(r.error,undefined);assert.equal(r.signal,null);assert.equal(r.status,0,r.stderr);
 assert.equal(canary.readBigUInt64LE(),0x6f6d612d70726f62n);
-console.log(JSON.stringify({pid:process.pid,jitSum:sum,nativeFfi:true,observer:JSON.parse(r.stdout)}));`;
+console.log(JSON.stringify({pid:process.pid,jitSum:sum,nativeFfi:true,protection,observer:JSON.parse(r.stdout)}));`;
  const observations=[];
  for(const [name,executable]of[['original',process.execPath],['protected',node]]){
   const chunks=[];let result;
@@ -47,6 +51,20 @@ console.log(JSON.stringify({pid:process.pid,jitSum:sum,nativeFfi:true,observer:J
   observations.push({name,...JSON.parse(result.stdout),completeScopeReturned:true});
  }
  assert.equal(fileDigest(process.execPath).sha256,sourceDigest);
+ assert.equal(observations[0].observer.canaryRead,true);assert.equal(observations[0].protection,'refused');
+ assert.equal(observations[1].observer.canaryRead,false);assert.equal(observations[1].protection,'protected');
+ await withProtectedMacNode(process.execPath,root,runtime,t.signal,()=>{},async selected=>{
+  assert.match(selected.sha256,/^[a-f0-9]{64}$/);assert.ok(selected.bytes>0);
+  const {readSync,fstatSync}=await import('node:fs');const bytes=Buffer.alloc(selected.bytes);
+  assert.equal(readSync(selected.fd,bytes,0,bytes.length,0),bytes.length);
+  const {createHash}=await import('node:crypto');assert.equal(createHash('sha256').update(bytes).digest('hex'),selected.sha256);
+  assert.equal(fstatSync(selected.fd).mode&0o777,0o500);
+ });
+ assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
+ await assert.rejects(withProtectedMacNode(process.execPath,root,runtime,t.signal,
+  ()=>{throw new StoreError('CANCELLED_BEFORE_COMMIT','fixture revoked signing authority');},
+  async()=>assert.fail('revoked signing reached the generation consumer')),{code:'CANCELLED_BEFORE_COMMIT'});
+ assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
  t.diagnostic(JSON.stringify({productionAdopted:false,sourceDigest,derivedDigest:fileDigest(node).sha256,
   signing:nodeSigning.stderr,entitlements:nodeEntitlements.stdout,observations,
   originalMachReadPositive:observations[0].observer.canaryRead===true,protectedMachReadDenied:observations[1].observer.canaryRead===false}));

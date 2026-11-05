@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "db415c2ba3a855d528def6fe8914cd4f89872e5f2d21483f245262512992de40",
+  "manifest": "58b22da10a9b45449cd17e9accf397abf3439edef943c9b6ebba3098a6bac83c",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "eac41a69caf68686d7b70da7b0cd56cc90ebbc37607763f2269888f97b83ea03"
+      "sha256": "e509fabc48d5c33936ecd70d577fa41b5914c87d04725d04579e9d2ce8535de4"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -339,12 +339,16 @@
       "sha256": "fe264f9978524f9525e2601c86603223ade9aa317f665fc52054c84a086ac2a1"
     },
     {
+      "path": "apps/oma/src/runtime/mac-protected-node.ts",
+      "sha256": "a3f512ad4ffb7bf092cbd9aed43ed17595221e1184c0df38e2513de6aca7010c"
+    },
+    {
       "path": "apps/oma/src/runtime/mac-runtime-artifact.ts",
       "sha256": "70165e1f2b537151205b3c2c0ffe07a386332c421c840fbf35b39160acd71cc1"
     },
     {
       "path": "apps/oma/src/runtime/mac-runtime-generation.ts",
-      "sha256": "b5887d66c8e69c80538debabdd3a99877cf13d9137052c45f9430bb15981ac79"
+      "sha256": "521ba61ca51a617ef84bb0865bb2f137ac0ded072b91a23b83de2b7ecc3b6802"
     },
     {
       "path": "apps/oma/src/runtime/module-inventory.ts",
@@ -1472,7 +1476,7 @@
     },
     {
       "path": "packages/native/src/control-socket.ts",
-      "sha256": "0c0f2e208046cd1584ac4733879a122c12fc2b7304844be090537eec2009a79a"
+      "sha256": "ec0d5262c98a9bab3773c47e56f1f5309f527f0967c1cce1e41220ff85192660"
     },
     {
       "path": "packages/native/src/darwin-file-flags.ts",
@@ -1505,6 +1509,10 @@
     {
       "path": "packages/native/src/darwin-metadata.ts",
       "sha256": "5c1844bca226513ba71b8d2f076ac4e92e6dba9cbf568661e6dfe801621d7c07"
+    },
+    {
+      "path": "packages/native/src/darwin-supervisor.ts",
+      "sha256": "6183d6e50ff1fb80db03dd08f5f54d9ed08b008146be545c633d177f0ea1f78e"
     },
     {
       "path": "packages/native/src/descriptor-path.ts",
