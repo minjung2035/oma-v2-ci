@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `261b72b26629508491a8de2383f04fd082879bc943a8370545cb2d726108a64c` (15948 files).
+verification input digest `9dceb881347288e456154c1e9fbebb23c7dd434cbec502de6069c638f15d2d8c` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4574,3 +4574,17 @@ fenced crash fixture의007/010은 이제 실제 App ExecutionRuntime을 사용�
 취소된 CI가 always 조건으로 cold generation을 새로 시작하던 조건은 !cancelled로 고쳤다. 일반 실패 뒤 검증·240000ms 제한·raw artifact 보존은 유지한다.
 SOURCE105 local build·선택92/92 PASS, producer C의 ARM/Intel SDK -Wall/-Wextra/-Werror object compile은 PASS다. Darwin cases는 Linux에서 명시적 NOT_RUN이다.
 INTERMEDIATE checkpoint이며 actual Mac controller compile·10/10·최종 packed/review/전체 제품 인수는 NOT_RUN이다. 세 gate와 기본 guard는 유지한다.
+
+
+### SOURCE105 actual ARM scope retention과 SOURCE106 malformed frame 정렬
+
+SOURCE105 `f5fd0287cd145e1be48a1de5aa24721d824c3697`, Native42087771695·Architecture42087771639다.
+canonical15948/`261b72b26629508491a8de2383f04fd082879bc943a8370545cb2d726108a64c`다.
+ARM Society ZIP13442614015 SHA-256 `ddff42fc4fb6979fb1dc72784c1e988b840a231dcd788952778a30ef11389f02`를 대조했다.
+같은 source/input/runtime Society 전후 동일, runtime15551/`d2d8d12a4c0b8b79f7f6262f11a6969047889035115b7c3d7bab83da42e06782`다.
+actual Apple compiler/build27/27은 PASS이며 Society9 PASS/1 FAIL·기타0다.
+010은 actual App Runtime scope 등록·owner SIGKILL·direct workload original pin exit·detached descendant live·Host tenure 종료 뒤 실제 bind EADDRINUSE·인수 거절·creator original pin live까지 통과했다.
+새 public-noise 대조의 두 번째1-byte body가 Native Mach API의4-byte alignment 검사에서 거절됐다. 제품 creator가 거절하거나 종료된 결과가 아니라 fixture 호출 규격 오류다.
+SOURCE106은 이를 정렬된4-byte malformed enrollment로 바꾼 test-only 수정이다. oversized1024-byte 요청과 실제 binding/원래 creator 유지·완전 scope death 뒤 재취득 oracle는 그대로다.
+production은 SOURCE105와 같으며 실제010 전체 PASS는 여전히 NOT_RUN이다. 최초 실패와 이전010 binding 해제 반례를 보존한다.
+SOURCE105 local 전체 architecture/transaction/durable/document/spec 검사는0 findings로 PASS다. 이 구조 결과를 actual scope/Actor 인수로 계산하지 않는다.

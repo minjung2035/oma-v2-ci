@@ -234,7 +234,7 @@ test('010. A paid detached descendant still excludes a new Host after its execut
  await tenure.end();boundResource(state);refused(state);
  assert.equal(creatorPin.state(),'live','the fixed creator retains its independent scope copy after Host release');
  const service=lookupMachService('org.oma.society-fence.'+societyLeaseName(state).slice('\0oma.society.'.length));
- try{assert.equal(service.send(0x4f4d5371,Buffer.alloc(1024)),'sent');assert.equal(service.send(0x4f4d5374,Buffer.alloc(1)),'sent');}finally{service.close();}
+ try{assert.equal(service.send(0x4f4d5371,Buffer.alloc(1024)),'sent');assert.equal(service.send(0x4f4d5374,Buffer.alloc(4)),'sent');}finally{service.close();}
  assert.deepEqual(authenticatedCreator(state),creator,'oversized or malformed public traffic cannot kill the remaining scope holder');boundResource(state);
  assert.equal(descendant.state(),'live');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');assert.equal(ExecutionJournal.inspect(state).length,1);
 });
