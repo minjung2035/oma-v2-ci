@@ -1588,7 +1588,7 @@
     },
     {
       "path": "packages/native/src/seatbelt/main.c",
-      "sha256": "8879a715a46a4e1f81b658bb2a81a101833eed0c06095e9360f4973c44d366cc"
+      "sha256": "557429790d77d1b3ef8a59fc505678c0cc4c1254df1e1e840d2e3f84d15bc36d"
     },
     {
       "path": "packages/native/src/snapshot-reader.ts",
@@ -1840,7 +1840,7 @@
     },
     {
       "path": "packages/process/src/run.ts",
-      "sha256": "b1e194fcac68a283335431026fa90ab81337fc9a51942ca3e0064351175c0e5f"
+      "sha256": "505a2e35a049b2cee15848a4a93e04784ecf21d362785eacae53d8b4da5d5ef5"
     },
     {
       "path": "packages/process/src/writer.ts",

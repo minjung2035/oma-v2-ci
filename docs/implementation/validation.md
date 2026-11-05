@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `8d4766ae990f67ebbb7c0ad08c9e152114c618423fcb0a8c154a78c330411593` (15913 files).
+verification input digest `c907d33abb69dcb0ecc7b3198e86010aa5d338c5b69b2cb5ff265726f020ea9e` (15914 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3142,3 +3142,39 @@ production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED22
 원시는 `/tmp/oma-source66-{build,selected-final,linux-git-pipeline,package-isolation,architecture-final,review,boundaries-final}.log`다.
 새 Mac quarantine FD9·private prerequisite graph와 Mac15 cleanup 원인 진단은 아직 NOT_RUN이다.
 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+
+### SOURCE66 양 OS412/412와 동기 directory capability 후속
+
+SOURCE66 `15c565f47023985b72692281729beb592c373661` / local checkpoint `814f2cfbe79b3333f33b6656c8330714ee156da4`,
+Native41987923514·Architecture41987923567를 발행했다. canonical15913/`8d4766ae990f67ebbb7c0ad08c9e152114c618423fcb0a8c154a78c330411593`다.
+Mac15 shared ZIP13396649241 SHA-256 `8bcb1be0bbb74a359ed32ec956b1cb0a28a5ba2114d102a3c49849539838b979`,
+Intel26 shared ZIP13397348043 SHA-256 `ef9acc8eb8334c229b250130f49997d7f772b9a0b43028caa2997755719fc93c`를 대조했다.
+각412/412 PASS·fail/cancel/skip/todo0이며 같은 source/canonical이 전후 같다.
+Mac15 runtime15532/27/`8ad822328fe9f3458d57fc0610d0dfbc866aba7aab0af4bafe8d74e1c47a54cf`,
+Intel runtime15532/27/`d249f8e154979730b91bfce3c729a48a8038fc30fe40b0171a27d0f075e23334`도 전후 같다.
+
+실제 protected private generation에서 candidate FD7과 quarantine FD9 canonical cwd/close,
+private prerequisite graph fetch·verify/import·accepted bytes/cursor·refs 보존과 scope/journal return을 완료했다.
+standalone shared quarantine의 이름 교체 후 original-only import와 unrelated canonical corruption 거절도 실행됐다.
+현재 terminal 진단에서 exact check와 protected pipeline은 exit0, 별도 권한 철회는 aborted이고 각각 owner가 scope를 반납했다.
+Mac15 private Git22399ms, Intel14842ms를 관측했다. Mac15 SOURCE65 populated-scope failure는 이번에 재현되지 않았으며,
+서로 다른 source의 성공으로 기존 실패를 고쳤다고 하지 않는다. 해당 unknown은 원인 미확정으로 보존한다.
+
+SOURCE67은 동기 bounded process에 caller-owned directory control을 추가한다. cwd pathname·custom FD slots와 함께 선택하면 거절한다.
+Linux는 동기 호출 동안 살아 있는 parent proc-fd directory를 child cwd에 사용한다.
+Darwin은 기존 설치된 tiny native launcher의 명시 directory-fd3 mode에서 fstat-directory→fchdir→close3→exec를 수행한다.
+명시 협조 fence4만 유지하며 다른 descriptor는 기존 실제 fd-table pruning으로 반납한다.
+이 mode는 profile을 새로 적용하지 않는 physical exec primitive이며 부모의 Seatbelt를 제거하거나 권한을 부여하지 않는다.
+기존 profile mode의 framing/validation/deny-default는 그대로다. Native C에는 Git/CAS/업무 payload 해석을 넣지 않는다.
+Host cwd는 바꾸지 않으며 이 direct-child observation을 전체 scope death·role·exact executable qualification으로 사용하지 않는다.
+
+SDK arm64/x64 object compile PASS, Linux 실제 경로 교체 뒤 original root 선택·Host cwd 보존·명시 socket 전달2 case와 기존 process I/O5 case가 PASS다.
+새 Darwin mode와 inherited Seatbelt denial의 실제 결과는 NOT_RUN이다. 동기 Host canonical/CAS caller 연결도 아직 남아 있다.
+Society strong lease·남은 Git/private root/SQLite writer·전체 Runner/Worker·CLI/reboot/release와 G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED를 유지한다.
+
+SOURCE67 source 고정 뒤 단일 build·fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사는 exit0다.
+최종 full architecture·transaction·durable boundary·document·spec inventory도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+원시는 `/tmp/oma-source67-{build,package-isolation,process-io,architecture}.log`다.
+이 구조 검증을 실제 Mac directory mode 실행이나 아직 연결하지 않은 Host canonical/CAS 보장으로 승격하지 않는다.

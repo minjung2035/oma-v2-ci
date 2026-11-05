@@ -2,11 +2,12 @@
 // A timeout/signal/spawn failure is never represented as an empty successful read.
 import { acquirePreparationPlacement } from "./preparation-lifetime.js";
 import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
-import { closeSync, constants, openSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { validateCommand, processErrorCode as errorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { decodeUtf8 } from "@oma/domain/utf8";
 import { fencedStdio, inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./fence.js";
+import { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
 export { validateCommand, snapshotCommand } from "./command.js";
 export type { CommandSpec, ProcessObservation } from "./command.js";
 export { runProcess, startProcess } from "./async.js";
@@ -17,6 +18,7 @@ export interface NativeSyncResult {
   readonly stdout: unknown; readonly stderr: unknown; readonly error?: Error;
 }
 export type SyncInvoker = (command: string, argv: string[], options: SpawnSyncOptionsWithBufferEncoding) => NativeSyncResult;
+export interface SyncDirectoryControl { readonly directoryFd?: number }
 function bytes(value: unknown): Buffer | null {
   if (value === null || value === undefined) return Buffer.alloc(0);
   if (Buffer.isBuffer(value)) return value;
@@ -33,8 +35,14 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
 /** Bounded synchronous commands remain available for the final authority/CAS
  * section. This direct-child result is not proof that an entire execution scope is dead.
  */
-export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = []): ProcessObservation {
+export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = [],
+  controls: SyncDirectoryControl = {}): ProcessObservation {
   validateCommand(spec);
+  const directoryFd = controls.directoryFd;
+  if (directoryFd !== undefined && (!Number.isSafeInteger(directoryFd) || directoryFd < 0 || spec.cwd !== undefined ||
+      inheritedFds.length !== 0 || !spec.executable.startsWith("/") || !fstatSync(directoryFd).isDirectory() ||
+      !["linux", "darwin"].includes(process.platform)))
+    throw new TypeError("synchronous directory execution requires one held directory, an absolute executable and no pathname cwd or custom FD slots");
   if (spec.timeoutMs === null || spec.stdoutOverflow === "discard")
     throw new TypeError("the synchronous runner requires a native bounded deadline and stdout capture; use runProcess");
   if (spec.timeoutMs > 0x7fffffff)
@@ -74,9 +82,19 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
       : fencedStdio([spec.stdinFd ?? "pipe", outFd ?? "pipe", errFd ?? "pipe"] as const, "ignore", fence);
     const env = { ...spec.env, ...(fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }) };
     const fd = stdio.length;
-    const executable = placement === undefined ? spec.executable : "/bin/bash";
-    const argv = placement === undefined ? [...spec.argv] : ["--noprofile", "--norc", "-c", `builtin printf 0 >&${fd} || builtin exit 125; builtin exec ${fd}>&-; builtin exec /usr/bin/env -i "$@"`, "oma-workload", ...Object.entries(env).filter((entry): entry is [string,string] => entry[1] !== undefined).map(([key,value]) => `${key}=${value}`), spec.executable, ...spec.argv];
-    result = invoke(executable, argv, { env: placement === undefined ? env : {}, cwd: spec.cwd,
+    let executable = placement === undefined ? spec.executable : "/bin/bash";
+    let argv = placement === undefined ? [...spec.argv] : ["--noprofile", "--norc", "-c", `builtin printf 0 >&${fd} || builtin exit 125; builtin exec ${fd}>&-; builtin exec /usr/bin/env -i "$@"`, "oma-workload", ...Object.entries(env).filter((entry): entry is [string,string] => entry[1] !== undefined).map(([key,value]) => `${key}=${value}`), spec.executable, ...spec.argv];
+    let cwd = spec.cwd;
+    if (directoryFd !== undefined) {
+      if (process.platform === "linux") cwd = `/proc/${process.pid}/fd/${directoryFd}`;
+      else {
+        if (placement !== undefined) throw new TypeError("Darwin directory execution has no Linux placement control");
+        stdio[3] = directoryFd;
+        executable = bundledSeatbeltHelper();
+        argv = ["--directory-fd3", ...(fence === undefined ? [] : ["--keep-fence4"]), spec.executable, ...spec.argv];
+      }
+    }
+    result = invoke(executable, argv, { env: placement === undefined ? env : {}, cwd,
       // The output encoding "buffer" is not a valid Buffer.from string encoding.
       // Encode stdin first so native spawnSync never applies it to a string.
       input: spec.input === undefined ? undefined : Buffer.from(spec.input),

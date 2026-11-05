@@ -29,6 +29,23 @@ static void receive(int fd, void *buffer, size_t length) {
   }
 }
 int main(int argc, char **argv) {
+  /* Fixed child-cwd primitive for synchronous trusted callers. It applies
+   * no new sandbox and cannot remove a sandbox inherited from its parent.
+   * Descriptor3 is a borrowed directory; only an explicit fence4 survives. */
+  if (argc > 1 && strcmp(argv[1], "--directory-fd3") == 0) {
+    int target = 2, fence = 4;
+    int keep_fence = target < argc && strcmp(argv[target], "--keep-fence4") == 0;
+    if (keep_fence) target++;
+    if (target >= argc || argv[target][0] != '/') {
+      fputs("Directory exec requires an absolute executable\n", stderr); return 125;
+    }
+    struct stat directory;
+    if (fstat(3, &directory) != 0) failed("Directory exec descriptor");
+    if (!S_ISDIR(directory.st_mode)) { errno = ENOTDIR; failed("Directory exec type"); }
+    if (fchdir(3) != 0 || close(3) != 0) failed("Directory exec cwd");
+    struct oma_fd_policy kept = { keep_fence ? &fence : NULL, keep_fence ? 1 : 0 };
+    oma_exec_with_fds(argv[target], &argv[target], environ, kept, 0);
+  }
   int target = 1;
   int profile_fd = 3, keep_seen = 0, suspended = 0;
   struct oma_fd_policy kept = { NULL, 0 };
