@@ -134,7 +134,7 @@ export function assertIntegrationCheck(check: FrozenCheck): void {
 export function integrationCheckEnvironment(check: FrozenCheck, home: string, path: string): Readonly<Record<string, string>> {
   assertIntegrationCheck(check);
   const environment = { ...check.env, HOME: home, PATH: path,
-    ...(check.pipeline === undefined ? {} : { NODE_PATH: "/opt/oma-node/lib/node_modules:/usr/lib/node_modules" }), LANG: "C", LC_ALL: "C",
+    LANG: "C", LC_ALL: "C",
     GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
     GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_ATTR_NOSYSTEM: "1", GIT_CONFIG_COUNT: "2",
     GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",

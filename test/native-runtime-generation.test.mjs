@@ -70,7 +70,7 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
   preparing = withAsyncCleanup(async()=>{
     await preparationOwner.recover();
     return withProtectedMacNode(installation.node,root,preparationOwner,preparationSignal,()=>{},
-      node=>prepareMacRuntimeGeneration(installation,root,preparationSignal,node));
+      node=>{phase('protected-node-preparation');return prepareMacRuntimeGeneration(installation,root,preparationSignal,node);});
   },()=>preparationOwner.close());
   generation = await preparing;
   assert.ok(ticks > 0, "preparation must service the event loop while building the actual whole installation");

@@ -17,7 +17,8 @@ export function candidateSandbox(host: CandidateSandboxHost, candidate: string, 
   if (!isValidFullOid(candidate) || !trustedAbsolutePath(host.rootfs) ||
       !trustedAbsolutePath(host.node) || !trustedAbsolutePath(host.libdir))
     throw new StoreError("UNSUPPORTED_PROFILE", "integration checks require trusted sandbox roots and a pinned Node");
-  const environment = integrationCheckEnvironment(check, "/tmp", "/opt/oma-node:/usr/bin:/bin");
+  const environment = { ...integrationCheckEnvironment(check, "/tmp", "/opt/oma-node:/usr/bin:/bin"),
+    ...(check.pipeline === undefined ? {} : { NODE_PATH: "/opt/oma-node/lib/node_modules:/usr/lib/node_modules" }) };
   const sandbox = ["/usr/bin/bwrap", "--unshare-all", "--share-net", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
     // bwrap consumes the filter before starting the checked program.
     "--seccomp", "0", "--ro-bind", host.rootfs, "/",

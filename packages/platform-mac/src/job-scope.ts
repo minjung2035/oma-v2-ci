@@ -11,5 +11,12 @@ export async function launchSeatbeltJobScope(source: CommandSpec, policy: Seatbe
   let recipe: ReturnType<typeof prepareSeatbelt>, executable: string;
   try { const command = snapshotCommand(source); executable = command.executable; recipe = prepareSeatbelt(command, { ...policy, suspendExec: true }); }
   catch (error) { throw new ExecutionNotStarted(error); }
+  // The declared cwd is checked against the policy above. With a held
+  // directory capability, only that descriptor selects the physical cwd;
+  // never reopen the checked pathname in the final process capture.
+  if (options.directoryFd !== undefined) {
+    const { cwd: _declaredDirectory, ...command } = recipe.command;
+    return launchPreparedDarwinJobScope(command, executable, recipe.privateInputs, options);
+  }
   return launchPreparedDarwinJobScope(recipe.command, executable, recipe.privateInputs, options);
 }

@@ -74,6 +74,8 @@ test("004. Mac setup forwards the exact pipeline instead of executing only its p
   const selected=snapshotIntegrationPolicy({maxWorkers:6,policyRevision:'pipeline',protectedPaths:[],
     checks:[{id:'pipeline:v2',argv:['oma-pipeline-v2'],env:{},pipeline}]}).checks[0];
   const plan=candidateSeatbeltPlan(host,view,root+'/tmp',candidate,selected);
+  assert.equal(Object.hasOwn(plan.command.env,'NODE_PATH'),false);
+  assert.doesNotThrow(()=>prepareSeatbelt(plan.command,plan.policy));
   assert.deepEqual(JSON.parse(plan.command.argv.at(-1)),{candidate,argv:selected.argv,pipeline,
     pipelineView:{temporary:root+'/tmp',npm:'/opt/pinned-node/lib/node_modules/npm/package.json'},view});
 });
@@ -84,6 +86,8 @@ test("005. Mac pipeline keeps the staging lease in slot9 and gives downloads a s
     checks:[{id:'pipeline:v2',argv:['oma-pipeline-v2'],env:{},pipeline}]}).checks[0];
   const downloadCache={root:'/private/var/oma/downloads/cache',key:'c'.repeat(64),files:['12345678-1234-1234-1234-123456789abc.result']};
   const plan=candidateSeatbeltPlan({...host,downloadCache},view,root+'/tmp',candidate,selected);
+  assert.equal(Object.hasOwn(plan.command.env,'NODE_PATH'),false);
+  assert.doesNotThrow(()=>prepareSeatbelt(plan.command,plan.policy));
   const input=JSON.parse(plan.command.argv.at(-1));
   assert.equal(input.pipelineView.downloads,downloadCache.root);assert.deepEqual(input.downloadCache,{key:downloadCache.key,files:downloadCache.files});
   assert.deepEqual(plan.policy.preserveFds,[6,8,9,10]);

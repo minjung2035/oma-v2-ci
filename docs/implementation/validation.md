@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7c312743714222734a31c6929aafab43020ce7f1ade8ac6daf4647474545202c` (15908 files).
+verification input digest `6de5feca6f0ca1479d5d13b27999b19b13d2825895ac3fb50d9828b35872db88` (15910 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -2930,3 +2930,68 @@ SOURCE62 최종 전체 architecture·transaction·durable boundary·document·sp
 최종 단일 build 뒤 새27/27 packed installation(App 포함)과 installed runtime·declaration 검사는 exit0다.
 로컬 원시는 `/tmp/oma-source62-{build-repaired,package-isolation,architecture-final,selected-final,linux-pipeline,review}.log`에 보존했다.
 이 구조/로컬 회귀 결과로 새 Darwin 실행을 PASS 처리하지 않는다. 세 gate OPEN·product BLOCKED를 유지한다.
+
+
+### SOURCE62 protected Node 생산자 발행과 후속 lease composition 시험
+
+SOURCE62 `2cf32ed50ce35174dfb5df86a2b022b53ef124d6` / local checkpoint `7a2a501fb3fb0cdda1a55dd1656db01aed2ee369`,
+Native41980352107·Architecture41980352110을 발행했다. canonical15908/`7c312743714222734a31c6929aafab43020ce7f1ade8ac6daf4647474545202c`다.
+발행 직전 local27/27 packed App 포함·전체 구조·문서·spec·binding013이 통과했고, 새 Darwin producer/guard/pipeline/Git FD 경로는 아직 NOT_RUN이다.
+
+추가 회수한 SOURCE61 Mac15 shared ZIP13393108769 SHA-256 `e7dfdf1ae973006ada1b889a8f2a24f13bdc2b4bbaefb6dd67c665e0c00cf174`는
+407/406 PASS/1 FAIL·기타0이며 유일한 FAIL은 같은 hash-object trace gate timeout이다.
+protected Node의 원본 Mach read 양성·보호 copy 음성과 JIT/FFI는 Mac15에서도 관측됐다.
+canonical15906/`51054476befe2a4fdf11fecdaf240e3f83d163737a3a7900e186d187efbddb2e`,
+runtime15528/27/`4dd76a32b9bde95192645db028f670d87cd5ef10173482ec7019abbdec81894b`가 각각 shared 전후 같다.
+
+후속 wildcard/filter 후보는 기존 multicast 주소 namespace 후보를 재채택하지 않는다.
+IPv6 wildcard bind의 실제 contender 배제와 lo0의 ff01 node-local group에 보관한256-bit source-filter metadata를 따로 관측한다.
+초기 specific bind/reuse 조합4가지, freeze 전후 ANY/loopback contender·다른 port 양성, metadata read/mutation, reconnect,
+dup-only·last-close를 비교하고 public proc_pidfdinfo의 자기 socket handle/generation도 관측한다.
+SO_RESTRICTIONS=0x1081은 기존 고정 XNU의 private selector이며 public SDK API라고 쓰지 않는다.
+자기 socket만 사용하고 payload 전송은 없다. 이것만으로 Society identity·producer·fork/exec/crash/reacquisition을 증명하지 않는다.
+SDK arm64/x64 object compile과 Linux NOT_RUN 가지는 PASS이며 실제 Mac 관측·production 채택은 NOT_RUN이다.
+후속 변경은 SOURCE62 실제 Mac 결과가 보존된 뒤 발행한다. 세 gate OPEN·product BLOCKED를 유지한다.
+
+### SOURCE62 ARM 실제 보호 성공과 pipeline/root 조립의 두 실패
+
+ARM26 shared ZIP13393314775 SHA-256 `c42cfecb898559c6e8af12471dadcadf68f144f43b64bf95d9ba1440dbb1b35c`를 대조했다.
+407/405 PASS/2 FAIL·cancel/skip/todo0, source `2cf32ed50ce35174dfb5df86a2b022b53ef124d6`다.
+canonical15908/`7c312743714222734a31c6929aafab43020ce7f1ade8ac6daf4647474545202c`,
+runtime15532/27/`c602a9940e58df05ef36087c30b080ae12cf07c9b9ca87b63c9a355d144991cc`가 각각 shared 전후 같다.
+
+작은 Node case는 실제 protectPipelineSupervisor의 원본 refusal/protected 성공, JIT/FFI,
+원본 Mach8-byte canary 양성/protected control5·read/inspect EPERM·0-byte 음성,
+journaled signed-node producer의 held bytes/hash/mode와 서명 전 권한 철회 후 consumer 미호출·빈 journal까지 통과했다.
+whole-generation은123730ms에 후속 pipeline launch에서 실패했다. fixture16901ms·source hash8948ms·generation70597ms·initial scope731ms를 관측했다.
+새 protected producer와 immutable Seatbelt 내부 guard·초기 private candidate/cache helper는 실행됐지만,
+그 뒤 pipeline·권한 철회·quarantine 단계까지 완료한 전체 PASS로 읽지 않는다.
+
+1. raw Git은 setup 뒤 rename/replacement 후 held original에만 blob을 기록하고 scope/journal을 반납했다.
+   Seatbelt 가지는 command.cwd가 없어 정책 검증에서 실행 전 거절됐다. 실제 sandboxed root 결박은 NOT_RUN이다.
+2. 공통 integrationCheckEnvironment가 pipeline에 Linux NODE_PATH를 넣고 있었다.
+   private generation의 clean-loader guard가 이를 거절했다. guard를 완화하지 않고 이 경로를 Linux candidate 어댑터로 옮긴다.
+   Linux의 동일 NODE_PATH 값은 보존하며 Mac 두 pipeline plan은 NODE_PATH 부재와 prepareSeatbelt 성공을 구조 시험으로 확인한다.
+
+SOURCE63 Seatbelt composition은 명시 cwd를 writable policy에 검증한 뒤, directoryFd가 있으면 최종 capture에서 cwd pathname을 제거한다.
+실제 cwd는 held descriptor 하나만 선택하며 raw Darwin capture의 FD+pathname 이중 입력 거절은 유지한다.
+Git 시험의 명시 cwd는 의도적으로 replacement이며 held FD는 original이다. FD가 무시되면 다른 repo에 기록돼 실패해야 한다.
+이것은 external Git business owner 전체의 결박 완료가 아니며 실제 새 Mac 실행은 NOT_RUN이다.
+
+SOURCE62 Intel26 shared ZIP13394515629 SHA-256 `718aea5bdf4fe4b7bf4e2b3c255d06ff1a1467ef24618262392b4e086ca03913`도 대조했다.
+407/405 PASS/2 FAIL·기타0이며 같은 Seatbelt cwd와 Linux NODE_PATH 거절이다. 작은 보호 guard/producer·원본 Mach 양성/보호 음성과 raw Git original-only 효과는 통과했다.
+canonical15908은 위 ARM과 같고 runtime15532/27/`f2dc46bfca298dc6d6e9a7c39ae31470ecdd9b6d16a64842cad28a62794afca0`도 shared 전후 같다.
+whole-generation duration250772ms는 cleanup까지 포함하며 PASS가 아니다. fixture17925ms·hash6324ms·signing+generation190921ms·initial scope1193ms였다.
+SOURCE63은 기존240s budget을 유지하며 signing preparation과 generation copy/seal의 phase 진단을 나눠 느린 구간을 다음 실제 실행에서 관측한다.
+SOURCE63 단일 최종 build PASS, 관련 Linux17/17(Mac 실제 경로는 refusal/NOT_RUN)과 실제 Linux pipeline5/5 PASS다.
+이후 production 수정 없이 fresh27-package 검사와 full architecture를 수행한다.
+
+SOURCE62 ARM26 full ZIP13393709605 SHA-256 `ecca1fa6881a331d604de15fa938fde7765cf410999d89124c2758c36eddc2d1`도 대조했다.
+27/27 packed installation(App 포함) PASS이며 위 canonical/runtime은 최종 전후에도 같다.
+shared407/405/2 실패 결과는 변하지 않는다. SOURCE62 Mac15 공통 실행은 현재 queued/NOT_RUN이며 이 근거를 그 OS의 새 guard 통과로 합성하지 않는다.
+
+SOURCE63 최종 단일 build와 전체 architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+source 고정 뒤 새27/27 packed installation(App 포함)·installed runtime·declaration 검사도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220을 유지한다.
+로컬 원시는 `/tmp/oma-source63-{build-final,package-isolation,architecture-final,selected,linux-pipeline,review}.log`다.
+새 Mac pipeline/root-FD composition·wildcard/filter 관측은 아직 NOT_RUN이며 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
