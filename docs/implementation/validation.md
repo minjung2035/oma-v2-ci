@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `04262556f8e49d3c89f1aff70f799bf32c042777ef9e1595208ac63fdc2b60eb` (15921 files).
+verification input digest `6fc011c7ab32052c93a5fc2438dd72f4d0a82fe77c02c5f1b05f1235a54942ed` (15922 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3467,3 +3467,41 @@ producer의 두 origin도100003, 이후 process pin unavailable이었다. 임시
 SOURCE73 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
 새 Mac SQLite namespace와 corrected producer lifetime의 실제 결과는 여전히 NOT_RUN이다.
 원시는 `/tmp/oma-source73-{architecture,sqlite-arm,sqlite-intel,candidates-linux}.log`와 실제 Linux prototype log다.
+
+### SOURCE74 공개 SQLite Unix VFS syscall adapter 후보
+
+SOURCE73 `666d6c23125723548e27bdd93bb3d060160f0f1f` / local checkpoint `188e0cb11dd876d284ec825a51827706adb2ae05`,
+Native42005149612·Architecture42005149538의 Mac15 shared ZIP13404318778 SHA-256
+`8fc78d25b85acb62ae7efc95150b8cfafa7639fdac15a787fa3bf08cc3f4dea8`를 대조했다.
+canonical15921/`04262556f8e49d3c89f1aff70f799bf32c042777ef9e1595208ac63fdc2b60eb`와
+runtime15532/27/`adf176d1285869bd5f59fc5f2c9e2d2b0a27f58b9da88ef9a5d2ad88c9fa1be6`는 전후 동일이다.
+main430/430 PASS·generation3/3 PASS·각 기타0다. explicit FD3 수정 뒤 producer expected CDHash matched,
+fresh live·independent alias/replay 거절·producer-live last-close를 실제 관측했다. full Society lease/backend 채택은 아니다.
+
+Intel main ZIP13404659510 SHA-256 `dd0255c550f5284b26f438f4ef65137a9603e4b16cb8f4950e1aca05dd8cadeb`도 대조했다.
+같은 canonical과 runtime15532/27/`b505525cd1e2081bf497e0956547c751b878850ecf9626979e2cdbdbf877286c`는 main 전후 동일이다.
+main430/429 PASS/1 FAIL·기타0다. producer의 같은 인증·instance·alias·last-close 조건은 통과했지만
+기존 supervisor-guard candidate에서 populated scope termination failed / RUN_TERMINATION_UNKNOWN이 발생했다.
+직렬 generation과 전체 packed qualification 완료로 이 main artifact를 해석하지 않는다.
+SOURCE74는 해당 fixture의 원래 process 안에서 mode·population·journal·전체 중첩 cause를 기록한다.
+unknown을 dead로 바꾸거나 재실행 성공으로 이 실패를 지우지 않는다.
+
+SQLite descriptor-spelling 후보는 실제 양 Mac에서 canary ENOENT와 database-open errcode14로 REJECTED였다.
+Linux `/proc/self/fd` 성공을 Mac `/dev/fd`에 옮기지 않는다. SOURCE74는 별도 test-only C extension에서
+[공개 VFS v3 syscall hooks](https://www.sqlite.org/c3ref/vfs.html)를 조사한다.
+기존 Node 내장 SQLite engine·Unix POSIX locking·WAL/SHM 구현을 유지하고 private virtual prefix만
+held directory의 openat/fstatat/unlinkat 등으로 처리한다. 다른 default-VFS 경로는 원래 호출로 전달한다.
+Mac은 명시적 unix-posix VFS를 요구하며 private SQLite 구조·Node symbol·OS SQLite library를 쓰지 않는다.
+고정 candidate는 단일 test root만 복제해 보유하고 모든 DB close 뒤 명시 반납한다. production root API가 아니다.
+이미 callback을 설치한 뒤 setup이 거절돼도 image는 영구 load 상태로 유지하며 bind를 거절한다.
+
+Linux Node26의 실제 내장 engine에서 root caller FD를 닫고 원본 rename/replacement 후 처음 WAL/SHM을 열어,
+WAL mode·reader snapshot·writer contention·checkpoint·재개방 integrity·default VFS 공존·반납 후 거절을 확인했다.
+원시는 `/tmp/oma-source74-sqlite-linux.log`다. Mac actual 결과와 G-FILES 채택은 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE73 Mac15 full ZIP13405186336 SHA-256 `062c63d610792603dd24d444f9ef7f4c76f16fe3d0499010126d67792439eaa3`도 대조했다.
+27/27 packed installation(App installed runtime 포함)과 main/shared/final input/runtime의 원본 대비 동일을 확인했다.
+SOURCE74 양 SDK object compile·Linux NOT_RUN 경로·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+Linux public-hook 원형은 실제1/1 PASS이며 Mac qualification과 합산하지 않는다. production은 SOURCE72와 같다.
+원시는 `/tmp/oma-source74-{architecture,sqlite-arm,sqlite-intel,candidates-linux,sqlite-linux}.log`다.

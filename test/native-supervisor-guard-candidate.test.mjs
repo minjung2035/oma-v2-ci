@@ -7,6 +7,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
+import {inspect} from 'node:util';
 import {launchDarwinJobScope,launchSeatbeltJobScope} from '@oma/platform-mac/job-scope';
 import {ExecutionCoordinator} from '@oma/process/owned-execution';
 
@@ -29,8 +30,13 @@ test('001. Actual Darwin supervisor candidate records task access and attach att
   const command={executable,argv:[mode],cwd:root,env:{HOME:root,TMPDIR:root,PATH:'/usr/bin:/bin'},timeoutMs:20000,stdoutBytes:16384,stderrBytes:16384};
   const policy={readable:[],writable:[{path:root,kind:'directory'}],denied:[],executable:[{path:executable,kind:'file'}],
    unixSockets:[],machServices:[],environmentKeys:['HOME','TMPDIR','PATH']};
-  const result=await owner.run({slot:'guard-probe',signal:t.signal,
-   launch:()=>seatbelt?launchSeatbeltJobScope(command,policy):launchDarwinJobScope(command),authorize(){}});
+  let scope,result;
+  try{result=await owner.run({slot:'guard-probe',signal:t.signal,
+   launch:async()=>{scope=await(seatbelt?launchSeatbeltJobScope(command,policy):launchDarwinJobScope(command));return scope;},authorize(){}});}
+  catch(error){
+   let population;try{population=scope?.population();}catch(observation){population=inspect(observation,{depth:null});}
+   t.diagnostic(JSON.stringify({phase:'supervisor-guard-failure',mode,seatbelt,population,journal:rows,error:inspect(error,{depth:null})}));throw error;
+  }
   assert.equal(result.kind,'exited',result.stderr.toString());assert.equal(result.exitCode,0,result.stderr.toString());
   const reports=result.stdout.toString().trim().split('\n').map(line=>JSON.parse(line));
   assert.equal(reports.filter(row=>row.kind==='supervisor').length,1);assert.equal(reports.filter(row=>row.kind==='mach').length,1);
