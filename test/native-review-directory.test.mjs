@@ -35,6 +35,10 @@ for(const disposition of['accepted','discarded','registration-refused','renamed-
     owner.retainForOperation();repository.integration.verifyDiff(prepared.diff);
     assert.match(repository.readDiffPatch(prepared.diff).toString(),/original-only review bytes/);
     assert.deepEqual(repository.readDiffRecord(prepared.diff).paths,[{status:'M',path:'file'}]);
+    repository.withReviewSourceRecord(base,candidate,source=>{
+     assert.match(readFileSync(source.patch.path,'utf8'),/original-only review bytes/);assert.equal(source.paths.length,1);assert.equal(source.paths[0].path,'file');
+     source.withBlob(source.paths[0].after.oid,file=>{assert.equal(readFileSync(file.path,'utf8'),'original-only review bytes\n');});
+    });
     const unbound=new GitRepository(paths,{submissions:()=>[]});assert.throws(()=>unbound.readDiffPatch(prepared.diff),error=>error.code==='STORE_CORRUPT');
    }else{owner.discardUnaccepted();assert.deepEqual(readdirSync(join(moved,'oma-results')),[]);}
    assert.equal(readFileSync(replacement,'utf8'),'replacement must remain');

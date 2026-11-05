@@ -306,6 +306,7 @@ packages/file-descriptors/src/index.ts
 packages/git/package.json
 packages/git/src/candidate-check.ts
 packages/git/src/canonical-command.ts
+packages/git/src/canonical-directory.ts
 packages/git/src/canonical-health.ts
 packages/git/src/check-pipeline.ts
 packages/git/src/context-publication.ts
@@ -320,6 +321,7 @@ packages/git/src/mail-attachments.ts
 packages/git/src/observe.ts
 packages/git/src/paths.ts
 packages/git/src/ports.ts
+packages/git/src/prepared-ref-owner.ts
 packages/git/src/project-preparation.ts
 packages/git/src/project-snapshot.ts
 packages/git/src/provenance-index.ts

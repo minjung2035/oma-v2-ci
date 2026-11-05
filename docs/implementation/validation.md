@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6fc011c7ab32052c93a5fc2438dd72f4d0a82fe77c02c5f1b05f1235a54942ed` (15922 files).
+verification input digest `bd3571c3139a5b99971020f01f14da001229e4117b3c2d988f7eccb153b65051` (15925 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3505,3 +3505,58 @@ SOURCE73 Mac15 full ZIP13405186336 SHA-256 `062c63d610792603dd24d444f9ef7f4c76f1
 SOURCE74 양 SDK object compile·Linux NOT_RUN 경로·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
 Linux public-hook 원형은 실제1/1 PASS이며 Mac qualification과 합산하지 않는다. production은 SOURCE72와 같다.
 원시는 `/tmp/oma-source74-{architecture,sqlite-arm,sqlite-intel,candidates-linux,sqlite-linux}.log`다.
+
+### SOURCE75 integration 준비·prepared ref owner·collector의 canonical root
+
+SOURCE74 `0eeeaad05db7e476b1c4f541c8ef17574bad56f8` / local checkpoint `32da519ab05feac9dea7cc57488e6efd5b06effd`,
+Native42007519477·Architecture42007519354를 발행했다. canonical15922/`6fc011c7ab32052c93a5fc2438dd72f4d0a82fe77c02c5f1b05f1235a54942ed`다.
+Mac15 shared ZIP13406201920 SHA-256 `e3cf455298762402e651ca47c9189f6f7dbee7a03c95a7de9fcce73de896dda4`와
+Intel main ZIP13405627239 SHA-256 `60f4afcf294faaa3dc75375c0b5612ad9977249fbfc881c98c4bfdae936cddb1`를 대조했다.
+각 canonical과 runtime15532/27은 전후 동일이며 runtime digest는 Mac15 `adf176d1285869bd5f59fc5f2c9e2d2b0a27f58b9da88ef9a5d2ad88c9fa1be6`,
+Intel `b505525cd1e2081bf497e0956547c751b878850ecf9626979e2cdbdbf877286c`다.
+양 main431/431 PASS·기타0, Mac15 isolated generation3/3 PASS·기타0다. Intel generation은 이 main artifact 범위 밖이다.
+새 SQLite public hook 후보의 실제 WAL mode·rename 뒤 WAL/SHM·reader snapshot·writer contention·checkpoint·integrity reopen·
+다른 default VFS 공존·root 반납 뒤 거절은 양 Mac에서 관측했다. Store production 연결·G-FILES 완료는 아니다.
+앞선 Intel scope unknown이 이번에 재발하지 않았다는 사실만으로 원인이 수정됐다고 하지 않는다.
+
+SOURCE73 Intel shared ZIP13405341353 SHA-256 `9d8afbbe36aae5558b38db938bbeec41d207b216f5e77bf12b4722a85d898acd`도 대조했다.
+canonical15921와 SOURCE73 Intel runtime15532/27은 shared 전후 동일이다. main430/429 PASS/1 FAIL·기타0,
+isolated generation3/2 PASS/1 CANCELLED·fail/skip/todo0다. generation001은 기존240000ms 예산을 넘겨273815.784697ms에 timeout을 기록했다.
+phase는 fixture installation36901ms·source digest10654ms·protected Node preparation12479ms까지 왔다.
+이후 generation construction 완료는 관측하지 못했다. 직렬 실행도 deadline 보장은 아니며 예산을 넓히지 않는다.
+
+SOURCE75는 기존 CanonicalExecution을 async integration merge-tree·commit-tree·prepared update-ref·raw delta에 전달한다.
+별도 fixed canonical-directory leaf가 oma-results/oma-preparations만 열며, review와 integration이 같은 project capability를 쓴다.
+TreeLease는 trusted borrowed parent cursor로 take·quiescence·collection을 처리하는 선택 port를 갖는다.
+이 port가 있으면 logical tree label의 leaf만 held parent에서 열고 닫으며 경로 fallback을 하지 않는다.
+기존 lease 없음/불명→unknown·실행 범위 사망의 독립 조건과 기본 Linux 조립은 유지한다.
+
+prepared ref의 preaccept owner는 project와 preparations parent의 자기 cursor를 보유한다.
+활성/불명 helper면 폐기를 거절하고 cursor를 보존하며, 수락 또는 관측된 ref 부재 뒤 반납한다.
+반납 실패는 보존하고 숫자 FD를 다시 닫지 않는다. 등록 callback 거절은 게시 전 cursor만 반납한다.
+삭제 command exit만 성공으로 쓰지 않고 같은 held canonical에서 ref 부재도 확인한다.
+startup collector의 enumerate·lease·ref 관측·삭제·lease 정리도 같은 root를 사용하며 실제 App reconcile에 전달한다.
+reconcile canonicalMain과 review source-record의 patch/blob 관측도 같은 selected Git/root를 쓴다.
+canonical health diagnostics·context/private workspace·SQLite Store와 나머지 G-FILES는 아직 미완료다.
+
+원본 rename/replacement와 등록 중 교체에서 수락·폐기·등록 거절·활성 lease 거절 후 폐기·고아 collector를 실제 Git으로 확인했다.
+settlement 직전 caller root FD를 닫아도 owner의 독립 cursor로 원본 ref만 처리했다.
+replacement ref·동명 lease bytes·main·Host cwd는 보존됐다. 새6건과 기존 review/canonical을 포함한 최종 Linux 회귀106/106 PASS다.
+기존 accepted/unknown/active collector·SIGKILL prepared CAS·lease cleanup 회귀24/24도 PASS다.
+review source-record는 교체 후 원본 patch와 정확한 endpoint blob bytes까지 읽었다.
+원시는 `/tmp/oma-source75-linux-regression.log`·`/tmp/oma-source75-collector-leases.log`이며 checkout `.git`은 read-only였다.
+최종 index diff는 빈 `/tmp/oma-source75-checkout-index.patch`다. Mac actual 새 consumer 결과는 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE74 Intel shared ZIP13405947904 SHA-256 `35a76c6ae456b5c1db2820cb9563188fb6fac36e5c9e19a4028742f777b493b6`도 대조했다.
+같은 canonical15922와 위 Intel runtime15532/27은 shared 전후 동일이며 main431/431·generation3/3 PASS·기타0다.
+SOURCE73 timeout/unknown 실패를 이 결과로 없애거나 cold-start 예산 보장으로 쓰지 않는다.
+SOURCE75 최종 production build와 fresh27/27 packed installation(App installed runtime 포함)은 exit0다.
+production14396, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14364 / REMOVED220이다.
+원시는 `/tmp/oma-source75-build-final.log`·`/tmp/oma-source75-package-isolation.log`·`/tmp/oma-source75-review.log`다.
+
+SOURCE75 full architecture·transaction·durable boundary·document·spec inventory는 exit0이며 input binding013은1/1 PASS다.
+원시는 `/tmp/oma-source75-architecture.log`·`/tmp/oma-source75-input-binding-test.log`다.
+SOURCE74 Mac15 full ZIP13406740322 SHA-256 `e4e496fcc4da21c3d54083d72bc77c7d1c314ad8f3862a2d6f3cd219121d2930`의
+27/27 packed installation(App installed runtime 포함)과 최종 canonical/runtime 동일도 대조했다.
+SOURCE75 actual Mac consumer 시험과 전체 product gate는 완료하지 않았다.

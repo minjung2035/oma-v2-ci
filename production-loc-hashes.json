@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "58b22da10a9b45449cd17e9accf397abf3439edef943c9b6ebba3098a6bac83c",
+  "manifest": "3c30a0fbef0431455a7c4a3382ade14097c088874c6687ad1a907f632a6a73e2",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -108,7 +108,7 @@
     },
     {
       "path": "apps/oma/src/broker/reconcile-composition.ts",
-      "sha256": "8e997699020e206d8f1b8a2212154de12b81b52449bbab800375d28175c91fb4"
+      "sha256": "21996fcd8a5534df27c4dc7e9a7675654753f81e1fe800f69a18f716260cfc56"
     },
     {
       "path": "apps/oma/src/broker/review-composition.ts",
@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "8b765a37aaec9c3d70e10d3dbb4fc255dee5a17051ef9e76381aba5b18a8e422"
+      "sha256": "9eac8f3025a5fda07cd239b265352e39f85f582a0f8e5dbe02d7213f41cb1c53"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
@@ -1235,6 +1235,10 @@
       "sha256": "0dc6039a25605dc14d6821ac8495f342541e587461043c23c33fbb3c448bea15"
     },
     {
+      "path": "packages/git/src/canonical-directory.ts",
+      "sha256": "ac135b889ed78f25210174faa5a94a8a2dcc186ae8d96cb243c181302240aaa5"
+    },
+    {
       "path": "packages/git/src/canonical-health.ts",
       "sha256": "20824401e5d7933e2481607a5396d4a9fcdaee09f00a9e5c810cc525f3434b82"
     },
@@ -1264,7 +1268,7 @@
     },
     {
       "path": "packages/git/src/integration-preparation.ts",
-      "sha256": "ebcfbfa010edf8a07c586940d2400092ca8137cef9048bc6455fd53019580b35"
+      "sha256": "f7e99b259f6aa11fc356d355eb28e1d27b616deefb356da084c633c728041c3a"
     },
     {
       "path": "packages/git/src/integration-publication.ts",
@@ -1289,6 +1293,10 @@
     {
       "path": "packages/git/src/ports.ts",
       "sha256": "f6b96e7a8690f593e13f5f2346c3655c4b5403841bce9262c576e138be510eb1"
+    },
+    {
+      "path": "packages/git/src/prepared-ref-owner.ts",
+      "sha256": "5b931429e2a8a8be09f65894e182480d1cbcf50fc28567021a0506d219b5feb5"
     },
     {
       "path": "packages/git/src/project-preparation.ts",
@@ -1328,15 +1336,15 @@
     },
     {
       "path": "packages/git/src/repository.ts",
-      "sha256": "97f789d500cc1f59dc73c8ba3cc02a8b4675ff65542713f965deae80b897f900"
+      "sha256": "0ebd27d98bf317c2707f580972193a6c8a8cb8fabc9535911968bf73a77146fd"
     },
     {
       "path": "packages/git/src/review-artifact.ts",
-      "sha256": "3446ea6f014a39c4aa20b6fe3decdcce6806b55fff4cad120f926c9f2f53b19a"
+      "sha256": "997af704cd264244f708f552cd25288580c75565f1dd5ba8939451ac66d88fe6"
     },
     {
       "path": "packages/git/src/review-record.ts",
-      "sha256": "c4d20bedf18ffef0fc03ddde4826dc0172222fdc89c21d757ff974c4366bab13"
+      "sha256": "00128828ed20b05c593b34f62b707f8406b1d705747aaf5763fea9c2be82f919"
     },
     {
       "path": "packages/git/src/submit.ts",
@@ -2236,7 +2244,7 @@
     },
     {
       "path": "packages/storage/src/tree-lease.ts",
-      "sha256": "ceed78e2079226d4df8be6229de2f29d960c1c630dbdca82c8bc36e9da5116ef"
+      "sha256": "1d50f1580b9152686f7e3c3dd3610409d0ae95e14e5d2dbddd1b7d28cfe1107a"
     },
     {
       "path": "packages/tool-files/package.json",

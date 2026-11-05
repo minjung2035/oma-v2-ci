@@ -1,8 +1,6 @@
 /** Canonical patch streaming, owned before its first asynchronous effect. */
 import { join } from "node:path";
-import { closeSync, constants, fstatSync, fsyncSync } from "node:fs";
-import { mkdirAt } from "@oma/file-descriptors";
-import { openBeneath } from "@oma/native/files";
+import { closeSync } from "node:fs";
 import { cleanupAll, withCleanup, withAsyncCleanup } from "@oma/native/cleanup";
 import { createResult } from "@oma/tool-files/results";
 import { ensureOwnedDurableDirectory } from "@oma/storage/durable-fs";
@@ -12,23 +10,11 @@ import { GIT_ENV } from "@oma/process/policies";
 import { StoreError } from "@oma/domain/errors";
 import type { PreacceptArtifactOwner, ReviewDiffArtifact } from "@oma/contracts/files";
 import { CANONICAL_SAFE_ARGS, GIT_BIN, bindCanonicalCommand, type CanonicalExecution } from "./canonical-command.js";
+import { openCanonicalDirectory } from "./canonical-directory.js";
 /** Caller owns this cursor. It is relative to the same canonical capability
  * used by Git; the string root remains the logical artifact address. */
 export function openReviewDirectory(repository: string, execution?: CanonicalExecution, create = false): number | undefined {
-  const project = execution?.directories.get(repository);
-  if (project === undefined) return undefined;
-  if (create) {
-    try { mkdirAt(project, "oma-results", 0o700); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
-  }
-  const directory = openBeneath(project, "oma-results", constants.O_RDONLY | constants.O_DIRECTORY);
-  try {
-    const stat = fstatSync(directory);
-    if (stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0)
-      throw new StoreError("REF_STATE_UNKNOWN", "review result directory is not privately owned");
-    if (create) { fsyncSync(directory); fsyncSync(project); }
-    return directory;
-  } catch (error) { return withCleanup(() => { throw error; }, () => closeSync(directory)); }
+  return openCanonicalDirectory(repository, "oma-results", execution, create);
 }
 export class ReviewArtifacts {
   private readonly executor = new PreparationExecutor();

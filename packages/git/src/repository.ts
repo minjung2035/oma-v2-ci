@@ -94,7 +94,7 @@ export class GitRepository implements GitRepositoryPort {
       publishSnapshot: (operation, proof) => this.contextRepository.publishSnapshot(operation, proof),
     } satisfies GitRepositoryPort["context"];
     const artifacts = new ReviewArtifacts(paths.projectGit, canonicalExecution);
-    const preparation = new IntegrationPreparation(paths.projectGit, paths.society);
+    const preparation = new IntegrationPreparation(paths.projectGit, paths.society, canonicalExecution);
     this.review = { ...facts,
       prepareIntegration: (id, base, candidate, main, own) => preparation.prepare(id,base,candidate,main,own),
       prepareDiff: (operation, base, candidate, own) => artifacts.prepare(operation, base, candidate, own),
@@ -129,7 +129,7 @@ export class GitRepository implements GitRepositoryPort {
     const format = this.objectFormat(this.paths.projectGit, [base, candidate]);
     observed(this.observations.commit(this.paths.projectGit, base), "recorded review base");
     observed(this.observations.commit(this.paths.projectGit, candidate), "recorded review candidate");
-    withReviewSourceRecord(this.paths.projectGit, base, candidate, format, consume);
+    withReviewSourceRecord(this.paths.projectGit, base, candidate, format, consume, this.canonicalExecution);
   }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
     const format = observed(this.observations.objectFormat(repo), "repository object format");

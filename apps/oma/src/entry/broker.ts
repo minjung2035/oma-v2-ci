@@ -312,7 +312,7 @@ async function main(): Promise<void> {
             projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed,
             ...(freshVerifiedMain === undefined ? {} : { freshVerifiedMain }),
             sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
-        });
+        }, canonicalExecution);
         // PR-001: only the host that started this process gets a Principal
         // endpoint, and credentials leave only on the channel that host holds --
         // never through a file, an environment or this process's own output.

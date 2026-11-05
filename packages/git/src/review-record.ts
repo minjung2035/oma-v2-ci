@@ -15,7 +15,7 @@ import { fileDigest } from "@oma/storage/file-digest";
 import { mkdirAt } from "@oma/file-descriptors";
 import { withinDirectory } from "@oma/native/files";
 import { removeOwnedEntryAt } from "@oma/storage/directory";
-import { CANONICAL_PROCESS_LIMITS, CANONICAL_SAFE_ARGS, GIT_BIN } from "./canonical-command.js";
+import { CANONICAL_PROCESS_LIMITS, CANONICAL_SAFE_ARGS, GIT_BIN, bindCanonicalCommand, type CanonicalExecution } from "./canonical-command.js";
 import { gitOidArgument } from "./observe.js";
 
 /** Parse NUL-framed raw changes incrementally. Neither whole-tree output nor a
@@ -69,7 +69,7 @@ function rawPaths(path: string, width: number): readonly ReviewSourcePath[] {
 }
 
 export function withReviewSourceRecord(repository: string, base: string, candidate: string,
-    objectFormat: "sha1" | "sha256", consume: (source: ReviewSourceRecord) => undefined): void {
+    objectFormat: "sha1" | "sha256", consume: (source: ReviewSourceRecord) => undefined, execution?: CanonicalExecution): void {
   gitOidArgument(base); gitOidArgument(candidate);
   const width = objectFormat === "sha1" ? 40 : 64;
   if (base.length !== width || candidate.length !== width)
@@ -82,10 +82,11 @@ export function withReviewSourceRecord(repository: string, base: string, candida
       const spool = (args: readonly string[]): ReviewRecordFile => {
         if (!active) throw new StoreError("INTERNAL_ERROR", "review source outlived its observation owner");
         const path = join(scratch, String(ordinal++));
-        const result = runProcessSync({ executable: GIT_BIN,
+        const physical = bindCanonicalCommand({ executable: GIT_BIN,
           argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, ...args],
           env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" }, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout,
-          stdoutBytes: 0, stderrBytes: 8192, stdoutSpool: path });
+          stdoutBytes: 0, stderrBytes: 8192, stdoutSpool: path }, execution);
+        const result = runProcessSync(physical.command, undefined, [], physical.directoryFd === undefined ? {} : { directoryFd: physical.directoryFd });
         if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "recorded review source observation timed out");
         if (result.kind !== "exited" || result.exitCode !== 0 || result.stderr.length !== 0)
           throw new StoreError("REF_STATE_UNKNOWN", "recorded review source could not be observed completely");
