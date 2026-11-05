@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c907d33abb69dcb0ecc7b3198e86010aa5d338c5b69b2cb5ff265726f020ea9e` (15914 files).
+verification input digest `978a35c1a24332290616c747c29f2bf3e85086476db811358e6bc5e5ebecb7fa` (15915 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3178,3 +3178,50 @@ SOURCE67 source 고정 뒤 단일 build·fresh27/27 packed installation(App 포�
 production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
 원시는 `/tmp/oma-source67-{build,package-isolation,process-io,architecture}.log`다.
 이 구조 검증을 실제 Mac directory mode 실행이나 아직 연결하지 않은 Host canonical/CAS 보장으로 승격하지 않는다.
+
+### SOURCE68 Host canonical Git directory 연결
+
+trusted composition의 CanonicalExecution은 선택한 Git executable과 caller-owned repository directory map만 담는다.
+wire/model grammar에는 FD를 추가하지 않는다. adapter가 작성한 고정 `--git-dir` operand만 local`.`로 바꾸고
+동기 directory control로 실행하며, 요청 argument 전체를 검색·변환하거나 Host cwd를 바꾸지 않는다.
+GitRepository의 canonical 관측·CAS·published refs/provenance traversal·no-op witness·revert plumbing에 같은 control을 전달한다.
+Mac broker는 기존 owned developer-tools observation의 실제 Git을 선택하고 project directory를 연다.
+directory는 native retirement와 logical drain을 모두 마친 lifetime.shutdown 성공 뒤 반납하며,
+unknown shutdown의 실패 경로에서는 process 종료 전 먼저 반납하지 않는다.
+Linux 기본 composition은 기존 경로를 유지한다.
+
+이 연결은 project canonical commands에 한정된다. context의 준비/초기화·review artifact·비동기 integration preparation·
+private workspace·SQLite 및 다른 외부 writer의 root 결박은 아직 미완료다.
+full product gate나 whole-scope death proof로 승격하지 않는다.
+SHA1/SHA256 actual Git 시험은 열린 원본을 rename하고 같은 이름에 빈 repo를 놓은 뒤 shared GitRepository 관측·CAS와
+고정 adapter의 published refs·no-op·graph/range·revert가 원본에만 적용됨을 통과했다.
+초기 fixture는 기존 CAS 반환의 oid field를 예상값에서 빠뜨려 실패했으며 production 판정을 바꾸지 않고 fixture를 수정했다.
+초기 원시는 `/tmp/oma-source68-canonical.log`, 최종 관련 원시는 `/tmp/oma-source68-canonical-final.log`다.
+Mac에서 이 Host canonical 연결의 실제 실행은 NOT_RUN이다. 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE67 `b95a0bb29525c70de6ffad597d9846ec10aa6241` / local checkpoint `d738766e35bb8ffb4f3bdcede24bc8fbc924cd9f`,
+Native41991320854·Architecture41991320813를 발행했다.
+canonical15914/`c907d33abb69dcb0ecc7b3198e86010aa5d338c5b69b2cb5ff265726f020ea9e`다.
+해당 source의 새 동기 directory mode 실제 Mac 결과는 아직 NOT_RUN이다.
+
+추가 수신한 SOURCE66 ARM26 shared ZIP13398400660 SHA-256 `460efeb90390857c288beef701dea5d014a59416aa87a945cf8f557babbb6ed6`도
+같은 canonical15913과 runtime15532/27/`75f9ae8911e268696b4d52da232f0ec6dc18a5d8b43a4ab8d40b3c298e7daf2d` 전후 동일,
+412/412 PASS·기타0이다. SOURCE66의 세 Mac full artifact도 각각27/27 packed installation(App installed runtime 포함)과
+최종 input/runtime 전후 동일을 확인했다. SHA-256 대조한 full ZIP은
+ARM26 13398591043/`8d2863be68730cc669269bf21189d02a0abd387a220edcc60c6938481aa919be`,
+Intel26 13397404923/`5f51f836a3295da7ebf9ad2e7384c482f5bd302d334c3f7cb96024842f5795bb`,
+Mac15 13397219796/`309aa9633f0c6f93ddcd3acd0f71c93f601e2951680fe4b184e651c6b4f3a81e`다.
+SOURCE66 결과를 SOURCE67/68 구현의 실제 실행 근거로 승계하지 않는다.
+
+SOURCE67 Mac15 shared ZIP13398043900 SHA-256 `4a06dc3d19dde0135c11389e46b86a01352e57c474cd521862c22c1aaec302f3`를 대조했다.
+같은 canonical15914와 runtime15532/27/`f3b6d8d03e1791f965ec23077c8c5b3295cdec3e607df15d9d2cebc2ac7b9671` 전후 동일,
+415/415 PASS·fail/cancel/skip/todo0이다. 새 실제 directory-fd3의 이름 교체·명시 socket 전달·inherited Seatbelt denial3 case도 통과했다.
+기존 protected pipeline·quarantine도 이번 source에서 통과했으며 SOURCE65 cleanup unknown을 고쳤다는 근거로 쓰지 않는다.
+SOURCE68 local 관련 canonical/observation 검사는14/14, 실제 namespace tiered integration·publication·기존 review 회귀는33/33 PASS다.
+Mac에서 SOURCE68 Host canonical 연결 실행은 여전히 NOT_RUN이다.
+
+SOURCE68 최종 source 고정 뒤 단일 build·fresh27/27 packed installation(App 포함)·installed runtime·declaration 검사는 exit0다.
+full architecture·transaction·durable boundary·document·spec inventory도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+원시는 `/tmp/oma-source68-{build,canonical-final,linux-regression,package-isolation,review,architecture}.log`다.
+최종 구조 검증을 아직 미실행인 SOURCE68 Mac consumer qualification로 쓰지 않는다.

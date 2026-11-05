@@ -30,7 +30,8 @@ import { prepareResidentTools } from "../runtime/resident-tools.js";
 import type { MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { observeProjectBinding, repairSociety } from "../runtime/provision.js";
 import { prepareSociety } from "../runtime/society-preparation.js";
-import { realpathSync } from "node:fs";
+import { openDirectory } from "@oma/native/files";
+import { closeSync, realpathSync } from "node:fs";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "@oma/domain/integration-policy";
 import { ReconcileModule } from "@oma/reconcile";
 import { loadConfig, readCurrentHostPolicy } from "@oma/config";
@@ -76,6 +77,7 @@ catch (error) {
 }
 const { stateRoot, runRoot, configPath } = location;
 async function main(): Promise<void> {
+    let canonicalDirectory: number | undefined;
     // DR72: standalone startup must refuse before run-root/lock creation,
     // Store open, workspace restore, execution recovery or provisioning.
     requireCollaborationSociety(readSessionBirth(stateRoot), society);
@@ -159,6 +161,7 @@ async function main(): Promise<void> {
             if (runtimePreparation !== null)
                 await runtimePreparation.catch(() => {});
             await lifetime.shutdown();
+            if (canonicalDirectory !== undefined) { closeSync(canonicalDirectory); canonicalDirectory = undefined; }
             if (exitStatus === 0 && sessionStorage !== null && storageResidents !== null) {
                 try { await sessionStorage.close(storageResidents, storageCloseMode); }
                 catch (error) { console.error("Session workspace reclamation did not finish; recovery data retained:", error instanceof Error ? error.message : String(error)); }
@@ -286,11 +289,14 @@ async function main(): Promise<void> {
             worldDir: join(stateRoot, "world"), society,
             ownerSignal: preparationAbort.signal,
             checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
+        if (developerTools !== undefined) canonicalDirectory = openDirectory(gitPaths.projectGit);
+        const canonicalExecution = developerTools === undefined || canonicalDirectory === undefined ? undefined :
+            { executable: developerTools.git, directories: new Map([[gitPaths.projectGit, canonicalDirectory]]) };
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared, physicalLaunch) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared, physicalLaunch), undefined, preparationAbort.signal,
             () => executionOwner.confirmDead("candidate"), cfg.resources, runtimeGeneration?.launchNode);
         const { git, reviews } = createGitServices(gitPaths, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society)), (candidate, check, cancellation, authorize, attempt) => checks.run(candidate, check, cancellation, authorize, attempt), { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
-            bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner, runtimeGeneration?.launchNode));
+            bundleBytes: cfg.limits.bundleBytes }, quarantineExecution(gitPaths, executionOwner, runtimeGeneration?.launchNode), canonicalExecution);
         const hasGoal = (): boolean => git.hasCommittedContext();
         const activationAllowed = (): boolean => {
             lifecycle.assertActiveCapacity();

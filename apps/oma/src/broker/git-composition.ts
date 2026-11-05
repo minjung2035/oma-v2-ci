@@ -7,6 +7,7 @@ import type { IntegrationPolicy, IntegrationPolicyReader, FrozenCheck } from "@o
 import { GitModule } from "@oma/git";
 import { GitRepository } from "@oma/git/repository";
 import type { QuarantineExecution } from "@oma/git/quarantine";
+import type { CanonicalExecution } from "@oma/git/canonical-command";
 import type { GitPaths } from "@oma/git/paths";
 import { ReviewModule, type ReviewBounds, type ReviewEffects } from "@oma/review";
 import { ReviewAuthorityReader } from "@oma/review/authority";
@@ -14,10 +15,10 @@ import { gitLedger, gitMessaging } from "./git-ledger.js";
 
 type CandidateCheck = (candidate: Oid, check: FrozenCheck, cancellation: AbortSignal | undefined, authorize: () => void, attempt?: string) => Promise<void>;
 function composeGit(paths: GitPaths, store: Store, mail: MailModule,
-  policy: IntegrationPolicy | null, reader: IntegrationPolicyReader | null, check: CandidateCheck | null, quarantine: QuarantineExecution | null) {
+  policy: IntegrationPolicy | null, reader: IntegrationPolicyReader | null, check: CandidateCheck | null, quarantine: QuarantineExecution | null, canonicalExecution?: CanonicalExecution) {
   store.bindRepositoryIdentity({ society: paths.society });
   const ledger = gitLedger(store);
-  const repository = new GitRepository(paths, { submissions: () => ledger.submissions(), attachmentRoots: () => ledger.attachmentRoots?.() ?? [] }, quarantine);
+  const repository = new GitRepository(paths, { submissions: () => ledger.submissions(), attachmentRoots: () => ledger.attachmentRoots?.() ?? [] }, quarantine, canonicalExecution);
   const authority = new ReviewAuthorityReader({
     attestationFacts: () => store.attestationFacts(),
     getOperation: (actor, key) => store.getOperation(actor, key),
@@ -34,14 +35,14 @@ function composeGit(paths: GitPaths, store: Store, mail: MailModule,
 }
 export function createGitModule(paths: GitPaths, store: Store, mail: MailModule,
   policy: IntegrationPolicy | null = null, reader: IntegrationPolicyReader | null = null,
-  check: CandidateCheck | null = null, quarantine: QuarantineExecution | null = null): GitModule {
-  return composeGit(paths, store, mail, policy, reader, check, quarantine).git;
+  check: CandidateCheck | null = null, quarantine: QuarantineExecution | null = null, canonicalExecution?: CanonicalExecution): GitModule {
+  return composeGit(paths, store, mail, policy, reader, check, quarantine, canonicalExecution).git;
 }
 export function createGitServices(paths: GitPaths, store: Store, mail: MailModule,
   policy: IntegrationPolicy | null = null, reader: IntegrationPolicyReader | null = null,
   check: CandidateCheck | null = null,
-  bounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 }, quarantine: QuarantineExecution | null = null) {
-  const { git, repository, authority } = composeGit(paths, store, mail, policy, reader, check, quarantine);
+  bounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 }, quarantine: QuarantineExecution | null = null, canonicalExecution?: CanonicalExecution) {
+  const { git, repository, authority } = composeGit(paths, store, mail, policy, reader, check, quarantine, canonicalExecution);
   const effects: ReviewEffects = {
     ...repository.review, ...reviewRuntime(), executionPhase: request => git.executionPhase(request),
     policy: () => git.boundPolicy(), currentPolicy: () => git.currentIntegrationPolicy(),

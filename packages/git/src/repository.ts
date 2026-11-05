@@ -18,7 +18,7 @@ import { StoreError } from "@oma/domain/errors";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import type { GitPaths } from "./paths.js";
 import type { RefAfterCas } from "./observe.js";
-import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalRevertCommit } from "./canonical-command.js";
+import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalRevertCommit, type CanonicalExecution } from "./canonical-command.js";
 import { GitPublicationObserver } from "./publication.js";
 import { ContextPublicationObserver } from "./context-publication.js";
 import { ContextRepository } from "./context-repository.js";
@@ -27,7 +27,7 @@ import { QuarantineImporter, type QuarantineExecution } from "./quarantine.js";
 export class GitRepository implements GitRepositoryPort {
   get stateRoot(): string { return this.paths.stateRoot; }
   get society(): string { return this.paths.society; }
-  private readonly observations = createCanonicalObserver();
+  private readonly observations;
   private readonly provenance: ProvenanceIndex;
   private readonly quarantine: QuarantineImporter;
   private readonly contextRepository: ContextRepository;
@@ -40,8 +40,9 @@ export class GitRepository implements GitRepositoryPort {
   constructor(private readonly paths: GitPaths, private readonly ledger: {
     submissions(): readonly OperationOf<"git.submit">[];
     attachmentRoots?(): readonly (OperationOf<"mail.send"> | OperationOf<"agent.create">)[];
-  }, quarantine: QuarantineExecution | null = null) {
-    this.provenance = new ProvenanceIndex({refs:()=>canonicalPublishedRefs(paths.projectGit),graph:tips=>canonicalCommitGraph(paths.projectGit,tips),range:(base,candidate)=>canonicalCommitRange(paths.projectGit,base,candidate)});
+  }, quarantine: QuarantineExecution | null = null, private readonly canonicalExecution?: CanonicalExecution) {
+    this.observations = createCanonicalObserver(canonicalExecution?.executable, canonicalExecution);
+    this.provenance = new ProvenanceIndex({refs:()=>canonicalPublishedRefs(paths.projectGit, canonicalExecution),graph:tips=>canonicalCommitGraph(paths.projectGit,tips,canonicalExecution),range:(base,candidate)=>canonicalCommitRange(paths.projectGit,base,candidate,canonicalExecution)});
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate), quarantine);
     this.contextRepository = new ContextRepository(paths, this.observations);
     this.submissionPublication = new GitPublicationObserver(this.observations, paths.projectGit);
@@ -94,7 +95,7 @@ export class GitRepository implements GitRepositoryPort {
     this.review = { ...facts,
       prepareIntegration: (id, base, candidate, main, own) => preparation.prepare(id,base,candidate,main,own),
       prepareDiff: (operation, base, candidate, own) => artifacts.prepare(operation, base, candidate, own),
-      prepareRevert: input => canonicalRevertCommit(paths.projectGit, { ...input, society: paths.society }),
+      prepareRevert: input => canonicalRevertCommit(paths.projectGit, { ...input, society: paths.society }, canonicalExecution),
       publishCandidateRef: (ref, candidate) => this.publishRef(ref, candidate),
     } satisfies GitRepositoryPort["review"];
   }
@@ -125,10 +126,10 @@ export class GitRepository implements GitRepositoryPort {
   }
   /** The durable no-op authorization uses the same canonical Git owner as CAS. */
   private authorizeNoop(ref: string, candidate: Oid): GitObservation<Oid> {
-    return authorizeCanonicalNoop(this.observations, this.paths.projectGit, ref, candidate);
+    return authorizeCanonicalNoop(this.observations, this.paths.projectGit, ref, candidate, this.canonicalExecution);
   }
   private casRef(repository: string, ref: string, candidate: string, expected: string | null): RefAfterCas {
-    return compareAndSwapCanonicalRef(this.observations, repository, ref, candidate, expected);
+    return compareAndSwapCanonicalRef(this.observations, repository, ref, candidate, expected, this.canonicalExecution);
   }
   private submitters(base: Oid, candidate: Oid): readonly string[] {
     return this.provenance.authors(base,candidate,this.ledger.submissions(), this.ledger.attachmentRoots?.() ?? []);

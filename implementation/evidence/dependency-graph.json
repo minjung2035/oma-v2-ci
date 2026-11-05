@@ -2868,8 +2868,8 @@
   }
  ],
  "files": 576,
- "runtimeEdges": 2347,
- "typeOnlyEdges": 990,
+ "runtimeEdges": 2348,
+ "typeOnlyEdges": 991,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 640,
   "L2-facts -> L1-kernel": 46,
@@ -2880,7 +2880,7 @@
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
   "L4-orchestration -> L4-orchestration": 217,
-  "L5-entry -> L1-kernel": 155,
+  "L5-entry -> L1-kernel": 156,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,
   "L5-entry -> L4-orchestration": 105,
@@ -2910,7 +2910,7 @@
   "packages/domain/src/errors.ts": 296,
   "packages/domain/src/identifiers.ts": 94,
   "packages/native/src/cleanup.ts": 61,
-  "packages/native/src/files.ts": 56,
+  "packages/native/src/files.ts": 57,
   "packages/storage/src/directory.ts": 56,
   "packages/domain/src/canonical-json.ts": 49,
   "packages/domain/src/paths.ts": 42,
@@ -2924,7 +2924,7 @@
   "packages/native/src/posix-files.ts": 22
  },
  "fanOut": {
-  "apps/oma/src/entry/broker.ts": 46,
+  "apps/oma/src/entry/broker.ts": 47,
   "packages/mail/src/index.ts": 24,
   "apps/oma/src/entry/oma-society.ts": 23,
   "apps/oma/src/runtime/host-invocations.ts": 23,
