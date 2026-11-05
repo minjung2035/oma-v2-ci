@@ -15,7 +15,7 @@ import {tryHoldSociety,societyLeaseName,inheritedFence} from '#oma-test/app/runt
 import {holdDarwinSocietyFence,darwinSocietyFencePort,identifyDarwinSocietyFence} from '@oma/native/darwin-society-fence';
 import {controlSocketPair} from '@oma/native/control-socket';
 import {watchDarwinProcess} from '@oma/native/process-event';
-import {load} from 'koffi';
+import {load,errno} from 'koffi';
 import {machoImageCdHashes} from '@oma/native/darwin-macho-image';
 import {SOCIETY_FENCE_ENV} from '@oma/process/async';
 import {runProcessSync} from '@oma/process/run';
@@ -33,6 +33,13 @@ function fixture(t){const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-produ
 function darwin(t){if(process.platform==='darwin')return true;t.diagnostic('NOT_RUN: actual Darwin Society lease');return false;}
 function closedEnv(){const env={...process.env};for(const key of [SOCIETY_FENCE_ENV,'NODE_CHANNEL_FD','NODE_CHANNEL_SERIALIZATION_MODE'])delete env[key];return env;}
 function refused(state){let lease;try{lease=tryHoldSociety(state);}catch(error){assert.equal(error.code,'BROKER_UNAVAILABLE');return;}if(lease!==null){lease.release();assert.fail('another Host acquired a live inherited fence');}}
+function boundResource(state){
+ const api=load(null),socket=api.func('int socket(int domain, int type, int protocol)'),bind=api.func('int bind(int fd, const void *address, unsigned int size)');
+ const fd=socket(30,2,0);assert.ok(fd>=0);try{
+  const address=Buffer.alloc(28);address[0]=28;address[1]=30;address.writeUInt16BE(darwinSocietyFencePort(societyLeaseName(state)),2);
+  errno(0);const result=bind(fd,address,address.length),error=errno();assert.equal(result,-1,'the actual exclusion socket must remain bound after workload FD closure');assert.equal(error,48);
+ }finally{closeSync(fd);}
+}
 function authenticatedCreator(state){
  const nativeRoot=new URL('../packages/native/dist/society-fence/',import.meta.url),producer=fileURLToPath(new URL('oma-society-fence-producer',nativeRoot)),control=fileURLToPath(new URL('oma-society-fence-control',nativeRoot));
  const hashes=machoImageCdHashes(readFileSync(producer),process.arch==='arm64'?'arm64':'x64');assert.equal(hashes.length,1);
@@ -127,7 +134,7 @@ async function paidSocietyScope(t,closeDescriptors=false){
  await Promise.race([entered,running.then(result=>{throw new Error('paid scope ended before descendant readiness: '+JSON.stringify({...result,stdout:result.stdout.toString(),stderr:result.stderr.toString()}));})]);
  restore();const rows=ExecutionJournal.inspect(state);assert.equal(rows.length,1);const identity=rows[0].witness;
  assert.equal(identity.kind,'darwin-resource-coalition');assert.equal(observeDarwinCoalitionPopulation(identity),'populated');
- const released=held;held=undefined;released.release();refused(state);
+ const released=held;held=undefined;released.release();if(closeDescriptors)boundResource(state);refused(state);
  assert.equal(observeDarwinCoalitionPopulation(identity),'populated','scope must still be live while takeover is refused');
  controller.abort();const result=await running;assert.equal(result.kind,'aborted');
  assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);

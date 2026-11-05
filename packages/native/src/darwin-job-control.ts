@@ -33,7 +33,12 @@ export interface DarwinJobImageDigests {
   readonly helper: string;
   readonly images: readonly string[];
 }
-export interface DarwinJobFile { readonly target: number; readonly fd: number }
+export interface DarwinJobFile {
+  readonly target: number; readonly fd: number;
+  /** An independent parent socket reference, returned only with the empty
+   * scope. Workload descriptor closure cannot return this capability. */
+  readonly retainUntilEmpty?: boolean;
+}
 type DarwinJobTerminal = { readonly kind: "waited"; readonly pid: number; readonly waitStatus: number } |
   { readonly kind: "stopped" };
 export interface DarwinJobControl {
@@ -89,6 +94,12 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
   let root: DarwinProcessPin | undefined, rootAccepted = false;
   try {
     const command = snapshotCommand(source), targets = files.map(file => file.target), stages = images.length;
+    const retained = new Set(files.flatMap((file, index) => {
+      if (file.retainUntilEmpty !== undefined && typeof file.retainUntilEmpty !== "boolean" ||
+          file.retainUntilEmpty === true && !fstatSync(file.fd).isSocket())
+        throw new StoreError("UNSUPPORTED_PROFILE", "retained job capability must be a socket");
+      return file.retainUntilEmpty === true ? [index] : [];
+    }));
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "job setup was cancelled");
     if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0 || stages !== 1 && stages !== 2 || images[0] !== command.executable)
       throw new StoreError("UNSUPPORTED_PROFILE", "job setup requires explicit Darwin main image stages");
@@ -100,7 +111,18 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     const peer = peerSource === undefined ? undefined : captureDarwinJobPeer(peerSource);
     if (peer !== undefined) owners.push(() => peer.endpoint.close());
     const frame = encodeDarwinJob(command, targets, stages, false, peer?.token), hashes = images.map((path, index) => selected(path, imageDigests?.images[index])), helper = bundledJobHelper(), helperHashes = selected(helper, imageDigests?.helper);
-    const capabilities = files.map(file => { const port = createMachFilePort(file.fd); owners.push(() => port.close()); return port; });
+    const capabilities = files.map((file, index) => {
+      const port = createMachFilePort(file.fd);
+      owners.push(() => {
+        // A failed acquisition after job creation is not noncreation. Keep
+        // this kernel reference when its scope is still live or unobserved.
+        if (retained.has(index) && attempted && (!rootAccepted || !root || observeDarwinCoalitionPopulation(root.identity) !== "empty"))
+          throw unknown("job socket remains owned until independent whole-scope death");
+        port.close();
+      });
+      return port;
+    });
+    const returnSetupFiles = (): void => cleanupAll(capabilities.flatMap((port, index) => retained.has(index) ? [] : [() => port.close()]));
     const directory = directoryFd === undefined ? (() => {
       const cwd = openDirectory(command.cwd ?? process.cwd());
       return withCleanup(() => createMachFilePort(cwd), () => closeSync(cwd));
@@ -145,7 +167,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     const terminate = (): void => {
       stopping = true;
       const errors: unknown[] = [];
-      try { cleanupAll([...capabilities.map(port => () => port.close()), () => directory.close()]); }
+      try { cleanupAll([returnSetupFiles, () => directory.close()]); }
       catch (error) { errors.push(error); }
       const population = observeDarwinCoalitionPopulation(identity);
       if (population === "unknown") errors.push(unknown("job population is unobserved"));
@@ -234,7 +256,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
       const first = take(0x4f4d4123);
       for (const [index, file] of capabilities.entries()) await sendSetup(0x4f4d4130 + index, file);
       await sendSetup(0x4f4d4122, sinkSend); await observeTarget(await first, 0);
-      cleanupAll(capabilities.map(port => () => port.close()));
+      returnSetupFiles();
       if (stages === 2) {
         const next = take(0x4f4d4128); send(0x4f4d4124); await observeTarget(await next, 1);
       }

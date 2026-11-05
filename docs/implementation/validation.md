@@ -1,7 +1,7 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
-SOURCE100의 제품 shared Society lease·실제 paid execution scope·Host tenure crash/recovery는 ARM·Intel에서 각각7/7 PASS다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
+SOURCE102의 제품 shared Society lease·paid execution scope·Host tenure crash/recovery·private Host 감독은 ARM·Intel에서 각8 PASS다. 새009 close-all 반례는 양쪽 모두 FAIL이며 아직 수리 확인 전이다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `af1fd33cf06476031949d907c96af8f36c54678a950b0e932eb2649fc66cecb2` (15948 files).
+verification input digest `0640eff9b38017701fc6f3826364209ce12eb98db5fe3d4b4c1032eee8e396ee` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4511,3 +4511,22 @@ runtime15551/`d84699c1b6925c4f7bb0687e2fe0fd67f2e73f6c6bae12e9ba1ff3934d92d68b`�
 이 unknown 거절을 성공으로 바꾸지 않는다. SOURCE102는 Host가 살아 있을 때 고정 creator를 인증하고 watch 등록 뒤 fresh 응답을 다시 대조한다.
 Host/Broker와 그 원래 creator의 종료까지 각각 확인한 뒤 새 취득을 한 번 시도한다. deadline/거절 정책/production은 바꾸지 않는 fixture 수리다.
 008 전체 PASS와009 close-all의 actual Mac은 SOURCE102에서 아직 NOT_RUN이다.
+
+
+### SOURCE102 actual close-all 반례와 SOURCE103 trusted scope 참조 수명 수리
+
+SOURCE102 `8899ef1cd78f949873ef290740648abdb0a54d93`, Native42081758324·Architecture42081758241이다.
+canonical15948/`af1fd33cf06476031949d907c96af8f36c54678a950b0e932eb2649fc66cecb2`다.
+ARM Society ZIP13441651197 SHA-256 `f8d1887366a0ba26206d6f24c9cb77a351ce371afc738386b132c3622931aa6f`,
+Intel Society ZIP13440957461 SHA-256 `9b99b6e2256043445e30172ab4d1e73503d514a492c6d5e01ce19c013d0a6760`를 대조했다.
+각 source/input/runtime Society 전후 동일, runtime15551은 ARM `1cdd4ad8862848dc0e871d09d85d6fdc21db6276c9317b02fcf7e4a596eda5f8`,
+Intel `d84699c1b6925c4f7bb0687e2fe0fd67f2e73f6c6bae12e9ba1ff3934d92d68b`다.
+양쪽8 PASS/1 FAIL·기타0다. 008은 실제 private parent/session 왕복·Host SIGKILL·Broker 및 원래 creator exit 뒤 재획득까지 통과했다.
+009는 workload와 detached descendant가 FD4를 닫자 아직 populated인 scope를 두고 새 Host가 실제 취득했다. 원래 반례를 성공/unknown으로 재분류하지 않는다.
+
+SOURCE103은 setup 완료 때 모든 fileport 참조를 반환하던 수명 오류를 수리한다.
+Process는 상속 cooperation socket을 Native의 retained socket capability로 지정하고, trusted scope owner가 자기 fileport 참조를 별도로 유지한다.
+setup/종료 요청만으로 그 참조를 닫지 않으며, 정상 close는 공통 owner의 독립 kernel empty와 capture drain 뒤에만 호출된다.
+생성 시도 이후 취득 실패에서 scope empty가 증명되지 않으면 참조 반환도 거절한다. stdio/config fileport의 기존 반환은 유지해 EOF drain을 막지 않는다.
+009에는 실제 wildcard socket bind가 EADDRINUSE인지 별도 확인을 추가해 discovery의 일시 unknown만으로 PASS하지 못하게 한다.
+INTERMEDIATE checkpoint이며 새9/9 actual Mac·후속 packed/review/전체 인수는 NOT_RUN이다. Runtime owner 자신까지 사망한 결합은 별도 범위이며 이 정상 scope owner 참조 수리로 해결했다고 쓰지 않는다.

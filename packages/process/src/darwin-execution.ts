@@ -94,6 +94,10 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
         if (target > 65535) throw new StoreError("UNSUPPORTED_PROFILE", "Darwin job has no free cooperation socket slot");
         extra = [...extra, { target, fd: fence }];
       }
+      // The trusted scope owner keeps its own fileport reference through
+      // independent scope death and capture drain. A workload may close all
+      // of its descriptors without giving the Society away.
+      extra = extra.map(file => file.fd === fence ? { ...file, retainUntilEmpty: true } : file);
       command = snapshotCommand({ ...command, env: { ...command.env, [SOCIETY_FENCE_ENV]: String(target) } });
     }
   } catch (error) { throw new ExecutionNotStarted(error); }
