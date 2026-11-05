@@ -3,7 +3,7 @@
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
 SOURCE77의 세 Mac 공통451/451·실행 세대3/3·독립 설치27/27을 각각 확인했다.
 SOURCE78 직접 fixed producer는 세 Mac 공통 각452/452 안에서 실제 통과했으나 전체 Society lease로 채택하지 않았다.
-SOURCE79 canonical context persistence barrier는 로컬 회귀39/39까지 확인했고 actual Mac은 NOT_RUN이다.
+SOURCE80의 canonical context persistence barrier는 Mac15 새6건·공통453/453·실행 세대3/3을 확인했다. 다른 Mac의 새 barrier는 아직 NOT_RUN이다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
 | 남은 제품 작업 | 닫히지 않은 범위 |
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `41ccb8b27f8b0cbb3e0b1daa63c21535798ead9fba7b843751dd2b948fabe351` (15935 files).
+verification input digest `0e9505333c5c15118862accfadb20bacd370fcbe1b37d73e013155c48328981a` (15936 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3874,3 +3874,48 @@ controller의 CoreFoundation/Security headers는 로컬 SDK snapshot에 없어 a
 
 SOURCE81 full architecture·transaction·durable boundary·document·spec inventory는 exit0다(`/tmp/oma-source81-architecture.log`).
 새 bootstrap 전달/dynamic service는 actual Mac NOT_RUN이고 production build/pack은 SOURCE79의 동일한 bytes에 대한 기존 결과다.
+
+### SOURCE82 Darwin 협력 socket의 실제 자식 수명 상속
+
+SOURCE81 `a2beeed31d183f3349018bac3a6fc995bb64e0ee` / local checkpoint `366c23d9a7d3d275c241e322beddd1ddf8ed1354`,
+Native42027105081을 발행했다. 새 bootstrap capability/dynamic discovery의 actual Mac은 아직 NOT_RUN이다.
+SOURCE80 Mac15 main ZIP13414736018 SHA-256 `0929e81201b579c6d8fdd36617ea28aaf476244af301b12d7571ca29b0739d37`,
+shared ZIP13414322217 SHA-256 `f502c6e2b33747e709fff40e33bfb31f89f765108801b87dcaf04df4cc0d3144`를 대조했다.
+canonical15935/`4bd527ae72680e7352c1bc4628c10daabadd0a9a934e0ee8a385a5598cf32888` 및 runtime15540/27
+`00216364774d2b080202d2847c2f7f9bebf7f02bb68ea3869e9307e0448ac7e7`가 각 전후 동일이다.
+main453/453·generation3/3 PASS·기타0며 준비 전 canonical name 교체를 포함한 새 context6건이 실제 통과했다.
+SOURCE80의 다른 Mac/독립 설치를 이 결과에 합성하지 않는다.
+
+SOURCE82는 Darwin job의 fileport 수신에도 부모가 보유한 협력 socket을 포함한다.
+기존 inheritedFence primitive로 부모 FD를 관측하고, 명시적 handoff가 같은 FD를 이미 포함하면 그 child slot을 재사용한다.
+보통 FD4에 전달하지만 private/preparation input이 점유하면 다른 빈 slot을 사용하고 실제 child env에 그 번호를 결박한다.
+기존 capability를 덮어쓰지 않고 없는/잘못된 부모 FD는 creation 전에 거절한다.
+이는 shape-only lease 인식이나 제품 권한을 추가하는 변경이 아니다. 부모가 이미 보유한 socket의 물리적 수명 상속만 담당한다.
+Linux backend와 Broker의 FD4 Society provenance 판정은 바꾸지 않는다.
+
+새 실제 Darwin 시험은 ordinary/occupied slot/explicit same socket 세 경우를 나눈다.
+setup/authorize 뒤 부모 복사본과 환경을 반납하고, 자식의 실제 socket 통신·명시적 다른 socket 보존·마지막 close의 EOF와
+kernel CID/journal 반납을 확인한다. 아직 actual Mac NOT_RUN이며 Linux에서는 명시적 NOT_RUN 진단이다.
+로컬 build exit0, 관련 Linux process/context/조립 회귀43/43 PASS·기타0와 빈 index diff를 확인했다.
+원시는 `/tmp/oma-source82-build.log`·`/tmp/oma-source82-process-regression.log`·`/tmp/oma-source82-checkout-index.patch`다.
+최초 focused11건의 default Linux 실행도 exit0였고 index는 비어 있었다. 최종43건은 checkout .git을 read-only bind했다.
+fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata·full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+Society identity/discovery/collision·current Host/FD4 authority·owner crash와 전체 제품 gate는 여전히 미완료다.
+세 gate OPEN·product BLOCKED·실행 guard·death predicate·예산을 유지한다.
+
+SOURCE81 Mac15 main ZIP13414403530 SHA-256 `fa16f0dac32d1c1b1921aa7671f8027112ac4a33bcf32f5b15087c65882af1df`를 대조했다.
+canonical15935/`41ccb8b27f8b0cbb3e0b1daa63c21535798ead9fba7b843751dd2b948fabe351` 및 SOURCE80과 같은 Mac15 runtime이 main 전후 동일이다.
+main453/452 PASS/1 FAIL·기타0다. bootstrap-peer wrong/expected CDHash·last-close와 기존 producer/replay 반례는 통과했다.
+새 discovery mode는 wrong CDHash 거절은 통과했지만 expected CDHash의 copy0/parse0/check0 뒤 discovery acknowledgement layout에서 실패했다.
+require의 perror가 남긴 Attribute not found는 이 logical layout 실패의 OS 원인으로 해석하지 않는다.
+SOURCE82 test-only controller는 같은 채널의 비-ack 메시지 header를 기록하고 mach_msg_destroy로 반납한 뒤 기대한 ack를 기다린다.
+기대 id의 size/token/full tag/instance 단언은 그대로다. 이 대기는 원래5000ms의 절대 monotonic deadline 안에서만 실행하며
+20초 controller ceiling·creator authentication·제품 gate를 바꾸지 않는다. 실제 header/수리 효과는 아직 NOT_RUN이다.
+이것으로 bootstrap_check_in이나 libSystem의 원인을 확정하지 않는다.
+
+SOURCE81 Mac15 shared ZIP13414034487 SHA-256 `31e8c774f3dcf9ed80269c9bfa2b11a229511281e15e77e9c5bb71987dc1e0d7`도 대조했다.
+같은 canonical/runtime의 shared 전후 동일이며 main453/452 PASS/1 FAIL·generation3/3 PASS·기타0다.
+단일 main failure는 위 discovery acknowledgement layout이다. generation 성공으로 해당 실패나 이전 termination unknown을 삭제하지 않는다.
+SOURCE82 최종 production14398, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14366 / REMOVED220이다.
+원시는 `/tmp/oma-source82-build.log`·`/tmp/oma-source82-package-isolation.log`·`/tmp/oma-source82-review.log`·`/tmp/oma-source82-architecture.log`다.
+CI YAML/21개 bash run block도 문법 통과했다. 새 상속3건과 ack demultiplex는 actual Mac NOT_RUN이다.

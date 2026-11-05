@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 extern int fileport_makefd(mach_port_t);
 static volatile sig_atomic_t child,expired;
@@ -34,6 +35,19 @@ static int observe(int flags,int *status){
 static void cleanup(void){if(child>0){(void)kill((pid_t)child,SIGKILL);int status;while(child>0){(void)observe(0,&status);usleep(1000);}}}
 static void require(int okay,const char *message){if(!okay){perror(message);exit(70);}}
 static void mach_ok(kern_return_t status,const char *message){if(status){fprintf(stderr,"%s=%d\n",message,status);exit(71);}}
+static uint64_t milliseconds(void){struct timespec now;require(clock_gettime(CLOCK_MONOTONIC,&now)==0,"monotonic clock");return (uint64_t)now.tv_sec*1000+(uint64_t)now.tv_nsec/1000000;}
+static void receive_ack(void *bytes,size_t capacity,mach_port_t endpoint){
+  uint64_t deadline=milliseconds()+5000;
+  for(;;){
+    uint64_t now=milliseconds();require(now<deadline && !expired,"discovery acknowledgement deadline");
+    memset(bytes,0,capacity);mach_msg_header_t *head=bytes;
+    mach_msg_return_t status=mach_msg(head,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),0,(mach_msg_size_t)capacity,endpoint,(mach_msg_timeout_t)(deadline-now),MACH_PORT_NULL);
+    mach_ok(status,"discovery acknowledgement");
+    if(head->msgh_id==0x4f4d4175)return;
+    fprintf(stderr,"{\"phase\":\"discovery-non-ack\",\"id\":%d,\"size\":%u,\"bits\":%u}\n",head->msgh_id,head->msgh_size,head->msgh_bits);
+    mach_msg_destroy(head);
+  }
+}
 static int signed_child(audit_token_t token,const char *hash){
   CFDataRef data=CFDataCreate(NULL,(const UInt8 *)&token,sizeof token);require(data!=NULL,"audit data");
   const void *keys[]={kSecGuestAttributeAudit},*values[]={data};
@@ -94,8 +108,7 @@ int main(int argc,char **argv){
     struct {mach_msg_header_t head;uint8_t nonce[16];} returned={0};memcpy(returned.nonce,message.bytes+sizeof *request,16);
     returned.head=(mach_msg_header_t){.msgh_bits=MACH_MSGH_BITS(MACH_MSG_TYPE_MOVE_SEND,MACH_MSG_TYPE_COPY_SEND),.msgh_size=sizeof returned,.msgh_remote_port=request->msgh_remote_port,.msgh_local_port=bootstrap_port,.msgh_id=0x4f4d4174};
     mach_ok(mach_msg(&returned.head,MACH_SEND_MSG|MACH_SEND_TIMEOUT,sizeof returned,0,MACH_PORT_NULL,1000,MACH_PORT_NULL),"return normal bootstrap capability");
-    memset(&message,0,sizeof message);mach_msg_header_t *ack=(mach_msg_header_t *)message.bytes;
-    mach_ok(mach_msg(ack,MACH_RCV_MSG|MACH_RCV_TIMEOUT|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)|MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),0,sizeof message,endpoint,5000,MACH_PORT_NULL),"discovery acknowledgement");
+    receive_ack(message.bytes,sizeof message,endpoint);mach_msg_header_t *ack=(mach_msg_header_t *)message.bytes;
     require(ack->msgh_id==0x4f4d4175 && ack->msgh_size==sizeof packet,"discovery acknowledgement layout");
     mach_msg_audit_trailer_t *ack_trailer=(mach_msg_audit_trailer_t *)(message.bytes+((ack->msgh_size+3)&~3));
     struct publication *ack_body=(struct publication *)ack;

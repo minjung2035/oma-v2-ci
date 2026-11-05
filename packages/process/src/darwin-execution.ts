@@ -13,6 +13,7 @@ import type { DarwinCoalitionIdentity } from "@oma/native/audit-session";
 import { controlPipe } from "@oma/native/control-socket";
 import { startDarwinJobControl, type DarwinJobControl, type DarwinJobFile, type DarwinJobImageDigests } from "@oma/native/darwin-job-control";
 import { bundledSeatbeltHelper } from "@oma/native/darwin-job-assets";
+import { inheritedFence, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./fence.js";
 import type { DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export { inheritedDarwinJobPeer, peerFromMachReceiver, type DarwinJobPeer } from "@oma/native/darwin-job-peer";
 export interface DarwinJobScopeOptions extends ProcessIOOptions {
@@ -79,6 +80,22 @@ async function launch(source: CommandSpec, options: Inputs): Promise<BlockedExec
         stderrFd !== undefined && (command.stderrBytes !== 0 || captureOptions.stderrSink !== undefined))
       throw new StoreError("UNSUPPORTED_PROFILE", "invalid Darwin job scope inputs");
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "job was cancelled before creation");
+    // File handoff must retain the parent's cooperation socket too. Explicit
+    // preparation/stdio slots may already occupy FD4; the declared child slot
+    // follows the actual handoff rather than replacing another capability.
+    // This transports an already-held socket; it does not identify a lease
+    // or authorize a Host/Broker role.
+    const fence = inheritedFence();
+    if (fence !== undefined) {
+      let target = extra.find(file => file.fd === fence)?.target;
+      if (target === undefined) {
+        target = SOCIETY_FENCE_FD;
+        while (targets.includes(target) && target <= 65535) target++;
+        if (target > 65535) throw new StoreError("UNSUPPORTED_PROFILE", "Darwin job has no free cooperation socket slot");
+        extra = [...extra, { target, fd: fence }];
+      }
+      command = snapshotCommand({ ...command, env: { ...command.env, [SOCIETY_FENCE_ENV]: String(target) } });
+    }
   } catch (error) { throw new ExecutionNotStarted(error); }
   const raw = new Set<number>(), streams: Socket[] = [], inputReturns: Promise<void>[] = [], privateDrains: Promise<void>[] = [];
   const pipe = () => { const value = controlPipe(); raw.add(value.read); raw.add(value.write); return value; };
