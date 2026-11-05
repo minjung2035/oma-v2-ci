@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `dc7635b269b6d6a1a37cb94b50fbe2db2ecd77c88878a65b613c83cbbeb2c842` (15948 files).
+verification input digest `af1fd33cf06476031949d907c96af8f36c54678a950b0e932eb2649fc66cecb2` (15948 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4485,3 +4485,29 @@ SOURCE100 Intel 공통 ZIP13440052374 SHA-256 `da0bcc774083018d0e3665194457c2572
 같은 source/canonical/runtime의 main 전후 동일이며465/465 PASS·fail/cancel/skip/todo0다. 전체 gate·전체 제품 인수와 구분한다.
 SOURCE101 local build·workspace boundary·문서/spec 검사와 감독/tenure/조립 회귀77/77 PASS다.
 그 중 Darwin8개는 Linux에서 명시적 NOT_RUN이며 실제 Mac 실행으로 계산하지 않는다.
+
+
+SOURCE100의 나머지 ARM 공통 ZIP13438334431 SHA-256 `4e55f3cc1c5942d77f402315b2b5f6c7d280fb13716d823bed5ad1fd0d9315bf`는465/465 PASS다.
+ARM shared ZIP13439943886 SHA-256 `84919cc98b25fd2be8bd7b03adb301a91cb6e4df24060da5e9083d20aeded194`,
+Intel shared ZIP13439723060 SHA-256 `cd3afa525b3b4acac12e7875e5a4b1a22cc9d187869f1aa93410475526ce49a6`를 대조했다.
+모두 같은 source/canonical 및 각 architecture runtime의 main/shared 전후 동일이다.
+ARM cold generation3/3 PASS(첫 case216662ms), Intel은2 PASS/1 CANCELLED(testTimeoutFailure240000ms)다.
+Intel construction193670ms·copy193623ms 중 fsync33725회110654ms가 관측됐고, scope-execution-and-return1789ms 뒤 private Git 단계에서 시험 예산이 끝났다.
+원래240000ms 제한을 늘리거나 timeout을 성공으로 계산하지 않는다. Society7/7·common465/465의 인수 범위와 이 cold-generation 실패를 구분한다.
+
+
+SOURCE101의 production 변경 뒤 local fresh packed install27/27(실제 설치 App 포함)·전체 architecture/transaction/durable/document/spec 검사는 PASS다.
+기본 ledger 명령은 이미 제거/이동된 과거 reviewed path 때문에 거절했고, 명시적 `--invalidate-stale`로 옛 검토를 무효화했다.
+새 ledger는 production14404 중 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14372·REMOVED220이며 새 코드가 검토 완료됐다고 표시하지 않는다.
+SOURCE102는009 반례를 추가하는 test-only checkpoint다. 006의 기존 조건은 유지하며 별도009에서 workload와 detached descendant가 FD4를 직접 닫은 뒤에도 populated scope의 인수를 거절해야 한다.
+이 close-all 반례의 actual Mac은 NOT_RUN이며 기존006/007 성공은 이 조건을 증명하지 않는다. production guard·시간 제한·scope empty predicate는 유지한다.
+
+
+SOURCE101 actual Intel Society ZIP13440866488 SHA-256 `cdbea5a529156e3378fbb106b75645c7eb767be3f4da9ec2089c0f132e1cbbe7`를 대조했다.
+source `dfb27bb1129e7a75bb0e41dbca70239a2eed6b32`, canonical15948/`dc7635b269b6d6a1a37cb94b50fbe2db2ecd77c88878a65b613c83cbbeb2c842`,
+runtime15551/`d84699c1b6925c4f7bb0687e2fe0fd67f2e73f6c6bae12e9ba1ff3934d92d68b`가 Society 전후 동일이다.
+7 PASS/1 FAIL·기타0다. 008의 private 부모 결박/session 왕복·Host SIGKILL·Broker 원래 pin exit/종료 이유까지 통과했다.
+마지막 새 lease 취득은 종료 중인 기존 creator의 nonce 응답을 Security 검증하다 `fence creator mapped image: No such process`로 거절됐다.
+이 unknown 거절을 성공으로 바꾸지 않는다. SOURCE102는 Host가 살아 있을 때 고정 creator를 인증하고 watch 등록 뒤 fresh 응답을 다시 대조한다.
+Host/Broker와 그 원래 creator의 종료까지 각각 확인한 뒤 새 취득을 한 번 시도한다. deadline/거절 정책/production은 바꾸지 않는 fixture 수리다.
+008 전체 PASS와009 close-all의 actual Mac은 SOURCE102에서 아직 NOT_RUN이다.

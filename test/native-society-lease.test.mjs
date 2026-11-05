@@ -33,6 +33,12 @@ function fixture(t){const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-produ
 function darwin(t){if(process.platform==='darwin')return true;t.diagnostic('NOT_RUN: actual Darwin Society lease');return false;}
 function closedEnv(){const env={...process.env};for(const key of [SOCIETY_FENCE_ENV,'NODE_CHANNEL_FD','NODE_CHANNEL_SERIALIZATION_MODE'])delete env[key];return env;}
 function refused(state){let lease;try{lease=tryHoldSociety(state);}catch(error){assert.equal(error.code,'BROKER_UNAVAILABLE');return;}if(lease!==null){lease.release();assert.fail('another Host acquired a live inherited fence');}}
+function authenticatedCreator(state){
+ const nativeRoot=new URL('../packages/native/dist/society-fence/',import.meta.url),producer=fileURLToPath(new URL('oma-society-fence-producer',nativeRoot)),control=fileURLToPath(new URL('oma-society-fence-control',nativeRoot));
+ const hashes=machoImageCdHashes(readFileSync(producer),process.arch==='arm64'?'arm64':'x64');assert.equal(hashes.length,1);
+ const name=societyLeaseName(state),result=spawnSync(control,['holder',name.slice('\0oma.society.'.length),hashes[0],String(darwinSocietyFencePort(name))],{encoding:'utf8',timeout:15000});
+ assert.equal(result.error,undefined);assert.equal(result.status,0,result.stderr);const creator=JSON.parse(result.stdout);assert.equal(creator.kind,'matched');return creator;
+}
 async function exited(pin){const deadline=performance.now()+3000;while(pin.state()!=='exited'&&performance.now()<deadline)await delay(5);assert.equal(pin.state(),'exited','original pinned process must positively exit');}
 
 test('001. Product Darwin lease rejects a second fresh Host before state effects and reacquires after release',{timeout:45000},t=>{
@@ -96,7 +102,7 @@ test('005. An inherited holder cannot free the exclusion resource by mutating it
  refused(f.state);assert.equal(inheritedFence(held.fence,f.state).kind,'society');assert.equal(existsSync(f.state),false);
 });
 
-test('006. A paid Darwin execution scope holds the Society until complete scope death and descriptor drain',{timeout:45000},async t=>{
+async function paidSocietyScope(t,closeDescriptors=false){
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-paid-society-'))),state=join(base,'state'),controller=new AbortController();
  const previous=process.env[SOCIETY_FENCE_ENV],restore=()=>{if(previous===undefined)delete process.env[SOCIETY_FENCE_ENV];else process.env[SOCIETY_FENCE_ENV]=previous;};
@@ -110,8 +116,8 @@ test('006. A paid Darwin execution scope holds the Society until complete scope 
  });
  held=tryHoldSociety(state);assert.notEqual(held,null);assert.equal(existsSync(state),false);
  ExecutionJournal.initialize(state);runtime=new ExecutionRuntime(state,launchDarwinJobScope);await runtime.recover();
- const descendant=`const fs=require('node:fs'),assert=require('node:assert/strict');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);process.stdout.write('society-descendant-ready'+String.fromCharCode(10));setInterval(()=>{},1000);`;
- const workload=`const fs=require('node:fs'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:['ignore',1,2,'ignore',fd],env:process.env});setInterval(()=>{},1000);`;
+ const descendant=`const fs=require('node:fs'),assert=require('node:assert/strict');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);${closeDescriptors?'fs.closeSync(fd);':''}process.stdout.write('society-descendant-ready'+String.fromCharCode(10));setInterval(()=>{},1000);`;
+ const workload=`const fs=require('node:fs'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');const fd=Number(process.env.${SOCIETY_FENCE_ENV});assert.equal(fd,4);assert.equal(fs.fstatSync(fd).isSocket(),true);spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:['ignore',1,2,'ignore',fd],env:process.env});${closeDescriptors?'fs.closeSync(fd);':''}setInterval(()=>{},1000);`;
  let output='',ready;const entered=new Promise(resolve=>{ready=resolve;});
  process.env[SOCIETY_FENCE_ENV]=String(held.fence);
  running=runtime.run('preparation',{executable:realpathSync(process.execPath),argv:['-e',workload],env:{HOME:base,TMPDIR:base,PATH:'/usr/bin:/bin'},
@@ -126,7 +132,8 @@ test('006. A paid Darwin execution scope holds the Society until complete scope 
  controller.abort();const result=await running;assert.equal(result.kind,'aborted');
  assert.equal(observeDarwinCoalitionPopulation(identity),'empty');assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(state),[]);
  next=tryHoldSociety(state);assert.notEqual(next,null,'only complete scope death and descriptor drain return the Society');
-});
+}
+test('006. A paid Darwin execution scope holds the Society until complete scope death and descriptor drain',{timeout:45000},t=>paidSocietyScope(t));
 
 test('007. A live Host tenure keeps the Society through its fenced execution owner crash and journal recovery',{timeout:45000},async t=>{
  if(!darwin(t))return;
@@ -163,18 +170,22 @@ test('008. The product private supervision channel binds the actual Host and end
  const fake=controlSocketPair();try{assert.equal(pinDarwinPrivateParent(fake.parent),null,'a same-user socket owned by this process is not its parent');}finally{closeSync(fake.parent);closeSync(fake.child);}
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-private-supervision-'))),f={base,state:join(base,'state')};ExecutionJournal.initialize(f.state);
  const host=fork(fileURLToPath(new URL('./fixtures/darwin-supervision.mjs',import.meta.url)),[f.state,'host'],{stdio:['ignore','ignore','pipe','ipc'],env:closedEnv()});
- let stderr='',pin,next;host.stderr.on('data',bytes=>{stderr+=bytes;});
+ let stderr='',pin,creatorPin,next;host.stderr.on('data',bytes=>{stderr+=bytes;});
  const closed=new Promise((yes,no)=>{host.once('error',no);host.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
  t.after(async()=>{
   if(host.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');await closed;
   const limit=performance.now()+16000;while(pin?.state()==='live'&&performance.now()<limit)await delay(10);
-  const ended=pin?.state()==='exited';pin?.close();next?.release();
+  const ended=pin?.state()==='exited';pin?.close();creatorPin?.close();next?.release();
   if(ended)rmSync(base,{recursive:true});else t.diagnostic('Retained unconfirmed private supervision: '+base);
  });
  const [ready]=await Promise.race([once(host,'message'),closed.then(status=>{throw new Error('Host/Broker supervision failed before readiness: '+JSON.stringify(status)+' '+stderr);})]);
  assert.equal(ready.kind,'ready');assert.equal(ready.host,host.pid);assert.ok(ready.broker>1);
  pin=watchDarwinProcess(ready.broker);assert.equal(pin.state(),'live');refused(f.state);
+ const creator=authenticatedCreator(f.state);creatorPin=watchDarwinProcess(creator.creatorPid);assert.equal(creatorPin.state(),'live');assert.deepEqual(authenticatedCreator(f.state),creator);
  host.kill('SIGKILL');assert.deepEqual(await closed,{code:null,signal:'SIGKILL'},stderr);await exited(pin);
+ await exited(creatorPin);
  const ended=JSON.parse(readFileSync(join(f.state,'broker-ended.json'),'utf8'));assert.equal(ended.pid,ready.broker);assert.match(ended.reason,/host/);
  next=tryHoldSociety(f.state);assert.notEqual(next,null,'the ended private Broker returns its inherited Society fence');
 });
+
+test('009. A paid scope cannot return its Society by closing every workload and descendant fence descriptor',{timeout:45000},t=>paidSocietyScope(t,true));
